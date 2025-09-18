@@ -1,0 +1,46 @@
+create table public.iot_data (
+  id serial not null,
+  event_time timestamp with time zone null default timezone ('Asia/Shanghai'::text, now()),
+  device_id text not null,
+  illumination double precision null,
+  temperature double precision null,
+  humidity double precision null,
+  acceleration_x integer null,
+  acceleration_y integer null,
+  acceleration_z integer null,
+  gyroscope_x integer null,
+  gyroscope_y integer null,
+  gyroscope_z integer null,
+  mpu_temperature double precision null,
+  latitude double precision null,
+  longitude double precision null,
+  acceleration_total double precision null,
+  gyroscope_total double precision null,
+  vibration integer null,
+  risk_level double precision null,
+  alarm_active boolean null default false,
+  uptime integer null,
+  angle_x double precision null,
+  angle_y double precision null,
+  angle_z double precision null,
+  deformation_distance_3d numeric(8, 3) null,
+  deformation_horizontal numeric(8, 3) null,
+  deformation_vertical numeric(8, 3) null,
+  deformation_velocity numeric(8, 3) null,
+  deformation_risk_level integer null,
+  deformation_type integer null,
+  deformation_confidence numeric(3, 2) null,
+  baseline_established boolean null default false,
+  constraint iot_data_pkey primary key (id)
+) TABLESPACE pg_default;
+
+create index IF not exists idx_iot_data_risk_level on public.iot_data using btree (risk_level) TABLESPACE pg_default;
+
+create index IF not exists idx_iot_data_alarm_active on public.iot_data using btree (alarm_active) TABLESPACE pg_default;
+
+create index IF not exists idx_iot_data_latitude_longitude on public.iot_data using btree (latitude, longitude) TABLESPACE pg_default;
+
+create trigger trigger_calculate_totals BEFORE INSERT
+or
+update on iot_data for EACH row
+execute FUNCTION calculate_totals ();

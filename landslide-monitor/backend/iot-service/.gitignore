@@ -1,0 +1,61 @@
+# ================================================================
+# 滑坡监测系统 - Git忽略文件
+# ================================================================
+
+# 环境变量文件 (包含敏感信息)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# 依赖目录
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 日志文件
+*.log
+logs/
+server.log
+error.log
+access.log
+
+# 临时文件
+.tmp/
+.cache/
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 构建输出
+dist/
+build/
+coverage/
+
+# PM2 配置
+ecosystem.config.js
+
+# 数据库备份
+*.sql.backup
+*.db.backup
+
+# 测试文件
+test-config.js
+
+# 系统文件
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ================================================================
+# 允许提交的文件:
+# - .env.example (配置示例)
+# - package.json (依赖管理)
+# - *.js (源代码)
+# - *.md (文档)
+# ================================================================

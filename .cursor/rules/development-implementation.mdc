@@ -1,0 +1,356 @@
+---
+description: OpenHarmony开发实现规范和编码标准
+globs: vendor/**/*.c,vendor/**/*.h,vendor/**/*.gn,src/**/*.c,src/**/*.h,技术文档/03_开发实现/**/*
+alwaysApply: false
+---
+
+# OpenHarmony开发实现规范
+
+## 规则说明
+本规则适用于OpenHarmony rk2206平台的滑坡监测系统开发，涵盖代码实现、构建配置、调试优化等全栈开发要求。
+
+## 项目结构规范
+
+### 核心目录结构
+```
+vendor/isoftstone/rk2206/samples/landslide_monitor/
+├── BUILD.gn                    # 主构建配置
+├── src/                        # 源代码目录
+│   ├── landslide_monitor.c     # 主程序入口
+│   ├── gps_nmea_parser.c       # GPS NMEA解析模块
+│   ├── sensor_manager.c        # 传感器管理模块
+│   ├── deformation_analyzer.c  # 形变分析算法
+│   ├── data_uploader.c         # 数据上传模块
+│   ├── display_controller.c    # 显示控制模块
+│   └── system_monitor.c        # 系统监控模块
+├── include/                    # 头文件目录
+│   ├── landslide_monitor.h     # 主头文件
+│   ├── gps_types.h            # GPS数据类型定义
+│   ├── sensor_types.h         # 传感器数据类型
+│   └── config.h               # 系统配置定义
+├── libs/                       # 静态库目录
+├── configs/                    # 配置文件目录
+└── docs/                      # 文档目录
+```
+
+## 编码规范标准
+
+### C语言编码规范
+```c
+/**
+ * 函数注释模板
+ * @brief 函数功能简述
+ * @param[in] paramName 参数描述
+ * @param[out] output 输出参数描述
+ * @return 返回值说明
+ * @note 注意事项和性能要求
+ */
+int FunctionName(const char* input, char* output);
+
+// 命名规范
+#define MAX_GPS_BUFFER_SIZE 512     // 宏定义大写+下划线
+typedef struct GPSData GPS_Data_t;  // 类型定义大写+下划线+_t
+int g_deviceId = 0;                 // 全局变量g_+驼峰
+static int s_moduleStatus = 0;      // 静态变量s_+驼峰
+```
+
+### 内存管理规范
+```c
+// 内存分配原则
+#define GPS_BUFFER_SIZE 1024
+static char g_gpsBuffer[GPS_BUFFER_SIZE];  // 优先使用静态分配
+
+// 禁止动态内存分配（嵌入式约束）
+// char* buffer = malloc(size);  // 不允许
+// free(buffer);                 // 不允许
+
+// 数组边界检查
+int SafeStringCopy(char* dest, const char* src, size_t destSize) {
+    if (dest == NULL || src == NULL || destSize == 0) {
+        return -1;
+    }
+    strncpy(dest, src, destSize - 1);
+    dest[destSize - 1] = '\0';
+    return 0;
+}
+```
+
+### 错误处理规范
+```c
+// 错误码定义
+typedef enum {
+    ERR_SUCCESS = 0,
+    ERR_NULL_POINTER = -1,
+    ERR_INVALID_PARAM = -2,
+    ERR_BUFFER_OVERFLOW = -3,
+    ERR_DEVICE_NOT_FOUND = -4,
+    ERR_COMMUNICATION_FAILED = -5
+} ErrorCode_t;
+
+// 错误处理模式
+int ProcessGPSData(const char* nmeaString) {
+    if (nmeaString == NULL) {
+        printf("[ERROR] GPS: Null NMEA string\n");
+        return ERR_NULL_POINTER;
+    }
+    
+    // 主逻辑处理
+    int result = ParseNMEA(nmeaString);
+    if (result != ERR_SUCCESS) {
+        printf("[ERROR] GPS: Parse failed, code=%d\n", result);
+        return result;
+    }
+    
+    return ERR_SUCCESS;
+}
+```
+
+## 核心模块实现规范
+
+### GPS NMEA解析模块
+```c
+// gps_nmea_parser.h
+#define NMEA_SENTENCE_MAX_LENGTH 82
+#define GPS_PRECISION_DECIMAL_PLACES 8
+
+typedef struct {
+    double latitude;        // 纬度（十进制度）
+    double longitude;       // 经度（十进制度）
+    double altitude;        // 海拔高度（米）
+    int satelliteCount;     // 卫星数量
+    double hdop;           // 水平精度因子
+    char fixQuality;       // 定位质量
+    char timestamp[20];    // 时间戳
+    bool isValid;          // 数据有效性
+} GPS_Data_t;
+
+// 接口函数声明
+int GPS_ParseNMEA(const char* nmeaString, GPS_Data_t* gpsData);
+int GPS_ValidateChecksum(const char* nmeaString);
+double GPS_ConvertDMSToDD(double dmsValue);
+```
+
+### 传感器管理模块
+```c
+// sensor_manager.h
+typedef struct {
+    float temperature;      // 温度（摄氏度）
+    float humidity;        // 湿度（%RH）
+    float accelX, accelY, accelZ;     // 加速度（m/s²）
+    float gyroX, gyroY, gyroZ;        // 角速度（°/s）
+    float lightIntensity;   // 光照强度（lux）
+    uint32_t timestamp;     // 时间戳
+} Sensor_Data_t;
+
+// 传感器接口
+int SENSOR_Initialize(void);
+int SENSOR_ReadTemperatureHumidity(float* temp, float* humidity);
+int SENSOR_ReadAccelerometer(float* x, float* y, float* z);
+int SENSOR_ReadGyroscope(float* x, float* y, float* z);
+int SENSOR_ReadLightSensor(float* intensity);
+```
+
+### 形变分析算法模块
+```c
+// deformation_analyzer.h
+#define DEFORMATION_HISTORY_SIZE 10
+#define CONFIDENCE_THRESHOLD 0.7
+
+typedef struct {
+    double dx, dy, dz;         // 三维位移（米）
+    double distance2D;         // 二维位移距离（米）
+    double distance3D;         // 三维位移距离（米）
+    double confidence;         // 置信度（0-1）
+    int riskLevel;            // 风险等级（0-5）
+    uint32_t timestamp;       // 计算时间戳
+} Deformation_Result_t;
+
+// 算法接口
+int DEFORM_Initialize(void);
+int DEFORM_CalculateDisplacement(GPS_Data_t current, GPS_Data_t baseline, 
+                                Deformation_Result_t* result);
+int DEFORM_UpdateBaseline(GPS_Data_t newBaseline);
+int DEFORM_ApplyKalmanFilter(GPS_Data_t* data);
+```
+
+## 构建配置规范
+
+### BUILD.gn 文件规范
+```python
+# 标准构建配置模板
+import("//build/ohos.gni")
+
+ohos_executable("landslide_monitor") {
+  sources = [
+    "src/landslide_monitor.c",
+    "src/gps_nmea_parser.c", 
+    "src/sensor_manager.c",
+    "src/deformation_analyzer.c",
+    "src/data_uploader.c",
+    "src/display_controller.c",
+    "src/system_monitor.c"
+  ]
+
+  include_dirs = [
+    "include",
+    "//foundation/communication/bluetooth/interfaces/innerkits/native_c/include",
+    "//base/hiviewdfx/hilog/interfaces/native/innerkits/include"
+  ]
+
+  deps = [
+    "//base/hiviewdfx/hilog/interfaces/native/innerkits:libhilog",
+    "//foundation/communication/bluetooth/interfaces/innerkits/native_c:bluetooth_c_utils"
+  ]
+
+  defines = [
+    "GPS_MODULE_ATGM336H",
+    "DEBUG_LEVEL=2",
+    "MAX_DEVICE_COUNT=10"
+  ]
+
+  cflags = [
+    "-Wall",
+    "-Wextra", 
+    "-Werror",
+    "-O2"
+  ]
+
+  install_enable = true
+  part_name = "applications"
+  subsystem_name = "applications"
+}
+```
+
+## 性能优化标准
+
+### 内存优化策略
+```c
+// 1. 使用栈内存和静态分配
+#define MAX_BUFFER_SIZE 512
+static char g_workBuffer[MAX_BUFFER_SIZE];
+
+// 2. 数据结构紧凑化
+typedef struct __attribute__((packed)) {
+    uint16_t deviceId;      // 2字节
+    uint32_t timestamp;     // 4字节
+    float gpsLat;          // 4字节
+    float gpsLng;          // 4字节
+    int16_t temperature;    // 2字节 (温度*100)
+    uint16_t humidity;      // 2字节 (湿度*100)
+} CompactSensorData_t;     // 总计18字节
+
+// 3. 循环缓冲区设计
+typedef struct {
+    GPS_Data_t buffer[GPS_BUFFER_SIZE];
+    int head, tail, count;
+} GPS_CircularBuffer_t;
+```
+
+### 计算优化策略
+```c
+// 1. 查表法替代复杂运算
+static const float g_sinTable[360] = { /* 预计算正弦值 */ };
+static const float g_cosTable[360] = { /* 预计算余弦值 */ };
+
+// 2. 位运算优化
+#define FAST_MULTIPLY_BY_8(x) ((x) << 3)
+#define FAST_DIVIDE_BY_16(x) ((x) >> 4)
+
+// 3. 避免浮点运算
+int IntegerSqrt(int value) {
+    int result = 0;
+    int bit = 1 << 30;  // 整数平方根算法
+    while (bit > value) bit >>= 2;
+    while (bit != 0) {
+        if (value >= result + bit) {
+            value -= result + bit;
+            result = (result >> 1) + bit;
+        } else {
+            result >>= 1;
+        }
+        bit >>= 2;
+    }
+    return result;
+}
+```
+
+## 调试与测试规范
+
+### 日志输出规范
+```c
+#include "hilog/log.h"
+
+// 日志级别定义
+#define LOG_TAG "LandslideMonitor"
+#define LOG_DOMAIN 0xD001234
+
+// 日志宏定义
+#define LOGD(fmt, ...) HILOG_DEBUG(LOG_CORE, "[%s] " fmt, __FUNCTION__, ##__VA_ARGS__)
+#define LOGI(fmt, ...) HILOG_INFO(LOG_CORE, "[%s] " fmt, __FUNCTION__, ##__VA_ARGS__)
+#define LOGW(fmt, ...) HILOG_WARN(LOG_CORE, "[%s] " fmt, __FUNCTION__, ##__VA_ARGS__)
+#define LOGE(fmt, ...) HILOG_ERROR(LOG_CORE, "[%s] " fmt, __FUNCTION__, ##__VA_ARGS__)
+
+// 使用示例
+void ProcessSensorData(void) {
+    LOGI("Starting sensor data processing");
+    
+    Sensor_Data_t sensorData;
+    int result = SENSOR_ReadAll(&sensorData);
+    if (result != ERR_SUCCESS) {
+        LOGE("Failed to read sensor data, error=%d", result);
+        return;
+    }
+    
+    LOGD("Temperature: %.2f°C, Humidity: %.2f%%", 
+         sensorData.temperature, sensorData.humidity);
+}
+```
+
+### 单元测试规范
+```c
+// 测试框架示例
+#ifdef UNIT_TEST
+#include <assert.h>
+
+void TEST_GPS_ParseNMEA(void) {
+    // 测试用例1：有效NMEA数据
+    const char* validNMEA = "$GPRMC,123519,A,4807.038,N,01131.000,E,022.4,084.4,230394,003.1,W*6A";
+    GPS_Data_t gpsData;
+    int result = GPS_ParseNMEA(validNMEA, &gpsData);
+    assert(result == ERR_SUCCESS);
+    assert(gpsData.isValid == true);
+    
+    // 测试用例2：无效NMEA数据
+    const char* invalidNMEA = "$GPRMC,123519,V,,,,,,,230394,003.1,W*6A";
+    result = GPS_ParseNMEA(invalidNMEA, &gpsData);
+    assert(result == ERR_SUCCESS);
+    assert(gpsData.isValid == false);
+    
+    printf("GPS_ParseNMEA tests passed\n");
+}
+
+void RUN_ALL_TESTS(void) {
+    TEST_GPS_ParseNMEA();
+    // 其他测试函数...
+    printf("All tests completed\n");
+}
+#endif
+```
+
+## 质量保证要求
+
+### 代码审查清单
+- [ ] 函数注释完整，包含功能、参数、返回值说明
+- [ ] 错误处理逻辑完整，所有分支都有处理
+- [ ] 内存使用安全，无缓冲区溢出风险
+- [ ] 变量命名符合规范，逻辑清晰
+- [ ] 编译无警告，通过静态分析检查
+- [ ] 性能满足要求，关键路径优化
+- [ ] 单元测试覆盖核心功能
+
+### 性能测试要求
+- **编译时间**: 全量编译<60秒
+- **运行内存**: 峰值使用<200KB
+- **Flash占用**: 程序大小<1MB
+- **响应时间**: GPS解析<50ms，形变计算<100ms
+- **稳定性**: 连续运行>72小时无内存泄漏
