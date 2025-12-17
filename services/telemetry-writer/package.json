@@ -1,0 +1,20 @@
+{
+  "name": "@lsmv2/telemetry-writer",
+  "private": true,
+  "version": "0.0.0",
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint src --max-warnings=0",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@clickhouse/client": "^1.12.1",
+    "@lsmv2/observability": "*",
+    "@lsmv2/validation": "*",
+    "kafkajs": "^2.2.4",
+    "zod": "^3.24.1"
+  }
+}
+
