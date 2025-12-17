@@ -17,7 +17,9 @@ def main() -> int:
         print(f"Missing: {openapi_path.as_posix()}")
         return 1
 
-    digest = hashlib.sha256(openapi_path.read_bytes()).hexdigest()
+    # Normalize CRLF/LF to avoid cross-platform mismatch.
+    data = openapi_path.read_bytes().replace(b"\r\n", b"\n")
+    digest = hashlib.sha256(data).hexdigest()
     stamp_path.write_text(digest + "\n", encoding="utf-8")
 
     print("Updated OpenAPI stamp:")
@@ -28,4 +30,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
