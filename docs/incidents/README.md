@@ -17,3 +17,4 @@
 - `docs/incidents/INC-0001-telemetry-schema-drift.md`
 - `docs/incidents/INC-0002-secrets-and-credentials-leak.md`
 - `docs/incidents/INC-0003-frontend-direct-db-access.md`
+- `docs/incidents/INC-0004-dockerhub-pull-timeout.md`

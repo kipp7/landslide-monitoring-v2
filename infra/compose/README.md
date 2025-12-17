@@ -29,6 +29,8 @@
 
    - `docker compose -f infra/compose/docker-compose.yml --env-file infra/compose/.env up -d`
 
+> 如果出现镜像拉取超时（Docker Hub 在国内经常不稳定），请先在 Docker Desktop 配置 Registry Mirror，再重试。
+
 4. 初始化数据库（首次启动后执行一次）：
 
    - PostgreSQL：`powershell -ExecutionPolicy Bypass -File infra/compose/scripts/init-postgres.ps1`
@@ -70,3 +72,11 @@
   - ClickHouse：`docs/integrations/storage/clickhouse/`
 - 运维 runbook：`docs/guides/runbooks/README.md`
 
+## 6) 企业化健康检查与证据包（推荐）
+
+当出现“启动失败/端口不可用/服务不健康”等问题时，建议先跑：
+
+- 健康检查：`powershell -ExecutionPolicy Bypass -File infra/compose/scripts/health-check.ps1`
+- 证据包（用于 Issue/Incident）：`powershell -ExecutionPolicy Bypass -File infra/compose/scripts/collect-evidence.ps1`
+
+证据包会输出到 `backups/evidence/<timestamp>/`（已忽略，不会被提交）。

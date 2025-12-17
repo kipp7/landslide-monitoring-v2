@@ -8,6 +8,7 @@
 
 - 已安装 Docker Desktop（Windows）
 - 已安装 Docker Compose v2（`docker compose` 可用）
+- 若 Docker Hub 访问不稳定（常见）：需要配置 Docker Desktop 的 Registry Mirror
 
 ## 1) 初始化步骤（首次）
 
@@ -24,6 +25,12 @@
 3. 启动基础设施：
 
 - `docker compose -f infra/compose/docker-compose.yml --env-file infra/compose/.env up -d`
+
+如果镜像拉取超时：
+
+- 先运行证据包脚本收集信息：`powershell -ExecutionPolicy Bypass -File infra/compose/scripts/collect-evidence.ps1`
+- 在 Docker Desktop → Settings → Docker Engine 配置 `registry-mirrors`（或使用你学校/网络允许的镜像加速）
+- 重新执行 `up -d`
 
 4. 初始化 DDL（首次必须）：
 
@@ -77,4 +84,3 @@
 - 复现步骤
 - `docker compose logs` 输出片段（注意不要包含密码）
 - 系统环境信息（OS、Docker 版本）
-
