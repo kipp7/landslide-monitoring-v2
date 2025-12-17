@@ -32,11 +32,14 @@ GitHub 页面路径：
 
 - 勾选 `Require status checks to pass before merging`
   - 勾选 `Require branches to be up to date before merging`
-  - 在 status checks 中选择：`quality-gates`（对应 `.github/workflows/quality-gates.yml`）
+  - 在 status checks 中选择：`docs-and-contracts`（对应 `.github/workflows/quality-gates.yml` 的 job 名）
 
 说明：
 
 - 这会强制每个 PR 必须通过 `python docs/tools/run-quality-gates.py`，否则不能合并。
+- **常见坑**：GitHub 的 “status check 名称”通常是 *workflow 的 job 名*，不是 workflow 文件名或 `name:`。
+  - 本仓库 workflow 名为 `quality-gates`，但实际可选的 check 往往显示为 `docs-and-contracts` 或 `quality-gates / docs-and-contracts`。
+- **如果列表里找不到**：先确保 `main` 上至少跑过一次 Actions（有一次绿色记录），GitHub 才会把它出现在可选列表里。
 
 ### 2.3 历史与强推（强烈建议）
 
@@ -44,6 +47,14 @@ GitHub 页面路径：
 - 勾选 `Restrict who can push to matching branches`（限制谁能 push 到 main）
 - 勾选 `Do not allow force pushes`（禁止强推）
 - 勾选 `Do not allow deletions`（禁止删除 main）
+
+如果你在 `Branches` 页面找不到上述选项，可能是 GitHub 新版界面启用了 `Rulesets`（规则集）：
+
+- 入口：`Settings` → `Rules` → `Rulesets`
+- 在 ruleset 中对 `main` 设置：
+  - `Require a pull request`
+  - `Require status checks`（选择 `docs-and-contracts`）
+  - 禁止 force-push / 禁止删除 / 限制推送（对应规则项名称可能略有差异）
 
 ### 2.4 管理员也受约束（建议）
 
@@ -101,4 +112,3 @@ GitHub 页面路径：
 - 先改文档：`docs/guides/standards/`（说明为什么要改）
 - 再改 GitHub Settings
 - 开 Issue 记录：原因、变更点、影响范围、回滚方式
-
