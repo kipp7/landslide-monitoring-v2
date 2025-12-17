@@ -71,8 +71,8 @@ GitHub 页面路径：
 
 建议：
 
-- ✅ 仅启用 `Squash merging`
-- ⛔ 关闭 `Merge commits`
+- 仅启用 `Squash merging`（推荐）
+- 关闭 `Merge commits`
 - （可选）关闭 `Rebase merging`，避免新手误操作导致历史变复杂
 
 原因：
