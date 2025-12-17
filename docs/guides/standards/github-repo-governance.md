@@ -56,6 +56,50 @@ GitHub 页面路径：
   - `Require status checks`（选择 `docs-and-contracts`）
   - 禁止 force-push / 禁止删除 / 限制推送（对应规则项名称可能略有差异）
 
+> 实战结论：如果你看到 `Settings → Rules → Rulesets`，优先用 **Rulesets**，不要纠结旧版 Branch protection 教程。
+
+## 2.5 Rulesets（新版推荐做法，强制）
+
+页面路径：
+
+1) `Settings` → `Rules` → `Rulesets`
+2) `New ruleset` → `New branch ruleset`
+3) `Enforcement status` 选 `active`
+4) `Target branches` 选择 `main`（pattern: `refs/heads/main` 或 UI 的 `main`）
+
+建议开启的 rules（与本仓库治理目标对齐）：
+
+- `pull_request`：强制 PR-only，并要求 review 讨论已解决
+- `required_status_checks`：强制 CI 门禁（本仓库应选择 `docs-and-contracts`）
+- `non_fast_forward`：禁止 force push
+- `deletion`：禁止删除 `main`
+
+### 2.6 Required status checks 的“正确名称”怎么找（必须掌握）
+
+常见误区：在 UI 里找 `quality-gates`/“docs”是找不到的。
+
+本仓库的真实 check context 是 `docs-and-contracts`（Actions job 名），不是 workflow 文件名。
+
+稳定确认方式（PowerShell，推荐）：
+
+```powershell
+$headers = @{
+  Authorization = "Bearer $env:GITHUB_TOKEN"
+  Accept        = "application/vnd.github+json"
+  "X-GitHub-Api-Version" = "2022-11-28"
+}
+
+$sha = (Invoke-RestMethod -Method Get -Uri "https://api.github.com/repos/kipp7/landslide-monitoring-v2/commits/main" -Headers $headers).sha
+$runs = (Invoke-RestMethod -Method Get -Uri "https://api.github.com/repos/kipp7/landslide-monitoring-v2/commits/$sha/check-runs" -Headers $headers).check_runs
+$runs | Select-Object name, status, conclusion
+```
+
+## 6.1 常见问题与修复入口（强制阅读）
+
+- Rulesets/UI/422 错误/PowerShell 解析差异：`docs/incidents/INC-0005-github-rulesets-and-status-checks-setup.md`
+- Git 命令行访问 GitHub 连接重置：`docs/incidents/INC-0006-git-https-connection-reset.md`
+- DockerHub 拉镜像超时：`docs/incidents/INC-0004-dockerhub-pull-timeout.md`
+
 ### 2.4 管理员也受约束（建议）
 
 - 勾选 `Include administrators`

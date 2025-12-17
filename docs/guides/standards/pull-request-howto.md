@@ -108,3 +108,55 @@ PR 内容必须包含：
 3) 清理本地已合并分支（可选）：
    - `git branch -d <branch>`
 
+## 6) PR 显示 “This branch has conflicts” 怎么办（必会）
+
+### 6.1 最省事：用 GitHub 网页解决
+
+当 PR 页面提示冲突：
+
+1) 打开 PR 页面
+2) 点击 `Resolve conflicts`（如果可用）
+3) 解决冲突后 `Mark as resolved`
+4) `Commit merge`（GitHub 会把冲突解决 commit 到你的分支）
+
+适用场景：
+
+- 你不熟悉命令行
+- 网络导致本地 `git fetch/pull` 不稳定（见 INC-0006）
+
+### 6.2 命令行解决（更可控）
+
+1) 确保你在工作分支：
+
+- `git checkout <your-branch>`
+
+2) 拉取远端并合并 `main`：
+
+- `git fetch origin`
+- `git merge origin/main`
+
+3) 按提示打开冲突文件，删除 `<<<<<<<` / `=======` / `>>>>>>>` 标记，并保留正确内容。
+
+4) 提交并 push：
+
+- `git add -A`
+- `git commit -m "chore(repo): resolve merge conflicts"`
+- `git push`
+
+#### 6.2.1 add/add 冲突（双方都新增同一文件）
+
+最常见于 “两边同时新增同名文档”：
+
+- 选择保留一份权威内容（不要重复两份）
+- 合并后确保引用入口（README/索引）只指向一份文件
+
+案例复盘：`docs/incidents/INC-0005-github-rulesets-and-status-checks-setup.md`
+
+## 7) 命令行推送失败（连接重置/超时）怎么办
+
+症状：`git fetch/pull/push` 报 `Recv failure: Connection was reset`
+
+处理：
+
+- 优先切换 SSH remote（推荐）：见 `docs/incidents/INC-0006-git-https-connection-reset.md`
+- 不要卡在命令行：可用 GitHub 网页完成 PR 创建/冲突解决/合并
