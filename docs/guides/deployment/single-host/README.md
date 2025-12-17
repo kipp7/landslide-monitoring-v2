@@ -1,9 +1,12 @@
-﻿# 单机部署（Docker Compose）
+# 单机部署（Docker Compose）
 
-本目录提供单机部署的“最小可复用物料”：
+本目录作为“部署文档入口”；实际可运行的 Compose 物料统一放在仓库根目录的 `infra/compose/`，避免文档与配置分离导致漂移。
 
-- `docker-compose.yml`：基础设施（EMQX/Kafka/ClickHouse/Postgres/Redis/Kafka UI）
-- `env.example`：环境变量模板（复制为 `.env`）
+权威入口：
+
+- `infra/compose/README.md`
+- `infra/compose/docker-compose.yml`
+- `infra/compose/env.example`
 
 运行手册见：
 

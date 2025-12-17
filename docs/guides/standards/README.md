@@ -12,3 +12,4 @@
 - 代码生成规范：`docs/guides/standards/code-generation.md`
 - 仓库结构与命名：`docs/guides/standards/repo-structure-and-naming.md`
 - Git 工作流：`docs/guides/standards/git-workflow.md`
+- Issue/Incident 流程：`docs/guides/standards/issue-and-incident-process.md`

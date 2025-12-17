@@ -46,3 +46,4 @@ venv/
 # Local data directories (infra)
 data/
 volumes/
+backups/

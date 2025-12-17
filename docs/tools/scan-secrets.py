@@ -4,6 +4,7 @@ import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+import subprocess
 
 
 @dataclass(frozen=True)
@@ -118,19 +119,46 @@ def _check_env_files(path: Path) -> list[Finding]:
         return []
     return [Finding(path=path, line=1, kind="env_file", excerpt="Do not commit real .env files; use .env.example")]
 
+def _tracked_files(repo_root: Path) -> list[Path]:
+    """
+    Scan only tracked files.
+
+    Rationale:
+    - Local developers often have `.env` and other untracked files.
+    - Secrets gate should enforce what can be pushed to GitHub (tracked content).
+    """
+    try:
+        proc = subprocess.run(
+            ["git", "ls-files", "-z"],
+            cwd=repo_root,
+            check=True,
+            capture_output=True,
+        )
+    except Exception:  # noqa: BLE001
+        return []
+
+    raw = proc.stdout
+    parts = [p for p in raw.split(b"\x00") if p]
+    return [repo_root / p.decode("utf-8", errors="replace") for p in parts]
+
 
 def main() -> int:
     repo_root = _repo_root()
     patterns = _compile_patterns()
     findings: list[Finding] = []
 
-    for path in repo_root.rglob("*"):
-        try:
-            if not path.is_file():
+    tracked = _tracked_files(repo_root)
+    if not tracked:
+        print("Warning: could not list tracked files (git ls-files). Falling back to full scan.")
+        tracked = []
+        for path in repo_root.rglob("*"):
+            try:
+                if path.is_file():
+                    tracked.append(path)
+            except OSError:
                 continue
-        except OSError:
-            # Some directories may contain inaccessible files on Windows (e.g., broken links/ACL).
-            continue
+
+    for path in tracked:
         if _should_ignore(path):
             continue
         if _is_binary(path):

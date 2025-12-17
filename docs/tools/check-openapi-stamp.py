@@ -9,7 +9,9 @@ def _repo_root() -> Path:
 
 
 def _sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    # Normalize CRLF/LF to avoid cross-platform mismatch.
+    data = path.read_bytes().replace(b"\r\n", b"\n")
+    return hashlib.sha256(data).hexdigest()
 
 
 def main() -> int:
@@ -44,4 +46,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
