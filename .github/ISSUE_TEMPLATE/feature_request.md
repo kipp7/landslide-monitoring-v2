@@ -15,6 +15,11 @@ assignees: ""
 - [ ]
 - [ ]
 
+## 需求文档（推荐）
+
+- PRD（如果已有）：`docs/features/prd/`
+- Spec（如果需要技术方案）：`docs/features/spec/`
+
 ## 影响范围
 
 - [ ] docs（需求/契约/ADR）

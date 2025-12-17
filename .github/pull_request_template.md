@@ -15,6 +15,11 @@
 - 目标是什么（验收标准/DoD）
 - 约束是什么（单机、契约优先、不写死等）
 
+## 关联 Issue（推荐）
+
+- 关联 Issue：
+  - #
+
 ## 变更内容（做了什么）
 
 - 影响范围（勾选）：docs / apps / services / libs / infra
@@ -27,6 +32,12 @@
 - [ ] 若修改了 OpenAPI：已运行 `python docs/tools/update-openapi-stamp.py`
 - [ ] 其他验证（如有）：
   - 
+
+## 证据材料（建议）
+
+当出现 “CI 偶现失败 / Docker 拉不起 / 环境差异” 时，请附上证据材料（日志/截图/压缩包），便于复盘与复现：
+
+- 单机证据收集脚本：`infra/compose/scripts/collect-evidence.ps1`
 
 ## 风险与回滚（必须填写）
 

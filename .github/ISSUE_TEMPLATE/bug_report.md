@@ -20,6 +20,12 @@ assignees: ""
 2.
 3.
 
+## 证据材料（强烈建议）
+
+- 日志/错误堆栈：
+- 截图/录屏（如适用）：
+- 若为单机部署问题：请运行 `infra/compose/scripts/collect-evidence.ps1` 并上传压缩包（注意脱敏）
+
 ## 环境信息
 
 - OS：
