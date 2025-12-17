@@ -21,6 +21,10 @@
 - `python docs/tools/validate-contracts.py` 通过
 - 明确单机部署形态（Docker Compose）与数据目录规划（可备份/可迁移）
 
+建议先完成“启动前检查清单”，避免流程/环境缺失导致返工：
+
+- `docs/guides/roadmap/kickoff-checklist.md`
+
 ## 2. 下一步怎么做（按优先级）
 
 ### 2.1 基础设施（先做，避免后面返工）
@@ -65,4 +69,3 @@
 - 质量门禁：`docs/guides/standards/quality-gates.md`
 - App PRD：`docs/features/prd/mobile-app.md`
 - 固件 PRD：`docs/features/prd/device-firmware.md`
-

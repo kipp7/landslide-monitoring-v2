@@ -2,6 +2,11 @@
 
 目标：让仓库在 GitHub 上长期可维护，避免“乱推分支、乱改主分支、提交信息不可追溯”。
 
+配套必读（强制）：
+
+- GitHub 仓库治理（分支保护/合并策略）：`docs/guides/standards/github-repo-governance.md`
+- PR 操作指南（页面步骤/标题/内容/修 CI）：`docs/guides/standards/pull-request-howto.md`
+
 ## 1) 分支策略（强制）
 
 ### 1.1 主分支（main）
@@ -105,10 +110,18 @@ PR 模板见：
 
 - `.github/pull_request_template.md`
 
+合并纪律（强制）：
+
+- 优先 `Squash and merge`（保持 `main` 历史干净）
+- 合并完成后必须点击 `Delete branch`（保持远端干净）
+
+不会操作 PR 时，不要“乱点”，按步骤执行：
+
+- `docs/guides/standards/pull-request-howto.md`
+
 ## 5) 版本化与发布（后续扩展）
 
 当前阶段不强制发布版本号，但必须保证：
 
 - 契约变更可追溯（通过 PR + commit）
 - schema 必须版本化（`v1/v2`），向后兼容优先
-

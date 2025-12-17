@@ -31,9 +31,11 @@
 ## guides（落地指南）
 
 - 标准：`docs/guides/standards/README.md`
+- 语言与写作规范（先读）：`docs/guides/standards/language-policy.md`
 - 单机 runbook：`docs/guides/runbooks/README.md`
 - 下一步与路线图：`docs/guides/roadmap/README.md`
 - 审查与差距分析：`docs/guides/audits/README.md`
+- 重构启动清单（开始写代码前必读）：`docs/guides/roadmap/kickoff-checklist.md`
 
 ## 代码仓库结构（v2）
 
