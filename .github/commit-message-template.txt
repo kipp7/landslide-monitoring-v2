@@ -1,14 +1,24 @@
 <type>(<scope>): <subject>
 
-# type: feat|fix|docs|refactor|chore|test
-# scope: docs|api|mqtt|kafka|rules|storage|ci|repo|web|mobile|firmware|infra
+# type（必选）：
+# - feat（新增功能）
+# - fix（修复问题）
+# - docs（文档/契约）
+# - refactor（重构）
+# - chore（工程/CI/脚本）
+# - test（测试）
 #
-# 变更说明（可选）：
+# scope（建议必填）：
+# - docs|api|mqtt|kafka|rules|storage|ci|repo|web|mobile|firmware|infra
+#
+# subject（建议中文，必须一句话说清楚）：
+# - 避免 “update/modify/调整一下” 这类无信息描述
+#
+# 变更说明（可选，建议写 why/影响/风险）：
 # - 为什么要改（why）
-# - 关键点（what）
-# - 风险/兼容性（risk）
+# - 做了什么（what）
+# - 风险与回滚（risk）
 #
 # 示例：
-# docs(api): 补齐 auth 响应示例
-# chore(ci): 添加 quality-gates workflow
-
+# docs(api): 补齐登录响应示例
+# chore(infra): 增加单机 compose 初始化脚本

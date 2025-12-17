@@ -1,6 +1,6 @@
 ---
-name: Feature request
-about: 提出一个需求/改进建议
+name: 提出需求（Feature）
+about: 提出一个需求/改进建议（建议写清验收标准）
 title: "[FEAT] "
 labels: enhancement
 assignees: ""
@@ -23,4 +23,3 @@ assignees: ""
 - [ ] mobile（apps/mobile）
 - [ ] firmware
 - [ ] infra
-
