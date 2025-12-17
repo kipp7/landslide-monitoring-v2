@@ -52,6 +52,11 @@
 
 CI 的原则是“只复用本地脚本，不另写一套规则”，避免本地与 CI 不一致。
 
+补充（Rulesets 必读）：
+
+- 如果你在 GitHub Rulesets 中配置 “Required status checks”，本仓库应选择 `docs-and-contracts`（Actions job 名）。
+- 具体踩坑与 422 修复过程见：`docs/incidents/INC-0005-github-rulesets-and-status-checks-setup.md`
+
 ## 8) Git 推送纪律（必须）
 
 - 禁止直接 push 到 `main`（必须走 PR）

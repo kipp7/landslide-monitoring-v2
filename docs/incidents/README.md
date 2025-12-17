@@ -18,3 +18,5 @@
 - `docs/incidents/INC-0002-secrets-and-credentials-leak.md`
 - `docs/incidents/INC-0003-frontend-direct-db-access.md`
 - `docs/incidents/INC-0004-dockerhub-pull-timeout.md`
+- `docs/incidents/INC-0005-github-rulesets-and-status-checks-setup.md`
+- `docs/incidents/INC-0006-git-https-connection-reset.md`
