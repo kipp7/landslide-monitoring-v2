@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/schemas/kafka.device-commands.v1.schema.json",
+  "title": "Kafka device.commands.v1 payload",
+  "description": "API 下发的设备命令进入 Kafka，用于解耦 API 与 MQTT 下发/重试。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "command_id", "device_id", "command_type", "payload", "issued_ts"],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "command_id": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    },
+    "device_id": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    },
+    "command_type": { "type": "string" },
+    "payload": { "type": "object", "additionalProperties": true },
+    "issued_ts": { "type": "string", "format": "date-time" },
+    "requested_by": {
+      "type": ["string", "null"],
+      "description": "发起用户 ID（审计用）",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    }
+  }
+}
+

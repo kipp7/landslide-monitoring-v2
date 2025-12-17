@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "alert_id": "6eaf2d9a-4c8b-4e0e-9e5f-4f4e3b97b2b0",
+  "event_id": "f7e7b9c0-2f1a-4b7e-9c5f-8b22d8d9a7a1",
+  "event_type": "ALERT_TRIGGER",
+  "created_ts": "2025-12-15T10:00:00Z",
+  "rule_id": "1afdc6d7-8c2f-4b2b-9c9a-69e4d9e4b2fa",
+  "rule_version": 3,
+  "severity": "high",
+  "device_id": "2c1f2d8e-2bb7-4f58-bb6a-6c2a0f4a7a4c",
+  "station_id": "7b0f2d41-0b25-4d16-9a38-7283a4dcdb4e",
+  "evidence": {
+    "time_field": "received",
+    "sensor_key": "displacement_velocity_mm_h",
+    "value": 0.32,
+    "threshold": 0.3,
+    "received_ts": "2025-12-15T10:00:00.123Z",
+    "seq": 12345
+  },
+  "explain": "displacement_velocity_mm_h >= 0.3 for window(duration=10min,minPoints=6)"
+}
+

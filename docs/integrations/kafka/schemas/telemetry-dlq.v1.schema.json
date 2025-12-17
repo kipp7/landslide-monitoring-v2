@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/schemas/kafka.telemetry-dlq.v1.schema.json",
+  "title": "Kafka telemetry.dlq.v1 payload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "reason_code", "received_ts", "raw_payload"],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "reason_code": { "type": "string" },
+    "reason_detail": { "type": "string" },
+    "received_ts": { "type": "string", "format": "date-time" },
+    "device_id": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    },
+    "raw_payload": { "type": "string" }
+  }
+}
+

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/schemas/presence-event.v1.schema.json",
+  "title": "PresenceEvent (MQTT) v1",
+  "description": "设备在线/心跳事件。用于在线状态判定与连接风暴排查，不承载业务遥测。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "device_id", "event_ts", "status"],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "device_id": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    },
+    "event_ts": { "type": "string", "format": "date-time" },
+    "status": { "type": "string", "enum": ["online", "offline"] },
+    "meta": { "type": "object", "additionalProperties": true }
+  }
+}
+

@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "device_id": "2c1f2d8e-2bb7-4f58-bb6a-6c2a0f4a7a4c",
+  "event_ts": "2025-12-15T10:00:00Z",
+  "status": "online",
+  "meta": {
+    "ip": "192.168.1.10",
+    "reason": "boot"
+  }
+}
+

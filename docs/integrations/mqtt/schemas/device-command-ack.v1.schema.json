@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/schemas/device-command-ack.v1.schema.json",
+  "title": "DeviceCommandAck (MQTT) v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "command_id", "device_id", "ack_ts", "status"],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "command_id": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    },
+    "device_id": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    },
+    "ack_ts": { "type": "string", "format": "date-time" },
+    "status": { "type": "string", "enum": ["acked", "failed"] },
+    "result": { "type": "object", "additionalProperties": true }
+  }
+}
+

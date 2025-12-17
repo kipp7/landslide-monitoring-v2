@@ -1,0 +1,131 @@
+# Docker Compose（单机）- 后端基础设施
+#
+# 说明：
+# - 该文件用于“重构计划阶段”的部署蓝图与环境约定；应用服务（api/ingest/worker）实现后再补充。
+# - 单机不追求高可用，重点是可恢复（卷持久化 + 备份 + 保留策略）。
+
+version: "3.9"
+
+name: landslide-monitor
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: landslide_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${PG_USER:-landslide}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-landslide123}
+      POSTGRES_DB: ${PG_DATABASE:-landslide_monitor}
+      TZ: Asia/Shanghai
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER:-landslide} -d ${PG_DATABASE:-landslide_monitor}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: landslide_redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-redis123}"]
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a ${REDIS_PASSWORD:-redis123} ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.10
+    container_name: landslide_clickhouse
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_DB: ${CH_DATABASE:-landslide}
+      CLICKHOUSE_USER: ${CH_USER:-landslide}
+      CLICKHOUSE_PASSWORD: ${CH_PASSWORD:-landslide123}
+      TZ: Asia/Shanghai
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    ports:
+      - "8123:8123"  # HTTP
+      - "9000:9000"  # Native
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8123/ping | grep Ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  emqx:
+    image: emqx/emqx:5.7.2
+    container_name: landslide_emqx
+    restart: unless-stopped
+    environment:
+      EMQX_NAME: landslide_emqx
+      EMQX_HOST: 127.0.0.1
+      EMQX_DASHBOARD__DEFAULT_USERNAME: ${EMQX_DASHBOARD_USER:-admin}
+      EMQX_DASHBOARD__DEFAULT_PASSWORD: ${EMQX_DASHBOARD_PASSWORD:-public}
+    ports:
+      - "1883:1883"   # MQTT
+      - "8883:8883"   # MQTTS（后续启用证书）
+      - "18083:18083" # Dashboard
+
+  kafka:
+    image: bitnami/kafka:3.7
+    container_name: landslide_kafka
+    restart: unless-stopped
+    environment:
+      KAFKA_ENABLE_KRAFT: "yes"
+      KAFKA_CFG_NODE_ID: "1"
+      KAFKA_CFG_PROCESS_ROLES: "broker,controller"
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093"
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT"
+      KAFKA_CFG_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094"
+      KAFKA_CFG_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094"
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_CFG_LOG_RETENTION_HOURS: "${KAFKA_LOG_RETENTION_HOURS:-72}"
+      KAFKA_KRAFT_CLUSTER_ID: "${KAFKA_KRAFT_CLUSTER_ID:-abcdefghijklmnopqrstuv}"
+      TZ: Asia/Shanghai
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+    volumes:
+      - kafka_data:/bitnami/kafka
+    ports:
+      - "9094:9094" # 主机访问（EXTERNAL）
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list 1>/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:v0.7.2
+    container_name: landslide_kafka_ui
+    restart: unless-stopped
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+    ports:
+      - "8080:8080"
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:
+  clickhouse_data:
+  kafka_data:
+

@@ -1,0 +1,30 @@
+{
+  "dslVersion": 1,
+  "name": "位移速率趋势告警（窗口计算）",
+  "scope": {
+    "type": "device",
+    "deviceId": "2c1f2d8e-2bb7-4f58-bb6a-6c2a0f4a7a4c"
+  },
+  "enabled": true,
+  "severity": "high",
+  "timeField": "received",
+  "missing": { "policy": "ignore" },
+  "when": {
+    "metric": {
+      "sensorKey": "displacement_mm",
+      "agg": "slope",
+      "window": { "type": "duration", "minutes": 10, "minPoints": 6 }
+    },
+    "operator": ">=",
+    "value": 0.3
+  },
+  "window": { "type": "none" },
+  "actions": [
+    {
+      "type": "emit_alert",
+      "titleTemplate": "位移速率异常",
+      "messageTemplate": "位移速率>=0.3mm/h"
+    }
+  ]
+}
+
