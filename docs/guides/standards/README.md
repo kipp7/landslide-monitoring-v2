@@ -2,6 +2,8 @@
 
 代码与数据的统一规范（How-to + 约束集合）：
 
+- 语言政策：`docs/guides/standards/language-policy.md`
+- 文档写作规范：`docs/guides/standards/documentation-style.md`
 - 命名与约定：`docs/guides/standards/naming-conventions.md`
 - 后端规则（幂等、降级、安全、可观测性）：`docs/guides/standards/backend-rules.md`
 - 后端工程结构：`docs/guides/standards/backend-architecture.md`
