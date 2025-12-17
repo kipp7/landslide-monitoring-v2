@@ -28,14 +28,14 @@ M1（最小闭环）目标：
 当前完成情况：
 
 - ✅ ingest-service：已实现 MQTT telemetry 订阅、JSON Schema 校验、写 `telemetry.raw.v1` 与 `telemetry.dlq.v1`
-- ⏳ telemetry-writer：未开始
+- ✅ telemetry-writer：已实现消费 `telemetry.raw.v1` 并批量写入 ClickHouse（基础重试；writer 侧 DLQ 仍待决）
 - ⏳ API：未开始
 
 ## 3) 下一步（Next Actions，按优先级）
 
-1) `services/telemetry-writer`：Kafka `telemetry.raw.v1` → ClickHouse（批量写入 + 失败隔离）
-2) `services/api`：最小查询端点（`/data/state`、`/data/series`，并遵循 OpenAPI 契约）
-3) 单机联调：用 `infra/compose/` 拉起组件，跑一次端到端冒烟测试
+1) `services/api`：最小查询端点（`/data/state`、`/data/series`，并遵循 OpenAPI 契约）
+2) 单机联调：用 `infra/compose/` 拉起组件，跑一次端到端冒烟测试
+3) writer 可靠性增强：评估并补充 writer 侧 DLQ/告警/退避策略（避免 ClickHouse 故障导致缓冲堆积）
 
 ## 4) 关键入口（新 AI 只读这些就能上手）
 
@@ -83,4 +83,3 @@ M1（最小闭环）目标：
 - Rulesets / Required checks / 422：`docs/incidents/INC-0005-github-rulesets-and-status-checks-setup.md`
 - Git HTTPS 连接重置：`docs/incidents/INC-0006-git-https-connection-reset.md`
 - DockerHub 拉镜像超时：`docs/incidents/INC-0004-dockerhub-pull-timeout.md`
-
