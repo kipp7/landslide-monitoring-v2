@@ -63,3 +63,14 @@ OpenAPI 额外要求：
 
 - 容量规划假设（磁盘/内存/峰值吞吐）
 - 故障处置流程（Kafka 积压、ClickHouse 写入失败、MQTT 连接风暴）
+
+## 5. 进入“合并阶段”（Merge）
+
+强制要求：
+
+- 合并必须使用 `Squash and merge`
+- 每次合并必须提供“合并信息包”（PR 标题/描述 + Squash commit 标题/描述）
+
+参考：
+
+- `docs/guides/standards/pull-request-howto.md`

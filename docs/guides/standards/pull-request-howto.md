@@ -99,6 +99,69 @@ PR 内容必须包含：
 2) 合并说明用中文写清楚（建议沿用 PR 模板摘要）
 3) 合并完成后点击 `Delete branch`（保持远端干净）
 
+## 4.1 合并时必须填写哪些内容（强制：每次我让你合并都会给）
+
+从现在开始，每次出现“请你合并 PR”的场景，我都会提供一份 **合并信息包**，你只需要复制粘贴即可，避免你临场纠结标题/描述怎么写。
+
+你在 GitHub 上会遇到 2 个“填写窗口”，都要填：
+
+1) 创建 PR 时：PR 标题 + PR 描述
+2) `Squash and merge` 时：最终 commit message 标题 + 描述
+
+### A. PR 信息包模板（创建 PR 时用）
+
+**PR 标题（必填）**
+
+```
+<type>(<scope>): <一句话说明本次变更>
+```
+
+**PR 描述（必填）**
+
+```
+## 背景与目标（为什么要改）
+- 
+
+## 变更内容（做了什么）
+- 
+
+## 验证方式（必须填写）
+- [x] 已运行 `python docs/tools/run-quality-gates.py`
+- [ ] 若修改了 OpenAPI：已运行 `python docs/tools/update-openapi-stamp.py`
+
+## 风险与回滚（必须填写）
+- 风险点：
+  - 
+- 回滚方式：
+  - revert 本 PR
+```
+
+### B. Squash commit 信息包模板（合并按钮弹窗时用）
+
+**Commit message 标题（必填）**
+
+建议与 PR 标题一致（保持可追溯）：
+
+```
+<type>(<scope>): <一句话说明本次变更>
+```
+
+**Extended description（推荐）**
+
+建议写 3~6 行摘要（不要贴长日志）：
+
+```
+- Why：一句话说明动机/问题
+- What：列 2~4 条关键变更点
+- Verify：`python docs/tools/run-quality-gates.py`（本地/CI）
+- Risk/Rollback：revert 本 commit（对应 PR）
+```
+
+### C. type/scope 取值（统一约束）
+
+- type：`feat` / `fix` / `docs` / `refactor` / `chore` / `test`
+- scope（按模块选一个）：`repo` / `ci` / `infra` / `api` / `mqtt` / `kafka` / `rules` / `storage` / `web` / `mobile` / `firmware` / `docs`
+
 ## 5) 合并后同步本地（避免分叉）
 
 1) 切回 main：
