@@ -74,3 +74,9 @@ OpenAPI 额外要求：
 参考：
 
 - `docs/guides/standards/pull-request-howto.md`
+
+## 6. 改变了“进度/下一步”（Project Status）
+
+当你合并了一个 PR，导致项目阶段、里程碑、下一步发生变化，必须更新：
+
+- `docs/guides/roadmap/project-status.md`

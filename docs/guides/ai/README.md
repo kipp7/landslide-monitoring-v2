@@ -5,6 +5,7 @@
 ## 1. AI 阅读顺序（强制）
 
 1) `docs/README.md`（Docs Hub）
+2) `docs/guides/roadmap/project-status.md`（当前进度与下一步）
 2) `docs/architecture/`（Why）
 3) `docs/features/`（What）
 4) `docs/integrations/`（契约）
@@ -17,6 +18,11 @@
 - 是否新增/修改了 ADR？（关键决策必须有 why）
 - 是否更新了 PRD/SPEC？（功能边界与验收标准明确）
 - 是否按清单同步更新入口？`docs/guides/ai/checklists.md`
+- 是否需要更新项目状态页？`docs/guides/roadmap/project-status.md`
+
+补充：
+
+- 换窗口/换模型/换 AI 的交接指南：`docs/guides/ai/handoff.md`
 
 ## 3. Hooks 建议（实现阶段）
 
