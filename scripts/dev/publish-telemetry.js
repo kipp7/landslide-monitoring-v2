@@ -26,6 +26,8 @@ function requireArg(name) {
 }
 
 const mqttUrl = getArg("mqtt", process.env.MQTT_URL || "mqtt://localhost:1883");
+const username = getArg("username", process.env.MQTT_USERNAME);
+const password = getArg("password", process.env.MQTT_PASSWORD);
 const deviceId = requireArg("device");
 const topic = getArg("topic", `telemetry/${deviceId}`);
 const seq = Number(getArg("seq", "1"));
@@ -48,7 +50,9 @@ const payload = {
   }
 };
 
-const client = mqtt.connect(mqttUrl);
+const client = mqtt.connect(mqttUrl, {
+  ...(username && password ? { username, password } : {})
+});
 
 client.on("connect", () => {
   client.publish(topic, JSON.stringify(payload), { qos: 1 }, (err) => {
@@ -67,4 +71,3 @@ client.on("error", (err) => {
   process.exitCode = 1;
   client.end(true);
 });
-

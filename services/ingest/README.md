@@ -12,7 +12,7 @@
 参考：`services/ingest/.env.example`
 
 - `MQTT_URL`：例如 `mqtt://127.0.0.1:1883`
-- `MQTT_USERNAME`：可选；若 broker 启用鉴权则必须与 `MQTT_PASSWORD` 同时设置
+- `MQTT_USERNAME`：可选；若 broker 启用鉴权则必须与 `MQTT_PASSWORD` 同时设置（建议使用内部账号，例如 `ingest-service`）
 - `MQTT_PASSWORD`：可选；需与 `MQTT_USERNAME` 成对出现
 - `MQTT_TOPIC_TELEMETRY`：默认 `telemetry/+`
 - `KAFKA_BROKERS`：逗号分隔，例如 `127.0.0.1:9092`

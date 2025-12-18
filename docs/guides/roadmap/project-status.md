@@ -7,7 +7,7 @@
 - 每次合并一个 PR 到 `main`，如果它改变了项目阶段/里程碑/下一步，必须更新本页。
 - 本页只记录“当前状态与下一步”，历史细节放到 `docs/incidents/` 或 PR/commit 记录中。
 
-最后更新时间：2025-12-18（新增一键端到端冒烟脚本）
+最后更新时间：2025-12-18（新增 EMQX HTTP 鉴权/ACL 回调接口）
 
 ## 1) 当前结论（TL;DR）
 
@@ -15,6 +15,7 @@
 - 仓库治理已落地：Rulesets 强制 PR-only、必过 `docs-and-contracts`、禁强推/禁删除。
 - 阶段 0 已完成：单机基础设施 + 端到端冒烟（MQTT→Kafka→ClickHouse→API）可复现，踩坑已沉淀到 `docs/incidents/`。
   - 补充：`infra/compose/scripts/e2e-smoke-test.ps1` 可一键跑通并自动留证日志（见 `docs/guides/testing/e2e-smoke-test.md`）。
+- 阶段 1 进行中：已提供 EMQX HTTP authn/authz 回调接口（用于设备 `device_id + secret` 鉴权与 topic ACL），待在单机 Compose 环境接线验证。
 
 ## 2) 当前阶段与里程碑
 
@@ -41,7 +42,7 @@ M2（阶段 1：设备接入与鉴权）目标：
 ## 3) 下一步（Next Actions，按优先级）
 
 1) 合并阶段 1 的设备管理 PR：实现 `/devices`、`/sensors` 等管理端接口（Postgres），作为 MQTT 鉴权/ACL 的数据源
-2) MQTT 鉴权/ACL（阶段 1 关键）：把 EMQX authn/authz 接到后端（或单独 auth-service），并实现 revoke 立即生效
+2) MQTT 鉴权/ACL（阶段 1 关键）：把 EMQX authn/authz 接到后端（或单独 auth-service），并实现 revoke 立即生效（本 PR 提供回调接口）
 3) writer 可靠性增强：补充 writer 侧 DLQ/告警/退避策略（避免 ClickHouse 故障导致缓冲堆积）
 4) Postgres shadow（后续）：为 `/data/state` 引入 `device_state`（避免每次都扫 ClickHouse），并保持与 ClickHouse 可回放一致
 
