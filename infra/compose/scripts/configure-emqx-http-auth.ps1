@@ -145,7 +145,7 @@ if ($WriteServiceEnv) {
   if ($infra.ContainsKey("PG_PASSWORD")) { Set-OrAppendEnvValue $ApiEnvFile "POSTGRES_PASSWORD" $infra["PG_PASSWORD"] }
   if ($infra.ContainsKey("PG_DATABASE")) { Set-OrAppendEnvValue $ApiEnvFile "POSTGRES_DATABASE" $infra["PG_DATABASE"] }
 
-  if ($infra.ContainsKey("CH_HTTP_URL")) { Set-OrAppendEnvValue $ApiEnvFile "CLICKHOUSE_URL" $infra["CH_HTTP_URL"] }
+  if ($infra.ContainsKey("CH_HTTP_URL")) { Set-OrAppendEnvValue $ApiEnvFile "CLICKHOUSE_URL" (Resolve-EnvTemplate $infra["CH_HTTP_URL"] $infra) }
   if ($infra.ContainsKey("CH_DATABASE")) { Set-OrAppendEnvValue $ApiEnvFile "CLICKHOUSE_DATABASE" $infra["CH_DATABASE"] }
   if ($infra.ContainsKey("CH_USER")) { Set-OrAppendEnvValue $ApiEnvFile "CLICKHOUSE_USERNAME" $infra["CH_USER"] }
   if ($infra.ContainsKey("CH_PASSWORD")) { Set-OrAppendEnvValue $ApiEnvFile "CLICKHOUSE_PASSWORD" $infra["CH_PASSWORD"] }
