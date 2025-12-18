@@ -64,7 +64,9 @@ services:
         soft: 262144
         hard: 262144
     volumes:
-      - ${DATA_DIR:-../../data}/clickhouse:/var/lib/clickhouse
+      # ClickHouse 在 Windows/桌面环境 bind mount 上可能出现 rename/permission 问题；
+      # 用 named volume（存储在 Docker VM 内）可显著降低踩坑概率。
+      - clickhouse_data:/var/lib/clickhouse
     ports:
       - "8123:8123"  # HTTP
       - "9000:9000"  # Native
@@ -131,3 +133,6 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
+
+volumes:
+  clickhouse_data:

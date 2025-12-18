@@ -46,6 +46,7 @@ while ($true) {
 Write-Host "Kafka is ready." -ForegroundColor Green
 
 $topics = @(
+  "__consumer_offsets",
   "telemetry.raw.v1",
   "telemetry.dlq.v1",
   "alerts.events.v1",
@@ -55,13 +56,23 @@ $topics = @(
 
 foreach ($t in $topics) {
   Write-Host "Ensuring topic: $t"
-  Invoke-KafkaTopics @(
+
+  $args = @(
     "--bootstrap-server", "kafka:9092",
     "--create", "--if-not-exists",
     "--topic", $t,
-    "--partitions", "6",
     "--replication-factor", "1"
-  ) 1>$null
+  )
+
+  if ($t -eq "__consumer_offsets") {
+    # KafkaJS consumer groups require the offsets topic to exist.
+    # When auto topic creation is disabled, this internal topic may not be created automatically.
+    $args += @("--partitions", "50", "--config", "cleanup.policy=compact")
+  } else {
+    $args += @("--partitions", "6")
+  }
+
+  Invoke-KafkaTopics $args 1>$null
   Assert-LastExitCode "kafka-topics create failed: $t"
 }
 

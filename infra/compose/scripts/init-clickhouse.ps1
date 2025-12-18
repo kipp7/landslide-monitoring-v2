@@ -39,16 +39,12 @@ function Assert-LastExitCode([string]$message) {
   if ($LASTEXITCODE -ne 0) { throw "$message (exit=$LASTEXITCODE)" }
 }
 
-Write-Host "Waiting for ClickHouse to respond to /ping..." -ForegroundColor Cyan
+Write-Host "Waiting for ClickHouse to be ready..." -ForegroundColor Cyan
 $maxWaitSeconds = 90
 $start = Get-Date
 while ($true) {
-  try {
-    $resp = Invoke-WebRequest -UseBasicParsing -Uri "http://localhost:8123/ping" -TimeoutSec 2
-    if ($resp.StatusCode -eq 200 -and $resp.Content -match "Ok") { break }
-  } catch {
-    # ignore
-  }
+  docker compose -f $ComposeFile --env-file $EnvFile exec -T clickhouse clickhouse-client --user $env:CH_USER --password $env:CH_PASSWORD --query "SELECT 1" 1>$null 2>$null
+  if ($LASTEXITCODE -eq 0) { break }
   if (((Get-Date) - $start).TotalSeconds -gt $maxWaitSeconds) {
     throw "ClickHouse is not ready after ${maxWaitSeconds}s. Check: docker compose logs clickhouse"
   }

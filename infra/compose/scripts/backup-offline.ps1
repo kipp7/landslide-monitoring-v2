@@ -1,10 +1,10 @@
-$ErrorActionPreference = "Stop"
-
 param(
   [string]$EnvFile = "infra/compose/.env",
   [string]$ComposeFile = "infra/compose/docker-compose.yml",
   [string]$BackupRoot = "backups"
 )
+
+$ErrorActionPreference = "Stop"
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\\..\\..")).Path
 
@@ -39,12 +39,34 @@ $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $dst = Join-Path (Join-Path $repoRoot $BackupRoot) $timestamp
 
 New-Item -ItemType Directory -Force -Path $dst | Out-Null
+New-Item -ItemType Directory -Force -Path (Join-Path $dst "volumes") | Out-Null
 
 Write-Host "Stopping services (offline backup)..."
 docker compose -f $ComposeFile --env-file $EnvFile down
 
 Write-Host "Copying data dir: $dataDirAbs -> $dst"
 Copy-Item -Recurse -Force $dataDirAbs (Join-Path $dst "data")
+
+function Get-ComposeProjectName([string]$composeFile) {
+  $nameLine = (Get-Content -Encoding UTF8 $composeFile | Where-Object { $_ -match '^name:\\s*' } | Select-Object -First 1)
+  if (-not $nameLine) { return $null }
+  return ($nameLine -replace '^name:\\s*', '').Trim()
+}
+
+$projectName = Get-ComposeProjectName $ComposeFile
+if ($projectName) {
+  $clickhouseVolume = "${projectName}_clickhouse_data"
+  Write-Host "Backing up ClickHouse named volume: $clickhouseVolume"
+
+  # Note: this may pull the image on first run.
+  docker run --rm `
+    -v "${clickhouseVolume}:/volume:ro" `
+    -v "${dst}:/backup" `
+    alpine:3.20 `
+    sh -lc "mkdir -p /backup/volumes && tar -czf /backup/volumes/clickhouse_data.tgz -C /volume ."
+} else {
+  Write-Host "WARN: Cannot detect compose project name; skipping ClickHouse named volume backup." -ForegroundColor Yellow
+}
 
 Write-Host "Starting services..."
 docker compose -f $ComposeFile --env-file $EnvFile up -d
