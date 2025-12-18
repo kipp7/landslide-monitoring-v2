@@ -13,6 +13,7 @@
     "@types/pg": "^8.11.11"
   },
   "dependencies": {
+    "@fastify/formbody": "^8.0.2",
     "@clickhouse/client": "^1.12.1",
     "@lsmv2/observability": "*",
     "dotenv": "^16.4.7",

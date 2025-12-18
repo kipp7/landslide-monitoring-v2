@@ -73,6 +73,7 @@
   - PostgreSQL：`docs/integrations/storage/postgres/tables/`
   - ClickHouse：`docs/integrations/storage/clickhouse/`
 - 运维 runbook：`docs/guides/runbooks/README.md`
+- 阶段 1（设备鉴权/ACL）接线：`docs/guides/deployment/single-host/emqx-http-auth.md`
 
 ## 6) 企业化健康检查与证据包（推荐）
 

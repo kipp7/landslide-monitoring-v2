@@ -1,4 +1,5 @@
 import { createLogger, newTraceId } from "@lsmv2/observability";
+import formbody from "@fastify/formbody";
 import dotenv from "dotenv";
 import Fastify from "fastify";
 import path from "node:path";
@@ -8,6 +9,7 @@ import { fail } from "./http";
 import { createPgPool } from "./postgres";
 import { registerDataRoutes } from "./routes/data";
 import { registerDeviceRoutes } from "./routes/devices";
+import { registerEmqxRoutes } from "./routes/emqx";
 import { registerSensorRoutes } from "./routes/sensors";
 
 async function main(): Promise<void> {
@@ -21,6 +23,8 @@ async function main(): Promise<void> {
     disableRequestLogging: true
   });
 
+  await app.register(formbody);
+
   app.decorateRequest("traceId", "");
 
   app.addHook("onRequest", async (request, _reply) => {
@@ -29,6 +33,7 @@ async function main(): Promise<void> {
 
   app.addHook("preHandler", async (request, reply) => {
     if (request.url === "/health") return;
+    if (request.url.startsWith("/emqx/")) return;
     if (!config.authRequired) return;
 
     const traceId = request.traceId;
@@ -59,6 +64,8 @@ async function main(): Promise<void> {
 
   const ch = createClickhouseClient(config);
   const pg = createPgPool(config);
+
+  registerEmqxRoutes(app, config, pg);
 
   app.register((v1, _opts, done) => {
     registerDataRoutes(v1, config, ch);

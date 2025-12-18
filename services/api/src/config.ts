@@ -1,5 +1,13 @@
 import { z } from "zod";
 
+function optionalNonEmptyString() {
+  return z.preprocess((v) => {
+    if (typeof v !== "string") return v;
+    const trimmed = v.trim();
+    return trimmed.length === 0 ? undefined : trimmed;
+  }, z.string().min(1).optional());
+}
+
 const configSchema = z.object({
   serviceName: z.string().default("api-service"),
   apiHost: z.string().default("0.0.0.0"),
@@ -21,6 +29,10 @@ const configSchema = z.object({
     .transform((v) => (v ?? "true").toLowerCase())
     .pipe(z.enum(["true", "false"]))
     .transform((v) => v === "true"),
+
+  emqxWebhookToken: optionalNonEmptyString(),
+  mqttInternalUsername: z.string().default("ingest-service"),
+  mqttInternalPassword: optionalNonEmptyString(),
 
   clickhouseUrl: z.string().url(),
   clickhouseUsername: z.string().default("default"),
@@ -57,7 +69,11 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
     clickhouseDatabase: env.CLICKHOUSE_DATABASE,
     clickhouseTable: env.CLICKHOUSE_TABLE,
 
-    apiMaxSeriesRangeHours: env.API_MAX_SERIES_RANGE_HOURS,
-    apiMaxPoints: env.API_MAX_POINTS
+  apiMaxSeriesRangeHours: env.API_MAX_SERIES_RANGE_HOURS,
+    apiMaxPoints: env.API_MAX_POINTS,
+
+    emqxWebhookToken: env.EMQX_WEBHOOK_TOKEN,
+    mqttInternalUsername: env.MQTT_INTERNAL_USERNAME,
+    mqttInternalPassword: env.MQTT_INTERNAL_PASSWORD
   });
 }

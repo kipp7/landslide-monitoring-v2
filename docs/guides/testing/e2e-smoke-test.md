@@ -76,6 +76,10 @@
 
 - `node scripts/dev/publish-telemetry.js --mqtt mqtt://localhost:1883 --device 2c1f2d8e-2bb7-4f58-bb6a-6c2a0f4a7a4c`
 
+如果你已启用 MQTT 鉴权（阶段 1），则需要带上 username/password（username 为 `device_id`）：
+
+- `node scripts/dev/publish-telemetry.js --mqtt mqtt://localhost:1883 --device <device_id> --username <device_id> --password <device_secret>`
+
 预期：
 - `ingest-service` 日志出现写入 Kafka 成功的记录
 - `telemetry-writer` 日志出现 ClickHouse insert ok

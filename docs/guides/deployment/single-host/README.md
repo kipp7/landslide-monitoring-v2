@@ -12,3 +12,6 @@
 
 - `docs/guides/runbooks/single-host-runbook.md`
 
+阶段 1（设备鉴权/ACL）接线说明：
+
+- `docs/guides/deployment/single-host/emqx-http-auth.md`
