@@ -5,6 +5,7 @@ param(
   [switch]$UseMqttAuth,
   [switch]$CreateDevice,
   [switch]$ConfigureEmqx,
+  [bool]$CollectEvidenceOnFailure = $true,
   [switch]$SkipBuild,
   [switch]$SkipWriteServiceEnv,
   [switch]$ForceWriteServiceEnv
@@ -57,6 +58,15 @@ function Read-EnvValue([string]$path, [string]$key, [string]$fallback) {
     return $t.Substring($key.Length + 1).Trim()
   }
   return $fallback
+}
+
+function Exec-ToFile([string]$path, [scriptblock]$cmd) {
+  try {
+    $out = & $cmd 2>&1 | Out-String
+    $out | Set-Content -Encoding UTF8 -NoNewline -LiteralPath $path
+  } catch {
+    ("ERROR: " + $_.Exception.Message + "`n") | Set-Content -Encoding UTF8 -NoNewline -LiteralPath $path
+  }
 }
 
 if (-not (Test-Path $EnvFile)) {
@@ -173,6 +183,8 @@ try {
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $logDir = "backups/evidence/e2e-smoke-$timestamp"
 New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+
+$evidenceDir = $null
 
 $ingestOut = Join-Path $logDir "ingest.stdout.log"
 $ingestErr = Join-Path $logDir "ingest.stderr.log"
@@ -299,6 +311,47 @@ try {
 
   Write-Host "E2E smoke test passed." -ForegroundColor Green
   Write-Host "Logs: $logDir" -ForegroundColor DarkGray
+} catch {
+  $errText = $_ | Out-String
+  Write-Host "E2E smoke test FAILED." -ForegroundColor Red
+  Write-Host $errText -ForegroundColor DarkGray
+
+  $failPath = Join-Path $logDir "failure.txt"
+  $errText | Set-Content -Encoding UTF8 -NoNewline -LiteralPath $failPath
+
+  if ($CollectEvidenceOnFailure) {
+    Write-Host "Collecting evidence bundle..." -ForegroundColor Cyan
+
+    Exec-ToFile (Join-Path $logDir "compose-ps.txt") { docker compose -f $ComposeFile --env-file $EnvFile ps }
+    Exec-ToFile (Join-Path $logDir "compose-logs-emqx.txt") { docker compose -f $ComposeFile --env-file $EnvFile logs --tail=400 emqx }
+    Exec-ToFile (Join-Path $logDir "compose-logs-kafka.txt") { docker compose -f $ComposeFile --env-file $EnvFile logs --tail=400 kafka }
+    Exec-ToFile (Join-Path $logDir "compose-logs-postgres.txt") { docker compose -f $ComposeFile --env-file $EnvFile logs --tail=400 postgres }
+    Exec-ToFile (Join-Path $logDir "compose-logs-clickhouse.txt") { docker compose -f $ComposeFile --env-file $EnvFile logs --tail=400 clickhouse }
+
+    try {
+      powershell -NoProfile -ExecutionPolicy Bypass -File infra/compose/scripts/health-check.ps1
+      Assert-LastExitCode "health-check.ps1 failed"
+    } catch {
+      # keep going
+    }
+
+    try {
+      powershell -NoProfile -ExecutionPolicy Bypass -File infra/compose/scripts/collect-evidence.ps1 -EnvFile $EnvFile -ComposeFile $ComposeFile -OutDirRoot $logDir
+      Assert-LastExitCode "collect-evidence.ps1 failed"
+      $items = Get-ChildItem -Path $logDir -Directory | Sort-Object Name -Descending
+      if ($items.Count -gt 0) { $evidenceDir = $items[0].FullName }
+    } catch {
+      Write-Host "WARN: evidence collection failed: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+
+    if ($evidenceDir) {
+      Write-Host "Evidence: $evidenceDir" -ForegroundColor Yellow
+    } else {
+      Write-Host "Evidence: $logDir" -ForegroundColor Yellow
+    }
+  }
+
+  exit 1
 } finally {
   Write-Host "Stopping services..." -ForegroundColor Cyan
   foreach ($p in @($ingestProc, $writerProc, $apiProc)) {

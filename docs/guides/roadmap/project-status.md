@@ -7,7 +7,7 @@
 - 每次合并一个 PR 到 `main`，如果它改变了项目阶段/里程碑/下一步，必须更新本页。
 - 本页只记录“当前状态与下一步”，历史细节放到 `docs/incidents/` 或 PR/commit 记录中。
 
-最后更新时间：2025-12-18（阶段 1：鉴权端到端一键冒烟）
+最后更新时间：2025-12-18（阶段 1：鉴权端到端一键冒烟 + 自动留证）
 
 ## 1) 当前结论（TL;DR）
 
@@ -18,6 +18,7 @@
 - 阶段 1 进行中：已提供 EMQX HTTP authn/authz 回调接口（用于设备 `device_id + secret` 鉴权与 topic ACL），待在单机 Compose 环境接线验证。
   - 补充：`infra/compose/scripts/configure-emqx-http-auth.ps1` 可一键写入 EMQX 配置（免 Dashboard 手工操作）。
   - 补充：`infra/compose/scripts/e2e-smoke-test.ps1` 支持 `-ConfigureEmqx -UseMqttAuth -CreateDevice` 一键跑通“带鉴权”的端到端冒烟。
+  - 补充：冒烟失败会自动调用 `infra/compose/scripts/collect-evidence.ps1` 生成证据包（带脱敏），避免手工收集日志。
 
 ## 2) 当前阶段与里程碑
 

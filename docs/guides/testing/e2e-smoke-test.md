@@ -19,6 +19,14 @@
 
 - `powershell -NoProfile -ExecutionPolicy Bypass -File infra/compose/scripts/e2e-smoke-test.ps1 -ConfigureEmqx -UseMqttAuth -CreateDevice`
 
+失败时留证（无需手工收集）：
+
+- 脚本失败会自动在 `backups/evidence/e2e-smoke-<timestamp>/` 下输出：
+  - `failure.txt`：失败原因
+  - `*.stdout.log`/`*.stderr.log`：本机进程日志
+  - `compose-logs-*.txt`：基础设施容器日志（tail）
+  - `backups/evidence/e2e-smoke-<timestamp>/<timestamp>/`：证据包（`collect-evidence.ps1` 产物，已做敏感信息脱敏）
+
 ## 1) 启动基础设施（Docker Compose）
 
 从仓库根目录执行（只需要第一次初始化时跑 init 脚本）：
