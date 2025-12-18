@@ -110,7 +110,13 @@ function Run-Node([string[]]$nodeArgs, [string]$logPath) {
   $header = "== node $argText =="
   Add-Content -Encoding UTF8 -LiteralPath $logPath -Value ($header + "`n")
 
-  $out = (& node @nodeArgs 2>&1 | Out-String)
+  $prevPreference = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  try {
+    $out = (& node @nodeArgs 2>&1 | Out-String)
+  } finally {
+    $ErrorActionPreference = $prevPreference
+  }
   if ($out) { Add-Content -Encoding UTF8 -LiteralPath $logPath -Value $out }
 
   $exit = $LASTEXITCODE
