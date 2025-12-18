@@ -12,8 +12,8 @@
 参考：`services/ingest/.env.example`
 
 - `MQTT_URL`：例如 `mqtt://127.0.0.1:1883`
-- `MQTT_USERNAME`：设备/服务端用户名（本阶段可先用服务端账号）
-- `MQTT_PASSWORD`
+- `MQTT_USERNAME`：可选；若 broker 启用鉴权则必须与 `MQTT_PASSWORD` 同时设置
+- `MQTT_PASSWORD`：可选；需与 `MQTT_USERNAME` 成对出现
 - `MQTT_TOPIC_TELEMETRY`：默认 `telemetry/+`
 - `KAFKA_BROKERS`：逗号分隔，例如 `127.0.0.1:9092`
 - `KAFKA_CLIENT_ID`：默认 `ingest-service`
@@ -44,4 +44,3 @@
   - 校验通过 → 写入 Kafka `telemetry.raw.v1`（补充 `received_ts`）
 
 注意：Schema 文件当前直接引用 `docs/integrations/*/schemas`，实现阶段会把 schemas 固化为 `libs/` 的可发布包（见 `docs/guides/standards/code-generation.md`）。
-

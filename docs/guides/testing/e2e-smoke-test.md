@@ -11,6 +11,10 @@
 - 已通过基础设施冒烟测试：`docs/guides/testing/single-host-smoke-test.md`
 - Node.js 满足 `package.json` 要求（建议 Node 20+）
 
+可选：如果你希望“一键跑通并自动留证”，可以直接运行脚本（会启动本机进程形式的 services，并在 `backups/evidence/` 输出日志）：
+
+- `powershell -ExecutionPolicy Bypass -File infra/compose/scripts/e2e-smoke-test.ps1`
+
 ## 1) 启动基础设施（Docker Compose）
 
 从仓库根目录执行（只需要第一次初始化时跑 init 脚本）：
@@ -40,6 +44,7 @@
 - 编辑 `services/ingest/.env`（示例）：
   - `MQTT_URL=mqtt://localhost:1883`
   - `KAFKA_BROKERS=localhost:9094`
+  - （可选）若 EMQX 启用了鉴权：同时设置 `MQTT_USERNAME` + `MQTT_PASSWORD`
 - 运行：`node services/ingest/dist/index.js`
   - 说明：服务会自动读取同目录下的 `.env`（无需手动导出环境变量）
 
