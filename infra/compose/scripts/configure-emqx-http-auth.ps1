@@ -30,6 +30,24 @@ function Read-EnvFile([string]$path) {
   return $map
 }
 
+function Resolve-EnvTemplate([string]$value, [hashtable]$envMap) {
+  $out = $value
+  $maxPasses = 10
+  for ($i = 0; $i -lt $maxPasses; $i++) {
+    $before = $out
+    $out = [regex]::Replace($out, "\$\{([A-Za-z_][A-Za-z0-9_]*)\}", {
+      param($m)
+      $k = $m.Groups[1].Value
+      if ($envMap.ContainsKey($k) -and $envMap[$k]) { return [string]$envMap[$k] }
+      $fromEnv = [System.Environment]::GetEnvironmentVariable($k)
+      if ($fromEnv) { return $fromEnv }
+      return $m.Value
+    })
+    if ($out -eq $before) { break }
+  }
+  return $out
+}
+
 function Get-OrCreateToken([string]$path, [string]$key) {
   if (Test-Path $path) {
     $lines = Get-Content -Encoding UTF8 $path
@@ -148,7 +166,7 @@ if ($WriteIngestEnv) {
   Write-Host "Updating ingest-service env to use internal MQTT credentials..." -ForegroundColor Cyan
   Set-OrAppendEnvValue $IngestEnvFile "MQTT_USERNAME" "ingest-service"
   Set-OrAppendEnvValue $IngestEnvFile "MQTT_PASSWORD" $internalPass
-  if ($infra.ContainsKey("MQTT_URL")) { Set-OrAppendEnvValue $IngestEnvFile "MQTT_URL" $infra["MQTT_URL"] }
+  if ($infra.ContainsKey("MQTT_URL")) { Set-OrAppendEnvValue $IngestEnvFile "MQTT_URL" (Resolve-EnvTemplate $infra["MQTT_URL"] $infra) }
   if ($infra.ContainsKey("KAFKA_BROKERS")) { Set-OrAppendEnvValue $IngestEnvFile "KAFKA_BROKERS" $infra["KAFKA_BROKERS"] }
 }
 

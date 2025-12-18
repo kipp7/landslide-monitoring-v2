@@ -36,6 +36,24 @@ function Read-EnvFile([string]$path) {
   return $map
 }
 
+function Resolve-EnvTemplate([string]$value, [hashtable]$envMap) {
+  $out = $value
+  $maxPasses = 10
+  for ($i = 0; $i -lt $maxPasses; $i++) {
+    $before = $out
+    $out = [regex]::Replace($out, "\$\{([A-Za-z_][A-Za-z0-9_]*)\}", {
+      param($m)
+      $k = $m.Groups[1].Value
+      if ($envMap.ContainsKey($k) -and $envMap[$k]) { return [string]$envMap[$k] }
+      $fromEnv = [System.Environment]::GetEnvironmentVariable($k)
+      if ($fromEnv) { return $fromEnv }
+      return $m.Value
+    })
+    if ($out -eq $before) { break }
+  }
+  return $out
+}
+
 function Write-EnvIfMissingOrForced([string]$path, [string[]]$lines, [switch]$force) {
   if ((Test-Path $path) -and (-not $force)) {
     Write-Host "Keeping existing env: $path" -ForegroundColor DarkGray
@@ -75,9 +93,9 @@ if (-not (Test-Path $EnvFile)) {
 
 $envs = Read-EnvFile $EnvFile
 
-$mqttUrl = if ($envs.ContainsKey("MQTT_URL")) { $envs["MQTT_URL"] } else { "mqtt://localhost:1883" }
+$mqttUrl = if ($envs.ContainsKey("MQTT_URL")) { Resolve-EnvTemplate $envs["MQTT_URL"] $envs } else { "mqtt://localhost:1883" }
 $kafkaBrokers = if ($envs.ContainsKey("KAFKA_BROKERS")) { $envs["KAFKA_BROKERS"] } else { "localhost:9094" }
-$chUrl = if ($envs.ContainsKey("CH_HTTP_URL")) { $envs["CH_HTTP_URL"] } else { "http://localhost:8123" }
+$chUrl = if ($envs.ContainsKey("CH_HTTP_URL")) { Resolve-EnvTemplate $envs["CH_HTTP_URL"] $envs } else { "http://localhost:8123" }
 $chUser = if ($envs.ContainsKey("CH_USER")) { $envs["CH_USER"] } else { "default" }
 $chPassword = if ($envs.ContainsKey("CH_PASSWORD")) { $envs["CH_PASSWORD"] } else { "" }
 $chDb = if ($envs.ContainsKey("CH_DATABASE")) { $envs["CH_DATABASE"] } else { "landslide" }
@@ -87,98 +105,6 @@ $pgPort = if ($envs.ContainsKey("PG_PORT")) { $envs["PG_PORT"] } else { "5432" }
 $pgUser = if ($envs.ContainsKey("PG_USER")) { $envs["PG_USER"] } else { "landslide" }
 $pgPassword = if ($envs.ContainsKey("PG_PASSWORD")) { $envs["PG_PASSWORD"] } else { "" }
 $pgDb = if ($envs.ContainsKey("PG_DATABASE")) { $envs["PG_DATABASE"] } else { "landslide_monitor" }
-
-if ($ConfigureEmqx) {
-  Write-Host "Configuring EMQX HTTP authn/authz (via dashboard API)..." -ForegroundColor Cyan
-  powershell -NoProfile -ExecutionPolicy Bypass -File infra/compose/scripts/configure-emqx-http-auth.ps1 -WriteServiceEnv -WriteIngestEnv
-  Assert-LastExitCode "configure-emqx-http-auth.ps1 failed"
-}
-
-if (-not $SkipWriteServiceEnv) {
-  Write-Host "Preparing service env files (ignored by git)..." -ForegroundColor Cyan
-
-  $apiEnvPath = "services/api/.env"
-  $internalPassword = Read-EnvValue $apiEnvPath "MQTT_INTERNAL_PASSWORD" ""
-  if ($UseMqttAuth -and -not $internalPassword) {
-    throw "MQTT auth enabled but MQTT_INTERNAL_PASSWORD is missing in $apiEnvPath. Run this script with -ConfigureEmqx or run: infra/compose/scripts/configure-emqx-http-auth.ps1 -WriteServiceEnv -WriteIngestEnv"
-  }
-
-  Write-EnvIfMissingOrForced "services/ingest/.env" @(
-    "SERVICE_NAME=ingest-service",
-    "",
-    "MQTT_URL=$mqttUrl",
-    "MQTT_USERNAME=$(if ($UseMqttAuth) { 'ingest-service' } else { '' })",
-    "MQTT_PASSWORD=$(if ($UseMqttAuth) { $internalPassword } else { '' })",
-    "MQTT_TOPIC_TELEMETRY=telemetry/+",
-    "",
-    "KAFKA_BROKERS=$kafkaBrokers",
-    "KAFKA_CLIENT_ID=ingest-service",
-    "KAFKA_TOPIC_TELEMETRY_RAW=telemetry.raw.v1",
-    "KAFKA_TOPIC_TELEMETRY_DLQ=telemetry.dlq.v1"
-  ) -force:$ForceWriteServiceEnv
-
-  Write-EnvIfMissingOrForced "services/telemetry-writer/.env" @(
-    "SERVICE_NAME=telemetry-writer",
-    "",
-    "KAFKA_BROKERS=$kafkaBrokers",
-    "KAFKA_CLIENT_ID=telemetry-writer",
-    "KAFKA_GROUP_ID=telemetry-writer.v1",
-    "KAFKA_TOPIC_TELEMETRY_RAW=telemetry.raw.v1",
-    "",
-    "CLICKHOUSE_URL=$chUrl",
-    "CLICKHOUSE_USERNAME=$chUser",
-    "CLICKHOUSE_PASSWORD=$chPassword",
-    "CLICKHOUSE_DATABASE=$chDb",
-    "CLICKHOUSE_TABLE=telemetry_raw",
-    "",
-    "BATCH_MAX_ROWS=2000",
-    "BATCH_FLUSH_INTERVAL_MS=1000"
-  ) -force:$ForceWriteServiceEnv
-
-  Write-EnvIfMissingOrForced "services/api/.env" @(
-    "SERVICE_NAME=api-service",
-    "API_HOST=0.0.0.0",
-    "API_PORT=8080",
-    "",
-    "AUTH_REQUIRED=false",
-    "ADMIN_API_TOKEN=",
-    "EMQX_WEBHOOK_TOKEN=",
-    "MQTT_INTERNAL_USERNAME=ingest-service",
-    "MQTT_INTERNAL_PASSWORD=",
-    "",
-    "POSTGRES_HOST=$pgHost",
-    "POSTGRES_PORT=$pgPort",
-    "POSTGRES_USER=$pgUser",
-    "POSTGRES_PASSWORD=$pgPassword",
-    "POSTGRES_DATABASE=$pgDb",
-    "POSTGRES_POOL_MAX=10",
-    "",
-    "CLICKHOUSE_URL=$chUrl",
-    "CLICKHOUSE_USERNAME=$chUser",
-    "CLICKHOUSE_PASSWORD=$chPassword",
-    "CLICKHOUSE_DATABASE=$chDb",
-    "CLICKHOUSE_TABLE=telemetry_raw",
-    "",
-    "API_MAX_SERIES_RANGE_HOURS=168",
-    "API_MAX_POINTS=100000"
-  ) -force:$ForceWriteServiceEnv
-}
-
-if (-not $SkipBuild) {
-  Write-Host "Building workspaces..." -ForegroundColor Cyan
-  npm run build
-  Assert-LastExitCode "npm run build failed"
-}
-
-Write-Host "Checking infra is reachable..." -ForegroundColor Cyan
-try {
-  $resp = Invoke-WebRequest -UseBasicParsing -Uri "$chUrl/ping" -TimeoutSec 3
-  if ($resp.StatusCode -ne 200 -or ($resp.Content -notmatch "Ok")) {
-    throw "ClickHouse /ping did not return Ok"
-  }
-} catch {
-  throw "ClickHouse not reachable at $chUrl. Did you run: docker compose -f $ComposeFile --env-file $EnvFile up -d ?"
-}
 
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $logDir = "backups/evidence/e2e-smoke-$timestamp"
@@ -207,6 +133,98 @@ $writerProc = $null
 $apiProc = $null
 
 try {
+  if ($ConfigureEmqx) {
+    Write-Host "Configuring EMQX HTTP authn/authz (via dashboard API)..." -ForegroundColor Cyan
+    powershell -NoProfile -ExecutionPolicy Bypass -File infra/compose/scripts/configure-emqx-http-auth.ps1 -WriteServiceEnv -WriteIngestEnv
+    Assert-LastExitCode "configure-emqx-http-auth.ps1 failed"
+  }
+
+  if (-not $SkipWriteServiceEnv) {
+    Write-Host "Preparing service env files (ignored by git)..." -ForegroundColor Cyan
+
+    $apiEnvPath = "services/api/.env"
+    $internalPassword = Read-EnvValue $apiEnvPath "MQTT_INTERNAL_PASSWORD" ""
+    if ($UseMqttAuth -and -not $internalPassword) {
+      throw "MQTT auth enabled but MQTT_INTERNAL_PASSWORD is missing in $apiEnvPath. Run this script with -ConfigureEmqx or run: infra/compose/scripts/configure-emqx-http-auth.ps1 -WriteServiceEnv -WriteIngestEnv"
+    }
+
+    Write-EnvIfMissingOrForced "services/ingest/.env" @(
+      "SERVICE_NAME=ingest-service",
+      "",
+      "MQTT_URL=$mqttUrl",
+      "MQTT_USERNAME=$(if ($UseMqttAuth) { 'ingest-service' } else { '' })",
+      "MQTT_PASSWORD=$(if ($UseMqttAuth) { $internalPassword } else { '' })",
+      "MQTT_TOPIC_TELEMETRY=telemetry/+",
+      "",
+      "KAFKA_BROKERS=$kafkaBrokers",
+      "KAFKA_CLIENT_ID=ingest-service",
+      "KAFKA_TOPIC_TELEMETRY_RAW=telemetry.raw.v1",
+      "KAFKA_TOPIC_TELEMETRY_DLQ=telemetry.dlq.v1"
+    ) -force:$ForceWriteServiceEnv
+
+    Write-EnvIfMissingOrForced "services/telemetry-writer/.env" @(
+      "SERVICE_NAME=telemetry-writer",
+      "",
+      "KAFKA_BROKERS=$kafkaBrokers",
+      "KAFKA_CLIENT_ID=telemetry-writer",
+      "KAFKA_GROUP_ID=telemetry-writer.v1",
+      "KAFKA_TOPIC_TELEMETRY_RAW=telemetry.raw.v1",
+      "",
+      "CLICKHOUSE_URL=$chUrl",
+      "CLICKHOUSE_USERNAME=$chUser",
+      "CLICKHOUSE_PASSWORD=$chPassword",
+      "CLICKHOUSE_DATABASE=$chDb",
+      "CLICKHOUSE_TABLE=telemetry_raw",
+      "",
+      "BATCH_MAX_ROWS=2000",
+      "BATCH_FLUSH_INTERVAL_MS=1000"
+    ) -force:$ForceWriteServiceEnv
+
+    Write-EnvIfMissingOrForced "services/api/.env" @(
+      "SERVICE_NAME=api-service",
+      "API_HOST=0.0.0.0",
+      "API_PORT=8080",
+      "",
+      "AUTH_REQUIRED=false",
+      "ADMIN_API_TOKEN=",
+      "EMQX_WEBHOOK_TOKEN=",
+      "MQTT_INTERNAL_USERNAME=ingest-service",
+      "MQTT_INTERNAL_PASSWORD=",
+      "",
+      "POSTGRES_HOST=$pgHost",
+      "POSTGRES_PORT=$pgPort",
+      "POSTGRES_USER=$pgUser",
+      "POSTGRES_PASSWORD=$pgPassword",
+      "POSTGRES_DATABASE=$pgDb",
+      "POSTGRES_POOL_MAX=10",
+      "",
+      "CLICKHOUSE_URL=$chUrl",
+      "CLICKHOUSE_USERNAME=$chUser",
+      "CLICKHOUSE_PASSWORD=$chPassword",
+      "CLICKHOUSE_DATABASE=$chDb",
+      "CLICKHOUSE_TABLE=telemetry_raw",
+      "",
+      "API_MAX_SERIES_RANGE_HOURS=168",
+      "API_MAX_POINTS=100000"
+    ) -force:$ForceWriteServiceEnv
+  }
+
+  if (-not $SkipBuild) {
+    Write-Host "Building workspaces..." -ForegroundColor Cyan
+    npm run build
+    Assert-LastExitCode "npm run build failed"
+  }
+
+  Write-Host "Checking infra is reachable..." -ForegroundColor Cyan
+  try {
+    $resp = Invoke-WebRequest -UseBasicParsing -Uri "$chUrl/ping" -TimeoutSec 3
+    if ($resp.StatusCode -ne 200 -or ($resp.Content -notmatch "Ok")) {
+      throw "ClickHouse /ping did not return Ok"
+    }
+  } catch {
+    throw "ClickHouse not reachable at $chUrl. Did you run: docker compose -f $ComposeFile --env-file $EnvFile up -d ?"
+  }
+
   Write-Host "Starting services..." -ForegroundColor Cyan
 
   $ingestProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/ingest" -PassThru -RedirectStandardOutput $ingestOut -RedirectStandardError $ingestErr
