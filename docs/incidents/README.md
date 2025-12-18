@@ -22,3 +22,6 @@
 - `docs/incidents/INC-0006-git-https-connection-reset.md`
 - `docs/incidents/INC-0007-compose-kafka-image-manifest-unknown.md`
 - `docs/incidents/INC-0008-fastify-hook-signature-hang.md`
+- `docs/incidents/INC-0009-ajv-validator-wrapper-mismatch.md`
+- `docs/incidents/INC-0010-kafka-missing-consumer-offsets-topic.md`
+- `docs/incidents/INC-0011-clickhouse-bind-mount-rename-permission-denied.md`

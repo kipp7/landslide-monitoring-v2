@@ -23,7 +23,8 @@
 - `powershell -ExecutionPolicy Bypass -File infra/compose/scripts/create-kafka-topics.ps1`
 
 验收（必须）：
-- `http://localhost:8123/ping` 返回 `Ok.`
+- ClickHouse `/ping` 返回 `Ok.`（如果启用了用户密码，请带上 Basic Auth）：
+  - `curl.exe -u "<CH_USER>:<CH_PASSWORD>" http://localhost:8123/ping`
 - EMQX Dashboard 可打开：`http://localhost:18083`
 - Kafka listener：`localhost:9094` 可用（供本机服务连接）
 
@@ -87,7 +88,12 @@
 
 2) 查询曲线：
 
-- `curl \"http://localhost:8080/api/v1/data/series/2c1f2d8e-2bb7-4f58-bb6a-6c2a0f4a7a4c?startTime=2025-12-15T00:00:00Z&endTime=2030-01-01T00:00:00Z&sensorKeys=displacement_mm\"`
+PowerShell 推荐（避免 `$deviceId?startTime` 这类变量插值坑；并且查询范围不要超过后端限制，默认 168 小时）：
+
+- `$deviceId = "2c1f2d8e-2bb7-4f58-bb6a-6c2a0f4a7a4c"`
+- `$end = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")`
+- `$start = (Get-Date).AddHours(-1).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")`
+- `curl.exe "http://localhost:8080/api/v1/data/series/${deviceId}?startTime=$start&endTime=$end&sensorKeys=displacement_mm"`
 
 预期：
 - `series[0].points` 至少返回 1 个点

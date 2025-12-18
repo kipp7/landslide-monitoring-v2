@@ -52,7 +52,8 @@
 
 - PostgreSQL：`localhost:5432`
 - Redis：`localhost:6379`
-- ClickHouse HTTP：`http://localhost:8123/ping` 返回 `Ok.`
+- ClickHouse HTTP：`/ping` 返回 `Ok.`（如果启用了用户密码，请带上 Basic Auth）：
+  - `curl.exe -u "<CH_USER>:<CH_PASSWORD>" http://localhost:8123/ping`
 - EMQX Dashboard：`http://localhost:18083`
 - Kafka 外部 listener：`localhost:9094`
 
@@ -62,8 +63,9 @@
 
 - `data/postgres/`
 - `data/redis/`
-- `data/clickhouse/`
 - `data/kafka/`
+
+说明：ClickHouse 默认使用 Docker named volume（避免 Windows bind mount 的 rename/权限坑）。
 
 ### 2.4 可恢复性（最小）
 
@@ -71,6 +73,7 @@
 
 - `powershell -ExecutionPolicy Bypass -File infra/compose/scripts/backup-offline.ps1`
 - 备份产物应出现在：`backups/<timestamp>/data/`
+  - ClickHouse（named volume）备份：`backups/<timestamp>/volumes/clickhouse_data.tgz`
 
 ## 3) 失败处理（必须记录）
 
