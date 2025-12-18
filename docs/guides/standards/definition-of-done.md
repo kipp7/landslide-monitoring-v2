@@ -9,6 +9,7 @@
 - [ ] 有清晰的 Why（背景与目标），并能被复述。
 - [ ] 变更范围明确（影响哪些目录/模块）。
 - [ ] 质量门禁通过：`python docs/tools/run-quality-gates.py`
+- [ ] 若影响“阶段/里程碑/下一步/风险”：已更新 `docs/guides/roadmap/project-status.md`（交接入口，强制）。
 - [ ] 若涉及契约变更：已同步更新 `docs/integrations/`（且示例可校验）。
 - [ ] 有回滚策略（至少是 “revert 本 PR”）。
 - [ ] 不提交任何敏感信息（token/secret/password）。
@@ -39,4 +40,3 @@
 - [ ] `infra/compose/README.md` 有清晰的一键启动、数据目录、备份恢复步骤。
 - [ ] 关键脚本可执行（init/health-check/evidence/backup）。
 - [ ] 遇到问题能收集证据：`infra/compose/scripts/collect-evidence.ps1`
-
