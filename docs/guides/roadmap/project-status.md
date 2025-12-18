@@ -13,13 +13,13 @@
 
 - 技术栈已冻结：后端 TypeScript（strict），MQTT→Kafka→ClickHouse + Postgres（单机 Compose）。
 - 仓库治理已落地：Rulesets 强制 PR-only、必过 `docs-and-contracts`、禁强推/禁删除。
-- 已进入代码阶段：`services/ingest`/`services/telemetry-writer`/`services/api` 最小闭环已落地，Node/TS 工具链已接入 CI。
+- 阶段 0 已完成：单机基础设施 + 端到端冒烟（MQTT→Kafka→ClickHouse→API）可复现，踩坑已沉淀到 `docs/incidents/`。
 
 ## 2) 当前阶段与里程碑
 
-阶段：阶段 2（后端骨架与闭环）
+阶段：阶段 1（设备接入与鉴权）
 
-M1（最小闭环）目标：
+M1（阶段 0：最小闭环）目标：
 
 - MQTT ingest：设备上报 → Kafka（含 schema 校验与 DLQ）
 - writer：Kafka → ClickHouse（批量写入、错误隔离）
@@ -31,11 +31,18 @@ M1（最小闭环）目标：
 - ✅ telemetry-writer：已实现消费 `telemetry.raw.v1` 并批量写入 ClickHouse（基础重试；writer 侧 DLQ 仍待决）
 - ✅ API：已实现最小查询端点（`/data/state`、`/data/series`），数据源为 ClickHouse（后续可切换到 Postgres shadow）
 
+M2（阶段 1：设备接入与鉴权）目标：
+
+- 管理端：创建设备并生成“身份包”（`deviceId + deviceSecret`，secret 仅返回一次；服务端只存 hash）
+- MQTT：设备按 `deviceId/secret` 鉴权，按 topic 做 ACL，禁越权发布；吊销设备后立即拒绝上报
+- 运营：传感器字典与设备传感器声明可维护（前端不写死）
+
 ## 3) 下一步（Next Actions，按优先级）
 
-1) 单机联调（端到端冒烟）：用 `infra/compose/` 拉起基础设施，并跑通 MQTT→Kafka→ClickHouse→API 查询闭环
-2) writer 可靠性增强：评估并补充 writer 侧 DLQ/告警/退避策略（避免 ClickHouse 故障导致缓冲堆积）
-3) Postgres shadow：为 `/data/state` 引入 `device_state`（避免每次都扫 ClickHouse），并保持与 ClickHouse 可回放一致
+1) 合并阶段 1 的设备管理 PR：实现 `/devices`、`/sensors` 等管理端接口（Postgres），作为 MQTT 鉴权/ACL 的数据源
+2) MQTT 鉴权/ACL（阶段 1 关键）：把 EMQX authn/authz 接到后端（或单独 auth-service），并实现 revoke 立即生效
+3) writer 可靠性增强：补充 writer 侧 DLQ/告警/退避策略（避免 ClickHouse 故障导致缓冲堆积）
+4) Postgres shadow（后续）：为 `/data/state` 引入 `device_state`（避免每次都扫 ClickHouse），并保持与 ClickHouse 可回放一致
 
 ## 4) 关键入口（新 AI 只读这些就能上手）
 
