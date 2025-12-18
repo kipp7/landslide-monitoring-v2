@@ -15,6 +15,10 @@
 
 - `powershell -ExecutionPolicy Bypass -File infra/compose/scripts/e2e-smoke-test.ps1`
 
+阶段 1（启用 MQTT 鉴权/ACL）的一键冒烟（推荐全自动，不用点 Dashboard）：
+
+- `powershell -NoProfile -ExecutionPolicy Bypass -File infra/compose/scripts/e2e-smoke-test.ps1 -ConfigureEmqx -UseMqttAuth -CreateDevice`
+
 ## 1) 启动基础设施（Docker Compose）
 
 从仓库根目录执行（只需要第一次初始化时跑 init 脚本）：

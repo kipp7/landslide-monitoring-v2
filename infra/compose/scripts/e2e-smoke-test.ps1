@@ -2,6 +2,9 @@ param(
   [string]$EnvFile = "infra/compose/.env",
   [string]$ComposeFile = "infra/compose/docker-compose.yml",
   [string]$DeviceId = "",
+  [switch]$UseMqttAuth,
+  [switch]$CreateDevice,
+  [switch]$ConfigureEmqx,
   [switch]$SkipBuild,
   [switch]$SkipWriteServiceEnv,
   [switch]$ForceWriteServiceEnv
@@ -75,15 +78,27 @@ $pgUser = if ($envs.ContainsKey("PG_USER")) { $envs["PG_USER"] } else { "landsli
 $pgPassword = if ($envs.ContainsKey("PG_PASSWORD")) { $envs["PG_PASSWORD"] } else { "" }
 $pgDb = if ($envs.ContainsKey("PG_DATABASE")) { $envs["PG_DATABASE"] } else { "landslide_monitor" }
 
+if ($ConfigureEmqx) {
+  Write-Host "Configuring EMQX HTTP authn/authz (via dashboard API)..." -ForegroundColor Cyan
+  powershell -NoProfile -ExecutionPolicy Bypass -File infra/compose/scripts/configure-emqx-http-auth.ps1 -WriteServiceEnv -WriteIngestEnv
+  Assert-LastExitCode "configure-emqx-http-auth.ps1 failed"
+}
+
 if (-not $SkipWriteServiceEnv) {
   Write-Host "Preparing service env files (ignored by git)..." -ForegroundColor Cyan
+
+  $apiEnvPath = "services/api/.env"
+  $internalPassword = Read-EnvValue $apiEnvPath "MQTT_INTERNAL_PASSWORD" ""
+  if ($UseMqttAuth -and -not $internalPassword) {
+    throw "MQTT auth enabled but MQTT_INTERNAL_PASSWORD is missing in $apiEnvPath. Run this script with -ConfigureEmqx or run: infra/compose/scripts/configure-emqx-http-auth.ps1 -WriteServiceEnv -WriteIngestEnv"
+  }
 
   Write-EnvIfMissingOrForced "services/ingest/.env" @(
     "SERVICE_NAME=ingest-service",
     "",
     "MQTT_URL=$mqttUrl",
-    "MQTT_USERNAME=",
-    "MQTT_PASSWORD=",
+    "MQTT_USERNAME=$(if ($UseMqttAuth) { 'ingest-service' } else { '' })",
+    "MQTT_PASSWORD=$(if ($UseMqttAuth) { $internalPassword } else { '' })",
     "MQTT_TOPIC_TELEMETRY=telemetry/+",
     "",
     "KAFKA_BROKERS=$kafkaBrokers",
@@ -117,6 +132,9 @@ if (-not $SkipWriteServiceEnv) {
     "",
     "AUTH_REQUIRED=false",
     "ADMIN_API_TOKEN=",
+    "EMQX_WEBHOOK_TOKEN=",
+    "MQTT_INTERNAL_USERNAME=ingest-service",
+    "MQTT_INTERNAL_PASSWORD=",
     "",
     "POSTGRES_HOST=$pgHost",
     "POSTGRES_PORT=$pgPort",
@@ -200,8 +218,46 @@ try {
   }
   Write-Host "API is healthy." -ForegroundColor Green
 
+  $deviceSecret = $null
+  if ($CreateDevice) {
+    Write-Host "Creating a test device via API..." -ForegroundColor Cyan
+    $body = @{
+      deviceId = $DeviceId
+      deviceName = "smoke-device"
+      deviceType = "generic"
+      metadata = @{ note = "smoke_test" }
+    } | ConvertTo-Json -Depth 5
+
+    try {
+      $create = Invoke-RestMethod -Method Post -Uri "http://localhost:$apiPort/api/v1/devices" -ContentType "application/json" -Body $body -TimeoutSec 10
+      if (-not $create.success -or -not $create.data.deviceSecret) {
+        throw "unexpected API response"
+      }
+      $deviceSecret = [string]$create.data.deviceSecret
+    } catch {
+      throw "device creation failed. Ensure PostgreSQL is initialized (infra/compose/scripts/init-postgres.ps1). Logs: $logDir"
+    }
+    Write-Host "Device created: $DeviceId (secret not printed)" -ForegroundColor Green
+  }
+
+  if ($UseMqttAuth) {
+    if (-not $CreateDevice) {
+      throw "UseMqttAuth requires CreateDevice (needs device_secret)."
+    }
+
+    Write-Host "Verifying anonymous MQTT publish is denied..." -ForegroundColor Cyan
+    node scripts/dev/publish-telemetry.js --mqtt $mqttUrl --device $DeviceId | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+      throw "Expected anonymous MQTT publish to be denied, but it succeeded. Check EMQX authn is enabled and points to the correct URL."
+    }
+  }
+
   Write-Host "Publishing telemetry to MQTT..." -ForegroundColor Cyan
-  node scripts/dev/publish-telemetry.js --mqtt $mqttUrl --device $DeviceId
+  if ($UseMqttAuth) {
+    node scripts/dev/publish-telemetry.js --mqtt $mqttUrl --device $DeviceId --username $DeviceId --password $deviceSecret
+  } else {
+    node scripts/dev/publish-telemetry.js --mqtt $mqttUrl --device $DeviceId
+  }
   Assert-LastExitCode "publish-telemetry.js failed"
 
   Write-Host "Querying latest state..." -ForegroundColor Cyan
@@ -254,4 +310,3 @@ try {
     }
   }
 }
-
