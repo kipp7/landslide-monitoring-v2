@@ -64,7 +64,9 @@ services:
         soft: 262144
         hard: 262144
     volumes:
-      - ${DATA_DIR:-../../data}/clickhouse:/var/lib/clickhouse
+      # Default to a named volume (avoids Windows bind-mount rename/permission issues during INSERT).
+      # To use a bind-mount instead, set CH_DATA_DIR to something like: ../../data/clickhouse
+      - ${CH_DATA_DIR:-lsmv2_clickhouse_data}:/var/lib/clickhouse
     ports:
       - "8123:8123"  # HTTP
       - "9000:9000"  # Native
@@ -131,3 +133,6 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
+
+volumes:
+  lsmv2_clickhouse_data:

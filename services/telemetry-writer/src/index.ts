@@ -46,10 +46,18 @@ function isSafeInt64(value: number): boolean {
   return Number.isInteger(value) && Math.abs(value) <= Number.MAX_SAFE_INTEGER;
 }
 
+function toClickhouseDateTime64Utc(value: string): string {
+  // ClickHouse DateTime64 text format: "YYYY-MM-DD HH:MM:SS.mmm" (no trailing "Z", no "T")
+  // We normalize through Date to ensure UTC and keep millisecond precision.
+  const iso = new Date(value).toISOString(); // always ends with 'Z'
+  return iso.replace("T", " ").replace("Z", "");
+}
+
 function toTelemetryRows(payload: TelemetryRawV1): TelemetryRow[] {
   const rows: TelemetryRow[] = [];
 
-  const eventTs = payload.event_ts ?? null;
+  const receivedTs = toClickhouseDateTime64Utc(payload.received_ts);
+  const eventTs = payload.event_ts ? toClickhouseDateTime64Utc(payload.event_ts) : null;
   const seq = payload.seq ?? null;
   const schemaVersion = payload.schema_version;
 
@@ -69,7 +77,7 @@ function toTelemetryRows(payload: TelemetryRawV1): TelemetryRow[] {
     }
 
     rows.push({
-      received_ts: payload.received_ts,
+      received_ts: receivedTs,
       event_ts: eventTs,
       device_id: payload.device_id,
       sensor_key: sensorKey,
