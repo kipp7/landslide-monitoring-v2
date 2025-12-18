@@ -17,6 +17,15 @@
 5) **规范与流程（How-to）**：`docs/guides/standards/`
 6) **历史问题与坑**：`docs/incidents/`
 
+## 1.1) 当前进度快照（给新 AI 直接定位）
+
+以仓库事实为准：`docs/guides/roadmap/project-status.md`。
+
+截至当前快照：
+
+- 阶段 0（基础闭环）已完成：单机 Compose + MQTT→Kafka→ClickHouse→API 可复现，门禁与复盘已落地。
+- 阶段 1（设备接入与鉴权）正在进行：已提交“设备管理 + 传感器字典维护（Postgres）”的 PR，等待合入 `main` 后继续做 MQTT 鉴权/ACL。
+
 ## 2) 新 AI 接手时必须做的 7 步（强制）
 
 1) 读：`docs/README.md`
@@ -28,6 +37,27 @@
 6) 运行本地门禁（确认环境正常）：
    - `python docs/tools/run-quality-gates.py`
 7) 开始工作前先写“计划/范围”，并确保不越界（不扩大范围、不改既定技术栈）。
+
+## 2.1) PR 合并与自动化（避免人工点合并）
+
+仓库已启用 Rulesets：**必须走 PR**，且 **required checks 通过** 才能合并。
+
+自动合并的原则：
+
+- “冲突已解决”不等于“能合并”；必须等 CI/门禁全绿。
+- Auto-merge 可能在出现 conflicts / checks fail 后被 GitHub 取消，需要重新启用一次。
+
+推荐路径（最稳）：
+
+1) 在 PR 页面启用 `Auto-merge (Squash)`
+2) 等 required checks 全绿后自动合入
+
+如果你要用命令行自动合并（需本机已安装 `gh` 且已登录/有权限）：
+
+- 检查：`gh auth status`
+- 启用自动合并（推荐，符合 Rulesets）：`gh pr merge <PR号> --auto --squash --delete-branch`
+
+注意：本仓库的 CI 会严格执行 `npm run lint` / `npm run build` / `python docs/tools/run-quality-gates.py`，不通过不会合并。
 
 ## 3) 交接时必须更新哪些东西（强制）
 
@@ -67,4 +97,4 @@
 - 新 AI 直接开始写代码，不先读 `project-status.md` 与 `integrations/`。
 - 未经 ADR 直接改变技术路线（例如换语言、换消息中间件）。
 - 在 `apps/` 中硬编码传感器字段/阈值/单位（违反不写死原则）。
-
+- 新增临时调试脚本/证据包文件却未忽略：调试产物必须放 `backups/**` 且被 ESLint/Git 忽略，不进入仓库逻辑。

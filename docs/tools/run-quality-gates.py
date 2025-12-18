@@ -18,6 +18,7 @@ def main() -> int:
     steps: list[tuple[str, list[str]]] = [
         ("openapi stamp", [sys.executable, "docs/tools/check-openapi-stamp.py"]),
         ("contract validation", [sys.executable, "docs/tools/validate-contracts.py"]),
+        ("project status", [sys.executable, "docs/tools/check-project-status-updated.py"]),
         ("secrets scan", [sys.executable, "docs/tools/scan-secrets.py"]),
     ]
 
