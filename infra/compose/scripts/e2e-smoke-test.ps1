@@ -90,6 +90,34 @@ function Exec-ToFile([string]$path, [scriptblock]$cmd) {
   }
 }
 
+function Wait-ForLogMatch([string]$path, [string]$pattern, [int]$timeoutSeconds) {
+  $deadline = (Get-Date).AddSeconds($timeoutSeconds)
+  while ((Get-Date) -lt $deadline) {
+    if (Test-Path $path) {
+      try {
+        if (Select-String -Path $path -Pattern $pattern -Quiet) { return $true }
+      } catch {
+        # ignore transient read errors
+      }
+    }
+    Start-Sleep -Seconds 1
+  }
+  return $false
+}
+
+function Run-Node([string[]]$nodeArgs, [string]$logPath) {
+  $argText = ($nodeArgs -join " ")
+  $header = "== node $argText =="
+  Add-Content -Encoding UTF8 -LiteralPath $logPath -Value ($header + "`n")
+
+  $out = (& node @nodeArgs 2>&1 | Out-String)
+  if ($out) { Add-Content -Encoding UTF8 -LiteralPath $logPath -Value $out }
+
+  $exit = $LASTEXITCODE
+  Add-Content -Encoding UTF8 -LiteralPath $logPath -Value ("exit=" + $exit + "`n")
+  return $exit
+}
+
 if (-not (Test-Path $EnvFile)) {
   throw "Missing env file: $EnvFile (copy infra/compose/env.example -> infra/compose/.env)"
 }
@@ -121,6 +149,7 @@ $writerOut = Join-Path $logDir "writer.stdout.log"
 $writerErr = Join-Path $logDir "writer.stderr.log"
 $apiOut = Join-Path $logDir "api.stdout.log"
 $apiErr = Join-Path $logDir "api.stderr.log"
+$publishLog = Join-Path $logDir "publish-telemetry.log"
 
 $apiEnvPath = "services/api/.env"
 $apiPort = Read-EnvValue $apiEnvPath "API_PORT" "8080"
@@ -253,6 +282,12 @@ try {
   }
   Write-Host "API is healthy." -ForegroundColor Green
 
+  Write-Host "Waiting for ingest MQTT subscription..." -ForegroundColor Cyan
+  if (-not (Wait-ForLogMatch $ingestOut "mqtt subscribed" 45)) {
+    throw "ingest-service did not subscribe to MQTT within 45s. Logs: $logDir"
+  }
+  Write-Host "ingest-service is subscribed." -ForegroundColor Green
+
   $deviceSecret = $null
   if ($CreateDevice) {
     Write-Host "Creating a test device via API..." -ForegroundColor Cyan
@@ -281,19 +316,38 @@ try {
     }
 
     Write-Host "Verifying anonymous MQTT publish is denied..." -ForegroundColor Cyan
-    node scripts/dev/publish-telemetry.js --mqtt $mqttUrl --device $DeviceId | Out-Null
-    if ($LASTEXITCODE -eq 0) {
-      throw "Expected anonymous MQTT publish to be denied, but it succeeded. Check EMQX authn is enabled and points to the correct URL."
+    $anonDenied = $false
+    for ($i = 1; $i -le 10; $i++) {
+      Add-Content -Encoding UTF8 -LiteralPath $publishLog -Value ("-- anonymous attempt " + $i + " --`n")
+      $exit = Run-Node @("scripts/dev/publish-telemetry.js", "--mqtt", $mqttUrl, "--device", $DeviceId) $publishLog
+      if ($exit -eq 0) {
+        throw "Expected anonymous MQTT publish to be denied, but it succeeded. Check EMQX authn is enabled and points to the correct URL."
+      }
+      $tail = ""
+      try { $tail = (Get-Content -LiteralPath $publishLog -Tail 30 | Out-String) } catch { }
+      if ($tail -match "Not authorized") { $anonDenied = $true; break }
+      Start-Sleep -Seconds 2
+    }
+    if (-not $anonDenied) {
+      throw "Anonymous MQTT publish did not clearly fail with 'Not authorized' after retries. Check EMQX authn resource health and webhook connectivity. Logs: $logDir"
     }
   }
 
   Write-Host "Publishing telemetry to MQTT..." -ForegroundColor Cyan
-  if ($UseMqttAuth) {
-    node scripts/dev/publish-telemetry.js --mqtt $mqttUrl --device $DeviceId --username $DeviceId --password $deviceSecret
-  } else {
-    node scripts/dev/publish-telemetry.js --mqtt $mqttUrl --device $DeviceId
+  $published = $false
+  for ($i = 1; $i -le 10; $i++) {
+    Add-Content -Encoding UTF8 -LiteralPath $publishLog -Value ("-- publish attempt " + $i + " --`n")
+    if ($UseMqttAuth) {
+      $exit = Run-Node @("scripts/dev/publish-telemetry.js", "--mqtt", $mqttUrl, "--device", $DeviceId, "--username", $DeviceId, "--password", $deviceSecret) $publishLog
+    } else {
+      $exit = Run-Node @("scripts/dev/publish-telemetry.js", "--mqtt", $mqttUrl, "--device", $DeviceId) $publishLog
+    }
+    if ($exit -eq 0) { $published = $true; break }
+    Start-Sleep -Seconds ([Math]::Min(10, 1 + ($i * 2)))
   }
-  Assert-LastExitCode "publish-telemetry.js failed"
+  if (-not $published) {
+    throw "publish-telemetry.js failed after retries. See: $publishLog"
+  }
 
   Write-Host "Querying latest state..." -ForegroundColor Cyan
   $stateUrl = "http://$apiLocalHost`:$apiPort/api/v1/data/state/$DeviceId"
