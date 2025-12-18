@@ -25,7 +25,7 @@
 
 处理建议：
 
-- 修改 `.env` 中 `KAFKA_KRAFT_CLUSTER_ID` 后清理 `data/kafka`（注意备份）
+- 修改 `.env` 中 `CLUSTER_ID` 后清理 `data/kafka`（注意备份）
 - 或更换外部端口映射
 
 ### 2.2 ClickHouse ping 不通
@@ -60,4 +60,3 @@
 - 或 GitHub Issue（一般问题）
 
 并在文档中链接相关 commit/PR，确保“故事可追溯”。
-

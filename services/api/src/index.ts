@@ -1,11 +1,15 @@
 import { createLogger, newTraceId } from "@lsmv2/observability";
+import dotenv from "dotenv";
 import Fastify from "fastify";
+import path from "node:path";
 import { createClickhouseClient } from "./clickhouse";
 import { loadConfigFromEnv } from "./config";
 import { fail } from "./http";
 import { registerDataRoutes } from "./routes/data";
 
 async function main(): Promise<void> {
+  dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
+
   const config = loadConfigFromEnv(process.env);
   const logger = createLogger(config.serviceName);
 

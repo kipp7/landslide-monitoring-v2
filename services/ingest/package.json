@@ -12,9 +12,9 @@
   "dependencies": {
     "@lsmv2/observability": "*",
     "@lsmv2/validation": "*",
+    "dotenv": "^16.4.7",
     "kafkajs": "^2.2.4",
     "mqtt": "^5.10.3",
     "zod": "^3.24.1"
   }
 }
-

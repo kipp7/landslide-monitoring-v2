@@ -1,6 +1,7 @@
 import { createLogger, newTraceId } from "@lsmv2/observability";
 import { loadAndCompileSchema } from "@lsmv2/validation";
 import { Kafka } from "kafkajs";
+import dotenv from "dotenv";
 import mqtt from "mqtt";
 import path from "node:path";
 import { loadConfigFromEnv } from "./config";
@@ -36,6 +37,8 @@ function repoRootFromHere(): string {
 }
 
 async function main(): Promise<void> {
+  dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
+
   const config = loadConfigFromEnv(process.env);
   const logger = createLogger(config.serviceName);
 

@@ -13,8 +13,8 @@
     "@clickhouse/client": "^1.12.1",
     "@lsmv2/observability": "*",
     "@lsmv2/validation": "*",
+    "dotenv": "^16.4.7",
     "kafkajs": "^2.2.4",
     "zod": "^3.24.1"
   }
 }
-

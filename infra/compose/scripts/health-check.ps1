@@ -71,7 +71,7 @@ $requiredImages = @(
   "redis:7-alpine",
   "clickhouse/clickhouse-server:24.10",
   "emqx/emqx:5.7.2",
-  "bitnami/kafka:3.7",
+  "apache/kafka:3.7.0",
   "provectuslabs/kafka-ui:v0.7.2"
 )
 $missing = 0

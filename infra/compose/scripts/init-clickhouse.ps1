@@ -1,10 +1,10 @@
-$ErrorActionPreference = "Stop"
-
 param(
   [string]$EnvFile = "infra/compose/.env",
   [string]$ComposeFile = "infra/compose/docker-compose.yml",
   [string]$SqlDir = "docs/integrations/storage/clickhouse"
 )
+
+$ErrorActionPreference = "Stop"
 
 function Import-EnvFile([string]$path) {
   if (-not (Test-Path $path)) { throw "Missing env file: $path" }
@@ -35,11 +35,33 @@ Write-Host "Applying ClickHouse DDL from $SqlDir"
 
 $null = Import-EnvFile $EnvFile
 
+function Assert-LastExitCode([string]$message) {
+  if ($LASTEXITCODE -ne 0) { throw "$message (exit=$LASTEXITCODE)" }
+}
+
+Write-Host "Waiting for ClickHouse to respond to /ping..." -ForegroundColor Cyan
+$maxWaitSeconds = 90
+$start = Get-Date
+while ($true) {
+  try {
+    $resp = Invoke-WebRequest -UseBasicParsing -Uri "http://localhost:8123/ping" -TimeoutSec 2
+    if ($resp.StatusCode -eq 200 -and $resp.Content -match "Ok") { break }
+  } catch {
+    # ignore
+  }
+  if (((Get-Date) - $start).TotalSeconds -gt $maxWaitSeconds) {
+    throw "ClickHouse is not ready after ${maxWaitSeconds}s. Check: docker compose logs clickhouse"
+  }
+  Start-Sleep -Seconds 2
+}
+Write-Host "ClickHouse is ready." -ForegroundColor Green
+
 $sqlFiles = Get-ChildItem -Path $SqlDir -File -Filter "*.sql" | Sort-Object Name
 foreach ($f in $sqlFiles) {
   Write-Host "Running: $($f.Name)"
   $sql = Get-Content -Raw -Encoding UTF8 $f.FullName
   $sql | docker compose -f $ComposeFile --env-file $EnvFile exec -T clickhouse clickhouse-client --user $env:CH_USER --password $env:CH_PASSWORD --database $env:CH_DATABASE --multiquery
+  Assert-LastExitCode "clickhouse-client failed: $($f.Name)"
 }
 
 Write-Host "ClickHouse init done."

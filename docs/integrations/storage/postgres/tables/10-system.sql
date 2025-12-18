@@ -21,7 +21,7 @@ INSERT INTO system_configs (config_key, config_value, config_type, description, 
 
 -- 操作审计（建议分区；此处仅定义表结构）
 CREATE TABLE operation_logs (
-  id BIGSERIAL PRIMARY KEY,
+  id BIGSERIAL,
   user_id UUID REFERENCES users(user_id),
   username VARCHAR(50),
   module VARCHAR(50) NOT NULL,
@@ -35,7 +35,8 @@ CREATE TABLE operation_logs (
   user_agent TEXT,
   status VARCHAR(20) NOT NULL DEFAULT 'success',
   error_message TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (id, created_at)
 ) PARTITION BY RANGE (created_at);
 
 CREATE INDEX idx_op_logs_user ON operation_logs(user_id);
@@ -44,7 +45,7 @@ CREATE INDEX idx_op_logs_time ON operation_logs(created_at DESC);
 
 -- API 访问日志（建议分区；此处仅定义表结构）
 CREATE TABLE api_logs (
-  id BIGSERIAL PRIMARY KEY,
+  id BIGSERIAL,
   user_id UUID,
   method VARCHAR(10),
   path VARCHAR(500),
@@ -53,9 +54,9 @@ CREATE TABLE api_logs (
   response_time_ms INT,
   ip_address VARCHAR(50),
   user_agent TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (id, created_at)
 ) PARTITION BY RANGE (created_at);
 
 CREATE INDEX idx_api_logs_time ON api_logs(created_at DESC);
 CREATE INDEX idx_api_logs_path ON api_logs(path);
-

@@ -1,6 +1,7 @@
 import { createClient, type ClickHouseClient } from "@clickhouse/client";
 import { createLogger, newTraceId } from "@lsmv2/observability";
 import { loadAndCompileSchema } from "@lsmv2/validation";
+import dotenv from "dotenv";
 import { Kafka, logLevel } from "kafkajs";
 import path from "node:path";
 import { loadConfigFromEnv } from "./config";
@@ -100,6 +101,8 @@ async function insertRows(
 }
 
 async function main(): Promise<void> {
+  dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
+
   const config = loadConfigFromEnv(process.env);
   const logger = createLogger(config.serviceName);
 
@@ -193,4 +196,3 @@ async function main(): Promise<void> {
 }
 
 void main();
-
