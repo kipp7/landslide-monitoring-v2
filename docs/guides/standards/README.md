@@ -14,6 +14,7 @@
 - 前端组件规范：`docs/guides/standards/frontend-components.md`
 - 代码风格与格式化：`docs/guides/standards/code-style-and-formatting.md`
 - 质量门禁：`docs/guides/standards/quality-gates.md`
+- CI 常见问题排查：`docs/guides/standards/ci-troubleshooting.md`
 - 代码生成规范：`docs/guides/standards/code-generation.md`
 - 仓库结构与命名：`docs/guides/standards/repo-structure-and-naming.md`
 - Git 工作流：`docs/guides/standards/git-workflow.md`
