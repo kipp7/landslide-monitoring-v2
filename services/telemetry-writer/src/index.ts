@@ -46,10 +46,21 @@ function isSafeInt64(value: number): boolean {
   return Number.isInteger(value) && Math.abs(value) <= Number.MAX_SAFE_INTEGER;
 }
 
+function toClickhouseDateTime64Utc(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) {
+    throw new Error(`invalid date-time: ${iso}`);
+  }
+
+  // ClickHouse DateTime64 JSONEachRow does not accept RFC3339 `...Z` in all cases.
+  // Use `YYYY-MM-DD HH:MM:SS.mmm` (UTC) instead.
+  return d.toISOString().replace("T", " ").replace("Z", "");
+}
+
 function toTelemetryRows(payload: TelemetryRawV1): TelemetryRow[] {
   const rows: TelemetryRow[] = [];
 
-  const eventTs = payload.event_ts ?? null;
+  const eventTs = payload.event_ts ? toClickhouseDateTime64Utc(payload.event_ts) : null;
   const seq = payload.seq ?? null;
   const schemaVersion = payload.schema_version;
 
@@ -69,7 +80,7 @@ function toTelemetryRows(payload: TelemetryRawV1): TelemetryRow[] {
     }
 
     rows.push({
-      received_ts: payload.received_ts,
+      received_ts: toClickhouseDateTime64Utc(payload.received_ts),
       event_ts: eventTs,
       device_id: payload.device_id,
       sensor_key: sensorKey,

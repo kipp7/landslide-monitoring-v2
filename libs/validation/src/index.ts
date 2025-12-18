@@ -29,8 +29,14 @@ export async function loadJsonSchema(schemaPath: string): Promise<AnySchema> {
 }
 
 export function compileSchema<T>(schema: AnySchema, ajv = createAjv()): Validator<T> {
-  const validate = ajv.compile(schema);
-  return validate as unknown as Validator<T>;
+  const validateFn = ajv.compile(schema);
+
+  return {
+    validate: (value: unknown): value is T => validateFn(value) as boolean,
+    get errors() {
+      return validateFn.errors;
+    }
+  };
 }
 
 export async function loadAndCompileSchema<T>(
