@@ -5,7 +5,10 @@ import path from "node:path";
 import { createClickhouseClient } from "./clickhouse";
 import { loadConfigFromEnv } from "./config";
 import { fail } from "./http";
+import { createPgPool } from "./postgres";
 import { registerDataRoutes } from "./routes/data";
+import { registerDeviceRoutes } from "./routes/devices";
+import { registerSensorRoutes } from "./routes/sensors";
 
 async function main(): Promise<void> {
   dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
@@ -18,11 +21,13 @@ async function main(): Promise<void> {
     disableRequestLogging: true
   });
 
-  app.addHook("onRequest", (request) => {
+  app.decorateRequest("traceId", "");
+
+  app.addHook("onRequest", async (request, _reply) => {
     request.traceId = newTraceId();
   });
 
-  app.addHook("preHandler", (request, reply) => {
+  app.addHook("preHandler", async (request, reply) => {
     if (request.url === "/health") return;
     if (!config.authRequired) return;
 
@@ -34,18 +39,38 @@ async function main(): Promise<void> {
     }
   });
 
+  app.setErrorHandler((err, request, reply) => {
+    logger.error({ err, traceId: request.traceId, url: request.url }, "request failed");
+
+    const statusCode =
+      typeof (err as { statusCode?: unknown }).statusCode === "number"
+        ? (err as { statusCode: number }).statusCode
+        : 500;
+
+    if (statusCode >= 400 && statusCode < 500) {
+      fail(reply, statusCode, "参数错误", request.traceId, { code: (err as { code?: unknown }).code });
+      return;
+    }
+
+    fail(reply, 500, "内部错误", request.traceId);
+  });
+
   app.get("/health", () => ({ ok: true }));
 
   const ch = createClickhouseClient(config);
+  const pg = createPgPool(config);
 
   app.register((v1, _opts, done) => {
     registerDataRoutes(v1, config, ch);
+    registerDeviceRoutes(v1, config, pg);
+    registerSensorRoutes(v1, config, pg);
     done();
   }, { prefix: "/api/v1" });
 
   const shutdown = async (signal: string) => {
     logger.info({ signal }, "shutting down");
     await app.close();
+    await pg?.end();
     await ch.close();
     process.exit(0);
   };

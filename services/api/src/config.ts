@@ -5,6 +5,16 @@ const configSchema = z.object({
   apiHost: z.string().default("0.0.0.0"),
   apiPort: z.coerce.number().int().positive().default(8080),
 
+  postgresUrl: z.string().url().optional(),
+  postgresHost: z.string().default("localhost"),
+  postgresPort: z.coerce.number().int().positive().default(5432),
+  postgresUser: z.string().default("landslide"),
+  postgresPassword: z.string().optional(),
+  postgresDatabase: z.string().default("landslide_monitor"),
+  postgresPoolMax: z.coerce.number().int().positive().default(10),
+
+  adminApiToken: z.string().optional(),
+
   authRequired: z
     .string()
     .optional()
@@ -29,6 +39,16 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
     serviceName: env.SERVICE_NAME,
     apiHost: env.API_HOST,
     apiPort: env.API_PORT,
+
+    postgresUrl: env.POSTGRES_URL,
+    postgresHost: env.POSTGRES_HOST,
+    postgresPort: env.POSTGRES_PORT,
+    postgresUser: env.POSTGRES_USER,
+    postgresPassword: env.POSTGRES_PASSWORD,
+    postgresDatabase: env.POSTGRES_DATABASE,
+    postgresPoolMax: env.POSTGRES_POOL_MAX,
+
+    adminApiToken: env.ADMIN_API_TOKEN,
     authRequired: env.AUTH_REQUIRED,
 
     clickhouseUrl: env.CLICKHOUSE_URL,
@@ -41,4 +61,3 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
     apiMaxPoints: env.API_MAX_POINTS
   });
 }
-
