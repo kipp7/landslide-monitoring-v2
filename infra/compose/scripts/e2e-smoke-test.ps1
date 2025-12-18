@@ -144,6 +144,7 @@ try {
 
     $apiEnvPath = "services/api/.env"
     $internalPassword = Read-EnvValue $apiEnvPath "MQTT_INTERNAL_PASSWORD" ""
+    $webhookToken = Read-EnvValue $apiEnvPath "EMQX_WEBHOOK_TOKEN" ""
     if ($UseMqttAuth -and -not $internalPassword) {
       throw "MQTT auth enabled but MQTT_INTERNAL_PASSWORD is missing in $apiEnvPath. Run this script with -ConfigureEmqx or run: infra/compose/scripts/configure-emqx-http-auth.ps1 -WriteServiceEnv -WriteIngestEnv"
     }
@@ -187,9 +188,9 @@ try {
       "",
       "AUTH_REQUIRED=false",
       "ADMIN_API_TOKEN=",
-      "EMQX_WEBHOOK_TOKEN=",
+      "EMQX_WEBHOOK_TOKEN=$webhookToken",
       "MQTT_INTERNAL_USERNAME=ingest-service",
-      "MQTT_INTERNAL_PASSWORD=",
+      "MQTT_INTERNAL_PASSWORD=$internalPassword",
       "",
       "POSTGRES_HOST=$pgHost",
       "POSTGRES_PORT=$pgPort",
