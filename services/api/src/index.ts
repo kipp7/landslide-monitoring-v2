@@ -18,11 +18,13 @@ async function main(): Promise<void> {
     disableRequestLogging: true
   });
 
-  app.addHook("onRequest", (request) => {
+  app.decorateRequest("traceId", "");
+
+  app.addHook("onRequest", async (request) => {
     request.traceId = newTraceId();
   });
 
-  app.addHook("preHandler", (request, reply) => {
+  app.addHook("preHandler", async (request, reply) => {
     if (request.url === "/health") return;
     if (!config.authRequired) return;
 
@@ -32,6 +34,11 @@ async function main(): Promise<void> {
       fail(reply, 401, "未认证", traceId);
       return;
     }
+  });
+
+  app.setErrorHandler((err, request, reply) => {
+    logger.error({ err, traceId: request.traceId, url: request.url }, "request failed");
+    fail(reply, 500, "内部错误", request.traceId);
   });
 
   app.get("/health", () => ({ ok: true }));

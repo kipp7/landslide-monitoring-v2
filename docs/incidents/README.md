@@ -21,3 +21,4 @@
 - `docs/incidents/INC-0005-github-rulesets-and-status-checks-setup.md`
 - `docs/incidents/INC-0006-git-https-connection-reset.md`
 - `docs/incidents/INC-0007-compose-kafka-image-manifest-unknown.md`
+- `docs/incidents/INC-0008-fastify-hook-signature-hang.md`

@@ -51,3 +51,12 @@
 - 降级策略：
   - 队列积压过大：降低实时推送频率/采样；但不能丢数据
   - ClickHouse 压力大：优先保证写入，查询走聚合/缓存
+
+## 7. Node/Fastify 关键实现约束（避免隐性故障）
+
+- Fastify Hook 必须使用以下两种签名之一（否则可能导致请求挂起、`/health` 超时）：
+  - `async (request, reply) => { ... }`（推荐）
+  - `(request, reply, done) => { done() }`
+- 禁止写法：`addHook("onRequest", (request) => { ... })`、`addHook("preHandler", (request, reply) => { ... })` 这类“形参个数不明确”的函数。
+- 自定义 `request.xxx` 字段必须先 `decorateRequest("xxx", defaultValue)`，否则运行期可能抛错或产生不可预期行为。
+- `/health` 必须做到：不依赖外部组件（Kafka/ClickHouse/Postgres），且在 100ms 内响应；依赖检查请用 `/ready`（后续补齐）。
