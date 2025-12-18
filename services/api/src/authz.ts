@@ -13,7 +13,7 @@ export function requireAdmin(
   if (!cfg.adminApiToken) return true;
   const auth = request.headers.authorization;
   const traceId = request.traceId;
-  if (!auth || !auth.startsWith("Bearer ")) {
+  if (!auth?.startsWith("Bearer ")) {
     fail(reply, 401, "未认证", traceId);
     return false;
   }

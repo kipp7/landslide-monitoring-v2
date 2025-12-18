@@ -93,7 +93,7 @@ export function registerDeviceRoutes(
     const params: unknown[] = [];
     const add = (sql: string, val: unknown) => {
       params.push(val);
-      where.push(sql.replace("$X", `$${params.length}`));
+      where.push(sql.replace("$X", "$" + String(params.length)));
     };
 
     if (keyword) add("(device_name ILIKE $X)", `%${keyword}%`);
@@ -127,8 +127,8 @@ export function registerDeviceRoutes(
           FROM devices
           ${whereSql}
           ORDER BY created_at DESC
-          LIMIT $${params.length + 1}
-          OFFSET $${params.length + 2}
+          LIMIT $${String(params.length + 1)}
+          OFFSET $${String(params.length + 2)}
         `,
         params.concat([pageSize, offset])
       );
@@ -280,7 +280,7 @@ export function registerDeviceRoutes(
             metadata = COALESCE($5::jsonb, metadata),
             updated_at = NOW()
           WHERE device_id = $1
-          RETURNING to_char(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS updated_at
+          RETURNING to_char(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS updated_at
         `,
         [
           deviceId,
@@ -323,7 +323,7 @@ export function registerDeviceRoutes(
           UPDATE devices
           SET status = 'revoked', updated_at = NOW()
           WHERE device_id = $1
-          RETURNING status, to_char(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS revoked_at
+          RETURNING status, to_char(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS revoked_at
         `,
         [deviceId]
       )

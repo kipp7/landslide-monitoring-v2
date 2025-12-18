@@ -23,7 +23,14 @@ export function hashDeviceSecret(secret: string): DeviceSecretHash {
 
   const saltB64 = salt.toString("base64");
   const keyB64 = key.toString("base64");
-  return `scrypt$N=${SCRYPT_N}$r=${SCRYPT_R}$p=${SCRYPT_P}$salt=${saltB64}$hash=${keyB64}`;
+  return (
+    "scrypt" +
+    `$N=${String(SCRYPT_N)}` +
+    `$r=${String(SCRYPT_R)}` +
+    `$p=${String(SCRYPT_P)}` +
+    `$salt=${saltB64}` +
+    `$hash=${keyB64}`
+  );
 }
 
 export function verifyDeviceSecret(secret: string, stored: DeviceSecretHash): boolean {
@@ -52,4 +59,3 @@ export function verifyDeviceSecret(secret: string, stored: DeviceSecretHash): bo
 
   return crypto.timingSafeEqual(actual, expected);
 }
-
