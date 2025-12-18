@@ -1,4 +1,4 @@
-import Ajv, { type AnySchema, type ErrorObject } from "ajv";
+import Ajv, { type AnySchema, type ErrorObject, type ValidateFunction } from "ajv";
 import Ajv2020 from "ajv/dist/2020";
 import addFormats from "ajv-formats";
 import { readFile } from "node:fs/promises";
@@ -29,8 +29,16 @@ export async function loadJsonSchema(schemaPath: string): Promise<AnySchema> {
 }
 
 export function compileSchema<T>(schema: AnySchema, ajv = createAjv()): Validator<T> {
-  const validate = ajv.compile(schema);
-  return validate as unknown as Validator<T>;
+  const validateFn: ValidateFunction<T> = ajv.compile<T>(schema);
+
+  const validator: Validator<T> = {
+    validate: (value: unknown): value is T => validateFn(value),
+    get errors() {
+      return validateFn.errors;
+    }
+  };
+
+  return validator;
 }
 
 export async function loadAndCompileSchema<T>(

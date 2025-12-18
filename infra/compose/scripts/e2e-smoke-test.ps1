@@ -110,7 +110,13 @@ function Run-Node([string[]]$nodeArgs, [string]$logPath) {
   $header = "== node $argText =="
   Add-Content -Encoding UTF8 -LiteralPath $logPath -Value ($header + "`n")
 
-  $out = (& node @nodeArgs 2>&1 | Out-String)
+  $prevPreference = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  try {
+    $out = (& node @nodeArgs 2>&1 | Out-String)
+  } finally {
+    $ErrorActionPreference = $prevPreference
+  }
   if ($out) { Add-Content -Encoding UTF8 -LiteralPath $logPath -Value $out }
 
   $exit = $LASTEXITCODE
@@ -259,6 +265,23 @@ try {
     throw "ClickHouse not reachable at $chUrl. Did you run: docker compose -f $ComposeFile --env-file $EnvFile up -d ?"
   }
 
+  Write-Host "Ensuring ClickHouse schema is initialized..." -ForegroundColor Cyan
+  $chExists = $false
+  try {
+    $args = @("compose", "-f", $ComposeFile, "--env-file", $EnvFile, "exec", "-T", "clickhouse", "clickhouse-client", "--user", $chUser)
+    if ($chPassword) { $args += @("--password", $chPassword) }
+    $args += @("--database", $chDb, "--query", "EXISTS TABLE $chDb.telemetry_raw")
+    $out = (& docker @args 2>$null | Out-String).Trim()
+    if ($out -eq "1") { $chExists = $true }
+  } catch {
+    # ignore and fall back to init script
+  }
+  if (-not $chExists) {
+    Write-Host "ClickHouse table missing; running init-clickhouse.ps1..." -ForegroundColor Yellow
+    powershell -NoProfile -ExecutionPolicy Bypass -File infra/compose/scripts/init-clickhouse.ps1 -EnvFile $EnvFile -ComposeFile $ComposeFile
+    Assert-LastExitCode "init-clickhouse.ps1 failed"
+  }
+
   Write-Host "Starting services..." -ForegroundColor Cyan
 
   $ingestProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/ingest" -PassThru -RedirectStandardOutput $ingestOut -RedirectStandardError $ingestErr
@@ -376,7 +399,7 @@ try {
   Write-Host "Querying series..." -ForegroundColor Cyan
   $startTime = (Get-Date).AddHours(-1).ToUniversalTime().ToString("o")
   $endTime = (Get-Date).AddHours(1).ToUniversalTime().ToString("o")
-  $seriesUrl = "http://$apiLocalHost`:$apiPort/api/v1/data/series/$DeviceId?startTime=$startTime&endTime=$endTime&sensorKeys=displacement_mm"
+  $seriesUrl = "http://$apiLocalHost`:$apiPort/api/v1/data/series/$($DeviceId)?startTime=$startTime&endTime=$endTime&sensorKeys=displacement_mm"
   $series = Invoke-RestMethod -Uri $seriesUrl -TimeoutSec 10
   if ($series.success -ne $true) { throw "series query failed. Logs: $logDir" }
   if (-not $series.data.series -or $series.data.series.Count -lt 1) {

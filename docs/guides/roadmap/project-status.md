@@ -7,7 +7,7 @@
 - 每次合并一个 PR 到 `main`，如果它改变了项目阶段/里程碑/下一步，必须更新本页。
 - 本页只记录“当前状态与下一步”，历史细节放到 `docs/incidents/` 或 PR/commit 记录中。
 
-最后更新时间：2025-12-18（阶段 1：本地脚本健壮性修复 v3）
+最后更新时间：2025-12-18（阶段 1：本地脚本健壮性修复 v4）
 
 ## 1) 当前结论（TL;DR）
 
@@ -25,6 +25,10 @@
   - 修复：接线脚本生成 token 时不再追加重复键；e2e 脚本读取 `.env` 时使用“最后一个非空值”，避免因重复键的空值导致误报。
   - 修复：e2e 冒烟脚本访问 API 改用 `127.0.0.1`（避免 Windows 下 `localhost` 解析到 IPv6 ::1 导致 /health 超时）；EMQX HTTP authn/authz webhook 增加 `Content-Type: application/json`。
   - 修复：e2e 冒烟脚本增加启动稳定性：等待 ingest-service 确认订阅 MQTT，并在 EMQX webhook 刚恢复时对 `publish-telemetry.js` 做 retry，同时把输出写入 `publish-telemetry.log` 便于排查。
+  - 修复：`@lsmv2/validation` 的 Ajv schema 编译结果按 `Validator{ validate, errors }` 形式包装，避免运行期出现 `validateRaw.validate is not a function`。
+  - 修复：telemetry-writer 写入 ClickHouse 时，将 `*_ts` 按 ClickHouse `DateTime64(3, 'UTC')` 期望格式序列化（避免 ISO8601 `T/Z` 导致解析失败）。
+  - 修复：API `/data/series` 查询对 ClickHouse 的 `DateTime64` 参数使用 UTC 解析（避免时区/格式导致范围查询无数据或 500）。
+  - 修复：ClickHouse 默认使用 named volume（可用 `CH_DATA_DIR` 切回 bind-mount），并在 e2e 冒烟中自动检测/初始化 ClickHouse DDL（缺表时执行 `init-clickhouse.ps1`）。
 
 ## 2) 当前阶段与里程碑
 

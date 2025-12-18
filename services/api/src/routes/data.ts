@@ -53,6 +53,11 @@ function intervalSeconds(interval: "1m" | "5m" | "1h" | "1d"): number {
   return 86400;
 }
 
+function toClickhouseDateTime64Utc(d: Date): string {
+  // ClickHouse DateTime64 text format: "YYYY-MM-DD HH:MM:SS.mmm" (no trailing "Z", no "T")
+  return d.toISOString().replace("T", " ").replace("Z", "");
+}
+
 export function registerDataRoutes(
   app: FastifyInstance,
   config: AppConfig,
@@ -149,8 +154,8 @@ export function registerDataRoutes(
     const timeExpr = timeField === "event" ? "event_ts" : "received_ts";
     const timeFilter =
       timeField === "event"
-        ? `event_ts IS NOT NULL AND event_ts >= {start:DateTime64} AND event_ts <= {end:DateTime64}`
-        : `received_ts >= {start:DateTime64} AND received_ts <= {end:DateTime64}`;
+        ? `event_ts IS NOT NULL AND event_ts >= {start:DateTime64(3, 'UTC')} AND event_ts <= {end:DateTime64(3, 'UTC')}`
+        : `received_ts >= {start:DateTime64(3, 'UTC')} AND received_ts <= {end:DateTime64(3, 'UTC')}`;
 
     let sql: string;
 
@@ -197,8 +202,8 @@ export function registerDataRoutes(
         query_params: {
           deviceId,
           sensorKeys: uniqueKeys,
-          start: start.toISOString(),
-          end: end.toISOString(),
+          start: toClickhouseDateTime64Utc(start),
+          end: toClickhouseDateTime64Utc(end),
           bucket: seconds,
           limit: config.apiMaxPoints
         },
@@ -214,8 +219,8 @@ export function registerDataRoutes(
       query_params: {
         deviceId,
         sensorKeys: uniqueKeys,
-        start: start.toISOString(),
-        end: end.toISOString(),
+        start: toClickhouseDateTime64Utc(start),
+        end: toClickhouseDateTime64Utc(end),
         limit: config.apiMaxPoints
       },
       format: "JSONEachRow"
