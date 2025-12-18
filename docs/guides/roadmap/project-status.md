@@ -7,7 +7,7 @@
 - 每次合并一个 PR 到 `main`，如果它改变了项目阶段/里程碑/下一步，必须更新本页。
 - 本页只记录“当前状态与下一步”，历史细节放到 `docs/incidents/` 或 PR/commit 记录中。
 
-最后更新时间：2025-12-18（阶段 1：本地脚本健壮性修复）
+最后更新时间：2025-12-18（阶段 1：本地脚本健壮性修复 v2）
 
 ## 1) 当前结论（TL;DR）
 
@@ -23,6 +23,7 @@
   - 修复：EMQX 接线脚本写入 `services/api/.env` 时会展开 `CH_HTTP_URL`，避免 ClickHouse URL 形如 `http://${CH_HOST}:${CH_HTTP_PORT}` 导致 api-service 启动失败。
   - 修复：`-ForceWriteServiceEnv` 下重写 `services/api/.env` 时会保留 `EMQX_WEBHOOK_TOKEN` 与 `MQTT_INTERNAL_PASSWORD`，避免鉴权冒烟提前失败。
   - 修复：接线脚本生成 token 时不再追加重复键；e2e 脚本读取 `.env` 时使用“最后一个非空值”，避免因重复键的空值导致误报。
+  - 修复：e2e 冒烟脚本访问 API 改用 `127.0.0.1`（避免 Windows 下 `localhost` 解析到 IPv6 ::1 导致 /health 超时）；EMQX HTTP authn/authz webhook 增加 `Content-Type: application/json`。
 
 ## 2) 当前阶段与里程碑
 

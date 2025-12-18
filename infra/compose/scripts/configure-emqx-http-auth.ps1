@@ -184,7 +184,7 @@ $authnBody = @{
   enable = $true
   method = "post"
   url = "$ApiBaseUrl/emqx/authn"
-  headers = @{ "x-emqx-token" = $token }
+  headers = @{ "x-emqx-token" = $token; "content-type" = "application/json" }
   body = @{
     username = '${username}'
     password = '${password}'
@@ -204,7 +204,7 @@ $authzHttpBody = @{
   enable = $true
   method = "post"
   url = "$ApiBaseUrl/emqx/acl"
-  headers = @{ "x-emqx-token" = $token }
+  headers = @{ "x-emqx-token" = $token; "content-type" = "application/json" }
   body = @{
     username = '${username}'
     topic = '${topic}'

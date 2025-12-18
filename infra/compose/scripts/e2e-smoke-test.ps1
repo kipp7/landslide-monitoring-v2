@@ -124,6 +124,7 @@ $apiErr = Join-Path $logDir "api.stderr.log"
 
 $apiEnvPath = "services/api/.env"
 $apiPort = Read-EnvValue $apiEnvPath "API_PORT" "8080"
+$apiLocalHost = "127.0.0.1"
 
 if (-not $DeviceId -or $DeviceId.Trim().Length -eq 0) {
   $DeviceId = (New-Guid).ToString()
@@ -240,7 +241,7 @@ try {
   $start = Get-Date
   while ($true) {
     try {
-      $health = Invoke-RestMethod -Uri "http://localhost:$apiPort/health" -TimeoutSec 2
+      $health = Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/health" -TimeoutSec 2
       if ($health.ok -eq $true) { break }
     } catch {
       # ignore
@@ -263,7 +264,7 @@ try {
     } | ConvertTo-Json -Depth 5
 
     try {
-      $create = Invoke-RestMethod -Method Post -Uri "http://localhost:$apiPort/api/v1/devices" -ContentType "application/json" -Body $body -TimeoutSec 10
+      $create = Invoke-RestMethod -Method Post -Uri "http://$apiLocalHost`:$apiPort/api/v1/devices" -ContentType "application/json" -Body $body -TimeoutSec 10
       if (-not $create.success -or -not $create.data.deviceSecret) {
         throw "unexpected API response"
       }
@@ -295,7 +296,7 @@ try {
   Assert-LastExitCode "publish-telemetry.js failed"
 
   Write-Host "Querying latest state..." -ForegroundColor Cyan
-  $stateUrl = "http://localhost:$apiPort/api/v1/data/state/$DeviceId"
+  $stateUrl = "http://$apiLocalHost`:$apiPort/api/v1/data/state/$DeviceId"
   $deadline = (Get-Date).AddSeconds(45)
   $state = $null
   while ((Get-Date) -lt $deadline) {
@@ -321,7 +322,7 @@ try {
   Write-Host "Querying series..." -ForegroundColor Cyan
   $startTime = (Get-Date).AddHours(-1).ToUniversalTime().ToString("o")
   $endTime = (Get-Date).AddHours(1).ToUniversalTime().ToString("o")
-  $seriesUrl = "http://localhost:$apiPort/api/v1/data/series/$DeviceId?startTime=$startTime&endTime=$endTime&sensorKeys=displacement_mm"
+  $seriesUrl = "http://$apiLocalHost`:$apiPort/api/v1/data/series/$DeviceId?startTime=$startTime&endTime=$endTime&sensorKeys=displacement_mm"
   $series = Invoke-RestMethod -Uri $seriesUrl -TimeoutSec 10
   if ($series.success -ne $true) { throw "series query failed. Logs: $logDir" }
   if (-not $series.data.series -or $series.data.series.Count -lt 1) {
