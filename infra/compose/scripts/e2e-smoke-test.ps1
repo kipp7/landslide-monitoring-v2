@@ -69,12 +69,15 @@ function Write-EnvIfMissingOrForced([string]$path, [string[]]$lines, [switch]$fo
 function Read-EnvValue([string]$path, [string]$key, [string]$fallback) {
   if (-not (Test-Path $path)) { return $fallback }
   $lines = Get-Content -Encoding UTF8 $path
+  $lastNonEmpty = $null
   foreach ($line in $lines) {
     $t = $line.Trim()
     if ($t.StartsWith("#")) { continue }
     if (-not $t.StartsWith("$key=")) { continue }
-    return $t.Substring($key.Length + 1).Trim()
+    $v = $t.Substring($key.Length + 1).Trim()
+    if ($v.Length -gt 0) { $lastNonEmpty = $v }
   }
+  if ($null -ne $lastNonEmpty) { return $lastNonEmpty }
   return $fallback
 }
 
