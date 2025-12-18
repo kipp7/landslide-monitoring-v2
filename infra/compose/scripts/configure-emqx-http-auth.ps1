@@ -69,7 +69,7 @@ function Get-OrCreateToken([string]$path, [string]$key) {
     Set-Content -Encoding UTF8 -Path $path -Value ""
   }
 
-  Add-Content -Encoding UTF8 -Path $path -Value "`n$key=$token`n"
+  Set-OrAppendEnvValue $path $key $token
   return $token
 }
 
