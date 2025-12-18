@@ -78,8 +78,9 @@ async function main(): Promise<void> {
   await producer.connect();
 
   const mqttClient = mqtt.connect(config.mqttUrl, {
-    username: config.mqttUsername,
-    password: config.mqttPassword
+    ...(config.mqttUsername && config.mqttPassword
+      ? { username: config.mqttUsername, password: config.mqttPassword }
+      : {})
   });
 
   mqttClient.on("connect", () => {

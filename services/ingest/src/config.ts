@@ -1,21 +1,40 @@
 import { z } from "zod";
 
-const configSchema = z.object({
-  serviceName: z.string().default("ingest-service"),
+function optionalNonEmptyString() {
+  return z.preprocess((v) => {
+    if (typeof v !== "string") return v;
+    const trimmed = v.trim();
+    return trimmed.length === 0 ? undefined : trimmed;
+  }, z.string().min(1).optional());
+}
 
-  mqttUrl: z.string().url(),
-  mqttUsername: z.string().min(1),
-  mqttPassword: z.string().min(1),
-  mqttTopicTelemetry: z.string().default("telemetry/+"),
+const configSchema = z
+  .object({
+    serviceName: z.string().default("ingest-service"),
 
-  kafkaBrokers: z
-    .string()
-    .min(1)
-    .transform((v) => v.split(",").map((s) => s.trim()).filter(Boolean)),
-  kafkaClientId: z.string().default("ingest-service"),
-  kafkaTopicTelemetryRaw: z.string().default("telemetry.raw.v1"),
-  kafkaTopicTelemetryDlq: z.string().default("telemetry.dlq.v1")
-});
+    mqttUrl: z.string().url(),
+    mqttUsername: optionalNonEmptyString(),
+    mqttPassword: optionalNonEmptyString(),
+    mqttTopicTelemetry: z.string().default("telemetry/+"),
+
+    kafkaBrokers: z
+      .string()
+      .min(1)
+      .transform((v) => v.split(",").map((s) => s.trim()).filter(Boolean)),
+    kafkaClientId: z.string().default("ingest-service"),
+    kafkaTopicTelemetryRaw: z.string().default("telemetry.raw.v1"),
+    kafkaTopicTelemetryDlq: z.string().default("telemetry.dlq.v1")
+  })
+  .superRefine((data, ctx) => {
+    const hasUser = Boolean(data.mqttUsername);
+    const hasPass = Boolean(data.mqttPassword);
+    if (hasUser !== hasPass) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "MQTT_USERNAME and MQTT_PASSWORD must be both set or both empty"
+      });
+    }
+  });
 
 export type AppConfig = z.infer<typeof configSchema>;
 
@@ -32,4 +51,3 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
     kafkaTopicTelemetryDlq: env.KAFKA_TOPIC_TELEMETRY_DLQ
   });
 }
-
