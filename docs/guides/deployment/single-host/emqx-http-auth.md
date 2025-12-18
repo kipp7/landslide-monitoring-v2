@@ -47,6 +47,19 @@
 
 - `host.docker.internal` 在 Windows/macOS Docker Desktop 可用；如果是 Linux，需要改成能从容器访问到宿主机的地址，或把 `api-service` 也容器化后走 Compose 内网地址。
 
+## 3.1 一键配置（推荐，免手工点 Dashboard）
+
+如果你不想手动在 Dashboard 里点 HTTP Authentication/Authorization，可以直接运行脚本（会通过 EMQX Dashboard API 自动写入配置）：
+
+- `powershell -ExecutionPolicy Bypass -File infra/compose/scripts/configure-emqx-http-auth.ps1 -WriteServiceEnv -WriteIngestEnv`
+  - 建议加 `-NoProfile`，避免你本机 PowerShell Profile（例如 conda 自动激活）干扰脚本执行：
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File infra/compose/scripts/configure-emqx-http-auth.ps1 -WriteServiceEnv -WriteIngestEnv`
+
+说明：
+
+- `-WriteServiceEnv` 会在 `services/api/.env` 中自动生成/写入 `EMQX_WEBHOOK_TOKEN` 与 `MQTT_INTERNAL_PASSWORD`（`.env` 已被 `.gitignore` 忽略，不会提交）。
+- `-WriteIngestEnv` 会把 `services/ingest/.env` 的 MQTT 账号切换为内部账号（用于订阅 `telemetry/+`）。
+
 ## 4) 设备与服务端账号约定
 
 ### 4.1 设备账号
@@ -87,4 +100,3 @@
 响应：
 
 - `{"result":"allow"}` 或 `{"result":"deny"}`
-
