@@ -30,7 +30,7 @@ CREATE TABLE alert_rule_versions (
   dsl_json JSONB NOT NULL,
   -- 以下字段为“冗余字段”，用于检索/索引；由应用层确保与 dsl_json 一致
   conditions JSONB,
-  window JSONB,
+  window_json JSONB,
   hysteresis JSONB,
   severity VARCHAR(20) NOT NULL DEFAULT 'medium'
     CHECK (severity IN ('low', 'medium', 'high', 'critical')),

@@ -12,6 +12,8 @@
 - `env.example`：环境变量模板（复制为 `.env`）
 - `scripts/`：初始化与运维脚本（建 topic / 初始化 DDL / 离线备份）
 
+说明：Kafka 采用 KRaft 单机模式（无 ZooKeeper），镜像为 `apache/kafka`。
+
 ## 2) 快速开始（Windows/PowerShell）
 
 从仓库根目录执行：

@@ -41,6 +41,7 @@
   - `MQTT_URL=mqtt://localhost:1883`
   - `KAFKA_BROKERS=localhost:9094`
 - 运行：`node services/ingest/dist/index.js`
+  - 说明：服务会自动读取同目录下的 `.env`（无需手动导出环境变量）
 
 3) 启动 `telemetry-writer`
 
@@ -49,6 +50,7 @@
   - `KAFKA_BROKERS=localhost:9094`
   - `CLICKHOUSE_URL=http://localhost:8123`
 - 运行：`node services/telemetry-writer/dist/index.js`
+  - 说明：服务会自动读取同目录下的 `.env`（无需手动导出环境变量）
 
 4) 启动 `api-service`
 
@@ -57,6 +59,7 @@
   - `CLICKHOUSE_URL=http://localhost:8123`
   - `AUTH_REQUIRED=false`（本地测试可先关；生产必须开）
 - 运行：`node services/api/dist/index.js`
+  - 说明：服务会自动读取同目录下的 `.env`（无需手动导出环境变量）
 
 ## 3) 发送一条测试遥测（MQTT）
 
@@ -99,4 +102,3 @@
 并记录到：
 - 一般问题：GitHub Issue
 - 严重阻塞：`docs/incidents/`
-
