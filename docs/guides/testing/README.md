@@ -10,6 +10,7 @@
 
 - 单机基础设施冒烟测试：`docs/guides/testing/single-host-smoke-test.md`
 - 端到端冒烟测试（MQTT→Kafka→ClickHouse→API）：`docs/guides/testing/e2e-smoke-test.md`
+- Telemetry 负载测试（单机）：`docs/guides/testing/telemetry-load-test.md`
 - 问题排查与证据收集：`docs/guides/testing/troubleshooting-and-evidence.md`
 
 ## 2) 测试哲学（项目约束）
