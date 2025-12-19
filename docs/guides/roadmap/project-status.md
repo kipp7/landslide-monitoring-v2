@@ -10,6 +10,7 @@
 最后更新时间：2025-12-20（阶段 5 已完成：固件模拟器 + Stage5Regression 回归基线；准备进入真实固件联调）
 - 2025-12-20：补齐 OpenAPI 契约缺口（api-service 实现 `/auth/*`、`/users`/`/roles`/`/permissions`、`/system/configs`、`/system/logs/*`、`/data/raw|statistics|export`），并为 `operation_logs`/`api_logs` 增加 DEFAULT 分区以避免单机环境插入失败；阶段 5 Next Actions 不变。
 - 2025-12-20：阶段 5 落地：新增固件模拟器 `scripts/dev/firmware-sim.js`（schema 校验 + state 持久化 + 重连退避 + ping/set_config/reboot），并在 `infra/compose/scripts/e2e-smoke-test.ps1` 增加 `-Stage5Regression` 预置回归；新增 `docs/guides/roadmap/stage5-acceptance.md`。
+- 2025-12-20：补齐 PresenceEvent 可选链路：ingest-service 订阅 `presence/+` 写入 `presence.events.v1`，新增 `presence-recorder` 落库 `device_presence`，并把 presence 断言纳入 `Stage1Regression/Stage2Regression/Stage5Regression` 回归基线。
 
 ## 1) 当前结论（TL;DR）
 
@@ -101,7 +102,6 @@ M3（阶段 2：可告警）目标：
 1) 真实固件联调：按 `docs/integrations/mqtt/*` 与 `docs/integrations/firmware/README.md`，让真实设备跑通 telemetry + commands，并以 `-Stage5Regression` 作为回归基线
 2) 将真实固件的“身份包存储/重连退避/命令回执”实现细节沉淀到 `docs/integrations/firmware/`（含可复用代码片段与踩坑记录）
 3) 规划下一阶段：Web/App 去硬编码（仅依赖 API/字典表渲染），并补齐对应 acceptance + e2e 断言
-4) （可选）补齐 PresenceEvent 上报与后端落库/查询（用于在线/离线与告警缺失策略）
 
 ## 4) 关键入口（新 AI 只读这些就能上手）
 
