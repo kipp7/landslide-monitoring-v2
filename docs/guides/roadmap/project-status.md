@@ -7,7 +7,7 @@
 - 每次合并一个 PR 到 `main`，如果它改变了项目阶段/里程碑/下一步，必须更新本页。
 - 本页只记录“当前状态与下一步”，历史细节放到 `docs/incidents/` 或 PR/commit 记录中。
 
-最后更新时间：2025-12-19（阶段 1：writer failure guard v26）
+最后更新时间：2025-12-19（阶段 1：telemetry load test v27）
 
 ## 1) 当前结论（TL;DR）
 
