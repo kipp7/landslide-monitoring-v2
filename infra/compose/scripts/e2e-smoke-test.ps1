@@ -3,6 +3,7 @@ param(
   [string]$ComposeFile = "infra/compose/docker-compose.yml",
   [string]$DeviceId = "",
   [switch]$Stage1Regression,
+  [switch]$Stage2Regression,
   [switch]$UseMqttAuth,
   [switch]$CreateDevice,
   [switch]$ConfigureEmqx,
@@ -10,6 +11,7 @@ param(
   [switch]$TestCommandAcks,
   [switch]$TestCommandFailed,
   [switch]$TestCommandTimeout,
+  [switch]$TestAlerts,
   [switch]$TestTelemetryDlq,
   [switch]$TestRevoke,
   [bool]$CollectEvidenceOnFailure = $true,
@@ -172,6 +174,8 @@ $eventsOut = Join-Path $logDir "command-events-recorder.stdout.log"
 $eventsErr = Join-Path $logDir "command-events-recorder.stderr.log"
 $notifyOut = Join-Path $logDir "command-notify-worker.stdout.log"
 $notifyErr = Join-Path $logDir "command-notify-worker.stderr.log"
+$ruleOut = Join-Path $logDir "rule-engine-worker.stdout.log"
+$ruleErr = Join-Path $logDir "rule-engine-worker.stderr.log"
 $dlqOut = Join-Path $logDir "telemetry-dlq-recorder.stdout.log"
 $dlqErr = Join-Path $logDir "telemetry-dlq-recorder.stderr.log"
 $waitCmdOut = Join-Path $logDir "wait-command.stdout.log"
@@ -196,11 +200,12 @@ $ackProc = $null
 $timeoutProc = $null
 $eventsProc = $null
 $notifyProc = $null
+$ruleProc = $null
 $dlqProc = $null
 
 try {
   if ($Stage1Regression) {
-    if ($UseMqttAuth -or $CreateDevice -or $ConfigureEmqx -or $TestCommands -or $TestCommandAcks -or $TestCommandFailed -or $TestCommandTimeout -or $TestTelemetryDlq -or $TestRevoke) {
+    if ($Stage2Regression -or $UseMqttAuth -or $CreateDevice -or $ConfigureEmqx -or $TestCommands -or $TestCommandAcks -or $TestCommandFailed -or $TestCommandTimeout -or $TestAlerts -or $TestTelemetryDlq -or $TestRevoke) {
       throw "Stage1Regression is a preset and must not be combined with other switches. Use either -Stage1Regression or the individual switches."
     }
     $ConfigureEmqx = $true
@@ -208,6 +213,19 @@ try {
     $CreateDevice = $true
     $TestCommands = $true
     $TestTelemetryDlq = $true
+    $TestRevoke = $true
+  }
+
+  if ($Stage2Regression) {
+    if ($Stage1Regression -or $UseMqttAuth -or $CreateDevice -or $ConfigureEmqx -or $TestCommands -or $TestCommandAcks -or $TestCommandFailed -or $TestCommandTimeout -or $TestAlerts -or $TestTelemetryDlq -or $TestRevoke) {
+      throw "Stage2Regression is a preset and must not be combined with other switches. Use either -Stage2Regression or the individual switches."
+    }
+    $ConfigureEmqx = $true
+    $UseMqttAuth = $true
+    $CreateDevice = $true
+    $TestCommands = $true
+    $TestTelemetryDlq = $true
+    $TestAlerts = $true
     $TestRevoke = $true
   }
 
@@ -307,8 +325,8 @@ try {
       "POSTGRES_POOL_MAX=5"
     ) -force:$ForceWriteServiceEnv
 
-    $ackTimeoutSeconds = if ($TestCommandTimeout -or $Stage1Regression) { "10" } else { "60" }
-    $scanIntervalMs = if ($TestCommandTimeout -or $Stage1Regression) { "1000" } else { "5000" }
+    $ackTimeoutSeconds = if ($TestCommandTimeout -or $Stage1Regression -or $Stage2Regression) { "10" } else { "60" }
+    $scanIntervalMs = if ($TestCommandTimeout -or $Stage1Regression -or $Stage2Regression) { "1000" } else { "5000" }
 
     Write-EnvIfMissingOrForced "services/command-timeout-worker/.env" @(
       "SERVICE_NAME=command-timeout-worker",
@@ -361,6 +379,25 @@ try {
       "POSTGRES_POOL_MAX=5",
       "",
       "NOTIFY_TYPE=app"
+    ) -force:$ForceWriteServiceEnv
+
+    Write-EnvIfMissingOrForced "services/rule-engine-worker/.env" @(
+      "SERVICE_NAME=rule-engine-worker",
+      "",
+      "KAFKA_BROKERS=$kafkaBrokers",
+      "KAFKA_CLIENT_ID=rule-engine-worker",
+      "KAFKA_GROUP_ID=rule-engine-worker.v1",
+      "KAFKA_TOPIC_TELEMETRY_RAW=telemetry.raw.v1",
+      "",
+      "POSTGRES_HOST=$pgHost",
+      "POSTGRES_PORT=$pgPort",
+      "POSTGRES_USER=$pgUser",
+      "POSTGRES_PASSWORD=$pgPassword",
+      "POSTGRES_DATABASE=$pgDb",
+      "POSTGRES_POOL_MAX=5",
+      "",
+      "RULES_REFRESH_MS=5000",
+      "MAX_POINTS_PER_RULE=600"
     ) -force:$ForceWriteServiceEnv
 
     Write-EnvIfMissingOrForced "services/telemetry-dlq-recorder/.env" @(
@@ -468,6 +505,7 @@ try {
   $timeoutProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/command-timeout-worker" -PassThru -RedirectStandardOutput $timeoutOut -RedirectStandardError $timeoutErr
   $eventsProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/command-events-recorder" -PassThru -RedirectStandardOutput $eventsOut -RedirectStandardError $eventsErr
   $notifyProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/command-notify-worker" -PassThru -RedirectStandardOutput $notifyOut -RedirectStandardError $notifyErr
+  $ruleProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/rule-engine-worker" -PassThru -RedirectStandardOutput $ruleOut -RedirectStandardError $ruleErr
   $dlqProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/telemetry-dlq-recorder" -PassThru -RedirectStandardOutput $dlqOut -RedirectStandardError $dlqErr
 
   Write-Host "Waiting for API /health..." -ForegroundColor Cyan
@@ -524,6 +562,12 @@ try {
     throw "telemetry-dlq-recorder did not start within 45s. Logs: $logDir"
   }
   Write-Host "telemetry-dlq-recorder is running." -ForegroundColor Green
+
+  Write-Host "Waiting for rule-engine-worker startup..." -ForegroundColor Cyan
+  if (-not (Wait-ForLogMatch $ruleOut "rule-engine-worker started" 45)) {
+    throw "rule-engine-worker did not start within 45s. Logs: $logDir"
+  }
+  Write-Host "rule-engine-worker is running." -ForegroundColor Green
 
   $deviceSecret = $null
   if ($CreateDevice) {
@@ -804,7 +848,7 @@ try {
       }
     }
 
-    if ($Stage1Regression) {
+    if ($Stage1Regression -or $Stage2Regression) {
       Invoke-CommandTest "acked"
       Invoke-CommandTest "failed"
       Invoke-CommandTest "timeout"
@@ -820,41 +864,6 @@ try {
       if ($TestCommandAcks) { Invoke-CommandTest "acked" }
       if ($TestCommandFailed) { Invoke-CommandTest "failed" }
       if ($TestCommandTimeout) { Invoke-CommandTest "timeout" }
-    }
-  }
-
-  if ($TestRevoke) {
-    if (-not $UseMqttAuth -or -not $CreateDevice -or -not $deviceSecret) {
-      throw "TestRevoke requires -UseMqttAuth and -CreateDevice (needs device credentials)."
-    }
-
-    Write-Host "Revoking device via API..." -ForegroundColor Cyan
-    $revokeUrl = "http://$apiLocalHost`:$apiPort/api/v1/devices/$($DeviceId)/revoke"
-    $revoke = Invoke-RestMethod -Method Put -Uri $revokeUrl -TimeoutSec 10
-    if (-not $revoke.success) { throw "revoke API failed. Logs: $logDir" }
-
-    Write-Host "Verifying revoked device is immediately denied by EMQX authn..." -ForegroundColor Cyan
-    $revokedDenied = $false
-    for ($i = 1; $i -le 10; $i++) {
-      Add-Content -Encoding UTF8 -LiteralPath $publishLog -Value ("-- revoked attempt " + $i + " --`n")
-      $exit = Run-Node @(
-        "scripts/dev/publish-telemetry.js",
-        "--mqtt", $mqttUrl,
-        "--device", $DeviceId,
-        "--username", $DeviceId,
-        "--password", $deviceSecret,
-        "--seq", (1000 + $i)
-      ) $publishLog
-      if ($exit -eq 0) {
-        throw "Expected revoked device publish to be denied, but it succeeded. Check EMQX authn and devices.status revoke enforcement."
-      }
-      $tail = ""
-      try { $tail = (Get-Content -LiteralPath $publishLog -Tail 40 | Out-String) } catch { }
-      if ($tail -match "Not authorized") { $revokedDenied = $true; break }
-      Start-Sleep -Seconds 2
-    }
-    if (-not $revokedDenied) {
-      throw "Revoked device publish did not clearly fail with 'Not authorized' after retries. Logs: $logDir"
     }
   }
 
@@ -963,6 +972,128 @@ try {
     }
   }
 
+  if ($TestAlerts) {
+    if (-not $UseMqttAuth -or -not $CreateDevice -or -not $deviceSecret) {
+      throw "TestAlerts requires -UseMqttAuth and -CreateDevice (needs device credentials)."
+    }
+
+    Write-Host "Creating an alert rule via API..." -ForegroundColor Cyan
+    $dsl = @{
+      dslVersion = 1
+      name = "smoke displacement threshold"
+      scope = @{ type = "device"; deviceId = $DeviceId }
+      enabled = $true
+      severity = "high"
+      timeField = "received"
+      missing = @{ policy = "ignore" }
+      when = @{
+        op = "AND"
+        items = @(@{ sensorKey = "displacement_mm"; operator = ">="; value = 1.0 })
+      }
+      window = @{ type = "points"; points = 1 }
+      cooldown = @{ minutes = 0 }
+      actions = @(@{ type = "emit_alert"; titleTemplate = "位移阈值触发"; messageTemplate = "device={{deviceId}} value={{value}}" })
+    }
+
+    $ruleBody = @{
+      rule = @{
+        ruleName = "位移阈值触发（smoke）"
+        description = "smoke test rule"
+        scope = @{ type = "device"; deviceId = $DeviceId }
+        isActive = $true
+      }
+      dsl = $dsl
+    } | ConvertTo-Json -Depth 10
+
+    $createRule = Invoke-RestMethod -Method Post -Uri "http://$apiLocalHost`:$apiPort/api/v1/alert-rules" -ContentType "application/json" -Body $ruleBody -TimeoutSec 10
+    if ($createRule.success -ne $true -or -not $createRule.data.ruleId) {
+      throw "create alert rule failed. Logs: $logDir"
+    }
+    $ruleId = [string]$createRule.data.ruleId
+
+    Write-Host "Publishing telemetry to trigger alert..." -ForegroundColor Cyan
+    Add-Content -Encoding UTF8 -LiteralPath $publishLog -Value ("-- publish telemetry for alert --`n")
+    $exit = Run-Node @(
+      "scripts/dev/publish-telemetry.js",
+      "--mqtt", $mqttUrl,
+      "--device", $DeviceId,
+      "--username", $DeviceId,
+      "--password", $deviceSecret,
+      "--seq", "9001"
+    ) $publishLog
+    if ($exit -ne 0) { throw "publish-telemetry.js failed (exit=$exit). Logs: $logDir" }
+
+    Write-Host "Waiting for alert to appear..." -ForegroundColor Cyan
+    $deadline = (Get-Date).AddSeconds(45)
+    $alertId = ""
+    while ((Get-Date) -lt $deadline) {
+      try {
+        $alerts = Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/api/v1/alerts?page=1&pageSize=50&deviceId=$DeviceId" -TimeoutSec 3
+        if ($alerts.success -eq $true -and $alerts.data.list) {
+          foreach ($a in $alerts.data.list) {
+            if ($a.ruleId -eq $ruleId -and $a.status -in @("active", "acked")) { $alertId = [string]$a.alertId; break }
+          }
+        }
+      } catch {
+        # ignore
+      }
+      if ($alertId) { break }
+      Start-Sleep -Seconds 2
+    }
+    if (-not $alertId) { throw "alert not found within 45s. Logs: $logDir" }
+
+    Write-Host "Verifying alert event stream..." -ForegroundColor Cyan
+    $events = Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/api/v1/alerts/$($alertId)/events" -TimeoutSec 10
+    if ($events.success -ne $true -or -not $events.data.events -or $events.data.events.Count -lt 1) {
+      throw "alert events missing. Logs: $logDir"
+    }
+
+    Write-Host "Acking alert..." -ForegroundColor Cyan
+    $ackBody = @{ notes = "smoke ack" } | ConvertTo-Json -Depth 5
+    $ack = Invoke-RestMethod -Method Post -Uri "http://$apiLocalHost`:$apiPort/api/v1/alerts/$($alertId)/ack" -ContentType "application/json" -Body $ackBody -TimeoutSec 10
+    if ($ack.success -ne $true) { throw "ack alert failed. Logs: $logDir" }
+
+    Write-Host "Resolving alert..." -ForegroundColor Cyan
+    $resolveBody = @{ notes = "smoke resolve" } | ConvertTo-Json -Depth 5
+    $resolve = Invoke-RestMethod -Method Post -Uri "http://$apiLocalHost`:$apiPort/api/v1/alerts/$($alertId)/resolve" -ContentType "application/json" -Body $resolveBody -TimeoutSec 10
+    if ($resolve.success -ne $true) { throw "resolve alert failed. Logs: $logDir" }
+  }
+
+  if ($TestRevoke) {
+    if (-not $UseMqttAuth -or -not $CreateDevice -or -not $deviceSecret) {
+      throw "TestRevoke requires -UseMqttAuth and -CreateDevice (needs device credentials)."
+    }
+
+    Write-Host "Revoking device via API..." -ForegroundColor Cyan
+    $revokeUrl = "http://$apiLocalHost`:$apiPort/api/v1/devices/$($DeviceId)/revoke"
+    $revoke = Invoke-RestMethod -Method Put -Uri $revokeUrl -TimeoutSec 10
+    if (-not $revoke.success) { throw "revoke API failed. Logs: $logDir" }
+
+    Write-Host "Verifying revoked device is immediately denied by EMQX authn..." -ForegroundColor Cyan
+    $revokedDenied = $false
+    for ($i = 1; $i -le 10; $i++) {
+      Add-Content -Encoding UTF8 -LiteralPath $publishLog -Value ("-- revoked attempt " + $i + " --`n")
+      $exit = Run-Node @(
+        "scripts/dev/publish-telemetry.js",
+        "--mqtt", $mqttUrl,
+        "--device", $DeviceId,
+        "--username", $DeviceId,
+        "--password", $deviceSecret,
+        "--seq", (1000 + $i)
+      ) $publishLog
+      if ($exit -eq 0) {
+        throw "Expected revoked device publish to be denied, but it succeeded. Check EMQX authn and devices.status revoke enforcement."
+      }
+      $tail = ""
+      try { $tail = (Get-Content -LiteralPath $publishLog -Tail 40 | Out-String) } catch { }
+      if ($tail -match "Not authorized") { $revokedDenied = $true; break }
+      Start-Sleep -Seconds 2
+    }
+    if (-not $revokedDenied) {
+      throw "Revoked device publish did not clearly fail with 'Not authorized' after retries. Logs: $logDir"
+    }
+  }
+
   Write-Host "E2E smoke test passed." -ForegroundColor Green
   Write-Host "Logs: $logDir" -ForegroundColor DarkGray
 } catch {
@@ -1008,7 +1139,7 @@ try {
   exit 1
 } finally {
   Write-Host "Stopping services..." -ForegroundColor Cyan
-  foreach ($p in @($ingestProc, $writerProc, $apiProc, $cmdProc, $ackProc, $timeoutProc, $eventsProc, $notifyProc, $dlqProc)) {
+  foreach ($p in @($ingestProc, $writerProc, $apiProc, $cmdProc, $ackProc, $timeoutProc, $eventsProc, $notifyProc, $ruleProc, $dlqProc)) {
     if ($null -eq $p) { continue }
     try {
       if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
