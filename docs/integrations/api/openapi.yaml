@@ -650,6 +650,38 @@ paths:
   /devices/{deviceId}/commands:
     parameters:
       - $ref: "#/components/parameters/DeviceIdPath"
+    get:
+      tags: [devices]
+      summary: List device commands
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: status
+          in: query
+          required: false
+          schema: { type: string, enum: [queued, sent, acked, failed, timeout, canceled] }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PaginatedDeviceCommands"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
     post:
       tags: [devices]
       summary: Create device command
@@ -671,6 +703,39 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/CreateDeviceCommandResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /devices/{deviceId}/commands/{commandId}:
+    parameters:
+      - $ref: "#/components/parameters/DeviceIdPath"
+      - name: commandId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [devices]
+      summary: Get device command detail
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DeviceCommand"
         "401":
           $ref: "#/components/responses/UnauthorizedResponse"
         "403":
@@ -1700,6 +1765,37 @@ components:
       properties:
         commandId: { type: string, format: uuid }
         status: { type: string, enum: [queued, sent, acked, failed, timeout] }
+
+    DeviceCommand:
+      type: object
+      required: [commandId, deviceId, commandType, payload, status, createdAt, updatedAt]
+      properties:
+        commandId: { type: string, format: uuid }
+        deviceId: { type: string, format: uuid }
+        commandType: { type: string }
+        payload:
+          type: object
+          additionalProperties: true
+        status: { type: string, enum: [queued, sent, acked, failed, timeout, canceled] }
+        sentAt: { type: string, format: date-time, nullable: true }
+        ackedAt: { type: string, format: date-time, nullable: true }
+        result:
+          type: object
+          additionalProperties: true
+        errorMessage: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    PaginatedDeviceCommands:
+      type: object
+      required: [list, pagination]
+      properties:
+        list:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeviceCommand"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
 
     DeviceStateResponse:
       type: object

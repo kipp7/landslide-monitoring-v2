@@ -31,6 +31,14 @@ const createDeviceCommandSchema = z.object({
   payload: z.record(z.unknown())
 });
 
+const commandIdSchema = z.string().uuid();
+
+const listDeviceCommandsQuerySchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  pageSize: z.coerce.number().int().positive().max(200).default(20),
+  status: z.enum(["queued", "sent", "acked", "failed", "timeout", "canceled"]).optional()
+});
+
 const listDevicesQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().positive().max(200).default(20),
@@ -48,6 +56,20 @@ type DeviceRow = {
   status: "inactive" | "active" | "revoked";
   metadata: unknown;
   last_seen_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type DeviceCommandRow = {
+  command_id: string;
+  device_id: string;
+  command_type: string;
+  payload: unknown;
+  status: "queued" | "sent" | "acked" | "failed" | "timeout" | "canceled";
+  sent_at: string | null;
+  acked_at: string | null;
+  result: unknown;
+  error_message: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -429,5 +451,179 @@ export function registerDeviceRoutes(
     }
 
     ok(reply, { commandId: created.command_id, status: created.status }, traceId);
+  });
+
+  app.get("/devices/:deviceId/commands", async (request, reply) => {
+    const traceId = request.traceId;
+    if (!requireAdmin(adminCfg, request, reply)) return;
+    if (!pg) {
+      fail(reply, 503, "PostgreSQL 未配置", traceId);
+      return;
+    }
+
+    const parseId = deviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
+    if (!parseId.success) {
+      fail(reply, 400, "参数错误", traceId, { field: "deviceId" });
+      return;
+    }
+    const deviceId = parseId.data;
+
+    const parseQuery = listDeviceCommandsQuerySchema.safeParse(request.query);
+    if (!parseQuery.success) {
+      fail(reply, 400, "参数错误", traceId, { field: "query", issues: parseQuery.error.issues });
+      return;
+    }
+    const { page, pageSize, status } = parseQuery.data;
+
+    const where: string[] = ["device_id = $1"];
+    const params: unknown[] = [deviceId];
+    if (status) {
+      params.push(status);
+      where.push("status = $" + String(params.length));
+    }
+
+    const whereSql = `WHERE ${where.join(" AND ")}`;
+    const offset = (page - 1) * pageSize;
+
+    const data = await withPgClient(pg, async (client) => {
+      const exists = await queryOne<{ ok: boolean }>(
+        client,
+        "SELECT TRUE AS ok FROM devices WHERE device_id=$1",
+        [deviceId]
+      );
+      if (!exists) return null;
+
+      const totalRow = await queryOne<{ total: string }>(
+        client,
+        `SELECT count(*)::text AS total FROM device_commands ${whereSql}`,
+        params
+      );
+      const total = Number(totalRow?.total ?? "0");
+
+      const res = await client.query<DeviceCommandRow>(
+        `
+          SELECT
+            command_id,
+            device_id,
+            command_type,
+            payload,
+            status,
+            to_char(sent_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS sent_at,
+            to_char(acked_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS acked_at,
+            result,
+            error_message,
+            to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at,
+            to_char(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS updated_at
+          FROM device_commands
+          ${whereSql}
+          ORDER BY created_at DESC
+          LIMIT $${String(params.length + 1)}
+          OFFSET $${String(params.length + 2)}
+        `,
+        params.concat([pageSize, offset])
+      );
+
+      return { total, list: res.rows };
+    });
+
+    if (!data) {
+      fail(reply, 404, "资源不存在", traceId, { deviceId });
+      return;
+    }
+
+    ok(
+      reply,
+      {
+        list: data.list.map((c) => ({
+          commandId: c.command_id,
+          deviceId: c.device_id,
+          commandType: c.command_type,
+          payload: c.payload ?? {},
+          status: c.status,
+          sentAt: c.sent_at,
+          ackedAt: c.acked_at,
+          result: c.result ?? {},
+          errorMessage: c.error_message ?? "",
+          createdAt: c.created_at,
+          updatedAt: c.updated_at
+        })),
+        pagination: {
+          page,
+          pageSize,
+          total: data.total,
+          totalPages: Math.max(1, Math.ceil(data.total / pageSize))
+        }
+      },
+      traceId
+    );
+  });
+
+  app.get("/devices/:deviceId/commands/:commandId", async (request, reply) => {
+    const traceId = request.traceId;
+    if (!requireAdmin(adminCfg, request, reply)) return;
+    if (!pg) {
+      fail(reply, 503, "PostgreSQL 未配置", traceId);
+      return;
+    }
+
+    const parseId = deviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
+    if (!parseId.success) {
+      fail(reply, 400, "参数错误", traceId, { field: "deviceId" });
+      return;
+    }
+    const deviceId = parseId.data;
+
+    const parseCmd = commandIdSchema.safeParse((request.params as { commandId?: unknown }).commandId);
+    if (!parseCmd.success) {
+      fail(reply, 400, "参数错误", traceId, { field: "commandId" });
+      return;
+    }
+    const commandId = parseCmd.data;
+
+    const row = await withPgClient(pg, async (client) =>
+      queryOne<DeviceCommandRow>(
+        client,
+        `
+          SELECT
+            command_id,
+            device_id,
+            command_type,
+            payload,
+            status,
+            to_char(sent_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS sent_at,
+            to_char(acked_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS acked_at,
+            result,
+            error_message,
+            to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at,
+            to_char(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS updated_at
+          FROM device_commands
+          WHERE command_id = $1 AND device_id = $2
+        `,
+        [commandId, deviceId]
+      )
+    );
+
+    if (!row) {
+      fail(reply, 404, "资源不存在", traceId, { deviceId, commandId });
+      return;
+    }
+
+    ok(
+      reply,
+      {
+        commandId: row.command_id,
+        deviceId: row.device_id,
+        commandType: row.command_type,
+        payload: row.payload ?? {},
+        status: row.status,
+        sentAt: row.sent_at,
+        ackedAt: row.acked_at,
+        result: row.result ?? {},
+        errorMessage: row.error_message ?? "",
+        createdAt: row.created_at,
+        updatedAt: row.updated_at
+      },
+      traceId
+    );
   });
 }

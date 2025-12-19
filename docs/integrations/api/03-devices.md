@@ -258,3 +258,72 @@
   "traceId": "req_01J..."
 }
 ```
+
+## 9. 获取设备命令列表（用于运维排查）
+
+**GET** `/devices/{deviceId}/commands`
+
+权限：`device:control`
+
+查询参数：
+- `page`, `pageSize`
+- `status`（queued/sent/acked/failed/timeout/canceled）
+
+响应（示例）：
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "ok",
+  "data": {
+    "list": [
+      {
+        "commandId": "1b4c81aa-3c5f-4c14-8f9e-1c0fbe9d2c3d",
+        "deviceId": "2c1f2d8e-2bb7-4f58-bb6a-6c2a0f4a7a4c",
+        "commandType": "set_config",
+        "payload": { "sampling_s": 5 },
+        "status": "acked",
+        "sentAt": "2025-12-15T10:00:01Z",
+        "ackedAt": "2025-12-15T10:00:02Z",
+        "result": { },
+        "errorMessage": "",
+        "createdAt": "2025-12-15T10:00:00Z",
+        "updatedAt": "2025-12-15T10:00:02Z"
+      }
+    ],
+    "pagination": { "page": 1, "pageSize": 20, "total": 1, "totalPages": 1 }
+  },
+  "timestamp": "2025-12-15T10:00:00Z",
+  "traceId": "req_01J..."
+}
+```
+
+## 10. 获取设备命令详情（用于运维排查）
+
+**GET** `/devices/{deviceId}/commands/{commandId}`
+
+权限：`device:control`
+
+响应：
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "ok",
+  "data": {
+    "commandId": "1b4c81aa-3c5f-4c14-8f9e-1c0fbe9d2c3d",
+    "deviceId": "2c1f2d8e-2bb7-4f58-bb6a-6c2a0f4a7a4c",
+    "commandType": "set_config",
+    "payload": { "sampling_s": 5 },
+    "status": "acked",
+    "sentAt": "2025-12-15T10:00:01Z",
+    "ackedAt": "2025-12-15T10:00:02Z",
+    "result": { },
+    "errorMessage": "",
+    "createdAt": "2025-12-15T10:00:00Z",
+    "updatedAt": "2025-12-15T10:00:02Z"
+  },
+  "timestamp": "2025-12-15T10:00:00Z",
+  "traceId": "req_01J..."
+}
+```
