@@ -24,6 +24,7 @@
 - alerts.events.v1：`docs/integrations/kafka/schemas/alerts-events.v1.schema.json`
 - device.commands.v1：`docs/integrations/kafka/schemas/device-commands.v1.schema.json`
 - device.command_acks.v1：`docs/integrations/kafka/schemas/device-command-acks.v1.schema.json`
+- device.command_events.v1：`docs/integrations/kafka/schemas/device-command-events.v1.schema.json`
 
 ## 5. Storage（DDL/表结构）
 

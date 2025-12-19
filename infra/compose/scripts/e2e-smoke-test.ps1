@@ -7,6 +7,7 @@ param(
   [switch]$ConfigureEmqx,
   [switch]$TestCommands,
   [switch]$TestCommandAcks,
+  [switch]$TestCommandTimeout,
   [switch]$TestRevoke,
   [bool]$CollectEvidenceOnFailure = $true,
   [switch]$SkipBuild,
@@ -162,6 +163,8 @@ $cmdOut = Join-Path $logDir "command-dispatcher.stdout.log"
 $cmdErr = Join-Path $logDir "command-dispatcher.stderr.log"
 $ackOut = Join-Path $logDir "command-ack-receiver.stdout.log"
 $ackErr = Join-Path $logDir "command-ack-receiver.stderr.log"
+$timeoutOut = Join-Path $logDir "command-timeout-worker.stdout.log"
+$timeoutErr = Join-Path $logDir "command-timeout-worker.stderr.log"
 $waitCmdOut = Join-Path $logDir "wait-command.stdout.log"
 $waitCmdErr = Join-Path $logDir "wait-command.stderr.log"
 $publishLog = Join-Path $logDir "publish-telemetry.log"
@@ -181,6 +184,7 @@ $writerProc = $null
 $apiProc = $null
 $cmdProc = $null
 $ackProc = $null
+$timeoutProc = $null
 
 try {
   if ($ConfigureEmqx) {
@@ -269,6 +273,7 @@ try {
       "KAFKA_CLIENT_ID=command-ack-receiver",
       "KAFKA_GROUP_ID=command-ack-receiver.v1",
       "KAFKA_TOPIC_DEVICE_COMMAND_ACKS=device.command_acks.v1",
+      "KAFKA_TOPIC_DEVICE_COMMAND_EVENTS=device.command_events.v1",
       "",
       "POSTGRES_HOST=$pgHost",
       "POSTGRES_PORT=$pgPort",
@@ -276,6 +281,28 @@ try {
       "POSTGRES_PASSWORD=$pgPassword",
       "POSTGRES_DATABASE=$pgDb",
       "POSTGRES_POOL_MAX=5"
+    ) -force:$ForceWriteServiceEnv
+
+    $ackTimeoutSeconds = if ($TestCommandTimeout) { "10" } else { "60" }
+    $scanIntervalMs = if ($TestCommandTimeout) { "1000" } else { "5000" }
+
+    Write-EnvIfMissingOrForced "services/command-timeout-worker/.env" @(
+      "SERVICE_NAME=command-timeout-worker",
+      "",
+      "KAFKA_BROKERS=$kafkaBrokers",
+      "KAFKA_CLIENT_ID=command-timeout-worker",
+      "KAFKA_TOPIC_DEVICE_COMMAND_EVENTS=device.command_events.v1",
+      "",
+      "POSTGRES_HOST=$pgHost",
+      "POSTGRES_PORT=$pgPort",
+      "POSTGRES_USER=$pgUser",
+      "POSTGRES_PASSWORD=$pgPassword",
+      "POSTGRES_DATABASE=$pgDb",
+      "POSTGRES_POOL_MAX=5",
+      "",
+      "COMMAND_ACK_TIMEOUT_SECONDS=$ackTimeoutSeconds",
+      "SCAN_INTERVAL_MS=$scanIntervalMs",
+      "SCAN_LIMIT=200"
     ) -force:$ForceWriteServiceEnv
 
     Write-EnvIfMissingOrForced "services/api/.env" @(
@@ -350,6 +377,7 @@ try {
   $apiProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/api" -PassThru -RedirectStandardOutput $apiOut -RedirectStandardError $apiErr
   $cmdProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/command-dispatcher" -PassThru -RedirectStandardOutput $cmdOut -RedirectStandardError $cmdErr
   $ackProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/command-ack-receiver" -PassThru -RedirectStandardOutput $ackOut -RedirectStandardError $ackErr
+  $timeoutProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/command-timeout-worker" -PassThru -RedirectStandardOutput $timeoutOut -RedirectStandardError $timeoutErr
 
   Write-Host "Waiting for API /health..." -ForegroundColor Cyan
   $maxWaitSeconds = 60
@@ -379,6 +407,12 @@ try {
     throw "command-ack-receiver did not subscribe to MQTT within 45s. Logs: $logDir"
   }
   Write-Host "command-ack-receiver is subscribed." -ForegroundColor Green
+
+  Write-Host "Waiting for command-timeout-worker startup..." -ForegroundColor Cyan
+  if (-not (Wait-ForLogMatch $timeoutOut "command-timeout-worker started" 45)) {
+    throw "command-timeout-worker did not start within 45s. Logs: $logDir"
+  }
+  Write-Host "command-timeout-worker is running." -ForegroundColor Green
 
   $deviceSecret = $null
   if ($CreateDevice) {
@@ -482,8 +516,8 @@ try {
     if (-not $UseMqttAuth -or -not $CreateDevice -or -not $deviceSecret) {
       throw "TestCommands requires -UseMqttAuth and -CreateDevice (needs device credentials)."
     }
-    if ($TestCommandAcks -and (-not $TestCommands)) {
-      throw "TestCommandAcks requires -TestCommands (needs commandId)."
+    if ($TestCommandAcks -and $TestCommandTimeout) {
+      throw "TestCommandAcks and TestCommandTimeout are mutually exclusive (one command cannot be both acked and timed out)."
     }
 
     Write-Host "Subscribing to device command topic..." -ForegroundColor Cyan
@@ -549,6 +583,26 @@ try {
       }
       if ($status -ne "acked") {
         throw "command did not become acked within 45s (status='$status'). Logs: $logDir"
+      }
+    }
+
+    if ($TestCommandTimeout) {
+      Write-Host "Waiting for command status to become timeout..." -ForegroundColor Cyan
+      $cmdId = [string]$cmdResp.data.commandId
+      $deadline = (Get-Date).AddSeconds(45)
+      $status = ""
+      while ((Get-Date) -lt $deadline) {
+        try {
+          $cmd = Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/api/v1/devices/$($DeviceId)/commands/$cmdId" -TimeoutSec 3
+          if ($cmd.success -eq $true -and $cmd.data.status) { $status = [string]$cmd.data.status }
+        } catch {
+          # ignore transient failures
+        }
+        if ($status -eq "timeout") { break }
+        Start-Sleep -Seconds 2
+      }
+      if ($status -ne "timeout") {
+        throw "command did not become timeout within 45s (status='$status'). Logs: $logDir"
       }
     }
   }
@@ -633,7 +687,7 @@ try {
   exit 1
 } finally {
   Write-Host "Stopping services..." -ForegroundColor Cyan
-  foreach ($p in @($ingestProc, $writerProc, $apiProc, $cmdProc, $ackProc)) {
+  foreach ($p in @($ingestProc, $writerProc, $apiProc, $cmdProc, $ackProc, $timeoutProc)) {
     if ($null -eq $p) { continue }
     try {
       if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }

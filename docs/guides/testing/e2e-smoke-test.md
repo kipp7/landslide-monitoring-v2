@@ -23,6 +23,10 @@
 
 - `powershell -NoProfile -ExecutionPolicy Bypass -File infra/compose/scripts/e2e-smoke-test.ps1 -ConfigureEmqx -UseMqttAuth -CreateDevice -TestCommands -TestCommandAcks -TestRevoke`
 
+阶段 1（命令回执超时）验证用例（不发送 ack，验证 `sent` → `timeout`）：
+
+- `powershell -NoProfile -ExecutionPolicy Bypass -File infra/compose/scripts/e2e-smoke-test.ps1 -ConfigureEmqx -UseMqttAuth -CreateDevice -TestCommands -TestCommandTimeout`
+
 失败时留证（无需手工收集）：
 
 - 脚本失败会自动在 `backups/evidence/e2e-smoke-<timestamp>/` 下输出：

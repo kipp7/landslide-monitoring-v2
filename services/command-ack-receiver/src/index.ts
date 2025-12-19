@@ -16,6 +16,18 @@ type DeviceCommandAckV1 = {
   result?: Record<string, unknown>;
 };
 
+type DeviceCommandEventV1 = {
+  schema_version: 1;
+  event_id: string;
+  event_type: "COMMAND_SENT" | "COMMAND_ACKED" | "COMMAND_FAILED" | "COMMAND_TIMEOUT";
+  created_ts: string;
+  command_id: string;
+  device_id: string;
+  status: "queued" | "sent" | "acked" | "failed" | "timeout" | "canceled";
+  detail?: string;
+  result?: Record<string, unknown>;
+};
+
 function repoRootFromHere(): string {
   return path.resolve(__dirname, "..", "..", "..");
 }
@@ -114,8 +126,17 @@ async function main(): Promise<void> {
     "schemas",
     "device-command-acks.v1.schema.json"
   );
+  const schemaEventPath = path.join(
+    repoRoot,
+    "docs",
+    "integrations",
+    "kafka",
+    "schemas",
+    "device-command-events.v1.schema.json"
+  );
   const validateMqtt = await loadAndCompileSchema<DeviceCommandAckV1>(schemaMqttPath);
   const validateKafka = await loadAndCompileSchema<DeviceCommandAckV1>(schemaKafkaPath);
+  const validateEvent = await loadAndCompileSchema<DeviceCommandEventV1>(schemaEventPath);
 
   const mqttClient = mqtt.connect(config.mqttUrl, {
     ...(config.mqttUsername && config.mqttPassword
@@ -144,6 +165,17 @@ async function main(): Promise<void> {
   await producer.connect();
   await consumer.connect();
   await consumer.subscribe({ topic: config.kafkaTopicDeviceCommandAcks, fromBeginning: false });
+
+  const publishCommandEvent = async (event: DeviceCommandEventV1) => {
+    if (!validateEvent.validate(event)) {
+      logger.error({ errors: validateEvent.errors, event }, "device.command_events schema invalid (BUG)");
+      return;
+    }
+    await producer.send({
+      topic: config.kafkaTopicDeviceCommandEvents,
+      messages: [{ key: event.device_id, value: JSON.stringify(event) }]
+    });
+  };
 
   mqttClient.subscribe(`${config.mqttTopicAckPrefix}+`, { qos: 1 }, (err) => {
     if (err) logger.error({ err }, "mqtt subscribe failed");
@@ -223,6 +255,19 @@ async function main(): Promise<void> {
             logger.info({ traceId, commandId: ack.command_id, deviceId: ack.device_id }, "ack already applied (noop)");
           } else {
             logger.info({ traceId, commandId: ack.command_id, deviceId: ack.device_id, status: ack.status }, "ack applied to postgres");
+
+            const errorMessage = ack.status === "failed" ? pickErrorMessage(ack.result) : null;
+            await publishCommandEvent({
+              schema_version: 1,
+              event_id: crypto.randomUUID(),
+              event_type: ack.status === "acked" ? "COMMAND_ACKED" : "COMMAND_FAILED",
+              created_ts: new Date().toISOString(),
+              command_id: ack.command_id,
+              device_id: ack.device_id,
+              status: ack.status,
+              ...(errorMessage ? { detail: errorMessage } : {}),
+              ...(ack.result ? { result: ack.result } : {})
+            });
           }
 
           ctx.resolveOffset(message.offset);

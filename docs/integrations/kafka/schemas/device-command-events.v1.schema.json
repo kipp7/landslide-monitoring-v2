@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/schemas/kafka.device-command-events.v1.schema.json",
+  "title": "Kafka device.command_events.v1 payload",
+  "description": "设备命令生命周期事件（sent/acked/failed/timeout），用于通知与运维观测。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "event_id",
+    "event_type",
+    "created_ts",
+    "command_id",
+    "device_id",
+    "status"
+  ],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "event_id": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    },
+    "event_type": {
+      "type": "string",
+      "enum": ["COMMAND_SENT", "COMMAND_ACKED", "COMMAND_FAILED", "COMMAND_TIMEOUT"]
+    },
+    "created_ts": { "type": "string", "format": "date-time" },
+    "command_id": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    },
+    "device_id": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    },
+    "status": { "type": "string", "enum": ["queued", "sent", "acked", "failed", "timeout", "canceled"] },
+    "detail": { "type": "string" },
+    "result": { "type": "object", "additionalProperties": true }
+  }
+}
+
