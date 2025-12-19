@@ -43,6 +43,11 @@ const configSchema = z.object({
   mqttInternalUsername: z.string().default("ingest-service"),
   mqttInternalPassword: optionalNonEmptyString(),
 
+  jwtAccessSecret: optionalNonEmptyString(),
+  jwtRefreshSecret: optionalNonEmptyString(),
+  jwtAccessExpiresInSeconds: z.coerce.number().int().positive().default(2 * 3600),
+  jwtRefreshExpiresInSeconds: z.coerce.number().int().positive().default(7 * 24 * 3600),
+
   clickhouseUrl: z.string().url(),
   clickhouseUsername: z.string().default("default"),
   clickhousePassword: z.string().optional(),
@@ -93,6 +98,11 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
     emqxWebhookToken: env.EMQX_WEBHOOK_TOKEN,
     mqttInternalUsername: env.MQTT_INTERNAL_USERNAME,
     mqttInternalPassword: env.MQTT_INTERNAL_PASSWORD,
+
+    jwtAccessSecret: env.JWT_ACCESS_SECRET,
+    jwtRefreshSecret: env.JWT_REFRESH_SECRET,
+    jwtAccessExpiresInSeconds: env.JWT_ACCESS_EXPIRES_IN_SECONDS,
+    jwtRefreshExpiresInSeconds: env.JWT_REFRESH_EXPIRES_IN_SECONDS,
 
     kafkaBrokers: env.KAFKA_BROKERS,
     kafkaTopicDeviceCommands: env.KAFKA_TOPIC_DEVICE_COMMANDS
