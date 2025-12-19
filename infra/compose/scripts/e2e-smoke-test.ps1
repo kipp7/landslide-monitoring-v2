@@ -654,6 +654,25 @@ try {
         throw "command notification not found within 45s. Logs: $logDir"
       }
 
+      Write-Host "Verifying unreadOnly filter..." -ForegroundColor Cyan
+      $deadline = (Get-Date).AddSeconds(20)
+      $unreadFound = $false
+      while ((Get-Date) -lt $deadline) {
+        try {
+          $u = Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/api/v1/devices/$($deviceId)/command-notifications?commandId=$commandId&unreadOnly=true&pageSize=50" -TimeoutSec 3
+          if ($u.success -eq $true -and $u.data.list -and $u.data.list.Count -ge 1) {
+            $unreadFound = $true
+            break
+          }
+        } catch {
+          # ignore
+        }
+        Start-Sleep -Seconds 2
+      }
+      if (-not $unreadFound) {
+        throw "unreadOnly filter did not return the notification within 20s. Logs: $logDir"
+      }
+
       Write-Host "Verifying notification stats and read marker..." -ForegroundColor Cyan
       $statsBefore = Get-NotificationStats $deviceId $windowStartTime $windowEndTime
       if ($statsBefore.success -ne $true) { throw "notification stats query failed. Logs: $logDir" }
@@ -670,6 +689,18 @@ try {
       if ($unreadAfter -gt ($unreadBefore - 1)) {
         throw "notification stats unread did not decrease after read (before=$unreadBefore after=$unreadAfter). Logs: $logDir"
       }
+
+      $deadline = (Get-Date).AddSeconds(20)
+      while ((Get-Date) -lt $deadline) {
+        try {
+          $u2 = Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/api/v1/devices/$($deviceId)/command-notifications?commandId=$commandId&unreadOnly=true&pageSize=50" -TimeoutSec 3
+          if ($u2.success -eq $true -and (-not $u2.data.list -or $u2.data.list.Count -eq 0)) { return }
+        } catch {
+          # ignore
+        }
+        Start-Sleep -Seconds 2
+      }
+      throw "unreadOnly filter still returns the notification after read within 20s. Logs: $logDir"
     }
 
     function Invoke-CommandTest([ValidateSet("acked", "failed", "timeout")][string]$mode) {

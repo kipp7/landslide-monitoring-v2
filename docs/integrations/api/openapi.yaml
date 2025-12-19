@@ -756,6 +756,14 @@ paths:
       parameters:
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PageSize"
+        - name: startTime
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: endTime
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
         - name: commandId
           in: query
           required: false
@@ -776,6 +784,52 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/PaginatedDeviceCommandEvents"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /devices/{deviceId}/command-events/stats:
+    parameters:
+      - $ref: "#/components/parameters/DeviceIdPath"
+    get:
+      tags: [devices]
+      summary: Get device command event stats
+      parameters:
+        - name: startTime
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: endTime
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: eventType
+          in: query
+          required: false
+          schema: { type: string, enum: [COMMAND_SENT, COMMAND_ACKED, COMMAND_FAILED, COMMAND_TIMEOUT] }
+        - name: bucket
+          in: query
+          required: false
+          schema: { type: string, enum: ["1h", "1d"] }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DeviceCommandEventStats"
         "401":
           $ref: "#/components/responses/UnauthorizedResponse"
         "403":
@@ -829,10 +883,22 @@ paths:
       parameters:
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PageSize"
+        - name: startTime
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: endTime
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
         - name: commandId
           in: query
           required: false
           schema: { type: string, format: uuid }
+        - name: eventType
+          in: query
+          required: false
+          schema: { type: string, enum: [COMMAND_SENT, COMMAND_ACKED, COMMAND_FAILED, COMMAND_TIMEOUT] }
         - name: status
           in: query
           required: false
@@ -841,6 +907,10 @@ paths:
           in: query
           required: false
           schema: { type: string, enum: [app, sms, email, wechat] }
+        - name: unreadOnly
+          in: query
+          required: false
+          schema: { type: boolean }
       responses:
         "200":
           description: ok
@@ -883,6 +953,10 @@ paths:
           in: query
           required: false
           schema: { type: string, enum: [app, sms, email, wechat] }
+        - name: bucket
+          in: query
+          required: false
+          schema: { type: string, enum: ["1h", "1d"] }
       responses:
         "200":
           description: ok
@@ -2154,6 +2228,44 @@ components:
         createdAt: { type: string, format: date-time }
         ingestedAt: { type: string, format: date-time }
 
+    DeviceCommandEventStats:
+      type: object
+      required: [deviceId, totals, byEventType, bucket, byBucket]
+      properties:
+        deviceId: { type: string, format: uuid }
+        window:
+          type: object
+          nullable: true
+          required: [startTime, endTime]
+          properties:
+            startTime: { type: string, format: date-time }
+            endTime: { type: string, format: date-time }
+        eventType: { type: string }
+        bucket: { type: string }
+        totals:
+          type: object
+          required: [total]
+          properties:
+            total: { type: integer }
+        byEventType:
+          type: array
+          items:
+            type: object
+            required: [eventType, count]
+            properties:
+              eventType:
+                type: string
+                enum: [COMMAND_SENT, COMMAND_ACKED, COMMAND_FAILED, COMMAND_TIMEOUT]
+              count: { type: integer }
+        byBucket:
+          type: array
+          items:
+            type: object
+            required: [bucketStartTime, total]
+            properties:
+              bucketStartTime: { type: string, format: date-time }
+              total: { type: integer }
+
     PaginatedDeviceCommandEvents:
       type: object
       required: [list, pagination]
@@ -2210,7 +2322,7 @@ components:
 
     DeviceCommandNotificationStats:
       type: object
-      required: [deviceId, totals, byStatus, byNotifyType, byEventType]
+      required: [deviceId, totals, byStatus, byNotifyType, byEventType, bucket, byBucket]
       properties:
         deviceId: { type: string, format: uuid }
         window:
@@ -2253,6 +2365,20 @@ components:
                 type: string
                 enum: [COMMAND_SENT, COMMAND_ACKED, COMMAND_FAILED, COMMAND_TIMEOUT]
               count: { type: integer }
+        bucket: { type: string }
+        byBucket:
+          type: array
+          items:
+            type: object
+            required: [bucketStartTime, totals]
+            properties:
+              bucketStartTime: { type: string, format: date-time }
+              totals:
+                type: object
+                required: [total, unread]
+                properties:
+                  total: { type: integer }
+                  unread: { type: integer }
 
     MarkNotificationReadResponse:
       type: object

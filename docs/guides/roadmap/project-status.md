@@ -7,7 +7,7 @@
 - 每次合并一个 PR 到 `main`，如果它改变了项目阶段/里程碑/下一步，必须更新本页。
 - 本页只记录“当前状态与下一步”，历史细节放到 `docs/incidents/` 或 PR/commit 记录中。
 
-最后更新时间：2025-12-19（阶段 1：Stage1Regression 一键闭环回归基线）
+最后更新时间：2025-12-19（阶段 1：commands 运维筛选 + bucket 聚合）
 
 ## 1) 当前结论（TL;DR）
 
@@ -45,6 +45,7 @@
   - 进展：补齐 commands 运维接口：`GET /devices/{deviceId}/commands` 与 `GET /devices/{deviceId}/commands/{commandId}`（用于排查 queued/sent/acked/failed/timeout/canceled）。
   - 进展：补齐 ack 超时策略：新增 `command-timeout-worker` 定期扫描 `sent` 超时命令并标记为 `timeout`，同时发出 `device.command_events.v1` 事件；e2e 支持 `-TestCommandTimeout` 回归。
   - 进展：补齐 command events 的“落库与查询”：新增 `command-events-recorder` 落库 `device_command_events`；API 新增 `/devices/{deviceId}/command-events` 查询，用于通知/排查与 e2e 断言。
+  - 进展：commands 运维收口：命令事件/通知列表支持 `startTime/endTime/eventType/unreadOnly` 过滤；统计接口支持 `bucket(1h/1d)` 按时间窗口聚合，并新增 `/devices/{deviceId}/command-events/stats`。
 
 ## 2) 当前阶段与里程碑
 
@@ -75,8 +76,7 @@ M2（阶段 1：设备接入与鉴权）目标：
 
 ## 3) 下一步（Next Actions，按优先级）
 
-1) commands 运维收口：在现有 event/notification 落库与查询基础上，补齐展示/筛选/统计能力（例如：未读计数、按时间窗口聚合、按类型聚合），并继续沉淀到单机联调脚本/证据包
-2) writer 可靠性增强：补充告警/限流/降载策略（基础运行观测/保护已落地，后续补齐告警与容量压测）
+1) writer 可靠性增强：补充告警/限流/降载策略（基础运行观测/保护已落地，后续补齐告警与容量压测）
 
 ## 4) 关键入口（新 AI 只读这些就能上手）
 
