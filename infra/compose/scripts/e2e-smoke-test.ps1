@@ -5,6 +5,7 @@ param(
   [switch]$UseMqttAuth,
   [switch]$CreateDevice,
   [switch]$ConfigureEmqx,
+  [switch]$TestCommands,
   [bool]$CollectEvidenceOnFailure = $true,
   [switch]$SkipBuild,
   [switch]$SkipWriteServiceEnv,
@@ -155,6 +156,10 @@ $writerOut = Join-Path $logDir "writer.stdout.log"
 $writerErr = Join-Path $logDir "writer.stderr.log"
 $apiOut = Join-Path $logDir "api.stdout.log"
 $apiErr = Join-Path $logDir "api.stderr.log"
+$cmdOut = Join-Path $logDir "command-dispatcher.stdout.log"
+$cmdErr = Join-Path $logDir "command-dispatcher.stderr.log"
+$waitCmdOut = Join-Path $logDir "wait-command.stdout.log"
+$waitCmdErr = Join-Path $logDir "wait-command.stderr.log"
 $publishLog = Join-Path $logDir "publish-telemetry.log"
 
 $apiEnvPath = "services/api/.env"
@@ -170,6 +175,7 @@ Write-Host "Using deviceId: $DeviceId" -ForegroundColor Cyan
 $ingestProc = $null
 $writerProc = $null
 $apiProc = $null
+$cmdProc = $null
 
 try {
   if ($ConfigureEmqx) {
@@ -224,6 +230,26 @@ try {
       "",
       "BATCH_MAX_ROWS=2000",
       "BATCH_FLUSH_INTERVAL_MS=1000"
+    ) -force:$ForceWriteServiceEnv
+
+    Write-EnvIfMissingOrForced "services/command-dispatcher/.env" @(
+      "SERVICE_NAME=command-dispatcher",
+      "",
+      "KAFKA_BROKERS=$kafkaBrokers",
+      "KAFKA_CLIENT_ID=command-dispatcher",
+      "KAFKA_GROUP_ID=command-dispatcher.v1",
+      "KAFKA_TOPIC_DEVICE_COMMANDS=device.commands.v1",
+      "",
+      "MQTT_URL=$mqttUrl",
+      "MQTT_USERNAME=$(if ($UseMqttAuth) { 'ingest-service' } else { '' })",
+      "MQTT_PASSWORD=$(if ($UseMqttAuth) { $internalPassword } else { '' })",
+      "MQTT_TOPIC_COMMAND_PREFIX=cmd/",
+      "",
+      "POSTGRES_HOST=$pgHost",
+      "POSTGRES_PORT=$pgPort",
+      "POSTGRES_USER=$pgUser",
+      "POSTGRES_PASSWORD=$pgPassword",
+      "POSTGRES_DATABASE=$pgDb"
     ) -force:$ForceWriteServiceEnv
 
     Write-EnvIfMissingOrForced "services/api/.env" @(
@@ -296,6 +322,7 @@ try {
   $ingestProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/ingest" -PassThru -RedirectStandardOutput $ingestOut -RedirectStandardError $ingestErr
   $writerProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/telemetry-writer" -PassThru -RedirectStandardOutput $writerOut -RedirectStandardError $writerErr
   $apiProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/api" -PassThru -RedirectStandardOutput $apiOut -RedirectStandardError $apiErr
+  $cmdProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/command-dispatcher" -PassThru -RedirectStandardOutput $cmdOut -RedirectStandardError $cmdErr
 
   Write-Host "Waiting for API /health..." -ForegroundColor Cyan
   $maxWaitSeconds = 60
@@ -418,6 +445,43 @@ try {
     throw "series response has no points. Logs: $logDir"
   }
 
+  if ($TestCommands) {
+    if (-not $UseMqttAuth -or -not $CreateDevice -or -not $deviceSecret) {
+      throw "TestCommands requires -UseMqttAuth and -CreateDevice (needs device credentials)."
+    }
+
+    Write-Host "Subscribing to device command topic..." -ForegroundColor Cyan
+    $waitProc = Start-Process -FilePath "node" -ArgumentList @(
+      "scripts/dev/wait-for-command.js",
+      "--mqtt", $mqttUrl,
+      "--device", $DeviceId,
+      "--username", $DeviceId,
+      "--password", $deviceSecret,
+      "--timeout", "45"
+    ) -WorkingDirectory "." -PassThru -RedirectStandardOutput $waitCmdOut -RedirectStandardError $waitCmdErr
+
+    Start-Sleep -Seconds 2
+
+    Write-Host "Creating a device command via API..." -ForegroundColor Cyan
+    $cmdBody = @{
+      commandType = "set_config"
+      payload = @{ sampling_s = 5; report_interval_s = 5 }
+    } | ConvertTo-Json -Depth 5
+
+    $cmdResp = Invoke-RestMethod -Method Post -Uri "http://$apiLocalHost`:$apiPort/api/v1/devices/$($DeviceId)/commands" -ContentType "application/json" -Body $cmdBody -TimeoutSec 10
+    if (-not $cmdResp.success -or -not $cmdResp.data.commandId) {
+      throw "command creation failed. Logs: $logDir"
+    }
+
+    if (-not $waitProc.WaitForExit(60000)) {
+      try { Stop-Process -Id $waitProc.Id -Force } catch { }
+      throw "Timed out waiting for MQTT command delivery. Logs: $logDir"
+    }
+    if ($waitProc.ExitCode -ne 0) {
+      throw "Device did not receive command (wait-for-command.js exit=$($waitProc.ExitCode)). Logs: $logDir"
+    }
+  }
+
   Write-Host "E2E smoke test passed." -ForegroundColor Green
   Write-Host "Logs: $logDir" -ForegroundColor DarkGray
 } catch {
@@ -463,7 +527,7 @@ try {
   exit 1
 } finally {
   Write-Host "Stopping services..." -ForegroundColor Cyan
-  foreach ($p in @($ingestProc, $writerProc, $apiProc)) {
+  foreach ($p in @($ingestProc, $writerProc, $apiProc, $cmdProc)) {
     if ($null -eq $p) { continue }
     try {
       if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
