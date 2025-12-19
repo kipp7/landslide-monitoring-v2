@@ -7,8 +7,9 @@
 - 每次合并一个 PR 到 `main`，如果它改变了项目阶段/里程碑/下一步，必须更新本页。
 - 本页只记录“当前状态与下一步”，历史细节放到 `docs/incidents/` 或 PR/commit 记录中。
 
-最后更新时间：2025-12-20（阶段 4 已完成：单机端点齐备且 e2e 有断言；进入阶段 5）
+最后更新时间：2025-12-20（阶段 5 已完成：固件模拟器 + Stage5Regression 回归基线；准备进入真实固件联调）
 - 2025-12-20：补齐 OpenAPI 契约缺口（api-service 实现 `/auth/*`、`/users`/`/roles`/`/permissions`、`/system/configs`、`/system/logs/*`、`/data/raw|statistics|export`），并为 `operation_logs`/`api_logs` 增加 DEFAULT 分区以避免单机环境插入失败；阶段 5 Next Actions 不变。
+- 2025-12-20：阶段 5 落地：新增固件模拟器 `scripts/dev/firmware-sim.js`（schema 校验 + state 持久化 + 重连退避 + ping/set_config/reboot），并在 `infra/compose/scripts/e2e-smoke-test.ps1` 增加 `-Stage5Regression` 预置回归；新增 `docs/guides/roadmap/stage5-acceptance.md`。
 
 ## 1) 当前结论（TL;DR）
 
@@ -97,10 +98,10 @@ M3（阶段 2：可告警）目标：
 
 ## 3) 下一步（Next Actions，按优先级）
 
-1) 固件端 MQTT 对齐：按 `docs/integrations/mqtt/README.md` + schemas 完成上报与回执示例（examples + schema 校验）
-2) 断电安全与重连策略：身份包安全存储 + 指数退避重连（避免连接风暴/丢包抖动）
-3) 最小命令集：支持 `set_config / ping / reboot`（含 ACK/FAILED 回执），并与后端 commands 契约对齐
-4) 联调回归：补齐“固件模拟器/脚本”并接入单机 e2e 证据包（确保端到端可复现）
+1) 真实固件联调：按 `docs/integrations/mqtt/*` 与 `docs/integrations/firmware/README.md`，让真实设备跑通 telemetry + commands，并以 `-Stage5Regression` 作为回归基线
+2) 将真实固件的“身份包存储/重连退避/命令回执”实现细节沉淀到 `docs/integrations/firmware/`（含可复用代码片段与踩坑记录）
+3) 规划下一阶段：Web/App 去硬编码（仅依赖 API/字典表渲染），并补齐对应 acceptance + e2e 断言
+4) （可选）补齐 PresenceEvent 上报与后端落库/查询（用于在线/离线与告警缺失策略）
 
 ## 4) 关键入口（新 AI 只读这些就能上手）
 

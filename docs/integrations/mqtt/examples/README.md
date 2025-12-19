@@ -11,4 +11,4 @@
 - `presence-event.v1.json`（在线/离线事件）
 - `device-command.v1.json`（服务端下发命令）
 - `device-command-ack.v1.json`（设备回执）
-
+- `firmware-simulator.md`（可运行的固件模拟器：上报/命令/回执 + schema 校验 + 重连退避 + state 持久化）

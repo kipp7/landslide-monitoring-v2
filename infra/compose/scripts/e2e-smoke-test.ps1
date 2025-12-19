@@ -4,6 +4,7 @@ param(
   [string]$DeviceId = "",
   [switch]$Stage1Regression,
   [switch]$Stage2Regression,
+  [switch]$Stage5Regression,
   [switch]$UseMqttAuth,
   [switch]$CreateDevice,
   [switch]$ConfigureEmqx,
@@ -15,6 +16,7 @@ param(
   [switch]$TestAlertNotifications,
   [switch]$TestTelemetryDlq,
   [switch]$TestRevoke,
+  [switch]$TestFirmwareSimulator,
   [bool]$CollectEvidenceOnFailure = $true,
   [switch]$SkipBuild,
   [switch]$SkipWriteServiceEnv,
@@ -184,6 +186,9 @@ $dlqErr = Join-Path $logDir "telemetry-dlq-recorder.stderr.log"
 $waitCmdOut = Join-Path $logDir "wait-command.stdout.log"
 $waitCmdErr = Join-Path $logDir "wait-command.stderr.log"
 $publishLog = Join-Path $logDir "publish-telemetry.log"
+$firmwareOut = Join-Path $logDir "firmware-sim.stdout.log"
+$firmwareErr = Join-Path $logDir "firmware-sim.stderr.log"
+$firmwareState = Join-Path $logDir "firmware-sim.state.json"
 
 $apiEnvPath = "services/api/.env"
 $apiPort = Read-EnvValue $apiEnvPath "API_PORT" "8080"
@@ -206,10 +211,11 @@ $notifyProc = $null
 $alertNotifyProc = $null
 $ruleProc = $null
 $dlqProc = $null
+$firmwareProc = $null
 
 try {
   if ($Stage1Regression) {
-    if ($Stage2Regression -or $UseMqttAuth -or $CreateDevice -or $ConfigureEmqx -or $TestCommands -or $TestCommandAcks -or $TestCommandFailed -or $TestCommandTimeout -or $TestAlerts -or $TestAlertNotifications -or $TestTelemetryDlq -or $TestRevoke) {
+    if ($Stage2Regression -or $Stage5Regression -or $UseMqttAuth -or $CreateDevice -or $ConfigureEmqx -or $TestCommands -or $TestCommandAcks -or $TestCommandFailed -or $TestCommandTimeout -or $TestAlerts -or $TestAlertNotifications -or $TestTelemetryDlq -or $TestRevoke -or $TestFirmwareSimulator) {
       throw "Stage1Regression is a preset and must not be combined with other switches. Use either -Stage1Regression or the individual switches."
     }
     $ConfigureEmqx = $true
@@ -232,6 +238,16 @@ try {
     $TestAlerts = $true
     $TestAlertNotifications = $true
     $TestRevoke = $true
+  }
+
+  if ($Stage5Regression) {
+    if ($Stage1Regression -or $Stage2Regression -or $UseMqttAuth -or $CreateDevice -or $ConfigureEmqx -or $TestCommands -or $TestCommandAcks -or $TestCommandFailed -or $TestCommandTimeout -or $TestAlerts -or $TestAlertNotifications -or $TestTelemetryDlq -or $TestRevoke -or $TestFirmwareSimulator) {
+      throw "Stage5Regression is a preset and must not be combined with other switches. Use either -Stage5Regression or the individual switches."
+    }
+    $ConfigureEmqx = $true
+    $UseMqttAuth = $true
+    $CreateDevice = $true
+    $TestFirmwareSimulator = $true
   }
 
   if ($TestAlertNotifications -and -not $TestAlerts) {
@@ -649,6 +665,28 @@ try {
     Write-Host "Device created: $DeviceId (secret not printed)" -ForegroundColor Green
   }
 
+  if ($TestFirmwareSimulator) {
+    if (-not $UseMqttAuth -or -not $CreateDevice -or -not $deviceSecret) {
+      throw "TestFirmwareSimulator requires -UseMqttAuth and -CreateDevice (needs device_secret)."
+    }
+
+    Write-Host "Starting firmware simulator (MQTT telemetry + command ack)..." -ForegroundColor Cyan
+    $firmwareProc = Start-Process -FilePath "node" -ArgumentList @(
+      "scripts/dev/firmware-sim.js",
+      "--mqtt", $mqttUrl,
+      "--device", $DeviceId,
+      "--username", $DeviceId,
+      "--password", $deviceSecret,
+      "--stateFile", $firmwareState,
+      "--telemetryIntervalMs", "2000"
+    ) -WorkingDirectory "." -PassThru -RedirectStandardOutput $firmwareOut -RedirectStandardError $firmwareErr
+
+    if (-not (Wait-ForLogMatch $firmwareOut "^ready$" 45)) {
+      throw "firmware simulator did not become ready within 45s. Logs: $logDir"
+    }
+    Write-Host "firmware simulator is ready." -ForegroundColor Green
+  }
+
   if ($UseMqttAuth) {
     if (-not $CreateDevice) {
       throw "UseMqttAuth requires CreateDevice (needs device_secret)."
@@ -672,20 +710,24 @@ try {
     }
   }
 
-  Write-Host "Publishing telemetry to MQTT..." -ForegroundColor Cyan
-  $published = $false
-  for ($i = 1; $i -le 10; $i++) {
-    Add-Content -Encoding UTF8 -LiteralPath $publishLog -Value ("-- publish attempt " + $i + " --`n")
-    if ($UseMqttAuth) {
-      $exit = Run-Node @("scripts/dev/publish-telemetry.js", "--mqtt", $mqttUrl, "--device", $DeviceId, "--username", $DeviceId, "--password", $deviceSecret) $publishLog
-    } else {
-      $exit = Run-Node @("scripts/dev/publish-telemetry.js", "--mqtt", $mqttUrl, "--device", $DeviceId) $publishLog
+  if (-not $TestFirmwareSimulator) {
+    Write-Host "Publishing telemetry to MQTT..." -ForegroundColor Cyan
+    $published = $false
+    for ($i = 1; $i -le 10; $i++) {
+      Add-Content -Encoding UTF8 -LiteralPath $publishLog -Value ("-- publish attempt " + $i + " --`n")
+      if ($UseMqttAuth) {
+        $exit = Run-Node @("scripts/dev/publish-telemetry.js", "--mqtt", $mqttUrl, "--device", $DeviceId, "--username", $DeviceId, "--password", $deviceSecret) $publishLog
+      } else {
+        $exit = Run-Node @("scripts/dev/publish-telemetry.js", "--mqtt", $mqttUrl, "--device", $DeviceId) $publishLog
+      }
+      if ($exit -eq 0) { $published = $true; break }
+      Start-Sleep -Seconds ([Math]::Min(10, 1 + ($i * 2)))
     }
-    if ($exit -eq 0) { $published = $true; break }
-    Start-Sleep -Seconds ([Math]::Min(10, 1 + ($i * 2)))
-  }
-  if (-not $published) {
-    throw "publish-telemetry.js failed after retries. See: $publishLog"
+    if (-not $published) {
+      throw "publish-telemetry.js failed after retries. See: $publishLog"
+    }
+  } else {
+    Write-Host "Telemetry is provided by firmware simulator." -ForegroundColor DarkGray
   }
 
   Write-Host "Querying latest state..." -ForegroundColor Cyan
@@ -718,6 +760,63 @@ try {
   $seriesUrl = "http://$apiLocalHost`:$apiPort/api/v1/data/series/$($DeviceId)?startTime=$startTime&endTime=$endTime&sensorKeys=displacement_mm"
   $series = Invoke-RestMethod -Uri $seriesUrl -TimeoutSec 10
   if ($series.success -ne $true) { throw "series query failed. Logs: $logDir" }
+
+  if ($TestFirmwareSimulator) {
+    function Invoke-FirmwareCommand([string]$commandType, [hashtable]$payload, [string]$expectResultKey = "") {
+      Write-Host "Creating firmware command via API (type=$commandType)..." -ForegroundColor Cyan
+      $cmdBody = @{
+        commandType = $commandType
+        payload = $payload
+      } | ConvertTo-Json -Depth 10
+
+      $cmdResp = Invoke-RestMethod -Method Post -Uri "http://$apiLocalHost`:$apiPort/api/v1/devices/$($DeviceId)/commands" -ContentType "application/json" -Body $cmdBody -TimeoutSec 10
+      if (-not $cmdResp.success -or -not $cmdResp.data.commandId) {
+        throw "command creation failed (type=$commandType). Logs: $logDir"
+      }
+      $cmdId = [string]$cmdResp.data.commandId
+
+      Write-Host "Waiting for command status to become acked (type=$commandType)..." -ForegroundColor Cyan
+      $deadline = (Get-Date).AddSeconds(45)
+      $status = ""
+      $cmd = $null
+      while ((Get-Date) -lt $deadline) {
+        try {
+          $cmd = Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/api/v1/devices/$($DeviceId)/commands/$cmdId" -TimeoutSec 3
+          if ($cmd.success -eq $true -and $cmd.data.status) { $status = [string]$cmd.data.status }
+        } catch {
+          # ignore transient failures
+        }
+        if ($status -eq "acked" -or $status -eq "failed") { break }
+        Start-Sleep -Seconds 2
+      }
+      if ($status -ne "acked") {
+        $errMsg = ""
+        try { $errMsg = $(if ($cmd -and $cmd.data -and $cmd.data.errorMessage) { [string]$cmd.data.errorMessage } else { "" }) } catch { }
+        throw "firmware command did not ack within 45s (type=$commandType status=$status err=$errMsg). Logs: $logDir"
+      }
+
+      if ($expectResultKey -and $expectResultKey.Length -gt 0) {
+        try {
+          if (-not ($cmd.data.result.PSObject.Properties.Name -contains $expectResultKey)) {
+            throw "missing result key '$expectResultKey'"
+          }
+        } catch {
+          throw "firmware command result did not include expected key '$expectResultKey' (type=$commandType). Logs: $logDir"
+        }
+      }
+
+      return $cmdId
+    }
+
+    $null = Invoke-FirmwareCommand "ping" @{} "pong"
+    $null = Invoke-FirmwareCommand "set_config" @{ sampling_s = 7; report_interval_s = 7 } "applied"
+    $null = Invoke-FirmwareCommand "reboot" @{} "rebooting"
+
+    # Optional: ensure simulator stays alive and continues telemetry after reboot.
+    if (-not (Wait-ForLogMatch $firmwareOut "telemetry published:" 45)) {
+      throw "firmware simulator did not publish telemetry (post reboot) within 45s. Logs: $logDir"
+    }
+  }
   if (-not $series.data.series -or $series.data.series.Count -lt 1) {
     throw "series response has no data. Logs: $logDir"
   }
@@ -1254,7 +1353,7 @@ VALUES ('$testUserId', '$DeviceId', 'low', TRUE, TRUE);
   exit 1
 } finally {
   Write-Host "Stopping services..." -ForegroundColor Cyan
-  foreach ($p in @($ingestProc, $writerProc, $apiProc, $cmdProc, $ackProc, $timeoutProc, $eventsProc, $notifyProc, $alertNotifyProc, $ruleProc, $dlqProc)) {
+  foreach ($p in @($firmwareProc, $ingestProc, $writerProc, $apiProc, $cmdProc, $ackProc, $timeoutProc, $eventsProc, $notifyProc, $alertNotifyProc, $ruleProc, $dlqProc)) {
     if ($null -eq $p) { continue }
     try {
       if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
