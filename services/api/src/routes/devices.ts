@@ -25,6 +25,11 @@ const updateDeviceSchema = z.object({
   metadata: z.record(z.unknown()).optional()
 });
 
+const createDeviceCommandSchema = z.object({
+  commandType: z.string().min(1).max(50),
+  payload: z.record(z.unknown())
+});
+
 const listDevicesQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().positive().max(200).default(20),
@@ -335,5 +340,64 @@ export function registerDeviceRoutes(
     }
 
     ok(reply, { deviceId, status: row.status, revokedAt: row.revoked_at }, traceId);
+  });
+
+  app.post("/devices/:deviceId/commands", async (request, reply) => {
+    const traceId = request.traceId;
+    if (!requireAdmin(adminCfg, request, reply)) return;
+    if (!pg) {
+      fail(reply, 503, "PostgreSQL 未配置", traceId);
+      return;
+    }
+
+    const parseId = deviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
+    if (!parseId.success) {
+      fail(reply, 400, "参数错误", traceId, { field: "deviceId" });
+      return;
+    }
+    const deviceId = parseId.data;
+
+    const parseBody = createDeviceCommandSchema.safeParse(request.body);
+    if (!parseBody.success) {
+      fail(reply, 400, "参数错误", traceId, { field: "body", issues: parseBody.error.issues });
+      return;
+    }
+
+    const { commandType, payload } = parseBody.data;
+
+    const created = await withPgClient(pg, async (client) => {
+      const device = await queryOne<{ status: string }>(
+        client,
+        "SELECT status FROM devices WHERE device_id=$1",
+        [deviceId]
+      );
+      if (!device) return null;
+      if (device.status === "revoked") return "revoked";
+
+      const row = await queryOne<{ command_id: string; status: string }>(
+        client,
+        `
+          INSERT INTO device_commands (
+            device_id, command_type, payload, status, requested_by, request_source
+          ) VALUES (
+            $1, $2, $3::jsonb, 'queued', NULL, 'api'
+          )
+          RETURNING command_id, status
+        `,
+        [deviceId, commandType, JSON.stringify(payload)]
+      );
+      return row ?? null;
+    });
+
+    if (created === "revoked") {
+      fail(reply, 409, "设备已吊销", traceId, { deviceId });
+      return;
+    }
+    if (!created) {
+      fail(reply, 404, "资源不存在", traceId, { deviceId });
+      return;
+    }
+
+    ok(reply, { commandId: created.command_id, status: created.status }, traceId);
   });
 }
