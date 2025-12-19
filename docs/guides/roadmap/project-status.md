@@ -7,7 +7,7 @@
 - 每次合并一个 PR 到 `main`，如果它改变了项目阶段/里程碑/下一步，必须更新本页。
 - 本页只记录“当前状态与下一步”，历史细节放到 `docs/incidents/` 或 PR/commit 记录中。
 
-最后更新时间：2025-12-18（阶段 1：本地脚本健壮性修复 v4）
+最后更新时间：2025-12-18（阶段 1：本地脚本健壮性修复 v5）
 
 ## 1) 当前结论（TL;DR）
 
@@ -29,6 +29,7 @@
   - 修复：telemetry-writer 写入 ClickHouse 时，将 `*_ts` 按 ClickHouse `DateTime64(3, 'UTC')` 期望格式序列化（避免 ISO8601 `T/Z` 导致解析失败）。
   - 修复：API `/data/series` 查询对 ClickHouse 的 `DateTime64` 参数使用 UTC 解析（避免时区/格式导致范围查询无数据或 500）。
   - 修复：ClickHouse 默认使用 named volume（可用 `CH_DATA_DIR` 切回 bind-mount），并在 e2e 冒烟中自动检测/初始化 ClickHouse DDL（缺表时执行 `init-clickhouse.ps1`）。
+  - 进展：补齐设备管理端接口的“命令下发”入口 `POST /devices/{deviceId}/commands`（写入 Postgres `device_commands`，返回 queued）。
 
 ## 2) 当前阶段与里程碑
 
