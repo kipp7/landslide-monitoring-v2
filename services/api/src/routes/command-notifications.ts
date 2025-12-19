@@ -13,7 +13,14 @@ const listNotificationsQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().positive().max(200).default(20),
   commandId: z.string().uuid().optional(),
-  status: z.enum(["pending", "sent", "delivered", "failed"]).optional()
+  status: z.enum(["pending", "sent", "delivered", "failed"]).optional(),
+  notifyType: z.enum(["app", "sms", "email", "wechat"]).optional()
+});
+
+const notificationStatsQuerySchema = z.object({
+  startTime: z.string().datetime().optional(),
+  endTime: z.string().datetime().optional(),
+  notifyType: z.enum(["app", "sms", "email", "wechat"]).optional()
 });
 
 type NotificationRow = {
@@ -60,7 +67,7 @@ export function registerCommandNotificationRoutes(
       fail(reply, 400, "参数错误", traceId, { field: "query", issues: parseQuery.error.issues });
       return;
     }
-    const { page, pageSize, commandId, status } = parseQuery.data;
+    const { page, pageSize, commandId, status, notifyType } = parseQuery.data;
 
     const where: string[] = ["e.device_id = $1"];
     const params: unknown[] = [deviceId];
@@ -71,6 +78,10 @@ export function registerCommandNotificationRoutes(
     if (status) {
       params.push(status);
       where.push("n.status = $" + String(params.length));
+    }
+    if (notifyType) {
+      params.push(notifyType);
+      where.push("n.notify_type = $" + String(params.length));
     }
 
     const whereSql = `WHERE ${where.join(" AND ")}`;
@@ -161,6 +172,155 @@ export function registerCommandNotificationRoutes(
     );
   });
 
+  app.get("/devices/:deviceId/command-notifications/stats", async (request, reply) => {
+    const traceId = request.traceId;
+    if (!requireAdmin(adminCfg, request, reply)) return;
+    if (!pg) {
+      fail(reply, 503, "PostgreSQL 未配置", traceId);
+      return;
+    }
+
+    const parseId = deviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
+    if (!parseId.success) {
+      fail(reply, 400, "参数错误", traceId, { field: "deviceId" });
+      return;
+    }
+    const deviceId = parseId.data;
+
+    const parseQuery = notificationStatsQuerySchema.safeParse(request.query);
+    if (!parseQuery.success) {
+      fail(reply, 400, "参数错误", traceId, { field: "query", issues: parseQuery.error.issues });
+      return;
+    }
+
+    const { startTime, endTime, notifyType } = parseQuery.data;
+    if ((startTime && !endTime) || (!startTime && endTime)) {
+      fail(reply, 400, "参数错误", traceId, { field: "timeRange" });
+      return;
+    }
+    const start = startTime ? new Date(startTime) : null;
+    const end = endTime ? new Date(endTime) : null;
+    if (start && end && !(start < end)) {
+      fail(reply, 400, "参数错误", traceId, { field: "timeRange" });
+      return;
+    }
+
+    const where: string[] = ["e.device_id = $1"];
+    const params: unknown[] = [deviceId];
+    if (start && end) {
+      params.push(start);
+      where.push("n.created_at >= $" + String(params.length) + "::timestamptz");
+      params.push(end);
+      where.push("n.created_at <= $" + String(params.length) + "::timestamptz");
+    }
+    if (notifyType) {
+      params.push(notifyType);
+      where.push("n.notify_type = $" + String(params.length));
+    }
+
+    const whereSql = `WHERE ${where.join(" AND ")}`;
+
+    const data = await withPgClient(pg, async (client) => {
+      const exists = await queryOne<{ ok: boolean }>(
+        client,
+        "SELECT TRUE AS ok FROM devices WHERE device_id=$1",
+        [deviceId]
+      );
+      if (!exists) return null;
+
+      const totalRow = await queryOne<{ total: string }>(
+        client,
+        `
+          SELECT count(*)::text AS total
+          FROM device_command_notifications n
+          JOIN device_command_events e ON e.event_id = n.event_id
+          ${whereSql}
+        `,
+        params
+      );
+      const total = Number(totalRow?.total ?? "0");
+
+      const unreadRow = await queryOne<{ total: string }>(
+        client,
+        `
+          SELECT count(*)::text AS total
+          FROM device_command_notifications n
+          JOIN device_command_events e ON e.event_id = n.event_id
+          ${whereSql}
+            AND n.read_at IS NULL
+        `,
+        params
+      );
+      const unread = Number(unreadRow?.total ?? "0");
+
+      const statusRows = await client.query<{ status: string; count: string }>(
+        `
+          SELECT n.status, count(*)::text AS count
+          FROM device_command_notifications n
+          JOIN device_command_events e ON e.event_id = n.event_id
+          ${whereSql}
+          GROUP BY n.status
+          ORDER BY n.status
+        `,
+        params
+      );
+
+      const typeRows = await client.query<{ notify_type: string; count: string }>(
+        `
+          SELECT n.notify_type, count(*)::text AS count
+          FROM device_command_notifications n
+          JOIN device_command_events e ON e.event_id = n.event_id
+          ${whereSql}
+          GROUP BY n.notify_type
+          ORDER BY n.notify_type
+        `,
+        params
+      );
+
+      const eventTypeRows = await client.query<{ event_type: string; count: string }>(
+        `
+          SELECT e.event_type, count(*)::text AS count
+          FROM device_command_notifications n
+          JOIN device_command_events e ON e.event_id = n.event_id
+          ${whereSql}
+          GROUP BY e.event_type
+          ORDER BY e.event_type
+        `,
+        params
+      );
+
+      return {
+        total,
+        unread,
+        byStatus: statusRows.rows.map((r) => ({ status: r.status, count: Number(r.count) })),
+        byNotifyType: typeRows.rows.map((r) => ({ notifyType: r.notify_type, count: Number(r.count) })),
+        byEventType: eventTypeRows.rows.map((r) => ({ eventType: r.event_type, count: Number(r.count) }))
+      };
+    });
+
+    if (!data) {
+      fail(reply, 404, "资源不存在", traceId, { deviceId });
+      return;
+    }
+
+    ok(
+      reply,
+      {
+        deviceId,
+        window: startTime && endTime ? { startTime, endTime } : null,
+        notifyType: notifyType ?? "",
+        totals: {
+          total: data.total,
+          unread: data.unread
+        },
+        byStatus: data.byStatus,
+        byNotifyType: data.byNotifyType,
+        byEventType: data.byEventType
+      },
+      traceId
+    );
+  });
+
   app.get("/devices/:deviceId/command-notifications/:notificationId", async (request, reply) => {
     const traceId = request.traceId;
     if (!requireAdmin(adminCfg, request, reply)) return;
@@ -238,5 +398,66 @@ export function registerCommandNotificationRoutes(
       traceId
     );
   });
-}
 
+  app.put("/devices/:deviceId/command-notifications/:notificationId/read", async (request, reply) => {
+    const traceId = request.traceId;
+    if (!requireAdmin(adminCfg, request, reply)) return;
+    if (!pg) {
+      fail(reply, 503, "PostgreSQL 未配置", traceId);
+      return;
+    }
+
+    const parseId = deviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
+    if (!parseId.success) {
+      fail(reply, 400, "参数错误", traceId, { field: "deviceId" });
+      return;
+    }
+    const deviceId = parseId.data;
+
+    const parseN = notificationIdSchema.safeParse(
+      (request.params as { notificationId?: unknown }).notificationId
+    );
+    if (!parseN.success) {
+      fail(reply, 400, "参数错误", traceId, { field: "notificationId" });
+      return;
+    }
+    const notificationId = parseN.data;
+
+    const row = await withPgClient(pg, async (client) => {
+      const existing = await queryOne<{ read_at: string | null }>(
+        client,
+        `
+          SELECT to_char(n.read_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS read_at
+          FROM device_command_notifications n
+          JOIN device_command_events e ON e.event_id = n.event_id
+          WHERE n.notification_id = $1 AND e.device_id = $2
+        `,
+        [notificationId, deviceId]
+      );
+      if (!existing) return null;
+      if (existing.read_at) return existing;
+
+      return queryOne<{ read_at: string }>(
+        client,
+        `
+          UPDATE device_command_notifications n
+          SET read_at = NOW()
+          FROM device_command_events e
+          WHERE n.event_id = e.event_id
+            AND n.notification_id = $1
+            AND e.device_id = $2
+            AND n.read_at IS NULL
+          RETURNING to_char(n.read_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS read_at
+        `,
+        [notificationId, deviceId]
+      );
+    });
+
+    if (!row) {
+      fail(reply, 404, "资源不存在", traceId, { deviceId, notificationId });
+      return;
+    }
+
+    ok(reply, { notificationId, readAt: row.read_at ?? "" }, traceId);
+  });
+}

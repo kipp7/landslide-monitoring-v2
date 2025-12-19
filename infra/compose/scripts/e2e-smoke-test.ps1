@@ -696,10 +696,15 @@ try {
       Write-Host "Verifying command notification is created..." -ForegroundColor Cyan
       $deadline = (Get-Date).AddSeconds(45)
       $found = $false
+      $notificationId = ""
       while ((Get-Date) -lt $deadline) {
         try {
           $n = Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/api/v1/devices/$($DeviceId)/command-notifications?commandId=$cmdId" -TimeoutSec 3
-          if ($n.success -eq $true -and $n.data.list -and $n.data.list.Count -ge 1) { $found = $true; break }
+          if ($n.success -eq $true -and $n.data.list -and $n.data.list.Count -ge 1) {
+            $notificationId = [string]$n.data.list[0].notificationId
+            $found = $true
+            break
+          }
         } catch {
           # ignore
         }
@@ -708,6 +713,19 @@ try {
       if (-not $found) {
         throw "command notification not found within 45s. Logs: $logDir"
       }
+
+      Write-Host "Verifying notification stats and read marker..." -ForegroundColor Cyan
+      $stats = Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/api/v1/devices/$($DeviceId)/command-notifications/stats" -TimeoutSec 10
+      if ($stats.success -ne $true) { throw "notification stats query failed. Logs: $logDir" }
+      if ($stats.data.totals.total -lt 1) { throw "notification stats total < 1. Logs: $logDir" }
+      if ($stats.data.totals.unread -lt 1) { throw "notification stats unread < 1. Logs: $logDir" }
+
+      $read = Invoke-RestMethod -Method Put -Uri "http://$apiLocalHost`:$apiPort/api/v1/devices/$($DeviceId)/command-notifications/$notificationId/read" -TimeoutSec 10
+      if ($read.success -ne $true) { throw "mark notification read failed. Logs: $logDir" }
+
+      $stats2 = Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/api/v1/devices/$($DeviceId)/command-notifications/stats" -TimeoutSec 10
+      if ($stats2.success -ne $true) { throw "notification stats query failed (after read). Logs: $logDir" }
+      if ($stats2.data.totals.unread -ne 0) { throw "notification stats unread not zero after read. Logs: $logDir" }
     }
   }
 

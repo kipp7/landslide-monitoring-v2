@@ -837,6 +837,10 @@ paths:
           in: query
           required: false
           schema: { type: string, enum: [pending, sent, delivered, failed] }
+        - name: notifyType
+          in: query
+          required: false
+          schema: { type: string, enum: [app, sms, email, wechat] }
       responses:
         "200":
           description: ok
@@ -849,6 +853,48 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/PaginatedDeviceCommandNotifications"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /devices/{deviceId}/command-notifications/stats:
+    parameters:
+      - $ref: "#/components/parameters/DeviceIdPath"
+    get:
+      tags: [devices]
+      summary: Get device command notification stats
+      parameters:
+        - name: startTime
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: endTime
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: notifyType
+          in: query
+          required: false
+          schema: { type: string, enum: [app, sms, email, wechat] }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DeviceCommandNotificationStats"
         "401":
           $ref: "#/components/responses/UnauthorizedResponse"
         "403":
@@ -882,6 +928,39 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/DeviceCommandNotification"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /devices/{deviceId}/command-notifications/{notificationId}/read:
+    parameters:
+      - $ref: "#/components/parameters/DeviceIdPath"
+      - name: notificationId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    put:
+      tags: [devices]
+      summary: Mark device command notification as read
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/MarkNotificationReadResponse"
         "401":
           $ref: "#/components/responses/UnauthorizedResponse"
         "403":
@@ -2014,6 +2093,59 @@ components:
             $ref: "#/components/schemas/DeviceCommandNotification"
         pagination:
           $ref: "#/components/schemas/Pagination"
+
+    DeviceCommandNotificationStats:
+      type: object
+      required: [deviceId, totals, byStatus, byNotifyType, byEventType]
+      properties:
+        deviceId: { type: string, format: uuid }
+        window:
+          type: object
+          nullable: true
+          required: [startTime, endTime]
+          properties:
+            startTime: { type: string, format: date-time }
+            endTime: { type: string, format: date-time }
+        notifyType: { type: string }
+        totals:
+          type: object
+          required: [total, unread]
+          properties:
+            total: { type: integer }
+            unread: { type: integer }
+        byStatus:
+          type: array
+          items:
+            type: object
+            required: [status, count]
+            properties:
+              status: { type: string, enum: [pending, sent, delivered, failed] }
+              count: { type: integer }
+        byNotifyType:
+          type: array
+          items:
+            type: object
+            required: [notifyType, count]
+            properties:
+              notifyType: { type: string, enum: [app, sms, email, wechat] }
+              count: { type: integer }
+        byEventType:
+          type: array
+          items:
+            type: object
+            required: [eventType, count]
+            properties:
+              eventType:
+                type: string
+                enum: [COMMAND_SENT, COMMAND_ACKED, COMMAND_FAILED, COMMAND_TIMEOUT]
+              count: { type: integer }
+
+    MarkNotificationReadResponse:
+      type: object
+      required: [notificationId, readAt]
+      properties:
+        notificationId: { type: string, format: uuid }
+        readAt: { type: string }
 
     DeviceStateResponse:
       type: object
