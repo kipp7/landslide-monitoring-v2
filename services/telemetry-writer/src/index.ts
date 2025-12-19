@@ -17,6 +17,15 @@ type TelemetryRawV1 = {
   meta?: Record<string, unknown>;
 };
 
+type TelemetryDlqV1 = {
+  schema_version: 1;
+  reason_code: string;
+  reason_detail?: string;
+  received_ts: string;
+  device_id?: string | null;
+  raw_payload: string;
+};
+
 type TelemetryRow = {
   received_ts: string;
   event_ts: string | null;
@@ -35,12 +44,55 @@ function repoRootFromHere(): string {
   return path.resolve(__dirname, "..", "..", "..");
 }
 
+function isoNow(): string {
+  return new Date().toISOString();
+}
+
+const uuidV4ishRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
 function createClickhouseClient(config: ReturnType<typeof loadConfigFromEnv>): ClickHouseClient {
   return createClient({
     url: config.clickhouseUrl,
     username: config.clickhouseUsername,
     password: config.clickhousePassword ?? ""
   });
+}
+
+function extractDeviceIdOrNull(parsed: unknown): string | null {
+  if (!parsed || typeof parsed !== "object") return null;
+  const v = (parsed as { device_id?: unknown }).device_id;
+  if (typeof v !== "string") return null;
+  return uuidV4ishRegex.test(v) ? v : null;
+}
+
+function extractReceivedTsOrNow(parsed: unknown): string {
+  if (!parsed || typeof parsed !== "object") return isoNow();
+  const v = (parsed as { received_ts?: unknown }).received_ts;
+  if (typeof v !== "string") return isoNow();
+  const t = Date.parse(v);
+  return Number.isFinite(t) ? new Date(t).toISOString() : isoNow();
+}
+
+function describeError(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return String(err);
+  }
+}
+
+function isProbablyTransientClickhouseError(err: unknown): boolean {
+  const msg = describeError(err);
+  return /(ECONNREFUSED|ETIMEDOUT|EHOSTUNREACH|ENOTFOUND|socket hang up|fetch failed)/i.test(msg);
+}
+
+function isProbablyClickhouseDataError(err: unknown): boolean {
+  if (isProbablyTransientClickhouseError(err)) return false;
+  const msg = describeError(err);
+  return /(Cannot parse|Type mismatch|Unknown (identifier|field|function)|No such (column|table)|DB::Exception)/i.test(
+    msg
+  );
 }
 
 function isSafeInt64(value: number): boolean {
@@ -194,7 +246,16 @@ async function main(): Promise<void> {
     "schemas",
     "telemetry-raw.v1.schema.json"
   );
+  const schemaTelemetryDlqPath = path.join(
+    repoRoot,
+    "docs",
+    "integrations",
+    "kafka",
+    "schemas",
+    "telemetry-dlq.v1.schema.json"
+  );
   const validateRaw = await loadAndCompileSchema<TelemetryRawV1>(schemaTelemetryRawPath);
+  const validateDlq = await loadAndCompileSchema<TelemetryDlqV1>(schemaTelemetryDlqPath);
 
   const kafka = new Kafka({
     clientId: config.kafkaClientId,
@@ -202,7 +263,9 @@ async function main(): Promise<void> {
     logLevel: logLevel.NOTHING
   });
   const consumer = kafka.consumer({ groupId: config.kafkaGroupId });
+  const producer = kafka.producer();
   await consumer.connect();
+  await producer.connect();
   await consumer.subscribe({ topic: config.kafkaTopicTelemetryRaw, fromBeginning: false });
 
   const ch = createClickhouseClient(config);
@@ -214,6 +277,18 @@ async function main(): Promise<void> {
     );
   }
 
+  const publishDlq = async (dlq: TelemetryDlqV1) => {
+    if (!validateDlq.validate(dlq)) {
+      logger.error({ errors: validateDlq.errors, dlq }, "dlq payload does not match schema (BUG)");
+      throw new Error("dlq payload does not match schema");
+    }
+
+    await producer.send({
+      topic: config.kafkaTopicTelemetryDlq,
+      messages: [{ key: dlq.device_id ?? null, value: JSON.stringify(dlq) }]
+    });
+  };
+
   await consumer.run({
     autoCommit: false,
     eachBatchAutoResolve: false,
@@ -221,36 +296,107 @@ async function main(): Promise<void> {
       const { batch } = ctx;
       if (!ctx.isRunning() || ctx.isStale()) return;
 
-      const pendingOffsets: string[] = [];
-      let rows: TelemetryRow[] = [];
+      type PendingMessage = {
+        offset: string;
+        raw: string;
+        payload: TelemetryRawV1;
+        rows: TelemetryRow[];
+      };
+
+      const pending: PendingMessage[] = [];
+      let pendingRowsCount = 0;
       let lastFlushAt = Date.now();
       const deviceStateByDeviceId = new Map<string, { updatedAtIso: string; state: unknown }>();
 
       const flush = async (reason: string) => {
-        if (rows.length === 0) return;
+        if (pending.length === 0) return;
+
+        const allRows = pending.flatMap((p) => p.rows);
         const startedAt = Date.now();
+        try {
+          await insertWithRetry(ch, config, logger, reason, allRows);
+          logger.info(
+            { reason, rows: allRows.length, messages: pending.length, tookMs: Date.now() - startedAt },
+            "clickhouse insert ok"
+          );
 
-        await insertWithRetry(ch, config, logger, reason, rows);
-        logger.info({ reason, rows: rows.length, tookMs: Date.now() - startedAt }, "clickhouse insert ok");
-
-        if (pg && deviceStateByDeviceId.size > 0) {
-          try {
-            for (const [deviceId, v] of deviceStateByDeviceId.entries()) {
-              await upsertDeviceStateShadow(pg, deviceId, v.updatedAtIso, v.state);
+          if (pg && deviceStateByDeviceId.size > 0) {
+            try {
+              for (const [deviceId, v] of deviceStateByDeviceId.entries()) {
+                await upsertDeviceStateShadow(pg, deviceId, v.updatedAtIso, v.state);
+              }
+            } catch (err) {
+              logger.error(
+                { err, reason, devices: deviceStateByDeviceId.size },
+                "device_state shadow update failed (ignored)"
+              );
             }
-          } catch (err) {
-            logger.error(
-              { err, reason, devices: deviceStateByDeviceId.size },
-              "device_state shadow update failed (ignored)"
-            );
           }
-        }
 
-        for (const off of pendingOffsets) ctx.resolveOffset(off);
-        pendingOffsets.length = 0;
-        rows = [];
-        deviceStateByDeviceId.clear();
-        await ctx.commitOffsetsIfNecessary();
+          for (const p of pending) ctx.resolveOffset(p.offset);
+          pending.length = 0;
+          deviceStateByDeviceId.clear();
+          await ctx.commitOffsetsIfNecessary();
+          return;
+        } catch (err) {
+          if (!isProbablyClickhouseDataError(err)) throw err;
+
+          logger.warn(
+            { err, reason, messages: pending.length, rows: allRows.length },
+            "clickhouse insert failed (data error suspected); isolating per-message"
+          );
+
+          const shadowUpdates = new Map<string, { updatedAtIso: string; state: unknown }>();
+
+          for (const p of pending) {
+            if (!ctx.isRunning() || ctx.isStale()) break;
+            await ctx.heartbeat();
+
+            try {
+              await insertRows(ch, config.clickhouseDatabase, config.clickhouseTable, p.rows);
+
+              const updatedAtIso = new Date(p.payload.received_ts).toISOString();
+              shadowUpdates.set(p.payload.device_id, {
+                updatedAtIso,
+                state: { metrics: p.payload.metrics, meta: p.payload.meta ?? {} }
+              });
+
+              ctx.resolveOffset(p.offset);
+            } catch (err2) {
+              if (!isProbablyClickhouseDataError(err2)) throw err2;
+
+              const detail = describeError(err2);
+              await publishDlq({
+                schema_version: 1,
+                reason_code: "writer_clickhouse_insert_failed",
+                reason_detail: detail,
+                received_ts: p.payload.received_ts,
+                device_id: p.payload.device_id,
+                raw_payload: p.raw
+              });
+              logger.warn(
+                { reason, deviceId: p.payload.device_id, detail },
+                "message sent to telemetry.dlq.v1 due to clickhouse insert failure"
+              );
+              ctx.resolveOffset(p.offset);
+            }
+          }
+
+          if (pg && shadowUpdates.size > 0) {
+            try {
+              for (const [deviceId, v] of shadowUpdates.entries()) {
+                await upsertDeviceStateShadow(pg, deviceId, v.updatedAtIso, v.state);
+              }
+            } catch (err3) {
+              logger.error({ err: err3, reason, devices: shadowUpdates.size }, "device_state shadow update failed (ignored)");
+            }
+          }
+
+          pending.length = 0;
+          deviceStateByDeviceId.clear();
+          await ctx.commitOffsetsIfNecessary();
+          return;
+        }
       };
 
       for (const message of batch.messages) {
@@ -263,10 +409,15 @@ async function main(): Promise<void> {
         try {
           const parsed = JSON.parse(raw) as unknown;
           if (!validateRaw.validate(parsed)) {
-            logger.warn(
-              { traceId, topic: batch.topic, partition: batch.partition, errors: validateRaw.errors },
-              "kafka telemetry.raw schema invalid (skipped)"
-            );
+            await publishDlq({
+              schema_version: 1,
+              reason_code: "writer_schema_validation_failed",
+              reason_detail: "Kafka telemetry.raw schema validation failed",
+              received_ts: extractReceivedTsOrNow(parsed),
+              device_id: extractDeviceIdOrNull(parsed),
+              raw_payload: raw
+            });
+            logger.warn({ traceId, topic: batch.topic, partition: batch.partition, errors: validateRaw.errors }, "kafka telemetry.raw schema invalid (dlq)");
             ctx.resolveOffset(message.offset);
             continue;
           }
@@ -274,8 +425,8 @@ async function main(): Promise<void> {
           const payload: TelemetryRawV1 = parsed;
           const messageRows = toTelemetryRows(payload);
           if (messageRows.length > 0) {
-            rows.push(...messageRows);
-            pendingOffsets.push(message.offset);
+            pending.push({ offset: message.offset, raw, payload, rows: messageRows });
+            pendingRowsCount += messageRows.length;
 
             const updatedAtIso = new Date(payload.received_ts).toISOString();
             const existing = deviceStateByDeviceId.get(payload.device_id);
@@ -289,23 +440,31 @@ async function main(): Promise<void> {
             ctx.resolveOffset(message.offset);
           }
 
-          if (rows.length >= config.batchMaxRows) {
+          if (pendingRowsCount >= config.batchMaxRows) {
             await flush("batch_max_rows");
+            pendingRowsCount = 0;
             lastFlushAt = Date.now();
           } else if (Date.now() - lastFlushAt >= config.batchFlushIntervalMs) {
             await flush("interval");
+            pendingRowsCount = 0;
             lastFlushAt = Date.now();
           }
         } catch (err) {
-          logger.warn(
-            { traceId, topic: batch.topic, partition: batch.partition, err },
-            "kafka message parse failed (skipped)"
-          );
+          await publishDlq({
+            schema_version: 1,
+            reason_code: "writer_invalid_json",
+            reason_detail: describeError(err),
+            received_ts: isoNow(),
+            device_id: null,
+            raw_payload: raw
+          });
+          logger.warn({ traceId, topic: batch.topic, partition: batch.partition, err }, "kafka message parse failed (dlq)");
           ctx.resolveOffset(message.offset);
         }
       }
 
       await flush("batch_end");
+      pendingRowsCount = 0;
       await ctx.heartbeat();
       await ctx.commitOffsetsIfNecessary();
     }
@@ -314,6 +473,7 @@ async function main(): Promise<void> {
   const shutdown = async (signal: string) => {
     logger.info({ signal }, "shutting down");
     await consumer.disconnect();
+    await producer.disconnect();
     await ch.close();
     await pg?.end();
     process.exit(0);

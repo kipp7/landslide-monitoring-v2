@@ -18,6 +18,7 @@ const configSchema = z.object({
   kafkaClientId: z.string().default("telemetry-writer"),
   kafkaGroupId: z.string().default("telemetry-writer.v1"),
   kafkaTopicTelemetryRaw: z.string().default("telemetry.raw.v1"),
+  kafkaTopicTelemetryDlq: z.string().default("telemetry.dlq.v1"),
 
   clickhouseUrl: z.string().url(),
   clickhouseUsername: z.string().default("default"),
@@ -51,6 +52,7 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
     kafkaClientId: env.KAFKA_CLIENT_ID,
     kafkaGroupId: env.KAFKA_GROUP_ID,
     kafkaTopicTelemetryRaw: env.KAFKA_TOPIC_TELEMETRY_RAW,
+    kafkaTopicTelemetryDlq: env.KAFKA_TOPIC_TELEMETRY_DLQ,
 
     clickhouseUrl: env.CLICKHOUSE_URL,
     clickhouseUsername: env.CLICKHOUSE_USERNAME,
