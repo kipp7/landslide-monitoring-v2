@@ -19,6 +19,14 @@
 
 - `powershell -NoProfile -ExecutionPolicy Bypass -File infra/compose/scripts/e2e-smoke-test.ps1 -ConfigureEmqx -UseMqttAuth -CreateDevice`
 
+阶段 1（闭环回归基线，一键跑完鉴权 + commands + DLQ + revoke，推荐作为改动后的快速验收）：
+
+- `powershell -NoProfile -ExecutionPolicy Bypass -File infra/compose/scripts/e2e-smoke-test.ps1 -Stage1Regression`
+
+说明：
+- `-Stage1Regression` 是“预置模式”，不能与其它开关组合使用（避免歧义/漂移，保证回归基线稳定）。
+- 覆盖范围：commands（acked/failed/timeout 三种结果）、Telemetry DLQ、revoke 立即生效，并自动留证到 `backups/evidence/`。
+
 阶段 1（鉴权 + 命令下发 + revoke 立即生效）的回归用例（推荐作为改动后的快速验收）：
 
 - `powershell -NoProfile -ExecutionPolicy Bypass -File infra/compose/scripts/e2e-smoke-test.ps1 -ConfigureEmqx -UseMqttAuth -CreateDevice -TestCommands -TestCommandAcks -TestRevoke`
