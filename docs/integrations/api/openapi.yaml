@@ -972,6 +972,82 @@ paths:
         default:
           $ref: "#/components/responses/ErrorResponse"
 
+  /telemetry/dlq:
+    get:
+      tags: [data]
+      summary: List telemetry DLQ messages (ops)
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: reasonCode
+          in: query
+          required: false
+          schema: { type: string }
+        - name: deviceId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - name: startTime
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: endTime
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PaginatedTelemetryDlqMessages"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /telemetry/dlq/{messageId}:
+    parameters:
+      - name: messageId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [data]
+      summary: Get telemetry DLQ message detail
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/TelemetryDlqMessageDetail"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
   /data/state/{deviceId}:
     parameters:
       - $ref: "#/components/parameters/DeviceIdPath"
@@ -2146,6 +2222,57 @@ components:
       properties:
         notificationId: { type: string, format: uuid }
         readAt: { type: string }
+
+    TelemetryDlqMessage:
+      type: object
+      required: [messageId, receivedAt, deviceId, reasonCode, reasonDetail, rawPayloadPreview, kafka, createdAt]
+      properties:
+        messageId: { type: string, format: uuid }
+        receivedAt: { type: string, format: date-time }
+        deviceId: { type: string }
+        reasonCode: { type: string }
+        reasonDetail: { type: string }
+        rawPayloadPreview: { type: string }
+        kafka:
+          type: object
+          required: [topic, partition, offset, key]
+          properties:
+            topic: { type: string }
+            partition: { type: integer }
+            offset: { type: string }
+            key: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    TelemetryDlqMessageDetail:
+      type: object
+      required: [messageId, receivedAt, deviceId, reasonCode, reasonDetail, rawPayload, kafka, createdAt]
+      properties:
+        messageId: { type: string, format: uuid }
+        receivedAt: { type: string, format: date-time }
+        deviceId: { type: string }
+        reasonCode: { type: string }
+        reasonDetail: { type: string }
+        rawPayload: { type: string }
+        kafka:
+          type: object
+          required: [topic, partition, offset, key]
+          properties:
+            topic: { type: string }
+            partition: { type: integer }
+            offset: { type: string }
+            key: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    PaginatedTelemetryDlqMessages:
+      type: object
+      required: [list, pagination]
+      properties:
+        list:
+          type: array
+          items:
+            $ref: "#/components/schemas/TelemetryDlqMessage"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
 
     DeviceStateResponse:
       type: object

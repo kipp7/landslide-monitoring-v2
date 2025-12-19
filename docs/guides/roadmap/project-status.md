@@ -7,7 +7,7 @@
 - 每次合并一个 PR 到 `main`，如果它改变了项目阶段/里程碑/下一步，必须更新本页。
 - 本页只记录“当前状态与下一步”，历史细节放到 `docs/incidents/` 或 PR/commit 记录中。
 
-最后更新时间：2025-12-19（阶段 1：ingest dlq truncation v22）
+最后更新时间：2025-12-19（阶段 1：telemetry dlq ops v23）
 
 ## 1) 当前结论（TL;DR）
 
@@ -60,6 +60,7 @@ M1（阶段 0：最小闭环）目标：
 - ✅ ingest-service：已实现 MQTT telemetry 订阅、JSON Schema 校验、写 `telemetry.raw.v1` 与 `telemetry.dlq.v1`
   - 补充：ingest-service 增加入站降载保护（payload 过大 / metrics 过多 → 直接写 DLQ），避免异常负载拖垮后续链路。
   - 修复：ingest-service 写入 DLQ 时对 `raw_payload` 做字节级截断（避免超大 payload 反向拖垮 DLQ topic）。
+  - 进展：新增 `telemetry-dlq-recorder` 把 `telemetry.dlq.v1` 落库到 Postgres，并提供 API 查询接口，方便运维定位坏消息来源。
 - ✅ telemetry-writer：已实现消费 `telemetry.raw.v1` 并批量写入 ClickHouse（批量写入 + 退避重试 + writer 侧 DLQ + 基础运行观测/保护）
 - ✅ API：已实现最小查询端点（`/data/state`、`/data/series`），数据源为 ClickHouse（后续可切换到 Postgres shadow）
 
