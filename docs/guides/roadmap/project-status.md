@@ -7,7 +7,7 @@
 - 每次合并一个 PR 到 `main`，如果它改变了项目阶段/里程碑/下一步，必须更新本页。
 - 本页只记录“当前状态与下一步”，历史细节放到 `docs/incidents/` 或 PR/commit 记录中。
 
-最后更新时间：2025-12-19（阶段 1：command notifications stats v19）
+最后更新时间：2025-12-19（阶段 1：e2e command failed v20）
 
 ## 1) 当前结论（TL;DR）
 
@@ -18,6 +18,7 @@
 - 阶段 1 进行中：单机 Compose 已具备设备鉴权 + commands 运维排查的“可落库/可查询”基础闭环（command events + notifications），并持续把回归断言沉淀到 `e2e-smoke-test.ps1` 的证据包中。
   - 补充：`infra/compose/scripts/configure-emqx-http-auth.ps1` 可一键写入 EMQX 配置（免 Dashboard 手工操作）。
   - 补充：`infra/compose/scripts/e2e-smoke-test.ps1` 支持 `-ConfigureEmqx -UseMqttAuth -CreateDevice` 一键跑通“带鉴权”的端到端冒烟。
+  - 补充：`infra/compose/scripts/e2e-smoke-test.ps1` 增加 `-TestCommandFailed` 回归用例（sent→failed），并断言事件/通知/统计/已读链路可用。
   - 补充：冒烟失败会自动调用 `infra/compose/scripts/collect-evidence.ps1` 生成证据包（带脱敏），避免手工收集日志。
   - 修复：冒烟脚本现在会展开 `infra/compose/.env` 中的 `${VAR}`（例如 `CH_HTTP_URL`/`MQTT_URL`），避免误判基础设施不可达。
   - 修复：EMQX 接线脚本写入 `services/api/.env` 时会展开 `CH_HTTP_URL`，避免 ClickHouse URL 形如 `http://${CH_HOST}:${CH_HTTP_PORT}` 导致 api-service 启动失败。

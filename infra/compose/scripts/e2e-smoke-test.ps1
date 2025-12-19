@@ -7,6 +7,7 @@ param(
   [switch]$ConfigureEmqx,
   [switch]$TestCommands,
   [switch]$TestCommandAcks,
+  [switch]$TestCommandFailed,
   [switch]$TestCommandTimeout,
   [switch]$TestRevoke,
   [bool]$CollectEvidenceOnFailure = $true,
@@ -572,8 +573,12 @@ try {
     if (-not $UseMqttAuth -or -not $CreateDevice -or -not $deviceSecret) {
       throw "TestCommands requires -UseMqttAuth and -CreateDevice (needs device credentials)."
     }
-    if ($TestCommandAcks -and $TestCommandTimeout) {
-      throw "TestCommandAcks and TestCommandTimeout are mutually exclusive (one command cannot be both acked and timed out)."
+    $selected = 0
+    if ($TestCommandAcks) { $selected++ }
+    if ($TestCommandFailed) { $selected++ }
+    if ($TestCommandTimeout) { $selected++ }
+    if ($selected -gt 1) {
+      throw "TestCommandAcks/TestCommandFailed/TestCommandTimeout are mutually exclusive (a single command has only one final status)."
     }
 
     Write-Host "Subscribing to device command topic..." -ForegroundColor Cyan
@@ -656,6 +661,92 @@ try {
       if (-not $found) {
         throw "COMMAND_ACKED event not found within 45s. Logs: $logDir"
       }
+    }
+
+    if ($TestCommandFailed) {
+      Write-Host "Publishing failed command ack from device..." -ForegroundColor Cyan
+      Add-Content -Encoding UTF8 -LiteralPath $publishLog -Value ("-- publish failed command ack --`n")
+      $ackExit = Run-Node @(
+        "scripts/dev/publish-command-ack.js",
+        "--mqtt", $mqttUrl,
+        "--device", $DeviceId,
+        "--commandId", $cmdResp.data.commandId,
+        "--username", $DeviceId,
+        "--password", $deviceSecret,
+        "--status", "failed",
+        "--result", '{"error":"simulated_failure"}'
+      ) $publishLog
+      if ($ackExit -ne 0) {
+        throw "publish-command-ack.js failed (exit=$ackExit). Logs: $logDir"
+      }
+
+      Write-Host "Waiting for command status to become failed..." -ForegroundColor Cyan
+      $cmdId = [string]$cmdResp.data.commandId
+      $deadline = (Get-Date).AddSeconds(45)
+      $status = ""
+      while ((Get-Date) -lt $deadline) {
+        try {
+          $cmd = Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/api/v1/devices/$($DeviceId)/commands/$cmdId" -TimeoutSec 3
+          if ($cmd.success -eq $true -and $cmd.data.status) { $status = [string]$cmd.data.status }
+        } catch {
+          # ignore transient failures
+        }
+        if ($status -eq "failed") { break }
+        Start-Sleep -Seconds 2
+      }
+      if ($status -ne "failed") {
+        throw "command did not become failed within 45s (status='$status'). Logs: $logDir"
+      }
+
+      Write-Host "Verifying COMMAND_FAILED event is recorded..." -ForegroundColor Cyan
+      $deadline = (Get-Date).AddSeconds(45)
+      $found = $false
+      while ((Get-Date) -lt $deadline) {
+        try {
+          $events = Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/api/v1/devices/$($DeviceId)/command-events?commandId=$cmdId&eventType=COMMAND_FAILED" -TimeoutSec 3
+          if ($events.success -eq $true -and $events.data.list -and $events.data.list.Count -ge 1) { $found = $true; break }
+        } catch {
+          # ignore
+        }
+        Start-Sleep -Seconds 2
+      }
+      if (-not $found) {
+        throw "COMMAND_FAILED event not found within 45s. Logs: $logDir"
+      }
+
+      Write-Host "Verifying command notification is created..." -ForegroundColor Cyan
+      $deadline = (Get-Date).AddSeconds(45)
+      $found = $false
+      $notificationId = ""
+      while ((Get-Date) -lt $deadline) {
+        try {
+          $n = Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/api/v1/devices/$($DeviceId)/command-notifications?commandId=$cmdId" -TimeoutSec 3
+          if ($n.success -eq $true -and $n.data.list -and $n.data.list.Count -ge 1) {
+            $notificationId = [string]$n.data.list[0].notificationId
+            $found = $true
+            break
+          }
+        } catch {
+          # ignore
+        }
+        Start-Sleep -Seconds 2
+      }
+      if (-not $found) {
+        throw "command notification not found within 45s. Logs: $logDir"
+      }
+
+      Write-Host "Verifying notification stats and read marker..." -ForegroundColor Cyan
+      $stats = Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/api/v1/devices/$($DeviceId)/command-notifications/stats" -TimeoutSec 10
+      if ($stats.success -ne $true) { throw "notification stats query failed. Logs: $logDir" }
+      if ($stats.data.totals.total -lt 1) { throw "notification stats total < 1. Logs: $logDir" }
+      if ($stats.data.totals.unread -lt 1) { throw "notification stats unread < 1. Logs: $logDir" }
+
+      $read = Invoke-RestMethod -Method Put -Uri "http://$apiLocalHost`:$apiPort/api/v1/devices/$($DeviceId)/command-notifications/$notificationId/read" -TimeoutSec 10
+      if ($read.success -ne $true) { throw "mark notification read failed. Logs: $logDir" }
+
+      $stats2 = Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/api/v1/devices/$($DeviceId)/command-notifications/stats" -TimeoutSec 10
+      if ($stats2.success -ne $true) { throw "notification stats query failed (after read). Logs: $logDir" }
+      if ($stats2.data.totals.unread -ne 0) { throw "notification stats unread not zero after read. Logs: $logDir" }
     }
 
     if ($TestCommandTimeout) {

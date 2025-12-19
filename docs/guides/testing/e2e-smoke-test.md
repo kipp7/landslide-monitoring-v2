@@ -23,6 +23,10 @@
 
 - `powershell -NoProfile -ExecutionPolicy Bypass -File infra/compose/scripts/e2e-smoke-test.ps1 -ConfigureEmqx -UseMqttAuth -CreateDevice -TestCommands -TestCommandAcks -TestRevoke`
 
+阶段 1（命令回执失败）验证用例（设备返回 failed，验证 `sent` → `failed`，并生成通知）：
+
+- `powershell -NoProfile -ExecutionPolicy Bypass -File infra/compose/scripts/e2e-smoke-test.ps1 -ConfigureEmqx -UseMqttAuth -CreateDevice -TestCommands -TestCommandFailed`
+
 阶段 1（命令回执超时）验证用例（不发送 ack，验证 `sent` → `timeout`）：
 
 - `powershell -NoProfile -ExecutionPolicy Bypass -File infra/compose/scripts/e2e-smoke-test.ps1 -ConfigureEmqx -UseMqttAuth -CreateDevice -TestCommands -TestCommandTimeout`
