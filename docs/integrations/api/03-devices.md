@@ -393,3 +393,79 @@
   "traceId": "req_01J..."
 }
 ```
+
+## 13. 获取设备命令通知列表（用于运维告警/通知展示）
+
+**GET** `/devices/{deviceId}/command-notifications`
+
+权限：`device:control`
+
+查询参数：
+- `page`, `pageSize`
+- `commandId`（可选，UUID）
+- `status`（可选：pending/sent/delivered/failed）
+
+响应（示例）：
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "ok",
+  "data": {
+    "list": [
+      {
+        "notificationId": "a4b3dfc4-55e6-4dd3-9f37-6c3c5a2e8b0c",
+        "eventId": "b7a5c0a9-43a8-4a3d-9f7c-0b5b3c8ac1b2",
+        "eventType": "COMMAND_TIMEOUT",
+        "commandId": "1b4c81aa-3c5f-4c14-8f9e-1c0fbe9d2c3d",
+        "deviceId": "2c1f2d8e-2bb7-4f58-bb6a-6c2a0f4a7a4c",
+        "notifyType": "app",
+        "status": "pending",
+        "title": "命令超时：1b4c81aa-3c5f-4c14-8f9e-1c0fbe9d2c3d",
+        "content": "命令超时\\ndeviceId=...\\ncommandId=...\\nstatus=timeout\\ndetail=ack timeout after 30s\\n",
+        "errorMessage": "",
+        "createdAt": "2025-12-15T10:00:31Z",
+        "sentAt": null,
+        "deliveredAt": null,
+        "readAt": null
+      }
+    ],
+    "pagination": { "page": 1, "pageSize": 20, "total": 1, "totalPages": 1 }
+  },
+  "timestamp": "2025-12-15T10:00:00Z",
+  "traceId": "req_01J..."
+}
+```
+
+## 14. 获取设备命令通知详情
+
+**GET** `/devices/{deviceId}/command-notifications/{notificationId}`
+
+权限：`device:control`
+
+响应：
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "ok",
+  "data": {
+    "notificationId": "a4b3dfc4-55e6-4dd3-9f37-6c3c5a2e8b0c",
+    "eventId": "b7a5c0a9-43a8-4a3d-9f7c-0b5b3c8ac1b2",
+    "eventType": "COMMAND_TIMEOUT",
+    "commandId": "1b4c81aa-3c5f-4c14-8f9e-1c0fbe9d2c3d",
+    "deviceId": "2c1f2d8e-2bb7-4f58-bb6a-6c2a0f4a7a4c",
+    "notifyType": "app",
+    "status": "pending",
+    "title": "命令超时：1b4c81aa-3c5f-4c14-8f9e-1c0fbe9d2c3d",
+    "content": "命令超时\\ndeviceId=...\\ncommandId=...\\nstatus=timeout\\ndetail=ack timeout after 30s\\n",
+    "errorMessage": "",
+    "createdAt": "2025-12-15T10:00:31Z",
+    "sentAt": null,
+    "deliveredAt": null,
+    "readAt": null
+  },
+  "timestamp": "2025-12-15T10:00:00Z",
+  "traceId": "req_01J..."
+}
+```

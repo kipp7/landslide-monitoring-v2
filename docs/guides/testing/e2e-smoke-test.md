@@ -27,6 +27,9 @@
 
 - `powershell -NoProfile -ExecutionPolicy Bypass -File infra/compose/scripts/e2e-smoke-test.ps1 -ConfigureEmqx -UseMqttAuth -CreateDevice -TestCommands -TestCommandTimeout`
 
+说明：
+- 该用例会同时断言：`COMMAND_TIMEOUT` 事件已落库可查询，并且对应的 command notification 已创建（用于后续运维告警/通知展示）。
+
 失败时留证（无需手工收集）：
 
 - 脚本失败会自动在 `backups/evidence/e2e-smoke-<timestamp>/` 下输出：

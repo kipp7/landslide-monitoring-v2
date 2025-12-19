@@ -36,6 +36,7 @@ export function registerCommandEventRoutes(
   pg: PgPool | null
 ): void {
   const adminCfg: AdminAuthConfig = { adminApiToken: config.adminApiToken };
+  // NOTE: We keep command events under /devices/{deviceId}/... to align with device ops workflows.
 
   app.get("/devices/:deviceId/command-events", async (request, reply) => {
     const traceId = request.traceId;
@@ -207,4 +208,3 @@ export function registerCommandEventRoutes(
     );
   });
 }
-

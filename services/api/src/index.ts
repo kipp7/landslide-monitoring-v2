@@ -13,6 +13,7 @@ import { registerEmqxRoutes } from "./routes/emqx";
 import { registerSensorRoutes } from "./routes/sensors";
 import { registerStationRoutes } from "./routes/stations";
 import { registerCommandEventRoutes } from "./routes/command-events";
+import { registerCommandNotificationRoutes } from "./routes/command-notifications";
 
 async function main(): Promise<void> {
   dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
@@ -75,6 +76,7 @@ async function main(): Promise<void> {
     registerSensorRoutes(v1, config, pg);
     registerStationRoutes(v1, config, pg);
     registerCommandEventRoutes(v1, config, pg);
+    registerCommandNotificationRoutes(v1, config, pg);
     done();
   }, { prefix: "/api/v1" });
 
