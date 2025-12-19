@@ -18,6 +18,7 @@ import { registerAlertRoutes } from "./routes/alerts";
 import { registerAlertRuleRoutes } from "./routes/alert-rules";
 import { registerAlertRuleReplayRoutes } from "./routes/alert-rules-replay";
 import { registerTelemetryDlqRoutes } from "./routes/telemetry-dlq";
+import { registerSystemRoutes } from "./routes/system";
 
 async function main(): Promise<void> {
   dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
@@ -85,6 +86,7 @@ async function main(): Promise<void> {
     registerCommandEventRoutes(v1, config, pg);
     registerCommandNotificationRoutes(v1, config, pg);
     registerTelemetryDlqRoutes(v1, config, pg);
+    registerSystemRoutes(v1, config, ch, pg);
     done();
   }, { prefix: "/api/v1" });
 

@@ -553,6 +553,16 @@ try {
   }
   Write-Host "API is healthy." -ForegroundColor Green
 
+  Write-Host "Checking API system endpoints (/system/status, /dashboard)..." -ForegroundColor Cyan
+  try {
+    $st = Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/api/v1/system/status" -TimeoutSec 10
+    if ($st.success -ne $true) { throw "system/status failed" }
+    $dash = Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/api/v1/dashboard" -TimeoutSec 10
+    if ($dash.success -ne $true) { throw "dashboard failed" }
+  } catch {
+    throw "API system endpoints not available. Logs: $logDir"
+  }
+
   $ingestProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/ingest" -PassThru -RedirectStandardOutput $ingestOut -RedirectStandardError $ingestErr
   $cmdProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/command-dispatcher" -PassThru -RedirectStandardOutput $cmdOut -RedirectStandardError $cmdErr
   $ackProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/command-ack-receiver" -PassThru -RedirectStandardOutput $ackOut -RedirectStandardError $ackErr
