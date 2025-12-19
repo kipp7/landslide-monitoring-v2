@@ -44,7 +44,10 @@ const configSchema = z.object({
 
   clickhouseInsertMaxRetries: z.coerce.number().int().positive().max(30).default(10),
   clickhouseInsertBackoffMs: z.coerce.number().int().positive().max(60000).default(1000),
-  clickhouseInsertBackoffMaxMs: z.coerce.number().int().positive().max(300000).default(15000)
+  clickhouseInsertBackoffMaxMs: z.coerce.number().int().positive().max(300000).default(15000),
+
+  clickhouseUnavailableCooldownMs: z.coerce.number().int().positive().max(600_000).default(15_000),
+  clickhouseUnavailableCooldownMaxMs: z.coerce.number().int().positive().max(3_600_000).default(300_000)
 });
 
 export type AppConfig = z.infer<typeof configSchema>;
@@ -83,6 +86,9 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
 
     clickhouseInsertMaxRetries: env.CLICKHOUSE_INSERT_MAX_RETRIES,
     clickhouseInsertBackoffMs: env.CLICKHOUSE_INSERT_BACKOFF_MS,
-    clickhouseInsertBackoffMaxMs: env.CLICKHOUSE_INSERT_BACKOFF_MAX_MS
+    clickhouseInsertBackoffMaxMs: env.CLICKHOUSE_INSERT_BACKOFF_MAX_MS,
+
+    clickhouseUnavailableCooldownMs: env.CLICKHOUSE_UNAVAILABLE_COOLDOWN_MS,
+    clickhouseUnavailableCooldownMaxMs: env.CLICKHOUSE_UNAVAILABLE_COOLDOWN_MAX_MS
   });
 }
