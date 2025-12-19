@@ -137,14 +137,30 @@ export function registerEmqxRoutes(app: FastifyInstance, config: AppConfig, pg: 
       return;
     }
 
+    // For devices, enforce revoke immediately by checking DB status on every ACL decision.
+    // This ensures a device that was already connected gets blocked from publish/subscribe after revoke.
+    if (!pg) {
+      sendEmqxResult(reply, { result: "deny" });
+      return;
+    }
+
     const deviceIdParse = z.string().uuid().safeParse(username);
     if (!deviceIdParse.success) {
       sendEmqxResult(reply, { result: "deny" });
       return;
     }
 
-    const allowed = isAllowedDeviceTopic(action, topic, deviceIdParse.data);
+    const deviceId = deviceIdParse.data;
+    const allowed = await withPgClient(pg, async (client) => {
+      const row = await queryOne<{ status: string }>(
+        client,
+        "SELECT status FROM devices WHERE device_id=$1",
+        [deviceId]
+      );
+      if (!row) return false;
+      if (row.status === "revoked") return false;
+      return isAllowedDeviceTopic(action, topic, deviceId);
+    });
     sendEmqxResult(reply, allowed ? { result: "allow" } : { result: "deny" });
   });
 }
-
