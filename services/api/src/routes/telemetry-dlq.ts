@@ -25,6 +25,21 @@ const listDlqQuerySchema = z
     }
   });
 
+const dlqStatsQuerySchema = z
+  .object({
+    startTime: z.string().datetime().optional(),
+    endTime: z.string().datetime().optional(),
+    deviceId: z.string().uuid().optional()
+  })
+  .superRefine((data, ctx) => {
+    if ((data.startTime && !data.endTime) || (!data.startTime && data.endTime)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "startTime and endTime must be both set or both empty"
+      });
+    }
+  });
+
 type DlqRow = {
   message_id: string;
   kafka_topic: string;
@@ -46,6 +61,81 @@ function previewText(value: string, maxLen: number): string {
 
 export function registerTelemetryDlqRoutes(app: FastifyInstance, config: AppConfig, pg: PgPool | null): void {
   const adminCfg: AdminAuthConfig = { adminApiToken: config.adminApiToken };
+
+  app.get("/telemetry/dlq/stats", async (request, reply) => {
+    const traceId = request.traceId;
+    if (!requireAdmin(adminCfg, request, reply)) return;
+    if (!pg) {
+      fail(reply, 503, "PostgreSQL 未配置", traceId);
+      return;
+    }
+
+    const parseQuery = dlqStatsQuerySchema.safeParse(request.query);
+    if (!parseQuery.success) {
+      fail(reply, 400, "参数错误", traceId, { field: "query", issues: parseQuery.error.issues });
+      return;
+    }
+
+    const { startTime, endTime, deviceId } = parseQuery.data;
+    if (startTime && endTime) {
+      const start = new Date(startTime);
+      const end = new Date(endTime);
+      if (!(start < end)) {
+        fail(reply, 400, "参数错误", traceId, { field: "timeRange" });
+        return;
+      }
+    }
+
+    const where: string[] = [];
+    const params: unknown[] = [];
+    if (deviceId) {
+      params.push(deviceId);
+      where.push(`device_id = $${String(params.length)}::uuid`);
+    }
+    if (startTime && endTime) {
+      params.push(startTime);
+      where.push(`received_ts >= $${String(params.length)}::timestamptz`);
+      params.push(endTime);
+      where.push(`received_ts <= $${String(params.length)}::timestamptz`);
+    }
+    const whereSql = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
+
+    const data = await withPgClient(pg, async (client) => {
+      const totalRow = await queryOne<{ total: string }>(
+        client,
+        `SELECT count(*)::text AS total FROM telemetry_dlq_messages ${whereSql}`,
+        params
+      );
+      const total = Number(totalRow?.total ?? "0");
+
+      const byReason = await client.query<{ reason_code: string; count: string }>(
+        `
+          SELECT reason_code, count(*)::text AS count
+          FROM telemetry_dlq_messages
+          ${whereSql}
+          GROUP BY reason_code
+          ORDER BY count(*) DESC, reason_code ASC
+        `,
+        params
+      );
+
+      return {
+        total,
+        byReasonCode: byReason.rows.map((r) => ({ reasonCode: r.reason_code, count: Number(r.count) }))
+      };
+    });
+
+    ok(
+      reply,
+      {
+        window: startTime && endTime ? { startTime, endTime } : null,
+        deviceId: deviceId ?? "",
+        totals: { total: data.total },
+        byReasonCode: data.byReasonCode
+      },
+      traceId
+    );
+  });
 
   app.get("/telemetry/dlq", async (request, reply) => {
     const traceId = request.traceId;
@@ -209,4 +299,3 @@ export function registerTelemetryDlqRoutes(app: FastifyInstance, config: AppConf
     );
   });
 }
-

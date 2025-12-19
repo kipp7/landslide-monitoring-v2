@@ -1016,6 +1016,44 @@ paths:
         default:
           $ref: "#/components/responses/ErrorResponse"
 
+  /telemetry/dlq/stats:
+    get:
+      tags: [data]
+      summary: Get telemetry DLQ stats (ops)
+      parameters:
+        - name: startTime
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: endTime
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: deviceId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/TelemetryDlqStats"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
   /telemetry/dlq/{messageId}:
     parameters:
       - name: messageId
@@ -2273,6 +2311,32 @@ components:
             $ref: "#/components/schemas/TelemetryDlqMessage"
         pagination:
           $ref: "#/components/schemas/Pagination"
+
+    TelemetryDlqStats:
+      type: object
+      required: [window, deviceId, totals, byReasonCode]
+      properties:
+        window:
+          type: object
+          nullable: true
+          required: [startTime, endTime]
+          properties:
+            startTime: { type: string, format: date-time }
+            endTime: { type: string, format: date-time }
+        deviceId: { type: string }
+        totals:
+          type: object
+          required: [total]
+          properties:
+            total: { type: integer }
+        byReasonCode:
+          type: array
+          items:
+            type: object
+            required: [reasonCode, count]
+            properties:
+              reasonCode: { type: string }
+              count: { type: integer }
 
     DeviceStateResponse:
       type: object

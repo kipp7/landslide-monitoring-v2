@@ -239,6 +239,36 @@
 }
 ```
 
+### 6.3 统计查询（按 reasonCode 聚合）
+
+**GET** `/telemetry/dlq/stats`
+
+权限：`data:analysis`（当前实现为 admin token 保护，见 `ADMIN_API_TOKEN`）
+
+查询参数：
+- `startTime`, `endTime`（可选，RFC3339；必须同时提供，用于按时间窗口统计）
+- `deviceId`（可选，UUID；用于定位单设备噪声/异常上报）
+
+响应（示例）：
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "ok",
+  "data": {
+    "window": null,
+    "deviceId": "",
+    "totals": { "total": 12 },
+    "byReasonCode": [
+      { "reasonCode": "invalid_json", "count": 7 },
+      { "reasonCode": "schema_validation_failed", "count": 5 }
+    ]
+  },
+  "timestamp": "2025-12-19T08:00:02Z",
+  "traceId": "req_01J..."
+}
+```
+
 说明：
 - 返回下载链接或任务 ID（数据量大建议异步导出）。
 
