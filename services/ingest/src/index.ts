@@ -36,6 +36,16 @@ function repoRootFromHere(): string {
   return path.resolve(__dirname, "..", "..", "..");
 }
 
+function truncateUtf8(value: string, maxBytes: number): { value: string; truncated: boolean } {
+  if (maxBytes <= 0) return { value: "", truncated: value.length > 0 };
+  const bytes = Buffer.byteLength(value, "utf8");
+  if (bytes <= maxBytes) return { value, truncated: false };
+
+  const buf = Buffer.from(value, "utf8");
+  const slice = buf.subarray(0, maxBytes);
+  return { value: slice.toString("utf8"), truncated: true };
+}
+
 async function main(): Promise<void> {
   dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
 
@@ -104,12 +114,19 @@ async function main(): Promise<void> {
     const publishDlq = async (
       partial: Omit<TelemetryDlqV1, "schema_version" | "received_ts" | "raw_payload">
     ) => {
+      const trunc = truncateUtf8(rawPayload, config.dlqRawPayloadMaxBytes);
       const dlq: TelemetryDlqV1 = {
         schema_version: 1,
         received_ts: receivedTs,
-        raw_payload: rawPayload,
+        raw_payload: trunc.value,
         ...partial
       };
+
+      if (trunc.truncated) {
+        dlq.reason_detail = dlq.reason_detail
+          ? `${dlq.reason_detail} (raw_payload truncated)`
+          : "raw_payload truncated";
+      }
 
       if (!validateDlq.validate(dlq)) {
         logger.error(

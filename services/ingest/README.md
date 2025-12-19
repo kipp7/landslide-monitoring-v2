@@ -17,6 +17,7 @@
 - `MQTT_TOPIC_TELEMETRY`：默认 `telemetry/+`
 - `MESSAGE_MAX_BYTES`：单条 MQTT payload 最大字节数（超过则写入 DLQ，默认 `262144`）
 - `METRICS_MAX_KEYS`：单条消息允许的 metrics key 数量上限（超过则写入 DLQ，默认 `500`）
+- `DLQ_RAW_PAYLOAD_MAX_BYTES`：写入 DLQ 的 `raw_payload` 最大字节数（截断以避免 DLQ 本身过大，默认 `65536`）
 - `KAFKA_BROKERS`：逗号分隔，例如 `127.0.0.1:9092`
 - `KAFKA_CLIENT_ID`：默认 `ingest-service`
 - `KAFKA_TOPIC_TELEMETRY_RAW`：默认 `telemetry.raw.v1`
