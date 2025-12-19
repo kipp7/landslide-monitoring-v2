@@ -16,12 +16,15 @@
   - API 下发的设备命令（cmd）
 - `device.command_acks.v1`
   - 设备回执（ack）
+- `device.command_events.v1`
+  - 设备命令生命周期事件（sent/acked/failed/timeout），用于通知与运维观测
 
 机器可读（Schema）：
 
 - alerts.events.v1：`docs/integrations/kafka/schemas/alerts-events.v1.schema.json`
 - device.commands.v1：`docs/integrations/kafka/schemas/device-commands.v1.schema.json`
 - device.command_acks.v1：`docs/integrations/kafka/schemas/device-command-acks.v1.schema.json`
+- device.command_events.v1：`docs/integrations/kafka/schemas/device-command-events.v1.schema.json`
 
 ## 2. 分区与消费组建议
 

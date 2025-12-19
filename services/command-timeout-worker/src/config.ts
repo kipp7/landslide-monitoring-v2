@@ -9,20 +9,13 @@ function optionalNonEmptyString() {
 }
 
 const configSchema = z.object({
-  serviceName: z.string().default("command-ack-receiver"),
-
-  mqttUrl: z.string().default("mqtt://localhost:1883"),
-  mqttUsername: optionalNonEmptyString(),
-  mqttPassword: optionalNonEmptyString(),
-  mqttTopicAckPrefix: z.string().default("cmd_ack/"),
+  serviceName: z.string().default("command-timeout-worker"),
 
   kafkaBrokers: z
     .string()
     .min(1)
     .transform((v) => v.split(",").map((s) => s.trim()).filter(Boolean)),
-  kafkaClientId: z.string().default("command-ack-receiver"),
-  kafkaGroupId: z.string().default("command-ack-receiver.v1"),
-  kafkaTopicDeviceCommandAcks: z.string().default("device.command_acks.v1"),
+  kafkaClientId: z.string().default("command-timeout-worker"),
   kafkaTopicDeviceCommandEvents: z.string().default("device.command_events.v1"),
 
   postgresUrl: z.string().url().optional(),
@@ -31,7 +24,11 @@ const configSchema = z.object({
   postgresUser: z.string().default("landslide"),
   postgresPassword: optionalNonEmptyString(),
   postgresDatabase: z.string().default("landslide_monitor"),
-  postgresPoolMax: z.coerce.number().int().positive().default(5)
+  postgresPoolMax: z.coerce.number().int().positive().default(5),
+
+  commandAckTimeoutSeconds: z.coerce.number().int().positive().max(7 * 24 * 3600).default(60),
+  scanIntervalMs: z.coerce.number().int().positive().max(60 * 60 * 1000).default(5000),
+  scanLimit: z.coerce.number().int().positive().max(5000).default(200)
 });
 
 export type AppConfig = z.infer<typeof configSchema>;
@@ -40,15 +37,8 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
   return configSchema.parse({
     serviceName: env.SERVICE_NAME,
 
-    mqttUrl: env.MQTT_URL,
-    mqttUsername: env.MQTT_USERNAME,
-    mqttPassword: env.MQTT_PASSWORD,
-    mqttTopicAckPrefix: env.MQTT_TOPIC_ACK_PREFIX,
-
     kafkaBrokers: env.KAFKA_BROKERS,
     kafkaClientId: env.KAFKA_CLIENT_ID,
-    kafkaGroupId: env.KAFKA_GROUP_ID,
-    kafkaTopicDeviceCommandAcks: env.KAFKA_TOPIC_DEVICE_COMMAND_ACKS,
     kafkaTopicDeviceCommandEvents: env.KAFKA_TOPIC_DEVICE_COMMAND_EVENTS,
 
     postgresUrl: env.POSTGRES_URL,
@@ -57,6 +47,11 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
     postgresUser: env.POSTGRES_USER,
     postgresPassword: env.POSTGRES_PASSWORD,
     postgresDatabase: env.POSTGRES_DATABASE,
-    postgresPoolMax: env.POSTGRES_POOL_MAX
+    postgresPoolMax: env.POSTGRES_POOL_MAX,
+
+    commandAckTimeoutSeconds: env.COMMAND_ACK_TIMEOUT_SECONDS,
+    scanIntervalMs: env.SCAN_INTERVAL_MS,
+    scanLimit: env.SCAN_LIMIT
   });
 }
+

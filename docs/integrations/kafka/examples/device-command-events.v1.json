@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "event_id": "b7a5c0a9-43a8-4a3d-9f7c-0b5b3c8ac1b2",
+  "event_type": "COMMAND_TIMEOUT",
+  "created_ts": "2025-12-15T10:00:30Z",
+  "command_id": "1b4c81aa-3c5f-4c14-8f9e-1c0fbe9d2c3d",
+  "device_id": "2c1f2d8e-2bb7-4f58-bb6a-6c2a0f4a7a4c",
+  "status": "timeout",
+  "detail": "ack timeout after 30s",
+  "result": {}
+}
+

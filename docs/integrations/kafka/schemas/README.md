@@ -9,6 +9,7 @@
 - alerts.events.v1：`docs/integrations/kafka/schemas/alerts-events.v1.schema.json`
 - device.commands.v1：`docs/integrations/kafka/schemas/device-commands.v1.schema.json`
 - device.command_acks.v1：`docs/integrations/kafka/schemas/device-command-acks.v1.schema.json`
+- device.command_events.v1：`docs/integrations/kafka/schemas/device-command-events.v1.schema.json`
 
 配套示例（用于脚本校验/联调对齐）：
 
