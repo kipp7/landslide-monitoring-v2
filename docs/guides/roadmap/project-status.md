@@ -37,6 +37,7 @@
   - 进展：Postgres shadow 落地：telemetry-writer 在写入 ClickHouse 成功后 upsert `device_state`；API `/data/state` 优先读 `device_state`，无记录时回退 ClickHouse。
   - 进展：命令下发进入 Kafka：API 创建命令时同步写入 `device.commands.v1`（为后续 MQTT 下发 worker / 回执链路打基础）。
   - 进展：新增 `command-dispatcher`：消费 `device.commands.v1` 并通过 MQTT 发布到 `cmd/{device_id}`，e2e 脚本可选验证设备接收命令。
+  - 进展：e2e 冒烟补齐阶段 1 回归用例：支持 `-TestRevoke` 验证 revoke 立即生效（EMQX authn 拒绝已吊销设备）。
 
 ## 2) 当前阶段与里程碑
 

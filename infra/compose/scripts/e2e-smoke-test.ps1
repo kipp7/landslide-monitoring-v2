@@ -6,6 +6,7 @@ param(
   [switch]$CreateDevice,
   [switch]$ConfigureEmqx,
   [switch]$TestCommands,
+  [switch]$TestRevoke,
   [bool]$CollectEvidenceOnFailure = $true,
   [switch]$SkipBuild,
   [switch]$SkipWriteServiceEnv,
@@ -479,6 +480,41 @@ try {
     }
     if ($waitProc.ExitCode -ne 0) {
       throw "Device did not receive command (wait-for-command.js exit=$($waitProc.ExitCode)). Logs: $logDir"
+    }
+  }
+
+  if ($TestRevoke) {
+    if (-not $UseMqttAuth -or -not $CreateDevice -or -not $deviceSecret) {
+      throw "TestRevoke requires -UseMqttAuth and -CreateDevice (needs device credentials)."
+    }
+
+    Write-Host "Revoking device via API..." -ForegroundColor Cyan
+    $revokeUrl = "http://$apiLocalHost`:$apiPort/api/v1/devices/$($DeviceId)/revoke"
+    $revoke = Invoke-RestMethod -Method Put -Uri $revokeUrl -TimeoutSec 10
+    if (-not $revoke.success) { throw "revoke API failed. Logs: $logDir" }
+
+    Write-Host "Verifying revoked device is immediately denied by EMQX authn..." -ForegroundColor Cyan
+    $revokedDenied = $false
+    for ($i = 1; $i -le 10; $i++) {
+      Add-Content -Encoding UTF8 -LiteralPath $publishLog -Value ("-- revoked attempt " + $i + " --`n")
+      $exit = Run-Node @(
+        "scripts/dev/publish-telemetry.js",
+        "--mqtt", $mqttUrl,
+        "--device", $DeviceId,
+        "--username", $DeviceId,
+        "--password", $deviceSecret,
+        "--seq", (1000 + $i)
+      ) $publishLog
+      if ($exit -eq 0) {
+        throw "Expected revoked device publish to be denied, but it succeeded. Check EMQX authn and devices.status revoke enforcement."
+      }
+      $tail = ""
+      try { $tail = (Get-Content -LiteralPath $publishLog -Tail 40 | Out-String) } catch { }
+      if ($tail -match "Not authorized") { $revokedDenied = $true; break }
+      Start-Sleep -Seconds 2
+    }
+    if (-not $revokedDenied) {
+      throw "Revoked device publish did not clearly fail with 'Not authorized' after retries. Logs: $logDir"
     }
   }
 
