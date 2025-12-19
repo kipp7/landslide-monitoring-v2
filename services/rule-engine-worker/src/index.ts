@@ -5,7 +5,16 @@ import { Kafka, logLevel } from "kafkajs";
 import { Pool } from "pg";
 import path from "node:path";
 import { loadConfigFromEnv } from "./config";
-import { evalCondition, findFirstSensorLeaf, ruleDslSchema, templateString, type RuleDslV1 } from "./dsl";
+import {
+  evalCondition,
+  findFirstSensorLeaf,
+  ruleDslSchema,
+  templateString,
+  type MetricPoint,
+  type MetricSeriesGetter,
+  type MetricWindow,
+  type RuleDslV1
+} from "./dsl";
 
 type TelemetryRawV1 = {
   schema_version: 1;
@@ -56,6 +65,7 @@ function makeActiveKey(ruleId: string, deviceId: string): ActiveKey {
 }
 
 type DeviceInfo = { stationId: string | null; expiresAtMs: number };
+type SeriesState = Map<string, MetricPoint[]>; // sensorKey -> points
 
 async function main(): Promise<void> {
   dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
@@ -133,6 +143,7 @@ async function main(): Promise<void> {
 
   const windowByKey = new Map<ActiveKey, WindowState>();
   const deviceInfoById = new Map<string, DeviceInfo>();
+  const seriesByKey = new Map<ActiveKey, SeriesState>();
 
   const getDeviceInfo = async (deviceId: string): Promise<DeviceInfo> => {
     const now = Date.now();
@@ -155,6 +166,40 @@ async function main(): Promise<void> {
     const s: WindowState = { points: [] };
     windowByKey.set(k, s);
     return s;
+  };
+
+  const getOrCreateSeries = (k: ActiveKey): SeriesState => {
+    const existing = seriesByKey.get(k);
+    if (existing) return existing;
+    const s: SeriesState = new Map<string, MetricPoint[]>();
+    seriesByKey.set(k, s);
+    return s;
+  };
+
+  const updateSeries = (state: SeriesState, tsMs: number, metrics: Record<string, unknown>) => {
+    for (const [k, v] of Object.entries(metrics)) {
+      if (typeof v !== "number") continue;
+      const arr = state.get(k) ?? [];
+      arr.push({ tsMs, value: v });
+      while (arr.length > config.maxPointsPerRule) arr.shift();
+      state.set(k, arr);
+    }
+  };
+
+  const getSeries = (state: SeriesState, nowMs: number): MetricSeriesGetter => {
+    return (sensorKey: string, window?: MetricWindow) => {
+      const arr = state.get(sensorKey) ?? [];
+      if (!window) return arr.slice(-1);
+      if (window.type === "points") return arr.slice(-window.points);
+      const cutoff = nowMs - window.minutes * 60_000;
+      let i = arr.length;
+      while (i > 0) {
+        const p = arr[i - 1];
+        if (!p || p.tsMs < cutoff) break;
+        i -= 1;
+      }
+      return arr.slice(i);
+    };
   };
 
   const loadLatestAlertForRuleDevice = async (ruleId: string, deviceId: string) => {
@@ -262,8 +307,20 @@ async function main(): Promise<void> {
         const key = makeActiveKey(r.row.rule_id, deviceId);
         const dsl = r.dsl;
 
+        const seriesState = getOrCreateSeries(key);
+        updateSeries(seriesState, tsMs, metrics);
+        const baseSeriesGetter = getSeries(seriesState, tsMs);
+        const defaultMetricWindow: MetricWindow | undefined =
+          dsl.window?.type === "duration"
+            ? { type: "duration", minutes: dsl.window.minutes, minPoints: dsl.window.minPoints }
+            : dsl.window?.type === "points"
+              ? { type: "points", points: dsl.window.points }
+              : undefined;
+        const seriesGetter: MetricSeriesGetter = (sensorKey, window) =>
+          baseSeriesGetter(sensorKey, window ?? defaultMetricWindow);
+
         const missingPolicy = dsl.missing?.policy ?? "ignore";
-        const okNow = evalCondition(dsl.when, metrics);
+        const okNow = evalCondition(dsl.when, metrics, seriesGetter);
         const okNowBool = okNow === true;
 
         const win = getOrCreateWindow(key);
