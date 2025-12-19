@@ -170,6 +170,75 @@
 }
 ```
 
+## 6. 查询 Telemetry DLQ（用于运维排查）
+
+说明：DLQ 消息会由 `telemetry-dlq-recorder` 落库到 PostgreSQL，API 提供分页查询与详情查看，便于定位 ingest/writer 的坏消息来源。
+
+### 6.1 列表查询
+
+**GET** `/telemetry/dlq`
+
+权限：`data:analysis`（当前实现为 admin token 保护，见 `ADMIN_API_TOKEN`）
+
+查询参数：
+- `page`, `pageSize`
+- `reasonCode`（可选，例如 `invalid_json` / `schema_validation_failed` / `payload_too_large` / `metrics_too_many`）
+- `deviceId`（可选，UUID；DLQ 中可能为空）
+- `startTime`, `endTime`（可选，RFC3339；必须同时提供，用于按时间窗口过滤）
+
+响应（示例）：
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "ok",
+  "data": {
+    "list": [
+      {
+        "messageId": "c67be5a5-2d97-4e06-8d1f-3e6f1e2f9d9f",
+        "receivedAt": "2025-12-19T08:00:00Z",
+        "deviceId": "",
+        "reasonCode": "invalid_json",
+        "reasonDetail": "Unexpected token ...",
+        "rawPayloadPreview": "{ ...",
+        "kafka": { "topic": "telemetry.dlq.v1", "partition": 0, "offset": "123", "key": "" },
+        "createdAt": "2025-12-19T08:00:01Z"
+      }
+    ],
+    "pagination": { "page": 1, "pageSize": 20, "total": 1, "totalPages": 1 }
+  },
+  "timestamp": "2025-12-19T08:00:02Z",
+  "traceId": "req_01J..."
+}
+```
+
+### 6.2 详情查询
+
+**GET** `/telemetry/dlq/{messageId}`
+
+权限：`data:analysis`（当前实现为 admin token 保护，见 `ADMIN_API_TOKEN`）
+
+响应（示例）：
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "ok",
+  "data": {
+    "messageId": "c67be5a5-2d97-4e06-8d1f-3e6f1e2f9d9f",
+    "receivedAt": "2025-12-19T08:00:00Z",
+    "deviceId": "",
+    "reasonCode": "invalid_json",
+    "reasonDetail": "Unexpected token ...",
+    "rawPayload": "{ ...",
+    "kafka": { "topic": "telemetry.dlq.v1", "partition": 0, "offset": "123", "key": "" },
+    "createdAt": "2025-12-19T08:00:01Z"
+  },
+  "timestamp": "2025-12-19T08:00:02Z",
+  "traceId": "req_01J..."
+}
+```
+
 说明：
 - 返回下载链接或任务 ID（数据量大建议异步导出）。
 

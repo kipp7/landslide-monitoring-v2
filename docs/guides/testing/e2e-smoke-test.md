@@ -34,6 +34,10 @@
 说明：
 - 该用例会同时断言：`COMMAND_TIMEOUT` 事件已落库可查询；对应的 command notification 已创建；并验证 notification stats（含未读计数）与“标记已读”接口。
 
+阶段 1（Telemetry DLQ）验证用例（发送无效 JSON，验证 DLQ 落库 + API 可查询）：
+
+- `powershell -NoProfile -ExecutionPolicy Bypass -File infra/compose/scripts/e2e-smoke-test.ps1 -ConfigureEmqx -UseMqttAuth -CreateDevice -TestTelemetryDlq`
+
 失败时留证（无需手工收集）：
 
 - 脚本失败会自动在 `backups/evidence/e2e-smoke-<timestamp>/` 下输出：

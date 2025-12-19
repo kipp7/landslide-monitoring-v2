@@ -9,6 +9,7 @@ param(
   [switch]$TestCommandAcks,
   [switch]$TestCommandFailed,
   [switch]$TestCommandTimeout,
+  [switch]$TestTelemetryDlq,
   [switch]$TestRevoke,
   [bool]$CollectEvidenceOnFailure = $true,
   [switch]$SkipBuild,
@@ -170,6 +171,8 @@ $eventsOut = Join-Path $logDir "command-events-recorder.stdout.log"
 $eventsErr = Join-Path $logDir "command-events-recorder.stderr.log"
 $notifyOut = Join-Path $logDir "command-notify-worker.stdout.log"
 $notifyErr = Join-Path $logDir "command-notify-worker.stderr.log"
+$dlqOut = Join-Path $logDir "telemetry-dlq-recorder.stdout.log"
+$dlqErr = Join-Path $logDir "telemetry-dlq-recorder.stderr.log"
 $waitCmdOut = Join-Path $logDir "wait-command.stdout.log"
 $waitCmdErr = Join-Path $logDir "wait-command.stderr.log"
 $publishLog = Join-Path $logDir "publish-telemetry.log"
@@ -192,6 +195,7 @@ $ackProc = $null
 $timeoutProc = $null
 $eventsProc = $null
 $notifyProc = $null
+$dlqProc = $null
 
 try {
   if ($ConfigureEmqx) {
@@ -346,6 +350,22 @@ try {
       "NOTIFY_TYPE=app"
     ) -force:$ForceWriteServiceEnv
 
+    Write-EnvIfMissingOrForced "services/telemetry-dlq-recorder/.env" @(
+      "SERVICE_NAME=telemetry-dlq-recorder",
+      "",
+      "KAFKA_BROKERS=$kafkaBrokers",
+      "KAFKA_CLIENT_ID=telemetry-dlq-recorder",
+      "KAFKA_GROUP_ID=telemetry-dlq-recorder.v1",
+      "KAFKA_TOPIC_TELEMETRY_DLQ=telemetry.dlq.v1",
+      "",
+      "POSTGRES_HOST=$pgHost",
+      "POSTGRES_PORT=$pgPort",
+      "POSTGRES_USER=$pgUser",
+      "POSTGRES_PASSWORD=$pgPassword",
+      "POSTGRES_DATABASE=$pgDb",
+      "POSTGRES_POOL_MAX=5"
+    ) -force:$ForceWriteServiceEnv
+
     Write-EnvIfMissingOrForced "services/api/.env" @(
       "SERVICE_NAME=api-service",
       "API_HOST=0.0.0.0",
@@ -411,6 +431,20 @@ try {
     Assert-LastExitCode "init-clickhouse.ps1 failed"
   }
 
+  Write-Host "Ensuring PostgreSQL schema is initialized..." -ForegroundColor Cyan
+  $pgHasSchema = $false
+  try {
+    $out = (& docker compose -f $ComposeFile --env-file $EnvFile exec -T postgres psql -U $pgUser -d $pgDb -At -c "SELECT (to_regclass('public.devices') IS NOT NULL) AND (to_regclass('public.telemetry_dlq_messages') IS NOT NULL);" 2>$null | Out-String).Trim()
+    if ($out.ToLowerInvariant() -eq "t") { $pgHasSchema = $true }
+  } catch {
+    # ignore and fall back to init script
+  }
+  if (-not $pgHasSchema) {
+    Write-Host "PostgreSQL tables missing; running init-postgres.ps1..." -ForegroundColor Yellow
+    powershell -NoProfile -ExecutionPolicy Bypass -File infra/compose/scripts/init-postgres.ps1 -EnvFile $EnvFile -ComposeFile $ComposeFile
+    Assert-LastExitCode "init-postgres.ps1 failed"
+  }
+
   Write-Host "Starting services..." -ForegroundColor Cyan
 
   $ingestProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/ingest" -PassThru -RedirectStandardOutput $ingestOut -RedirectStandardError $ingestErr
@@ -421,6 +455,7 @@ try {
   $timeoutProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/command-timeout-worker" -PassThru -RedirectStandardOutput $timeoutOut -RedirectStandardError $timeoutErr
   $eventsProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/command-events-recorder" -PassThru -RedirectStandardOutput $eventsOut -RedirectStandardError $eventsErr
   $notifyProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/command-notify-worker" -PassThru -RedirectStandardOutput $notifyOut -RedirectStandardError $notifyErr
+  $dlqProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/telemetry-dlq-recorder" -PassThru -RedirectStandardOutput $dlqOut -RedirectStandardError $dlqErr
 
   Write-Host "Waiting for API /health..." -ForegroundColor Cyan
   $maxWaitSeconds = 60
@@ -470,6 +505,12 @@ try {
     throw "command-notify-worker did not start within 45s. Logs: $logDir"
   }
   Write-Host "command-notify-worker is running." -ForegroundColor Green
+
+  Write-Host "Waiting for telemetry-dlq-recorder startup..." -ForegroundColor Cyan
+  if (-not (Wait-ForLogMatch $dlqOut "telemetry-dlq-recorder started" 45)) {
+    throw "telemetry-dlq-recorder did not start within 45s. Logs: $logDir"
+  }
+  Write-Host "telemetry-dlq-recorder is running." -ForegroundColor Green
 
   $deviceSecret = $null
   if ($CreateDevice) {
@@ -855,6 +896,54 @@ try {
     }
   }
 
+  if ($TestTelemetryDlq) {
+    if (-not $UseMqttAuth -or -not $CreateDevice -or -not $deviceSecret) {
+      throw "TestTelemetryDlq requires -UseMqttAuth and -CreateDevice (needs device credentials)."
+    }
+
+    Write-Host "Publishing invalid telemetry JSON to trigger DLQ..." -ForegroundColor Cyan
+    Add-Content -Encoding UTF8 -LiteralPath $publishLog -Value ("-- publish invalid telemetry json --`n")
+    $exit = Run-Node @(
+      "scripts/dev/publish-raw-mqtt.js",
+      "--mqtt", $mqttUrl,
+      "--topic", "telemetry/$DeviceId",
+      "--username", $DeviceId,
+      "--password", $deviceSecret,
+      "--payload", "{"
+    ) $publishLog
+    if ($exit -ne 0) {
+      throw "publish-raw-mqtt.js failed (exit=$exit). Logs: $logDir"
+    }
+
+    Write-Host "Waiting for telemetry DLQ message to be recorded..." -ForegroundColor Cyan
+    $startTime = (Get-Date).AddMinutes(-5).ToUniversalTime().ToString("o")
+    $endTime = (Get-Date).AddMinutes(5).ToUniversalTime().ToString("o")
+    $deadline = (Get-Date).AddSeconds(45)
+    $found = $false
+    $dlqId = ""
+    while ((Get-Date) -lt $deadline) {
+      try {
+        $dlq = Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/api/v1/telemetry/dlq?reasonCode=invalid_json&startTime=$startTime&endTime=$endTime" -TimeoutSec 5
+        if ($dlq.success -eq $true -and $dlq.data.list -and $dlq.data.list.Count -ge 1) {
+          $dlqId = [string]$dlq.data.list[0].messageId
+          $found = $true
+          break
+        }
+      } catch {
+        # ignore
+      }
+      Start-Sleep -Seconds 2
+    }
+    if (-not $found) {
+      throw "telemetry dlq message not found within 45s. Logs: $logDir"
+    }
+
+    $detail = Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/api/v1/telemetry/dlq/$dlqId" -TimeoutSec 10
+    if ($detail.success -ne $true -or -not $detail.data.rawPayload) {
+      throw "telemetry dlq detail query failed. Logs: $logDir"
+    }
+  }
+
   Write-Host "E2E smoke test passed." -ForegroundColor Green
   Write-Host "Logs: $logDir" -ForegroundColor DarkGray
 } catch {
@@ -900,7 +989,7 @@ try {
   exit 1
 } finally {
   Write-Host "Stopping services..." -ForegroundColor Cyan
-  foreach ($p in @($ingestProc, $writerProc, $apiProc, $cmdProc, $ackProc, $timeoutProc, $eventsProc, $notifyProc)) {
+  foreach ($p in @($ingestProc, $writerProc, $apiProc, $cmdProc, $ackProc, $timeoutProc, $eventsProc, $notifyProc, $dlqProc)) {
     if ($null -eq $p) { continue }
     try {
       if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
