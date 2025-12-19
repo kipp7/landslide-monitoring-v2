@@ -52,6 +52,7 @@
   - 进展：e2e 冒烟新增 `-Stage2Regression` 预置模式：阶段 1 回归基线 + alerts（创建规则 → 触发 → 查询事件流 → ACK → RESOLVE），并自动留证。
   - 2025-12-20：修复并稳定化 Stage2Regression（Ajv strict schema、commands/alerts 竞态与脚本幂等/可复现性），已本地复跑验证通过。
 - 阶段 3 进行中：复杂规则与 AI 插件（聚合/趋势/缺失策略/回放回测/可解释字段），在阶段 2 的可告警闭环之上持续迭代。
+  - 2025-12-20：rule-engine-worker 支持 `station` / `global` scope（station 规则按 `devices.station_id` 匹配；global 规则应用于全部设备）。
 
 ## 2) 当前阶段与里程碑
 

@@ -55,6 +55,8 @@ function makeActiveKey(ruleId: string, deviceId: string): ActiveKey {
   return `${ruleId}|${deviceId}`;
 }
 
+type DeviceInfo = { stationId: string | null; expiresAtMs: number };
+
 async function main(): Promise<void> {
   dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
 
@@ -130,6 +132,22 @@ async function main(): Promise<void> {
   };
 
   const windowByKey = new Map<ActiveKey, WindowState>();
+  const deviceInfoById = new Map<string, DeviceInfo>();
+
+  const getDeviceInfo = async (deviceId: string): Promise<DeviceInfo> => {
+    const now = Date.now();
+    const cached = deviceInfoById.get(deviceId);
+    if (cached && cached.expiresAtMs > now) return cached;
+
+    const row = await pg.query<{ station_id: string | null }>(
+      "SELECT station_id FROM devices WHERE device_id=$1",
+      [deviceId]
+    );
+    const stationId = row.rows[0]?.station_id ?? null;
+    const next: DeviceInfo = { stationId, expiresAtMs: now + 60_000 };
+    deviceInfoById.set(deviceId, next);
+    return next;
+  };
 
   const getOrCreateWindow = (k: ActiveKey): WindowState => {
     const existing = windowByKey.get(k);
@@ -228,11 +246,18 @@ async function main(): Promise<void> {
       const deviceId = payload.device_id;
       const tsMs = Date.parse(payload.received_ts);
       const metrics = payload.metrics;
+      const deviceInfo = await getDeviceInfo(deviceId);
+      const deviceStationId = deviceInfo.stationId;
 
       for (const r of cachedRules) {
-        // MVP: only device scope, and only exact device match.
-        if (r.row.scope !== "device") continue;
-        if (!r.row.device_id || r.row.device_id !== deviceId) continue;
+        if (r.row.scope === "device") {
+          if (!r.row.device_id || r.row.device_id !== deviceId) continue;
+        } else if (r.row.scope === "station") {
+          if (!deviceStationId) continue;
+          if (!r.row.station_id || r.row.station_id !== deviceStationId) continue;
+        } else {
+          // global: applies to all devices
+        }
 
         const key = makeActiveKey(r.row.rule_id, deviceId);
         const dsl = r.dsl;
@@ -327,7 +352,7 @@ async function main(): Promise<void> {
             ruleId: r.row.rule_id,
             ruleVersion: r.row.rule_version,
             deviceId,
-            stationId: r.row.station_id,
+            stationId: r.row.station_id ?? deviceStationId,
             severity: dsl.severity,
             title,
             message: messageText,
@@ -353,7 +378,7 @@ async function main(): Promise<void> {
             ruleId: r.row.rule_id,
             ruleVersion: r.row.rule_version,
             deviceId,
-            stationId: r.row.station_id,
+            stationId: r.row.station_id ?? deviceStationId,
             severity: dsl.severity,
             title,
             message: messageText,
