@@ -336,6 +336,7 @@
 
 查询参数：
 - `page`, `pageSize`
+- `startTime`, `endTime`（可选，ISO8601；必须同时提供，用于按时间窗口筛选）
 - `commandId`（可选，UUID）
 - `eventType`（可选：COMMAND_SENT/COMMAND_ACKED/COMMAND_FAILED/COMMAND_TIMEOUT）
 
@@ -366,7 +367,38 @@
 }
 ```
 
-## 12. 获取设备命令事件详情
+## 12. 获取设备命令事件统计（用于筛选/聚合）
+
+**GET** `/devices/{deviceId}/command-events/stats`
+
+权限：`device:control`
+
+查询参数：
+- `startTime`, `endTime`（可选，ISO8601；必须同时提供，用于按时间窗口统计）
+- `eventType`（可选：COMMAND_SENT/COMMAND_ACKED/COMMAND_FAILED/COMMAND_TIMEOUT）
+- `bucket`（可选：1h/1d；需要同时提供 startTime+endTime，用于按时间桶聚合）
+
+响应（示例）：
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "ok",
+  "data": {
+    "deviceId": "2c1f2d8e-2bb7-4f58-bb6a-6c2a0f4a7a4c",
+    "window": null,
+    "eventType": "",
+    "bucket": "",
+    "totals": { "total": 1 },
+    "byEventType": [{ "eventType": "COMMAND_TIMEOUT", "count": 1 }],
+    "byBucket": []
+  },
+  "timestamp": "2025-12-15T10:00:00Z",
+  "traceId": "req_01J..."
+}
+```
+
+## 13. 获取设备命令事件详情
 
 **GET** `/devices/{deviceId}/command-events/{eventId}`
 
@@ -394,7 +426,7 @@
 }
 ```
 
-## 13. 获取设备命令通知列表（用于运维告警/通知展示）
+## 14. 获取设备命令通知列表（用于运维告警/通知展示）
 
 **GET** `/devices/{deviceId}/command-notifications`
 
@@ -402,9 +434,12 @@
 
 查询参数：
 - `page`, `pageSize`
+- `startTime`, `endTime`（可选，ISO8601；必须同时提供，用于按时间窗口筛选）
 - `commandId`（可选，UUID）
+- `eventType`（可选：COMMAND_SENT/COMMAND_ACKED/COMMAND_FAILED/COMMAND_TIMEOUT）
 - `status`（可选：pending/sent/delivered/failed）
 - `notifyType`（可选：app/sms/email/wechat）
+- `unreadOnly`（可选：true/false；只返回未读）
 
 响应（示例）：
 ```json
@@ -438,7 +473,7 @@
 }
 ```
 
-## 14. 获取设备命令通知详情
+## 15. 获取设备命令通知详情
 
 **GET** `/devices/{deviceId}/command-notifications/{notificationId}`
 
@@ -471,7 +506,7 @@
 }
 ```
 
-## 15. 获取设备命令通知统计（用于列表筛选/未读计数）
+## 16. 获取设备命令通知统计（用于列表筛选/未读计数）
 
 **GET** `/devices/{deviceId}/command-notifications/stats`
 
@@ -480,6 +515,7 @@
 查询参数：
 - `startTime`, `endTime`（可选，ISO8601；必须同时提供，用于按时间窗口统计）
 - `notifyType`（可选：app/sms/email/wechat）
+- `bucket`（可选：1h/1d；需要同时提供 startTime+endTime，用于按时间桶聚合）
 
 响应（示例）：
 ```json
@@ -491,17 +527,19 @@
     "deviceId": "2c1f2d8e-2bb7-4f58-bb6a-6c2a0f4a7a4c",
     "window": null,
     "notifyType": "",
+    "bucket": "",
     "totals": { "total": 1, "unread": 1 },
     "byStatus": [{ "status": "pending", "count": 1 }],
     "byNotifyType": [{ "notifyType": "app", "count": 1 }],
-    "byEventType": [{ "eventType": "COMMAND_TIMEOUT", "count": 1 }]
+    "byEventType": [{ "eventType": "COMMAND_TIMEOUT", "count": 1 }],
+    "byBucket": []
   },
   "timestamp": "2025-12-15T10:00:00Z",
   "traceId": "req_01J..."
 }
 ```
 
-## 16. 标记设备命令通知为已读
+## 17. 标记设备命令通知为已读
 
 **PUT** `/devices/{deviceId}/command-notifications/{notificationId}/read`
 

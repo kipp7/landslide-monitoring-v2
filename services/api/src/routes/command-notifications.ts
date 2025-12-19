@@ -9,18 +9,34 @@ import { queryOne, withPgClient } from "../postgres";
 const deviceIdSchema = z.string().uuid();
 const notificationIdSchema = z.string().uuid();
 
+const queryBoolSchema = z.preprocess((v) => {
+  if (typeof v === "string") {
+    const t = v.trim().toLowerCase();
+    if (t === "1" || t === "true") return true;
+    if (t === "0" || t === "false") return false;
+  }
+  return v;
+}, z.boolean());
+
 const listNotificationsQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().positive().max(200).default(20),
+  startTime: z.string().datetime().optional(),
+  endTime: z.string().datetime().optional(),
   commandId: z.string().uuid().optional(),
+  eventType: z
+    .enum(["COMMAND_SENT", "COMMAND_ACKED", "COMMAND_FAILED", "COMMAND_TIMEOUT"])
+    .optional(),
   status: z.enum(["pending", "sent", "delivered", "failed"]).optional(),
-  notifyType: z.enum(["app", "sms", "email", "wechat"]).optional()
+  notifyType: z.enum(["app", "sms", "email", "wechat"]).optional(),
+  unreadOnly: queryBoolSchema.optional()
 });
 
 const notificationStatsQuerySchema = z.object({
   startTime: z.string().datetime().optional(),
   endTime: z.string().datetime().optional(),
-  notifyType: z.enum(["app", "sms", "email", "wechat"]).optional()
+  notifyType: z.enum(["app", "sms", "email", "wechat"]).optional(),
+  bucket: z.enum(["1h", "1d"]).optional()
 });
 
 type NotificationRow = {
@@ -67,13 +83,35 @@ export function registerCommandNotificationRoutes(
       fail(reply, 400, "参数错误", traceId, { field: "query", issues: parseQuery.error.issues });
       return;
     }
-    const { page, pageSize, commandId, status, notifyType } = parseQuery.data;
+    const { page, pageSize, startTime, endTime, commandId, eventType, status, notifyType, unreadOnly } =
+      parseQuery.data;
+
+    if ((startTime && !endTime) || (!startTime && endTime)) {
+      fail(reply, 400, "参数错误", traceId, { field: "timeRange" });
+      return;
+    }
+    const start = startTime ? new Date(startTime) : null;
+    const end = endTime ? new Date(endTime) : null;
+    if (start && end && !(start < end)) {
+      fail(reply, 400, "参数错误", traceId, { field: "timeRange" });
+      return;
+    }
 
     const where: string[] = ["e.device_id = $1"];
     const params: unknown[] = [deviceId];
+    if (start && end) {
+      params.push(start);
+      where.push("n.created_at >= $" + String(params.length) + "::timestamptz");
+      params.push(end);
+      where.push("n.created_at <= $" + String(params.length) + "::timestamptz");
+    }
     if (commandId) {
       params.push(commandId);
       where.push("e.command_id = $" + String(params.length));
+    }
+    if (eventType) {
+      params.push(eventType);
+      where.push("e.event_type = $" + String(params.length));
     }
     if (status) {
       params.push(status);
@@ -82,6 +120,9 @@ export function registerCommandNotificationRoutes(
     if (notifyType) {
       params.push(notifyType);
       where.push("n.notify_type = $" + String(params.length));
+    }
+    if (unreadOnly) {
+      where.push("n.read_at IS NULL");
     }
 
     const whereSql = `WHERE ${where.join(" AND ")}`;
@@ -219,6 +260,21 @@ export function registerCommandNotificationRoutes(
     }
 
     const whereSql = `WHERE ${where.join(" AND ")}`;
+    const bucket = parseQuery.data.bucket;
+    if (bucket && !(startTime && endTime)) {
+      fail(reply, 400, "参数错误", traceId, { field: "bucket", reason: "bucket requires startTime + endTime" });
+      return;
+    }
+
+    if (bucket && start && end) {
+      const bucketMs = bucket === "1h" ? 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
+      const maxBuckets = 1000;
+      const buckets = Math.ceil((end.getTime() - start.getTime()) / bucketMs);
+      if (buckets > maxBuckets) {
+        fail(reply, 400, "参数错误", traceId, { field: "bucket", reason: "time range too large" });
+        return;
+      }
+    }
 
     const data = await withPgClient(pg, async (client) => {
       const exists = await queryOne<{ ok: boolean }>(
@@ -289,12 +345,38 @@ export function registerCommandNotificationRoutes(
         params
       );
 
+      const bucketRows =
+        bucket && start && end
+          ? await client.query<{ bucket_start: string; total: string; unread: string }>(
+              `
+                SELECT
+                  to_char(date_trunc('${bucket === "1h" ? "hour" : "day"}', n.created_at AT TIME ZONE 'UTC'), 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS bucket_start,
+                  count(*)::text AS total,
+                  sum(CASE WHEN n.read_at IS NULL THEN 1 ELSE 0 END)::text AS unread
+                FROM device_command_notifications n
+                JOIN device_command_events e ON e.event_id = n.event_id
+                ${whereSql}
+                GROUP BY 1
+                ORDER BY 1
+              `,
+              params
+            )
+          : null;
+
       return {
         total,
         unread,
         byStatus: statusRows.rows.map((r) => ({ status: r.status, count: Number(r.count) })),
-        byNotifyType: typeRows.rows.map((r) => ({ notifyType: r.notify_type, count: Number(r.count) })),
-        byEventType: eventTypeRows.rows.map((r) => ({ eventType: r.event_type, count: Number(r.count) }))
+        byNotifyType: typeRows.rows.map((r) => ({
+          notifyType: r.notify_type,
+          count: Number(r.count)
+        })),
+        byEventType: eventTypeRows.rows.map((r) => ({ eventType: r.event_type, count: Number(r.count) })),
+        byBucket:
+          bucketRows?.rows.map((r) => ({
+            bucketStartTime: r.bucket_start,
+            totals: { total: Number(r.total), unread: Number(r.unread) }
+          })) ?? []
       };
     });
 
@@ -309,13 +391,15 @@ export function registerCommandNotificationRoutes(
         deviceId,
         window: startTime && endTime ? { startTime, endTime } : null,
         notifyType: notifyType ?? "",
+        bucket: bucket ?? "",
         totals: {
           total: data.total,
           unread: data.unread
         },
         byStatus: data.byStatus,
         byNotifyType: data.byNotifyType,
-        byEventType: data.byEventType
+        byEventType: data.byEventType,
+        byBucket: data.byBucket
       },
       traceId
     );
