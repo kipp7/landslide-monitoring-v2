@@ -7,7 +7,7 @@
 - 每次合并一个 PR 到 `main`，如果它改变了项目阶段/里程碑/下一步，必须更新本页。
 - 本页只记录“当前状态与下一步”，历史细节放到 `docs/incidents/` 或 PR/commit 记录中。
 
-最后更新时间：2025-12-19（阶段 1：command timeouts v16）
+最后更新时间：2025-12-19（阶段 1：command events ops v17）
 
 ## 1) 当前结论（TL;DR）
 
@@ -42,6 +42,7 @@
   - 进展：e2e 冒烟补齐回执验证：支持 `-TestCommandAcks`（command queued→sent→acked）。
   - 进展：补齐 commands 运维接口：`GET /devices/{deviceId}/commands` 与 `GET /devices/{deviceId}/commands/{commandId}`（用于排查 queued/sent/acked/failed/timeout/canceled）。
   - 进展：补齐 ack 超时策略：新增 `command-timeout-worker` 定期扫描 `sent` 超时命令并标记为 `timeout`，同时发出 `device.command_events.v1` 事件；e2e 支持 `-TestCommandTimeout` 回归。
+  - 进展：补齐 command events 的“落库与查询”：新增 `command-events-recorder` 落库 `device_command_events`；API 新增 `/devices/{deviceId}/command-events` 查询，用于通知/排查与 e2e 断言。
 
 ## 2) 当前阶段与里程碑
 
@@ -68,7 +69,7 @@ M2（阶段 1：设备接入与鉴权）目标：
 ## 3) 下一步（Next Actions，按优先级）
 
 1) 单机联调收口：把 `e2e-smoke-test.ps1` 的可选项补齐成“阶段 1 的闭环用例”（鉴权 + revoke + commands），作为后续重构的回归基线
-2) commands 运维收口：补齐事件消费者（通知/告警）与展示（列表筛选/统计），并沉淀到单机联调脚本/证据包
+2) commands 运维收口：补齐事件消费者（通知/告警）与展示（列表筛选/统计），并沉淀到单机联调脚本/证据包（当前已落库与可查询）
 3) writer 可靠性增强：补充告警/限流/降载策略（基础运行观测/保护已落地，后续补齐告警与容量压测）
 
 ## 4) 关键入口（新 AI 只读这些就能上手）

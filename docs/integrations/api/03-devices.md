@@ -327,3 +327,69 @@
   "traceId": "req_01J..."
 }
 ```
+
+## 11. 获取设备命令事件流（用于通知/排查）
+
+**GET** `/devices/{deviceId}/command-events`
+
+权限：`device:control`
+
+查询参数：
+- `page`, `pageSize`
+- `commandId`（可选，UUID）
+- `eventType`（可选：COMMAND_SENT/COMMAND_ACKED/COMMAND_FAILED/COMMAND_TIMEOUT）
+
+响应（示例）：
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "ok",
+  "data": {
+    "list": [
+      {
+        "eventId": "b7a5c0a9-43a8-4a3d-9f7c-0b5b3c8ac1b2",
+        "eventType": "COMMAND_TIMEOUT",
+        "commandId": "1b4c81aa-3c5f-4c14-8f9e-1c0fbe9d2c3d",
+        "deviceId": "2c1f2d8e-2bb7-4f58-bb6a-6c2a0f4a7a4c",
+        "status": "timeout",
+        "detail": "ack timeout after 30s",
+        "result": {},
+        "createdAt": "2025-12-15T10:00:30Z",
+        "ingestedAt": "2025-12-15T10:00:31Z"
+      }
+    ],
+    "pagination": { "page": 1, "pageSize": 20, "total": 1, "totalPages": 1 }
+  },
+  "timestamp": "2025-12-15T10:00:00Z",
+  "traceId": "req_01J..."
+}
+```
+
+## 12. 获取设备命令事件详情
+
+**GET** `/devices/{deviceId}/command-events/{eventId}`
+
+权限：`device:control`
+
+响应：
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "ok",
+  "data": {
+    "eventId": "b7a5c0a9-43a8-4a3d-9f7c-0b5b3c8ac1b2",
+    "eventType": "COMMAND_TIMEOUT",
+    "commandId": "1b4c81aa-3c5f-4c14-8f9e-1c0fbe9d2c3d",
+    "deviceId": "2c1f2d8e-2bb7-4f58-bb6a-6c2a0f4a7a4c",
+    "status": "timeout",
+    "detail": "ack timeout after 30s",
+    "result": {},
+    "createdAt": "2025-12-15T10:00:30Z",
+    "ingestedAt": "2025-12-15T10:00:31Z"
+  },
+  "timestamp": "2025-12-15T10:00:00Z",
+  "traceId": "req_01J..."
+}
+```
