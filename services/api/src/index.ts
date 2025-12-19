@@ -16,6 +16,7 @@ import { registerCommandEventRoutes } from "./routes/command-events";
 import { registerCommandNotificationRoutes } from "./routes/command-notifications";
 import { registerAlertRoutes } from "./routes/alerts";
 import { registerAlertRuleRoutes } from "./routes/alert-rules";
+import { registerAlertRuleReplayRoutes } from "./routes/alert-rules-replay";
 import { registerTelemetryDlqRoutes } from "./routes/telemetry-dlq";
 
 async function main(): Promise<void> {
@@ -80,6 +81,7 @@ async function main(): Promise<void> {
     registerStationRoutes(v1, config, pg);
     registerAlertRoutes(v1, config, pg);
     registerAlertRuleRoutes(v1, config, pg);
+    registerAlertRuleReplayRoutes(v1, config, ch, pg);
     registerCommandEventRoutes(v1, config, pg);
     registerCommandNotificationRoutes(v1, config, pg);
     registerTelemetryDlqRoutes(v1, config, pg);

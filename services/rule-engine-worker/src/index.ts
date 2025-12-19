@@ -1,10 +1,4 @@
 import { createLogger } from "@lsmv2/observability";
-import { loadAndCompileSchema } from "@lsmv2/validation";
-import dotenv from "dotenv";
-import { Kafka, logLevel } from "kafkajs";
-import { Pool } from "pg";
-import path from "node:path";
-import { loadConfigFromEnv } from "./config";
 import {
   evalCondition,
   findFirstSensorLeaf,
@@ -13,8 +7,15 @@ import {
   type MetricPoint,
   type MetricSeriesGetter,
   type MetricWindow,
-  type RuleDslV1
-} from "./dsl";
+  type RuleDslV1,
+  type Severity
+} from "@lsmv2/rules";
+import { loadAndCompileSchema } from "@lsmv2/validation";
+import dotenv from "dotenv";
+import { Kafka, logLevel } from "kafkajs";
+import { Pool } from "pg";
+import path from "node:path";
+import { loadConfigFromEnv } from "./config";
 
 type TelemetryRawV1 = {
   schema_version: 1;
@@ -67,6 +68,21 @@ function makeActiveKey(ruleId: string, deviceId: string): ActiveKey {
 type DeviceInfo = { stationId: string | null; expiresAtMs: number };
 type SeriesState = Map<string, MetricPoint[]>; // sensorKey -> points
 
+type AlertEventV1 = {
+  schema_version: 1;
+  alert_id: string;
+  event_id: string;
+  event_type: "ALERT_TRIGGER" | "ALERT_UPDATE" | "ALERT_RESOLVE" | "ALERT_ACK";
+  created_ts: string;
+  rule_id: string;
+  rule_version: number;
+  severity: Severity;
+  device_id?: string | null;
+  station_id?: string | null;
+  evidence?: Record<string, unknown>;
+  explain?: string;
+};
+
 async function main(): Promise<void> {
   dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
 
@@ -82,14 +98,26 @@ async function main(): Promise<void> {
     "schemas",
     "telemetry-raw.v1.schema.json"
   );
+  const schemaAlertEventPath = path.join(
+    repoRoot,
+    "docs",
+    "integrations",
+    "kafka",
+    "schemas",
+    "alerts-events.v1.schema.json"
+  );
   const validateRaw = await loadAndCompileSchema<TelemetryRawV1>(schemaRawPath);
+  const validateAlertEvent = await loadAndCompileSchema<AlertEventV1>(schemaAlertEventPath);
 
   const kafka = new Kafka({
     clientId: config.kafkaClientId,
     brokers: config.kafkaBrokers,
     logLevel: logLevel.NOTHING
   });
+  const producer = kafka.producer();
   const consumer = kafka.consumer({ groupId: config.kafkaGroupId });
+
+  await producer.connect();
   await consumer.connect();
   await consumer.subscribe({ topic: config.kafkaTopicTelemetryRaw, fromBeginning: false });
 
@@ -206,11 +234,17 @@ async function main(): Promise<void> {
     const row = await pg.query<{
       alert_id: string;
       event_type: string;
+      evidence_kind: string;
       created_at: string;
       severity: string;
     }>(
       `
-        SELECT alert_id, event_type, to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at, severity
+        SELECT
+          alert_id,
+          event_type,
+          coalesce(evidence->>'kind', '') AS evidence_kind,
+          to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at,
+          severity
         FROM alert_events
         WHERE rule_id = $1 AND device_id = $2
         ORDER BY created_at DESC
@@ -221,6 +255,17 @@ async function main(): Promise<void> {
     return row.rows[0] ?? null;
   };
 
+  const publishAlertEvent = async (ev: AlertEventV1) => {
+    if (!validateAlertEvent.validate(ev)) {
+      logger.error({ errors: validateAlertEvent.errors, ev }, "alerts.events schema invalid (BUG)");
+      return;
+    }
+    await producer.send({
+      topic: config.kafkaTopicAlertsEvents,
+      messages: [{ key: ev.device_id ?? ev.alert_id, value: JSON.stringify(ev) }]
+    });
+  };
+
   const insertAlertEvent = async (args: {
     alertId: string;
     eventType: "ALERT_TRIGGER" | "ALERT_UPDATE" | "ALERT_RESOLVE" | "ALERT_ACK";
@@ -228,7 +273,7 @@ async function main(): Promise<void> {
     ruleVersion: number;
     deviceId: string;
     stationId: string | null;
-    severity: "low" | "medium" | "high" | "critical";
+    severity: Severity;
     title: string;
     message: string;
     evidence: Record<string, unknown>;
@@ -261,6 +306,22 @@ async function main(): Promise<void> {
     );
     const row = res.rows[0];
     if (!row) throw new Error("insert alert event failed (no row returned)");
+
+    await publishAlertEvent({
+      schema_version: 1,
+      alert_id: args.alertId,
+      event_id: row.event_id,
+      event_type: args.eventType,
+      created_ts: row.created_at,
+      rule_id: args.ruleId,
+      rule_version: args.ruleVersion,
+      severity: args.severity,
+      device_id: args.deviceId,
+      station_id: args.stationId,
+      evidence: args.evidence,
+      explain: args.explain
+    });
+
     return row;
   };
 
@@ -319,8 +380,13 @@ async function main(): Promise<void> {
         const seriesGetter: MetricSeriesGetter = (sensorKey, window) =>
           baseSeriesGetter(sensorKey, window ?? defaultMetricWindow);
 
-        const missingPolicy = dsl.missing?.policy ?? "ignore";
         const okNow = evalCondition(dsl.when, metrics, seriesGetter);
+        const missing = dsl.missing;
+        const missingPolicy = missing?.policy ?? "ignore";
+        if (okNow === null && missingPolicy === "ignore") {
+          continue;
+        }
+
         const okNowBool = okNow === true;
 
         const win = getOrCreateWindow(key);
@@ -349,19 +415,22 @@ async function main(): Promise<void> {
           windowReady = win.points.length >= dsl.window.points;
         }
 
+        const missingCfg = missing?.policy === "raise_missing_alert" ? missing : null;
+        const missingNow =
+          missingCfg !== null &&
+          (okNow === null || !windowReady || missingCfg.sensorKeys.some((k) => typeof metrics[k] !== "number"));
+
         if (!windowReady) {
-          if (missingPolicy === "treat_as_fail") {
-            continue;
-          }
-          continue;
+          if (missingPolicy !== "raise_missing_alert") continue;
         }
 
         const triggered = win.points.every((p) => p.ok);
         const latest = await loadLatestAlertForRuleDevice(r.row.rule_id, deviceId);
         const lastEventType = latest?.event_type ?? "";
         const lastAlertId = latest?.alert_id ?? "";
-        const isActive = lastEventType === "ALERT_TRIGGER" || lastEventType === "ALERT_UPDATE";
-        const isAcked = lastEventType === "ALERT_ACK";
+        const lastKind = latest?.evidence_kind ?? "";
+        let isActive = lastEventType === "ALERT_TRIGGER" || lastEventType === "ALERT_UPDATE";
+        let isAcked = lastEventType === "ALERT_ACK";
 
         const action = dsl.actions[0];
         if (!action) continue;
@@ -380,6 +449,65 @@ async function main(): Promise<void> {
 
         const title = templateString(action.titleTemplate, valueVars);
         const messageText = templateString(action.messageTemplate ?? "", valueVars);
+
+        if (lastKind === "missing" && (isActive || isAcked) && !missingNow) {
+          const inserted = await insertAlertEvent({
+            alertId: lastAlertId,
+            eventType: "ALERT_RESOLVE",
+            ruleId: r.row.rule_id,
+            ruleVersion: r.row.rule_version,
+            deviceId,
+            stationId: r.row.station_id ?? deviceStationId,
+            severity: dsl.severity,
+            title,
+            message: messageText,
+            evidence: {
+              kind: "missing",
+              timeField: dsl.timeField ?? "received",
+              receivedTs: payload.received_ts,
+              seq: payload.seq ?? null,
+              missingSensorKeys: []
+            },
+            explain: "missing data recovered"
+          });
+          logger.info(
+            { ruleId: r.row.rule_id, deviceId, alertId: lastAlertId, eventId: inserted.event_id },
+            "missing alert resolved"
+          );
+          isActive = false;
+          isAcked = false;
+        }
+
+        if (missingNow) {
+          if (isActive || isAcked) {
+            continue;
+          }
+          const missingKeys =
+            missingCfg.sensorKeys.filter((k) => typeof metrics[k] !== "number");
+          const alertId = crypto.randomUUID();
+          await insertAlertEvent({
+            alertId,
+            eventType: "ALERT_TRIGGER",
+            ruleId: r.row.rule_id,
+            ruleVersion: r.row.rule_version,
+            deviceId,
+            stationId: r.row.station_id ?? deviceStationId,
+            severity: dsl.severity,
+            title,
+            message: messageText,
+            evidence: {
+              kind: "missing",
+              timeField: dsl.timeField ?? "received",
+              receivedTs: payload.received_ts,
+              seq: payload.seq ?? null,
+              missingSensorKeys: missingKeys,
+              window: { type: dsl.window?.type ?? "duration", points: win.points.length, ready: windowReady }
+            },
+            explain: "missing data"
+          });
+          logger.info({ ruleId: r.row.rule_id, deviceId, alertId }, "missing alert triggered");
+          continue;
+        }
 
         const explain = triggered ? "rule triggered" : "rule recovered";
 
@@ -414,6 +542,7 @@ async function main(): Promise<void> {
             title,
             message: messageText,
             evidence: {
+              kind: "rule",
               timeField: dsl.timeField ?? "received",
               sensorKey: valueVars.sensorKey,
               value: valueVars.value ? Number(valueVars.value) : null,
@@ -440,6 +569,7 @@ async function main(): Promise<void> {
             title,
             message: messageText,
             evidence: {
+              kind: "rule",
               timeField: dsl.timeField ?? "received",
               sensorKey: valueVars.sensorKey,
               value: valueVars.value ? Number(valueVars.value) : null,
@@ -456,6 +586,16 @@ async function main(): Promise<void> {
       }
     }
   });
+
+  const shutdown = async (signal: string) => {
+    logger.info({ signal }, "shutting down");
+    await consumer.disconnect();
+    await producer.disconnect();
+    await pg.end();
+    process.exit(0);
+  };
+  process.on("SIGINT", () => void shutdown("SIGINT"));
+  process.on("SIGTERM", () => void shutdown("SIGTERM"));
 }
 
 void main();

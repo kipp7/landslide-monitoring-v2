@@ -12,6 +12,7 @@ param(
   [switch]$TestCommandFailed,
   [switch]$TestCommandTimeout,
   [switch]$TestAlerts,
+  [switch]$TestAlertNotifications,
   [switch]$TestTelemetryDlq,
   [switch]$TestRevoke,
   [bool]$CollectEvidenceOnFailure = $true,
@@ -174,6 +175,8 @@ $eventsOut = Join-Path $logDir "command-events-recorder.stdout.log"
 $eventsErr = Join-Path $logDir "command-events-recorder.stderr.log"
 $notifyOut = Join-Path $logDir "command-notify-worker.stdout.log"
 $notifyErr = Join-Path $logDir "command-notify-worker.stderr.log"
+$alertNotifyOut = Join-Path $logDir "alert-notify-worker.stdout.log"
+$alertNotifyErr = Join-Path $logDir "alert-notify-worker.stderr.log"
 $ruleOut = Join-Path $logDir "rule-engine-worker.stdout.log"
 $ruleErr = Join-Path $logDir "rule-engine-worker.stderr.log"
 $dlqOut = Join-Path $logDir "telemetry-dlq-recorder.stdout.log"
@@ -200,12 +203,13 @@ $ackProc = $null
 $timeoutProc = $null
 $eventsProc = $null
 $notifyProc = $null
+$alertNotifyProc = $null
 $ruleProc = $null
 $dlqProc = $null
 
 try {
   if ($Stage1Regression) {
-    if ($Stage2Regression -or $UseMqttAuth -or $CreateDevice -or $ConfigureEmqx -or $TestCommands -or $TestCommandAcks -or $TestCommandFailed -or $TestCommandTimeout -or $TestAlerts -or $TestTelemetryDlq -or $TestRevoke) {
+    if ($Stage2Regression -or $UseMqttAuth -or $CreateDevice -or $ConfigureEmqx -or $TestCommands -or $TestCommandAcks -or $TestCommandFailed -or $TestCommandTimeout -or $TestAlerts -or $TestAlertNotifications -or $TestTelemetryDlq -or $TestRevoke) {
       throw "Stage1Regression is a preset and must not be combined with other switches. Use either -Stage1Regression or the individual switches."
     }
     $ConfigureEmqx = $true
@@ -217,7 +221,7 @@ try {
   }
 
   if ($Stage2Regression) {
-    if ($Stage1Regression -or $UseMqttAuth -or $CreateDevice -or $ConfigureEmqx -or $TestCommands -or $TestCommandAcks -or $TestCommandFailed -or $TestCommandTimeout -or $TestAlerts -or $TestTelemetryDlq -or $TestRevoke) {
+    if ($Stage1Regression -or $UseMqttAuth -or $CreateDevice -or $ConfigureEmqx -or $TestCommands -or $TestCommandAcks -or $TestCommandFailed -or $TestCommandTimeout -or $TestAlerts -or $TestAlertNotifications -or $TestTelemetryDlq -or $TestRevoke) {
       throw "Stage2Regression is a preset and must not be combined with other switches. Use either -Stage2Regression or the individual switches."
     }
     $ConfigureEmqx = $true
@@ -226,7 +230,12 @@ try {
     $TestCommands = $true
     $TestTelemetryDlq = $true
     $TestAlerts = $true
+    $TestAlertNotifications = $true
     $TestRevoke = $true
+  }
+
+  if ($TestAlertNotifications -and -not $TestAlerts) {
+    throw "TestAlertNotifications requires -TestAlerts (needs an alert trigger to verify notifications)."
   }
 
   if ($ConfigureEmqx) {
@@ -384,6 +393,24 @@ try {
       "NOTIFY_TYPE=app"
     ) -force:$forceEnv
 
+    Write-EnvIfMissingOrForced "services/alert-notify-worker/.env" @(
+      "SERVICE_NAME=alert-notify-worker",
+      "",
+      "KAFKA_BROKERS=$kafkaBrokers",
+      "KAFKA_CLIENT_ID=alert-notify-worker",
+      "KAFKA_GROUP_ID=alert-notify-worker.v1",
+      "KAFKA_TOPIC_ALERTS_EVENTS=alerts.events.v1",
+      "",
+      "POSTGRES_HOST=$pgHost",
+      "POSTGRES_PORT=$pgPort",
+      "POSTGRES_USER=$pgUser",
+      "POSTGRES_PASSWORD=$pgPassword",
+      "POSTGRES_DATABASE=$pgDb",
+      "POSTGRES_POOL_MAX=5",
+      "",
+      "NOTIFY_TYPE=app"
+    ) -force:$forceEnv
+
     Write-EnvIfMissingOrForced "services/rule-engine-worker/.env" @(
       "SERVICE_NAME=rule-engine-worker",
       "",
@@ -391,6 +418,7 @@ try {
       "KAFKA_CLIENT_ID=rule-engine-worker",
       "KAFKA_GROUP_ID=rule-engine-worker.v1",
       "KAFKA_TOPIC_TELEMETRY_RAW=telemetry.raw.v1",
+      "KAFKA_TOPIC_ALERTS_EVENTS=alerts.events.v1",
       "",
       "POSTGRES_HOST=$pgHost",
       "POSTGRES_PORT=$pgPort",
@@ -531,6 +559,9 @@ try {
   $timeoutProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/command-timeout-worker" -PassThru -RedirectStandardOutput $timeoutOut -RedirectStandardError $timeoutErr
   $eventsProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/command-events-recorder" -PassThru -RedirectStandardOutput $eventsOut -RedirectStandardError $eventsErr
   $notifyProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/command-notify-worker" -PassThru -RedirectStandardOutput $notifyOut -RedirectStandardError $notifyErr
+  if ($TestAlertNotifications -or $Stage2Regression) {
+    $alertNotifyProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/alert-notify-worker" -PassThru -RedirectStandardOutput $alertNotifyOut -RedirectStandardError $alertNotifyErr
+  }
   $ruleProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/rule-engine-worker" -PassThru -RedirectStandardOutput $ruleOut -RedirectStandardError $ruleErr
   $dlqProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/telemetry-dlq-recorder" -PassThru -RedirectStandardOutput $dlqOut -RedirectStandardError $dlqErr
 
@@ -565,6 +596,14 @@ try {
     throw "command-notify-worker did not start within 45s. Logs: $logDir"
   }
   Write-Host "command-notify-worker is running." -ForegroundColor Green
+
+  if ($alertNotifyProc) {
+    Write-Host "Waiting for alert-notify-worker startup..." -ForegroundColor Cyan
+    if (-not (Wait-ForLogMatch $alertNotifyOut "alert-notify-worker started" 45)) {
+      throw "alert-notify-worker did not start within 45s. Logs: $logDir"
+    }
+    Write-Host "alert-notify-worker is running." -ForegroundColor Green
+  }
 
   Write-Host "Waiting for telemetry-dlq-recorder startup..." -ForegroundColor Cyan
   if (-not (Wait-ForLogMatch $dlqOut "telemetry-dlq-recorder started" 45)) {
@@ -1038,6 +1077,23 @@ try {
     }
     $ruleId = [string]$createRule.data.ruleId
 
+    $testUserId = $null
+    if ($TestAlertNotifications) {
+      Write-Host "Preparing alert notification subscription (PostgreSQL)..." -ForegroundColor Cyan
+      $testUserId = (New-Guid).ToString()
+      $username = "smoke_user_" + ($testUserId.Substring(0, 8))
+      $sql = @"
+INSERT INTO users (user_id, username, password_hash, status)
+VALUES ('$testUserId', '$username', 'smoke_test_hash_placeholder', 'active')
+ON CONFLICT (username) DO NOTHING;
+
+INSERT INTO user_alert_subscriptions (user_id, device_id, min_severity, notify_app, is_active)
+VALUES ('$testUserId', '$DeviceId', 'low', TRUE, TRUE);
+"@
+      docker compose -f $ComposeFile --env-file $EnvFile exec -T postgres psql -v ON_ERROR_STOP=1 -U $pgUser -d $pgDb -c $sql 1>$null
+      Assert-LastExitCode "psql failed to create alert notification subscription"
+    }
+
     Write-Host "Publishing telemetry to trigger alert..." -ForegroundColor Cyan
     Add-Content -Encoding UTF8 -LiteralPath $publishLog -Value ("-- publish telemetry for alert --`n")
     $exit = Run-Node @(
@@ -1073,6 +1129,28 @@ try {
     $events = Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/api/v1/alerts/$($alertId)/events" -TimeoutSec 10
     if ($events.success -ne $true -or -not $events.data.events -or $events.data.events.Count -lt 1) {
       throw "alert events missing. Logs: $logDir"
+    }
+
+    if ($TestAlertNotifications) {
+      Write-Host "Waiting for alert notification..." -ForegroundColor Cyan
+      $triggerEventId = ""
+      foreach ($ev in $events.data.events) {
+        if ($ev.eventType -eq "ALERT_TRIGGER") { $triggerEventId = [string]$ev.eventId; break }
+      }
+      if (-not $triggerEventId) { throw "ALERT_TRIGGER eventId missing. Logs: $logDir" }
+
+      $deadline = (Get-Date).AddSeconds(30)
+      $hasNotification = $false
+      while ((Get-Date) -lt $deadline) {
+        $count = docker compose -f $ComposeFile --env-file $EnvFile exec -T postgres psql -U $pgUser -d $pgDb -At -c "SELECT count(*) FROM alert_notifications WHERE event_id = '$triggerEventId'::uuid AND user_id = '$testUserId'::uuid AND notify_type = 'app';"
+        Assert-LastExitCode "psql failed to query alert_notifications"
+        if ($count.Trim() -match "^[1-9]") { $hasNotification = $true; break }
+        Start-Sleep -Seconds 2
+      }
+      if (-not $hasNotification) {
+        throw "alert notification not created within 30s (eventId=$triggerEventId). Logs: $logDir"
+      }
+      Write-Host "Alert notification created." -ForegroundColor Green
     }
 
     Write-Host "Acking alert..." -ForegroundColor Cyan
@@ -1166,7 +1244,7 @@ try {
   exit 1
 } finally {
   Write-Host "Stopping services..." -ForegroundColor Cyan
-  foreach ($p in @($ingestProc, $writerProc, $apiProc, $cmdProc, $ackProc, $timeoutProc, $eventsProc, $notifyProc, $ruleProc, $dlqProc)) {
+  foreach ($p in @($ingestProc, $writerProc, $apiProc, $cmdProc, $ackProc, $timeoutProc, $eventsProc, $notifyProc, $alertNotifyProc, $ruleProc, $dlqProc)) {
     if ($null -eq $p) { continue }
     try {
       if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }

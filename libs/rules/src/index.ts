@@ -1,54 +1,78 @@
 import { z } from "zod";
 
 export const severitySchema = z.enum(["low", "medium", "high", "critical"]);
+export type Severity = z.infer<typeof severitySchema>;
 
 const scopeSchema = z.union([
-  z.object({ type: z.literal("device"), deviceId: z.string().uuid() }),
-  z.object({ type: z.literal("station"), stationId: z.string().uuid() }),
-  z.object({ type: z.literal("global") })
+  z.object({ type: z.literal("device"), deviceId: z.string().uuid() }).strict(),
+  z.object({ type: z.literal("station"), stationId: z.string().uuid() }).strict(),
+  z.object({ type: z.literal("global") }).strict()
 ]);
+
+export type Scope = z.infer<typeof scopeSchema>;
 
 const operatorSchema = z.enum([">", ">=", "<", "<=", "==", "!=", "between"]);
+export type Operator = z.infer<typeof operatorSchema>;
 
-const leafSensorSchema = z.object({
-  sensorKey: z.string().min(1),
-  operator: operatorSchema,
-  value: z.number().optional(),
-  min: z.number().optional(),
-  max: z.number().optional()
-});
+const leafSensorSchema = z
+  .object({
+    sensorKey: z.string().min(1),
+    operator: operatorSchema,
+    value: z.number().optional(),
+    min: z.number().optional(),
+    max: z.number().optional()
+  })
+  .strict();
 
-type LeafSensor = z.infer<typeof leafSensorSchema>;
+export type LeafSensor = z.infer<typeof leafSensorSchema>;
 
 const metricWindowSchema = z.union([
-  z.object({
-    type: z.literal("duration"),
-    minutes: z.number().positive(),
-    minPoints: z.number().int().positive().optional()
-  }),
-  z.object({ type: z.literal("points"), points: z.number().int().positive() })
+  z
+    .object({
+      type: z.literal("duration"),
+      minutes: z.number().positive(),
+      minPoints: z.number().int().positive().optional()
+    })
+    .strict(),
+  z.object({ type: z.literal("points"), points: z.number().int().positive() }).strict()
 ]);
+
+export type MetricWindow =
+  | { type: "duration"; minutes: number; minPoints?: number | undefined }
+  | { type: "points"; points: number };
 
 const ruleWindowSchema = z.union([
-  z.object({ type: z.literal("duration"), minutes: z.number().positive(), minPoints: z.number().int().positive() }),
-  z.object({ type: z.literal("points"), points: z.number().int().positive() })
+  z
+    .object({ type: z.literal("duration"), minutes: z.number().positive(), minPoints: z.number().int().positive() })
+    .strict(),
+  z.object({ type: z.literal("points"), points: z.number().int().positive() }).strict()
 ]);
 
-const metricSchema = z.object({
-  sensorKey: z.string().min(1),
-  agg: z.enum(["last", "min", "max", "avg", "delta", "slope"]),
-  window: metricWindowSchema.optional()
-});
+export type RuleWindow =
+  | { type: "duration"; minutes: number; minPoints: number }
+  | { type: "points"; points: number };
 
-const leafMetricSchema = z.object({
-  metric: metricSchema,
-  operator: operatorSchema,
-  value: z.number().optional(),
-  min: z.number().optional(),
-  max: z.number().optional()
-});
+const metricSchema = z
+  .object({
+    sensorKey: z.string().min(1),
+    agg: z.enum(["last", "min", "max", "avg", "delta", "slope"]),
+    window: metricWindowSchema.optional()
+  })
+  .strict();
 
-type LeafMetric = z.infer<typeof leafMetricSchema>;
+export type MetricSpec = z.infer<typeof metricSchema>;
+
+const leafMetricSchema = z
+  .object({
+    metric: metricSchema,
+    operator: operatorSchema,
+    value: z.number().optional(),
+    min: z.number().optional(),
+    max: z.number().optional()
+  })
+  .strict();
+
+export type LeafMetric = z.infer<typeof leafMetricSchema>;
 
 export type ConditionNode =
   | { op: "AND"; items: ConditionNode[] }
@@ -59,9 +83,9 @@ export type ConditionNode =
 
 const conditionSchema: z.ZodType<ConditionNode> = z.lazy(() =>
   z.union([
-    z.object({ op: z.literal("AND"), items: z.array(conditionSchema).min(1) }),
-    z.object({ op: z.literal("OR"), items: z.array(conditionSchema).min(1) }),
-    z.object({ op: z.literal("NOT"), item: conditionSchema }),
+    z.object({ op: z.literal("AND"), items: z.array(conditionSchema).min(1) }).strict(),
+    z.object({ op: z.literal("OR"), items: z.array(conditionSchema).min(1) }).strict(),
+    z.object({ op: z.literal("NOT"), item: conditionSchema }).strict(),
     leafSensorSchema,
     leafMetricSchema
   ])
@@ -74,14 +98,31 @@ const hysteresisSchema = z
   })
   .strict();
 
-const cooldownSchema = z.object({ minutes: z.number().int().nonnegative() }).strict();
-const missingSchema = z.object({ policy: z.enum(["ignore", "treat_as_fail"]) }).strict();
+export type Hysteresis = z.infer<typeof hysteresisSchema>;
 
-const actionSchema = z.object({
-  type: z.literal("emit_alert"),
-  titleTemplate: z.string().min(1),
-  messageTemplate: z.string().optional()
-});
+const cooldownSchema = z.object({ minutes: z.number().int().nonnegative() }).strict();
+export type Cooldown = z.infer<typeof cooldownSchema>;
+
+const missingSchema = z.union([
+  z.object({ policy: z.literal("ignore") }).strict(),
+  z.object({ policy: z.literal("treat_as_fail") }).strict(),
+  z.object({ policy: z.literal("raise_missing_alert"), sensorKeys: z.array(z.string().min(1)).min(1) }).strict()
+]);
+
+export type MissingPolicy =
+  | { policy: "ignore" }
+  | { policy: "treat_as_fail" }
+  | { policy: "raise_missing_alert"; sensorKeys: string[] };
+
+const actionSchema = z
+  .object({
+    type: z.literal("emit_alert"),
+    titleTemplate: z.string().min(1),
+    messageTemplate: z.string().optional()
+  })
+  .strict();
+
+export type RuleAction = z.infer<typeof actionSchema>;
 
 export const ruleDslSchema = z
   .object({
@@ -108,7 +149,9 @@ export function templateString(input: string, vars: Record<string, string>): str
   );
 }
 
-export function findFirstSensorLeaf(node: ConditionNode): { sensorKey: string; operator: string; value?: number } | null {
+export function findFirstSensorLeaf(
+  node: ConditionNode
+): { sensorKey: string; operator: string; value?: number } | null {
   if ("op" in node) {
     if (node.op === "NOT") return findFirstSensorLeaf(node.item);
     for (const it of node.items) {
@@ -128,13 +171,27 @@ export function findFirstSensorLeaf(node: ConditionNode): { sensorKey: string; o
   return null;
 }
 
+export function collectSensorKeys(node: ConditionNode): { sensors: Set<string>; metrics: Set<string> } {
+  const sensors = new Set<string>();
+  const metrics = new Set<string>();
+
+  const walk = (n: ConditionNode) => {
+    if ("op" in n) {
+      if (n.op === "NOT") walk(n.item);
+      else for (const it of n.items) walk(it);
+      return;
+    }
+    if ("sensorKey" in n) sensors.add(n.sensorKey);
+    else metrics.add(n.metric.sensorKey);
+  };
+  walk(node);
+  return { sensors, metrics };
+}
+
 export type MetricPoint = { tsMs: number; value: number };
-export type MetricWindow =
-  | { type: "duration"; minutes: number; minPoints?: number | undefined }
-  | { type: "points"; points: number };
 export type MetricSeriesGetter = (sensorKey: string, window?: MetricWindow) => MetricPoint[];
 
-function aggMetric(points: MetricPoint[], agg: z.infer<typeof metricSchema>["agg"]): number | null {
+function aggMetric(points: MetricPoint[], agg: MetricSpec["agg"]): number | null {
   if (points.length === 0) return null;
   const last = points[points.length - 1];
   const first = points[0];
@@ -162,7 +219,7 @@ function aggMetric(points: MetricPoint[], agg: z.infer<typeof metricSchema>["agg
 }
 
 function compareNumber(
-  operator: z.infer<typeof operatorSchema>,
+  operator: Operator,
   v: number,
   node: { value?: number | undefined; min?: number | undefined; max?: number | undefined }
 ): boolean {
@@ -193,25 +250,24 @@ export function evalCondition(
     if (node.op === "NOT") {
       const v = evalCondition(node.item, metrics, getSeries);
       return v === null ? null : !v;
-    } else if (node.op === "AND") {
+    }
+    if (node.op === "AND") {
       const items = node.items.map((x) => evalCondition(x, metrics, getSeries));
       if (items.some((x) => x === false)) return false;
       if (items.some((x) => x === null)) return null;
       return true;
-    } else {
-      const items = node.items.map((x) => evalCondition(x, metrics, getSeries));
-      if (items.some((x) => x === true)) return true;
-      if (items.some((x) => x === null)) return null;
-      return false;
     }
+    const items = node.items.map((x) => evalCondition(x, metrics, getSeries));
+    if (items.some((x) => x === true)) return true;
+    if (items.some((x) => x === null)) return null;
+    return false;
   }
 
   if ("sensorKey" in node) {
     const raw = metrics[node.sensorKey];
     if (raw === undefined || raw === null) return null;
     if (typeof raw !== "number") return null;
-    const v = raw;
-    return compareNumber(node.operator, v, node);
+    return compareNumber(node.operator, raw, node);
   }
 
   if (!getSeries) return null;
@@ -219,4 +275,9 @@ export function evalCondition(
   const v = aggMetric(points, node.metric.agg);
   if (v === null) return null;
   return compareNumber(node.operator, v, node);
+}
+
+export function compareSeverityAtLeast(actual: Severity, min: Severity): boolean {
+  const order: Record<Severity, number> = { low: 1, medium: 2, high: 3, critical: 4 };
+  return order[actual] >= order[min];
 }

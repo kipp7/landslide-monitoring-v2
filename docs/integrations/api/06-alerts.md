@@ -431,3 +431,58 @@
   "traceId": "req_01J..."
 }
 ```
+
+## 11. 规则回放/回测（dry-run replay）
+
+用途：
+- 用于复盘“某个规则在某段时间内会不会触发/何时触发”
+- 用于容量评估（点数/事件数/窗口策略影响）
+- **不会写入** `alert_events`（纯 dry-run 输出 explain/evidence）
+
+**POST** `/alert-rules/{ruleId}/versions/{version}/replay`
+
+权限：`alert:config`
+
+请求：
+```json
+{
+  "startTime": "2025-12-15T00:00:00Z",
+  "endTime": "2025-12-15T01:00:00Z",
+  "deviceIds": ["2c1f2d8e-2bb7-4f58-bb6a-6c2a0f4a7a4c"]
+}
+```
+
+说明：
+- 查询数据源为 ClickHouse（按规则 `timeField` 选择 `received_ts`/`event_ts`）
+- `deviceIds` 可选：
+  - scope=device：可省略（默认用 rule.deviceId）
+  - scope=station：可省略（默认取该站点所有 devices）
+  - scope=global：必须显式提供（避免意外全量回放）
+
+响应（示例）：
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "ok",
+  "data": {
+    "ruleId": "1afdc6d7-8c2f-4b2b-9c9a-69e4d9e4b2fa",
+    "version": 3,
+    "startTime": "2025-12-15T00:00:00Z",
+    "endTime": "2025-12-15T01:00:00Z",
+    "sensorKeys": ["displacement_velocity_mm_h"],
+    "devices": [
+      {
+        "deviceId": "2c1f2d8e-2bb7-4f58-bb6a-6c2a0f4a7a4c",
+        "points": 123,
+        "events": [
+          { "eventType": "ALERT_TRIGGER", "ts": "2025-12-15T00:10:00Z", "evidence": {}, "explain": "rule triggered" }
+        ]
+      }
+    ],
+    "totals": { "rows": 456, "points": 123, "events": 1 }
+  },
+  "timestamp": "2025-12-15T10:00:00Z",
+  "traceId": "req_01J..."
+}
+```

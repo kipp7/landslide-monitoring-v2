@@ -1690,6 +1690,44 @@ paths:
         default:
           $ref: "#/components/responses/ErrorResponse"
 
+  /alert-rules/{ruleId}/versions/{version}/replay:
+    parameters:
+      - $ref: "#/components/parameters/RuleIdPath"
+      - name: version
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+    post:
+      tags: [alerts]
+      summary: Dry-run replay for alert rule version (ClickHouse)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReplayAlertRuleRequest"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ReplayAlertRuleResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
   /system/configs:
     get:
       tags: [system]
@@ -2738,6 +2776,56 @@ components:
       properties:
         ruleId: { type: string, format: uuid }
         ruleVersion: { type: integer, minimum: 1 }
+
+    ReplayAlertRuleRequest:
+      type: object
+      required: [startTime, endTime]
+      additionalProperties: false
+      properties:
+        startTime: { type: string, format: date-time }
+        endTime: { type: string, format: date-time }
+        deviceIds:
+          type: array
+          items: { type: string, format: uuid }
+
+    ReplayAlertRuleResponse:
+      type: object
+      required: [ruleId, version, startTime, endTime, sensorKeys, devices, totals]
+      properties:
+        ruleId: { type: string, format: uuid }
+        version: { type: integer, minimum: 1 }
+        startTime: { type: string, format: date-time }
+        endTime: { type: string, format: date-time }
+        sensorKeys:
+          type: array
+          items: { type: string }
+        devices:
+          type: array
+          items:
+            type: object
+            required: [deviceId, points, events]
+            properties:
+              deviceId: { type: string, format: uuid }
+              points: { type: integer, minimum: 0 }
+              events:
+                type: array
+                items:
+                  type: object
+                  required: [eventType, ts, evidence, explain]
+                  properties:
+                    eventType: { type: string, enum: [ALERT_TRIGGER, ALERT_UPDATE, ALERT_RESOLVE, ALERT_ACK] }
+                    ts: { type: string, format: date-time }
+                    evidence:
+                      type: object
+                      additionalProperties: true
+                    explain: { type: string }
+        totals:
+          type: object
+          required: [rows, points, events]
+          properties:
+            rows: { type: integer, minimum: 0 }
+            points: { type: integer, minimum: 0 }
+            events: { type: integer, minimum: 0 }
 
     AlertRuleVersionsResponse:
       type: object

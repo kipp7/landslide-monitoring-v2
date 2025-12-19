@@ -53,7 +53,10 @@ const configSchema = z.object({
   kafkaTopicDeviceCommands: z.string().default("device.commands.v1"),
 
   apiMaxSeriesRangeHours: z.coerce.number().int().positive().default(168),
-  apiMaxPoints: z.coerce.number().int().positive().default(100000)
+  apiMaxPoints: z.coerce.number().int().positive().default(100000),
+  apiReplayMaxRangeHours: z.coerce.number().int().positive().default(168),
+  apiReplayMaxRows: z.coerce.number().int().positive().default(200000),
+  apiReplayMaxDevices: z.coerce.number().int().positive().default(50)
 });
 
 export type AppConfig = z.infer<typeof configSchema>;
@@ -81,8 +84,11 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
     clickhouseDatabase: env.CLICKHOUSE_DATABASE,
     clickhouseTable: env.CLICKHOUSE_TABLE,
 
-  apiMaxSeriesRangeHours: env.API_MAX_SERIES_RANGE_HOURS,
+    apiMaxSeriesRangeHours: env.API_MAX_SERIES_RANGE_HOURS,
     apiMaxPoints: env.API_MAX_POINTS,
+    apiReplayMaxRangeHours: env.API_REPLAY_MAX_RANGE_HOURS,
+    apiReplayMaxRows: env.API_REPLAY_MAX_ROWS,
+    apiReplayMaxDevices: env.API_REPLAY_MAX_DEVICES,
 
     emqxWebhookToken: env.EMQX_WEBHOOK_TOKEN,
     mqttInternalUsername: env.MQTT_INTERNAL_USERNAME,
