@@ -942,6 +942,21 @@ try {
     if ($detail.success -ne $true -or -not $detail.data.rawPayload) {
       throw "telemetry dlq detail query failed. Logs: $logDir"
     }
+
+    $stats = Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/api/v1/telemetry/dlq/stats?startTime=$startTime&endTime=$endTime" -TimeoutSec 10
+    if ($stats.success -ne $true) {
+      throw "telemetry dlq stats query failed. Logs: $logDir"
+    }
+    if ($stats.data.totals.total -lt 1) {
+      throw "telemetry dlq stats total < 1. Logs: $logDir"
+    }
+    $hasInvalid = $false
+    foreach ($x in $stats.data.byReasonCode) {
+      if ($x.reasonCode -eq "invalid_json" -and $x.count -ge 1) { $hasInvalid = $true; break }
+    }
+    if (-not $hasInvalid) {
+      throw "telemetry dlq stats missing invalid_json count. Logs: $logDir"
+    }
   }
 
   Write-Host "E2E smoke test passed." -ForegroundColor Green
