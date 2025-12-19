@@ -34,5 +34,6 @@
   - `received_ts` 作为主时间轴；`event_ts`（若有）作为设备侧事件时间
 
 注意：
-- writer 目前对“坏消息”仅记录日志并跳过（避免阻塞消费）；后续是否引入 writer 侧 DLQ 取决于我们对“写入失败原因追踪”的需求。
+- writer 会将“无法解析 JSON / schema 不匹配 / ClickHouse 写入失败（疑似数据错误）”的消息写入 `telemetry.dlq.v1`，避免坏消息阻塞消费并保留可追溯线索。
+- 对“ClickHouse 不可达/网络超时”等疑似基础设施问题，writer 会重试并在多次失败后中止本批次处理（不提交 offset），等待恢复后重放。
 - schema 当前直接引用 `docs/` 下的 JSON Schema；后续会固化为 `libs/` 的可复用资源包（便于版本化与发布）。

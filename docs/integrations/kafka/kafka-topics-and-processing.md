@@ -8,7 +8,8 @@
   - ingest-service 写入的标准化 `TelemetryEnvelope`
   - 分区键：`device_id`
 - `telemetry.dlq.v1`
-  - 无法解析/鉴权失败/字段非法/写入失败等进入 DLQ（需要可追溯原因）
+  - 坏数据/不可处理消息进入 DLQ（需要可追溯原因）
+  - 生产者示例：`ingest-service`（MQTT 入口解析/校验失败）、`telemetry-writer`（Kafka 入口解析/校验失败、疑似数据错误导致写入失败）
 - `alerts.events.v1`
   - rule-engine-worker 输出的告警事件（触发/更新/恢复/确认）
 - `device.commands.v1`
@@ -44,7 +45,7 @@
 
 进入 `telemetry.dlq.v1` 的消息必须包含：
 
-- `reason_code`（例如 `AUTH_FAILED`、`INVALID_JSON`、`SCHEMA_UNSUPPORTED`、`WRITE_FAILED`）
+- `reason_code`（例如 `invalid_json`、`schema_validation_failed`、`internal_mapping_failed`、`writer_invalid_json`、`writer_schema_validation_failed`、`writer_clickhouse_insert_failed`）
 - `reason_detail`（可选）
 - `received_ts`
 - `raw_payload`（或截断后的 payload）
