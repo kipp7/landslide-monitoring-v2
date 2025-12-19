@@ -7,7 +7,7 @@
 - 每次合并一个 PR 到 `main`，如果它改变了项目阶段/里程碑/下一步，必须更新本页。
 - 本页只记录“当前状态与下一步”，历史细节放到 `docs/incidents/` 或 PR/commit 记录中。
 
-最后更新时间：2025-12-19（阶段 1：writer observability v12）
+最后更新时间：2025-12-19（阶段 1：stations api v13）
 
 ## 1) 当前结论（TL;DR）
 
@@ -30,6 +30,8 @@
   - 修复：API `/data/series` 查询对 ClickHouse 的 `DateTime64` 参数使用 UTC 解析（避免时区/格式导致范围查询无数据或 500）。
   - 修复：ClickHouse 默认使用 named volume（可用 `CH_DATA_DIR` 切回 bind-mount），并在 e2e 冒烟中自动检测/初始化 ClickHouse DDL（缺表时执行 `init-clickhouse.ps1`）。
   - 进展：补齐设备管理端接口的“命令下发”入口 `POST /devices/{deviceId}/commands`（写入 Postgres `device_commands`，返回 queued）。
+  - 进展：补齐站点管理端接口：`/stations` CRUD（Postgres），用于设备绑定站点与运营维护。
+  - 修复：设备更新接口支持清空 `stationId`（原先无法设置为 `null`）。
   - 进展：MQTT revoke 立即生效：EMQX ACL 回调会实时查询 Postgres `devices.status`，`revoked` 设备会被拒绝 publish/subscribe（即使已连接）。
   - 进展：writer 可靠性增强：ClickHouse 写入成功后才提交 Kafka offset；写入失败时退避重试，避免 ClickHouse 故障导致数据丢失/缓冲堆积。
   - 进展：Postgres shadow 落地：telemetry-writer 在写入 ClickHouse 成功后 upsert `device_state`；API `/data/state` 优先读 `device_state`，无记录时回退 ClickHouse。
@@ -60,10 +62,9 @@ M2（阶段 1：设备接入与鉴权）目标：
 
 ## 3) 下一步（Next Actions，按优先级）
 
-1) 合并阶段 1 的设备管理 PR：实现 `/devices`、`/sensors` 等管理端接口（Postgres），作为 MQTT 鉴权/ACL 的数据源
-2) MQTT 鉴权/ACL（阶段 1 关键）：把 EMQX authn/authz 接到后端（或单独 auth-service），并实现 revoke 立即生效（本 PR 提供回调接口）
+1) 单机联调收口：把 `e2e-smoke-test.ps1` 的可选项补齐成“阶段 1 的闭环用例”（鉴权 + revoke + commands），作为后续重构的回归基线
+2) commands 回执闭环：实现 `device.command_acks.v1` 生产/消费与 Postgres 状态回写（queued→sent→acked/failed）
 3) writer 可靠性增强：补充告警/限流/降载策略（基础运行观测/保护已落地，后续补齐告警与容量压测）
-4) Postgres shadow（后续）：为 `/data/state` 引入 `device_state`（避免每次都扫 ClickHouse），并保持与 ClickHouse 可回放一致
 
 ## 4) 关键入口（新 AI 只读这些就能上手）
 

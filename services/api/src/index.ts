@@ -11,6 +11,7 @@ import { registerDataRoutes } from "./routes/data";
 import { registerDeviceRoutes } from "./routes/devices";
 import { registerEmqxRoutes } from "./routes/emqx";
 import { registerSensorRoutes } from "./routes/sensors";
+import { registerStationRoutes } from "./routes/stations";
 
 async function main(): Promise<void> {
   dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
@@ -71,6 +72,7 @@ async function main(): Promise<void> {
     registerDataRoutes(v1, config, ch, pg);
     registerDeviceRoutes(v1, config, pg);
     registerSensorRoutes(v1, config, pg);
+    registerStationRoutes(v1, config, pg);
     done();
   }, { prefix: "/api/v1" });
 
