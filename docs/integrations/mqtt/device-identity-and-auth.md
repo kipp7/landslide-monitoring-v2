@@ -35,6 +35,7 @@
 
 - 服务端数据库只存 `device_secret_hash`（例如 `argon2`/`bcrypt` hash），不存明文 secret
 - EMQX 通过 HTTP Auth 回调到后端鉴权接口（或内置认证插件），校验用户名/密码是否匹配、设备状态是否为 `active`
+  - 当前实现：拒绝 `revoked`；允许 `inactive/active`，并在设备首次成功鉴权连接时将状态从 `inactive` 提升为 `active`（同时更新 `last_seen_at`）。
 
 ## 4. ACL（访问控制）
 
@@ -64,4 +65,3 @@
 - v1 只做“吊销”（server 端标记 `revoked`，拒绝连接）
 - v1.1 做“轮换”：
   - 后端生成新 secret，通过命令下发（加密包更好），设备写入双槽并回执确认
-
