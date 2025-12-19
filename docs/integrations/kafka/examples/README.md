@@ -12,4 +12,5 @@
 - `alerts-events.v1.json`
 - `device-commands.v1.json`
 - `device-command-acks.v1.json`
-
+- `device-command-events.v1.json`
+- `presence-events.v1.json`

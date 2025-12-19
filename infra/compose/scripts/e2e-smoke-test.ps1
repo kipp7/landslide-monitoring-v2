@@ -15,6 +15,7 @@ param(
   [switch]$TestAlerts,
   [switch]$TestAlertNotifications,
   [switch]$TestTelemetryDlq,
+  [switch]$TestPresence,
   [switch]$TestRevoke,
   [switch]$TestFirmwareSimulator,
   [bool]$CollectEvidenceOnFailure = $true,
@@ -183,6 +184,8 @@ $ruleOut = Join-Path $logDir "rule-engine-worker.stdout.log"
 $ruleErr = Join-Path $logDir "rule-engine-worker.stderr.log"
 $dlqOut = Join-Path $logDir "telemetry-dlq-recorder.stdout.log"
 $dlqErr = Join-Path $logDir "telemetry-dlq-recorder.stderr.log"
+$presenceOut = Join-Path $logDir "presence-recorder.stdout.log"
+$presenceErr = Join-Path $logDir "presence-recorder.stderr.log"
 $waitCmdOut = Join-Path $logDir "wait-command.stdout.log"
 $waitCmdErr = Join-Path $logDir "wait-command.stderr.log"
 $publishLog = Join-Path $logDir "publish-telemetry.log"
@@ -211,6 +214,7 @@ $notifyProc = $null
 $alertNotifyProc = $null
 $ruleProc = $null
 $dlqProc = $null
+$presenceProc = $null
 $firmwareProc = $null
 
 try {
@@ -223,6 +227,7 @@ try {
     $CreateDevice = $true
     $TestCommands = $true
     $TestTelemetryDlq = $true
+    $TestPresence = $true
     $TestRevoke = $true
   }
 
@@ -237,6 +242,7 @@ try {
     $TestTelemetryDlq = $true
     $TestAlerts = $true
     $TestAlertNotifications = $true
+    $TestPresence = $true
     $TestRevoke = $true
   }
 
@@ -248,10 +254,15 @@ try {
     $UseMqttAuth = $true
     $CreateDevice = $true
     $TestFirmwareSimulator = $true
+    $TestPresence = $true
   }
 
   if ($TestAlertNotifications -and -not $TestAlerts) {
     throw "TestAlertNotifications requires -TestAlerts (needs an alert trigger to verify notifications)."
+  }
+
+  if ($TestPresence -and (-not $UseMqttAuth -or -not $CreateDevice)) {
+    throw "TestPresence requires -UseMqttAuth and -CreateDevice (needs device_secret)."
   }
 
   if ($ConfigureEmqx) {
@@ -280,11 +291,13 @@ try {
       "MQTT_USERNAME=$(if ($UseMqttAuth) { 'ingest-service' } else { '' })",
       "MQTT_PASSWORD=$(if ($UseMqttAuth) { $internalPassword } else { '' })",
       "MQTT_TOPIC_TELEMETRY=telemetry/+",
+      "MQTT_TOPIC_PRESENCE=presence/+",
       "",
       "KAFKA_BROKERS=$kafkaBrokers",
       "KAFKA_CLIENT_ID=ingest-service",
       "KAFKA_TOPIC_TELEMETRY_RAW=telemetry.raw.v1",
-      "KAFKA_TOPIC_TELEMETRY_DLQ=telemetry.dlq.v1"
+      "KAFKA_TOPIC_TELEMETRY_DLQ=telemetry.dlq.v1",
+      "KAFKA_TOPIC_PRESENCE_EVENTS=presence.events.v1"
     ) -force:$forceEnv
 
     Write-EnvIfMissingOrForced "services/telemetry-writer/.env" @(
@@ -463,6 +476,22 @@ try {
       "POSTGRES_POOL_MAX=5"
     ) -force:$forceEnv
 
+    Write-EnvIfMissingOrForced "services/presence-recorder/.env" @(
+      "SERVICE_NAME=presence-recorder",
+      "",
+      "KAFKA_BROKERS=$kafkaBrokers",
+      "KAFKA_CLIENT_ID=presence-recorder",
+      "KAFKA_GROUP_ID=presence-recorder.v1",
+      "KAFKA_TOPIC_PRESENCE_EVENTS=presence.events.v1",
+      "",
+      "POSTGRES_HOST=$pgHost",
+      "POSTGRES_PORT=$pgPort",
+      "POSTGRES_USER=$pgUser",
+      "POSTGRES_PASSWORD=$pgPassword",
+      "POSTGRES_DATABASE=$pgDb",
+      "POSTGRES_POOL_MAX=5"
+    ) -force:$forceEnv
+
     Write-EnvIfMissingOrForced "services/api/.env" @(
       "SERVICE_NAME=api-service",
       "API_HOST=0.0.0.0",
@@ -531,7 +560,7 @@ try {
   Write-Host "Ensuring PostgreSQL schema is initialized..." -ForegroundColor Cyan
   $pgHasSchema = $false
   try {
-    $out = (& docker compose -f $ComposeFile --env-file $EnvFile exec -T postgres psql -U $pgUser -d $pgDb -At -c "SELECT (to_regclass('public.devices') IS NOT NULL) AND (to_regclass('public.telemetry_dlq_messages') IS NOT NULL);" 2>$null | Out-String).Trim()
+    $out = (& docker compose -f $ComposeFile --env-file $EnvFile exec -T postgres psql -U $pgUser -d $pgDb -At -c "SELECT (to_regclass('public.devices') IS NOT NULL) AND (to_regclass('public.telemetry_dlq_messages') IS NOT NULL) AND (to_regclass('public.device_presence') IS NOT NULL);" 2>$null | Out-String).Trim()
     if ($out.ToLowerInvariant() -eq "t") { $pgHasSchema = $true }
   } catch {
     # ignore and fall back to init script
@@ -590,6 +619,9 @@ try {
   }
   $ruleProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/rule-engine-worker" -PassThru -RedirectStandardOutput $ruleOut -RedirectStandardError $ruleErr
   $dlqProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/telemetry-dlq-recorder" -PassThru -RedirectStandardOutput $dlqOut -RedirectStandardError $dlqErr
+  if ($TestPresence) {
+    $presenceProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/presence-recorder" -PassThru -RedirectStandardOutput $presenceOut -RedirectStandardError $presenceErr
+  }
 
   Write-Host "Waiting for ingest MQTT subscription..." -ForegroundColor Cyan
   if (-not (Wait-ForLogMatch $ingestOut "mqtt subscribed" 45)) {
@@ -637,6 +669,14 @@ try {
   }
   Write-Host "telemetry-dlq-recorder is running." -ForegroundColor Green
 
+  if ($presenceProc) {
+    Write-Host "Waiting for presence-recorder startup..." -ForegroundColor Cyan
+    if (-not (Wait-ForLogMatch $presenceOut "presence-recorder started" 45)) {
+      throw "presence-recorder did not start within 45s. Logs: $logDir"
+    }
+    Write-Host "presence-recorder is running." -ForegroundColor Green
+  }
+
   Write-Host "Waiting for rule-engine-worker startup..." -ForegroundColor Cyan
   if (-not (Wait-ForLogMatch $ruleOut "rule-engine-worker started" 45)) {
     throw "rule-engine-worker did not start within 45s. Logs: $logDir"
@@ -663,6 +703,40 @@ try {
       throw "device creation failed. Ensure PostgreSQL is initialized (infra/compose/scripts/init-postgres.ps1). Logs: $logDir"
     }
     Write-Host "Device created: $DeviceId (secret not printed)" -ForegroundColor Green
+  }
+
+  if ($TestPresence) {
+    Write-Host "Publishing presence (online) to MQTT..." -ForegroundColor Cyan
+    Add-Content -Encoding UTF8 -LiteralPath $publishLog -Value ("-- publish presence (online) --`n")
+    $pExit = Run-Node @(
+      "scripts/dev/publish-presence.js",
+      "--mqtt", $mqttUrl,
+      "--device", $DeviceId,
+      "--status", "online",
+      "--username", $DeviceId,
+      "--password", $deviceSecret
+    ) $publishLog
+    if ($pExit -ne 0) {
+      throw "publish-presence.js failed (exit=$pExit). Logs: $logDir"
+    }
+
+    Write-Host "Waiting for presence to be recorded in PostgreSQL..." -ForegroundColor Cyan
+    $deadline = (Get-Date).AddSeconds(45)
+    $recorded = $false
+    while ((Get-Date) -lt $deadline) {
+      try {
+        $count = docker compose -f $ComposeFile --env-file $EnvFile exec -T postgres psql -U $pgUser -d $pgDb -At -c "SELECT count(*) FROM device_presence WHERE device_id = '$DeviceId'::uuid AND status='online';"
+        Assert-LastExitCode "psql failed to query device_presence"
+        if ([int]$count -ge 1) { $recorded = $true; break }
+      } catch {
+        # ignore transient
+      }
+      Start-Sleep -Seconds 2
+    }
+    if (-not $recorded) {
+      throw "presence was not recorded within 45s. Logs: $logDir"
+    }
+    Write-Host "Presence recorded." -ForegroundColor Green
   }
 
   if ($TestFirmwareSimulator) {
@@ -1353,7 +1427,7 @@ VALUES ('$testUserId', '$DeviceId', 'low', TRUE, TRUE);
   exit 1
 } finally {
   Write-Host "Stopping services..." -ForegroundColor Cyan
-  foreach ($p in @($firmwareProc, $ingestProc, $writerProc, $apiProc, $cmdProc, $ackProc, $timeoutProc, $eventsProc, $notifyProc, $alertNotifyProc, $ruleProc, $dlqProc)) {
+  foreach ($p in @($firmwareProc, $presenceProc, $ingestProc, $writerProc, $apiProc, $cmdProc, $ackProc, $timeoutProc, $eventsProc, $notifyProc, $alertNotifyProc, $ruleProc, $dlqProc)) {
     if ($null -eq $p) { continue }
     try {
       if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }

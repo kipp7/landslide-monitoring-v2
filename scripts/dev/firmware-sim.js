@@ -74,6 +74,7 @@ const deviceId = requireArg("device");
 const username = getArg("username", process.env.MQTT_USERNAME);
 const password = getArg("password", process.env.MQTT_PASSWORD);
 const telemetryTopic = getArg("telemetryTopic", `telemetry/${deviceId}`);
+const presenceTopic = getArg("presenceTopic", `presence/${deviceId}`);
 const cmdTopic = getArg("cmdTopic", `cmd/${deviceId}`);
 const ackTopic = getArg("ackTopic", `cmd_ack/${deviceId}`);
 const telemetryIntervalMs = Number(getArg("telemetryIntervalMs", "2000"));
@@ -81,6 +82,7 @@ const stateFile = getArg("stateFile", defaultStateFile(deviceId));
 
 const schemaDir = path.resolve(process.cwd(), "docs", "integrations", "mqtt", "schemas");
 const telemetrySchemaPath = path.join(schemaDir, "telemetry-envelope.v1.schema.json");
+const presenceSchemaPath = path.join(schemaDir, "presence-event.v1.schema.json");
 const cmdSchemaPath = path.join(schemaDir, "device-command.v1.schema.json");
 const ackSchemaPath = path.join(schemaDir, "device-command-ack.v1.schema.json");
 
@@ -90,9 +92,10 @@ let telemetryTimer = null;
 
 async function loadValidators() {
   const telemetryV = await loadAndCompileSchema(telemetrySchemaPath);
+  const presenceV = await loadAndCompileSchema(presenceSchemaPath);
   const cmdV = await loadAndCompileSchema(cmdSchemaPath);
   const ackV = await loadAndCompileSchema(ackSchemaPath);
-  return { telemetryV, cmdV, ackV };
+  return { telemetryV, presenceV, cmdV, ackV };
 }
 
 async function loadState() {
@@ -144,6 +147,29 @@ function buildAck(commandId, status, result) {
     status,
     ...(result ? { result } : {})
   };
+}
+
+function buildPresence(status, meta) {
+  return {
+    schema_version: 1,
+    device_id: deviceId,
+    event_ts: nowIso(),
+    status,
+    ...(meta ? { meta } : {})
+  };
+}
+
+async function publishPresence(validators, status, meta) {
+  if (!client || !client.connected) return;
+  const p = buildPresence(status, meta);
+  if (!validators.presenceV.validate(p)) {
+    console.error("presence schema validation failed:", JSON.stringify(validators.presenceV.errors));
+    return;
+  }
+  client.publish(presenceTopic, JSON.stringify(p), { qos: 1 }, (err) => {
+    if (err) console.error("presence publish failed:", toErrorString(err));
+    else console.log(`presence published: status=${status}`);
+  });
 }
 
 async function handleCommand(validators, state, payloadBuf) {
@@ -300,6 +326,8 @@ async function run() {
       }
     });
 
+    await publishPresence(validators, "online", { fw: "firmware-sim", reason: "connect" });
+
     await new Promise((resolve) => {
       client.subscribe(cmdTopic, { qos: 1 }, (err) => {
         if (err) {
@@ -329,6 +357,8 @@ async function run() {
     });
 
     try {
+      // Best-effort: if we can still publish before disconnect, send offline.
+      await publishPresence(validators, "offline", { fw: "firmware-sim", reason: "disconnect" });
       if (telemetryTimer) clearInterval(telemetryTimer);
       telemetryTimer = null;
       client.removeAllListeners();
@@ -355,4 +385,3 @@ run().catch((err) => {
   console.error("firmware-sim fatal:", toErrorString(err));
   process.exitCode = 1;
 });
-
