@@ -216,6 +216,12 @@ try {
       "CLICKHOUSE_DATABASE=$chDb",
       "CLICKHOUSE_TABLE=telemetry_raw",
       "",
+      "POSTGRES_HOST=$pgHost",
+      "POSTGRES_PORT=$pgPort",
+      "POSTGRES_USER=$pgUser",
+      "POSTGRES_PASSWORD=$pgPassword",
+      "POSTGRES_DATABASE=$pgDb",
+      "",
       "BATCH_MAX_ROWS=2000",
       "BATCH_FLUSH_INTERVAL_MS=1000"
     ) -force:$ForceWriteServiceEnv

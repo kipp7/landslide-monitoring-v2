@@ -3,6 +3,8 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AppConfig } from "../config";
 import { fail, ok } from "../http";
+import type { PgPool } from "../postgres";
+import { queryOne, withPgClient } from "../postgres";
 
 const deviceIdSchema = z.string().uuid();
 
@@ -61,7 +63,8 @@ function toClickhouseDateTime64Utc(d: Date): string {
 export function registerDataRoutes(
   app: FastifyInstance,
   config: AppConfig,
-  ch: ClickHouseClient
+  ch: ClickHouseClient,
+  pg: PgPool | null
 ): void {
   app.get("/data/state/:deviceId", async (request, reply) => {
     const traceId = request.traceId;
@@ -71,6 +74,26 @@ export function registerDataRoutes(
       return;
     }
     const deviceId = parseId.data;
+
+    if (pg) {
+      const row = await withPgClient(pg, async (client) =>
+        queryOne<{ state: unknown; updated_at: string }>(
+          client,
+          `
+            SELECT
+              state,
+              to_char(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS updated_at
+            FROM device_state
+            WHERE device_id = $1
+          `,
+          [deviceId]
+        )
+      );
+      if (row) {
+        ok(reply, { deviceId, updatedAt: row.updated_at, state: row.state }, traceId);
+        return;
+      }
+    }
 
     const sql = `
       SELECT

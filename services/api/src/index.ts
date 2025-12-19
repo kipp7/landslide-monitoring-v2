@@ -68,7 +68,7 @@ async function main(): Promise<void> {
   registerEmqxRoutes(app, config, pg);
 
   app.register((v1, _opts, done) => {
-    registerDataRoutes(v1, config, ch);
+    registerDataRoutes(v1, config, ch, pg);
     registerDeviceRoutes(v1, config, pg);
     registerSensorRoutes(v1, config, pg);
     done();
