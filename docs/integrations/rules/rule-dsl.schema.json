@@ -119,11 +119,17 @@
       "allOf": [
         {
           "if": { "properties": { "type": { "const": "duration" } } },
-          "then": { "required": ["minutes"] }
+          "then": {
+            "required": ["minutes"],
+            "properties": { "minutes": { "type": "integer", "minimum": 1 } }
+          }
         },
         {
           "if": { "properties": { "type": { "const": "points" } } },
-          "then": { "required": ["points"] }
+          "then": {
+            "required": ["points"],
+            "properties": { "points": { "type": "integer", "minimum": 1 } }
+          }
         }
       ]
     },
@@ -176,7 +182,12 @@
       "properties": {
         "operator": { "$ref": "#/$defs/Operator" },
         "value": {
-          "type": ["number", "string", "boolean", "null"]
+          "oneOf": [
+            { "type": "number" },
+            { "type": "string" },
+            { "type": "boolean" },
+            { "type": "null" }
+          ]
         },
         "min": { "type": "number" },
         "max": { "type": "number" }
@@ -184,7 +195,10 @@
       "allOf": [
         {
           "if": { "properties": { "operator": { "const": "between" } } },
-          "then": { "required": ["min", "max"] }
+          "then": {
+            "required": ["min", "max"],
+            "properties": { "min": { "type": "number" }, "max": { "type": "number" } }
+          }
         }
       ]
     },
@@ -197,7 +211,14 @@
           "required": ["sensorKey"],
           "properties": {
             "operator": { "$ref": "#/$defs/Operator" },
-            "value": { "type": ["number", "string", "boolean", "null"] },
+            "value": {
+              "oneOf": [
+                { "type": "number" },
+                { "type": "string" },
+                { "type": "boolean" },
+                { "type": "null" }
+              ]
+            },
             "min": { "type": "number" },
             "max": { "type": "number" },
             "sensorKey": { "$ref": "#/$defs/SensorKey" }
@@ -224,7 +245,14 @@
           "required": ["metric"],
           "properties": {
             "operator": { "$ref": "#/$defs/Operator" },
-            "value": { "type": ["number", "string", "boolean", "null"] },
+            "value": {
+              "oneOf": [
+                { "type": "number" },
+                { "type": "string" },
+                { "type": "boolean" },
+                { "type": "null" }
+              ]
+            },
             "min": { "type": "number" },
             "max": { "type": "number" },
             "metric": { "$ref": "#/$defs/Metric" }
@@ -251,7 +279,14 @@
           "required": ["algo"],
           "properties": {
             "operator": { "$ref": "#/$defs/Operator" },
-            "value": { "type": ["number", "string", "boolean", "null"] },
+            "value": {
+              "oneOf": [
+                { "type": "number" },
+                { "type": "string" },
+                { "type": "boolean" },
+                { "type": "null" }
+              ]
+            },
             "min": { "type": "number" },
             "max": { "type": "number" },
             "algo": { "$ref": "#/$defs/Algo" }

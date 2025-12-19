@@ -55,7 +55,8 @@ const publishVersionRequestSchema = z
   .strict();
 
 function repoRootFromHere(): string {
-  return path.resolve(__dirname, "..", "..", "..");
+  // Note: compiled output is under services/api/dist/routes, so we need 4 levels to reach repo root.
+  return path.resolve(__dirname, "..", "..", "..", "..");
 }
 
 function readScopeFromUnknown(scope: unknown):
@@ -366,7 +367,8 @@ export function registerAlertRuleRoutes(app: FastifyInstance, config: AppConfig,
       return r.rule_id;
     });
 
-    ok(reply, { ruleId: inserted, currentVersion: 1 }, traceId);
+    // Align with docs/integrations/api/06-alerts.md: create returns ruleVersion=1
+    ok(reply, { ruleId: inserted, ruleVersion: 1 }, traceId);
   });
 
   app.put("/alert-rules/:ruleId", async (request, reply) => {
@@ -396,15 +398,18 @@ export function registerAlertRuleRoutes(app: FastifyInstance, config: AppConfig,
     }
 
     const updated = await withPgClient(pg, async (client) => {
-      const res = await client.query(
+      const res = await client.query<{ updated_at: string }>(
         `
           UPDATE alert_rules
           SET is_active = $2, updated_at = NOW()
           WHERE rule_id = $1
+          RETURNING to_char(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS updated_at
         `,
         [ruleId, isActive]
       );
-      return (res.rowCount ?? 0) > 0;
+      const row = res.rows[0];
+      if (!row) return null;
+      return { updatedAt: row.updated_at };
     });
 
     if (!updated) {
@@ -412,7 +417,7 @@ export function registerAlertRuleRoutes(app: FastifyInstance, config: AppConfig,
       return;
     }
 
-    ok(reply, { ruleId, isActive }, traceId);
+    ok(reply, { ruleId, isActive, updatedAt: updated.updatedAt }, traceId);
   });
 
   app.get("/alert-rules/:ruleId/versions", async (request, reply) => {
@@ -470,12 +475,13 @@ export function registerAlertRuleRoutes(app: FastifyInstance, config: AppConfig,
       reply,
       {
         ruleId,
-        versions: rows.map((v) => ({
+        list: rows.map((v) => ({
           version: v.rule_version,
           dslVersion: v.dsl_version,
           enabled: v.enabled,
           severity: v.severity,
-          createdAt: v.created_at
+          createdAt: v.created_at,
+          createdBy: ""
         }))
       },
       traceId
@@ -606,6 +612,7 @@ export function registerAlertRuleRoutes(app: FastifyInstance, config: AppConfig,
       return;
     }
 
-    ok(reply, { ruleId, version: inserted }, traceId);
+    // Align with docs/integrations/api/06-alerts.md: publish returns ruleVersion=N
+    ok(reply, { ruleId, ruleVersion: inserted }, traceId);
   });
 }

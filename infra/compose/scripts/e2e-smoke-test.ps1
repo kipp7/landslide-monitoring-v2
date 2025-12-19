@@ -245,6 +245,9 @@ try {
       throw "MQTT auth enabled but MQTT_INTERNAL_PASSWORD is missing in $apiEnvPath. Run this script with -ConfigureEmqx or run: infra/compose/scripts/configure-emqx-http-auth.ps1 -WriteServiceEnv -WriteIngestEnv"
     }
 
+    # Preset regressions should be deterministic: env files are ignored by git and safe to rewrite.
+    $forceEnv = $ForceWriteServiceEnv -or $Stage1Regression -or $Stage2Regression
+
     Write-EnvIfMissingOrForced "services/ingest/.env" @(
       "SERVICE_NAME=ingest-service",
       "",
@@ -257,7 +260,7 @@ try {
       "KAFKA_CLIENT_ID=ingest-service",
       "KAFKA_TOPIC_TELEMETRY_RAW=telemetry.raw.v1",
       "KAFKA_TOPIC_TELEMETRY_DLQ=telemetry.dlq.v1"
-    ) -force:$ForceWriteServiceEnv
+    ) -force:$forceEnv
 
     Write-EnvIfMissingOrForced "services/telemetry-writer/.env" @(
       "SERVICE_NAME=telemetry-writer",
@@ -281,7 +284,7 @@ try {
       "",
       "BATCH_MAX_ROWS=2000",
       "BATCH_FLUSH_INTERVAL_MS=1000"
-    ) -force:$ForceWriteServiceEnv
+    ) -force:$forceEnv
 
     Write-EnvIfMissingOrForced "services/command-dispatcher/.env" @(
       "SERVICE_NAME=command-dispatcher",
@@ -301,7 +304,7 @@ try {
       "POSTGRES_USER=$pgUser",
       "POSTGRES_PASSWORD=$pgPassword",
       "POSTGRES_DATABASE=$pgDb"
-    ) -force:$ForceWriteServiceEnv
+    ) -force:$forceEnv
 
     Write-EnvIfMissingOrForced "services/command-ack-receiver/.env" @(
       "SERVICE_NAME=command-ack-receiver",
@@ -323,7 +326,7 @@ try {
       "POSTGRES_PASSWORD=$pgPassword",
       "POSTGRES_DATABASE=$pgDb",
       "POSTGRES_POOL_MAX=5"
-    ) -force:$ForceWriteServiceEnv
+    ) -force:$forceEnv
 
     $ackTimeoutSeconds = if ($TestCommandTimeout -or $Stage1Regression -or $Stage2Regression) { "10" } else { "60" }
     $scanIntervalMs = if ($TestCommandTimeout -or $Stage1Regression -or $Stage2Regression) { "1000" } else { "5000" }
@@ -345,7 +348,7 @@ try {
       "COMMAND_ACK_TIMEOUT_SECONDS=$ackTimeoutSeconds",
       "SCAN_INTERVAL_MS=$scanIntervalMs",
       "SCAN_LIMIT=200"
-    ) -force:$ForceWriteServiceEnv
+    ) -force:$forceEnv
 
     Write-EnvIfMissingOrForced "services/command-events-recorder/.env" @(
       "SERVICE_NAME=command-events-recorder",
@@ -361,7 +364,7 @@ try {
       "POSTGRES_PASSWORD=$pgPassword",
       "POSTGRES_DATABASE=$pgDb",
       "POSTGRES_POOL_MAX=5"
-    ) -force:$ForceWriteServiceEnv
+    ) -force:$forceEnv
 
     Write-EnvIfMissingOrForced "services/command-notify-worker/.env" @(
       "SERVICE_NAME=command-notify-worker",
@@ -379,7 +382,7 @@ try {
       "POSTGRES_POOL_MAX=5",
       "",
       "NOTIFY_TYPE=app"
-    ) -force:$ForceWriteServiceEnv
+    ) -force:$forceEnv
 
     Write-EnvIfMissingOrForced "services/rule-engine-worker/.env" @(
       "SERVICE_NAME=rule-engine-worker",
@@ -398,7 +401,7 @@ try {
       "",
       "RULES_REFRESH_MS=5000",
       "MAX_POINTS_PER_RULE=600"
-    ) -force:$ForceWriteServiceEnv
+    ) -force:$forceEnv
 
     Write-EnvIfMissingOrForced "services/telemetry-dlq-recorder/.env" @(
       "SERVICE_NAME=telemetry-dlq-recorder",
@@ -414,7 +417,7 @@ try {
       "POSTGRES_PASSWORD=$pgPassword",
       "POSTGRES_DATABASE=$pgDb",
       "POSTGRES_POOL_MAX=5"
-    ) -force:$ForceWriteServiceEnv
+    ) -force:$forceEnv
 
     Write-EnvIfMissingOrForced "services/api/.env" @(
       "SERVICE_NAME=api-service",
@@ -445,7 +448,7 @@ try {
       "",
       "API_MAX_SERIES_RANGE_HOURS=168",
       "API_MAX_POINTS=100000"
-    ) -force:$ForceWriteServiceEnv
+    ) -force:$forceEnv
   }
 
   if (-not $SkipBuild) {
@@ -495,18 +498,15 @@ try {
     Assert-LastExitCode "init-postgres.ps1 failed"
   }
 
+  Write-Host "Ensuring Kafka topics exist..." -ForegroundColor Cyan
+  powershell -NoProfile -ExecutionPolicy Bypass -File infra/compose/scripts/create-kafka-topics.ps1 -EnvFile $EnvFile -ComposeFile $ComposeFile
+  Assert-LastExitCode "create-kafka-topics.ps1 failed"
+
   Write-Host "Starting services..." -ForegroundColor Cyan
 
-  $ingestProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/ingest" -PassThru -RedirectStandardOutput $ingestOut -RedirectStandardError $ingestErr
-  $writerProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/telemetry-writer" -PassThru -RedirectStandardOutput $writerOut -RedirectStandardError $writerErr
+  # Start API first so EMQX HTTP authn/authz webhooks are reachable before MQTT clients connect.
   $apiProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/api" -PassThru -RedirectStandardOutput $apiOut -RedirectStandardError $apiErr
-  $cmdProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/command-dispatcher" -PassThru -RedirectStandardOutput $cmdOut -RedirectStandardError $cmdErr
-  $ackProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/command-ack-receiver" -PassThru -RedirectStandardOutput $ackOut -RedirectStandardError $ackErr
-  $timeoutProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/command-timeout-worker" -PassThru -RedirectStandardOutput $timeoutOut -RedirectStandardError $timeoutErr
-  $eventsProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/command-events-recorder" -PassThru -RedirectStandardOutput $eventsOut -RedirectStandardError $eventsErr
-  $notifyProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/command-notify-worker" -PassThru -RedirectStandardOutput $notifyOut -RedirectStandardError $notifyErr
-  $ruleProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/rule-engine-worker" -PassThru -RedirectStandardOutput $ruleOut -RedirectStandardError $ruleErr
-  $dlqProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/telemetry-dlq-recorder" -PassThru -RedirectStandardOutput $dlqOut -RedirectStandardError $dlqErr
+  $writerProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/telemetry-writer" -PassThru -RedirectStandardOutput $writerOut -RedirectStandardError $writerErr
 
   Write-Host "Waiting for API /health..." -ForegroundColor Cyan
   $maxWaitSeconds = 60
@@ -524,6 +524,15 @@ try {
     Start-Sleep -Seconds 2
   }
   Write-Host "API is healthy." -ForegroundColor Green
+
+  $ingestProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/ingest" -PassThru -RedirectStandardOutput $ingestOut -RedirectStandardError $ingestErr
+  $cmdProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/command-dispatcher" -PassThru -RedirectStandardOutput $cmdOut -RedirectStandardError $cmdErr
+  $ackProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/command-ack-receiver" -PassThru -RedirectStandardOutput $ackOut -RedirectStandardError $ackErr
+  $timeoutProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/command-timeout-worker" -PassThru -RedirectStandardOutput $timeoutOut -RedirectStandardError $timeoutErr
+  $eventsProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/command-events-recorder" -PassThru -RedirectStandardOutput $eventsOut -RedirectStandardError $eventsErr
+  $notifyProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/command-notify-worker" -PassThru -RedirectStandardOutput $notifyOut -RedirectStandardError $notifyErr
+  $ruleProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/rule-engine-worker" -PassThru -RedirectStandardOutput $ruleOut -RedirectStandardError $ruleErr
+  $dlqProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/telemetry-dlq-recorder" -PassThru -RedirectStandardOutput $dlqOut -RedirectStandardError $dlqErr
 
   Write-Host "Waiting for ingest MQTT subscription..." -ForegroundColor Cyan
   if (-not (Wait-ForLogMatch $ingestOut "mqtt subscribed" 45)) {
@@ -779,13 +788,31 @@ try {
         try { Stop-Process -Id $waitProc.Id -Force } catch { }
         throw "Timed out waiting for MQTT command delivery. Logs: $logDir"
       }
-      if ($waitProc.ExitCode -ne 0) {
-        throw "Device did not receive command (wait-for-command.js exit=$($waitProc.ExitCode)). Logs: $logDir"
+      try { $waitProc.Refresh() } catch { }
+      $exitCode = $null
+      try { $exitCode = $waitProc.ExitCode } catch { }
+
+      if ($null -eq $exitCode -or $exitCode -ne 0) {
+        $received = $false
+        try {
+          if (Test-Path $waitCmdOut) {
+            $received = Select-String -Path $waitCmdOut -Pattern "^received:" -Quiet
+          }
+        } catch {
+          # ignore
+        }
+
+        if (-not $received) {
+          $codeText = $(if ($null -eq $exitCode) { "unknown" } else { [string]$exitCode })
+          throw "Device did not receive command (wait-for-command.js exit=$codeText). Logs: $logDir"
+        }
       }
 
       if ($mode -eq "acked" -or $mode -eq "failed") {
         $statusArg = $(if ($mode -eq "acked") { "acked" } else { "failed" })
-        $resultArg = $(if ($mode -eq "failed") { '{"error":"simulated_failure"}' } else { '' })
+        # NOTE: On Windows/PowerShell, passing raw JSON with quotes to native executables can lose quotes due to
+        # command line escaping rules. Keep the JSON valid by escaping quotes.
+        $resultArg = $(if ($mode -eq "failed") { '{\"error\":\"simulated_failure\"}' } else { '' })
 
         Write-Host "Publishing command ack from device (status=$statusArg)..." -ForegroundColor Cyan
         Add-Content -Encoding UTF8 -LiteralPath $publishLog -Value ("-- publish command ack (" + $statusArg + ") --`n")
@@ -992,12 +1019,12 @@ try {
       }
       window = @{ type = "points"; points = 1 }
       cooldown = @{ minutes = 0 }
-      actions = @(@{ type = "emit_alert"; titleTemplate = "位移阈值触发"; messageTemplate = "device={{deviceId}} value={{value}}" })
+      actions = @(@{ type = "emit_alert"; titleTemplate = "smoke threshold"; messageTemplate = "device={{deviceId}} value={{value}}" })
     }
 
     $ruleBody = @{
       rule = @{
-        ruleName = "位移阈值触发（smoke）"
+        ruleName = "smoke threshold"
         description = "smoke test rule"
         scope = @{ type = "device"; deviceId = $DeviceId }
         isActive = $true

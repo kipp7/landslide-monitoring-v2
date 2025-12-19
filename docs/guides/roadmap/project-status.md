@@ -7,7 +7,7 @@
 - 每次合并一个 PR 到 `main`，如果它改变了项目阶段/里程碑/下一步，必须更新本页。
 - 本页只记录“当前状态与下一步”，历史细节放到 `docs/incidents/` 或 PR/commit 记录中。
 
-最后更新时间：2025-12-19（阶段 3 kickoff：复杂规则 + 回放/回测）
+最后更新时间：2025-12-20（阶段 2 回归已复验；阶段 3 Next Actions 不变）
 
 ## 1) 当前结论（TL;DR）
 
@@ -50,6 +50,7 @@
   - 进展：新增 `rule-engine-worker`（消费 `telemetry.raw.v1`，按规则 DSL v1（最小子集）评估并写入 `alert_events`）。
   - 进展：补齐告警 API（`/alerts`、`/alerts/{alertId}/events`、`/alerts/{alertId}/ack|resolve`、`/alert-rules*`），对齐 `docs/integrations/api/06-alerts.md`。
   - 进展：e2e 冒烟新增 `-Stage2Regression` 预置模式：阶段 1 回归基线 + alerts（创建规则 → 触发 → 查询事件流 → ACK → RESOLVE），并自动留证。
+  - 2025-12-20：修复并稳定化 Stage2Regression（Ajv strict schema、commands/alerts 竞态与脚本幂等/可复现性），已本地复跑验证通过。
 - 阶段 3 进行中：复杂规则与 AI 插件（聚合/趋势/缺失策略/回放回测/可解释字段），在阶段 2 的可告警闭环之上持续迭代。
 
 ## 2) 当前阶段与里程碑
