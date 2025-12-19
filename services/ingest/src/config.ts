@@ -17,6 +17,9 @@ const configSchema = z
     mqttPassword: optionalNonEmptyString(),
     mqttTopicTelemetry: z.string().default("telemetry/+"),
 
+    messageMaxBytes: z.coerce.number().int().positive().max(10_000_000).default(256 * 1024),
+    metricsMaxKeys: z.coerce.number().int().positive().max(100_000).default(500),
+
     kafkaBrokers: z
       .string()
       .min(1)
@@ -45,6 +48,8 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
     mqttUsername: env.MQTT_USERNAME,
     mqttPassword: env.MQTT_PASSWORD,
     mqttTopicTelemetry: env.MQTT_TOPIC_TELEMETRY,
+    messageMaxBytes: env.MESSAGE_MAX_BYTES,
+    metricsMaxKeys: env.METRICS_MAX_KEYS,
     kafkaBrokers: env.KAFKA_BROKERS,
     kafkaClientId: env.KAFKA_CLIENT_ID,
     kafkaTopicTelemetryRaw: env.KAFKA_TOPIC_TELEMETRY_RAW,
