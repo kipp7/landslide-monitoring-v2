@@ -35,7 +35,12 @@ const configSchema = z.object({
   postgresPoolMax: z.coerce.number().int().positive().default(5),
 
   batchMaxRows: z.coerce.number().int().positive().default(2000),
+  batchMaxMessages: z.coerce.number().int().positive().default(500),
   batchFlushIntervalMs: z.coerce.number().int().positive().default(1000),
+
+  messageMaxBytes: z.coerce.number().int().positive().max(10_000_000).default(256 * 1024),
+  dlqRawPayloadMaxBytes: z.coerce.number().int().positive().max(10_000_000).default(64 * 1024),
+  statsLogIntervalMs: z.coerce.number().int().positive().max(600_000).default(30_000),
 
   clickhouseInsertMaxRetries: z.coerce.number().int().positive().max(30).default(10),
   clickhouseInsertBackoffMs: z.coerce.number().int().positive().max(60000).default(1000),
@@ -69,7 +74,12 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
     postgresPoolMax: env.POSTGRES_POOL_MAX,
 
     batchMaxRows: env.BATCH_MAX_ROWS,
+    batchMaxMessages: env.BATCH_MAX_MESSAGES,
     batchFlushIntervalMs: env.BATCH_FLUSH_INTERVAL_MS,
+
+    messageMaxBytes: env.MESSAGE_MAX_BYTES,
+    dlqRawPayloadMaxBytes: env.DLQ_RAW_PAYLOAD_MAX_BYTES,
+    statsLogIntervalMs: env.STATS_LOG_INTERVAL_MS,
 
     clickhouseInsertMaxRetries: env.CLICKHOUSE_INSERT_MAX_RETRIES,
     clickhouseInsertBackoffMs: env.CLICKHOUSE_INSERT_BACKOFF_MS,
