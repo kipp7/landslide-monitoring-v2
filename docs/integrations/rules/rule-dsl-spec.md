@@ -196,7 +196,7 @@ agg 支持（v1 建议实现最小集）：
 - `last`（窗口最后一个值）
 - `min` / `max` / `avg`
 - `delta`（last - first）
-- `slope`（简单线性趋势斜率，按分钟/小时归一化）
+- `slope`（简单线性趋势斜率；v1 约定单位为“每分钟变化量”，即 (last-first)/Δt(min)）
 
 说明：
 - `metric.window` 可省略，默认使用规则 `window`
