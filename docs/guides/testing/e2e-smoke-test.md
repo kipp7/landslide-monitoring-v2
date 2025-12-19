@@ -38,6 +38,9 @@
 
 - `powershell -NoProfile -ExecutionPolicy Bypass -File infra/compose/scripts/e2e-smoke-test.ps1 -ConfigureEmqx -UseMqttAuth -CreateDevice -TestTelemetryDlq`
 
+说明：
+- 该用例会覆盖 DLQ 的常见原因：`invalid_json`、`payload_too_large`、`metrics_too_many`，并通过 `/telemetry/dlq/stats` 断言聚合统计口径。
+
 失败时留证（无需手工收集）：
 
 - 脚本失败会自动在 `backups/evidence/e2e-smoke-<timestamp>/` 下输出：

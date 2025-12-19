@@ -901,6 +901,9 @@ try {
       throw "TestTelemetryDlq requires -UseMqttAuth and -CreateDevice (needs device credentials)."
     }
 
+    $startTime = (Get-Date).AddMinutes(-5).ToUniversalTime().ToString("o")
+    $endTime = (Get-Date).AddMinutes(5).ToUniversalTime().ToString("o")
+
     Write-Host "Publishing invalid telemetry JSON to trigger DLQ..." -ForegroundColor Cyan
     Add-Content -Encoding UTF8 -LiteralPath $publishLog -Value ("-- publish invalid telemetry json --`n")
     $exit = Run-Node @(
@@ -915,9 +918,35 @@ try {
       throw "publish-raw-mqtt.js failed (exit=$exit). Logs: $logDir"
     }
 
+    Write-Host "Publishing oversized payload to trigger payload_too_large..." -ForegroundColor Cyan
+    Add-Content -Encoding UTF8 -LiteralPath $publishLog -Value ("-- publish oversized payload --`n")
+    $exit = Run-Node @(
+      "scripts/dev/publish-raw-mqtt.js",
+      "--mqtt", $mqttUrl,
+      "--topic", "telemetry/$DeviceId",
+      "--username", $DeviceId,
+      "--password", $deviceSecret,
+      "--payloadSize", "300000"
+    ) $publishLog
+    if ($exit -ne 0) {
+      throw "publish-raw-mqtt.js failed (exit=$exit). Logs: $logDir"
+    }
+
+    Write-Host "Publishing telemetry with too many metrics to trigger metrics_too_many..." -ForegroundColor Cyan
+    Add-Content -Encoding UTF8 -LiteralPath $publishLog -Value ("-- publish too many metrics --`n")
+    $exit = Run-Node @(
+      "scripts/dev/publish-telemetry-many-metrics.js",
+      "--mqtt", $mqttUrl,
+      "--device", $DeviceId,
+      "--count", "600",
+      "--username", $DeviceId,
+      "--password", $deviceSecret
+    ) $publishLog
+    if ($exit -ne 0) {
+      throw "publish-telemetry-many-metrics.js failed (exit=$exit). Logs: $logDir"
+    }
+
     Write-Host "Waiting for telemetry DLQ message to be recorded..." -ForegroundColor Cyan
-    $startTime = (Get-Date).AddMinutes(-5).ToUniversalTime().ToString("o")
-    $endTime = (Get-Date).AddMinutes(5).ToUniversalTime().ToString("o")
     $deadline = (Get-Date).AddSeconds(45)
     $found = $false
     $dlqId = ""
@@ -956,6 +985,19 @@ try {
     }
     if (-not $hasInvalid) {
       throw "telemetry dlq stats missing invalid_json count. Logs: $logDir"
+    }
+
+    $hasTooLarge = $false
+    $hasTooMany = $false
+    foreach ($x in $stats.data.byReasonCode) {
+      if ($x.reasonCode -eq "payload_too_large" -and $x.count -ge 1) { $hasTooLarge = $true }
+      if ($x.reasonCode -eq "metrics_too_many" -and $x.count -ge 1) { $hasTooMany = $true }
+    }
+    if (-not $hasTooLarge) {
+      throw "telemetry dlq stats missing payload_too_large count. Logs: $logDir"
+    }
+    if (-not $hasTooMany) {
+      throw "telemetry dlq stats missing metrics_too_many count. Logs: $logDir"
     }
   }
 
