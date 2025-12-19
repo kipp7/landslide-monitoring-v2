@@ -747,6 +747,79 @@ paths:
         default:
           $ref: "#/components/responses/ErrorResponse"
 
+  /devices/{deviceId}/command-events:
+    parameters:
+      - $ref: "#/components/parameters/DeviceIdPath"
+    get:
+      tags: [devices]
+      summary: List device command events
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: commandId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - name: eventType
+          in: query
+          required: false
+          schema: { type: string, enum: [COMMAND_SENT, COMMAND_ACKED, COMMAND_FAILED, COMMAND_TIMEOUT] }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PaginatedDeviceCommandEvents"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /devices/{deviceId}/command-events/{eventId}:
+    parameters:
+      - $ref: "#/components/parameters/DeviceIdPath"
+      - name: eventId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [devices]
+      summary: Get device command event detail
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DeviceCommandEvent"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
   /data/state/{deviceId}:
     parameters:
       - $ref: "#/components/parameters/DeviceIdPath"
@@ -1794,6 +1867,35 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/DeviceCommand"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+
+    DeviceCommandEvent:
+      type: object
+      required: [eventId, eventType, commandId, deviceId, status, createdAt, ingestedAt]
+      properties:
+        eventId: { type: string, format: uuid }
+        eventType:
+          type: string
+          enum: [COMMAND_SENT, COMMAND_ACKED, COMMAND_FAILED, COMMAND_TIMEOUT]
+        commandId: { type: string, format: uuid }
+        deviceId: { type: string, format: uuid }
+        status: { type: string, enum: [queued, sent, acked, failed, timeout, canceled] }
+        detail: { type: string }
+        result:
+          type: object
+          additionalProperties: true
+        createdAt: { type: string, format: date-time }
+        ingestedAt: { type: string, format: date-time }
+
+    PaginatedDeviceCommandEvents:
+      type: object
+      required: [list, pagination]
+      properties:
+        list:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeviceCommandEvent"
         pagination:
           $ref: "#/components/schemas/Pagination"
 

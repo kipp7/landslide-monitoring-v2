@@ -165,6 +165,8 @@ $ackOut = Join-Path $logDir "command-ack-receiver.stdout.log"
 $ackErr = Join-Path $logDir "command-ack-receiver.stderr.log"
 $timeoutOut = Join-Path $logDir "command-timeout-worker.stdout.log"
 $timeoutErr = Join-Path $logDir "command-timeout-worker.stderr.log"
+$eventsOut = Join-Path $logDir "command-events-recorder.stdout.log"
+$eventsErr = Join-Path $logDir "command-events-recorder.stderr.log"
 $waitCmdOut = Join-Path $logDir "wait-command.stdout.log"
 $waitCmdErr = Join-Path $logDir "wait-command.stderr.log"
 $publishLog = Join-Path $logDir "publish-telemetry.log"
@@ -185,6 +187,7 @@ $apiProc = $null
 $cmdProc = $null
 $ackProc = $null
 $timeoutProc = $null
+$eventsProc = $null
 
 try {
   if ($ConfigureEmqx) {
@@ -305,6 +308,22 @@ try {
       "SCAN_LIMIT=200"
     ) -force:$ForceWriteServiceEnv
 
+    Write-EnvIfMissingOrForced "services/command-events-recorder/.env" @(
+      "SERVICE_NAME=command-events-recorder",
+      "",
+      "KAFKA_BROKERS=$kafkaBrokers",
+      "KAFKA_CLIENT_ID=command-events-recorder",
+      "KAFKA_GROUP_ID=command-events-recorder.v1",
+      "KAFKA_TOPIC_DEVICE_COMMAND_EVENTS=device.command_events.v1",
+      "",
+      "POSTGRES_HOST=$pgHost",
+      "POSTGRES_PORT=$pgPort",
+      "POSTGRES_USER=$pgUser",
+      "POSTGRES_PASSWORD=$pgPassword",
+      "POSTGRES_DATABASE=$pgDb",
+      "POSTGRES_POOL_MAX=5"
+    ) -force:$ForceWriteServiceEnv
+
     Write-EnvIfMissingOrForced "services/api/.env" @(
       "SERVICE_NAME=api-service",
       "API_HOST=0.0.0.0",
@@ -378,6 +397,7 @@ try {
   $cmdProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/command-dispatcher" -PassThru -RedirectStandardOutput $cmdOut -RedirectStandardError $cmdErr
   $ackProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/command-ack-receiver" -PassThru -RedirectStandardOutput $ackOut -RedirectStandardError $ackErr
   $timeoutProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/command-timeout-worker" -PassThru -RedirectStandardOutput $timeoutOut -RedirectStandardError $timeoutErr
+  $eventsProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/command-events-recorder" -PassThru -RedirectStandardOutput $eventsOut -RedirectStandardError $eventsErr
 
   Write-Host "Waiting for API /health..." -ForegroundColor Cyan
   $maxWaitSeconds = 60
@@ -413,6 +433,14 @@ try {
     throw "command-timeout-worker did not start within 45s. Logs: $logDir"
   }
   Write-Host "command-timeout-worker is running." -ForegroundColor Green
+
+  Write-Host "Waiting for command-events-recorder startup..." -ForegroundColor Cyan
+  if (-not (Wait-ForLogMatch $eventsOut "device.command_events" 45)) {
+    # recorder logs include topic name on schema invalid/skipped; use looser match by service startup info if needed
+    if (-not (Wait-ForLogMatch $eventsOut "command event recorded" 45)) {
+      Write-Host "WARN: command-events-recorder startup marker not found; continuing." -ForegroundColor Yellow
+    }
+  }
 
   $deviceSecret = $null
   if ($CreateDevice) {
@@ -584,6 +612,22 @@ try {
       if ($status -ne "acked") {
         throw "command did not become acked within 45s (status='$status'). Logs: $logDir"
       }
+
+      Write-Host "Verifying COMMAND_ACKED event is recorded..." -ForegroundColor Cyan
+      $deadline = (Get-Date).AddSeconds(45)
+      $found = $false
+      while ((Get-Date) -lt $deadline) {
+        try {
+          $events = Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/api/v1/devices/$($DeviceId)/command-events?commandId=$cmdId&eventType=COMMAND_ACKED" -TimeoutSec 3
+          if ($events.success -eq $true -and $events.data.list -and $events.data.list.Count -ge 1) { $found = $true; break }
+        } catch {
+          # ignore
+        }
+        Start-Sleep -Seconds 2
+      }
+      if (-not $found) {
+        throw "COMMAND_ACKED event not found within 45s. Logs: $logDir"
+      }
     }
 
     if ($TestCommandTimeout) {
@@ -603,6 +647,22 @@ try {
       }
       if ($status -ne "timeout") {
         throw "command did not become timeout within 45s (status='$status'). Logs: $logDir"
+      }
+
+      Write-Host "Verifying COMMAND_TIMEOUT event is recorded..." -ForegroundColor Cyan
+      $deadline = (Get-Date).AddSeconds(45)
+      $found = $false
+      while ((Get-Date) -lt $deadline) {
+        try {
+          $events = Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/api/v1/devices/$($DeviceId)/command-events?commandId=$cmdId&eventType=COMMAND_TIMEOUT" -TimeoutSec 3
+          if ($events.success -eq $true -and $events.data.list -and $events.data.list.Count -ge 1) { $found = $true; break }
+        } catch {
+          # ignore
+        }
+        Start-Sleep -Seconds 2
+      }
+      if (-not $found) {
+        throw "COMMAND_TIMEOUT event not found within 45s. Logs: $logDir"
       }
     }
   }
@@ -687,7 +747,7 @@ try {
   exit 1
 } finally {
   Write-Host "Stopping services..." -ForegroundColor Cyan
-  foreach ($p in @($ingestProc, $writerProc, $apiProc, $cmdProc, $ackProc, $timeoutProc)) {
+  foreach ($p in @($ingestProc, $writerProc, $apiProc, $cmdProc, $ackProc, $timeoutProc, $eventsProc)) {
     if ($null -eq $p) { continue }
     try {
       if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
