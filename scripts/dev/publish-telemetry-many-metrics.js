@@ -1,11 +1,13 @@
 /*
-  Dev helper: publish a raw payload string to MQTT.
+  Dev helper: publish a TelemetryEnvelope v1 message with many metrics keys.
 
   Usage (PowerShell):
-    node scripts/dev/publish-raw-mqtt.js `
+    node scripts/dev/publish-telemetry-many-metrics.js `
       --mqtt mqtt://localhost:1883 `
-      --topic telemetry/<deviceId> `
-      --payload "{"
+      --device <deviceId> `
+      --count 600 `
+      --username <deviceId> `
+      --password <deviceSecret>
 */
 
 const mqtt = require("mqtt");
@@ -26,34 +28,42 @@ function requireArg(name) {
 }
 
 const mqttUrl = getArg("mqtt", process.env.MQTT_URL || "mqtt://localhost:1883");
-const topic = requireArg("topic");
-const payloadArg = getArg("payload");
-const payloadSize = Number(getArg("payloadSize", ""));
 const username = getArg("username", process.env.MQTT_USERNAME);
 const password = getArg("password", process.env.MQTT_PASSWORD);
-const qos = Number(getArg("qos", "1"));
+const deviceId = requireArg("device");
+const topic = getArg("topic", `telemetry/${deviceId}`);
+const count = Number(getArg("count", "600"));
 
-let payload = payloadArg;
-if (!payload) {
-  if (!Number.isFinite(payloadSize) || payloadSize <= 0) {
-    console.error("Missing required arg: --payload (or provide --payloadSize)");
-    process.exit(2);
-  }
-  // Generate a large payload without putting it into the CLI args (Windows has cmdline length limits).
-  payload = "a".repeat(payloadSize);
+if (!Number.isFinite(count) || count <= 0 || count > 50000) {
+  console.error("Invalid --count (1..50000)");
+  process.exit(2);
 }
+
+const metrics = {};
+for (let i = 0; i < count; i += 1) {
+  metrics[`m_${i}`] = i;
+}
+
+const payload = {
+  schema_version: 1,
+  device_id: deviceId,
+  event_ts: new Date().toISOString(),
+  seq: 1,
+  metrics,
+  meta: { note: "many_metrics" }
+};
 
 const client = mqtt.connect(mqttUrl, {
   ...(username && password ? { username, password } : {})
 });
 
 client.on("connect", () => {
-  client.publish(topic, payload, { qos: Number.isFinite(qos) ? qos : 1 }, (err) => {
+  client.publish(topic, JSON.stringify(payload), { qos: 1 }, (err) => {
     if (err) {
       console.error("publish failed:", err);
       process.exitCode = 1;
     } else {
-      console.log(`published to ${topic}`);
+      console.log(`published to ${topic} (metrics=${count})`);
     }
     client.end(true);
   });
@@ -64,3 +74,4 @@ client.on("error", (err) => {
   process.exitCode = 1;
   client.end(true);
 });
+
