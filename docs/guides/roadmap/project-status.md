@@ -7,7 +7,7 @@
 - 每次合并一个 PR 到 `main`，如果它改变了项目阶段/里程碑/下一步，必须更新本页。
 - 本页只记录“当前状态与下一步”，历史细节放到 `docs/incidents/` 或 PR/commit 记录中。
 
-最后更新时间：2025-12-19（阶段 1：设备鉴权/ACL v6）
+最后更新时间：2025-12-19（阶段 1：writer 可靠性 v7）
 
 ## 1) 当前结论（TL;DR）
 
@@ -31,6 +31,7 @@
   - 修复：ClickHouse 默认使用 named volume（可用 `CH_DATA_DIR` 切回 bind-mount），并在 e2e 冒烟中自动检测/初始化 ClickHouse DDL（缺表时执行 `init-clickhouse.ps1`）。
   - 进展：补齐设备管理端接口的“命令下发”入口 `POST /devices/{deviceId}/commands`（写入 Postgres `device_commands`，返回 queued）。
   - 进展：MQTT revoke 立即生效：EMQX ACL 回调会实时查询 Postgres `devices.status`，`revoked` 设备会被拒绝 publish/subscribe（即使已连接）。
+  - 进展：writer 可靠性增强：ClickHouse 写入成功后才提交 Kafka offset；写入失败时退避重试，避免 ClickHouse 故障导致数据丢失/缓冲堆积。
 
 ## 2) 当前阶段与里程碑
 
