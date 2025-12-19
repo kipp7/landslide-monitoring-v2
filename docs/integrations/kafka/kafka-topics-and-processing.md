@@ -66,6 +66,11 @@ Kafka 的回放能力用于：
 - 规则升级后按历史数据回测（同规则版本得到一致结果）
 - 临时故障（ClickHouse 写入失败）后补写
 
+实现要求（writer）：
+
+- `telemetry-writer` 必须在 ClickHouse 写入成功后才提交 Kafka offset（避免 ClickHouse 故障导致数据丢失）
+- ClickHouse 写入失败时应退避重试/降低消费速率，避免内存缓冲堆积
+
 回放规则：
 
 - 必须幂等，否则回放会造成重复数据/重复告警

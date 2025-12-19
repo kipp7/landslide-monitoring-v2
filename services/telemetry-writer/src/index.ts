@@ -108,6 +108,38 @@ async function insertRows(
   });
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function insertWithRetry(
+  ch: ClickHouseClient,
+  config: ReturnType<typeof loadConfigFromEnv>,
+  logger: ReturnType<typeof createLogger>,
+  reason: string,
+  rows: TelemetryRow[]
+): Promise<void> {
+  let attempt = 0;
+  for (;;) {
+    attempt += 1;
+    try {
+      await insertRows(ch, config.clickhouseDatabase, config.clickhouseTable, rows);
+      return;
+    } catch (err) {
+      if (attempt >= config.clickhouseInsertMaxRetries) {
+        logger.error({ err, reason, rows: rows.length, attempt }, "clickhouse insert failed (giving up)");
+        throw err;
+      }
+      const backoff = Math.min(
+        config.clickhouseInsertBackoffMaxMs,
+        config.clickhouseInsertBackoffMs * attempt
+      );
+      logger.error({ err, reason, rows: rows.length, attempt, backoffMs: backoff }, "clickhouse insert failed (retry)");
+      await sleep(backoff);
+    }
+  }
+}
+
 async function main(): Promise<void> {
   dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
 
@@ -136,64 +168,81 @@ async function main(): Promise<void> {
 
   const ch = createClickhouseClient(config);
 
-  let buffer: TelemetryRow[] = [];
-  let flushing = false;
-
-  const flush = async (reason: string) => {
-    if (flushing) return;
-    if (buffer.length === 0) return;
-
-    flushing = true;
-    const batch = buffer;
-    buffer = [];
-
-    try {
-      await insertRows(ch, config.clickhouseDatabase, config.clickhouseTable, batch);
-      logger.info({ reason, rows: batch.length }, "clickhouse insert ok");
-    } catch (err) {
-      logger.error({ err, reason, rows: batch.length }, "clickhouse insert failed");
-      buffer = batch.concat(buffer);
-    } finally {
-      flushing = false;
-    }
-  };
-
-  const interval = setInterval(() => {
-    void flush("interval");
-  }, config.batchFlushIntervalMs);
-
   await consumer.run({
-    eachMessage: async ({ message, topic, partition }) => {
-      const traceId = newTraceId();
-      const raw = message.value?.toString("utf-8") ?? "";
+    autoCommit: false,
+    eachBatchAutoResolve: false,
+    eachBatch: async (ctx) => {
+      const { batch } = ctx;
+      if (!ctx.isRunning() || ctx.isStale()) return;
 
-      try {
-        const parsed = JSON.parse(raw) as unknown;
-        if (!validateRaw.validate(parsed)) {
+      const pendingOffsets: string[] = [];
+      let rows: TelemetryRow[] = [];
+      let lastFlushAt = Date.now();
+
+      const flush = async (reason: string) => {
+        if (rows.length === 0) return;
+        const startedAt = Date.now();
+
+        await insertWithRetry(ch, config, logger, reason, rows);
+        logger.info({ reason, rows: rows.length, tookMs: Date.now() - startedAt }, "clickhouse insert ok");
+
+        for (const off of pendingOffsets) ctx.resolveOffset(off);
+        pendingOffsets.length = 0;
+        rows = [];
+        await ctx.commitOffsetsIfNecessary();
+      };
+
+      for (const message of batch.messages) {
+        if (!ctx.isRunning() || ctx.isStale()) break;
+        await ctx.heartbeat();
+
+        const traceId = newTraceId();
+        const raw = message.value?.toString("utf-8") ?? "";
+
+        try {
+          const parsed = JSON.parse(raw) as unknown;
+          if (!validateRaw.validate(parsed)) {
+            logger.warn(
+              { traceId, topic: batch.topic, partition: batch.partition, errors: validateRaw.errors },
+              "kafka telemetry.raw schema invalid (skipped)"
+            );
+            ctx.resolveOffset(message.offset);
+            continue;
+          }
+
+          const payload: TelemetryRawV1 = parsed;
+          const messageRows = toTelemetryRows(payload);
+          if (messageRows.length > 0) {
+            rows.push(...messageRows);
+            pendingOffsets.push(message.offset);
+          } else {
+            ctx.resolveOffset(message.offset);
+          }
+
+          if (rows.length >= config.batchMaxRows) {
+            await flush("batch_max_rows");
+            lastFlushAt = Date.now();
+          } else if (Date.now() - lastFlushAt >= config.batchFlushIntervalMs) {
+            await flush("interval");
+            lastFlushAt = Date.now();
+          }
+        } catch (err) {
           logger.warn(
-            { traceId, topic, partition, errors: validateRaw.errors },
-            "kafka telemetry.raw schema invalid (skipped)"
+            { traceId, topic: batch.topic, partition: batch.partition, err },
+            "kafka message parse failed (skipped)"
           );
-          return;
+          ctx.resolveOffset(message.offset);
         }
-
-        const payload: TelemetryRawV1 = parsed;
-        const rows = toTelemetryRows(payload);
-        buffer.push(...rows);
-
-        if (buffer.length >= config.batchMaxRows) {
-          await flush("batch_max_rows");
-        }
-      } catch (err) {
-        logger.warn({ traceId, topic, partition, err }, "kafka message parse failed (skipped)");
       }
+
+      await flush("batch_end");
+      await ctx.heartbeat();
+      await ctx.commitOffsetsIfNecessary();
     }
   });
 
   const shutdown = async (signal: string) => {
-    clearInterval(interval);
     logger.info({ signal }, "shutting down");
-    await flush("shutdown");
     await consumer.disconnect();
     await ch.close();
     process.exit(0);

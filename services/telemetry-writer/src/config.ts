@@ -18,7 +18,11 @@ const configSchema = z.object({
   clickhouseTable: z.string().default("telemetry_raw"),
 
   batchMaxRows: z.coerce.number().int().positive().default(2000),
-  batchFlushIntervalMs: z.coerce.number().int().positive().default(1000)
+  batchFlushIntervalMs: z.coerce.number().int().positive().default(1000),
+
+  clickhouseInsertMaxRetries: z.coerce.number().int().positive().max(30).default(10),
+  clickhouseInsertBackoffMs: z.coerce.number().int().positive().max(60000).default(1000),
+  clickhouseInsertBackoffMaxMs: z.coerce.number().int().positive().max(300000).default(15000)
 });
 
 export type AppConfig = z.infer<typeof configSchema>;
@@ -39,7 +43,10 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
     clickhouseTable: env.CLICKHOUSE_TABLE,
 
     batchMaxRows: env.BATCH_MAX_ROWS,
-    batchFlushIntervalMs: env.BATCH_FLUSH_INTERVAL_MS
+    batchFlushIntervalMs: env.BATCH_FLUSH_INTERVAL_MS,
+
+    clickhouseInsertMaxRetries: env.CLICKHOUSE_INSERT_MAX_RETRIES,
+    clickhouseInsertBackoffMs: env.CLICKHOUSE_INSERT_BACKOFF_MS,
+    clickhouseInsertBackoffMaxMs: env.CLICKHOUSE_INSERT_BACKOFF_MAX_MS
   });
 }
-
