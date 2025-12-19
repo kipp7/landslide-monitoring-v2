@@ -380,11 +380,11 @@ export function registerDeviceRoutes(
       if (!device) return null;
       if (device.status === "revoked") return "revoked";
 
-      await client.query("BEGIN");
-      try {
-        const row = await queryOne<{ command_id: string; status: string; issued_ts: string }>(
-          client,
-          `
+        await client.query("BEGIN");
+        try {
+          const row = await queryOne<{ command_id: string; status: string; issued_ts: string }>(
+            client,
+            `
             INSERT INTO device_commands (
               device_id, command_type, payload, status, requested_by, request_source
             ) VALUES (
@@ -395,24 +395,24 @@ export function registerDeviceRoutes(
               status,
               to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS issued_ts
           `,
-          [deviceId, commandType, JSON.stringify(payload)]
-        );
-        if (!row) throw new Error("insert failed");
+            [deviceId, commandType, JSON.stringify(payload)]
+          );
+          if (!row) throw new Error("insert failed");
 
-        await kafkaPublisher.publishDeviceCommand({
-          schema_version: 1,
-          command_id: row.command_id,
-          device_id: deviceId,
-          command_type: commandType,
-          payload,
-          issued_ts: row.issued_ts,
-          requested_by: null
-        });
+          await kafkaPublisher.publishDeviceCommand({
+            schema_version: 1,
+            command_id: row.command_id,
+            device_id: deviceId,
+            command_type: commandType,
+            payload,
+            issued_ts: row.issued_ts,
+            requested_by: null
+          });
 
-        await client.query("COMMIT");
-        return { command_id: row.command_id, status: row.status };
-      } catch (err) {
-        await client.query("ROLLBACK");
+          await client.query("COMMIT");
+          return { command_id: row.command_id, status: row.status };
+        } catch (err) {
+          await client.query("ROLLBACK");
         throw err;
       }
     });
