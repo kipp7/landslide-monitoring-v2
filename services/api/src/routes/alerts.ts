@@ -203,6 +203,8 @@ export function registerAlertRoutes(app: FastifyInstance, config: AppConfig, pg:
               alert_id,
               event_type,
               severity,
+              device_id,
+              station_id,
               created_at AS last_event_at
             FROM alert_events
             ORDER BY alert_id, created_at DESC
@@ -216,6 +218,8 @@ export function registerAlertRoutes(app: FastifyInstance, config: AppConfig, pg:
                 ELSE 'resolved'
               END AS status,
               severity,
+              device_id,
+              station_id,
               last_event_at
             FROM latest
           )

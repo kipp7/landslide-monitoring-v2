@@ -54,6 +54,44 @@ function mqttPublish(client: mqtt.MqttClient, topic: string, payload: string): P
   });
 }
 
+function waitForMqttConnected(client: mqtt.MqttClient): Promise<void> {
+  if (client.connected) return Promise.resolve();
+  return new Promise((resolve) => {
+    client.once("connect", () => {
+      resolve();
+    });
+  });
+}
+
+async function sleepMs(ms: number): Promise<void> {
+  await new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function getCommandAndDeviceStatus(
+  pg: Pool,
+  commandId: string
+): Promise<{ commandStatus: string; deviceStatus: string } | null> {
+  const row = await pg.query<{ command_status: string; device_status: string }>(
+    `
+      SELECT
+        dc.status AS command_status,
+        d.status AS device_status
+      FROM device_commands dc
+      JOIN devices d ON d.device_id = dc.device_id
+      WHERE dc.command_id = $1
+    `,
+    [commandId]
+  );
+
+  if (row.rowCount === 0) return null;
+  return {
+    commandStatus: row.rows[0]?.command_status ?? "unknown",
+    deviceStatus: row.rows[0]?.device_status ?? "unknown"
+  };
+}
+
 async function main(): Promise<void> {
   dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
 
@@ -79,15 +117,13 @@ async function main(): Promise<void> {
       : {})
   });
 
-  await new Promise<void>((resolve, reject) => {
-    mqttClient.once("connect", () => {
-      resolve();
-    });
-    mqttClient.once("error", (err) => {
-      reject(err);
-    });
+  mqttClient.on("error", (err) => {
+    logger.error({ err }, "mqtt error");
   });
-  logger.info({ mqttUrl: config.mqttUrl }, "mqtt connected");
+
+  mqttClient.on("connect", () => {
+    logger.info({ mqttUrl: config.mqttUrl }, "mqtt connected");
+  });
 
   const kafka = new Kafka({
     clientId: config.kafkaClientId,
@@ -125,29 +161,24 @@ async function main(): Promise<void> {
 
           const cmd: DeviceCommandKafkaV1 = parsed;
 
-          const row = await pg.query<{
-            command_status: string;
-            device_status: string;
-          }>(
-            `
-              SELECT
-                dc.status AS command_status,
-                d.status AS device_status
-              FROM device_commands dc
-              JOIN devices d ON d.device_id = dc.device_id
-              WHERE dc.command_id = $1
-            `,
-            [cmd.command_id]
-          );
+          let state = await getCommandAndDeviceStatus(pg, cmd.command_id);
+          if (!state) {
+            // The API publishes to Kafka inside a DB transaction; a fast consumer may see the Kafka message
+            // before the transaction is committed. Retry briefly to avoid dropping valid commands.
+            const deadline = Date.now() + 5000;
+            while (!state && Date.now() < deadline) {
+              await sleepMs(200);
+              state = await getCommandAndDeviceStatus(pg, cmd.command_id);
+            }
 
-          if (row.rowCount === 0) {
-            logger.warn({ traceId, commandId: cmd.command_id }, "command not found in postgres (skipped)");
-            ctx.resolveOffset(message.offset);
-            continue;
+            if (!state) {
+              logger.warn({ traceId, commandId: cmd.command_id }, "command not found in postgres after retry (skipped)");
+              ctx.resolveOffset(message.offset);
+              continue;
+            }
           }
 
-          const commandStatus = row.rows[0]?.command_status ?? "unknown";
-          const deviceStatus = row.rows[0]?.device_status ?? "unknown";
+          const { commandStatus, deviceStatus } = state;
 
           if (deviceStatus === "revoked") {
             await pg.query(
@@ -182,6 +213,7 @@ async function main(): Promise<void> {
           };
 
           const mqttTopic = `${config.mqttTopicCommandPrefix}${cmd.device_id}`;
+          await waitForMqttConnected(mqttClient);
           await mqttPublish(mqttClient, mqttTopic, JSON.stringify(mqttPayload));
 
           await pg.query(

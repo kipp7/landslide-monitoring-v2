@@ -144,12 +144,15 @@ async function main(): Promise<void> {
       : {})
   });
 
-  await new Promise<void>((resolve, reject) => {
-    mqttClient.once("connect", () => {
+  mqttClient.on("error", (err) => {
+    logger.error({ err }, "mqtt error");
+  });
+
+  // Do not fail fast on initial auth errors: EMQX webhooks may still be coming up,
+  // and the mqtt client will retry and eventually emit "connect" when ready.
+  await new Promise<void>((resolve) => {
+    mqttClient.on("connect", () => {
       resolve();
-    });
-    mqttClient.once("error", (err) => {
-      reject(err);
     });
   });
   logger.info({ mqttUrl: config.mqttUrl }, "mqtt connected");

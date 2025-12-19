@@ -1545,7 +1545,16 @@ paths:
               $ref: "#/components/schemas/CreateAlertRuleRequest"
       responses:
         "200":
-          $ref: "#/components/responses/SuccessResponse"
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/CreateAlertRuleResponse"
         "401":
           $ref: "#/components/responses/UnauthorizedResponse"
         "403":
@@ -1605,7 +1614,16 @@ paths:
       summary: List rule versions
       responses:
         "200":
-          $ref: "#/components/responses/SuccessResponse"
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/AlertRuleVersionsResponse"
         "401":
           $ref: "#/components/responses/UnauthorizedResponse"
         "403":
@@ -1627,7 +1645,16 @@ paths:
               $ref: "#/components/schemas/PublishRuleVersionRequest"
       responses:
         "200":
-          $ref: "#/components/responses/SuccessResponse"
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PublishRuleVersionResponse"
         "401":
           $ref: "#/components/responses/UnauthorizedResponse"
         "403":
@@ -2697,6 +2724,38 @@ components:
         dsl:
           type: object
           additionalProperties: true
+
+    CreateAlertRuleResponse:
+      type: object
+      required: [ruleId, ruleVersion]
+      properties:
+        ruleId: { type: string, format: uuid }
+        ruleVersion: { type: integer, minimum: 1 }
+
+    PublishRuleVersionResponse:
+      type: object
+      required: [ruleId, ruleVersion]
+      properties:
+        ruleId: { type: string, format: uuid }
+        ruleVersion: { type: integer, minimum: 1 }
+
+    AlertRuleVersionsResponse:
+      type: object
+      required: [ruleId, list]
+      properties:
+        ruleId: { type: string, format: uuid }
+        list:
+          type: array
+          items:
+            type: object
+            required: [version, dslVersion, enabled, severity, createdAt, createdBy]
+            properties:
+              version: { type: integer, minimum: 1 }
+              dslVersion: { type: integer, minimum: 1 }
+              enabled: { type: boolean }
+              severity: { type: string, enum: [low, medium, high, critical] }
+              createdAt: { type: string, format: date-time }
+              createdBy: { type: string }
 
     UpdateSystemConfigsRequest:
       type: object
