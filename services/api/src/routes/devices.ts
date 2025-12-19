@@ -274,6 +274,7 @@ export function registerDeviceRoutes(
 
     const deviceId = parseId.data;
     const body = parseBody.data;
+    const stationIdProvided = body.stationId !== undefined;
 
     const updated = await withPgClient(pg, async (client) => {
       const row = await queryOne<{ updated_at: string }>(
@@ -283,8 +284,8 @@ export function registerDeviceRoutes(
           SET
             device_name = COALESCE($2, device_name),
             device_type = COALESCE($3, device_type),
-            station_id = CASE WHEN $4::text IS NULL THEN station_id ELSE $4::uuid END,
-            metadata = COALESCE($5::jsonb, metadata),
+            station_id = CASE WHEN $4::boolean THEN $5::uuid ELSE station_id END,
+            metadata = COALESCE($6::jsonb, metadata),
             updated_at = NOW()
           WHERE device_id = $1
           RETURNING to_char(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS updated_at
@@ -293,7 +294,8 @@ export function registerDeviceRoutes(
           deviceId,
           body.deviceName ?? null,
           body.deviceType ?? null,
-          body.stationId === undefined ? null : body.stationId,
+          stationIdProvided,
+          stationIdProvided ? body.stationId : null,
           body.metadata ? JSON.stringify(body.metadata) : null
         ]
       );
