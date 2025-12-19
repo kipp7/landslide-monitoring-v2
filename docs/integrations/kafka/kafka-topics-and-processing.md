@@ -32,6 +32,7 @@
   - `rule-engine-worker`：消费 `telemetry.raw.v1`（或消费 writer 产出的“写入确认事件”，视实现）
   - `notify-worker`：消费 `alerts.events.v1`
   - `command-dispatcher`：消费 `device.commands.v1` 并发布到 MQTT `cmd/{device_id}`
+  - `command-ack-receiver`：消费 `device.command_acks.v1` 并回写 Postgres `device_commands`（状态/acked_at/result）
 
 ## 3. 幂等与去重（必须）
 

@@ -21,7 +21,7 @@
 
 阶段 1（鉴权 + 命令下发 + revoke 立即生效）的回归用例（推荐作为改动后的快速验收）：
 
-- `powershell -NoProfile -ExecutionPolicy Bypass -File infra/compose/scripts/e2e-smoke-test.ps1 -ConfigureEmqx -UseMqttAuth -CreateDevice -TestCommands -TestRevoke`
+- `powershell -NoProfile -ExecutionPolicy Bypass -File infra/compose/scripts/e2e-smoke-test.ps1 -ConfigureEmqx -UseMqttAuth -CreateDevice -TestCommands -TestCommandAcks -TestRevoke`
 
 失败时留证（无需手工收集）：
 

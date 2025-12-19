@@ -6,6 +6,7 @@ param(
   [switch]$CreateDevice,
   [switch]$ConfigureEmqx,
   [switch]$TestCommands,
+  [switch]$TestCommandAcks,
   [switch]$TestRevoke,
   [bool]$CollectEvidenceOnFailure = $true,
   [switch]$SkipBuild,
@@ -126,6 +127,26 @@ function Run-Node([string[]]$nodeArgs, [string]$logPath) {
   return $exit
 }
 
+function Sql-Literal([string]$value) {
+  return "'" + ($value -replace "'", "''") + "'"
+}
+
+function Query-PostgresScalar([string]$sql) {
+  $args = @(
+    "compose", "-f", $ComposeFile, "--env-file", $EnvFile,
+    "exec", "-T",
+    "-e", "PGPASSWORD=$pgPassword",
+    "postgres",
+    "psql",
+    "-U", $pgUser,
+    "-d", $pgDb,
+    "-tA",
+    "-c", $sql
+  )
+  $out = (& docker @args 2>$null | Out-String).Trim()
+  return $out
+}
+
 if (-not (Test-Path $EnvFile)) {
   throw "Missing env file: $EnvFile (copy infra/compose/env.example -> infra/compose/.env)"
 }
@@ -159,6 +180,8 @@ $apiOut = Join-Path $logDir "api.stdout.log"
 $apiErr = Join-Path $logDir "api.stderr.log"
 $cmdOut = Join-Path $logDir "command-dispatcher.stdout.log"
 $cmdErr = Join-Path $logDir "command-dispatcher.stderr.log"
+$ackOut = Join-Path $logDir "command-ack-receiver.stdout.log"
+$ackErr = Join-Path $logDir "command-ack-receiver.stderr.log"
 $waitCmdOut = Join-Path $logDir "wait-command.stdout.log"
 $waitCmdErr = Join-Path $logDir "wait-command.stderr.log"
 $publishLog = Join-Path $logDir "publish-telemetry.log"
@@ -177,6 +200,7 @@ $ingestProc = $null
 $writerProc = $null
 $apiProc = $null
 $cmdProc = $null
+$ackProc = $null
 
 try {
   if ($ConfigureEmqx) {
@@ -253,6 +277,27 @@ try {
       "POSTGRES_DATABASE=$pgDb"
     ) -force:$ForceWriteServiceEnv
 
+    Write-EnvIfMissingOrForced "services/command-ack-receiver/.env" @(
+      "SERVICE_NAME=command-ack-receiver",
+      "",
+      "MQTT_URL=$mqttUrl",
+      "MQTT_USERNAME=$(if ($UseMqttAuth) { 'ingest-service' } else { '' })",
+      "MQTT_PASSWORD=$(if ($UseMqttAuth) { $internalPassword } else { '' })",
+      "MQTT_TOPIC_ACK_PREFIX=cmd_ack/",
+      "",
+      "KAFKA_BROKERS=$kafkaBrokers",
+      "KAFKA_CLIENT_ID=command-ack-receiver",
+      "KAFKA_GROUP_ID=command-ack-receiver.v1",
+      "KAFKA_TOPIC_DEVICE_COMMAND_ACKS=device.command_acks.v1",
+      "",
+      "POSTGRES_HOST=$pgHost",
+      "POSTGRES_PORT=$pgPort",
+      "POSTGRES_USER=$pgUser",
+      "POSTGRES_PASSWORD=$pgPassword",
+      "POSTGRES_DATABASE=$pgDb",
+      "POSTGRES_POOL_MAX=5"
+    ) -force:$ForceWriteServiceEnv
+
     Write-EnvIfMissingOrForced "services/api/.env" @(
       "SERVICE_NAME=api-service",
       "API_HOST=0.0.0.0",
@@ -324,6 +369,7 @@ try {
   $writerProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/telemetry-writer" -PassThru -RedirectStandardOutput $writerOut -RedirectStandardError $writerErr
   $apiProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/api" -PassThru -RedirectStandardOutput $apiOut -RedirectStandardError $apiErr
   $cmdProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/command-dispatcher" -PassThru -RedirectStandardOutput $cmdOut -RedirectStandardError $cmdErr
+  $ackProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/command-ack-receiver" -PassThru -RedirectStandardOutput $ackOut -RedirectStandardError $ackErr
 
   Write-Host "Waiting for API /health..." -ForegroundColor Cyan
   $maxWaitSeconds = 60
@@ -347,6 +393,12 @@ try {
     throw "ingest-service did not subscribe to MQTT within 45s. Logs: $logDir"
   }
   Write-Host "ingest-service is subscribed." -ForegroundColor Green
+
+  Write-Host "Waiting for command-ack-receiver MQTT subscription..." -ForegroundColor Cyan
+  if (-not (Wait-ForLogMatch $ackOut "mqtt subscribed" 45)) {
+    throw "command-ack-receiver did not subscribe to MQTT within 45s. Logs: $logDir"
+  }
+  Write-Host "command-ack-receiver is subscribed." -ForegroundColor Green
 
   $deviceSecret = $null
   if ($CreateDevice) {
@@ -450,6 +502,9 @@ try {
     if (-not $UseMqttAuth -or -not $CreateDevice -or -not $deviceSecret) {
       throw "TestCommands requires -UseMqttAuth and -CreateDevice (needs device credentials)."
     }
+    if ($TestCommandAcks -and (-not $TestCommands)) {
+      throw "TestCommandAcks requires -TestCommands (needs commandId)."
+    }
 
     Write-Host "Subscribing to device command topic..." -ForegroundColor Cyan
     $waitProc = Start-Process -FilePath "node" -ArgumentList @(
@@ -480,6 +535,37 @@ try {
     }
     if ($waitProc.ExitCode -ne 0) {
       throw "Device did not receive command (wait-for-command.js exit=$($waitProc.ExitCode)). Logs: $logDir"
+    }
+
+    if ($TestCommandAcks) {
+      Write-Host "Publishing command ack from device..." -ForegroundColor Cyan
+      Add-Content -Encoding UTF8 -LiteralPath $publishLog -Value ("-- publish command ack --`n")
+      $ackExit = Run-Node @(
+        "scripts/dev/publish-command-ack.js",
+        "--mqtt", $mqttUrl,
+        "--device", $DeviceId,
+        "--commandId", $cmdResp.data.commandId,
+        "--username", $DeviceId,
+        "--password", $deviceSecret,
+        "--status", "acked"
+      ) $publishLog
+      if ($ackExit -ne 0) {
+        throw "publish-command-ack.js failed (exit=$ackExit). Logs: $logDir"
+      }
+
+      Write-Host "Waiting for command status to become acked in Postgres..." -ForegroundColor Cyan
+      $cmdId = [string]$cmdResp.data.commandId
+      $deadline = (Get-Date).AddSeconds(45)
+      $status = ""
+      while ((Get-Date) -lt $deadline) {
+        $sql = "SELECT status FROM device_commands WHERE command_id=" + (Sql-Literal $cmdId) + ";"
+        $status = Query-PostgresScalar $sql
+        if ($status -eq "acked") { break }
+        Start-Sleep -Seconds 2
+      }
+      if ($status -ne "acked") {
+        throw "command did not become acked within 45s (status='$status'). Logs: $logDir"
+      }
     }
   }
 
@@ -563,7 +649,7 @@ try {
   exit 1
 } finally {
   Write-Host "Stopping services..." -ForegroundColor Cyan
-  foreach ($p in @($ingestProc, $writerProc, $apiProc, $cmdProc)) {
+  foreach ($p in @($ingestProc, $writerProc, $apiProc, $cmdProc, $ackProc)) {
     if ($null -eq $p) { continue }
     try {
       if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }

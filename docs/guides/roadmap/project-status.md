@@ -7,7 +7,7 @@
 - 每次合并一个 PR 到 `main`，如果它改变了项目阶段/里程碑/下一步，必须更新本页。
 - 本页只记录“当前状态与下一步”，历史细节放到 `docs/incidents/` 或 PR/commit 记录中。
 
-最后更新时间：2025-12-19（阶段 1：stations api v13）
+最后更新时间：2025-12-19（阶段 1：command acks v14）
 
 ## 1) 当前结论（TL;DR）
 
@@ -38,6 +38,8 @@
   - 进展：命令下发进入 Kafka：API 创建命令时同步写入 `device.commands.v1`（为后续 MQTT 下发 worker / 回执链路打基础）。
   - 进展：新增 `command-dispatcher`：消费 `device.commands.v1` 并通过 MQTT 发布到 `cmd/{device_id}`，e2e 脚本可选验证设备接收命令。
   - 进展：e2e 冒烟补齐阶段 1 回归用例：支持 `-TestRevoke` 验证 revoke 立即生效（EMQX authn 拒绝已吊销设备）。
+  - 进展：commands 回执闭环落地：设备 publish `cmd_ack/{device_id}` → Kafka `device.command_acks.v1` → Postgres `device_commands`（acked_at/result/status）。
+  - 进展：e2e 冒烟补齐回执验证：支持 `-TestCommandAcks`（command queued→sent→acked）。
 
 ## 2) 当前阶段与里程碑
 
@@ -64,7 +66,7 @@ M2（阶段 1：设备接入与鉴权）目标：
 ## 3) 下一步（Next Actions，按优先级）
 
 1) 单机联调收口：把 `e2e-smoke-test.ps1` 的可选项补齐成“阶段 1 的闭环用例”（鉴权 + revoke + commands），作为后续重构的回归基线
-2) commands 回执闭环：实现 `device.command_acks.v1` 生产/消费与 Postgres 状态回写（queued→sent→acked/failed）
+2) commands 运维收口：补齐命令状态查询/告警通知链路（例如 ack 超时、failed 通知），并沉淀到单机联调脚本/证据包
 3) writer 可靠性增强：补充告警/限流/降载策略（基础运行观测/保护已落地，后续补齐告警与容量压测）
 
 ## 4) 关键入口（新 AI 只读这些就能上手）
