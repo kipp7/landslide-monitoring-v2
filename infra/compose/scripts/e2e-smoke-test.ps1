@@ -127,26 +127,6 @@ function Run-Node([string[]]$nodeArgs, [string]$logPath) {
   return $exit
 }
 
-function Sql-Literal([string]$value) {
-  return "'" + ($value -replace "'", "''") + "'"
-}
-
-function Query-PostgresScalar([string]$sql) {
-  $args = @(
-    "compose", "-f", $ComposeFile, "--env-file", $EnvFile,
-    "exec", "-T",
-    "-e", "PGPASSWORD=$pgPassword",
-    "postgres",
-    "psql",
-    "-U", $pgUser,
-    "-d", $pgDb,
-    "-tA",
-    "-c", $sql
-  )
-  $out = (& docker @args 2>$null | Out-String).Trim()
-  return $out
-}
-
 if (-not (Test-Path $EnvFile)) {
   throw "Missing env file: $EnvFile (copy infra/compose/env.example -> infra/compose/.env)"
 }
@@ -553,13 +533,17 @@ try {
         throw "publish-command-ack.js failed (exit=$ackExit). Logs: $logDir"
       }
 
-      Write-Host "Waiting for command status to become acked in Postgres..." -ForegroundColor Cyan
+      Write-Host "Waiting for command status to become acked..." -ForegroundColor Cyan
       $cmdId = [string]$cmdResp.data.commandId
       $deadline = (Get-Date).AddSeconds(45)
       $status = ""
       while ((Get-Date) -lt $deadline) {
-        $sql = "SELECT status FROM device_commands WHERE command_id=" + (Sql-Literal $cmdId) + ";"
-        $status = Query-PostgresScalar $sql
+        try {
+          $cmd = Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/api/v1/devices/$($DeviceId)/commands/$cmdId" -TimeoutSec 3
+          if ($cmd.success -eq $true -and $cmd.data.status) { $status = [string]$cmd.data.status }
+        } catch {
+          # ignore transient failures
+        }
         if ($status -eq "acked") { break }
         Start-Sleep -Seconds 2
       }
