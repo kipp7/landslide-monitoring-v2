@@ -7,7 +7,7 @@
 - 每次合并一个 PR 到 `main`，如果它改变了项目阶段/里程碑/下一步，必须更新本页。
 - 本页只记录“当前状态与下一步”，历史细节放到 `docs/incidents/` 或 PR/commit 记录中。
 
-最后更新时间：2025-12-19（阶段 1：commands 运维筛选 + bucket 聚合）
+最后更新时间：2025-12-19（阶段 2：告警规则闭环 kickoff）
 
 ## 1) 当前结论（TL;DR）
 
@@ -15,7 +15,7 @@
 - 仓库治理已落地：Rulesets 强制 PR-only、必过 `docs-and-contracts`、禁强推/禁删除。
 - 阶段 0 已完成：单机基础设施 + 端到端冒烟（MQTT→Kafka→ClickHouse→API）可复现，踩坑已沉淀到 `docs/incidents/`。
   - 补充：`infra/compose/scripts/e2e-smoke-test.ps1` 可一键跑通并自动留证日志（见 `docs/guides/testing/e2e-smoke-test.md`）。
-- 阶段 1 进行中：单机 Compose 已具备设备鉴权 + commands 运维排查的“可落库/可查询”基础闭环（command events + notifications），并持续把回归断言沉淀到 `e2e-smoke-test.ps1` 的证据包中。
+- 阶段 1 已完成：单机 Compose 已具备设备鉴权 + commands 运维排查的“可落库/可查询”闭环（command events + notifications），并已把关键回归断言沉淀到 `e2e-smoke-test.ps1` 的证据包中。
   - 补充：`infra/compose/scripts/configure-emqx-http-auth.ps1` 可一键写入 EMQX 配置（免 Dashboard 手工操作）。
   - 补充：`infra/compose/scripts/e2e-smoke-test.ps1` 支持 `-ConfigureEmqx -UseMqttAuth -CreateDevice` 一键跑通“带鉴权”的端到端冒烟。
   - 补充：`infra/compose/scripts/e2e-smoke-test.ps1` 新增 `-Stage1Regression` 预置模式：一键跑完阶段 1 的闭环回归基线（鉴权 + commands acked/failed/timeout + Telemetry DLQ + revoke），并自动留证。
@@ -46,10 +46,11 @@
   - 进展：补齐 ack 超时策略：新增 `command-timeout-worker` 定期扫描 `sent` 超时命令并标记为 `timeout`，同时发出 `device.command_events.v1` 事件；e2e 支持 `-TestCommandTimeout` 回归。
   - 进展：补齐 command events 的“落库与查询”：新增 `command-events-recorder` 落库 `device_command_events`；API 新增 `/devices/{deviceId}/command-events` 查询，用于通知/排查与 e2e 断言。
   - 进展：commands 运维收口：命令事件/通知列表支持 `startTime/endTime/eventType/unreadOnly` 过滤；统计接口支持 `bucket(1h/1d)` 按时间窗口聚合，并新增 `/devices/{deviceId}/command-events/stats`。
+- 阶段 2 进行中：告警规则闭环（rule engine → alert events → API 可查询），作为“可告警（M3）”里程碑的主线工作。
 
 ## 2) 当前阶段与里程碑
 
-阶段：阶段 1（设备接入与鉴权）
+阶段：阶段 2（可告警：规则引擎与告警闭环）
 
 M1（阶段 0：最小闭环）目标：
 
@@ -74,9 +75,23 @@ M2（阶段 1：设备接入与鉴权）目标：
 - MQTT：设备按 `deviceId/secret` 鉴权，按 topic 做 ACL，禁越权发布；吊销设备后立即拒绝上报
 - 运营：传感器字典与设备传感器声明可维护（前端不写死）
 
+当前完成情况：
+
+- ✅ 管理端：设备创建 + deviceSecret（仅返回一次），服务端保存 hash
+- ✅ MQTT：鉴权 + ACL + revoke 立即生效（并已具备一键配置与回归基线）
+- ✅ 运维：commands events/notifications 可落库可查询，支持筛选/统计（含未读与按时间桶聚合）
+
+M3（阶段 2：可告警）目标：
+
+- 规则：DSL 版本化（`alert_rules`/`alert_rule_versions`），支持最小阈值/窗口/防抖
+- worker：`rule-engine-worker` 触发 `alert_events`（可回放/可查询）
+- API：按契约提供 `/alert-rules`、`/alerts` 的最小可用查询与运维接口
+
 ## 3) 下一步（Next Actions，按优先级）
 
-1) writer 可靠性增强：补充告警/限流/降载策略（基础运行观测/保护已落地，后续补齐告警与容量压测）
+1) 规则引擎最小闭环：落地 `rule-engine-worker`（telemetry → 规则评估 → `alert_events`），并提供可复现的单机回归基线
+2) 告警 API 收口：实现并对齐 `docs/integrations/api/06-alerts.md`（OpenAPI + examples + 质量门禁）
+3) 并行硬化（非阻塞）：writer 可靠性增强（告警/限流/降载策略 + 容量压测），以不影响主链路为原则逐步补齐
 
 ## 4) 关键入口（新 AI 只读这些就能上手）
 
