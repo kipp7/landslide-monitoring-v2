@@ -97,6 +97,14 @@ function isProbablyTransientClickhouseError(err: unknown): boolean {
   return /(ECONNREFUSED|ETIMEDOUT|EHOSTUNREACH|ENOTFOUND|socket hang up|fetch failed)/i.test(msg);
 }
 
+type ClickhouseUnavailableError = Error & { code: "CLICKHOUSE_UNAVAILABLE"; cause?: unknown };
+
+function isClickhouseUnavailableError(err: unknown): err is ClickhouseUnavailableError {
+  if (!(err instanceof Error)) return false;
+  const code = (err as unknown as { code?: unknown }).code;
+  return code === "CLICKHOUSE_UNAVAILABLE";
+}
+
 function isProbablyClickhouseDataError(err: unknown): boolean {
   if (isProbablyTransientClickhouseError(err)) return false;
   const msg = describeError(err);
@@ -227,8 +235,15 @@ async function insertWithRetry(
       await insertRows(ch, config.clickhouseDatabase, config.clickhouseTable, rows);
       return;
     } catch (err) {
+      const isTransient = isProbablyTransientClickhouseError(err);
       if (attempt >= config.clickhouseInsertMaxRetries) {
-        logger.error({ err, reason, rows: rows.length, attempt }, "clickhouse insert failed (giving up)");
+        logger.error({ err, reason, rows: rows.length, attempt, isTransient }, "clickhouse insert failed (giving up)");
+        if (isTransient) {
+          const e = new Error("ClickHouse temporarily unavailable") as ClickhouseUnavailableError;
+          e.code = "CLICKHOUSE_UNAVAILABLE";
+          e.cause = err;
+          throw e;
+        }
         throw err;
       }
       const backoff = Math.min(
@@ -297,6 +312,8 @@ async function main(): Promise<void> {
     clickhouseInsertMessagesFailed: 0
   };
 
+  let consecutiveClickhouseUnavailable = 0;
+
   const publishDlq = async (dlq: TelemetryDlqV1) => {
     const trunc = truncateUtf8(dlq.raw_payload, config.dlqRawPayloadMaxBytes);
     const normalized: TelemetryDlqV1 = {
@@ -361,6 +378,7 @@ async function main(): Promise<void> {
         try {
           await insertWithRetry(ch, config, logger, reason, allRows);
           stats.clickhouseInsertBatchesOk += 1;
+          consecutiveClickhouseUnavailable = 0;
           logger.info(
             { reason, rows: allRows.length, messages: pending.length, tookMs: Date.now() - startedAt },
             "clickhouse insert ok"
@@ -385,6 +403,20 @@ async function main(): Promise<void> {
           await ctx.commitOffsetsIfNecessary();
           return;
         } catch (err) {
+          if (isClickhouseUnavailableError(err)) {
+            consecutiveClickhouseUnavailable += 1;
+            const exp = Math.min(8, Math.max(0, consecutiveClickhouseUnavailable - 1));
+            const cooldown = Math.min(
+              config.clickhouseUnavailableCooldownMaxMs,
+              config.clickhouseUnavailableCooldownMs * Math.pow(2, exp)
+            );
+            logger.warn(
+              { reason, attemptWindow: consecutiveClickhouseUnavailable, cooldownMs: cooldown, err: err.cause ?? err },
+              "clickhouse unavailable; entering cooldown"
+            );
+            await sleep(cooldown);
+            throw err;
+          }
           if (!isProbablyClickhouseDataError(err)) throw err;
 
           logger.warn(
@@ -447,9 +479,10 @@ async function main(): Promise<void> {
         }
       };
 
-      for (const message of batch.messages) {
-        if (!ctx.isRunning() || ctx.isStale()) break;
-        await ctx.heartbeat();
+      try {
+        for (const message of batch.messages) {
+          if (!ctx.isRunning() || ctx.isStale()) break;
+          await ctx.heartbeat();
 
         const traceId = newTraceId();
         const raw = message.value?.toString("utf-8") ?? "";
@@ -524,25 +557,32 @@ async function main(): Promise<void> {
             pendingRowsCount = 0;
             lastFlushAt = Date.now();
           }
-        } catch (err) {
-          await publishDlq({
-            schema_version: 1,
-            reason_code: "writer_invalid_json",
-            reason_detail: describeError(err),
-            received_ts: isoNow(),
-            device_id: null,
-            raw_payload: raw
-          });
-          logger.warn({ traceId, topic: batch.topic, partition: batch.partition, err }, "kafka message parse failed (dlq)");
-          ctx.resolveOffset(message.offset);
-          stats.kafkaMessagesSkipped += 1;
+          } catch (err) {
+            await publishDlq({
+              schema_version: 1,
+              reason_code: "writer_invalid_json",
+              reason_detail: describeError(err),
+              received_ts: isoNow(),
+              device_id: null,
+              raw_payload: raw
+            });
+            logger.warn({ traceId, topic: batch.topic, partition: batch.partition, err }, "kafka message parse failed (dlq)");
+            ctx.resolveOffset(message.offset);
+            stats.kafkaMessagesSkipped += 1;
+          }
         }
-      }
 
-      await flush("batch_end");
-      pendingRowsCount = 0;
-      await ctx.heartbeat();
-      await ctx.commitOffsetsIfNecessary();
+        await flush("batch_end");
+        pendingRowsCount = 0;
+        await ctx.heartbeat();
+        await ctx.commitOffsetsIfNecessary();
+      } catch (err) {
+        if (isClickhouseUnavailableError(err)) {
+          // cooldown already applied; do not resolve offsets so we can retry later
+          return;
+        }
+        throw err;
+      }
     }
   });
 
