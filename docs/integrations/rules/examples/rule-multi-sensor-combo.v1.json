@@ -1,0 +1,29 @@
+{
+  "dslVersion": 1,
+  "name": "位移+倾角组合告警",
+  "scope": {
+    "type": "station",
+    "stationId": "7b0f2d41-0b25-4d16-9a38-7283a4dcdb4e"
+  },
+  "enabled": true,
+  "severity": "critical",
+  "timeField": "received",
+  "missing": { "policy": "ignore" },
+  "when": {
+    "op": "AND",
+    "items": [
+      { "sensorKey": "displacement_mm", "operator": ">=", "value": 30 },
+      { "sensorKey": "tilt_x_deg", "operator": ">=", "value": 3 }
+    ]
+  },
+  "window": { "type": "duration", "minutes": 10, "minPoints": 6 },
+  "hysteresis": { "recoverBelow": 2.5 },
+  "actions": [
+    {
+      "type": "emit_alert",
+      "titleTemplate": "组合告警",
+      "messageTemplate": "位移与倾角同时异常"
+    }
+  ]
+}
+

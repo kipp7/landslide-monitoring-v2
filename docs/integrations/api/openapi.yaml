@@ -1,0 +1,2859 @@
+﻿openapi: 3.0.3
+info:
+  title: Landslide Monitoring API (v2)
+  version: 0.1.0
+  description: |
+    本文件是 API 契约的机器可读入口（契约优先），与 `docs/integrations/api/*.md` 保持一致。
+
+servers:
+  - url: /api/v1
+
+tags:
+  - name: auth
+  - name: users
+  - name: devices
+  - name: stations
+  - name: data
+  - name: alerts
+  - name: system
+
+security:
+  - BearerAuth: []
+
+paths:
+  /auth/login:
+    post:
+      tags: [auth]
+      summary: User login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/LoginResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /auth/refresh:
+    post:
+      tags: [auth]
+      summary: Refresh token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /auth/logout:
+    post:
+      tags: [auth]
+      summary: Logout
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /auth/me:
+    get:
+      tags: [auth]
+      summary: Get current user
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/CurrentUser"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /auth/password:
+    put:
+      tags: [auth]
+      summary: Change password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /users:
+    get:
+      tags: [users]
+      summary: List users
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: keyword
+          in: query
+          required: false
+          schema: { type: string }
+        - name: status
+          in: query
+          required: false
+          schema: { type: string, enum: [active, inactive, locked] }
+        - name: roleId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PaginatedUsers"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+    post:
+      tags: [users]
+      summary: Create user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /users/{userId}:
+    parameters:
+      - $ref: "#/components/parameters/UserIdPath"
+    get:
+      tags: [users]
+      summary: Get user detail
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/User"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+    put:
+      tags: [users]
+      summary: Update user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+    delete:
+      tags: [users]
+      summary: Delete user
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /users/{userId}/reset-password:
+    parameters:
+      - $ref: "#/components/parameters/UserIdPath"
+    post:
+      tags: [users]
+      summary: Reset user password
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /roles:
+    get:
+      tags: [users]
+      summary: List roles
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /permissions:
+    get:
+      tags: [users]
+      summary: List permissions
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /stations:
+    get:
+      tags: [stations]
+      summary: List stations
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: keyword
+          in: query
+          required: false
+          schema: { type: string }
+        - name: status
+          in: query
+          required: false
+          schema: { type: string, enum: [active, inactive, maintenance] }
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+    post:
+      tags: [stations]
+      summary: Create station
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStationRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /stations/{stationId}:
+    parameters:
+      - $ref: "#/components/parameters/StationIdPath"
+    get:
+      tags: [stations]
+      summary: Get station detail
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+    put:
+      tags: [stations]
+      summary: Update station
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateStationRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+    delete:
+      tags: [stations]
+      summary: Delete station
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /health:
+    get:
+      tags: [system]
+      summary: Health check
+      security: []
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /devices:
+    get:
+      tags: [devices]
+      summary: List devices
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: keyword
+          in: query
+          required: false
+          schema: { type: string }
+        - name: status
+          in: query
+          required: false
+          schema: { type: string, enum: [inactive, active, revoked] }
+        - name: stationId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - name: deviceType
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PaginatedDevices"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+    post:
+      tags: [devices]
+      summary: Create device (returns secret once)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDeviceRequest"
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/CreateDeviceResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /devices/{deviceId}:
+    parameters:
+      - $ref: "#/components/parameters/DeviceIdPath"
+    get:
+      tags: [devices]
+      summary: Get device detail
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Device"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+    put:
+      tags: [devices]
+      summary: Update device
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateDeviceRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /devices/{deviceId}/revoke:
+    parameters:
+      - $ref: "#/components/parameters/DeviceIdPath"
+    put:
+      tags: [devices]
+      summary: Revoke device (deny MQTT)
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /sensors:
+    get:
+      tags: [devices]
+      summary: List global sensors dictionary
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [list]
+                        properties:
+                          list:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/Sensor"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /devices/{deviceId}/sensors:
+    parameters:
+      - $ref: "#/components/parameters/DeviceIdPath"
+    put:
+      tags: [devices]
+      summary: Declare device supported sensors (optional)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateDeviceSensorsRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /devices/{deviceId}/commands:
+    parameters:
+      - $ref: "#/components/parameters/DeviceIdPath"
+    get:
+      tags: [devices]
+      summary: List device commands
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: status
+          in: query
+          required: false
+          schema: { type: string, enum: [queued, sent, acked, failed, timeout, canceled] }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PaginatedDeviceCommands"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+    post:
+      tags: [devices]
+      summary: Create device command
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDeviceCommandRequest"
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/CreateDeviceCommandResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /devices/{deviceId}/commands/{commandId}:
+    parameters:
+      - $ref: "#/components/parameters/DeviceIdPath"
+      - name: commandId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [devices]
+      summary: Get device command detail
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DeviceCommand"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /devices/{deviceId}/command-events:
+    parameters:
+      - $ref: "#/components/parameters/DeviceIdPath"
+    get:
+      tags: [devices]
+      summary: List device command events
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: startTime
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: endTime
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: commandId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - name: eventType
+          in: query
+          required: false
+          schema: { type: string, enum: [COMMAND_SENT, COMMAND_ACKED, COMMAND_FAILED, COMMAND_TIMEOUT] }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PaginatedDeviceCommandEvents"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /devices/{deviceId}/command-events/stats:
+    parameters:
+      - $ref: "#/components/parameters/DeviceIdPath"
+    get:
+      tags: [devices]
+      summary: Get device command event stats
+      parameters:
+        - name: startTime
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: endTime
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: eventType
+          in: query
+          required: false
+          schema: { type: string, enum: [COMMAND_SENT, COMMAND_ACKED, COMMAND_FAILED, COMMAND_TIMEOUT] }
+        - name: bucket
+          in: query
+          required: false
+          schema: { type: string, enum: ["1h", "1d"] }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DeviceCommandEventStats"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /devices/{deviceId}/command-events/{eventId}:
+    parameters:
+      - $ref: "#/components/parameters/DeviceIdPath"
+      - name: eventId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [devices]
+      summary: Get device command event detail
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DeviceCommandEvent"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /devices/{deviceId}/command-notifications:
+    parameters:
+      - $ref: "#/components/parameters/DeviceIdPath"
+    get:
+      tags: [devices]
+      summary: List device command notifications
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: startTime
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: endTime
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: commandId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - name: eventType
+          in: query
+          required: false
+          schema: { type: string, enum: [COMMAND_SENT, COMMAND_ACKED, COMMAND_FAILED, COMMAND_TIMEOUT] }
+        - name: status
+          in: query
+          required: false
+          schema: { type: string, enum: [pending, sent, delivered, failed] }
+        - name: notifyType
+          in: query
+          required: false
+          schema: { type: string, enum: [app, sms, email, wechat] }
+        - name: unreadOnly
+          in: query
+          required: false
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PaginatedDeviceCommandNotifications"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /devices/{deviceId}/command-notifications/stats:
+    parameters:
+      - $ref: "#/components/parameters/DeviceIdPath"
+    get:
+      tags: [devices]
+      summary: Get device command notification stats
+      parameters:
+        - name: startTime
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: endTime
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: notifyType
+          in: query
+          required: false
+          schema: { type: string, enum: [app, sms, email, wechat] }
+        - name: bucket
+          in: query
+          required: false
+          schema: { type: string, enum: ["1h", "1d"] }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DeviceCommandNotificationStats"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /devices/{deviceId}/command-notifications/{notificationId}:
+    parameters:
+      - $ref: "#/components/parameters/DeviceIdPath"
+      - name: notificationId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [devices]
+      summary: Get device command notification detail
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DeviceCommandNotification"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /devices/{deviceId}/command-notifications/{notificationId}/read:
+    parameters:
+      - $ref: "#/components/parameters/DeviceIdPath"
+      - name: notificationId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    put:
+      tags: [devices]
+      summary: Mark device command notification as read
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/MarkNotificationReadResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /telemetry/dlq:
+    get:
+      tags: [data]
+      summary: List telemetry DLQ messages (ops)
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: reasonCode
+          in: query
+          required: false
+          schema: { type: string }
+        - name: deviceId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - name: startTime
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: endTime
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PaginatedTelemetryDlqMessages"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /telemetry/dlq/stats:
+    get:
+      tags: [data]
+      summary: Get telemetry DLQ stats (ops)
+      parameters:
+        - name: startTime
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: endTime
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: deviceId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/TelemetryDlqStats"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /telemetry/dlq/{messageId}:
+    parameters:
+      - name: messageId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [data]
+      summary: Get telemetry DLQ message detail
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/TelemetryDlqMessageDetail"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /data/state/{deviceId}:
+    parameters:
+      - $ref: "#/components/parameters/DeviceIdPath"
+    get:
+      tags: [data]
+      summary: Get latest device state (shadow)
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DeviceStateResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /data/series/{deviceId}:
+    parameters:
+      - $ref: "#/components/parameters/DeviceIdPath"
+    get:
+      tags: [data]
+      summary: Get device time series by sensorKeys
+      parameters:
+        - name: startTime
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: endTime
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: sensorKeys
+          in: query
+          required: true
+          schema: { type: string, description: Comma-separated keys }
+        - name: interval
+          in: query
+          required: false
+          schema: { type: string, enum: [raw, 1m, 5m, 1h, 1d], default: raw }
+        - name: timeField
+          in: query
+          required: false
+          schema: { type: string, enum: [received, event], default: received }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DeviceSeriesResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /data/raw/{deviceId}:
+    parameters:
+      - $ref: "#/components/parameters/DeviceIdPath"
+    get:
+      tags: [data]
+      summary: Get raw telemetry points (debug/export)
+      parameters:
+        - name: startTime
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: endTime
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: sensorKey
+          in: query
+          required: true
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100000, default: 10000 }
+        - name: order
+          in: query
+          required: false
+          schema: { type: string, enum: [asc, desc], default: asc }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DeviceRawResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /data/statistics:
+    get:
+      tags: [data]
+      summary: Get aggregated statistics
+      parameters:
+        - name: scope
+          in: query
+          required: true
+          schema: { type: string, enum: [device, station] }
+        - name: deviceId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - name: stationId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - name: sensorKey
+          in: query
+          required: true
+          schema: { type: string }
+        - name: startTime
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: endTime
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: interval
+          in: query
+          required: false
+          schema: { type: string, enum: [1h, 1d], default: 1h }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/StatisticsResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /data/export:
+    post:
+      tags: [data]
+      summary: Export data (async recommended)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExportRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /alerts:
+    get:
+      tags: [alerts]
+      summary: List alerts (aggregated by alertId)
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: deviceId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - name: stationId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - name: severity
+          in: query
+          required: false
+          schema: { type: string, enum: [low, medium, high, critical] }
+        - name: status
+          in: query
+          required: false
+          schema: { type: string, enum: [active, acked, resolved] }
+        - name: startTime
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: endTime
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PaginatedAlerts"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /alerts/{alertId}/events:
+    parameters:
+      - $ref: "#/components/parameters/AlertIdPath"
+    get:
+      tags: [alerts]
+      summary: Get alert event stream by alertId
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/AlertEventsResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /alerts/{alertId}/ack:
+    parameters:
+      - $ref: "#/components/parameters/AlertIdPath"
+    post:
+      tags: [alerts]
+      summary: Ack alert
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AlertActionRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /alerts/{alertId}/resolve:
+    parameters:
+      - $ref: "#/components/parameters/AlertIdPath"
+    post:
+      tags: [alerts]
+      summary: Resolve alert
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AlertActionRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /alert-rules:
+    get:
+      tags: [alerts]
+      summary: List alert rules (containers)
+      parameters:
+        - name: isActive
+          in: query
+          required: false
+          schema: { type: boolean }
+        - name: scope
+          in: query
+          required: false
+          schema: { type: string, enum: [device, station, global] }
+        - name: deviceId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - name: stationId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+    post:
+      tags: [alerts]
+      summary: Create rule (container + v1 version)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAlertRuleRequest"
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/CreateAlertRuleResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /alert-rules/{ruleId}:
+    parameters:
+      - $ref: "#/components/parameters/RuleIdPath"
+    get:
+      tags: [alerts]
+      summary: Get rule detail
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+    put:
+      tags: [alerts]
+      summary: Update rule container (enable/disable)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAlertRuleRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /alert-rules/{ruleId}/versions:
+    parameters:
+      - $ref: "#/components/parameters/RuleIdPath"
+    get:
+      tags: [alerts]
+      summary: List rule versions
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/AlertRuleVersionsResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+    post:
+      tags: [alerts]
+      summary: Publish new rule version
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublishRuleVersionRequest"
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PublishRuleVersionResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /alert-rules/{ruleId}/versions/{version}:
+    parameters:
+      - $ref: "#/components/parameters/RuleIdPath"
+      - name: version
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+    get:
+      tags: [alerts]
+      summary: Get rule version detail
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /alert-rules/{ruleId}/versions/{version}/replay:
+    parameters:
+      - $ref: "#/components/parameters/RuleIdPath"
+      - name: version
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+    post:
+      tags: [alerts]
+      summary: Dry-run replay for alert rule version (ClickHouse)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReplayAlertRuleRequest"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ReplayAlertRuleResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /system/configs:
+    get:
+      tags: [system]
+      summary: Get public system configs
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+    put:
+      tags: [system]
+      summary: Update system configs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSystemConfigsRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /system/logs/operation:
+    get:
+      tags: [system]
+      summary: Get operation logs
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: userId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - name: module
+          in: query
+          required: false
+          schema: { type: string }
+        - name: action
+          in: query
+          required: false
+          schema: { type: string }
+        - name: startTime
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: endTime
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /system/logs/api-stats:
+    get:
+      tags: [system]
+      summary: Get API stats
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /system/status:
+    get:
+      tags: [system]
+      summary: Get system status
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /dashboard:
+    get:
+      tags: [system]
+      summary: Dashboard summary
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    Page:
+      name: page
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, default: 1 }
+    PageSize:
+      name: pageSize
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 200, default: 20 }
+    UserIdPath:
+      name: userId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    DeviceIdPath:
+      name: deviceId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    StationIdPath:
+      name: stationId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    AlertIdPath:
+      name: alertId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    RuleIdPath:
+      name: ruleId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    SuccessResponse:
+      description: ok
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/SuccessResponse"
+    ErrorResponse:
+      description: error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    UnauthorizedResponse:
+      description: unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    ForbiddenResponse:
+      description: forbidden
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    NotFoundResponse:
+      description: not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    ConflictResponse:
+      description: conflict
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    TooManyRequestsResponse:
+      description: too many requests
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    InternalServerErrorResponse:
+      description: internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    SuccessResponse:
+      type: object
+      required: [success, code, message, timestamp, traceId]
+      properties:
+        success: { type: boolean, enum: [true] }
+        code: { type: integer, example: 200 }
+        message: { type: string, example: ok }
+        data: {}
+        timestamp:
+          type: string
+          format: date-time
+          example: "2025-12-15T10:00:00Z"
+        traceId:
+          type: string
+          example: "req_01J..."
+
+    ErrorResponse:
+      type: object
+      required: [success, code, message, timestamp, traceId]
+      properties:
+        success: { type: boolean, enum: [false] }
+        code: { type: integer, example: 400 }
+        message: { type: string, example: 参数错误 }
+        error:
+          type: object
+          additionalProperties: true
+        timestamp:
+          type: string
+          format: date-time
+          example: "2025-12-15T10:00:00Z"
+        traceId:
+          type: string
+          example: "req_01J..."
+
+    Pagination:
+      type: object
+      required: [page, pageSize, total, totalPages]
+      properties:
+        page: { type: integer, minimum: 1 }
+        pageSize: { type: integer, minimum: 1 }
+        total: { type: integer, minimum: 0 }
+        totalPages: { type: integer, minimum: 0 }
+
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username: { type: string }
+        password: { type: string }
+
+    RefreshRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken: { type: string }
+
+    ChangePasswordRequest:
+      type: object
+      required: [oldPassword, newPassword]
+      properties:
+        oldPassword: { type: string }
+        newPassword: { type: string }
+
+    Role:
+      type: object
+      required: [roleId, name]
+      properties:
+        roleId: { type: string, format: uuid }
+        name: { type: string }
+        displayName: { type: string }
+
+    LoginResponse:
+      type: object
+      required: [token, refreshToken, expiresIn, user]
+      properties:
+        token: { type: string }
+        refreshToken: { type: string }
+        expiresIn: { type: integer }
+        user:
+          type: object
+          required: [userId, username, roles, permissions]
+          properties:
+            userId: { type: string, format: uuid }
+            username: { type: string }
+            realName: { type: string }
+            roles:
+              type: array
+              items: { type: string }
+            permissions:
+              type: array
+              items: { type: string }
+
+    CurrentUser:
+      type: object
+      required: [userId, username, roles, permissions]
+      properties:
+        userId: { type: string, format: uuid }
+        username: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        realName: { type: string }
+        roles:
+          type: array
+          items:
+            $ref: "#/components/schemas/Role"
+        permissions:
+          type: array
+          items: { type: string }
+
+    User:
+      type: object
+      required: [userId, username, status, createdAt]
+      properties:
+        userId: { type: string, format: uuid }
+        username: { type: string }
+        realName: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        status: { type: string, enum: [active, inactive, locked] }
+        roles:
+          type: array
+          items:
+            $ref: "#/components/schemas/Role"
+        lastLoginAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+
+    PaginatedUsers:
+      type: object
+      required: [list, pagination]
+      properties:
+        list:
+          type: array
+          items:
+            $ref: "#/components/schemas/User"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+
+    CreateUserRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username: { type: string }
+        password: { type: string }
+        realName: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        roleIds:
+          type: array
+          items: { type: string, format: uuid }
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        realName: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        status: { type: string, enum: [active, inactive, locked] }
+        roleIds:
+          type: array
+          items: { type: string, format: uuid }
+
+    CreateStationRequest:
+      type: object
+      required: [stationCode, stationName]
+      properties:
+        stationCode: { type: string }
+        stationName: { type: string }
+        latitude: { type: number }
+        longitude: { type: number }
+        metadata:
+          type: object
+          additionalProperties: true
+
+    UpdateStationRequest:
+      type: object
+      properties:
+        stationName: { type: string }
+        latitude: { type: number }
+        longitude: { type: number }
+        status: { type: string, enum: [active, inactive, maintenance] }
+        metadata:
+          type: object
+          additionalProperties: true
+
+    Device:
+      type: object
+      required: [deviceId, status, createdAt]
+      properties:
+        deviceId:
+          type: string
+          format: uuid
+        deviceName:
+          type: string
+        deviceType:
+          type: string
+        stationId:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          type: string
+          enum: [inactive, active, revoked]
+        lastSeenAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+          additionalProperties: true
+
+    CreateDeviceRequest:
+      type: object
+      properties:
+        deviceName:
+          type: string
+        deviceType:
+          type: string
+        stationId:
+          type: string
+          format: uuid
+          nullable: true
+        metadata:
+          type: object
+          additionalProperties: true
+
+    CreateDeviceResponse:
+      type: object
+      required: [deviceId, deviceSecret, schemaVersion, credVersion]
+      properties:
+        deviceId:
+          type: string
+          format: uuid
+        deviceSecret:
+          type: string
+          description: Returned once, never stored in plaintext on server.
+        schemaVersion:
+          type: integer
+          example: 1
+        credVersion:
+          type: integer
+          example: 1
+
+    UpdateDeviceRequest:
+      type: object
+      properties:
+        deviceName: { type: string }
+        stationId: { type: string, format: uuid, nullable: true }
+        metadata:
+          type: object
+          additionalProperties: true
+
+    Sensor:
+      type: object
+      required: [sensorKey, dataType]
+      properties:
+        sensorKey: { type: string, pattern: "^[a-z0-9_]+$" }
+        unit: { type: string }
+        dataType: { type: string, enum: [float, int, bool, string] }
+        displayName: { type: string }
+
+    UpdateDeviceSensorsRequest:
+      type: object
+      required: [sensors]
+      properties:
+        sensors:
+          type: array
+          items:
+            type: object
+            required: [sensorKey, status]
+            properties:
+              sensorKey: { type: string }
+              status: { type: string, enum: [enabled, disabled] }
+
+    CreateDeviceCommandRequest:
+      type: object
+      required: [commandType, payload]
+      properties:
+        commandType: { type: string }
+        payload:
+          type: object
+          additionalProperties: true
+
+    CreateDeviceCommandResponse:
+      type: object
+      required: [commandId, status]
+      properties:
+        commandId: { type: string, format: uuid }
+        status: { type: string, enum: [queued, sent, acked, failed, timeout] }
+
+    DeviceCommand:
+      type: object
+      required: [commandId, deviceId, commandType, payload, status, createdAt, updatedAt]
+      properties:
+        commandId: { type: string, format: uuid }
+        deviceId: { type: string, format: uuid }
+        commandType: { type: string }
+        payload:
+          type: object
+          additionalProperties: true
+        status: { type: string, enum: [queued, sent, acked, failed, timeout, canceled] }
+        sentAt: { type: string, format: date-time, nullable: true }
+        ackedAt: { type: string, format: date-time, nullable: true }
+        result:
+          type: object
+          additionalProperties: true
+        errorMessage: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    PaginatedDeviceCommands:
+      type: object
+      required: [list, pagination]
+      properties:
+        list:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeviceCommand"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+
+    DeviceCommandEvent:
+      type: object
+      required: [eventId, eventType, commandId, deviceId, status, createdAt, ingestedAt]
+      properties:
+        eventId: { type: string, format: uuid }
+        eventType:
+          type: string
+          enum: [COMMAND_SENT, COMMAND_ACKED, COMMAND_FAILED, COMMAND_TIMEOUT]
+        commandId: { type: string, format: uuid }
+        deviceId: { type: string, format: uuid }
+        status: { type: string, enum: [queued, sent, acked, failed, timeout, canceled] }
+        detail: { type: string }
+        result:
+          type: object
+          additionalProperties: true
+        createdAt: { type: string, format: date-time }
+        ingestedAt: { type: string, format: date-time }
+
+    DeviceCommandEventStats:
+      type: object
+      required: [deviceId, totals, byEventType, bucket, byBucket]
+      properties:
+        deviceId: { type: string, format: uuid }
+        window:
+          type: object
+          nullable: true
+          required: [startTime, endTime]
+          properties:
+            startTime: { type: string, format: date-time }
+            endTime: { type: string, format: date-time }
+        eventType: { type: string }
+        bucket: { type: string }
+        totals:
+          type: object
+          required: [total]
+          properties:
+            total: { type: integer }
+        byEventType:
+          type: array
+          items:
+            type: object
+            required: [eventType, count]
+            properties:
+              eventType:
+                type: string
+                enum: [COMMAND_SENT, COMMAND_ACKED, COMMAND_FAILED, COMMAND_TIMEOUT]
+              count: { type: integer }
+        byBucket:
+          type: array
+          items:
+            type: object
+            required: [bucketStartTime, total]
+            properties:
+              bucketStartTime: { type: string, format: date-time }
+              total: { type: integer }
+
+    PaginatedDeviceCommandEvents:
+      type: object
+      required: [list, pagination]
+      properties:
+        list:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeviceCommandEvent"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+
+    DeviceCommandNotification:
+      type: object
+      required:
+        - notificationId
+        - eventId
+        - eventType
+        - commandId
+        - deviceId
+        - notifyType
+        - status
+        - title
+        - content
+        - errorMessage
+        - createdAt
+      properties:
+        notificationId: { type: string, format: uuid }
+        eventId: { type: string, format: uuid }
+        eventType:
+          type: string
+          enum: [COMMAND_SENT, COMMAND_ACKED, COMMAND_FAILED, COMMAND_TIMEOUT]
+        commandId: { type: string, format: uuid }
+        deviceId: { type: string, format: uuid }
+        notifyType: { type: string, enum: [app, sms, email, wechat] }
+        status: { type: string, enum: [pending, sent, delivered, failed] }
+        title: { type: string }
+        content: { type: string }
+        errorMessage: { type: string }
+        createdAt: { type: string, format: date-time }
+        sentAt: { type: string, format: date-time, nullable: true }
+        deliveredAt: { type: string, format: date-time, nullable: true }
+        readAt: { type: string, format: date-time, nullable: true }
+
+    PaginatedDeviceCommandNotifications:
+      type: object
+      required: [list, pagination]
+      properties:
+        list:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeviceCommandNotification"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+
+    DeviceCommandNotificationStats:
+      type: object
+      required: [deviceId, totals, byStatus, byNotifyType, byEventType, bucket, byBucket]
+      properties:
+        deviceId: { type: string, format: uuid }
+        window:
+          type: object
+          nullable: true
+          required: [startTime, endTime]
+          properties:
+            startTime: { type: string, format: date-time }
+            endTime: { type: string, format: date-time }
+        notifyType: { type: string }
+        totals:
+          type: object
+          required: [total, unread]
+          properties:
+            total: { type: integer }
+            unread: { type: integer }
+        byStatus:
+          type: array
+          items:
+            type: object
+            required: [status, count]
+            properties:
+              status: { type: string, enum: [pending, sent, delivered, failed] }
+              count: { type: integer }
+        byNotifyType:
+          type: array
+          items:
+            type: object
+            required: [notifyType, count]
+            properties:
+              notifyType: { type: string, enum: [app, sms, email, wechat] }
+              count: { type: integer }
+        byEventType:
+          type: array
+          items:
+            type: object
+            required: [eventType, count]
+            properties:
+              eventType:
+                type: string
+                enum: [COMMAND_SENT, COMMAND_ACKED, COMMAND_FAILED, COMMAND_TIMEOUT]
+              count: { type: integer }
+        bucket: { type: string }
+        byBucket:
+          type: array
+          items:
+            type: object
+            required: [bucketStartTime, totals]
+            properties:
+              bucketStartTime: { type: string, format: date-time }
+              totals:
+                type: object
+                required: [total, unread]
+                properties:
+                  total: { type: integer }
+                  unread: { type: integer }
+
+    MarkNotificationReadResponse:
+      type: object
+      required: [notificationId, readAt]
+      properties:
+        notificationId: { type: string, format: uuid }
+        readAt: { type: string }
+
+    TelemetryDlqMessage:
+      type: object
+      required: [messageId, receivedAt, deviceId, reasonCode, reasonDetail, rawPayloadPreview, kafka, createdAt]
+      properties:
+        messageId: { type: string, format: uuid }
+        receivedAt: { type: string, format: date-time }
+        deviceId: { type: string }
+        reasonCode: { type: string }
+        reasonDetail: { type: string }
+        rawPayloadPreview: { type: string }
+        kafka:
+          type: object
+          required: [topic, partition, offset, key]
+          properties:
+            topic: { type: string }
+            partition: { type: integer }
+            offset: { type: string }
+            key: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    TelemetryDlqMessageDetail:
+      type: object
+      required: [messageId, receivedAt, deviceId, reasonCode, reasonDetail, rawPayload, kafka, createdAt]
+      properties:
+        messageId: { type: string, format: uuid }
+        receivedAt: { type: string, format: date-time }
+        deviceId: { type: string }
+        reasonCode: { type: string }
+        reasonDetail: { type: string }
+        rawPayload: { type: string }
+        kafka:
+          type: object
+          required: [topic, partition, offset, key]
+          properties:
+            topic: { type: string }
+            partition: { type: integer }
+            offset: { type: string }
+            key: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    PaginatedTelemetryDlqMessages:
+      type: object
+      required: [list, pagination]
+      properties:
+        list:
+          type: array
+          items:
+            $ref: "#/components/schemas/TelemetryDlqMessage"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+
+    TelemetryDlqStats:
+      type: object
+      required: [window, deviceId, totals, byReasonCode]
+      properties:
+        window:
+          type: object
+          nullable: true
+          required: [startTime, endTime]
+          properties:
+            startTime: { type: string, format: date-time }
+            endTime: { type: string, format: date-time }
+        deviceId: { type: string }
+        totals:
+          type: object
+          required: [total]
+          properties:
+            total: { type: integer }
+        byReasonCode:
+          type: array
+          items:
+            type: object
+            required: [reasonCode, count]
+            properties:
+              reasonCode: { type: string }
+              count: { type: integer }
+
+    DeviceStateResponse:
+      type: object
+      required: [deviceId, updatedAt, state]
+      properties:
+        deviceId: { type: string, format: uuid }
+        updatedAt: { type: string, format: date-time }
+        state:
+          type: object
+          required: [metrics]
+          properties:
+            metrics:
+              type: object
+              additionalProperties: true
+            meta:
+              type: object
+              additionalProperties: true
+
+    DeviceSeriesResponse:
+      type: object
+      required: [deviceId, startTime, endTime, interval, series]
+      properties:
+        deviceId: { type: string, format: uuid }
+        startTime: { type: string, format: date-time }
+        endTime: { type: string, format: date-time }
+        interval: { type: string }
+        series:
+          type: array
+          items:
+            type: object
+            required: [sensorKey, points]
+            properties:
+              sensorKey: { type: string }
+              unit: { type: string }
+              dataType: { type: string }
+              points:
+                type: array
+                items:
+                  type: object
+                  required: [ts, value]
+                  properties:
+                    ts: { type: string, format: date-time }
+                    value: {}
+        missing:
+          type: array
+          items:
+            type: object
+            required: [sensorKey, reason]
+            properties:
+              sensorKey: { type: string }
+              reason: { type: string }
+
+    DeviceRawResponse:
+      type: object
+      required: [deviceId, sensorKey, list]
+      properties:
+        deviceId: { type: string, format: uuid }
+        sensorKey: { type: string }
+        list:
+          type: array
+          items:
+            type: object
+            required: [receivedTs, value]
+            properties:
+              receivedTs: { type: string, format: date-time }
+              eventTs: { type: string, format: date-time, nullable: true }
+              seq: { type: integer, nullable: true }
+              value: {}
+              quality: { type: integer, nullable: true }
+
+    StatisticsResponse:
+      type: object
+      required: [scope, sensorKey, interval, buckets]
+      properties:
+        scope: { type: string, enum: [device, station] }
+        sensorKey: { type: string }
+        interval: { type: string }
+        buckets:
+          type: array
+          items:
+            type: object
+            required: [ts, count]
+            properties:
+              ts: { type: string, format: date-time }
+              min: { type: number, nullable: true }
+              max: { type: number, nullable: true }
+              avg: { type: number, nullable: true }
+              count: { type: integer, minimum: 0 }
+
+    ExportRequest:
+      type: object
+      required: [scope, startTime, endTime, sensorKeys, format]
+      properties:
+        scope: { type: string, enum: [device, station] }
+        deviceId: { type: string, format: uuid }
+        stationId: { type: string, format: uuid }
+        startTime: { type: string, format: date-time }
+        endTime: { type: string, format: date-time }
+        sensorKeys:
+          type: array
+          items: { type: string }
+        format: { type: string, enum: [csv, json] }
+
+    PaginatedDevices:
+      type: object
+      required: [list, pagination]
+      properties:
+        list:
+          type: array
+          items:
+            $ref: "#/components/schemas/Device"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+
+    AlertSummary:
+      type: object
+      properties:
+        active: { type: integer, minimum: 0 }
+        acked: { type: integer, minimum: 0 }
+        resolved: { type: integer, minimum: 0 }
+        high: { type: integer, minimum: 0 }
+        critical: { type: integer, minimum: 0 }
+
+    Alert:
+      type: object
+      required: [alertId, status, severity, ruleId, ruleVersion, lastEventAt]
+      properties:
+        alertId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [active, acked, resolved]
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        title:
+          type: string
+        deviceId:
+          type: string
+          format: uuid
+          nullable: true
+        stationId:
+          type: string
+          format: uuid
+          nullable: true
+        ruleId:
+          type: string
+          format: uuid
+        ruleVersion:
+          type: integer
+          minimum: 1
+        lastEventAt:
+          type: string
+          format: date-time
+
+    PaginatedAlerts:
+      type: object
+      required: [list, pagination, summary]
+      properties:
+        list:
+          type: array
+          items:
+            $ref: "#/components/schemas/Alert"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+        summary:
+          $ref: "#/components/schemas/AlertSummary"
+
+    AlertActionRequest:
+      type: object
+      properties:
+        notes: { type: string }
+
+    AlertEvent:
+      type: object
+      required: [eventId, eventType, createdAt, ruleId, ruleVersion]
+      properties:
+        eventId: { type: string, format: uuid }
+        eventType: { type: string, enum: [ALERT_TRIGGER, ALERT_UPDATE, ALERT_RESOLVE, ALERT_ACK] }
+        severity: { type: string, enum: [low, medium, high, critical] }
+        createdAt: { type: string, format: date-time }
+        ruleId: { type: string, format: uuid }
+        ruleVersion: { type: integer, minimum: 1 }
+        deviceId: { type: string, format: uuid, nullable: true }
+        stationId: { type: string, format: uuid, nullable: true }
+        evidence:
+          type: object
+          additionalProperties: true
+
+    AlertEventsResponse:
+      type: object
+      required: [alertId, events]
+      properties:
+        alertId: { type: string, format: uuid }
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/AlertEvent"
+
+    CreateAlertRuleRequest:
+      type: object
+      required: [rule, dsl]
+      properties:
+        rule:
+          type: object
+          required: [ruleName, scope, isActive]
+          properties:
+            ruleName: { type: string }
+            description: { type: string }
+            scope:
+              type: object
+              required: [type]
+              properties:
+                type: { type: string, enum: [device, station, global] }
+                deviceId: { type: string, format: uuid }
+                stationId: { type: string, format: uuid }
+            isActive: { type: boolean }
+        dsl:
+          type: object
+          additionalProperties: true
+
+    UpdateAlertRuleRequest:
+      type: object
+      properties:
+        isActive: { type: boolean }
+
+    PublishRuleVersionRequest:
+      type: object
+      required: [dsl]
+      properties:
+        dsl:
+          type: object
+          additionalProperties: true
+
+    CreateAlertRuleResponse:
+      type: object
+      required: [ruleId, ruleVersion]
+      properties:
+        ruleId: { type: string, format: uuid }
+        ruleVersion: { type: integer, minimum: 1 }
+
+    PublishRuleVersionResponse:
+      type: object
+      required: [ruleId, ruleVersion]
+      properties:
+        ruleId: { type: string, format: uuid }
+        ruleVersion: { type: integer, minimum: 1 }
+
+    ReplayAlertRuleRequest:
+      type: object
+      required: [startTime, endTime]
+      additionalProperties: false
+      properties:
+        startTime: { type: string, format: date-time }
+        endTime: { type: string, format: date-time }
+        deviceIds:
+          type: array
+          items: { type: string, format: uuid }
+
+    ReplayAlertRuleResponse:
+      type: object
+      required: [ruleId, version, startTime, endTime, sensorKeys, devices, totals]
+      properties:
+        ruleId: { type: string, format: uuid }
+        version: { type: integer, minimum: 1 }
+        startTime: { type: string, format: date-time }
+        endTime: { type: string, format: date-time }
+        sensorKeys:
+          type: array
+          items: { type: string }
+        devices:
+          type: array
+          items:
+            type: object
+            required: [deviceId, points, events]
+            properties:
+              deviceId: { type: string, format: uuid }
+              points: { type: integer, minimum: 0 }
+              events:
+                type: array
+                items:
+                  type: object
+                  required: [eventType, ts, evidence, explain]
+                  properties:
+                    eventType: { type: string, enum: [ALERT_TRIGGER, ALERT_UPDATE, ALERT_RESOLVE, ALERT_ACK] }
+                    ts: { type: string, format: date-time }
+                    evidence:
+                      type: object
+                      additionalProperties: true
+                    explain: { type: string }
+        totals:
+          type: object
+          required: [rows, points, events]
+          properties:
+            rows: { type: integer, minimum: 0 }
+            points: { type: integer, minimum: 0 }
+            events: { type: integer, minimum: 0 }
+
+    AlertRuleVersionsResponse:
+      type: object
+      required: [ruleId, list]
+      properties:
+        ruleId: { type: string, format: uuid }
+        list:
+          type: array
+          items:
+            type: object
+            required: [version, dslVersion, enabled, severity, createdAt, createdBy]
+            properties:
+              version: { type: integer, minimum: 1 }
+              dslVersion: { type: integer, minimum: 1 }
+              enabled: { type: boolean }
+              severity: { type: string, enum: [low, medium, high, critical] }
+              createdAt: { type: string, format: date-time }
+              createdBy: { type: string }
+
+    UpdateSystemConfigsRequest:
+      type: object
+      required: [configs]
+      properties:
+        configs:
+          type: array
+          items:
+            type: object
+            required: [key, value]
+            properties:
+              key: { type: string }
+              value: { type: string }

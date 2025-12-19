@@ -1,0 +1,29 @@
+{
+  "dslVersion": 1,
+  "name": "AI 预测风险告警（算法模块）",
+  "scope": {
+    "type": "global"
+  },
+  "enabled": true,
+  "severity": "medium",
+  "timeField": "received",
+  "missing": { "policy": "ignore" },
+  "when": {
+    "algo": {
+      "provider": "ai_predict",
+      "sensorKey": "displacement_mm",
+      "horizon": "6h"
+    },
+    "operator": ">=",
+    "value": 0.8
+  },
+  "window": { "type": "points", "points": 60, "minPoints": 30 },
+  "actions": [
+    {
+      "type": "emit_alert",
+      "titleTemplate": "AI 预测风险升高",
+      "messageTemplate": "风险评分>=0.8 (horizon=6h)"
+    }
+  ]
+}
+

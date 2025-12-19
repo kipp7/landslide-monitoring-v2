@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "reason_code": "SCHEMA_VALIDATION_FAILED",
+  "reason_detail": "metrics.displacement_mm should be a number",
+  "received_ts": "2025-12-15T10:00:00.123Z",
+  "device_id": "2c1f2d8e-2bb7-4f58-bb6a-6c2a0f4a7a4c",
+  "raw_payload": "{\"schema_version\":1,\"device_id\":\"...\",\"metrics\":{\"displacement_mm\":\"NaN\"}}"
+}
+

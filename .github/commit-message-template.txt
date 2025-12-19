@@ -1,0 +1,14 @@
+<type>(<scope>): <subject>
+
+# type: feat|fix|docs|refactor|chore|test
+# scope: docs|api|mqtt|kafka|rules|storage|ci|repo|web|mobile|firmware|infra
+#
+# 变更说明（可选）：
+# - 为什么要改（why）
+# - 关键点（what）
+# - 风险/兼容性（risk）
+#
+# 示例：
+# docs(api): 补齐 auth 响应示例
+# chore(ci): 添加 quality-gates workflow
+

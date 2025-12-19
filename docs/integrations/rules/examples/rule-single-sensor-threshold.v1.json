@@ -1,0 +1,26 @@
+{
+  "dslVersion": 1,
+  "name": "位移阈值告警",
+  "scope": {
+    "type": "device",
+    "deviceId": "2c1f2d8e-2bb7-4f58-bb6a-6c2a0f4a7a4c"
+  },
+  "enabled": true,
+  "severity": "high",
+  "timeField": "received",
+  "missing": { "policy": "ignore" },
+  "when": {
+    "sensorKey": "displacement_mm",
+    "operator": ">=",
+    "value": 30
+  },
+  "window": { "type": "none" },
+  "actions": [
+    {
+      "type": "emit_alert",
+      "titleTemplate": "位移超阈值",
+      "messageTemplate": "位移={{value}}mm (>=30mm)"
+    }
+  ]
+}
+

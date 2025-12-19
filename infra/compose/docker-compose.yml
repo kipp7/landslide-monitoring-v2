@@ -1,0 +1,138 @@
+# Docker Compose（单机）- 后端基础设施（v2）
+#
+# 目标：
+# - 单机不追求高可用，但必须可恢复（数据目录外置 + 备份/恢复 runbook）。
+# - 不写死：后续接入 services/* 时，不需要推翻基础设施。
+#
+# 用法（建议从仓库根目录执行）：
+# - 复制 env：copy infra/compose/env.example infra/compose/.env
+# - 启动：docker compose -f infra/compose/docker-compose.yml --env-file infra/compose/.env up -d
+# - 停止：docker compose -f infra/compose/docker-compose.yml --env-file infra/compose/.env down
+#
+# 重要：
+# - 默认密码仅用于本地开发，请在 `.env` 中修改强密码。
+# - `DATA_DIR` 建议使用仓库根目录下的 `data/`，以便备份/迁移。
+
+name: landslide-monitoring-v2
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: lsmv2_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${PG_USER:-landslide}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-change-me}
+      POSTGRES_DB: ${PG_DATABASE:-landslide_monitor}
+      TZ: Asia/Shanghai
+    volumes:
+      - ${DATA_DIR:-../../data}/postgres:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER:-landslide} -d ${PG_DATABASE:-landslide_monitor}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: lsmv2_redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-change-me}"]
+    volumes:
+      - ${DATA_DIR:-../../data}/redis:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a ${REDIS_PASSWORD:-change-me} ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.10
+    container_name: lsmv2_clickhouse
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_DB: ${CH_DATABASE:-landslide}
+      CLICKHOUSE_USER: ${CH_USER:-landslide}
+      CLICKHOUSE_PASSWORD: ${CH_PASSWORD:-change-me}
+      TZ: Asia/Shanghai
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    volumes:
+      # Default to a named volume (avoids Windows bind-mount rename/permission issues during INSERT).
+      # To use a bind-mount instead, set CH_DATA_DIR to something like: ../../data/clickhouse
+      - ${CH_DATA_DIR:-lsmv2_clickhouse_data}:/var/lib/clickhouse
+    ports:
+      - "8123:8123"  # HTTP
+      - "9000:9000"  # Native
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8123/ping | grep Ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  emqx:
+    image: emqx/emqx:5.7.2
+    container_name: lsmv2_emqx
+    restart: unless-stopped
+    environment:
+      EMQX_NAME: landslide_emqx
+      EMQX_HOST: 127.0.0.1
+      EMQX_DASHBOARD__DEFAULT_USERNAME: ${EMQX_DASHBOARD_USER:-admin}
+      EMQX_DASHBOARD__DEFAULT_PASSWORD: ${EMQX_DASHBOARD_PASSWORD:-change-me}
+    ports:
+      - "1883:1883"   # MQTT
+      - "8883:8883"   # MQTTS（后续启用证书）
+      - "18083:18083" # Dashboard
+
+  kafka:
+    image: apache/kafka:3.7.0
+    container_name: lsmv2_kafka
+    restart: unless-stopped
+    environment:
+      # Apache Kafka official image (KRaft single-node)
+      CLUSTER_ID: "${CLUSTER_ID:-5L6g3nShT-eMCtK--X86sw}"
+
+      KAFKA_NODE_ID: "1"
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT"
+      KAFKA_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_LOG_RETENTION_HOURS: "${KAFKA_LOG_RETENTION_HOURS:-72}"
+      TZ: Asia/Shanghai
+    volumes:
+      - ${DATA_DIR:-../../data}/kafka:/tmp/kraft-combined-logs
+    ports:
+      - "9094:9094" # 主机访问（EXTERNAL）
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list 1>/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:v0.7.2
+    container_name: lsmv2_kafka_ui
+    restart: unless-stopped
+    profiles: ["ops"]
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+    ports:
+      - "8080:8080"
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+volumes:
+  lsmv2_clickhouse_data:

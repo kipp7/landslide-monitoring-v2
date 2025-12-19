@@ -1,0 +1,6 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Docs Hub
+    url: https://github.com/kipp7/landslide-monitoring-v2
+    about: 请先阅读仓库 docs/README.md，再提交 issue。
+

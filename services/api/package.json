@@ -1,0 +1,31 @@
+{
+  "name": "@lsmv2/api-service",
+  "private": true,
+  "version": "0.0.0",
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint src --max-warnings=0",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@fastify/formbody": "^8.0.2",
+    "@clickhouse/client": "^1.12.1",
+    "@lsmv2/observability": "*",
+    "@lsmv2/rules": "*",
+    "@lsmv2/validation": "*",
+    "bcryptjs": "^3.0.2",
+    "dotenv": "^16.4.7",
+    "fastify": "^5.2.1",
+    "jsonwebtoken": "^9.0.2",
+    "kafkajs": "^2.2.4",
+    "pg": "^8.13.1",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.9",
+    "@types/pg": "^8.16.0"
+  }
+}
