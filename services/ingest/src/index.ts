@@ -99,6 +99,7 @@ async function main(): Promise<void> {
     const traceId = newTraceId();
     const receivedTs = isoNow();
     const rawPayload = payload.toString("utf-8");
+    const rawBytes = Buffer.byteLength(rawPayload, "utf8");
 
     const publishDlq = async (
       partial: Omit<TelemetryDlqV1, "schema_version" | "received_ts" | "raw_payload">
@@ -124,6 +125,19 @@ async function main(): Promise<void> {
       });
     };
 
+    if (rawBytes > config.messageMaxBytes) {
+      await publishDlq({
+        reason_code: "payload_too_large",
+        reason_detail: `payload bytes=${String(rawBytes)} exceeds limit=${String(config.messageMaxBytes)}`,
+        device_id: null
+      });
+      logger.warn(
+        { traceId, topic, rawBytes, limitBytes: config.messageMaxBytes },
+        "telemetry payload too large (sent to dlq)"
+      );
+      return;
+    }
+
     try {
       const parsed = JSON.parse(rawPayload) as unknown;
 
@@ -138,6 +152,19 @@ async function main(): Promise<void> {
       }
 
       const envelope: TelemetryEnvelopeV1 = parsed;
+      const metricsCount = Object.keys(envelope.metrics).length;
+      if (metricsCount > config.metricsMaxKeys) {
+        await publishDlq({
+          reason_code: "metrics_too_many",
+          reason_detail: `metrics keys=${String(metricsCount)} exceeds limit=${String(config.metricsMaxKeys)}`,
+          device_id: envelope.device_id
+        });
+        logger.warn(
+          { traceId, topic, deviceId: envelope.device_id, metricsCount, limit: config.metricsMaxKeys },
+          "telemetry metrics too many (sent to dlq)"
+        );
+        return;
+      }
       const raw: TelemetryRawV1 = {
         schema_version: envelope.schema_version,
         device_id: envelope.device_id,

@@ -15,6 +15,8 @@
 - `MQTT_USERNAME`：可选；若 broker 启用鉴权则必须与 `MQTT_PASSWORD` 同时设置（建议使用内部账号，例如 `ingest-service`）
 - `MQTT_PASSWORD`：可选；需与 `MQTT_USERNAME` 成对出现
 - `MQTT_TOPIC_TELEMETRY`：默认 `telemetry/+`
+- `MESSAGE_MAX_BYTES`：单条 MQTT payload 最大字节数（超过则写入 DLQ，默认 `262144`）
+- `METRICS_MAX_KEYS`：单条消息允许的 metrics key 数量上限（超过则写入 DLQ，默认 `500`）
 - `KAFKA_BROKERS`：逗号分隔，例如 `127.0.0.1:9092`
 - `KAFKA_CLIENT_ID`：默认 `ingest-service`
 - `KAFKA_TOPIC_TELEMETRY_RAW`：默认 `telemetry.raw.v1`
@@ -41,6 +43,7 @@
 - 收到 MQTT 消息后：
   - JSON 解析失败 → 写入 Kafka `telemetry.dlq.v1`（`reason_code=invalid_json`）
   - Schema 校验失败 → 写入 Kafka `telemetry.dlq.v1`（`reason_code=schema_validation_failed`）
+  - payload 过大/metrics 过多 → 写入 Kafka `telemetry.dlq.v1`（`reason_code=payload_too_large|metrics_too_many`）
   - 校验通过 → 写入 Kafka `telemetry.raw.v1`（补充 `received_ts`）
 
 注意：Schema 文件当前直接引用 `docs/integrations/*/schemas`，实现阶段会把 schemas 固化为 `libs/` 的可发布包（见 `docs/guides/standards/code-generation.md`）。
