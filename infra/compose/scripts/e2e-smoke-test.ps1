@@ -2,6 +2,7 @@ param(
   [string]$EnvFile = "infra/compose/.env",
   [string]$ComposeFile = "infra/compose/docker-compose.yml",
   [string]$DeviceId = "",
+  [switch]$Stage1Regression,
   [switch]$UseMqttAuth,
   [switch]$CreateDevice,
   [switch]$ConfigureEmqx,
@@ -198,6 +199,18 @@ $notifyProc = $null
 $dlqProc = $null
 
 try {
+  if ($Stage1Regression) {
+    if ($UseMqttAuth -or $CreateDevice -or $ConfigureEmqx -or $TestCommands -or $TestCommandAcks -or $TestCommandFailed -or $TestCommandTimeout -or $TestTelemetryDlq -or $TestRevoke) {
+      throw "Stage1Regression is a preset and must not be combined with other switches. Use either -Stage1Regression or the individual switches."
+    }
+    $ConfigureEmqx = $true
+    $UseMqttAuth = $true
+    $CreateDevice = $true
+    $TestCommands = $true
+    $TestTelemetryDlq = $true
+    $TestRevoke = $true
+  }
+
   if ($ConfigureEmqx) {
     Write-Host "Configuring EMQX HTTP authn/authz (via dashboard API)..." -ForegroundColor Cyan
     powershell -NoProfile -ExecutionPolicy Bypass -File infra/compose/scripts/configure-emqx-http-auth.ps1 -WriteServiceEnv -WriteIngestEnv
@@ -294,8 +307,8 @@ try {
       "POSTGRES_POOL_MAX=5"
     ) -force:$ForceWriteServiceEnv
 
-    $ackTimeoutSeconds = if ($TestCommandTimeout) { "10" } else { "60" }
-    $scanIntervalMs = if ($TestCommandTimeout) { "1000" } else { "5000" }
+    $ackTimeoutSeconds = if ($TestCommandTimeout -or $Stage1Regression) { "10" } else { "60" }
+    $scanIntervalMs = if ($TestCommandTimeout -or $Stage1Regression) { "1000" } else { "5000" }
 
     Write-EnvIfMissingOrForced "services/command-timeout-worker/.env" @(
       "SERVICE_NAME=command-timeout-worker",
@@ -614,154 +627,19 @@ try {
     if (-not $UseMqttAuth -or -not $CreateDevice -or -not $deviceSecret) {
       throw "TestCommands requires -UseMqttAuth and -CreateDevice (needs device credentials)."
     }
-    $selected = 0
-    if ($TestCommandAcks) { $selected++ }
-    if ($TestCommandFailed) { $selected++ }
-    if ($TestCommandTimeout) { $selected++ }
-    if ($selected -gt 1) {
-      throw "TestCommandAcks/TestCommandFailed/TestCommandTimeout are mutually exclusive (a single command has only one final status)."
+
+    function Get-NotificationStats([string]$deviceId, [string]$startTime, [string]$endTime) {
+      return Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/api/v1/devices/$($deviceId)/command-notifications/stats?startTime=$startTime&endTime=$endTime" -TimeoutSec 10
     }
 
-    Write-Host "Subscribing to device command topic..." -ForegroundColor Cyan
-    $waitProc = Start-Process -FilePath "node" -ArgumentList @(
-      "scripts/dev/wait-for-command.js",
-      "--mqtt", $mqttUrl,
-      "--device", $DeviceId,
-      "--username", $DeviceId,
-      "--password", $deviceSecret,
-      "--timeout", "45"
-    ) -WorkingDirectory "." -PassThru -RedirectStandardOutput $waitCmdOut -RedirectStandardError $waitCmdErr
-
-    Start-Sleep -Seconds 2
-
-    Write-Host "Creating a device command via API..." -ForegroundColor Cyan
-    $cmdBody = @{
-      commandType = "set_config"
-      payload = @{ sampling_s = 5; report_interval_s = 5 }
-    } | ConvertTo-Json -Depth 5
-
-    $cmdResp = Invoke-RestMethod -Method Post -Uri "http://$apiLocalHost`:$apiPort/api/v1/devices/$($DeviceId)/commands" -ContentType "application/json" -Body $cmdBody -TimeoutSec 10
-    if (-not $cmdResp.success -or -not $cmdResp.data.commandId) {
-      throw "command creation failed. Logs: $logDir"
-    }
-
-    if (-not $waitProc.WaitForExit(60000)) {
-      try { Stop-Process -Id $waitProc.Id -Force } catch { }
-      throw "Timed out waiting for MQTT command delivery. Logs: $logDir"
-    }
-    if ($waitProc.ExitCode -ne 0) {
-      throw "Device did not receive command (wait-for-command.js exit=$($waitProc.ExitCode)). Logs: $logDir"
-    }
-
-    if ($TestCommandAcks) {
-      Write-Host "Publishing command ack from device..." -ForegroundColor Cyan
-      Add-Content -Encoding UTF8 -LiteralPath $publishLog -Value ("-- publish command ack --`n")
-      $ackExit = Run-Node @(
-        "scripts/dev/publish-command-ack.js",
-        "--mqtt", $mqttUrl,
-        "--device", $DeviceId,
-        "--commandId", $cmdResp.data.commandId,
-        "--username", $DeviceId,
-        "--password", $deviceSecret,
-        "--status", "acked"
-      ) $publishLog
-      if ($ackExit -ne 0) {
-        throw "publish-command-ack.js failed (exit=$ackExit). Logs: $logDir"
-      }
-
-      Write-Host "Waiting for command status to become acked..." -ForegroundColor Cyan
-      $cmdId = [string]$cmdResp.data.commandId
-      $deadline = (Get-Date).AddSeconds(45)
-      $status = ""
-      while ((Get-Date) -lt $deadline) {
-        try {
-          $cmd = Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/api/v1/devices/$($DeviceId)/commands/$cmdId" -TimeoutSec 3
-          if ($cmd.success -eq $true -and $cmd.data.status) { $status = [string]$cmd.data.status }
-        } catch {
-          # ignore transient failures
-        }
-        if ($status -eq "acked") { break }
-        Start-Sleep -Seconds 2
-      }
-      if ($status -ne "acked") {
-        throw "command did not become acked within 45s (status='$status'). Logs: $logDir"
-      }
-
-      Write-Host "Verifying COMMAND_ACKED event is recorded..." -ForegroundColor Cyan
-      $deadline = (Get-Date).AddSeconds(45)
-      $found = $false
-      while ((Get-Date) -lt $deadline) {
-        try {
-          $events = Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/api/v1/devices/$($DeviceId)/command-events?commandId=$cmdId&eventType=COMMAND_ACKED" -TimeoutSec 3
-          if ($events.success -eq $true -and $events.data.list -and $events.data.list.Count -ge 1) { $found = $true; break }
-        } catch {
-          # ignore
-        }
-        Start-Sleep -Seconds 2
-      }
-      if (-not $found) {
-        throw "COMMAND_ACKED event not found within 45s. Logs: $logDir"
-      }
-    }
-
-    if ($TestCommandFailed) {
-      Write-Host "Publishing failed command ack from device..." -ForegroundColor Cyan
-      Add-Content -Encoding UTF8 -LiteralPath $publishLog -Value ("-- publish failed command ack --`n")
-      $ackExit = Run-Node @(
-        "scripts/dev/publish-command-ack.js",
-        "--mqtt", $mqttUrl,
-        "--device", $DeviceId,
-        "--commandId", $cmdResp.data.commandId,
-        "--username", $DeviceId,
-        "--password", $deviceSecret,
-        "--status", "failed",
-        "--result", '{"error":"simulated_failure"}'
-      ) $publishLog
-      if ($ackExit -ne 0) {
-        throw "publish-command-ack.js failed (exit=$ackExit). Logs: $logDir"
-      }
-
-      Write-Host "Waiting for command status to become failed..." -ForegroundColor Cyan
-      $cmdId = [string]$cmdResp.data.commandId
-      $deadline = (Get-Date).AddSeconds(45)
-      $status = ""
-      while ((Get-Date) -lt $deadline) {
-        try {
-          $cmd = Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/api/v1/devices/$($DeviceId)/commands/$cmdId" -TimeoutSec 3
-          if ($cmd.success -eq $true -and $cmd.data.status) { $status = [string]$cmd.data.status }
-        } catch {
-          # ignore transient failures
-        }
-        if ($status -eq "failed") { break }
-        Start-Sleep -Seconds 2
-      }
-      if ($status -ne "failed") {
-        throw "command did not become failed within 45s (status='$status'). Logs: $logDir"
-      }
-
-      Write-Host "Verifying COMMAND_FAILED event is recorded..." -ForegroundColor Cyan
-      $deadline = (Get-Date).AddSeconds(45)
-      $found = $false
-      while ((Get-Date) -lt $deadline) {
-        try {
-          $events = Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/api/v1/devices/$($DeviceId)/command-events?commandId=$cmdId&eventType=COMMAND_FAILED" -TimeoutSec 3
-          if ($events.success -eq $true -and $events.data.list -and $events.data.list.Count -ge 1) { $found = $true; break }
-        } catch {
-          # ignore
-        }
-        Start-Sleep -Seconds 2
-      }
-      if (-not $found) {
-        throw "COMMAND_FAILED event not found within 45s. Logs: $logDir"
-      }
-
+    function Verify-NotificationAndRead([string]$deviceId, [string]$commandId, [string]$windowStartTime, [string]$windowEndTime) {
       Write-Host "Verifying command notification is created..." -ForegroundColor Cyan
       $deadline = (Get-Date).AddSeconds(45)
       $found = $false
       $notificationId = ""
       while ((Get-Date) -lt $deadline) {
         try {
-          $n = Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/api/v1/devices/$($DeviceId)/command-notifications?commandId=$cmdId" -TimeoutSec 3
+          $n = Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/api/v1/devices/$($deviceId)/command-notifications?commandId=$commandId" -TimeoutSec 3
           if ($n.success -eq $true -and $n.data.list -and $n.data.list.Count -ge 1) {
             $notificationId = [string]$n.data.list[0].notificationId
             $found = $true
@@ -777,22 +655,87 @@ try {
       }
 
       Write-Host "Verifying notification stats and read marker..." -ForegroundColor Cyan
-      $stats = Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/api/v1/devices/$($DeviceId)/command-notifications/stats" -TimeoutSec 10
-      if ($stats.success -ne $true) { throw "notification stats query failed. Logs: $logDir" }
-      if ($stats.data.totals.total -lt 1) { throw "notification stats total < 1. Logs: $logDir" }
-      if ($stats.data.totals.unread -lt 1) { throw "notification stats unread < 1. Logs: $logDir" }
+      $statsBefore = Get-NotificationStats $deviceId $windowStartTime $windowEndTime
+      if ($statsBefore.success -ne $true) { throw "notification stats query failed. Logs: $logDir" }
+      if ($statsBefore.data.totals.total -lt 1) { throw "notification stats total < 1. Logs: $logDir" }
+      $unreadBefore = [int]$statsBefore.data.totals.unread
+      if ($unreadBefore -lt 1) { throw "notification stats unread < 1. Logs: $logDir" }
 
-      $read = Invoke-RestMethod -Method Put -Uri "http://$apiLocalHost`:$apiPort/api/v1/devices/$($DeviceId)/command-notifications/$notificationId/read" -TimeoutSec 10
+      $read = Invoke-RestMethod -Method Put -Uri "http://$apiLocalHost`:$apiPort/api/v1/devices/$($deviceId)/command-notifications/$notificationId/read" -TimeoutSec 10
       if ($read.success -ne $true) { throw "mark notification read failed. Logs: $logDir" }
 
-      $stats2 = Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/api/v1/devices/$($DeviceId)/command-notifications/stats" -TimeoutSec 10
-      if ($stats2.success -ne $true) { throw "notification stats query failed (after read). Logs: $logDir" }
-      if ($stats2.data.totals.unread -ne 0) { throw "notification stats unread not zero after read. Logs: $logDir" }
+      $statsAfter = Get-NotificationStats $deviceId $windowStartTime $windowEndTime
+      if ($statsAfter.success -ne $true) { throw "notification stats query failed (after read). Logs: $logDir" }
+      $unreadAfter = [int]$statsAfter.data.totals.unread
+      if ($unreadAfter -gt ($unreadBefore - 1)) {
+        throw "notification stats unread did not decrease after read (before=$unreadBefore after=$unreadAfter). Logs: $logDir"
+      }
     }
 
-    if ($TestCommandTimeout) {
-      Write-Host "Waiting for command status to become timeout..." -ForegroundColor Cyan
+    function Invoke-CommandTest([ValidateSet("acked", "failed", "timeout")][string]$mode) {
+      $testStartTime = (Get-Date).ToUniversalTime().ToString("o")
+      $testEndTime = (Get-Date).AddMinutes(5).ToUniversalTime().ToString("o")
+
+      Write-Host "Subscribing to device command topic (mode=$mode)..." -ForegroundColor Cyan
+      $waitProc = Start-Process -FilePath "node" -ArgumentList @(
+        "scripts/dev/wait-for-command.js",
+        "--mqtt", $mqttUrl,
+        "--device", $DeviceId,
+        "--username", $DeviceId,
+        "--password", $deviceSecret,
+        "--timeout", "45"
+      ) -WorkingDirectory "." -PassThru -RedirectStandardOutput $waitCmdOut -RedirectStandardError $waitCmdErr
+
+      Start-Sleep -Seconds 2
+
+      Write-Host "Creating a device command via API..." -ForegroundColor Cyan
+      $cmdBody = @{
+        commandType = "set_config"
+        payload = @{ sampling_s = 5; report_interval_s = 5 }
+      } | ConvertTo-Json -Depth 5
+
+      $cmdResp = Invoke-RestMethod -Method Post -Uri "http://$apiLocalHost`:$apiPort/api/v1/devices/$($DeviceId)/commands" -ContentType "application/json" -Body $cmdBody -TimeoutSec 10
+      if (-not $cmdResp.success -or -not $cmdResp.data.commandId) {
+        throw "command creation failed. Logs: $logDir"
+      }
       $cmdId = [string]$cmdResp.data.commandId
+
+      if (-not $waitProc.WaitForExit(60000)) {
+        try { Stop-Process -Id $waitProc.Id -Force } catch { }
+        throw "Timed out waiting for MQTT command delivery. Logs: $logDir"
+      }
+      if ($waitProc.ExitCode -ne 0) {
+        throw "Device did not receive command (wait-for-command.js exit=$($waitProc.ExitCode)). Logs: $logDir"
+      }
+
+      if ($mode -eq "acked" -or $mode -eq "failed") {
+        $statusArg = $(if ($mode -eq "acked") { "acked" } else { "failed" })
+        $resultArg = $(if ($mode -eq "failed") { '{"error":"simulated_failure"}' } else { '' })
+
+        Write-Host "Publishing command ack from device (status=$statusArg)..." -ForegroundColor Cyan
+        Add-Content -Encoding UTF8 -LiteralPath $publishLog -Value ("-- publish command ack (" + $statusArg + ") --`n")
+
+        $args = @(
+          "scripts/dev/publish-command-ack.js",
+          "--mqtt", $mqttUrl,
+          "--device", $DeviceId,
+          "--commandId", $cmdId,
+          "--username", $DeviceId,
+          "--password", $deviceSecret,
+          "--status", $statusArg
+        )
+        if ($mode -eq "failed") { $args += @("--result", $resultArg) }
+
+        $ackExit = Run-Node $args $publishLog
+        if ($ackExit -ne 0) {
+          throw "publish-command-ack.js failed (exit=$ackExit). Logs: $logDir"
+        }
+      }
+
+      $expectedStatus = $(if ($mode -eq "timeout") { "timeout" } else { $mode })
+      $expectedEventType = $(if ($mode -eq "acked") { "COMMAND_ACKED" } elseif ($mode -eq "failed") { "COMMAND_FAILED" } else { "COMMAND_TIMEOUT" })
+
+      Write-Host "Waiting for command status to become $expectedStatus..." -ForegroundColor Cyan
       $deadline = (Get-Date).AddSeconds(45)
       $status = ""
       while ((Get-Date) -lt $deadline) {
@@ -802,19 +745,19 @@ try {
         } catch {
           # ignore transient failures
         }
-        if ($status -eq "timeout") { break }
+        if ($status -eq $expectedStatus) { break }
         Start-Sleep -Seconds 2
       }
-      if ($status -ne "timeout") {
-        throw "command did not become timeout within 45s (status='$status'). Logs: $logDir"
+      if ($status -ne $expectedStatus) {
+        throw "command did not become $expectedStatus within 45s (status='$status'). Logs: $logDir"
       }
 
-      Write-Host "Verifying COMMAND_TIMEOUT event is recorded..." -ForegroundColor Cyan
+      Write-Host "Verifying $expectedEventType event is recorded..." -ForegroundColor Cyan
       $deadline = (Get-Date).AddSeconds(45)
       $found = $false
       while ((Get-Date) -lt $deadline) {
         try {
-          $events = Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/api/v1/devices/$($DeviceId)/command-events?commandId=$cmdId&eventType=COMMAND_TIMEOUT" -TimeoutSec 3
+          $events = Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/api/v1/devices/$($DeviceId)/command-events?commandId=$cmdId&eventType=$expectedEventType" -TimeoutSec 3
           if ($events.success -eq $true -and $events.data.list -and $events.data.list.Count -ge 1) { $found = $true; break }
         } catch {
           # ignore
@@ -822,42 +765,30 @@ try {
         Start-Sleep -Seconds 2
       }
       if (-not $found) {
-        throw "COMMAND_TIMEOUT event not found within 45s. Logs: $logDir"
+        throw "$expectedEventType event not found within 45s. Logs: $logDir"
       }
 
-      Write-Host "Verifying command notification is created..." -ForegroundColor Cyan
-      $deadline = (Get-Date).AddSeconds(45)
-      $found = $false
-      $notificationId = ""
-      while ((Get-Date) -lt $deadline) {
-        try {
-          $n = Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/api/v1/devices/$($DeviceId)/command-notifications?commandId=$cmdId" -TimeoutSec 3
-          if ($n.success -eq $true -and $n.data.list -and $n.data.list.Count -ge 1) {
-            $notificationId = [string]$n.data.list[0].notificationId
-            $found = $true
-            break
-          }
-        } catch {
-          # ignore
-        }
-        Start-Sleep -Seconds 2
+      if ($mode -eq "failed" -or $mode -eq "timeout") {
+        Verify-NotificationAndRead $DeviceId $cmdId $testStartTime $testEndTime
       }
-      if (-not $found) {
-        throw "command notification not found within 45s. Logs: $logDir"
+    }
+
+    if ($Stage1Regression) {
+      Invoke-CommandTest "acked"
+      Invoke-CommandTest "failed"
+      Invoke-CommandTest "timeout"
+    } else {
+      $selected = 0
+      if ($TestCommandAcks) { $selected++ }
+      if ($TestCommandFailed) { $selected++ }
+      if ($TestCommandTimeout) { $selected++ }
+      if ($selected -gt 1) {
+        throw "TestCommandAcks/TestCommandFailed/TestCommandTimeout are mutually exclusive (a single command has only one final status)."
       }
 
-      Write-Host "Verifying notification stats and read marker..." -ForegroundColor Cyan
-      $stats = Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/api/v1/devices/$($DeviceId)/command-notifications/stats" -TimeoutSec 10
-      if ($stats.success -ne $true) { throw "notification stats query failed. Logs: $logDir" }
-      if ($stats.data.totals.total -lt 1) { throw "notification stats total < 1. Logs: $logDir" }
-      if ($stats.data.totals.unread -lt 1) { throw "notification stats unread < 1. Logs: $logDir" }
-
-      $read = Invoke-RestMethod -Method Put -Uri "http://$apiLocalHost`:$apiPort/api/v1/devices/$($DeviceId)/command-notifications/$notificationId/read" -TimeoutSec 10
-      if ($read.success -ne $true) { throw "mark notification read failed. Logs: $logDir" }
-
-      $stats2 = Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/api/v1/devices/$($DeviceId)/command-notifications/stats" -TimeoutSec 10
-      if ($stats2.success -ne $true) { throw "notification stats query failed (after read). Logs: $logDir" }
-      if ($stats2.data.totals.unread -ne 0) { throw "notification stats unread not zero after read. Logs: $logDir" }
+      if ($TestCommandAcks) { Invoke-CommandTest "acked" }
+      if ($TestCommandFailed) { Invoke-CommandTest "failed" }
+      if ($TestCommandTimeout) { Invoke-CommandTest "timeout" }
     }
   }
 
