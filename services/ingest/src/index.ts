@@ -28,6 +28,18 @@ type TelemetryDlqV1 = {
   raw_payload: string;
 };
 
+type PresenceEventV1 = {
+  schema_version: 1;
+  device_id: string;
+  event_ts: string;
+  status: "online" | "offline";
+  meta?: Record<string, unknown>;
+};
+
+type PresenceEventsV1 = PresenceEventV1 & {
+  received_ts: string;
+};
+
 function isoNow(): string {
   return new Date().toISOString();
 }
@@ -77,11 +89,29 @@ async function main(): Promise<void> {
     "schemas",
     "telemetry-dlq.v1.schema.json"
   );
+  const schemaPresenceEventPath = path.join(
+    repoRoot,
+    "docs",
+    "integrations",
+    "mqtt",
+    "schemas",
+    "presence-event.v1.schema.json"
+  );
+  const schemaPresenceEventsPath = path.join(
+    repoRoot,
+    "docs",
+    "integrations",
+    "kafka",
+    "schemas",
+    "presence-events.v1.schema.json"
+  );
 
   const validateEnvelope =
     await loadAndCompileSchema<TelemetryEnvelopeV1>(schemaTelemetryEnvelopePath);
   const validateRaw = await loadAndCompileSchema<TelemetryRawV1>(schemaTelemetryRawPath);
   const validateDlq = await loadAndCompileSchema<TelemetryDlqV1>(schemaTelemetryDlqPath);
+  const validatePresence = await loadAndCompileSchema<PresenceEventV1>(schemaPresenceEventPath);
+  const validatePresenceEvents = await loadAndCompileSchema<PresenceEventsV1>(schemaPresenceEventsPath);
 
   const kafka = new Kafka({ clientId: config.kafkaClientId, brokers: config.kafkaBrokers });
   const producer = kafka.producer();
@@ -94,10 +124,17 @@ async function main(): Promise<void> {
   });
 
   mqttClient.on("connect", () => {
-    logger.info({ mqttUrl: config.mqttUrl, topic: config.mqttTopicTelemetry }, "mqtt connected");
-    mqttClient.subscribe(config.mqttTopicTelemetry, { qos: 1 }, (err) => {
+    logger.info(
+      { mqttUrl: config.mqttUrl, topicTelemetry: config.mqttTopicTelemetry, topicPresence: config.mqttTopicPresence },
+      "mqtt connected"
+    );
+    mqttClient.subscribe([config.mqttTopicTelemetry, config.mqttTopicPresence], { qos: 1 }, (err) => {
       if (err) logger.error({ err }, "mqtt subscribe failed");
-      else logger.info({ topic: config.mqttTopicTelemetry }, "mqtt subscribed");
+      else
+        logger.info(
+          { topicTelemetry: config.mqttTopicTelemetry, topicPresence: config.mqttTopicPresence },
+          "mqtt subscribed"
+        );
     });
   });
 
@@ -110,6 +147,52 @@ async function main(): Promise<void> {
     const receivedTs = isoNow();
     const rawPayload = payload.toString("utf-8");
     const rawBytes = Buffer.byteLength(rawPayload, "utf8");
+
+    const isPresence = topic.startsWith("presence/");
+
+    if (isPresence) {
+      if (rawBytes > config.messageMaxBytes) {
+        logger.warn(
+          { traceId, topic, rawBytes, limitBytes: config.messageMaxBytes },
+          "presence payload too large (dropped)"
+        );
+        return;
+      }
+
+      try {
+        const parsed = JSON.parse(rawPayload) as unknown;
+        if (!validatePresence.validate(parsed)) {
+          logger.warn({ traceId, topic, errors: validatePresence.errors }, "presence schema invalid (skipped)");
+          return;
+        }
+        const p: PresenceEventV1 = parsed;
+
+        const out: PresenceEventsV1 = {
+          schema_version: 1,
+          device_id: p.device_id,
+          event_ts: p.event_ts,
+          status: p.status,
+          ...(p.meta ? { meta: p.meta } : {}),
+          received_ts: receivedTs
+        };
+
+        if (!validatePresenceEvents.validate(out)) {
+          logger.error({ traceId, topic, errors: validatePresenceEvents.errors }, "presence mapping invalid (BUG)");
+          return;
+        }
+
+        await producer.send({
+          topic: config.kafkaTopicPresenceEvents,
+          messages: [{ key: out.device_id, value: JSON.stringify(out) }]
+        });
+
+        logger.info({ traceId, topic, deviceId: out.device_id, status: out.status }, "presence ingested");
+      } catch (err) {
+        logger.warn({ traceId, topic, err }, "invalid presence json");
+      }
+
+      return;
+    }
 
     const publishDlq = async (
       partial: Omit<TelemetryDlqV1, "schema_version" | "received_ts" | "raw_payload">

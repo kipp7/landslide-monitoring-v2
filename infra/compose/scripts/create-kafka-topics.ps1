@@ -51,7 +51,8 @@ $topics = @(
   "alerts.events.v1",
   "device.commands.v1",
   "device.command_acks.v1",
-  "device.command_events.v1"
+  "device.command_events.v1",
+  "presence.events.v1"
 )
 
 foreach ($t in $topics) {

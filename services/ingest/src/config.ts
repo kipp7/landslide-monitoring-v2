@@ -16,6 +16,7 @@ const configSchema = z
     mqttUsername: optionalNonEmptyString(),
     mqttPassword: optionalNonEmptyString(),
     mqttTopicTelemetry: z.string().default("telemetry/+"),
+    mqttTopicPresence: z.string().default("presence/+"),
 
     messageMaxBytes: z.coerce.number().int().positive().max(10_000_000).default(256 * 1024),
     metricsMaxKeys: z.coerce.number().int().positive().max(100_000).default(500),
@@ -27,7 +28,8 @@ const configSchema = z
       .transform((v) => v.split(",").map((s) => s.trim()).filter(Boolean)),
     kafkaClientId: z.string().default("ingest-service"),
     kafkaTopicTelemetryRaw: z.string().default("telemetry.raw.v1"),
-    kafkaTopicTelemetryDlq: z.string().default("telemetry.dlq.v1")
+    kafkaTopicTelemetryDlq: z.string().default("telemetry.dlq.v1"),
+    kafkaTopicPresenceEvents: z.string().default("presence.events.v1")
   })
   .superRefine((data, ctx) => {
     const hasUser = Boolean(data.mqttUsername);
@@ -49,12 +51,14 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
     mqttUsername: env.MQTT_USERNAME,
     mqttPassword: env.MQTT_PASSWORD,
     mqttTopicTelemetry: env.MQTT_TOPIC_TELEMETRY,
+    mqttTopicPresence: env.MQTT_TOPIC_PRESENCE,
     messageMaxBytes: env.MESSAGE_MAX_BYTES,
     metricsMaxKeys: env.METRICS_MAX_KEYS,
     dlqRawPayloadMaxBytes: env.DLQ_RAW_PAYLOAD_MAX_BYTES,
     kafkaBrokers: env.KAFKA_BROKERS,
     kafkaClientId: env.KAFKA_CLIENT_ID,
     kafkaTopicTelemetryRaw: env.KAFKA_TOPIC_TELEMETRY_RAW,
-    kafkaTopicTelemetryDlq: env.KAFKA_TOPIC_TELEMETRY_DLQ
+    kafkaTopicTelemetryDlq: env.KAFKA_TOPIC_TELEMETRY_DLQ,
+    kafkaTopicPresenceEvents: env.KAFKA_TOPIC_PRESENCE_EVENTS
   });
 }

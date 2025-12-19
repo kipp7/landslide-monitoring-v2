@@ -18,6 +18,9 @@
   - 设备回执（ack）
 - `device.command_events.v1`
   - 设备命令生命周期事件（sent/acked/failed/timeout），用于通知与运维观测
+- `presence.events.v1`
+  - 设备在线/离线事件（可选）：固件发布 PresenceEvent，经 ingest-service 校验后写入 Kafka
+  - 分区键：`device_id`
 
 机器可读（Schema）：
 
@@ -25,6 +28,7 @@
 - device.commands.v1：`docs/integrations/kafka/schemas/device-commands.v1.schema.json`
 - device.command_acks.v1：`docs/integrations/kafka/schemas/device-command-acks.v1.schema.json`
 - device.command_events.v1：`docs/integrations/kafka/schemas/device-command-events.v1.schema.json`
+- presence.events.v1：`docs/integrations/kafka/schemas/presence-events.v1.schema.json`
 
 ## 2. 分区与消费组建议
 
