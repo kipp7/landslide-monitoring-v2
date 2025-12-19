@@ -11,6 +11,8 @@
 */
 
 const mqtt = require("mqtt");
+const path = require("node:path");
+const { loadAndCompileSchema } = require("@lsmv2/validation");
 
 function getArg(name, fallback = undefined) {
   const idx = process.argv.indexOf(`--${name}`);
@@ -37,9 +39,7 @@ const commandId = getArg("commandId");
 
 const deadline = Date.now() + (Number.isFinite(timeoutSeconds) ? timeoutSeconds : 30) * 1000;
 
-const client = mqtt.connect(mqttUrl, {
-  ...(username && password ? { username, password } : {})
-});
+let validateCommand = null;
 
 const timer = setInterval(() => {
   if (Date.now() > deadline) {
@@ -50,38 +50,66 @@ const timer = setInterval(() => {
   }
 }, 250);
 
-client.on("connect", () => {
-  client.subscribe(topic, { qos: 1 }, (err) => {
-    if (err) {
-      console.error("subscribe failed:", err);
+async function main() {
+  const schemaPath = path.resolve(
+    process.cwd(),
+    "docs",
+    "integrations",
+    "mqtt",
+    "schemas",
+    "device-command.v1.schema.json"
+  );
+  const v = await loadAndCompileSchema(schemaPath);
+  validateCommand = v;
+
+  const client = mqtt.connect(mqttUrl, {
+    ...(username && password ? { username, password } : {})
+  });
+
+  client.on("connect", () => {
+    client.subscribe(topic, { qos: 1 }, (err) => {
+      if (err) {
+        console.error("subscribe failed:", err);
+        process.exitCode = 1;
+        clearInterval(timer);
+        client.end(true);
+        return;
+      }
+      console.log(`subscribed: ${topic}`);
+    });
+  });
+
+  client.on("message", (_topic, payload) => {
+    try {
+      const msg = JSON.parse(payload.toString("utf-8"));
+      if (commandId && msg.command_id !== commandId) return;
+      if (validateCommand && !validateCommand.validate(msg)) {
+        console.error("command schema validation failed:", JSON.stringify(validateCommand.errors));
+        process.exitCode = 1;
+        clearInterval(timer);
+        client.end(true);
+        return;
+      }
+      console.log("received:", JSON.stringify(msg));
+      clearInterval(timer);
+      client.end(true);
+    } catch (err) {
+      console.error("invalid json:", err);
       process.exitCode = 1;
       clearInterval(timer);
       client.end(true);
-      return;
     }
-    console.log(`subscribed: ${topic}`);
   });
-});
 
-client.on("message", (_topic, payload) => {
-  try {
-    const msg = JSON.parse(payload.toString("utf-8"));
-    if (commandId && msg.command_id !== commandId) return;
-    console.log("received:", JSON.stringify(msg));
-    clearInterval(timer);
-    client.end(true);
-  } catch (err) {
-    console.error("invalid json:", err);
+  client.on("error", (err) => {
+    console.error("mqtt error:", err);
     process.exitCode = 1;
     clearInterval(timer);
     client.end(true);
-  }
-});
+  });
+}
 
-client.on("error", (err) => {
-  console.error("mqtt error:", err);
+main().catch((err) => {
+  console.error("fatal:", err);
   process.exitCode = 1;
-  clearInterval(timer);
-  client.end(true);
 });
-

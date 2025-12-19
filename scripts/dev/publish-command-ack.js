@@ -12,6 +12,8 @@
 */
 
 const mqtt = require("mqtt");
+const path = require("node:path");
+const { loadAndCompileSchema } = require("@lsmv2/validation");
 
 function getArg(name, fallback = undefined) {
   const idx = process.argv.indexOf(`--${name}`);
@@ -56,25 +58,46 @@ const payload = {
   ...(result ? { result } : {})
 };
 
-const client = mqtt.connect(mqttUrl, {
-  ...(username && password ? { username, password } : {})
-});
+async function main() {
+  const schemaPath = path.resolve(
+    process.cwd(),
+    "docs",
+    "integrations",
+    "mqtt",
+    "schemas",
+    "device-command-ack.v1.schema.json"
+  );
+  const validator = await loadAndCompileSchema(schemaPath);
+  if (!validator.validate(payload)) {
+    console.error("ack schema validation failed:", JSON.stringify(validator.errors));
+    process.exitCode = 2;
+    return;
+  }
 
-client.on("connect", () => {
-  client.publish(topic, JSON.stringify(payload), { qos: 1 }, (err) => {
-    if (err) {
-      console.error("publish failed:", err);
-      process.exitCode = 1;
-    } else {
-      console.log(`published ack to ${topic}`);
-    }
+  const client = mqtt.connect(mqttUrl, {
+    ...(username && password ? { username, password } : {})
+  });
+
+  client.on("connect", () => {
+    client.publish(topic, JSON.stringify(payload), { qos: 1 }, (err) => {
+      if (err) {
+        console.error("publish failed:", err);
+        process.exitCode = 1;
+      } else {
+        console.log(`published ack to ${topic}`);
+      }
+      client.end(true);
+    });
+  });
+
+  client.on("error", (err) => {
+    console.error("mqtt error:", err);
+    process.exitCode = 1;
     client.end(true);
   });
-});
+}
 
-client.on("error", (err) => {
-  console.error("mqtt error:", err);
+main().catch((err) => {
+  console.error("fatal:", err);
   process.exitCode = 1;
-  client.end(true);
 });
-
