@@ -7,7 +7,7 @@
 - 每次合并一个 PR 到 `main`，如果它改变了项目阶段/里程碑/下一步，必须更新本页。
 - 本页只记录“当前状态与下一步”，历史细节放到 `docs/incidents/` 或 PR/commit 记录中。
 
-最后更新时间：2025-12-19（阶段 1：writer dlq v11）
+最后更新时间：2025-12-19（阶段 1：writer observability v12）
 
 ## 1) 当前结论（TL;DR）
 
@@ -49,7 +49,7 @@ M1（阶段 0：最小闭环）目标：
 当前完成情况：
 
 - ✅ ingest-service：已实现 MQTT telemetry 订阅、JSON Schema 校验、写 `telemetry.raw.v1` 与 `telemetry.dlq.v1`
-- ✅ telemetry-writer：已实现消费 `telemetry.raw.v1` 并批量写入 ClickHouse（批量写入 + 退避重试 + writer 侧 DLQ）
+- ✅ telemetry-writer：已实现消费 `telemetry.raw.v1` 并批量写入 ClickHouse（批量写入 + 退避重试 + writer 侧 DLQ + 基础运行观测/保护）
 - ✅ API：已实现最小查询端点（`/data/state`、`/data/series`），数据源为 ClickHouse（后续可切换到 Postgres shadow）
 
 M2（阶段 1：设备接入与鉴权）目标：
@@ -62,7 +62,7 @@ M2（阶段 1：设备接入与鉴权）目标：
 
 1) 合并阶段 1 的设备管理 PR：实现 `/devices`、`/sensors` 等管理端接口（Postgres），作为 MQTT 鉴权/ACL 的数据源
 2) MQTT 鉴权/ACL（阶段 1 关键）：把 EMQX authn/authz 接到后端（或单独 auth-service），并实现 revoke 立即生效（本 PR 提供回调接口）
-3) writer 可靠性增强：补充告警/限流/降载策略（writer 侧 DLQ + 退避重试已落地，后续补齐运行观测）
+3) writer 可靠性增强：补充告警/限流/降载策略（基础运行观测/保护已落地，后续补齐告警与容量压测）
 4) Postgres shadow（后续）：为 `/data/state` 引入 `device_state`（避免每次都扫 ClickHouse），并保持与 ClickHouse 可回放一致
 
 ## 4) 关键入口（新 AI 只读这些就能上手）

@@ -73,6 +73,16 @@ function extractReceivedTsOrNow(parsed: unknown): string {
   return Number.isFinite(t) ? new Date(t).toISOString() : isoNow();
 }
 
+function truncateUtf8(value: string, maxBytes: number): { value: string; truncated: boolean } {
+  if (maxBytes <= 0) return { value: "", truncated: value.length > 0 };
+  const bytes = Buffer.byteLength(value, "utf8");
+  if (bytes <= maxBytes) return { value, truncated: false };
+
+  const buf = Buffer.from(value, "utf8");
+  const slice = buf.subarray(0, maxBytes);
+  return { value: slice.toString("utf8"), truncated: true };
+}
+
 function describeError(err: unknown): string {
   if (err instanceof Error) return err.message;
   try {
@@ -277,17 +287,52 @@ async function main(): Promise<void> {
     );
   }
 
+  const stats = {
+    startedAtMs: Date.now(),
+    kafkaMessagesOk: 0,
+    kafkaMessagesSkipped: 0,
+    dlqPublished: 0,
+    clickhouseInsertBatchesOk: 0,
+    clickhouseInsertBatchesIsolated: 0,
+    clickhouseInsertMessagesFailed: 0
+  };
+
   const publishDlq = async (dlq: TelemetryDlqV1) => {
-    if (!validateDlq.validate(dlq)) {
-      logger.error({ errors: validateDlq.errors, dlq }, "dlq payload does not match schema (BUG)");
+    const trunc = truncateUtf8(dlq.raw_payload, config.dlqRawPayloadMaxBytes);
+    const normalized: TelemetryDlqV1 = {
+      ...dlq,
+      raw_payload: trunc.value,
+      ...(trunc.truncated
+        ? {
+            reason_detail: dlq.reason_detail
+              ? `${dlq.reason_detail} (raw_payload truncated)`
+              : "raw_payload truncated"
+          }
+        : {})
+    };
+
+    if (!validateDlq.validate(normalized)) {
+      logger.error({ errors: validateDlq.errors, dlq: normalized }, "dlq payload does not match schema (BUG)");
       throw new Error("dlq payload does not match schema");
     }
 
     await producer.send({
       topic: config.kafkaTopicTelemetryDlq,
-      messages: [{ key: dlq.device_id ?? null, value: JSON.stringify(dlq) }]
+      messages: [{ key: normalized.device_id ?? null, value: JSON.stringify(normalized) }]
     });
+    stats.dlqPublished += 1;
   };
+
+  const statsTimer = setInterval(() => {
+    logger.info(
+      {
+        uptimeS: Math.floor((Date.now() - stats.startedAtMs) / 1000),
+        ...stats
+      },
+      "writer stats"
+    );
+  }, config.statsLogIntervalMs);
+  statsTimer.unref();
 
   await consumer.run({
     autoCommit: false,
@@ -315,6 +360,7 @@ async function main(): Promise<void> {
         const startedAt = Date.now();
         try {
           await insertWithRetry(ch, config, logger, reason, allRows);
+          stats.clickhouseInsertBatchesOk += 1;
           logger.info(
             { reason, rows: allRows.length, messages: pending.length, tookMs: Date.now() - startedAt },
             "clickhouse insert ok"
@@ -345,6 +391,7 @@ async function main(): Promise<void> {
             { err, reason, messages: pending.length, rows: allRows.length },
             "clickhouse insert failed (data error suspected); isolating per-message"
           );
+          stats.clickhouseInsertBatchesIsolated += 1;
 
           const shadowUpdates = new Map<string, { updatedAtIso: string; state: unknown }>();
 
@@ -374,6 +421,7 @@ async function main(): Promise<void> {
                 device_id: p.payload.device_id,
                 raw_payload: p.raw
               });
+              stats.clickhouseInsertMessagesFailed += 1;
               logger.warn(
                 { reason, deviceId: p.payload.device_id, detail },
                 "message sent to telemetry.dlq.v1 due to clickhouse insert failure"
@@ -405,6 +453,26 @@ async function main(): Promise<void> {
 
         const traceId = newTraceId();
         const raw = message.value?.toString("utf-8") ?? "";
+        const rawBytes = Buffer.byteLength(raw, "utf8");
+
+        if (rawBytes > config.messageMaxBytes) {
+          await publishDlq({
+            schema_version: 1,
+            reason_code: "writer_message_too_large",
+            reason_detail:
+              "message size " +
+              String(rawBytes) +
+              " exceeds MESSAGE_MAX_BYTES=" +
+              String(config.messageMaxBytes),
+            received_ts: isoNow(),
+            device_id: null,
+            raw_payload: raw
+          });
+          logger.warn({ traceId, topic: batch.topic, partition: batch.partition, rawBytes }, "kafka message too large (dlq)");
+          ctx.resolveOffset(message.offset);
+          stats.kafkaMessagesSkipped += 1;
+          continue;
+        }
 
         try {
           const parsed = JSON.parse(raw) as unknown;
@@ -419,6 +487,7 @@ async function main(): Promise<void> {
             });
             logger.warn({ traceId, topic: batch.topic, partition: batch.partition, errors: validateRaw.errors }, "kafka telemetry.raw schema invalid (dlq)");
             ctx.resolveOffset(message.offset);
+            stats.kafkaMessagesSkipped += 1;
             continue;
           }
 
@@ -436,12 +505,18 @@ async function main(): Promise<void> {
                 state: { metrics: payload.metrics, meta: payload.meta ?? {} }
               });
             }
+            stats.kafkaMessagesOk += 1;
           } else {
             ctx.resolveOffset(message.offset);
+            stats.kafkaMessagesSkipped += 1;
           }
 
           if (pendingRowsCount >= config.batchMaxRows) {
             await flush("batch_max_rows");
+            pendingRowsCount = 0;
+            lastFlushAt = Date.now();
+          } else if (pending.length >= config.batchMaxMessages) {
+            await flush("batch_max_messages");
             pendingRowsCount = 0;
             lastFlushAt = Date.now();
           } else if (Date.now() - lastFlushAt >= config.batchFlushIntervalMs) {
@@ -460,6 +535,7 @@ async function main(): Promise<void> {
           });
           logger.warn({ traceId, topic: batch.topic, partition: batch.partition, err }, "kafka message parse failed (dlq)");
           ctx.resolveOffset(message.offset);
+          stats.kafkaMessagesSkipped += 1;
         }
       }
 
@@ -472,6 +548,7 @@ async function main(): Promise<void> {
 
   const shutdown = async (signal: string) => {
     logger.info({ signal }, "shutting down");
+    clearInterval(statsTimer);
     await consumer.disconnect();
     await producer.disconnect();
     await ch.close();
