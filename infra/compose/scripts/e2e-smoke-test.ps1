@@ -167,6 +167,8 @@ $timeoutOut = Join-Path $logDir "command-timeout-worker.stdout.log"
 $timeoutErr = Join-Path $logDir "command-timeout-worker.stderr.log"
 $eventsOut = Join-Path $logDir "command-events-recorder.stdout.log"
 $eventsErr = Join-Path $logDir "command-events-recorder.stderr.log"
+$notifyOut = Join-Path $logDir "command-notify-worker.stdout.log"
+$notifyErr = Join-Path $logDir "command-notify-worker.stderr.log"
 $waitCmdOut = Join-Path $logDir "wait-command.stdout.log"
 $waitCmdErr = Join-Path $logDir "wait-command.stderr.log"
 $publishLog = Join-Path $logDir "publish-telemetry.log"
@@ -188,6 +190,7 @@ $cmdProc = $null
 $ackProc = $null
 $timeoutProc = $null
 $eventsProc = $null
+$notifyProc = $null
 
 try {
   if ($ConfigureEmqx) {
@@ -324,6 +327,24 @@ try {
       "POSTGRES_POOL_MAX=5"
     ) -force:$ForceWriteServiceEnv
 
+    Write-EnvIfMissingOrForced "services/command-notify-worker/.env" @(
+      "SERVICE_NAME=command-notify-worker",
+      "",
+      "KAFKA_BROKERS=$kafkaBrokers",
+      "KAFKA_CLIENT_ID=command-notify-worker",
+      "KAFKA_GROUP_ID=command-notify-worker.v1",
+      "KAFKA_TOPIC_DEVICE_COMMAND_EVENTS=device.command_events.v1",
+      "",
+      "POSTGRES_HOST=$pgHost",
+      "POSTGRES_PORT=$pgPort",
+      "POSTGRES_USER=$pgUser",
+      "POSTGRES_PASSWORD=$pgPassword",
+      "POSTGRES_DATABASE=$pgDb",
+      "POSTGRES_POOL_MAX=5",
+      "",
+      "NOTIFY_TYPE=app"
+    ) -force:$ForceWriteServiceEnv
+
     Write-EnvIfMissingOrForced "services/api/.env" @(
       "SERVICE_NAME=api-service",
       "API_HOST=0.0.0.0",
@@ -398,6 +419,7 @@ try {
   $ackProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/command-ack-receiver" -PassThru -RedirectStandardOutput $ackOut -RedirectStandardError $ackErr
   $timeoutProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/command-timeout-worker" -PassThru -RedirectStandardOutput $timeoutOut -RedirectStandardError $timeoutErr
   $eventsProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/command-events-recorder" -PassThru -RedirectStandardOutput $eventsOut -RedirectStandardError $eventsErr
+  $notifyProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/command-notify-worker" -PassThru -RedirectStandardOutput $notifyOut -RedirectStandardError $notifyErr
 
   Write-Host "Waiting for API /health..." -ForegroundColor Cyan
   $maxWaitSeconds = 60
@@ -441,6 +463,12 @@ try {
       Write-Host "WARN: command-events-recorder startup marker not found; continuing." -ForegroundColor Yellow
     }
   }
+
+  Write-Host "Waiting for command-notify-worker startup..." -ForegroundColor Cyan
+  if (-not (Wait-ForLogMatch $notifyOut "command-notify-worker started" 45)) {
+    throw "command-notify-worker did not start within 45s. Logs: $logDir"
+  }
+  Write-Host "command-notify-worker is running." -ForegroundColor Green
 
   $deviceSecret = $null
   if ($CreateDevice) {
@@ -664,6 +692,22 @@ try {
       if (-not $found) {
         throw "COMMAND_TIMEOUT event not found within 45s. Logs: $logDir"
       }
+
+      Write-Host "Verifying command notification is created..." -ForegroundColor Cyan
+      $deadline = (Get-Date).AddSeconds(45)
+      $found = $false
+      while ((Get-Date) -lt $deadline) {
+        try {
+          $n = Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/api/v1/devices/$($DeviceId)/command-notifications?commandId=$cmdId" -TimeoutSec 3
+          if ($n.success -eq $true -and $n.data.list -and $n.data.list.Count -ge 1) { $found = $true; break }
+        } catch {
+          # ignore
+        }
+        Start-Sleep -Seconds 2
+      }
+      if (-not $found) {
+        throw "command notification not found within 45s. Logs: $logDir"
+      }
     }
   }
 
@@ -747,7 +791,7 @@ try {
   exit 1
 } finally {
   Write-Host "Stopping services..." -ForegroundColor Cyan
-  foreach ($p in @($ingestProc, $writerProc, $apiProc, $cmdProc, $ackProc, $timeoutProc, $eventsProc)) {
+  foreach ($p in @($ingestProc, $writerProc, $apiProc, $cmdProc, $ackProc, $timeoutProc, $eventsProc, $notifyProc)) {
     if ($null -eq $p) { continue }
     try {
       if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }

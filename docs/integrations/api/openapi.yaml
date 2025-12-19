@@ -820,6 +820,79 @@ paths:
         default:
           $ref: "#/components/responses/ErrorResponse"
 
+  /devices/{deviceId}/command-notifications:
+    parameters:
+      - $ref: "#/components/parameters/DeviceIdPath"
+    get:
+      tags: [devices]
+      summary: List device command notifications
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: commandId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - name: status
+          in: query
+          required: false
+          schema: { type: string, enum: [pending, sent, delivered, failed] }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PaginatedDeviceCommandNotifications"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /devices/{deviceId}/command-notifications/{notificationId}:
+    parameters:
+      - $ref: "#/components/parameters/DeviceIdPath"
+      - name: notificationId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [devices]
+      summary: Get device command notification detail
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DeviceCommandNotification"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
   /data/state/{deviceId}:
     parameters:
       - $ref: "#/components/parameters/DeviceIdPath"
@@ -1896,6 +1969,49 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/DeviceCommandEvent"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+
+    DeviceCommandNotification:
+      type: object
+      required:
+        - notificationId
+        - eventId
+        - eventType
+        - commandId
+        - deviceId
+        - notifyType
+        - status
+        - title
+        - content
+        - errorMessage
+        - createdAt
+      properties:
+        notificationId: { type: string, format: uuid }
+        eventId: { type: string, format: uuid }
+        eventType:
+          type: string
+          enum: [COMMAND_SENT, COMMAND_ACKED, COMMAND_FAILED, COMMAND_TIMEOUT]
+        commandId: { type: string, format: uuid }
+        deviceId: { type: string, format: uuid }
+        notifyType: { type: string, enum: [app, sms, email, wechat] }
+        status: { type: string, enum: [pending, sent, delivered, failed] }
+        title: { type: string }
+        content: { type: string }
+        errorMessage: { type: string }
+        createdAt: { type: string, format: date-time }
+        sentAt: { type: string, format: date-time, nullable: true }
+        deliveredAt: { type: string, format: date-time, nullable: true }
+        readAt: { type: string, format: date-time, nullable: true }
+
+    PaginatedDeviceCommandNotifications:
+      type: object
+      required: [list, pagination]
+      properties:
+        list:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeviceCommandNotification"
         pagination:
           $ref: "#/components/schemas/Pagination"
 
