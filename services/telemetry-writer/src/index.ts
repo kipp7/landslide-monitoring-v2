@@ -3,6 +3,7 @@ import { createLogger, newTraceId } from "@lsmv2/observability";
 import { loadAndCompileSchema } from "@lsmv2/validation";
 import dotenv from "dotenv";
 import { Kafka, logLevel } from "kafkajs";
+import { Pool } from "pg";
 import path from "node:path";
 import { loadConfigFromEnv } from "./config";
 
@@ -94,6 +95,44 @@ function toTelemetryRows(payload: TelemetryRawV1): TelemetryRow[] {
   return rows;
 }
 
+function createPostgresPoolIfConfigured(
+  config: ReturnType<typeof loadConfigFromEnv>
+): Pool | null {
+  if (config.postgresUrl) {
+    return new Pool({ connectionString: config.postgresUrl, max: config.postgresPoolMax });
+  }
+  if (!config.postgresPassword) return null;
+  return new Pool({
+    host: config.postgresHost,
+    port: config.postgresPort,
+    user: config.postgresUser,
+    password: config.postgresPassword,
+    database: config.postgresDatabase,
+    max: config.postgresPoolMax
+  });
+}
+
+async function upsertDeviceStateShadow(
+  pool: Pool,
+  deviceId: string,
+  updatedAtIso: string,
+  state: unknown
+): Promise<void> {
+  await pool.query(
+    `
+      INSERT INTO device_state (device_id, version, state, updated_at)
+      VALUES ($1, 1, $2::jsonb, $3::timestamptz)
+      ON CONFLICT (device_id) DO UPDATE
+      SET
+        version = device_state.version + 1,
+        state = EXCLUDED.state,
+        updated_at = EXCLUDED.updated_at
+      WHERE EXCLUDED.updated_at >= device_state.updated_at
+    `,
+    [deviceId, JSON.stringify(state), updatedAtIso]
+  );
+}
+
 async function insertRows(
   ch: ClickHouseClient,
   database: string,
@@ -167,6 +206,13 @@ async function main(): Promise<void> {
   await consumer.subscribe({ topic: config.kafkaTopicTelemetryRaw, fromBeginning: false });
 
   const ch = createClickhouseClient(config);
+  const pg = createPostgresPoolIfConfigured(config);
+  if (!pg) {
+    logger.warn(
+      { postgresHost: config.postgresHost, postgresDatabase: config.postgresDatabase },
+      "PostgreSQL device_state shadow disabled (missing POSTGRES_URL or POSTGRES_PASSWORD)"
+    );
+  }
 
   await consumer.run({
     autoCommit: false,
@@ -178,6 +224,7 @@ async function main(): Promise<void> {
       const pendingOffsets: string[] = [];
       let rows: TelemetryRow[] = [];
       let lastFlushAt = Date.now();
+      const deviceStateByDeviceId = new Map<string, { updatedAtIso: string; state: unknown }>();
 
       const flush = async (reason: string) => {
         if (rows.length === 0) return;
@@ -186,9 +233,23 @@ async function main(): Promise<void> {
         await insertWithRetry(ch, config, logger, reason, rows);
         logger.info({ reason, rows: rows.length, tookMs: Date.now() - startedAt }, "clickhouse insert ok");
 
+        if (pg && deviceStateByDeviceId.size > 0) {
+          try {
+            for (const [deviceId, v] of deviceStateByDeviceId.entries()) {
+              await upsertDeviceStateShadow(pg, deviceId, v.updatedAtIso, v.state);
+            }
+          } catch (err) {
+            logger.error(
+              { err, reason, devices: deviceStateByDeviceId.size },
+              "device_state shadow update failed (ignored)"
+            );
+          }
+        }
+
         for (const off of pendingOffsets) ctx.resolveOffset(off);
         pendingOffsets.length = 0;
         rows = [];
+        deviceStateByDeviceId.clear();
         await ctx.commitOffsetsIfNecessary();
       };
 
@@ -215,6 +276,15 @@ async function main(): Promise<void> {
           if (messageRows.length > 0) {
             rows.push(...messageRows);
             pendingOffsets.push(message.offset);
+
+            const updatedAtIso = new Date(payload.received_ts).toISOString();
+            const existing = deviceStateByDeviceId.get(payload.device_id);
+            if (!existing || existing.updatedAtIso <= updatedAtIso) {
+              deviceStateByDeviceId.set(payload.device_id, {
+                updatedAtIso,
+                state: { metrics: payload.metrics, meta: payload.meta ?? {} }
+              });
+            }
           } else {
             ctx.resolveOffset(message.offset);
           }
@@ -245,6 +315,7 @@ async function main(): Promise<void> {
     logger.info({ signal }, "shutting down");
     await consumer.disconnect();
     await ch.close();
+    await pg?.end();
     process.exit(0);
   };
 

@@ -1,5 +1,13 @@
 import { z } from "zod";
 
+function optionalNonEmptyString() {
+  return z.preprocess((v) => {
+    if (typeof v !== "string") return v;
+    const trimmed = v.trim();
+    return trimmed.length === 0 ? undefined : trimmed;
+  }, z.string().min(1).optional());
+}
+
 const configSchema = z.object({
   serviceName: z.string().default("telemetry-writer"),
 
@@ -16,6 +24,14 @@ const configSchema = z.object({
   clickhousePassword: z.string().optional(),
   clickhouseDatabase: z.string().default("landslide"),
   clickhouseTable: z.string().default("telemetry_raw"),
+
+  postgresUrl: z.string().url().optional(),
+  postgresHost: z.string().default("localhost"),
+  postgresPort: z.coerce.number().int().positive().default(5432),
+  postgresUser: z.string().default("landslide"),
+  postgresPassword: optionalNonEmptyString(),
+  postgresDatabase: z.string().default("landslide_monitor"),
+  postgresPoolMax: z.coerce.number().int().positive().default(5),
 
   batchMaxRows: z.coerce.number().int().positive().default(2000),
   batchFlushIntervalMs: z.coerce.number().int().positive().default(1000),
@@ -41,6 +57,14 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
     clickhousePassword: env.CLICKHOUSE_PASSWORD,
     clickhouseDatabase: env.CLICKHOUSE_DATABASE,
     clickhouseTable: env.CLICKHOUSE_TABLE,
+
+    postgresUrl: env.POSTGRES_URL,
+    postgresHost: env.POSTGRES_HOST,
+    postgresPort: env.POSTGRES_PORT,
+    postgresUser: env.POSTGRES_USER,
+    postgresPassword: env.POSTGRES_PASSWORD,
+    postgresDatabase: env.POSTGRES_DATABASE,
+    postgresPoolMax: env.POSTGRES_POOL_MAX,
 
     batchMaxRows: env.BATCH_MAX_ROWS,
     batchFlushIntervalMs: env.BATCH_FLUSH_INTERVAL_MS,
