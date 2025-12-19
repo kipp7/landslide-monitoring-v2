@@ -8,6 +8,15 @@ function optionalNonEmptyString() {
   }, z.string().min(1).optional());
 }
 
+function optionalCsvList() {
+  return z.preprocess((v) => {
+    if (typeof v !== "string") return v;
+    const trimmed = v.trim();
+    if (trimmed.length === 0) return undefined;
+    return trimmed;
+  }, z.string().min(1).transform((v) => v.split(",").map((s) => s.trim()).filter(Boolean)).optional());
+}
+
 const configSchema = z.object({
   serviceName: z.string().default("api-service"),
   apiHost: z.string().default("0.0.0.0"),
@@ -39,6 +48,9 @@ const configSchema = z.object({
   clickhousePassword: z.string().optional(),
   clickhouseDatabase: z.string().default("landslide"),
   clickhouseTable: z.string().default("telemetry_raw"),
+
+  kafkaBrokers: optionalCsvList(),
+  kafkaTopicDeviceCommands: z.string().default("device.commands.v1"),
 
   apiMaxSeriesRangeHours: z.coerce.number().int().positive().default(168),
   apiMaxPoints: z.coerce.number().int().positive().default(100000)
@@ -74,6 +86,9 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
 
     emqxWebhookToken: env.EMQX_WEBHOOK_TOKEN,
     mqttInternalUsername: env.MQTT_INTERNAL_USERNAME,
-    mqttInternalPassword: env.MQTT_INTERNAL_PASSWORD
+    mqttInternalPassword: env.MQTT_INTERNAL_PASSWORD,
+
+    kafkaBrokers: env.KAFKA_BROKERS,
+    kafkaTopicDeviceCommands: env.KAFKA_TOPIC_DEVICE_COMMANDS
   });
 }
