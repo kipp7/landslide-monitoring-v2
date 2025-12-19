@@ -16,6 +16,36 @@ const seriesQuerySchema = z.object({
   timeField: z.enum(["received", "event"]).default("received")
 });
 
+const rawQuerySchema = z.object({
+  startTime: z.string().datetime(),
+  endTime: z.string().datetime(),
+  sensorKey: z.string().min(1),
+  limit: z.coerce.number().int().positive().max(100000).default(10000),
+  order: z.enum(["asc", "desc"]).default("asc")
+});
+
+const statisticsQuerySchema = z.object({
+  scope: z.enum(["device", "station"]),
+  deviceId: z.string().uuid().optional(),
+  stationId: z.string().uuid().optional(),
+  sensorKey: z.string().min(1),
+  startTime: z.string().datetime(),
+  endTime: z.string().datetime(),
+  interval: z.enum(["1h", "1d"]).default("1h")
+});
+
+const exportRequestSchema = z
+  .object({
+    scope: z.enum(["device", "station"]),
+    deviceId: z.string().uuid().optional(),
+    stationId: z.string().uuid().optional(),
+    startTime: z.string().datetime(),
+    endTime: z.string().datetime(),
+    sensorKeys: z.array(z.string().min(1)).min(1),
+    format: z.enum(["csv", "json"])
+  })
+  .strict();
+
 type LatestRow = {
   sensor_key: string;
   latest_ts: string;
@@ -31,6 +61,17 @@ type SeriesRow = {
   value_num: number | null;
   value_str: string | null;
   value_bool: number | null;
+};
+
+type RawRow = {
+  received_ts: string;
+  event_ts: string | null;
+  seq: number | null;
+  value_f64: number | null;
+  value_i64: number | null;
+  value_str: string | null;
+  value_bool: number | null;
+  quality: number | null;
 };
 
 function normalizeMetricValue(row: {
@@ -58,6 +99,14 @@ function intervalSeconds(interval: "1m" | "5m" | "1h" | "1d"): number {
 function toClickhouseDateTime64Utc(d: Date): string {
   // ClickHouse DateTime64 text format: "YYYY-MM-DD HH:MM:SS.mmm" (no trailing "Z", no "T")
   return d.toISOString().replace("T", " ").replace("Z", "");
+}
+
+function clickhouseStringToIsoZ(ts: string): string {
+  const t = ts.trim();
+  if (t.includes("T") && t.endsWith("Z")) return t;
+  if (t.includes("T") && !t.endsWith("Z")) return t + "Z";
+  if (t.includes(" ")) return t.replace(" ", "T") + "Z";
+  return t;
 }
 
 export function registerDataRoutes(
@@ -250,6 +299,287 @@ export function registerDataRoutes(
     });
     const rows: SeriesRow[] = await result.json();
     ok(reply, buildSeriesResponse(deviceId, startTime, endTime, interval, uniqueKeys, rows), traceId);
+  });
+
+  app.get("/data/raw/:deviceId", async (request, reply) => {
+    const traceId = request.traceId;
+    const parseId = deviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
+    if (!parseId.success) {
+      fail(reply, 400, "参数错误", traceId, { field: "deviceId" });
+      return;
+    }
+    const deviceId = parseId.data;
+
+    const parseQuery = rawQuerySchema.safeParse(request.query);
+    if (!parseQuery.success) {
+      fail(reply, 400, "参数错误", traceId, { field: "query", issues: parseQuery.error.issues });
+      return;
+    }
+    const { startTime, endTime, sensorKey, limit, order } = parseQuery.data;
+    const start = new Date(startTime);
+    const end = new Date(endTime);
+    if (!(start < end)) {
+      fail(reply, 400, "参数错误", traceId, { field: "timeRange" });
+      return;
+    }
+
+    const maxRangeMs = config.apiMaxSeriesRangeHours * 3600 * 1000;
+    if (end.getTime() - start.getTime() > maxRangeMs) {
+      fail(reply, 400, "查询范围过大", traceId, { maxHours: config.apiMaxSeriesRangeHours });
+      return;
+    }
+
+    const sql = `
+      SELECT
+        toString(received_ts) AS received_ts,
+        toString(event_ts) AS event_ts,
+        seq,
+        value_f64,
+        value_i64,
+        value_str,
+        value_bool,
+        quality
+      FROM ${config.clickhouseDatabase}.${config.clickhouseTable}
+      WHERE device_id = {deviceId:String}
+        AND sensor_key = {sensorKey:String}
+        AND received_ts >= {start:DateTime64(3, 'UTC')}
+        AND received_ts <= {end:DateTime64(3, 'UTC')}
+      ORDER BY received_ts ${order === "asc" ? "ASC" : "DESC"}
+      LIMIT {limit:UInt32}
+    `;
+
+    const result = await ch.query({
+      query: sql,
+      query_params: {
+        deviceId,
+        sensorKey,
+        start: toClickhouseDateTime64Utc(start),
+        end: toClickhouseDateTime64Utc(end),
+        limit
+      },
+      format: "JSONEachRow"
+    });
+    const rows: RawRow[] = await result.json();
+
+    ok(
+      reply,
+      {
+        deviceId,
+        sensorKey,
+        list: rows.map((r) => ({
+          receivedTs: clickhouseStringToIsoZ(r.received_ts),
+          eventTs: r.event_ts ? clickhouseStringToIsoZ(r.event_ts) : null,
+          seq: r.seq,
+          value: normalizeMetricValue(r),
+          quality: r.quality
+        }))
+      },
+      traceId
+    );
+  });
+
+  app.get("/data/statistics", async (request, reply) => {
+    const traceId = request.traceId;
+    const parseQuery = statisticsQuerySchema.safeParse(request.query);
+    if (!parseQuery.success) {
+      fail(reply, 400, "参数错误", traceId, { field: "query", issues: parseQuery.error.issues });
+      return;
+    }
+    const { scope, deviceId, stationId, sensorKey, startTime, endTime, interval } = parseQuery.data;
+    const start = new Date(startTime);
+    const end = new Date(endTime);
+    if (!(start < end)) {
+      fail(reply, 400, "参数错误", traceId, { field: "timeRange" });
+      return;
+    }
+
+    let deviceIds: string[] = [];
+    if (scope === "device") {
+      if (!deviceId) {
+        fail(reply, 400, "参数错误", traceId, { field: "deviceId" });
+        return;
+      }
+      deviceIds = [deviceId];
+    } else {
+      if (!stationId) {
+        fail(reply, 400, "参数错误", traceId, { field: "stationId" });
+        return;
+      }
+      if (!pg) {
+        fail(reply, 503, "PostgreSQL 未配置", traceId);
+        return;
+      }
+      const rows = await withPgClient(pg, async (client) => {
+        const res = await client.query<{ device_id: string }>("SELECT device_id FROM devices WHERE station_id=$1", [
+          stationId
+        ]);
+        return res.rows;
+      });
+      deviceIds = rows.map((r) => r.device_id);
+    }
+
+    if (deviceIds.length === 0) {
+      ok(reply, { scope, sensorKey, interval, buckets: [] }, traceId);
+      return;
+    }
+
+    const bucketSeconds = interval === "1d" ? 86400 : 3600;
+    const sql = `
+      SELECT
+        toString(toStartOfInterval(received_ts, INTERVAL {bucket:UInt32} SECOND)) AS ts,
+        minOrNull(coalesce(value_f64, toFloat64(value_i64))) AS min,
+        maxOrNull(coalesce(value_f64, toFloat64(value_i64))) AS max,
+        avgOrNull(coalesce(value_f64, toFloat64(value_i64))) AS avg,
+        count()::UInt64 AS count
+      FROM ${config.clickhouseDatabase}.${config.clickhouseTable}
+      WHERE device_id IN {deviceIds:Array(String)}
+        AND sensor_key = {sensorKey:String}
+        AND received_ts >= {start:DateTime64(3, 'UTC')}
+        AND received_ts <= {end:DateTime64(3, 'UTC')}
+      GROUP BY ts
+      ORDER BY ts ASC
+      LIMIT {limit:UInt32}
+    `;
+    const result = await ch.query({
+      query: sql,
+      query_params: {
+        deviceIds,
+        sensorKey,
+        bucket: bucketSeconds,
+        start: toClickhouseDateTime64Utc(start),
+        end: toClickhouseDateTime64Utc(end),
+        limit: 200000
+      },
+      format: "JSONEachRow"
+    });
+    const rows: { ts: string; min: number | null; max: number | null; avg: number | null; count: number | string }[] =
+      await result.json();
+
+    ok(
+      reply,
+      {
+        scope,
+        sensorKey,
+        interval,
+        buckets: rows.map((r) => ({
+          ts: clickhouseStringToIsoZ(r.ts),
+          min: r.min,
+          max: r.max,
+          avg: r.avg,
+          count: typeof r.count === "string" ? Number(r.count) : r.count
+        }))
+      },
+      traceId
+    );
+  });
+
+  app.post("/data/export", async (request, reply) => {
+    const traceId = request.traceId;
+    const parseBody = exportRequestSchema.safeParse(request.body);
+    if (!parseBody.success) {
+      fail(reply, 400, "参数错误", traceId, { field: "body", issues: parseBody.error.issues });
+      return;
+    }
+
+    const { scope, deviceId, stationId, startTime, endTime, sensorKeys, format } = parseBody.data;
+    const start = new Date(startTime);
+    const end = new Date(endTime);
+    if (!(start < end)) {
+      fail(reply, 400, "参数错误", traceId, { field: "timeRange" });
+      return;
+    }
+
+    let deviceIds: string[] = [];
+    if (scope === "device") {
+      if (!deviceId) {
+        fail(reply, 400, "参数错误", traceId, { field: "deviceId" });
+        return;
+      }
+      deviceIds = [deviceId];
+    } else {
+      if (!stationId) {
+        fail(reply, 400, "参数错误", traceId, { field: "stationId" });
+        return;
+      }
+      if (!pg) {
+        fail(reply, 503, "PostgreSQL 未配置", traceId);
+        return;
+      }
+      const rows = await withPgClient(pg, async (client) => {
+        const res = await client.query<{ device_id: string }>("SELECT device_id FROM devices WHERE station_id=$1", [
+          stationId
+        ]);
+        return res.rows;
+      });
+      deviceIds = rows.map((r) => r.device_id);
+    }
+
+    if (deviceIds.length === 0) {
+      ok(reply, { format, rows: 0, data: format === "csv" ? "" : [] }, traceId);
+      return;
+    }
+
+    const uniqueSensorKeys = Array.from(new Set(sensorKeys));
+    const limit = config.apiReplayMaxRows;
+
+    const sql = `
+      SELECT
+        device_id,
+        sensor_key,
+        toString(received_ts) AS received_ts,
+        value_f64,
+        value_i64,
+        value_str,
+        value_bool
+      FROM ${config.clickhouseDatabase}.${config.clickhouseTable}
+      WHERE device_id IN {deviceIds:Array(String)}
+        AND sensor_key IN {sensorKeys:Array(String)}
+        AND received_ts >= {start:DateTime64(3, 'UTC')}
+        AND received_ts <= {end:DateTime64(3, 'UTC')}
+      ORDER BY device_id, received_ts ASC
+      LIMIT {limit:UInt32}
+    `;
+
+    const result = await ch.query({
+      query: sql,
+      query_params: {
+        deviceIds,
+        sensorKeys: uniqueSensorKeys,
+        start: toClickhouseDateTime64Utc(start),
+        end: toClickhouseDateTime64Utc(end),
+        limit
+      },
+      format: "JSONEachRow"
+    });
+    const rows: { device_id: string; sensor_key: string; received_ts: string; value_f64: number | null; value_i64: number | null; value_str: string | null; value_bool: number | null }[] =
+      await result.json();
+
+    const out = rows.map((r) => ({
+      deviceId: r.device_id,
+      sensorKey: r.sensor_key,
+      receivedTs: clickhouseStringToIsoZ(r.received_ts),
+      value: normalizeMetricValue(r)
+    }));
+
+    if (format === "json") {
+      ok(reply, { format, rows: out.length, data: out, limitHit: out.length >= limit }, traceId);
+      return;
+    }
+
+    const header = "deviceId,sensorKey,receivedTs,value";
+    const lines: string[] = [header];
+    for (const r of out) {
+      const v =
+        r.value === null || r.value === undefined
+          ? ""
+          : typeof r.value === "string"
+            ? JSON.stringify(r.value)
+            : typeof r.value === "number" || typeof r.value === "boolean"
+              ? String(r.value)
+              : JSON.stringify(r.value);
+      lines.push(`${r.deviceId},${r.sensorKey},${r.receivedTs},${v}`);
+    }
+    ok(reply, { format, rows: out.length, data: lines.join("\n"), limitHit: out.length >= limit }, traceId);
   });
 }
 

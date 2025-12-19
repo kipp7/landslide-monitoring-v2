@@ -63,6 +63,73 @@ export function registerSensorRoutes(app: FastifyInstance, config: AppConfig, pg
     );
   });
 
+  app.get("/devices/:deviceId/sensors", async (request, reply) => {
+    const traceId = request.traceId;
+    if (!requireAdmin(adminCfg, request, reply)) return;
+    if (!pg) {
+      fail(reply, 503, "PostgreSQL 未配置", traceId);
+      return;
+    }
+
+    const parseId = deviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
+    if (!parseId.success) {
+      fail(reply, 400, "参数错误", traceId, { field: "deviceId" });
+      return;
+    }
+    const deviceId = parseId.data;
+
+    const data = await withPgClient(pg, async (client) => {
+      const exists = await queryOne<{ ok: boolean }>(client, "SELECT TRUE AS ok FROM devices WHERE device_id=$1", [
+        deviceId
+      ]);
+      if (!exists) return null;
+
+      const res = await client.query<{
+        sensor_key: string;
+        status: string;
+        display_name: string;
+        unit: string | null;
+        data_type: string;
+      }>(
+        `
+          SELECT
+            ds.sensor_key,
+            ds.status,
+            s.display_name,
+            s.unit,
+            s.data_type
+          FROM device_sensors ds
+          JOIN sensors s ON s.sensor_key = ds.sensor_key
+          WHERE ds.device_id = $1
+          ORDER BY ds.sensor_key
+        `,
+        [deviceId]
+      );
+
+      return res.rows;
+    });
+
+    if (!data) {
+      fail(reply, 404, "资源不存在", traceId, { deviceId });
+      return;
+    }
+
+    ok(
+      reply,
+      {
+        deviceId,
+        list: data.map((r) => ({
+          sensorKey: r.sensor_key,
+          status: r.status,
+          displayName: r.display_name,
+          unit: r.unit ?? "",
+          dataType: r.data_type
+        }))
+      },
+      traceId
+    );
+  });
+
   app.put("/devices/:deviceId/sensors", async (request, reply) => {
     const traceId = request.traceId;
     if (!requireAdmin(adminCfg, request, reply)) return;
@@ -143,4 +210,3 @@ export function registerSensorRoutes(app: FastifyInstance, config: AppConfig, pg
     );
   });
 }
-

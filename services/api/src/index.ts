@@ -5,6 +5,7 @@ import Fastify from "fastify";
 import path from "node:path";
 import { createClickhouseClient } from "./clickhouse";
 import { loadConfigFromEnv } from "./config";
+import { verifyAccessToken } from "./auth";
 import { fail } from "./http";
 import { createPgPool } from "./postgres";
 import { registerDataRoutes } from "./routes/data";
@@ -19,6 +20,8 @@ import { registerAlertRuleRoutes } from "./routes/alert-rules";
 import { registerAlertRuleReplayRoutes } from "./routes/alert-rules-replay";
 import { registerTelemetryDlqRoutes } from "./routes/telemetry-dlq";
 import { registerSystemRoutes } from "./routes/system";
+import { registerAuthRoutes } from "./routes/auth";
+import { registerUserRoutes } from "./routes/users";
 
 async function main(): Promise<void> {
   dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
@@ -34,14 +37,20 @@ async function main(): Promise<void> {
   await app.register(formbody);
 
   app.decorateRequest("traceId", "");
+  app.decorateRequest("startTimeMs", 0);
+  app.decorateRequest("user", null);
 
   app.addHook("onRequest", async (request, _reply) => {
     request.traceId = newTraceId();
+    request.startTimeMs = Date.now();
+    request.user = null;
   });
 
   app.addHook("preHandler", async (request, reply) => {
     if (request.url === "/health") return;
     if (request.url.startsWith("/emqx/")) return;
+    if (request.url === "/api/v1/auth/login") return;
+    if (request.url === "/api/v1/auth/refresh") return;
     if (!config.authRequired) return;
 
     const traceId = request.traceId;
@@ -50,6 +59,27 @@ async function main(): Promise<void> {
       fail(reply, 401, "未认证", traceId);
       return;
     }
+
+    const token = auth.slice("Bearer ".length).trim();
+
+    if (config.adminApiToken && token === config.adminApiToken) {
+      request.user = null;
+      return;
+    }
+
+    const u = verifyAccessToken(config, token);
+    if (u) {
+      request.user = u;
+      return;
+    }
+
+    // Backward compatibility: if JWT is not configured yet, only require a bearer token to exist.
+    if (!config.jwtAccessSecret) {
+      request.user = null;
+      return;
+    }
+
+    fail(reply, 401, "未认证", traceId);
   });
 
   app.setErrorHandler((err, request, reply) => {
@@ -73,9 +103,43 @@ async function main(): Promise<void> {
   const ch = createClickhouseClient(config);
   const pg = createPgPool(config);
 
+  app.addHook("onResponse", async (request, reply) => {
+    if (!pg) return;
+    if (request.url === "/health") return;
+    if (request.url.startsWith("/emqx/")) return;
+
+    const responseTimeMs = Math.max(0, Date.now() - request.startTimeMs);
+    const method = request.method;
+    const pathOnly = request.raw.url?.split("?")[0] ?? request.url.split("?")[0] ?? request.url;
+    const routePath = request.routeOptions.url ?? pathOnly;
+
+    const userAgent = typeof request.headers["user-agent"] === "string" ? request.headers["user-agent"] : null;
+
+    void pg
+      .query(
+        `
+          INSERT INTO api_logs (user_id, method, path, query_params, status_code, response_time_ms, ip_address, user_agent)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        `,
+        [
+          request.user?.userId ?? null,
+          method,
+          routePath,
+          (request.query ?? {}) as unknown,
+          reply.statusCode,
+          responseTimeMs,
+          request.ip,
+          userAgent
+        ]
+      )
+      .catch(() => undefined);
+  });
+
   registerEmqxRoutes(app, config, pg);
 
   app.register((v1, _opts, done) => {
+    registerAuthRoutes(v1, config, pg);
+    registerUserRoutes(v1, config, pg);
     registerDataRoutes(v1, config, ch, pg);
     registerDeviceRoutes(v1, config, pg);
     registerSensorRoutes(v1, config, pg);

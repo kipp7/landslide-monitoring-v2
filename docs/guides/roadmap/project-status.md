@@ -8,6 +8,7 @@
 - 本页只记录“当前状态与下一步”，历史细节放到 `docs/incidents/` 或 PR/commit 记录中。
 
 最后更新时间：2025-12-20（阶段 4 已完成：单机端点齐备且 e2e 有断言；进入阶段 5）
+- 2025-12-20：补齐 OpenAPI 契约缺口（api-service 实现 `/auth/*`、`/users`/`/roles`/`/permissions`、`/system/configs`、`/system/logs/*`、`/data/raw|statistics|export`），并为 `operation_logs`/`api_logs` 增加 DEFAULT 分区以避免单机环境插入失败；阶段 5 Next Actions 不变。
 
 ## 1) 当前结论（TL;DR）
 
