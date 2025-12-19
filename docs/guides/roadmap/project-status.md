@@ -7,7 +7,7 @@
 - 每次合并一个 PR 到 `main`，如果它改变了项目阶段/里程碑/下一步，必须更新本页。
 - 本页只记录“当前状态与下一步”，历史细节放到 `docs/incidents/` 或 PR/commit 记录中。
 
-最后更新时间：2025-12-20（阶段 2 回归已复验；阶段 3 Next Actions 不变）
+最后更新时间：2025-12-20（阶段 3 已完成：复杂规则/回放/通知闭环；进入阶段 4）
 
 ## 1) 当前结论（TL;DR）
 
@@ -57,7 +57,7 @@
 
 ## 2) 当前阶段与里程碑
 
-阶段：阶段 3（复杂规则与 AI 插件）
+阶段：阶段 4（Web/App 去硬编码）
 
 M1（阶段 0：最小闭环）目标：
 
@@ -96,9 +96,9 @@ M3（阶段 2：可告警）目标：
 
 ## 3) 下一步（Next Actions，按优先级）
 
-1) 复杂规则能力：在 DSL v1 规范下补齐 `metric`（min/max/avg/delta/slope）与 station/global scope（以不改表为原则演进）
-2) 回放/回测：支持按 `ruleId + ruleVersion + timeRange` 对 ClickHouse 数据进行 dry-run 回放，并输出 explain/evidence（便于复盘与容量评估）
-3) 通知与处置：把告警事件与通知策略打通（App/SMS/Email/WeChat 的最小策略），并沉淀到单机联调脚本/证据包
+1) Stage 4 验收清单：把“Web/App 去硬编码”的验收标准补齐为可执行 checklist（与 `docs/features/prd/mobile-app.md` 对齐）
+2) App/Web 依赖接口：补齐并固化 App/Web 依赖的“字典 + DTO”接口与 OpenAPI（避免前端写死映射/阈值）
+3) 联调证据：把 Web/App 相关的最小联调流程沉淀到单机脚本与证据包（沿用 e2e 留证机制）
 4) 并行硬化（非阻塞）：writer 可靠性增强（告警/限流/降载策略 + 容量压测），以不影响主链路为原则逐步补齐
 
 ## 4) 关键入口（新 AI 只读这些就能上手）

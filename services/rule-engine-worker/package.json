@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@lsmv2/observability": "*",
+    "@lsmv2/rules": "*",
     "@lsmv2/validation": "*",
     "dotenv": "^16.4.7",
     "kafkajs": "^2.2.4",

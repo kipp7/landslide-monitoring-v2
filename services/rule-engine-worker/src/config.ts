@@ -6,6 +6,7 @@ const configSchema = z.object({
   kafkaClientId: z.string().min(1).default("rule-engine-worker"),
   kafkaGroupId: z.string().min(1).default("rule-engine-worker.v1"),
   kafkaTopicTelemetryRaw: z.string().min(1).default("telemetry.raw.v1"),
+  kafkaTopicAlertsEvents: z.string().min(1).default("alerts.events.v1"),
 
   postgresUrl: z.string().optional(),
   postgresHost: z.string().min(1).default("127.0.0.1"),
@@ -26,6 +27,7 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv) {
     kafkaClientId: env.KAFKA_CLIENT_ID,
     kafkaGroupId: env.KAFKA_GROUP_ID,
     kafkaTopicTelemetryRaw: env.KAFKA_TOPIC_TELEMETRY_RAW,
+    kafkaTopicAlertsEvents: env.KAFKA_TOPIC_ALERTS_EVENTS,
 
     postgresUrl: env.POSTGRES_URL,
     postgresHost: env.POSTGRES_HOST,
@@ -45,4 +47,3 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv) {
 
   return parsed.data;
 }
-
