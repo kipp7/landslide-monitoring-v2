@@ -4,6 +4,7 @@ param(
   [string]$DeviceId = "",
   [switch]$Stage1Regression,
   [switch]$Stage2Regression,
+  [switch]$Stage4Regression,
   [switch]$Stage5Regression,
   [switch]$UseMqttAuth,
   [switch]$CreateDevice,
@@ -219,7 +220,7 @@ $firmwareProc = $null
 
 try {
   if ($Stage1Regression) {
-    if ($Stage2Regression -or $Stage5Regression -or $UseMqttAuth -or $CreateDevice -or $ConfigureEmqx -or $TestCommands -or $TestCommandAcks -or $TestCommandFailed -or $TestCommandTimeout -or $TestAlerts -or $TestAlertNotifications -or $TestTelemetryDlq -or $TestRevoke -or $TestFirmwareSimulator) {
+    if ($Stage2Regression -or $Stage4Regression -or $Stage5Regression -or $UseMqttAuth -or $CreateDevice -or $ConfigureEmqx -or $TestCommands -or $TestCommandAcks -or $TestCommandFailed -or $TestCommandTimeout -or $TestAlerts -or $TestAlertNotifications -or $TestTelemetryDlq -or $TestRevoke -or $TestFirmwareSimulator) {
       throw "Stage1Regression is a preset and must not be combined with other switches. Use either -Stage1Regression or the individual switches."
     }
     $ConfigureEmqx = $true
@@ -232,7 +233,7 @@ try {
   }
 
   if ($Stage2Regression) {
-    if ($Stage1Regression -or $UseMqttAuth -or $CreateDevice -or $ConfigureEmqx -or $TestCommands -or $TestCommandAcks -or $TestCommandFailed -or $TestCommandTimeout -or $TestAlerts -or $TestAlertNotifications -or $TestTelemetryDlq -or $TestRevoke) {
+    if ($Stage1Regression -or $Stage4Regression -or $UseMqttAuth -or $CreateDevice -or $ConfigureEmqx -or $TestCommands -or $TestCommandAcks -or $TestCommandFailed -or $TestCommandTimeout -or $TestAlerts -or $TestAlertNotifications -or $TestTelemetryDlq -or $TestRevoke) {
       throw "Stage2Regression is a preset and must not be combined with other switches. Use either -Stage2Regression or the individual switches."
     }
     $ConfigureEmqx = $true
@@ -246,8 +247,23 @@ try {
     $TestRevoke = $true
   }
 
+  if ($Stage4Regression) {
+    if ($Stage1Regression -or $Stage2Regression -or $Stage5Regression -or $UseMqttAuth -or $CreateDevice -or $ConfigureEmqx -or $TestCommands -or $TestCommandAcks -or $TestCommandFailed -or $TestCommandTimeout -or $TestAlerts -or $TestAlertNotifications -or $TestTelemetryDlq -or $TestRevoke -or $TestFirmwareSimulator) {
+      throw "Stage4Regression is a preset and must not be combined with other switches. Use either -Stage4Regression or the individual switches."
+    }
+    $ConfigureEmqx = $true
+    $UseMqttAuth = $true
+    $CreateDevice = $true
+    $TestCommands = $true
+    $TestTelemetryDlq = $true
+    $TestAlerts = $true
+    $TestAlertNotifications = $true
+    $TestPresence = $true
+    $TestRevoke = $true
+  }
+
   if ($Stage5Regression) {
-    if ($Stage1Regression -or $Stage2Regression -or $UseMqttAuth -or $CreateDevice -or $ConfigureEmqx -or $TestCommands -or $TestCommandAcks -or $TestCommandFailed -or $TestCommandTimeout -or $TestAlerts -or $TestAlertNotifications -or $TestTelemetryDlq -or $TestRevoke -or $TestFirmwareSimulator) {
+    if ($Stage1Regression -or $Stage2Regression -or $Stage4Regression -or $UseMqttAuth -or $CreateDevice -or $ConfigureEmqx -or $TestCommands -or $TestCommandAcks -or $TestCommandFailed -or $TestCommandTimeout -or $TestAlerts -or $TestAlertNotifications -or $TestTelemetryDlq -or $TestRevoke -or $TestFirmwareSimulator) {
       throw "Stage5Regression is a preset and must not be combined with other switches. Use either -Stage5Regression or the individual switches."
     }
     $ConfigureEmqx = $true
@@ -282,7 +298,7 @@ try {
     }
 
     # Preset regressions should be deterministic: env files are ignored by git and safe to rewrite.
-    $forceEnv = $ForceWriteServiceEnv -or $Stage1Regression -or $Stage2Regression
+    $forceEnv = $ForceWriteServiceEnv -or $Stage1Regression -or $Stage2Regression -or $Stage4Regression -or $Stage5Regression
 
     Write-EnvIfMissingOrForced "services/ingest/.env" @(
       "SERVICE_NAME=ingest-service",
@@ -366,8 +382,8 @@ try {
       "POSTGRES_POOL_MAX=5"
     ) -force:$forceEnv
 
-    $ackTimeoutSeconds = if ($TestCommandTimeout -or $Stage1Regression -or $Stage2Regression) { "10" } else { "60" }
-    $scanIntervalMs = if ($TestCommandTimeout -or $Stage1Regression -or $Stage2Regression) { "1000" } else { "5000" }
+    $ackTimeoutSeconds = if ($TestCommandTimeout -or $Stage1Regression -or $Stage2Regression -or $Stage4Regression) { "10" } else { "60" }
+    $scanIntervalMs = if ($TestCommandTimeout -or $Stage1Regression -or $Stage2Regression -or $Stage4Regression) { "1000" } else { "5000" }
 
     Write-EnvIfMissingOrForced "services/command-timeout-worker/.env" @(
       "SERVICE_NAME=command-timeout-worker",
@@ -604,6 +620,33 @@ try {
     if ($st.success -ne $true) { throw "system/status failed" }
     $dash = Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/api/v1/dashboard" -TimeoutSec 10
     if ($dash.success -ne $true) { throw "dashboard failed" }
+
+    if ($Stage4Regression) {
+      if (-not $st.data) { throw "system/status missing data" }
+      if (-not $st.data.postgres.status) { throw "system/status missing postgres.status" }
+      if (-not $st.data.clickhouse.status) { throw "system/status missing clickhouse.status" }
+      if ($st.data.postgres.status -ne "healthy") { throw "system/status postgres not healthy: $($st.data.postgres.status)" }
+      if ($st.data.clickhouse.status -ne "healthy") { throw "system/status clickhouse not healthy: $($st.data.clickhouse.status)" }
+
+      if (-not $dash.data) { throw "dashboard missing data" }
+      foreach ($k in @("todayDataCount", "onlineDevices", "offlineDevices", "pendingAlerts", "alertsBySeverity", "stations", "lastUpdatedAt")) {
+        if (-not ($dash.data.PSObject.Properties.Name -contains $k)) { throw "dashboard missing field: $k" }
+      }
+
+      Write-Host "Checking API sensors dictionary (/sensors)..." -ForegroundColor Cyan
+      $sensors = Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/api/v1/sensors" -TimeoutSec 10
+      if ($sensors.success -ne $true -or -not $sensors.data -or -not $sensors.data.list) { throw "/sensors failed" }
+      $requiredKeys = @("sensorKey", "displayName", "unit", "dataType")
+      $first = $sensors.data.list | Select-Object -First 1
+      foreach ($k in $requiredKeys) {
+        if (-not ($first.PSObject.Properties.Name -contains $k)) { throw "/sensors missing field: $k" }
+      }
+      $hasDisplacement = $false
+      foreach ($s in $sensors.data.list) {
+        if ($s.sensorKey -eq "displacement_mm") { $hasDisplacement = $true; break }
+      }
+      if (-not $hasDisplacement) { throw "/sensors missing expected key: displacement_mm" }
+    }
   } catch {
     throw "API system endpoints not available. Logs: $logDir"
   }
@@ -614,7 +657,7 @@ try {
   $timeoutProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/command-timeout-worker" -PassThru -RedirectStandardOutput $timeoutOut -RedirectStandardError $timeoutErr
   $eventsProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/command-events-recorder" -PassThru -RedirectStandardOutput $eventsOut -RedirectStandardError $eventsErr
   $notifyProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/command-notify-worker" -PassThru -RedirectStandardOutput $notifyOut -RedirectStandardError $notifyErr
-  if ($TestAlertNotifications -or $Stage2Regression) {
+  if ($TestAlertNotifications -or $Stage2Regression -or $Stage4Regression) {
     $alertNotifyProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/alert-notify-worker" -PassThru -RedirectStandardOutput $alertNotifyOut -RedirectStandardError $alertNotifyErr
   }
   $ruleProc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" -WorkingDirectory "services/rule-engine-worker" -PassThru -RedirectStandardOutput $ruleOut -RedirectStandardError $ruleErr
@@ -703,6 +746,30 @@ try {
       throw "device creation failed. Ensure PostgreSQL is initialized (infra/compose/scripts/init-postgres.ps1). Logs: $logDir"
     }
     Write-Host "Device created: $DeviceId (secret not printed)" -ForegroundColor Green
+  }
+
+  if ($Stage4Regression) {
+    Write-Host "Declaring device sensors via API (stage4)..." -ForegroundColor Cyan
+    $declBody = @{
+      sensors = @(
+        @{ sensorKey = "displacement_mm"; status = "enabled" },
+        @{ sensorKey = "tilt_x_deg"; status = "enabled" },
+        @{ sensorKey = "battery_v"; status = "enabled" },
+        @{ sensorKey = "humidity_pct"; status = "missing" }
+      )
+    } | ConvertTo-Json -Depth 6
+
+    $declUrl = "http://$apiLocalHost`:$apiPort/api/v1/devices/$($DeviceId)/sensors"
+    $decl = Invoke-RestMethod -Method Put -Uri $declUrl -ContentType "application/json" -Body $declBody -TimeoutSec 10
+    if ($decl.success -ne $true) { throw "device sensors PUT failed. Logs: $logDir" }
+
+    $get = Invoke-RestMethod -Method Get -Uri $declUrl -TimeoutSec 10
+    if ($get.success -ne $true -or -not $get.data -or -not $get.data.list) { throw "device sensors GET failed. Logs: $logDir" }
+    $found = $false
+    foreach ($row in $get.data.list) {
+      if ($row.sensorKey -eq "displacement_mm" -and $row.status -eq "enabled") { $found = $true; break }
+    }
+    if (-not $found) { throw "device sensors declaration mismatch (expected displacement_mm enabled). Logs: $logDir" }
   }
 
   if ($TestPresence) {
@@ -1097,7 +1164,7 @@ try {
       }
     }
 
-    if ($Stage1Regression -or $Stage2Regression) {
+    if ($Stage1Regression -or $Stage2Regression -or $Stage4Regression) {
       Invoke-CommandTest "acked"
       Invoke-CommandTest "failed"
       Invoke-CommandTest "timeout"

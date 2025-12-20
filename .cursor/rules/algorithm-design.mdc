@@ -1,0 +1,179 @@
+---
+description: GPS形变算法设计规范和实现要求
+globs: src/**/*.c,src/**/*.h,algorithm/**/*,技术文档/01_算法设计/**/*
+alwaysApply: false
+---
+
+# GPS形变算法设计规范
+
+## 规则说明
+本规则适用于OpenHarmony rk2206滑坡监测系统的GPS形变算法设计、实现和优化。
+
+## 技术目标与性能指标
+
+### 硬件平台
+- **GPS模块**: 中科微ATGM336H-5N GPS模块
+- **通信模块**: L610 4G模块 
+- **主控平台**: OpenHarmony rk2206单片机
+
+### 性能指标
+- **定位精度**: <2.5米(CEP50)（ATGM336H-5N实际测试精度）
+- **位移检测精度**: ±1.5米（经过滤波优化后的实际精度）
+- **处理性能**: GPS解析<50ms，形变计算<100ms，总处理时间<200ms
+- **内存占用**: GPS数据缓存1KB，形变历史数据2KB，总计<4KB
+- **可靠性**: 连续运行>72小时，NMEA解析成功率>99.5%
+- **数据更新频率**: GPS数据1Hz，形变分析0.2Hz（每5秒）
+
+## 算法架构设计
+
+### 数据处理流水线
+```
+NMEA数据接收 → 数据解析验证 → 坐标转换 → 质量评估 → 形变计算 → 风险评估 → 数据输出
+```
+
+### 核心算法模块
+1. **NMEA解析模块**
+   - 数据校验和验证
+   - 格式解析和错误处理
+   - 异常数据检测和过滤
+
+2. **坐标转换模块**  
+   - DMS（度分秒）到DD（十进制度）转换
+   - 坐标系转换和高程处理
+   - 精度标准化处理
+
+3. **数据质量评估**
+   - GPS信号质量评估
+   - 卫星数量和几何精度
+   - 数据有效性验证
+
+4. **形变计算模块**
+   - 多级滤波算法（卡尔曼滤波 + 移动平均）
+   - 自适应基准点更新
+   - 位移、速度、加速度计算
+
+5. **风险评估模块**
+   - 多维数据融合
+   - 置信度计算
+   - 风险等级判定
+
+## 关键算法实现
+
+### NMEA数据解析
+```c
+/**
+ * 解析NMEA GPS数据
+ * 输入: NMEA字符串
+ * 输出: GPS结构体数据
+ * 性能要求: <50ms处理时间
+ */
+typedef struct {
+    double latitude;     // 纬度（十进制度）
+    double longitude;    // 经度（十进制度）
+    double altitude;     // 海拔高度
+    int satellites;      // 卫星数量
+    double hdop;         // 水平精度因子
+    char fix_quality;    // 定位质量
+    char timestamp[20];  // 时间戳
+} GPSData;
+
+int parseNMEA(const char* nmea_string, GPSData* gps_data);
+```
+
+### 形变计算核心算法
+```c
+/**
+ * 计算GPS形变位移
+ * 输入: 当前GPS数据，历史基准数据
+ * 输出: 位移向量和置信度
+ * 算法: 多级滤波 + 自适应基准
+ */
+typedef struct {
+    double dx, dy, dz;    // 三维位移
+    double distance_2d;   // 二维位移距离
+    double distance_3d;   // 三维位移距离
+    double confidence;    // 置信度 [0-1]
+    int risk_level;       // 风险等级 [0-5]
+} DeformationResult;
+
+int calculateDeformation(GPSData current, GPSData baseline, DeformationResult* result);
+```
+
+## 数据结构规范
+
+### GPS数据缓存结构
+```c
+#define GPS_BUFFER_SIZE 10
+#define BASELINE_UPDATE_INTERVAL 3600  // 基准更新间隔(秒)
+
+typedef struct {
+    GPSData buffer[GPS_BUFFER_SIZE];
+    int head, tail, count;
+    GPSData baseline;
+    time_t baseline_timestamp;
+    double quality_threshold;
+} GPSBuffer;
+```
+
+### 滤波算法参数
+```c
+typedef struct {
+    double kalman_q;      // 过程噪声
+    double kalman_r;      // 测量噪声  
+    double kalman_p;      // 估计误差协方差
+    double kalman_k;      // 卡尔曼增益
+    double ma_alpha;      // 移动平均系数
+    int outlier_threshold; // 异常值阈值
+} FilterParams;
+```
+
+## 算法优化策略
+
+### 内存优化
+- 使用循环缓冲区存储GPS历史数据
+- 避免动态内存分配，使用栈内存
+- 数据结构紧凑化，减少内存碎片
+
+### 计算优化
+- 查表法替代复杂数学运算
+- 整数运算优先，避免浮点计算
+- 批处理减少函数调用开销
+
+### 实时性优化  
+- 异步数据处理，避免阻塞主线程
+- 优先级调度，关键计算高优先级
+- 缓存中间结果，避免重复计算
+
+## 质量保证要求
+
+### 算法验证
+- 仿真测试：使用模拟GPS数据验证算法正确性
+- 实地测试：实际部署验证精度和稳定性
+- 边界测试：极端条件下的算法鲁棒性
+
+### 代码质量
+- 函数注释必须包含：功能描述、参数说明、返回值、性能指标
+- 关键算法必须有单元测试
+- 内存泄漏检测和性能profiling
+
+### 错误处理
+- 输入参数验证
+- 异常情况处理和恢复
+- 日志记录和调试信息
+
+## 测试验证标准
+
+### 精度测试
+- GPS定位精度: <2.5米(CEP50)
+- 位移检测精度: ±1.5米
+- 重复性测试: 10次测试标准差<0.5米
+
+### 性能测试
+- 处理时间: 总时间<200ms
+- 内存占用: <4KB
+- 连续运行: >72小时无故障
+
+### 稳定性测试
+- NMEA解析成功率: >99.5%
+- 异常数据处理: 100%捕获并处理
+- 系统恢复: 故障后自动恢复<10秒

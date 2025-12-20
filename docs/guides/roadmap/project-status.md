@@ -16,6 +16,8 @@
 
 - 技术栈已冻结：后端 TypeScript（strict），MQTT→Kafka→ClickHouse + Postgres（单机 Compose）。
 - 仓库治理已落地：Rulesets 强制 PR-only、必过 `docs-and-contracts`、禁强推/禁删除。
+- GitHub 远端仓库：https://github.com/kipp7/landslide-monitoring-v2（remote: `origin`；PR-only 合并）
+- 当前迁移分支：`feat/v2-monorepo-migration`（迁移 commit：`9570f2a`）
 - 阶段 0 已完成：单机基础设施 + 端到端冒烟（MQTT→Kafka→ClickHouse→API）可复现，踩坑已沉淀到 `docs/incidents/`。
   - 补充：`infra/compose/scripts/e2e-smoke-test.ps1` 可一键跑通并自动留证日志（见 `docs/guides/testing/e2e-smoke-test.md`）。
 - 阶段 1 已完成：单机 Compose 已具备设备鉴权 + commands 运维排查的“可落库/可查询”闭环（command events + notifications），并已把关键回归断言沉淀到 `e2e-smoke-test.ps1` 的证据包中。

@@ -1,0 +1,217 @@
+---
+description: 系统架构设计规范和边云协同架构要求
+globs: src/**/*,frontend/**/*,backend/**/*,技术文档/02_系统架构/**/*
+alwaysApply: false
+---
+
+# 系统架构设计规范
+
+## 规则说明
+本规则定义了OpenHarmony rk2206滑坡监测系统的整体架构设计规范，包括边云协同架构、前端架构、后端架构的设计原则和实现要求。
+
+## 边云协同架构设计
+
+### 架构目标
+设计高效、可靠的边云协同架构，实现OpenHarmony rk2206单片机端实时智能处理与云端大数据分析的深度融合。
+
+### 设计原则
+- **边缘智能**: 关键算法在边缘端实现，确保毫秒级响应
+- **云端赋能**: 大数据分析、机器学习预测在云端实现
+- **数据安全**: 敏感数据本地加密，传输过程SSL保护
+- **系统韧性**: 网络中断时边缘端完全自主工作
+- **弹性扩展**: 支持多设备接入，云端资源动态伸缩
+- **成本优化**: 边缘计算减少云端资源消耗
+
+### 整体架构层次
+```
+┌─────────────────────────────────────────────────────────┐
+│                    边云协同架构                         │
+├─────────────────────────────────────────────────────────┤
+│  边缘端 (OpenHarmony rk2206)  ◄──4G MQTT──► 云端平台    │
+│  ├─ 传感器集群                              ├─ 云端服务  │
+│  │  ├─ ATGM336H-5N GPS                    │  ├─ Node.js │
+│  │  ├─ MPU6050 六轴传感器                 │  ├─ Supabase│
+│  │  ├─ SHT30 温湿度                       │  ├─ Next.js │
+│  │  └─ L610 4G通信                        │  └─ 告警服务│
+│  └─ 输出设备集群                            └─ 用户接入层│
+└─────────────────────────────────────────────────────────┘
+```
+
+### 数据流架构
+```
+边缘端: 传感器采集 → 数据预处理 → 算法分析 → 本地决策 → 输出控制
+云端:   数据接收 → 实时处理 → 智能分析 → 历史存储 → 用户界面
+```
+
+## 前端技术架构规范
+
+### 技术栈要求
+- **框架**: Next.js 15+ (App Router) - 全栈React框架
+- **UI库**: Ant Design 5+ - 企业级UI组件
+- **状态管理**: Zustand 4+ - 轻量级状态管理
+- **实时数据**: Supabase Realtime - 实时数据订阅
+- **地图可视化**: Cesium + OpenLayers + 高德地图API
+- **图表库**: ECharts 5+ + Chart.js
+- **样式**: Tailwind CSS 4 - 原子化CSS框架
+- **类型检查**: TypeScript 5 - 静态类型检查
+
+### 目录结构标准
+```
+frontend/
+├── app/                    # Next.js App Router
+│   ├── analysis/           # 数据分析页面
+│   ├── components/         # 全局共享组件
+│   │   ├── charts/         # 图表组件
+│   │   ├── maps/           # 地图组件
+│   │   └── ui/             # UI组件
+│   ├── dashboard/          # 仪表板页面
+│   ├── monitoring/         # 实时监控页面
+│   └── layout.tsx          # 全局布局
+├── lib/                    # 工具库
+├── hooks/                  # 自定义Hooks
+├── stores/                 # Zustand状态管理
+├── types/                  # TypeScript类型定义
+└── styles/                 # 样式文件
+```
+
+### 组件设计原则
+- **组件职责单一**: 每个组件只负责一个特定功能
+- **可复用性**: 通用组件设计支持多场景使用
+- **类型安全**: 所有Props和State必须有TypeScript类型
+- **性能优化**: 使用React.memo、useMemo、useCallback优化
+- **响应式设计**: 支持桌面、平板、手机多端适配
+
+### 状态管理规范
+```typescript
+// Zustand Store 结构示例
+interface MonitoringStore {
+  // 状态定义
+  deviceData: DeviceData[];
+  alerts: Alert[];
+  isConnected: boolean;
+  
+  // 操作函数
+  updateDeviceData: (data: DeviceData) => void;
+  addAlert: (alert: Alert) => void;
+  setConnectionStatus: (status: boolean) => void;
+}
+```
+
+## 后端技术架构规范
+
+### 技术栈要求
+- **运行时**: Node.js 18+ LTS
+- **Web框架**: Express 4.18+
+- **数据库**: Supabase (PostgreSQL 15) + Redis 7+
+- **IoT平台**: 华为云IoT设备接入服务
+- **消息队列**: Bull Queue + Redis
+- **实时通信**: Supabase Realtime
+- **监控**: Prometheus + Grafana
+
+### 目录结构标准
+```
+backend/iot-service/
+├── src/
+│   ├── controllers/        # 控制器层
+│   │   ├── iotController.js       # IoT数据控制器
+│   │   ├── deviceController.js    # 设备管理控制器
+│   │   └── healthController.js    # 健康检查控制器
+│   ├── services/          # 服务层
+│   │   ├── huaweiIotService.js    # 华为云IoT服务
+│   │   ├── dataProcessor.js       # 数据处理服务
+│   │   └── notificationService.js # 通知服务
+│   ├── models/            # 数据模型层
+│   ├── middleware/        # 中间件
+│   ├── utils/             # 工具函数
+│   └── config/            # 配置文件
+├── tests/                 # 测试文件
+└── docs/                  # API文档
+```
+
+### API设计规范
+```javascript
+// RESTful API 路由结构
+/api/v1/devices          # 设备管理
+/api/v1/data            # 数据接收和查询
+/api/v1/alerts          # 告警管理
+/api/v1/analytics       # 数据分析
+/api/v1/health          # 健康检查
+
+// 数据模型示例
+const deviceDataSchema = {
+  deviceId: String,      // 设备ID
+  timestamp: Date,       // 时间戳
+  gpsData: {            // GPS数据
+    latitude: Number,
+    longitude: Number,
+    altitude: Number
+  },
+  sensorData: {         // 传感器数据
+    temperature: Number,
+    humidity: Number,
+    acceleration: Object
+  },
+  riskLevel: Number     // 风险等级
+};
+```
+
+## 性能与安全要求
+
+### 性能指标
+- **响应时间**:
+  - 边缘端: <200ms
+  - 后端API: <500ms
+  - 前端渲染: <100ms
+- **并发处理**:
+  - 后端: 支持10000+ TPS
+  - 前端: 支持1000+并发用户
+- **可用性**:
+  - 边缘端: 99.9%
+  - 云端: 99.99%
+
+### 安全要求
+- **数据传输**: SSL/TLS加密
+- **身份认证**: JWT Token认证
+- **API安全**: Rate Limiting + 请求验证
+- **数据存储**: 敏感数据加密存储
+- **设备认证**: 设备证书双向认证
+
+## 部署架构规范
+
+### 边缘端部署
+- **硬件平台**: OpenHarmony rk2206开发板
+- **系统要求**: OpenHarmony 3.2+ LTS
+- **资源配置**: RAM≥256KB, Flash≥2MB
+- **网络要求**: 4G/Wi-Fi连接
+
+### 云端部署
+- **容器化**: Docker + Docker Compose
+- **负载均衡**: Nginx反向代理
+- **数据库**: Supabase托管PostgreSQL
+- **缓存**: Redis集群
+- **监控**: Prometheus + Grafana
+- **日志**: ELK Stack
+
+### CI/CD流程
+```
+开发 → 测试 → 构建 → 部署 → 监控
+├─ Git提交
+├─ 自动化测试
+├─ Docker构建
+├─ 环境部署
+└─ 性能监控
+```
+
+## 质量保证
+
+### 代码规范
+- **代码风格**: ESLint + Prettier统一格式
+- **类型检查**: TypeScript严格模式
+- **测试覆盖**: 单元测试覆盖率≥80%
+- **文档完整**: API文档和组件文档
+
+### 监控告警
+- **系统监控**: CPU、内存、磁盘、网络
+- **应用监控**: API响应时间、错误率、吞吐量
+- **业务监控**: 设备在线率、数据质量、告警响应
+- **告警机制**: 邮件、短信、企业微信推送

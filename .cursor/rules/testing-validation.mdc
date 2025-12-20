@@ -1,0 +1,559 @@
+---
+description: 测试验证规范和质量保证要求
+globs: tests/**/*,test/**/*,spec/**/*,__tests__/**/*,技术文档/04_测试验证/**/*
+alwaysApply: false
+---
+
+# 测试验证规范
+
+## 规则说明
+本规则定义了OpenHarmony rk2206滑坡监测系统的全面测试验证标准，包括单元测试、集成测试、性能测试、功能测试等各个测试层次的要求和标准。
+
+## 测试架构设计
+
+### 测试层次划分
+```
+测试金字塔架构:
+┌─────────────────────────────────────────┐
+│          E2E测试 (5%)                   │  系统级集成测试
+│         完整业务场景验证                │
+├─────────────────────────────────────────┤
+│        集成测试 (15%)                   │  模块间接口测试  
+│       跨模块功能验证                    │
+├─────────────────────────────────────────┤
+│        单元测试 (80%)                   │  函数级别测试
+│       独立模块验证                      │
+└─────────────────────────────────────────┘
+```
+
+### 测试环境配置
+- **开发测试环境**: 本地开发机 + OpenHarmony模拟器
+- **集成测试环境**: rk2206开发板 + 模拟传感器
+- **性能测试环境**: rk2206开发板 + 真实传感器
+- **压力测试环境**: 多设备集群 + 云端服务
+- **验收测试环境**: 实际部署环境 + 完整硬件
+
+## 单元测试规范
+
+### C语言单元测试框架
+```c
+// test_framework.h - 轻量级测试框架
+#ifndef TEST_FRAMEWORK_H
+#define TEST_FRAMEWORK_H
+
+#include <stdio.h>
+#include <assert.h>
+#include <string.h>
+
+// 测试统计
+typedef struct {
+    int total_tests;
+    int passed_tests;
+    int failed_tests;
+} TestStats_t;
+
+// 测试宏定义
+#define TEST_ASSERT(condition) \
+    do { \
+        if (!(condition)) { \
+            printf("[FAIL] %s:%d - %s\n", __FILE__, __LINE__, #condition); \
+            return -1; \
+        } \
+    } while(0)
+
+#define TEST_ASSERT_EQUAL(expected, actual) \
+    TEST_ASSERT((expected) == (actual))
+
+#define TEST_ASSERT_FLOAT_EQUAL(expected, actual, tolerance) \
+    TEST_ASSERT(fabs((expected) - (actual)) < (tolerance))
+
+#define TEST_ASSERT_STRING_EQUAL(expected, actual) \
+    TEST_ASSERT(strcmp((expected), (actual)) == 0)
+
+// 测试函数定义宏
+#define TEST_FUNCTION(name) \
+    int test_##name(void)
+
+#define RUN_TEST(name) \
+    do { \
+        printf("Running %s... ", #name); \
+        if (test_##name() == 0) { \
+            printf("PASS\n"); \
+            stats.passed_tests++; \
+        } else { \
+            printf("FAIL\n"); \
+            stats.failed_tests++; \
+        } \
+        stats.total_tests++; \
+    } while(0)
+
+#endif
+```
+
+### GPS模块测试用例
+```c
+// test_gps_module.c
+#include "test_framework.h"
+#include "gps_module.h"
+
+// 测试NMEA数据解析
+TEST_FUNCTION(gps_parse_valid_nmea) {
+    const char* nmea = "$GPRMC,123519,A,4807.038,N,01131.000,E,022.4,084.4,230394,003.1,W*6A";
+    GPS_Data_t gps_data;
+    
+    int result = GPS_ParseNMEA(nmea, &gps_data);
+    
+    TEST_ASSERT_EQUAL(ERR_SUCCESS, result);
+    TEST_ASSERT(gps_data.isValid);
+    TEST_ASSERT_FLOAT_EQUAL(48.1173, gps_data.latitude, 0.0001);
+    TEST_ASSERT_FLOAT_EQUAL(11.5167, gps_data.longitude, 0.0001);
+    
+    return 0;
+}
+
+// 测试无效NMEA数据
+TEST_FUNCTION(gps_parse_invalid_nmea) {
+    const char* nmea = "$GPRMC,123519,V,,,,,,,230394,003.1,W*6A";
+    GPS_Data_t gps_data;
+    
+    int result = GPS_ParseNMEA(nmea, &gps_data);
+    
+    TEST_ASSERT_EQUAL(ERR_SUCCESS, result);
+    TEST_ASSERT(!gps_data.isValid);
+    
+    return 0;
+}
+
+// 测试校验和验证
+TEST_FUNCTION(gps_checksum_validation) {
+    const char* valid_nmea = "$GPRMC,123519,A,4807.038,N,01131.000,E,022.4,084.4,230394,003.1,W*6A";
+    const char* invalid_nmea = "$GPRMC,123519,A,4807.038,N,01131.000,E,022.4,084.4,230394,003.1,W*6B";
+    
+    TEST_ASSERT_EQUAL(1, GPS_ValidateChecksum(valid_nmea));
+    TEST_ASSERT_EQUAL(0, GPS_ValidateChecksum(invalid_nmea));
+    
+    return 0;
+}
+
+// 测试坐标转换
+TEST_FUNCTION(gps_coordinate_conversion) {
+    double dms_value = 4807.038;  // 48°07.038'
+    double expected_dd = 48.1173; // 48.1173°
+    
+    double result = GPS_ConvertDMSToDD(dms_value);
+    
+    TEST_ASSERT_FLOAT_EQUAL(expected_dd, result, 0.0001);
+    
+    return 0;
+}
+```
+
+### 形变算法测试用例
+```c
+// test_deformation.c
+#include "test_framework.h"
+#include "deformation_analyzer.h"
+
+// 测试形变计算
+TEST_FUNCTION(deformation_calculate_displacement) {
+    GPS_Data_t baseline = {.latitude = 48.1173, .longitude = 11.5167, .altitude = 100.0};
+    GPS_Data_t current = {.latitude = 48.1174, .longitude = 11.5168, .altitude = 100.5};
+    Deformation_Result_t result;
+    
+    int ret = DEFORM_CalculateDisplacement(current, baseline, &result);
+    
+    TEST_ASSERT_EQUAL(ERR_SUCCESS, ret);
+    TEST_ASSERT(result.distance2D > 0);
+    TEST_ASSERT(result.distance3D > 0);
+    TEST_ASSERT(result.confidence >= 0.0 && result.confidence <= 1.0);
+    TEST_ASSERT(result.riskLevel >= 0 && result.riskLevel <= 5);
+    
+    return 0;
+}
+
+// 测试卡尔曼滤波
+TEST_FUNCTION(deformation_kalman_filter) {
+    GPS_Data_t noisy_data = {.latitude = 48.1173, .longitude = 11.5167, .altitude = 100.0};
+    GPS_Data_t filtered_data = noisy_data;
+    
+    int result = DEFORM_ApplyKalmanFilter(&filtered_data);
+    
+    TEST_ASSERT_EQUAL(ERR_SUCCESS, result);
+    // 验证滤波后的数据合理性
+    TEST_ASSERT(filtered_data.latitude != 0);
+    TEST_ASSERT(filtered_data.longitude != 0);
+    
+    return 0;
+}
+```
+
+## 集成测试规范
+
+### 模块间接口测试
+```c
+// test_integration.c
+#include "test_framework.h"
+#include "landslide_monitor.h"
+
+// 测试GPS与形变算法集成
+TEST_FUNCTION(integration_gps_deformation) {
+    // 初始化GPS模块
+    int result = GPS_Initialize();
+    TEST_ASSERT_EQUAL(ERR_SUCCESS, result);
+    
+    // 初始化形变分析模块
+    result = DEFORM_Initialize();
+    TEST_ASSERT_EQUAL(ERR_SUCCESS, result);
+    
+    // 模拟GPS数据
+    const char* nmea = "$GPRMC,123519,A,4807.038,N,01131.000,E,022.4,084.4,230394,003.1,W*6A";
+    GPS_Data_t gps_data;
+    result = GPS_ParseNMEA(nmea, &gps_data);
+    TEST_ASSERT_EQUAL(ERR_SUCCESS, result);
+    
+    // 设置基准点
+    result = DEFORM_UpdateBaseline(gps_data);
+    TEST_ASSERT_EQUAL(ERR_SUCCESS, result);
+    
+    // 模拟位移
+    gps_data.latitude += 0.0001; // 约11米位移
+    
+    // 计算形变
+    Deformation_Result_t deform_result;
+    result = DEFORM_CalculateDisplacement(gps_data, gps_data, &deform_result);
+    TEST_ASSERT_EQUAL(ERR_SUCCESS, result);
+    
+    // 验证结果合理性
+    TEST_ASSERT(deform_result.distance2D > 5.0); // 预期约11米
+    TEST_ASSERT(deform_result.riskLevel > 0);
+    
+    return 0;
+}
+
+// 测试传感器数据采集与处理
+TEST_FUNCTION(integration_sensor_processing) {
+    // 初始化传感器
+    int result = SENSOR_Initialize();
+    TEST_ASSERT_EQUAL(ERR_SUCCESS, result);
+    
+    // 读取传感器数据
+    Sensor_Data_t sensor_data;
+    float temp, humidity;
+    result = SENSOR_ReadTemperatureHumidity(&temp, &humidity);
+    TEST_ASSERT_EQUAL(ERR_SUCCESS, result);
+    
+    // 验证数据范围合理性
+    TEST_ASSERT(temp >= -40.0 && temp <= 80.0);  // 温度范围
+    TEST_ASSERT(humidity >= 0.0 && humidity <= 100.0); // 湿度范围
+    
+    return 0;
+}
+```
+
+## 性能测试规范
+
+### 响应时间测试
+```c
+// test_performance.c
+#include "test_framework.h"
+#include <time.h>
+
+// 测试GPS解析性能
+TEST_FUNCTION(performance_gps_parsing) {
+    const char* nmea = "$GPRMC,123519,A,4807.038,N,01131.000,E,022.4,084.4,230394,003.1,W*6A";
+    GPS_Data_t gps_data;
+    
+    clock_t start = clock();
+    
+    // 执行1000次解析
+    for (int i = 0; i < 1000; i++) {
+        GPS_ParseNMEA(nmea, &gps_data);
+    }
+    
+    clock_t end = clock();
+    double elapsed = ((double)(end - start)) / CLOCKS_PER_SEC * 1000; // 毫秒
+    double avg_time = elapsed / 1000;
+    
+    printf("GPS parsing average time: %.2f ms\n", avg_time);
+    TEST_ASSERT(avg_time < 50.0); // 要求小于50ms
+    
+    return 0;
+}
+
+// 测试形变计算性能
+TEST_FUNCTION(performance_deformation_calculation) {
+    GPS_Data_t baseline = {.latitude = 48.1173, .longitude = 11.5167, .altitude = 100.0};
+    GPS_Data_t current = {.latitude = 48.1174, .longitude = 11.5168, .altitude = 100.5};
+    Deformation_Result_t result;
+    
+    clock_t start = clock();
+    
+    // 执行1000次计算
+    for (int i = 0; i < 1000; i++) {
+        DEFORM_CalculateDisplacement(current, baseline, &result);
+    }
+    
+    clock_t end = clock();
+    double elapsed = ((double)(end - start)) / CLOCKS_PER_SEC * 1000;
+    double avg_time = elapsed / 1000;
+    
+    printf("Deformation calculation average time: %.2f ms\n", avg_time);
+    TEST_ASSERT(avg_time < 100.0); // 要求小于100ms
+    
+    return 0;
+}
+```
+
+### 内存使用测试
+```c
+// 测试内存占用
+TEST_FUNCTION(performance_memory_usage) {
+    size_t initial_heap = get_heap_size(); // 假设有内存监控函数
+    
+    // 初始化所有模块
+    GPS_Initialize();
+    SENSOR_Initialize();
+    DEFORM_Initialize();
+    
+    size_t after_init = get_heap_size();
+    size_t used_memory = after_init - initial_heap;
+    
+    printf("Memory usage: %zu bytes\n", used_memory);
+    TEST_ASSERT(used_memory < 4096); // 要求小于4KB
+    
+    return 0;
+}
+```
+
+## 功能测试规范
+
+### 前端功能测试（JavaScript/TypeScript）
+```typescript
+// frontend/tests/components/Dashboard.test.tsx
+import { render, screen, waitFor } from '@testing-library/react';
+import { Dashboard } from '@/components/Dashboard';
+import { expect, test, describe } from 'vitest';
+
+describe('Dashboard Component', () => {
+  test('renders dashboard with loading state', () => {
+    render(<Dashboard />);
+    expect(screen.getByText('加载中...')).toBeInTheDocument();
+  });
+
+  test('displays device data when loaded', async () => {
+    const mockData = {
+      deviceId: 'device001',
+      gpsData: { latitude: 48.1173, longitude: 11.5167 },
+      riskLevel: 2
+    };
+
+    render(<Dashboard />);
+    
+    await waitFor(() => {
+      expect(screen.getByText('设备 device001')).toBeInTheDocument();
+      expect(screen.getByText('风险等级: 2')).toBeInTheDocument();
+    });
+  });
+
+  test('updates real-time data', async () => {
+    render(<Dashboard />);
+    
+    // 模拟实时数据更新
+    await waitFor(() => {
+      expect(screen.getByTestId('last-update')).toBeInTheDocument();
+    });
+  });
+});
+```
+
+### 后端API测试（Node.js）
+```javascript
+// backend/tests/controllers/iotController.test.js
+const request = require('supertest');
+const app = require('../../src/app');
+
+describe('IoT Controller', () => {
+  test('POST /api/v1/data - should receive device data', async () => {
+    const deviceData = {
+      deviceId: 'device001',
+      timestamp: new Date().toISOString(),
+      gpsData: {
+        latitude: 48.1173,
+        longitude: 11.5167,
+        altitude: 100.0
+      },
+      sensorData: {
+        temperature: 25.5,
+        humidity: 60.0
+      },
+      riskLevel: 2
+    };
+
+    const response = await request(app)
+      .post('/api/v1/data')
+      .send(deviceData)
+      .expect(200);
+
+    expect(response.body.status).toBe('success');
+    expect(response.body.data.deviceId).toBe('device001');
+  });
+
+  test('GET /api/v1/devices - should return device list', async () => {
+    const response = await request(app)
+      .get('/api/v1/devices')
+      .expect(200);
+
+    expect(Array.isArray(response.body.data)).toBe(true);
+  });
+
+  test('GET /api/v1/data/:deviceId - should return device data', async () => {
+    const response = await request(app)
+      .get('/api/v1/data/device001')
+      .expect(200);
+
+    expect(response.body.data.deviceId).toBe('device001');
+  });
+});
+```
+
+## 系统测试规范
+
+### 端到端测试场景
+```javascript
+// e2e/tests/monitoring.spec.js
+const { test, expect } = require('@playwright/test');
+
+test.describe('滑坡监测系统 E2E 测试', () => {
+  test('完整监测流程测试', async ({ page }) => {
+    // 1. 访问监控dashboard
+    await page.goto('/dashboard');
+    await expect(page.locator('h1')).toContainText('滑坡监测系统');
+
+    // 2. 验证设备连接状态
+    await expect(page.locator('[data-testid="device-status"]')).toContainText('在线');
+
+    // 3. 检查实时数据显示
+    await expect(page.locator('[data-testid="gps-data"]')).toBeVisible();
+    await expect(page.locator('[data-testid="sensor-data"]')).toBeVisible();
+
+    // 4. 触发告警测试
+    await page.click('[data-testid="simulate-alert"]');
+    await expect(page.locator('[data-testid="alert-notification"]')).toBeVisible();
+
+    // 5. 验证数据历史
+    await page.click('[data-testid="history-tab"]');
+    await expect(page.locator('[data-testid="history-chart"]')).toBeVisible();
+  });
+
+  test('多设备并发监测', async ({ page }) => {
+    await page.goto('/monitoring');
+    
+    // 验证多设备同时显示
+    const deviceCards = page.locator('[data-testid="device-card"]');
+    await expect(deviceCards).toHaveCount(3); // 假设有3个设备
+
+    // 验证每个设备都有数据更新
+    for (let i = 0; i < 3; i++) {
+      await expect(deviceCards.nth(i).locator('[data-testid="last-update"]')).not.toBeEmpty();
+    }
+  });
+});
+```
+
+## 测试执行与报告
+
+### 测试脚本配置
+```bash
+#!/bin/bash
+# run_tests.sh - 测试执行脚本
+
+echo "开始执行滑坡监测系统测试..."
+
+# 1. 单元测试
+echo "执行单元测试..."
+cd tests/unit
+gcc -o test_runner *.c -I../../include -lm
+./test_runner
+
+# 2. 集成测试
+echo "执行集成测试..."
+cd ../integration
+gcc -o integration_runner *.c -I../../include -lm
+./integration_runner
+
+# 3. 性能测试
+echo "执行性能测试..."
+cd ../performance
+gcc -o performance_runner *.c -I../../include -lm
+./performance_runner
+
+# 4. 前端测试
+echo "执行前端测试..."
+cd ../../frontend
+npm test
+
+# 5. 后端测试
+echo "执行后端测试..."
+cd ../backend
+npm test
+
+# 6. E2E测试
+echo "执行E2E测试..."
+cd ../e2e
+npx playwright test
+
+echo "所有测试执行完成！"
+```
+
+### 测试覆盖率要求
+- **单元测试覆盖率**: ≥80%
+- **集成测试覆盖率**: ≥70%
+- **功能测试覆盖率**: ≥90%
+- **核心算法覆盖率**: ≥95%
+
+### 测试报告模板
+```
+测试执行报告
+================
+
+项目: OpenHarmony rk2206滑坡监测系统
+版本: v2.0.1
+测试时间: 2025-07-25 14:30:00
+测试环境: rk2206开发板 + 真实传感器
+
+测试结果概要:
+- 单元测试: 156/160 通过 (97.5%)
+- 集成测试: 45/48 通过 (93.75%)
+- 性能测试: 12/12 通过 (100%)
+- 功能测试: 89/92 通过 (96.7%)
+- E2E测试: 15/15 通过 (100%)
+
+总体通过率: 317/327 (96.9%)
+
+性能指标:
+- GPS解析时间: 平均 32ms (要求<50ms) ✓
+- 形变计算时间: 平均 78ms (要求<100ms) ✓
+- 内存占用: 峰值 3.2KB (要求<4KB) ✓
+- 连续运行: 72小时无故障 ✓
+
+失败用例分析:
+1. test_extreme_temperature: 极端温度条件下传感器读取失败
+2. test_network_recovery: 网络恢复后重连时间超出预期
+3. test_concurrent_access: 高并发访问时偶发超时
+
+建议:
+- 加强极端环境下的容错处理
+- 优化网络重连机制
+- 提升并发处理能力
+```
+
+## 质量门禁标准
+
+### 发布前检查清单
+- [ ] 所有单元测试通过率 ≥95%
+- [ ] 集成测试通过率 ≥90%
+- [ ] 性能测试全部通过
+- [ ] 安全测试无高危漏洞
+- [ ] 代码覆盖率达标
+- [ ] 文档更新完整
+- [ ] 版本号正确更新

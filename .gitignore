@@ -4,6 +4,8 @@ Thumbs.db
 .vscode/
 .idea/
 *.iml
+.cursor/
+.playwright-mcp/
 
 # Logs
 *.log
@@ -47,3 +49,7 @@ venv/
 data/
 volumes/
 backups/
+
+# Local scratch docs
+database_table_analysis.md
+Supabase模拟数据生成/
