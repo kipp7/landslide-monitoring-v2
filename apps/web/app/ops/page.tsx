@@ -1,15 +1,15 @@
-// app/page.tsx
 'use client'
 
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
-export default function Home() {
+export default function OpsHome() {
   const router = useRouter()
 
   useEffect(() => {
-    router.replace('/analysis')
+    router.replace('/ops/configs')
   }, [router])
 
   return null
 }
+

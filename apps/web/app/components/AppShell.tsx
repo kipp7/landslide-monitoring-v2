@@ -10,6 +10,8 @@ const ITEMS = [
   { key: '/analysis', label: '概览' },
   { key: '/stations', label: '站点' },
   { key: '/alerts', label: '告警' },
+  { key: '/admin', label: '管理' },
+  { key: '/ops', label: '运维' },
   { key: '/settings', label: '设置' },
 ]
 
