@@ -1,0 +1,56 @@
+﻿name: quality-gates
+
+on:
+  push:
+    branches: ["main", "master"]
+  pull_request:
+    branches: ["main", "master"]
+
+permissions:
+  contents: read
+
+jobs:
+  docs-and-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install gate dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r "docs/tools/requirements.txt"
+
+      - name: Run quality gates
+        run: |
+          python "docs/tools/run-quality-gates.py"
+
+      - name: Setup Node
+        if: ${{ hashFiles('package-lock.json') != '' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install Node dependencies
+        if: ${{ hashFiles('package-lock.json') != '' }}
+        run: |
+          npm ci
+
+      - name: Lint (TypeScript)
+        if: ${{ hashFiles('package-lock.json') != '' }}
+        run: |
+          npm run lint
+
+      - name: Build (TypeScript)
+        if: ${{ hashFiles('package-lock.json') != '' }}
+        run: |
+          npm run build
