@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { apiGetJson, type ApiSuccessResponse } from '../../lib/v2Api'
 
 export interface DeviceInfo {
   id: string
@@ -19,15 +20,6 @@ export interface DeviceInfo {
   last_active: string
 }
 
-type ApiSuccessResponse<T> = {
-  success: true
-  code: number
-  message: string
-  data: T
-  timestamp: string
-  traceId: string
-}
-
 type PaginatedDevices = {
   list: Array<{
     deviceId: string
@@ -44,17 +36,6 @@ type PaginatedDevices = {
     total: number
     totalPages: number
   }
-}
-
-function getApiBaseUrl(): string {
-  const base = process.env.NEXT_PUBLIC_API_BASE_URL
-  return base ? base.replace(/\/+$/, '') : ''
-}
-
-function buildApiUrl(path: string): string {
-  const base = getApiBaseUrl()
-  if (!base) return path
-  return `${base}${path.startsWith('/') ? '' : '/'}${path}`
 }
 
 function formatDate(dateString?: string | null): string {
@@ -96,18 +77,9 @@ export default function useDeviceList() {
       setLoading(true)
       setError(null)
 
-      const url = buildApiUrl('/api/v1/devices?page=1&pageSize=100')
-      const resp = await fetch(url, {
-        method: 'GET',
-        headers: { Accept: 'application/json' },
-        cache: 'no-store',
-      })
-
-      if (!resp.ok) {
-        throw new Error(`HTTP ${resp.status} ${resp.statusText}`)
-      }
-
-      const json = (await resp.json()) as ApiSuccessResponse<PaginatedDevices>
+      const json = await apiGetJson<ApiSuccessResponse<PaginatedDevices>>(
+        '/api/v1/devices?page=1&pageSize=100'
+      )
       const list = json.data?.list ?? []
 
       const mapped = list.map((device) => {

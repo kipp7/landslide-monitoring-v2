@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { apiGetJson, toNumber, type ApiSuccessResponse } from '../../lib/v2Api'
 
 export interface DeviceShadowData {
   device_id?: string
@@ -20,7 +21,7 @@ export interface DeviceShadowData {
     longitude?: number
     vibration?: number
     alarm_active?: boolean
-    [key: string]: any
+    [key: string]: unknown
   }
   event_time?: string
   version?: number
@@ -33,15 +34,6 @@ export interface UseDeviceShadowResult {
   refreshShadow: () => Promise<void>
 }
 
-type ApiSuccessResponse<T> = {
-  success: true
-  code: number
-  message: string
-  data: T
-  timestamp: string
-  traceId: string
-}
-
 type DeviceStateResponse = {
   deviceId: string
   updatedAt: string
@@ -49,26 +41,6 @@ type DeviceStateResponse = {
     metrics: Record<string, unknown>
     meta?: Record<string, unknown>
   }
-}
-
-function getApiBaseUrl(): string {
-  const base = process.env.NEXT_PUBLIC_API_BASE_URL
-  return base ? base.replace(/\/+$/, '') : ''
-}
-
-function buildApiUrl(path: string): string {
-  const base = getApiBaseUrl()
-  if (!base) return path
-  return `${base}${path.startsWith('/') ? '' : '/'}${path}`
-}
-
-function toNumber(value: unknown): number | undefined {
-  if (typeof value === 'number' && Number.isFinite(value)) return value
-  if (typeof value === 'string' && value.trim() !== '') {
-    const num = Number(value)
-    if (Number.isFinite(num)) return num
-  }
-  return undefined
 }
 
 function computeRiskLevel(metrics: Record<string, unknown>): number {
@@ -89,9 +61,10 @@ function computeRiskLevel(metrics: Record<string, unknown>): number {
 }
 
 export default function useDeviceShadow(
-  deviceId: string = '6815a14f9314d118511807c6_rk2206',
+  deviceId?: string,
   refreshInterval: number = 5000
 ): UseDeviceShadowResult {
+  const effectiveDeviceId = deviceId || '6815a14f9314d118511807c6_rk2206'
   const [data, setData] = useState<DeviceShadowData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -100,16 +73,9 @@ export default function useDeviceShadow(
     try {
       setError(null)
 
-      const url = buildApiUrl(`/api/v1/data/state/${encodeURIComponent(deviceId)}`)
-      const resp = await fetch(url, {
-        method: 'GET',
-        headers: { Accept: 'application/json' },
-        cache: 'no-store',
-      })
-
-      if (!resp.ok) throw new Error(`HTTP ${resp.status} ${resp.statusText}`)
-
-      const json = (await resp.json()) as ApiSuccessResponse<DeviceStateResponse>
+      const json = await apiGetJson<ApiSuccessResponse<DeviceStateResponse>>(
+        `/api/v1/data/state/${encodeURIComponent(effectiveDeviceId)}`
+      )
       if (!json?.success) throw new Error('Unexpected API response')
 
       const metrics = json.data.state.metrics ?? {}
@@ -144,7 +110,7 @@ export default function useDeviceShadow(
       const message = caught instanceof Error ? caught.message : String(caught)
       setError(message)
       setData({
-        device_id: deviceId,
+        device_id: effectiveDeviceId,
         properties: { risk_level: 0, alarm_active: false },
         event_time: new Date().toISOString(),
         version: 1,
@@ -152,7 +118,7 @@ export default function useDeviceShadow(
     } finally {
       setLoading(false)
     }
-  }, [deviceId])
+  }, [effectiveDeviceId])
 
   const refreshShadow = useCallback(async () => {
     setLoading(true)
@@ -170,4 +136,3 @@ export default function useDeviceShadow(
 
   return { data, loading, error, refreshShadow }
 }
-

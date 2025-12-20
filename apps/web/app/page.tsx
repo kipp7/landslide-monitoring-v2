@@ -1,15 +1,16 @@
 // app/page.tsx
-'use client';
+'use client'
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 
 export default function Home() {
-  const router = useRouter();
+  const router = useRouter()
 
   useEffect(() => {
-    router.replace('/login'); // 替换当前路由为 /login
-  }, [router]);
+    router.replace('/device-management')
+  }, [router])
 
-  return null; // 或者返回一个 loading 状态
+  return null
 }
+
