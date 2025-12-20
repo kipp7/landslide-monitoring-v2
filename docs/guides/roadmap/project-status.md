@@ -7,17 +7,18 @@
 - 每次合并一个 PR 到 `main`，如果它改变了项目阶段/里程碑/下一步，必须更新本页。
 - 本页只记录“当前状态与下一步”，历史细节放到 `docs/incidents/` 或 PR/commit 记录中。
 
-最后更新时间：2025-12-20（阶段 5 已完成：固件模拟器 + Stage5Regression 回归基线；准备进入真实固件联调）
+最后更新时间：2025-12-20（阶段 5 已完成：固件模拟器 + Stage5Regression 回归基线；硬件联调待启动）
 - 2025-12-20：补齐 OpenAPI 契约缺口（api-service 实现 `/auth/*`、`/users`/`/roles`/`/permissions`、`/system/configs`、`/system/logs/*`、`/data/raw|statistics|export`），并为 `operation_logs`/`api_logs` 增加 DEFAULT 分区以避免单机环境插入失败；阶段 5 Next Actions 不变。
 - 2025-12-20：阶段 5 落地：新增固件模拟器 `scripts/dev/firmware-sim.js`（schema 校验 + state 持久化 + 重连退避 + ping/set_config/reboot），并在 `infra/compose/scripts/e2e-smoke-test.ps1` 增加 `-Stage5Regression` 预置回归；新增 `docs/guides/roadmap/stage5-acceptance.md`。
 - 2025-12-20：补齐 PresenceEvent 可选链路：ingest-service 订阅 `presence/+` 写入 `presence.events.v1`，新增 `presence-recorder` 落库 `device_presence`，并把 presence 断言纳入 `Stage1Regression/Stage2Regression/Stage5Regression` 回归基线。
+- 2025-12-20：合并 PR #65：Stage4（Web/App 去硬编码）收口：Web 只依赖 v2 API + 字典渲染；新增告警详情（events 审计）、站点 CRUD、设备 sensors 声明/命令审计视图；e2e 新增 `-Stage4Regression` 回归基线；Stage4 验收清单更新为可执行并完成。
 
 ## 1) 当前结论（TL;DR）
 
 - 技术栈已冻结：后端 TypeScript（strict），MQTT→Kafka→ClickHouse + Postgres（单机 Compose）。
 - 仓库治理已落地：Rulesets 强制 PR-only、必过 `docs-and-contracts`、禁强推/禁删除。
 - GitHub 远端仓库：https://github.com/kipp7/landslide-monitoring-v2（remote: `origin`；PR-only 合并）
-- 当前迁移分支：`feat/v2-monorepo-migration`（迁移 commit：`9570f2a`）
+- 已完成 monorepo 迁移并合入 `main`（PR #65）。
 - 阶段 0 已完成：单机基础设施 + 端到端冒烟（MQTT→Kafka→ClickHouse→API）可复现，踩坑已沉淀到 `docs/incidents/`。
   - 补充：`infra/compose/scripts/e2e-smoke-test.ps1` 可一键跑通并自动留证日志（见 `docs/guides/testing/e2e-smoke-test.md`）。
 - 阶段 1 已完成：单机 Compose 已具备设备鉴权 + commands 运维排查的“可落库/可查询”闭环（command events + notifications），并已把关键回归断言沉淀到 `e2e-smoke-test.ps1` 的证据包中。
@@ -101,9 +102,10 @@ M3（阶段 2：可告警）目标：
 
 ## 3) 下一步（Next Actions，按优先级）
 
-1) 真实固件联调：按 `docs/integrations/mqtt/*` 与 `docs/integrations/firmware/README.md`，让真实设备跑通 telemetry + commands，并以 `-Stage5Regression` 作为回归基线
-2) 将真实固件的“身份包存储/重连退避/命令回执”实现细节沉淀到 `docs/integrations/firmware/`（含可复用代码片段与踩坑记录）
-3) 规划下一阶段：Web/App 去硬编码（仅依赖 API/字典表渲染），并补齐对应 acceptance + e2e 断言
+1) 完善“非硬件模块”收口：按 `docs/features/prd/security-and-access-control.md` 与 `docs/features/prd/system-operations-and-observability.md`，补齐管理端（用户/角色/权限）与运维端（configs/logs）在 Web 的最小可用界面，并以 `run-quality-gates + lint + build` 作为门禁
+2) 巩固回归基线：将 `-Stage4Regression` 作为“Web/API 契约一致性 + 字典渲染”的常规回归；改动涉及接口/消息/存储时必须更新对应 docs 并留证
+3) 真实固件联调（硬件最后）：按 `docs/integrations/mqtt/*` 与 `docs/integrations/firmware/README.md`，让真实设备跑通 telemetry + commands，并以 `-Stage5Regression` 作为回归基线
+4) 固件细节沉淀：将真实固件的“身份包存储/重连退避/命令回执”实现细节沉淀到 `docs/integrations/firmware/`（含可复用代码片段与踩坑记录）
 
 ## 4) 关键入口（新 AI 只读这些就能上手）
 
