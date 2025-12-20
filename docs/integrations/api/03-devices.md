@@ -188,7 +188,45 @@
 }
 ```
 
-## 7. 配置设备应有传感器（可选）
+## 7. 设备传感器声明（可选）
+
+### 7.1 获取设备传感器声明
+
+**GET** `/devices/{deviceId}/sensors`
+
+权限：`device:view`
+
+说明：
+- 返回“设备声明的传感器列表”，用于 Web/App 渲染、缺失提示与运维排查
+- `status` 取值：
+  - `enabled`：期望上报且应展示
+  - `disabled`：存在但当前禁用（可展示为灰态）
+  - `missing`：期望上报但当前缺失（可用于前端提示/告警）
+
+响应（示例）：
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "ok",
+  "data": {
+    "deviceId": "2c1f2d8e-2bb7-4f58-bb6a-6c2a0f4a7a4c",
+    "list": [
+      {
+        "sensorKey": "displacement_mm",
+        "status": "enabled",
+        "displayName": "位移",
+        "unit": "mm",
+        "dataType": "float"
+      }
+    ]
+  },
+  "timestamp": "2025-12-15T10:00:00Z",
+  "traceId": "req_01J..."
+}
+```
+
+### 7.2 配置设备传感器声明
 
 **PUT** `/devices/{deviceId}/sensors`
 
@@ -207,6 +245,7 @@
 说明：
 - 该接口用于“声明设备理论上支持哪些传感器”，便于前端展示与缺失提示
 - 实际上报仍然允许稀疏字段，不强制每次包含全部 key
+- `status` 可选：`enabled | disabled | missing`
 
 响应：
 ```json

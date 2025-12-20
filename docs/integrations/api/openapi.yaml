@@ -624,6 +624,31 @@ paths:
   /devices/{deviceId}/sensors:
     parameters:
       - $ref: "#/components/parameters/DeviceIdPath"
+    get:
+      tags: [devices]
+      summary: Get device declared sensors
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DeviceSensorsResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
     put:
       tags: [devices]
       summary: Declare device supported sensors (optional)
@@ -1825,7 +1850,16 @@ paths:
       summary: Get system status
       responses:
         "200":
-          $ref: "#/components/responses/SuccessResponse"
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SystemStatus"
         "401":
           $ref: "#/components/responses/UnauthorizedResponse"
         "403":
@@ -1841,7 +1875,16 @@ paths:
       summary: Dashboard summary
       responses:
         "200":
-          $ref: "#/components/responses/SuccessResponse"
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DashboardSummary"
         "401":
           $ref: "#/components/responses/UnauthorizedResponse"
         "403":
@@ -2208,12 +2251,32 @@ components:
 
     Sensor:
       type: object
-      required: [sensorKey, dataType]
+      required: [sensorKey, displayName, unit, dataType]
       properties:
         sensorKey: { type: string, pattern: "^[a-z0-9_]+$" }
         unit: { type: string }
         dataType: { type: string, enum: [float, int, bool, string] }
         displayName: { type: string }
+
+    DeviceSensor:
+      type: object
+      required: [sensorKey, status, displayName, unit, dataType]
+      properties:
+        sensorKey: { type: string }
+        status: { type: string, enum: [enabled, disabled, missing] }
+        displayName: { type: string }
+        unit: { type: string }
+        dataType: { type: string, enum: [float, int, bool, string] }
+
+    DeviceSensorsResponse:
+      type: object
+      required: [deviceId, list]
+      properties:
+        deviceId: { type: string, format: uuid }
+        list:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeviceSensor"
 
     UpdateDeviceSensorsRequest:
       type: object
@@ -2226,7 +2289,54 @@ components:
             required: [sensorKey, status]
             properties:
               sensorKey: { type: string }
-              status: { type: string, enum: [enabled, disabled] }
+              status: { type: string, enum: [enabled, disabled, missing] }
+
+    SystemStatus:
+      type: object
+      required: [uptimeS, postgres, clickhouse, kafka, emqx]
+      properties:
+        uptimeS: { type: integer, minimum: 0 }
+        postgres:
+          type: object
+          required: [status]
+          properties:
+            status: { type: string, enum: [healthy, unhealthy, not_configured] }
+            error: { type: string }
+        clickhouse:
+          type: object
+          required: [status]
+          properties:
+            status: { type: string, enum: [healthy, unhealthy] }
+            error: { type: string }
+        kafka:
+          type: object
+          required: [status]
+          properties:
+            status: { type: string, enum: [configured, not_configured] }
+        emqx:
+          type: object
+          required: [status]
+          properties:
+            status: { type: string }
+
+    DashboardSummary:
+      type: object
+      required: [todayDataCount, onlineDevices, offlineDevices, pendingAlerts, alertsBySeverity, stations, lastUpdatedAt]
+      properties:
+        todayDataCount: { type: integer, minimum: 0 }
+        onlineDevices: { type: integer, minimum: 0 }
+        offlineDevices: { type: integer, minimum: 0 }
+        pendingAlerts: { type: integer, minimum: 0 }
+        alertsBySeverity:
+          type: object
+          required: [low, medium, high, critical]
+          properties:
+            low: { type: integer, minimum: 0 }
+            medium: { type: integer, minimum: 0 }
+            high: { type: integer, minimum: 0 }
+            critical: { type: integer, minimum: 0 }
+        stations: { type: integer, minimum: 0 }
+        lastUpdatedAt: { type: string, format: date-time }
 
     CreateDeviceCommandRequest:
       type: object
