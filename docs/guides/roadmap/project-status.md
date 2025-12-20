@@ -12,6 +12,7 @@
 - 2025-12-20：阶段 5 落地：新增固件模拟器 `scripts/dev/firmware-sim.js`（schema 校验 + state 持久化 + 重连退避 + ping/set_config/reboot），并在 `infra/compose/scripts/e2e-smoke-test.ps1` 增加 `-Stage5Regression` 预置回归；新增 `docs/guides/roadmap/stage5-acceptance.md`。
 - 2025-12-20：补齐 PresenceEvent 可选链路：ingest-service 订阅 `presence/+` 写入 `presence.events.v1`，新增 `presence-recorder` 落库 `device_presence`，并把 presence 断言纳入 `Stage1Regression/Stage2Regression/Stage5Regression` 回归基线。
 - 2025-12-20：合并 PR #65：Stage4（Web/App 去硬编码）收口：Web 只依赖 v2 API + 字典渲染；新增告警详情（events 审计）、站点 CRUD、设备 sensors 声明/命令审计视图；e2e 新增 `-Stage4Regression` 回归基线；Stage4 验收清单更新为可执行并完成。
+- 2025-12-20：新增 Web 管理/运维最小可用界面：用户管理（CRUD）、角色/权限查看、系统配置编辑、操作日志查看、API stats（单机运维排查）；硬件仍按计划最后联调。
 
 ## 1) 当前结论（TL;DR）
 
