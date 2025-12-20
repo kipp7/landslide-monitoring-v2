@@ -1,0 +1,151 @@
+'use client'
+
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Button, Card, DatePicker, Select, Space, Table, Tag, Typography } from 'antd'
+import { ReloadOutlined } from '@ant-design/icons'
+import dayjs from 'dayjs'
+import { apiGetJson, type ApiSuccessResponse } from '../../lib/v2Api'
+
+const { Title, Text } = Typography
+
+type AlertRow = {
+  alertId: string
+  status: 'active' | 'acked' | 'resolved'
+  severity: 'low' | 'medium' | 'high' | 'critical'
+  title?: string | null
+  deviceId?: string | null
+  stationId?: string | null
+  lastEventAt: string
+}
+
+type AlertsListResponse = {
+  list: AlertRow[]
+  pagination: { page: number; pageSize: number; total: number; totalPages: number }
+}
+
+function severityTag(sev: AlertRow['severity']) {
+  const color = sev === 'critical' ? 'red' : sev === 'high' ? 'volcano' : sev === 'medium' ? 'orange' : 'green'
+  return <Tag color={color}>{sev}</Tag>
+}
+
+export default function AlertsPage() {
+  const [rows, setRows] = useState<AlertRow[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const [status, setStatus] = useState<AlertRow['status'] | 'all'>('all')
+  const [severity, setSeverity] = useState<AlertRow['severity'] | 'all'>('all')
+
+  const [range, setRange] = useState<[Date, Date]>(() => {
+    const end = new Date()
+    const start = new Date(end.getTime() - 24 * 60 * 60 * 1000)
+    return [start, end]
+  })
+
+  const queryString = useMemo(() => {
+    const params = new URLSearchParams()
+    params.set('page', '1')
+    params.set('pageSize', '200')
+    params.set('startTime', range[0].toISOString())
+    params.set('endTime', range[1].toISOString())
+    if (status !== 'all') params.set('status', status)
+    if (severity !== 'all') params.set('severity', severity)
+    return params.toString()
+  }, [range, severity, status])
+
+  const fetchAlerts = useCallback(async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const json = await apiGetJson<ApiSuccessResponse<AlertsListResponse>>(`/api/v1/alerts?${queryString}`)
+      setRows(json.data?.list ?? [])
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught))
+      setRows([])
+    } finally {
+      setLoading(false)
+    }
+  }, [queryString])
+
+  useEffect(() => {
+    void fetchAlerts()
+  }, [fetchAlerts])
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <Title level={3} style={{ margin: 0 }}>
+            告警
+          </Title>
+          <Text type="secondary">数据源：v2 API（/api/v1/alerts）</Text>
+        </div>
+        <Space>
+          <Button icon={<ReloadOutlined />} onClick={() => void fetchAlerts()} loading={loading}>
+            刷新
+          </Button>
+        </Space>
+      </div>
+
+      <Card>
+        <Space wrap>
+          <span>时间范围</span>
+          <DatePicker.RangePicker
+            showTime
+            value={[dayjs(range[0]), dayjs(range[1])]}
+            onChange={(value) => {
+              if (!value || value.length !== 2 || !value[0] || !value[1]) return
+              setRange([value[0].toDate(), value[1].toDate()])
+            }}
+          />
+          <span>状态</span>
+          <Select
+            style={{ width: 160 }}
+            value={status}
+            onChange={(v) => setStatus(v)}
+            options={[
+              { value: 'all', label: 'all' },
+              { value: 'active', label: 'active' },
+              { value: 'acked', label: 'acked' },
+              { value: 'resolved', label: 'resolved' },
+            ]}
+          />
+          <span>级别</span>
+          <Select
+            style={{ width: 160 }}
+            value={severity}
+            onChange={(v) => setSeverity(v)}
+            options={[
+              { value: 'all', label: 'all' },
+              { value: 'low', label: 'low' },
+              { value: 'medium', label: 'medium' },
+              { value: 'high', label: 'high' },
+              { value: 'critical', label: 'critical' },
+            ]}
+          />
+        </Space>
+
+        <div className="mt-4">
+          {error ? <Text type="danger">加载失败：{error}</Text> : null}
+          <Table
+            rowKey="alertId"
+            loading={loading}
+            dataSource={rows}
+            pagination={{ pageSize: 20 }}
+            size="small"
+            columns={[
+              { title: 'Time', dataIndex: 'lastEventAt', render: (v: string) => <span className="font-mono">{v}</span> },
+              { title: 'Severity', dataIndex: 'severity', render: (v: AlertRow['severity']) => severityTag(v) },
+              { title: 'Title', dataIndex: 'title', render: (v: string | null | undefined) => v || '-' },
+              {
+                title: 'Target',
+                render: (_: unknown, r: AlertRow) => r.deviceId || r.stationId || '-',
+              },
+              { title: 'Status', dataIndex: 'status' },
+            ]}
+          />
+        </div>
+      </Card>
+    </div>
+  )
+}

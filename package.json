@@ -24,5 +24,8 @@
     "prettier": "^3.4.2",
     "typescript": "^5.7.3",
     "typescript-eslint": "^8.18.0"
+  },
+  "dependencies": {
+    "landslide-monitoring-v2": "file:../../../06 工作区/2/openharmony"
   }
 }

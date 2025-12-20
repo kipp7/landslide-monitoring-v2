@@ -15,9 +15,21 @@ export type ApiErrorResponse = {
   traceId: string
 }
 
+function readLocalStorage(key: string): string | undefined {
+  if (typeof window === 'undefined') return undefined
+  try {
+    const value = window.localStorage.getItem(key)
+    return value && value.trim() ? value.trim() : undefined
+  } catch {
+    return undefined
+  }
+}
+
 export function getApiBearerToken(): string | undefined {
-  const token = process.env.NEXT_PUBLIC_API_BEARER_TOKEN
-  return token && token.trim() ? token.trim() : undefined
+  const runtime = readLocalStorage('LSMV2_API_BEARER_TOKEN')
+  if (runtime) return runtime
+  const envToken = process.env.NEXT_PUBLIC_API_BEARER_TOKEN
+  return envToken && envToken.trim() ? envToken.trim() : undefined
 }
 
 export function getApiAuthHeaders(): Record<string, string> {
@@ -26,7 +38,8 @@ export function getApiAuthHeaders(): Record<string, string> {
 }
 
 export function getApiBaseUrl(): string {
-  const base = process.env.NEXT_PUBLIC_API_BASE_URL
+  const runtime = readLocalStorage('LSMV2_API_BASE_URL')
+  const base = runtime ?? process.env.NEXT_PUBLIC_API_BASE_URL
   return base ? base.replace(/\/+$/, '') : ''
 }
 
