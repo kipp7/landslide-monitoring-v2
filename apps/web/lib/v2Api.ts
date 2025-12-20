@@ -121,6 +121,26 @@ export async function apiPutJson<T>(
   return (await resp.json()) as T
 }
 
+export async function apiDeleteJson<T>(path: string, init?: Omit<RequestInit, 'method'>): Promise<T> {
+  const url = buildApiUrl(path)
+  const resp = await fetch(url, {
+    method: 'DELETE',
+    headers: {
+      Accept: 'application/json',
+      ...getApiAuthHeaders(),
+      ...(init?.headers || {}),
+    },
+    cache: 'no-store',
+    ...init,
+  })
+
+  if (!resp.ok) {
+    throw new Error(`HTTP ${resp.status} ${resp.statusText}`)
+  }
+
+  return (await resp.json()) as T
+}
+
 export function toNumber(value: unknown): number | undefined {
   if (typeof value === 'number' && Number.isFinite(value)) return value
   if (typeof value === 'string' && value.trim() !== '') {

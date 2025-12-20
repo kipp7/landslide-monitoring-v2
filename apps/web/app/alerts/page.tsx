@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { Button, Card, DatePicker, Input, Modal, Select, Space, Table, Tag, Typography, message } from 'antd'
 import { CheckOutlined, ReloadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
@@ -172,6 +173,15 @@ export default function AlertsPage() {
                 render: (_: unknown, r: AlertRow) => r.deviceId || r.stationId || '-',
               },
               { title: 'Status', dataIndex: 'status' },
+              {
+                title: 'Detail',
+                dataIndex: 'alertId',
+                render: (v: string) => (
+                  <Link href={`/alerts/${encodeURIComponent(v)}`} className="font-mono">
+                    {v.slice(0, 8)}…
+                  </Link>
+                ),
+              },
               {
                 title: 'Actions',
                 render: (_: unknown, r: AlertRow) => (

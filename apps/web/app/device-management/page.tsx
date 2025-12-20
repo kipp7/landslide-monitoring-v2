@@ -12,13 +12,22 @@ import {
   Space,
   Table,
   Tag,
+  Tabs,
   Typography,
   message,
 } from 'antd'
 import { PlusOutlined, ReloadOutlined, SendOutlined, StopOutlined } from '@ant-design/icons'
 import useDeviceList from '../hooks/useDeviceList'
 import useDeviceShadow from '../hooks/useDeviceShadow'
-import { apiGetJson, apiJson, getApiAuthHeaders, type ApiSuccessResponse } from '../../lib/v2Api'
+import useSensors from '../hooks/useSensors'
+import {
+  apiGetJson,
+  apiJson,
+  apiPutJson,
+  buildApiUrl,
+  getApiAuthHeaders,
+  type ApiSuccessResponse,
+} from '../../lib/v2Api'
 
 const { Title, Text } = Typography
 
@@ -67,6 +76,59 @@ type CreateDeviceCommandResponse = {
   status: 'queued' | 'sent' | 'acked' | 'failed' | 'timeout'
 }
 
+type DeviceSensorRow = {
+  sensorKey: string
+  status: 'enabled' | 'disabled' | 'missing'
+  displayName: string
+  unit: string
+  dataType: 'float' | 'int' | 'bool' | 'string'
+}
+
+type DeviceSensorsResponse = {
+  deviceId: string
+  list: DeviceSensorRow[]
+}
+
+type PaginatedDeviceCommandEvents = {
+  list: Array<{
+    eventId: string
+    commandId: string
+    eventType: 'COMMAND_SENT' | 'COMMAND_ACKED' | 'COMMAND_FAILED' | 'COMMAND_TIMEOUT'
+    createdAt: string
+    payload?: Record<string, unknown>
+    reasonCode?: string | null
+    message?: string | null
+  }>
+  pagination: { page: number; pageSize: number; total: number; totalPages: number }
+}
+
+type PaginatedDeviceCommandNotifications = {
+  list: Array<{
+    notificationId: string
+    commandId: string
+    eventType: 'COMMAND_SENT' | 'COMMAND_ACKED' | 'COMMAND_FAILED' | 'COMMAND_TIMEOUT'
+    notifyType: 'app' | 'sms' | 'email' | 'wechat'
+    status: 'pending' | 'sent' | 'delivered' | 'failed'
+    isRead: boolean
+    createdAt: string
+    updatedAt: string
+    payload?: Record<string, unknown>
+  }>
+  pagination: { page: number; pageSize: number; total: number; totalPages: number }
+}
+
+function formatValue(value: unknown): string {
+  if (value === null) return 'null'
+  if (value === undefined) return '-'
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  try {
+    return JSON.stringify(value)
+  } catch {
+    return String(value)
+  }
+}
+
 export default function DeviceManagementPage() {
   const { devices, loading: devicesLoading, error: devicesError, refetch } = useDeviceList()
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>('')
@@ -81,10 +143,8 @@ export default function DeviceManagementPage() {
     return devices.find((d) => d.device_id === selectedDeviceId) ?? null
   }, [devices, selectedDeviceId])
 
-  const { data: shadow, loading: shadowLoading, error: shadowError, refreshShadow } = useDeviceShadow(
-    selectedDeviceId || undefined,
-    10_000
-  )
+  const { data: shadow, loading: shadowLoading, error: shadowError, refreshShadow } = useDeviceShadow(selectedDeviceId, 10_000)
+  const { byKey: sensorsByKey, error: sensorsError } = useSensors()
 
   const [stations, setStations] = useState<StationRow[]>([])
   const [stationsLoading, setStationsLoading] = useState(false)
@@ -157,7 +217,7 @@ export default function DeviceManagementPage() {
       okButtonProps: { danger: true },
       cancelText: '取消',
       onOk: async () => {
-        const resp = await fetch(`/api/v1/devices/${encodeURIComponent(selectedDeviceId)}/revoke`, {
+        const resp = await fetch(buildApiUrl(`/api/v1/devices/${encodeURIComponent(selectedDeviceId)}/revoke`), {
           method: 'PUT',
           headers: { Accept: 'application/json', ...getApiAuthHeaders() },
         })
@@ -166,6 +226,140 @@ export default function DeviceManagementPage() {
         await refetch()
       },
     })
+  }
+
+  const metricsRows = useMemo(() => {
+    const metrics = shadow?.metrics ?? {}
+    const entries = Object.entries(metrics).filter(([k]) => !k.startsWith('_'))
+    entries.sort((a, b) => a[0].localeCompare(b[0]))
+    return entries.map(([sensorKey, value]) => {
+      const sensor = sensorsByKey.get(sensorKey)
+      return {
+        sensorKey,
+        name: sensor?.displayName ?? sensorKey,
+        unit: sensor?.unit ?? '',
+        value,
+      }
+    })
+  }, [shadow?.metrics, sensorsByKey])
+
+  const [deviceSensors, setDeviceSensors] = useState<DeviceSensorRow[]>([])
+  const [deviceSensorsLoading, setDeviceSensorsLoading] = useState(false)
+  const [addSensorKey, setAddSensorKey] = useState<string>('')
+
+  const fetchDeviceSensors = useCallback(async () => {
+    if (!selectedDeviceId) {
+      setDeviceSensors([])
+      return
+    }
+    try {
+      setDeviceSensorsLoading(true)
+      const json = await apiGetJson<ApiSuccessResponse<DeviceSensorsResponse>>(
+        `/api/v1/devices/${encodeURIComponent(selectedDeviceId)}/sensors`
+      )
+      setDeviceSensors(json.data?.list ?? [])
+    } catch {
+      setDeviceSensors([])
+    } finally {
+      setDeviceSensorsLoading(false)
+    }
+  }, [selectedDeviceId])
+
+  useEffect(() => {
+    void fetchDeviceSensors()
+  }, [fetchDeviceSensors])
+
+  const saveDeviceSensors = async () => {
+    if (!selectedDeviceId) return
+    try {
+      setDeviceSensorsLoading(true)
+      await apiPutJson<ApiSuccessResponse<unknown>>(`/api/v1/devices/${encodeURIComponent(selectedDeviceId)}/sensors`, {
+        sensors: deviceSensors.map((s) => ({ sensorKey: s.sensorKey, status: s.status })),
+      })
+      message.success('已保存传感器声明')
+      await fetchDeviceSensors()
+    } catch (caught) {
+      message.error(caught instanceof Error ? caught.message : String(caught))
+    } finally {
+      setDeviceSensorsLoading(false)
+    }
+  }
+
+  const addSensor = () => {
+    const key = addSensorKey.trim()
+    if (!key) return
+    if (deviceSensors.some((s) => s.sensorKey === key)) {
+      message.info('该 sensorKey 已存在')
+      return
+    }
+    const sensor = sensorsByKey.get(key)
+    setDeviceSensors((prev) => [
+      ...prev,
+      {
+        sensorKey: key,
+        status: 'enabled',
+        displayName: sensor?.displayName ?? key,
+        unit: sensor?.unit ?? '',
+        dataType: sensor?.dataType ?? 'float',
+      },
+    ])
+    setAddSensorKey('')
+  }
+
+  const [auditOpen, setAuditOpen] = useState(false)
+  const [auditCommandId, setAuditCommandId] = useState<string>('')
+  const [eventsLoading, setEventsLoading] = useState(false)
+  const [events, setEvents] = useState<PaginatedDeviceCommandEvents['list']>([])
+  const [notificationsLoading, setNotificationsLoading] = useState(false)
+  const [notifications, setNotifications] = useState<PaginatedDeviceCommandNotifications['list']>([])
+
+  const fetchCommandAudit = useCallback(async () => {
+    if (!selectedDeviceId) return
+    const params = new URLSearchParams({ page: '1', pageSize: '50' })
+    if (auditCommandId) params.set('commandId', auditCommandId)
+
+    try {
+      setEventsLoading(true)
+      const json = await apiGetJson<ApiSuccessResponse<PaginatedDeviceCommandEvents>>(
+        `/api/v1/devices/${encodeURIComponent(selectedDeviceId)}/command-events?${params.toString()}`
+      )
+      setEvents(json.data?.list ?? [])
+    } catch {
+      setEvents([])
+    } finally {
+      setEventsLoading(false)
+    }
+
+    try {
+      setNotificationsLoading(true)
+      const json = await apiGetJson<ApiSuccessResponse<PaginatedDeviceCommandNotifications>>(
+        `/api/v1/devices/${encodeURIComponent(selectedDeviceId)}/command-notifications?${params.toString()}`
+      )
+      setNotifications(json.data?.list ?? [])
+    } catch {
+      setNotifications([])
+    } finally {
+      setNotificationsLoading(false)
+    }
+  }, [auditCommandId, selectedDeviceId])
+
+  useEffect(() => {
+    if (!auditOpen) return
+    void fetchCommandAudit()
+  }, [auditOpen, fetchCommandAudit])
+
+  const markNotificationRead = async (notificationId: string) => {
+    if (!selectedDeviceId) return
+    try {
+      await apiPutJson<ApiSuccessResponse<unknown>>(
+        `/api/v1/devices/${encodeURIComponent(selectedDeviceId)}/command-notifications/${encodeURIComponent(notificationId)}/read`,
+        {}
+      )
+      message.success('已标记已读')
+      await fetchCommandAudit()
+    } catch (caught) {
+      message.error(caught instanceof Error ? caught.message : String(caught))
+    }
   }
 
   const [commands, setCommands] = useState<DeviceCommand[]>([])
@@ -222,7 +416,7 @@ export default function DeviceManagementPage() {
           <Title level={3} style={{ margin: 0 }}>
             设备管理（v2）
           </Title>
-          <Text type="secondary">数据源：v2 API（services/api）</Text>
+          <Text type="secondary">数据源：v2 API（/api/v1/*）</Text>
         </div>
         <Space>
           <Button icon={<PlusOutlined />} onClick={() => setCreateDeviceOpen(true)}>
@@ -234,6 +428,7 @@ export default function DeviceManagementPage() {
               void refetch()
               void refreshShadow()
               void fetchStations()
+              void fetchDeviceSensors()
               void fetchCommands()
             }}
             loading={devicesLoading || shadowLoading}
@@ -260,6 +455,9 @@ export default function DeviceManagementPage() {
           {selectedDevice ? statusTag(selectedDevice.status) : null}
           <Button danger icon={<StopOutlined />} disabled={!selectedDeviceId} onClick={() => void revokeSelectedDevice()}>
             吊销
+          </Button>
+          <Button disabled={!selectedDeviceId} onClick={() => setAuditOpen(true)}>
+            命令审计
           </Button>
         </Space>
 
@@ -317,30 +515,211 @@ export default function DeviceManagementPage() {
       </Card>
 
       <Card
-        title="最新状态（shadow）"
+        title="最新状态（/data/state/{deviceId}）"
         extra={
           <Button icon={<ReloadOutlined />} onClick={() => void refreshShadow()} loading={shadowLoading}>
             刷新状态
           </Button>
         }
       >
+        {sensorsError ? <Text type="warning">传感器字典不可用：{sensorsError}</Text> : null}
         {shadowError ? <Text type="danger">状态获取失败：{shadowError}</Text> : null}
-        {shadow?.properties ? (
-          <Descriptions bordered size="small" column={3}>
-            <Descriptions.Item label="时间">{shadow.event_time}</Descriptions.Item>
-            <Descriptions.Item label="风险等级">{shadow.properties.risk_level ?? '-'}</Descriptions.Item>
-            <Descriptions.Item label="告警">{shadow.properties.alarm_active ? '是' : '否'}</Descriptions.Item>
-            <Descriptions.Item label="温度">{shadow.properties.temperature ?? '-'}</Descriptions.Item>
-            <Descriptions.Item label="湿度">{shadow.properties.humidity ?? '-'}</Descriptions.Item>
-            <Descriptions.Item label="光照">{shadow.properties.illumination ?? '-'}</Descriptions.Item>
-            <Descriptions.Item label="纬度">{shadow.properties.latitude ?? '-'}</Descriptions.Item>
-            <Descriptions.Item label="经度">{shadow.properties.longitude ?? '-'}</Descriptions.Item>
-            <Descriptions.Item label="振动">{shadow.properties.vibration ?? '-'}</Descriptions.Item>
-          </Descriptions>
+        {shadow ? (
+          <>
+            <Descriptions bordered size="small" column={2}>
+              <Descriptions.Item label="更新时间">{shadow.updatedAt}</Descriptions.Item>
+              <Descriptions.Item label="Metrics 数量">{Object.keys(shadow.metrics ?? {}).length}</Descriptions.Item>
+            </Descriptions>
+            <div className="mt-3">
+              <Table
+                rowKey="sensorKey"
+                loading={shadowLoading}
+                dataSource={metricsRows}
+                pagination={{ pageSize: 15 }}
+                size="small"
+                columns={[
+                  {
+                    title: 'sensorKey',
+                    dataIndex: 'sensorKey',
+                    width: 220,
+                    render: (v: string) => <span className="font-mono">{v}</span>,
+                  },
+                  { title: '名称', dataIndex: 'name' },
+                  {
+                    title: '值',
+                    dataIndex: 'value',
+                    render: (v: unknown) => <span className="font-mono">{formatValue(v)}</span>,
+                  },
+                  { title: '单位', dataIndex: 'unit', width: 80 },
+                ]}
+              />
+            </div>
+          </>
         ) : (
           <Text type="secondary">{shadowLoading ? '加载中…' : '暂无数据'}</Text>
         )}
       </Card>
+
+      <Card
+        title="传感器声明（/devices/{deviceId}/sensors，可选）"
+        extra={
+          <Space>
+            <Button
+              icon={<ReloadOutlined />}
+              onClick={() => void fetchDeviceSensors()}
+              loading={deviceSensorsLoading}
+              disabled={!selectedDeviceId}
+            >
+              刷新
+            </Button>
+            <Button
+              type="primary"
+              onClick={() => void saveDeviceSensors()}
+              loading={deviceSensorsLoading}
+              disabled={!selectedDeviceId}
+            >
+              保存
+            </Button>
+          </Space>
+        }
+      >
+        <Space wrap style={{ marginBottom: 12 }}>
+          <Select
+            style={{ minWidth: 320 }}
+            value={addSensorKey || undefined}
+            placeholder="添加 sensorKey（来自 /sensors）"
+            showSearch
+            onChange={(v) => setAddSensorKey(v)}
+            options={[...sensorsByKey.values()].map((s) => ({
+              value: s.sensorKey,
+              label: `${s.displayName} (${s.sensorKey})`,
+            }))}
+            disabled={!selectedDeviceId}
+          />
+          <Button onClick={addSensor} disabled={!selectedDeviceId || !addSensorKey.trim()}>
+            添加
+          </Button>
+        </Space>
+
+        <Table
+          rowKey="sensorKey"
+          size="small"
+          loading={deviceSensorsLoading}
+          dataSource={deviceSensors}
+          pagination={{ pageSize: 20 }}
+          columns={[
+            {
+              title: 'sensorKey',
+              dataIndex: 'sensorKey',
+              width: 220,
+              render: (v: string) => <span className="font-mono">{v}</span>,
+            },
+            { title: '名称', dataIndex: 'displayName' },
+            { title: '单位', dataIndex: 'unit', width: 80 },
+            { title: '类型', dataIndex: 'dataType', width: 90 },
+            {
+              title: '状态',
+              dataIndex: 'status',
+              width: 140,
+              render: (v: DeviceSensorRow['status'], row: DeviceSensorRow) => (
+                <Select
+                  value={v}
+                  style={{ width: 120 }}
+                  onChange={(next) => {
+                    setDeviceSensors((prev) => prev.map((s) => (s.sensorKey === row.sensorKey ? { ...s, status: next } : s)))
+                  }}
+                  options={[
+                    { value: 'enabled', label: 'enabled' },
+                    { value: 'disabled', label: 'disabled' },
+                    { value: 'missing', label: 'missing' },
+                  ]}
+                  disabled={!selectedDeviceId}
+                />
+              ),
+            },
+            {
+              title: '操作',
+              width: 90,
+              render: (_: unknown, row: DeviceSensorRow) => (
+                <Button danger size="small" onClick={() => setDeviceSensors((prev) => prev.filter((s) => s.sensorKey !== row.sensorKey))} disabled={!selectedDeviceId}>
+                  移除
+                </Button>
+              ),
+            },
+          ]}
+        />
+      </Card>
+
+      <Modal title="命令审计（events/notifications）" open={auditOpen} onCancel={() => setAuditOpen(false)} footer={null} width={980}>
+        <Space wrap style={{ marginBottom: 12 }}>
+          <Select
+            style={{ minWidth: 420 }}
+            value={auditCommandId || undefined}
+            allowClear
+            placeholder="按 commandId 过滤（可选）"
+            onChange={(v) => setAuditCommandId(v ?? '')}
+            options={commands.map((c) => ({ value: c.commandId, label: `${c.commandType} (${c.commandId})` }))}
+          />
+          <Button icon={<ReloadOutlined />} onClick={() => void fetchCommandAudit()} loading={eventsLoading || notificationsLoading}>
+            刷新
+          </Button>
+        </Space>
+
+        <Tabs
+          items={[
+            {
+              key: 'events',
+              label: 'Command Events',
+              children: (
+                <Table
+                  rowKey="eventId"
+                  size="small"
+                  loading={eventsLoading}
+                  dataSource={events}
+                  pagination={{ pageSize: 15 }}
+                  columns={[
+                    { title: 'createdAt', dataIndex: 'createdAt', width: 200, render: (v: string) => <span className="font-mono">{v}</span> },
+                    { title: 'eventType', dataIndex: 'eventType', width: 140 },
+                    { title: 'commandId', dataIndex: 'commandId', render: (v: string) => <span className="font-mono">{v}</span> },
+                    { title: 'reasonCode', dataIndex: 'reasonCode', width: 120, render: (v: string | null | undefined) => v ?? '-' },
+                    { title: 'message', dataIndex: 'message', render: (v: string | null | undefined) => v ?? '-' },
+                  ]}
+                />
+              ),
+            },
+            {
+              key: 'notifications',
+              label: 'Notifications',
+              children: (
+                <Table
+                  rowKey="notificationId"
+                  size="small"
+                  loading={notificationsLoading}
+                  dataSource={notifications}
+                  pagination={{ pageSize: 15 }}
+                  columns={[
+                    { title: 'createdAt', dataIndex: 'createdAt', width: 200, render: (v: string) => <span className="font-mono">{v}</span> },
+                    { title: 'notifyType', dataIndex: 'notifyType', width: 110 },
+                    { title: 'status', dataIndex: 'status', width: 110 },
+                    { title: 'isRead', dataIndex: 'isRead', width: 90, render: (v: boolean) => (v ? 'yes' : 'no') },
+                    { title: 'commandId', dataIndex: 'commandId', render: (v: string) => <span className="font-mono">{v}</span> },
+                    { title: 'payload', dataIndex: 'payload', render: (v: unknown) => <span className="font-mono">{formatValue(v)}</span> },
+                    {
+                      title: '操作',
+                      width: 90,
+                      render: (_: unknown, row: PaginatedDeviceCommandNotifications['list'][number]) => (
+                        <Button size="small" disabled={row.isRead} onClick={() => void markNotificationRead(row.notificationId)}>
+                          已读
+                        </Button>
+                      ),
+                    },
+                  ]}
+                />
+              ),
+            },
+          ]}
+        />
+      </Modal>
 
       <Modal
         title="创建设备（返回 secret 仅一次）"
@@ -390,4 +769,3 @@ export default function DeviceManagementPage() {
     </div>
   )
 }
-

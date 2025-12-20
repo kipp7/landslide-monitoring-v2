@@ -17,7 +17,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
 
-  const selectedKey = ITEMS.some((i) => i.key === pathname) ? pathname : '/device-management'
+  const selectedKey =
+    ITEMS.find((i) => pathname === i.key || pathname.startsWith(`${i.key}/`))?.key ?? '/device-management'
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -36,4 +37,3 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     </Layout>
   )
 }
-
