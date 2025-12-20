@@ -35,6 +35,18 @@
 - `-Stage2Regression` 是“预置模式”，不能与其它开关组合使用。
 - 覆盖范围：阶段 1 回归基线 + alerts（创建规则 → 触发 → 查询事件流 → ACK → RESOLVE），并自动留证到 `backups/evidence/`。
 
+阶段 4（Web/App 去硬编码回归基线，一键跑完阶段 2 基线 + 关键端点/字典/声明断言）：
+
+- `powershell -NoProfile -ExecutionPolicy Bypass -File infra/compose/scripts/e2e-smoke-test.ps1 -Stage4Regression`
+
+说明：
+- `-Stage4Regression` 是“预置模式”，不能与其它开关组合使用。
+- 覆盖范围：
+  - 阶段 2 回归基线（鉴权 + commands + DLQ + revoke + alerts/notifications/presence）
+  - 断言 `/system/status`、`/dashboard` 返回结构完整且 Postgres/ClickHouse 为 healthy
+  - 断言 `/sensors` 字典可用且包含 `displacement_mm`
+  - 断言设备传感器声明：`PUT/GET /devices/{deviceId}/sensors` 可用且结果一致
+
 阶段 1（鉴权 + 命令下发 + revoke 立即生效）的回归用例（推荐作为改动后的快速验收）：
 
 - `powershell -NoProfile -ExecutionPolicy Bypass -File infra/compose/scripts/e2e-smoke-test.ps1 -ConfigureEmqx -UseMqttAuth -CreateDevice -TestCommands -TestCommandAcks -TestRevoke`

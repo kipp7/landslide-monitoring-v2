@@ -46,14 +46,7 @@ function formatDate(dateString?: string | null): string {
 }
 
 function getDeviceTypeDisplay(deviceType?: string): string {
-  const typeMap: Record<string, string> = {
-    rk2206: 'RK2206 滑坡监测站',
-    sensor: '传感器节点',
-    gateway: '网关设备',
-    default: '监测设备',
-  }
-  if (!deviceType) return typeMap.default
-  return typeMap[deviceType] || typeMap.default
+  return deviceType && deviceType.trim() ? deviceType.trim() : 'unknown'
 }
 
 function determineDeviceStatus(
