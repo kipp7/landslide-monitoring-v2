@@ -1,10 +1,10 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Button, Card, DatePicker, Select, Space, Table, Tag, Typography } from 'antd'
-import { ReloadOutlined } from '@ant-design/icons'
+import { Button, Card, DatePicker, Input, Modal, Select, Space, Table, Tag, Typography, message } from 'antd'
+import { CheckOutlined, ReloadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
-import { apiGetJson, type ApiSuccessResponse } from '../../lib/v2Api'
+import { apiGetJson, apiJson, type ApiSuccessResponse } from '../../lib/v2Api'
 
 const { Title, Text } = Typography
 
@@ -70,6 +70,36 @@ export default function AlertsPage() {
   useEffect(() => {
     void fetchAlerts()
   }, [fetchAlerts])
+
+  const actionAlert = async (alertId: string, action: 'ack' | 'resolve') => {
+    const title = action === 'ack' ? 'Ack 告警' : 'Resolve 告警'
+    const okText = action === 'ack' ? '确认 Ack' : '确认 Resolve'
+
+    let notes = ''
+
+    Modal.confirm({
+      title,
+      content: (
+        <Input.TextArea
+          placeholder="可选：notes"
+          autoSize={{ minRows: 3, maxRows: 8 }}
+          onChange={(e) => {
+            notes = e.target.value
+          }}
+        />
+      ),
+      okText,
+      cancelText: '取消',
+      onOk: async () => {
+        const trimmed = notes.trim()
+        await apiJson<ApiSuccessResponse<unknown>>(`/api/v1/alerts/${encodeURIComponent(alertId)}/${action}`, {
+          ...(trimmed ? { notes: trimmed } : {}),
+        })
+        message.success(`${title} 成功`)
+        await fetchAlerts()
+      },
+    })
+  }
 
   return (
     <div className="space-y-6">
@@ -142,6 +172,28 @@ export default function AlertsPage() {
                 render: (_: unknown, r: AlertRow) => r.deviceId || r.stationId || '-',
               },
               { title: 'Status', dataIndex: 'status' },
+              {
+                title: 'Actions',
+                render: (_: unknown, r: AlertRow) => (
+                  <Space>
+                    <Button
+                      size="small"
+                      icon={<CheckOutlined />}
+                      disabled={r.status !== 'active'}
+                      onClick={() => void actionAlert(r.alertId, 'ack')}
+                    >
+                      Ack
+                    </Button>
+                    <Button
+                      size="small"
+                      disabled={r.status === 'resolved'}
+                      onClick={() => void actionAlert(r.alertId, 'resolve')}
+                    >
+                      Resolve
+                    </Button>
+                  </Space>
+                ),
+              },
             ]}
           />
         </div>
