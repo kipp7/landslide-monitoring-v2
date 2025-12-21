@@ -4,17 +4,9 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Button, Card, Descriptions, Space, Table, Tag, Typography } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
-import { apiGetJson, type ApiSuccessResponse } from '../../../lib/v2Api'
+import { getApiStats, type ApiStatsResponse } from '../../../lib/api/system'
 
 const { Title, Text } = Typography
-
-type ApiStatsResponse = {
-  since: string
-  total: number
-  byStatus: Record<'2xx' | '3xx' | '4xx' | '5xx', number>
-  avgResponseTimeMs: number | null
-  topPaths: Array<{ method: string; path: string; count: number; p95ResponseTimeMs: number | null }>
-}
 
 export default function OpsApiStatsPage() {
   const [data, setData] = useState<ApiStatsResponse | null>(null)
@@ -25,8 +17,8 @@ export default function OpsApiStatsPage() {
     try {
       setLoading(true)
       setError(null)
-      const json = await apiGetJson<ApiSuccessResponse<ApiStatsResponse>>('/api/v1/system/logs/api-stats')
-      setData(json.data)
+      const json = await getApiStats()
+      setData(json.data ?? null)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught))
       setData(null)
