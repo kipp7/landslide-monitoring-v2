@@ -3,29 +3,16 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Button, Card, Form, Input, Modal, Select, Space, Table, Tag, Typography, message } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
-import { apiDeleteJson, apiGetJson, apiJson, apiPutJson, type ApiSuccessResponse } from '../../lib/v2Api'
+import {
+  createStation,
+  deleteStation as deleteStationApi,
+  getStationDetail,
+  listStations,
+  updateStation,
+  type StationRow,
+} from '../../lib/api/stations'
 
 const { Title, Text } = Typography
-
-type StationRow = {
-  stationId: string
-  stationCode: string
-  stationName: string
-  status: 'active' | 'inactive' | 'maintenance'
-  latitude: number | null
-  longitude: number | null
-  altitude: number | null
-  createdAt: string
-  updatedAt: string
-  metadata?: Record<string, unknown>
-}
-
-type StationListResponse = {
-  list: StationRow[]
-  pagination: { page: number; pageSize: number; total: number; totalPages: number }
-}
-
-type StationDetailResponse = StationRow
 
 function statusTag(status: StationRow['status']) {
   const color = status === 'active' ? 'green' : status === 'maintenance' ? 'orange' : 'red'
@@ -47,7 +34,7 @@ export default function StationsPage() {
     try {
       setLoading(true)
       setError(null)
-      const json = await apiGetJson<ApiSuccessResponse<StationListResponse>>('/api/v1/stations?page=1&pageSize=200')
+      const json = await listStations(1, 200)
       setRows(json.data?.list ?? [])
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught))
@@ -70,9 +57,7 @@ export default function StationsPage() {
     setEditStationId(stationId)
     setSaving(true)
     try {
-      const json = await apiGetJson<ApiSuccessResponse<StationDetailResponse>>(
-        `/api/v1/stations/${encodeURIComponent(stationId)}`
-      )
+      const json = await getStationDetail(stationId)
       const station = json.data
       form.setFieldsValue({
         stationCode: station.stationCode,
@@ -110,7 +95,7 @@ export default function StationsPage() {
 
     setSaving(true)
     try {
-      await apiJson<ApiSuccessResponse<unknown>>('/api/v1/stations', {
+      await createStation({
         stationCode: values.stationCode,
         stationName: values.stationName,
         latitude: values.latitude && values.latitude.trim() ? Number(values.latitude) : undefined,
@@ -148,7 +133,7 @@ export default function StationsPage() {
 
     setSaving(true)
     try {
-      await apiPutJson<ApiSuccessResponse<unknown>>(`/api/v1/stations/${encodeURIComponent(editStationId)}`, {
+      await updateStation(editStationId, {
         stationName: values.stationName,
         status: values.status,
         latitude: values.latitude && values.latitude.trim() ? Number(values.latitude) : null,
@@ -173,7 +158,7 @@ export default function StationsPage() {
       okButtonProps: { danger: true },
       cancelText: '取消',
       onOk: async () => {
-        await apiDeleteJson<ApiSuccessResponse<unknown>>(`/api/v1/stations/${encodeURIComponent(stationId)}`)
+        await deleteStationApi(stationId)
         message.success('站点已删除')
         await fetchStations()
       },

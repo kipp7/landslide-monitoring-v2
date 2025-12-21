@@ -4,19 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Button, Card, Input, Space, Table, Typography, message } from 'antd'
 import { ReloadOutlined, SaveOutlined } from '@ant-design/icons'
-import { apiGetJson, apiPutJson, type ApiSuccessResponse } from '../../../lib/v2Api'
+import { getSystemConfigs, putSystemConfigs, type ConfigRow } from '../../../lib/api/system'
 
 const { Title, Text } = Typography
-
-type ConfigRow = {
-  key: string
-  value: string
-  type: string
-  description: string
-  updatedAt: string
-}
-
-type SystemConfigsResponse = { list: ConfigRow[] }
 
 export default function OpsConfigsPage() {
   const [rows, setRows] = useState<ConfigRow[]>([])
@@ -29,7 +19,7 @@ export default function OpsConfigsPage() {
     try {
       setLoading(true)
       setError(null)
-      const json = await apiGetJson<ApiSuccessResponse<SystemConfigsResponse>>('/api/v1/system/configs')
+      const json = await getSystemConfigs()
       const list = json.data?.list ?? []
       setRows(list)
       setDraft(Object.fromEntries(list.map((r) => [r.key, r.value ?? ''])))
@@ -62,7 +52,7 @@ export default function OpsConfigsPage() {
     }
     setSaving(true)
     try {
-      await apiPutJson<ApiSuccessResponse<unknown>>('/api/v1/system/configs', { configs: changed })
+      await putSystemConfigs(changed)
       message.success(`已保存 ${changed.length} 项`)
       await fetchConfigs()
     } catch (caught) {

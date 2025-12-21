@@ -1,38 +1,13 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Button, Card, DatePicker, Input, Modal, Space, Table, Tag, Typography } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
-import { apiGetJson, type ApiSuccessResponse } from '../../../lib/v2Api'
+import { getOperationLogs, type OperationLogRow } from '../../../lib/api/system'
 
 const { Title, Text } = Typography
-
-type OperationLogRow = {
-  id: string
-  userId: string | null
-  username: string
-  module: string
-  action: string
-  targetType: string
-  targetId: string
-  description: string
-  requestData: unknown
-  responseData: unknown
-  ipAddress: string
-  userAgent: string
-  status: string
-  errorMessage: string
-  createdAt: string
-}
-
-type OperationLogsResponse = {
-  page: number
-  pageSize: number
-  total: number
-  list: OperationLogRow[]
-}
 
 function stringify(value: unknown): string {
   if (value === null) return 'null'
@@ -62,23 +37,19 @@ export default function OpsLogsPage() {
     return [start, end]
   })
 
-  const queryString = useMemo(() => {
-    const params = new URLSearchParams()
-    params.set('page', String(page))
-    params.set('pageSize', String(pageSize))
-    if (userId.trim()) params.set('userId', userId.trim())
-    if (module.trim()) params.set('module', module.trim())
-    if (action.trim()) params.set('action', action.trim())
-    params.set('startTime', range[0].toISOString())
-    params.set('endTime', range[1].toISOString())
-    return params.toString()
-  }, [action, module, page, pageSize, range, userId])
-
   const fetchLogs = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
-      const json = await apiGetJson<ApiSuccessResponse<OperationLogsResponse>>(`/api/v1/system/logs/operation?${queryString}`)
+      const json = await getOperationLogs({
+        page,
+        pageSize,
+        userId,
+        module,
+        action,
+        startTime: range[0].toISOString(),
+        endTime: range[1].toISOString(),
+      })
       setRows(json.data?.list ?? [])
       setTotal(json.data?.total ?? 0)
     } catch (caught) {
@@ -88,7 +59,7 @@ export default function OpsLogsPage() {
     } finally {
       setLoading(false)
     }
-  }, [queryString])
+  }, [action, module, page, pageSize, range, userId])
 
   useEffect(() => {
     void fetchLogs()
