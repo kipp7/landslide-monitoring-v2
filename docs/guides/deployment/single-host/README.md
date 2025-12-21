@@ -15,3 +15,7 @@
 阶段 1（设备鉴权/ACL）接线说明：
 
 - `docs/guides/deployment/single-host/emqx-http-auth.md`
+
+JWT/RBAC（Web 登录）Bootstrap（非硬件模块，推荐优先收口）：
+
+- `docs/guides/deployment/single-host/jwt-rbac-bootstrap.md`
