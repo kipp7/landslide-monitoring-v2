@@ -7,6 +7,7 @@ import type { PgPool } from "../postgres";
 import { queryOne, withPgClient } from "../postgres";
 import path from "node:path";
 import { loadAndCompileSchema } from "@lsmv2/validation";
+import { enqueueOperationLog } from "../operation-log";
 
 const ruleIdSchema = z.string().uuid();
 
@@ -368,6 +369,15 @@ export function registerAlertRuleRoutes(app: FastifyInstance, config: AppConfig,
     });
 
     // Align with docs/integrations/api/06-alerts.md: create returns ruleVersion=1
+    enqueueOperationLog(pg, request, {
+      module: "alert",
+      action: "create_rule",
+      description: "create alert rule",
+      status: "success",
+      requestData: { ruleName: rule.ruleName, scope: rule.scope, isActive: rule.isActive },
+      responseData: { ruleId: inserted, ruleVersion: 1 }
+    });
+
     ok(reply, { ruleId: inserted, ruleVersion: 1 }, traceId);
   });
 
@@ -416,6 +426,15 @@ export function registerAlertRuleRoutes(app: FastifyInstance, config: AppConfig,
       fail(reply, 404, "资源不存在", traceId, { ruleId });
       return;
     }
+
+    enqueueOperationLog(pg, request, {
+      module: "alert",
+      action: "update_rule",
+      description: "update alert rule",
+      status: "success",
+      requestData: { ruleId, isActive },
+      responseData: { updatedAt: updated.updatedAt }
+    });
 
     ok(reply, { ruleId, isActive, updatedAt: updated.updatedAt }, traceId);
   });
@@ -613,6 +632,15 @@ export function registerAlertRuleRoutes(app: FastifyInstance, config: AppConfig,
     }
 
     // Align with docs/integrations/api/06-alerts.md: publish returns ruleVersion=N
+    enqueueOperationLog(pg, request, {
+      module: "alert",
+      action: "publish_rule_version",
+      description: "publish alert rule version",
+      status: "success",
+      requestData: { ruleId },
+      responseData: { ruleVersion: inserted }
+    });
+
     ok(reply, { ruleId, ruleVersion: inserted }, traceId);
   });
 }

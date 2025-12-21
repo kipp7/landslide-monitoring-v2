@@ -70,7 +70,9 @@ export default function AccessPage() {
         <Card>
           <Text type="danger">加载失败：{error}</Text>
           <div className="mt-2">
-            <Text type="secondary">如果服务端配置了 `ADMIN_API_TOKEN`，请在“设置”页配置 Bearer Token。</Text>
+            <Text type="secondary">
+              如果你使用 JWT 登录（推荐），请先到 <a href="/login">/login</a> 登录；如果仍使用静态 token（ADMIN_API_TOKEN），请在“设置”页配置手动 Bearer Token。
+            </Text>
           </div>
         </Card>
       ) : null}
@@ -113,4 +115,3 @@ export default function AccessPage() {
     </div>
   )
 }
-

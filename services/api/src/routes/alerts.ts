@@ -5,6 +5,7 @@ import { requirePermission, type AdminAuthConfig } from "../authz";
 import { fail, ok } from "../http";
 import type { PgPool } from "../postgres";
 import { queryOne, withPgClient } from "../postgres";
+import { enqueueOperationLog } from "../operation-log";
 
 const alertIdSchema = z.string().uuid();
 
@@ -431,6 +432,15 @@ export function registerAlertRoutes(app: FastifyInstance, config: AppConfig, pg:
         fail(reply, 404, "资源不存在", traceId, { alertId });
         return;
       }
+
+      enqueueOperationLog(pg, request, {
+        module: "alert",
+        action: eventType === "ALERT_ACK" ? "ack_alert" : "resolve_alert",
+        description: "manual alert action",
+        status: "success",
+        requestData: { alertId, eventType, notes },
+        responseData: { eventId: data.inserted.event_id, createdAt: data.inserted.created_at }
+      });
 
       ok(
         reply,

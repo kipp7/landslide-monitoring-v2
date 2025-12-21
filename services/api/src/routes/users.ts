@@ -6,6 +6,7 @@ import { fail, ok } from "../http";
 import type { PgPool } from "../postgres";
 import { queryOne, withPgClient } from "../postgres";
 import { hashPassword } from "../auth";
+import { enqueueOperationLog } from "../operation-log";
 
 const userIdSchema = z.string().uuid();
 
@@ -243,6 +244,15 @@ export function registerUserRoutes(app: FastifyInstance, config: AppConfig, pg: 
       }
     });
 
+    enqueueOperationLog(pg, request, {
+      module: "user",
+      action: "create_user",
+      description: "create user",
+      status: "success",
+      requestData: { username, realName: realName ?? null, email: email ?? null, phone: phone ?? null, roleIds: roleIds ?? [] },
+      responseData: { userId: created }
+    });
+
     ok(reply, { userId: created }, traceId);
   });
 
@@ -418,6 +428,15 @@ export function registerUserRoutes(app: FastifyInstance, config: AppConfig, pg: 
       return;
     }
 
+    enqueueOperationLog(pg, request, {
+      module: "user",
+      action: "update_user",
+      description: "update user",
+      status: "success",
+      requestData: { userId, realName: realName ?? null, email: email ?? null, phone: phone ?? null, status: status ?? null, roleIds: roleIds ?? null },
+      responseData: { updatedAt }
+    });
+
     ok(reply, { userId, updatedAt }, traceId);
   });
 
@@ -447,6 +466,15 @@ export function registerUserRoutes(app: FastifyInstance, config: AppConfig, pg: 
       fail(reply, 404, "资源不存在", traceId, { userId });
       return;
     }
+
+    enqueueOperationLog(pg, request, {
+      module: "user",
+      action: "delete_user",
+      description: "delete user",
+      status: "success",
+      requestData: { userId },
+      responseData: {}
+    });
 
     ok(reply, {}, traceId);
   });
@@ -481,6 +509,15 @@ export function registerUserRoutes(app: FastifyInstance, config: AppConfig, pg: 
       fail(reply, 404, "资源不存在", traceId, { userId });
       return;
     }
+
+    enqueueOperationLog(pg, request, {
+      module: "user",
+      action: "reset_password",
+      description: "reset password",
+      status: "success",
+      requestData: { userId },
+      responseData: { mustChangeOnNextLogin: true }
+    });
 
     ok(
       reply,

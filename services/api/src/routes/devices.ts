@@ -8,6 +8,7 @@ import type { PgPool } from "../postgres";
 import { queryOne, withPgClient } from "../postgres";
 import { generateDeviceSecret, hashDeviceSecret } from "../device-secret";
 import { requirePermission, type AdminAuthConfig } from "../authz";
+import { enqueueOperationLog } from "../operation-log";
 
 const deviceIdSchema = z.string().uuid();
 
@@ -263,6 +264,20 @@ export function registerDeviceRoutes(
       return row.device_id;
     });
 
+    enqueueOperationLog(pg, request, {
+      module: "device",
+      action: "create_device",
+      description: "create device",
+      status: "success",
+      requestData: {
+        deviceId: body.deviceId ?? null,
+        deviceName: body.deviceName,
+        deviceType: body.deviceType,
+        stationId: body.stationId ?? null
+      },
+      responseData: { deviceId: created }
+    });
+
     ok(
       reply,
       {
@@ -329,6 +344,15 @@ export function registerDeviceRoutes(
       return;
     }
 
+    enqueueOperationLog(pg, request, {
+      module: "device",
+      action: "update_device",
+      description: "update device",
+      status: "success",
+      requestData: { deviceId, deviceName: body.deviceName ?? null, deviceType: body.deviceType ?? null, stationId: body.stationId ?? null },
+      responseData: { updatedAt: updated }
+    });
+
     ok(reply, { deviceId, updatedAt: updated }, traceId);
   });
 
@@ -364,6 +388,15 @@ export function registerDeviceRoutes(
       fail(reply, 404, "资源不存在", traceId, { deviceId });
       return;
     }
+
+    enqueueOperationLog(pg, request, {
+      module: "device",
+      action: "revoke_device",
+      description: "revoke device",
+      status: "success",
+      requestData: { deviceId },
+      responseData: { status: row.status, revokedAt: row.revoked_at }
+    });
 
     ok(reply, { deviceId, status: row.status, revokedAt: row.revoked_at }, traceId);
   });
@@ -449,6 +482,15 @@ export function registerDeviceRoutes(
       fail(reply, 404, "资源不存在", traceId, { deviceId });
       return;
     }
+
+    enqueueOperationLog(pg, request, {
+      module: "device",
+      action: "issue_command",
+      description: "issue device command",
+      status: "success",
+      requestData: { deviceId, commandType, payloadKeys: Object.keys(payload) },
+      responseData: { commandId: created.command_id, status: created.status }
+    });
 
     ok(reply, { commandId: created.command_id, status: created.status }, traceId);
   });

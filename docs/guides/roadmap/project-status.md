@@ -7,7 +7,8 @@
 - 每次合并一个 PR 到 `main`，如果它改变了项目阶段/里程碑/下一步，必须更新本页。
 - 本页只记录“当前状态与下一步”，历史细节放到 `docs/incidents/` 或 PR/commit 记录中。
 
-最后更新时间：2025-12-20（阶段 5 已完成：固件模拟器 + Stage5Regression 回归基线；硬件联调待启动）
+最后更新时间：2025-12-21（阶段 5 已完成：固件模拟器 + Stage5Regression 回归基线；硬件联调待启动）
+- 2025-12-21：非硬件模块收口推进（安全与访问控制 + 运维审计）：API 端点从 admin token 兜底升级为基于 `permission_code` 的 RBAC 校验；新增 `role_permissions` 默认种子；Web 增加 JWT 登录页与 token refresh，导航/页面按权限可见；关键操作写入 `operation_logs` 便于运维审计。
 - 2025-12-20：补齐 OpenAPI 契约缺口（api-service 实现 `/auth/*`、`/users`/`/roles`/`/permissions`、`/system/configs`、`/system/logs/*`、`/data/raw|statistics|export`），并为 `operation_logs`/`api_logs` 增加 DEFAULT 分区以避免单机环境插入失败；阶段 5 Next Actions 不变。
 - 2025-12-20：阶段 5 落地：新增固件模拟器 `scripts/dev/firmware-sim.js`（schema 校验 + state 持久化 + 重连退避 + ping/set_config/reboot），并在 `infra/compose/scripts/e2e-smoke-test.ps1` 增加 `-Stage5Regression` 预置回归；新增 `docs/guides/roadmap/stage5-acceptance.md`。
 - 2025-12-20：补齐 PresenceEvent 可选链路：ingest-service 订阅 `presence/+` 写入 `presence.events.v1`，新增 `presence-recorder` 落库 `device_presence`，并把 presence 断言纳入 `Stage1Regression/Stage2Regression/Stage5Regression` 回归基线。

@@ -1,26 +1,44 @@
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
-import { Layout, Menu } from 'antd'
+import { Button, Dropdown, Layout, Menu, Space, Typography } from 'antd'
+import { LoginOutlined, LogoutOutlined, SettingOutlined, UserOutlined } from '@ant-design/icons'
+import { useAuth } from './AuthProvider'
 
 const { Header, Content } = Layout
+const { Text } = Typography
 
-const ITEMS = [
-  { key: '/device-management', label: '设备' },
-  { key: '/analysis', label: '概览' },
-  { key: '/stations', label: '站点' },
-  { key: '/alerts', label: '告警' },
-  { key: '/admin', label: '管理' },
-  { key: '/ops', label: '运维' },
-  { key: '/settings', label: '设置' },
-]
+function hasAnyPermission(userPerms: string[] | undefined, required: string[]): boolean {
+  if (!userPerms || userPerms.length === 0) return false
+  return required.some((p) => userPerms.includes(p))
+}
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
+  const { user, loading, logout } = useAuth()
 
-  const selectedKey =
-    ITEMS.find((i) => pathname === i.key || pathname.startsWith(`${i.key}/`))?.key ?? '/device-management'
+  const items = (() => {
+    const base = [
+      { key: '/analysis', label: '概览' },
+      { key: '/device-management', label: '设备' },
+      { key: '/stations', label: '站点' },
+      { key: '/alerts', label: '告警' },
+    ]
+
+    const perms = user?.permissions ?? []
+    const adminVisible = hasAnyPermission(perms, ['user:view', 'user:create', 'user:update', 'user:delete'])
+    const opsVisible = hasAnyPermission(perms, ['system:log', 'system:config'])
+
+    const extra = []
+    if (adminVisible) extra.push({ key: '/admin', label: '管理' })
+    if (opsVisible) extra.push({ key: '/ops', label: '运维' })
+    extra.push({ key: '/settings', label: '设置' })
+
+    return base.concat(extra)
+  })()
+
+  const selectedKey = items.find((i) => pathname === i.key || pathname.startsWith(`${i.key}/`))?.key ?? '/analysis'
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -30,12 +48,51 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           theme="dark"
           mode="horizontal"
           selectedKeys={[selectedKey]}
-          items={ITEMS}
+          items={items}
           onClick={(e) => router.push(e.key)}
           style={{ flex: 1 }}
         />
+        <Space>
+          {loading ? <Text style={{ color: '#ddd' }}>Loading…</Text> : null}
+          {!loading && user ? (
+            <Dropdown
+              menu={{
+                items: [
+                  {
+                    key: 'me',
+                    icon: <UserOutlined />,
+                    label: `${user.realName || user.username} (${user.username})`,
+                    disabled: true,
+                  },
+                  { type: 'divider' },
+                  {
+                    key: 'settings',
+                    icon: <SettingOutlined />,
+                    label: '设置',
+                    onClick: () => router.push('/settings'),
+                  },
+                  {
+                    key: 'logout',
+                    icon: <LogoutOutlined />,
+                    label: '退出登录',
+                    onClick: () => logout(),
+                  },
+                ],
+              }}
+              placement="bottomRight"
+            >
+              <Button>{user.username}</Button>
+            </Dropdown>
+          ) : null}
+          {!loading && !user ? (
+            <Button icon={<LoginOutlined />} onClick={() => router.push('/login')}>
+              登录
+            </Button>
+          ) : null}
+        </Space>
       </Header>
       <Content style={{ padding: 24 }}>{children}</Content>
     </Layout>
   )
 }
+
