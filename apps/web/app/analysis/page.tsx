@@ -6,48 +6,14 @@ import { ReloadOutlined } from '@ant-design/icons'
 import useDeviceList from '../hooks/useDeviceList'
 import useDeviceShadow from '../hooks/useDeviceShadow'
 import useSensors from '../hooks/useSensors'
-import { apiGetJson, type ApiSuccessResponse } from '../../lib/v2Api'
+import { listAlerts, type AlertRow } from '../../lib/api/alerts'
+import { getDashboard, getSystemStatus, type DashboardSummary, type SystemStatus } from '../../lib/api/dashboard'
 
 const { Title, Text } = Typography
-
-type AlertRow = {
-  alertId: string
-  status: 'active' | 'acked' | 'resolved'
-  severity: 'low' | 'medium' | 'high' | 'critical'
-  title?: string | null
-  deviceId?: string | null
-  stationId?: string | null
-  lastEventAt: string
-}
-
-type AlertsListResponse = {
-  list: AlertRow[]
-  pagination: { page: number; pageSize: number; total: number; totalPages: number }
-}
 
 function severityTag(sev: AlertRow['severity']) {
   const color = sev === 'critical' ? 'red' : sev === 'high' ? 'volcano' : sev === 'medium' ? 'orange' : 'green'
   return <Tag color={color}>{sev}</Tag>
-}
-
-type DashboardSummary = {
-  todayDataCount: number
-  onlineDevices: number
-  offlineDevices: number
-  pendingAlerts: number
-  alertsBySeverity: Record<'low' | 'medium' | 'high' | 'critical', number>
-  stations: number
-  lastUpdatedAt: string
-}
-
-type SystemCheck = { status: string; error?: string }
-
-type SystemStatus = {
-  uptimeS: number
-  postgres: SystemCheck
-  clickhouse: SystemCheck
-  kafka: SystemCheck
-  emqx: { status: string }
 }
 
 function formatValue(value: unknown): string {
@@ -85,8 +51,8 @@ export default function AnalysisPage() {
   const fetchDashboard = useCallback(async () => {
     try {
       setDashboardError(null)
-      const json = await apiGetJson<ApiSuccessResponse<DashboardSummary>>('/api/v1/dashboard')
-      setDashboard(json.data)
+      const json = await getDashboard()
+      setDashboard(json.data ?? null)
     } catch (caught) {
       setDashboardError(caught instanceof Error ? caught.message : String(caught))
       setDashboard(null)
@@ -96,8 +62,8 @@ export default function AnalysisPage() {
   const fetchSystemStatus = useCallback(async () => {
     try {
       setSystemStatusError(null)
-      const json = await apiGetJson<ApiSuccessResponse<SystemStatus>>('/api/v1/system/status')
-      setSystemStatus(json.data)
+      const json = await getSystemStatus()
+      setSystemStatus(json.data ?? null)
     } catch (caught) {
       setSystemStatusError(caught instanceof Error ? caught.message : String(caught))
       setSystemStatus(null)
@@ -112,11 +78,7 @@ export default function AnalysisPage() {
       const end = new Date()
       const start = new Date(end.getTime() - 24 * 60 * 60 * 1000)
 
-      const json = await apiGetJson<ApiSuccessResponse<AlertsListResponse>>(
-        `/api/v1/alerts?page=1&pageSize=50&startTime=${encodeURIComponent(start.toISOString())}&endTime=${encodeURIComponent(
-          end.toISOString()
-        )}`
-      )
+      const json = await listAlerts({ page: 1, pageSize: 50, startTime: start.toISOString(), endTime: end.toISOString() })
 
       setAlerts(json.data?.list ?? [])
     } catch (caught) {

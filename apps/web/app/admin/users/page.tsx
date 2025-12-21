@@ -1,10 +1,18 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Button, Card, Form, Input, Modal, Select, Space, Table, Tag, Typography, message } from 'antd'
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons'
-import { apiDeleteJson, apiGetJson, apiJson, apiPutJson, type ApiSuccessResponse } from '../../../lib/v2Api'
+import {
+  createUser,
+  deleteUser as deleteUserApi,
+  getUser,
+  listRoles,
+  listUsers,
+  resetUserPassword,
+  updateUser,
+} from '../../../lib/api/admin'
 
 const { Title, Text } = Typography
 
@@ -14,8 +22,6 @@ type RoleRow = {
   displayName: string
   description: string
 }
-
-type RolesResponse = { list: RoleRow[] }
 
 type UserRow = {
   userId: string
@@ -29,11 +35,6 @@ type UserRow = {
   lastLoginAt: string | null
   createdAt: string
   updatedAt: string
-}
-
-type PaginatedUsers = {
-  list: UserRow[]
-  pagination: { page: number; pageSize: number; total: number; totalPages: number }
 }
 
 type CreateUserRequest = {
@@ -73,19 +74,9 @@ export default function AdminUsersPage() {
   const [status, setStatus] = useState<'all' | UserRow['status']>('all')
   const [roleId, setRoleId] = useState<string | 'all'>('all')
 
-  const queryString = useMemo(() => {
-    const params = new URLSearchParams()
-    params.set('page', String(page))
-    params.set('pageSize', String(pageSize))
-    if (keyword.trim()) params.set('keyword', keyword.trim())
-    if (status !== 'all') params.set('status', status)
-    if (roleId !== 'all') params.set('roleId', roleId)
-    return params.toString()
-  }, [keyword, page, pageSize, roleId, status])
-
   const fetchRoles = useCallback(async () => {
     try {
-      const json = await apiGetJson<ApiSuccessResponse<RolesResponse>>('/api/v1/roles')
+      const json = await listRoles()
       setRoles(json.data?.list ?? [])
     } catch {
       setRoles([])
@@ -96,7 +87,13 @@ export default function AdminUsersPage() {
     try {
       setLoading(true)
       setError(null)
-      const json = await apiGetJson<ApiSuccessResponse<PaginatedUsers>>(`/api/v1/users?${queryString}`)
+      const json = await listUsers({
+        page,
+        pageSize,
+        keyword: keyword.trim() ? keyword.trim() : undefined,
+        status: status === 'all' ? undefined : status,
+        roleId: roleId === 'all' ? undefined : roleId,
+      })
       setRows(json.data?.list ?? [])
       setTotal(json.data?.pagination?.total ?? 0)
     } catch (caught) {
@@ -106,7 +103,7 @@ export default function AdminUsersPage() {
     } finally {
       setLoading(false)
     }
-  }, [queryString])
+  }, [keyword, page, pageSize, roleId, status])
 
   useEffect(() => {
     void fetchRoles()
@@ -124,7 +121,7 @@ export default function AdminUsersPage() {
     const values = (await createForm.validateFields()) as CreateUserRequest
     setCreateLoading(true)
     try {
-      await apiJson<ApiSuccessResponse<unknown>>('/api/v1/users', values)
+      await createUser(values)
       message.success('用户已创建')
       setCreateOpen(false)
       createForm.resetFields()
@@ -144,7 +141,7 @@ export default function AdminUsersPage() {
   const openEdit = async (userId: string) => {
     try {
       setEditLoading(true)
-      const json = await apiGetJson<ApiSuccessResponse<UserRow>>(`/api/v1/users/${encodeURIComponent(userId)}`)
+      const json = await getUser(userId)
       const u = json.data
       setEditUserId(userId)
       editForm.setFieldsValue({
@@ -168,7 +165,7 @@ export default function AdminUsersPage() {
     if (!editUserId) return
     setEditLoading(true)
     try {
-      await apiPutJson<ApiSuccessResponse<unknown>>(`/api/v1/users/${encodeURIComponent(editUserId)}`, values)
+      await updateUser(editUserId, values)
       message.success('用户已更新')
       setEditOpen(false)
       setEditUserId('')
@@ -188,7 +185,7 @@ export default function AdminUsersPage() {
       okButtonProps: { danger: true },
       cancelText: '取消',
       onOk: async () => {
-        await apiDeleteJson<ApiSuccessResponse<unknown>>(`/api/v1/users/${encodeURIComponent(userId)}`)
+        await deleteUserApi(userId)
         message.success('用户已删除')
         await fetchUsers()
       },
@@ -202,7 +199,7 @@ export default function AdminUsersPage() {
       okText: '确认',
       cancelText: '取消',
       onOk: async () => {
-        await apiJson<ApiSuccessResponse<unknown>>(`/api/v1/users/${encodeURIComponent(userId)}/reset-password`, {})
+        await resetUserPassword(userId)
         message.success('已重置（用户需在下次登录时修改密码）')
       },
     })

@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { apiGetJson, type ApiSuccessResponse } from '../../lib/v2Api'
+import { getDeviceState } from '../../lib/api/devices'
 
 export interface DeviceShadowData {
   deviceId: string
@@ -15,15 +15,6 @@ export interface UseDeviceShadowResult {
   loading: boolean
   error: string | null
   refreshShadow: () => Promise<void>
-}
-
-type DeviceStateResponse = {
-  deviceId: string
-  updatedAt: string
-  state: {
-    metrics: Record<string, unknown>
-    meta?: Record<string, unknown>
-  }
 }
 
 export default function useDeviceShadow(
@@ -45,9 +36,7 @@ export default function useDeviceShadow(
     try {
       setError(null)
 
-      const json = await apiGetJson<ApiSuccessResponse<DeviceStateResponse>>(
-        `/api/v1/data/state/${encodeURIComponent(deviceId)}`
-      )
+      const json = await getDeviceState(deviceId)
       if (!json?.success) throw new Error('Unexpected API response')
 
       setData({

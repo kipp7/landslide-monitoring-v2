@@ -1,28 +1,13 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Button, Card, DatePicker, Input, Modal, Select, Space, Table, Tag, Typography, message } from 'antd'
 import { CheckOutlined, ReloadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
-import { apiGetJson, apiJson, type ApiSuccessResponse } from '../../lib/v2Api'
+import { actionAlert as actionAlertApi, listAlerts, type AlertRow } from '../../lib/api/alerts'
 
 const { Title, Text } = Typography
-
-type AlertRow = {
-  alertId: string
-  status: 'active' | 'acked' | 'resolved'
-  severity: 'low' | 'medium' | 'high' | 'critical'
-  title?: string | null
-  deviceId?: string | null
-  stationId?: string | null
-  lastEventAt: string
-}
-
-type AlertsListResponse = {
-  list: AlertRow[]
-  pagination: { page: number; pageSize: number; total: number; totalPages: number }
-}
 
 function severityTag(sev: AlertRow['severity']) {
   const color = sev === 'critical' ? 'red' : sev === 'high' ? 'volcano' : sev === 'medium' ? 'orange' : 'green'
@@ -43,22 +28,18 @@ export default function AlertsPage() {
     return [start, end]
   })
 
-  const queryString = useMemo(() => {
-    const params = new URLSearchParams()
-    params.set('page', '1')
-    params.set('pageSize', '200')
-    params.set('startTime', range[0].toISOString())
-    params.set('endTime', range[1].toISOString())
-    if (status !== 'all') params.set('status', status)
-    if (severity !== 'all') params.set('severity', severity)
-    return params.toString()
-  }, [range, severity, status])
-
   const fetchAlerts = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
-      const json = await apiGetJson<ApiSuccessResponse<AlertsListResponse>>(`/api/v1/alerts?${queryString}`)
+      const json = await listAlerts({
+        page: 1,
+        pageSize: 200,
+        startTime: range[0].toISOString(),
+        endTime: range[1].toISOString(),
+        status: status === 'all' ? undefined : status,
+        severity: severity === 'all' ? undefined : severity,
+      })
       setRows(json.data?.list ?? [])
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught))
@@ -66,7 +47,7 @@ export default function AlertsPage() {
     } finally {
       setLoading(false)
     }
-  }, [queryString])
+  }, [range, severity, status])
 
   useEffect(() => {
     void fetchAlerts()
@@ -93,9 +74,7 @@ export default function AlertsPage() {
       cancelText: '取消',
       onOk: async () => {
         const trimmed = notes.trim()
-        await apiJson<ApiSuccessResponse<unknown>>(`/api/v1/alerts/${encodeURIComponent(alertId)}/${action}`, {
-          ...(trimmed ? { notes: trimmed } : {}),
-        })
+        await actionAlertApi(alertId, action, trimmed ? { notes: trimmed } : undefined)
         message.success(`${title} 成功`)
         await fetchAlerts()
       },

@@ -1,18 +1,9 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { apiGetJson, type ApiSuccessResponse } from '../../lib/v2Api'
+import { listSensors, type SensorRow } from '../../lib/api/sensors'
 
-export type SensorDictionaryItem = {
-  sensorKey: string
-  displayName: string
-  unit: string
-  dataType: 'float' | 'int' | 'bool' | 'string'
-}
-
-type SensorsResponse = {
-  list: SensorDictionaryItem[]
-}
+export type SensorDictionaryItem = SensorRow
 
 let cache: { list: SensorDictionaryItem[]; fetchedAtMs: number } | null = null
 
@@ -25,7 +16,7 @@ export default function useSensors() {
     try {
       setLoading(true)
       setError(null)
-      const json = await apiGetJson<ApiSuccessResponse<SensorsResponse>>('/api/v1/sensors')
+      const json = await listSensors()
       const next = json.data?.list ?? []
       cache = { list: next, fetchedAtMs: Date.now() }
       setList(next)
@@ -52,4 +43,3 @@ export default function useSensors() {
 
   return { list, byKey, loading, error, refresh }
 }
-
