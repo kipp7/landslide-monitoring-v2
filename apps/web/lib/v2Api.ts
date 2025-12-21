@@ -173,6 +173,10 @@ export async function apiPutJson<T>(
   })
 }
 
+export async function apiPut<T>(path: string, init?: Omit<RequestInit, 'method'>): Promise<T> {
+  return requestJson<T>(path, { method: 'PUT', ...init })
+}
+
 export async function apiDeleteJson<T>(path: string, init?: Omit<RequestInit, 'method'>): Promise<T> {
   return requestJson<T>(path, { method: 'DELETE', ...init })
 }

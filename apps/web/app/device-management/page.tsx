@@ -23,9 +23,8 @@ import useSensors from '../hooks/useSensors'
 import {
   apiGetJson,
   apiJson,
+  apiPut,
   apiPutJson,
-  buildApiUrl,
-  getApiAuthHeaders,
   type ApiSuccessResponse,
 } from '../../lib/v2Api'
 
@@ -217,11 +216,7 @@ export default function DeviceManagementPage() {
       okButtonProps: { danger: true },
       cancelText: '取消',
       onOk: async () => {
-        const resp = await fetch(buildApiUrl(`/api/v1/devices/${encodeURIComponent(selectedDeviceId)}/revoke`), {
-          method: 'PUT',
-          headers: { Accept: 'application/json', ...getApiAuthHeaders() },
-        })
-        if (!resp.ok) throw new Error(`HTTP ${resp.status} ${resp.statusText}`)
+        await apiPut<ApiSuccessResponse<unknown>>(`/api/v1/devices/${encodeURIComponent(selectedDeviceId)}/revoke`)
         message.success('已吊销')
         await refetch()
       },

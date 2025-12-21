@@ -11,6 +11,7 @@
 - 2025-12-21：非硬件模块收口推进（安全与访问控制 + 运维审计）：API 端点从 admin token 兜底升级为基于 `permission_code` 的 RBAC 校验；新增 `role_permissions` 默认种子；Web 增加 JWT 登录页与 token refresh，导航/页面按权限可见；关键操作写入 `operation_logs` 便于运维审计。
 - 2025-12-21：单机启用 JWT/RBAC 的一键引导：新增 `infra/compose/scripts/enable-jwt-auth.ps1`（生成 JWT secrets + 可选 ADMIN_API_TOKEN 并写入 gitignored 的 `services/api/.env`），补充单机部署指引与 smoke 脚本，降低首次启用成本。
 - 2025-12-21：回归基线流程收口：PR 模板与操作指南补齐本地门禁（`run-quality-gates + lint + build`）并明确 Web/API 变更需以 `-Stage4Regression` 留证，降低“接口/契约漂移”风险。
+- 2025-12-21：Web 接口封装一致性收口（不改 UI）：统一走 `apps/web/lib/v2Api.ts`（新增无 body 的 `apiPut`，移除直连 `fetch`），并清理未使用的遗留 IoT API 配置代码，降低维护成本与误用风险。
 - 2025-12-20：补齐 OpenAPI 契约缺口（api-service 实现 `/auth/*`、`/users`/`/roles`/`/permissions`、`/system/configs`、`/system/logs/*`、`/data/raw|statistics|export`），并为 `operation_logs`/`api_logs` 增加 DEFAULT 分区以避免单机环境插入失败；阶段 5 Next Actions 不变。
 - 2025-12-20：阶段 5 落地：新增固件模拟器 `scripts/dev/firmware-sim.js`（schema 校验 + state 持久化 + 重连退避 + ping/set_config/reboot），并在 `infra/compose/scripts/e2e-smoke-test.ps1` 增加 `-Stage5Regression` 预置回归；新增 `docs/guides/roadmap/stage5-acceptance.md`。
 - 2025-12-20：补齐 PresenceEvent 可选链路：ingest-service 订阅 `presence/+` 写入 `presence.events.v1`，新增 `presence-recorder` 落库 `device_presence`，并把 presence 断言纳入 `Stage1Regression/Stage2Regression/Stage5Regression` 回归基线。
