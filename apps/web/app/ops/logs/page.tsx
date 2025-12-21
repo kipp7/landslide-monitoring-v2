@@ -134,7 +134,7 @@ export default function OpsLogsPage() {
           <Title level={3} style={{ margin: 0 }}>
             操作日志
           </Title>
-          <Text type="secondary">数据源：`/api/v1/system/logs/operation`（需要 `ADMIN_API_TOKEN`）</Text>
+          <Text type="secondary">数据源：`/api/v1/system/logs/operation`（需要权限：`system:log`）</Text>
         </div>
         <Space>
           <Link href="/ops/configs">系统配置</Link>
@@ -233,4 +233,3 @@ export default function OpsLogsPage() {
     </div>
   )
 }
-

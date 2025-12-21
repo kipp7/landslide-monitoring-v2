@@ -46,7 +46,7 @@ export default function OpsApiStatsPage() {
           <Title level={3} style={{ margin: 0 }}>
             API 统计（近 24h）
           </Title>
-          <Text type="secondary">数据源：`/api/v1/system/logs/api-stats`（需要 `ADMIN_API_TOKEN`）</Text>
+          <Text type="secondary">数据源：`/api/v1/system/logs/api-stats`（需要权限：`system:log`）</Text>
         </div>
         <Space>
           <Link href="/ops/configs">系统配置</Link>
@@ -102,4 +102,3 @@ export default function OpsApiStatsPage() {
     </div>
   )
 }
-

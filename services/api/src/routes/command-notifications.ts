@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AppConfig } from "../config";
-import { requireAdmin, type AdminAuthConfig } from "../authz";
+import { requirePermission, type AdminAuthConfig } from "../authz";
 import { fail, ok } from "../http";
 import type { PgPool } from "../postgres";
 import { queryOne, withPgClient } from "../postgres";
@@ -61,11 +61,11 @@ export function registerCommandNotificationRoutes(
   config: AppConfig,
   pg: PgPool | null
 ): void {
-  const adminCfg: AdminAuthConfig = { adminApiToken: config.adminApiToken };
+  const adminCfg: AdminAuthConfig = { adminApiToken: config.adminApiToken, jwtEnabled: Boolean(config.jwtAccessSecret) };
 
   app.get("/devices/:deviceId/command-notifications", async (request, reply) => {
     const traceId = request.traceId;
-    if (!requireAdmin(adminCfg, request, reply)) return;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "device:control"))) return;
     if (!pg) {
       fail(reply, 503, "PostgreSQL 未配置", traceId);
       return;
@@ -215,7 +215,7 @@ export function registerCommandNotificationRoutes(
 
   app.get("/devices/:deviceId/command-notifications/stats", async (request, reply) => {
     const traceId = request.traceId;
-    if (!requireAdmin(adminCfg, request, reply)) return;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "device:control"))) return;
     if (!pg) {
       fail(reply, 503, "PostgreSQL 未配置", traceId);
       return;
@@ -407,7 +407,7 @@ export function registerCommandNotificationRoutes(
 
   app.get("/devices/:deviceId/command-notifications/:notificationId", async (request, reply) => {
     const traceId = request.traceId;
-    if (!requireAdmin(adminCfg, request, reply)) return;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "device:control"))) return;
     if (!pg) {
       fail(reply, 503, "PostgreSQL 未配置", traceId);
       return;
@@ -485,7 +485,7 @@ export function registerCommandNotificationRoutes(
 
   app.put("/devices/:deviceId/command-notifications/:notificationId/read", async (request, reply) => {
     const traceId = request.traceId;
-    if (!requireAdmin(adminCfg, request, reply)) return;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "device:control"))) return;
     if (!pg) {
       fail(reply, 503, "PostgreSQL 未配置", traceId);
       return;

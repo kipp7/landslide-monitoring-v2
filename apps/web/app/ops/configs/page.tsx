@@ -79,7 +79,7 @@ export default function OpsConfigsPage() {
           <Title level={3} style={{ margin: 0 }}>
             系统配置
           </Title>
-          <Text type="secondary">GET：公开配置（无需 token）；PUT：需要 `ADMIN_API_TOKEN`</Text>
+          <Text type="secondary">数据源：`/api/v1/system/configs`（需要权限：`system:config`）</Text>
         </div>
         <Space>
           <Link href="/ops/logs">操作日志</Link>
@@ -130,4 +130,3 @@ export default function OpsConfigsPage() {
     </div>
   )
 }
-

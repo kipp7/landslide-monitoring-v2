@@ -232,7 +232,9 @@ export default function AdminUsersPage() {
         <Card>
           <Text type="danger">加载失败：{error}</Text>
           <div className="mt-2">
-            <Text type="secondary">常见原因：服务端设置了 `ADMIN_API_TOKEN` 但未在“设置”页配置 Bearer Token。</Text>
+            <Text type="secondary">
+              常见原因：未登录导致 401/403；请先到 <a href="/login">/login</a> 登录（JWT），或在“设置”页配置手动 Bearer Token（ADMIN_API_TOKEN）。
+            </Text>
           </div>
         </Card>
       ) : null}
@@ -408,4 +410,3 @@ export default function AdminUsersPage() {
     </div>
   )
 }
-

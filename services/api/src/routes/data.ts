@@ -2,6 +2,7 @@ import type { ClickHouseClient } from "@clickhouse/client";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AppConfig } from "../config";
+import { requirePermission, type AdminAuthConfig } from "../authz";
 import { fail, ok } from "../http";
 import type { PgPool } from "../postgres";
 import { queryOne, withPgClient } from "../postgres";
@@ -115,8 +116,11 @@ export function registerDataRoutes(
   ch: ClickHouseClient,
   pg: PgPool | null
 ): void {
+  const adminCfg: AdminAuthConfig = { adminApiToken: config.adminApiToken, jwtEnabled: Boolean(config.jwtAccessSecret) };
+
   app.get("/data/state/:deviceId", async (request, reply) => {
     const traceId = request.traceId;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     const parseId = deviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
     if (!parseId.success) {
       fail(reply, 400, "参数错误", traceId, { field: "deviceId" });
@@ -186,6 +190,7 @@ export function registerDataRoutes(
 
   app.get("/data/series/:deviceId", async (request, reply) => {
     const traceId = request.traceId;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     const parseId = deviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
     if (!parseId.success) {
       fail(reply, 400, "参数错误", traceId, { field: "deviceId" });
@@ -303,6 +308,7 @@ export function registerDataRoutes(
 
   app.get("/data/raw/:deviceId", async (request, reply) => {
     const traceId = request.traceId;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     const parseId = deviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
     if (!parseId.success) {
       fail(reply, 400, "参数错误", traceId, { field: "deviceId" });
@@ -380,6 +386,7 @@ export function registerDataRoutes(
 
   app.get("/data/statistics", async (request, reply) => {
     const traceId = request.traceId;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:analysis"))) return;
     const parseQuery = statisticsQuerySchema.safeParse(request.query);
     if (!parseQuery.success) {
       fail(reply, 400, "参数错误", traceId, { field: "query", issues: parseQuery.error.issues });
@@ -475,6 +482,7 @@ export function registerDataRoutes(
 
   app.post("/data/export", async (request, reply) => {
     const traceId = request.traceId;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:export"))) return;
     const parseBody = exportRequestSchema.safeParse(request.body);
     if (!parseBody.success) {
       fail(reply, 400, "参数错误", traceId, { field: "body", issues: parseBody.error.issues });

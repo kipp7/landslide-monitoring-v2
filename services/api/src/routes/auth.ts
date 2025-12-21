@@ -5,6 +5,7 @@ import { fail, ok } from "../http";
 import type { PgPool } from "../postgres";
 import { queryOne, withPgClient } from "../postgres";
 import { hashPassword, signAccessToken, signRefreshToken, verifyPassword, verifyRefreshToken } from "../auth";
+import { enqueueOperationLog } from "../operation-log";
 
 const loginRequestSchema = z
   .object({
@@ -137,6 +138,17 @@ export function registerAuthRoutes(app: FastifyInstance, config: AppConfig, pg: 
         row.user_id
       ]);
     }).catch(() => undefined);
+
+    enqueueOperationLog(pg, request, {
+      module: "auth",
+      action: "login",
+      description: "user login",
+      status: "success",
+      requestData: { username },
+      responseData: { userId: row.user_id },
+      userIdOverride: row.user_id,
+      usernameOverride: row.username
+    });
 
     ok(
       reply,
@@ -299,6 +311,15 @@ export function registerAuthRoutes(app: FastifyInstance, config: AppConfig, pg: 
         u.userId,
         nextHash
       ]);
+    });
+
+    enqueueOperationLog(pg, request, {
+      module: "auth",
+      action: "change_password",
+      description: "change password",
+      status: "success",
+      requestData: {},
+      responseData: {}
     });
 
     ok(reply, {}, traceId);

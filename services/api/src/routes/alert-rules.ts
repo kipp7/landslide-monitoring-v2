@@ -1,12 +1,13 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AppConfig } from "../config";
-import { requireAdmin, type AdminAuthConfig } from "../authz";
+import { requirePermission, type AdminAuthConfig } from "../authz";
 import { fail, ok } from "../http";
 import type { PgPool } from "../postgres";
 import { queryOne, withPgClient } from "../postgres";
 import path from "node:path";
 import { loadAndCompileSchema } from "@lsmv2/validation";
+import { enqueueOperationLog } from "../operation-log";
 
 const ruleIdSchema = z.string().uuid();
 
@@ -86,7 +87,7 @@ function normalizeSeverity(v: unknown): "low" | "medium" | "high" | "critical" {
 }
 
 export function registerAlertRuleRoutes(app: FastifyInstance, config: AppConfig, pg: PgPool | null): void {
-  const adminCfg: AdminAuthConfig = { adminApiToken: config.adminApiToken };
+  const adminCfg: AdminAuthConfig = { adminApiToken: config.adminApiToken, jwtEnabled: Boolean(config.jwtAccessSecret) };
 
   const repoRoot = repoRootFromHere();
   const dslSchemaPath = path.join(repoRoot, "docs", "integrations", "rules", "rule-dsl.schema.json");
@@ -102,7 +103,7 @@ export function registerAlertRuleRoutes(app: FastifyInstance, config: AppConfig,
 
   app.get("/alert-rules", async (request, reply) => {
     const traceId = request.traceId;
-    if (!requireAdmin(adminCfg, request, reply)) return;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "alert:config"))) return;
     if (!pg) {
       fail(reply, 503, "PostgreSQL 未配置", traceId);
       return;
@@ -191,7 +192,7 @@ export function registerAlertRuleRoutes(app: FastifyInstance, config: AppConfig,
 
   app.get("/alert-rules/:ruleId", async (request, reply) => {
     const traceId = request.traceId;
-    if (!requireAdmin(adminCfg, request, reply)) return;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "alert:config"))) return;
     if (!pg) {
       fail(reply, 503, "PostgreSQL 未配置", traceId);
       return;
@@ -287,7 +288,7 @@ export function registerAlertRuleRoutes(app: FastifyInstance, config: AppConfig,
 
   app.post("/alert-rules", async (request, reply) => {
     const traceId = request.traceId;
-    if (!requireAdmin(adminCfg, request, reply)) return;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "alert:config"))) return;
     if (!pg) {
       fail(reply, 503, "PostgreSQL 未配置", traceId);
       return;
@@ -368,12 +369,21 @@ export function registerAlertRuleRoutes(app: FastifyInstance, config: AppConfig,
     });
 
     // Align with docs/integrations/api/06-alerts.md: create returns ruleVersion=1
+    enqueueOperationLog(pg, request, {
+      module: "alert",
+      action: "create_rule",
+      description: "create alert rule",
+      status: "success",
+      requestData: { ruleName: rule.ruleName, scope: rule.scope, isActive: rule.isActive },
+      responseData: { ruleId: inserted, ruleVersion: 1 }
+    });
+
     ok(reply, { ruleId: inserted, ruleVersion: 1 }, traceId);
   });
 
   app.put("/alert-rules/:ruleId", async (request, reply) => {
     const traceId = request.traceId;
-    if (!requireAdmin(adminCfg, request, reply)) return;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "alert:config"))) return;
     if (!pg) {
       fail(reply, 503, "PostgreSQL 未配置", traceId);
       return;
@@ -417,12 +427,21 @@ export function registerAlertRuleRoutes(app: FastifyInstance, config: AppConfig,
       return;
     }
 
+    enqueueOperationLog(pg, request, {
+      module: "alert",
+      action: "update_rule",
+      description: "update alert rule",
+      status: "success",
+      requestData: { ruleId, isActive },
+      responseData: { updatedAt: updated.updatedAt }
+    });
+
     ok(reply, { ruleId, isActive, updatedAt: updated.updatedAt }, traceId);
   });
 
   app.get("/alert-rules/:ruleId/versions", async (request, reply) => {
     const traceId = request.traceId;
-    if (!requireAdmin(adminCfg, request, reply)) return;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "alert:config"))) return;
     if (!pg) {
       fail(reply, 503, "PostgreSQL 未配置", traceId);
       return;
@@ -490,7 +509,7 @@ export function registerAlertRuleRoutes(app: FastifyInstance, config: AppConfig,
 
   app.get("/alert-rules/:ruleId/versions/:version", async (request, reply) => {
     const traceId = request.traceId;
-    if (!requireAdmin(adminCfg, request, reply)) return;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "alert:config"))) return;
     if (!pg) {
       fail(reply, 503, "PostgreSQL 未配置", traceId);
       return;
@@ -536,7 +555,7 @@ export function registerAlertRuleRoutes(app: FastifyInstance, config: AppConfig,
 
   app.post("/alert-rules/:ruleId/versions", async (request, reply) => {
     const traceId = request.traceId;
-    if (!requireAdmin(adminCfg, request, reply)) return;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "alert:config"))) return;
     if (!pg) {
       fail(reply, 503, "PostgreSQL 未配置", traceId);
       return;
@@ -613,6 +632,15 @@ export function registerAlertRuleRoutes(app: FastifyInstance, config: AppConfig,
     }
 
     // Align with docs/integrations/api/06-alerts.md: publish returns ruleVersion=N
+    enqueueOperationLog(pg, request, {
+      module: "alert",
+      action: "publish_rule_version",
+      description: "publish alert rule version",
+      status: "success",
+      requestData: { ruleId },
+      responseData: { ruleVersion: inserted }
+    });
+
     ok(reply, { ruleId, ruleVersion: inserted }, traceId);
   });
 }
