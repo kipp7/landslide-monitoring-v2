@@ -178,7 +178,7 @@
 
 **GET** `/telemetry/dlq`
 
-权限：`data:analysis`（当前实现为 admin token 保护，见 `ADMIN_API_TOKEN`）
+权限：`data:analysis`
 
 查询参数：
 - `page`, `pageSize`
@@ -216,7 +216,7 @@
 
 **GET** `/telemetry/dlq/{messageId}`
 
-权限：`data:analysis`（当前实现为 admin token 保护，见 `ADMIN_API_TOKEN`）
+权限：`data:analysis`
 
 响应（示例）：
 ```json
@@ -243,7 +243,7 @@
 
 **GET** `/telemetry/dlq/stats`
 
-权限：`data:analysis`（当前实现为 admin token 保护，见 `ADMIN_API_TOKEN`）
+权限：`data:analysis`
 
 查询参数：
 - `startTime`, `endTime`（可选，RFC3339；必须同时提供，用于按时间窗口统计）

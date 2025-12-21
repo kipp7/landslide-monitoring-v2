@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AppConfig } from "../config";
-import { requireAdmin, type AdminAuthConfig } from "../authz";
+import { requirePermission, type AdminAuthConfig } from "../authz";
 import { fail, ok } from "../http";
 import type { PgPool } from "../postgres";
 import { queryOne, withPgClient } from "../postgres";
@@ -41,11 +41,11 @@ const updateUserSchema = z
 type RoleRow = { role_id: string; role_name: string; display_name: string; description: string | null };
 
 export function registerUserRoutes(app: FastifyInstance, config: AppConfig, pg: PgPool | null): void {
-  const adminCfg: AdminAuthConfig = { adminApiToken: config.adminApiToken };
+  const adminCfg: AdminAuthConfig = { adminApiToken: config.adminApiToken, jwtEnabled: Boolean(config.jwtAccessSecret) };
 
   app.get("/roles", async (request, reply) => {
     const traceId = request.traceId;
-    if (!requireAdmin(adminCfg, request, reply)) return;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "user:view"))) return;
     if (!pg) {
       fail(reply, 503, "PostgreSQL 未配置", traceId);
       return;
@@ -72,7 +72,7 @@ export function registerUserRoutes(app: FastifyInstance, config: AppConfig, pg: 
 
   app.get("/permissions", async (request, reply) => {
     const traceId = request.traceId;
-    if (!requireAdmin(adminCfg, request, reply)) return;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "user:view"))) return;
     if (!pg) {
       fail(reply, 503, "PostgreSQL 未配置", traceId);
       return;
@@ -94,7 +94,7 @@ export function registerUserRoutes(app: FastifyInstance, config: AppConfig, pg: 
 
   app.get("/users", async (request, reply) => {
     const traceId = request.traceId;
-    if (!requireAdmin(adminCfg, request, reply)) return;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "user:view"))) return;
     if (!pg) {
       fail(reply, 503, "PostgreSQL 未配置", traceId);
       return;
@@ -200,7 +200,7 @@ export function registerUserRoutes(app: FastifyInstance, config: AppConfig, pg: 
 
   app.post("/users", async (request, reply) => {
     const traceId = request.traceId;
-    if (!requireAdmin(adminCfg, request, reply)) return;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "user:create"))) return;
     if (!pg) {
       fail(reply, 503, "PostgreSQL 未配置", traceId);
       return;
@@ -248,7 +248,7 @@ export function registerUserRoutes(app: FastifyInstance, config: AppConfig, pg: 
 
   app.get("/users/:userId", async (request, reply) => {
     const traceId = request.traceId;
-    if (!requireAdmin(adminCfg, request, reply)) return;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "user:view"))) return;
     if (!pg) {
       fail(reply, 503, "PostgreSQL 未配置", traceId);
       return;
@@ -346,7 +346,7 @@ export function registerUserRoutes(app: FastifyInstance, config: AppConfig, pg: 
 
   app.put("/users/:userId", async (request, reply) => {
     const traceId = request.traceId;
-    if (!requireAdmin(adminCfg, request, reply)) return;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "user:update"))) return;
     if (!pg) {
       fail(reply, 503, "PostgreSQL 未配置", traceId);
       return;
@@ -423,7 +423,7 @@ export function registerUserRoutes(app: FastifyInstance, config: AppConfig, pg: 
 
   app.delete("/users/:userId", async (request, reply) => {
     const traceId = request.traceId;
-    if (!requireAdmin(adminCfg, request, reply)) return;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "user:delete"))) return;
     if (!pg) {
       fail(reply, 503, "PostgreSQL 未配置", traceId);
       return;
@@ -453,7 +453,7 @@ export function registerUserRoutes(app: FastifyInstance, config: AppConfig, pg: 
 
   app.post("/users/:userId/reset-password", async (request, reply) => {
     const traceId = request.traceId;
-    if (!requireAdmin(adminCfg, request, reply)) return;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "user:update"))) return;
     if (!pg) {
       fail(reply, 503, "PostgreSQL 未配置", traceId);
       return;
@@ -489,4 +489,3 @@ export function registerUserRoutes(app: FastifyInstance, config: AppConfig, pg: 
     );
   });
 }
-

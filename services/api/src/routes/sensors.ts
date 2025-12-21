@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AppConfig } from "../config";
-import { requireAdmin, type AdminAuthConfig } from "../authz";
+import { requirePermission, type AdminAuthConfig } from "../authz";
 import { fail, ok } from "../http";
 import type { PgPool } from "../postgres";
 import { queryOne, withPgClient } from "../postgres";
@@ -27,11 +27,11 @@ type SensorRow = {
 };
 
 export function registerSensorRoutes(app: FastifyInstance, config: AppConfig, pg: PgPool | null): void {
-  const adminCfg: AdminAuthConfig = { adminApiToken: config.adminApiToken };
+  const adminCfg: AdminAuthConfig = { adminApiToken: config.adminApiToken, jwtEnabled: Boolean(config.jwtAccessSecret) };
 
   app.get("/sensors", async (request, reply) => {
     const traceId = request.traceId;
-    if (!requireAdmin(adminCfg, request, reply)) return;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "device:view"))) return;
     if (!pg) {
       fail(reply, 503, "PostgreSQL 未配置", traceId);
       return;
@@ -65,7 +65,7 @@ export function registerSensorRoutes(app: FastifyInstance, config: AppConfig, pg
 
   app.get("/devices/:deviceId/sensors", async (request, reply) => {
     const traceId = request.traceId;
-    if (!requireAdmin(adminCfg, request, reply)) return;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "device:view"))) return;
     if (!pg) {
       fail(reply, 503, "PostgreSQL 未配置", traceId);
       return;
@@ -132,7 +132,7 @@ export function registerSensorRoutes(app: FastifyInstance, config: AppConfig, pg
 
   app.put("/devices/:deviceId/sensors", async (request, reply) => {
     const traceId = request.traceId;
-    if (!requireAdmin(adminCfg, request, reply)) return;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "device:update"))) return;
     if (!pg) {
       fail(reply, 503, "PostgreSQL 未配置", traceId);
       return;

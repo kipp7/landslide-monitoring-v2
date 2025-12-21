@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AppConfig } from "../config";
-import { requireAdmin, type AdminAuthConfig } from "../authz";
+import { requirePermission, type AdminAuthConfig } from "../authz";
 import { fail, ok } from "../http";
 import type { PgPool } from "../postgres";
 import { queryOne, withPgClient } from "../postgres";
@@ -60,11 +60,11 @@ function previewText(value: string, maxLen: number): string {
 }
 
 export function registerTelemetryDlqRoutes(app: FastifyInstance, config: AppConfig, pg: PgPool | null): void {
-  const adminCfg: AdminAuthConfig = { adminApiToken: config.adminApiToken };
+  const adminCfg: AdminAuthConfig = { adminApiToken: config.adminApiToken, jwtEnabled: Boolean(config.jwtAccessSecret) };
 
   app.get("/telemetry/dlq/stats", async (request, reply) => {
     const traceId = request.traceId;
-    if (!requireAdmin(adminCfg, request, reply)) return;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:analysis"))) return;
     if (!pg) {
       fail(reply, 503, "PostgreSQL 未配置", traceId);
       return;
@@ -139,7 +139,7 @@ export function registerTelemetryDlqRoutes(app: FastifyInstance, config: AppConf
 
   app.get("/telemetry/dlq", async (request, reply) => {
     const traceId = request.traceId;
-    if (!requireAdmin(adminCfg, request, reply)) return;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:analysis"))) return;
     if (!pg) {
       fail(reply, 503, "PostgreSQL 未配置", traceId);
       return;
@@ -237,7 +237,7 @@ export function registerTelemetryDlqRoutes(app: FastifyInstance, config: AppConf
 
   app.get("/telemetry/dlq/:messageId", async (request, reply) => {
     const traceId = request.traceId;
-    if (!requireAdmin(adminCfg, request, reply)) return;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:analysis"))) return;
     if (!pg) {
       fail(reply, 503, "PostgreSQL 未配置", traceId);
       return;

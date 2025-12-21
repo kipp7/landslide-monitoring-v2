@@ -7,7 +7,7 @@ import { createKafkaPublisher } from "../kafka";
 import type { PgPool } from "../postgres";
 import { queryOne, withPgClient } from "../postgres";
 import { generateDeviceSecret, hashDeviceSecret } from "../device-secret";
-import { requireAdmin, type AdminAuthConfig } from "../authz";
+import { requirePermission, type AdminAuthConfig } from "../authz";
 
 const deviceIdSchema = z.string().uuid();
 
@@ -100,12 +100,12 @@ export function registerDeviceRoutes(
   config: AppConfig,
   pg: PgPool | null
 ): void {
-  const adminCfg: AdminAuthConfig = { adminApiToken: config.adminApiToken };
+  const adminCfg: AdminAuthConfig = { adminApiToken: config.adminApiToken, jwtEnabled: Boolean(config.jwtAccessSecret) };
   const kafkaPublisher = createKafkaPublisher(config);
 
   app.get("/devices", async (request, reply) => {
     const traceId = request.traceId;
-    if (!requireAdmin(adminCfg, request, reply)) return;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "device:view"))) return;
     if (!pg) {
       fail(reply, 503, "PostgreSQL 未配置", traceId);
       return;
@@ -189,7 +189,7 @@ export function registerDeviceRoutes(
 
   app.get("/devices/:deviceId", async (request, reply) => {
     const traceId = request.traceId;
-    if (!requireAdmin(adminCfg, request, reply)) return;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "device:view"))) return;
     if (!pg) {
       fail(reply, 503, "PostgreSQL 未配置", traceId);
       return;
@@ -224,7 +224,7 @@ export function registerDeviceRoutes(
 
   app.post("/devices", async (request, reply) => {
     const traceId = request.traceId;
-    if (!requireAdmin(adminCfg, request, reply)) return;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "device:create"))) return;
     if (!pg) {
       fail(reply, 503, "PostgreSQL 未配置", traceId);
       return;
@@ -277,7 +277,7 @@ export function registerDeviceRoutes(
 
   app.put("/devices/:deviceId", async (request, reply) => {
     const traceId = request.traceId;
-    if (!requireAdmin(adminCfg, request, reply)) return;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "device:update"))) return;
     if (!pg) {
       fail(reply, 503, "PostgreSQL 未配置", traceId);
       return;
@@ -334,7 +334,7 @@ export function registerDeviceRoutes(
 
   app.put("/devices/:deviceId/revoke", async (request, reply) => {
     const traceId = request.traceId;
-    if (!requireAdmin(adminCfg, request, reply)) return;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "device:update"))) return;
     if (!pg) {
       fail(reply, 503, "PostgreSQL 未配置", traceId);
       return;
@@ -370,7 +370,7 @@ export function registerDeviceRoutes(
 
   app.post("/devices/:deviceId/commands", async (request, reply) => {
     const traceId = request.traceId;
-    if (!requireAdmin(adminCfg, request, reply)) return;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "device:control"))) return;
     if (!pg) {
       fail(reply, 503, "PostgreSQL 未配置", traceId);
       return;
@@ -455,7 +455,7 @@ export function registerDeviceRoutes(
 
   app.get("/devices/:deviceId/commands", async (request, reply) => {
     const traceId = request.traceId;
-    if (!requireAdmin(adminCfg, request, reply)) return;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "device:control"))) return;
     if (!pg) {
       fail(reply, 503, "PostgreSQL 未配置", traceId);
       return;
@@ -560,7 +560,7 @@ export function registerDeviceRoutes(
 
   app.get("/devices/:deviceId/commands/:commandId", async (request, reply) => {
     const traceId = request.traceId;
-    if (!requireAdmin(adminCfg, request, reply)) return;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "device:control"))) return;
     if (!pg) {
       fail(reply, 503, "PostgreSQL 未配置", traceId);
       return;
