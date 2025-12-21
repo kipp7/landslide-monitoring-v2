@@ -10,6 +10,7 @@
 最后更新时间：2025-12-21（阶段 5 已完成：固件模拟器 + Stage5Regression 回归基线；硬件联调待启动）
 - 2025-12-21：非硬件模块收口推进（安全与访问控制 + 运维审计）：API 端点从 admin token 兜底升级为基于 `permission_code` 的 RBAC 校验；新增 `role_permissions` 默认种子；Web 增加 JWT 登录页与 token refresh，导航/页面按权限可见；关键操作写入 `operation_logs` 便于运维审计。
 - 2025-12-21：单机启用 JWT/RBAC 的一键引导：新增 `infra/compose/scripts/enable-jwt-auth.ps1`（生成 JWT secrets + 可选 ADMIN_API_TOKEN 并写入 gitignored 的 `services/api/.env`），补充单机部署指引与 smoke 脚本，降低首次启用成本。
+- 2025-12-21：回归基线流程收口：PR 模板与操作指南补齐本地门禁（`run-quality-gates + lint + build`）并明确 Web/API 变更需以 `-Stage4Regression` 留证，降低“接口/契约漂移”风险。
 - 2025-12-20：补齐 OpenAPI 契约缺口（api-service 实现 `/auth/*`、`/users`/`/roles`/`/permissions`、`/system/configs`、`/system/logs/*`、`/data/raw|statistics|export`），并为 `operation_logs`/`api_logs` 增加 DEFAULT 分区以避免单机环境插入失败；阶段 5 Next Actions 不变。
 - 2025-12-20：阶段 5 落地：新增固件模拟器 `scripts/dev/firmware-sim.js`（schema 校验 + state 持久化 + 重连退避 + ping/set_config/reboot），并在 `infra/compose/scripts/e2e-smoke-test.ps1` 增加 `-Stage5Regression` 预置回归；新增 `docs/guides/roadmap/stage5-acceptance.md`。
 - 2025-12-20：补齐 PresenceEvent 可选链路：ingest-service 订阅 `presence/+` 写入 `presence.events.v1`，新增 `presence-recorder` 落库 `device_presence`，并把 presence 断言纳入 `Stage1Regression/Stage2Regression/Stage5Regression` 回归基线。
@@ -105,10 +106,9 @@ M3（阶段 2：可告警）目标：
 
 ## 3) 下一步（Next Actions，按优先级）
 
-1) 完善“非硬件模块”收口：按 `docs/features/prd/security-and-access-control.md` 与 `docs/features/prd/system-operations-and-observability.md`，补齐管理端（用户/角色/权限）与运维端（configs/logs）在 Web 的最小可用界面，并以 `run-quality-gates + lint + build` 作为门禁
-2) 巩固回归基线：将 `-Stage4Regression` 作为“Web/API 契约一致性 + 字典渲染”的常规回归；改动涉及接口/消息/存储时必须更新对应 docs 并留证
-3) 真实固件联调（硬件最后）：按 `docs/integrations/mqtt/*` 与 `docs/integrations/firmware/README.md`，让真实设备跑通 telemetry + commands，并以 `-Stage5Regression` 作为回归基线
-4) 固件细节沉淀：将真实固件的“身份包存储/重连退避/命令回执”实现细节沉淀到 `docs/integrations/firmware/`（含可复用代码片段与踩坑记录）
+1) 巩固回归基线：将 `-Stage4Regression` 作为“Web/API 契约一致性 + 字典渲染”的常规回归；改动涉及接口/消息/存储时必须更新对应 docs 并留证
+2) 真实固件联调（硬件最后）：按 `docs/integrations/mqtt/*` 与 `docs/integrations/firmware/README.md`，让真实设备跑通 telemetry + commands，并以 `-Stage5Regression` 作为回归基线
+3) 固件细节沉淀：将真实固件的“身份包存储/重连退避/命令回执”实现细节沉淀到 `docs/integrations/firmware/`（含可复用代码片段与踩坑记录）
 
 ## 4) 关键入口（新 AI 只读这些就能上手）
 

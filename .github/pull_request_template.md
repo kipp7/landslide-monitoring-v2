@@ -29,7 +29,10 @@
 ## 验证方式（必须填写）
 
 - [ ] 已运行 `python docs/tools/run-quality-gates.py`
+- [ ] 已运行 `npm run lint`
+- [ ] 已运行 `npm run build`
 - [ ] 若修改了 OpenAPI：已运行 `python docs/tools/update-openapi-stamp.py`
+- [ ] 若改动涉及 Web/API/契约（接口、schema、topics、存储表结构等）：已运行 `powershell -NoProfile -ExecutionPolicy Bypass -File infra/compose/scripts/e2e-smoke-test.ps1 -Stage4Regression`
 - [ ] 其他验证（如有）：
   - 
 
@@ -38,6 +41,7 @@
 当出现 “CI 偶现失败 / Docker 拉不起 / 环境差异” 时，请附上证据材料（日志/截图/压缩包），便于复盘与复现：
 
 - 单机证据收集脚本：`infra/compose/scripts/collect-evidence.ps1`
+- 端到端回归证据：`infra/compose/scripts/e2e-smoke-test.ps1` 会在 `backups/evidence/` 下自动生成证据包（注意：`backups/` 被 `.gitignore` 忽略，不要提交到仓库；需要时把证据路径/压缩包附在 PR 里）
 
 ## 风险与回滚（必须填写）
 

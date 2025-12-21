@@ -5,7 +5,10 @@
 ## 0) 前置条件（强制）
 
 - 你已经从 `main` 拉出分支（不要在 `main` 上改）
-- 本地门禁通过：`python docs/tools/run-quality-gates.py`
+- 本地门禁通过：
+  - `python docs/tools/run-quality-gates.py`
+  - `npm run lint`
+  - `npm run build`
 - 你知道本次变更的范围：docs / infra / services / apps
 
 ## 1) 本地提交（最小闭环）
@@ -90,6 +93,24 @@ PR 内容必须包含：
 - **立刻删除**敏感内容（不要尝试“掩码一下”）
 - 使用 `env.example` + `.env`（不要提交 `.env`）
 - 如已推送到远端：立刻开 Incident 复盘（见 `docs/incidents/`）
+
+## 3.4 Web/API 契约一致性回归（推荐作为常规验收）
+
+当本次变更涉及以下任意一类时，建议（团队默认）在本地跑一次 `-Stage4Regression` 作为“闭环证据”：
+
+- Web 页面/路由/权限可见性
+- API 端点、OpenAPI、schema/examples
+- Kafka topics、MQTT topic 约束
+- 存储表结构/DDL、关键查询口径
+
+命令：
+
+- `powershell -NoProfile -ExecutionPolicy Bypass -File infra/compose/scripts/e2e-smoke-test.ps1 -Stage4Regression`
+
+说明：
+
+- 脚本会在 `backups/evidence/` 生成证据包；`backups/` 被 `.gitignore` 忽略，不要提交到仓库。
+- 需要留证时，把证据路径或压缩包附在 PR（描述/评论）中即可。
 
 ## 4) 合并 PR（强制 Squash）
 
