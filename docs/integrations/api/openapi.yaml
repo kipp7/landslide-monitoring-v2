@@ -2025,6 +2025,68 @@ paths:
         default:
           $ref: "#/components/responses/ErrorResponse"
 
+  /gps/deformations/{deviceId}/series:
+    get:
+      tags: [gps]
+      summary: Get GPS deformation series by deviceId
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: startTime
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: endTime
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: interval
+          in: query
+          required: false
+          schema: { type: string, enum: [1m, 5m, 1h, 1d], default: 1h }
+        - name: latKey
+          in: query
+          required: false
+          schema: { type: string, default: gps_latitude }
+        - name: lonKey
+          in: query
+          required: false
+          schema: { type: string, default: gps_longitude }
+        - name: altKey
+          in: query
+          required: false
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 200000, default: 20000 }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/GpsDeformationSeries"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
 components:
   securitySchemes:
     BearerAuth:
@@ -3134,3 +3196,56 @@ components:
         pointsCount: { type: integer, minimum: 1 }
         baseline:
           $ref: "#/components/schemas/GpsBaselinePoint"
+
+    GpsDeformationBaseline:
+      type: object
+      required: [latitude, longitude, method, computedAt]
+      properties:
+        latitude: { type: number }
+        longitude: { type: number }
+        altitude: { type: number, nullable: true }
+        positionAccuracyMeters: { type: number, nullable: true }
+        satelliteCount: { type: integer, nullable: true }
+        notes: { type: string, nullable: true }
+        method: { type: string, enum: [auto, manual] }
+        pointsCount: { type: integer, nullable: true }
+        computedAt: { type: string, format: date-time }
+
+    GpsDeformationPoint:
+      type: object
+      required: [ts, latitude, longitude, altitude, horizontalMeters, verticalMeters, distanceMeters, counts]
+      properties:
+        ts: { type: string, format: date-time }
+        latitude: { type: number }
+        longitude: { type: number }
+        altitude: { type: number, nullable: true }
+        horizontalMeters: { type: number }
+        verticalMeters: { type: number, nullable: true }
+        distanceMeters: { type: number }
+        counts:
+          type: object
+          required: [lat, lon, alt]
+          properties:
+            lat: { type: integer, minimum: 0 }
+            lon: { type: integer, minimum: 0 }
+            alt: { type: integer, minimum: 0 }
+
+    GpsDeformationSeries:
+      type: object
+      required: [deviceId, interval, keys, baseline, points]
+      properties:
+        deviceId: { type: string, format: uuid }
+        interval: { type: string, enum: [1m, 5m, 1h, 1d] }
+        keys:
+          type: object
+          required: [latKey, lonKey, altKey]
+          properties:
+            latKey: { type: string }
+            lonKey: { type: string }
+            altKey: { type: string, nullable: true }
+        baseline:
+          $ref: "#/components/schemas/GpsDeformationBaseline"
+        points:
+          type: array
+          items:
+            $ref: "#/components/schemas/GpsDeformationPoint"
