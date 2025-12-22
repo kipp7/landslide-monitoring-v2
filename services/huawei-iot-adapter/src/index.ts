@@ -100,14 +100,14 @@ async function main(): Promise<void> {
     const body = parsed.data;
     const deviceId = (body.deviceId ?? body.device_id ?? "").trim();
     const metrics = (body.metrics ?? body.data) ?? {};
-    const eventTs = (body.eventTs ?? body.event_ts ?? null) as string | null;
+    const eventTs = body.eventTs ?? body.event_ts ?? null;
     const seq = typeof body.seq === "number" ? body.seq : null;
 
     if (!deviceId) {
       reply.code(400).send({ success: false, message: "missing deviceId", traceId });
       return;
     }
-    if (!metrics || Object.keys(metrics).length === 0) {
+    if (Object.keys(metrics).length === 0) {
       reply.code(400).send({ success: false, message: "missing metrics", traceId });
       return;
     }
@@ -140,9 +140,8 @@ async function main(): Promise<void> {
   logger.info({ host: config.httpHost, port: config.httpPort }, "huawei-iot-adapter started");
 }
 
-void main().catch((err) => {
-  // eslint-disable-next-line no-console
-  console.error(err);
+void main().catch((err: unknown) => {
+  const msg = err instanceof Error ? err.stack ?? err.message : String(err);
+  console.error(msg);
   process.exit(1);
 });
-
