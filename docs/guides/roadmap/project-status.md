@@ -14,6 +14,7 @@
 - 2025-12-21：Web 接口封装一致性收口（不改 UI）：统一走 `apps/web/lib/v2Api.ts`（新增无 body 的 `apiPut`，移除直连 `fetch`），并清理未使用的遗留 IoT API 配置代码，降低维护成本与误用风险。
 - 2025-12-21：Web 代码架构细化（不改 UI）：引入 domain API 模块（`apps/web/lib/api/*`），将 stations/ops 等页面的请求拼装从 UI 层下沉到 API 层，降低重复与耦合。
 - 2025-12-21：Web 架构继续收口（不改 UI）：补齐 alerts/admin/auth/dashboard/devices/sensors 的 domain API 模块，并将相应页面与 hooks 迁移到 API 层调用，减少重复类型与散落的请求拼装。
+- 2025-12-21：Device Management 页面收口（不改 UI）：将 stations/devices/commands/events/notifications 等请求统一下沉到 `apps/web/lib/api/devices.ts` 与 `apps/web/lib/api/stations.ts`，移除页面内的路径拼装与散落调用。
 - 2025-12-20：补齐 OpenAPI 契约缺口（api-service 实现 `/auth/*`、`/users`/`/roles`/`/permissions`、`/system/configs`、`/system/logs/*`、`/data/raw|statistics|export`），并为 `operation_logs`/`api_logs` 增加 DEFAULT 分区以避免单机环境插入失败；阶段 5 Next Actions 不变。
 - 2025-12-20：阶段 5 落地：新增固件模拟器 `scripts/dev/firmware-sim.js`（schema 校验 + state 持久化 + 重连退避 + ping/set_config/reboot），并在 `infra/compose/scripts/e2e-smoke-test.ps1` 增加 `-Stage5Regression` 预置回归；新增 `docs/guides/roadmap/stage5-acceptance.md`。
 - 2025-12-20：补齐 PresenceEvent 可选链路：ingest-service 订阅 `presence/+` 写入 `presence.events.v1`，新增 `presence-recorder` 落库 `device_presence`，并把 presence 断言纳入 `Stage1Regression/Stage2Regression/Stage5Regression` 回归基线。

@@ -21,12 +21,17 @@ import useDeviceList from '../hooks/useDeviceList'
 import useDeviceShadow from '../hooks/useDeviceShadow'
 import useSensors from '../hooks/useSensors'
 import {
-  apiGetJson,
-  apiJson,
-  apiPut,
-  apiPutJson,
-  type ApiSuccessResponse,
-} from '../../lib/v2Api'
+  createDevice,
+  createDeviceCommand,
+  getDeviceSensors,
+  listDeviceCommandEvents,
+  listDeviceCommandNotifications,
+  listDeviceCommands,
+  markDeviceCommandNotificationRead,
+  putDeviceSensors,
+  revokeDevice,
+} from '../../lib/api/devices'
+import { listStations } from '../../lib/api/stations'
 
 const { Title, Text } = Typography
 
@@ -41,11 +46,6 @@ type StationRow = {
   stationCode: string
   stationName: string
   status: 'active' | 'inactive' | 'maintenance'
-}
-
-type StationListResponse = {
-  list: StationRow[]
-  pagination: { page: number; pageSize: number; total: number; totalPages: number }
 }
 
 type CreateDeviceResponse = {
@@ -65,27 +65,12 @@ type DeviceCommand = {
   updatedAt: string
 }
 
-type PaginatedDeviceCommands = {
-  list: DeviceCommand[]
-  pagination: { page: number; pageSize: number; total: number; totalPages: number }
-}
-
-type CreateDeviceCommandResponse = {
-  commandId: string
-  status: 'queued' | 'sent' | 'acked' | 'failed' | 'timeout'
-}
-
 type DeviceSensorRow = {
   sensorKey: string
   status: 'enabled' | 'disabled' | 'missing'
   displayName: string
   unit: string
   dataType: 'float' | 'int' | 'bool' | 'string'
-}
-
-type DeviceSensorsResponse = {
-  deviceId: string
-  list: DeviceSensorRow[]
 }
 
 type PaginatedDeviceCommandEvents = {
@@ -151,9 +136,7 @@ export default function DeviceManagementPage() {
   const fetchStations = useCallback(async () => {
     try {
       setStationsLoading(true)
-      const json = await apiGetJson<ApiSuccessResponse<StationListResponse>>(
-        '/api/v1/stations?page=1&pageSize=200'
-      )
+      const json = await listStations(1, 200)
       setStations(json.data?.list ?? [])
     } catch {
       setStations([])
@@ -191,7 +174,7 @@ export default function DeviceManagementPage() {
 
     setCreateDeviceLoading(true)
     try {
-      const json = await apiJson<ApiSuccessResponse<CreateDeviceResponse>>('/api/v1/devices', {
+      const json = await createDevice({
         deviceName: values.deviceName,
         deviceType: values.deviceType,
         stationId: values.stationId || null,
@@ -216,7 +199,7 @@ export default function DeviceManagementPage() {
       okButtonProps: { danger: true },
       cancelText: '取消',
       onOk: async () => {
-        await apiPut<ApiSuccessResponse<unknown>>(`/api/v1/devices/${encodeURIComponent(selectedDeviceId)}/revoke`)
+        await revokeDevice(selectedDeviceId)
         message.success('已吊销')
         await refetch()
       },
@@ -249,9 +232,7 @@ export default function DeviceManagementPage() {
     }
     try {
       setDeviceSensorsLoading(true)
-      const json = await apiGetJson<ApiSuccessResponse<DeviceSensorsResponse>>(
-        `/api/v1/devices/${encodeURIComponent(selectedDeviceId)}/sensors`
-      )
+      const json = await getDeviceSensors(selectedDeviceId)
       setDeviceSensors(json.data?.list ?? [])
     } catch {
       setDeviceSensors([])
@@ -268,9 +249,10 @@ export default function DeviceManagementPage() {
     if (!selectedDeviceId) return
     try {
       setDeviceSensorsLoading(true)
-      await apiPutJson<ApiSuccessResponse<unknown>>(`/api/v1/devices/${encodeURIComponent(selectedDeviceId)}/sensors`, {
-        sensors: deviceSensors.map((s) => ({ sensorKey: s.sensorKey, status: s.status })),
-      })
+      await putDeviceSensors(
+        selectedDeviceId,
+        deviceSensors.map((s) => ({ sensorKey: s.sensorKey, status: s.status }))
+      )
       message.success('已保存传感器声明')
       await fetchDeviceSensors()
     } catch (caught) {
@@ -310,14 +292,10 @@ export default function DeviceManagementPage() {
 
   const fetchCommandAudit = useCallback(async () => {
     if (!selectedDeviceId) return
-    const params = new URLSearchParams({ page: '1', pageSize: '50' })
-    if (auditCommandId) params.set('commandId', auditCommandId)
 
     try {
       setEventsLoading(true)
-      const json = await apiGetJson<ApiSuccessResponse<PaginatedDeviceCommandEvents>>(
-        `/api/v1/devices/${encodeURIComponent(selectedDeviceId)}/command-events?${params.toString()}`
-      )
+      const json = await listDeviceCommandEvents(selectedDeviceId, { page: 1, pageSize: 50, commandId: auditCommandId })
       setEvents(json.data?.list ?? [])
     } catch {
       setEvents([])
@@ -327,9 +305,7 @@ export default function DeviceManagementPage() {
 
     try {
       setNotificationsLoading(true)
-      const json = await apiGetJson<ApiSuccessResponse<PaginatedDeviceCommandNotifications>>(
-        `/api/v1/devices/${encodeURIComponent(selectedDeviceId)}/command-notifications?${params.toString()}`
-      )
+      const json = await listDeviceCommandNotifications(selectedDeviceId, { page: 1, pageSize: 50, commandId: auditCommandId })
       setNotifications(json.data?.list ?? [])
     } catch {
       setNotifications([])
@@ -346,10 +322,7 @@ export default function DeviceManagementPage() {
   const markNotificationRead = async (notificationId: string) => {
     if (!selectedDeviceId) return
     try {
-      await apiPutJson<ApiSuccessResponse<unknown>>(
-        `/api/v1/devices/${encodeURIComponent(selectedDeviceId)}/command-notifications/${encodeURIComponent(notificationId)}/read`,
-        {}
-      )
+      await markDeviceCommandNotificationRead(selectedDeviceId, notificationId)
       message.success('已标记已读')
       await fetchCommandAudit()
     } catch (caught) {
@@ -365,9 +338,7 @@ export default function DeviceManagementPage() {
     if (!selectedDeviceId) return
     try {
       setCommandsLoading(true)
-      const json = await apiGetJson<ApiSuccessResponse<PaginatedDeviceCommands>>(
-        `/api/v1/devices/${encodeURIComponent(selectedDeviceId)}/commands?page=1&pageSize=20`
-      )
+      const json = await listDeviceCommands(selectedDeviceId, { page: 1, pageSize: 20 })
       setCommands(json.data?.list ?? [])
     } catch {
       setCommands([])
@@ -392,10 +363,7 @@ export default function DeviceManagementPage() {
     }
 
     try {
-      const json = await apiJson<ApiSuccessResponse<CreateDeviceCommandResponse>>(
-        `/api/v1/devices/${encodeURIComponent(selectedDeviceId)}/commands`,
-        { commandType: values.commandType, payload }
-      )
+      const json = await createDeviceCommand(selectedDeviceId, { commandType: values.commandType, payload })
       message.success(`命令已创建：${json.data.commandId}（${json.data.status}）`)
       commandForm.resetFields()
       await fetchCommands()
