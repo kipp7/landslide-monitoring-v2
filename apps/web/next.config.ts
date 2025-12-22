@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Workaround (Windows): avoid `.next/trace` permission/lock issues that can hang `next build`.
+  distDir: '.next_web',
   reactStrictMode: false, // 关闭严格模式，防止重复渲染问题
   transpilePackages: ["cesium"], // 让 Next.js 处理 Cesium 依赖
 
