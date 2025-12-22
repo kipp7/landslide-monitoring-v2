@@ -14,6 +14,7 @@ tags:
   - name: devices
   - name: stations
   - name: data
+  - name: gps
   - name: alerts
   - name: system
 
@@ -1894,6 +1895,136 @@ paths:
         default:
           $ref: "#/components/responses/ErrorResponse"
 
+  /gps/baselines:
+    get:
+      tags: [gps]
+      summary: List GPS baselines
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: keyword
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [list, pagination]
+                        properties:
+                          list:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/GpsBaseline"
+                          pagination:
+                            $ref: "#/components/schemas/Pagination"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /gps/baselines/{deviceId}:
+    get:
+      tags: [gps]
+      summary: Get GPS baseline by deviceId
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/GpsBaseline"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+    put:
+      tags: [gps]
+      summary: Upsert GPS baseline (manual)
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertGpsBaselineRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+    delete:
+      tags: [gps]
+      summary: Delete GPS baseline
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
 components:
   securitySchemes:
     BearerAuth:
@@ -2967,3 +3098,39 @@ components:
             properties:
               key: { type: string }
               value: { type: string }
+
+    GpsBaselinePoint:
+      type: object
+      required: [latitude, longitude]
+      additionalProperties: false
+      properties:
+        latitude: { type: number }
+        longitude: { type: number }
+        altitude: { type: number }
+        positionAccuracyMeters: { type: number }
+        satelliteCount: { type: integer, minimum: 1 }
+        notes: { type: string }
+
+    GpsBaseline:
+      type: object
+      required: [deviceId, deviceName, method, baseline, computedAt, updatedAt]
+      properties:
+        deviceId: { type: string, format: uuid }
+        deviceName: { type: string }
+        stationId: { type: string, format: uuid, nullable: true }
+        method: { type: string, enum: [auto, manual] }
+        pointsCount: { type: integer, nullable: true }
+        baseline:
+          $ref: "#/components/schemas/GpsBaselinePoint"
+        computedAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    UpsertGpsBaselineRequest:
+      type: object
+      required: [baseline]
+      additionalProperties: false
+      properties:
+        method: { type: string, enum: [auto, manual] }
+        pointsCount: { type: integer, minimum: 1 }
+        baseline:
+          $ref: "#/components/schemas/GpsBaselinePoint"
