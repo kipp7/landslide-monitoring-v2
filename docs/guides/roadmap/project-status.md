@@ -8,6 +8,7 @@
 - 本页只记录“当前状态与下一步”，历史细节放到 `docs/incidents/` 或 PR/commit 记录中。
 
 最后更新时间：2025-12-22（阶段 5 已完成：固件模拟器 + Stage5Regression 回归基线；硬件联调待启动）
+- 2025-12-22：WS-G 落地收口：合并 `/ops/system-monitor` + `/ops/debug-api` 与旧路径跳转，并将 Next.js Windows 构建输出目录切换为 `.next_v2` 规避 `.next_web/trace` 的 EPERM 卡点（见 PR #79）。
 - 2025-12-22：运维工具（WS-G）：新增 Web 运维页 `/ops/system-monitor` 与 `/ops/debug-api`（仅 GET；RBAC 保护），并提供旧路径重定向，便于排查接口与基础设施状态。
 - 2025-12-22：GPS 基线管理（WS-D.1）：补齐 v2 API 的 `/api/v1/gps/baselines`（list/get/upsert/delete）实现与 OpenAPI 契约文档，支持站点/设备的基线维护与回归留证。
 - 2025-12-22：本地开发体验：api-service 开启 Web 开发用 CORS（允许 `http://localhost:3000` 调用 `http://localhost:8080`），解除登录/接口调试的跨域阻塞。
