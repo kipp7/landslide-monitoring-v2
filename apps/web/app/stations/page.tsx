@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
 import { Button, Card, Form, Input, Modal, Select, Space, Table, Tag, Typography, message } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
 import {
@@ -199,13 +200,16 @@ export default function StationsPage() {
             {
               title: 'Location',
               render: (_: unknown, r: StationRow) =>
-                r.latitude && r.longitude ? `${r.latitude.toFixed(6)}, ${r.longitude.toFixed(6)}` : '-',
+                r.latitude !== null && r.longitude !== null ? `${r.latitude.toFixed(6)}, ${r.longitude.toFixed(6)}` : '-',
             },
             { title: 'Updated', dataIndex: 'updatedAt', render: (v: string) => <span className="font-mono">{v}</span> },
             {
               title: 'Actions',
               render: (_: unknown, r: StationRow) => (
                 <Space>
+                  <Link href={`/stations/${r.stationId}`}>
+                    <Button size="small">详情</Button>
+                  </Link>
                   <Button size="small" onClick={() => void openEdit(r.stationId)}>
                     编辑
                   </Button>
