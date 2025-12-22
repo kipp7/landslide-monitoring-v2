@@ -55,7 +55,12 @@ export function getApiAuthHeaders(): Record<string, string> {
 export function getApiBaseUrl(): string {
   const runtime = readLocalStorage('LSMV2_API_BASE_URL')
   const base = runtime ?? process.env.NEXT_PUBLIC_API_BASE_URL
-  return base ? base.replace(/\/+$/, '') : ''
+  if (base && base.trim()) return base.replace(/\/+$/, '')
+
+  // Local dev fallback: avoid accidental same-origin /api calls to the Next dev server (3000).
+  if (process.env.NODE_ENV === 'development') return 'http://localhost:8080'
+
+  return ''
 }
 
 export function buildApiUrl(path: string): string {

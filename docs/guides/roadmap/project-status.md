@@ -7,7 +7,8 @@
 - 每次合并一个 PR 到 `main`，如果它改变了项目阶段/里程碑/下一步，必须更新本页。
 - 本页只记录“当前状态与下一步”，历史细节放到 `docs/incidents/` 或 PR/commit 记录中。
 
-最后更新时间：2025-12-21（阶段 5 已完成：固件模拟器 + Stage5Regression 回归基线；硬件联调待启动）
+最后更新时间：2025-12-22（阶段 5 已完成：固件模拟器 + Stage5Regression 回归基线；硬件联调待启动）
+- 2025-12-22：本地开发体验：api-service 开启 Web 开发用 CORS（允许 `http://localhost:3000` 调用 `http://localhost:8080`），解除登录/接口调试的跨域阻塞。
 - 2025-12-21：非硬件模块收口推进（安全与访问控制 + 运维审计）：API 端点从 admin token 兜底升级为基于 `permission_code` 的 RBAC 校验；新增 `role_permissions` 默认种子；Web 增加 JWT 登录页与 token refresh，导航/页面按权限可见；关键操作写入 `operation_logs` 便于运维审计。
 - 2025-12-21：单机启用 JWT/RBAC 的一键引导：新增 `infra/compose/scripts/enable-jwt-auth.ps1`（生成 JWT secrets + 可选 ADMIN_API_TOKEN 并写入 gitignored 的 `services/api/.env`），补充单机部署指引与 smoke 脚本，降低首次启用成本。
 - 2025-12-21：回归基线流程收口：PR 模板与操作指南补齐本地门禁（`run-quality-gates + lint + build`）并明确 Web/API 变更需以 `-Stage4Regression` 留证，降低“接口/契约漂移”风险。
