@@ -124,11 +124,11 @@
 | WS-B |  |  |  | backlog |  |  |
 | WS-C |  |  |  | backlog |  |  |
 | WS-D.1 | codex | `feat/ws-d/baselines-contract` | https://github.com/kipp7/landslide-monitoring-v2/pull/77 | done |  | 基准点（Baseline）契约/数据模型/API 骨架 |
-| WS-D.2 |  |  |  | backlog | WS-D.1 | 形变计算与趋势（API + 查询） |
+| WS-D.2 | codex | `feat/ws-d/deformation-trends` |  | claimed | WS-D.1 | 仅做“API + 查询”闭环：新增 `/api/v1/gps/deformations/*`（命名待确认），优先 ClickHouse 读；避免改动现有 Web UI，后续再单独对接页面 |
 | WS-E |  |  |  | backlog |  |  |
 | WS-F |  |  |  | backlog |  |  |
 | WS-G | codex | `feat/ws-g/ops-system-monitor` | https://github.com/kipp7/landslide-monitoring-v2/pull/79 | done |  | Web: `/ops/system-monitor` + `/ops/debug-api` + legacy redirects + Windows distDir workaround (`.next_v2`) |
-| WS-H | codex | `docs/ws-h/claim` |  | claimed |  | AI predictions plugin/worker |
+| WS-H | codex | `docs/ws-h/claim` | https://github.com/kipp7/landslide-monitoring-v2/pull/83 | in_review |  | AI predictions plugin/worker |
 
 ### 4.4 对齐与验收（总集成人做）
 
