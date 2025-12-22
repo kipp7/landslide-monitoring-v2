@@ -123,7 +123,7 @@
 | WS-A |  |  |  | backlog |  |  |
 | WS-B |  |  |  | backlog |  |  |
 | WS-C |  |  |  | backlog |  |  |
-| WS-D.1 | codex | `feat/ws-d/baselines-contract` |  | claimed |  | 基准点（Baseline）契约/数据模型/API 骨架 |
+| WS-D.1 | codex | `feat/ws-d/baselines-contract` | https://github.com/kipp7/landslide-monitoring-v2/pull/77 | in_review |  | 基准点（Baseline）契约/数据模型/API 骨架 |
 | WS-D.2 |  |  |  | backlog | WS-D.1 | 形变计算与趋势（API + 查询） |
 | WS-E |  |  |  | backlog |  |  |
 | WS-F |  |  |  | backlog |  |  |
