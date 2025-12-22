@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ai.predictions.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "prediction_id",
+    "created_ts",
+    "device_id",
+    "model_key",
+    "horizon_seconds",
+    "predicted_ts",
+    "risk_score",
+    "payload"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "prediction_id": { "type": "string", "format": "uuid" },
+    "created_ts": { "type": "string", "format": "date-time" },
+    "device_id": { "type": "string", "format": "uuid" },
+    "station_id": { "type": ["string", "null"], "format": "uuid" },
+    "model_key": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "model_version": { "type": ["string", "null"], "maxLength": 64 },
+    "horizon_seconds": { "type": "integer", "minimum": 0, "maximum": 31536000 },
+    "predicted_ts": { "type": "string", "format": "date-time" },
+    "risk_score": { "type": "number", "minimum": 0, "maximum": 1 },
+    "risk_level": { "type": ["string", "null"], "enum": ["low", "medium", "high", null] },
+    "explain": { "type": ["string", "null"], "maxLength": 2000 },
+    "payload": { "type": "object", "additionalProperties": true }
+  }
+}
+

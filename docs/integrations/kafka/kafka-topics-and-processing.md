@@ -21,6 +21,10 @@
 - `presence.events.v1`
   - 设备在线/离线事件（可选）：固件发布 PresenceEvent，经 ingest-service 校验后写入 Kafka
   - 分区键：`device_id`
+- `ai.predictions.v1`
+  - AI 预测/专家结论输出（可回放、可落库、可追溯）
+  - 生产者示例：`ai-prediction-worker`
+  - 分区键：`device_id`
 
 机器可读（Schema）：
 
@@ -29,6 +33,7 @@
 - device.command_acks.v1：`docs/integrations/kafka/schemas/device-command-acks.v1.schema.json`
 - device.command_events.v1：`docs/integrations/kafka/schemas/device-command-events.v1.schema.json`
 - presence.events.v1：`docs/integrations/kafka/schemas/presence-events.v1.schema.json`
+- ai.predictions.v1：`docs/integrations/kafka/schemas/ai-predictions.v1.schema.json`
 
 ## 2. 分区与消费组建议
 

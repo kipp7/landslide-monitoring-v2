@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "prediction_id": "02b30b56-3e2b-45ef-9b6b-23e1d8cbe9b7",
+  "created_ts": "2025-12-22T00:00:00Z",
+  "device_id": "2c1f2d8e-2bb7-4f58-bb6a-6c2a0f4a7a4c",
+  "station_id": null,
+  "model_key": "heuristic.v1",
+  "model_version": "1",
+  "horizon_seconds": 3600,
+  "predicted_ts": "2025-12-22T01:00:00Z",
+  "risk_score": 0.42,
+  "risk_level": "medium",
+  "explain": "heuristic: disp=42, tilt=n/a, vib=n/a",
+  "payload": {
+    "source": "telemetry.raw.v1",
+    "received_ts": "2025-12-22T00:00:00Z",
+    "seq": 123,
+    "metrics": { "displacement_mm": 42 }
+  }
+}
+
