@@ -128,7 +128,7 @@
 | WS-E |  |  |  | backlog |  |  |
 | WS-F |  |  |  | backlog |  |  |
 | WS-G | codex | `feat/ws-g/ops-system-monitor` | https://github.com/kipp7/landslide-monitoring-v2/pull/79 | done |  | Web: `/ops/system-monitor` + `/ops/debug-api` + legacy redirects + Windows distDir workaround (`.next_v2`) |
-| WS-H | codex | `feat/ws-h/ai-prediction-worker` |  | in_progress |  | AI predictions plugin/worker |
+| WS-H | codex | `feat/ws-h/ai-prediction-worker` | https://github.com/kipp7/landslide-monitoring-v2/pull/84 | in_review |  | AI predictions plugin/worker |
 
 ### 4.4 对齐与验收（总集成人做）
 
