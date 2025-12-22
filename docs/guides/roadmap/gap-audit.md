@@ -42,6 +42,8 @@
 
 用于快速确认 v2 现有页面入口，作为“参考区缺口对照”的落地点索引：
 
+也可直接查看：`docs/guides/roadmap/v2-web-route-inventory.md`。
+
 - `/`：`apps/web/app/page.tsx`
 - `/login`：`apps/web/app/login/page.tsx`
 - `/analysis`：`apps/web/app/analysis/page.tsx`
