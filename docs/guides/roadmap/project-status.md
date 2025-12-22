@@ -12,6 +12,7 @@
 - 2025-12-22：WS-G 落地收口：合并 `/ops/system-monitor` + `/ops/debug-api` 与旧路径跳转，并将 Next.js Windows 构建输出目录切换为 `.next_v2` 规避 `.next_web/trace` 的 EPERM 卡点（见 PR #79）。
 - 2025-12-22：运维工具（WS-G）：新增 Web 运维页 `/ops/system-monitor` 与 `/ops/debug-api`（仅 GET；RBAC 保护），并提供旧路径重定向，便于排查接口与基础设施状态。
 - 2025-12-22：GPS 基线管理（WS-D.1）：补齐 v2 API 的 `/api/v1/gps/baselines`（list/get/upsert/delete）实现与 OpenAPI 契约文档，支持站点/设备的基线维护与回归留证。
+- 2025-12-22：GPS 基准点管理（WS-D.3）：新增 Web 页面 `/device-management/baselines`（查看/编辑/删除），对接 `/api/v1/gps/baselines/*`。
 - 2025-12-22：AI 预测/专家系统（WS-H）：新增 `ai-prediction-worker` 骨架（telemetry.raw.v1 -> ai.predictions.v1），补齐 Kafka schema/example 与 Postgres `ai_predictions` 落库表。
 - 2025-12-22：告警规则管理（WS-E）：新增 Web 页面 `/alerts/rules`（规则列表/创建/启停/版本发布/回放入口）。
 - 2025-12-22: Stations detail (WS-B): add Web page `/stations/{stationId}` (station metadata + devices list via `/api/v1/devices?stationId=`).
