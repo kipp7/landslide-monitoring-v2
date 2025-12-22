@@ -20,6 +20,7 @@
 - 2025-12-22：WS-F（IoT 接入）：新增 `huawei-iot-adapter` 服务骨架（HTTP Push → Kafka `telemetry.raw.v1`），并补齐 `docs/integrations/iot/*` 契约文档。
 - 2025-12-22：修复 Web 构建阻塞：补齐 `apps/web/lib/api/data.ts` 的 `getStatistics` 导出，与 `/data` 页面保持一致。
 - 2025-12-22：本地开发体验：api-service 开启 Web 开发用 CORS（允许 `http://localhost:3000` 调用 `http://localhost:8080`），解除登录/接口调试的跨域阻塞。
+- 2025-12-22：本地开发体验：新增 Web 本地登录联调脚本 `infra/compose/scripts/configure-web-dev-env.ps1` 与指南 `docs/guides/testing/web-local-dev.md`，用 `ADMIN_API_TOKEN` 引导首次创建用户后再走登录。
 - 2025-12-21：非硬件模块收口推进（安全与访问控制 + 运维审计）：API 端点从 admin token 兜底升级为基于 `permission_code` 的 RBAC 校验；新增 `role_permissions` 默认种子；Web 增加 JWT 登录页与 token refresh，导航/页面按权限可见；关键操作写入 `operation_logs` 便于运维审计。
 - 2025-12-21：单机启用 JWT/RBAC 的一键引导：新增 `infra/compose/scripts/enable-jwt-auth.ps1`（生成 JWT secrets + 可选 ADMIN_API_TOKEN 并写入 gitignored 的 `services/api/.env`），补充单机部署指引与 smoke 脚本，降低首次启用成本。
 - 2025-12-21：回归基线流程收口：PR 模板与操作指南补齐本地门禁（`run-quality-gates + lint + build`）并明确 Web/API 变更需以 `-Stage4Regression` 留证，降低“接口/契约漂移”风险。
