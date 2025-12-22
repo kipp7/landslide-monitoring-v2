@@ -14,3 +14,4 @@
 - device.command_acks.v1：`docs/integrations/kafka/schemas/device-command-acks.v1.schema.json`
 - device.command_events.v1：`docs/integrations/kafka/schemas/device-command-events.v1.schema.json`
 - presence.events.v1：`docs/integrations/kafka/schemas/presence-events.v1.schema.json`
+- ai.predictions.v1：`docs/integrations/kafka/schemas/ai-predictions.v1.schema.json`
