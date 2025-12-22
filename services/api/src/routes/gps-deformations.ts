@@ -186,18 +186,20 @@ export function registerGpsDeformationRoutes(
     const baseline = parsedBaseline.data;
     const baseAlt = typeof baseline.altitude === "number" ? baseline.altitude : null;
 
-    const points = rows
-      .filter((r) => typeof r.lat === "number" && typeof r.lon === "number")
-      .map((r) => {
-        const horizontalMeters = haversineMeters(baseline.latitude, baseline.longitude, r.lat as number, r.lon as number);
-        const verticalMeters = baseAlt !== null && typeof r.alt === "number" ? (r.alt as number) - baseAlt : null;
+    const validRows = rows.filter(
+      (r): r is Row & { lat: number; lon: number } => typeof r.lat === "number" && typeof r.lon === "number"
+    );
+
+    const points = validRows.map((r) => {
+      const horizontalMeters = haversineMeters(baseline.latitude, baseline.longitude, r.lat, r.lon);
+      const verticalMeters = baseAlt !== null && typeof r.alt === "number" ? r.alt - baseAlt : null;
         const distanceMeters =
           verticalMeters === null ? horizontalMeters : Math.sqrt(horizontalMeters * horizontalMeters + verticalMeters * verticalMeters);
         return {
           ts: clickhouseStringToIsoZ(r.ts),
-          latitude: r.lat as number,
-          longitude: r.lon as number,
-          altitude: typeof r.alt === "number" ? (r.alt as number) : null,
+          latitude: r.lat,
+          longitude: r.lon,
+          altitude: typeof r.alt === "number" ? r.alt : null,
           horizontalMeters,
           verticalMeters,
           distanceMeters,
@@ -222,4 +224,3 @@ export function registerGpsDeformationRoutes(
     );
   });
 }
-
