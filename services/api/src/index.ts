@@ -1,4 +1,5 @@
 import { createLogger, newTraceId } from "@lsmv2/observability";
+import cors from "@fastify/cors";
 import formbody from "@fastify/formbody";
 import dotenv from "dotenv";
 import Fastify from "fastify";
@@ -32,6 +33,26 @@ async function main(): Promise<void> {
   const app = Fastify({
     logger: false,
     disableRequestLogging: true
+  });
+
+  const defaultCorsOrigins = new Set(["http://localhost:3000", "http://127.0.0.1:3000"]);
+  const corsOrigins = new Set([...(config.corsOrigins ?? []), ...defaultCorsOrigins]);
+
+  await app.register(cors, {
+    origin: (origin, cb) => {
+      if (!origin) {
+        cb(null, true);
+        return;
+      }
+      if (corsOrigins.has(origin)) {
+        cb(null, true);
+        return;
+      }
+      cb(null, false);
+    },
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Authorization", "Content-Type", "Accept"],
+    maxAge: 86400
   });
 
   await app.register(formbody);

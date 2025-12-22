@@ -22,6 +22,8 @@ const configSchema = z.object({
   apiHost: z.string().default("0.0.0.0"),
   apiPort: z.coerce.number().int().positive().default(8080),
 
+  corsOrigins: optionalCsvList(),
+
   postgresUrl: z.string().url().optional(),
   postgresHost: z.string().default("localhost"),
   postgresPort: z.coerce.number().int().positive().default(5432),
@@ -71,6 +73,8 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
     serviceName: env.SERVICE_NAME,
     apiHost: env.API_HOST,
     apiPort: env.API_PORT,
+
+    corsOrigins: env.CORS_ORIGINS,
 
     postgresUrl: env.POSTGRES_URL,
     postgresHost: env.POSTGRES_HOST,

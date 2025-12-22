@@ -10,6 +10,7 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
+    "@fastify/cors": "^11.1.0",
     "@fastify/formbody": "^8.0.2",
     "@clickhouse/client": "^1.12.1",
     "@lsmv2/observability": "*",
