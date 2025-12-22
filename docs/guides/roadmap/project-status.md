@@ -8,6 +8,7 @@
 - 本页只记录“当前状态与下一步”，历史细节放到 `docs/incidents/` 或 PR/commit 记录中。
 
 最后更新时间：2025-12-22（阶段 5 已完成：固件模拟器 + Stage5Regression 回归基线；硬件联调待启动）
+- 2025-12-22：PR #107（WS-D.2）：新增 `/api/v1/gps/deformations/{deviceId}/series`（baseline + ClickHouse 遥测聚合 + 位移计算）端点，并补齐 OpenAPI/契约文档。
 - 2025-12-22：PR #103（WS-C）：新增 Web 数据浏览器 `/data`（series/raw/export/statistics），用于单机联调与分析验证。
 - 2025-12-22：GPS 形变（WS-D.2）：新增 `/api/v1/gps/deformations/{deviceId}/series`（基于基准点 + ClickHouse 遥测计算位移），补齐 API 契约文档与 OpenAPI。
 - 2025-12-22：WS-G 落地收口：合并 `/ops/system-monitor` + `/ops/debug-api` 与旧路径跳转，并将 Next.js Windows 构建输出目录切换为 `.next_v2` 规避 `.next_web/trace` 的 EPERM 卡点（见 PR #79）。
