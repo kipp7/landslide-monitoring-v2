@@ -94,3 +94,40 @@ export async function exportData(body: ExportTelemetryRequest): Promise<ApiSucce
   return apiJson<ApiSuccessResponse<ExportTelemetryResponse>>('/api/v1/data/export', body)
 }
 
+export type StatisticsBucketRow = {
+  ts: string
+  min: number | null
+  max: number | null
+  avg: number | null
+  count: number
+}
+
+export type StatisticsResponse = {
+  scope: 'device' | 'station'
+  sensorKey: string
+  interval: string
+  buckets: StatisticsBucketRow[]
+}
+
+export type GetStatisticsQuery = {
+  scope: 'device' | 'station'
+  deviceId?: string
+  stationId?: string
+  sensorKey: string
+  startTime: string
+  endTime: string
+  interval?: '1h' | '1d'
+}
+
+export async function getStatistics(query: GetStatisticsQuery): Promise<ApiSuccessResponse<StatisticsResponse>> {
+  const params = new URLSearchParams()
+  params.set('scope', query.scope)
+  if (query.deviceId && query.deviceId.trim()) params.set('deviceId', query.deviceId.trim())
+  if (query.stationId && query.stationId.trim()) params.set('stationId', query.stationId.trim())
+  params.set('sensorKey', query.sensorKey)
+  params.set('startTime', query.startTime)
+  params.set('endTime', query.endTime)
+  if (query.interval) params.set('interval', query.interval)
+
+  return apiGetJson<ApiSuccessResponse<StatisticsResponse>>(`/api/v1/data/statistics?${params.toString()}`)
+}
