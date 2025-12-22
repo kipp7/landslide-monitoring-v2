@@ -28,11 +28,20 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
     const perms = user?.permissions ?? []
     const dataVisible = hasAnyPermission(perms, ['data:view', 'data:analysis', 'data:export'])
+    const gpsMonitoringVisible = hasAnyPermission(perms, ['data:view'])
+    const gpsDeformationVisible = hasAnyPermission(perms, ['data:analysis'])
     const adminVisible = hasAnyPermission(perms, ['user:view', 'user:create', 'user:update', 'user:delete'])
     const opsVisible = hasAnyPermission(perms, ['system:log', 'system:config'])
 
     const extra = []
     if (dataVisible) base.splice(1, 0, { key: '/data', label: '数据' })
+    if (gpsMonitoringVisible || gpsDeformationVisible) {
+      const stationIndex = base.findIndex((i) => i.key === '/stations')
+      const insertAt = stationIndex >= 0 ? stationIndex + 1 : base.length
+      if (gpsMonitoringVisible) base.splice(insertAt, 0, { key: '/gps-monitoring', label: 'GPS 监测' })
+      if (gpsDeformationVisible)
+        base.splice(insertAt + (gpsMonitoringVisible ? 1 : 0), 0, { key: '/gps-deformation', label: 'GPS 形变' })
+    }
     if (adminVisible) extra.push({ key: '/admin', label: '管理' })
     if (opsVisible) extra.push({ key: '/ops', label: '运维' })
     extra.push({ key: '/settings', label: '设置' })

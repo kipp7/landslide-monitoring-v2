@@ -18,6 +18,7 @@
 - 2025-12-22：告警规则管理（WS-E）：新增 Web 页面 `/alerts/rules`（规则列表/创建/启停/版本发布/回放入口）。
 - 2025-12-22: Stations detail (WS-B): add Web page `/stations/{stationId}` (station metadata + devices list via `/api/v1/devices?stationId=`).
 - 2025-12-22：WS-F（IoT 接入）：新增 `huawei-iot-adapter` 服务骨架（HTTP Push → Kafka `telemetry.raw.v1`），并补齐 `docs/integrations/iot/*` 契约文档。
+- 2025-12-22：GPS 监测/形变页面（WS-D.4）：新增 Web 页面 `/gps-monitoring` 与 `/gps-deformation`，分别对接 `/api/v1/data/series` 与 `/api/v1/gps/deformations/*`。
 - 2025-12-22：修复 Web 构建阻塞：补齐 `apps/web/lib/api/data.ts` 的 `getStatistics` 导出，与 `/data` 页面保持一致。
 - 2025-12-22：本地开发体验：api-service 开启 Web 开发用 CORS（允许 `http://localhost:3000` 调用 `http://localhost:8080`），解除登录/接口调试的跨域阻塞。
 - 2025-12-22：本地开发体验：新增 Web 本地登录联调脚本 `infra/compose/scripts/configure-web-dev-env.ps1` 与指南 `docs/guides/testing/web-local-dev.md`，用 `ADMIN_API_TOKEN` 引导首次创建用户后再走登录。
