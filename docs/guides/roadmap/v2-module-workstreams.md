@@ -124,7 +124,7 @@
 | WS-B | codex | `feat/ws-b/station-detail-page` | https://github.com/kipp7/landslide-monitoring-v2/pull/96 | done |  | Web: station detail page (`/stations/{stationId}`) |
 | WS-C | codex | `feat/ws-c/data-statistics-ui` |  | in_progress |  | Web: `/data` 增加统计聚合（对接 `/api/v1/data/statistics`） |
 | WS-D.1 | codex | `feat/ws-d/baselines-contract` | https://github.com/kipp7/landslide-monitoring-v2/pull/77 | done |  | 基准点（Baseline）契约/数据模型/API 骨架 |
-| WS-D.2 | codex | `feat/ws-d/deformation-trends` |  | claimed | WS-D.1 | 仅做“API + 查询”闭环：新增 `/api/v1/gps/deformations/*`（命名待确认），优先 ClickHouse 读；避免改动现有 Web UI，后续再单独对接页面 |
+| WS-D.2 | codex | `feat/ws-d/deformation-trends` |  | in_progress | WS-D.1 | 仅做“API + 查询”闭环：新增 `/api/v1/gps/deformations/{deviceId}/series`（baseline + ClickHouse 遥测计算位移）；会改动 `services/api/src/routes/*` 与 `docs/integrations/api/openapi.yaml` |
 | WS-D.3 | codex | `feat/ws-d/baseline-management-ui` |  | claimed | WS-D.1 | Web: 基准点管理页（`/device-management/baselines`）对接 `/api/v1/gps/baselines/*` |
 | WS-E | codex | `feat/ws-e/alert-rules-ui` | https://github.com/kipp7/landslide-monitoring-v2/pull/90 | done |  | Web: alert rules management UI (`/alerts/rules`) |
 | WS-F | codex | `feat/ws-f/huawei-iot-adapter` | https://github.com/kipp7/landslide-monitoring-v2/pull/99 | done |  | IoT adapter: Huawei IoT HTTP push -> Kafka telemetry (no UI) |
