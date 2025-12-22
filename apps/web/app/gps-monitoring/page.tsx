@@ -6,18 +6,14 @@ import { Button, Card, DatePicker, Select, Space, Tag, Typography } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
 import dayjs, { type Dayjs } from 'dayjs'
 import { CircleMarker, MapContainer, Polyline, TileLayer, Tooltip } from 'react-leaflet'
-import 'leaflet/dist/leaflet.css'
 import useDeviceList from '../hooks/useDeviceList'
 import useSensors from '../hooks/useSensors'
 import { getDeviceSeries } from '../../lib/api/data'
+import { toNumber } from '../../lib/v2Api'
 
 const { Title, Text } = Typography
 
 type TrackPoint = { ts: string; lat: number; lon: number; alt: number | null }
-
-function isFiniteNumber(v: unknown): v is number {
-  return typeof v === 'number' && Number.isFinite(v)
-}
 
 export default function GpsMonitoringPage() {
   const { devices, loading: devicesLoading, error: devicesError, refetch } = useDeviceList()
@@ -69,13 +65,15 @@ export default function GpsMonitoringPage() {
       const points: TrackPoint[] = []
       for (const p of latSeries) {
         const lonVal = lonByTs.get(p.ts)
-        if (!isFiniteNumber(p.value) || !isFiniteNumber(lonVal)) continue
+        const lat = toNumber(p.value)
+        const lon = toNumber(lonVal)
+        if (lat === undefined || lon === undefined) continue
         const altVal = altByTs.get(p.ts)
         points.push({
           ts: p.ts,
-          lat: p.value,
-          lon: lonVal,
-          alt: isFiniteNumber(altVal) ? altVal : null,
+          lat,
+          lon,
+          alt: toNumber(altVal) ?? null,
         })
       }
       setTrack(points)
