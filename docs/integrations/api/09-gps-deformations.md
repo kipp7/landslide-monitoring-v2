@@ -44,4 +44,4 @@ v2 约束：
 - `horizontalMeters`：Haversine（球面）距离；
 - `verticalMeters`：`altitude - baseline.altitude`（仅当两者都有 altitude）；
 - `distanceMeters`：有垂直位移时为三维距离，否则等于 `horizontalMeters`。
-
+- 若设备端使用不同的 metric key（例如自定义 GPS 字段名），可通过 `latKey/lonKey/altKey` 覆盖默认值。
