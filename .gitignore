@@ -46,9 +46,9 @@ __pycache__/
 venv/
 
 # Local data directories (infra)
-data/
-volumes/
-backups/
+/data/
+/volumes/
+/backups/
 
 # Local scratch docs
 database_table_analysis.md
