@@ -124,8 +124,9 @@ M3（阶段 2：可告警）目标：
 ## 3) 下一步（Next Actions，按优先级）
 
 1) 巩固回归基线：将 `-Stage4Regression` 作为“Web/API 契约一致性 + 字典渲染”的常规回归；改动涉及接口/消息/存储时必须更新对应 docs 并留证
-2) 真实固件联调（硬件最后）：按 `docs/integrations/mqtt/*` 与 `docs/integrations/firmware/README.md`，让真实设备跑通 telemetry + commands，并以 `-Stage5Regression` 作为回归基线
-3) 固件细节沉淀：将真实固件的“身份包存储/重连退避/命令回执”实现细节沉淀到 `docs/integrations/firmware/`（含可复用代码片段与踩坑记录）
+2) 缺口对照验收（非硬件）：按 `docs/guides/roadmap/gap-audit.md` 逐项对照参考区与 v2 的落地点，确保“功能不缺失”，并将缺口拆成最小 PR 推进
+3) 真实固件联调（硬件最后）：按 `docs/integrations/mqtt/*` 与 `docs/integrations/firmware/README.md`，让真实设备跑通 telemetry + commands，并以 `-Stage5Regression` 作为回归基线
+4) 固件细节沉淀：将真实固件的“身份包存储/重连退避/命令回执”实现细节沉淀到 `docs/integrations/firmware/`（含可复用代码片段与踩坑记录）
 
 ## 4) 关键入口（新 AI 只读这些就能上手）
 
