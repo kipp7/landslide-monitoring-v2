@@ -28,6 +28,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
     const perms = user?.permissions ?? []
     const dataVisible = hasAnyPermission(perms, ['data:view', 'data:analysis', 'data:export'])
+    const aiVisible = hasAnyPermission(perms, ['data:analysis'])
     const gpsMonitoringVisible = hasAnyPermission(perms, ['data:view'])
     const gpsDeformationVisible = hasAnyPermission(perms, ['data:analysis'])
     const adminVisible = hasAnyPermission(perms, ['user:view', 'user:create', 'user:update', 'user:delete'])
@@ -35,6 +36,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
     const extra = []
     if (dataVisible) base.splice(1, 0, { key: '/data', label: '数据' })
+    if (aiVisible) {
+      const dataIndex = base.findIndex((i) => i.key === '/data')
+      const insertAt = dataIndex >= 0 ? dataIndex + 1 : 1
+      base.splice(insertAt, 0, { key: '/ai/predictions', label: 'AI 预测' })
+    }
     if (gpsMonitoringVisible || gpsDeformationVisible) {
       const stationIndex = base.findIndex((i) => i.key === '/stations')
       const insertAt = stationIndex >= 0 ? stationIndex + 1 : base.length
