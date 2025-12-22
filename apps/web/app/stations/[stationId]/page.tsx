@@ -90,7 +90,7 @@ export default function StationDetailPage() {
             <Descriptions.Item label="stationName">{station.stationName}</Descriptions.Item>
             <Descriptions.Item label="status">{stationStatusTag(station.status)}</Descriptions.Item>
             <Descriptions.Item label="location">
-              {station.latitude && station.longitude ? (
+              {station.latitude !== null && station.longitude !== null ? (
                 <span className="font-mono">
                   {station.latitude.toFixed(6)}, {station.longitude.toFixed(6)}
                 </span>
@@ -127,4 +127,3 @@ export default function StationDetailPage() {
     </div>
   )
 }
-

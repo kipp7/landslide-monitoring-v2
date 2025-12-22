@@ -200,7 +200,7 @@ export default function StationsPage() {
             {
               title: 'Location',
               render: (_: unknown, r: StationRow) =>
-                r.latitude && r.longitude ? `${r.latitude.toFixed(6)}, ${r.longitude.toFixed(6)}` : '-',
+                r.latitude !== null && r.longitude !== null ? `${r.latitude.toFixed(6)}, ${r.longitude.toFixed(6)}` : '-',
             },
             { title: 'Updated', dataIndex: 'updatedAt', render: (v: string) => <span className="font-mono">{v}</span> },
             {
