@@ -141,7 +141,7 @@ export function registerAiPredictionRoutes(app: FastifyInstance, config: AppConf
         total: data.total,
         totalPages: Math.ceil(data.total / pageSize)
       }
-    });
+    }, traceId);
   });
 
   app.get("/ai/predictions/:predictionId", async (request, reply) => {
@@ -201,7 +201,6 @@ export function registerAiPredictionRoutes(app: FastifyInstance, config: AppConf
       explain: row.explain,
       payload: row.payload ?? {},
       createdAt: row.created_at
-    });
+    }, traceId);
   });
 }
-
