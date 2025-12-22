@@ -120,7 +120,7 @@
 
 | Scope | Owner | Branch | PR | Status | Dependencies | Notes |
 |---|---|---|---|---|---|---|
-| WS-A | codex | `feat/ws-a/local-dev-web-env` | https://github.com/kipp7/landslide-monitoring-v2/pull/94 | in_review |  | Local dev: CORS + Web 登录联调（尽量不改 UI） |
+| WS-A | codex | `feat/ws-a/local-dev-web-env` | https://github.com/kipp7/landslide-monitoring-v2/pull/94 | done |  | Local dev: CORS + Web 登录联调（尽量不改 UI） |
 | WS-B | codex | `feat/ws-b/station-detail-page` | https://github.com/kipp7/landslide-monitoring-v2/pull/96 | done |  | Web: station detail page (`/stations/{stationId}`) |
 | WS-C | codex | `feat/ws-c/data-statistics-ui` | https://github.com/kipp7/landslide-monitoring-v2/pull/103 | done |  | Web: `/data` 增加统计聚合（对接 `/api/v1/data/statistics`） |
 | WS-D.1 | codex | `feat/ws-d/baselines-contract` | https://github.com/kipp7/landslide-monitoring-v2/pull/77 | done |  | 基准点（Baseline）契约/数据模型/API 骨架 |
