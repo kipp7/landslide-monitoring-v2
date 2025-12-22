@@ -14,6 +14,7 @@ tags:
   - name: devices
   - name: stations
   - name: data
+  - name: ai
   - name: gps
   - name: alerts
   - name: system
@@ -2087,6 +2088,94 @@ paths:
         default:
           $ref: "#/components/responses/ErrorResponse"
 
+  /ai/predictions:
+    get:
+      tags: [ai]
+      summary: List AI predictions
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: deviceId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - name: stationId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - name: modelKey
+          in: query
+          required: false
+          schema: { type: string }
+        - name: startTime
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: endTime
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: order
+          in: query
+          required: false
+          schema: { type: string, enum: [asc, desc], default: desc }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PaginatedAiPredictions"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /ai/predictions/{predictionId}:
+    get:
+      tags: [ai]
+      summary: Get AI prediction by predictionId
+      parameters:
+        - name: predictionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/AiPrediction"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
 components:
   securitySchemes:
     BearerAuth:
@@ -3249,3 +3338,46 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/GpsDeformationPoint"
+
+    AiPrediction:
+      type: object
+      required: [
+        predictionId,
+        deviceId,
+        stationId,
+        modelKey,
+        modelVersion,
+        horizonSeconds,
+        predictedTs,
+        riskScore,
+        riskLevel,
+        explain,
+        payload,
+        createdAt
+      ]
+      properties:
+        predictionId: { type: string, format: uuid }
+        deviceId: { type: string, format: uuid }
+        stationId: { type: string, format: uuid, nullable: true }
+        modelKey: { type: string }
+        modelVersion: { type: string, nullable: true }
+        horizonSeconds: { type: integer, minimum: 0 }
+        predictedTs: { type: string, format: date-time }
+        riskScore: { type: number, minimum: 0, maximum: 1 }
+        riskLevel: { type: string, enum: [low, medium, high], nullable: true }
+        explain: { type: string, nullable: true }
+        payload:
+          type: object
+          additionalProperties: true
+        createdAt: { type: string, format: date-time }
+
+    PaginatedAiPredictions:
+      type: object
+      required: [list, pagination]
+      properties:
+        list:
+          type: array
+          items:
+            $ref: "#/components/schemas/AiPrediction"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
