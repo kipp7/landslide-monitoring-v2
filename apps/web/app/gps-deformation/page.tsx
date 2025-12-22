@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Button, Card, DatePicker, Descriptions, Select, Space, Table, Tag, Typography } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
-import dayjs from 'dayjs'
+import dayjs, { type Dayjs } from 'dayjs'
 import ReactECharts from 'echarts-for-react'
 import useDeviceList from '../hooks/useDeviceList'
 import { getGpsDeformationSeries, type GpsDeformationSeriesPoint, type GpsDeformationSeriesResponse } from '../../lib/api/gpsDeformations'
@@ -135,10 +135,12 @@ export default function GpsDeformationPage() {
           <span>时间</span>
           <DatePicker.RangePicker
             showTime
-            value={[dayjs(range[0]), dayjs(range[1])] as any}
+            value={[dayjs(range[0]), dayjs(range[1])] as [Dayjs, Dayjs]}
             onChange={(v) => {
-              if (!v || v.length !== 2 || !v[0] || !v[1]) return
-              setRange([v[0].toDate(), v[1].toDate()])
+              const a = v?.[0] ?? null
+              const b = v?.[1] ?? null
+              if (!a || !b) return
+              setRange([a.toDate(), b.toDate()])
             }}
           />
 
@@ -252,4 +254,3 @@ export default function GpsDeformationPage() {
     </div>
   )
 }
-
