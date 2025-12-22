@@ -25,6 +25,7 @@ import { registerAuthRoutes } from "./routes/auth";
 import { registerUserRoutes } from "./routes/users";
 import { registerGpsBaselineRoutes } from "./routes/gps-baselines";
 import { registerGpsDeformationRoutes } from "./routes/gps-deformations";
+import { registerAiPredictionRoutes } from "./routes/ai-predictions";
 
 async function main(): Promise<void> {
   dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
@@ -176,6 +177,7 @@ async function main(): Promise<void> {
     registerSystemRoutes(v1, config, ch, pg);
     registerGpsBaselineRoutes(v1, config, pg);
     registerGpsDeformationRoutes(v1, config, ch, pg);
+    registerAiPredictionRoutes(v1, config, pg);
     done();
   }, { prefix: "/api/v1" });
 
