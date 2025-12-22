@@ -110,6 +110,7 @@ export default function OpsLogsPage() {
         <Space>
           <Link href="/ops/configs">系统配置</Link>
           <Link href="/ops/api-stats">API Stats</Link>
+          <Link href="/ops/telemetry-dlq">Telemetry DLQ</Link>
           <Button icon={<ReloadOutlined />} onClick={() => void fetchLogs()} loading={loading}>
             刷新
           </Button>

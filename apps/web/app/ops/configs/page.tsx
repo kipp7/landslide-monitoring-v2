@@ -73,6 +73,7 @@ export default function OpsConfigsPage() {
         </div>
         <Space>
           <Link href="/ops/logs">操作日志</Link>
+          <Link href="/ops/telemetry-dlq">Telemetry DLQ</Link>
           <Link href="/ops/api-stats">API Stats</Link>
           <Button icon={<ReloadOutlined />} onClick={() => void fetchConfigs()} loading={loading}>
             刷新

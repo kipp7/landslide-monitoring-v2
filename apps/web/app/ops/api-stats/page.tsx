@@ -43,6 +43,7 @@ export default function OpsApiStatsPage() {
         <Space>
           <Link href="/ops/configs">系统配置</Link>
           <Link href="/ops/logs">操作日志</Link>
+          <Link href="/ops/telemetry-dlq">Telemetry DLQ</Link>
           <Button icon={<ReloadOutlined />} onClick={() => void fetchStats()} loading={loading}>
             刷新
           </Button>

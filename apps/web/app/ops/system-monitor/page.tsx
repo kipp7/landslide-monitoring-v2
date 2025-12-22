@@ -51,6 +51,7 @@ export default function OpsSystemMonitorPage() {
         <Space>
           <Link href="/ops/configs">系统配置</Link>
           <Link href="/ops/logs">操作日志</Link>
+          <Link href="/ops/telemetry-dlq">Telemetry DLQ</Link>
           <Link href="/ops/api-stats">API Stats</Link>
           <Link href="/ops/debug-api">Debug API</Link>
           <Button icon={<ReloadOutlined />} onClick={() => void refresh()} loading={loading}>
@@ -105,4 +106,3 @@ export default function OpsSystemMonitorPage() {
     </div>
   )
 }
-

@@ -71,6 +71,7 @@ export default function OpsDebugApiPage() {
           <Link href="/ops/system-monitor">系统监控</Link>
           <Link href="/ops/configs">系统配置</Link>
           <Link href="/ops/logs">操作日志</Link>
+          <Link href="/ops/telemetry-dlq">Telemetry DLQ</Link>
           <Link href="/ops/api-stats">API Stats</Link>
         </Space>
       </div>
@@ -114,4 +115,3 @@ export default function OpsDebugApiPage() {
     </div>
   )
 }
-
