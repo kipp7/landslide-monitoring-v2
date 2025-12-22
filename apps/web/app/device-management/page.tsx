@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   Button,
   Card,
@@ -114,6 +115,7 @@ function formatValue(value: unknown): string {
 }
 
 export default function DeviceManagementPage() {
+  const router = useRouter()
   const { devices, loading: devicesLoading, error: devicesError, refetch } = useDeviceList()
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>('')
 
@@ -382,6 +384,7 @@ export default function DeviceManagementPage() {
           <Text type="secondary">数据源：v2 API（/api/v1/*）</Text>
         </div>
         <Space>
+          <Button onClick={() => router.push('/device-management/baselines')}>GPS 基准点</Button>
           <Button icon={<PlusOutlined />} onClick={() => setCreateDeviceOpen(true)}>
             创建设备
           </Button>
