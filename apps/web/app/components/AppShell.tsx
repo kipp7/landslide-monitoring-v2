@@ -27,10 +27,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     ]
 
     const perms = user?.permissions ?? []
+    const dataVisible = hasAnyPermission(perms, ['data:view', 'data:analysis', 'data:export'])
     const adminVisible = hasAnyPermission(perms, ['user:view', 'user:create', 'user:update', 'user:delete'])
     const opsVisible = hasAnyPermission(perms, ['system:log', 'system:config'])
 
     const extra = []
+    if (dataVisible) base.splice(1, 0, { key: '/data', label: '数据' })
     if (adminVisible) extra.push({ key: '/admin', label: '管理' })
     if (opsVisible) extra.push({ key: '/ops', label: '运维' })
     extra.push({ key: '/settings', label: '设置' })
@@ -95,4 +97,3 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     </Layout>
   )
 }
-
