@@ -132,7 +132,7 @@
 | WS-G | codex | `feat/ws-g/ops-system-monitor` | https://github.com/kipp7/landslide-monitoring-v2/pull/79 | done |  | Web: `/ops/system-monitor` + `/ops/debug-api` + legacy redirects + Windows distDir workaround (`.next_v2`) |
 | WS-G.2 | codex | `feat/ws-g/telemetry-dlq-ui` | https://github.com/kipp7/landslide-monitoring-v2/pull/109 | done |  | Ops: Telemetry DLQ 页面（`/ops/telemetry-dlq`）对接 `/api/v1/telemetry/dlq*` |
 | WS-H | codex | `feat/ws-h/ai-prediction-worker` | https://github.com/kipp7/landslide-monitoring-v2/pull/84 | done |  | AI predictions plugin/worker |
-| WS-I | codex | `docs/ws-i/gap-audit-route-inventory` |  | claimed |  | Docs: 扩充 `gap-audit.md`（v2 Web 路由盘点 + 参考区对照） |
+| WS-I | codex | `docs/ws-i/gap-audit-route-inventory` |  | in_progress |  | Docs: 扩充 `gap-audit.md`（v2 Web 路由盘点 + 参考区对照） |
 
 ### 4.4 对齐与验收（总集成人做）
 
