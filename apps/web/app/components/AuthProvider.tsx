@@ -1,8 +1,9 @@
 'use client'
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { apiGetJson, apiLogin, getApiBearerToken, type ApiSuccessResponse } from '../../lib/v2Api'
+import { getApiBearerToken } from '../../lib/v2Api'
 import { clearStoredTokens, setStoredTokens } from '../../lib/authStorage'
+import { getMe, login as apiLogin, type CurrentUser } from '../../lib/api/auth'
 
 export type AuthUser = {
   userId: string
@@ -31,17 +32,7 @@ export function useAuth(): AuthContextValue {
   return ctx
 }
 
-type MeResponse = {
-  userId: string
-  username: string
-  email: string
-  phone: string
-  realName: string
-  roles: Array<{ roleId: string; name: string; displayName: string }>
-  permissions: string[]
-}
-
-function normalizeUserFromMe(me: MeResponse): AuthUser {
+function normalizeUserFromMe(me: CurrentUser): AuthUser {
   return {
     userId: me.userId,
     username: me.username,
@@ -67,7 +58,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
         return
       }
 
-      const json = await apiGetJson<ApiSuccessResponse<MeResponse>>('/api/v1/auth/me')
+      const json = await getMe()
       if (!json?.success || !json.data) {
         setUser(null)
         return

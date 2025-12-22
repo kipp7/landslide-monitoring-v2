@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { apiGetJson, type ApiSuccessResponse } from '../../lib/v2Api'
+import { listDevices } from '../../lib/api/devices'
 
 export interface DeviceInfo {
   id: string
@@ -18,24 +18,6 @@ export interface DeviceInfo {
   display_name: string
   model: string
   last_active: string
-}
-
-type PaginatedDevices = {
-  list: Array<{
-    deviceId: string
-    deviceName?: string
-    deviceType?: string
-    status: 'inactive' | 'active' | 'revoked'
-    lastSeenAt?: string | null
-    createdAt: string
-    metadata?: Record<string, unknown>
-  }>
-  pagination: {
-    page: number
-    pageSize: number
-    total: number
-    totalPages: number
-  }
 }
 
 function formatDate(dateString?: string | null): string {
@@ -70,9 +52,7 @@ export default function useDeviceList() {
       setLoading(true)
       setError(null)
 
-      const json = await apiGetJson<ApiSuccessResponse<PaginatedDevices>>(
-        '/api/v1/devices?page=1&pageSize=100'
-      )
+      const json = await listDevices({ page: 1, pageSize: 100 })
       const list = json.data?.list ?? []
 
       const mapped = list.map((device) => {

@@ -3,22 +3,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Button, Card, Space, Table, Typography } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
-import { apiGetJson, type ApiSuccessResponse } from '../../../lib/v2Api'
+import { listPermissions, listRoles, type PermissionRow, type RoleRow } from '../../../lib/api/admin'
 
 const { Title, Text } = Typography
-
-type RoleRow = {
-  roleId: string
-  name: string
-  displayName: string
-  description: string
-}
-
-type RolesResponse = { list: RoleRow[] }
-
-type PermissionRow = { permissionKey: string; description: string }
-
-type PermissionsResponse = { list: PermissionRow[] }
 
 export default function AccessPage() {
   const [roles, setRoles] = useState<RoleRow[]>([])
@@ -32,8 +19,8 @@ export default function AccessPage() {
       setError(null)
 
       const [rolesJson, permsJson] = await Promise.all([
-        apiGetJson<ApiSuccessResponse<RolesResponse>>('/api/v1/roles'),
-        apiGetJson<ApiSuccessResponse<PermissionsResponse>>('/api/v1/permissions'),
+        listRoles(),
+        listPermissions(),
       ])
       setRoles(rolesJson.data?.list ?? [])
       setPerms(permsJson.data?.list ?? [])

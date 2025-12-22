@@ -4,26 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Button, Card, Input, Modal, Space, Table, Tag, Typography, message } from 'antd'
 import { ArrowLeftOutlined, CheckOutlined, ReloadOutlined } from '@ant-design/icons'
-import { apiGetJson, apiJson, type ApiSuccessResponse } from '../../../lib/v2Api'
+import { actionAlert as actionAlertApi, getAlertEvents, type AlertEvent } from '../../../lib/api/alerts'
 
 const { Title, Text } = Typography
-
-type AlertEvent = {
-  eventId: string
-  eventType: 'ALERT_TRIGGER' | 'ALERT_UPDATE' | 'ALERT_RESOLVE' | 'ALERT_ACK'
-  severity: 'low' | 'medium' | 'high' | 'critical'
-  createdAt: string
-  ruleId: string
-  ruleVersion: number
-  deviceId?: string | null
-  stationId?: string | null
-  evidence?: Record<string, unknown>
-}
-
-type AlertEventsResponse = {
-  alertId: string
-  events: AlertEvent[]
-}
 
 function severityTag(sev: AlertEvent['severity']) {
   const color = sev === 'critical' ? 'red' : sev === 'high' ? 'volcano' : sev === 'medium' ? 'orange' : 'green'
@@ -43,9 +26,7 @@ export default function AlertDetailPage() {
     try {
       setLoading(true)
       setError(null)
-      const json = await apiGetJson<ApiSuccessResponse<AlertEventsResponse>>(
-        `/api/v1/alerts/${encodeURIComponent(alertId)}/events`
-      )
+      const json = await getAlertEvents(alertId)
       setEvents(json.data?.events ?? [])
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught))
@@ -80,9 +61,7 @@ export default function AlertDetailPage() {
       cancelText: '取消',
       onOk: async () => {
         const trimmed = notes.trim()
-        await apiJson<ApiSuccessResponse<unknown>>(`/api/v1/alerts/${encodeURIComponent(alertId)}/${action}`, {
-          ...(trimmed ? { notes: trimmed } : {}),
-        })
+        await actionAlertApi(alertId, action, trimmed ? { notes: trimmed } : undefined)
         message.success(`${title} 成功`)
         await fetchEvents()
       },
@@ -155,4 +134,3 @@ export default function AlertDetailPage() {
     </div>
   )
 }
-
