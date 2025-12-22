@@ -15,8 +15,10 @@
 | `/alerts/rules` | `apps/web/app/alerts/rules/page.tsx` |
 | `/alerts/rules/[ruleId]` | `apps/web/app/alerts/rules/[ruleId]/page.tsx` |
 | `/analysis` | `apps/web/app/analysis/page.tsx` |
+| `/analysis2` | `apps/web/app/analysis2/page.tsx` |
 | `/data` | `apps/web/app/data/page.tsx` |
 | `/debug-api` | `apps/web/app/debug-api/page.tsx` |
+| `/baseline-management` | `apps/web/app/baseline-management/page.tsx` |
 | `/device-management` | `apps/web/app/device-management/page.tsx` |
 | `/device-management/baselines` | `apps/web/app/device-management/baselines/page.tsx` |
 | `/gps-deformation` | `apps/web/app/gps-deformation/page.tsx` |
@@ -34,4 +36,4 @@
 | `/stations` | `apps/web/app/stations/page.tsx` |
 | `/stations/[stationId]` | `apps/web/app/stations/[stationId]/page.tsx` |
 | `/system-monitor` | `apps/web/app/system-monitor/page.tsx` |
-
+| `/optimized-demo` | `apps/web/app/optimized-demo/page.tsx` |
