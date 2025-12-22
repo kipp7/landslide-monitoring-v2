@@ -127,7 +127,7 @@
 | WS-D.2 |  |  |  | backlog | WS-D.1 | 形变计算与趋势（API + 查询） |
 | WS-E |  |  |  | backlog |  |  |
 | WS-F |  |  |  | backlog |  |  |
-| WS-G |  |  |  | backlog |  |  |
+| WS-G | codex | `feat/ws-g/ops-system-monitor` |  | claimed |  | 计划触达：`apps/web/app/ops/*`（system-monitor/debug-api），可能与 WS-C/WS-A 有重叠需提前沟通拆分 |
 | WS-H |  |  |  | backlog |  |  |
 
 ### 4.4 对齐与验收（总集成人做）
