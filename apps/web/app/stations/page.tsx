@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Button, Card, Form, Input, Modal, Select, Space, Table, Tag, Typography, message } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
+import Link from 'next/link'
 import {
   createStation,
   deleteStation as deleteStationApi,
@@ -206,6 +207,7 @@ export default function StationsPage() {
               title: 'Actions',
               render: (_: unknown, r: StationRow) => (
                 <Space>
+                  <Link href={`/stations/${encodeURIComponent(r.stationId)}`}>详情</Link>
                   <Button size="small" onClick={() => void openEdit(r.stationId)}>
                     编辑
                   </Button>
