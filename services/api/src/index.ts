@@ -24,6 +24,7 @@ import { registerSystemRoutes } from "./routes/system";
 import { registerAuthRoutes } from "./routes/auth";
 import { registerUserRoutes } from "./routes/users";
 import { registerGpsBaselineRoutes } from "./routes/gps-baselines";
+import { registerGpsDeformationRoutes } from "./routes/gps-deformations";
 
 async function main(): Promise<void> {
   dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
@@ -174,6 +175,7 @@ async function main(): Promise<void> {
     registerTelemetryDlqRoutes(v1, config, pg);
     registerSystemRoutes(v1, config, ch, pg);
     registerGpsBaselineRoutes(v1, config, pg);
+    registerGpsDeformationRoutes(v1, config, ch, pg);
     done();
   }, { prefix: "/api/v1" });
 
