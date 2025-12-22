@@ -133,7 +133,7 @@
 | WS-G.2 | codex | `feat/ws-g/telemetry-dlq-ui` | https://github.com/kipp7/landslide-monitoring-v2/pull/109 | done |  | Ops: Telemetry DLQ 页面（`/ops/telemetry-dlq`）对接 `/api/v1/telemetry/dlq*` |
 | WS-H | codex | `feat/ws-h/ai-prediction-worker` | https://github.com/kipp7/landslide-monitoring-v2/pull/84 | done |  | AI predictions plugin/worker |
 | WS-I | codex | `docs/ws-i/gap-audit-route-inventory` | https://github.com/kipp7/landslide-monitoring-v2/pull/121 | done |  | Docs: 扩充 `gap-audit.md`（v2 Web 路由盘点 + 参考区对照） |
-| WS-J | codex | `feat/ws-j/legacy-routes-compat` |  | claimed |  | Web: 恢复旧系统兼容入口（`/baseline-management`、`/analysis2`、`/optimized-demo`）并跳转到 v2 等价页面 |
+| WS-J | codex | `feat/ws-j/legacy-routes-compat` | https://github.com/kipp7/landslide-monitoring-v2/pull/125 | in_review |  | Web: 恢复旧系统兼容入口（`/baseline-management`、`/analysis2`、`/optimized-demo`）并跳转到 v2 等价页面 |
 
 ### 4.4 对齐与验收（总集成人做）
 
