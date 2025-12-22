@@ -15,6 +15,7 @@
 - 2025-12-22：AI 预测/专家系统（WS-H）：新增 `ai-prediction-worker` 骨架（telemetry.raw.v1 -> ai.predictions.v1），补齐 Kafka schema/example 与 Postgres `ai_predictions` 落库表。
 - 2025-12-22：告警规则管理（WS-E）：新增 Web 页面 `/alerts/rules`（规则列表/创建/启停/版本发布/回放入口）。
 - 2025-12-22: Stations detail (WS-B): add Web page `/stations/{stationId}` (station metadata + devices list via `/api/v1/devices?stationId=`).
+- 2025-12-22：WS-F（IoT 接入）：新增 `huawei-iot-adapter` 服务骨架（HTTP Push → Kafka `telemetry.raw.v1`），并补齐 `docs/integrations/iot/*` 契约文档。
 - 2025-12-22：修复 Web 构建阻塞：补齐 `apps/web/lib/api/data.ts` 的 `getStatistics` 导出，与 `/data` 页面保持一致。
 - 2025-12-22：本地开发体验：api-service 开启 Web 开发用 CORS（允许 `http://localhost:3000` 调用 `http://localhost:8080`），解除登录/接口调试的跨域阻塞。
 - 2025-12-21：非硬件模块收口推进（安全与访问控制 + 运维审计）：API 端点从 admin token 兜底升级为基于 `permission_code` 的 RBAC 校验；新增 `role_permissions` 默认种子；Web 增加 JWT 登录页与 token refresh，导航/页面按权限可见；关键操作写入 `operation_logs` 便于运维审计。

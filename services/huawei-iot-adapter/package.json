@@ -1,0 +1,22 @@
+{
+  "name": "@lsmv2/huawei-iot-adapter",
+  "private": true,
+  "version": "0.0.0",
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint src --max-warnings=0",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@lsmv2/observability": "*",
+    "@lsmv2/validation": "*",
+    "@fastify/formbody": "^8.0.2",
+    "dotenv": "^16.4.7",
+    "fastify": "^5.2.1",
+    "kafkajs": "^2.2.4",
+    "zod": "^3.24.1"
+  }
+}
+

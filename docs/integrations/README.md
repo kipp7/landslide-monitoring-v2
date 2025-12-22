@@ -11,6 +11,7 @@
 - Rules：`docs/integrations/rules/README.md`
 - Storage：`docs/integrations/storage/README.md`
 - AI（预测/专家系统）：`docs/integrations/ai/README.md`
+- IoT adapters（HTTP Push / 第三方平台接入）：`docs/integrations/iot/README.md`
 
 机器可读契约入口（实现阶段逐步启用）：
 
