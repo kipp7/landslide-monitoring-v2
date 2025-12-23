@@ -141,7 +141,7 @@
 | WS-K.5 | codex | `feat/ws-k5/gps-baselines-advanced` | https://github.com/kipp7/landslide-monitoring-v2/pull/133 | done | WS-D.1 | GPS baselines 高级能力：对齐参考区 `/api/baselines/:deviceId/auto-establish`、`/quality-check`、`/available-devices`；在 v2 补齐等价能力（契约+实现+回归留证），并确认 Web 基准点管理页的入口/字段一致性 |
 | WS-K.6 | codex | `feat/ws-k6/huawei-legacy-compat` | https://github.com/kipp7/landslide-monitoring-v2/pull/139 | done | WS-F, WS-A | 华为/硬件 legacy 端点：对齐参考区 `/huawei/*`（shadow/command templates/led/motor/buzzer/reboot）与 `/iot/huawei`；明确在 v2 的保留/弃用策略（推荐以 v2 `/devices/{deviceId}/commands` 为主），必要时实现兼容层并补齐安全与审计 |
 | WS-L.1 | codex | `feat/ws-l1/ai-predictions-api` | https://github.com/kipp7/landslide-monitoring-v2/pull/149 | done | WS-H | AI predictions：补齐 `ai_predictions` 的查询 API（/api/v1/ai/predictions*）+ Web 查看入口 + OpenAPI/文档（worker 已有，缺 API/UI/契约） |
-| WS-M.1 | codex | `feat/ws-m1/legacy-device-management-api` | https://github.com/kipp7/landslide-monitoring-v2/pull/154 | claimed | WS-A | Legacy 设备管理 API 兼容：对齐 `legacy-frontend/app/api/device-management*`、`/monitoring-stations*`、`/iot/devices*`、`/data-aggregation` 的关键返回结构；v2 以 `/api` 兼容层落地，并尽量映射到既有 v1 设备/站点/数据/基准点/告警能力 |
+| WS-M.1 | codex | `feat/ws-m1/legacy-device-management-api` | https://github.com/kipp7/landslide-monitoring-v2/pull/154 | done | WS-A | Legacy 设备管理 API 兼容：对齐 `legacy-frontend/app/api/device-management*`、`/monitoring-stations*`、`/iot/devices*`、`/data-aggregation` 的关键返回结构；v2 以 `/api` 兼容层落地，并尽量映射到既有 v1 设备/站点/数据/基准点/告警能力 |
 
 ### 4.4 对齐与验收（总集成人做）
 
