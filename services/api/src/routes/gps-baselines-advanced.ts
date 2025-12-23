@@ -238,21 +238,37 @@ async function handleAvailableDevices(
   }
   const { lookbackDays, latKey, lonKey, limit } = parseQuery.data;
 
-  type Row = { device_id: string };
+  const start = new Date(Date.now() - lookbackDays * 86400 * 1000);
+
+  type Row = { device_id: string; lat_count: number | string; lon_count: number | string };
   const sql = `
-    SELECT DISTINCT device_id
+    SELECT
+      device_id,
+      countIf(sensor_key = {latKey:String})::UInt64 AS lat_count,
+      countIf(sensor_key = {lonKey:String})::UInt64 AS lon_count
     FROM ${config.clickhouseDatabase}.${config.clickhouseTable}
     WHERE sensor_key IN {sensorKeys:Array(String)}
-      AND received_ts >= now() - INTERVAL {days:UInt32} DAY
+      AND received_ts >= {start:DateTime64(3, 'UTC')}
+    GROUP BY device_id
+    HAVING lat_count > 0 AND lon_count > 0
     LIMIT {limit:UInt32}
   `;
   const res = await ch.query({
     query: sql,
-    query_params: { sensorKeys: [latKey, lonKey], days: lookbackDays, limit },
+    query_params: { sensorKeys: [latKey, lonKey], latKey, lonKey, start: toClickhouseDateTime64Utc(start), limit },
     format: "JSONEachRow"
   });
   const rows: Row[] = await res.json();
-  const gpsDeviceIds = [...new Set(rows.map((r) => r.device_id))];
+  const gpsDeviceIds = [...new Set(rows.map((r) => r.device_id))].filter((id) => deviceIdSchema.safeParse(id).success);
+  if (gpsDeviceIds.length === 0) {
+    respond(
+      reply,
+      { availableDevices: [], totalGpsDevices: 0, devicesWithBaseline: 0, devicesNeedingBaseline: 0, lookbackDays },
+      traceId,
+      opts
+    );
+    return;
+  }
 
   const activeDeviceIds = await withPgClient(pg, async (client) => {
     const r = await client.query<{ device_id: string }>(
@@ -354,7 +370,7 @@ async function handleAutoEstablish(
     longitude: lonAvg,
     altitude: altAvg ?? undefined,
     positionAccuracyMeters: accuracy,
-    notes: `auto-establish (${points.length} points)`
+    notes: `auto-establish (${String(points.length)} points)`
   });
 
   await upsertBaseline(pg, deviceId, "auto", points.length, baseline);
