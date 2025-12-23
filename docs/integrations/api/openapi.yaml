@@ -1967,6 +1967,50 @@ paths:
         default:
           $ref: "#/components/responses/ErrorResponse"
 
+  /gps/baselines/available-devices:
+    get:
+      tags: [gps]
+      summary: List devices needing GPS baseline
+      parameters:
+        - name: lookbackDays
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 365, default: 30 }
+        - name: latKey
+          in: query
+          required: false
+          schema: { type: string, default: gps_latitude }
+        - name: lonKey
+          in: query
+          required: false
+          schema: { type: string, default: gps_longitude }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 50000, default: 10000 }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/GpsBaselineAvailableDevices"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
   /gps/baselines/{deviceId}:
     get:
       tags: [gps]
@@ -2042,6 +2086,100 @@ paths:
       responses:
         "200":
           $ref: "#/components/responses/SuccessResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /gps/baselines/{deviceId}/auto-establish:
+    post:
+      tags: [gps]
+      summary: Auto establish GPS baseline
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AutoEstablishGpsBaselineRequest"
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/AutoEstablishGpsBaselineResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /gps/baselines/{deviceId}/quality-check:
+    get:
+      tags: [gps]
+      summary: Check GPS baseline quality
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: pointsCount
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 5000, default: 200 }
+        - name: lookbackDays
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 365, default: 30 }
+        - name: latKey
+          in: query
+          required: false
+          schema: { type: string, default: gps_latitude }
+        - name: lonKey
+          in: query
+          required: false
+          schema: { type: string, default: gps_longitude }
+        - name: altKey
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/GpsBaselineQualityCheck"
         "400":
           $ref: "#/components/responses/ErrorResponse"
         "401":
@@ -3263,6 +3401,112 @@ components:
         pointsCount: { type: integer, minimum: 1 }
         baseline:
           $ref: "#/components/schemas/GpsBaselinePoint"
+
+    GpsBaselineAvailableDevices:
+      type: object
+      required: [availableDevices, totalGpsDevices, devicesWithBaseline, devicesNeedingBaseline, lookbackDays]
+      properties:
+        availableDevices:
+          type: array
+          items: { type: string, format: uuid }
+        totalGpsDevices: { type: integer, minimum: 0 }
+        devicesWithBaseline: { type: integer, minimum: 0 }
+        devicesNeedingBaseline: { type: integer, minimum: 0 }
+        lookbackDays: { type: integer, minimum: 1 }
+
+    AutoEstablishGpsBaselineRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        pointsCount: { type: integer, minimum: 1, maximum: 5000, default: 20 }
+        lookbackDays: { type: integer, minimum: 1, maximum: 365, default: 30 }
+        latKey: { type: string, default: gps_latitude }
+        lonKey: { type: string, default: gps_longitude }
+        altKey: { type: string }
+
+    AutoEstablishGpsBaselineResponse:
+      type: object
+      required: [deviceId, pointsUsed, lookbackDays, keys, baseline, statistics]
+      properties:
+        deviceId: { type: string, format: uuid }
+        pointsUsed: { type: integer, minimum: 0 }
+        lookbackDays: { type: integer, minimum: 1 }
+        keys:
+          type: object
+          required: [latKey, lonKey, altKey]
+          properties:
+            latKey: { type: string }
+            lonKey: { type: string }
+            altKey: { type: string, nullable: true }
+        baseline:
+          $ref: "#/components/schemas/GpsBaselinePoint"
+        statistics:
+          type: object
+          required: [latStdDeg, lonStdDeg, positionAccuracyMeters, timeRange]
+          properties:
+            latStdDeg: { type: number }
+            lonStdDeg: { type: number }
+            positionAccuracyMeters: { type: number }
+            timeRange:
+              type: object
+              required: [start, end]
+              properties:
+                start: { type: string, format: date-time, nullable: true }
+                end: { type: string, format: date-time, nullable: true }
+
+    GpsBaselineQualityCheck:
+      type: object
+      required: [deviceId, lookbackDays, keys, baseline, sample, driftMeters, recommendation, baselineAgeHours]
+      properties:
+        deviceId: { type: string, format: uuid }
+        lookbackDays: { type: integer, minimum: 1 }
+        keys:
+          type: object
+          required: [latKey, lonKey, altKey]
+          properties:
+            latKey: { type: string }
+            lonKey: { type: string }
+            altKey: { type: string, nullable: true }
+        baseline:
+          allOf:
+            - $ref: "#/components/schemas/GpsBaselinePoint"
+            - type: object
+              required: [method, pointsCount, computedAt]
+              properties:
+                method: { type: string, enum: [auto, manual] }
+                pointsCount: { type: integer, nullable: true }
+                computedAt: { type: string, format: date-time }
+        sample:
+          type: object
+          required: [pointsUsed, timeRange]
+          properties:
+            pointsUsed: { type: integer, minimum: 0 }
+            timeRange:
+              type: object
+              required: [start, end]
+              properties:
+                start: { type: string, format: date-time, nullable: true }
+                end: { type: string, format: date-time, nullable: true }
+        driftMeters:
+          type: object
+          required: [mean, std, p95, max]
+          properties:
+            mean: { type: number }
+            std: { type: number }
+            p95: { type: number }
+            max: { type: number }
+        recommendation:
+          type: object
+          required: [level, thresholds]
+          properties:
+            level: { type: string, enum: [good, warn, bad] }
+            thresholds:
+              type: object
+              required: [goodP95Meters, warnP95Meters]
+              properties:
+                goodP95Meters: { type: number }
+                warnP95Meters: { type: number }
+        baselineAgeHours: { type: number }
 
     GpsDeformationBaseline:
       type: object
