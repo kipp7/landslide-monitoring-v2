@@ -20,6 +20,7 @@
 - `docs/integrations/api/08-gps-baselines.md`
 - `docs/integrations/api/09-gps-deformations.md`
 - `docs/integrations/api/010-realtime.md`
+- `docs/integrations/api/011-camera.md`
 
 机器可读契约（实现阶段用于生成 SDK/Mock/校验）：
 

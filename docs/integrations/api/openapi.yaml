@@ -15,6 +15,7 @@ tags:
   - name: stations
   - name: data
   - name: realtime
+  - name: camera
   - name: gps
   - name: alerts
   - name: system
@@ -2243,6 +2244,161 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/GpsDeformationSeries"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /camera/devices:
+    get:
+      tags: [camera]
+      summary: List camera devices
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          devices:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                id: { type: string }
+                                ip: { type: string }
+                                name: { type: string }
+                                status: { type: string, enum: [online, offline, error] }
+                                lastSeen: { type: integer }
+                                stats: { type: object, nullable: true }
+                          total: { type: integer }
+                          online: { type: integer }
+                        required: [devices, total, online]
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+    post:
+      tags: [camera]
+      summary: Add camera device (in-memory)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, ip, name]
+              properties:
+                id: { type: string }
+                ip: { type: string }
+                name: { type: string }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          id: { type: string }
+                          ip: { type: string }
+                          name: { type: string }
+                          status: { type: string, enum: [online, offline, error] }
+                          lastSeen: { type: integer }
+                          stats: { type: object, nullable: true }
+                        required: [id, ip, name, status, lastSeen]
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /camera/devices/{cameraId}/status:
+    get:
+      tags: [camera]
+      summary: Fetch camera status
+      parameters:
+        - name: cameraId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: timeoutMs
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1000, maximum: 20000, default: 5000 }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          id: { type: string }
+                          ip: { type: string }
+                          name: { type: string }
+                          status: { type: string, enum: [online, offline, error] }
+                          lastSeen: { type: integer }
+                          stats: { type: object, nullable: true }
+                        required: [id, ip, name, status, lastSeen]
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /camera/devices/{cameraId}:
+    delete:
+      tags: [camera]
+      summary: Delete camera device (in-memory)
+      parameters:
+        - name: cameraId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessResponse"
         "400":
           $ref: "#/components/responses/ErrorResponse"
         "401":
