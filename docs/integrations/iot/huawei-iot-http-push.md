@@ -5,7 +5,9 @@
 ## 1) 服务与端点
 
 - Service：`services/huawei-iot-adapter`
-- Endpoint：`POST /iot/huawei/telemetry`
+- Endpoint：
+  - v2：`POST /iot/huawei/telemetry`
+  - legacy 兼容：`POST /iot/huawei`（等价别名）
 
 健康检查：
 
@@ -57,4 +59,3 @@ Topic：`telemetry.raw.v1`
 - `received_ts` 由适配器写入（服务端接收时间）
 - `event_ts/seq/metrics/meta` 由请求体映射
 - Kafka message key 使用 `device_id`
-

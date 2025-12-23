@@ -5,4 +5,4 @@
 索引：
 
 - 华为云 IoT（HTTP Push）适配器：`docs/integrations/iot/huawei-iot-http-push.md`
-
+- 华为/硬件 legacy 端点兼容层：`docs/integrations/iot/huawei-legacy-compat.md`

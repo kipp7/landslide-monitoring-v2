@@ -28,6 +28,7 @@ import { registerGpsBaselineAdvancedRoutes, registerGpsBaselineLegacyCompatRoute
 import { registerGpsDeformationRoutes } from "./routes/gps-deformations";
 import { registerAnomalyAssessmentCompatRoutes } from "./routes/anomaly-assessment";
 import { registerRealtimeLegacyCompatRoutes, registerRealtimeRoutes } from "./routes/realtime";
+import { registerHuaweiLegacyCompatRoutes } from "./routes/huawei-legacy";
 
 async function main(): Promise<void> {
   dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
@@ -162,6 +163,9 @@ async function main(): Promise<void> {
   });
 
   registerEmqxRoutes(app, config, pg);
+
+  // Legacy-compatible paths (reference system): /huawei/*
+  registerHuaweiLegacyCompatRoutes(app, config, ch, pg);
 
   // Legacy-compatible path (reference system): /api/anomaly-assessment
   app.register(
