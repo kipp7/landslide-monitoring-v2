@@ -137,7 +137,7 @@
 | WS-K.1 |  |  |  | backlog | WS-C, WS-G | Camera/ESP32-CAM：对齐参考区 `frontend/app/analysis` 的视频监控能力；决定 v2 是否提供 `/api/v1/camera/*`（或独立 service），并补齐 Web 落地点与文档；默认按“硬件最后”可延后，但需先明确方案与契约 |
 | WS-K.2 |  |  |  | backlog | WS-C | Realtime/SSE：对齐参考区 `frontend/app/api/realtime-stream` 的实时推送能力；明确 v2 是否需要 realtime（SSE/WebSocket），如需要则定义契约、实现最小闭环、补齐 Web 订阅与权限控制 |
 | WS-K.3 |  |  |  | backlog | WS-H, WS-A | 设备健康专家系统：对齐参考区 `frontend/app/api/device-health-expert` + `backend/services/expertDeviceHealthService.js`；在 v2 以 worker/plugin 方式落地（入库 + 可查询 + 可审计），并补齐 Web 展示入口（尽量不改 UI） |
-| WS-K.4 |  |  |  | backlog | WS-E | Anomaly assessment 兼容/映射：对齐参考区 `/api/anomaly-assessment`；在 v2 明确与 `/alerts`/rule-engine 的对应关系，必要时增加兼容端点或提供迁移层，避免前端/运营依赖缺失 |
+| WS-K.4 | codex | `feat/ws-k4/anomaly-assessment-compat` |  | claimed | WS-E | Anomaly assessment 兼容/映射：对齐参考区 `/api/anomaly-assessment`；在 v2 明确与 `/alerts`/rule-engine 的对应关系，必要时增加兼容端点或提供迁移层，避免前端/运营依赖缺失 |
 | WS-K.5 |  |  |  | backlog | WS-D.1 | GPS baselines 高级能力：对齐参考区 `/api/baselines/:deviceId/auto-establish`、`/quality-check`、`/available-devices`；在 v2 补齐等价能力（契约+实现+回归留证），并确认 Web 基准点管理页的入口/字段一致性 |
 | WS-K.6 |  |  |  | backlog | WS-F, WS-A | 华为/硬件 legacy 端点：对齐参考区 `/huawei/*`（shadow/command templates/led/motor/buzzer/reboot）与 `/iot/huawei`；明确在 v2 的保留/弃用策略（推荐以 v2 `/devices/{deviceId}/commands` 为主），必要时实现兼容层并补齐安全与审计 |
 
