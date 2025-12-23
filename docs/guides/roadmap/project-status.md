@@ -20,6 +20,7 @@
 - 2025-12-23：设备健康专家（WS-K.3）：新增 `/devices/{deviceId}/health/expert`（TTL 缓存 + 落库 + 审计）、`/history` 与 actions，并提供 legacy `/api/device-health-expert`；Web 增加调试页 `/data/health-expert`。
 - 2025-12-23：AI predictions（WS-L.1）：新增 `/ai/predictions*` 查询端点（对接 `ai_predictions` 表）+ legacy `/api/ai-prediction` 兼容端点，并提供 Web 查看页 `/data/ai-predictions`。
 - 2025-12-23：Legacy 设备管理 API 兼容（WS-M.1）：新增 legacy `/api/device-management/*`、`/api/iot/devices/*`、`/api/monitoring-stations*`、`/api/data-aggregation`，映射到 v2 Postgres/ClickHouse 数据源，旧前端无需改代码即可继续使用。
+- 2025-12-23：运行大屏（WS-N.1）：PR #160，重构 Web `/analysis` 为“大屏信息架构”（地图/视频切换 + 侧边栏 + Realtime 状态），对齐 legacy 入口并复用 v2 API 数据源。
 - 2025-12-23：Camera/ESP32-CAM（WS-K.1）：新增 `/api/v1/camera/devices*`（列出/添加/删除/状态探测），并提供 legacy `/api/camera` 兼容路径；Web `运行概览` 补齐视频监控卡片（直连 `http://{ip}/stream`）。
 - 2025-12-23：华为/硬件 legacy 端点策略（WS-K.6）：补齐 `/iot/huawei`（适配器别名）与 `/huawei/*` 兼容层（影子/命令模板/快捷命令），并将 legacy 命令映射到 v2 `device_commands` + Kafka 管线。
 - 2025-12-22：GPS 基线管理（WS-D.1）：补齐 v2 API 的 `/api/v1/gps/baselines`（list/get/upsert/delete）实现与 OpenAPI 契约文档，支持站点/设备的基线维护与回归留证。
