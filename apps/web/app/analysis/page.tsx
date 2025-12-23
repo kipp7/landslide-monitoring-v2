@@ -7,6 +7,7 @@ import useDeviceList from '../hooks/useDeviceList'
 import useDeviceShadow from '../hooks/useDeviceShadow'
 import useSensors from '../hooks/useSensors'
 import { listAlerts, type AlertRow } from '../../lib/api/alerts'
+import { getCameraStatus, listCameraDevices, type CameraDevice } from '../../lib/api/camera'
 import { getDashboard, getSystemStatus, type DashboardSummary, type SystemStatus } from '../../lib/api/dashboard'
 
 const { Title, Text } = Typography
@@ -38,6 +39,12 @@ export default function AnalysisPage() {
 
   const { data: shadow, loading: shadowLoading, error: shadowError, refreshShadow } = useDeviceShadow(selectedDeviceId, 15_000)
   const { byKey: sensorsByKey, error: sensorsError } = useSensors()
+
+  const [cameras, setCameras] = useState<CameraDevice[]>([])
+  const [camerasLoading, setCamerasLoading] = useState(false)
+  const [camerasError, setCamerasError] = useState<string | null>(null)
+  const [selectedCameraId, setSelectedCameraId] = useState<string>('')
+  const [cameraStreamError, setCameraStreamError] = useState<string | null>(null)
 
   const [alerts, setAlerts] = useState<AlertRow[]>([])
   const [alertsLoading, setAlertsLoading] = useState(false)
@@ -92,6 +99,44 @@ export default function AnalysisPage() {
   useEffect(() => {
     void fetchAlerts()
   }, [fetchAlerts])
+
+  const fetchCameras = useCallback(async () => {
+    try {
+      setCamerasLoading(true)
+      setCamerasError(null)
+      const json = await listCameraDevices()
+      setCameras(json.data?.devices ?? [])
+    } catch (caught) {
+      setCamerasError(caught instanceof Error ? caught.message : String(caught))
+      setCameras([])
+    } finally {
+      setCamerasLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void fetchCameras()
+  }, [fetchCameras])
+
+  useEffect(() => {
+    if (!selectedCameraId && cameras.length > 0) setSelectedCameraId(cameras[0].id)
+  }, [cameras, selectedCameraId])
+
+  const refreshCameraStatus = useCallback(async () => {
+    if (!selectedCameraId) return
+    try {
+      const json = await getCameraStatus(selectedCameraId, { timeoutMs: 5000 })
+      const updated = json.data
+      setCameras((prev) => {
+        const next = prev.slice()
+        const idx = next.findIndex((c) => c.id === updated.id)
+        if (idx >= 0) next[idx] = updated
+        return next
+      })
+    } catch (caught) {
+      setCamerasError(caught instanceof Error ? caught.message : String(caught))
+    }
+  }, [selectedCameraId])
 
   useEffect(() => {
     void fetchDashboard()
@@ -182,6 +227,59 @@ export default function AnalysisPage() {
           )}
         </Card>
       </div>
+
+      <Card title="视频监控（ESP32-CAM）" size="small">
+        {camerasError ? <Text type="danger">摄像头加载失败：{camerasError}</Text> : null}
+        <Space wrap>
+          <span>摄像头</span>
+          <Select
+            style={{ minWidth: 260 }}
+            value={selectedCameraId || undefined}
+            showSearch
+            placeholder="请选择 camera"
+            loading={camerasLoading}
+            options={cameras.map((c) => ({ value: c.id, label: `${c.name} (${c.ip})` }))}
+            onChange={(v) => {
+              setSelectedCameraId(v)
+              setCameraStreamError(null)
+            }}
+          />
+          <Button onClick={() => void fetchCameras()} loading={camerasLoading}>
+            刷新
+          </Button>
+          <Button onClick={() => void refreshCameraStatus()} disabled={!selectedCameraId}>
+            刷新状态
+          </Button>
+          {selectedCameraId ? <Tag>{cameras.find((c) => c.id === selectedCameraId)?.status ?? 'offline'}</Tag> : null}
+        </Space>
+
+        <div className="mt-3">
+          {(() => {
+            const cam = cameras.find((c) => c.id === selectedCameraId)
+            if (!cam) return <Text type="secondary">暂无摄像头</Text>
+            const streamUrl = `http://${cam.ip}/stream?t=${Date.now()}`
+            return (
+              <div>
+                <div className="mb-2">
+                  <Text type="secondary">
+                    stream: <span className="font-mono">{streamUrl}</span>
+                  </Text>
+                </div>
+                {cameraStreamError ? <Text type="danger">{cameraStreamError}</Text> : null}
+                <div className="w-full max-w-[960px] bg-black rounded-lg overflow-hidden">
+                  <img
+                    src={streamUrl}
+                    alt="ESP32-CAM stream"
+                    className="w-full h-auto object-contain"
+                    onError={() => setCameraStreamError('视频流加载失败（请确认浏览器可直连摄像头 IP）')}
+                    onLoad={() => setCameraStreamError(null)}
+                  />
+                </div>
+              </div>
+            )
+          })()}
+        </div>
+      </Card>
 
       <Card title="设备概览" size="small">
         {devicesError ? <Text type="danger">设备列表加载失败：{devicesError.message}</Text> : null}
