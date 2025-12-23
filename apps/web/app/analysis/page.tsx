@@ -1,14 +1,20 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Button, Card, Descriptions, Select, Space, Table, Tag, Typography } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
-import useDeviceList from '../hooks/useDeviceList'
-import useDeviceShadow from '../hooks/useDeviceShadow'
-import useSensors from '../hooks/useSensors'
+import { Button, Card, Descriptions, Select, Segmented, Space, Table, Tag, Typography } from 'antd'
+import dynamic from 'next/dynamic'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { listAlerts, type AlertRow } from '../../lib/api/alerts'
 import { getCameraStatus, listCameraDevices, type CameraDevice } from '../../lib/api/camera'
 import { getDashboard, getSystemStatus, type DashboardSummary, type SystemStatus } from '../../lib/api/dashboard'
+import useDeviceList from '../hooks/useDeviceList'
+import useDeviceShadow from '../hooks/useDeviceShadow'
+import { useRealtimeStream } from '../hooks/useRealtimeStream'
+import useSensors from '../hooks/useSensors'
+import useStationList from '../hooks/useStationList'
+import type { StationMapPoint, StationMapTile } from './components/StationMap'
+
+const StationMap = dynamic(() => import('./components/StationMap'), { ssr: false })
 
 const { Title, Text } = Typography
 
@@ -31,11 +37,62 @@ function formatValue(value: unknown): string {
 
 export default function AnalysisPage() {
   const { devices, loading: devicesLoading, error: devicesError, refetch } = useDeviceList()
+  const { stations, loading: stationsLoading, error: stationsError, refetch: refetchStations } = useStationList()
+  const realtime = useRealtimeStream({ deviceId: 'all' })
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>('')
+  const [mapMode, setMapMode] = useState<'2d' | '3d' | 'satellite' | 'video'>('2d')
 
   useEffect(() => {
     if (!selectedDeviceId && devices.length > 0) setSelectedDeviceId(devices[0].device_id)
   }, [devices, selectedDeviceId])
+
+  const selectedDevice = useMemo(
+    () => devices.find((d) => d.device_id === selectedDeviceId) ?? null,
+    [devices, selectedDeviceId]
+  )
+
+  const mapPoints = useMemo(() => {
+    const stationById = new Map(stations.map((s) => [s.stationId, s] as const))
+    const points = devices.flatMap((d) => {
+      const stationId = d.station_id ?? null
+      if (!stationId) return []
+      const station = stationById.get(stationId)
+      if (!station) return []
+      if (station.latitude === null || station.longitude === null) return []
+      return [
+        {
+          deviceId: d.device_id,
+          label: d.display_name || d.device_id,
+          stationName: station.stationName,
+          status: d.status,
+          lat: station.latitude,
+          lon: station.longitude,
+        },
+      ]
+    })
+    points.sort((a, b) => a.label.localeCompare(b.label))
+    return points as StationMapPoint[]
+  }, [devices, stations])
+
+  const mapCenter = useMemo<[number, number]>(() => {
+    if (mapPoints.length === 0) return [30.0, 120.0]
+    const avgLat = mapPoints.reduce((s, p) => s + p.lat, 0) / mapPoints.length
+    const avgLon = mapPoints.reduce((s, p) => s + p.lon, 0) / mapPoints.length
+    return [avgLat, avgLon]
+  }, [mapPoints])
+
+  const tile = useMemo(() => {
+    if (mapMode === 'satellite') {
+      return {
+        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        attribution: 'Tiles © Esri',
+      } satisfies StationMapTile
+    }
+    return {
+      url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      attribution: '© OpenStreetMap contributors',
+    } satisfies StationMapTile
+  }, [mapMode])
 
   const { data: shadow, loading: shadowLoading, error: shadowError, refreshShadow } = useDeviceShadow(selectedDeviceId, 15_000)
   const { byKey: sensorsByKey, error: sensorsError } = useSensors()
@@ -98,7 +155,14 @@ export default function AnalysisPage() {
 
   useEffect(() => {
     void fetchAlerts()
-  }, [fetchAlerts])
+    void fetchDashboard()
+    void fetchSystemStatus()
+  }, [fetchAlerts, fetchDashboard, fetchSystemStatus])
+
+  useEffect(() => {
+    realtime.connect()
+    return () => realtime.disconnect()
+  }, [realtime])
 
   const fetchCameras = useCallback(async () => {
     try {
@@ -133,20 +197,10 @@ export default function AnalysisPage() {
         if (idx >= 0) next[idx] = updated
         return next
       })
-    } catch (caught) {
-      setCamerasError(caught instanceof Error ? caught.message : String(caught))
+    } catch {
+      // ignore
     }
   }, [selectedCameraId])
-
-  useEffect(() => {
-    void fetchDashboard()
-    void fetchSystemStatus()
-  }, [fetchDashboard, fetchSystemStatus])
-
-  const selectedDevice = useMemo(() => devices.find((d) => d.device_id === selectedDeviceId) ?? null, [
-    devices,
-    selectedDeviceId,
-  ])
 
   const metricsRows = useMemo(() => {
     const metrics = shadow?.metrics ?? {}
@@ -168,46 +222,50 @@ export default function AnalysisPage() {
       <div className="flex items-center justify-between">
         <div>
           <Title level={3} style={{ margin: 0 }}>
-            运行概览（v2）
+            Analysis (big-screen layout, v2)
           </Title>
-          <Text type="secondary">数据源：v2 API（/api/v1/dashboard、/api/v1/system/status、/api/v1/*）</Text>
+          <Text type="secondary">WS-N.1: restore legacy /analysis information architecture (map slot + sidebar + status)</Text>
         </div>
         <Space>
           <Button
             icon={<ReloadOutlined />}
             onClick={() => {
               void refetch()
+              void refetchStations()
               void refreshShadow()
               void fetchAlerts()
               void fetchDashboard()
               void fetchSystemStatus()
+              void fetchCameras()
+              realtime.disconnect()
+              realtime.connect()
             }}
-            loading={devicesLoading || shadowLoading || alertsLoading}
+            loading={devicesLoading || shadowLoading || alertsLoading || camerasLoading}
           >
-            刷新
+            Refresh
           </Button>
         </Space>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Card title="Dashboard（/dashboard）" size="small">
-          {dashboardError ? <Text type="danger">加载失败：{dashboardError}</Text> : null}
+        <Card title="Dashboard" size="small">
+          {dashboardError ? <Text type="danger">Load failed: {dashboardError}</Text> : null}
           {dashboard ? (
             <Descriptions bordered size="small" column={2}>
-              <Descriptions.Item label="今日数据量">{dashboard.todayDataCount}</Descriptions.Item>
-              <Descriptions.Item label="站点数">{dashboard.stations}</Descriptions.Item>
-              <Descriptions.Item label="在线设备">{dashboard.onlineDevices}</Descriptions.Item>
-              <Descriptions.Item label="离线设备">{dashboard.offlineDevices}</Descriptions.Item>
-              <Descriptions.Item label="待处理告警">{dashboard.pendingAlerts}</Descriptions.Item>
-              <Descriptions.Item label="最后更新时间">{dashboard.lastUpdatedAt}</Descriptions.Item>
+              <Descriptions.Item label="Today data">{dashboard.todayDataCount}</Descriptions.Item>
+              <Descriptions.Item label="Stations">{dashboard.stations}</Descriptions.Item>
+              <Descriptions.Item label="Online devices">{dashboard.onlineDevices}</Descriptions.Item>
+              <Descriptions.Item label="Offline devices">{dashboard.offlineDevices}</Descriptions.Item>
+              <Descriptions.Item label="Pending alerts">{dashboard.pendingAlerts}</Descriptions.Item>
+              <Descriptions.Item label="Last updated">{dashboard.lastUpdatedAt}</Descriptions.Item>
             </Descriptions>
           ) : (
-            <Text type="secondary">暂无数据</Text>
+            <Text type="secondary">No data</Text>
           )}
         </Card>
 
-        <Card title="系统状态（/system/status）" size="small">
-          {systemStatusError ? <Text type="danger">加载失败：{systemStatusError}</Text> : null}
+        <Card title="System status (/system/status)" size="small">
+          {systemStatusError ? <Text type="danger">Load failed: {systemStatusError}</Text> : null}
           {systemStatus ? (
             <Descriptions bordered size="small" column={2}>
               <Descriptions.Item label="Uptime(s)">{systemStatus.uptimeS}</Descriptions.Item>
@@ -215,154 +273,213 @@ export default function AnalysisPage() {
                 <Tag color={systemStatus.postgres.status === 'healthy' ? 'green' : 'red'}>{systemStatus.postgres.status}</Tag>
               </Descriptions.Item>
               <Descriptions.Item label="ClickHouse">
-                <Tag color={systemStatus.clickhouse.status === 'healthy' ? 'green' : 'red'}>
-                  {systemStatus.clickhouse.status}
-                </Tag>
+                <Tag color={systemStatus.clickhouse.status === 'healthy' ? 'green' : 'red'}>{systemStatus.clickhouse.status}</Tag>
               </Descriptions.Item>
               <Descriptions.Item label="Kafka">{systemStatus.kafka.status}</Descriptions.Item>
               <Descriptions.Item label="EMQX">{systemStatus.emqx.status}</Descriptions.Item>
             </Descriptions>
           ) : (
-            <Text type="secondary">暂无数据</Text>
+            <Text type="secondary">No data</Text>
           )}
         </Card>
       </div>
 
-      <Card title="视频监控（ESP32-CAM）" size="small">
-        {camerasError ? <Text type="danger">摄像头加载失败：{camerasError}</Text> : null}
+      <Card title="Realtime (SSE) status" size="small">
         <Space wrap>
-          <span>摄像头</span>
-          <Select
-            style={{ minWidth: 260 }}
-            value={selectedCameraId || undefined}
-            showSearch
-            placeholder="请选择 camera"
-            loading={camerasLoading}
-            options={cameras.map((c) => ({ value: c.id, label: `${c.name} (${c.ip})` }))}
-            onChange={(v) => {
-              setSelectedCameraId(v)
-              setCameraStreamError(null)
-            }}
-          />
-          <Button onClick={() => void fetchCameras()} loading={camerasLoading}>
-            刷新
+          <Button type="primary" onClick={realtime.connect} disabled={realtime.isConnected || realtime.isConnecting}>
+            Connect
           </Button>
-          <Button onClick={() => void refreshCameraStatus()} disabled={!selectedCameraId}>
-            刷新状态
+          <Button onClick={realtime.disconnect} disabled={!realtime.isConnected && !realtime.isConnecting}>
+            Disconnect
           </Button>
-          {selectedCameraId ? <Tag>{cameras.find((c) => c.id === selectedCameraId)?.status ?? 'offline'}</Tag> : null}
+          <Tag color={realtime.isConnected ? 'green' : realtime.connectionError ? 'red' : 'default'}>
+            {realtime.isConnected ? 'connected' : realtime.isConnecting ? 'connecting' : 'disconnected'}
+          </Tag>
+          {realtime.stats.lastHeartbeat ? (
+            <Text type="secondary">
+              lastHeartbeat: <span className="font-mono">{realtime.stats.lastHeartbeat}</span>
+            </Text>
+          ) : null}
+          <Text type="secondary">
+            messages: <span className="font-mono">{realtime.stats.messagesReceived}</span>
+          </Text>
+          {realtime.connectionError ? <Text type="danger">{realtime.connectionError}</Text> : null}
         </Space>
+      </Card>
 
-        <div className="mt-3">
-          {(() => {
-            const cam = cameras.find((c) => c.id === selectedCameraId)
-            if (!cam) return <Text type="secondary">暂无摄像头</Text>
-            const streamUrl = `http://${cam.ip}/stream?t=${Date.now()}`
-            return (
-              <div>
-                <div className="mb-2">
-                  <Text type="secondary">
-                    stream: <span className="font-mono">{streamUrl}</span>
-                  </Text>
-                </div>
-                {cameraStreamError ? <Text type="danger">{cameraStreamError}</Text> : null}
-                <div className="w-full max-w-[960px] bg-black rounded-lg overflow-hidden">
-                  <img
-                    src={streamUrl}
-                    alt="ESP32-CAM stream"
-                    className="w-full h-auto object-contain"
-                    onError={() => setCameraStreamError('视频流加载失败（请确认浏览器可直连摄像头 IP）')}
-                    onLoad={() => setCameraStreamError(null)}
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Card
+          className="lg:col-span-2"
+          size="small"
+          title="Map / Video"
+          extra={
+            <Segmented
+              size="small"
+              value={mapMode}
+              options={[
+                { label: '2D', value: '2d' },
+                { label: '3D', value: '3d' },
+                { label: 'Satellite', value: 'satellite' },
+                { label: 'Video', value: 'video' },
+              ]}
+              onChange={(v) => setMapMode(v as typeof mapMode)}
+            />
+          }
+        >
+          {mapMode === 'video' ? (
+            <div>
+              {camerasError ? <Text type="danger">Camera list failed: {camerasError}</Text> : null}
+              <Space wrap>
+                <span>Camera</span>
+                <Select
+                  style={{ minWidth: 280 }}
+                  value={selectedCameraId || undefined}
+                  showSearch
+                  placeholder="Select camera"
+                  loading={camerasLoading}
+                  options={cameras.map((c) => ({ value: c.id, label: `${c.name} (${c.ip})` }))}
+                  onChange={(v) => {
+                    setSelectedCameraId(v)
+                    setCameraStreamError(null)
+                  }}
+                />
+                <Button onClick={() => void fetchCameras()} loading={camerasLoading}>
+                  Refresh
+                </Button>
+                <Button onClick={() => void refreshCameraStatus()} disabled={!selectedCameraId}>
+                  Refresh status
+                </Button>
+                {selectedCameraId ? <Tag>{cameras.find((c) => c.id === selectedCameraId)?.status ?? 'offline'}</Tag> : null}
+              </Space>
+
+              <div className="mt-3">
+                {(() => {
+                  const cam = cameras.find((c) => c.id === selectedCameraId)
+                  if (!cam) return <Text type="secondary">No camera selected</Text>
+                  const streamUrl = `http://${cam.ip}/stream?t=${Date.now()}`
+                  return (
+                    <div>
+                      <div className="mb-2">
+                        <Text type="secondary">
+                          stream: <span className="font-mono">{streamUrl}</span>
+                        </Text>
+                      </div>
+                      {cameraStreamError ? <Text type="danger">{cameraStreamError}</Text> : null}
+                      <div className="w-full bg-black rounded-lg overflow-hidden">
+                        <img
+                          src={streamUrl}
+                          alt="ESP32-CAM stream"
+                          className="w-full h-auto object-contain"
+                          onError={() => setCameraStreamError('Stream load failed (make sure browser can reach the camera IP)')}
+                          onLoad={() => setCameraStreamError(null)}
+                        />
+                      </div>
+                    </div>
+                  )
+                })()}
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {stationsError ? <Text type="danger">Stations load failed: {stationsError.message}</Text> : null}
+              <div className="h-[420px] rounded-lg overflow-hidden">
+                <StationMap
+                  center={mapCenter}
+                  zoom={mapPoints.length > 0 ? 11 : 5}
+                  tile={tile}
+                  points={mapPoints}
+                  onSelectDevice={setSelectedDeviceId}
+                />
+              </div>
+
+              <Descriptions bordered size="small" column={2}>
+                <Descriptions.Item label="Stations">{stations.length}</Descriptions.Item>
+                <Descriptions.Item label="Map markers">{mapPoints.length}</Descriptions.Item>
+                <Descriptions.Item label="Selected device">{selectedDevice?.display_name || selectedDeviceId || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Mode">{mapMode.toUpperCase()}</Descriptions.Item>
+              </Descriptions>
+              {stationsLoading ? <Text type="secondary">Loading stations…</Text> : null}
+              {mapPoints.length === 0 && !stationsLoading ? (
+                <Text type="secondary">No station coordinates configured yet (set lat/lon on stations to show markers).</Text>
+              ) : null}
+              <Text type="secondary">
+                WS-N.2 will add cluster markers + risk colors + popups; WS-N.1 focuses on layout + v2 data wiring.
+              </Text>
+            </div>
+          )}
+        </Card>
+
+        <div className="space-y-4">
+          <Card title="Device" size="small">
+            {devicesError ? <Text type="danger">Device list failed: {devicesError.message}</Text> : null}
+            <Space wrap>
+              <span>Select</span>
+              <Select
+                style={{ minWidth: 260 }}
+                value={selectedDeviceId || undefined}
+                showSearch
+                placeholder="Select deviceId"
+                options={devices.map((d) => ({ value: d.device_id, label: `${d.display_name} (${d.device_id})` }))}
+                onChange={(v) => setSelectedDeviceId(v)}
+              />
+            </Space>
+            <div className="mt-3">
+              <Descriptions bordered size="small" column={2}>
+                <Descriptions.Item label="Total">{devices.length}</Descriptions.Item>
+                <Descriptions.Item label="Online">{devices.filter((d) => d.status === 'online').length}</Descriptions.Item>
+                <Descriptions.Item label="Selected">{selectedDevice?.display_name || selectedDeviceId || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Device ID">{selectedDeviceId || '-'}</Descriptions.Item>
+              </Descriptions>
+            </div>
+          </Card>
+
+          <Card title="Device state (/data/state/{deviceId})" size="small">
+            {sensorsError ? <Text type="warning">Sensors dict not available: {sensorsError}</Text> : null}
+            {shadowError ? <Text type="danger">State load failed: {shadowError}</Text> : null}
+            {shadow ? (
+              <>
+                <Descriptions bordered size="small" column={2}>
+                  <Descriptions.Item label="Updated">{shadow.updatedAt}</Descriptions.Item>
+                  <Descriptions.Item label="Metrics">{Object.keys(shadow.metrics ?? {}).length}</Descriptions.Item>
+                </Descriptions>
+                <div className="mt-3">
+                  <Table
+                    rowKey="sensorKey"
+                    loading={shadowLoading}
+                    dataSource={metricsRows}
+                    pagination={{ pageSize: 10 }}
+                    size="small"
+                    columns={[
+                      { title: 'sensorKey', dataIndex: 'sensorKey', width: 220, render: (v: string) => <span className="font-mono">{v}</span> },
+                      { title: 'Name', dataIndex: 'name' },
+                      { title: 'Value', dataIndex: 'value', render: (v: unknown) => <span className="font-mono">{formatValue(v)}</span> },
+                      { title: 'Unit', dataIndex: 'unit', width: 80 },
+                    ]}
                   />
                 </div>
-              </div>
-            )
-          })()}
+              </>
+            ) : (
+              <Text type="secondary">{shadowLoading ? 'Loading…' : 'No data'}</Text>
+            )}
+          </Card>
+
+          <Card title="Alerts (last 24h)" size="small">
+            {alertsError ? <Text type="danger">Alerts load failed: {alertsError}</Text> : null}
+            <Table
+              rowKey="alertId"
+              loading={alertsLoading}
+              dataSource={alerts}
+              pagination={{ pageSize: 8 }}
+              size="small"
+              columns={[
+                { title: 'Time', dataIndex: 'lastEventAt', render: (v: string) => <span className="font-mono">{v}</span> },
+                { title: 'Severity', dataIndex: 'severity', render: (v: AlertRow['severity']) => severityTag(v) },
+                { title: 'Title', dataIndex: 'title', render: (v: string | null | undefined) => v || '-' },
+              ]}
+            />
+          </Card>
         </div>
-      </Card>
-
-      <Card title="设备概览" size="small">
-        {devicesError ? <Text type="danger">设备列表加载失败：{devicesError.message}</Text> : null}
-        <Space wrap>
-          <span>选择设备</span>
-          <Select
-            style={{ minWidth: 260 }}
-            value={selectedDeviceId || undefined}
-            showSearch
-            placeholder="请选择 deviceId"
-            options={devices.map((d) => ({ value: d.device_id, label: `${d.display_name} (${d.device_id})` }))}
-            onChange={(v) => setSelectedDeviceId(v)}
-          />
-        </Space>
-        <div className="mt-3">
-          <Descriptions bordered size="small" column={2}>
-            <Descriptions.Item label="设备数量">{devices.length}</Descriptions.Item>
-            <Descriptions.Item label="在线设备">{devices.filter((d) => d.status === 'online').length}</Descriptions.Item>
-            <Descriptions.Item label="当前选择">{selectedDevice?.display_name || selectedDeviceId || '-'}</Descriptions.Item>
-            <Descriptions.Item label="Device ID">{selectedDeviceId || '-'}</Descriptions.Item>
-          </Descriptions>
-        </div>
-      </Card>
-
-      <Card title="当前设备状态（/data/state/{deviceId}）" size="small">
-        {sensorsError ? <Text type="warning">传感器字典不可用：{sensorsError}</Text> : null}
-        {shadowError ? <Text type="danger">状态获取失败：{shadowError}</Text> : null}
-        {shadow ? (
-          <>
-            <Descriptions bordered size="small" column={2}>
-              <Descriptions.Item label="更新时间">{shadow.updatedAt}</Descriptions.Item>
-              <Descriptions.Item label="Metrics 数量">{Object.keys(shadow.metrics ?? {}).length}</Descriptions.Item>
-            </Descriptions>
-            <div className="mt-3">
-              <Table
-                rowKey="sensorKey"
-                loading={shadowLoading}
-                dataSource={metricsRows}
-                pagination={{ pageSize: 15 }}
-                size="small"
-                columns={[
-                  { title: 'sensorKey', dataIndex: 'sensorKey', width: 220, render: (v: string) => <span className="font-mono">{v}</span> },
-                  { title: '名称', dataIndex: 'name' },
-                  { title: '值', dataIndex: 'value', render: (v: unknown) => <span className="font-mono">{formatValue(v)}</span> },
-                  { title: '单位', dataIndex: 'unit', width: 80 },
-                ]}
-              />
-            </div>
-          </>
-        ) : (
-          <Text type="secondary">{shadowLoading ? '加载中…' : '暂无数据'}</Text>
-        )}
-      </Card>
-
-      <Card title="近 24 小时告警">
-        {alertsError ? <Text type="danger">告警加载失败：{alertsError}</Text> : null}
-        <Table
-          rowKey="alertId"
-          loading={alertsLoading}
-          dataSource={alerts}
-          pagination={false}
-          size="small"
-          columns={[
-            {
-              title: '时间',
-              dataIndex: 'lastEventAt',
-              render: (v: string) => <span className="font-mono">{v}</span>,
-            },
-            {
-              title: '级别',
-              dataIndex: 'severity',
-              render: (v: AlertRow['severity']) => severityTag(v),
-            },
-            { title: '标题', dataIndex: 'title', render: (v: string | null | undefined) => v || '-' },
-            {
-              title: '对象',
-              dataIndex: 'deviceId',
-              render: (_: unknown, row: AlertRow) => row.deviceId || row.stationId || '-',
-            },
-            { title: '状态', dataIndex: 'status' },
-          ]}
-        />
-      </Card>
+      </div>
     </div>
   )
 }

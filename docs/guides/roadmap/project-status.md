@@ -7,7 +7,7 @@
 - 每次合并一个 PR 到 `main`，如果它改变了项目阶段/里程碑/下一步，必须更新本页。
 - 本页只记录“当前状态与下一步”，历史细节放到 `docs/incidents/` 或 PR/commit 记录中。
 
-最后更新时间：2025-12-23（阶段 5 已完成：固件模拟器 + Stage5Regression 回归基线；硬件联调待启动）
+最后更新时间：2025-12-24（阶段 5 已完成：固件模拟器 + Stage5Regression 回归基线；硬件联调待启动）
 - 2025-12-22：PR #103（WS-C）：新增 Web 数据浏览器 `/data`（series/raw/export/statistics），用于单机联调与分析验证。
 - 2025-12-22：GPS 形变（WS-D.2）：新增 `/api/v1/gps/deformations/{deviceId}/series`（基于基准点 + ClickHouse 遥测计算位移；支持 `latKey/lonKey/altKey` 覆盖默认 metric key），补齐 API 契约文档与 OpenAPI。
 - 2025-12-22：WS-G 落地收口：合并 `/ops/system-monitor` + `/ops/debug-api` 与旧路径跳转，并将 Next.js Windows 构建输出目录切换为 `.next_v2` 规避 `.next_web/trace` 的 EPERM 卡点（见 PR #79）。
@@ -20,6 +20,7 @@
 - 2025-12-23：设备健康专家（WS-K.3）：新增 `/devices/{deviceId}/health/expert`（TTL 缓存 + 落库 + 审计）、`/history` 与 actions，并提供 legacy `/api/device-health-expert`；Web 增加调试页 `/data/health-expert`。
 - 2025-12-23：AI predictions（WS-L.1）：新增 `/ai/predictions*` 查询端点（对接 `ai_predictions` 表）+ legacy `/api/ai-prediction` 兼容端点，并提供 Web 查看页 `/data/ai-predictions`。
 - 2025-12-23：Legacy 设备管理 API 兼容（WS-M.1）：新增 legacy `/api/device-management/*`、`/api/iot/devices/*`、`/api/monitoring-stations*`、`/api/data-aggregation`，映射到 v2 Postgres/ClickHouse 数据源，旧前端无需改代码即可继续使用。
+- 2025-12-24：运行大屏（WS-N.1）：PR #160，Web `/analysis` 补齐“大屏信息架构”与最小地图（站点坐标 -> 设备标记 + 点击选设备）+ Realtime(SSE) 状态卡，数据源统一走 v2 API（后续 WS-N.2 深化地图聚合/风险色/弹窗）。
 - 2025-12-23：Camera/ESP32-CAM（WS-K.1）：新增 `/api/v1/camera/devices*`（列出/添加/删除/状态探测），并提供 legacy `/api/camera` 兼容路径；Web `运行概览` 补齐视频监控卡片（直连 `http://{ip}/stream`）。
 - 2025-12-23：华为/硬件 legacy 端点策略（WS-K.6）：补齐 `/iot/huawei`（适配器别名）与 `/huawei/*` 兼容层（影子/命令模板/快捷命令），并将 legacy 命令映射到 v2 `device_commands` + Kafka 管线。
 - 2025-12-22：GPS 基线管理（WS-D.1）：补齐 v2 API 的 `/api/v1/gps/baselines`（list/get/upsert/delete）实现与 OpenAPI 契约文档，支持站点/设备的基线维护与回归留证。
