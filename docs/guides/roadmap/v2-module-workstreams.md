@@ -134,7 +134,7 @@
 | WS-H | codex | `feat/ws-h/ai-prediction-worker` | https://github.com/kipp7/landslide-monitoring-v2/pull/84 | done |  | AI predictions plugin/worker |
 | WS-I | codex | `docs/ws-i/gap-audit-route-inventory` | https://github.com/kipp7/landslide-monitoring-v2/pull/121 | done |  | Docs: 扩充 `gap-audit.md`（v2 Web 路由盘点 + 参考区对照） |
 | WS-J | codex | `feat/ws-j/legacy-routes-compat` | https://github.com/kipp7/landslide-monitoring-v2/pull/125 | done |  | Web: 恢复旧系统兼容入口（`/baseline-management`、`/analysis2`、`/optimized-demo`）并跳转到 v2 等价页面 |
-| WS-K.1 |  |  |  | backlog | WS-C, WS-G | Camera/ESP32-CAM：对齐参考区 `frontend/app/analysis` 的视频监控能力；决定 v2 是否提供 `/api/v1/camera/*`（或独立 service），并补齐 Web 落地点与文档；默认按“硬件最后”可延后，但需先明确方案与契约 |
+| WS-K.1 | codex | `feat/ws-k1/camera-esp32cam` |  | claimed | WS-C, WS-G | Camera/ESP32-CAM：对齐参考区 `frontend/app/analysis` 的视频监控能力；决定 v2 是否提供 `/api/v1/camera/*`（或独立 service），并补齐 Web 落地点与文档；默认按“硬件最后”可延后，但需先明确方案与契约 |
 | WS-K.2 | codex | `feat/ws-k2/realtime-sse` | https://github.com/kipp7/landslide-monitoring-v2/pull/136 | done | WS-C | Realtime/SSE：对齐参考区 `frontend/app/api/realtime-stream` 的实时推送能力；明确 v2 是否需要 realtime（SSE/WebSocket），如需要则定义契约、实现最小闭环、补齐 Web 订阅与权限控制 |
 | WS-K.3 |  |  |  | backlog | WS-H, WS-A | 设备健康专家系统：对齐参考区 `frontend/app/api/device-health-expert` + `backend/services/expertDeviceHealthService.js`；在 v2 以 worker/plugin 方式落地（入库 + 可查询 + 可审计），并补齐 Web 展示入口（尽量不改 UI） |
 | WS-K.4 | codex | `feat/ws-k4/anomaly-assessment-compat` | https://github.com/kipp7/landslide-monitoring-v2/pull/130 | done | WS-E | Anomaly assessment 兼容/映射：对齐参考区 `/api/anomaly-assessment`；在 v2 明确与 `/alerts`/rule-engine 的对应关系，必要时增加兼容端点或提供迁移层，避免前端/运营依赖缺失 |
