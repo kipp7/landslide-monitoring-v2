@@ -1528,6 +1528,36 @@ paths:
         default:
           $ref: "#/components/responses/ErrorResponse"
 
+  /anomaly-assessment:
+    get:
+      tags: [alerts]
+      summary: Anomaly assessment aggregation (legacy-compatible)
+      parameters:
+        - name: timeWindow
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 720, default: 24 }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/AnomalyAssessmentPayload"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
   /alert-rules:
     get:
       tags: [alerts]
@@ -3030,6 +3060,43 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/AlertEvent"
+
+    AnomalyAssessmentItem:
+      type: object
+      required: [anomaly_type, count, severity, priority, latest_time, color, display_name, recommended_action]
+      properties:
+        anomaly_type: { type: string }
+        count: { type: integer, minimum: 0 }
+        severity: { type: string, enum: [red, orange, yellow, blue, normal] }
+        priority: { type: integer, minimum: 0 }
+        latest_time: { type: string, format: date-time }
+        color: { type: string }
+        display_name: { type: string }
+        recommended_action: { type: string }
+
+    AnomalyAssessmentStats:
+      type: object
+      required: [total, red, orange, yellow, blue]
+      properties:
+        total: { type: integer, minimum: 0 }
+        red: { type: integer, minimum: 0 }
+        orange: { type: integer, minimum: 0 }
+        yellow: { type: integer, minimum: 0 }
+        blue: { type: integer, minimum: 0 }
+
+    AnomalyAssessmentPayload:
+      type: object
+      required: [data, stats, time_window, processed_at, source]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/AnomalyAssessmentItem"
+        stats:
+          $ref: "#/components/schemas/AnomalyAssessmentStats"
+        time_window: { type: integer, minimum: 1 }
+        processed_at: { type: string, format: date-time }
+        source: { type: string }
 
     CreateAlertRuleRequest:
       type: object

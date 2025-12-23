@@ -14,6 +14,7 @@
 - 2025-12-22：运维工具（WS-G）：新增 Web 运维页 `/ops/system-monitor` 与 `/ops/debug-api`（仅 GET；RBAC 保护），并提供旧路径重定向，便于排查接口与基础设施状态。
 - 2025-12-22：运维工具（WS-G.2）：新增 Web 运维页 `/ops/telemetry-dlq`（列表/详情），用于定位 `telemetry.dlq.v1` 的异常消息。
 - 2025-12-22：Web 兼容入口（WS-J）：新增旧路由 `/baseline-management`、`/analysis2`、`/optimized-demo` 的兼容跳转，避免旧链接失效。
+- 2025-12-23：Anomaly assessment 兼容（WS-K.4）：新增 `/anomaly-assessment`（v1 契约）与 legacy `/api/anomaly-assessment` 聚合接口（基于 v2 `alert_events` 映射国标四级预警）。
 - 2025-12-22：GPS 基线管理（WS-D.1）：补齐 v2 API 的 `/api/v1/gps/baselines`（list/get/upsert/delete）实现与 OpenAPI 契约文档，支持站点/设备的基线维护与回归留证。
 - 2025-12-22：GPS 基准点管理（WS-D.3）：新增 Web 页面 `/device-management/baselines`（查看/编辑/删除），对接 `/api/v1/gps/baselines/*`。
 - 2025-12-22：AI 预测/专家系统（WS-H）：新增 `ai-prediction-worker` 骨架（telemetry.raw.v1 -> ai.predictions.v1），补齐 Kafka schema/example 与 Postgres `ai_predictions` 落库表。
