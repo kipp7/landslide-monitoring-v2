@@ -2,8 +2,8 @@
 
 import { ReloadOutlined } from '@ant-design/icons'
 import { Button, Card, Descriptions, Select, Segmented, Space, Table, Tag, Typography } from 'antd'
+import dynamic from 'next/dynamic'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { CircleMarker, MapContainer, TileLayer, Tooltip } from 'react-leaflet'
 import { listAlerts, type AlertRow } from '../../lib/api/alerts'
 import { getCameraStatus, listCameraDevices, type CameraDevice } from '../../lib/api/camera'
 import { getDashboard, getSystemStatus, type DashboardSummary, type SystemStatus } from '../../lib/api/dashboard'
@@ -12,6 +12,9 @@ import useDeviceShadow from '../hooks/useDeviceShadow'
 import { useRealtimeStream } from '../hooks/useRealtimeStream'
 import useSensors from '../hooks/useSensors'
 import useStationList from '../hooks/useStationList'
+import type { StationMapPoint, StationMapTile } from './components/StationMap'
+
+const StationMap = dynamic(() => import('./components/StationMap'), { ssr: false })
 
 const { Title, Text } = Typography
 
@@ -68,7 +71,7 @@ export default function AnalysisPage() {
       ]
     })
     points.sort((a, b) => a.label.localeCompare(b.label))
-    return points
+    return points as StationMapPoint[]
   }, [devices, stations])
 
   const mapCenter = useMemo<[number, number]>(() => {
@@ -83,12 +86,12 @@ export default function AnalysisPage() {
       return {
         url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
         attribution: 'Tiles © Esri',
-      }
+      } satisfies StationMapTile
     }
     return {
       url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
       attribution: '© OpenStreetMap contributors',
-    }
+    } satisfies StationMapTile
   }, [mapMode])
 
   const { data: shadow, loading: shadowLoading, error: shadowError, refreshShadow } = useDeviceShadow(selectedDeviceId, 15_000)
@@ -159,7 +162,7 @@ export default function AnalysisPage() {
   useEffect(() => {
     realtime.connect()
     return () => realtime.disconnect()
-  }, [realtime.connect, realtime.disconnect])
+  }, [realtime])
 
   const fetchCameras = useCallback(async () => {
     try {
@@ -380,31 +383,13 @@ export default function AnalysisPage() {
             <div className="space-y-2">
               {stationsError ? <Text type="danger">Stations load failed: {stationsError.message}</Text> : null}
               <div className="h-[420px] rounded-lg overflow-hidden">
-                <MapContainer center={mapCenter} zoom={mapPoints.length > 0 ? 11 : 5} scrollWheelZoom style={{ height: '100%', width: '100%' }}>
-                  <TileLayer url={tile.url} attribution={tile.attribution} />
-                  {mapPoints.map((p) => {
-                    const color = p.status === 'online' ? '#16a34a' : p.status === 'maintenance' ? '#f59e0b' : '#64748b'
-                    return (
-                      <CircleMarker
-                        key={p.deviceId}
-                        center={[p.lat, p.lon]}
-                        radius={10}
-                        pathOptions={{ color, fillColor: color, fillOpacity: 0.8 }}
-                        eventHandlers={{ click: () => setSelectedDeviceId(p.deviceId) }}
-                      >
-                        <Tooltip direction="top" opacity={1} permanent={false}>
-                          <div className="space-y-0.5">
-                            <div className="font-medium">{p.label}</div>
-                            <div className="text-xs opacity-80">{p.stationName}</div>
-                            <div className="text-xs font-mono">
-                              {p.lat.toFixed(5)}, {p.lon.toFixed(5)}
-                            </div>
-                          </div>
-                        </Tooltip>
-                      </CircleMarker>
-                    )
-                  })}
-                </MapContainer>
+                <StationMap
+                  center={mapCenter}
+                  zoom={mapPoints.length > 0 ? 11 : 5}
+                  tile={tile}
+                  points={mapPoints}
+                  onSelectDevice={setSelectedDeviceId}
+                />
               </div>
 
               <Descriptions bordered size="small" column={2}>
