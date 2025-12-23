@@ -14,6 +14,7 @@ tags:
   - name: devices
   - name: stations
   - name: data
+  - name: realtime
   - name: gps
   - name: alerts
   - name: system
@@ -2250,6 +2251,80 @@ paths:
           $ref: "#/components/responses/ForbiddenResponse"
         "404":
           $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /realtime/stream:
+    get:
+      tags: [realtime]
+      summary: Realtime SSE stream
+      description: |
+        Server-Sent Events (SSE) stream. Each event is a JSON payload wrapped as `data: <json>`.
+      parameters:
+        - name: device_id
+          in: query
+          required: false
+          schema: { type: string, description: "all or device UUID", default: "all" }
+        - name: poll_ms
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1000, maximum: 60000, default: 5000 }
+        - name: heartbeat_ms
+          in: query
+          required: false
+          schema: { type: integer, minimum: 5000, maximum: 60000, default: 30000 }
+      responses:
+        "200":
+          description: text/event-stream
+          content:
+            text/event-stream:
+              schema: { type: string }
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+    post:
+      tags: [realtime]
+      summary: Broadcast realtime events (admin)
+      description: |
+        Admin/ops endpoint for broadcasting messages to active SSE clients.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action:
+                  type: string
+                  enum:
+                    - broadcast_device_data
+                    - broadcast_anomaly
+                    - broadcast_system_status
+                    - get_client_stats
+                    - cleanup_inactive_clients
+                deviceId: { type: string, format: uuid }
+                data: {}
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
         "500":
           $ref: "#/components/responses/InternalServerErrorResponse"
         default:
