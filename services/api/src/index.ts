@@ -24,6 +24,7 @@ import { registerSystemRoutes } from "./routes/system";
 import { registerAuthRoutes } from "./routes/auth";
 import { registerUserRoutes } from "./routes/users";
 import { registerGpsBaselineRoutes } from "./routes/gps-baselines";
+import { registerGpsBaselineAdvancedRoutes, registerGpsBaselineLegacyCompatRoutes } from "./routes/gps-baselines-advanced";
 import { registerGpsDeformationRoutes } from "./routes/gps-deformations";
 import { registerAnomalyAssessmentCompatRoutes } from "./routes/anomaly-assessment";
 
@@ -165,6 +166,7 @@ async function main(): Promise<void> {
   app.register(
     (api, _opts, done) => {
       registerAnomalyAssessmentCompatRoutes(api, config, pg, { legacyResponse: true });
+      registerGpsBaselineLegacyCompatRoutes(api, config, ch, pg);
       done();
     },
     { prefix: "/api" }
@@ -185,6 +187,7 @@ async function main(): Promise<void> {
     registerTelemetryDlqRoutes(v1, config, pg);
     registerSystemRoutes(v1, config, ch, pg);
     registerGpsBaselineRoutes(v1, config, pg);
+    registerGpsBaselineAdvancedRoutes(v1, config, ch, pg);
     registerGpsDeformationRoutes(v1, config, ch, pg);
     registerAnomalyAssessmentCompatRoutes(v1, config, pg);
     done();
