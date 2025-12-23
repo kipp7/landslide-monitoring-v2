@@ -675,6 +675,119 @@ paths:
         default:
           $ref: "#/components/responses/ErrorResponse"
 
+  /devices/{deviceId}/health/expert:
+    parameters:
+      - $ref: "#/components/parameters/DeviceIdPath"
+    get:
+      tags: [devices]
+      summary: Device health expert assessment
+      parameters:
+        - name: metric
+          in: query
+          required: false
+          schema: { type: string, enum: [all, health, battery, signal], default: all }
+        - name: forceRefresh
+          in: query
+          required: false
+          schema: { type: boolean, default: false }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DeviceHealthExpertAssessmentResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+    post:
+      tags: [devices]
+      summary: Device health expert actions (admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeviceHealthExpertActionRequest"
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DeviceHealthExpertActionResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /devices/{deviceId}/health/expert/history:
+    parameters:
+      - $ref: "#/components/parameters/DeviceIdPath"
+    get:
+      tags: [devices]
+      summary: Device health expert history
+      parameters:
+        - name: metric
+          in: query
+          required: false
+          schema: { type: string, enum: [all, health, battery, signal] }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DeviceHealthExpertHistoryResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
   /devices/{deviceId}/commands:
     parameters:
       - $ref: "#/components/parameters/DeviceIdPath"
@@ -3247,6 +3360,123 @@ components:
             meta:
               type: object
               additionalProperties: true
+
+    DeviceHealthExpertAssessmentResponse:
+      type: object
+      required: [deviceId, metric, runId, result]
+      properties:
+        deviceId: { type: string, format: uuid }
+        metric: { type: string, enum: [all, health, battery, signal] }
+        runId: { type: string, format: uuid }
+        cachedAt: { type: string, format: date-time, nullable: true }
+        result:
+          $ref: "#/components/schemas/DeviceHealthExpertResult"
+
+    DeviceHealthExpertResult:
+      type: object
+      required: [deviceId, timestamp, analysisType, metadata]
+      properties:
+        deviceId: { type: string, format: uuid }
+        timestamp: { type: string, format: date-time }
+        analysisType: { type: string }
+        battery:
+          $ref: "#/components/schemas/DeviceHealthExpertBattery"
+        signal:
+          $ref: "#/components/schemas/DeviceHealthExpertSignal"
+        health:
+          $ref: "#/components/schemas/DeviceHealthExpertHealth"
+        metadata:
+          $ref: "#/components/schemas/DeviceHealthExpertMetadata"
+
+    DeviceHealthExpertMetadata:
+      type: object
+      required: [apiVersion, analysisMethod, calculationTime, cacheUsed]
+      properties:
+        apiVersion: { type: string }
+        analysisMethod: { type: string }
+        calculationTime: { type: string, format: date-time }
+        cacheUsed: { type: boolean }
+
+    DeviceHealthExpertBattery:
+      type: object
+      required: [soc, voltage, temperatureC, confidence, warnings]
+      properties:
+        soc: { type: number }
+        voltage: { type: number, nullable: true }
+        temperatureC: { type: number, nullable: true }
+        confidence: { type: number }
+        warnings:
+          type: array
+          items: { type: string }
+
+    DeviceHealthExpertSignal:
+      type: object
+      required: [rssi, strength, confidence, warnings]
+      properties:
+        rssi: { type: number, nullable: true }
+        strength: { type: number }
+        confidence: { type: number }
+        warnings:
+          type: array
+          items: { type: string }
+
+    DeviceHealthExpertHealth:
+      type: object
+      required: [score, level, components, warnings]
+      properties:
+        score: { type: number }
+        level: { type: string, enum: [good, warn, bad] }
+        components:
+          type: object
+          required: [batteryScore, signalScore, dataFreshnessScore]
+          properties:
+            batteryScore: { type: number }
+            signalScore: { type: number }
+            dataFreshnessScore: { type: number }
+        warnings:
+          type: array
+          items: { type: string }
+
+    DeviceHealthExpertHistoryResponse:
+      type: object
+      required: [deviceId, list]
+      properties:
+        deviceId: { type: string, format: uuid }
+        list:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeviceHealthExpertHistoryItem"
+
+    DeviceHealthExpertHistoryItem:
+      type: object
+      required: [runId, metric, createdAt, result]
+      properties:
+        runId: { type: string, format: uuid }
+        metric: { type: string, enum: [all, health, battery, signal] }
+        createdAt: { type: string, format: date-time }
+        result:
+          $ref: "#/components/schemas/DeviceHealthExpertResult"
+
+    DeviceHealthExpertActionRequest:
+      type: object
+      required: [action]
+      properties:
+        action: { type: string, enum: [recalibrate, reset_baseline, update_config] }
+        parameters:
+          type: object
+          additionalProperties: true
+
+    DeviceHealthExpertActionResponse:
+      type: object
+      required: [deviceId, action, actionId, parameters, message]
+      properties:
+        deviceId: { type: string, format: uuid }
+        action: { type: string, enum: [recalibrate, reset_baseline, update_config] }
+        actionId: { type: string, format: uuid }
+        parameters:
+          type: object
+          additionalProperties: true
+        message: { type: string }
 
     DeviceSeriesResponse:
       type: object

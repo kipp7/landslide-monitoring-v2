@@ -30,6 +30,7 @@ import { registerAnomalyAssessmentCompatRoutes } from "./routes/anomaly-assessme
 import { registerRealtimeLegacyCompatRoutes, registerRealtimeRoutes } from "./routes/realtime";
 import { registerHuaweiLegacyCompatRoutes } from "./routes/huawei-legacy";
 import { registerCameraLegacyCompatRoutes, registerCameraRoutes } from "./routes/camera";
+import { registerDeviceHealthExpertLegacyCompatRoutes, registerDeviceHealthExpertRoutes } from "./routes/device-health-expert";
 
 async function main(): Promise<void> {
   dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
@@ -177,6 +178,7 @@ async function main(): Promise<void> {
       registerAnomalyAssessmentCompatRoutes(api, config, pg, { legacyResponse: true });
       registerGpsBaselineLegacyCompatRoutes(api, config, ch, pg);
       registerRealtimeLegacyCompatRoutes(api, config, ch, pg);
+      registerDeviceHealthExpertLegacyCompatRoutes(api, config, ch, pg);
       done();
     },
     { prefix: "/api" }
@@ -201,6 +203,7 @@ async function main(): Promise<void> {
     registerGpsDeformationRoutes(v1, config, ch, pg);
     registerAnomalyAssessmentCompatRoutes(v1, config, pg);
     registerRealtimeRoutes(v1, config, ch, pg);
+    registerDeviceHealthExpertRoutes(v1, config, ch, pg);
     registerCameraRoutes(v1, config, pg);
     done();
   }, { prefix: "/api/v1" });
