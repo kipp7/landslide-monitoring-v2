@@ -7,7 +7,7 @@
 - 每次合并一个 PR 到 `main`，如果它改变了项目阶段/里程碑/下一步，必须更新本页。
 - 本页只记录“当前状态与下一步”，历史细节放到 `docs/incidents/` 或 PR/commit 记录中。
 
-最后更新时间：2025-12-22（阶段 5 已完成：固件模拟器 + Stage5Regression 回归基线；硬件联调待启动）
+最后更新时间：2025-12-23（阶段 5 已完成：固件模拟器 + Stage5Regression 回归基线；硬件联调待启动）
 - 2025-12-22：PR #103（WS-C）：新增 Web 数据浏览器 `/data`（series/raw/export/statistics），用于单机联调与分析验证。
 - 2025-12-22：GPS 形变（WS-D.2）：新增 `/api/v1/gps/deformations/{deviceId}/series`（基于基准点 + ClickHouse 遥测计算位移；支持 `latKey/lonKey/altKey` 覆盖默认 metric key），补齐 API 契约文档与 OpenAPI。
 - 2025-12-22：WS-G 落地收口：合并 `/ops/system-monitor` + `/ops/debug-api` 与旧路径跳转，并将 Next.js Windows 构建输出目录切换为 `.next_v2` 规避 `.next_web/trace` 的 EPERM 卡点（见 PR #79）。
@@ -17,6 +17,7 @@
 - 2025-12-23：Anomaly assessment 兼容（WS-K.4）：新增 `/anomaly-assessment`（v1 契约）与 legacy `/api/anomaly-assessment` 聚合接口（基于 v2 `alert_events` 映射国标四级预警）。
 - 2025-12-23：GPS baselines 高级能力（WS-K.5）：补齐 `/gps/baselines/{deviceId}/auto-establish`、`/quality-check`、`/available-devices`，并提供 legacy `/api/baselines/*` 兼容路径。
 - 2025-12-23：Realtime/SSE（WS-K.2）：新增 `/realtime/stream`（SSE）与 legacy `/api/realtime-stream`，支持 heartbeat + 单设备快照轮询（可选）+ 广播接口，并提供 Web 订阅调试页 `/data/realtime`。
+- 2025-12-23：设备健康专家（WS-K.3）：新增 `/devices/{deviceId}/health/expert`（TTL 缓存 + 落库 + 审计）、`/history` 与 actions，并提供 legacy `/api/device-health-expert`；Web 增加调试页 `/data/health-expert`。
 - 2025-12-23：Camera/ESP32-CAM（WS-K.1）：新增 `/api/v1/camera/devices*`（列出/添加/删除/状态探测），并提供 legacy `/api/camera` 兼容路径；Web `运行概览` 补齐视频监控卡片（直连 `http://{ip}/stream`）。
 - 2025-12-23：华为/硬件 legacy 端点策略（WS-K.6）：补齐 `/iot/huawei`（适配器别名）与 `/huawei/*` 兼容层（影子/命令模板/快捷命令），并将 legacy 命令映射到 v2 `device_commands` + Kafka 管线。
 - 2025-12-22：GPS 基线管理（WS-D.1）：补齐 v2 API 的 `/api/v1/gps/baselines`（list/get/upsert/delete）实现与 OpenAPI 契约文档，支持站点/设备的基线维护与回归留证。

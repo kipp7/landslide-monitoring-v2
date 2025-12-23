@@ -12,13 +12,12 @@ const deviceIdSchema = z.string().uuid();
 
 const querySchema = z.object({
   metric: z.enum(["all", "battery", "health", "signal"]).default("all"),
-  forceRefresh: z
-    .preprocess((v) => {
-      if (v === "true") return true;
-      if (v === "false") return false;
-      return v;
-    }, z.boolean().default(false))
-    .optional()
+  forceRefresh: z.preprocess((v) => {
+    if (v === "" || v === null || v === undefined) return undefined;
+    if (v === "true") return true;
+    if (v === "false") return false;
+    return v;
+  }, z.boolean().default(false))
 });
 
 const legacyQuerySchema = z.object({
@@ -314,6 +313,25 @@ async function saveRun(pg: PgPool, deviceId: string, metric: string, result: unk
   });
 }
 
+async function ensureDeviceExists(pg: PgPool, deviceId: string): Promise<boolean> {
+  const row = await withPgClient(pg, async (client) =>
+    queryOne<{ device_id: string }>(
+      client,
+      `SELECT device_id FROM devices WHERE device_id = $1 AND status != 'revoked'`,
+      [deviceId]
+    )
+  );
+  return Boolean(row?.device_id);
+}
+
+function withCacheUsed(result: unknown): unknown {
+  if (!result || typeof result !== "object") return result;
+  const obj = result as Record<string, unknown>;
+  const metadata = obj.metadata;
+  if (!metadata || typeof metadata !== "object") return result;
+  return { ...obj, metadata: { ...(metadata as Record<string, unknown>), cacheUsed: true } };
+}
+
 async function resolveLegacyDeviceId(pg: PgPool, input: string): Promise<string | null> {
   const asUuid = deviceIdSchema.safeParse(input);
   if (asUuid.success) return asUuid.data;
@@ -324,9 +342,12 @@ async function resolveLegacyDeviceId(pg: PgPool, input: string): Promise<string 
       `
         SELECT device_id
         FROM devices
-        WHERE metadata->>'legacy_device_id' = $1
-           OR metadata#>>'{externalIds,legacy}' = $1
-           OR device_name = $1
+        WHERE status != 'revoked'
+          AND (
+            metadata->>'legacy_device_id' = $1
+            OR metadata#>>'{externalIds,legacy}' = $1
+            OR device_name = $1
+          )
         LIMIT 1
       `,
       [input]
@@ -364,15 +385,24 @@ export function registerDeviceHealthExpertRoutes(
       return;
     }
 
+    if (!(await ensureDeviceExists(pg, deviceId))) {
+      fail(reply, 404, "device not found", traceId, { deviceId });
+      return;
+    }
+
     const metric = parseQuery.data.metric;
-    const forceRefresh = Boolean(parseQuery.data.forceRefresh);
+    const forceRefresh = parseQuery.data.forceRefresh;
 
     const ttlMs = metric === "battery" ? 2 * 60_000 : metric === "signal" ? 60_000 : 5 * 60_000;
 
     if (!forceRefresh) {
       const cached = await maybeGetCachedRun(pg, deviceId, metric, ttlMs);
       if (cached) {
-        ok(reply, { deviceId, metric, runId: cached.run_id, result: cached.result, cachedAt: cached.created_at }, traceId);
+        ok(
+          reply,
+          { deviceId, metric, runId: cached.run_id, result: withCacheUsed(cached.result), cachedAt: cached.created_at },
+          traceId
+        );
         return;
       }
     }
@@ -412,6 +442,11 @@ export function registerDeviceHealthExpertRoutes(
 
       ok(reply, { deviceId, metric, runId, result: out }, traceId);
     } catch (err) {
+      const pgCode = typeof (err as { code?: unknown }).code === "string" ? (err as { code: string }).code : "";
+      if (pgCode === "23503") {
+        fail(reply, 404, "device not found", traceId, { deviceId });
+        return;
+      }
       const statusCode =
         typeof (err as { statusCode?: unknown }).statusCode === "number"
           ? (err as { statusCode: number }).statusCode
@@ -434,6 +469,11 @@ export function registerDeviceHealthExpertRoutes(
       return;
     }
     const deviceId = parseId.data;
+
+    if (!(await ensureDeviceExists(pg, deviceId))) {
+      fail(reply, 404, "device not found", traceId, { deviceId });
+      return;
+    }
 
     const query = (request.query ?? {}) as { limit?: unknown; metric?: unknown };
     const limit = z.coerce.number().int().min(1).max(200).default(50).safeParse(query.limit);
@@ -494,6 +534,11 @@ export function registerDeviceHealthExpertRoutes(
       return;
     }
     const deviceId = parseId.data;
+
+    if (!(await ensureDeviceExists(pg, deviceId))) {
+      fail(reply, 404, "device not found", traceId, { deviceId });
+      return;
+    }
 
     const parseBody = postSchema.safeParse(request.body);
     if (!parseBody.success) {
