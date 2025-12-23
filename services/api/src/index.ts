@@ -27,6 +27,7 @@ import { registerGpsBaselineRoutes } from "./routes/gps-baselines";
 import { registerGpsBaselineAdvancedRoutes, registerGpsBaselineLegacyCompatRoutes } from "./routes/gps-baselines-advanced";
 import { registerGpsDeformationRoutes } from "./routes/gps-deformations";
 import { registerAnomalyAssessmentCompatRoutes } from "./routes/anomaly-assessment";
+import { registerRealtimeLegacyCompatRoutes, registerRealtimeRoutes } from "./routes/realtime";
 
 async function main(): Promise<void> {
   dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
@@ -167,6 +168,7 @@ async function main(): Promise<void> {
     (api, _opts, done) => {
       registerAnomalyAssessmentCompatRoutes(api, config, pg, { legacyResponse: true });
       registerGpsBaselineLegacyCompatRoutes(api, config, ch, pg);
+      registerRealtimeLegacyCompatRoutes(api, config, ch, pg);
       done();
     },
     { prefix: "/api" }
@@ -190,6 +192,7 @@ async function main(): Promise<void> {
     registerGpsBaselineAdvancedRoutes(v1, config, ch, pg);
     registerGpsDeformationRoutes(v1, config, ch, pg);
     registerAnomalyAssessmentCompatRoutes(v1, config, pg);
+    registerRealtimeRoutes(v1, config, ch, pg);
     done();
   }, { prefix: "/api/v1" });
 

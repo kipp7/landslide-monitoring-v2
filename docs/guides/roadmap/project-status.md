@@ -16,6 +16,7 @@
 - 2025-12-22：Web 兼容入口（WS-J）：新增旧路由 `/baseline-management`、`/analysis2`、`/optimized-demo` 的兼容跳转，避免旧链接失效。
 - 2025-12-23：Anomaly assessment 兼容（WS-K.4）：新增 `/anomaly-assessment`（v1 契约）与 legacy `/api/anomaly-assessment` 聚合接口（基于 v2 `alert_events` 映射国标四级预警）。
 - 2025-12-23：GPS baselines 高级能力（WS-K.5）：补齐 `/gps/baselines/{deviceId}/auto-establish`、`/quality-check`、`/available-devices`，并提供 legacy `/api/baselines/*` 兼容路径。
+- 2025-12-23：Realtime/SSE（WS-K.2）：新增 `/realtime/stream`（SSE）与 legacy `/api/realtime-stream`，支持 heartbeat + 单设备快照轮询（可选）+ 广播接口，并提供 Web 订阅调试页 `/data/realtime`。
 - 2025-12-22：GPS 基线管理（WS-D.1）：补齐 v2 API 的 `/api/v1/gps/baselines`（list/get/upsert/delete）实现与 OpenAPI 契约文档，支持站点/设备的基线维护与回归留证。
 - 2025-12-22：GPS 基准点管理（WS-D.3）：新增 Web 页面 `/device-management/baselines`（查看/编辑/删除），对接 `/api/v1/gps/baselines/*`。
 - 2025-12-22：AI 预测/专家系统（WS-H）：新增 `ai-prediction-worker` 骨架（telemetry.raw.v1 -> ai.predictions.v1），补齐 Kafka schema/example 与 Postgres `ai_predictions` 落库表。

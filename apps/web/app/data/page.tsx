@@ -277,6 +277,7 @@ export default function DataExplorerPage() {
         </div>
         <Space>
           <Link href="/analysis">概览</Link>
+          <Link href="/data/realtime">Realtime</Link>
           <Button
             icon={<ReloadOutlined />}
             onClick={() => {
