@@ -32,6 +32,7 @@ import { registerHuaweiLegacyCompatRoutes } from "./routes/huawei-legacy";
 import { registerCameraLegacyCompatRoutes, registerCameraRoutes } from "./routes/camera";
 import { registerDeviceHealthExpertLegacyCompatRoutes, registerDeviceHealthExpertRoutes } from "./routes/device-health-expert";
 import { registerAiPredictionLegacyCompatRoutes, registerAiPredictionRoutes } from "./routes/ai-predictions";
+import { registerLegacyDeviceManagementCompatRoutes } from "./routes/legacy-device-management";
 
 async function main(): Promise<void> {
   dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
@@ -181,6 +182,7 @@ async function main(): Promise<void> {
       registerRealtimeLegacyCompatRoutes(api, config, ch, pg);
       registerAiPredictionLegacyCompatRoutes(api, config, pg);
       registerDeviceHealthExpertLegacyCompatRoutes(api, config, ch, pg);
+      registerLegacyDeviceManagementCompatRoutes(api, config, ch, pg);
       done();
     },
     { prefix: "/api" }
