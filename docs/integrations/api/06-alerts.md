@@ -64,7 +64,7 @@
 
 说明：参考区有 `/api/anomaly-assessment` 用于“异常类型聚合 + 国标四级预警展示”。v2 中该能力以 alerts/rule-engine 为数据源提供兼容聚合端点，避免旧前端/运营依赖缺失。
 
-**GET** `/anomaly-assessment?timeWindow=24`
+**GET** `/anomaly-assessment`
 
 权限：`alert:view`
 
