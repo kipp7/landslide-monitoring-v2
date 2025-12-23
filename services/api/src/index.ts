@@ -25,6 +25,7 @@ import { registerAuthRoutes } from "./routes/auth";
 import { registerUserRoutes } from "./routes/users";
 import { registerGpsBaselineRoutes } from "./routes/gps-baselines";
 import { registerGpsDeformationRoutes } from "./routes/gps-deformations";
+import { registerAnomalyAssessmentCompatRoutes } from "./routes/anomaly-assessment";
 
 async function main(): Promise<void> {
   dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
@@ -160,6 +161,15 @@ async function main(): Promise<void> {
 
   registerEmqxRoutes(app, config, pg);
 
+  // Legacy-compatible path (reference system): /api/anomaly-assessment
+  app.register(
+    (api, _opts, done) => {
+      registerAnomalyAssessmentCompatRoutes(api, config, pg, { legacyResponse: true });
+      done();
+    },
+    { prefix: "/api" }
+  );
+
   app.register((v1, _opts, done) => {
     registerAuthRoutes(v1, config, pg);
     registerUserRoutes(v1, config, pg);
@@ -174,8 +184,9 @@ async function main(): Promise<void> {
     registerCommandNotificationRoutes(v1, config, pg);
     registerTelemetryDlqRoutes(v1, config, pg);
     registerSystemRoutes(v1, config, ch, pg);
-    registerGpsBaselineRoutes(v1, config, pg);
+    registerGpsBaselineRoutes(v1, config, ch, pg);
     registerGpsDeformationRoutes(v1, config, ch, pg);
+    registerAnomalyAssessmentCompatRoutes(v1, config, pg);
     done();
   }, { prefix: "/api/v1" });
 

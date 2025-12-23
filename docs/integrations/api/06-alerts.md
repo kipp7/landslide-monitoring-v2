@@ -60,6 +60,56 @@
 }
 ```
 
+## 12. Anomaly assessment（兼容旧系统）
+
+说明：参考区有 `/api/anomaly-assessment` 用于“异常类型聚合 + 国标四级预警展示”。v2 中该能力以 alerts/rule-engine 为数据源提供兼容聚合端点，避免旧前端/运营依赖缺失。
+
+**GET** `/anomaly-assessment?timeWindow=24`
+
+权限：`alert:view`
+
+查询参数：
+
+- `timeWindow`：时间窗口（小时），默认 `24`，最大 `720`。
+
+返回（兼容旧系统字段命名，作为 `data` 字段的 payload）：
+
+- `data[]`：按 `anomaly_type` 聚合
+  - `anomaly_type`：聚合键（优先 `title`，否则 `rule_id`，否则 `alert_id`）
+  - `count`：窗口内 `ALERT_TRIGGER/ALERT_UPDATE` 次数
+  - `severity`：`red/orange/yellow/blue/normal`（从 v2 `critical/high/medium/low` 映射）
+  - `latest_time`：最新事件时间（UTC）
+
+示例响应：
+
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "ok",
+  "data": {
+    "data": [
+      {
+        "anomaly_type": "rule: gps displacement threshold",
+        "count": 3,
+        "severity": "orange",
+        "priority": 2,
+        "latest_time": "2025-12-15T10:00:00Z",
+        "color": "#ea580c",
+        "display_name": "rule: gps displacement threshold",
+        "recommended_action": "启动二级应急响应"
+      }
+    ],
+    "stats": { "total": 3, "red": 0, "orange": 3, "yellow": 0, "blue": 0 },
+    "time_window": 24,
+    "processed_at": "2025-12-15T10:00:00Z",
+    "source": "v2_alerts_compat"
+  },
+  "timestamp": "2025-12-15T10:00:00Z",
+  "traceId": "req_01J..."
+}
+```
+
 ## 2. 告警事件流（某个 alertId 的所有事件）
 
 **GET** `/alerts/{alertId}/events`
