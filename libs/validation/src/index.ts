@@ -1,5 +1,4 @@
 import Ajv, { type AnySchema, type ErrorObject, type ValidateFunction } from "ajv";
-import Ajv2020 from "ajv/dist/2020";
 import addFormats from "ajv-formats";
 import { readFile } from "node:fs/promises";
 
@@ -14,7 +13,7 @@ export type Validator<T> = {
 };
 
 export function createAjv(): Ajv {
-  const ajv = new Ajv2020({
+  const ajv = new Ajv({
     allErrors: true,
     removeAdditional: false,
     strict: true

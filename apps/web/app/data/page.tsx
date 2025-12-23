@@ -278,6 +278,7 @@ export default function DataExplorerPage() {
         <Space>
           <Link href="/analysis">概览</Link>
           <Link href="/data/realtime">Realtime</Link>
+          <Link href="/data/health-expert">Health Expert</Link>
           <Button
             icon={<ReloadOutlined />}
             onClick={() => {
