@@ -184,7 +184,7 @@ async function main(): Promise<void> {
     registerCommandNotificationRoutes(v1, config, pg);
     registerTelemetryDlqRoutes(v1, config, pg);
     registerSystemRoutes(v1, config, ch, pg);
-    registerGpsBaselineRoutes(v1, config, ch, pg);
+    registerGpsBaselineRoutes(v1, config, pg);
     registerGpsDeformationRoutes(v1, config, ch, pg);
     registerAnomalyAssessmentCompatRoutes(v1, config, pg);
     done();

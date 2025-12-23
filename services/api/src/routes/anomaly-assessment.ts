@@ -138,6 +138,6 @@ export function registerAnomalyAssessmentCompatRoutes(
       return;
     }
 
-    ok(reply, payload);
+    ok(reply, payload, traceId);
   });
 }
