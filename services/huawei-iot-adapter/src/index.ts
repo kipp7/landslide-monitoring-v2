@@ -2,6 +2,7 @@ import { createLogger, newTraceId } from "@lsmv2/observability";
 import { loadAndCompileSchema } from "@lsmv2/validation";
 import formbody from "@fastify/formbody";
 import dotenv from "dotenv";
+import type { FastifyReply, FastifyRequest } from "fastify";
 import Fastify from "fastify";
 import { Kafka, logLevel } from "kafkajs";
 import path from "node:path";
@@ -76,7 +77,7 @@ async function main(): Promise<void> {
     reply.send({ ok: true });
   });
 
-  app.post("/iot/huawei/telemetry", async (request, reply) => {
+  const handleTelemetry = async (request: FastifyRequest, reply: FastifyReply) => {
     const traceId = newTraceId();
 
     if (config.iotHttpToken) {
@@ -134,7 +135,13 @@ async function main(): Promise<void> {
     });
 
     reply.send({ success: true, traceId });
-  });
+  };
+
+  // v2 endpoint
+  app.post("/iot/huawei/telemetry", handleTelemetry);
+
+  // Legacy-compatible endpoint (reference system): POST /iot/huawei
+  app.post("/iot/huawei", handleTelemetry);
 
   await app.listen({ host: config.httpHost, port: config.httpPort });
   logger.info({ host: config.httpHost, port: config.httpPort }, "huawei-iot-adapter started");
