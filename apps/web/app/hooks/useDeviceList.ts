@@ -14,6 +14,7 @@ export interface DeviceInfo {
   lastCheck: string
   status: 'online' | 'offline' | 'maintenance'
   device_id: string
+  station_id?: string | null
   friendly_name: string
   display_name: string
   model: string
@@ -64,6 +65,7 @@ export default function useDeviceList() {
         return {
           id: deviceId,
           device_id: deviceId,
+          station_id: device.stationId ?? null,
           name,
           friendly_name: name,
           display_name: name,
