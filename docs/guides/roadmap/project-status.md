@@ -25,6 +25,7 @@
 - 2025-12-24：运行大屏 AI 组件恢复（WS-N.4）：Web `/analysis` 增加 AI Predictions 入口与懒加载小组件（预测列表 + 传感器图表预览），数据源对接 `/api/v1/ai/predictions*` 与 `/api/v1/data/series`。
 - 2025-12-24：运行大屏实时组件（WS-N.3）：PR #169，Web `/analysis` 补齐实时异常表（SSE `anomaly_alert` + `/anomaly-assessment` 聚合）与“实时传感器状态/最后上报时间”表（SSE `device_data`）。
 - 2025-12-24：GPS 导出（WS-D.6）：Web `/gps-monitoring` 与 `/gps-deformation` 增加导出入口（CSV/JSON 报告），用于对齐参考区 GPS 监测页的导出闭环。
+- 2025-12-24：基准点管理增强（WS-D.5）：Web `/device-management/baselines` 补齐自动建立 baseline（auto-establish）、质量检查（quality-check）、可用设备扫描（available-devices）入口，用于对齐参考区 BaselineManagementV2。
 - 2025-12-23：Camera/ESP32-CAM（WS-K.1）：新增 `/api/v1/camera/devices*`（列出/添加/删除/状态探测），并提供 legacy `/api/camera` 兼容路径；Web `运行概览` 补齐视频监控卡片（直连 `http://{ip}/stream`）。
 - 2025-12-23：华为/硬件 legacy 端点策略（WS-K.6）：补齐 `/iot/huawei`（适配器别名）与 `/huawei/*` 兼容层（影子/命令模板/快捷命令），并将 legacy 命令映射到 v2 `device_commands` + Kafka 管线。
 - 2025-12-22：GPS 基线管理（WS-D.1）：补齐 v2 API 的 `/api/v1/gps/baselines`（list/get/upsert/delete）实现与 OpenAPI 契约文档，支持站点/设备的基线维护与回归留证。
