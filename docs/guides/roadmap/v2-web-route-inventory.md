@@ -15,6 +15,8 @@
 | `/alerts/rules` | `apps/web/app/alerts/rules/page.tsx` |
 | `/alerts/rules/[ruleId]` | `apps/web/app/alerts/rules/[ruleId]/page.tsx` |
 | `/analysis` | `apps/web/app/analysis/page.tsx` |
+| `/analysis-v2` | `apps/web/app/analysis-v2/page.tsx` |
+| `/analysis-legacy` | `apps/web/app/analysis-legacy/page.tsx` |
 | `/analysis2` | `apps/web/app/analysis2/page.tsx` |
 | `/data` | `apps/web/app/data/page.tsx` |
 | `/debug-api` | `apps/web/app/debug-api/page.tsx` |
