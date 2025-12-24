@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Button, Card, DatePicker, Select, Space, Tag, Typography } from 'antd'
-import { ReloadOutlined } from '@ant-design/icons'
+import { Button, Card, DatePicker, Dropdown, Select, Space, Tag, Typography, message } from 'antd'
+import { DownloadOutlined, ReloadOutlined } from '@ant-design/icons'
 import dayjs, { type Dayjs } from 'dayjs'
 import { CircleMarker, MapContainer, Polyline, TileLayer, Tooltip } from 'react-leaflet'
 import useDeviceList from '../hooks/useDeviceList'
@@ -14,6 +14,16 @@ import { toNumber } from '../../lib/v2Api'
 const { Title, Text } = Typography
 
 type TrackPoint = { ts: string; lat: number; lon: number; alt: number | null }
+
+function downloadText(content: string, filename: string, mime = 'text/plain;charset=utf-8') {
+  const blob = new Blob([content], { type: mime })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(url), 5000)
+}
 
 export default function GpsMonitoringPage() {
   const { devices, loading: devicesLoading, error: devicesError, refetch } = useDeviceList()
@@ -37,6 +47,7 @@ export default function GpsMonitoringPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [track, setTrack] = useState<TrackPoint[]>([])
+  const [exporting, setExporting] = useState(false)
 
   const refresh = useCallback(async () => {
     if (!deviceId) return
@@ -85,6 +96,62 @@ export default function GpsMonitoringPage() {
     }
   }, [altKey, deviceId, latKey, lonKey, range])
 
+  const exportTrack = useCallback(
+    async (format: 'csv' | 'xlsx') => {
+      if (!deviceId) {
+        message.warning('Select a device first.')
+        return
+      }
+      if (track.length === 0) {
+        message.warning('No GPS points to export.')
+        return
+      }
+
+      const stamp = new Date().toISOString().slice(0, 10)
+      const base = `gps-track_${deviceId}_${stamp}`
+
+      if (format === 'csv') {
+        const header = ['ts', 'lat', 'lon', 'alt']
+        const rows = track.map((p) => {
+          const alt = p.alt === null ? '' : String(p.alt)
+          return [p.ts, p.lat.toFixed(6), p.lon.toFixed(6), alt].join(',')
+        })
+        downloadText([header.join(','), ...rows].join('\n'), `${base}.csv`, 'text/csv;charset=utf-8')
+        message.success('CSV exported.')
+        return
+      }
+
+      try {
+        setExporting(true)
+        const XLSX = await import('xlsx')
+        const { saveAs } = await import('file-saver')
+
+        const worksheet = XLSX.utils.json_to_sheet(
+          track.map((p, idx) => ({
+            index: idx + 1,
+            ts: p.ts,
+            lat: Number(p.lat.toFixed(6)),
+            lon: Number(p.lon.toFixed(6)),
+            alt: p.alt ?? null,
+          })),
+        )
+
+        const workbook = XLSX.utils.book_new()
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'track')
+
+        const array = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
+        const blob = new Blob([array], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+        saveAs(blob, `${base}.xlsx`)
+        message.success('XLSX exported.')
+      } catch (caught) {
+        message.error(caught instanceof Error ? caught.message : String(caught))
+      } finally {
+        setExporting(false)
+      }
+    },
+    [deviceId, track],
+  )
+
   useEffect(() => {
     void refresh()
   }, [refresh])
@@ -116,6 +183,19 @@ export default function GpsMonitoringPage() {
         </div>
         <Space>
           <Link href="/data">数据查询</Link>
+          <Dropdown
+            menu={{
+              items: [
+                { key: 'csv', label: 'å¯¼å‡º CSV' },
+                { key: 'xlsx', label: 'å¯¼å‡º XLSX' },
+              ],
+              onClick: (e) => void exportTrack(e.key as 'csv' | 'xlsx'),
+            }}
+          >
+            <Button icon={<DownloadOutlined />} disabled={track.length === 0} loading={exporting}>
+              å¯¼å‡º
+            </Button>
+          </Dropdown>
           <Button
             icon={<ReloadOutlined />}
             onClick={() => {

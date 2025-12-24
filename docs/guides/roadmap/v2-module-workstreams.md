@@ -127,6 +127,7 @@
 | WS-D.2 | codex | `feat/ws-d/deformation-trends2` | https://github.com/kipp7/landslide-monitoring-v2/pull/110 | done | WS-D.1 | 仅做“API + 查询”闭环：新增 `/api/v1/gps/deformations/{deviceId}/series`（baseline + ClickHouse 遥测计算位移）；会改动 `services/api/src/routes/*` 与 `docs/integrations/api/openapi.yaml` |
 | WS-D.3 | codex | `feat/ws-d/baseline-management-ui` | https://github.com/kipp7/landslide-monitoring-v2/pull/105 | done | WS-D.1 | Web: 基准点管理页（`/device-management/baselines`）对接 `/api/v1/gps/baselines/*` |
 | WS-D.4 | codex | `feat/ws-d/gps-monitoring-ui` | https://github.com/kipp7/landslide-monitoring-v2/pull/115 | done | WS-D.2, WS-D.3 | Web: 恢复 GPS 监测/形变页面（`/gps-monitoring` + `/gps-deformation`），对接 `/api/v1/data/series` 与 `/api/v1/gps/deformations/*` |
+| WS-D.5 | codex | `feat/ws-d5/gps-export` |  | claimed | WS-D.4 | Web: GPS 页面补齐导出能力（CSV/XLSX），对齐参考区 `gps-monitoring` 的导出按钮；数据源使用 v2 现有查询结果（`/api/v1/data/series`、`/api/v1/gps/deformations/{deviceId}/series`） |
 | WS-E | codex | `feat/ws-e/alert-rules-ui` | https://github.com/kipp7/landslide-monitoring-v2/pull/90 | done |  | Web: alert rules management UI (`/alerts/rules`) |
 | WS-F | codex | `feat/ws-f/huawei-iot-adapter` | https://github.com/kipp7/landslide-monitoring-v2/pull/99 | done |  | IoT adapter: Huawei IoT HTTP push -> Kafka telemetry (no UI) |
 | WS-G | codex | `feat/ws-g/ops-system-monitor` | https://github.com/kipp7/landslide-monitoring-v2/pull/79 | done |  | Web: `/ops/system-monitor` + `/ops/debug-api` + legacy redirects + Windows distDir workaround (`.next_v2`) |

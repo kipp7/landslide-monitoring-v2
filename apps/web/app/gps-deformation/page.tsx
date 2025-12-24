@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Button, Card, DatePicker, Descriptions, Select, Space, Table, Tag, Typography } from 'antd'
-import { ReloadOutlined } from '@ant-design/icons'
+import { Button, Card, DatePicker, Descriptions, Dropdown, Select, Space, Table, Tag, Typography, message } from 'antd'
+import { DownloadOutlined, ReloadOutlined } from '@ant-design/icons'
 import dayjs, { type Dayjs } from 'dayjs'
 import ReactECharts from 'echarts-for-react'
 import useDeviceList from '../hooks/useDeviceList'
@@ -29,6 +29,16 @@ function buildDeformationOption(points: GpsDeformationSeriesPoint[]) {
       { name: 'distanceMeters', type: 'line', showSymbol: false, connectNulls: true, data: points.map((p) => p.distanceMeters) },
     ],
   }
+}
+
+function downloadText(content: string, filename: string, mime = 'text/plain;charset=utf-8') {
+  const blob = new Blob([content], { type: mime })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(url), 5000)
 }
 
 export default function GpsDeformationPage() {
@@ -57,6 +67,7 @@ export default function GpsDeformationPage() {
     points: GpsDeformationSeriesPoint[]
     keys: GpsDeformationSeriesResponse['keys']
   } | null>(null)
+  const [exporting, setExporting] = useState(false)
 
   const refresh = useCallback(async () => {
     if (!deviceId) return
@@ -81,6 +92,101 @@ export default function GpsDeformationPage() {
     }
   }, [altKey, deviceId, interval, latKey, lonKey, range])
 
+  const exportSeries = useCallback(
+    async (format: 'csv' | 'xlsx') => {
+      if (!deviceId) {
+        message.warning('Select a device first.')
+        return
+      }
+      const points = data?.points ?? []
+      if (points.length === 0) {
+        message.warning('No deformation points to export.')
+        return
+      }
+
+      const stamp = new Date().toISOString().slice(0, 10)
+      const base = `gps-deformation_${deviceId}_${stamp}`
+
+      if (format === 'csv') {
+        const header = ['ts', 'latitude', 'longitude', 'altitude', 'horizontalMeters', 'verticalMeters', 'distanceMeters']
+        const rows = points.map((p) => {
+          const alt = p.altitude === null ? '' : String(p.altitude)
+          const vertical = p.verticalMeters === null ? '' : String(p.verticalMeters)
+          return [
+            p.ts,
+            p.latitude.toFixed(8),
+            p.longitude.toFixed(8),
+            alt,
+            p.horizontalMeters.toFixed(6),
+            vertical,
+            p.distanceMeters.toFixed(6),
+          ].join(',')
+        })
+        downloadText([header.join(','), ...rows].join('\n'), `${base}.csv`, 'text/csv;charset=utf-8')
+        message.success('CSV exported.')
+        return
+      }
+
+      try {
+        setExporting(true)
+        const XLSX = await import('xlsx')
+        const { saveAs } = await import('file-saver')
+
+        const workbook = XLSX.utils.book_new()
+
+        const pointsSheet = XLSX.utils.json_to_sheet(
+          points.map((p, idx) => ({
+            index: idx + 1,
+            ts: p.ts,
+            latitude: p.latitude,
+            longitude: p.longitude,
+            altitude: p.altitude ?? null,
+            horizontalMeters: p.horizontalMeters,
+            verticalMeters: p.verticalMeters ?? null,
+            distanceMeters: p.distanceMeters,
+            latCount: p.counts.lat,
+            lonCount: p.counts.lon,
+            altCount: p.counts.alt,
+          })),
+        )
+        XLSX.utils.book_append_sheet(workbook, pointsSheet, 'points')
+
+        if (data?.baseline) {
+          const baselineSheet = XLSX.utils.json_to_sheet([
+            {
+              latitude: data.baseline.latitude,
+              longitude: data.baseline.longitude,
+              altitude: data.baseline.altitude ?? null,
+              method: data.baseline.method,
+              pointsCount: data.baseline.pointsCount ?? null,
+              computedAt: data.baseline.computedAt,
+              positionAccuracyMeters: data.baseline.positionAccuracyMeters ?? null,
+              satelliteCount: data.baseline.satelliteCount ?? null,
+              notes: data.baseline.notes ?? '',
+              latKey: data.keys.latKey,
+              lonKey: data.keys.lonKey,
+              altKey: data.keys.altKey ?? '',
+              interval,
+              startTime: range[0].toISOString(),
+              endTime: range[1].toISOString(),
+            },
+          ])
+          XLSX.utils.book_append_sheet(workbook, baselineSheet, 'baseline')
+        }
+
+        const array = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
+        const blob = new Blob([array], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+        saveAs(blob, `${base}.xlsx`)
+        message.success('XLSX exported.')
+      } catch (caught) {
+        message.error(caught instanceof Error ? caught.message : String(caught))
+      } finally {
+        setExporting(false)
+      }
+    },
+    [data, deviceId, interval, range],
+  )
+
   useEffect(() => {
     void refresh()
   }, [refresh])
@@ -98,6 +204,19 @@ export default function GpsDeformationPage() {
         </div>
         <Space>
           <Link href="/device-management/baselines">基准点管理</Link>
+          <Dropdown
+            menu={{
+              items: [
+                { key: 'csv', label: '导出 CSV' },
+                { key: 'xlsx', label: '导出 XLSX' },
+              ],
+              onClick: (e) => void exportSeries(e.key as 'csv' | 'xlsx'),
+            }}
+          >
+            <Button icon={<DownloadOutlined />} disabled={!data?.points?.length} loading={exporting}>
+              导出
+            </Button>
+          </Dropdown>
           <Button
             icon={<ReloadOutlined />}
             onClick={() => {
