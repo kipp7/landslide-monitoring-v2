@@ -80,7 +80,7 @@ export default function AnalysisLegacyPage() {
 
   useEffect(() => {
     if (!isPerformanceGood) {
-      // 保留参考区行为入口（后续 WS-N.9 完整实现）
+      console.warn('性能较差，建议减少组件显示')
     }
   }, [isPerformanceGood])
 
@@ -105,11 +105,12 @@ export default function AnalysisLegacyPage() {
         </div>
       ) : null}
 
-      {warnings.length > 0 ? (
-        <div className="absolute right-4 top-20 z-50">
-          <Alert message="性能警告" description={warnings.join(', ')} type="warning" closable style={{ maxWidth: 300 }} />
+      {/* 性能警告 - 已禁用 */}
+      {false && warnings.length > 0 && (
+        <div className="absolute top-20 right-4 z-50">
+          <Alert message="性能警告" description={warnings.join(', ')} type="warning" closable style={{ maxWidth: '300px' }} />
         </div>
-      ) : null}
+      )}
 
       {loading ? (
         <div className="absolute inset-0 z-40 flex items-center justify-center bg-black bg-opacity-50">
