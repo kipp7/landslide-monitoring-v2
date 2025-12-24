@@ -130,7 +130,7 @@
 | WS-D.5 | codex | `feat/ws-d5/baselines-advanced-ui` | https://github.com/kipp7/landslide-monitoring-v2/pull/178 | done | WS-K.5, WS-D.3 | Web: 基准点管理页补齐参考区 `BaselineManagementV2` 的高级能力（自动建立/重建基准点、质量评估展示与建议、可用设备列表/映射兜底）；优先复用 v2 既有兼容端点（WS-K.5） |
 | WS-D.6 | codex | `feat/ws-d6/gps-export` | https://github.com/kipp7/landslide-monitoring-v2/pull/175 | done | WS-D.4 | Web: GPS 监测页补齐“导出”闭环（CSV/XLSX/报告）：对齐参考区 `/gps-monitoring` 的导出菜单；数据源基于 v2 现有查询结果（`/api/v1/data/series`、`/api/v1/gps/deformations/{deviceId}/series`），不新增重型依赖 |
 | WS-D.7 | codex | `feat/ws-d7/gps-advanced-analysis` | https://github.com/kipp7/landslide-monitoring-v2/pull/181 | done | WS-D.4, WS-D.6 | Web: GPS 监测页补齐参考区高级分析分栏（CEEMD/预测/数据详情/风险解释等）；若 v2 缺 API 则先拆“契约+最小 API 骨架”PR，再做页面渲染 PR |
-| WS-D.8 |  |  |  | backlog | WS-D.6, WS-D.7 | Web: GPS 监测页导出能力对齐参考区（XLSX/报告/图表图片等）；优先复用已依赖的 `xlsx`，避免引入新重型依赖；若需后端模板/报告生成，先拆“契约+最小 API 骨架”PR |
+| WS-D.8 | codex | `feat/ws-d8/gps-export-parity` |  | claimed | WS-D.6, WS-D.7 | Web: GPS 监测页导出能力对齐参考区（XLSX/报告/图表图片等）；优先复用已依赖的 `xlsx`，避免引入新重型依赖；若需后端模板/报告生成，先拆“契约+最小 API 骨架”PR |
 | WS-E | codex | `feat/ws-e/alert-rules-ui` | https://github.com/kipp7/landslide-monitoring-v2/pull/90 | done |  | Web: alert rules management UI (`/alerts/rules`) |
 | WS-F | codex | `feat/ws-f/huawei-iot-adapter` | https://github.com/kipp7/landslide-monitoring-v2/pull/99 | done |  | IoT adapter: Huawei IoT HTTP push -> Kafka telemetry (no UI) |
 | WS-G | codex | `feat/ws-g/ops-system-monitor` | https://github.com/kipp7/landslide-monitoring-v2/pull/79 | done |  | Web: `/ops/system-monitor` + `/ops/debug-api` + legacy redirects + Windows distDir workaround (`.next_v2`) |
