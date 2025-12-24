@@ -17,6 +17,9 @@
 | `/analysis` | `apps/web/app/analysis/page.tsx` |
 | `/analysis2` | `apps/web/app/analysis2/page.tsx` |
 | `/data` | `apps/web/app/data/page.tsx` |
+| `/data/ai-predictions` | `apps/web/app/data/ai-predictions/page.tsx` |
+| `/data/health-expert` | `apps/web/app/data/health-expert/page.tsx` |
+| `/data/realtime` | `apps/web/app/data/realtime/page.tsx` |
 | `/debug-api` | `apps/web/app/debug-api/page.tsx` |
 | `/baseline-management` | `apps/web/app/baseline-management/page.tsx` |
 | `/device-management` | `apps/web/app/device-management/page.tsx` |
