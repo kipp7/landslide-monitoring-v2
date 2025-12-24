@@ -49,6 +49,18 @@ const deviceManagementQuerySchema = z.object({
   }, z.boolean().optional())
 });
 
+const deviceManagementRealDbQuerySchema = z.object({
+  device_id: z.string().optional(),
+  mode: z.enum(["all", "summary", "device_specific"]).default("all")
+});
+
+const deviceDiagnosticsSchema = z
+  .object({
+    device_id: z.string().optional(),
+    simple_id: z.string().optional()
+  })
+  .passthrough();
+
 const monitoringStationsUpdateSchema = z.record(z.unknown());
 
 const monitoringStationsBulkUpdateSchema = z
@@ -540,12 +552,247 @@ export function registerLegacyDeviceManagementCompatRoutes(
       }
     ];
 
+      legacyOk(reply, {
+        regions,
+        allDevices: mapped,
+        totalDevices: mapped.length,
+        onlineDevices,
+        offlineDevices
+      });
+  });
+
+  app.get("/device-management-real-db", async (request, reply) => {
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
+    if (!pg) {
+      legacyFail(reply, 503, "PostgreSQL not configured");
+      return;
+    }
+
+    const parsed = deviceManagementRealDbQuerySchema.safeParse(request.query ?? {});
+    if (!parsed.success) {
+      legacyFail(reply, 400, "invalid query");
+      return;
+    }
+
+    const mode = parsed.data.mode;
+    const inputDeviceId = (parsed.data.device_id ?? "").trim();
+
+    if (mode === "device_specific") {
+      if (!inputDeviceId) {
+        legacyFail(reply, 400, "device_id required");
+        return;
+      }
+
+      const resolved = await resolveDeviceId(pg, inputDeviceId);
+      if (!resolved) {
+        legacyFail(reply, 404, "device not found");
+        return;
+      }
+
+      const device = await fetchDeviceWithStation(pg, resolved);
+      if (!device) {
+        legacyFail(reply, 404, "device not found");
+        return;
+      }
+
+      const baseline = await fetchGpsBaseline(pg, resolved);
+      let todayCount = 0;
+      try {
+        todayCount = (await todayTelemetryCounts(config, ch, [resolved])).get(resolved) ?? 0;
+      } catch {
+        todayCount = 0;
+      }
+
+      const online = onlineStatus(device.last_seen_at, device.status);
+      legacyOk(reply, {
+        simple_id: legacyKeyFromMetadata(device.device_name, device.metadata),
+        actual_device_id: device.device_id,
+        device_name: device.device_name,
+        location_name: device.station_name ?? "",
+        device_type: device.device_type,
+        latitude: device.latitude,
+        longitude: device.longitude,
+        status: "active",
+        online_status: online,
+        last_data_time: device.last_seen_at ?? device.created_at,
+        today_data_count: todayCount,
+        baseline_established: Boolean(baseline)
+      });
+      return;
+    }
+
+    const devices = await listDevicesWithStations(pg);
+    const deviceIds = devices.map((d) => d.device_id);
+    const baselineIds = await baselineDeviceIds(pg, deviceIds);
+
+    let todayCounts = new Map<string, number>();
+    try {
+      todayCounts = await todayTelemetryCounts(config, ch, deviceIds);
+    } catch {
+      todayCounts = new Map();
+    }
+
+    const mapped = devices.map((d) => {
+      const online = onlineStatus(d.last_seen_at, d.status);
+      return {
+        simple_id: legacyKeyFromMetadata(d.device_name, d.metadata),
+        actual_device_id: d.device_id,
+        device_name: d.device_name,
+        location_name: d.station_name ?? "",
+        device_type: d.device_type,
+        latitude: d.latitude,
+        longitude: d.longitude,
+        status: "active",
+        description: "",
+        install_date: d.created_at,
+        last_data_time: d.last_seen_at ?? d.created_at,
+        online_status: online,
+        today_data_count: todayCounts.get(d.device_id) ?? 0,
+        baseline_established: baselineIds.has(d.device_id),
+        health_score: online === "online" ? 95 : 0,
+        battery_level: online === "online" ? 85 : 0,
+        signal_strength: online === "online" ? 90 : 0
+      };
+    });
+
+    if (mode === "summary") {
+      legacyOk(
+        reply,
+        mapped.map((d) => ({
+          device_id: d.simple_id,
+          display_name: d.device_name,
+          online_status: d.online_status,
+          today_data_count: d.today_data_count,
+          baseline_established: d.baseline_established,
+          last_data_time: d.last_data_time,
+          coordinates: { lat: d.latitude, lng: d.longitude }
+        }))
+      );
+      return;
+    }
+
+    const onlineDevices = mapped.filter((d) => d.online_status === "online").length;
+    const offlineDevices = mapped.length - onlineDevices;
+
+    const regions = [
+      {
+        id: "default",
+        name: "默认监测区",
+        devices: mapped,
+        total_devices: mapped.length,
+        online_devices: onlineDevices,
+        offline_devices: offlineDevices
+      }
+    ];
+
     legacyOk(reply, {
       regions,
       allDevices: mapped,
       totalDevices: mapped.length,
       onlineDevices,
-      offlineDevices
+      offlineDevices,
+      summary: {
+        total_data_points: mapped.reduce((sum, d) => sum + d.today_data_count, 0),
+        baselines_established: mapped.filter((d) => d.baseline_established).length,
+        last_update: new Date().toISOString()
+      }
+    });
+  });
+
+  app.post("/device-management-real/diagnostics", async (request, reply) => {
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
+    if (!pg) {
+      legacyFail(reply, 503, "PostgreSQL not configured");
+      return;
+    }
+
+    const parsed = deviceDiagnosticsSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      legacyFail(reply, 400, "invalid body");
+      return;
+    }
+
+    const inputActual = (parsed.data.device_id ?? "").trim();
+    const inputSimple = (parsed.data.simple_id ?? "").trim();
+    const lookup = inputActual || inputSimple;
+    if (!lookup) {
+      legacyFail(reply, 400, "device_id or simple_id required");
+      return;
+    }
+
+    const resolved = await resolveDeviceId(pg, lookup);
+    if (!resolved) {
+      legacyFail(reply, 404, "device not found");
+      return;
+    }
+
+    const device = await fetchDeviceWithStation(pg, resolved);
+    if (!device) {
+      legacyFail(reply, 404, "device not found");
+      return;
+    }
+
+    const baseline = await fetchGpsBaseline(pg, resolved);
+    const online = onlineStatus(device.last_seen_at, device.status);
+
+    let todayCount = 0;
+    try {
+      todayCount = (await todayTelemetryCounts(config, ch, [resolved])).get(resolved) ?? 0;
+    } catch {
+      todayCount = 0;
+    }
+
+    const now = new Date();
+    const lastSeenMs = device.last_seen_at ? Date.parse(device.last_seen_at) : NaN;
+    const minutesSinceLastData = Number.isFinite(lastSeenMs) ? (now.getTime() - lastSeenMs) / (1000 * 60) : Number.POSITIVE_INFINITY;
+
+    const factors = {
+      online_status: online === "online" ? 30 : 0,
+      data_freshness:
+        minutesSinceLastData <= 5
+          ? 25
+          : minutesSinceLastData <= 30
+            ? 20
+            : minutesSinceLastData <= 120
+              ? 10
+              : 0,
+      data_volume: todayCount >= 100 ? 20 : todayCount >= 50 ? 15 : todayCount >= 10 ? 10 : todayCount > 0 ? 5 : 0,
+      baseline_status: baseline ? 15 : 0,
+      connection_stability:
+        online === "online" && minutesSinceLastData <= 10
+          ? 10
+          : online === "online" && minutesSinceLastData <= 30
+            ? 7
+            : online === "online" && minutesSinceLastData <= 60
+              ? 4
+              : 0
+    };
+
+    const healthScore = Object.values(factors).reduce((sum, v) => sum + v, 0);
+
+    const overallStatus = healthScore >= 80 ? "healthy" : healthScore >= 50 ? "warning" : "error";
+
+    const recommendations: string[] = [];
+    if (online !== "online") recommendations.push("device offline: check power and network connectivity");
+    if (factors.data_freshness === 0) recommendations.push("data is stale: check telemetry collection pipeline");
+    if (factors.data_volume <= 5) recommendations.push("low data volume: check sensors and reporting interval");
+    if (!baseline) recommendations.push("baseline missing: establish GPS baseline to enable deformation monitoring");
+    if (factors.connection_stability <= 4) recommendations.push("unstable connection: investigate network and signal strength");
+
+    legacyOk(reply, {
+      overall_status: overallStatus,
+      health_score: Math.round(healthScore),
+      data_quality: todayCount > 0 ? "normal" : "poor",
+      connection_status: factors.connection_stability >= 7 ? "stable" : "unstable",
+      baseline_status: baseline ? "active" : "inactive",
+      performance_metrics: {
+        today_data_count: todayCount,
+        avg_response_time: online === "online" ? 80 : 0,
+        last_communication: device.last_seen_at ?? device.created_at
+      },
+      recommendations,
+      factors,
+      timestamp: now.toISOString()
     });
   });
 

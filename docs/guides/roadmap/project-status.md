@@ -20,6 +20,7 @@
 - 2025-12-23：设备健康专家（WS-K.3）：新增 `/devices/{deviceId}/health/expert`（TTL 缓存 + 落库 + 审计）、`/history` 与 actions，并提供 legacy `/api/device-health-expert`；Web 增加调试页 `/data/health-expert`。
 - 2025-12-23：AI predictions（WS-L.1）：新增 `/ai/predictions*` 查询端点（对接 `ai_predictions` 表）+ legacy `/api/ai-prediction` 兼容端点，并提供 Web 查看页 `/data/ai-predictions`。
 - 2025-12-23：Legacy 设备管理 API 兼容（WS-M.1）：新增 legacy `/api/device-management/*`、`/api/iot/devices/*`、`/api/monitoring-stations*`、`/api/data-aggregation`，映射到 v2 Postgres/ClickHouse 数据源，旧前端无需改代码即可继续使用。
+- 2025-12-24：device-management-real 兼容：新增 legacy `/api/device-management-real-db`（`mode=all|summary|device_specific`）与 `/api/device-management-real/diagnostics`，对齐 reference `device-management` 页面数据结构（基于 v2 Postgres devices/stations + ClickHouse 今日计数 + GPS baseline 状态）。
 - 2025-12-24：运行大屏（WS-N.1）：PR #160，Web `/analysis` 补齐“大屏信息架构”与最小地图（站点坐标 -> 设备标记 + 点击选设备）+ Realtime(SSE) 状态卡，数据源统一走 v2 API（后续 WS-N.2 深化地图聚合/风险色/弹窗）。
 - 2025-12-24：运行大屏地图增强（WS-N.2）：PR #164，Web `/analysis` 增加地图聚合（按站点/缩放网格）、弹窗列表与风险颜色（基于 active alerts severity 映射），补齐 legacy 地图体验。
 - 2025-12-24：运行大屏 AI 组件恢复（WS-N.4）：Web `/analysis` 增加 AI Predictions 入口与懒加载小组件（预测列表 + 传感器图表预览），数据源对接 `/api/v1/ai/predictions*` 与 `/api/v1/data/series`。
