@@ -5,6 +5,7 @@ import { Button, Card, Descriptions, Select, Segmented, Space, Switch, Table, Ta
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { getAnomalyAssessment, type AnomalyAssessmentItem } from '../../lib/api/anomalyAssessment'
 import { listAlerts, type AlertRow } from '../../lib/api/alerts'
 import { getCameraStatus, listCameraDevices, type CameraDevice } from '../../lib/api/camera'
 import { getDashboard, getSystemStatus, type DashboardSummary, type SystemStatus } from '../../lib/api/dashboard'
@@ -13,6 +14,8 @@ import useDeviceShadow from '../hooks/useDeviceShadow'
 import { useRealtimeStream } from '../hooks/useRealtimeStream'
 import useSensors from '../hooks/useSensors'
 import useStationList from '../hooks/useStationList'
+import { RealtimeAnomalyTable, type RealtimeAnomalyEvent } from './components/RealtimeAnomalyTable'
+import { RealtimeSensorStatusTable, type RealtimeDeviceLastSeen } from './components/RealtimeSensorStatusTable'
 import type { StationMapPoint, StationMapTile } from './components/StationMap'
 
 const StationMap = dynamic(() => import('./components/StationMap'), { ssr: false })
@@ -37,6 +40,20 @@ function formatValue(value: unknown): string {
   }
 }
 
+function anomalyTitle(data: unknown): string {
+  if (!data) return '-'
+  if (typeof data === 'string') return data
+  if (typeof data !== 'object') return String(data)
+  const rec = data as Record<string, unknown>
+  const cand =
+    (typeof rec.title === 'string' && rec.title) ||
+    (typeof rec.anomaly_type === 'string' && rec.anomaly_type) ||
+    (typeof rec.type === 'string' && rec.type) ||
+    (typeof rec.message === 'string' && rec.message)
+  if (cand && cand.trim()) return cand.trim()
+  return 'anomaly_alert'
+}
+
 const severityRank: Record<AlertRow['severity'], number> = { low: 1, medium: 2, high: 3, critical: 4 }
 
 function maxSeverity(
@@ -56,6 +73,8 @@ export default function AnalysisPage() {
   const disconnectRealtime = realtime.disconnect
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>('')
   const [mapMode, setMapMode] = useState<'2d' | '3d' | 'satellite' | 'video'>('2d')
+  const [realtimeAnomalies, setRealtimeAnomalies] = useState<RealtimeAnomalyEvent[]>([])
+  const [realtimeLastSeenByDeviceId, setRealtimeLastSeenByDeviceId] = useState<RealtimeDeviceLastSeen>({})
   const [showAiWidgets, setShowAiWidgets] = useState(false)
 
   useEffect(() => {
@@ -129,6 +148,10 @@ export default function AnalysisPage() {
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null)
   const [systemStatusError, setSystemStatusError] = useState<string | null>(null)
 
+  const [anomalyAggregates, setAnomalyAggregates] = useState<AnomalyAssessmentItem[]>([])
+  const [anomalyAggregatesLoading, setAnomalyAggregatesLoading] = useState(false)
+  const [anomalyAggregatesError, setAnomalyAggregatesError] = useState<string | null>(null)
+
   const fetchDashboard = useCallback(async () => {
     try {
       setDashboardError(null)
@@ -148,6 +171,20 @@ export default function AnalysisPage() {
     } catch (caught) {
       setSystemStatusError(caught instanceof Error ? caught.message : String(caught))
       setSystemStatus(null)
+    }
+  }, [])
+
+  const fetchAnomalyAssessment = useCallback(async () => {
+    try {
+      setAnomalyAggregatesLoading(true)
+      setAnomalyAggregatesError(null)
+      const json = await getAnomalyAssessment(24)
+      setAnomalyAggregates(json.data?.data ?? [])
+    } catch (caught) {
+      setAnomalyAggregatesError(caught instanceof Error ? caught.message : String(caught))
+      setAnomalyAggregates([])
+    } finally {
+      setAnomalyAggregatesLoading(false)
     }
   }, [])
 
@@ -174,12 +211,40 @@ export default function AnalysisPage() {
     void fetchAlerts()
     void fetchDashboard()
     void fetchSystemStatus()
-  }, [fetchAlerts, fetchDashboard, fetchSystemStatus])
+    void fetchAnomalyAssessment()
+  }, [fetchAlerts, fetchAnomalyAssessment, fetchDashboard, fetchSystemStatus])
 
   useEffect(() => {
     connectRealtime()
     return () => disconnectRealtime()
   }, [connectRealtime, disconnectRealtime])
+
+  useEffect(() => {
+    const msg = realtime.lastMessage
+    if (!msg) return
+
+    if (msg.type === 'device_data' || msg.type === 'initial_data') {
+      setRealtimeLastSeenByDeviceId((prev) => ({ ...prev, [msg.deviceId]: msg.timestamp }))
+      return
+    }
+
+    if (msg.type === 'anomaly_alert') {
+      setRealtimeAnomalies((prev) => {
+        const next: RealtimeAnomalyEvent[] = [
+          {
+            alertId: msg.alertId,
+            deviceId: msg.deviceId,
+            timestamp: msg.timestamp,
+            severity: msg.severity,
+            title: anomalyTitle(msg.data),
+            raw: msg.data,
+          },
+          ...prev,
+        ]
+        return next.slice(0, 50)
+      })
+    }
+  }, [realtime.lastMessage])
 
   const riskByDeviceId = useMemo<Record<string, AlertRow['severity']>>(() => {
     const map: Record<string, AlertRow['severity']> = {}
@@ -284,11 +349,12 @@ export default function AnalysisPage() {
               void fetchAlerts()
               void fetchDashboard()
               void fetchSystemStatus()
+              void fetchAnomalyAssessment()
               void fetchCameras()
               realtime.disconnect()
               realtime.connect()
             }}
-            loading={devicesLoading || shadowLoading || alertsLoading || camerasLoading}
+            loading={devicesLoading || shadowLoading || alertsLoading || anomalyAggregatesLoading || camerasLoading}
           >
             Refresh
           </Button>
@@ -533,6 +599,20 @@ export default function AnalysisPage() {
             ) : (
               <Text type="secondary">Toggle on to load AI prediction widgets (lazy-loaded).</Text>
             )}
+          </Card>
+
+          <Card title="Realtime sensor status (SSE)" size="small">
+            <RealtimeSensorStatusTable devices={devices} lastSeenByDeviceId={realtimeLastSeenByDeviceId} />
+          </Card>
+
+          <Card title="Realtime anomalies (SSE + /anomaly-assessment)" size="small">
+            <RealtimeAnomalyTable
+              events={realtimeAnomalies}
+              aggregates={anomalyAggregates}
+              loadingAggregates={anomalyAggregatesLoading}
+              aggregatesError={anomalyAggregatesError}
+              maxRows={8}
+            />
           </Card>
 
           <Card title="Alerts (last 24h)" size="small">
