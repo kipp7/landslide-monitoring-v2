@@ -35,6 +35,17 @@ function formatValue(value: unknown): string {
   }
 }
 
+const severityRank: Record<AlertRow['severity'], number> = { low: 1, medium: 2, high: 3, critical: 4 }
+
+function maxSeverity(
+  a: AlertRow['severity'] | undefined,
+  b: AlertRow['severity'] | undefined,
+): AlertRow['severity'] | undefined {
+  if (!a) return b
+  if (!b) return a
+  return severityRank[a] >= severityRank[b] ? a : b
+}
+
 export default function AnalysisPage() {
   const { devices, loading: devicesLoading, error: devicesError, refetch } = useDeviceList()
   const { stations, loading: stationsLoading, error: stationsError, refetch: refetchStations } = useStationList()
@@ -63,6 +74,7 @@ export default function AnalysisPage() {
         {
           deviceId: d.device_id,
           label: d.display_name || d.device_id,
+          stationId: station.stationId,
           stationName: station.stationName,
           status: d.status,
           lat: station.latitude,
@@ -216,6 +228,37 @@ export default function AnalysisPage() {
       }
     })
   }, [shadow?.metrics, sensorsByKey])
+
+  const riskByDeviceId = useMemo<Record<string, AlertRow['severity']>>(() => {
+    const map: Record<string, AlertRow['severity']> = {}
+    for (const a of alerts) {
+      if (a.status !== 'active') continue
+      if (!a.deviceId) continue
+      const prev = map[a.deviceId]
+      if (!prev || severityRank[a.severity] > severityRank[prev]) map[a.deviceId] = a.severity
+    }
+    return map
+  }, [alerts])
+
+  const riskByStationId = useMemo<Record<string, AlertRow['severity']>>(() => {
+    const map: Record<string, AlertRow['severity']> = {}
+    for (const a of alerts) {
+      if (a.status !== 'active') continue
+      if (!a.stationId) continue
+      const prev = map[a.stationId]
+      if (!prev || severityRank[a.severity] > severityRank[prev]) map[a.stationId] = a.severity
+    }
+    return map
+  }, [alerts])
+
+  const mapPointsWithRisk = useMemo<StationMapPoint[]>(() => {
+    return mapPoints.map((p) => ({
+      ...p,
+      risk: maxSeverity(riskByDeviceId[p.deviceId], riskByStationId[p.stationId]),
+    }))
+  }, [mapPoints, riskByDeviceId, riskByStationId])
+
+  const mapClusterCount = useMemo(() => new Set(mapPointsWithRisk.map((p) => p.stationId)).size, [mapPointsWithRisk])
 
   return (
     <div className="p-6 space-y-6">
@@ -385,26 +428,33 @@ export default function AnalysisPage() {
               <div className="h-[420px] rounded-lg overflow-hidden">
                 <StationMap
                   center={mapCenter}
-                  zoom={mapPoints.length > 0 ? 11 : 5}
+                  zoom={mapPointsWithRisk.length > 0 ? 11 : 5}
                   tile={tile}
-                  points={mapPoints}
+                  points={mapPointsWithRisk}
                   onSelectDevice={setSelectedDeviceId}
+                  selectedDeviceId={selectedDeviceId}
                 />
               </div>
 
               <Descriptions bordered size="small" column={2}>
                 <Descriptions.Item label="Stations">{stations.length}</Descriptions.Item>
-                <Descriptions.Item label="Map markers">{mapPoints.length}</Descriptions.Item>
+                <Descriptions.Item label="Map clusters">{mapClusterCount}</Descriptions.Item>
                 <Descriptions.Item label="Selected device">{selectedDevice?.display_name || selectedDeviceId || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Mode">{mapMode.toUpperCase()}</Descriptions.Item>
+                <Descriptions.Item label="Mapped devices">{mapPointsWithRisk.length}</Descriptions.Item>
+                <Descriptions.Item label="Active alerts (24h)">{alerts.filter((a) => a.status === 'active').length}</Descriptions.Item>
               </Descriptions>
               {stationsLoading ? <Text type="secondary">Loading stations…</Text> : null}
-              {mapPoints.length === 0 && !stationsLoading ? (
+              {mapPointsWithRisk.length === 0 && !stationsLoading ? (
                 <Text type="secondary">No station coordinates configured yet (set lat/lon on stations to show markers).</Text>
               ) : null}
-              <Text type="secondary">
-                WS-N.2 will add cluster markers + risk colors + popups; WS-N.1 focuses on layout + v2 data wiring.
-              </Text>
+              <Space wrap>
+                <Text type="secondary">Risk legend:</Text>
+                {severityTag('critical')}
+                {severityTag('high')}
+                {severityTag('medium')}
+                {severityTag('low')}
+              </Space>
             </div>
           )}
         </Card>
