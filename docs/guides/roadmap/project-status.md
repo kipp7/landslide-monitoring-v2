@@ -23,6 +23,7 @@
 - 2025-12-24：运行大屏（WS-N.1）：PR #160，Web `/analysis` 补齐“大屏信息架构”与最小地图（站点坐标 -> 设备标记 + 点击选设备）+ Realtime(SSE) 状态卡，数据源统一走 v2 API（后续 WS-N.2 深化地图聚合/风险色/弹窗）。
 - 2025-12-24：运行大屏地图增强（WS-N.2）：PR #164，Web `/analysis` 增加地图聚合（按站点/缩放网格）、弹窗列表与风险颜色（基于 active alerts severity 映射），补齐 legacy 地图体验。
 - 2025-12-24：运行大屏 AI 组件恢复（WS-N.4）：Web `/analysis` 增加 AI Predictions 入口与懒加载小组件（预测列表 + 传感器图表预览），数据源对接 `/api/v1/ai/predictions*` 与 `/api/v1/data/series`。
+- 2025-12-24：GPS 监测高级分析（WS-D.7）：PR #181，Web `/gps-monitoring` 增加分析分栏（CEEMD 轻量分解 / 预测分析 / 数据详情 / 风险与基准点）。
 - 2025-12-24：运行大屏实时组件（WS-N.3）：PR #169，Web `/analysis` 补齐实时异常表（SSE `anomaly_alert` + `/anomaly-assessment` 聚合）与“实时传感器状态/最后上报时间”表（SSE `device_data`）。
 - 2025-12-24：GPS 导出（WS-D.6）：Web `/gps-monitoring` 与 `/gps-deformation` 增加导出入口（CSV/JSON 报告），用于对齐参考区 GPS 监测页的导出闭环。
 - 2025-12-24：基准点管理增强（WS-D.5）：Web `/device-management/baselines` 补齐自动建立 baseline（auto-establish）、质量检查（quality-check）、可用设备扫描（available-devices）入口，用于对齐参考区 BaselineManagementV2。
