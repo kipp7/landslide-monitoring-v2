@@ -8,14 +8,17 @@
 
 缺口对照需要“参考区源代码（页面/接口）”可读。若参考区目录里只有 `.next/` 或 `node_modules/`，无法可靠枚举页面与能力，会导致对照验收失真。
 
-当前已观测到：`E:\学校\06 工作区\2\openharmony\landslide-monitor\frontend` 下 **几乎没有源码**（仅 `.next/`、`node_modules/`、少量 `.env*` 与 `app/device-management/page.tsx.backup`）。
+当前已确认：参考区源代码可读（含 Next.js App Router 页面源码）。
 
-处理方式（二选一）：
+参考区（只读）主要落点：
 
-1) 你提供一份“参考区源码快照”的目录路径（只读，不在其上修改）。
-2) 你把参考区的前端/后端源码恢复到该路径（仍保持只读）。
+- 参考区前端：`E:\学校\06 工作区\2\openharmony\landslide-monitor\frontend`
+- 参考区后端：`E:\学校\06 工作区\2\openharmony\landslide-monitor\backend`
 
-在参考区未恢复前，本清单只能先基于“v2 已实现功能”做自检，并把“参考区对照”标记为待确认。
+说明：
+
+- 参考区目录下存在一份重复镜像：`E:\学校\06 工作区\2\openharmony\landslide-monitor\landslide-monitor\frontend`（内容与上面的 `frontend` 高度重复）
+- 对照验收以 `frontend/app/**/page.tsx` 与其引用的 `app/components/*` 为准（避免只看 `.next/` 产物）
 
 ## 1) 目录与落地点速查（基于既有文档线索）
 
@@ -31,6 +34,7 @@
 | 运维/排障 | system monitor / debug api | Web: `/ops/system-monitor`、`/ops/debug-api`、`/ops/telemetry-dlq`；API: `/api/v1/system/*`、`/api/v1/telemetry/dlq*` | ✅ |
 
 另：v2 Web 路由清单见 `docs/guides/roadmap/v2-web-route-inventory.md`（用于验收走查）。
+另：参考区 Web 路由清单见 `docs/guides/roadmap/reference-web-route-inventory.md`（用于对照走查）。
 
 ## 2) 下一步缺口检查方式（执行顺序）
 
@@ -75,5 +79,11 @@
 
 ## 4) 待确认/待补齐（需要参考区恢复后逐项验证）
 
-- 参考区缺失：需要恢复“参考区源码快照”，否则无法确认“功能不缺失”。
-- GPS 监测/形变页面：v2 已有 `/gps-monitoring` 与 `/gps-deformation`，需在“参考区恢复后”对照其字段/图表/导出能力是否一致，并按缺口拆分最小 PR。
+### 4.1 已确认缺口（建议拆分为最小 PR）
+
+- GPS 监测页面（参考区 `/gps-monitoring`）：包含“导出（Excel/报告）+ CEEMD 分解 + 预测分析 + 数据详情”等多分栏能力；v2 当前 `/gps-monitoring` 为轻量轨迹展示，缺少这些高级分析与导出闭环。
+- 基准点管理（参考区 `BaselineManagementV2`）：包含“自动建立基准点（simple/advanced）+ 质量评估（quality grade/score/recommendations）+ 站点/设备映射兜底”等能力；v2 当前 `/device-management/baselines` 未暴露这些高级能力（后端兼容端点已具备：见 WS-K.5）。
+
+### 4.2 执行建议（并发友好）
+
+将上述缺口拆成“可 1~3 天闭环”的子项，并在 `docs/guides/roadmap/v2-module-workstreams.md` 中新增 WS-D.* 子项，避免大杂烩 PR。
