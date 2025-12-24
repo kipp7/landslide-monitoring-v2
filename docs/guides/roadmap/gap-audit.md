@@ -81,8 +81,8 @@
 
 ### 4.1 已确认缺口（建议拆分为最小 PR）
 
-- GPS 监测页面（参考区 `/gps-monitoring`）：包含“导出（Excel/报告）+ CEEMD 分解 + 预测分析 + 数据详情”等多分栏能力；v2 当前 `/gps-monitoring` 为轻量轨迹展示，缺少这些高级分析与导出闭环。
-- 基准点管理（参考区 `BaselineManagementV2`）：包含“自动建立基准点（simple/advanced）+ 质量评估（quality grade/score/recommendations）+ 站点/设备映射兜底”等能力；v2 当前 `/device-management/baselines` 未暴露这些高级能力（后端兼容端点已具备：见 WS-K.5）。
+- （已补齐）GPS 监测页面（参考区 `/gps-monitoring`）：导出/CEEMD 分解/预测分析/数据详情等多分栏能力已落地（WS-D.6 + WS-D.7）。
+- （已补齐）基准点管理（参考区 `BaselineManagementV2`）：自动建立/质量评估/可用设备等高级能力已落地（WS-D.5；后端兼容端点见 WS-K.5）。
 
 ### 4.2 执行建议（并发友好）
 
