@@ -177,7 +177,19 @@ export default function AnalysisLegacyPage() {
                       <LazyMap3DContainer />
                     ) : mapType === '视频' ? (
                       <div className="flex h-full w-full items-center justify-center rounded-lg bg-black">
-                        <div className="text-sm text-white">视频流（待 WS-N.8 1:1 还原）</div>
+                        <img
+                          src={`http://192.168.43.55/stream?t=${Date.now()}`}
+                          className="max-h-full max-w-full object-contain"
+                          alt="ESP32-CAM 实时视频流"
+                          onError={(e) => {
+                            console.error('ESP32-CAM视频流加载失败')
+                            const target = e.target as HTMLImageElement
+                            target.style.display = 'none'
+                          }}
+                          onLoad={() => {
+                            console.log('ESP32-CAM视频流加载成功')
+                          }}
+                        />
                       </div>
                     ) : getDevicesForMap.length > 0 ? (
                       <LazyMapContainer mode={mapType === '卫星图' ? '卫星图' : '2D'} devices={getDevicesForMap} center={mapCenter} zoom={16} />
@@ -243,4 +255,3 @@ export default function AnalysisLegacyPage() {
     </div>
   )
 }
-
