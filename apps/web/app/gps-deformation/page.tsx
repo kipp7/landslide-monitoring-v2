@@ -2,12 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Button, Card, DatePicker, Descriptions, Select, Space, Table, Tag, Typography } from 'antd'
-import { ReloadOutlined } from '@ant-design/icons'
+import { Button, Card, DatePicker, Descriptions, Dropdown, Select, Space, Table, Tag, Typography, message } from 'antd'
+import type { MenuProps } from 'antd'
+import { DownloadOutlined, ReloadOutlined } from '@ant-design/icons'
 import dayjs, { type Dayjs } from 'dayjs'
 import ReactECharts from 'echarts-for-react'
 import useDeviceList from '../hooks/useDeviceList'
 import { getGpsDeformationSeries, type GpsDeformationSeriesPoint, type GpsDeformationSeriesResponse } from '../../lib/api/gpsDeformations'
+import { downloadTextFile } from '../../lib/download'
 
 const { Title, Text } = Typography
 
@@ -29,6 +31,14 @@ function buildDeformationOption(points: GpsDeformationSeriesPoint[]) {
       { name: 'distanceMeters', type: 'line', showSymbol: false, connectNulls: true, data: points.map((p) => p.distanceMeters) },
     ],
   }
+}
+
+function deformationToCsv(points: GpsDeformationSeriesPoint[]): string {
+  const lines: string[] = ['ts,horizontalMeters,verticalMeters,distanceMeters']
+  for (const p of points) {
+    lines.push(`${p.ts},${p.horizontalMeters ?? ''},${p.verticalMeters ?? ''},${p.distanceMeters ?? ''}`)
+  }
+  return lines.join('\n')
 }
 
 export default function GpsDeformationPage() {
@@ -57,6 +67,32 @@ export default function GpsDeformationPage() {
     points: GpsDeformationSeriesPoint[]
     keys: GpsDeformationSeriesResponse['keys']
   } | null>(null)
+
+  const doExportCsv = useCallback(() => {
+    if (!deviceId) return
+    const points = data?.points ?? []
+    if (points.length === 0) {
+      message.info('没有可导出的形变点')
+      return
+    }
+    const filename = `gps_deformation_${deviceId}_${dayjs(range[0]).format('YYYYMMDDHHmm')}-${dayjs(range[1]).format('YYYYMMDDHHmm')}.csv`
+    downloadTextFile(deformationToCsv(points), filename, 'text/csv;charset=utf-8')
+  }, [data?.points, deviceId, range])
+
+  const doExportReportJson = useCallback(() => {
+    if (!deviceId) return
+    const payload = {
+      deviceId,
+      startTime: range[0].toISOString(),
+      endTime: range[1].toISOString(),
+      interval,
+      keys: { latKey, lonKey, altKey: altKey.trim() ? altKey : null },
+      baseline: data?.baseline ?? null,
+      points: data?.points ?? [],
+    }
+    const filename = `gps_deformation_report_${deviceId}_${dayjs(range[0]).format('YYYYMMDDHHmm')}-${dayjs(range[1]).format('YYYYMMDDHHmm')}.json`
+    downloadTextFile(JSON.stringify(payload, null, 2), filename, 'application/json;charset=utf-8')
+  }, [altKey, data?.baseline, data?.points, deviceId, interval, latKey, lonKey, range])
 
   const refresh = useCallback(async () => {
     if (!deviceId) return
@@ -98,6 +134,19 @@ export default function GpsDeformationPage() {
         </div>
         <Space>
           <Link href="/device-management/baselines">基准点管理</Link>
+          <Dropdown
+            trigger={['click']}
+            menu={
+              {
+                items: [
+                  { key: 'csv', label: '导出 CSV（本页形变曲线）', onClick: () => doExportCsv() },
+                  { key: 'report_json', label: '导出报告 JSON（baseline+points）', onClick: () => doExportReportJson() },
+                ],
+              } satisfies MenuProps
+            }
+          >
+            <Button icon={<DownloadOutlined />}>导出</Button>
+          </Dropdown>
           <Button
             icon={<ReloadOutlined />}
             onClick={() => {

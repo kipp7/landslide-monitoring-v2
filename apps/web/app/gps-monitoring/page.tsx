@@ -2,18 +2,28 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Button, Card, DatePicker, Select, Space, Tag, Typography } from 'antd'
-import { ReloadOutlined } from '@ant-design/icons'
+import { Button, Card, DatePicker, Dropdown, Select, Space, Tag, Typography, message } from 'antd'
+import type { MenuProps } from 'antd'
+import { DownloadOutlined, ReloadOutlined } from '@ant-design/icons'
 import dayjs, { type Dayjs } from 'dayjs'
 import { CircleMarker, MapContainer, Polyline, TileLayer, Tooltip } from 'react-leaflet'
 import useDeviceList from '../hooks/useDeviceList'
 import useSensors from '../hooks/useSensors'
-import { getDeviceSeries } from '../../lib/api/data'
+import { exportData, getDeviceSeries } from '../../lib/api/data'
+import { downloadTextFile } from '../../lib/download'
 import { toNumber } from '../../lib/v2Api'
 
 const { Title, Text } = Typography
 
 type TrackPoint = { ts: string; lat: number; lon: number; alt: number | null }
+
+function trackToCsv(points: TrackPoint[]): string {
+  const lines: string[] = ['ts,lat,lon,alt']
+  for (const p of points) {
+    lines.push(`${p.ts},${p.lat},${p.lon},${p.alt ?? ''}`)
+  }
+  return lines.join('\n')
+}
 
 export default function GpsMonitoringPage() {
   const { devices, loading: devicesLoading, error: devicesError, refetch } = useDeviceList()
@@ -37,6 +47,40 @@ export default function GpsMonitoringPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [track, setTrack] = useState<TrackPoint[]>([])
+
+  const doExportTrackCsv = useCallback(() => {
+    if (!deviceId) return
+    if (track.length === 0) {
+      message.info('没有可导出的轨迹点')
+      return
+    }
+    const filename = `gps_track_${deviceId}_${dayjs(range[0]).format('YYYYMMDDHHmm')}-${dayjs(range[1]).format('YYYYMMDDHHmm')}.csv`
+    downloadTextFile(trackToCsv(track), filename, 'text/csv;charset=utf-8')
+  }, [deviceId, range, track])
+
+  const doExportTelemetryCsv = useCallback(async () => {
+    if (!deviceId) return
+    const keys = altKey.trim() ? [latKey, lonKey, altKey] : [latKey, lonKey]
+    try {
+      const json = await exportData({
+        scope: 'device',
+        deviceId,
+        startTime: range[0].toISOString(),
+        endTime: range[1].toISOString(),
+        sensorKeys: keys,
+        format: 'csv',
+      })
+      const csv = typeof json.data?.data === 'string' ? json.data.data : ''
+      if (!csv) throw new Error('导出返回为空')
+      const filename = `gps_telemetry_${deviceId}_${dayjs(range[0]).format('YYYYMMDDHHmm')}-${dayjs(range[1]).format(
+        'YYYYMMDDHHmm',
+      )}.csv`
+      downloadTextFile(csv, filename, 'text/csv;charset=utf-8')
+      if (json.data?.limitHit) message.warning('导出命中限制：数据被截断（请缩小时间范围或减少指标）')
+    } catch (caught) {
+      message.error(caught instanceof Error ? caught.message : String(caught))
+    }
+  }, [altKey, deviceId, latKey, lonKey, range])
 
   const refresh = useCallback(async () => {
     if (!deviceId) return
@@ -116,6 +160,19 @@ export default function GpsMonitoringPage() {
         </div>
         <Space>
           <Link href="/data">数据查询</Link>
+          <Dropdown
+            trigger={['click']}
+            menu={
+              {
+                items: [
+                  { key: 'track_csv', label: '导出轨迹 CSV（本页点位）', onClick: () => doExportTrackCsv() },
+                  { key: 'telemetry_csv', label: '导出遥测 CSV（/api/v1/data/export）', onClick: () => void doExportTelemetryCsv() },
+                ],
+              } satisfies MenuProps
+            }
+          >
+            <Button icon={<DownloadOutlined />}>导出</Button>
+          </Dropdown>
           <Button
             icon={<ReloadOutlined />}
             onClick={() => {
