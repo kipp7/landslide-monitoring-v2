@@ -127,6 +127,9 @@
 | WS-D.2 | codex | `feat/ws-d/deformation-trends2` | https://github.com/kipp7/landslide-monitoring-v2/pull/110 | done | WS-D.1 | 仅做“API + 查询”闭环：新增 `/api/v1/gps/deformations/{deviceId}/series`（baseline + ClickHouse 遥测计算位移）；会改动 `services/api/src/routes/*` 与 `docs/integrations/api/openapi.yaml` |
 | WS-D.3 | codex | `feat/ws-d/baseline-management-ui` | https://github.com/kipp7/landslide-monitoring-v2/pull/105 | done | WS-D.1 | Web: 基准点管理页（`/device-management/baselines`）对接 `/api/v1/gps/baselines/*` |
 | WS-D.4 | codex | `feat/ws-d/gps-monitoring-ui` | https://github.com/kipp7/landslide-monitoring-v2/pull/115 | done | WS-D.2, WS-D.3 | Web: 恢复 GPS 监测/形变页面（`/gps-monitoring` + `/gps-deformation`），对接 `/api/v1/data/series` 与 `/api/v1/gps/deformations/*` |
+| WS-D.5 |  |  |  | backlog | WS-K.5, WS-D.3 | Web: 基准点管理页补齐参考区 `BaselineManagementV2` 的高级能力（自动建立/重建基准点、质量评估展示与建议、可用设备列表/映射兜底）；优先复用 v2 既有兼容端点（WS-K.5） |
+| WS-D.6 |  |  |  | backlog | WS-D.4 | Web: GPS 监测页补齐“导出”闭环（CSV/XLSX/报告）：对齐参考区 `/gps-monitoring` 的导出菜单；数据源基于 v2 现有查询结果（`/api/v1/data/series`、`/api/v1/gps/deformations/{deviceId}/series`），不新增重型依赖 |
+| WS-D.7 |  |  |  | backlog | WS-D.4, WS-D.6 | Web: GPS 监测页补齐参考区高级分析分栏（CEEMD/预测/数据详情/风险解释等）；若 v2 缺 API 则先拆“契约+最小 API 骨架”PR，再做页面渲染 PR |
 | WS-E | codex | `feat/ws-e/alert-rules-ui` | https://github.com/kipp7/landslide-monitoring-v2/pull/90 | done |  | Web: alert rules management UI (`/alerts/rules`) |
 | WS-F | codex | `feat/ws-f/huawei-iot-adapter` | https://github.com/kipp7/landslide-monitoring-v2/pull/99 | done |  | IoT adapter: Huawei IoT HTTP push -> Kafka telemetry (no UI) |
 | WS-G | codex | `feat/ws-g/ops-system-monitor` | https://github.com/kipp7/landslide-monitoring-v2/pull/79 | done |  | Web: `/ops/system-monitor` + `/ops/debug-api` + legacy redirects + Windows distDir workaround (`.next_v2`) |
