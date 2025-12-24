@@ -5,6 +5,8 @@ import Link from 'next/link'
 import {
   Button,
   Card,
+  Descriptions,
+  Divider,
   Form,
   Input,
   InputNumber,
@@ -26,6 +28,13 @@ import {
   upsertGpsBaseline,
   type GpsBaselineRow,
 } from '../../../lib/api/gpsBaselines'
+import {
+  autoEstablishGpsBaseline,
+  getGpsBaselinesAvailableDevices,
+  qualityCheckGpsBaseline,
+  type GpsBaselineQualityCheckResponse,
+  type GpsBaselinesAvailableDevicesResponse,
+} from '../../../lib/api/gpsBaselinesAdvanced'
 
 const { Title, Text } = Typography
 
@@ -38,6 +47,15 @@ type BaselineFormValues = {
   positionAccuracyMeters?: number
   satelliteCount?: number
   notes?: string
+}
+
+type AutoEstablishFormValues = {
+  deviceId: string
+  pointsCount: number
+  lookbackDays: number
+  latKey: string
+  lonKey: string
+  altKey?: string
 }
 
 function isNotFoundError(caught: unknown): boolean {
@@ -97,6 +115,18 @@ export default function BaselinesPage() {
   const [baseline, setBaseline] = useState<GpsBaselineRow | null>(null)
 
   const [form] = Form.useForm<BaselineFormValues>()
+  const [autoForm] = Form.useForm<AutoEstablishFormValues>()
+
+  const [availableLoading, setAvailableLoading] = useState(false)
+  const [availableError, setAvailableError] = useState<string | null>(null)
+  const [available, setAvailable] = useState<GpsBaselinesAvailableDevicesResponse | null>(null)
+
+  const [autoModalOpen, setAutoModalOpen] = useState(false)
+  const [autoLoading, setAutoLoading] = useState(false)
+
+  const [qcLoading, setQcLoading] = useState(false)
+  const [qcError, setQcError] = useState<string | null>(null)
+  const [qc, setQc] = useState<GpsBaselineQualityCheckResponse | null>(null)
 
   const resetForm = useCallback(() => {
     form.setFieldsValue({
@@ -110,6 +140,46 @@ export default function BaselinesPage() {
       notes: undefined,
     })
   }, [form])
+
+  useEffect(() => {
+    autoForm.setFieldsValue({
+      deviceId: selectedDeviceId,
+      pointsCount: 20,
+      lookbackDays: 30,
+      latKey: 'gps_latitude',
+      lonKey: 'gps_longitude',
+      altKey: 'gps_altitude',
+    })
+  }, [autoForm, selectedDeviceId])
+
+  const refreshAvailableDevices = useCallback(async () => {
+    try {
+      setAvailableLoading(true)
+      setAvailableError(null)
+      const json = await getGpsBaselinesAvailableDevices({ lookbackDays: 30, latKey: 'gps_latitude', lonKey: 'gps_longitude' })
+      setAvailable(json.data ?? null)
+    } catch (caught) {
+      setAvailableError(caught instanceof Error ? caught.message : String(caught))
+      setAvailable(null)
+    } finally {
+      setAvailableLoading(false)
+    }
+  }, [])
+
+  const runQualityCheck = useCallback(async () => {
+    if (!selectedDeviceId) return
+    try {
+      setQcLoading(true)
+      setQcError(null)
+      const json = await qualityCheckGpsBaseline(selectedDeviceId, { lookbackDays: 30, pointsCount: 200 })
+      setQc(json.data ?? null)
+    } catch (caught) {
+      setQcError(caught instanceof Error ? caught.message : String(caught))
+      setQc(null)
+    } finally {
+      setQcLoading(false)
+    }
+  }, [selectedDeviceId])
 
   const loadBaseline = useCallback(async () => {
     if (!selectedDeviceId) return
@@ -205,6 +275,30 @@ export default function BaselinesPage() {
       },
     })
   }, [selectedDeviceId, refreshList, resetForm])
+
+  const onAutoEstablish = useCallback(async () => {
+    try {
+      const values = await autoForm.validateFields()
+      if (!values.deviceId) return
+
+      setAutoLoading(true)
+      const json = await autoEstablishGpsBaseline(values.deviceId, {
+        pointsCount: values.pointsCount,
+        lookbackDays: values.lookbackDays,
+        latKey: values.latKey,
+        lonKey: values.lonKey,
+        ...(values.altKey && values.altKey.trim() ? { altKey: values.altKey.trim() } : {}),
+      })
+      message.success(`自动建立成功：pointsUsed=${json.data?.pointsUsed ?? '-'}`)
+      setAutoModalOpen(false)
+      await refreshList()
+      await loadBaseline()
+    } catch (caught) {
+      message.error(caught instanceof Error ? caught.message : String(caught))
+    } finally {
+      setAutoLoading(false)
+    }
+  }, [autoForm, loadBaseline, refreshList])
 
   const listColumns = useMemo(
     () => [
@@ -339,6 +433,113 @@ export default function BaselinesPage() {
             <Text type="secondary">当前账号无 `device:update` 权限：保存/删除已禁用。</Text>
           ) : null}
         </Form>
+      </Card>
+
+      <Card
+        title="高级工具（对齐参考区 BaselineManagementV2）"
+        size="small"
+        extra={<Text type="secondary">端点：`/gps/baselines/*`</Text>}
+      >
+        <Space wrap>
+          <Button onClick={() => void refreshAvailableDevices()} loading={availableLoading}>
+            扫描可用设备（无 baseline）
+          </Button>
+          <Button type="primary" onClick={() => setAutoModalOpen(true)} disabled={!selectedDeviceId || !canEdit}>
+            自动建立 baseline
+          </Button>
+          <Button onClick={() => void runQualityCheck()} loading={qcLoading} disabled={!selectedDeviceId || baselineMissing}>
+            质量检查
+          </Button>
+          {!canEdit ? <Text type="secondary">当前账号无 `device:update`：自动建立已禁用。</Text> : null}
+        </Space>
+
+        {availableError ? (
+          <div className="mt-3">
+            <Text type="danger">可用设备扫描失败：{availableError}</Text>
+          </div>
+        ) : null}
+        {available ? (
+          <div className="mt-3 space-y-2">
+            <Descriptions bordered size="small" column={2}>
+              <Descriptions.Item label="lookbackDays">{available.lookbackDays}</Descriptions.Item>
+              <Descriptions.Item label="totalGpsDevices">{available.totalGpsDevices}</Descriptions.Item>
+              <Descriptions.Item label="devicesWithBaseline">{available.devicesWithBaseline}</Descriptions.Item>
+              <Descriptions.Item label="devicesNeedingBaseline">{available.devicesNeedingBaseline}</Descriptions.Item>
+            </Descriptions>
+            <div className="flex flex-wrap gap-2">
+              {(available.availableDevices ?? []).slice(0, 20).map((id) => (
+                <Button key={id} size="small" onClick={() => setSelectedDeviceId(id)}>
+                  <span className="font-mono">{id.slice(0, 8)}…</span>
+                </Button>
+              ))}
+              {(available.availableDevices ?? []).length > 20 ? (
+                <Text type="secondary">仅展示前 20 个，可用设备总数：{available.availableDevices.length}</Text>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
+        <Divider />
+
+        {qcError ? <Text type="danger">质量检查失败：{qcError}</Text> : null}
+        {qc ? (
+          <div className="space-y-2">
+            <Space wrap>
+              <Tag color={qc.recommendation.level === 'good' ? 'green' : qc.recommendation.level === 'warn' ? 'orange' : 'red'}>
+                {qc.recommendation.level.toUpperCase()}
+              </Tag>
+              <Text type="secondary">
+                baselineAgeHours: <span className="font-mono">{qc.baselineAgeHours.toFixed(1)}</span>
+              </Text>
+              <Text type="secondary">
+                pointsUsed: <span className="font-mono">{qc.sample.pointsUsed}</span>
+              </Text>
+            </Space>
+            <Descriptions bordered size="small" column={2}>
+              <Descriptions.Item label="drift mean (m)">{qc.driftMeters.mean.toFixed(3)}</Descriptions.Item>
+              <Descriptions.Item label="drift std (m)">{qc.driftMeters.std.toFixed(3)}</Descriptions.Item>
+              <Descriptions.Item label="drift p95 (m)">{qc.driftMeters.p95.toFixed(3)}</Descriptions.Item>
+              <Descriptions.Item label="drift max (m)">{qc.driftMeters.max.toFixed(3)}</Descriptions.Item>
+            </Descriptions>
+          </div>
+        ) : (
+          <Text type="secondary">质量检查会基于 baseline + 最近 GPS 样本计算漂移统计（p95 阈值：2m/5m）。</Text>
+        )}
+
+        <Modal
+          title="自动建立 GPS baseline"
+          open={autoModalOpen}
+          onCancel={() => setAutoModalOpen(false)}
+          onOk={() => void onAutoEstablish()}
+          confirmLoading={autoLoading}
+          okButtonProps={{ disabled: !canEdit }}
+        >
+          <Form form={autoForm} layout="vertical">
+            <Form.Item label="deviceId" name="deviceId" rules={[{ required: true, message: 'deviceId 必填' }]}>
+              <Select
+                showSearch
+                options={devices.map((d) => ({ value: d.device_id, label: `${d.display_name || d.device_id} (${d.device_id.slice(0, 8)}…)` }))}
+              />
+            </Form.Item>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <Form.Item label="pointsCount" name="pointsCount" rules={[{ required: true }]}>
+                <InputNumber min={10} max={5000} style={{ width: '100%' }} />
+              </Form.Item>
+              <Form.Item label="lookbackDays" name="lookbackDays" rules={[{ required: true }]}>
+                <InputNumber min={1} max={365} style={{ width: '100%' }} />
+              </Form.Item>
+              <Form.Item label="latKey" name="latKey" rules={[{ required: true }]}>
+                <Input placeholder="gps_latitude" />
+              </Form.Item>
+              <Form.Item label="lonKey" name="lonKey" rules={[{ required: true }]}>
+                <Input placeholder="gps_longitude" />
+              </Form.Item>
+              <Form.Item label="altKey（可选）" name="altKey">
+                <Input placeholder="gps_altitude" />
+              </Form.Item>
+            </div>
+          </Form>
+        </Modal>
       </Card>
 
       <Card
