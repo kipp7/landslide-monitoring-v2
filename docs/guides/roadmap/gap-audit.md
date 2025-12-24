@@ -42,6 +42,8 @@
 2. 在 v2 中定位：Web 路由 / API 路由 / OpenAPI / DB 表 / Kafka schema（以 `docs/integrations/` 为唯一权威）。
 3. 若缺口存在：在 `docs/guides/roadmap/v2-module-workstreams.md` 新增一个最小子项（1 个分支 + 1 个 PR），避免大杂烩 PR。
 
+最终验收走查建议使用：`docs/guides/roadmap/final-acceptance-walkthrough.md`（按页面逐项点检）。
+
 ## 3) v2 Web 路由清单（从 `apps/web/app/*/page.tsx` 枚举）
 
 用于快速确认 v2 现有页面入口，作为“参考区缺口对照”的落地点索引：
