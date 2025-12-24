@@ -1,7 +1,8 @@
 'use client'
 
 import { ReloadOutlined } from '@ant-design/icons'
-import { Button, Card, Descriptions, Select, Segmented, Space, Table, Tag, Typography } from 'antd'
+import { Button, Card, Descriptions, Select, Segmented, Space, Switch, Table, Tag, Typography } from 'antd'
+import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { listAlerts, type AlertRow } from '../../lib/api/alerts'
@@ -15,6 +16,7 @@ import useStationList from '../hooks/useStationList'
 import type { StationMapPoint, StationMapTile } from './components/StationMap'
 
 const StationMap = dynamic(() => import('./components/StationMap'), { ssr: false })
+const AnalysisAiPanel = dynamic(() => import('./components/AnalysisAiPanel'), { ssr: false })
 
 const { Title, Text } = Typography
 
@@ -54,6 +56,7 @@ export default function AnalysisPage() {
   const disconnectRealtime = realtime.disconnect
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>('')
   const [mapMode, setMapMode] = useState<'2d' | '3d' | 'satellite' | 'video'>('2d')
+  const [showAiWidgets, setShowAiWidgets] = useState(false)
 
   useEffect(() => {
     if (!selectedDeviceId && devices.length > 0) setSelectedDeviceId(devices[0].device_id)
@@ -512,6 +515,23 @@ export default function AnalysisPage() {
               </>
             ) : (
               <Text type="secondary">{shadowLoading ? 'Loading…' : 'No data'}</Text>
+            )}
+          </Card>
+
+          <Card
+            title="AI widgets"
+            size="small"
+            extra={
+              <Space size="small">
+                <Switch checked={showAiWidgets} onChange={setShowAiWidgets} />
+                <Link href="/data/ai-predictions">AI Predictions</Link>
+              </Space>
+            }
+          >
+            {showAiWidgets ? (
+              <AnalysisAiPanel deviceId={selectedDeviceId} sensorsByKey={sensorsByKey} />
+            ) : (
+              <Text type="secondary">Toggle on to load AI prediction widgets (lazy-loaded).</Text>
             )}
           </Card>
 
