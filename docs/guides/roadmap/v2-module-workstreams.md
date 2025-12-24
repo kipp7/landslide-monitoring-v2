@@ -151,7 +151,7 @@
 | WS-N.3 | codex | `feat/ws-n3/analysis-realtime-widgets` | https://github.com/kipp7/landslide-monitoring-v2/pull/169 | done | WS-N.1, WS-K.4 | Web：恢复 legacy 实时异常表/实时传感器状态等组件（`RealtimeAnomalyTable`/`RealtimeSensorStatus*`），并对齐 v2 `/api/anomaly-assessment` + `/realtime/stream` 的数据结构 |
 | WS-N.4 | codex | `feat/ws-n4/analysis-ai-widgets` | https://github.com/kipp7/landslide-monitoring-v2/pull/170 | done | WS-N.1, WS-L.1 | Web：恢复 legacy AI 预测卡片/图表组件（温湿度/加速度/陀螺仪等）在 `/analysis` 的入口与懒加载，数据源使用 v2 `/api/v1/data/series` 与 `/api/v1/ai/predictions*` |
 | WS-N.5 | codex | `feat/ws-n5/analysis-legacy-shell` | https://github.com/kipp7/landslide-monitoring-v2/pull/192 | done | WS-N.1~WS-N.4 | Web：`/analysis` UI 1:1 还原（骨架）：移植参考区 `HoverSidebar`、`BaseCard`、`MapSwitchPanel`、`LazyComponents` 框架与布局结构（先确保 DOM/布局/交互入口一致，数据源适配后续拆分） |
-| WS-N.6 |  |  |  | backlog | WS-N.5 | Web：`/analysis` 图表 1:1（基础四图）：移植温度/湿度/加速度/陀螺仪图表组件（参考区 `TemperatureChart`/`HumidityChart`/`AccelerationChart`/`GyroscopeChart`），并用 v2 `/api/v1/data/series` 适配数据（含无数据状态与单位显示） |
+| WS-N.6 | codex | `feat/ws-n6/analysis-charts-core` |  | claimed | WS-N.5 | Web：`/analysis` 图表 1:1（基础四图）：移植温度/湿度/加速度/陀螺仪图表组件（参考区 `TemperatureChart`/`HumidityChart`/`AccelerationChart`/`GyroscopeChart`），并用 v2 `/api/v1/data/series` 适配数据（含无数据状态与单位显示） |
 | WS-N.7 |  |  |  | backlog | WS-N.5 | Web：`/analysis` 图表 1:1（其余图表）：移植液位图（LiquidFill）、柱状图（BarChart）、设备错误图（DeviceErrorChart）、异常类型图（AnomalyTypeChart）并适配 v2 数据/告警聚合 |
 | WS-N.8 |  |  |  | backlog | WS-N.5 | Web：`/analysis` 3D 地图 1:1：移植 `Map3DContainer`（或等价 3D 引擎），补齐参考区 2D/3D/卫星/视频切换与交互；如 3D 依赖新引擎，先拆“技术选型+最小 demo”PR |
 | WS-N.9 |  |  |  | backlog | WS-N.5 | Web：`/analysis` 性能监控 1:1：移植 `usePerformanceMonitor` 与性能告警 UI（warnings/isPerformanceGood），并补齐必要的缓存/节流策略（不改变 v2 API） |
