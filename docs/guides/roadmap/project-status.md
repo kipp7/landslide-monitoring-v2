@@ -26,6 +26,7 @@
 - 2025-12-24：运行大屏 UI 1:1 骨架（WS-N.5）：PR #192，将 Web `/analysis` 切换为参考区风格大屏骨架（HoverSidebar/BaseCard/MapSwitchPanel/LazyComponents 布局）；原 v2 大屏页保留在 `/analysis-v2` 便于对照回归。
 - 2025-12-24：运行大屏基础四图 1:1（WS-N.6）：PR #195，Web `/analysis` 补齐温度/湿度/加速度/陀螺仪四个图表组件（按参考区 ECharts option 与交互），数据源通过 v2 `/api/v1/data/series` 适配。
 - 2025-12-24：运行大屏其余图表 1:1（WS-N.7）：PR #199，Web `/analysis` 补齐液位图（LiquidFill）、柱状图（BarChart）、设备错误图（DeviceErrorChart）、异常类型图（AnomalyTypeChart），并对接 v2 alerts/legacy API。
+- 2025-12-24：运行大屏 3D/视频切换 1:1（WS-N.8）：Web `/analysis` 补齐参考区 3D 地图容器（AMap 3D/terrain）与视频模式（ESP32-CAM `<img src=http://192.168.43.55/stream>`）。
 - 2025-12-24：运行大屏性能监控 1:1（WS-N.9）：Web `/analysis` 补齐参考区 `usePerformanceMonitor`（FPS/内存/加载耗时）与性能降级提示入口（`warnings`/`isPerformanceGood`，节流更新避免高频重渲染）。
 - 2025-12-24：GPS 监测高级分析（WS-D.7）：PR #181，Web `/gps-monitoring` 增加分析分栏（CEEMD 轻量分解 / 预测分析 / 数据详情 / 风险与基准点）。
 - 2025-12-24：运行大屏实时组件（WS-N.3）：PR #169，Web `/analysis` 补齐实时异常表（SSE `anomaly_alert` + `/anomaly-assessment` 聚合）与“实时传感器状态/最后上报时间”表（SSE `device_data`）。
