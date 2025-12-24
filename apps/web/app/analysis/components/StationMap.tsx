@@ -1,7 +1,7 @@
 'use client'
 
-import { useMemo } from 'react'
-import { CircleMarker, MapContainer, Popup, TileLayer, Tooltip, useMap } from 'react-leaflet'
+import { useEffect, useMemo, useState } from 'react'
+import { CircleMarker, MapContainer, Popup, TileLayer, Tooltip, useMap, useMapEvents } from 'react-leaflet'
 
 export type StationMapTile = { url: string; attribution: string }
 
@@ -261,6 +261,19 @@ function ClusterMarkers({
   })
 }
 
+function ZoomTracker({ onZoomChange }: { onZoomChange: (zoom: number) => void }) {
+  const map = useMap()
+  useMapEvents({
+    zoomend: () => onZoomChange(map.getZoom()),
+  })
+
+  useEffect(() => {
+    onZoomChange(map.getZoom())
+  }, [map, onZoomChange])
+
+  return null
+}
+
 export default function StationMap({
   center,
   zoom,
@@ -276,6 +289,12 @@ export default function StationMap({
   onSelectDevice: (deviceId: string) => void
   selectedDeviceId?: string
 }) {
+  const [currentZoom, setCurrentZoom] = useState(zoom)
+
+  useEffect(() => {
+    setCurrentZoom(zoom)
+  }, [zoom])
+
   const clusters = useMemo(() => {
     const byStationId = new Map<
       string,
@@ -369,13 +388,19 @@ export default function StationMap({
       ],
     }))
 
-    return normalizeClusters(stationClusters, zoom, selectedDeviceId)
-  }, [points, selectedDeviceId, zoom])
+    return normalizeClusters(stationClusters, currentZoom, selectedDeviceId)
+  }, [points, selectedDeviceId, currentZoom])
 
   return (
     <MapContainer center={center} zoom={zoom} scrollWheelZoom style={{ height: '100%', width: '100%' }}>
       <TileLayer url={tile.url} attribution={tile.attribution} />
-      <ClusterMarkers clusters={clusters} zoom={zoom} onSelectDevice={onSelectDevice} selectedDeviceId={selectedDeviceId} />
+      <ZoomTracker onZoomChange={setCurrentZoom} />
+      <ClusterMarkers
+        clusters={clusters}
+        zoom={currentZoom}
+        onSelectDevice={onSelectDevice}
+        selectedDeviceId={selectedDeviceId}
+      />
     </MapContainer>
   )
 }
