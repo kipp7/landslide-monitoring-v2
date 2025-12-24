@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Alert, Button, Card, DatePicker, Descriptions, Dropdown, Select, Space, Table, Tabs, Tag, Typography, message } from 'antd'
 import type { MenuProps } from 'antd'
@@ -12,7 +12,7 @@ import useDeviceList from '../hooks/useDeviceList'
 import useSensors from '../hooks/useSensors'
 import { exportData, getDeviceSeries } from '../../lib/api/data'
 import { listAiPredictions, type AiPredictionRow } from '../../lib/api/aiPredictions'
-import { downloadTextFile } from '../../lib/download'
+import { downloadArrayBuffer, downloadDataUrl, downloadTextFile } from '../../lib/download'
 import { qualityCheckGpsBaseline, type GpsBaselineQualityCheckResponse } from '../../lib/api/gpsBaselinesAdvanced'
 import { toNumber } from '../../lib/v2Api'
 
@@ -56,6 +56,8 @@ function movingAverage(values: number[], windowSize: number): number[] {
 }
 
 export default function GpsMonitoringPage() {
+  const ceemdChartRef = useRef<InstanceType<typeof ReactECharts> | null>(null)
+
   const { devices, loading: devicesLoading, error: devicesError, refetch } = useDeviceList()
   const { byKey: sensorsByKey } = useSensors()
 
@@ -119,6 +121,138 @@ export default function GpsMonitoringPage() {
       message.error(caught instanceof Error ? caught.message : String(caught))
     }
   }, [altKey, deviceId, latKey, lonKey, range])
+
+  const doExportTrackXlsx = useCallback(async () => {
+    if (!deviceId) return
+    if (track.length === 0) {
+      message.info('没有可导出的轨迹点')
+      return
+    }
+    try {
+      const mod = await import('xlsx')
+      const XLSX = (mod as unknown as { default?: typeof mod }).default ?? mod
+      const rows = track.map((p) => ({
+        ts: p.ts,
+        lat: p.lat,
+        lon: p.lon,
+        alt: p.alt ?? null,
+      }))
+      const wb = XLSX.utils.book_new()
+      const ws = XLSX.utils.json_to_sheet(rows)
+      XLSX.utils.book_append_sheet(wb, ws, 'track')
+      const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' }) as unknown as ArrayBuffer
+      const filename = `gps_track_${deviceId}_${dayjs(range[0]).format('YYYYMMDDHHmm')}-${dayjs(range[1]).format('YYYYMMDDHHmm')}.xlsx`
+      downloadArrayBuffer(buf, filename, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    } catch (caught) {
+      message.error(caught instanceof Error ? caught.message : String(caught))
+    }
+  }, [deviceId, range, track])
+
+  const doExportDisplacementXlsx = useCallback(async () => {
+    if (!deviceId) return
+    if (track.length < 2) {
+      message.info('暂无位移序列可导出')
+      return
+    }
+    try {
+      const mod = await import('xlsx')
+      const XLSX = (mod as unknown as { default?: typeof mod }).default ?? mod
+      const wb = XLSX.utils.book_new()
+
+      const base = track[0]
+      const series = track.map((p) => ({
+        ts: p.ts,
+        meters: haversineMeters(base.lat, base.lon, p.lat, p.lon),
+      }))
+      const seriesRows = series.map((p) => ({ ts: p.ts, displacement_m: p.meters }))
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(seriesRows), 'displacement')
+
+      const values = series.map((p) => p.meters)
+      const summaryRows = [
+        { key: 'deviceId', value: deviceId },
+        { key: 'startTs', value: series[0].ts },
+        { key: 'endTs', value: series[series.length - 1].ts },
+        { key: 'points', value: series.length },
+        { key: 'maxMeters', value: Math.max(...values) },
+        { key: 'avgMeters', value: values.reduce((s, v) => s + v, 0) / values.length },
+      ]
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryRows), 'summary')
+
+      const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' }) as unknown as ArrayBuffer
+      const filename = `gps_displacement_${deviceId}_${dayjs(range[0]).format('YYYYMMDDHHmm')}-${dayjs(range[1]).format('YYYYMMDDHHmm')}.xlsx`
+      downloadArrayBuffer(buf, filename, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    } catch (caught) {
+      message.error(caught instanceof Error ? caught.message : String(caught))
+    }
+  }, [deviceId, range, track])
+
+  const doExportCeemdChartPng = useCallback(() => {
+    if (!deviceId) return
+    const instance = ceemdChartRef.current?.getEchartsInstance()
+    const dataUrl = instance?.getDataURL?.({ type: 'png', pixelRatio: 2, backgroundColor: '#ffffff' })
+    if (!dataUrl) {
+      message.info('暂无可导出的图表')
+      return
+    }
+    const filename = `gps_ceemd_${deviceId}_${dayjs(range[0]).format('YYYYMMDDHHmm')}-${dayjs(range[1]).format('YYYYMMDDHHmm')}.png`
+    downloadDataUrl(dataUrl, filename)
+  }, [deviceId, range])
+
+  const doExportMarkdownReport = useCallback(() => {
+    if (!deviceId) return
+    const parts: string[] = []
+    parts.push(`# GPS 监测报告`)
+    parts.push('')
+    parts.push(`- deviceId: \`${deviceId}\``)
+    parts.push(`- timeRange: \`${range[0].toISOString()}\` → \`${range[1].toISOString()}\``)
+    parts.push(`- points: \`${track.length}\``)
+    const localLatest = track.length > 0 ? track[track.length - 1] : null
+    if (localLatest) {
+      parts.push(
+        `- latest: \`${localLatest.ts}\` (${localLatest.lat}, ${localLatest.lon}${localLatest.alt == null ? '' : `, alt=${localLatest.alt}`})`,
+      )
+    }
+    parts.push('')
+
+    if (track.length >= 2) {
+      const base = track[0]
+      const series = track.map((p) => haversineMeters(base.lat, base.lon, p.lat, p.lon))
+      const maxMeters = Math.max(...series)
+      const avgMeters = series.reduce((s, v) => s + v, 0) / series.length
+      const startTs = track[0].ts
+      const endTs = track[track.length - 1].ts
+      parts.push('## 位移统计（相对首点）')
+      parts.push('')
+      parts.push(`- max: \`${maxMeters.toFixed(3)} m\``)
+      parts.push(`- avg: \`${avgMeters.toFixed(3)} m\``)
+      parts.push(`- time range: \`${startTs}\` → \`${endTs}\``)
+      parts.push('')
+    }
+
+    if (qc) {
+      parts.push('## 基准点质量检查')
+      parts.push('')
+      parts.push(`- recommendation: \`${qc.recommendation.level}\``)
+      parts.push(`- drift p95/max: \`${qc.driftMeters.p95.toFixed(3)} / ${qc.driftMeters.max.toFixed(3)} m\``)
+      parts.push('')
+    }
+
+    if (predictions.length > 0) {
+      parts.push('## AI Predictions（最近 20 条）')
+      parts.push('')
+      parts.push('| createdAt | predictedTs | horizon(s) | riskScore | riskLevel | model |')
+      parts.push('|---|---:|---:|---:|---:|---|')
+      for (const p of predictions) {
+        parts.push(
+          `| \`${p.createdAt}\` | \`${p.predictedTs}\` | \`${p.horizonSeconds}\` | \`${p.riskScore.toFixed(3)}\` | \`${p.riskLevel ?? '-'}\` | \`${p.modelKey}\` |`,
+        )
+      }
+      parts.push('')
+    }
+
+    const filename = `gps_report_${deviceId}_${dayjs(range[0]).format('YYYYMMDDHHmm')}-${dayjs(range[1]).format('YYYYMMDDHHmm')}.md`
+    downloadTextFile(parts.join('\n'), filename, 'text/markdown;charset=utf-8')
+  }, [deviceId, predictions, qc, range, track])
 
   const runQualityCheck = useCallback(async () => {
     if (!deviceId) return
@@ -306,6 +440,21 @@ export default function GpsMonitoringPage() {
     ] as const
   }, [])
 
+  const exportMenu = useMemo(() => {
+    return {
+      items: [
+        { key: 'track_csv', label: '导出轨迹 CSV（本页点位）', onClick: () => doExportTrackCsv() },
+        { key: 'track_xlsx', label: '导出轨迹 XLSX', onClick: () => void doExportTrackXlsx() },
+        { type: 'divider' as const },
+        { key: 'telemetry_csv', label: '导出遥测 CSV（/api/v1/data/export）', onClick: () => void doExportTelemetryCsv() },
+        { key: 'displacement_xlsx', label: '导出位移 XLSX（相对首点）', onClick: () => void doExportDisplacementXlsx() },
+        { type: 'divider' as const },
+        { key: 'ceemd_png', label: '导出 CEEMD 图表 PNG（当前分栏）', onClick: () => doExportCeemdChartPng() },
+        { key: 'report_md', label: '导出报告 Markdown（本页汇总）', onClick: () => doExportMarkdownReport() },
+      ],
+    } satisfies MenuProps
+  }, [doExportCeemdChartPng, doExportDisplacementXlsx, doExportMarkdownReport, doExportTelemetryCsv, doExportTrackCsv, doExportTrackXlsx])
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -317,17 +466,7 @@ export default function GpsMonitoringPage() {
         </div>
         <Space>
           <Link href="/data">数据查询</Link>
-          <Dropdown
-            trigger={['click']}
-            menu={
-              {
-                items: [
-                  { key: 'track_csv', label: '导出轨迹 CSV（本页点位）', onClick: () => doExportTrackCsv() },
-                  { key: 'telemetry_csv', label: '导出遥测 CSV（/api/v1/data/export）', onClick: () => void doExportTelemetryCsv() },
-                ],
-              } satisfies MenuProps
-            }
-          >
+          <Dropdown trigger={['click']} menu={exportMenu}>
             <Button icon={<DownloadOutlined />}>导出</Button>
           </Dropdown>
           <Button
@@ -464,7 +603,11 @@ export default function GpsMonitoringPage() {
                   message="说明：参考区包含 CEEMD 分解等高级分析。本页先提供一个“轻量级（前端）分解”用于保留体验入口，后续可按契约下沉到 worker/API。"
                 />
                 <Card size="small" title="位移分解（displacement / trend / residual）">
-                  {ceemdLikeOption ? <ReactECharts option={ceemdLikeOption} style={{ height: 360 }} /> : <Text type="secondary">暂无数据</Text>}
+                  {ceemdLikeOption ? (
+                    <ReactECharts ref={ceemdChartRef} option={ceemdLikeOption} style={{ height: 360 }} />
+                  ) : (
+                    <Text type="secondary">暂无数据</Text>
+                  )}
                 </Card>
               </div>
             ),
