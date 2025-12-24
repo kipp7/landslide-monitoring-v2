@@ -56,9 +56,7 @@ function movingAverage(values: number[], windowSize: number): number[] {
 }
 
 export default function GpsMonitoringPage() {
-  const ceemdChartRef = useRef<{
-    getEchartsInstance?: () => { getDataURL?: (opts?: unknown) => string }
-  } | null>(null)
+  const ceemdChartRef = useRef<InstanceType<typeof ReactECharts> | null>(null)
 
   const { devices, loading: devicesLoading, error: devicesError, refetch } = useDeviceList()
   const { byKey: sensorsByKey } = useSensors()
@@ -132,7 +130,7 @@ export default function GpsMonitoringPage() {
     }
     try {
       const mod = await import('xlsx')
-      const XLSX: any = (mod as any).default ?? mod
+      const XLSX = (mod as unknown as { default?: typeof mod }).default ?? mod
       const rows = track.map((p) => ({
         ts: p.ts,
         lat: p.lat,
@@ -142,7 +140,7 @@ export default function GpsMonitoringPage() {
       const wb = XLSX.utils.book_new()
       const ws = XLSX.utils.json_to_sheet(rows)
       XLSX.utils.book_append_sheet(wb, ws, 'track')
-      const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' }) as ArrayBuffer
+      const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' }) as unknown as ArrayBuffer
       const filename = `gps_track_${deviceId}_${dayjs(range[0]).format('YYYYMMDDHHmm')}-${dayjs(range[1]).format('YYYYMMDDHHmm')}.xlsx`
       downloadArrayBuffer(buf, filename, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     } catch (caught) {
@@ -158,7 +156,7 @@ export default function GpsMonitoringPage() {
     }
     try {
       const mod = await import('xlsx')
-      const XLSX: any = (mod as any).default ?? mod
+      const XLSX = (mod as unknown as { default?: typeof mod }).default ?? mod
       const wb = XLSX.utils.book_new()
 
       const base = track[0]
@@ -180,7 +178,7 @@ export default function GpsMonitoringPage() {
       ]
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryRows), 'summary')
 
-      const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' }) as ArrayBuffer
+      const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' }) as unknown as ArrayBuffer
       const filename = `gps_displacement_${deviceId}_${dayjs(range[0]).format('YYYYMMDDHHmm')}-${dayjs(range[1]).format('YYYYMMDDHHmm')}.xlsx`
       downloadArrayBuffer(buf, filename, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     } catch (caught) {
@@ -190,7 +188,7 @@ export default function GpsMonitoringPage() {
 
   const doExportCeemdChartPng = useCallback(() => {
     if (!deviceId) return
-    const instance = ceemdChartRef.current?.getEchartsInstance?.()
+    const instance = ceemdChartRef.current?.getEchartsInstance()
     const dataUrl = instance?.getDataURL?.({ type: 'png', pixelRatio: 2, backgroundColor: '#ffffff' })
     if (!dataUrl) {
       message.info('暂无可导出的图表')
@@ -606,7 +604,7 @@ export default function GpsMonitoringPage() {
                 />
                 <Card size="small" title="位移分解（displacement / trend / residual）">
                   {ceemdLikeOption ? (
-                    <ReactECharts ref={ceemdChartRef as any} option={ceemdLikeOption} style={{ height: 360 }} />
+                    <ReactECharts ref={ceemdChartRef} option={ceemdLikeOption} style={{ height: 360 }} />
                   ) : (
                     <Text type="secondary">暂无数据</Text>
                   )}
