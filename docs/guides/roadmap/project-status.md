@@ -7,8 +7,9 @@
 - 每次合并一个 PR 到 `main`，如果它改变了项目阶段/里程碑/下一步，必须更新本页。
 - 本页只记录“当前状态与下一步”，历史细节放到 `docs/incidents/` 或 PR/commit 记录中。
 
-最后更新时间：2025-12-25（WS-O.1：恢复 /baseline-management 参考区 1:1；阶段 5 已完成：固件模拟器 + Stage5Regression 回归基线；硬件联调待启动）
+最后更新时间：2025-12-25（WS-O.3：恢复 /system-monitor 参考区 1:1；阶段 5 已完成：固件模拟器 + Stage5Regression 回归基线；硬件联调待启动）
 - 2025-12-25：WS-O.1（/baseline-management）：PR #213，恢复参考区页面 1:1 并对接 v2 GPS baselines API（含自动建立/质量评估）；保留 v2 重定向页 `/baseline-management-v2`
+- 2025-12-25：WS-O.3（/system-monitor）：PR #216，恢复参考区系统监控页 1:1（cache/realtime/worker 指标面板）；保留 v2 重定向页 `/system-monitor-v2`
 - 2025-12-22：PR #103（WS-C）：新增 Web 数据浏览器 `/data`（series/raw/export/statistics），用于单机联调与分析验证。
 - 2025-12-22：GPS 形变（WS-D.2）：新增 `/api/v1/gps/deformations/{deviceId}/series`（基于基准点 + ClickHouse 遥测计算位移；支持 `latKey/lonKey/altKey` 覆盖默认 metric key），补齐 API 契约文档与 OpenAPI。
 - 2025-12-22：WS-G 落地收口：合并 `/ops/system-monitor` + `/ops/debug-api` 与旧路径跳转，并将 Next.js Windows 构建输出目录切换为 `.next_v2` 规避 `.next_web/trace` 的 EPERM 卡点（见 PR #79）。
