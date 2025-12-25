@@ -20,7 +20,7 @@
 | `/` | `openharmony/landslide-monitor/frontend/app/page.tsx` | `/` | `apps/web/app/page.tsx` | ✅ |
 | `/login` | `openharmony/landslide-monitor/frontend/app/login/page.tsx` | `/login` | `apps/web/app/login/page.tsx` | ✅ |
 | `/analysis` | `openharmony/landslide-monitor/frontend/app/analysis/page.tsx` | `/analysis` | `apps/web/app/analysis/page.tsx` | ✅ |
-| `/analysis2` | `openharmony/landslide-monitor/frontend/app/analysis2/page.tsx` | `/analysis2`（兼容跳转） | `apps/web/app/analysis2/page.tsx` | ✅ |
+| `/analysis2` | `openharmony/landslide-monitor/frontend/app/analysis2/page.tsx` | `/analysis2` | `apps/web/app/analysis2/page.tsx` | ✅ |
 | `/optimized-demo` | `openharmony/landslide-monitor/frontend/app/optimized-demo/page.tsx` | `/optimized-demo`（兼容跳转） | `apps/web/app/optimized-demo/page.tsx` | ✅ |
 | `/device-management` | `openharmony/landslide-monitor/frontend/app/device-management/page.tsx` | `/device-management` | `apps/web/app/device-management/page.tsx` | ✅ |
 | `/baseline-management` | `openharmony/landslide-monitor/frontend/app/baseline-management/page.tsx` | `/baseline-management`（兼容跳转） | `apps/web/app/baseline-management/page.tsx` | ✅ |
@@ -56,6 +56,12 @@
 
 - ✅ 兼容入口存在，跳转到 `/ops/*` 运维页面（WS-G/WS-J）
 
+### 2.5 `/analysis2`（监测点面板）
+
+- ✅ 页面可渲染且不重定向到 `/analysis`（WS-O.5）
+- ✅ 左侧折叠面板：异常/监测点/传感器/设备/视图可切换（WS-O.5）
+- ✅ 详情卡片：Point/Sensor/Alert/View/Device 切换显示正常（WS-O.5）
+
 ## 3) 仍需确认的项（人工验收）
 
 以下不属于“缺口已确认”，但建议在最终验收时手工点一遍，避免“入口有但细节漏掉”：
@@ -63,4 +69,3 @@
 - 权限/RBAC：不同角色登录后，导航与页面权限是否符合预期（WS-A）
 - 摄像头：视频地址/鉴权/跨域策略在目标环境是否可用（WS-K.1）
 - GPS：真实设备数据下的预测列表/质量检查响应时延与错误提示（WS-D.7/WS-D.8）
-
