@@ -23,3 +23,4 @@
 - 本地：`python docs/tools/run-quality-gates.py`
 - GitHub CI：`.github/workflows/quality-gates.yml`
 
+<!-- ruleset verify -->
