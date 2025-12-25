@@ -186,7 +186,7 @@ export default function BaselineManagementV2({ className = '' }: { className?: s
         setBaselines(mapped)
         await fetchQualityAssessments(mapped)
       }
-    } catch (error) {
+    } catch {
       message.error('获取基准点列表失败')
     } finally {
       setLoading(false)
@@ -279,7 +279,7 @@ export default function BaselineManagementV2({ className = '' }: { className?: s
       message.success(editMode ? '基准点更新成功' : '基准点创建成功')
       setModalVisible(false)
       await fetchBaselines()
-    } catch (error) {
+    } catch {
       message.error('保存基准点失败')
     }
   }
@@ -323,7 +323,7 @@ export default function BaselineManagementV2({ className = '' }: { className?: s
       message.success('自动建立基准点任务已执行')
       setAutoModalVisible(false)
       await fetchBaselines()
-    } catch (error) {
+    } catch {
       message.error('自动建立基准点失败')
     }
   }
