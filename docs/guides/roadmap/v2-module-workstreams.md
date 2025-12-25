@@ -135,6 +135,7 @@
 | WS-F | codex | `feat/ws-f/huawei-iot-adapter` | https://github.com/kipp7/landslide-monitoring-v2/pull/99 | done |  | IoT adapter: Huawei IoT HTTP push -> Kafka telemetry (no UI) |
 | WS-G | codex | `feat/ws-g/ops-system-monitor` | https://github.com/kipp7/landslide-monitoring-v2/pull/79 | done |  | Web: `/ops/system-monitor` + `/ops/debug-api` + legacy redirects + Windows distDir workaround (`.next_v2`) |
 | WS-G.2 | codex | `feat/ws-g/telemetry-dlq-ui` | https://github.com/kipp7/landslide-monitoring-v2/pull/109 | done |  | Ops: Telemetry DLQ 页面（`/ops/telemetry-dlq`）对接 `/api/v1/telemetry/dlq*` |
+| WS-G.3 | codex | `feat/ws-g3/ops-debug-api-smoke-tests` | TBD | in_progress | WS-G, WS-K.6 | Ops：`/ops/debug-api` 补齐参考区 debug-api 的“一键连通性测试”（`/health`、`/huawei/config`、`/huawei/devices/:deviceId/shadow`）；危险的 `POST /huawei/devices/:deviceId/*` 默认关闭并需要二次确认 |
 | WS-H | codex | `feat/ws-h/ai-prediction-worker` | https://github.com/kipp7/landslide-monitoring-v2/pull/84 | done |  | AI predictions plugin/worker |
 | WS-I | codex | `docs/ws-i/gap-audit-route-inventory` | https://github.com/kipp7/landslide-monitoring-v2/pull/121 | done |  | Docs: 扩充 `gap-audit.md`（v2 Web 路由盘点 + 参考区对照） |
 | WS-J | codex | `feat/ws-j/legacy-routes-compat` | https://github.com/kipp7/landslide-monitoring-v2/pull/125 | done |  | Web: 恢复旧系统兼容入口（`/baseline-management`、`/analysis2`、`/optimized-demo`）：baseline-management/optimized-demo 保持兼容跳转，analysis2 后续在 WS-O.5 恢复实际页面 |

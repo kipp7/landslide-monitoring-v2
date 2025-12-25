@@ -2,8 +2,8 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Button, Card, Divider, Input, Select, Space, Typography } from 'antd'
-import { apiGetJson } from '../../../lib/v2Api'
+import { Alert, Button, Card, Checkbox, Divider, Input, InputNumber, Select, Space, Tag, Typography, message } from 'antd'
+import { apiGetJson, apiJson, buildApiUrl, getApiBaseUrl, getApiBearerToken } from '../../../lib/v2Api'
 
 const { Title, Text } = Typography
 
@@ -20,9 +20,25 @@ function stringify(value: unknown): string {
 
 type Preset = { label: string; path: string }
 
+type SmokeTestResult = {
+  test: string
+  success: boolean
+  data?: unknown
+  error?: string
+  timestamp: string
+}
+
+function toErrorMessage(caught: unknown): string {
+  return caught instanceof Error ? caught.message : String(caught)
+}
+
 export default function OpsDebugApiPage() {
   const presets: Preset[] = useMemo(
     () => [
+      { label: 'GET /health', path: '/health' },
+      { label: 'GET /huawei/config (legacy)', path: '/huawei/config' },
+      { label: 'GET /huawei/command-templates (legacy)', path: '/huawei/command-templates' },
+      { label: 'GET /huawei/devices/:deviceId/shadow (legacy)', path: '/huawei/devices/<deviceId>/shadow' },
       { label: 'GET /api/v1/system/status', path: '/api/v1/system/status' },
       { label: 'GET /api/v1/dashboard', path: '/api/v1/dashboard' },
       { label: 'GET /api/v1/system/configs', path: '/api/v1/system/configs' },
@@ -43,6 +59,26 @@ export default function OpsDebugApiPage() {
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<string>('')
 
+  const [suiteLoading, setSuiteLoading] = useState(false)
+  const [suiteResults, setSuiteResults] = useState<SmokeTestResult[]>([])
+  const [suiteDeviceId, setSuiteDeviceId] = useState<string>('')
+
+  const [suiteHealth, setSuiteHealth] = useState(true)
+  const [suiteHuaweiConfig, setSuiteHuaweiConfig] = useState(true)
+  const [suiteCommandTemplates, setSuiteCommandTemplates] = useState(false)
+  const [suiteShadow, setSuiteShadow] = useState(false)
+  const [suiteMotor, setSuiteMotor] = useState(false)
+
+  const [motorEnable, setMotorEnable] = useState(true)
+  const [motorSpeed, setMotorSpeed] = useState<number>(50)
+  const [motorDirection, setMotorDirection] = useState<number>(1)
+  const [motorDuration, setMotorDuration] = useState<number>(2)
+  const [motorConfirm, setMotorConfirm] = useState<string>('')
+
+  const addSuiteResult = (test: string, success: boolean, data?: unknown, error?: string) => {
+    setSuiteResults((prev) => [...prev, { test, success, data, error, timestamp: new Date().toLocaleString() }])
+  }
+
   const run = async () => {
     try {
       setLoading(true)
@@ -55,6 +91,70 @@ export default function OpsDebugApiPage() {
       setResult('')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const runSuite = async () => {
+    if (suiteMotor && motorConfirm.trim().toUpperCase() !== 'MOTOR') {
+      message.error('已勾选“电机控制”，请先输入确认短语 MOTOR 才会执行 POST 命令。')
+      return
+    }
+
+    setSuiteLoading(true)
+    setSuiteResults([])
+
+    const baseUrl = getApiBaseUrl()
+    const hasToken = Boolean(getApiBearerToken())
+    const location =
+      typeof window === 'undefined'
+        ? null
+        : { hostname: window.location.hostname, port: window.location.port, protocol: window.location.protocol, href: window.location.href }
+
+    addSuiteResult('API 配置检查', true, {
+      location,
+      apiBaseUrl: baseUrl,
+      hasBearerToken: hasToken,
+      healthUrl: buildApiUrl('/health'),
+      huaweiConfigUrl: buildApiUrl('/huawei/config'),
+    })
+
+    const exec = async (label: string, fn: () => Promise<unknown>) => {
+      try {
+        const json = await fn()
+        addSuiteResult(label, true, json)
+      } catch (caught) {
+        addSuiteResult(label, false, undefined, toErrorMessage(caught))
+      }
+    }
+
+    try {
+      if (suiteHealth) await exec('健康检查', () => apiGetJson<unknown>('/health'))
+      if (suiteHuaweiConfig) await exec('华为云配置', () => apiGetJson<unknown>('/huawei/config'))
+      if (suiteCommandTemplates) await exec('命令模板', () => apiGetJson<unknown>('/huawei/command-templates'))
+
+      const trimmedDeviceId = suiteDeviceId.trim()
+
+      if (suiteShadow) {
+        if (!trimmedDeviceId) addSuiteResult('设备影子', false, undefined, 'deviceId 不能为空（可填 uuid 或 legacy/huawei device id）')
+        else await exec('设备影子', () => apiGetJson<unknown>(`/huawei/devices/${encodeURIComponent(trimmedDeviceId)}/shadow`))
+      }
+
+      if (suiteMotor) {
+        if (!trimmedDeviceId) {
+          addSuiteResult('电机控制', false, undefined, 'deviceId 不能为空（可填 uuid 或 legacy/huawei device id）')
+        } else {
+          await exec('电机控制', () =>
+            apiJson<unknown>(`/huawei/devices/${encodeURIComponent(trimmedDeviceId)}/motor`, {
+              enable: motorEnable,
+              speed: motorSpeed,
+              direction: motorDirection,
+              duration: motorDuration,
+            }),
+          )
+        }
+      }
+    } finally {
+      setSuiteLoading(false)
     }
   }
 
@@ -111,6 +211,114 @@ export default function OpsDebugApiPage() {
         ) : (
           <Text type="secondary">{loading ? '请求中…' : '暂无输出'}</Text>
         )}
+      </Card>
+
+      <Card title="一键连通性测试（参考区 `/debug-api`）">
+        <div className="space-y-4">
+          <Text type="secondary">
+            用于快速验证 API 基础连通性与 legacy Huawei 兼容端点。默认只跑 GET；危险的设备控制（POST）默认关闭并需要二次确认。
+          </Text>
+
+          <Space wrap>
+            <Checkbox checked={suiteHealth} onChange={(e) => setSuiteHealth(e.target.checked)}>
+              健康检查（GET /health）
+            </Checkbox>
+            <Checkbox checked={suiteHuaweiConfig} onChange={(e) => setSuiteHuaweiConfig(e.target.checked)}>
+              华为云配置（GET /huawei/config）
+            </Checkbox>
+            <Checkbox checked={suiteCommandTemplates} onChange={(e) => setSuiteCommandTemplates(e.target.checked)}>
+              命令模板（GET /huawei/command-templates）
+            </Checkbox>
+            <Checkbox checked={suiteShadow} onChange={(e) => setSuiteShadow(e.target.checked)}>
+              设备影子（GET /huawei/devices/:deviceId/shadow）
+            </Checkbox>
+            <Checkbox checked={suiteMotor} onChange={(e) => setSuiteMotor(e.target.checked)}>
+              电机控制（POST /huawei/devices/:deviceId/motor）
+            </Checkbox>
+          </Space>
+
+          <Space wrap>
+            <Input
+              style={{ width: 520 }}
+              value={suiteDeviceId}
+              onChange={(e) => setSuiteDeviceId(e.target.value)}
+              placeholder="deviceId（uuid 或 legacy/huawei device id；用于 shadow / motor）"
+            />
+            <Button type="primary" onClick={() => void runSuite()} loading={suiteLoading}>
+              开始测试
+            </Button>
+            <Button onClick={() => setSuiteResults([])} disabled={suiteLoading || suiteResults.length === 0}>
+              清空结果
+            </Button>
+          </Space>
+
+          {suiteMotor ? (
+            <div className="space-y-2">
+              <Alert
+                type="warning"
+                showIcon
+                message="危险：电机控制会下发设备命令"
+                description="仅用于运维排障；需要 device:control 权限与后端命令管线（PostgreSQL + Kafka）启用。"
+              />
+              <Space wrap>
+                <Checkbox checked={motorEnable} onChange={(e) => setMotorEnable(e.target.checked)}>
+                  enable
+                </Checkbox>
+                <span>speed</span>
+                <InputNumber min={0} max={100} value={motorSpeed} onChange={(v) => setMotorSpeed(typeof v === 'number' ? v : 50)} />
+                <span>direction</span>
+                <Select
+                  style={{ width: 120 }}
+                  value={motorDirection}
+                  options={[
+                    { value: -1, label: '-1' },
+                    { value: 0, label: '0' },
+                    { value: 1, label: '1' },
+                  ]}
+                  onChange={(v) => setMotorDirection(v)}
+                />
+                <span>duration(s)</span>
+                <InputNumber min={1} max={3600} value={motorDuration} onChange={(v) => setMotorDuration(typeof v === 'number' ? v : 2)} />
+                <Input
+                  style={{ width: 260 }}
+                  value={motorConfirm}
+                  onChange={(e) => setMotorConfirm(e.target.value)}
+                  placeholder='输入 "MOTOR" 以确认执行'
+                />
+              </Space>
+            </div>
+          ) : null}
+
+          <Divider />
+
+          {suiteResults.length > 0 ? (
+            <div className="space-y-3">
+              {suiteResults.map((r, idx) => (
+                <div key={`${idx}-${r.test}`} className="rounded border border-gray-200 bg-white p-4">
+                  <div className="flex items-center justify-between">
+                    <Space>
+                      <Tag color={r.success ? 'green' : 'red'}>{r.success ? 'PASS' : 'FAIL'}</Tag>
+                      <Text strong>{r.test}</Text>
+                    </Space>
+                    <Text type="secondary" className="font-mono">
+                      {r.timestamp}
+                    </Text>
+                  </div>
+
+                  {r.error ? <div className="mt-2 text-sm text-red-600">错误：{r.error}</div> : null}
+
+                  {r.data !== undefined ? (
+                    <pre style={{ whiteSpace: 'pre-wrap', margin: 0 }} className="mt-2 font-mono text-xs">
+                      {stringify(r.data)}
+                    </pre>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <Text type="secondary">{suiteLoading ? '测试中…' : '暂无结果'}</Text>
+          )}
+        </div>
       </Card>
     </div>
   )
