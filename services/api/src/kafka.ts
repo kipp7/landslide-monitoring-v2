@@ -12,7 +12,7 @@ export type DeviceCommandMessageV1 = {
 };
 
 export type KafkaPublisher = {
-  publishDeviceCommand: (msg: DeviceCommandMessageV1) => Promise<void>;
+  publishDeviceCommand: (msg: DeviceCommandMessageV1, traceId?: string) => Promise<void>;
 };
 
 export function createKafkaPublisher(config: AppConfig): KafkaPublisher | null {
@@ -35,11 +35,17 @@ export function createKafkaPublisher(config: AppConfig): KafkaPublisher | null {
   };
 
   return {
-    publishDeviceCommand: async (msg) => {
+    publishDeviceCommand: async (msg, traceId) => {
       const producer = await getProducer();
       await producer.send({
         topic: config.kafkaTopicDeviceCommands,
-        messages: [{ key: msg.device_id, value: JSON.stringify(msg) }]
+        messages: [
+          {
+            key: msg.device_id,
+            value: JSON.stringify(msg),
+            ...(traceId ? { headers: { traceId } } : {})
+          }
+        ]
       });
     }
   };

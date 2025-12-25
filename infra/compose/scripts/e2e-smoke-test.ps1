@@ -18,6 +18,7 @@ param(
   [switch]$TestTelemetryDlq,
   [switch]$TestPresence,
   [switch]$TestRevoke,
+  [switch]$TestMobileMvp,
   [switch]$TestFirmwareSimulator,
   [bool]$CollectEvidenceOnFailure = $true,
   [switch]$SkipBuild,
@@ -157,6 +158,8 @@ $pgUser = if ($envs.ContainsKey("PG_USER")) { $envs["PG_USER"] } else { "landsli
 $pgPassword = if ($envs.ContainsKey("PG_PASSWORD")) { $envs["PG_PASSWORD"] } else { "" }
 $pgDb = if ($envs.ContainsKey("PG_DATABASE")) { $envs["PG_DATABASE"] } else { "landslide_monitor" }
 
+$redisUrl = if ($envs.ContainsKey("REDIS_URL")) { Resolve-EnvTemplate $envs["REDIS_URL"] $envs } else { "redis://:change-me@localhost:6379" }
+
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $logDir = "backups/evidence/e2e-smoke-$timestamp"
 New-Item -ItemType Directory -Path $logDir -Force | Out-Null
@@ -220,7 +223,7 @@ $firmwareProc = $null
 
 try {
   if ($Stage1Regression) {
-    if ($Stage2Regression -or $Stage4Regression -or $Stage5Regression -or $UseMqttAuth -or $CreateDevice -or $ConfigureEmqx -or $TestCommands -or $TestCommandAcks -or $TestCommandFailed -or $TestCommandTimeout -or $TestAlerts -or $TestAlertNotifications -or $TestTelemetryDlq -or $TestRevoke -or $TestFirmwareSimulator) {
+    if ($Stage2Regression -or $Stage4Regression -or $Stage5Regression -or $UseMqttAuth -or $CreateDevice -or $ConfigureEmqx -or $TestCommands -or $TestCommandAcks -or $TestCommandFailed -or $TestCommandTimeout -or $TestAlerts -or $TestAlertNotifications -or $TestTelemetryDlq -or $TestRevoke -or $TestMobileMvp -or $TestFirmwareSimulator) {
       throw "Stage1Regression is a preset and must not be combined with other switches. Use either -Stage1Regression or the individual switches."
     }
     $ConfigureEmqx = $true
@@ -233,7 +236,7 @@ try {
   }
 
   if ($Stage2Regression) {
-    if ($Stage1Regression -or $Stage4Regression -or $UseMqttAuth -or $CreateDevice -or $ConfigureEmqx -or $TestCommands -or $TestCommandAcks -or $TestCommandFailed -or $TestCommandTimeout -or $TestAlerts -or $TestAlertNotifications -or $TestTelemetryDlq -or $TestRevoke) {
+    if ($Stage1Regression -or $Stage4Regression -or $UseMqttAuth -or $CreateDevice -or $ConfigureEmqx -or $TestCommands -or $TestCommandAcks -or $TestCommandFailed -or $TestCommandTimeout -or $TestAlerts -or $TestAlertNotifications -or $TestTelemetryDlq -or $TestRevoke -or $TestMobileMvp) {
       throw "Stage2Regression is a preset and must not be combined with other switches. Use either -Stage2Regression or the individual switches."
     }
     $ConfigureEmqx = $true
@@ -248,7 +251,7 @@ try {
   }
 
   if ($Stage4Regression) {
-    if ($Stage1Regression -or $Stage2Regression -or $Stage5Regression -or $UseMqttAuth -or $CreateDevice -or $ConfigureEmqx -or $TestCommands -or $TestCommandAcks -or $TestCommandFailed -or $TestCommandTimeout -or $TestAlerts -or $TestAlertNotifications -or $TestTelemetryDlq -or $TestRevoke -or $TestFirmwareSimulator) {
+    if ($Stage1Regression -or $Stage2Regression -or $Stage5Regression -or $UseMqttAuth -or $CreateDevice -or $ConfigureEmqx -or $TestCommands -or $TestCommandAcks -or $TestCommandFailed -or $TestCommandTimeout -or $TestAlerts -or $TestAlertNotifications -or $TestTelemetryDlq -or $TestRevoke -or $TestMobileMvp -or $TestFirmwareSimulator) {
       throw "Stage4Regression is a preset and must not be combined with other switches. Use either -Stage4Regression or the individual switches."
     }
     $ConfigureEmqx = $true
@@ -263,7 +266,7 @@ try {
   }
 
   if ($Stage5Regression) {
-    if ($Stage1Regression -or $Stage2Regression -or $Stage4Regression -or $UseMqttAuth -or $CreateDevice -or $ConfigureEmqx -or $TestCommands -or $TestCommandAcks -or $TestCommandFailed -or $TestCommandTimeout -or $TestAlerts -or $TestAlertNotifications -or $TestTelemetryDlq -or $TestRevoke -or $TestFirmwareSimulator) {
+    if ($Stage1Regression -or $Stage2Regression -or $Stage4Regression -or $UseMqttAuth -or $CreateDevice -or $ConfigureEmqx -or $TestCommands -or $TestCommandAcks -or $TestCommandFailed -or $TestCommandTimeout -or $TestAlerts -or $TestAlertNotifications -or $TestTelemetryDlq -or $TestRevoke -or $TestMobileMvp -or $TestFirmwareSimulator) {
       throw "Stage5Regression is a preset and must not be combined with other switches. Use either -Stage5Regression or the individual switches."
     }
     $ConfigureEmqx = $true
@@ -335,6 +338,9 @@ try {
       "POSTGRES_USER=$pgUser",
       "POSTGRES_PASSWORD=$pgPassword",
       "POSTGRES_DATABASE=$pgDb",
+      "",
+      "REDIS_URL=$redisUrl",
+      "DEDUPE_TTL_SECONDS=604800",
       "",
       "BATCH_MAX_ROWS=2000",
       "BATCH_FLUSH_INTERVAL_MS=1000"
@@ -1446,6 +1452,51 @@ VALUES ('$testUserId', '$DeviceId', 'low', TRUE, TRUE);
     }
     if (-not $revokedDenied) {
       throw "Revoked device publish did not clearly fail with 'Not authorized' after retries. Logs: $logDir"
+    }
+  }
+
+  if ($TestMobileMvp) {
+    Write-Host "Testing patrol reports API..." -ForegroundColor Cyan
+    $patrolBody = @{
+      notes = "smoke patrol"
+      latitude = 21.6847
+      longitude = 108.3516
+      attachments = @(@{ url = "https://example.com/patrol/photo-1.jpg"; type = "image"; name = "photo-1.jpg" })
+    } | ConvertTo-Json -Depth 6
+
+    $patrolResp = Invoke-RestMethod -Method Post -Uri "http://$apiLocalHost`:$apiPort/api/v1/patrol/reports" -ContentType "application/json" -Body $patrolBody -TimeoutSec 10
+    if ($patrolResp.success -ne $true -or -not $patrolResp.data.reportId) {
+      throw "patrol report create failed. Logs: $logDir"
+    }
+    $reportId = [string]$patrolResp.data.reportId
+
+    $patrolList = Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/api/v1/patrol/reports?page=1&pageSize=10" -TimeoutSec 10
+    if ($patrolList.success -ne $true -or -not $patrolList.data.list) {
+      throw "patrol report list failed. Logs: $logDir"
+    }
+
+    $patrolDetail = Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/api/v1/patrol/reports/$reportId" -TimeoutSec 10
+    if ($patrolDetail.success -ne $true -or $patrolDetail.data.reportId -ne $reportId) {
+      throw "patrol report detail failed. Logs: $logDir"
+    }
+
+    Write-Host "Testing SOS API..." -ForegroundColor Cyan
+    $sosBody = @{
+      latitude = 21.6849
+      longitude = 108.3519
+      description = "smoke sos"
+      priority = "high"
+    } | ConvertTo-Json -Depth 6
+
+    $sosResp = Invoke-RestMethod -Method Post -Uri "http://$apiLocalHost`:$apiPort/api/v1/sos" -ContentType "application/json" -Body $sosBody -TimeoutSec 10
+    if ($sosResp.success -ne $true -or -not $sosResp.data.sosId) {
+      throw "sos create failed. Logs: $logDir"
+    }
+    $sosId = [string]$sosResp.data.sosId
+
+    $sosDetail = Invoke-RestMethod -Uri "http://$apiLocalHost`:$apiPort/api/v1/sos/$sosId" -TimeoutSec 10
+    if ($sosDetail.success -ne $true -or $sosDetail.data.sosId -ne $sosId) {
+      throw "sos detail failed. Logs: $logDir"
     }
   }
 

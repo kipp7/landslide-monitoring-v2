@@ -20,6 +20,8 @@ tags:
   - name: gps
   - name: alerts
   - name: system
+  - name: patrol
+  - name: sos
 
 security:
   - BearerAuth: []
@@ -2686,6 +2688,182 @@ paths:
         default:
           $ref: "#/components/responses/ErrorResponse"
 
+  /patrol/reports:
+    get:
+      tags: [patrol]
+      summary: List patrol reports
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: stationId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - name: reporterId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - name: status
+          in: query
+          required: false
+          schema: { type: string, enum: [submitted, reviewed, archived] }
+        - name: startTime
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: endTime
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PaginatedPatrolReports"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+    post:
+      tags: [patrol]
+      summary: Create patrol report
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePatrolReportRequest"
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PatrolReport"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /patrol/reports/{reportId}:
+    parameters:
+      - $ref: "#/components/parameters/ReportIdPath"
+    get:
+      tags: [patrol]
+      summary: Get patrol report detail
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PatrolReport"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /sos:
+    post:
+      tags: [sos]
+      summary: Create SOS request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSosRequest"
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SosRequest"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /sos/{sosId}:
+    parameters:
+      - $ref: "#/components/parameters/SosIdPath"
+    get:
+      tags: [sos]
+      summary: Get SOS status
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SosRequest"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
 components:
   securitySchemes:
     BearerAuth:
@@ -2726,6 +2904,16 @@ components:
       schema: { type: string, format: uuid }
     RuleIdPath:
       name: ruleId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ReportIdPath:
+      name: reportId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    SosIdPath:
+      name: sosId
       in: path
       required: true
       schema: { type: string, format: uuid }
@@ -4148,3 +4336,114 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/AiPrediction"
+
+    MediaAttachment:
+      type: object
+      required: [url, type]
+      properties:
+        url: { type: string }
+        type: { type: string, enum: [image, audio, video, file] }
+        name: { type: string }
+        size: { type: integer, minimum: 0 }
+        checksum: { type: string }
+        thumbUrl: { type: string }
+        metadata:
+          type: object
+          additionalProperties: true
+
+    PatrolReport:
+      type: object
+      required: [reportId, status, attachments, createdAt, updatedAt]
+      properties:
+        reportId: { type: string, format: uuid }
+        stationId: { type: string, format: uuid, nullable: true }
+        stationName: { type: string, nullable: true }
+        stationCode: { type: string, nullable: true }
+        taskId: { type: string, format: uuid, nullable: true }
+        status: { type: string, enum: [submitted, reviewed, archived] }
+        notes: { type: string }
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/MediaAttachment"
+        latitude: { type: number, nullable: true }
+        longitude: { type: number, nullable: true }
+        reportedBy: { type: string, format: uuid, nullable: true }
+        metadata:
+          type: object
+          additionalProperties: true
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    PaginatedPatrolReports:
+      type: object
+      required: [list, pagination]
+      properties:
+        list:
+          type: array
+          items:
+            $ref: "#/components/schemas/PatrolReport"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+
+    CreatePatrolReportRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        stationId: { type: string, format: uuid }
+        taskId: { type: string, format: uuid }
+        notes: { type: string }
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/MediaAttachment"
+        latitude: { type: number }
+        longitude: { type: number }
+        metadata:
+          type: object
+          additionalProperties: true
+
+    SosRequest:
+      type: object
+      required: [sosId, status, priority, latitude, longitude, attachments, createdAt, updatedAt]
+      properties:
+        sosId: { type: string, format: uuid }
+        status: { type: string, enum: [open, acknowledged, resolved, canceled] }
+        priority: { type: string, enum: [low, normal, high, critical] }
+        description: { type: string }
+        address: { type: string }
+        contactName: { type: string }
+        contactPhone: { type: string }
+        latitude: { type: number }
+        longitude: { type: number }
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/MediaAttachment"
+        metadata:
+          type: object
+          additionalProperties: true
+        createdBy: { type: string, format: uuid, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        acknowledgedAt: { type: string, format: date-time, nullable: true }
+        resolvedAt: { type: string, format: date-time, nullable: true }
+
+    CreateSosRequest:
+      type: object
+      required: [latitude, longitude]
+      properties:
+        latitude: { type: number }
+        longitude: { type: number }
+        description: { type: string }
+        address: { type: string }
+        contactName: { type: string }
+        contactPhone: { type: string }
+        priority: { type: string, enum: [low, normal, high, critical] }
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/MediaAttachment"
+        metadata:
+          type: object
+          additionalProperties: true

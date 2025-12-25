@@ -4,6 +4,7 @@ import formbody from "@fastify/formbody";
 import dotenv from "dotenv";
 import Fastify from "fastify";
 import path from "node:path";
+import { Counter, Histogram, Registry, collectDefaultMetrics } from "prom-client";
 import { createClickhouseClient } from "./clickhouse";
 import { loadConfigFromEnv } from "./config";
 import { verifyAccessToken } from "./auth";
@@ -33,12 +34,32 @@ import { registerCameraLegacyCompatRoutes, registerCameraRoutes } from "./routes
 import { registerDeviceHealthExpertLegacyCompatRoutes, registerDeviceHealthExpertRoutes } from "./routes/device-health-expert";
 import { registerAiPredictionLegacyCompatRoutes, registerAiPredictionRoutes } from "./routes/ai-predictions";
 import { registerLegacyDeviceManagementCompatRoutes } from "./routes/legacy-device-management";
+import { registerPatrolRoutes } from "./routes/patrol";
+import { registerSosRoutes } from "./routes/sos";
 
 async function main(): Promise<void> {
   dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
 
   const config = loadConfigFromEnv(process.env);
   const logger = createLogger(config.serviceName);
+
+  const registry = new Registry();
+  registry.setDefaultLabels({ service: config.serviceName });
+  collectDefaultMetrics({ register: registry });
+
+  const httpRequestsTotal = new Counter({
+    name: "api_http_requests_total",
+    help: "HTTP requests processed by api-service",
+    labelNames: ["method", "path", "status"],
+    registers: [registry]
+  });
+  const httpRequestDurationMs = new Histogram({
+    name: "api_http_request_duration_ms",
+    help: "HTTP request duration (ms) for api-service",
+    labelNames: ["method", "path", "status"],
+    buckets: [5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000],
+    registers: [registry]
+  });
 
   const app = Fastify({
     logger: false,
@@ -79,6 +100,9 @@ async function main(): Promise<void> {
 
   app.addHook("preHandler", async (request, reply) => {
     if (request.url === "/health") return;
+    if (request.url === "/healthz") return;
+    if (request.url === "/readyz") return;
+    if (request.url === "/metrics") return;
     if (request.url.startsWith("/emqx/")) return;
     if (request.url === "/api/v1/auth/login") return;
     if (request.url === "/api/v1/auth/refresh") return;
@@ -130,13 +154,44 @@ async function main(): Promise<void> {
   });
 
   app.get("/health", () => ({ ok: true }));
+  app.get("/healthz", () => ({ ok: true }));
+  app.get("/metrics", async (_request, reply) => {
+    const out = await registry.metrics();
+    void reply.header("content-type", registry.contentType).send(out);
+  });
 
   const ch = createClickhouseClient(config);
   const pg = createPgPool(config);
 
+  app.get("/readyz", async (_request, reply) => {
+    const checks: { postgres: "healthy" | "unhealthy"; clickhouse: "healthy" | "unhealthy" } = {
+      postgres: "healthy",
+      clickhouse: "healthy"
+    };
+
+    try {
+      await pg?.query("SELECT 1 AS ok");
+    } catch {
+      checks.postgres = "unhealthy";
+    }
+
+    try {
+      const res = await ch.query({ query: "SELECT 1 AS ok", format: "JSONEachRow" });
+      await res.json();
+    } catch {
+      checks.clickhouse = "unhealthy";
+    }
+
+    const ok = checks.postgres === "healthy" && checks.clickhouse === "healthy";
+    void reply.code(ok ? 200 : 503).send({ ok, ...checks });
+  });
+
   app.addHook("onResponse", async (request, reply) => {
     if (!pg) return;
     if (request.url === "/health") return;
+    if (request.url === "/healthz") return;
+    if (request.url === "/readyz") return;
+    if (request.url === "/metrics") return;
     if (request.url.startsWith("/emqx/")) return;
 
     const responseTimeMs = Math.max(0, Date.now() - request.startTimeMs);
@@ -145,14 +200,18 @@ async function main(): Promise<void> {
     const routePath = request.routeOptions.url ?? pathOnly;
 
     const userAgent = typeof request.headers["user-agent"] === "string" ? request.headers["user-agent"] : null;
+    const status = String(reply.statusCode);
+    httpRequestsTotal.inc({ method, path: routePath, status });
+    httpRequestDurationMs.observe({ method, path: routePath, status }, responseTimeMs);
 
     void pg
       .query(
         `
-          INSERT INTO api_logs (user_id, method, path, query_params, status_code, response_time_ms, ip_address, user_agent)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          INSERT INTO api_logs (trace_id, user_id, method, path, query_params, status_code, response_time_ms, ip_address, user_agent)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         `,
         [
+          request.traceId,
           request.user?.userId ?? null,
           method,
           routePath,
@@ -210,6 +269,8 @@ async function main(): Promise<void> {
     registerDeviceHealthExpertRoutes(v1, config, ch, pg);
     registerCameraRoutes(v1, config, pg);
     registerAiPredictionRoutes(v1, config, pg);
+    registerPatrolRoutes(v1, config, pg);
+    registerSosRoutes(v1, config, pg);
     done();
   }, { prefix: "/api/v1" });
 

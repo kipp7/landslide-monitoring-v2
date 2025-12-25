@@ -39,6 +39,14 @@
 
 - `powershell -NoProfile -ExecutionPolicy Bypass -File infra/compose/scripts/e2e-smoke-test.ps1 -Stage4Regression`
 
+移动端 MVP 接口冒烟（patrol + sos）：
+
+- `powershell -NoProfile -ExecutionPolicy Bypass -File infra/compose/scripts/e2e-smoke-test.ps1 -TestMobileMvp`
+
+说明：
+- 如需跳过 Postgres 初始化，可在 `services/api/.env` 设置 `MOBILE_API_MOCK=true` 使用 mock 返回。
+- 如果你的 EMQX 已启用 MQTT 鉴权/ACL（匿名 publish 会被拒绝），使用：`powershell -NoProfile -ExecutionPolicy Bypass -File infra/compose/scripts/e2e-smoke-test.ps1 -ConfigureEmqx -UseMqttAuth -CreateDevice -TestMobileMvp`
+
 说明：
 - `-Stage4Regression` 是“预置模式”，不能与其它开关组合使用。
 - 覆盖范围：

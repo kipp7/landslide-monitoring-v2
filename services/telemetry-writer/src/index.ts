@@ -2,8 +2,11 @@ import { createClient, type ClickHouseClient } from "@clickhouse/client";
 import { createLogger, newTraceId } from "@lsmv2/observability";
 import { loadAndCompileSchema } from "@lsmv2/validation";
 import dotenv from "dotenv";
-import { Kafka, logLevel } from "kafkajs";
+import Redis from "ioredis";
+import { Kafka, logLevel, type IHeaders } from "kafkajs";
+import http from "node:http";
 import { Pool } from "pg";
+import { Counter, Gauge, Registry, collectDefaultMetrics } from "prom-client";
 import path from "node:path";
 import { loadConfigFromEnv } from "./config";
 
@@ -49,6 +52,28 @@ function isoNow(): string {
 }
 
 const uuidV4ishRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
+type KafkaHeaderValue = Buffer | string | (Buffer | string)[] | undefined;
+
+function headerValueToString(value: KafkaHeaderValue): string | null {
+  if (!value) return null;
+  if (Array.isArray(value)) {
+    const first = value[0];
+    if (!first) return null;
+    return typeof first === "string" ? first : first.toString("utf8");
+  }
+  if (typeof value === "string") return value;
+  return value.toString("utf8");
+}
+
+function traceIdFromKafkaHeaders(headers: IHeaders | undefined): string | null {
+  if (!headers) return null;
+  const v = headers.traceId ?? headers.traceid ?? headers["trace-id"] ?? headers.trace_id;
+  const s = headerValueToString(v as KafkaHeaderValue);
+  if (!s) return null;
+  const trimmed = s.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
 
 function createClickhouseClient(config: ReturnType<typeof loadConfigFromEnv>): ClickHouseClient {
   return createClient({
@@ -103,6 +128,14 @@ function isClickhouseUnavailableError(err: unknown): err is ClickhouseUnavailabl
   if (!(err instanceof Error)) return false;
   const code = (err as unknown as { code?: unknown }).code;
   return code === "CLICKHOUSE_UNAVAILABLE";
+}
+
+type RedisUnavailableError = Error & { code: "REDIS_UNAVAILABLE"; cause?: unknown };
+
+function isRedisUnavailableError(err: unknown): err is RedisUnavailableError {
+  if (!(err instanceof Error)) return false;
+  const code = (err as unknown as { code?: unknown }).code;
+  return code === "REDIS_UNAVAILABLE";
 }
 
 function isProbablyClickhouseDataError(err: unknown): boolean {
@@ -262,6 +295,88 @@ async function main(): Promise<void> {
   const config = loadConfigFromEnv(process.env);
   const logger = createLogger(config.serviceName);
 
+  const registry = new Registry();
+  registry.setDefaultLabels({ service: config.serviceName });
+  collectDefaultMetrics({ register: registry });
+
+  const kafkaMessagesTotal = new Counter({
+    name: "writer_kafka_messages_total",
+    help: "Kafka messages processed by writer",
+    labelNames: ["result"],
+    registers: [registry]
+  });
+  const dlqPublishedTotal = new Counter({
+    name: "writer_dlq_published_total",
+    help: "DLQ messages published by writer",
+    registers: [registry]
+  });
+  const clickhouseRowsInsertedTotal = new Counter({
+    name: "writer_clickhouse_rows_inserted_total",
+    help: "Rows inserted into ClickHouse by writer",
+    registers: [registry]
+  });
+  const kafkaConsumerLag = new Gauge({
+    name: "writer_kafka_consumer_lag",
+    help: "Kafka consumer lag (high watermark - committed offset)",
+    labelNames: ["topic", "partition"],
+    registers: [registry]
+  });
+
+  let kafkaReady = false;
+  let redisReady = false;
+
+  const opsServer = http.createServer(async (req, res) => {
+    const url = (req.url ?? "").split("?")[0] ?? "";
+    if (url === "/healthz" || url === "/health") {
+      res.statusCode = 200;
+      res.setHeader("content-type", "text/plain; charset=utf-8");
+      res.end("ok");
+      return;
+    }
+    if (url === "/readyz" || url === "/ready") {
+      const ready = kafkaReady && redisReady;
+      res.statusCode = ready ? 200 : 503;
+      res.setHeader("content-type", "text/plain; charset=utf-8");
+      res.end(ready ? "ready" : "not_ready");
+      return;
+    }
+    if (url === "/metrics") {
+      try {
+        const out = await registry.metrics();
+        res.statusCode = 200;
+        res.setHeader("content-type", registry.contentType);
+        res.end(out);
+      } catch {
+        res.statusCode = 500;
+        res.setHeader("content-type", "text/plain; charset=utf-8");
+        res.end("metrics_error");
+      }
+      return;
+    }
+    res.statusCode = 404;
+    res.setHeader("content-type", "text/plain; charset=utf-8");
+    res.end("not_found");
+  });
+
+  opsServer.listen(config.opsPort, config.opsHost, () => {
+    logger.info({ host: config.opsHost, port: config.opsPort }, "ops server started");
+  });
+
+  const redis = new Redis(config.redisUrl, { lazyConnect: true, maxRetriesPerRequest: 1 });
+  redis.on("ready", () => {
+    redisReady = true;
+    logger.info("redis ready");
+  });
+  redis.on("end", () => {
+    redisReady = false;
+    logger.warn("redis connection closed");
+  });
+  redis.on("error", (err) => {
+    redisReady = false;
+    logger.error({ err }, "redis error");
+  });
+  await redis.connect();
+
   const repoRoot = repoRootFromHere();
   const schemaTelemetryRawPath = path.join(
     repoRoot,
@@ -292,6 +407,37 @@ async function main(): Promise<void> {
   await consumer.connect();
   await producer.connect();
   await consumer.subscribe({ topic: config.kafkaTopicTelemetryRaw, fromBeginning: false });
+  kafkaReady = true;
+
+  const admin = kafka.admin();
+  await admin.connect();
+
+  const lagTimer = setInterval(() => {
+    const topic = config.kafkaTopicTelemetryRaw;
+    void (async () => {
+      const [topicOffsets, groupOffsets] = await Promise.all([
+        admin.fetchTopicOffsets(topic),
+        admin.fetchOffsets({ groupId: config.kafkaGroupId, topics: [topic] })
+      ]);
+
+      const highByPartition = new Map<number, number>();
+      for (const p of topicOffsets) {
+        const high = Number.parseInt(p.offset, 10);
+        if (Number.isFinite(high)) highByPartition.set(p.partition, high);
+      }
+
+      const partitions = groupOffsets.find((x) => x.topic === topic)?.partitions ?? [];
+      for (const p of partitions) {
+        const high = highByPartition.get(p.partition) ?? 0;
+        const committed = Number.parseInt(p.offset, 10);
+        const lag = Number.isFinite(committed) && committed >= 0 ? Math.max(0, high - committed) : high;
+        kafkaConsumerLag.set({ topic, partition: String(p.partition) }, lag);
+      }
+    })().catch((err: unknown) => {
+      logger.warn({ err }, "kafka lag fetch failed");
+    });
+  }, config.kafkaLagRefreshMs);
+  lagTimer.unref();
 
   const ch = createClickhouseClient(config);
   const pg = createPostgresPoolIfConfigured(config);
@@ -306,6 +452,7 @@ async function main(): Promise<void> {
     startedAtMs: Date.now(),
     kafkaMessagesOk: 0,
     kafkaMessagesSkipped: 0,
+    kafkaMessagesDeduped: 0,
     dlqPublished: 0,
     clickhouseInsertBatchesOk: 0,
     clickhouseInsertBatchesIsolated: 0,
@@ -313,8 +460,9 @@ async function main(): Promise<void> {
   };
 
   let consecutiveClickhouseUnavailable = 0;
+  let consecutiveRedisUnavailable = 0;
 
-  const publishDlq = async (dlq: TelemetryDlqV1) => {
+  const publishDlq = async (dlq: TelemetryDlqV1, traceId?: string) => {
     const trunc = truncateUtf8(dlq.raw_payload, config.dlqRawPayloadMaxBytes);
     const normalized: TelemetryDlqV1 = {
       ...dlq,
@@ -335,9 +483,16 @@ async function main(): Promise<void> {
 
     await producer.send({
       topic: config.kafkaTopicTelemetryDlq,
-      messages: [{ key: normalized.device_id ?? null, value: JSON.stringify(normalized) }]
+      messages: [
+        {
+          key: normalized.device_id ?? null,
+          value: JSON.stringify(normalized),
+          ...(traceId ? { headers: { traceId } } : {})
+        }
+      ]
     });
     stats.dlqPublished += 1;
+    dlqPublishedTotal.inc();
   };
 
   const statsTimer = setInterval(() => {
@@ -378,6 +533,7 @@ async function main(): Promise<void> {
         try {
           await insertWithRetry(ch, config, logger, reason, allRows);
           stats.clickhouseInsertBatchesOk += 1;
+          clickhouseRowsInsertedTotal.inc(allRows.length);
           consecutiveClickhouseUnavailable = 0;
           logger.info(
             { reason, rows: allRows.length, messages: pending.length, tookMs: Date.now() - startedAt },
@@ -433,6 +589,7 @@ async function main(): Promise<void> {
 
             try {
               await insertRows(ch, config.clickhouseDatabase, config.clickhouseTable, p.rows);
+              clickhouseRowsInsertedTotal.inc(p.rows.length);
 
               const updatedAtIso = new Date(p.payload.received_ts).toISOString();
               shadowUpdates.set(p.payload.device_id, {
@@ -484,7 +641,7 @@ async function main(): Promise<void> {
           if (!ctx.isRunning() || ctx.isStale()) break;
           await ctx.heartbeat();
 
-        const traceId = newTraceId();
+        const traceId = traceIdFromKafkaHeaders(message.headers) ?? newTraceId();
         const raw = message.value?.toString("utf-8") ?? "";
         const rawBytes = Buffer.byteLength(raw, "utf8");
 
@@ -500,10 +657,11 @@ async function main(): Promise<void> {
             received_ts: isoNow(),
             device_id: null,
             raw_payload: raw
-          });
+          }, traceId);
           logger.warn({ traceId, topic: batch.topic, partition: batch.partition, rawBytes }, "kafka message too large (dlq)");
           ctx.resolveOffset(message.offset);
           stats.kafkaMessagesSkipped += 1;
+          kafkaMessagesTotal.inc({ result: "dlq" });
           continue;
         }
 
@@ -517,14 +675,57 @@ async function main(): Promise<void> {
               received_ts: extractReceivedTsOrNow(parsed),
               device_id: extractDeviceIdOrNull(parsed),
               raw_payload: raw
-            });
+            }, traceId);
             logger.warn({ traceId, topic: batch.topic, partition: batch.partition, errors: validateRaw.errors }, "kafka telemetry.raw schema invalid (dlq)");
             ctx.resolveOffset(message.offset);
             stats.kafkaMessagesSkipped += 1;
+            kafkaMessagesTotal.inc({ result: "dlq" });
             continue;
           }
 
           const payload: TelemetryRawV1 = parsed;
+
+          const seq = payload.seq ?? null;
+          if (seq !== null) {
+            if (!Number.isInteger(seq) || seq < 0) {
+              await publishDlq(
+                {
+                  schema_version: 1,
+                  reason_code: "writer_seq_invalid",
+                  reason_detail: "seq must be a non-negative integer",
+                  received_ts: payload.received_ts,
+                  device_id: payload.device_id,
+                  raw_payload: raw
+                },
+                traceId
+              );
+              ctx.resolveOffset(message.offset);
+              stats.kafkaMessagesSkipped += 1;
+              kafkaMessagesTotal.inc({ result: "dlq" });
+              continue;
+            }
+
+            try {
+              const key = `telemetry:dedupe:v1:${payload.device_id}:${String(seq)}`;
+              const ok = await redis.set(key, "1", "EX", config.dedupeTtlSeconds, "NX");
+              consecutiveRedisUnavailable = 0;
+              if (!ok) {
+                stats.kafkaMessagesDeduped += 1;
+                kafkaMessagesTotal.inc({ result: "deduped" });
+                logger.info({ traceId, deviceId: payload.device_id, seq }, "duplicate telemetry skipped (deduped)");
+                ctx.resolveOffset(message.offset);
+                continue;
+              }
+            } catch (err) {
+              redisReady = false;
+              logger.error({ traceId, err }, "redis dedupe failed; pausing consumer (no offset resolve)");
+              const e = new Error("Redis temporarily unavailable") as RedisUnavailableError;
+              e.code = "REDIS_UNAVAILABLE";
+              e.cause = err;
+              throw e;
+            }
+          }
+
           const messageRows = toTelemetryRows(payload);
           if (messageRows.length > 0) {
             pending.push({ offset: message.offset, raw, payload, rows: messageRows });
@@ -539,9 +740,11 @@ async function main(): Promise<void> {
               });
             }
             stats.kafkaMessagesOk += 1;
+            kafkaMessagesTotal.inc({ result: "ok" });
           } else {
             ctx.resolveOffset(message.offset);
             stats.kafkaMessagesSkipped += 1;
+            kafkaMessagesTotal.inc({ result: "skipped" });
           }
 
           if (pendingRowsCount >= config.batchMaxRows) {
@@ -569,6 +772,7 @@ async function main(): Promise<void> {
             logger.warn({ traceId, topic: batch.topic, partition: batch.partition, err }, "kafka message parse failed (dlq)");
             ctx.resolveOffset(message.offset);
             stats.kafkaMessagesSkipped += 1;
+            kafkaMessagesTotal.inc({ result: "dlq" });
           }
         }
 
@@ -581,6 +785,20 @@ async function main(): Promise<void> {
           // cooldown already applied; do not resolve offsets so we can retry later
           return;
         }
+        if (isRedisUnavailableError(err)) {
+          consecutiveRedisUnavailable += 1;
+          const exp = Math.min(8, Math.max(0, consecutiveRedisUnavailable - 1));
+          const cooldown = Math.min(
+            config.clickhouseUnavailableCooldownMaxMs,
+            config.clickhouseUnavailableCooldownMs * Math.pow(2, exp)
+          );
+          logger.warn(
+            { attemptWindow: consecutiveRedisUnavailable, cooldownMs: cooldown, err: err.cause ?? err },
+            "redis unavailable; entering cooldown"
+          );
+          await sleep(cooldown);
+          return;
+        }
         throw err;
       }
     }
@@ -589,15 +807,31 @@ async function main(): Promise<void> {
   const shutdown = async (signal: string) => {
     logger.info({ signal }, "shutting down");
     clearInterval(statsTimer);
+    clearInterval(lagTimer);
     await consumer.disconnect();
     await producer.disconnect();
+    await admin.disconnect();
+    try {
+      await redis.quit();
+    } catch {
+      // ignore
+    }
+    await new Promise<void>((resolve) => {
+      opsServer.close(() => {
+        resolve();
+      });
+    });
     await ch.close();
     await pg?.end();
     process.exit(0);
   };
 
-  process.on("SIGINT", () => void shutdown("SIGINT"));
-  process.on("SIGTERM", () => void shutdown("SIGTERM"));
+  process.on("SIGINT", () => {
+    void shutdown("SIGINT");
+  });
+  process.on("SIGTERM", () => {
+    void shutdown("SIGTERM");
+  });
 }
 
 void main();

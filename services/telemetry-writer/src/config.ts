@@ -34,6 +34,9 @@ const configSchema = z.object({
   postgresDatabase: z.string().default("landslide_monitor"),
   postgresPoolMax: z.coerce.number().int().positive().default(5),
 
+  redisUrl: z.string().url(),
+  dedupeTtlSeconds: z.coerce.number().int().positive().max(30 * 24 * 3600).default(7 * 24 * 3600),
+
   batchMaxRows: z.coerce.number().int().positive().default(2000),
   batchMaxMessages: z.coerce.number().int().positive().default(500),
   batchFlushIntervalMs: z.coerce.number().int().positive().default(1000),
@@ -47,7 +50,11 @@ const configSchema = z.object({
   clickhouseInsertBackoffMaxMs: z.coerce.number().int().positive().max(300000).default(15000),
 
   clickhouseUnavailableCooldownMs: z.coerce.number().int().positive().max(600_000).default(15_000),
-  clickhouseUnavailableCooldownMaxMs: z.coerce.number().int().positive().max(3_600_000).default(300_000)
+  clickhouseUnavailableCooldownMaxMs: z.coerce.number().int().positive().max(3_600_000).default(300_000),
+
+  opsHost: z.string().default("0.0.0.0"),
+  opsPort: z.coerce.number().int().positive().default(9102),
+  kafkaLagRefreshMs: z.coerce.number().int().positive().max(600_000).default(10_000)
 });
 
 export type AppConfig = z.infer<typeof configSchema>;
@@ -76,6 +83,9 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
     postgresDatabase: env.POSTGRES_DATABASE,
     postgresPoolMax: env.POSTGRES_POOL_MAX,
 
+    redisUrl: env.REDIS_URL,
+    dedupeTtlSeconds: env.DEDUPE_TTL_SECONDS,
+
     batchMaxRows: env.BATCH_MAX_ROWS,
     batchMaxMessages: env.BATCH_MAX_MESSAGES,
     batchFlushIntervalMs: env.BATCH_FLUSH_INTERVAL_MS,
@@ -89,6 +99,10 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
     clickhouseInsertBackoffMaxMs: env.CLICKHOUSE_INSERT_BACKOFF_MAX_MS,
 
     clickhouseUnavailableCooldownMs: env.CLICKHOUSE_UNAVAILABLE_COOLDOWN_MS,
-    clickhouseUnavailableCooldownMaxMs: env.CLICKHOUSE_UNAVAILABLE_COOLDOWN_MAX_MS
+    clickhouseUnavailableCooldownMaxMs: env.CLICKHOUSE_UNAVAILABLE_COOLDOWN_MAX_MS,
+
+    opsHost: env.OPS_HOST,
+    opsPort: env.OPS_PORT,
+    kafkaLagRefreshMs: env.KAFKA_LAG_REFRESH_MS
   });
 }

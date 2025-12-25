@@ -89,3 +89,6 @@
 - `05-data.md`：数据接口（稀疏指标：sensorKey + metrics）
 - `06-alerts.md`：告警接口（版本化规则 + 事件化告警）
 - `07-system.md`：系统接口（配置/日志/状态）
+- `08-gps-baselines.md`：GPS 基线（高精度定位基准）
+- `015-patrol.md`：巡查上报（移动端）
+- `016-sos.md`：紧急求救（移动端）

@@ -24,6 +24,8 @@
 - `docs/integrations/api/012-device-health-expert.md`
 - `docs/integrations/api/013-ai-predictions.md`
 - `docs/integrations/api/014-legacy-device-management.md`
+- `docs/integrations/api/015-patrol.md`
+- `docs/integrations/api/016-sos.md`
 
 机器可读契约（实现阶段用于生成 SDK/Mock/校验）：
 

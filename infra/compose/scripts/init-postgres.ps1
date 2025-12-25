@@ -70,7 +70,12 @@ foreach ($line in ($applied -split "`r?`n")) {
   if ($t.Length -gt 0) { $null = $appliedSet.Add($t) }
 }
 
-$sqlFiles = Get-ChildItem -Path $SqlDir -File -Filter "*.sql" | Sort-Object Name
+$sqlFiles = Get-ChildItem -Path $SqlDir -File -Filter "*.sql"
+$sqlFileMap = @{}
+foreach ($f in $sqlFiles) { $sqlFileMap[$f.Name] = $f }
+$sqlNames = [string[]]$sqlFileMap.Keys
+[Array]::Sort($sqlNames, [System.StringComparer]::Ordinal)
+$sqlFiles = foreach ($name in $sqlNames) { $sqlFileMap[$name] }
 
 # Bootstrap mode:
 # If schema already exists (e.g. tables were created before we introduced schema_migrations),

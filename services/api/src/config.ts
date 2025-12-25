@@ -40,6 +40,12 @@ const configSchema = z.object({
     .transform((v) => (v ?? "true").toLowerCase())
     .pipe(z.enum(["true", "false"]))
     .transform((v) => v === "true"),
+  mobileApiMock: z
+    .string()
+    .optional()
+    .transform((v) => (v ?? "false").toLowerCase())
+    .pipe(z.enum(["true", "false"]))
+    .transform((v) => v === "true"),
 
   emqxWebhookToken: optionalNonEmptyString(),
   mqttInternalUsername: z.string().default("ingest-service"),
@@ -86,6 +92,7 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
 
     adminApiToken: env.ADMIN_API_TOKEN,
     authRequired: env.AUTH_REQUIRED,
+    mobileApiMock: env.MOBILE_API_MOCK,
 
     clickhouseUrl: env.CLICKHOUSE_URL,
     clickhouseUsername: env.CLICKHOUSE_USERNAME,

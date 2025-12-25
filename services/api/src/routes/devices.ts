@@ -456,7 +456,8 @@ export function registerDeviceRoutes(
           );
           if (!row) throw new Error("insert failed");
 
-          await kafkaPublisher.publishDeviceCommand({
+          await kafkaPublisher.publishDeviceCommand(
+            {
             schema_version: 1,
             command_id: row.command_id,
             device_id: deviceId,
@@ -464,7 +465,9 @@ export function registerDeviceRoutes(
             payload,
             issued_ts: row.issued_ts,
             requested_by: null
-          });
+            },
+            traceId
+          );
 
           await client.query("COMMIT");
           return { command_id: row.command_id, status: row.status };

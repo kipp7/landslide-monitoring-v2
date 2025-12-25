@@ -12,11 +12,17 @@ const configSchema = z
   .object({
     serviceName: z.string().default("ingest-service"),
 
+    opsHost: z.string().default("0.0.0.0"),
+    opsPort: z.coerce.number().int().positive().default(9101),
+
     mqttUrl: z.string().url(),
     mqttUsername: optionalNonEmptyString(),
     mqttPassword: optionalNonEmptyString(),
     mqttTopicTelemetry: z.string().default("telemetry/+"),
     mqttTopicPresence: z.string().default("presence/+"),
+
+    maxInFlight: z.coerce.number().int().positive().max(10_000).default(50),
+    maxQueueSize: z.coerce.number().int().positive().max(1_000_000).default(5000),
 
     messageMaxBytes: z.coerce.number().int().positive().max(10_000_000).default(256 * 1024),
     metricsMaxKeys: z.coerce.number().int().positive().max(100_000).default(500),
@@ -47,11 +53,15 @@ export type AppConfig = z.infer<typeof configSchema>;
 export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
   return configSchema.parse({
     serviceName: env.SERVICE_NAME,
+    opsHost: env.OPS_HOST,
+    opsPort: env.OPS_PORT,
     mqttUrl: env.MQTT_URL,
     mqttUsername: env.MQTT_USERNAME,
     mqttPassword: env.MQTT_PASSWORD,
     mqttTopicTelemetry: env.MQTT_TOPIC_TELEMETRY,
     mqttTopicPresence: env.MQTT_TOPIC_PRESENCE,
+    maxInFlight: env.MAX_IN_FLIGHT,
+    maxQueueSize: env.MAX_QUEUE_SIZE,
     messageMaxBytes: env.MESSAGE_MAX_BYTES,
     metricsMaxKeys: env.METRICS_MAX_KEYS,
     dlqRawPayloadMaxBytes: env.DLQ_RAW_PAYLOAD_MAX_BYTES,

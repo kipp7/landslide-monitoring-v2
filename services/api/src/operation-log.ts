@@ -23,10 +23,11 @@ export function enqueueOperationLog(pg: PgPool | null, request: FastifyRequest, 
   void withPgClient(pg, async (client) => {
     await client.query(
       `
-        INSERT INTO operation_logs (user_id, username, module, action, description, request_data, response_data, ip_address, user_agent, status)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        INSERT INTO operation_logs (trace_id, user_id, username, module, action, description, request_data, response_data, ip_address, user_agent, status)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       `,
       [
+        request.traceId,
         entry.userIdOverride ?? request.user?.userId ?? null,
         entry.usernameOverride ?? request.user?.username ?? "admin",
         entry.module,

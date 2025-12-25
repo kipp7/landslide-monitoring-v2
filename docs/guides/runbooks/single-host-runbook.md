@@ -27,6 +27,18 @@
 - ClickHouse：按分区备份（导出/备份工具），至少保证“每周全量/每天增量”的可执行方案
 - 备份必须可恢复演练（至少月度一次）
 
+### 3.1 离线备份/恢复（当前可执行基线）
+
+> 单机 MS01 优先交付“能恢复”。当前采用离线方式：备份/恢复会短暂停机。
+
+- 备份：`powershell -ExecutionPolicy Bypass -File infra/compose/scripts/backup-offline.ps1`
+- 恢复：`powershell -ExecutionPolicy Bypass -File infra/compose/scripts/restore-offline.ps1 -BackupPath backups/<timestamp>`
+
+恢复后建议立即验证：
+
+- 运行基础设施健康检查：`powershell -ExecutionPolicy Bypass -File infra/compose/scripts/health-check.ps1`
+- 运行端到端冒烟：`powershell -ExecutionPolicy Bypass -File infra/compose/scripts/e2e-smoke-test.ps1`
+
 ## 4. 监控指标（最小集合）
 
 - Kafka：topic lag、磁盘占用、生产/消费速率
@@ -53,4 +65,3 @@
   - 检查 Kafka 保留策略是否生效
   - 检查 ClickHouse TTL 是否生效
   - 检查日志是否无限增长（日志必须轮转）
-

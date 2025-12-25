@@ -61,6 +61,7 @@
 > 单机优先保证“能恢复”。在未引入更高级的 CH online backup 工具前，先提供离线备份方案。
 
 - `powershell -ExecutionPolicy Bypass -File infra/compose/scripts/backup-offline.ps1`
+- 恢复（离线）：`powershell -ExecutionPolicy Bypass -File infra/compose/scripts/restore-offline.ps1 -BackupPath backups/<timestamp>`
 
 说明：
 

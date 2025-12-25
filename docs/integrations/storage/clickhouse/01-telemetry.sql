@@ -23,5 +23,5 @@ CREATE TABLE IF NOT EXISTS landslide.telemetry_raw
 ENGINE = MergeTree
 PARTITION BY toYYYYMM(received_ts)
 ORDER BY (device_id, sensor_key, received_ts)
+TTL toDateTime(received_ts) + INTERVAL 30 DAY
 SETTINGS index_granularity = 8192;
-

@@ -89,6 +89,11 @@ services:
       - "1883:1883"   # MQTT
       - "8883:8883"   # MQTTS（后续启用证书）
       - "18083:18083" # Dashboard
+    healthcheck:
+      test: ["CMD", "emqx_ctl", "status"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
 
   kafka:
     image: apache/kafka:3.7.0
@@ -109,6 +114,10 @@ services:
 
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
       KAFKA_LOG_RETENTION_HOURS: "${KAFKA_LOG_RETENTION_HOURS:-72}"
+      KAFKA_DEFAULT_REPLICATION_FACTOR: "1"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
       TZ: Asia/Shanghai
     volumes:
       - ${DATA_DIR:-../../data}/kafka:/tmp/kraft-combined-logs
