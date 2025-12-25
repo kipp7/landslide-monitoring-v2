@@ -55,6 +55,7 @@
 ### 2.4 `/system-monitor` 与 `/debug-api`
 
 - ✅ 兼容入口存在，跳转到 `/ops/*` 运维页面（WS-G/WS-J）
+- （进行中：WS-G.3）`/ops/debug-api` 补齐参考区 `/debug-api` 的“一键连通性测试”（`/health`、`/huawei/*`；危险 POST 默认关闭 + 二次确认）
 
 ### 2.5 `/analysis2`（监测点面板）
 

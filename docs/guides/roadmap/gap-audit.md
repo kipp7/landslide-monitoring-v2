@@ -87,6 +87,7 @@
 - （已补齐）基准点管理（参考区 `BaselineManagementV2`）：自动建立/质量评估/可用设备等高级能力已落地（WS-D.5；后端兼容端点见 WS-K.5）。
 - （已补齐）GPS 监测页导出细节：XLSX/报告/图表导出已补齐（WS-D.8）。
 - （已补齐）监测点面板（参考区 `/analysis2`）：v2 `/analysis2` 恢复 `MonitoringPoints` UI 与基本交互（WS-O.5；先用 demo 数据，后续可逐步接 v2 数据源）。
+- （进行中）Debug API（参考区 `/debug-api`）：参考区提供“一键连通性测试”（`/health` + `/huawei/*` + 可选电机控制 POST）；v2 当前为手动 GET 调试页，计划在 WS-G.3 补齐一键测试（危险 POST 默认关闭 + 二次确认）。
 
 ### 4.2 执行建议（并发友好）
 
