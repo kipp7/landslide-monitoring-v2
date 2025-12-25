@@ -20,6 +20,7 @@ import {
   LazyTemperatureChart,
 } from '../analysis/legacy/components/LazyComponents'
 import useDeviceShadow from '../analysis/legacy/hooks/useDeviceShadow'
+import useDeviceMappings from '../analysis/legacy/hooks/useDeviceMappings'
 import usePerformanceMonitor from '../analysis/legacy/hooks/usePerformanceMonitor'
 import useRealtimeData from '../analysis/legacy/hooks/useRealtimeData'
 import { generateDeviceName, getDetailedLocationInfo, getRiskByLocation } from '../analysis/legacy/utils/location-naming'
@@ -27,7 +28,7 @@ import { generateDeviceName, getDetailedLocationInfo, getRiskByLocation } from '
 export default function AnalysisLegacyPage() {
   const [mapType, setMapType] = useState<LegacyMapType>('卫星图')
   const [alert, setAlert] = useState(false)
-  const [deviceMappings] = useState<Array<{ simple_id: string; device_name?: string; location_name?: string }>>([])
+  const { mappings: deviceMappings } = useDeviceMappings()
 
   const { loading, error, deviceStats, data } = useRealtimeData()
   const { data: shadowData, error: shadowError } = useDeviceShadow()
@@ -50,7 +51,7 @@ export default function AnalysisLegacyPage() {
       const lat = typeof record.latitude === 'string' ? parseFloat(record.latitude) : Number(record.latitude)
       const lng = typeof record.longitude === 'string' ? parseFloat(record.longitude) : Number(record.longitude)
       const locationInfo = getDetailedLocationInfo(lat, lng)
-      const mapping = deviceMappings.find((m) => m.simple_id === record.device_id)
+      const mapping = deviceMappings.find((m) => m.simple_id === record.device_id || m.actual_device_id === record.device_id)
       const deviceName = mapping?.device_name || mapping?.location_name || generateDeviceName(lat, lng, record.device_id)
       return {
         device_id: record.device_id,
