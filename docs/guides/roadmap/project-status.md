@@ -166,6 +166,7 @@ M3（阶段 2：可告警）目标：
 3) 真实固件联调（硬件最后）：按 `docs/integrations/mqtt/*` 与 `docs/integrations/firmware/README.md`，让真实设备跑通 telemetry + commands，并以 `-Stage5Regression` 作为回归基线
 4) 固件细节沉淀：将真实固件的“身份包存储/重连退避/命令回执”实现细节沉淀到 `docs/integrations/firmware/`（含可复用代码片段与踩坑记录）
 5) /analysis 对齐（UI/组件）：补齐 legacy ExceptionStatsChart 组件与懒加载导出（WS-N.13）
+6) 参考区组件补齐：新增 `FullScreenWrapper`（apps/web）用于全屏背景包裹（不改变现有页面行为）
 
 ## 4) 关键入口（新 AI 只读这些就能上手）
 
