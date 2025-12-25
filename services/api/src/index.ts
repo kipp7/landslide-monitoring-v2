@@ -34,6 +34,7 @@ import { registerCameraLegacyCompatRoutes, registerCameraRoutes } from "./routes
 import { registerDeviceHealthExpertLegacyCompatRoutes, registerDeviceHealthExpertRoutes } from "./routes/device-health-expert";
 import { registerAiPredictionLegacyCompatRoutes, registerAiPredictionRoutes } from "./routes/ai-predictions";
 import { registerLegacyDeviceManagementCompatRoutes } from "./routes/legacy-device-management";
+import { registerLegacyIotDeviceEndpoints } from "./routes/legacy-iot-device-endpoints";
 
 async function main(): Promise<void> {
   dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
@@ -172,13 +173,17 @@ async function main(): Promise<void> {
   // Legacy-compatible paths (reference system): /huawei/*
   registerHuaweiLegacyCompatRoutes(app, config, ch, pg);
 
-  // Legacy-compatible path (reference system): /api/camera
+  // Backward-compatible camera path (historical): /camera
   registerCameraLegacyCompatRoutes(app, config, pg);
+
+  // Legacy-compatible paths (reference iot-server): /info, /devices/*, /debug/*
+  registerLegacyIotDeviceEndpoints(app, config, ch, pg);
 
   // Legacy-compatible path (reference system): /api/anomaly-assessment
   app.register(
     (api, _opts, done) => {
       registerAnomalyAssessmentCompatRoutes(api, config, pg, { legacyResponse: true });
+      registerCameraLegacyCompatRoutes(api, config, pg);
       registerGpsBaselineLegacyCompatRoutes(api, config, ch, pg);
       registerGpsDeformationLegacyCompatRoutes(api, config, ch, pg);
       registerRealtimeLegacyCompatRoutes(api, config, ch, pg);
@@ -195,6 +200,7 @@ async function main(): Promise<void> {
   app.register(
     (api, _opts, done) => {
       registerAnomalyAssessmentCompatRoutes(api, config, pg, { legacyResponse: true });
+      registerCameraLegacyCompatRoutes(api, config, pg);
       registerGpsBaselineLegacyCompatRoutes(api, config, ch, pg);
       registerGpsDeformationLegacyCompatRoutes(api, config, ch, pg);
       registerRealtimeLegacyCompatRoutes(api, config, ch, pg);
