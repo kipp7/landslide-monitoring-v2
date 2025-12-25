@@ -179,6 +179,15 @@ async function main(): Promise<void> {
   // Legacy-compatible paths (reference iot-server): /info, /devices/*, /debug/*
   registerLegacyIotDeviceEndpoints(app, config, ch, pg);
 
+  // Legacy-compatible prefix (reference iot-server behind nginx): /iot/*
+  app.register(
+    (iot, _opts, done) => {
+      registerLegacyIotDeviceEndpoints(iot, config, ch, pg);
+      done();
+    },
+    { prefix: "/iot" }
+  );
+
   // Legacy-compatible path (reference system): /api/anomaly-assessment
   app.register(
     (api, _opts, done) => {
