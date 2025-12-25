@@ -7,7 +7,8 @@
 - 每次合并一个 PR 到 `main`，如果它改变了项目阶段/里程碑/下一步，必须更新本页。
 - 本页只记录“当前状态与下一步”，历史细节放到 `docs/incidents/` 或 PR/commit 记录中。
 
-最后更新时间：2025-12-25（WS-G.3：/ops/debug-api 补齐“一键连通性测试”（/health + /huawei/*；危险 POST 需二次确认）；阶段 5 已完成：固件模拟器 + Stage5Regression 回归基线；硬件联调待启动）
+最后更新时间：2025-12-25（e2e：Stage4Regression 修复 health-check 端口同步；WS-G.3：/ops/debug-api 补齐“一键连通性测试”（/health + /huawei/*；危险 POST 需二次确认）；阶段 5 已完成：固件模拟器 + Stage5Regression 回归基线；硬件联调待启动）
+- 2025-12-25：修复 e2e smoke（`-Stage4Regression`）：`infra/compose/scripts/e2e-smoke-test.ps1` 在写入 `services/api/.env` 后重新读取 `API_PORT`，避免 health check 端口与 API 实际监听端口不一致导致误报失败。
 - 2025-12-25：WS-O.1（/baseline-management）：PR #213，恢复参考区页面 1:1 并对接 v2 GPS baselines API（含自动建立/质量评估）；保留 v2 重定向页 `/baseline-management-v2`
 - 2025-12-25：WS-O.2（/optimized-demo）：PR #212，恢复参考区“数据库优化演示”页 1:1（OptimizedDeviceStatus/useDataAggregation）；保留 v2 重定向页 `/optimized-demo-v2`
 - 2025-12-25：WS-O.3（/system-monitor）：PR #216，恢复参考区系统监控页 1:1（cache/realtime/worker 指标面板）；保留 v2 重定向页 `/system-monitor-v2`
