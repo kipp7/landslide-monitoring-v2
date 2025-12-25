@@ -60,7 +60,7 @@ _MD_ENDPOINT_RE = re.compile(r"\*\*(GET|POST|PUT|DELETE|PATCH)\*\*\s+\x60([^\x60
 
 def _collect_markdown_endpoints(api_docs_dir: Path) -> set[tuple[str, str]]:
     endpoints: set[tuple[str, str]] = set()
-    for path in sorted(api_docs_dir.glob("[0-9][0-9]-*.md")):
+    for path in sorted(api_docs_dir.glob("0*-*.md")):
         text = path.read_text(encoding="utf-8")
         for match in _MD_ENDPOINT_RE.finditer(text):
             method = match.group(1)
