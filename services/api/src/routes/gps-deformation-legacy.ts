@@ -44,7 +44,7 @@ type LegacyGpsRow = {
   deformation_vertical: number;
   deformation_velocity: number;
   deformation_confidence: number;
-  risk_level: string | null;
+  risk_level: number;
   temperature: number | null;
   humidity: number | null;
 };
@@ -222,7 +222,7 @@ function computeLegacyDeformationRows(points: GpsPoint[], baseline: Baseline | n
     deformation_vertical: p.vertical,
     deformation_velocity: velocities[idx] ?? 0,
     deformation_confidence: confidence,
-    risk_level: null,
+    risk_level: 0,
     temperature: null,
     humidity: null
   }));
@@ -381,9 +381,12 @@ export function registerGpsDeformationLegacyCompatRoutes(
     const riskLevel = hasBaseline ? assessRiskLevelFromDisplacementMm(maxDisplacementMm) : 0;
     const riskConfidence = clamp01(0.45 + Math.min(0.4, displacementMm.length / 200) + (hasBaseline ? 0.1 : 0));
     const riskFactors: Record<string, unknown> = {
-      maxDisplacementMm,
+      maxDisplacement: maxDisplacementMm,
+      minDisplacement: minDisplacementMm,
       trend,
-      baselineSource: hasBaseline ? "gps_baselines" : rows.length > 0 ? "first_point" : null
+      trendMagnitude: Math.abs(trendDeltaMm),
+      baselineSource: hasBaseline ? "gps_baselines" : rows.length > 0 ? "first_point" : null,
+      patternSimilarity: null
     };
     if (!hasBaseline) riskFactors.reason = "未设置基准点";
 
@@ -394,7 +397,7 @@ export function registerGpsDeformationLegacyCompatRoutes(
 
     const pointsWithRisk = rows.map((r) => {
       const level = hasBaseline ? assessRiskLevelFromDisplacementMm(r.deformation_distance_3d * 1000) : 0;
-      return { ...r, risk_level: level === 0 ? null : riskDescriptionFromLevel(level) };
+      return { ...r, risk_level: level };
     });
 
     const realTimeDisplacement = {
@@ -438,8 +441,7 @@ export function registerGpsDeformationLegacyCompatRoutes(
           summary: {
             maxDisplacement: maxDisplacementMm,
             minDisplacement: minDisplacementMm,
-            riskIndicators,
-            maxDisplacementMm
+            riskIndicators
           }
         },
         trendAnalysis: { trend, confidence: trendConfidence, magnitude: Math.abs(trendDeltaMm), deltaMm: trendDeltaMm },
