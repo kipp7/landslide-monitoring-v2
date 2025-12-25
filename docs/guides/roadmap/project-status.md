@@ -7,7 +7,8 @@
 - 每次合并一个 PR 到 `main`，如果它改变了项目阶段/里程碑/下一步，必须更新本页。
 - 本页只记录“当前状态与下一步”，历史细节放到 `docs/incidents/` 或 PR/commit 记录中。
 
-最后更新时间：2025-12-25（WS-K.9：legacy 设备管理形变端点兼容；WS-K.10：legacy `/iot/api/*` 前缀兼容；WS-K.8：legacy `/api/baselines` CRUD 兼容；WS-K.7：legacy `/api/gps-deformation/:deviceId` 兼容端点；e2e：Stage4Regression 修复 health-check 端口同步；WS-G.3：/ops/debug-api 补齐“一键连通性测试”（/health + /huawei/*；危险 POST 需二次确认）；阶段 5 已完成：固件模拟器 + Stage5Regression 回归基线；硬件联调待启动）
+最后更新时间：2025-12-25（WS-K.12：legacy `/api/gps-deformation/:deviceId` 返回结构补齐；WS-K.9：legacy 设备管理形变端点兼容；WS-K.10：legacy `/iot/api/*` 前缀兼容；WS-K.8：legacy `/api/baselines` CRUD 兼容；WS-K.7：legacy `/api/gps-deformation/:deviceId` 兼容端点；e2e：Stage4Regression 修复 health-check 端口同步；WS-G.3：/ops/debug-api 补齐“一键连通性测试”（/health + /huawei/*；危险 POST 需二次确认）；阶段 5 已完成：固件模拟器 + Stage5Regression 回归基线；硬件联调待启动）
+- 2025-12-25：WS-K.12（legacy `/api/gps-deformation/:deviceId`）：PR #233，补齐 `dataQuality`/`results`/`realTimeDisplacement` 等字段，并在 points 中提供数值型 `risk_level`（0~4）。
 - 2025-12-25：WS-K.9（legacy 设备管理形变端点）：PR #230，补齐 `/api/device-management/deformation/:deviceId`、`/trend`、`/summary`（ClickHouse + gps_baselines；含 legacy deviceId → UUID 映射）。
 - 2025-12-25：WS-K.10（legacy `/iot/api/*` 前缀兼容）：PR #232，将 legacy compat 路由额外挂载到 `/iot/api`（与 `/api/*` 保持一致），并补齐 `/iot/huawei` 禁用 stub（503）。
 - 2025-12-25：WS-K.8（legacy `/api/baselines` CRUD）：PR #226，补齐 legacy baselines CRUD（列表/查询/创建/更新/删除），并支持 legacy deviceId → UUID 映射（devices.metadata.legacy_device_id / devices.metadata.externalIds.legacy）。

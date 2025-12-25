@@ -44,9 +44,17 @@ type LegacyGpsRow = {
   deformation_vertical: number;
   deformation_velocity: number;
   deformation_confidence: number;
-  risk_level: string | null;
+  risk_level: number;
   temperature: number | null;
   humidity: number | null;
+};
+
+type BasicStats = {
+  mean: number;
+  median: number;
+  standardDeviation: number;
+  min: number;
+  max: number;
 };
 
 function toClickhouseDateTime64Utc(d: Date): string {
@@ -214,10 +222,69 @@ function computeLegacyDeformationRows(points: GpsPoint[], baseline: Baseline | n
     deformation_vertical: p.vertical,
     deformation_velocity: velocities[idx] ?? 0,
     deformation_confidence: confidence,
-    risk_level: null,
+    risk_level: 0,
     temperature: null,
     humidity: null
   }));
+}
+
+function clamp01(n: number): number {
+  if (n < 0) return 0;
+  if (n > 1) return 1;
+  return n;
+}
+
+function mean(values: number[]): number {
+  if (values.length === 0) return 0;
+  return values.reduce((a, b) => a + b, 0) / values.length;
+}
+
+function median(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 0) {
+    const left = sorted[mid - 1] ?? 0;
+    const right = sorted[mid] ?? 0;
+    return (left + right) / 2;
+  }
+  return sorted[mid] ?? 0;
+}
+
+function standardDeviation(values: number[], avg: number): number {
+  if (values.length === 0) return 0;
+  const variance = values.reduce((sum, v) => sum + (v - avg) * (v - avg), 0) / values.length;
+  return Math.sqrt(variance);
+}
+
+function basicStats(values: number[]): BasicStats {
+  const finite = values.filter((v) => Number.isFinite(v));
+  if (finite.length === 0) return { mean: 0, median: 0, standardDeviation: 0, min: 0, max: 0 };
+  const avg = mean(finite);
+  return {
+    mean: avg,
+    median: median(finite),
+    standardDeviation: standardDeviation(finite, avg),
+    min: Math.min(...finite),
+    max: Math.max(...finite)
+  };
+}
+
+function assessRiskLevelFromDisplacementMm(displacementMm: number): number {
+  if (displacementMm >= 20) return 1;
+  if (displacementMm >= 10) return 2;
+  if (displacementMm >= 5) return 3;
+  if (displacementMm >= 2) return 4;
+  return 0;
+}
+
+function riskDescriptionFromLevel(level: number): string {
+  if (level === 0) return "正常";
+  if (level === 4) return "IV级蓝色";
+  if (level === 3) return "III级黄色";
+  if (level === 2) return "II级橙色";
+  if (level === 1) return "I级红色";
+  return "未知";
 }
 
 export function registerGpsDeformationLegacyCompatRoutes(
@@ -229,6 +296,7 @@ export function registerGpsDeformationLegacyCompatRoutes(
   const adminCfg: AdminAuthConfig = { adminApiToken: config.adminApiToken, jwtEnabled: Boolean(config.jwtAccessSecret) };
 
   const handler = async (request: FastifyRequest, reply: FastifyReply) => {
+    const t0 = Date.now();
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:analysis"))) return;
     if (!pg) {
       legacyFail(reply, 503, "PostgreSQL not configured");
@@ -297,6 +365,57 @@ export function registerGpsDeformationLegacyCompatRoutes(
     }
 
     const rows = computeLegacyDeformationRows(points, baseline, baselineSource);
+    const nowIso = new Date().toISOString();
+
+    const displacementMm = rows.map((r) => r.deformation_distance_3d * 1000);
+    const maxDisplacementMm = displacementMm.length > 0 ? Math.max(...displacementMm) : 0;
+    const minDisplacementMm = displacementMm.length > 0 ? Math.min(...displacementMm) : 0;
+    const latest = rows.at(-1) ?? null;
+
+    const firstMm = displacementMm[0] ?? 0;
+    const lastMm = displacementMm.at(-1) ?? 0;
+    const trendDeltaMm = displacementMm.length >= 2 ? lastMm - firstMm : 0;
+    const trend = Math.abs(trendDeltaMm) < 0.5 ? "stable" : trendDeltaMm > 0 ? "increasing" : "decreasing";
+    const trendConfidence = clamp01(0.55 + Math.min(0.35, displacementMm.length / 200) + (hasBaseline ? 0.1 : 0));
+
+    const riskLevel = hasBaseline ? assessRiskLevelFromDisplacementMm(maxDisplacementMm) : 0;
+    const riskConfidence = clamp01(0.45 + Math.min(0.4, displacementMm.length / 200) + (hasBaseline ? 0.1 : 0));
+    const riskFactors: Record<string, unknown> = {
+      maxDisplacement: maxDisplacementMm,
+      minDisplacement: minDisplacementMm,
+      trend,
+      trendMagnitude: Math.abs(trendDeltaMm),
+      baselineSource: hasBaseline ? "gps_baselines" : rows.length > 0 ? "first_point" : null,
+      patternSimilarity: null
+    };
+    if (!hasBaseline) riskFactors.reason = "未设置基准点";
+
+    const riskIndicators: string[] = [];
+    if (!hasBaseline) riskIndicators.push("未设置基准点");
+    if (rows.length === 0) riskIndicators.push("无GPS数据");
+    if (rows.length > 0) riskIndicators.push("已计算位移/速度序列");
+
+    const pointsWithRisk = rows.map((r) => {
+      const level = hasBaseline ? assessRiskLevelFromDisplacementMm(r.deformation_distance_3d * 1000) : 0;
+      return { ...r, risk_level: level };
+    });
+
+    const realTimeDisplacement = {
+      hasBaseline,
+      hasLatestData: Boolean(latest),
+      displacement: hasBaseline ? latest?.deformation_distance_3d ?? 0 : 0,
+      horizontal: hasBaseline ? latest?.deformation_horizontal ?? 0 : 0,
+      vertical: hasBaseline ? latest?.deformation_vertical ?? 0 : 0,
+      latestTime: latest?.event_time ?? null,
+      baseline: hasBaseline && baseline ? { latitude: baseline.latitude, longitude: baseline.longitude, ...(baseline.altitude == null ? {} : { altitude: baseline.altitude }) } : null,
+      latestGPS: latest ? { latitude: latest.latitude, longitude: latest.longitude, time: latest.event_time } : null,
+      ...(hasBaseline ? {} : { error: "未设置基准点" })
+    };
+
+    const qualityScore = clamp01((hasBaseline ? 0.75 : 0.6) + Math.min(0.25, rows.length / 200));
+    const completeness = clamp01(rows.length / Math.max(1, Math.min(limit, 200)));
+    const consistency = clamp01(0.75 + Math.min(0.2, rows.length / 500));
+    const accuracy = clamp01(hasBaseline ? 0.9 : 0.75);
 
     legacyOk(reply, {
       deviceId: inputDeviceId,
@@ -305,7 +424,35 @@ export function registerGpsDeformationLegacyCompatRoutes(
       hasBaseline,
       baseline: baseline ?? null,
       baselineSource: hasBaseline ? "gps_baselines" : points.length > 0 ? "first_point" : null,
-      points: rows
+      analysisTime: nowIso,
+      processingTime: `${String(Date.now() - t0)}ms`,
+      realTimeDisplacement,
+      dataQuality: {
+        totalPoints: points.length,
+        validPoints: rows.length,
+        qualityScore,
+        completeness,
+        consistency,
+        accuracy
+      },
+      results: {
+        statisticalAnalysis: {
+          basic: basicStats(displacementMm),
+          summary: {
+            maxDisplacement: maxDisplacementMm,
+            minDisplacement: minDisplacementMm,
+            riskIndicators
+          }
+        },
+        trendAnalysis: { trend, confidence: trendConfidence, magnitude: Math.abs(trendDeltaMm), deltaMm: trendDeltaMm },
+        riskAssessment: {
+          level: riskLevel,
+          description: riskDescriptionFromLevel(riskLevel),
+          confidence: riskConfidence,
+          factors: riskFactors
+        }
+      },
+      points: pointsWithRisk
     });
   };
 
