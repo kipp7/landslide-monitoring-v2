@@ -157,6 +157,7 @@
 | WS-N.9 | codex | `feat/ws-n9/analysis-performance-monitor` | https://github.com/kipp7/landslide-monitoring-v2/pull/197 | done | WS-N.5 | Web：`/analysis` 性能监控 1:1：移植 `usePerformanceMonitor` 与性能告警 UI（warnings/isPerformanceGood），并补齐必要的缓存/节流策略（不改变 v2 API） |
 | WS-N.10 | codex | `feat/ws-n10/analysis-device-naming` | https://github.com/kipp7/landslide-monitoring-v2/pull/205 | done | WS-N.5 | Web：`/analysis` 设备命名/映射 1:1：对齐参考区 `device_mapping`/位置命名逻辑（generateDeviceName/getRiskByLocation/getDetailedLocationInfo），在 v2 侧实现等价映射（不直连 Supabase） |
 | WS-N.11 | kipp7 | `feat/ws-n11/analysis-2d-map` | https://github.com/kipp7/landslide-monitoring-v2/pull/207 | done | WS-N.5 | Web：`/analysis` 2D/卫星地图 1:1：移植参考区 OpenLayers `MapContainer`（聚合点弹窗/轮播分页/设备标注），并补齐切换后重绘与样式引入（`ol/ol.css`） |
+| WS-N.13 | codex | `feat/ws-n13/analysis-legacy-device-shadow` |  | claimed | WS-N.5, WS-N.10 | Web：`/analysis` 设备影子/风险等级（参考区 1:1）：实现 legacy `useDeviceShadow`，从 v2 `/api/v1/data/state` 获取主设备最新状态并计算 `risk_level`（含时效/阈值规则），供红色告警光效与 LiquidFillChart 使用（不直连 Supabase） |
 
 ### 4.4 对齐与验收（总集成人做）
 
