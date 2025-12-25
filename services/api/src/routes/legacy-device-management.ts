@@ -1,6 +1,5 @@
 import type { ClickHouseClient } from "@clickhouse/client";
 import type { FastifyInstance, FastifyReply } from "fastify";
-import type { FastifyRequest } from "fastify";
 import type { PoolClient } from "pg";
 import { z } from "zod";
 import type { AppConfig } from "../config";
@@ -50,6 +49,18 @@ const deviceManagementQuerySchema = z.object({
   }, z.boolean().optional())
 });
 
+const deformationLimitQuerySchema = z
+  .object({
+    limit: z.coerce.number().int().positive().max(5000).optional()
+  })
+  .passthrough();
+
+const deformationTrendQuerySchema = z
+  .object({
+    days: z.coerce.number().int().positive().max(365).optional()
+  })
+  .passthrough();
+
 const monitoringStationsUpdateSchema = z.record(z.unknown());
 
 const monitoringStationsBulkUpdateSchema = z
@@ -65,45 +76,10 @@ const baselineSchema = z.object({
   altitude: z.number().finite().optional()
 });
 
-const legacyExportBodySchema = z
-  .object({
-    device_id: z.string().optional(),
-    deviceId: z.string().optional(),
-    export_type: z.enum(["today", "history", "custom"]).optional(),
-    start_date: z.string().optional(),
-    end_date: z.string().optional(),
-    format: z.enum(["json", "csv"]).optional()
-  })
-  .strict();
-
-const legacyExportQuerySchema = z.object({
-  device_id: z.string().optional(),
-  deviceId: z.string().optional()
-});
-
-const legacyReportBodySchema = z
-  .object({
-    device_id: z.string().optional(),
-    deviceId: z.string().optional(),
-    report_type: z.enum(["daily", "weekly", "monthly", "custom"]).optional(),
-    start_date: z.string().optional(),
-    end_date: z.string().optional()
-  })
-  .strict();
-
-const legacyReportQuerySchema = z.object({
-  device_id: z.string().optional(),
-  deviceId: z.string().optional()
-});
-
-const legacyDiagnosticsBodySchema = z
-  .object({
-    device_id: z.string().optional(),
-    deviceId: z.string().optional(),
-    simple_id: z.string().optional(),
-    simpleId: z.string().optional()
-  })
-  .strict();
+type BaselineInfo = z.infer<typeof baselineSchema> & {
+  established_time: string | null;
+  established_by: string;
+};
 
 function utcStartOfDay(d: Date): Date {
   const x = new Date(d.getTime());
@@ -121,210 +97,6 @@ function clickhouseStringToIsoZ(ts: string): string {
   if (t.includes("T") && !t.endsWith("Z")) return t + "Z";
   if (t.includes(" ")) return t.replace(" ", "T") + "Z";
   return t;
-}
-
-function normalizeMetricValue(row: {
-  value_f64?: number | null;
-  value_i64?: number | null;
-  value_str?: string | null;
-  value_bool?: number | null;
-}): unknown {
-  if (row.value_f64 != null) return row.value_f64;
-  if (row.value_i64 != null) return row.value_i64;
-  if (row.value_bool != null) return row.value_bool === 1;
-  if (row.value_str != null) return row.value_str;
-  return null;
-}
-
-function parseLegacyExportRange(body: {
-  export_type?: "today" | "history" | "custom";
-  start_date?: string;
-  end_date?: string;
-}): { start: Date; end: Date; exportType: "today" | "history" | "custom" } | null {
-  const exportType = body.export_type ?? "today";
-  const now = new Date();
-  if (exportType === "today") {
-    return { start: utcStartOfDay(now), end: now, exportType };
-  }
-  if (exportType === "history") {
-    return { start: new Date(now.getTime() - 30 * 86400 * 1000), end: now, exportType };
-  }
-  const start = body.start_date ? new Date(body.start_date) : null;
-  const end = body.end_date ? new Date(body.end_date) : null;
-  if (!start || !end) return null;
-  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) return null;
-  if (!(start < end)) return null;
-  return { start, end, exportType };
-}
-
-function parseLegacyReportRange(body: {
-  report_type?: "daily" | "weekly" | "monthly" | "custom";
-  start_date?: string;
-  end_date?: string;
-}): { start: Date; end: Date; reportType: "daily" | "weekly" | "monthly" | "custom" } | null {
-  const reportType = body.report_type ?? "daily";
-  const now = new Date();
-  if (reportType === "daily") {
-    return { start: utcStartOfDay(now), end: now, reportType };
-  }
-  if (reportType === "weekly") {
-    return { start: new Date(now.getTime() - 7 * 86400 * 1000), end: now, reportType };
-  }
-  if (reportType === "monthly") {
-    return { start: new Date(now.getTime() - 30 * 86400 * 1000), end: now, reportType };
-  }
-  const start = body.start_date ? new Date(body.start_date) : null;
-  const end = body.end_date ? new Date(body.end_date) : null;
-  if (!start || !end) return null;
-  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) return null;
-  if (!(start < end)) return null;
-  return { start, end, reportType };
-}
-
-type TelemetryRow = {
-  received_ts: string;
-  sensor_key: string;
-  value_f64: number | null;
-  value_i64: number | null;
-  value_str: string | null;
-  value_bool: number | null;
-};
-
-async function fetchTelemetryRows(
-  config: AppConfig,
-  ch: ClickHouseClient,
-  deviceId: string,
-  start: Date,
-  end: Date,
-  limit: number,
-  order: "asc" | "desc"
-): Promise<TelemetryRow[]> {
-  const sql = `
-    SELECT
-      toString(received_ts) AS received_ts,
-      sensor_key,
-      value_f64,
-      value_i64,
-      value_str,
-      value_bool
-    FROM ${config.clickhouseDatabase}.${config.clickhouseTable}
-    WHERE device_id = {deviceId:String}
-      AND received_ts >= {start:DateTime64(3, 'UTC')}
-      AND received_ts <= {end:DateTime64(3, 'UTC')}
-    ORDER BY received_ts ${order === "asc" ? "ASC" : "DESC"}
-    LIMIT {limit:UInt32}
-  `;
-
-  const res = await ch.query({
-    query: sql,
-    query_params: {
-      deviceId,
-      start: toClickhouseDateTime64Utc(start),
-      end: toClickhouseDateTime64Utc(end),
-      limit
-    },
-    format: "JSONEachRow"
-  });
-
-  return res.json<TelemetryRow[]>();
-}
-
-async function telemetryCountInRange(
-  config: AppConfig,
-  ch: ClickHouseClient,
-  deviceId: string,
-  start: Date,
-  end: Date
-): Promise<number> {
-  const sql = `
-    SELECT
-      count() AS c
-    FROM ${config.clickhouseDatabase}.${config.clickhouseTable}
-    WHERE device_id = {deviceId:String}
-      AND received_ts >= {start:DateTime64(3, 'UTC')}
-      AND received_ts <= {end:DateTime64(3, 'UTC')}
-  `;
-  const res = await ch.query({
-    query: sql,
-    query_params: { deviceId, start: toClickhouseDateTime64Utc(start), end: toClickhouseDateTime64Utc(end) },
-    format: "JSONEachRow"
-  });
-  const rows: { c: number | string }[] = await res.json();
-  const c = rows[0]?.c ?? 0;
-  return typeof c === "string" ? Number(c) : c;
-}
-
-async function telemetryMinMaxTs(config: AppConfig, ch: ClickHouseClient, deviceId: string): Promise<{ min: string | null; max: string | null }> {
-  const sql = `
-    SELECT
-      toString(min(received_ts)) AS min_ts,
-      toString(max(received_ts)) AS max_ts
-    FROM ${config.clickhouseDatabase}.${config.clickhouseTable}
-    WHERE device_id = {deviceId:String}
-  `;
-  const res = await ch.query({ query: sql, query_params: { deviceId }, format: "JSONEachRow" });
-  const rows: { min_ts: string; max_ts: string }[] = await res.json();
-  const r = rows[0];
-  if (!r) return { min: null, max: null };
-  const min = r.min_ts?.trim() ? clickhouseStringToIsoZ(r.min_ts) : null;
-  const max = r.max_ts?.trim() ? clickhouseStringToIsoZ(r.max_ts) : null;
-  return { min, max };
-}
-
-async function distinctMinutesInRange(config: AppConfig, ch: ClickHouseClient, deviceId: string, start: Date, end: Date): Promise<number> {
-  const sql = `
-    SELECT
-      countDistinct(toStartOfMinute(received_ts)) AS m
-    FROM ${config.clickhouseDatabase}.${config.clickhouseTable}
-    WHERE device_id = {deviceId:String}
-      AND received_ts >= {start:DateTime64(3, 'UTC')}
-      AND received_ts <= {end:DateTime64(3, 'UTC')}
-  `;
-  const res = await ch.query({
-    query: sql,
-    query_params: { deviceId, start: toClickhouseDateTime64Utc(start), end: toClickhouseDateTime64Utc(end) },
-    format: "JSONEachRow"
-  });
-  const rows: { m: number | string }[] = await res.json();
-  const m = rows[0]?.m ?? 0;
-  return typeof m === "string" ? Number(m) : m;
-}
-
-type SensorStatsRow = { sensor_key: string; min: number | null; max: number | null; avg: number | null; count: number | string };
-
-async function sensorStatsInRange(
-  config: AppConfig,
-  ch: ClickHouseClient,
-  deviceId: string,
-  start: Date,
-  end: Date,
-  sensorKeys: string[]
-): Promise<SensorStatsRow[]> {
-  if (sensorKeys.length === 0) return [];
-
-  const sql = `
-    SELECT
-      sensor_key,
-      min(coalesce(value_f64, toFloat64(value_i64))) AS min,
-      max(coalesce(value_f64, toFloat64(value_i64))) AS max,
-      avg(coalesce(value_f64, toFloat64(value_i64))) AS avg,
-      count() AS count
-    FROM ${config.clickhouseDatabase}.${config.clickhouseTable}
-    WHERE device_id = {deviceId:String}
-      AND sensor_key IN {sensorKeys:Array(String)}
-      AND received_ts >= {start:DateTime64(3, 'UTC')}
-      AND received_ts <= {end:DateTime64(3, 'UTC')}
-      AND (isNotNull(value_f64) OR isNotNull(value_i64))
-    GROUP BY sensor_key
-  `;
-
-  const res = await ch.query({
-    query: sql,
-    query_params: { deviceId, sensorKeys, start: toClickhouseDateTime64Utc(start), end: toClickhouseDateTime64Utc(end) },
-    format: "JSONEachRow"
-  });
-
-  return res.json<SensorStatsRow[]>();
 }
 
 function haversineMeters(aLat: number, aLon: number, bLat: number, bLon: number): number {
@@ -530,6 +302,39 @@ async function fetchGpsBaseline(pg: PgPool, deviceId: string): Promise<z.infer<t
   return parsed.data;
 }
 
+async function fetchGpsBaselineInfo(pg: PgPool, deviceId: string): Promise<BaselineInfo | null> {
+  const row = await withPgClient(pg, async (client) =>
+    queryOne<{ baseline: unknown; method: string; computed_at: string | null; updated_at: string | null }>(
+      client,
+      `
+        SELECT
+          baseline,
+          method,
+          to_char(computed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS computed_at,
+          to_char(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS updated_at
+        FROM gps_baselines
+        WHERE device_id = $1
+        LIMIT 1
+      `,
+      [deviceId]
+    )
+  );
+  if (!row) return null;
+
+  const parsed = baselineSchema.safeParse(row.baseline ?? {});
+  if (!parsed.success) return null;
+
+  const baselineObj = row.baseline && typeof row.baseline === "object" ? (row.baseline as Record<string, unknown>) : {};
+  const establishedByRaw = typeof baselineObj.establishedBy === "string" ? baselineObj.establishedBy.trim() : "";
+  const established_by = establishedByRaw || (row.method === "auto" ? "系统自动建立" : "管理员");
+
+  return {
+    ...parsed.data,
+    established_time: row.computed_at ?? row.updated_at ?? null,
+    established_by
+  };
+}
+
 type LegacyGpsRow = {
   event_time: string;
   latitude: number;
@@ -639,6 +444,64 @@ function computeLegacyGpsRows(
   return { hasBaseline, rows: rowsAsc.reverse() };
 }
 
+type DeformationType = {
+  type: "noise" | "none" | "horizontal" | "vertical" | "combined" | "rotation";
+  code: -1 | 0 | 1 | 2 | 3 | 4;
+  description: string;
+};
+
+function analyzeDeformationType(maxDisplacementMeters: number, maxHorizontalMeters: number, maxVerticalMeters: number): DeformationType {
+  const noiseThreshold = 0.001; // 1mm
+  const minDisplacement = 0.002; // 2mm
+
+  if (maxDisplacementMeters < noiseThreshold) return { type: "noise", code: -1, description: "GPS噪声" };
+  if (maxDisplacementMeters < minDisplacement) return { type: "none", code: 0, description: "无明显形变" };
+
+  const h = Math.abs(maxHorizontalMeters);
+  const v = Math.abs(maxVerticalMeters);
+  const d = maxDisplacementMeters + 0.0001;
+  const hRatio = h / d;
+  const vRatio = v / d;
+
+  if (hRatio > 0.8 && vRatio < 0.3) return { type: "horizontal", code: 1, description: "水平形变" };
+  if (vRatio > 0.8 && hRatio < 0.3) return { type: "vertical", code: 2, description: "垂直形变" };
+  if (hRatio > 0.4 && vRatio > 0.4) return { type: "combined", code: 3, description: "复合形变" };
+  return { type: "rotation", code: 4, description: "旋转形变" };
+}
+
+function riskFromDisplacement(maxDisplacementMeters: number): { level: number; description: string; factors: string[] } {
+  const factors: string[] = [];
+  if (maxDisplacementMeters >= 0.1) {
+    factors.push(`位移${(maxDisplacementMeters * 1000).toFixed(1)}mm达到I级红色预警(≥100mm)，风险很高，可能性很大`);
+    return { level: 1, description: "I级红色", factors };
+  }
+  if (maxDisplacementMeters >= 0.05) {
+    factors.push(`位移${(maxDisplacementMeters * 1000).toFixed(1)}mm达到II级橙色预警(≥50mm)，风险高，可能性较大`);
+    return { level: 2, description: "II级橙色", factors };
+  }
+  if (maxDisplacementMeters >= 0.02) {
+    factors.push(`位移${(maxDisplacementMeters * 1000).toFixed(1)}mm达到III级黄色预警(≥20mm)，风险较高，有一定可能性`);
+    return { level: 3, description: "III级黄色", factors };
+  }
+  if (maxDisplacementMeters >= 0.005) {
+    factors.push(`位移${(maxDisplacementMeters * 1000).toFixed(1)}mm达到IV级蓝色预警(≥5mm)，风险一般，可能性较小`);
+    return { level: 4, description: "IV级蓝色", factors };
+  }
+  factors.push(`位移${(maxDisplacementMeters * 1000).toFixed(1)}mm未达到预警标准(<5mm)`);
+  return { level: 0, description: "正常", factors };
+}
+
+function analyzeTrend(distancesMetersOldestFirst: number[]): "stable" | "increasing" | "decreasing" {
+  if (distancesMetersOldestFirst.length < 3) return "stable";
+  const mid = Math.floor(distancesMetersOldestFirst.length / 2);
+  const firstHalf = distancesMetersOldestFirst.slice(0, mid);
+  const secondHalf = distancesMetersOldestFirst.slice(mid);
+  const avg = (arr: number[]) => (arr.length === 0 ? 0 : arr.reduce((a, b) => a + b, 0) / arr.length);
+  const d = avg(secondHalf) - avg(firstHalf);
+  if (Math.abs(d) < 0.0005) return "stable"; // 0.5mm
+  return d > 0 ? "increasing" : "decreasing";
+}
+
 export function registerLegacyDeviceManagementCompatRoutes(
   app: FastifyInstance,
   config: AppConfig,
@@ -647,436 +510,316 @@ export function registerLegacyDeviceManagementCompatRoutes(
 ): void {
   const adminCfg: AdminAuthConfig = { adminApiToken: config.adminApiToken, jwtEnabled: Boolean(config.jwtAccessSecret) };
 
-  app.post("/device-management/export", async (request, reply) => {
-    if (!(await requirePermission(adminCfg, pg, request, reply, "data:export"))) return;
-    if (!pg) {
-      legacyFail(reply, 503, "PostgreSQL not configured");
-      return;
-    }
-
-    const parsed = legacyExportBodySchema.safeParse(request.body ?? {});
-    if (!parsed.success) {
-      legacyFail(reply, 400, "invalid body", { issues: parsed.error.issues });
-      return;
-    }
-
-    const inputDeviceId = (parsed.data.device_id ?? parsed.data.deviceId ?? "").trim() || "device_1";
-    const resolved = await resolveDeviceId(pg, inputDeviceId);
-    if (!resolved) {
-      legacyFail(reply, 404, "device not found");
-      return;
-    }
-
-    const range = parseLegacyExportRange({
-      export_type: parsed.data.export_type ?? "today",
-      start_date: parsed.data.start_date,
-      end_date: parsed.data.end_date
-    });
-    if (!range) {
-      legacyFail(reply, 400, "invalid time range");
-      return;
-    }
-
-    const format = parsed.data.format ?? "json";
-    const limit = Math.min(10000, Math.max(1, config.apiReplayMaxRows));
-
-    const rows = await fetchTelemetryRows(config, ch, resolved, range.start, range.end, limit, "desc");
-    const out = rows.map((r) => ({
-      receivedTs: clickhouseStringToIsoZ(r.received_ts),
-      sensorKey: r.sensor_key,
-      value: normalizeMetricValue(r)
-    }));
-
-    if (out.length === 0) {
-      void reply.code(404).send({ success: false, error: "没有找到数据" });
-      return;
-    }
-
-    if (format === "csv") {
-      const header = "receivedTs,sensorKey,value";
-      const lines: string[] = [header];
-      for (const r of out) {
-        const v =
-          r.value === null || r.value === undefined
-            ? ""
-            : typeof r.value === "string"
-              ? JSON.stringify(r.value)
-              : typeof r.value === "number" || typeof r.value === "boolean"
-                ? String(r.value)
-                : JSON.stringify(r.value);
-        lines.push(`${r.receivedTs},${r.sensorKey},${v}`);
-      }
-
-      void reply.header("Content-Type", "text/csv; charset=utf-8");
-      void reply.header(
-        "Content-Disposition",
-        `attachment; filename=\"device_${encodeURIComponent(inputDeviceId)}_${range.exportType}_${range.start.toISOString().slice(0, 10)}.csv\"`
-      );
-      void reply.code(200).send(lines.join("\n"));
-      return;
-    }
-
-    void reply.code(200).send({
-      success: true,
-      data: out,
-      meta: {
-        device_id: inputDeviceId,
-        export_type: range.exportType,
-        total_records: out.length,
-        export_time: new Date().toISOString(),
-        time_range: { start: range.start.toISOString(), end: range.end.toISOString() }
-      }
-    });
-  });
-
-  app.get("/device-management/export", async (request, reply) => {
+  app.get("/device-management/deformation/:deviceId", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
       legacyFail(reply, 503, "PostgreSQL not configured");
       return;
     }
 
-    const parsed = legacyExportQuerySchema.safeParse(request.query ?? {});
-    if (!parsed.success) {
+    const parsedParams = z.object({ deviceId: deviceIdSchema }).safeParse(request.params ?? {});
+    if (!parsedParams.success) {
+      legacyFail(reply, 400, "invalid deviceId");
+      return;
+    }
+
+    const parsedQuery = deformationLimitQuerySchema.safeParse(request.query ?? {});
+    if (!parsedQuery.success) {
       legacyFail(reply, 400, "invalid query");
       return;
     }
 
-    const inputDeviceId = (parsed.data.device_id ?? parsed.data.deviceId ?? "").trim() || "device_1";
-    const resolved = await resolveDeviceId(pg, inputDeviceId);
-    if (!resolved) {
-      legacyOk(reply, {
-        total_records: 0,
-        date_range: null,
-        today_records: 0,
-        this_week_records: 0,
-        this_month_records: 0
-      });
-      return;
-    }
+    const inputDeviceId = parsedParams.data.deviceId;
+    const limit = parsedQuery.data.limit ?? 50;
 
-    const now = new Date();
-    const today = utcStartOfDay(now);
-    const week = new Date(now.getTime() - 7 * 86400 * 1000);
-    const month = new Date(now.getTime() - 30 * 86400 * 1000);
-
-    const [minmax, total, todayCount, weekCount, monthCount] = await Promise.all([
-      telemetryMinMaxTs(config, ch, resolved),
-      telemetryCountInRange(config, ch, resolved, new Date(0), now),
-      telemetryCountInRange(config, ch, resolved, today, now),
-      telemetryCountInRange(config, ch, resolved, week, now),
-      telemetryCountInRange(config, ch, resolved, month, now)
-    ]);
-
-    legacyOk(reply, {
-      total_records: total,
-      date_range: minmax.min && minmax.max ? { earliest: minmax.min, latest: minmax.max } : null,
-      today_records: todayCount,
-      this_week_records: weekCount,
-      this_month_records: monthCount
-    });
-  });
-
-  app.post("/device-management/reports", async (request, reply) => {
-    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
-    if (!pg) {
-      legacyFail(reply, 503, "PostgreSQL not configured");
-      return;
-    }
-
-    const parsed = legacyReportBodySchema.safeParse(request.body ?? {});
-    if (!parsed.success) {
-      legacyFail(reply, 400, "invalid body", { issues: parsed.error.issues });
-      return;
-    }
-
-    const inputDeviceId = (parsed.data.device_id ?? parsed.data.deviceId ?? "").trim() || "device_1";
     const resolved = await resolveDeviceId(pg, inputDeviceId);
     if (!resolved) {
       legacyFail(reply, 404, "device not found");
       return;
     }
 
-    const range = parseLegacyReportRange({
-      report_type: parsed.data.report_type ?? "daily",
-      start_date: parsed.data.start_date,
-      end_date: parsed.data.end_date
-    });
-    if (!range) {
-      legacyFail(reply, 400, "invalid time range");
+    const baselineInfo = await fetchGpsBaselineInfo(pg, resolved);
+    if (!baselineInfo) {
+      void reply.code(400).send({ success: false, error: "设备未设置基准点", hasBaseline: false, timestamp: new Date().toISOString() });
       return;
     }
 
-    const totalRecords = await telemetryCountInRange(config, ch, resolved, range.start, range.end);
-    if (totalRecords === 0) {
-      void reply.code(404).send({ success: false, error: "指定时间范围内没有数据" });
+    const points = await fetchLatestGpsTelemetry(config, ch, resolved, limit);
+    if (points.length === 0) {
+      void reply.code(400).send({ success: false, error: "无GPS数据", hasData: false, timestamp: new Date().toISOString() });
       return;
     }
 
-    const totalMinutes = Math.max(1, Math.floor((range.end.getTime() - range.start.getTime()) / (60 * 1000)));
-    const minutesWithData = await distinctMinutesInRange(config, ch, resolved, range.start, range.end);
-    const dataCompleteness = Math.min(100, (minutesWithData / totalMinutes) * 100);
+    const computed = computeLegacyGpsRows(points, baselineInfo);
+    const rows = computed.rows;
+    const nowIso = new Date().toISOString();
 
-    const targetKeys = [
-      "temperature",
-      "humidity",
-      "acceleration_x",
-      "acceleration_y",
-      "acceleration_z",
-      "gyroscope_x",
-      "gyroscope_y",
-      "gyroscope_z"
-    ];
+    const distances = rows.map((r) => r.deformation_distance_3d);
+    const horizontals = rows.map((r) => Math.abs(r.deformation_horizontal));
+    const verticals = rows.map((r) => Math.abs(r.deformation_vertical));
 
-    const statsRows = await sensorStatsInRange(config, ch, resolved, range.start, range.end, targetKeys);
-    const statsByKey = new Map(statsRows.map((r) => [r.sensor_key, r]));
+    const maxDisplacement = distances.length > 0 ? Math.max(...distances) : 0;
+    const avgDisplacement = distances.length > 0 ? distances.reduce((a, b) => a + b, 0) / distances.length : 0;
+    const maxHorizontal = horizontals.length > 0 ? Math.max(...horizontals) : 0;
+    const maxVertical = verticals.length > 0 ? Math.max(...verticals) : 0;
 
-    const temperature = statsByKey.get("temperature") ?? null;
-    const humidity = statsByKey.get("humidity") ?? null;
+    const deformationType = analyzeDeformationType(maxDisplacement, maxHorizontal, maxVertical);
+    const trend = analyzeTrend([...distances].reverse());
 
-    const anomalies: { type: string; message: string; severity: "warning" | "critical" }[] = [];
-    if (temperature?.min != null && temperature?.max != null && (temperature.min < -10 || temperature.max > 60)) {
-      anomalies.push({
-        type: "temperature_out_of_range",
-        message: `温度超出正常范围: ${temperature.min}°C - ${temperature.max}°C`,
-        severity: "warning"
-      });
+    const latest = rows[0];
+    const previous = rows[1];
+    const velocity =
+      latest && previous
+        ? (() => {
+            const t0 = Date.parse(latest.event_time);
+            const t1 = Date.parse(previous.event_time);
+            const hours = Number.isFinite(t0) && Number.isFinite(t1) ? Math.max(0.0001, (t0 - t1) / (1000 * 60 * 60)) : 1;
+            return (latest.deformation_distance_3d - previous.deformation_distance_3d) / hours;
+          })()
+        : 0;
+
+    const confidence = rows.length > 0 ? rows.reduce((sum, r) => sum + r.deformation_confidence, 0) / rows.length : 0.9;
+    const quality = Math.min(1, rows.length / 20) * Math.min(1, confidence / 0.8);
+
+    const baseRisk = riskFromDisplacement(maxDisplacement);
+    let riskLevel = baseRisk.level;
+    const factors = [...baseRisk.factors];
+
+    if (Math.abs(velocity) > 0.001) {
+      riskLevel = Math.max(riskLevel, 1);
+      factors.push("形变速度较快");
     }
-    if (humidity?.min != null && humidity?.max != null && (humidity.min < 0 || humidity.max > 100)) {
-      anomalies.push({
-        type: "humidity_out_of_range",
-        message: `湿度超出正常范围: ${humidity.min}% - ${humidity.max}%`,
-        severity: "warning"
-      });
+    if (deformationType.code > 0) {
+      riskLevel = Math.max(riskLevel, 1);
+      factors.push(`检测到${deformationType.description}`);
+      if (deformationType.code === 3 || deformationType.code === 4) {
+        riskLevel = Math.max(riskLevel, 2);
+        factors.push("复杂形变模式");
+      }
     }
-    if (dataCompleteness < 50) {
-      anomalies.push({ type: "data_incomplete", message: `数据完整性不足: ${dataCompleteness.toFixed(1)}%`, severity: "critical" });
-    } else if (dataCompleteness < 80) {
-      anomalies.push({ type: "data_incomplete", message: `数据完整性不足: ${dataCompleteness.toFixed(1)}%`, severity: "warning" });
-    }
+    if (quality < 0.7) factors.push("数据质量较低");
 
-    const overall = anomalies.some((a) => a.severity === "critical") ? "critical" : anomalies.length > 0 ? "warning" : "healthy";
-
-    const formatStat = (r: SensorStatsRow | null) => {
-      if (!r) return null;
-      const c = typeof r.count === "string" ? Number(r.count) : r.count;
-      return {
-        min: r.min == null ? null : Math.round(r.min * 10) / 10,
-        max: r.max == null ? null : Math.round(r.max * 10) / 10,
-        avg: r.avg == null ? null : Math.round(r.avg * 10) / 10,
-        count: c
-      };
-    };
-
-    const baseReport = {
-      device_id: inputDeviceId,
-      report_type: range.reportType,
-      time_range: {
-        start: range.start.toISOString(),
-        end: range.end.toISOString(),
-        duration_hours: Math.round((range.end.getTime() - range.start.getTime()) / (60 * 60 * 1000))
-      },
-      data_summary: {
-        total_records: totalRecords,
-        data_completeness: Math.round(dataCompleteness * 100) / 100
-      },
-      sensor_statistics: {
-        temperature: formatStat(temperature),
-        humidity: formatStat(humidity)
-      },
-      device_status: {
-        overall,
-        anomalies_count: anomalies.length,
-        uptime_percentage: Math.round(dataCompleteness * 100) / 100
-      },
-      anomalies,
-      recommendations: [
-        ...(dataCompleteness < 90 ? ["检查设备网络连接稳定性"] : []),
-        ...(anomalies.length > 0 ? ["及时处理检测到的异常"] : []),
-        "定期进行设备维护检查",
-        "监控设备运行状态"
-      ],
-      generated_at: new Date().toISOString()
-    };
-
-    const aiAnalysis = {
-      summary: "数据分析完成，设备运行状态已生成报告。",
-      insights: ["本报告为系统基础分析（不依赖外部 AI 服务）", "可结合告警/趋势图进一步排查异常"],
-      recommendations: ["如需 AI 增强分析，请在 v2 侧单独接入并审计外部调用"]
-    };
+    const riskDescription =
+      riskLevel === 1 ? "I级红色" : riskLevel === 2 ? "II级橙色" : riskLevel === 3 ? "III级黄色" : riskLevel === 4 ? "IV级蓝色" : "正常";
 
     void reply.code(200).send({
       success: true,
-      data: {
-        ...baseReport,
-        ai_analysis: aiAnalysis,
-        enhanced_recommendations: [...baseReport.recommendations, ...aiAnalysis.recommendations]
-      }
+      deviceId: inputDeviceId,
+      timestamp: nowIso,
+      hasBaseline: true,
+      hasData: true,
+      baseline: {
+        latitude: baselineInfo.latitude,
+        longitude: baselineInfo.longitude,
+        established_time: baselineInfo.established_time,
+        established_by: baselineInfo.established_by
+      },
+      deformation: {
+        type: deformationType.type,
+        type_code: deformationType.code,
+        type_description: deformationType.description,
+        max_displacement: maxDisplacement,
+        avg_displacement: avgDisplacement,
+        horizontal_displacement: maxHorizontal,
+        vertical_displacement: maxVertical,
+        trend,
+        velocity,
+        risk_level: riskLevel,
+        risk_description: riskDescription,
+        risk_factors: factors,
+        data_quality: quality,
+        confidence,
+        data_count: rows.length
+      },
+      latest_data: latest
+        ? {
+            timestamp: latest.event_time,
+            latitude: latest.latitude,
+            longitude: latest.longitude,
+            displacement_3d: latest.deformation_distance_3d,
+            horizontal: latest.deformation_horizontal,
+            vertical: latest.deformation_vertical
+          }
+        : null
     });
   });
 
-  app.get("/device-management/reports", async (request, reply) => {
+  app.get("/device-management/deformation/:deviceId/trend", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
       legacyFail(reply, 503, "PostgreSQL not configured");
       return;
     }
 
-    const parsed = legacyReportQuerySchema.safeParse(request.query ?? {});
-    if (!parsed.success) {
+    const parsedParams = z.object({ deviceId: deviceIdSchema }).safeParse(request.params ?? {});
+    if (!parsedParams.success) {
+      legacyFail(reply, 400, "invalid deviceId");
+      return;
+    }
+    const parsedQuery = deformationTrendQuerySchema.safeParse(request.query ?? {});
+    if (!parsedQuery.success) {
       legacyFail(reply, 400, "invalid query");
       return;
     }
 
-    const inputDeviceId = (parsed.data.device_id ?? parsed.data.deviceId ?? "").trim() || "device_1";
+    const inputDeviceId = parsedParams.data.deviceId;
+    const days = parsedQuery.data.days ?? 7;
+    const limit = Math.min(days * 24, 500);
+
     const resolved = await resolveDeviceId(pg, inputDeviceId);
     if (!resolved) {
-      legacyOk(reply, {
-        available_types: [
-          { type: "daily", name: "日报告", description: "过去24小时的设备运行报告" },
-          { type: "weekly", name: "周报告", description: "过去7天的设备运行报告" },
-          { type: "monthly", name: "月报告", description: "过去30天的设备运行报告" },
-          { type: "custom", name: "自定义", description: "指定时间范围的设备运行报告" }
-        ],
-        data_range: { earliest: null, latest: null }
-      });
+      legacyFail(reply, 404, "device not found");
       return;
     }
 
-    const minmax = await telemetryMinMaxTs(config, ch, resolved);
+    const baselineInfo = await fetchGpsBaselineInfo(pg, resolved);
+    if (!baselineInfo) {
+      void reply.code(400).send({ success: false, error: "设备未设置基准点", hasBaseline: false, timestamp: new Date().toISOString() });
+      return;
+    }
 
-    legacyOk(reply, {
-      available_types: [
-        { type: "daily", name: "日报告", description: "过去24小时的设备运行报告" },
-        { type: "weekly", name: "周报告", description: "过去7天的设备运行报告" },
-        { type: "monthly", name: "月报告", description: "过去30天的设备运行报告" },
-        { type: "custom", name: "自定义", description: "指定时间范围的设备运行报告" }
-      ],
-      data_range: { earliest: minmax.min, latest: minmax.max }
+    const points = await fetchLatestGpsTelemetry(config, ch, resolved, limit);
+    if (points.length === 0) {
+      void reply.code(400).send({ success: false, error: "无GPS数据", hasData: false, timestamp: new Date().toISOString() });
+      return;
+    }
+
+    const computed = computeLegacyGpsRows(points, baselineInfo);
+    const rows = computed.rows;
+
+    const distances = rows.map((r) => r.deformation_distance_3d);
+    const maxDisplacement = distances.length > 0 ? Math.max(...distances) : 0;
+    const trend = analyzeTrend([...distances].reverse());
+
+    const latest = rows[0];
+    const previous = rows[1];
+    const velocity =
+      latest && previous
+        ? (() => {
+            const t0 = Date.parse(latest.event_time);
+            const t1 = Date.parse(previous.event_time);
+            const hours = Number.isFinite(t0) && Number.isFinite(t1) ? Math.max(0.0001, (t0 - t1) / (1000 * 60 * 60)) : 1;
+            return (latest.deformation_distance_3d - previous.deformation_distance_3d) / hours;
+          })()
+        : 0;
+
+    const deformationType = analyzeDeformationType(maxDisplacement, maxDisplacement, 0);
+    const risk = riskFromDisplacement(maxDisplacement);
+    let riskLevel = risk.level;
+    if (Math.abs(velocity) > 0.001 || deformationType.code > 0) riskLevel = Math.max(riskLevel, 1);
+    const riskDescription =
+      riskLevel === 1 ? "I级红色" : riskLevel === 2 ? "II级橙色" : riskLevel === 3 ? "III级黄色" : riskLevel === 4 ? "IV级蓝色" : "正常";
+
+    const confidence = rows.length > 0 ? rows.reduce((sum, r) => sum + r.deformation_confidence, 0) / rows.length : 0.9;
+    const quality = Math.min(1, rows.length / 20) * Math.min(1, confidence / 0.8);
+
+    void reply.code(200).send({
+      success: true,
+      deviceId: inputDeviceId,
+      timestamp: new Date().toISOString(),
+      trend: {
+        direction: trend,
+        velocity,
+        max_displacement: maxDisplacement,
+        risk_level: riskLevel,
+        risk_description: riskDescription
+      },
+      data_quality: quality,
+      data_count: rows.length
     });
   });
 
-  app.post("/device-management/diagnostics", async (request, reply) => {
+  app.get("/device-management/deformation/:deviceId/summary", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
       legacyFail(reply, 503, "PostgreSQL not configured");
       return;
     }
 
-    const parsed = legacyDiagnosticsBodySchema.safeParse(request.body ?? {});
-    if (!parsed.success) {
-      legacyFail(reply, 400, "invalid body", { issues: parsed.error.issues });
+    const parsedParams = z.object({ deviceId: deviceIdSchema }).safeParse(request.params ?? {});
+    if (!parsedParams.success) {
+      legacyFail(reply, 400, "invalid deviceId");
       return;
     }
 
-    const inputDeviceId = (parsed.data.device_id ?? parsed.data.deviceId ?? parsed.data.simple_id ?? parsed.data.simpleId ?? "").trim();
-    if (!inputDeviceId) {
-      legacyFail(reply, 400, "missing device_id");
-      return;
-    }
-
+    const inputDeviceId = parsedParams.data.deviceId;
     const resolved = await resolveDeviceId(pg, inputDeviceId);
     if (!resolved) {
       legacyFail(reply, 404, "device not found");
       return;
     }
 
-    const device = await fetchDeviceWithStation(pg, resolved);
-    if (!device) {
-      legacyFail(reply, 404, "device not found");
+    const baselineInfo = await fetchGpsBaselineInfo(pg, resolved);
+    if (!baselineInfo) {
+      void reply.code(400).send({ success: false, error: "设备未设置基准点", hasBaseline: false, timestamp: new Date().toISOString() });
       return;
     }
 
-    const now = new Date();
-    const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    const today = utcStartOfDay(now);
-
-    const baseline = await fetchGpsBaseline(pg, resolved);
-
-    let todayCount = 0;
-    try {
-      todayCount = await telemetryCountInRange(config, ch, resolved, today, now);
-    } catch {
-      todayCount = 0;
+    const points = await fetchLatestGpsTelemetry(config, ch, resolved, 20);
+    if (points.length === 0) {
+      void reply.code(400).send({ success: false, error: "无GPS数据", hasData: false, timestamp: new Date().toISOString() });
+      return;
     }
 
-    const online = onlineStatus(device.last_seen_at, device.status);
+    const computed = computeLegacyGpsRows(points, baselineInfo);
+    const rows = computed.rows;
 
-    const recent = await fetchTelemetryRows(config, ch, resolved, yesterday, now, 200, "desc");
-    const recentAsc = [...recent].reverse();
-    let maxGapMinutes = 0;
-    let gapCount = 0;
-    let sumGap = 0;
-    for (let i = 1; i < recentAsc.length; i++) {
-      const t0 = Date.parse(clickhouseStringToIsoZ(recentAsc[i - 1]?.received_ts ?? ""));
-      const t1 = Date.parse(clickhouseStringToIsoZ(recentAsc[i]?.received_ts ?? ""));
-      if (!Number.isFinite(t0) || !Number.isFinite(t1)) continue;
-      const gapMinutes = Math.max(0, (t1 - t0) / (1000 * 60));
-      if (gapMinutes > 5) {
-        gapCount += 1;
-        sumGap += gapMinutes;
-        if (gapMinutes > maxGapMinutes) maxGapMinutes = gapMinutes;
-      }
-    }
+    const distances = rows.map((r) => r.deformation_distance_3d);
+    const horizontals = rows.map((r) => Math.abs(r.deformation_horizontal));
+    const verticals = rows.map((r) => Math.abs(r.deformation_vertical));
 
-    const factors = {
-      online_status: online === "online" ? 30 : 0,
-      data_freshness: 0,
-      data_volume: 0,
-      baseline_status: baseline ? 15 : 0,
-      connection_stability: 0
-    };
+    const maxDisplacement = distances.length > 0 ? Math.max(...distances) : 0;
+    const maxHorizontal = horizontals.length > 0 ? Math.max(...horizontals) : 0;
+    const maxVertical = verticals.length > 0 ? Math.max(...verticals) : 0;
 
-    const lastSeen = device.last_seen_at ? Date.parse(device.last_seen_at) : NaN;
-    if (Number.isFinite(lastSeen)) {
-      const minutesSinceLast = (Date.now() - lastSeen) / (1000 * 60);
-      if (minutesSinceLast <= 5) factors.data_freshness = 25;
-      else if (minutesSinceLast <= 30) factors.data_freshness = 20;
-      else if (minutesSinceLast <= 120) factors.data_freshness = 10;
-    }
+    const deformationType = analyzeDeformationType(maxDisplacement, maxHorizontal, maxVertical);
+    const trend = analyzeTrend([...distances].reverse());
 
-    if (todayCount >= 100) factors.data_volume = 20;
-    else if (todayCount >= 50) factors.data_volume = 15;
-    else if (todayCount >= 10) factors.data_volume = 10;
-    else if (todayCount > 0) factors.data_volume = 5;
+    const latest = rows[0];
+    const previous = rows[1];
+    const velocity =
+      latest && previous
+        ? (() => {
+            const t0 = Date.parse(latest.event_time);
+            const t1 = Date.parse(previous.event_time);
+            const hours = Number.isFinite(t0) && Number.isFinite(t1) ? Math.max(0.0001, (t0 - t1) / (1000 * 60 * 60)) : 1;
+            return (latest.deformation_distance_3d - previous.deformation_distance_3d) / hours;
+          })()
+        : 0;
 
-    if (recentAsc.length > 0) {
-      if (maxGapMinutes <= 10) factors.connection_stability = 10;
-      else if (maxGapMinutes <= 30) factors.connection_stability = 7;
-      else if (maxGapMinutes <= 60) factors.connection_stability = 4;
-    }
+    const confidence = rows.length > 0 ? rows.reduce((sum, r) => sum + r.deformation_confidence, 0) / rows.length : 0.9;
+    const quality = Math.min(1, rows.length / 20) * Math.min(1, confidence / 0.8);
 
-    const healthScore = Object.values(factors).reduce((s, x) => s + x, 0);
-    const overall_status = healthScore >= 80 ? "healthy" : healthScore >= 50 ? "warning" : "error";
-
-    const recommendations: string[] = [];
-    if (online === "offline") recommendations.push("设备离线，检查设备电源和网络连接");
-    if (factors.data_freshness === 0) recommendations.push("数据更新延迟，检查数据采集系统");
-    if (factors.data_volume <= 5) recommendations.push("数据量偏低，检查传感器工作状态");
-    if (!baseline) recommendations.push("建议建立GPS基准点以启用形变监测");
-    if (factors.connection_stability <= 4) recommendations.push("连接不稳定，检查网络环境和信号强度");
-
-    const avgGapMinutes = gapCount > 0 ? sumGap / gapCount : 0;
+    const risk = riskFromDisplacement(maxDisplacement);
+    let riskLevel = risk.level;
+    if (Math.abs(velocity) > 0.001 || deformationType.code > 0) riskLevel = Math.max(riskLevel, 1);
+    const riskDescription =
+      riskLevel === 1 ? "I级红色" : riskLevel === 2 ? "II级橙色" : riskLevel === 3 ? "III级黄色" : riskLevel === 4 ? "IV级蓝色" : "正常";
 
     void reply.code(200).send({
       success: true,
-      data: {
-        overall_status,
-        health_score: Math.round(healthScore),
-        data_quality: todayCount > 0 ? "normal" : "poor",
-        connection_status: factors.connection_stability >= 7 ? "stable" : "unstable",
-        baseline_status: baseline ? "active" : "inactive",
-        performance_metrics: {
-          today_data_count: todayCount,
-          avg_response_time: online === "online" ? 80 : 0,
-          last_communication: device.last_seen_at ?? now.toISOString(),
-          data_gap_analysis: { maxGapMinutes: maxGapMinutes, avgGapMinutes, gapCount }
-        },
-        recommendations,
-        factors,
-        timestamp: now.toISOString()
-      },
-      timestamp: now.toISOString()
+      deviceId: inputDeviceId,
+      timestamp: new Date().toISOString(),
+      hasBaseline: true,
+      hasData: true,
+      deformation_type: deformationType.code,
+      deformation_type_description: deformationType.description,
+      max_displacement: maxDisplacement,
+      horizontal_displacement: maxHorizontal,
+      vertical_displacement: maxVertical,
+      risk_level: riskLevel,
+      risk_description: riskDescription,
+      trend,
+      velocity,
+      confidence,
+      data_quality: quality,
+      debug_info: {
+        raw_max_displacement: maxDisplacement,
+        raw_horizontal: maxHorizontal,
+        raw_vertical: maxVertical,
+        raw_velocity: velocity,
+        raw_confidence: confidence
+      }
     });
   });
 

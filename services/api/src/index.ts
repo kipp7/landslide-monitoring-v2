@@ -190,6 +190,32 @@ async function main(): Promise<void> {
     { prefix: "/api" }
   );
 
+  // Legacy-compatible prefix (reference system behind nginx): /iot/api/*
+  // Reference frontend often uses BACKEND_URL=http://.../iot and then calls `${BACKEND_URL}/api/...`.
+  app.register(
+    (api, _opts, done) => {
+      registerAnomalyAssessmentCompatRoutes(api, config, pg, { legacyResponse: true });
+      registerGpsBaselineLegacyCompatRoutes(api, config, ch, pg);
+      registerGpsDeformationLegacyCompatRoutes(api, config, ch, pg);
+      registerRealtimeLegacyCompatRoutes(api, config, ch, pg);
+      registerAiPredictionLegacyCompatRoutes(api, config, pg);
+      registerDeviceHealthExpertLegacyCompatRoutes(api, config, ch, pg);
+      registerLegacyDeviceManagementCompatRoutes(api, config, ch, pg);
+      done();
+    },
+    { prefix: "/iot/api" }
+  );
+
+  // Legacy telemetry ingest endpoint in the reference system is disabled; keep a safe explicit stub for compatibility.
+  app.post("/iot/huawei", async (_request, reply) => {
+    void reply.code(503).send({
+      "Status Code": 503,
+      message: "华为IoT数据接收功能已禁用",
+      timestamp: new Date().toISOString(),
+      disabled: true
+    });
+  });
+
   app.register((v1, _opts, done) => {
     registerAuthRoutes(v1, config, pg);
     registerUserRoutes(v1, config, pg);
