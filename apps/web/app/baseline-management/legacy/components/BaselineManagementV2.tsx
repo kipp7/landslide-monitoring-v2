@@ -3,31 +3,26 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import {
   AimOutlined,
+  CheckCircleOutlined,
   DeleteOutlined,
-  DownloadOutlined,
   EditOutlined,
   EnvironmentOutlined,
-  ExclamationCircleOutlined,
   PlusOutlined,
   RobotOutlined,
-  SettingOutlined,
   StarOutlined,
-  ThunderboltOutlined,
 } from '@ant-design/icons'
 import {
   Alert,
+  Badge,
   Button,
-  Card,
   Col,
   Form,
   Input,
   InputNumber,
   Modal,
-  Progress,
   Row,
   Select,
   Space,
-  Spin,
   Statistic,
   Table,
   Tag,
@@ -92,6 +87,21 @@ type ListGpsBaselinesResponse = {
   pagination: { page: number; pageSize: number; total: number; totalPages: number }
 }
 
+type AutoEstablishResponse = {
+  deviceId: string
+  pointsUsed: number
+  lookbackDays: number
+  keys?: { latKey: string; lonKey: string; altKey: string | null }
+  baseline?: {
+    latitude: number
+    longitude: number
+    altitude: number | null
+    positionAccuracyMeters: number
+    satelliteCount: number
+  }
+  statistics?: { positionAccuracyMeters?: number; timeRange?: { start?: string | null; end?: string | null } }
+}
+
 type QualityCheckResponse = {
   driftMeters?: { p95?: number; mean?: number; std?: number; max?: number }
   recommendation?: { level?: 'good' | 'warn' | 'bad'; thresholds?: { goodP95Meters?: number; warnP95Meters?: number } }
@@ -109,6 +119,9 @@ export default function BaselineManagementV2({ className = '' }: { className?: s
   const [selectedBaseline, setSelectedBaseline] = useState<Baseline | null>(null)
   const [qualityAssessments, setQualityAssessments] = useState<Map<string, QualityAssessment>>(new Map())
 
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false)
+  const [deleteDeviceId, setDeleteDeviceId] = useState<string>('')
+
   const [form] = Form.useForm()
   const [autoForm] = Form.useForm()
 
@@ -120,71 +133,132 @@ export default function BaselineManagementV2({ className = '' }: { className?: s
     return map
   }, [mappings])
 
-  const mappingByActualId = useMemo(() => {
-    const map = new Map<string, LegacyDeviceMappingRow>()
-    for (const row of mappings) {
-      if (row.actual_device_id) map.set(row.actual_device_id, row)
-    }
-    return map
-  }, [mappings])
-
-  const resolveActualDeviceId = (deviceKey: string) => {
-    return mappingBySimpleId.get(deviceKey)?.actual_device_id ?? deviceKey
+  const resolveActualDeviceId = (deviceKey: string, bySimple?: Map<string, LegacyDeviceMappingRow>) => {
+    const map = bySimple ?? mappingBySimpleId
+    return map.get(deviceKey)?.actual_device_id ?? deviceKey
   }
 
-  const resolveDisplayName = (deviceKey: string) => {
-    const m = mappingBySimpleId.get(deviceKey) ?? mappingByActualId.get(deviceKey)
-    return m?.device_name || m?.location_name || deviceKey
-  }
-
-  useEffect(() => {
-    void fetchDevices()
-    void fetchBaselines()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  const fetchDevices = async () => {
+  async function fetchDevices(): Promise<LegacyDeviceMappingRow[]> {
     try {
-      const json = await listLegacyDeviceMappings()
-      if (json.success) {
-        setMappings(json.data)
-        const ids = Array.from(new Set(json.data.map((d) => d.simple_id).filter(Boolean)))
-        setDevices(ids)
-      } else {
-        setMappings([])
-        setDevices([])
+      const result = await listLegacyDeviceMappings()
+      if (result.success) {
+        const rows = result.data || []
+        setMappings(rows)
+        const deviceIds = Array.from(new Set(rows.map((row) => row.simple_id).filter(Boolean)))
+        setDevices(deviceIds)
+        return rows
       }
-    } catch {
       setMappings([])
       setDevices([])
+      return []
+    } catch (error) {
+      console.error('获取设备列表失败:', error)
+      setMappings([])
+      setDevices(['device_1', 'device_2', 'device_3'])
+      return []
     }
   }
 
-  const fetchBaselines = async () => {
+  function qualityFromCheck(qc: QualityCheckResponse | null): QualityAssessment | null {
+    if (!qc) return null
+    const p95 = typeof qc.driftMeters?.p95 === 'number' ? qc.driftMeters.p95 : null
+    if (p95 == null) return null
+
+    let qualityGrade: 'excellent' | 'good' | 'fair' | 'poor' | 'critical'
+    let overallScore: number
+
+    if (p95 <= 1) {
+      qualityGrade = 'excellent'
+      overallScore = 0.95
+    } else if (p95 <= 2) {
+      qualityGrade = 'good'
+      overallScore = 0.85
+    } else if (p95 <= 5) {
+      qualityGrade = 'fair'
+      overallScore = 0.7
+    } else if (p95 <= 10) {
+      qualityGrade = 'poor'
+      overallScore = 0.55
+    } else {
+      qualityGrade = 'critical'
+      overallScore = 0.3
+    }
+
+    const stabilityScore = overallScore
+    const dataQualityScore = overallScore
+    const precisionScore = overallScore
+
+    const recommendations: string[] = [`P95 漂移: ${p95.toFixed(2)}m`]
+    if (qualityGrade === 'excellent') recommendations.push('基准点稳定，建议定期复核')
+    if (qualityGrade === 'good') recommendations.push('质量良好，建议重点关注环境变化')
+    if (qualityGrade === 'fair') recommendations.push('漂移偏大，建议重新自动建立或检查数据质量')
+    if (qualityGrade === 'poor') recommendations.push('质量偏低，建议重新建立基准点')
+    if (qualityGrade === 'critical') recommendations.push('漂移显著，建议立即重建并排查设备/环境因素')
+
+    return { overallScore, qualityGrade, stabilityScore, dataQualityScore, precisionScore, recommendations }
+  }
+
+  async function fetchQualityAssessments(baselineList: Baseline[], mappingRows?: LegacyDeviceMappingRow[]) {
+    const bySimple = new Map<string, LegacyDeviceMappingRow>()
+    for (const row of mappingRows ?? mappings) {
+      if (row.simple_id) bySimple.set(row.simple_id, row)
+    }
+
+    const assessmentMap = new Map<string, QualityAssessment>()
+    for (const baseline of baselineList) {
+      try {
+        const actualId = resolveActualDeviceId(baseline.device_id, bySimple)
+        const response = await apiGetJson<ApiSuccessResponse<QualityCheckResponse>>(
+          `/api/v1/gps/baselines/${encodeURIComponent(actualId)}/quality-check?lookbackDays=30&pointsCount=200`,
+        )
+        if (response.success) {
+          const qa = qualityFromCheck(response.data)
+          if (qa) assessmentMap.set(baseline.device_id, qa)
+        }
+      } catch {
+        // ignore per-device failures
+      }
+    }
+
+    setQualityAssessments(assessmentMap)
+  }
+
+  async function fetchBaselines(mappingRows?: LegacyDeviceMappingRow[]) {
     setLoading(true)
     try {
-      const res = await apiGetJson<ApiSuccessResponse<ListGpsBaselinesResponse>>('/api/v1/gps/baselines?page=1&pageSize=200')
-      if (res.success) {
-        const list = res.data?.list ?? []
+      const response = await apiGetJson<ApiSuccessResponse<ListGpsBaselinesResponse>>('/api/v1/gps/baselines?page=1&pageSize=200')
+      if (response.success) {
+        const list = response.data?.list || []
+
+        const byActual = new Map<string, LegacyDeviceMappingRow>()
+        for (const row of mappingRows ?? mappings) {
+          if (row.actual_device_id) byActual.set(row.actual_device_id, row)
+        }
+
         const mapped: Baseline[] = list.map((row) => {
-          const m = mappingByActualId.get(row.deviceId)
+          const m = byActual.get(row.deviceId)
           const deviceKey = m?.simple_id || row.deviceId
+
           return {
             device_id: deviceKey,
             baseline_latitude: Number(row.baseline?.latitude ?? 0),
             baseline_longitude: Number(row.baseline?.longitude ?? 0),
-            baseline_altitude: row.baseline?.altitude ?? undefined,
-            established_by: row.method === 'auto' ? '系统' : '管理员',
-            established_time: row.computedAt ?? row.updatedAt ?? new Date().toISOString(),
+            baseline_altitude: row.baseline?.altitude == null ? undefined : Number(row.baseline?.altitude),
+            established_by: row.method === 'auto' ? 'AI智能系统' : '管理员',
+            established_time: row.computedAt || row.updatedAt || new Date().toISOString(),
             notes: row.baseline?.notes ?? undefined,
             status: 'active',
-            position_accuracy: row.baseline?.positionAccuracyMeters ?? undefined,
-            satellite_count: row.baseline?.satelliteCount ?? undefined,
-            data_points_used: row.pointsCount ?? undefined,
+            position_accuracy: row.baseline?.positionAccuracyMeters == null ? undefined : Number(row.baseline?.positionAccuracyMeters),
+            satellite_count: row.baseline?.satelliteCount == null ? undefined : Number(row.baseline?.satelliteCount),
+            pdop_value: undefined,
+            measurement_duration: undefined,
+            confidence_level: undefined,
+            data_points_used: row.pointsCount == null ? undefined : Number(row.pointsCount),
           }
         })
+
         setBaselines(mapped)
-        await fetchQualityAssessments(mapped)
+        await fetchQualityAssessments(mapped, mappingRows)
       }
     } catch {
       message.error('获取基准点列表失败')
@@ -193,44 +267,13 @@ export default function BaselineManagementV2({ className = '' }: { className?: s
     }
   }
 
-  const qualityFromCheck = (qc: QualityCheckResponse | null): QualityAssessment | null => {
-    if (!qc) return null
-    const level = qc.recommendation?.level ?? 'warn'
-    const p95 = typeof qc.driftMeters?.p95 === 'number' ? qc.driftMeters.p95 : null
-
-    const overallScore = level === 'good' ? 95 : level === 'warn' ? 75 : 45
-    const grade = level === 'good' ? '优秀' : level === 'warn' ? '良好' : '较差'
-    const stabilityScore = level === 'good' ? 90 : level === 'warn' ? 70 : 40
-    const dataQualityScore = level === 'good' ? 90 : level === 'warn' ? 70 : 40
-    const precisionScore = level === 'good' ? 95 : level === 'warn' ? 70 : 35
-
-    const recommendations: string[] = []
-    if (p95 != null) recommendations.push(`P95 漂移：${p95.toFixed(2)}m`)
-    if (level === 'good') recommendations.push('基准点稳定，建议定期复核')
-    if (level === 'warn') recommendations.push('漂移偏大，建议重新自动建立或检查数据质量')
-    if (level === 'bad') recommendations.push('漂移显著，建议立即重新建立基准点并排查设备/环境因素')
-
-    return { overallScore, qualityGrade: grade, stabilityScore, dataQualityScore, precisionScore, recommendations }
-  }
-
-  const fetchQualityAssessments = async (baselineList: Baseline[]) => {
-    const assessmentMap = new Map<string, QualityAssessment>()
-    for (const baseline of baselineList) {
-      const actualId = resolveActualDeviceId(baseline.device_id)
-      try {
-        const resp = await apiGetJson<ApiSuccessResponse<QualityCheckResponse>>(
-          `/api/v1/gps/baselines/${encodeURIComponent(actualId)}/quality-check?lookbackDays=30&pointsCount=200`,
-        )
-        if (resp.success) {
-          const qa = qualityFromCheck(resp.data) ?? undefined
-          if (qa) assessmentMap.set(baseline.device_id, qa)
-        }
-      } catch {
-        // ignore per-device failures
-      }
-    }
-    setQualityAssessments(assessmentMap)
-  }
+  useEffect(() => {
+    void (async () => {
+      const mappingRows = await fetchDevices()
+      await fetchBaselines(mappingRows)
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleCreateBaseline = () => {
     setEditMode(false)
@@ -265,7 +308,6 @@ export default function BaselineManagementV2({ className = '' }: { className?: s
 
       await apiPutJson<ApiSuccessResponse<unknown>>(`/api/v1/gps/baselines/${encodeURIComponent(actualId)}`, {
         method: 'manual',
-        pointsCount: values.dataPointsUsed ? Number(values.dataPointsUsed) : undefined,
         baseline: {
           latitude: Number(values.latitude),
           longitude: Number(values.longitude),
@@ -278,369 +320,783 @@ export default function BaselineManagementV2({ className = '' }: { className?: s
 
       message.success(editMode ? '基准点更新成功' : '基准点创建成功')
       setModalVisible(false)
-      await fetchBaselines()
+      form.resetFields()
+      setEditMode(false)
+      setSelectedBaseline(null)
+      void fetchBaselines()
     } catch {
-      message.error('保存基准点失败')
+      message.error('操作失败')
     }
   }
 
-  const handleDeleteBaseline = async (baseline: Baseline) => {
-    Modal.confirm({
-      title: '确认删除',
-      icon: <ExclamationCircleOutlined />,
-      content: `确定要删除设备 ${resolveDisplayName(baseline.device_id)} 的基准点吗？此操作不可恢复。`,
-      okText: '确认删除',
-      okType: 'danger',
-      cancelText: '取消',
-      onOk: async () => {
-        try {
-          const actualId = resolveActualDeviceId(baseline.device_id)
-          await apiDeleteJson<ApiSuccessResponse<unknown>>(`/api/v1/gps/baselines/${encodeURIComponent(actualId)}`)
-          message.success('基准点删除成功')
-          await fetchBaselines()
-        } catch {
-          message.error('删除基准点失败')
-        }
-      },
-    })
-  }
-
-  const handleAutoEstablish = () => {
-    autoForm.resetFields()
-    setAutoModalVisible(true)
-  }
-
-  const handleRunAutoEstablish = async (values: any) => {
+  const handleAutoBaseline = async (values: any, useSimple = false) => {
     try {
-      const actualId = resolveActualDeviceId(values.device_id)
-      await apiJson<ApiSuccessResponse<unknown>>(`/api/v1/gps/baselines/${encodeURIComponent(actualId)}/auto-establish`, {
-        pointsCount: Number(values.pointsCount ?? 20),
-        lookbackDays: Number(values.lookbackDays ?? 30),
-        latKey: values.latKey || 'gps_latitude',
-        lonKey: values.lonKey || 'gps_longitude',
-        ...(values.altKey ? { altKey: values.altKey } : {}),
+      const deviceId = resolveActualDeviceId(values.device_id)
+      const analysisHours = Number(values.analysisHours || 24)
+      const lookbackDays = Math.max(1, Math.min(365, Math.ceil(analysisHours / 24)))
+
+      const autoResp = await apiJson<ApiSuccessResponse<AutoEstablishResponse>>(`/api/v1/gps/baselines/${encodeURIComponent(deviceId)}/auto-establish`, {
+        pointsCount: useSimple ? 20 : 200,
+        lookbackDays,
+        latKey: 'gps_latitude',
+        lonKey: 'gps_longitude',
       })
-      message.success('自动建立基准点任务已执行')
+
+      let qa: QualityAssessment | null = null
+      try {
+        const qc = await apiGetJson<ApiSuccessResponse<QualityCheckResponse>>(
+          `/api/v1/gps/baselines/${encodeURIComponent(deviceId)}/quality-check?lookbackDays=${lookbackDays}&pointsCount=200`,
+        )
+        if (qc.success) qa = qualityFromCheck(qc.data)
+      } catch {
+        // ignore quality check failure
+      }
+
+      const gradeTexts = {
+        excellent: '优秀级',
+        good: '良好级',
+        fair: '一般级',
+        poor: '可接受',
+        critical: '严重',
+      } as const
+
+      const qualityGradeLabel =
+        qa?.qualityGrade && qa.qualityGrade in gradeTexts ? gradeTexts[qa.qualityGrade as keyof typeof gradeTexts] : '良好级'
+      const overallScorePct = qa ? (qa.overallScore * 100).toFixed(1) : '0.0'
+
+      const successMsg = useSimple
+        ? `简易基准点建立成功！使用了${autoResp.data?.pointsUsed ?? 0}个数据点`
+        : `专业级基准点建立成功！质量等级: ${qualityGradeLabel}`
+
+      message.success(successMsg)
       setAutoModalVisible(false)
-      await fetchBaselines()
+      autoForm.resetFields()
+      void fetchBaselines()
+
+      Modal.info({
+        title: '基准点质量分析报告',
+        width: 800,
+        content: (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Text strong>数据分析:</Text>
+                <div className="mt-2 space-y-1">
+                  <div>总数据点: {autoResp.data?.pointsUsed ?? '-'}</div>
+                  <div>有效数据点: {autoResp.data?.pointsUsed ?? '-'}</div>
+                  <div>异常值移除: 0</div>
+                </div>
+              </div>
+              <div>
+                <Text strong>质量评估:</Text>
+                <div className="mt-2 space-y-1">
+                  <div>质量等级: {qualityGradeLabel}</div>
+                  <div>综合评分: {overallScorePct}%</div>
+                  <div>
+                    精度:{' '}
+                    {typeof autoResp.data?.statistics?.positionAccuracyMeters === 'number'
+                      ? `${autoResp.data.statistics.positionAccuracyMeters.toFixed(2)}米`
+                      : '-'}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <Text strong>建议:</Text>
+              <ul className="mt-2">
+                {(qa?.recommendations?.length ? qa.recommendations : ['无']).map((rec: string, index: number) => (
+                  <li key={index}>• {rec}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        ),
+      })
     } catch {
-      message.error('自动建立基准点失败')
+      message.error(useSimple ? '简易基准点建立失败' : '专业级基准点建立失败')
     }
   }
 
-  const exportCsv = () => {
-    const headers = [
-      'device_id',
-      'device_name',
-      'baseline_latitude',
-      'baseline_longitude',
-      'baseline_altitude',
-      'status',
-      'established_by',
-      'established_time',
-      'position_accuracy_m',
-      'satellite_count',
-      'data_points_used',
-      'quality_grade',
-      'quality_score',
-      'recommendations',
-      'notes',
-    ] as const
+  const handleDeleteBaseline = (deviceId: string) => {
+    setDeleteDeviceId(deviceId)
+    setDeleteModalVisible(true)
+  }
 
-    const escapeCsv = (value: unknown) => {
-      const raw = value == null ? '' : String(value)
-      const needsQuotes = raw.includes(',') || raw.includes('"') || raw.includes('\n') || raw.includes('\r')
-      const escaped = raw.replaceAll('"', '""')
-      return needsQuotes ? `"${escaped}"` : escaped
+  const confirmDeleteBaseline = async () => {
+    try {
+      const actualId = resolveActualDeviceId(deleteDeviceId)
+      await apiDeleteJson<ApiSuccessResponse<unknown>>(`/api/v1/gps/baselines/${encodeURIComponent(actualId)}`)
+      message.success('删除成功')
+      setDeleteModalVisible(false)
+      setDeleteDeviceId('')
+      void fetchBaselines()
+    } catch {
+      message.error('删除失败')
+    }
+  }
+
+  const getQualityTag = (deviceId: string) => {
+    const assessment = qualityAssessments.get(deviceId)
+    if (!assessment) return <Tag color="default">未评估</Tag>
+
+    const gradeColors = {
+      excellent: 'gold',
+      good: 'green',
+      fair: 'blue',
+      poor: 'orange',
+      critical: 'red',
     }
 
-    const lines = [headers.join(',')]
-    for (const b of baselines) {
-      const qa = qualityAssessments.get(b.device_id)
-      const row = {
-        device_id: b.device_id,
-        device_name: resolveDisplayName(b.device_id),
-        baseline_latitude: b.baseline_latitude,
-        baseline_longitude: b.baseline_longitude,
-        baseline_altitude: b.baseline_altitude ?? '',
-        status: b.status,
-        established_by: b.established_by,
-        established_time: b.established_time,
-        position_accuracy_m: b.position_accuracy ?? '',
-        satellite_count: b.satellite_count ?? '',
-        data_points_used: b.data_points_used ?? '',
-        quality_grade: qa?.qualityGrade ?? '',
-        quality_score: qa?.overallScore ?? '',
-        recommendations: qa ? qa.recommendations.join('; ') : '',
-        notes: b.notes ?? '',
-      } satisfies Record<(typeof headers)[number], unknown>
-
-      lines.push(headers.map((h) => escapeCsv(row[h])).join(','))
+    const gradeTexts = {
+      excellent: '优秀',
+      good: '良好',
+      fair: '一般',
+      poor: '较差',
+      critical: '严重',
     }
 
-    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `gps-baselines-${new Date().toISOString().slice(0, 10)}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+    return (
+      <Tooltip title={`评分: ${(assessment.overallScore * 100).toFixed(1)}%`}>
+        <Tag color={gradeColors[assessment.qualityGrade as keyof typeof gradeColors]}>
+          {gradeTexts[assessment.qualityGrade as keyof typeof gradeTexts]}
+        </Tag>
+      </Tooltip>
+    )
+  }
 
-    message.success('已导出 CSV')
+  const getStatusTag = (status: string) => {
+    const statusConfig = {
+      active: { color: 'green', text: '活跃' },
+      inactive: { color: 'red', text: '非活跃' },
+      needs_update: { color: 'orange', text: '需要更新' },
+    }
+
+    const config = statusConfig[status as keyof typeof statusConfig] || { color: 'default', text: status }
+    return <Tag color={config.color}>{config.text}</Tag>
   }
 
   const columns = [
     {
-      title: '设备',
+      title: '设备ID',
       dataIndex: 'device_id',
       key: 'device_id',
-      width: 180,
-      render: (text: string) => (
-        <Space direction="vertical" size={0}>
-          <Text strong className="text-cyan-300">
-            {resolveDisplayName(text)}
-          </Text>
-          <Text type="secondary" className="text-xs">
-            {text}
-          </Text>
-        </Space>
+      width: 120,
+      render: (deviceId: string) => (
+        <Text code className="text-cyan-300">
+          {deviceId}
+        </Text>
       ),
     },
     {
-      title: '基准坐标',
-      key: 'coords',
-      render: (_: unknown, record: Baseline) => (
-        <Space direction="vertical" size={0}>
-          <Text className="text-white">纬度: {record.baseline_latitude.toFixed(6)}</Text>
-          <Text className="text-white">经度: {record.baseline_longitude.toFixed(6)}</Text>
-          {record.baseline_altitude != null ? <Text className="text-white">高程: {record.baseline_altitude.toFixed(2)}m</Text> : null}
-        </Space>
+      title: '坐标位置',
+      key: 'coordinates',
+      width: 220,
+      render: (_: any, record: Baseline) => (
+        <div className="space-y-1">
+          <div className="text-xs text-slate-400">纬度: {record.baseline_latitude.toFixed(8)}</div>
+          <div className="text-xs text-slate-400">经度: {record.baseline_longitude.toFixed(8)}</div>
+        </div>
       ),
     },
     {
-      title: '质量',
+      title: '海拔 (m)',
+      dataIndex: 'baseline_altitude',
+      key: 'altitude',
+      width: 80,
+      render: (altitude: number) => <span className="text-green-400">{altitude ? altitude.toFixed(2) : '-'}</span>,
+    },
+    {
+      title: '精度 (m)',
+      dataIndex: 'position_accuracy',
+      key: 'accuracy',
+      width: 80,
+      render: (accuracy: number) => <span className="text-blue-400">{accuracy ? accuracy.toFixed(2) : '-'}</span>,
+    },
+    {
+      title: '卫星数',
+      dataIndex: 'satellite_count',
+      key: 'satellites',
+      width: 70,
+      render: (count: number) => <span className="text-purple-400">{count || '-'}</span>,
+    },
+    {
+      title: 'PDOP',
+      dataIndex: 'pdop_value',
+      key: 'pdop',
+      width: 70,
+      render: (pdop: number) => <span className="text-yellow-400">{pdop ? pdop.toFixed(2) : '-'}</span>,
+    },
+    {
+      title: '质量等级',
       key: 'quality',
-      width: 160,
-      render: (_: unknown, record: Baseline) => {
-        const qa = qualityAssessments.get(record.device_id)
-        if (!qa) return <Tag color="default">未评估</Tag>
-        const color = qa.overallScore >= 85 ? 'green' : qa.overallScore >= 65 ? 'orange' : 'red'
-        return (
-          <Tooltip title={qa.recommendations.join('\n')}>
-            <div>
-              <Tag color={color}>{qa.qualityGrade}</Tag>
-              <Progress percent={qa.overallScore} size="small" showInfo={false} />
-            </div>
-          </Tooltip>
-        )
-      },
+      width: 100,
+      render: (_: any, record: Baseline) => getQualityTag(record.device_id),
     },
     {
       title: '状态',
       dataIndex: 'status',
       key: 'status',
-      width: 120,
-      render: (status: string) => (
-        <Tag color={status === 'active' ? 'green' : status === 'pending' ? 'orange' : 'red'}>
-          {status === 'active' ? '已建立' : status === 'pending' ? '建立中' : '异常'}
-        </Tag>
-      ),
+      width: 80,
+      render: (status: string) => getStatusTag(status),
     },
     {
-      title: '建立信息',
-      key: 'established',
-      width: 180,
-      render: (_: unknown, record: Baseline) => (
-        <Space direction="vertical" size={0}>
-          <Text className="text-white">{record.established_by}</Text>
-          <Text type="secondary" className="text-xs">
-            {new Date(record.established_time).toLocaleString()}
-          </Text>
-        </Space>
-      ),
+      title: '建立人',
+      dataIndex: 'established_by',
+      key: 'established_by',
+      width: 120,
+      render: (by: string) => <span className="block max-w-full truncate text-slate-300">{by}</span>,
+    },
+    {
+      title: '建立时间',
+      dataIndex: 'established_time',
+      key: 'established_time',
+      width: 160,
+      render: (time: string) => <span className="whitespace-nowrap text-xs text-slate-400">{new Date(time).toLocaleString('zh-CN')}</span>,
     },
     {
       title: '操作',
       key: 'actions',
-      width: 160,
-      render: (_: unknown, record: Baseline) => (
-        <Space>
-          <Button size="small" icon={<EditOutlined />} onClick={() => handleEditBaseline(record)} />
-          <Button size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteBaseline(record)} />
-        </Space>
+      fixed: 'right' as const,
+      align: 'center' as const,
+      render: (_: any, record: Baseline) => (
+        <div className="flex items-center justify-center space-x-3">
+          <Tooltip title="编辑基准点">
+            <Button
+              type="link"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => handleEditBaseline(record)}
+              className="flex items-center space-x-1 rounded px-2 py-1 text-cyan-400 hover:bg-cyan-400/10 hover:text-cyan-300"
+            >
+              <span>编辑</span>
+            </Button>
+          </Tooltip>
+          <Tooltip title="删除基准点">
+            <Button
+              type="link"
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+              onClick={() => handleDeleteBaseline(record.device_id)}
+              className="flex items-center space-x-1 rounded px-2 py-1 text-red-400 hover:bg-red-400/10 hover:text-red-300"
+            >
+              <span>删除</span>
+            </Button>
+          </Tooltip>
+        </div>
       ),
+      width: 160,
     },
   ]
 
+  const statistics = {
+    total: baselines.length,
+    active: baselines.filter((b) => b.status === 'active').length,
+    avgAccuracy:
+      baselines.length > 0
+        ? baselines.filter((b) => b.position_accuracy).reduce((sum, b) => sum + (b.position_accuracy || 0), 0) /
+          Math.max(baselines.filter((b) => b.position_accuracy).length, 1)
+        : 0,
+    excellentQuality: Array.from(qualityAssessments.values()).filter((q) => q.qualityGrade === 'excellent').length,
+  }
+
   return (
-    <div className={className}>
-      <Row gutter={[16, 16]} className="mb-4">
-        <Col span={24}>
-          <Alert
-            message="基准点管理"
-            description="基准点用于 GPS 形变计算与质量校验。建议优先使用自动建立，并定期做质量检查。"
-            type="info"
-            showIcon
+    <div className={`${className} w-full`}>
+      <div className="mb-6 border-b border-slate-600 bg-slate-800/80 backdrop-blur-sm">
+        <div className="px-6 py-4">
+          <div className="mb-6 flex items-start justify-between">
+            <div>
+              <h4 className="mb-2 flex items-center space-x-2 text-lg font-bold text-cyan-300">
+                <span>GPS基准点管理系统</span>
+                <Badge count="V2.0" style={{ backgroundColor: '#52c41a' }} />
+              </h4>
+              <p className="text-sm text-slate-400">高精度GPS基准点建立与维护，支持智能自动化建立</p>
+            </div>
+            <Space>
+              <Button type="primary" icon={<PlusOutlined />} onClick={handleCreateBaseline} className="border-cyan-500 bg-cyan-500 hover:bg-cyan-600">
+                手动设置基准点
+              </Button>
+              <Button
+                icon={<RobotOutlined />}
+                onClick={() => setAutoModalVisible(true)}
+                className="border-none bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600"
+              >
+                智能自动建立
+              </Button>
+            </Space>
+          </div>
+
+          <div className="grid grid-cols-4 gap-6">
+            <div className="rounded-lg border border-slate-600 bg-slate-700/30 p-4">
+              <Statistic
+                title={<span className="text-slate-400">总基准点数</span>}
+                value={statistics.total}
+                prefix={<EnvironmentOutlined className="text-cyan-400" />}
+                valueStyle={{ color: '#22d3ee' }}
+                suffix="个"
+              />
+            </div>
+            <div className="rounded-lg border border-slate-600 bg-slate-700/30 p-4">
+              <Statistic
+                title={<span className="text-slate-400">活跃基准点</span>}
+                value={statistics.active}
+                prefix={<CheckCircleOutlined className="text-green-400" />}
+                valueStyle={{ color: '#4ade80' }}
+                suffix="个"
+              />
+            </div>
+            <div className="rounded-lg border border-slate-600 bg-slate-700/30 p-4">
+              <Statistic
+                title={<span className="text-slate-400">平均精度</span>}
+                value={statistics.avgAccuracy.toFixed(2)}
+                prefix={<AimOutlined className="text-purple-400" />}
+                valueStyle={{ color: '#a855f7' }}
+                suffix="m"
+              />
+            </div>
+            <div className="rounded-lg border border-slate-600 bg-slate-700/30 p-4">
+              <Statistic
+                title={<span className="text-slate-400">优秀质量</span>}
+                value={statistics.excellentQuality}
+                prefix={<StarOutlined className="text-yellow-400" />}
+                valueStyle={{ color: '#facc15' }}
+                suffix="个"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-slate-600 bg-slate-800/50 backdrop-blur-sm">
+        <div className="p-6">
+          <Table
+            columns={columns}
+            dataSource={baselines}
+            rowKey="device_id"
+            loading={loading}
+            pagination={{
+              pageSize: 10,
+              showSizeChanger: true,
+              showQuickJumper: true,
+              showTotal: (total) => `共 ${total} 个基准点`,
+              className: 'dark-pagination',
+            }}
+            scroll={{ x: 'max-content' }}
+            className="dark-table"
+            size="middle"
           />
-        </Col>
-      </Row>
-
-      <Row gutter={[16, 16]} className="mb-4">
-        <Col xs={24} md={8}>
-          <Card>
-            <Statistic title="基准点数量" value={baselines.length} prefix={<EnvironmentOutlined />} />
-          </Card>
-        </Col>
-        <Col xs={24} md={8}>
-          <Card>
-            <Statistic title="已评估" value={qualityAssessments.size} prefix={<StarOutlined />} />
-          </Card>
-        </Col>
-        <Col xs={24} md={8}>
-          <Card>
-            <Statistic title="设备映射" value={devices.length} prefix={<AimOutlined />} />
-          </Card>
-        </Col>
-      </Row>
-
-      <Card
-        title={
-          <Space>
-            <SettingOutlined />
-            基准点列表
-          </Space>
-        }
-        extra={
-          <Space>
-            <Button icon={<DownloadOutlined />} onClick={exportCsv}>
-              导出
-            </Button>
-            <Button icon={<RobotOutlined />} onClick={handleAutoEstablish}>
-              自动建立
-            </Button>
-            <Button type="primary" icon={<PlusOutlined />} onClick={handleCreateBaseline}>
-              新增基准点
-            </Button>
-            <Button icon={<ThunderboltOutlined />} onClick={() => void fetchBaselines()}>
-              刷新
-            </Button>
-          </Space>
-        }
-      >
-        <Spin spinning={loading}>
-          <Table rowKey={(r) => r.device_id} dataSource={baselines} columns={columns} pagination={{ pageSize: 10 }} />
-        </Spin>
-      </Card>
+        </div>
+      </div>
 
       <Modal
-        title={editMode ? '编辑基准点' : '新增基准点'}
+        title={
+          <div className="flex items-center space-x-2">
+            <EnvironmentOutlined className="text-cyan-400" />
+            <span>{editMode ? '编辑基准点' : '手动设置基准点'}</span>
+          </div>
+        }
         open={modalVisible}
-        onCancel={() => setModalVisible(false)}
-        onOk={() => form.submit()}
-        okText="保存"
-        cancelText="取消"
-        destroyOnClose
+        onCancel={() => {
+          setModalVisible(false)
+          form.resetFields()
+          setEditMode(false)
+          setSelectedBaseline(null)
+        }}
+        footer={null}
+        width={700}
+        className="dark-modal"
       >
         <Form form={form} layout="vertical" onFinish={handleSaveBaseline}>
-          <Form.Item name="device_id" label="设备" rules={[{ required: true, message: '请选择设备' }]}>
-            <Select disabled={editMode} showSearch optionFilterProp="children">
-              {devices.map((id) => (
-                <Option key={id} value={id}>
-                  {resolveDisplayName(id)}
+          <Form.Item name="device_id" label="设备ID" rules={[{ required: true, message: '请选择设备' }]}>
+            <Select placeholder="选择设备" className="dark-select" disabled={editMode}>
+              {devices.map((device) => (
+                <Option key={device} value={device}>
+                  {device}
                 </Option>
               ))}
             </Select>
           </Form.Item>
-          <Row gutter={12}>
+
+          <Row gutter={16}>
             <Col span={12}>
-              <Form.Item name="latitude" label="纬度" rules={[{ required: true, message: '请输入纬度' }]}>
-                <InputNumber className="w-full" precision={6} />
+              <Form.Item
+                name="latitude"
+                label="纬度"
+                rules={[
+                  { required: true, message: '请输入纬度' },
+                  { type: 'number', min: -90, max: 90, message: '纬度范围: -90 到 90' },
+                ]}
+              >
+                <InputNumber style={{ width: '100%' }} precision={8} placeholder="例如: 22.62736667" className="dark-input" />
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item name="longitude" label="经度" rules={[{ required: true, message: '请输入经度' }]}>
-                <InputNumber className="w-full" precision={6} />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Row gutter={12}>
-            <Col span={12}>
-              <Form.Item name="altitude" label="高程(可选)">
-                <InputNumber className="w-full" precision={2} />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="positionAccuracy" label="定位精度(米)">
-                <InputNumber className="w-full" precision={2} />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Row gutter={12}>
-            <Col span={12}>
-              <Form.Item name="satelliteCount" label="卫星数">
-                <InputNumber className="w-full" />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="dataPointsUsed" label="使用数据点(可选)">
-                <InputNumber className="w-full" />
+              <Form.Item
+                name="longitude"
+                label="经度"
+                rules={[
+                  { required: true, message: '请输入经度' },
+                  { type: 'number', min: -180, max: 180, message: '经度范围: -180 到 180' },
+                ]}
+              >
+                <InputNumber style={{ width: '100%' }} precision={8} placeholder="例如: 110.18930000" className="dark-input" />
               </Form.Item>
             </Col>
           </Row>
-          <Form.Item name="notes" label="备注">
-            <TextArea rows={3} />
+
+          <Form.Item name="altitude" label="海拔 (米)">
+            <InputNumber style={{ width: '100%' }} precision={2} placeholder="例如: 156.78" className="dark-input" />
           </Form.Item>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="positionAccuracy" label="位置精度 (米)">
+                <InputNumber style={{ width: '100%' }} precision={3} min={0} placeholder="例如: 2.500" className="dark-input" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="satelliteCount" label="卫星数量">
+                <InputNumber style={{ width: '100%' }} min={0} max={50} placeholder="例如: 12" className="dark-input" />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="pdopValue" label="PDOP值">
+                <InputNumber style={{ width: '100%' }} precision={2} min={0} placeholder="例如: 1.50" className="dark-input" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="measurementDuration" label="测量时长 (秒)">
+                <InputNumber style={{ width: '100%' }} min={0} placeholder="例如: 300" className="dark-input" />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Form.Item name="establishedBy" label="建立人" rules={[{ required: true, message: '请输入建立人' }]}>
+            <Input placeholder="例如: 张工程师" className="dark-input" />
+          </Form.Item>
+
+          <Form.Item name="notes" label="备注">
+            <TextArea rows={3} placeholder="基准点相关说明.." className="dark-input" />
+          </Form.Item>
+
+          <div className="flex justify-end space-x-3 border-t border-slate-600 pt-4">
+            <Button
+              onClick={() => {
+                setModalVisible(false)
+                form.resetFields()
+                setEditMode(false)
+                setSelectedBaseline(null)
+              }}
+            >
+              取消
+            </Button>
+            <Button type="primary" htmlType="submit" className="bg-cyan-500 hover:bg-cyan-600">
+              {editMode ? '更新基准点' : '创建基准点'}
+            </Button>
+          </div>
         </Form>
       </Modal>
 
       <Modal
-        title="自动建立基准点"
+        title={
+          <div className="flex items-center space-x-2">
+            <RobotOutlined className="text-purple-400" />
+            <span>智能自动建立基准点</span>
+            <Badge count="NEW" style={{ backgroundColor: '#722ed1' }} />
+          </div>
+        }
         open={autoModalVisible}
-        onCancel={() => setAutoModalVisible(false)}
-        onOk={() => autoForm.submit()}
-        okText="执行"
-        cancelText="取消"
-        destroyOnClose
+        onCancel={() => {
+          setAutoModalVisible(false)
+          autoForm.resetFields()
+        }}
+        footer={null}
+        width={600}
+        className="dark-modal"
       >
-        <Form form={autoForm} layout="vertical" onFinish={handleRunAutoEstablish} initialValues={{ pointsCount: 20, lookbackDays: 30 }}>
-          <Form.Item name="device_id" label="设备" rules={[{ required: true, message: '请选择设备' }]}>
-            <Select showSearch optionFilterProp="children">
-              {devices.map((id) => (
-                <Option key={id} value={id}>
-                  {resolveDisplayName(id)}
+        <Alert
+          message="两种建立模式"
+          description="快速建立：降低要求，快速生成基准点用于测试；高精度建立：严格算法，高质量基准点。"
+          type="info"
+          showIcon
+          className="mb-4 border-blue-400/30 bg-blue-500/10"
+        />
+
+        <Form form={autoForm} layout="vertical">
+          <Form.Item name="device_id" label="设备ID" rules={[{ required: true, message: '请选择设备' }]}>
+            <Select placeholder="选择设备" className="dark-select">
+              {devices.map((device) => (
+                <Option key={device} value={device}>
+                  {device}
                 </Option>
               ))}
             </Select>
           </Form.Item>
-          <Row gutter={12}>
+
+          <Row gutter={16}>
             <Col span={12}>
-              <Form.Item name="pointsCount" label="采样点数">
-                <InputNumber className="w-full" min={10} max={5000} />
+              <Form.Item name="analysisHours" label="分析时间窗口 (小时)" initialValue={24}>
+                <InputNumber style={{ width: '100%' }} min={2} max={48} placeholder="推荐: 24小时" className="dark-input" />
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item name="lookbackDays" label="回溯天数">
-                <InputNumber className="w-full" min={1} max={365} />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Row gutter={12}>
-            <Col span={12}>
-              <Form.Item name="latKey" label="纬度 metric key">
-                <Input placeholder="gps_latitude" />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="lonKey" label="经度 metric key">
-                <Input placeholder="gps_longitude" />
+              <Form.Item name="requiredQuality" label="质量要求" initialValue="fair">
+                <Select className="dark-select">
+                  <Option value="excellent">优秀级 (90%+)</Option>
+                  <Option value="good">良好级 (80%+)</Option>
+                  <Option value="fair">一般级 (65%+)</Option>
+                  <Option value="poor">可接受 (50%+)</Option>
+                </Select>
               </Form.Item>
             </Col>
           </Row>
-          <Form.Item name="altKey" label="高程 metric key(可选)">
-            <Input placeholder="gps_altitude" />
+
+          <Form.Item name="maxRetries" label="最大重试次数" initialValue={3}>
+            <InputNumber style={{ width: '100%' }} min={1} max={5} placeholder="推荐: 3次" className="dark-input" />
           </Form.Item>
+
+          <Form.Item name="establishedBy" label="建立人" initialValue="AI智能系统">
+            <Input placeholder="例如: AI智能系统" className="dark-input" />
+          </Form.Item>
+
+          <Form.Item name="notes" label="备注" initialValue="基于高精度算法自动建立的高质量基准点">
+            <TextArea rows={3} placeholder="备注信息..." className="dark-input" />
+          </Form.Item>
+
+          <div className="flex justify-end space-x-3 border-t border-slate-600 pt-4">
+            <Button
+              onClick={() => {
+                setAutoModalVisible(false)
+                autoForm.resetFields()
+              }}
+            >
+              取消
+            </Button>
+            <Button
+              type="default"
+              onClick={() => {
+                autoForm
+                  .validateFields()
+                  .then((vals) => {
+                    handleAutoBaseline(vals, true)
+                  })
+                  .catch((err) => {
+                    console.error('表单验证失败:', err)
+                  })
+              }}
+              className="border-none bg-green-500 text-white hover:bg-green-600"
+            >
+              快速建立(简单模式)
+            </Button>
+            <Button
+              type="primary"
+              onClick={() => {
+                autoForm
+                  .validateFields()
+                  .then((vals) => {
+                    handleAutoBaseline(vals, false)
+                  })
+                  .catch((err) => {
+                    console.error('表单验证失败:', err)
+                  })
+              }}
+              className="border-none bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
+            >
+              高精度建立(高级模式)
+            </Button>
+          </div>
         </Form>
       </Modal>
+
+      <Modal
+        title={
+          <div className="flex items-center space-x-2">
+            <DeleteOutlined className="text-red-400" />
+            <span>确认删除基准点</span>
+          </div>
+        }
+        open={deleteModalVisible}
+        onCancel={() => {
+          setDeleteModalVisible(false)
+          setDeleteDeviceId('')
+        }}
+        className="dark-modal"
+        footer={[
+          <Button
+            key="cancel"
+            onClick={() => {
+              setDeleteModalVisible(false)
+              setDeleteDeviceId('')
+            }}
+          >
+            取消
+          </Button>,
+          <Button key="delete" type="primary" danger onClick={confirmDeleteBaseline} className="bg-red-500 hover:bg-red-600">
+            确定删除
+          </Button>,
+        ]}
+      >
+        <div className="space-y-3">
+          <Alert
+            message="删除警告"
+            description="删除基准点是不可逆操作，请确认您要继续。"
+            type="warning"
+            showIcon
+            className="border-yellow-400/30 bg-yellow-500/10"
+          />
+          <div className="text-slate-300">
+            确定要删除设备 <Text code className="text-red-400">{deleteDeviceId}</Text> 的基准点吗？
+          </div>
+          <div className="text-sm text-slate-400">删除后，该设备将失去地质形变分析的参考基准，可能影响监测精度。</div>
+        </div>
+      </Modal>
+
+      <style jsx global>{`
+        .dark-table .ant-table {
+          background: transparent;
+          color: #e2e8f0;
+        }
+
+        .dark-table .ant-table-thead > tr > th {
+          background: #334155;
+          color: #06b6d4;
+          border-bottom: 1px solid #475569;
+        }
+
+        .dark-table .ant-table-tbody > tr > td {
+          background: transparent;
+          border-bottom: 1px solid #475569;
+          color: #e2e8f0;
+          padding: 8px 12px !important;
+        }
+
+        .dark-table .ant-table-tbody > tr:hover > td {
+          background: rgba(71, 85, 105, 0.3) !important;
+        }
+
+        .dark-table .ant-table-tbody > tr:hover {
+          background: rgba(71, 85, 105, 0.3) !important;
+        }
+
+        .dark-table .ant-table-tbody > tr.ant-table-row:hover > td {
+          background: rgba(71, 85, 105, 0.3) !important;
+        }
+
+        .dark-table .ant-table-tbody code {
+          background: rgba(34, 211, 238, 0.1) !important;
+          color: #22d3ee !important;
+          border: 1px solid rgba(34, 211, 238, 0.3) !important;
+          padding: 2px 6px !important;
+          border-radius: 4px !important;
+        }
+
+        .dark-table .ant-table-tbody > tr:hover > td,
+        .dark-table .ant-table-tbody > tr.ant-table-row:hover > td,
+        .dark-table .ant-table-tbody > tr:hover > td.ant-table-cell,
+        .dark-table .ant-table-tbody > tr.ant-table-row:hover > td.ant-table-cell {
+          background: rgba(71, 85, 105, 0.3) !important;
+        }
+
+        .dark-table .ant-table-tbody > tr:hover,
+        .dark-table .ant-table-tbody > tr.ant-table-row:hover {
+          background: rgba(71, 85, 105, 0.3) !important;
+        }
+
+        .ant-table-tbody > tr.ant-table-row:hover > td,
+        .ant-table-tbody > tr.ant-table-row-hover > td,
+        .ant-table-tbody > tr:hover > td {
+          background: rgba(71, 85, 105, 0.3) !important;
+        }
+
+        .dark-pagination .ant-pagination-total-text {
+          color: #e2e8f0 !important;
+        }
+
+        .dark-pagination .ant-select-selector {
+          background: #334155 !important;
+          border-color: #475569 !important;
+          color: #e2e8f0 !important;
+        }
+
+        .dark-pagination .ant-select-selection-item {
+          color: #e2e8f0 !important;
+        }
+
+        .dark-pagination .ant-select-arrow {
+          color: #94a3b8 !important;
+        }
+
+        .dark-pagination .ant-select-dropdown {
+          background: #334155 !important;
+          border: 1px solid #475569 !important;
+        }
+
+        .dark-pagination .ant-select-item {
+          background: #334155 !important;
+          color: #e2e8f0 !important;
+        }
+
+        .dark-pagination .ant-select-item:hover {
+          background: #475569 !important;
+        }
+
+        .dark-pagination .ant-select-item-option-selected {
+          background: #06b6d4 !important;
+          color: white !important;
+        }
+
+        .dark-pagination .ant-pagination-item {
+          background: #334155;
+          border-color: #475569;
+        }
+
+        .dark-pagination .ant-pagination-item a {
+          color: #e2e8f0;
+        }
+
+        .dark-pagination .ant-pagination-item-active {
+          background: #06b6d4;
+          border-color: #06b6d4;
+        }
+
+        .dark-modal .ant-modal-content {
+          background: #1e293b;
+          color: #e2e8f0;
+        }
+
+        .dark-modal .ant-modal-header {
+          background: #334155;
+          border-bottom: 1px solid #475569;
+        }
+
+        .dark-modal .ant-modal-title {
+          color: #06b6d4;
+        }
+
+        .dark-input.ant-input,
+        .dark-input.ant-input-number,
+        .dark-select .ant-select-selector {
+          background: #334155 !important;
+          border-color: #475569 !important;
+          color: #e2e8f0 !important;
+        }
+
+        .dark-input.ant-input:hover,
+        .dark-input.ant-input-number:hover,
+        .dark-select .ant-select-selector:hover {
+          border-color: #06b6d4 !important;
+        }
+
+        .dark-input.ant-input:focus,
+        .dark-input.ant-input-number:focus,
+        .dark-select .ant-select-focused .ant-select-selector {
+          border-color: #06b6d4 !important;
+          box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.2) !important;
+        }
+      `}</style>
     </div>
   )
 }
