@@ -169,10 +169,10 @@ function legacyBaselineFromRow(row: LegacyBaselineJoinRow, deviceKeyOverride?: s
     device_id: deviceKey,
     baseline_latitude: latitude,
     baseline_longitude: longitude,
-    baseline_altitude: altitude == null ? null : altitude,
+    baseline_altitude: altitude ?? null,
     established_by: establishedBy || (row.method === "auto" ? "系统自动建立" : "管理员"),
     established_time,
-    notes,
+    ...(notes ? { notes } : {}),
     status: "active",
     ...(positionAccuracyMeters == null ? {} : { position_accuracy: positionAccuracyMeters }),
     ...(measurementDuration == null ? {} : { measurement_duration: measurementDuration }),
@@ -666,8 +666,9 @@ export function registerGpsBaselineLegacyCompatRoutes(
       where.push(sql.replaceAll("$X", "$" + String(params.length)));
     };
 
-    if (keyword && keyword.trim()) {
-      const k = `%${keyword.trim()}%`;
+    const keywordTrimmed = keyword?.trim();
+    if (keywordTrimmed) {
+      const k = `%${keywordTrimmed}%`;
       add(
         "(d.device_name ILIKE $X OR d.metadata->>'legacy_device_id' ILIKE $X OR d.metadata#>>'{externalIds,legacy}' ILIKE $X)",
         k
@@ -829,14 +830,17 @@ export function registerGpsBaselineLegacyCompatRoutes(
       return;
     }
 
+    const notes = body.notes?.trim();
+    const establishedBy = body.establishedBy?.trim();
+
     const baseline: Record<string, unknown> = {
       latitude,
       longitude,
       ...(body.altitude == null ? {} : { altitude: body.altitude }),
       ...(body.positionAccuracy == null ? {} : { positionAccuracyMeters: body.positionAccuracy }),
       ...(body.satelliteCount == null ? {} : { satelliteCount: body.satelliteCount }),
-      ...(body.notes && body.notes.trim() ? { notes: body.notes.trim() } : {}),
-      ...(body.establishedBy && body.establishedBy.trim() ? { establishedBy: body.establishedBy.trim() } : {}),
+      ...(notes ? { notes } : {}),
+      ...(establishedBy ? { establishedBy } : {}),
       ...(body.measurementDuration == null ? {} : { measurementDuration: body.measurementDuration }),
       ...(body.pdopValue == null ? {} : { pdopValue: body.pdopValue })
     };
