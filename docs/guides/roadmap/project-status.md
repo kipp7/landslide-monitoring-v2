@@ -7,7 +7,8 @@
 - 每次合并一个 PR 到 `main`，如果它改变了项目阶段/里程碑/下一步，必须更新本页。
 - 本页只记录“当前状态与下一步”，历史细节放到 `docs/incidents/` 或 PR/commit 记录中。
 
-最后更新时间：2025-12-25（WS-K.8：legacy `/api/baselines` CRUD 兼容；WS-K.7：legacy `/api/gps-deformation/:deviceId` 兼容端点；e2e：Stage4Regression 修复 health-check 端口同步；WS-G.3：/ops/debug-api 补齐“一键连通性测试”（/health + /huawei/*；危险 POST 需二次确认）；阶段 5 已完成：固件模拟器 + Stage5Regression 回归基线；硬件联调待启动）
+最后更新时间：2025-12-25（legacy `/iot/api/*`：补齐旧后端在 nginx `/iot` 前缀下访问 `/api/*` 的等价别名；WS-K.8：legacy `/api/baselines` CRUD 兼容；WS-K.7：legacy `/api/gps-deformation/:deviceId` 兼容端点；e2e：Stage4Regression 修复 health-check 端口同步；WS-G.3：/ops/debug-api 补齐“一键连通性测试”（/health + /huawei/*；危险 POST 需二次确认）；阶段 5 已完成：固件模拟器 + Stage5Regression 回归基线；硬件联调待启动）
+- 2025-12-25：Legacy `/iot/api/*`：为所有 legacy `/api/*` 兼容层增加 `/iot/api/*` 等价别名（对齐参考区在 nginx 前缀 `/iot` 下的访问方式），并补齐 `/api/camera`（此前仅注册了 `/camera`）。
 - 2025-12-25：WS-K.8（legacy `/api/baselines` CRUD）：PR #226，补齐 legacy baselines CRUD（列表/查询/创建/更新/删除），并支持 legacy deviceId → UUID 映射（devices.metadata.legacy_device_id / devices.metadata.externalIds.legacy）。
 - 2025-12-25：WS-K.7（legacy `/api/gps-deformation/:deviceId`）：PR #227，增加兼容端点（legacy deviceId → UUID 映射；基于 ClickHouse + baseline 计算位移/速度序列；不包含参考区 CEEMD/AI 分析结果）。
 - 2025-12-25：修复 e2e smoke（`-Stage4Regression`）：`infra/compose/scripts/e2e-smoke-test.ps1` 在写入 `services/api/.env` 后重新读取 `API_PORT`，避免 health check 端口与 API 实际监听端口不一致导致误报失败。
