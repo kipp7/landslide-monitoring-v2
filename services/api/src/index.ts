@@ -26,6 +26,7 @@ import { registerUserRoutes } from "./routes/users";
 import { registerGpsBaselineRoutes } from "./routes/gps-baselines";
 import { registerGpsBaselineAdvancedRoutes, registerGpsBaselineLegacyCompatRoutes } from "./routes/gps-baselines-advanced";
 import { registerGpsDeformationRoutes } from "./routes/gps-deformations";
+import { registerGpsDeformationLegacyCompatRoutes } from "./routes/gps-deformation-legacy";
 import { registerAnomalyAssessmentCompatRoutes } from "./routes/anomaly-assessment";
 import { registerRealtimeLegacyCompatRoutes, registerRealtimeRoutes } from "./routes/realtime";
 import { registerHuaweiLegacyCompatRoutes } from "./routes/huawei-legacy";
@@ -179,6 +180,7 @@ async function main(): Promise<void> {
     (api, _opts, done) => {
       registerAnomalyAssessmentCompatRoutes(api, config, pg, { legacyResponse: true });
       registerGpsBaselineLegacyCompatRoutes(api, config, ch, pg);
+      registerGpsDeformationLegacyCompatRoutes(api, config, ch, pg);
       registerRealtimeLegacyCompatRoutes(api, config, ch, pg);
       registerAiPredictionLegacyCompatRoutes(api, config, pg);
       registerDeviceHealthExpertLegacyCompatRoutes(api, config, ch, pg);
