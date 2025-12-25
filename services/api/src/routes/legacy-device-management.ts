@@ -81,6 +81,46 @@ type BaselineInfo = z.infer<typeof baselineSchema> & {
   established_by: string;
 };
 
+const legacyExportBodySchema = z
+  .object({
+    device_id: z.string().optional(),
+    deviceId: z.string().optional(),
+    export_type: z.enum(["today", "history", "custom"]).optional(),
+    start_date: z.string().optional(),
+    end_date: z.string().optional(),
+    format: z.enum(["json", "csv"]).optional()
+  })
+  .strict();
+
+const legacyExportQuerySchema = z.object({
+  device_id: z.string().optional(),
+  deviceId: z.string().optional()
+});
+
+const legacyReportBodySchema = z
+  .object({
+    device_id: z.string().optional(),
+    deviceId: z.string().optional(),
+    report_type: z.enum(["daily", "weekly", "monthly", "custom"]).optional(),
+    start_date: z.string().optional(),
+    end_date: z.string().optional()
+  })
+  .strict();
+
+const legacyReportQuerySchema = z.object({
+  device_id: z.string().optional(),
+  deviceId: z.string().optional()
+});
+
+const legacyDiagnosticsBodySchema = z
+  .object({
+    device_id: z.string().optional(),
+    deviceId: z.string().optional(),
+    simple_id: z.string().optional(),
+    simpleId: z.string().optional()
+  })
+  .strict();
+
 function utcStartOfDay(d: Date): Date {
   const x = new Date(d.getTime());
   x.setUTCHours(0, 0, 0, 0);
@@ -97,6 +137,208 @@ function clickhouseStringToIsoZ(ts: string): string {
   if (t.includes("T") && !t.endsWith("Z")) return t + "Z";
   if (t.includes(" ")) return t.replace(" ", "T") + "Z";
   return t;
+}
+
+function normalizeMetricValue(row: {
+  value_f64?: number | null;
+  value_i64?: number | null;
+  value_str?: string | null;
+  value_bool?: number | null;
+}): unknown {
+  if (row.value_f64 != null) return row.value_f64;
+  if (row.value_i64 != null) return row.value_i64;
+  if (row.value_bool != null) return row.value_bool === 1;
+  if (row.value_str != null) return row.value_str;
+  return null;
+}
+
+function parseLegacyExportRange(body: {
+  export_type?: "today" | "history" | "custom";
+  start_date?: string | undefined;
+  end_date?: string | undefined;
+}): { start: Date; end: Date; exportType: "today" | "history" | "custom" } | null {
+  const exportType = body.export_type ?? "today";
+  const now = new Date();
+  if (exportType === "today") {
+    return { start: utcStartOfDay(now), end: now, exportType };
+  }
+  if (exportType === "history") {
+    return { start: new Date(now.getTime() - 30 * 86400 * 1000), end: now, exportType };
+  }
+  const start = body.start_date ? new Date(body.start_date) : null;
+  const end = body.end_date ? new Date(body.end_date) : null;
+  if (!start || !end) return null;
+  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) return null;
+  if (!(start < end)) return null;
+  return { start, end, exportType };
+}
+
+function parseLegacyReportRange(body: {
+  report_type?: "daily" | "weekly" | "monthly" | "custom";
+  start_date?: string | undefined;
+  end_date?: string | undefined;
+}): { start: Date; end: Date; reportType: "daily" | "weekly" | "monthly" | "custom" } | null {
+  const reportType = body.report_type ?? "daily";
+  const now = new Date();
+  if (reportType === "daily") {
+    return { start: utcStartOfDay(now), end: now, reportType };
+  }
+  if (reportType === "weekly") {
+    return { start: new Date(now.getTime() - 7 * 86400 * 1000), end: now, reportType };
+  }
+  if (reportType === "monthly") {
+    return { start: new Date(now.getTime() - 30 * 86400 * 1000), end: now, reportType };
+  }
+  const start = body.start_date ? new Date(body.start_date) : null;
+  const end = body.end_date ? new Date(body.end_date) : null;
+  if (!start || !end) return null;
+  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) return null;
+  if (!(start < end)) return null;
+  return { start, end, reportType };
+}
+
+type TelemetryRow = {
+  received_ts: string;
+  sensor_key: string;
+  value_f64: number | null;
+  value_i64: number | null;
+  value_str: string | null;
+  value_bool: number | null;
+};
+
+async function fetchTelemetryRows(
+  config: AppConfig,
+  ch: ClickHouseClient,
+  deviceId: string,
+  start: Date,
+  end: Date,
+  limit: number,
+  order: "asc" | "desc"
+): Promise<TelemetryRow[]> {
+  const sql = `
+    SELECT
+      toString(received_ts) AS received_ts,
+      sensor_key,
+      value_f64,
+      value_i64,
+      value_str,
+      value_bool
+    FROM ${config.clickhouseDatabase}.${config.clickhouseTable}
+    WHERE device_id = {deviceId:String}
+      AND received_ts >= {start:DateTime64(3, 'UTC')}
+      AND received_ts <= {end:DateTime64(3, 'UTC')}
+    ORDER BY received_ts ${order === "asc" ? "ASC" : "DESC"}
+    LIMIT {limit:UInt32}
+  `;
+
+  const res = await ch.query({
+    query: sql,
+    query_params: {
+      deviceId,
+      start: toClickhouseDateTime64Utc(start),
+      end: toClickhouseDateTime64Utc(end),
+      limit
+    },
+    format: "JSONEachRow"
+  });
+
+  return res.json<TelemetryRow>();
+}
+
+async function telemetryCountInRange(config: AppConfig, ch: ClickHouseClient, deviceId: string, start: Date, end: Date): Promise<number> {
+  const sql = `
+    SELECT
+      count() AS c
+    FROM ${config.clickhouseDatabase}.${config.clickhouseTable}
+    WHERE device_id = {deviceId:String}
+      AND received_ts >= {start:DateTime64(3, 'UTC')}
+      AND received_ts <= {end:DateTime64(3, 'UTC')}
+  `;
+  const res = await ch.query({
+    query: sql,
+    query_params: { deviceId, start: toClickhouseDateTime64Utc(start), end: toClickhouseDateTime64Utc(end) },
+    format: "JSONEachRow"
+  });
+  const rows: { c: number | string }[] = await res.json();
+  const c = rows[0]?.c ?? 0;
+  return typeof c === "string" ? Number(c) : c;
+}
+
+async function telemetryMinMaxTs(
+  config: AppConfig,
+  ch: ClickHouseClient,
+  deviceId: string
+): Promise<{ min: string | null; max: string | null }> {
+  const sql = `
+    SELECT
+      toString(min(received_ts)) AS min_ts,
+      toString(max(received_ts)) AS max_ts
+    FROM ${config.clickhouseDatabase}.${config.clickhouseTable}
+    WHERE device_id = {deviceId:String}
+  `;
+  const res = await ch.query({ query: sql, query_params: { deviceId }, format: "JSONEachRow" });
+  const rows: { min_ts: string; max_ts: string }[] = await res.json();
+  const r = rows[0];
+  if (!r) return { min: null, max: null };
+  const min = r.min_ts.trim() ? clickhouseStringToIsoZ(r.min_ts) : null;
+  const max = r.max_ts.trim() ? clickhouseStringToIsoZ(r.max_ts) : null;
+  return { min, max };
+}
+
+async function distinctMinutesInRange(config: AppConfig, ch: ClickHouseClient, deviceId: string, start: Date, end: Date): Promise<number> {
+  const sql = `
+    SELECT
+      countDistinct(toStartOfMinute(received_ts)) AS m
+    FROM ${config.clickhouseDatabase}.${config.clickhouseTable}
+    WHERE device_id = {deviceId:String}
+      AND received_ts >= {start:DateTime64(3, 'UTC')}
+      AND received_ts <= {end:DateTime64(3, 'UTC')}
+  `;
+  const res = await ch.query({
+    query: sql,
+    query_params: { deviceId, start: toClickhouseDateTime64Utc(start), end: toClickhouseDateTime64Utc(end) },
+    format: "JSONEachRow"
+  });
+  const rows: { m: number | string }[] = await res.json();
+  const m = rows[0]?.m ?? 0;
+  return typeof m === "string" ? Number(m) : m;
+}
+
+type SensorStatsRow = { sensor_key: string; min: number | null; max: number | null; avg: number | null; count: number | string };
+
+async function sensorStatsInRange(
+  config: AppConfig,
+  ch: ClickHouseClient,
+  deviceId: string,
+  start: Date,
+  end: Date,
+  sensorKeys: string[]
+): Promise<SensorStatsRow[]> {
+  if (sensorKeys.length === 0) return [];
+
+  const sql = `
+    SELECT
+      sensor_key,
+      min(coalesce(value_f64, toFloat64(value_i64))) AS min,
+      max(coalesce(value_f64, toFloat64(value_i64))) AS max,
+      avg(coalesce(value_f64, toFloat64(value_i64))) AS avg,
+      count() AS count
+    FROM ${config.clickhouseDatabase}.${config.clickhouseTable}
+    WHERE device_id = {deviceId:String}
+      AND sensor_key IN {sensorKeys:Array(String)}
+      AND received_ts >= {start:DateTime64(3, 'UTC')}
+      AND received_ts <= {end:DateTime64(3, 'UTC')}
+      AND (isNotNull(value_f64) OR isNotNull(value_i64))
+    GROUP BY sensor_key
+  `;
+
+  const res = await ch.query({
+    query: sql,
+    query_params: { deviceId, sensorKeys, start: toClickhouseDateTime64Utc(start), end: toClickhouseDateTime64Utc(end) },
+    format: "JSONEachRow"
+  });
+
+  return res.json<SensorStatsRow>();
 }
 
 function haversineMeters(aLat: number, aLon: number, bLat: number, bLon: number): number {
@@ -820,6 +1062,430 @@ export function registerLegacyDeviceManagementCompatRoutes(
         raw_velocity: velocity,
         raw_confidence: confidence
       }
+    });
+  });
+
+  app.post("/device-management/export", async (request, reply) => {
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:export"))) return;
+    if (!pg) {
+      legacyFail(reply, 503, "PostgreSQL not configured");
+      return;
+    }
+
+    const parsed = legacyExportBodySchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      legacyFail(reply, 400, "invalid body", { issues: parsed.error.issues });
+      return;
+    }
+
+    const inputDeviceId = (parsed.data.device_id ?? parsed.data.deviceId ?? "").trim() || "device_1";
+    const resolved = await resolveDeviceId(pg, inputDeviceId);
+    if (!resolved) {
+      legacyFail(reply, 404, "device not found");
+      return;
+    }
+
+    const range = parseLegacyExportRange({
+      export_type: parsed.data.export_type ?? "today",
+      start_date: parsed.data.start_date,
+      end_date: parsed.data.end_date
+    });
+    if (!range) {
+      legacyFail(reply, 400, "invalid time range");
+      return;
+    }
+
+    const format = parsed.data.format ?? "json";
+    const limit = Math.min(10000, Math.max(1, config.apiReplayMaxRows));
+
+    const rows = await fetchTelemetryRows(config, ch, resolved, range.start, range.end, limit, "desc");
+    const out = rows.map((r) => ({
+      receivedTs: clickhouseStringToIsoZ(r.received_ts),
+      sensorKey: r.sensor_key,
+      value: normalizeMetricValue(r)
+    }));
+
+    if (out.length === 0) {
+      void reply.code(404).send({ success: false, error: "没有找到数据" });
+      return;
+    }
+
+    if (format === "csv") {
+      const header = "receivedTs,sensorKey,value";
+      const lines: string[] = [header];
+      for (const r of out) {
+        const v =
+          r.value === null || r.value === undefined
+            ? ""
+            : typeof r.value === "string"
+              ? JSON.stringify(r.value)
+              : typeof r.value === "number" || typeof r.value === "boolean"
+                ? String(r.value)
+                : JSON.stringify(r.value);
+        lines.push(`${r.receivedTs},${r.sensorKey},${v}`);
+      }
+
+      void reply.header("Content-Type", "text/csv; charset=utf-8");
+      void reply.header(
+        "Content-Disposition",
+        `attachment; filename="device_${encodeURIComponent(inputDeviceId)}_${range.exportType}_${range.start.toISOString().slice(0, 10)}.csv"`
+      );
+      void reply.code(200).send(lines.join("\n"));
+      return;
+    }
+
+    void reply.code(200).send({
+      success: true,
+      data: out,
+      meta: {
+        device_id: inputDeviceId,
+        export_type: range.exportType,
+        total_records: out.length,
+        export_time: new Date().toISOString(),
+        time_range: { start: range.start.toISOString(), end: range.end.toISOString() }
+      }
+    });
+  });
+
+  app.get("/device-management/export", async (request, reply) => {
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
+    if (!pg) {
+      legacyFail(reply, 503, "PostgreSQL not configured");
+      return;
+    }
+
+    const parsed = legacyExportQuerySchema.safeParse(request.query ?? {});
+    if (!parsed.success) {
+      legacyFail(reply, 400, "invalid query");
+      return;
+    }
+
+    const inputDeviceId = (parsed.data.device_id ?? parsed.data.deviceId ?? "").trim() || "device_1";
+    const resolved = await resolveDeviceId(pg, inputDeviceId);
+    if (!resolved) {
+      legacyOk(reply, {
+        total_records: 0,
+        date_range: null,
+        today_records: 0,
+        this_week_records: 0,
+        this_month_records: 0
+      });
+      return;
+    }
+
+    const now = new Date();
+    const today = utcStartOfDay(now);
+    const week = new Date(now.getTime() - 7 * 86400 * 1000);
+    const month = new Date(now.getTime() - 30 * 86400 * 1000);
+
+    const [minmax, total, todayCount, weekCount, monthCount] = await Promise.all([
+      telemetryMinMaxTs(config, ch, resolved),
+      telemetryCountInRange(config, ch, resolved, new Date(0), now),
+      telemetryCountInRange(config, ch, resolved, today, now),
+      telemetryCountInRange(config, ch, resolved, week, now),
+      telemetryCountInRange(config, ch, resolved, month, now)
+    ]);
+
+    legacyOk(reply, {
+      total_records: total,
+      date_range: minmax.min && minmax.max ? { earliest: minmax.min, latest: minmax.max } : null,
+      today_records: todayCount,
+      this_week_records: weekCount,
+      this_month_records: monthCount
+    });
+  });
+
+  app.post("/device-management/reports", async (request, reply) => {
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
+    if (!pg) {
+      legacyFail(reply, 503, "PostgreSQL not configured");
+      return;
+    }
+
+    const parsed = legacyReportBodySchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      legacyFail(reply, 400, "invalid body", { issues: parsed.error.issues });
+      return;
+    }
+
+    const inputDeviceId = (parsed.data.device_id ?? parsed.data.deviceId ?? "").trim() || "device_1";
+    const resolved = await resolveDeviceId(pg, inputDeviceId);
+    if (!resolved) {
+      legacyFail(reply, 404, "device not found");
+      return;
+    }
+
+    const range = parseLegacyReportRange({
+      report_type: parsed.data.report_type ?? "daily",
+      start_date: parsed.data.start_date,
+      end_date: parsed.data.end_date
+    });
+    if (!range) {
+      legacyFail(reply, 400, "invalid time range");
+      return;
+    }
+
+    const totalRecords = await telemetryCountInRange(config, ch, resolved, range.start, range.end);
+    if (totalRecords === 0) {
+      void reply.code(404).send({ success: false, error: "指定时间范围内没有数据" });
+      return;
+    }
+
+    const totalMinutes = Math.max(1, Math.floor((range.end.getTime() - range.start.getTime()) / (60 * 1000)));
+    const minutesWithData = await distinctMinutesInRange(config, ch, resolved, range.start, range.end);
+    const dataCompleteness = Math.min(100, (minutesWithData / totalMinutes) * 100);
+
+    const targetKeys = [
+      "temperature",
+      "humidity",
+      "acceleration_x",
+      "acceleration_y",
+      "acceleration_z",
+      "gyroscope_x",
+      "gyroscope_y",
+      "gyroscope_z"
+    ];
+
+    const statsRows = await sensorStatsInRange(config, ch, resolved, range.start, range.end, targetKeys);
+    const statsByKey = new Map(statsRows.map((r) => [r.sensor_key, r]));
+
+    const temperature = statsByKey.get("temperature") ?? null;
+    const humidity = statsByKey.get("humidity") ?? null;
+
+    const anomalies: { type: string; message: string; severity: "warning" | "critical" }[] = [];
+    const temperatureMin = temperature?.min ?? null;
+    const temperatureMax = temperature?.max ?? null;
+    if (temperatureMin != null && temperatureMax != null && (temperatureMin < -10 || temperatureMax > 60)) {
+      anomalies.push({
+        type: "temperature_out_of_range",
+        message: `温度超出正常范围: ${temperatureMin.toFixed(1)}°C - ${temperatureMax.toFixed(1)}°C`,
+        severity: "warning"
+      });
+    }
+    const humidityMin = humidity?.min ?? null;
+    const humidityMax = humidity?.max ?? null;
+    if (humidityMin != null && humidityMax != null && (humidityMin < 0 || humidityMax > 100)) {
+      anomalies.push({
+        type: "humidity_out_of_range",
+        message: `湿度超出正常范围: ${humidityMin.toFixed(1)}% - ${humidityMax.toFixed(1)}%`,
+        severity: "warning"
+      });
+    }
+    if (dataCompleteness < 50) {
+      anomalies.push({ type: "data_incomplete", message: `数据完整性不足: ${dataCompleteness.toFixed(1)}%`, severity: "critical" });
+    } else if (dataCompleteness < 80) {
+      anomalies.push({ type: "data_incomplete", message: `数据完整性不足: ${dataCompleteness.toFixed(1)}%`, severity: "warning" });
+    }
+
+    const overall = anomalies.some((a) => a.severity === "critical") ? "critical" : anomalies.length > 0 ? "warning" : "healthy";
+
+    const formatStat = (r: SensorStatsRow | null) => {
+      if (!r) return null;
+      const c = typeof r.count === "string" ? Number(r.count) : r.count;
+      return {
+        min: r.min == null ? null : Math.round(r.min * 10) / 10,
+        max: r.max == null ? null : Math.round(r.max * 10) / 10,
+        avg: r.avg == null ? null : Math.round(r.avg * 10) / 10,
+        count: c
+      };
+    };
+
+    const baseReport = {
+      device_id: inputDeviceId,
+      report_type: range.reportType,
+      time_range: {
+        start: range.start.toISOString(),
+        end: range.end.toISOString(),
+        duration_hours: Math.round((range.end.getTime() - range.start.getTime()) / (60 * 60 * 1000))
+      },
+      data_summary: {
+        total_records: totalRecords,
+        data_completeness: Math.round(dataCompleteness * 100) / 100
+      },
+      sensor_statistics: {
+        temperature: formatStat(temperature),
+        humidity: formatStat(humidity)
+      },
+      device_status: {
+        overall,
+        anomalies_count: anomalies.length,
+        uptime_percentage: Math.round(dataCompleteness * 100) / 100
+      },
+      anomalies,
+      recommendations: [
+        ...(dataCompleteness < 90 ? ["检查设备网络连接稳定性"] : []),
+        ...(anomalies.length > 0 ? ["及时处理检测到的异常"] : []),
+        "定期进行设备维护检查",
+        "监控设备运行状态"
+      ],
+      generated_at: new Date().toISOString()
+    };
+
+    void reply.code(200).send({ success: true, data: baseReport });
+  });
+
+  app.get("/device-management/reports", async (request, reply) => {
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
+    if (!pg) {
+      legacyFail(reply, 503, "PostgreSQL not configured");
+      return;
+    }
+
+    const parsed = legacyReportQuerySchema.safeParse(request.query ?? {});
+    if (!parsed.success) {
+      legacyFail(reply, 400, "invalid query");
+      return;
+    }
+
+    const inputDeviceId = (parsed.data.device_id ?? parsed.data.deviceId ?? "").trim() || "device_1";
+    const resolved = await resolveDeviceId(pg, inputDeviceId);
+    if (!resolved) {
+      legacyOk(reply, {
+        available_types: [
+          { type: "daily", name: "日报告", description: "过去24小时的设备运行报告" },
+          { type: "weekly", name: "周报告", description: "过去7天的设备运行报告" },
+          { type: "monthly", name: "月报告", description: "过去30天的设备运行报告" },
+          { type: "custom", name: "自定义", description: "指定时间范围的设备运行报告" }
+        ],
+        data_range: { earliest: null, latest: null }
+      });
+      return;
+    }
+
+    const minmax = await telemetryMinMaxTs(config, ch, resolved);
+
+    legacyOk(reply, {
+      available_types: [
+        { type: "daily", name: "日报告", description: "过去24小时的设备运行报告" },
+        { type: "weekly", name: "周报告", description: "过去7天的设备运行报告" },
+        { type: "monthly", name: "月报告", description: "过去30天的设备运行报告" },
+        { type: "custom", name: "自定义", description: "指定时间范围的设备运行报告" }
+      ],
+      data_range: { earliest: minmax.min, latest: minmax.max }
+    });
+  });
+
+  app.post("/device-management/diagnostics", async (request, reply) => {
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
+    if (!pg) {
+      legacyFail(reply, 503, "PostgreSQL not configured");
+      return;
+    }
+
+    const parsed = legacyDiagnosticsBodySchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      legacyFail(reply, 400, "invalid body", { issues: parsed.error.issues });
+      return;
+    }
+
+    const inputDeviceId = (parsed.data.device_id ?? parsed.data.deviceId ?? parsed.data.simple_id ?? parsed.data.simpleId ?? "").trim();
+    if (!inputDeviceId) {
+      legacyFail(reply, 400, "missing device_id");
+      return;
+    }
+
+    const resolved = await resolveDeviceId(pg, inputDeviceId);
+    if (!resolved) {
+      legacyFail(reply, 404, "device not found");
+      return;
+    }
+
+    const device = await fetchDeviceWithStation(pg, resolved);
+    if (!device) {
+      legacyFail(reply, 404, "device not found");
+      return;
+    }
+
+    const now = new Date();
+    const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const today = utcStartOfDay(now);
+
+    const baseline = await fetchGpsBaseline(pg, resolved);
+
+    let todayCount = 0;
+    try {
+      todayCount = await telemetryCountInRange(config, ch, resolved, today, now);
+    } catch {
+      todayCount = 0;
+    }
+
+    const online = onlineStatus(device.last_seen_at, device.status);
+
+    const recent = await fetchTelemetryRows(config, ch, resolved, yesterday, now, 200, "desc");
+    const recentAsc = [...recent].reverse();
+    let maxGapMinutes = 0;
+    let gapCount = 0;
+    let sumGap = 0;
+    for (let i = 1; i < recentAsc.length; i++) {
+      const t0 = Date.parse(clickhouseStringToIsoZ(recentAsc[i - 1]?.received_ts ?? ""));
+      const t1 = Date.parse(clickhouseStringToIsoZ(recentAsc[i]?.received_ts ?? ""));
+      if (!Number.isFinite(t0) || !Number.isFinite(t1)) continue;
+      const gapMinutes = Math.max(0, (t1 - t0) / (1000 * 60));
+      if (gapMinutes > 5) {
+        gapCount += 1;
+        sumGap += gapMinutes;
+        if (gapMinutes > maxGapMinutes) maxGapMinutes = gapMinutes;
+      }
+    }
+
+    const factors = {
+      online_status: online === "online" ? 30 : 0,
+      data_freshness: 0,
+      data_volume: 0,
+      baseline_status: baseline ? 15 : 0,
+      connection_stability: 0
+    };
+
+    const lastSeen = device.last_seen_at ? Date.parse(device.last_seen_at) : NaN;
+    if (Number.isFinite(lastSeen)) {
+      const minutesSinceLast = (Date.now() - lastSeen) / (1000 * 60);
+      if (minutesSinceLast <= 5) factors.data_freshness = 25;
+      else if (minutesSinceLast <= 30) factors.data_freshness = 20;
+      else if (minutesSinceLast <= 120) factors.data_freshness = 10;
+    }
+
+    if (todayCount >= 100) factors.data_volume = 20;
+    else if (todayCount >= 50) factors.data_volume = 15;
+    else if (todayCount >= 10) factors.data_volume = 10;
+    else if (todayCount > 0) factors.data_volume = 5;
+
+    if (recentAsc.length > 0) {
+      if (maxGapMinutes <= 10) factors.connection_stability = 10;
+      else if (maxGapMinutes <= 30) factors.connection_stability = 7;
+      else if (maxGapMinutes <= 60) factors.connection_stability = 4;
+    }
+
+    const healthScore = Object.values(factors).reduce((s, x) => s + x, 0);
+    const overall_status = healthScore >= 80 ? "healthy" : healthScore >= 50 ? "warning" : "error";
+
+    const recommendations: string[] = [];
+    if (online === "offline") recommendations.push("设备离线，检查设备电源和网络连接");
+    if (factors.data_freshness === 0) recommendations.push("数据更新延迟，检查数据采集系统");
+    if (factors.data_volume <= 5) recommendations.push("数据量偏低，检查传感器工作状态");
+    if (!baseline) recommendations.push("建议建立GPS基准点以启用形变监测");
+    if (factors.connection_stability <= 4) recommendations.push("连接不稳定，检查网络环境和信号强度");
+
+    const avgGapMinutes = gapCount > 0 ? sumGap / gapCount : 0;
+
+    void reply.code(200).send({
+      success: true,
+      data: {
+        overall_status,
+        health_score: Math.round(healthScore),
+        data_quality: todayCount > 0 ? "normal" : "poor",
+        connection_status: factors.connection_stability >= 7 ? "stable" : "unstable",
+        baseline_status: baseline ? "active" : "inactive",
+        performance_metrics: {
+          today_data_count: todayCount,
+          avg_response_time: online === "online" ? 80 : 0,
+          last_communication: device.last_seen_at ?? now.toISOString(),
+          data_gap_analysis: { maxGapMinutes: maxGapMinutes, avgGapMinutes, gapCount }
+        },
+        recommendations,
+        factors,
+        timestamp: now.toISOString()
+      },
+      timestamp: now.toISOString()
     });
   });
 
