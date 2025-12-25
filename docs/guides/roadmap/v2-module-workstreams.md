@@ -160,7 +160,7 @@
 | WS-O.1 | codex | `feat/ws-o1/baseline-management-legacy` | https://github.com/kipp7/landslide-monitoring-v2/pull/213 | done | WS-D, WS-M.1 | Web：`/baseline-management` 1:1：恢复参考区 `BaselineManagementV2`（含自动建立/质量评估/设备选择/导出等 UI），并对接 v2 GPS baselines（`/api/v1/gps/baselines*` + legacy `/baselines/*`）；当前 v2 `/baseline-management` 仅重定向，需保留 v2 版到 `/baseline-management-v2` |
 | WS-O.2 |  |  |  | backlog | WS-C, WS-M.1 | Web：`/optimized-demo` 1:1：恢复参考区“数据库优化演示”页面与依赖组件（`OptimizedDeviceStatus`、`useDataAggregation` 等），数据源切到 v2 API/legacy compat；当前 v2 `/optimized-demo` 仅重定向，需保留 v2 版到 `/optimized-demo-v2` |
 | WS-O.3 | codex | `feat/ws-o3/system-monitor-legacy` | https://github.com/kipp7/landslide-monitoring-v2/pull/216 | done | WS-G, WS-C, WS-M.1 | Web：`/system-monitor` 1:1：恢复参考区系统监控页（cache/realtime/worker 指标面板），将旧 hooks（`useOptimizedDeviceData`/`useDataAggregation`/`useRealtimeStream`/`useWebWorker`）迁移为 v2 版本；当前 v2 `/system-monitor` 仅重定向到 `/ops/system-monitor` |
-| WS-O.4 |  |  |  | backlog | WS-B, WS-D, WS-M.1 | Web：`/device-management` 1:1：恢复参考区设备管理页（状态/监测站管理/基准点管理 tabs），并将依赖组件（`MonitoringStationManagement`/`DeviceMappingTable` 等）迁移到 v2 数据源；保留现有 v2 设备管理页到 `/device-management-v2` |
+| WS-O.4 | codex | `feat/ws-o4/device-management-legacy` |  | in_progress | WS-B, WS-D, WS-M.1 | Web：`/device-management` 1:1：恢复参考区设备管理页（状态/监测站管理/基准点管理 tabs），并将依赖组件（`MonitoringStationManagement`/`DeviceMappingTable` 等）迁移到 v2 数据源；保留现有 v2 设备管理页到 `/device-management-v2` |
 
 ### 4.4 对齐与验收（总集成人做）
 
