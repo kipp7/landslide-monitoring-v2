@@ -37,6 +37,6 @@ export const LazyLiquidFillChart = dynamic(() => import('./LiquidFillChart'), { 
 export const LazyDeviceErrorChart = dynamic(() => import('./DeviceErrorChart'), { loading: LoadingSpinner, ssr: false })
 export const LazyRealtimeSensorStatus = dynamic(() => import('./RealtimeSensorStatus'), { loading: LoadingSpinner, ssr: false })
 export const LazyAnomalyTypeChart = dynamic(() => import('./AnomalyTypeChart'), { loading: LoadingSpinner, ssr: false })
+export const LazyExceptionStatsChart = dynamic(() => import('./ExceptionStatsChart'), { loading: LoadingSpinner, ssr: false })
 export const LazyAIPredictionComponent = dynamic(() => import('./AIPredictionComponent'), { loading: LoadingSpinner, ssr: false })
 export const LazyRealtimeAnomalyTable = dynamic(() => import('./RealtimeAnomalyTable'), { loading: LoadingSpinner, ssr: false })
-
