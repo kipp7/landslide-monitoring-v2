@@ -369,6 +369,7 @@ export function registerGpsDeformationLegacyCompatRoutes(
 
     const displacementMm = rows.map((r) => r.deformation_distance_3d * 1000);
     const maxDisplacementMm = displacementMm.length > 0 ? Math.max(...displacementMm) : 0;
+    const minDisplacementMm = displacementMm.length > 0 ? Math.min(...displacementMm) : 0;
     const latest = rows.at(-1) ?? null;
 
     const firstMm = displacementMm[0] ?? 0;
@@ -385,6 +386,11 @@ export function registerGpsDeformationLegacyCompatRoutes(
       baselineSource: hasBaseline ? "gps_baselines" : rows.length > 0 ? "first_point" : null
     };
     if (!hasBaseline) riskFactors.reason = "未设置基准点";
+
+    const riskIndicators: string[] = [];
+    if (!hasBaseline) riskIndicators.push("未设置基准点");
+    if (rows.length === 0) riskIndicators.push("无GPS数据");
+    if (rows.length > 0) riskIndicators.push("已计算位移/速度序列");
 
     const pointsWithRisk = rows.map((r) => {
       const level = hasBaseline ? assessRiskLevelFromDisplacementMm(r.deformation_distance_3d * 1000) : 0;
@@ -429,9 +435,14 @@ export function registerGpsDeformationLegacyCompatRoutes(
       results: {
         statisticalAnalysis: {
           basic: basicStats(displacementMm),
-          summary: { maxDisplacementMm }
+          summary: {
+            maxDisplacement: maxDisplacementMm,
+            minDisplacement: minDisplacementMm,
+            riskIndicators,
+            maxDisplacementMm
+          }
         },
-        trendAnalysis: { trend, confidence: trendConfidence, deltaMm: trendDeltaMm },
+        trendAnalysis: { trend, confidence: trendConfidence, magnitude: Math.abs(trendDeltaMm), deltaMm: trendDeltaMm },
         riskAssessment: {
           level: riskLevel,
           description: riskDescriptionFromLevel(riskLevel),
