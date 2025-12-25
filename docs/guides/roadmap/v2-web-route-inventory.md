@@ -19,10 +19,15 @@
 | `/analysis-legacy` | `apps/web/app/analysis-legacy/page.tsx` |
 | `/analysis2` | `apps/web/app/analysis2/page.tsx` |
 | `/data` | `apps/web/app/data/page.tsx` |
+| `/data/ai-predictions` | `apps/web/app/data/ai-predictions/page.tsx` |
+| `/data/health-expert` | `apps/web/app/data/health-expert/page.tsx` |
+| `/data/realtime` | `apps/web/app/data/realtime/page.tsx` |
 | `/debug-api` | `apps/web/app/debug-api/page.tsx` |
 | `/baseline-management` | `apps/web/app/baseline-management/page.tsx` |
+| `/baseline-management-v2` | `apps/web/app/baseline-management-v2/page.tsx` |
 | `/device-management` | `apps/web/app/device-management/page.tsx` |
 | `/device-management/baselines` | `apps/web/app/device-management/baselines/page.tsx` |
+| `/device-management-v2` | `apps/web/app/device-management-v2/page.tsx` |
 | `/gps-deformation` | `apps/web/app/gps-deformation/page.tsx` |
 | `/gps-monitoring` | `apps/web/app/gps-monitoring/page.tsx` |
 | `/login` | `apps/web/app/login/page.tsx` |
@@ -38,4 +43,6 @@
 | `/stations` | `apps/web/app/stations/page.tsx` |
 | `/stations/[stationId]` | `apps/web/app/stations/[stationId]/page.tsx` |
 | `/system-monitor` | `apps/web/app/system-monitor/page.tsx` |
+| `/system-monitor-v2` | `apps/web/app/system-monitor-v2/page.tsx` |
 | `/optimized-demo` | `apps/web/app/optimized-demo/page.tsx` |
+| `/optimized-demo-v2` | `apps/web/app/optimized-demo-v2/page.tsx` |

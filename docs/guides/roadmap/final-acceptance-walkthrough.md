@@ -21,12 +21,12 @@
 | `/login` | `openharmony/landslide-monitor/frontend/app/login/page.tsx` | `/login` | `apps/web/app/login/page.tsx` | ✅ |
 | `/analysis` | `openharmony/landslide-monitor/frontend/app/analysis/page.tsx` | `/analysis` | `apps/web/app/analysis/page.tsx` | ✅ |
 | `/analysis2` | `openharmony/landslide-monitor/frontend/app/analysis2/page.tsx` | `/analysis2` | `apps/web/app/analysis2/page.tsx` | ✅ |
-| `/optimized-demo` | `openharmony/landslide-monitor/frontend/app/optimized-demo/page.tsx` | `/optimized-demo`（兼容跳转） | `apps/web/app/optimized-demo/page.tsx` | ✅ |
+| `/optimized-demo` | `openharmony/landslide-monitor/frontend/app/optimized-demo/page.tsx` | `/optimized-demo` | `apps/web/app/optimized-demo/page.tsx` | ✅ |
 | `/device-management` | `openharmony/landslide-monitor/frontend/app/device-management/page.tsx` | `/device-management` | `apps/web/app/device-management/page.tsx` | ✅ |
-| `/baseline-management` | `openharmony/landslide-monitor/frontend/app/baseline-management/page.tsx` | `/baseline-management`（兼容跳转） | `apps/web/app/baseline-management/page.tsx` | ✅ |
+| `/baseline-management` | `openharmony/landslide-monitor/frontend/app/baseline-management/page.tsx` | `/baseline-management` | `apps/web/app/baseline-management/page.tsx` | ✅ |
 | `/gps-monitoring` | `openharmony/landslide-monitor/frontend/app/gps-monitoring/page.tsx` | `/gps-monitoring` | `apps/web/app/gps-monitoring/page.tsx` | ✅ |
-| `/system-monitor` | `openharmony/landslide-monitor/frontend/app/system-monitor/page.tsx` | `/system-monitor`（兼容跳转） | `apps/web/app/system-monitor/page.tsx` | ✅ |
-| `/debug-api` | `openharmony/landslide-monitor/frontend/app/debug-api/page.tsx` | `/debug-api`（兼容跳转） | `apps/web/app/debug-api/page.tsx` | ✅ |
+| `/system-monitor` | `openharmony/landslide-monitor/frontend/app/system-monitor/page.tsx` | `/system-monitor` | `apps/web/app/system-monitor/page.tsx` | ✅ |
+| `/debug-api` | `openharmony/landslide-monitor/frontend/app/debug-api/page.tsx` | `/debug-api`（兼容跳转到 `/ops/debug-api`） | `apps/web/app/debug-api/page.tsx` | ✅ |
 
 ## 2) 功能点走查（动作级）
 
@@ -54,7 +54,9 @@
 
 ### 2.4 `/system-monitor` 与 `/debug-api`
 
-- ✅ 兼容入口存在，跳转到 `/ops/*` 运维页面（WS-G/WS-J）
+- ✅ `/system-monitor`：参考区同名页面已迁移（系统性能监控中心）
+- ✅ `/ops/system-monitor`：运维系统监控（WS-G/WS-J）
+- ✅ `/debug-api`：兼容入口跳转到 `/ops/debug-api`（WS-G/WS-J）
 - ✅ `/ops/debug-api` 已补齐参考区 `/debug-api` 的“一键连通性测试”（`/health`、`/huawei/*`；危险 POST 默认关闭 + 二次确认）（WS-G.3 / PR #221）
 
 ### 2.5 `/analysis2`（监测点面板）
