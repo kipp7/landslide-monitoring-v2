@@ -28,6 +28,7 @@
 - 2025-12-24：运行大屏其余图表 1:1（WS-N.7）：PR #199，Web `/analysis` 补齐液位图（LiquidFill）、柱状图（BarChart）、设备错误图（DeviceErrorChart）、异常类型图（AnomalyTypeChart），并对接 v2 alerts/legacy API。
 - 2025-12-24：运行大屏 3D/视频切换 1:1（WS-N.8）：PR #202，Web `/analysis` 补齐参考区 3D 地图容器（AMap 3D/terrain）与视频模式（ESP32-CAM `<img src=http://192.168.43.55/stream>`）。
 - 2025-12-25：运行大屏设备命名/映射 1:1（WS-N.10）：PR #205，Web `/analysis` 从 v2 legacy `/api/iot/devices/mappings` 获取映射信息（simple_id/actual_device_id/device_name/location_name），并与位置命名逻辑对齐参考区。
+- 2025-12-25：运行大屏实时组件补齐（WS-N.12）：Web `/analysis` 补齐 legacy `useRealtimeData`（地图点/lastUpdateTime）与 `RealtimeAnomalyTable`/`RealtimeSensorStatus`（自动滚动/节点轮播），数据源使用 v2 SSE `/api/v1/realtime/stream` + `/api/v1/data/state` 兜底。
 - 2025-12-24：运行大屏性能监控 1:1（WS-N.9）：Web `/analysis` 补齐参考区 `usePerformanceMonitor`（FPS/内存/加载耗时）与性能降级提示入口（`warnings`/`isPerformanceGood`，节流更新避免高频重渲染）。
 - 2025-12-24：GPS 监测高级分析（WS-D.7）：PR #181，Web `/gps-monitoring` 增加分析分栏（CEEMD 轻量分解 / 预测分析 / 数据详情 / 风险与基准点）。
 - 2025-12-24：运行大屏实时组件（WS-N.3）：PR #169，Web `/analysis` 补齐实时异常表（SSE `anomaly_alert` + `/anomaly-assessment` 聚合）与“实时传感器状态/最后上报时间”表（SSE `device_data`）。
