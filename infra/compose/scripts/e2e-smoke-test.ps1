@@ -591,6 +591,9 @@ try {
   powershell -NoProfile -ExecutionPolicy Bypass -File infra/compose/scripts/create-kafka-topics.ps1 -EnvFile $EnvFile -ComposeFile $ComposeFile
   Assert-LastExitCode "create-kafka-topics.ps1 failed"
 
+  # Preset regressions can force-rewrite services/api/.env, so refresh the port we use for health checks.
+  $apiPort = Read-EnvValue $apiEnvPath "API_PORT" "8080"
+
   Write-Host "Starting services..." -ForegroundColor Cyan
 
   # Start API first so EMQX HTTP authn/authz webhooks are reachable before MQTT clients connect.
