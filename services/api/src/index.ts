@@ -2,7 +2,7 @@ import { createLogger, newTraceId } from "@lsmv2/observability";
 import cors from "@fastify/cors";
 import formbody from "@fastify/formbody";
 import dotenv from "dotenv";
-import Fastify from "fastify";
+import Fastify, { type FastifyInstance } from "fastify";
 import path from "node:path";
 import { createClickhouseClient } from "./clickhouse";
 import { loadConfigFromEnv } from "./config";
@@ -172,23 +172,31 @@ async function main(): Promise<void> {
   // Legacy-compatible paths (reference system): /huawei/*
   registerHuaweiLegacyCompatRoutes(app, config, ch, pg);
 
-  // Legacy-compatible path (reference system): /api/camera
+  // Backward-compatible camera path (historical): /camera
   registerCameraLegacyCompatRoutes(app, config, pg);
 
-  // Legacy-compatible path (reference system): /api/anomaly-assessment
-  app.register(
-    (api, _opts, done) => {
-      registerAnomalyAssessmentCompatRoutes(api, config, pg, { legacyResponse: true });
-      registerGpsBaselineLegacyCompatRoutes(api, config, ch, pg);
-      registerGpsDeformationLegacyCompatRoutes(api, config, ch, pg);
-      registerRealtimeLegacyCompatRoutes(api, config, ch, pg);
-      registerAiPredictionLegacyCompatRoutes(api, config, pg);
-      registerDeviceHealthExpertLegacyCompatRoutes(api, config, ch, pg);
-      registerLegacyDeviceManagementCompatRoutes(api, config, ch, pg);
-      done();
-    },
-    { prefix: "/api" }
-  );
+  const registerLegacyCompatApi = (api: FastifyInstance): void => {
+    registerAnomalyAssessmentCompatRoutes(api, config, pg, { legacyResponse: true });
+    registerGpsBaselineLegacyCompatRoutes(api, config, ch, pg);
+    registerGpsDeformationLegacyCompatRoutes(api, config, ch, pg);
+    registerRealtimeLegacyCompatRoutes(api, config, ch, pg);
+    registerAiPredictionLegacyCompatRoutes(api, config, pg);
+    registerDeviceHealthExpertLegacyCompatRoutes(api, config, ch, pg);
+    registerLegacyDeviceManagementCompatRoutes(api, config, ch, pg);
+    registerCameraLegacyCompatRoutes(api, config, pg);
+  };
+
+  // Legacy-compatible path (reference system): /api/*
+  app.register((api, _opts, done) => {
+    registerLegacyCompatApi(api);
+    done();
+  }, { prefix: "/api" });
+
+  // Legacy-compatible path (reference system behind nginx): /iot/api/*
+  app.register((api, _opts, done) => {
+    registerLegacyCompatApi(api);
+    done();
+  }, { prefix: "/iot/api" });
 
   app.register((v1, _opts, done) => {
     registerAuthRoutes(v1, config, pg);
