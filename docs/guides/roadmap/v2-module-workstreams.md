@@ -156,6 +156,7 @@
 | WS-N.8 | codex | `feat/ws-n8/analysis-3d-map` | https://github.com/kipp7/landslide-monitoring-v2/pull/202 | done | WS-N.5 | Web：`/analysis` 3D 地图 1:1：移植 `Map3DContainer`（或等价 3D 引擎），补齐参考区 2D/3D/卫星/视频切换与交互；如 3D 依赖新引擎，先拆“技术选型+最小 demo”PR |
 | WS-N.9 | codex | `feat/ws-n9/analysis-performance-monitor` |  | claimed | WS-N.5 | Web：`/analysis` 性能监控 1:1：移植 `usePerformanceMonitor` 与性能告警 UI（warnings/isPerformanceGood），并补齐必要的缓存/节流策略（不改变 v2 API） |
 | WS-N.10 | codex | `feat/ws-n10/analysis-device-naming` | https://github.com/kipp7/landslide-monitoring-v2/pull/205 | done | WS-N.5 | Web：`/analysis` 设备命名/映射 1:1：对齐参考区 `device_mapping`/位置命名逻辑（generateDeviceName/getRiskByLocation/getDetailedLocationInfo），在 v2 侧实现等价映射（不直连 Supabase） |
+| WS-N.11 | kipp7 | `feat/ws-n11/analysis-2d-map` | https://github.com/kipp7/landslide-monitoring-v2/pull/207 | claimed | WS-N.5 | Web：`/analysis` 2D/卫星地图 1:1：移植参考区 OpenLayers `MapContainer`（聚合点弹窗/轮播分页/设备标注），并补齐切换后重绘与样式引入（`ol/ol.css`） |
 
 ### 4.4 对齐与验收（总集成人做）
 
