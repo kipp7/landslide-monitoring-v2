@@ -53,6 +53,135 @@ type BaselineRow = {
   updated_at: string;
 };
 
+function legacyKeyFromMetadata(deviceName: string, metadata: unknown): string {
+  const m = metadata && typeof metadata === "object" ? (metadata as Record<string, unknown>) : null;
+
+  const legacy = typeof m?.legacy_device_id === "string" ? m.legacy_device_id.trim() : "";
+  if (legacy) return legacy;
+
+  const externalIds = m?.externalIds;
+  const externalLegacyRaw =
+    externalIds && typeof externalIds === "object" ? (externalIds as Record<string, unknown>).legacy : undefined;
+  const externalLegacy = typeof externalLegacyRaw === "string" ? externalLegacyRaw.trim() : "";
+  if (externalLegacy) return externalLegacy;
+
+  return deviceName;
+}
+
+function coerceOptionalNumber() {
+  return z.preprocess((v) => {
+    if (v === "" || v === null || v === undefined) return undefined;
+    return v;
+  }, z.coerce.number().finite().optional());
+}
+
+function coerceOptionalInt() {
+  return z.preprocess((v) => {
+    if (v === "" || v === null || v === undefined) return undefined;
+    return v;
+  }, z.coerce.number().int().positive().optional());
+}
+
+const legacyBaselineListQuerySchema = z.object({
+  keyword: z.string().optional(),
+  limit: z.coerce.number().int().positive().max(5000).default(2000)
+});
+
+const legacyBaselineUpsertBodySchema = z
+  .object({
+    latitude: z.coerce.number().finite(),
+    longitude: z.coerce.number().finite(),
+    altitude: coerceOptionalNumber(),
+    establishedBy: z.string().optional(),
+    notes: z.string().optional(),
+    positionAccuracy: coerceOptionalNumber(),
+    measurementDuration: coerceOptionalInt(),
+    satelliteCount: coerceOptionalInt(),
+    pdopValue: coerceOptionalNumber()
+  })
+  .strict();
+
+type LegacyBaselineJoinRow = {
+  device_id: string;
+  device_name: string;
+  metadata: unknown;
+  method: "auto" | "manual";
+  points_count: number | null;
+  baseline: unknown;
+  computed_at: string;
+  updated_at: string;
+};
+
+type LegacyBaselineRecord = {
+  device_id: string;
+  baseline_latitude: number;
+  baseline_longitude: number;
+  baseline_altitude: number | null;
+  established_by: string;
+  established_time: string;
+  notes?: string;
+  status: "active";
+  position_accuracy?: number;
+  measurement_duration?: number;
+  satellite_count?: number;
+  pdop_value?: number;
+  confidence_level?: number;
+  data_points_used?: number;
+};
+
+function readFiniteNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const t = value.trim();
+    if (!t) return null;
+    const n = Number(t);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
+function readFiniteInt(value: unknown): number | null {
+  const n = readFiniteNumber(value);
+  if (n == null) return null;
+  const i = Math.trunc(n);
+  if (!Number.isFinite(i)) return null;
+  return i;
+}
+
+function legacyBaselineFromRow(row: LegacyBaselineJoinRow, deviceKeyOverride?: string): LegacyBaselineRecord {
+  const baselineObj = row.baseline && typeof row.baseline === "object" ? (row.baseline as Record<string, unknown>) : {};
+
+  const latitude = readFiniteNumber(baselineObj.latitude) ?? 0;
+  const longitude = readFiniteNumber(baselineObj.longitude) ?? 0;
+  const altitude = readFiniteNumber(baselineObj.altitude);
+  const positionAccuracyMeters = readFiniteNumber(baselineObj.positionAccuracyMeters);
+  const satelliteCount = readFiniteInt(baselineObj.satelliteCount);
+  const measurementDuration = readFiniteInt(baselineObj.measurementDuration);
+  const pdopValue = readFiniteNumber(baselineObj.pdopValue);
+  const notes = typeof baselineObj.notes === "string" && baselineObj.notes.trim() ? baselineObj.notes.trim() : undefined;
+  const establishedBy =
+    typeof baselineObj.establishedBy === "string" && baselineObj.establishedBy.trim() ? baselineObj.establishedBy.trim() : "";
+
+  const deviceKey = deviceKeyOverride ?? legacyKeyFromMetadata(row.device_name, row.metadata);
+  const established_time = row.computed_at || row.updated_at || new Date().toISOString();
+
+  return {
+    device_id: deviceKey,
+    baseline_latitude: latitude,
+    baseline_longitude: longitude,
+    baseline_altitude: altitude ?? null,
+    established_by: establishedBy || (row.method === "auto" ? "系统自动建立" : "管理员"),
+    established_time,
+    ...(notes ? { notes } : {}),
+    status: "active",
+    ...(positionAccuracyMeters == null ? {} : { position_accuracy: positionAccuracyMeters }),
+    ...(measurementDuration == null ? {} : { measurement_duration: measurementDuration }),
+    ...(satelliteCount == null ? {} : { satellite_count: satelliteCount }),
+    ...(pdopValue == null ? {} : { pdop_value: pdopValue }),
+    ...(row.points_count == null ? {} : { data_points_used: row.points_count })
+  };
+}
+
 function toClickhouseDateTime64Utc(d: Date): string {
   return d.toISOString().replace("T", " ").replace("Z", "");
 }
@@ -515,9 +644,278 @@ export function registerGpsBaselineLegacyCompatRoutes(
 ): void {
   const adminCfg: AdminAuthConfig = { adminApiToken: config.adminApiToken, jwtEnabled: Boolean(config.jwtAccessSecret) };
 
+  app.get("/baselines", async (request, reply) => {
+    if (!(await requirePermission(adminCfg, pg, request, reply, "device:view"))) return;
+    if (!pg) {
+      void reply.code(503).send({ success: false, error: "PostgreSQL 未配置" });
+      return;
+    }
+
+    const parsed = legacyBaselineListQuerySchema.safeParse(request.query ?? {});
+    if (!parsed.success) {
+      void reply.code(400).send({ success: false, error: "参数错误" });
+      return;
+    }
+
+    const { keyword, limit } = parsed.data;
+
+    const where: string[] = ["d.status != 'revoked'"];
+    const params: unknown[] = [];
+    const add = (sql: string, val: unknown) => {
+      params.push(val);
+      where.push(sql.replaceAll("$X", "$" + String(params.length)));
+    };
+
+    const keywordTrimmed = keyword?.trim();
+    if (keywordTrimmed) {
+      const k = `%${keywordTrimmed}%`;
+      add(
+        "(d.device_name ILIKE $X OR d.metadata->>'legacy_device_id' ILIKE $X OR d.metadata#>>'{externalIds,legacy}' ILIKE $X)",
+        k
+      );
+    }
+
+    const whereSql = `WHERE ${where.join(" AND ")}`;
+
+    const rows = await withPgClient(pg, async (client) =>
+      client.query<LegacyBaselineJoinRow>(
+        `
+          SELECT
+            gb.device_id,
+            d.device_name,
+            d.metadata,
+            gb.method,
+            gb.points_count,
+            gb.baseline,
+            to_char(gb.computed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS computed_at,
+            to_char(gb.updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS updated_at
+          FROM gps_baselines gb
+          JOIN devices d ON d.device_id = gb.device_id
+          ${whereSql}
+          ORDER BY gb.updated_at DESC
+          LIMIT $${String(params.length + 1)}
+        `,
+        params.concat([limit])
+      )
+    );
+
+    const data = rows.rows.map((r) => legacyBaselineFromRow(r));
+    void reply.code(200).send({ success: true, data, count: data.length });
+  });
+
   app.get("/baselines/available-devices", (request, reply) =>
     handleAvailableDevices(request, reply, config, ch, pg, adminCfg, { legacy: true })
   );
+
+  app.get("/baselines/:deviceId", async (request, reply) => {
+    if (!(await requirePermission(adminCfg, pg, request, reply, "device:view"))) return;
+    if (!pg) {
+      void reply.code(503).send({ success: false, error: "PostgreSQL 未配置" });
+      return;
+    }
+
+    const rawId = typeof (request.params as { deviceId?: unknown }).deviceId === "string" ? (request.params as { deviceId: string }).deviceId : "";
+    const deviceKey = rawId.trim();
+    if (!deviceKey) {
+      void reply.code(400).send({ success: false, error: "参数错误", hasBaseline: false });
+      return;
+    }
+
+    const deviceRow = await withPgClient(pg, async (client) =>
+      queryOne<{ device_id: string; device_name: string; metadata: unknown }>(
+        client,
+        `
+          SELECT device_id, device_name, metadata
+          FROM devices
+          WHERE status != 'revoked'
+            AND (
+              device_id::text = $1
+              OR device_name = $1
+              OR metadata->>'legacy_device_id' = $1
+              OR metadata#>>'{externalIds,legacy}' = $1
+            )
+          LIMIT 1
+        `,
+        [deviceKey]
+      )
+    );
+
+    if (!deviceRow) {
+      void reply.code(200).send({ success: false, error: "该设备没有设置基准点", hasBaseline: false });
+      return;
+    }
+
+    const baselineRow = await withPgClient(pg, async (client) =>
+      queryOne<LegacyBaselineJoinRow>(
+        client,
+        `
+          SELECT
+            gb.device_id,
+            d.device_name,
+            d.metadata,
+            gb.method,
+            gb.points_count,
+            gb.baseline,
+            to_char(gb.computed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS computed_at,
+            to_char(gb.updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS updated_at
+          FROM gps_baselines gb
+          JOIN devices d ON d.device_id = gb.device_id
+          WHERE gb.device_id = $1
+            AND d.status != 'revoked'
+        `,
+        [deviceRow.device_id]
+      )
+    );
+
+    if (!baselineRow) {
+      void reply.code(200).send({ success: false, error: "该设备没有设置基准点", hasBaseline: false });
+      return;
+    }
+
+    const key = legacyKeyFromMetadata(deviceRow.device_name, deviceRow.metadata);
+    const record = legacyBaselineFromRow(baselineRow, key);
+    void reply.code(200).send({ success: true, data: record, hasBaseline: true });
+  });
+
+  const upsertLegacy = async (request: FastifyRequest, reply: FastifyReply, mode: "create" | "update") => {
+    if (!(await requirePermission(adminCfg, pg, request, reply, "device:update"))) return;
+    if (!pg) {
+      void reply.code(503).send({ success: false, error: "PostgreSQL 未配置" });
+      return;
+    }
+
+    const rawId = typeof (request.params as { deviceId?: unknown }).deviceId === "string" ? (request.params as { deviceId: string }).deviceId : "";
+    const deviceKey = rawId.trim();
+    if (!deviceKey) {
+      void reply.code(400).send({ success: false, error: "参数错误" });
+      return;
+    }
+
+    const parsed = legacyBaselineUpsertBodySchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      void reply.code(400).send({ success: false, error: "参数错误" });
+      return;
+    }
+
+    const body = parsed.data;
+    const latitude = body.latitude;
+    const longitude = body.longitude;
+
+    if (Math.abs(latitude) > 90 || Math.abs(longitude) > 180) {
+      void reply.code(400).send({ success: false, error: "坐标值超出有效范围" });
+      return;
+    }
+
+    const deviceRow = await withPgClient(pg, async (client) =>
+      queryOne<{ device_id: string; device_name: string; metadata: unknown }>(
+        client,
+        `
+          SELECT device_id, device_name, metadata
+          FROM devices
+          WHERE status != 'revoked'
+            AND (
+              device_id::text = $1
+              OR device_name = $1
+              OR metadata->>'legacy_device_id' = $1
+              OR metadata#>>'{externalIds,legacy}' = $1
+            )
+          LIMIT 1
+        `,
+        [deviceKey]
+      )
+    );
+
+    if (!deviceRow) {
+      void reply.code(404).send({ success: false, error: "设备不存在" });
+      return;
+    }
+
+    const notes = body.notes?.trim();
+    const establishedBy = body.establishedBy?.trim();
+
+    const baseline: Record<string, unknown> = {
+      latitude,
+      longitude,
+      ...(body.altitude == null ? {} : { altitude: body.altitude }),
+      ...(body.positionAccuracy == null ? {} : { positionAccuracyMeters: body.positionAccuracy }),
+      ...(body.satelliteCount == null ? {} : { satelliteCount: body.satelliteCount }),
+      ...(notes ? { notes } : {}),
+      ...(establishedBy ? { establishedBy } : {}),
+      ...(body.measurementDuration == null ? {} : { measurementDuration: body.measurementDuration }),
+      ...(body.pdopValue == null ? {} : { pdopValue: body.pdopValue })
+    };
+
+    await upsertBaseline(pg, deviceRow.device_id, "manual", null, baseline);
+
+    const nowIso = new Date().toISOString();
+    const key = legacyKeyFromMetadata(deviceRow.device_name, deviceRow.metadata);
+    const record = legacyBaselineFromRow(
+      {
+        device_id: deviceRow.device_id,
+        device_name: deviceRow.device_name,
+        metadata: deviceRow.metadata,
+        method: "manual",
+        points_count: null,
+        baseline,
+        computed_at: nowIso,
+        updated_at: nowIso
+      },
+      key
+    );
+
+    void reply
+      .code(200)
+      .send({ success: true, data: record, message: mode === "update" ? "基准点更新成功" : "基准点设置成功" });
+  };
+
+  app.post("/baselines/:deviceId", async (request, reply) => upsertLegacy(request, reply, "create"));
+  app.put("/baselines/:deviceId", async (request, reply) => upsertLegacy(request, reply, "update"));
+
+  app.delete("/baselines/:deviceId", async (request, reply) => {
+    if (!(await requirePermission(adminCfg, pg, request, reply, "device:update"))) return;
+    if (!pg) {
+      void reply.code(503).send({ success: false, error: "PostgreSQL 未配置" });
+      return;
+    }
+
+    const rawId = typeof (request.params as { deviceId?: unknown }).deviceId === "string" ? (request.params as { deviceId: string }).deviceId : "";
+    const deviceKey = rawId.trim();
+    if (!deviceKey) {
+      void reply.code(400).send({ success: false, error: "参数错误" });
+      return;
+    }
+
+    const deviceRow = await withPgClient(pg, async (client) =>
+      queryOne<{ device_id: string }>(
+        client,
+        `
+          SELECT device_id
+          FROM devices
+          WHERE status != 'revoked'
+            AND (
+              device_id::text = $1
+              OR device_name = $1
+              OR metadata->>'legacy_device_id' = $1
+              OR metadata#>>'{externalIds,legacy}' = $1
+            )
+          LIMIT 1
+        `,
+        [deviceKey]
+      )
+    );
+
+    if (!deviceRow) {
+      void reply.code(404).send({ success: false, error: "设备不存在" });
+      return;
+    }
+
+    await withPgClient(pg, async (client) => {
+      await client.query(`DELETE FROM gps_baselines WHERE device_id = $1`, [deviceRow.device_id]);
+    });
+
+    void reply.code(200).send({ success: true, message: "基准点删除成功" });
+  });
+
   app.post("/baselines/:deviceId/auto-establish", (request, reply) =>
     handleAutoEstablish(request, reply, config, ch, pg, adminCfg, { legacy: true })
   );
