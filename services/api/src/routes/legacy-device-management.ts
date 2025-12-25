@@ -49,6 +49,18 @@ const deviceManagementQuerySchema = z.object({
   }, z.boolean().optional())
 });
 
+const deformationLimitQuerySchema = z
+  .object({
+    limit: z.coerce.number().int().positive().max(5000).optional()
+  })
+  .passthrough();
+
+const deformationTrendQuerySchema = z
+  .object({
+    days: z.coerce.number().int().positive().max(365).optional()
+  })
+  .passthrough();
+
 const monitoringStationsUpdateSchema = z.record(z.unknown());
 
 const monitoringStationsBulkUpdateSchema = z
@@ -63,6 +75,11 @@ const baselineSchema = z.object({
   longitude: z.number().finite(),
   altitude: z.number().finite().optional()
 });
+
+type BaselineInfo = z.infer<typeof baselineSchema> & {
+  established_time: string | null;
+  established_by: string;
+};
 
 function utcStartOfDay(d: Date): Date {
   const x = new Date(d.getTime());
@@ -285,6 +302,39 @@ async function fetchGpsBaseline(pg: PgPool, deviceId: string): Promise<z.infer<t
   return parsed.data;
 }
 
+async function fetchGpsBaselineInfo(pg: PgPool, deviceId: string): Promise<BaselineInfo | null> {
+  const row = await withPgClient(pg, async (client) =>
+    queryOne<{ baseline: unknown; method: string; computed_at: string | null; updated_at: string | null }>(
+      client,
+      `
+        SELECT
+          baseline,
+          method,
+          to_char(computed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS computed_at,
+          to_char(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS updated_at
+        FROM gps_baselines
+        WHERE device_id = $1
+        LIMIT 1
+      `,
+      [deviceId]
+    )
+  );
+  if (!row) return null;
+
+  const parsed = baselineSchema.safeParse(row.baseline ?? {});
+  if (!parsed.success) return null;
+
+  const baselineObj = row.baseline && typeof row.baseline === "object" ? (row.baseline as Record<string, unknown>) : {};
+  const establishedByRaw = typeof baselineObj.establishedBy === "string" ? baselineObj.establishedBy.trim() : "";
+  const established_by = establishedByRaw || (row.method === "auto" ? "系统自动建立" : "管理员");
+
+  return {
+    ...parsed.data,
+    established_time: row.computed_at ?? row.updated_at ?? null,
+    established_by
+  };
+}
+
 type LegacyGpsRow = {
   event_time: string;
   latitude: number;
@@ -394,6 +444,64 @@ function computeLegacyGpsRows(
   return { hasBaseline, rows: rowsAsc.reverse() };
 }
 
+type DeformationType = {
+  type: "noise" | "none" | "horizontal" | "vertical" | "combined" | "rotation";
+  code: -1 | 0 | 1 | 2 | 3 | 4;
+  description: string;
+};
+
+function analyzeDeformationType(maxDisplacementMeters: number, maxHorizontalMeters: number, maxVerticalMeters: number): DeformationType {
+  const noiseThreshold = 0.001; // 1mm
+  const minDisplacement = 0.002; // 2mm
+
+  if (maxDisplacementMeters < noiseThreshold) return { type: "noise", code: -1, description: "GPS噪声" };
+  if (maxDisplacementMeters < minDisplacement) return { type: "none", code: 0, description: "无明显形变" };
+
+  const h = Math.abs(maxHorizontalMeters);
+  const v = Math.abs(maxVerticalMeters);
+  const d = maxDisplacementMeters + 0.0001;
+  const hRatio = h / d;
+  const vRatio = v / d;
+
+  if (hRatio > 0.8 && vRatio < 0.3) return { type: "horizontal", code: 1, description: "水平形变" };
+  if (vRatio > 0.8 && hRatio < 0.3) return { type: "vertical", code: 2, description: "垂直形变" };
+  if (hRatio > 0.4 && vRatio > 0.4) return { type: "combined", code: 3, description: "复合形变" };
+  return { type: "rotation", code: 4, description: "旋转形变" };
+}
+
+function riskFromDisplacement(maxDisplacementMeters: number): { level: number; description: string; factors: string[] } {
+  const factors: string[] = [];
+  if (maxDisplacementMeters >= 0.1) {
+    factors.push(`位移${(maxDisplacementMeters * 1000).toFixed(1)}mm达到I级红色预警(≥100mm)，风险很高，可能性很大`);
+    return { level: 1, description: "I级红色", factors };
+  }
+  if (maxDisplacementMeters >= 0.05) {
+    factors.push(`位移${(maxDisplacementMeters * 1000).toFixed(1)}mm达到II级橙色预警(≥50mm)，风险高，可能性较大`);
+    return { level: 2, description: "II级橙色", factors };
+  }
+  if (maxDisplacementMeters >= 0.02) {
+    factors.push(`位移${(maxDisplacementMeters * 1000).toFixed(1)}mm达到III级黄色预警(≥20mm)，风险较高，有一定可能性`);
+    return { level: 3, description: "III级黄色", factors };
+  }
+  if (maxDisplacementMeters >= 0.005) {
+    factors.push(`位移${(maxDisplacementMeters * 1000).toFixed(1)}mm达到IV级蓝色预警(≥5mm)，风险一般，可能性较小`);
+    return { level: 4, description: "IV级蓝色", factors };
+  }
+  factors.push(`位移${(maxDisplacementMeters * 1000).toFixed(1)}mm未达到预警标准(<5mm)`);
+  return { level: 0, description: "正常", factors };
+}
+
+function analyzeTrend(distancesMetersOldestFirst: number[]): "stable" | "increasing" | "decreasing" {
+  if (distancesMetersOldestFirst.length < 3) return "stable";
+  const mid = Math.floor(distancesMetersOldestFirst.length / 2);
+  const firstHalf = distancesMetersOldestFirst.slice(0, mid);
+  const secondHalf = distancesMetersOldestFirst.slice(mid);
+  const avg = (arr: number[]) => (arr.length === 0 ? 0 : arr.reduce((a, b) => a + b, 0) / arr.length);
+  const d = avg(secondHalf) - avg(firstHalf);
+  if (Math.abs(d) < 0.0005) return "stable"; // 0.5mm
+  return d > 0 ? "increasing" : "decreasing";
+}
+
 export function registerLegacyDeviceManagementCompatRoutes(
   app: FastifyInstance,
   config: AppConfig,
@@ -401,6 +509,319 @@ export function registerLegacyDeviceManagementCompatRoutes(
   pg: PgPool | null
 ): void {
   const adminCfg: AdminAuthConfig = { adminApiToken: config.adminApiToken, jwtEnabled: Boolean(config.jwtAccessSecret) };
+
+  app.get("/device-management/deformation/:deviceId", async (request, reply) => {
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
+    if (!pg) {
+      legacyFail(reply, 503, "PostgreSQL not configured");
+      return;
+    }
+
+    const parsedParams = z.object({ deviceId: deviceIdSchema }).safeParse(request.params ?? {});
+    if (!parsedParams.success) {
+      legacyFail(reply, 400, "invalid deviceId");
+      return;
+    }
+
+    const parsedQuery = deformationLimitQuerySchema.safeParse(request.query ?? {});
+    if (!parsedQuery.success) {
+      legacyFail(reply, 400, "invalid query");
+      return;
+    }
+
+    const inputDeviceId = parsedParams.data.deviceId;
+    const limit = parsedQuery.data.limit ?? 50;
+
+    const resolved = await resolveDeviceId(pg, inputDeviceId);
+    if (!resolved) {
+      legacyFail(reply, 404, "device not found");
+      return;
+    }
+
+    const baselineInfo = await fetchGpsBaselineInfo(pg, resolved);
+    if (!baselineInfo) {
+      void reply.code(400).send({ success: false, error: "设备未设置基准点", hasBaseline: false, timestamp: new Date().toISOString() });
+      return;
+    }
+
+    const points = await fetchLatestGpsTelemetry(config, ch, resolved, limit);
+    if (points.length === 0) {
+      void reply.code(400).send({ success: false, error: "无GPS数据", hasData: false, timestamp: new Date().toISOString() });
+      return;
+    }
+
+    const computed = computeLegacyGpsRows(points, baselineInfo);
+    const rows = computed.rows;
+    const nowIso = new Date().toISOString();
+
+    const distances = rows.map((r) => r.deformation_distance_3d);
+    const horizontals = rows.map((r) => Math.abs(r.deformation_horizontal));
+    const verticals = rows.map((r) => Math.abs(r.deformation_vertical));
+
+    const maxDisplacement = distances.length > 0 ? Math.max(...distances) : 0;
+    const avgDisplacement = distances.length > 0 ? distances.reduce((a, b) => a + b, 0) / distances.length : 0;
+    const maxHorizontal = horizontals.length > 0 ? Math.max(...horizontals) : 0;
+    const maxVertical = verticals.length > 0 ? Math.max(...verticals) : 0;
+
+    const deformationType = analyzeDeformationType(maxDisplacement, maxHorizontal, maxVertical);
+    const trend = analyzeTrend([...distances].reverse());
+
+    const latest = rows[0];
+    const previous = rows[1];
+    const velocity =
+      latest && previous
+        ? (() => {
+            const t0 = Date.parse(latest.event_time);
+            const t1 = Date.parse(previous.event_time);
+            const hours = Number.isFinite(t0) && Number.isFinite(t1) ? Math.max(0.0001, (t0 - t1) / (1000 * 60 * 60)) : 1;
+            return (latest.deformation_distance_3d - previous.deformation_distance_3d) / hours;
+          })()
+        : 0;
+
+    const confidence = rows.length > 0 ? rows.reduce((sum, r) => sum + r.deformation_confidence, 0) / rows.length : 0.9;
+    const quality = Math.min(1, rows.length / 20) * Math.min(1, confidence / 0.8);
+
+    const baseRisk = riskFromDisplacement(maxDisplacement);
+    let riskLevel = baseRisk.level;
+    const factors = [...baseRisk.factors];
+
+    if (Math.abs(velocity) > 0.001) {
+      riskLevel = Math.max(riskLevel, 1);
+      factors.push("形变速度较快");
+    }
+    if (deformationType.code > 0) {
+      riskLevel = Math.max(riskLevel, 1);
+      factors.push(`检测到${deformationType.description}`);
+      if (deformationType.code === 3 || deformationType.code === 4) {
+        riskLevel = Math.max(riskLevel, 2);
+        factors.push("复杂形变模式");
+      }
+    }
+    if (quality < 0.7) factors.push("数据质量较低");
+
+    const riskDescription =
+      riskLevel === 1 ? "I级红色" : riskLevel === 2 ? "II级橙色" : riskLevel === 3 ? "III级黄色" : riskLevel === 4 ? "IV级蓝色" : "正常";
+
+    void reply.code(200).send({
+      success: true,
+      deviceId: inputDeviceId,
+      timestamp: nowIso,
+      hasBaseline: true,
+      hasData: true,
+      baseline: {
+        latitude: baselineInfo.latitude,
+        longitude: baselineInfo.longitude,
+        established_time: baselineInfo.established_time,
+        established_by: baselineInfo.established_by
+      },
+      deformation: {
+        type: deformationType.type,
+        type_code: deformationType.code,
+        type_description: deformationType.description,
+        max_displacement: maxDisplacement,
+        avg_displacement: avgDisplacement,
+        horizontal_displacement: maxHorizontal,
+        vertical_displacement: maxVertical,
+        trend,
+        velocity,
+        risk_level: riskLevel,
+        risk_description: riskDescription,
+        risk_factors: factors,
+        data_quality: quality,
+        confidence,
+        data_count: rows.length
+      },
+      latest_data: latest
+        ? {
+            timestamp: latest.event_time,
+            latitude: latest.latitude,
+            longitude: latest.longitude,
+            displacement_3d: latest.deformation_distance_3d,
+            horizontal: latest.deformation_horizontal,
+            vertical: latest.deformation_vertical
+          }
+        : null
+    });
+  });
+
+  app.get("/device-management/deformation/:deviceId/trend", async (request, reply) => {
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
+    if (!pg) {
+      legacyFail(reply, 503, "PostgreSQL not configured");
+      return;
+    }
+
+    const parsedParams = z.object({ deviceId: deviceIdSchema }).safeParse(request.params ?? {});
+    if (!parsedParams.success) {
+      legacyFail(reply, 400, "invalid deviceId");
+      return;
+    }
+    const parsedQuery = deformationTrendQuerySchema.safeParse(request.query ?? {});
+    if (!parsedQuery.success) {
+      legacyFail(reply, 400, "invalid query");
+      return;
+    }
+
+    const inputDeviceId = parsedParams.data.deviceId;
+    const days = parsedQuery.data.days ?? 7;
+    const limit = Math.min(days * 24, 500);
+
+    const resolved = await resolveDeviceId(pg, inputDeviceId);
+    if (!resolved) {
+      legacyFail(reply, 404, "device not found");
+      return;
+    }
+
+    const baselineInfo = await fetchGpsBaselineInfo(pg, resolved);
+    if (!baselineInfo) {
+      void reply.code(400).send({ success: false, error: "设备未设置基准点", hasBaseline: false, timestamp: new Date().toISOString() });
+      return;
+    }
+
+    const points = await fetchLatestGpsTelemetry(config, ch, resolved, limit);
+    if (points.length === 0) {
+      void reply.code(400).send({ success: false, error: "无GPS数据", hasData: false, timestamp: new Date().toISOString() });
+      return;
+    }
+
+    const computed = computeLegacyGpsRows(points, baselineInfo);
+    const rows = computed.rows;
+
+    const distances = rows.map((r) => r.deformation_distance_3d);
+    const maxDisplacement = distances.length > 0 ? Math.max(...distances) : 0;
+    const trend = analyzeTrend([...distances].reverse());
+
+    const latest = rows[0];
+    const previous = rows[1];
+    const velocity =
+      latest && previous
+        ? (() => {
+            const t0 = Date.parse(latest.event_time);
+            const t1 = Date.parse(previous.event_time);
+            const hours = Number.isFinite(t0) && Number.isFinite(t1) ? Math.max(0.0001, (t0 - t1) / (1000 * 60 * 60)) : 1;
+            return (latest.deformation_distance_3d - previous.deformation_distance_3d) / hours;
+          })()
+        : 0;
+
+    const deformationType = analyzeDeformationType(maxDisplacement, maxDisplacement, 0);
+    const risk = riskFromDisplacement(maxDisplacement);
+    let riskLevel = risk.level;
+    if (Math.abs(velocity) > 0.001 || deformationType.code > 0) riskLevel = Math.max(riskLevel, 1);
+    const riskDescription =
+      riskLevel === 1 ? "I级红色" : riskLevel === 2 ? "II级橙色" : riskLevel === 3 ? "III级黄色" : riskLevel === 4 ? "IV级蓝色" : "正常";
+
+    const confidence = rows.length > 0 ? rows.reduce((sum, r) => sum + r.deformation_confidence, 0) / rows.length : 0.9;
+    const quality = Math.min(1, rows.length / 20) * Math.min(1, confidence / 0.8);
+
+    void reply.code(200).send({
+      success: true,
+      deviceId: inputDeviceId,
+      timestamp: new Date().toISOString(),
+      trend: {
+        direction: trend,
+        velocity,
+        max_displacement: maxDisplacement,
+        risk_level: riskLevel,
+        risk_description: riskDescription
+      },
+      data_quality: quality,
+      data_count: rows.length
+    });
+  });
+
+  app.get("/device-management/deformation/:deviceId/summary", async (request, reply) => {
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
+    if (!pg) {
+      legacyFail(reply, 503, "PostgreSQL not configured");
+      return;
+    }
+
+    const parsedParams = z.object({ deviceId: deviceIdSchema }).safeParse(request.params ?? {});
+    if (!parsedParams.success) {
+      legacyFail(reply, 400, "invalid deviceId");
+      return;
+    }
+
+    const inputDeviceId = parsedParams.data.deviceId;
+    const resolved = await resolveDeviceId(pg, inputDeviceId);
+    if (!resolved) {
+      legacyFail(reply, 404, "device not found");
+      return;
+    }
+
+    const baselineInfo = await fetchGpsBaselineInfo(pg, resolved);
+    if (!baselineInfo) {
+      void reply.code(400).send({ success: false, error: "设备未设置基准点", hasBaseline: false, timestamp: new Date().toISOString() });
+      return;
+    }
+
+    const points = await fetchLatestGpsTelemetry(config, ch, resolved, 20);
+    if (points.length === 0) {
+      void reply.code(400).send({ success: false, error: "无GPS数据", hasData: false, timestamp: new Date().toISOString() });
+      return;
+    }
+
+    const computed = computeLegacyGpsRows(points, baselineInfo);
+    const rows = computed.rows;
+
+    const distances = rows.map((r) => r.deformation_distance_3d);
+    const horizontals = rows.map((r) => Math.abs(r.deformation_horizontal));
+    const verticals = rows.map((r) => Math.abs(r.deformation_vertical));
+
+    const maxDisplacement = distances.length > 0 ? Math.max(...distances) : 0;
+    const maxHorizontal = horizontals.length > 0 ? Math.max(...horizontals) : 0;
+    const maxVertical = verticals.length > 0 ? Math.max(...verticals) : 0;
+
+    const deformationType = analyzeDeformationType(maxDisplacement, maxHorizontal, maxVertical);
+    const trend = analyzeTrend([...distances].reverse());
+
+    const latest = rows[0];
+    const previous = rows[1];
+    const velocity =
+      latest && previous
+        ? (() => {
+            const t0 = Date.parse(latest.event_time);
+            const t1 = Date.parse(previous.event_time);
+            const hours = Number.isFinite(t0) && Number.isFinite(t1) ? Math.max(0.0001, (t0 - t1) / (1000 * 60 * 60)) : 1;
+            return (latest.deformation_distance_3d - previous.deformation_distance_3d) / hours;
+          })()
+        : 0;
+
+    const confidence = rows.length > 0 ? rows.reduce((sum, r) => sum + r.deformation_confidence, 0) / rows.length : 0.9;
+    const quality = Math.min(1, rows.length / 20) * Math.min(1, confidence / 0.8);
+
+    const risk = riskFromDisplacement(maxDisplacement);
+    let riskLevel = risk.level;
+    if (Math.abs(velocity) > 0.001 || deformationType.code > 0) riskLevel = Math.max(riskLevel, 1);
+    const riskDescription =
+      riskLevel === 1 ? "I级红色" : riskLevel === 2 ? "II级橙色" : riskLevel === 3 ? "III级黄色" : riskLevel === 4 ? "IV级蓝色" : "正常";
+
+    void reply.code(200).send({
+      success: true,
+      deviceId: inputDeviceId,
+      timestamp: new Date().toISOString(),
+      hasBaseline: true,
+      hasData: true,
+      deformation_type: deformationType.code,
+      deformation_type_description: deformationType.description,
+      max_displacement: maxDisplacement,
+      horizontal_displacement: maxHorizontal,
+      vertical_displacement: maxVertical,
+      risk_level: riskLevel,
+      risk_description: riskDescription,
+      trend,
+      velocity,
+      confidence,
+      data_quality: quality,
+      debug_info: {
+        raw_max_displacement: maxDisplacement,
+        raw_horizontal: maxHorizontal,
+        raw_vertical: maxVertical,
+        raw_velocity: velocity,
+        raw_confidence: confidence
+      }
+    });
+  });
 
   app.get("/device-management", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
