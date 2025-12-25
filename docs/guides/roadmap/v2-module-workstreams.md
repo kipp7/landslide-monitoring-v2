@@ -155,7 +155,7 @@
 | WS-N.7 | codex | `feat/ws-n7/analysis-charts-rest` | https://github.com/kipp7/landslide-monitoring-v2/pull/199 | done | WS-N.5 | Web：`/analysis` 图表 1:1（其余图表）：移植液位图（LiquidFill）、柱状图（BarChart）、设备错误图（DeviceErrorChart）、异常类型图（AnomalyTypeChart）并适配 v2 数据/告警聚合 |
 | WS-N.8 | codex | `feat/ws-n8/analysis-3d-map` | https://github.com/kipp7/landslide-monitoring-v2/pull/202 | done | WS-N.5 | Web：`/analysis` 3D 地图 1:1：移植 `Map3DContainer`（或等价 3D 引擎），补齐参考区 2D/3D/卫星/视频切换与交互；如 3D 依赖新引擎，先拆“技术选型+最小 demo”PR |
 | WS-N.9 | codex | `feat/ws-n9/analysis-performance-monitor` |  | claimed | WS-N.5 | Web：`/analysis` 性能监控 1:1：移植 `usePerformanceMonitor` 与性能告警 UI（warnings/isPerformanceGood），并补齐必要的缓存/节流策略（不改变 v2 API） |
-| WS-N.10 | codex | `feat/ws-n10/analysis-device-naming` | https://github.com/kipp7/landslide-monitoring-v2/pull/205 | claimed | WS-N.5 | Web：`/analysis` 设备命名/映射 1:1：对齐参考区 `device_mapping`/位置命名逻辑（generateDeviceName/getRiskByLocation/getDetailedLocationInfo），在 v2 侧实现等价映射（不直连 Supabase） |
+| WS-N.10 | codex | `feat/ws-n10/analysis-device-naming` | https://github.com/kipp7/landslide-monitoring-v2/pull/205 | done | WS-N.5 | Web：`/analysis` 设备命名/映射 1:1：对齐参考区 `device_mapping`/位置命名逻辑（generateDeviceName/getRiskByLocation/getDetailedLocationInfo），在 v2 侧实现等价映射（不直连 Supabase） |
 
 ### 4.4 对齐与验收（总集成人做）
 
