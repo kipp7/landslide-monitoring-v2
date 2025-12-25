@@ -97,6 +97,8 @@ export default function DeviceManagementPage() {
   };
   
   const deviceInfo = getCurrentDeviceInfo();
+  const coordinatesLat = deviceInfo.coordinates?.lat;
+  const coordinatesLng = deviceInfo.coordinates?.lng;
 
   // 获取实时数据
   const fetchRealTimeData = useCallback(async (showMessage = false) => {
@@ -693,8 +695,8 @@ export default function DeviceManagementPage() {
                             <div className="flex flex-col">
                               <span className="text-xs text-slate-400">GPS坐标</span>
                               <div className="text-xs text-slate-300 font-mono">
-                                <div>{deviceInfo.coordinates.lat.toFixed(6)}°N</div>
-                                <div>{deviceInfo.coordinates.lng.toFixed(6)}°E</div>
+                                <div>{typeof coordinatesLat === 'number' ? `${coordinatesLat.toFixed(6)}°N` : '-'}</div>
+                                <div>{typeof coordinatesLng === 'number' ? `${coordinatesLng.toFixed(6)}°E` : '-'}</div>
                               </div>
                             </div>
                             <div className="flex flex-col">
