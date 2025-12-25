@@ -86,6 +86,7 @@
 - （已补齐）GPS 监测页面（参考区 `/gps-monitoring`）：导出/CEEMD 分解/预测分析/数据详情等多分栏能力已落地（WS-D.6 + WS-D.7）。
 - （已补齐）基准点管理（参考区 `BaselineManagementV2`）：自动建立/质量评估/可用设备等高级能力已落地（WS-D.5；后端兼容端点见 WS-K.5）。
 - （已补齐）GPS 监测页导出细节：XLSX/报告/图表导出已补齐（WS-D.8）。
+- （已补齐）监测点面板（参考区 `/analysis2`）：v2 `/analysis2` 恢复 `MonitoringPoints` UI 与基本交互（WS-O.5；先用 demo 数据，后续可逐步接 v2 数据源）。
 
 ### 4.2 执行建议（并发友好）
 

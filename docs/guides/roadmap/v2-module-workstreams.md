@@ -137,7 +137,7 @@
 | WS-G.2 | codex | `feat/ws-g/telemetry-dlq-ui` | https://github.com/kipp7/landslide-monitoring-v2/pull/109 | done |  | Ops: Telemetry DLQ 页面（`/ops/telemetry-dlq`）对接 `/api/v1/telemetry/dlq*` |
 | WS-H | codex | `feat/ws-h/ai-prediction-worker` | https://github.com/kipp7/landslide-monitoring-v2/pull/84 | done |  | AI predictions plugin/worker |
 | WS-I | codex | `docs/ws-i/gap-audit-route-inventory` | https://github.com/kipp7/landslide-monitoring-v2/pull/121 | done |  | Docs: 扩充 `gap-audit.md`（v2 Web 路由盘点 + 参考区对照） |
-| WS-J | codex | `feat/ws-j/legacy-routes-compat` | https://github.com/kipp7/landslide-monitoring-v2/pull/125 | done |  | Web: 恢复旧系统兼容入口（`/baseline-management`、`/analysis2`、`/optimized-demo`）并跳转到 v2 等价页面 |
+| WS-J | codex | `feat/ws-j/legacy-routes-compat` | https://github.com/kipp7/landslide-monitoring-v2/pull/125 | done |  | Web: 恢复旧系统兼容入口（`/baseline-management`、`/analysis2`、`/optimized-demo`）：baseline-management/optimized-demo 保持兼容跳转，analysis2 后续在 WS-O.5 恢复实际页面 |
 | WS-K.1 | codex | `feat/ws-k1/camera-esp32cam` | https://github.com/kipp7/landslide-monitoring-v2/pull/142 | done | WS-C, WS-G | Camera/ESP32-CAM：对齐参考区 `frontend/app/analysis` 的视频监控能力；决定 v2 是否提供 `/api/v1/camera/*`（或独立 service），并补齐 Web 落地点与文档；默认按“硬件最后”可延后，但需先明确方案与契约 |
 | WS-K.2 | codex | `feat/ws-k2/realtime-sse` | https://github.com/kipp7/landslide-monitoring-v2/pull/136 | done | WS-C | Realtime/SSE：对齐参考区 `frontend/app/api/realtime-stream` 的实时推送能力；明确 v2 是否需要 realtime（SSE/WebSocket），如需要则定义契约、实现最小闭环、补齐 Web 订阅与权限控制 |
 | WS-K.3 | codex | `feat/ws-k3/device-health-expert` | https://github.com/kipp7/landslide-monitoring-v2/pull/145 | done | WS-H, WS-A | 设备健康专家系统：对齐参考区 `frontend/app/api/device-health-expert` + `backend/services/expertDeviceHealthService.js`；在 v2 以 worker/plugin 方式落地（入库 + 可查询 + 可审计），并补齐 Web 展示入口（尽量不改 UI） |
@@ -161,6 +161,7 @@
 | WS-O.2 | codex | `feat/ws-o2/optimized-demo-legacy` | https://github.com/kipp7/landslide-monitoring-v2/pull/212 | done | WS-C, WS-M.1 | Web：`/optimized-demo` 1:1：恢复参考区“数据库优化演示”页面与依赖组件（`OptimizedDeviceStatus`、`useDataAggregation` 等），数据源切到 v2 API/legacy compat；当前 v2 `/optimized-demo` 仅重定向，需保留 v2 版到 `/optimized-demo-v2` |
 | WS-O.3 | codex | `feat/ws-o3/system-monitor-legacy` | https://github.com/kipp7/landslide-monitoring-v2/pull/216 | done | WS-G, WS-C, WS-M.1 | Web：`/system-monitor` 1:1：恢复参考区系统监控页（cache/realtime/worker 指标面板），将旧 hooks（`useOptimizedDeviceData`/`useDataAggregation`/`useRealtimeStream`/`useWebWorker`）迁移为 v2 版本；当前 v2 `/system-monitor` 仅重定向到 `/ops/system-monitor` |
 | WS-O.4 | codex | `feat/ws-o4/device-management-legacy` | https://github.com/kipp7/landslide-monitoring-v2/pull/218 | done | WS-B, WS-D, WS-M.1 | Web：`/device-management` 1:1：恢复参考区设备管理页（状态/监测站管理/基准点管理 tabs），并将依赖组件（`MonitoringStationManagement`/`DeviceMappingTable` 等）迁移到 v2 数据源；保留现有 v2 设备管理页到 `/device-management-v2` |
+| WS-O.5 | codex | `feat/ws-o5/analysis2-monitoring-points` | TBD | in_progress | WS-J | Web：`/analysis2` 1:1：恢复参考区 `MonitoringPoints`（监测点/传感器/异常/视图面板 demo UI），取消当前 `/analysis2` → `/analysis` 重定向 |
 
 ### 4.4 对齐与验收（总集成人做）
 

@@ -1,15 +1,9 @@
-'use client'
+import MonitoringPoints from './components/MonitoringPoints'
 
-import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-
-export default function LegacyAnalysisRedirect() {
-  const router = useRouter()
-
-  useEffect(() => {
-    router.replace('/analysis')
-  }, [router])
-
-  return null
+export default function Analysis2Page() {
+  return (
+    <div className="min-h-screen bg-gray-100">
+      <MonitoringPoints />
+    </div>
+  )
 }
-
