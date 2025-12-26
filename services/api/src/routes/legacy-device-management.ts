@@ -452,6 +452,19 @@ async function fetchDeviceWithStation(pg: PgPool, deviceId: string): Promise<Dev
   );
 }
 
+function legacyMonitoringStationRow(row: DeviceListRow): Record<string, unknown> {
+  return {
+    device_id: legacyKeyFromMetadata(row.device_name, row.metadata),
+    actual_device_id: row.device_id,
+    station_name: row.station_name ?? row.device_name,
+    location_name: row.station_name ?? "",
+    latitude: row.latitude,
+    longitude: row.longitude,
+    status: row.status,
+    metadata: row.metadata ?? {}
+  };
+}
+
 async function fetchGpsBaseline(pg: PgPool, deviceId: string): Promise<z.infer<typeof baselineSchema> | null> {
   const row = await withPgClient(pg, async (client) =>
     queryOne<{ baseline: unknown }>(
@@ -1985,7 +1998,12 @@ export function registerLegacyDeviceManagementCompatRoutes(
       );
     });
 
-    legacyOk(reply, { updated: true });
+    const updatedRow = await fetchDeviceWithStation(pg, resolved);
+    if (!updatedRow) {
+      legacyOk(reply, { updated: true });
+      return;
+    }
+    legacyOk(reply, legacyMonitoringStationRow(updatedRow));
   });
 
   app.put("/monitoring-stations/:deviceId", async (request, reply) => {
@@ -2026,7 +2044,12 @@ export function registerLegacyDeviceManagementCompatRoutes(
       );
     });
 
-    legacyOk(reply, { updated: true });
+    const updatedRow = await fetchDeviceWithStation(pg, resolved);
+    if (!updatedRow) {
+      legacyOk(reply, { updated: true });
+      return;
+    }
+    legacyOk(reply, legacyMonitoringStationRow(updatedRow));
   });
 
   app.post("/monitoring-stations", async (request, reply) => {
