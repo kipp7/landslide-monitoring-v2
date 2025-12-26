@@ -7,7 +7,8 @@
 - 每次合并一个 PR 到 `main`，如果它改变了项目阶段/里程碑/下一步，必须更新本页。
 - 本页只记录“当前状态与下一步”，历史细节放到 `docs/incidents/` 或 PR/commit 记录中。
 
-最后更新时间：2025-12-26（WS-N.19：/analysis legacy hooks 数据对齐）
+最后更新时间：2025-12-26（WS-K.15：legacy compat aliases 补齐；WS-N.19：/analysis legacy hooks 数据对齐）
+- 2025-12-26：WS-K.15（legacy compat aliases）：PR #247，补齐参考区“optimized/real”等硬编码路径的别名兼容（集中在 api-service 路由层做转发/映射），减少旧前端对 URL 细节的耦合。
 - 2025-12-26：WS-N.18（参考区 app/components 1:1 兼容导出补齐）：补齐 `apps/web/app/components/*` 的薄包装 re-export，覆盖图表/地图/侧边栏/管理组件。
 - 2025-12-26：WS-N.19（/analysis 大屏）：实现 legacy `useRealtimeData`/`useDeviceShadow` 数据源（基于 v2 API），并对齐 analysis-legacy 文案/标题到参考区 1:1。
 - 2025-12-25：WS-K.12（legacy `/api/gps-deformation/:deviceId`）：PR #233，补齐 `dataQuality`/`results`/`realTimeDisplacement` 等字段，并在 points 中提供数值型 `risk_level`（0~4）。
