@@ -189,6 +189,14 @@ async function main(): Promise<void> {
 
   // iot-server compatibility (reference system /devices/*, /info).
   registerIotServerCompatRoutes(app);
+  // Reference frontend hook `useDeviceMappings` defaults apiBase to `${host}/iot` and calls `/iot/devices/*`.
+  app.register(
+    (iot, _opts, done) => {
+      registerIotServerCompatRoutes(iot);
+      done();
+    },
+    { prefix: "/iot" }
+  );
 
   // Legacy-compatible path (reference system): /api/anomaly-assessment
   app.register(
