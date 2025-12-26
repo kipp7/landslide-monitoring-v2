@@ -49,7 +49,10 @@ async function resolveDeviceUuid(pg: PgPool | null, inputDeviceId: string): Prom
       `
         SELECT device_id
         FROM devices
-        WHERE metadata->>'huawei_device_id' = $1
+        WHERE device_name = $1
+           OR metadata->>'legacy_device_id' = $1
+           OR metadata#>>'{externalIds,legacy}' = $1
+           OR metadata->>'huawei_device_id' = $1
            OR metadata#>>'{huawei,deviceId}' = $1
            OR metadata#>>'{externalIds,huawei}' = $1
         LIMIT 1
