@@ -189,8 +189,6 @@ async function main(): Promise<void> {
       registerLegacyDeviceManagementCompatRoutes(api, config, ch, pg);
       registerLegacyDisabledRoutes(api, config);
       registerLegacyCompatAliasRoutes(api);
-      registerLegacyDisabledRoutes(api, config);
-      registerLegacyCompatAliasRoutes(api);
       done();
     },
     { prefix: "/api" }
@@ -207,8 +205,6 @@ async function main(): Promise<void> {
       registerAiPredictionLegacyCompatRoutes(api, config, pg);
       registerDeviceHealthExpertLegacyCompatRoutes(api, config, ch, pg);
       registerLegacyDeviceManagementCompatRoutes(api, config, ch, pg);
-      registerLegacyDisabledRoutes(api, config);
-      registerLegacyCompatAliasRoutes(api);
       registerLegacyDisabledRoutes(api, config);
       registerLegacyCompatAliasRoutes(api);
       done();

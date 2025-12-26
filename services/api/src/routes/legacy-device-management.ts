@@ -15,12 +15,6 @@ function legacyFail(reply: FastifyReply, statusCode: number, message: string, de
   void reply.code(statusCode).send({ success: false, message, error: details, timestamp: new Date().toISOString() });
 }
 
-function redirectLegacyAlias(rawUrl: string | undefined, reply: FastifyReply, from: string, to: string): void {
-  const input = rawUrl ?? "";
-  const target = input.includes(from) ? input.replace(from, to) : input;
-  void reply.redirect(target, 307);
-}
-
 const aggregationSchema = z
   .object({
     type: z.enum(["hierarchy_stats", "network_stats", "device_summary", "real_time_dashboard"]),
@@ -1053,22 +1047,6 @@ export function registerLegacyDeviceManagementCompatRoutes(
     });
   });
 
-  app.get("/device-management-optimized", async (request, reply) => {
-    redirectLegacyAlias(request.raw.url, reply, "/device-management-optimized", "/device-management");
-  });
-
-  app.get("/device-management-real", async (request, reply) => {
-    redirectLegacyAlias(request.raw.url, reply, "/device-management-real", "/device-management");
-  });
-
-  app.get("/device-management-real-db", async (request, reply) => {
-    redirectLegacyAlias(request.raw.url, reply, "/device-management-real-db", "/device-management");
-  });
-
-  app.post("/device-management-real/diagnostics", async (request, reply) => {
-    redirectLegacyAlias(request.raw.url, reply, "/device-management-real/diagnostics", "/device-management/diagnostics");
-  });
-
   app.get("/device-management/hierarchical", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
@@ -1929,14 +1907,6 @@ export function registerLegacyDeviceManagementCompatRoutes(
     });
 
     legacyOk(reply, { updated });
-  });
-
-  app.get("/monitoring-stations-optimized", async (request, reply) => {
-    redirectLegacyAlias(request.raw.url, reply, "/monitoring-stations-optimized", "/monitoring-stations");
-  });
-
-  app.put("/monitoring-stations-optimized", async (request, reply) => {
-    redirectLegacyAlias(request.raw.url, reply, "/monitoring-stations-optimized", "/monitoring-stations");
   });
 
   app.get("/monitoring-stations/:deviceId", async (request, reply) => {
