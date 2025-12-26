@@ -40,6 +40,14 @@ const deviceManagementQuerySchema = z.object({
   startTime: z.string().datetime().optional(),
   endTime: z.string().datetime().optional(),
   limit: z.coerce.number().int().positive().max(5000).optional(),
+  cache: z.preprocess((v) => {
+    if (v === "" || v === null || v === undefined) return undefined;
+    if (v === "true") return true;
+    if (v === "false") return false;
+    if (v === true) return true;
+    if (v === false) return false;
+    return v;
+  }, z.boolean().optional()),
   data_only: z.preprocess((v) => {
     if (v === "" || v === null || v === undefined) return undefined;
     if (v === "true") return true;
@@ -1054,6 +1062,7 @@ export function registerLegacyDeviceManagementCompatRoutes(
     const inputDeviceId = (parsed.data.device_id ?? parsed.data.deviceId ?? "").trim() || "device_1";
     const limit = parsed.data.limit ?? 50;
     const dataOnly = parsed.data.data_only ?? parsed.data.dataOnly ?? false;
+    const cacheRequested = parsed.data.cache ?? true;
 
     const resolved = await resolveDeviceId(pg, inputDeviceId);
     if (!resolved) {
@@ -1089,6 +1098,8 @@ export function registerLegacyDeviceManagementCompatRoutes(
         deviceId: inputDeviceId,
         hasBaseline: computed.hasBaseline,
         calculationMode: "v2_clickhouse",
+        fromCache: false,
+        optimization: { method: "v2_clickhouse", cache: cacheRequested },
         timestamp: new Date().toISOString()
       });
       return;
@@ -1132,6 +1143,8 @@ export function registerLegacyDeviceManagementCompatRoutes(
         signal_strength: online === "online" ? 90 : 0,
         baseline_established: Boolean(baseline)
       },
+      fromCache: false,
+      optimization: { method: "v2_clickhouse", cache: cacheRequested },
       timestamp: new Date().toISOString()
     });
   });
