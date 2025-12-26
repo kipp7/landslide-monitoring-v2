@@ -35,6 +35,7 @@ import { registerDeviceHealthExpertLegacyCompatRoutes, registerDeviceHealthExper
 import { registerAiPredictionLegacyCompatRoutes, registerAiPredictionRoutes } from "./routes/ai-predictions";
 import { registerLegacyDisabledRoutes } from "./routes/legacy-disabled";
 import { registerLegacyDeviceManagementCompatRoutes } from "./routes/legacy-device-management";
+import { registerIotServerCompatRoutes } from "./routes/iot-server-compat";
 
 async function main(): Promise<void> {
   dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
@@ -175,6 +176,9 @@ async function main(): Promise<void> {
 
   // Legacy-compatible path (reference system): /api/camera
   registerCameraLegacyCompatRoutes(app, config, pg);
+
+  // iot-server compatibility (reference system /devices/*, /info).
+  registerIotServerCompatRoutes(app);
 
   // Legacy-compatible path (reference system): /api/anomaly-assessment
   app.register(
