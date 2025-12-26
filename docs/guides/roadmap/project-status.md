@@ -7,7 +7,8 @@
 - 每次合并一个 PR 到 `main`，如果它改变了项目阶段/里程碑/下一步，必须更新本页。
 - 本页只记录“当前状态与下一步”，历史细节放到 `docs/incidents/` 或 PR/commit 记录中。
 
-最后更新时间：2025-12-26（fix：/health 返回结构对齐；docs：对齐 roadmap/workstreams 状态；WS-K.20：/iot/health + /iot/huawei/* 兼容，PR #258；WS-N.22：参考区 app/utils 1:1 入口补齐，PR #257；WS-K.19：legacy data-aggregation clear_cache，PR #256；WS-K.18：iot-server /devices 兼容，PR #254；WS-N.21：参考区 app/hooks 1:1 入口补齐，PR #255；WS-K.17：legacy camera alias，PR #252；WS-K.16：legacy baselines alias routes，PR #251；WS-K.15：legacy compat aliases 补齐，PR #247；WS-N.20：/analysis legacy 占位组件还原）
+最后更新时间：2025-12-26（WS-K.21：legacy /gps-monitoring 1:1 + /api/gps-deformation CEEMD/预测补齐，PR #263；fix：/health 返回结构对齐；docs：对齐 roadmap/workstreams 状态；WS-K.20：/iot/health + /iot/huawei/* 兼容，PR #258；WS-N.22：参考区 app/utils 1:1 入口补齐，PR #257；WS-K.19：legacy data-aggregation clear_cache，PR #256；WS-K.18：iot-server /devices 兼容，PR #254；WS-N.21：参考区 app/hooks 1:1 入口补齐，PR #255；WS-K.17：legacy camera alias，PR #252；WS-K.16：legacy baselines alias routes，PR #251；WS-K.15：legacy compat aliases 补齐，PR #247；WS-N.20：/analysis legacy 占位组件还原）
+- 2025-12-26：WS-K.21（legacy /gps-monitoring 1:1 + /api/gps-deformation CEEMD/预测）：PR #263，恢复参考区 `/gps-monitoring` 页面并补齐 `EnhancedPredictionCharts`；legacy `/api/gps-deformation/:deviceId` 增加 `ceemdDecomposition` + `prediction`；legacy `/api/device-management` data_only 支持 `timeRange/startTime/endTime`。
 - 2025-12-26：fix（/health 返回结构对齐）：PR #260，补齐 `/health`（与 `/iot/health`）响应中的 `service` 与 `timestamp` 字段，兼容参考区脚本/旧探针（保留 `ok: true`）。
 - 2025-12-26：docs（roadmap/workstreams）：将 WS-K.15 的重复条目合并为单条 `done` 记录，并在备注中包含补充 PR #253（仅文档状态调整，不改行为）。
 - 2025-12-26：WS-K.20（/iot 前缀兼容）：PR #258，补齐 `/iot/health` 与 `/iot/huawei/*` 访问（参考区在 baseUrl=/iot 时会调用），避免旧前端在 nginx `/iot` 代理场景下 404。
