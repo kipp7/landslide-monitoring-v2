@@ -7,7 +7,8 @@
 - 每次合并一个 PR 到 `main`，如果它改变了项目阶段/里程碑/下一步，必须更新本页。
 - 本页只记录“当前状态与下一步”，历史细节放到 `docs/incidents/` 或 PR/commit 记录中。
 
-最后更新时间：2025-12-25（WS-K.12：legacy `/api/gps-deformation/:deviceId` 返回结构补齐；WS-K.9：legacy 设备管理形变端点兼容；WS-K.10：legacy `/iot/api/*` 前缀兼容；WS-K.8：legacy `/api/baselines` CRUD 兼容；WS-K.7：legacy `/api/gps-deformation/:deviceId` 兼容端点；e2e：Stage4Regression 修复 health-check 端口同步；WS-G.3：/ops/debug-api 补齐“一键连通性测试”（/health + /huawei/*；危险 POST 需二次确认）；阶段 5 已完成：固件模拟器 + Stage5Regression 回归基线；硬件联调待启动）
+最后更新时间：2025-12-26（WS-N.18：参考区 app/components 1:1 兼容导出补齐）
+- 2025-12-26：WS-N.18（参考区 app/components 1:1 兼容导出补齐）：补齐 `apps/web/app/components/*` 的薄包装 re-export，覆盖图表/地图/侧边栏/管理组件。
 - 2025-12-25：WS-K.12（legacy `/api/gps-deformation/:deviceId`）：PR #233，补齐 `dataQuality`/`results`/`realTimeDisplacement` 等字段，并在 points 中提供数值型 `risk_level`（0~4）。
 - 2025-12-25：WS-K.9（legacy 设备管理形变端点）：PR #230，补齐 `/api/device-management/deformation/:deviceId`、`/trend`、`/summary`（ClickHouse + gps_baselines；含 legacy deviceId → UUID 映射）。
 - 2025-12-25：WS-K.10（legacy `/iot/api/*` 前缀兼容）：PR #232，将 legacy compat 路由额外挂载到 `/iot/api`（与 `/api/*` 保持一致），并补齐 `/iot/huawei` 禁用 stub（503）。
@@ -165,10 +166,9 @@ M3（阶段 2：可告警）目标：
 2) 缺口对照验收（非硬件）：按 `docs/guides/roadmap/gap-audit.md` 逐项对照参考区与 v2 的落地点，确保“功能不缺失”，并将缺口拆成最小 PR 推进
 3) 真实固件联调（硬件最后）：按 `docs/integrations/mqtt/*` 与 `docs/integrations/firmware/README.md`，让真实设备跑通 telemetry + commands，并以 `-Stage5Regression` 作为回归基线
 4) 固件细节沉淀：将真实固件的“身份包存储/重连退避/命令回执”实现细节沉淀到 `docs/integrations/firmware/`（含可复用代码片段与踩坑记录）
-5) /analysis 对齐（UI/组件）：补齐 legacy ExceptionStatsChart 组件与懒加载导出（WS-N.13）
-6) 参考区组件补齐：新增 `FullScreenWrapper`（apps/web）用于全屏背景包裹（不改变现有页面行为）
-7) 参考区组件补齐：新增 `BaselineManagement`/`DeviceMappingTable`/`ClusterPopup` 与 `*Updated`/`Sidebar` 的兼容导出（apps/web）
-8) /analysis2 对齐（UI/路径）：补齐 `app/components2/*` 与 `app/config/monitoring-stations.ts`，并对齐 `app/analysis2/page.tsx` 的导入与布局
+5) /analysis 大屏 UI 1:1：按参考区 `analysis/page.tsx` 逐项对齐懒加载组件、布局与交互（温湿度/加速度/陀螺仪/异常类型/液位/设备错误/异常统计/实时表/2D+3D 地图/HoverSidebar/性能监控等）
+6) app 路径级兼容：补齐参考区 `app/hooks/*` 与 `app/utils/*` 的同名入口（以 re-export 为主），避免旧引用路径失效
+7) legacy route handlers：评估并补齐需要的 `apps/web/app/api/*/route.ts` 兼容层（仅必要/安全端点；不恢复 inspect/db-admin/test）
 
 ## 4) 关键入口（新 AI 只读这些就能上手）
 
