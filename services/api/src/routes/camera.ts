@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { AppConfig } from "../config";
 import { requirePermission, type AdminAuthConfig } from "../authz";
@@ -177,7 +177,7 @@ export function registerCameraLegacyCompatRoutes(app: FastifyInstance, config: A
     })
     .passthrough();
 
-  app.get("/camera", async (request, reply) => {
+  const handleLegacyGet = async (request: FastifyRequest, reply: FastifyReply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
 
     const parseQuery = legacyGetQuerySchema.safeParse(request.query ?? {});
@@ -201,9 +201,9 @@ export function registerCameraLegacyCompatRoutes(app: FastifyInstance, config: A
 
     const list = Array.from(devices.values()).map(withOnlineCalc);
     void reply.code(200).send({ devices: list, total: list.length, online: list.filter((d) => d.status === "online").length });
-  });
+  };
 
-  app.post("/camera", async (request, reply) => {
+  const handleLegacyPost = async (request: FastifyRequest, reply: FastifyReply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "system:config"))) return;
 
     const parseBody = legacyPostSchema.safeParse(request.body);
@@ -258,5 +258,10 @@ export function registerCameraLegacyCompatRoutes(app: FastifyInstance, config: A
         return;
       }
     }
-  });
+  };
+
+  for (const path of ["/camera", "/api/camera", "/iot/api/camera"]) {
+    app.get(path, handleLegacyGet);
+    app.post(path, handleLegacyPost);
+  }
 }
