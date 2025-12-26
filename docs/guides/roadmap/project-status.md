@@ -204,6 +204,7 @@ M3（阶段 2：可告警）目标：
 ### 质量门禁（必过）
 
 - `python docs/tools/run-quality-gates.py`
+- 2025-12-26：WS-K.14（PR #242）：legacy `inspect-*`/`db-admin`/`test-*` 调试/管理端点在 v2 中显式禁用（403），并补齐说明文档 `docs/integrations/api/015-legacy-disabled-endpoints.md`
 - `npm run lint`
 - `npm run build`
 
