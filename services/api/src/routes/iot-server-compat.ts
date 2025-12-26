@@ -90,6 +90,8 @@ export function registerIotServerCompatRoutes(
         device_mappings: "GET /devices/mappings",
         device_info: "GET /devices/info/:simpleId",
         device_by_id: "GET /devices/:deviceId",
+        device_management: "GET /devices/:deviceId/management",
+        device_status: "GET /devices/:deviceId/status",
         latest_data: "GET /debug/latest-data",
         legacy_prefix: "GET /api/iot/devices/* (preferred in v2 legacy-compat)"
       },
