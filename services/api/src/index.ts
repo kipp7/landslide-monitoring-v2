@@ -134,6 +134,7 @@ async function main(): Promise<void> {
   });
 
   app.get("/health", () => ({ ok: true }));
+  app.get("/iot/health", () => ({ ok: true }));
 
   const ch = createClickhouseClient(config);
   const pg = createPgPool(config);
@@ -174,6 +175,13 @@ async function main(): Promise<void> {
 
   // Legacy-compatible paths (reference system): /huawei/*
   registerHuaweiLegacyCompatRoutes(app, config, ch, pg);
+  app.register(
+    (iot, _opts, done) => {
+      registerHuaweiLegacyCompatRoutes(iot, config, ch, pg);
+      done();
+    },
+    { prefix: "/iot" }
+  );
 
   // Legacy-compatible path (reference system): /api/camera
   registerCameraLegacyCompatRoutes(app, config, pg);
