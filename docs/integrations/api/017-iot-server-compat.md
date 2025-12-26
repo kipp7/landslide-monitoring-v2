@@ -6,6 +6,7 @@ v2 的权威接口仍然是 `api-service` 的 legacy compat 前缀（`/api/*`、
 
 ## 1) 兼容端点
 
+- 同时提供 `/iot/*` 前缀下对等端点（如 `GET /iot/info`、`GET /iot/devices/mappings`），用于参考区前端 `NEXT_PUBLIC_IOT_API_BASE` 默认指向 `${host}/iot` 时的调用。
 - `GET /info`：返回服务信息与可用端点索引（最小实现）
 - `GET /health`：健康检查（兼容参考区 iot-server；同时支持 `/iot/health`）
 - `GET /devices/mappings`：等价于 `GET /api/iot/devices/mappings`，并补充 `count`

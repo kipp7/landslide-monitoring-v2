@@ -76,8 +76,10 @@ export function registerIotServerCompatRoutes(
   app: FastifyInstance,
   config: AppConfig,
   ch: ClickHouseClient,
-  pg: PgPool | null
+  pg: PgPool | null,
+  opts?: { injector?: FastifyInstance }
 ): void {
+  const injector = opts?.injector ?? app;
   const adminCfg: AdminAuthConfig = { adminApiToken: config.adminApiToken, jwtEnabled: Boolean(config.jwtAccessSecret) };
 
   app.get("/info", async (_request, reply) => {
@@ -108,7 +110,7 @@ export function registerIotServerCompatRoutes(
   });
 
   app.get("/devices/mappings", async (request, reply) => {
-    const { res, parsed } = await injectJson(app, {
+    const { res, parsed } = await injectJson(injector, {
       method: "GET",
       url: "/api/iot/devices/mappings",
       headers: forwardAuthHeader(request)
@@ -139,7 +141,7 @@ export function registerIotServerCompatRoutes(
       return;
     }
 
-    const { res, parsed } = await injectJson(app, {
+    const { res, parsed } = await injectJson(injector, {
       method: "GET",
       url: `/api/iot/devices/${encodeURIComponent(deviceId)}`,
       headers: forwardAuthHeader(request)
@@ -161,7 +163,7 @@ export function registerIotServerCompatRoutes(
   });
 
   app.get("/devices/list", async (request, reply) => {
-    const { res, parsed } = await injectJson(app, {
+    const { res, parsed } = await injectJson(injector, {
       method: "GET",
       url: "/api/iot/devices/mappings",
       headers: forwardAuthHeader(request)
@@ -207,7 +209,7 @@ export function registerIotServerCompatRoutes(
       return;
     }
 
-    const { res, parsed } = await injectJson(app, {
+    const { res, parsed } = await injectJson(injector, {
       method: "GET",
       url: "/api/iot/devices/mappings",
       headers: forwardAuthHeader(request)
@@ -255,7 +257,7 @@ export function registerIotServerCompatRoutes(
       return;
     }
 
-    const { res, parsed } = await injectJson(app, {
+    const { res, parsed } = await injectJson(injector, {
       method: "GET",
       url: `/api/device-management?device_id=${encodeURIComponent(deviceId)}`,
       headers: forwardAuthHeader(request)
@@ -271,7 +273,7 @@ export function registerIotServerCompatRoutes(
 
     let deformationData: Record<string, unknown> | null = null;
     try {
-      const { res: defRes, parsed: defParsed } = await injectJson(app, {
+      const { res: defRes, parsed: defParsed } = await injectJson(injector, {
         method: "GET",
         url: `/api/device-management/deformation/${encodeURIComponent(deviceId)}/summary`,
         headers: forwardAuthHeader(request)
@@ -323,7 +325,7 @@ export function registerIotServerCompatRoutes(
       return;
     }
 
-    const { res, parsed } = await injectJson(app, {
+    const { res, parsed } = await injectJson(injector, {
       method: "GET",
       url: `/api/device-management?device_id=${encodeURIComponent(deviceId)}`,
       headers: forwardAuthHeader(request)
