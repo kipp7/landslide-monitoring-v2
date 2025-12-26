@@ -61,6 +61,45 @@ const deformationTrendQuerySchema = z
   })
   .passthrough();
 
+const exportStatsQuerySchema = z
+  .object({
+    device_id: z.string().optional(),
+    deviceId: z.string().optional()
+  })
+  .passthrough();
+
+const exportRequestSchema = z
+  .object({
+    device_id: z.string().optional(),
+    export_type: z.enum(["today", "history", "custom"]).optional(),
+    start_date: z.string().optional(),
+    end_date: z.string().optional(),
+    format: z.enum(["json", "csv", "excel"]).optional()
+  })
+  .passthrough();
+
+const diagnosticsRequestSchema = z
+  .object({
+    device_id: z.string().optional(),
+    simple_id: z.string().optional()
+  })
+  .passthrough();
+
+const reportsQuerySchema = z
+  .object({
+    device_id: z.string().optional()
+  })
+  .passthrough();
+
+const reportsRequestSchema = z
+  .object({
+    device_id: z.string().optional(),
+    report_type: z.enum(["daily", "weekly", "monthly", "custom"]).optional(),
+    start_date: z.string().optional(),
+    end_date: z.string().optional()
+  })
+  .passthrough();
+
 const monitoringStationsUpdateSchema = z.record(z.unknown());
 
 const monitoringStationsBulkUpdateSchema = z
@@ -84,6 +123,17 @@ type BaselineInfo = z.infer<typeof baselineSchema> & {
 function utcStartOfDay(d: Date): Date {
   const x = new Date(d.getTime());
   x.setUTCHours(0, 0, 0, 0);
+  return x;
+}
+
+function utcStartOfMonth(d: Date): Date {
+  const x = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1, 0, 0, 0, 0));
+  return x;
+}
+
+function utcTomorrowStart(d: Date): Date {
+  const x = utcStartOfDay(d);
+  x.setUTCDate(x.getUTCDate() + 1);
   return x;
 }
 
@@ -118,6 +168,21 @@ function onlineStatus(lastSeenAt: string | null, status: "inactive" | "active" |
   const t = Date.parse(lastSeenAt);
   if (!Number.isFinite(t)) return "offline";
   return Date.now() - t < 5 * 60_000 ? "online" : "offline";
+}
+
+function toZhCnTime(value: string): string {
+  const d = new Date(value);
+  if (Number.isFinite(d.getTime())) return d.toLocaleString("zh-CN");
+  return value;
+}
+
+function toCsv(rows: Record<string, string>[]): string {
+  if (rows.length === 0) return "";
+  const first = rows[0];
+  if (!first) return "";
+  const headers = Object.keys(first);
+  const escape = (value: string) => `"${value.replace(/"/g, '""')}"`;
+  return [headers.join(","), ...rows.map((r) => headers.map((h) => escape(r[h] ?? "")).join(","))].join("\n");
 }
 
 type DeviceListRow = {
@@ -196,6 +261,83 @@ async function listDevicesWithStations(pg: PgPool): Promise<DeviceListRow[]> {
     );
     return res.rows;
   });
+}
+
+type ExportBucketRow = {
+  bucket_ts: string;
+  temperature_c: number | null;
+  humidity_pct: number | null;
+  illumination: number | null;
+  acceleration_x: number | null;
+  acceleration_y: number | null;
+  acceleration_z: number | null;
+  gyroscope_x: number | null;
+  gyroscope_y: number | null;
+  gyroscope_z: number | null;
+};
+
+async function fetchDeviceMinuteBuckets(
+  config: AppConfig,
+  ch: ClickHouseClient,
+  deviceId: string,
+  start: Date,
+  end: Date,
+  limit: number
+): Promise<ExportBucketRow[]> {
+  const keys = [
+    "temperature_c",
+    "humidity_pct",
+    "illumination",
+    "acceleration_x",
+    "acceleration_y",
+    "acceleration_z",
+    "gyroscope_x",
+    "gyroscope_y",
+    "gyroscope_z"
+  ];
+
+  const sql = `
+    SELECT
+      toString(bucket_ts) AS bucket_ts,
+      argMaxIf(v, received_ts, sensor_key = 'temperature_c') AS temperature_c,
+      argMaxIf(v, received_ts, sensor_key = 'humidity_pct') AS humidity_pct,
+      argMaxIf(v, received_ts, sensor_key = 'illumination') AS illumination,
+      argMaxIf(v, received_ts, sensor_key = 'acceleration_x') AS acceleration_x,
+      argMaxIf(v, received_ts, sensor_key = 'acceleration_y') AS acceleration_y,
+      argMaxIf(v, received_ts, sensor_key = 'acceleration_z') AS acceleration_z,
+      argMaxIf(v, received_ts, sensor_key = 'gyroscope_x') AS gyroscope_x,
+      argMaxIf(v, received_ts, sensor_key = 'gyroscope_y') AS gyroscope_y,
+      argMaxIf(v, received_ts, sensor_key = 'gyroscope_z') AS gyroscope_z
+    FROM (
+      SELECT
+        toStartOfMinute(received_ts) AS bucket_ts,
+        received_ts,
+        sensor_key,
+        if(isNull(value_f64) AND isNull(value_i64), NULL, coalesce(value_f64, toFloat64(value_i64))) AS v
+      FROM ${config.clickhouseDatabase}.${config.clickhouseTable}
+      WHERE device_id = {deviceId:String}
+        AND received_ts >= {start:DateTime64(3, 'UTC')}
+        AND received_ts < {end:DateTime64(3, 'UTC')}
+        AND sensor_key IN {sensorKeys:Array(String)}
+    )
+    GROUP BY bucket_ts
+    ORDER BY bucket_ts DESC
+    LIMIT {limit:UInt32}
+  `;
+
+  const result = await ch.query({
+    query: sql,
+    query_params: {
+      deviceId,
+      sensorKeys: keys,
+      start: toClickhouseDateTime64Utc(start),
+      end: toClickhouseDateTime64Utc(end),
+      limit
+    },
+    format: "JSONEachRow"
+  });
+  const rows: ExportBucketRow[] = await result.json();
+  return rows.map((r) => ({ ...r, bucket_ts: clickhouseStringToIsoZ(r.bucket_ts) }));
 }
 
 async function baselineDeviceIds(pg: PgPool, deviceIds: string[]): Promise<Set<string>> {
@@ -967,6 +1109,585 @@ export function registerLegacyDeviceManagementCompatRoutes(
       totalDevices: mapped.length,
       onlineDevices,
       offlineDevices
+    });
+  });
+
+  app.get("/device-management/export", async (request, reply) => {
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
+    if (!pg) {
+      legacyFail(reply, 503, "PostgreSQL not configured");
+      return;
+    }
+
+    const parsed = exportStatsQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      legacyFail(reply, 400, "invalid query");
+      return;
+    }
+
+    const inputDeviceId = parsed.data.device_id ?? parsed.data.deviceId ?? "device_1";
+    const resolved = await resolveDeviceId(pg, inputDeviceId);
+    if (!resolved) {
+      legacyFail(reply, 404, "device not found", inputDeviceId);
+      return;
+    }
+
+    const now = new Date();
+    const today = utcStartOfDay(now);
+    const thisWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const thisMonth = utcStartOfMonth(now);
+
+    const result = await ch.query({
+      query: `
+        SELECT
+          uniqExact(toStartOfMinute(received_ts)) AS total_records,
+          toString(min(received_ts)) AS earliest,
+          toString(max(received_ts)) AS latest,
+          uniqExactIf(toStartOfMinute(received_ts), received_ts >= {today:DateTime64(3, 'UTC')}) AS today_records,
+          uniqExactIf(toStartOfMinute(received_ts), received_ts >= {week:DateTime64(3, 'UTC')}) AS this_week_records,
+          uniqExactIf(toStartOfMinute(received_ts), received_ts >= {month:DateTime64(3, 'UTC')}) AS this_month_records
+        FROM ${config.clickhouseDatabase}.${config.clickhouseTable}
+        WHERE device_id = {deviceId:String}
+      `,
+      query_params: {
+        deviceId: resolved,
+        today: toClickhouseDateTime64Utc(today),
+        week: toClickhouseDateTime64Utc(thisWeek),
+        month: toClickhouseDateTime64Utc(thisMonth)
+      },
+      format: "JSONEachRow"
+    });
+
+    const rows: {
+      total_records: number | string;
+      earliest: string | null;
+      latest: string | null;
+      today_records: number | string;
+      this_week_records: number | string;
+      this_month_records: number | string;
+    }[] = await result.json();
+    const row = rows[0];
+
+    const totalRecords = typeof row?.total_records === "string" ? Number(row.total_records) : (row?.total_records ?? 0);
+    const earliest = row?.earliest ? clickhouseStringToIsoZ(row.earliest) : null;
+    const latest = row?.latest ? clickhouseStringToIsoZ(row.latest) : null;
+    const todayRecords = typeof row?.today_records === "string" ? Number(row.today_records) : (row?.today_records ?? 0);
+    const weekRecords =
+      typeof row?.this_week_records === "string" ? Number(row.this_week_records) : (row?.this_week_records ?? 0);
+    const monthRecords =
+      typeof row?.this_month_records === "string" ? Number(row.this_month_records) : (row?.this_month_records ?? 0);
+
+    legacyOk(reply, {
+      total_records: totalRecords,
+      date_range: totalRecords > 0 ? { earliest, latest } : null,
+      today_records: todayRecords,
+      this_week_records: weekRecords,
+      this_month_records: monthRecords
+    });
+  });
+
+  app.post("/device-management/export", async (request, reply) => {
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:export"))) return;
+    if (!pg) {
+      legacyFail(reply, 503, "PostgreSQL not configured");
+      return;
+    }
+
+    const parsed = exportRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      legacyFail(reply, 400, "invalid body");
+      return;
+    }
+
+    const inputDeviceId = parsed.data.device_id ?? "device_1";
+    const exportType = parsed.data.export_type ?? "today";
+    const format = parsed.data.format ?? "json";
+
+    const resolved = await resolveDeviceId(pg, inputDeviceId);
+    if (!resolved) {
+      legacyFail(reply, 404, "device not found", inputDeviceId);
+      return;
+    }
+
+    const now = new Date();
+    let start: Date;
+    let end: Date;
+
+    if (exportType === "today") {
+      start = utcStartOfDay(now);
+      end = utcTomorrowStart(now);
+    } else if (exportType === "history") {
+      start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      end = now;
+    } else {
+      const startParsed = parsed.data.start_date ? new Date(parsed.data.start_date) : null;
+      const endParsed = parsed.data.end_date ? new Date(parsed.data.end_date) : null;
+      if (!startParsed || !endParsed || !Number.isFinite(startParsed.getTime()) || !Number.isFinite(endParsed.getTime())) {
+        legacyFail(reply, 400, "invalid time range");
+        return;
+      }
+      start = startParsed;
+      end = endParsed;
+    }
+
+    const buckets = await fetchDeviceMinuteBuckets(config, ch, resolved, start, end, 10000);
+    if (buckets.length === 0) {
+      legacyFail(reply, 404, "没有找到数据", "no data");
+      return;
+    }
+
+    const processed = buckets.map((r) => ({
+      时间: toZhCnTime(r.bucket_ts),
+      设备ID: inputDeviceId,
+      温度: r.temperature_c == null ? "N/A" : `${String(r.temperature_c)}°C`,
+      湿度: r.humidity_pct == null ? "N/A" : `${String(r.humidity_pct)}%`,
+      照度: r.illumination == null ? "N/A" : String(r.illumination),
+      加速度X: r.acceleration_x == null ? "N/A" : String(r.acceleration_x),
+      加速度Y: r.acceleration_y == null ? "N/A" : String(r.acceleration_y),
+      加速度Z: r.acceleration_z == null ? "N/A" : String(r.acceleration_z),
+      陀螺仪X: r.gyroscope_x == null ? "N/A" : String(r.gyroscope_x),
+      陀螺仪Y: r.gyroscope_y == null ? "N/A" : String(r.gyroscope_y),
+      陀螺仪Z: r.gyroscope_z == null ? "N/A" : String(r.gyroscope_z)
+    }));
+
+    if (format === "csv") {
+      const csv = toCsv(processed);
+      const ymd = new Date().toISOString().slice(0, 10);
+      void reply
+        .header("Content-Type", "text/csv; charset=utf-8")
+        .header("Content-Disposition", `attachment; filename="device_${inputDeviceId}_${exportType}_${ymd}.csv"`)
+        .code(200)
+        .send(csv);
+      return;
+    }
+
+    void reply.code(200).send({
+      success: true,
+      data: processed,
+      meta: {
+        device_id: inputDeviceId,
+        export_type: exportType,
+        total_records: processed.length,
+        export_time: new Date().toISOString(),
+        time_range: {
+          start: buckets[buckets.length - 1]?.bucket_ts ?? null,
+          end: buckets[0]?.bucket_ts ?? null
+        }
+      }
+    });
+  });
+
+  app.get("/device-management/reports", async (request, reply) => {
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
+    if (!pg) {
+      legacyFail(reply, 503, "PostgreSQL not configured");
+      return;
+    }
+
+    const parsed = reportsQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      legacyFail(reply, 400, "invalid query");
+      return;
+    }
+
+    const inputDeviceId = parsed.data.device_id ?? "device_1";
+    const resolved = await resolveDeviceId(pg, inputDeviceId);
+    if (!resolved) {
+      legacyFail(reply, 404, "device not found", inputDeviceId);
+      return;
+    }
+
+    const res = await ch.query({
+      query: `
+        SELECT
+          toString(min(received_ts)) AS earliest,
+          toString(max(received_ts)) AS latest
+        FROM ${config.clickhouseDatabase}.${config.clickhouseTable}
+        WHERE device_id = {deviceId:String}
+      `,
+      query_params: { deviceId: resolved },
+      format: "JSONEachRow"
+    });
+    const rows: { earliest: string | null; latest: string | null }[] = await res.json();
+    const earliest = rows[0]?.earliest ? clickhouseStringToIsoZ(rows[0].earliest) : null;
+    const latest = rows[0]?.latest ? clickhouseStringToIsoZ(rows[0].latest) : null;
+
+    void reply.code(200).send({
+      success: true,
+      data: {
+        available_types: [
+          { type: "daily", name: "日报告", description: "过去24小时的设备运行报告" },
+          { type: "weekly", name: "周报告", description: "过去7天的设备运行报告" },
+          { type: "monthly", name: "月报告", description: "过去30天的设备运行报告" },
+          { type: "custom", name: "自定义", description: "指定时间范围的设备运行报告" }
+        ],
+        data_range: earliest && latest ? { earliest, latest } : { earliest: null, latest: null }
+      }
+    });
+  });
+
+  app.post("/device-management/reports", async (request, reply) => {
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
+    if (!pg) {
+      legacyFail(reply, 503, "PostgreSQL not configured");
+      return;
+    }
+
+    const parsed = reportsRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      legacyFail(reply, 400, "invalid body");
+      return;
+    }
+
+    const inputDeviceId = parsed.data.device_id ?? "device_1";
+    const reportType = parsed.data.report_type ?? "daily";
+    const resolved = await resolveDeviceId(pg, inputDeviceId);
+    if (!resolved) {
+      legacyFail(reply, 404, "device not found", inputDeviceId);
+      return;
+    }
+
+    const now = new Date();
+    let start: Date;
+    let end: Date = now;
+
+    if (reportType === "daily") {
+      start = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    } else if (reportType === "weekly") {
+      start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    } else if (reportType === "monthly") {
+      start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    } else {
+      const startParsed = parsed.data.start_date ? new Date(parsed.data.start_date) : null;
+      const endParsed = parsed.data.end_date ? new Date(parsed.data.end_date) : null;
+      if (!startParsed || !endParsed || !Number.isFinite(startParsed.getTime()) || !Number.isFinite(endParsed.getTime())) {
+        legacyFail(reply, 400, "invalid time range");
+        return;
+      }
+      start = startParsed;
+      end = endParsed;
+    }
+
+    const statsRes = await ch.query({
+      query: `
+        SELECT
+          uniqExact(toStartOfMinute(received_ts)) AS total_records,
+          toString(min(received_ts)) AS first_record,
+          toString(max(received_ts)) AS last_record,
+          minIf(v, sensor_key = 'temperature_c') AS temp_min,
+          maxIf(v, sensor_key = 'temperature_c') AS temp_max,
+          avgIf(v, sensor_key = 'temperature_c') AS temp_avg,
+          countIf(sensor_key = 'temperature_c' AND NOT isNull(v)) AS temp_count,
+          minIf(v, sensor_key = 'humidity_pct') AS humidity_min,
+          maxIf(v, sensor_key = 'humidity_pct') AS humidity_max,
+          avgIf(v, sensor_key = 'humidity_pct') AS humidity_avg,
+          countIf(sensor_key = 'humidity_pct' AND NOT isNull(v)) AS humidity_count
+        FROM (
+          SELECT
+            received_ts,
+            sensor_key,
+            if(isNull(value_f64) AND isNull(value_i64), NULL, coalesce(value_f64, toFloat64(value_i64))) AS v
+          FROM ${config.clickhouseDatabase}.${config.clickhouseTable}
+          WHERE device_id = {deviceId:String}
+            AND received_ts >= {start:DateTime64(3, 'UTC')}
+            AND received_ts <= {end:DateTime64(3, 'UTC')}
+            AND sensor_key IN {sensorKeys:Array(String)}
+        )
+      `,
+      query_params: {
+        deviceId: resolved,
+        start: toClickhouseDateTime64Utc(start),
+        end: toClickhouseDateTime64Utc(end),
+        sensorKeys: ["temperature_c", "humidity_pct"]
+      },
+      format: "JSONEachRow"
+    });
+
+    const rows: {
+      total_records: number | string;
+      first_record: string | null;
+      last_record: string | null;
+      temp_min: number | null;
+      temp_max: number | null;
+      temp_avg: number | null;
+      temp_count: number | string;
+      humidity_min: number | null;
+      humidity_max: number | null;
+      humidity_avg: number | null;
+      humidity_count: number | string;
+    }[] = await statsRes.json();
+    const s = rows[0];
+
+    const totalRecords =
+      typeof s?.total_records === "string" ? Number(s.total_records) : (s?.total_records ?? 0);
+    if (!totalRecords) {
+      legacyFail(reply, 404, "指定时间范围内没有数据");
+      return;
+    }
+
+    const expectedRecords = Math.max(1, Math.floor((end.getTime() - start.getTime()) / (60 * 1000)));
+    const dataCompleteness = Math.min(100, (totalRecords / expectedRecords) * 100);
+
+    const anomalies: { type: string; message: string; severity: "warning" | "critical" }[] = [];
+    if (s?.temp_min != null && s.temp_max != null) {
+      if (s.temp_min < -10 || s.temp_max > 60) {
+        anomalies.push({
+          type: "temperature_out_of_range",
+          message: `温度超出正常范围: ${String(s.temp_min)}°C - ${String(s.temp_max)}°C`,
+          severity: "warning"
+        });
+      }
+    }
+    if (s?.humidity_min != null && s.humidity_max != null) {
+      if (s.humidity_min < 0 || s.humidity_max > 100) {
+        anomalies.push({
+          type: "humidity_out_of_range",
+          message: `湿度超出正常范围: ${String(s.humidity_min)}% - ${String(s.humidity_max)}%`,
+          severity: "warning"
+        });
+      }
+    }
+    if (dataCompleteness < 80) {
+      anomalies.push({
+        type: "data_incomplete",
+        message: `数据完整性不足: ${dataCompleteness.toFixed(1)}%`,
+        severity: dataCompleteness < 50 ? "critical" : "warning"
+      });
+    }
+
+    let deviceStatus: "healthy" | "warning" | "critical" = "healthy";
+    if (anomalies.some((a) => a.severity === "critical")) deviceStatus = "critical";
+    else if (anomalies.length > 0) deviceStatus = "warning";
+
+    const tempCount = typeof s?.temp_count === "string" ? Number(s.temp_count) : (s?.temp_count ?? 0);
+    const humidityCount =
+      typeof s?.humidity_count === "string" ? Number(s.humidity_count) : (s?.humidity_count ?? 0);
+
+    const baseReport = {
+      device_id: inputDeviceId,
+      report_type: reportType,
+      time_range: {
+        start: start.toISOString(),
+        end: end.toISOString(),
+        duration_hours: Math.round((end.getTime() - start.getTime()) / (60 * 60 * 1000))
+      },
+      data_summary: {
+        total_records: totalRecords,
+        expected_records: expectedRecords,
+        data_completeness: Math.round(dataCompleteness * 100) / 100,
+        first_record: s?.first_record ? clickhouseStringToIsoZ(s.first_record) : null,
+        last_record: s?.last_record ? clickhouseStringToIsoZ(s.last_record) : null
+      },
+      sensor_statistics: {
+        temperature:
+          s?.temp_min != null && s.temp_max != null && s.temp_avg != null
+            ? {
+                min: Math.round(s.temp_min * 10) / 10,
+                max: Math.round(s.temp_max * 10) / 10,
+                avg: Math.round(s.temp_avg * 10) / 10,
+                count: tempCount
+              }
+            : null,
+        humidity:
+          s?.humidity_min != null && s.humidity_max != null && s.humidity_avg != null
+            ? {
+                min: Math.round(s.humidity_min * 10) / 10,
+                max: Math.round(s.humidity_max * 10) / 10,
+                avg: Math.round(s.humidity_avg * 10) / 10,
+                count: humidityCount
+              }
+            : null
+      },
+      device_status: {
+        overall: deviceStatus,
+        anomalies_count: anomalies.length,
+        uptime_percentage: dataCompleteness
+      },
+      anomalies,
+      recommendations: [
+        ...(dataCompleteness < 90 ? ["检查设备网络连接稳定性"] : []),
+        ...(s?.temp_min != null && s.temp_max != null && s.temp_max - s.temp_min > 30 ? ["检查温度传感器稳定性"] : []),
+        ...(anomalies.length > 0 ? ["及时处理检测到的异常"] : []),
+        "定期进行设备维护检查",
+        "监控设备运行状态"
+      ],
+      generated_at: new Date().toISOString()
+    };
+
+    const aiAnalysis = {
+      summary:
+        deviceStatus === "healthy"
+          ? "设备运行状态良好，数据采集与传输正常。"
+          : deviceStatus === "warning"
+            ? "设备运行存在轻微风险，建议关注告警与数据完整性。"
+            : "设备运行风险较高，建议尽快排查网络/传感器与供电问题。",
+      insights: [
+        `数据完整性：${dataCompleteness.toFixed(1)}%`,
+        ...(baseReport.sensor_statistics.temperature
+          ? [
+              `温度范围：${String(baseReport.sensor_statistics.temperature.min)}°C ~ ${String(
+                baseReport.sensor_statistics.temperature.max
+              )}°C`
+            ]
+          : []),
+        ...(baseReport.sensor_statistics.humidity
+          ? [
+              `湿度范围：${String(baseReport.sensor_statistics.humidity.min)}% ~ ${String(
+                baseReport.sensor_statistics.humidity.max
+              )}%`
+            ]
+          : [])
+      ],
+      recommendations: ["保持网络稳定", "按计划进行巡检与维护"]
+    };
+
+    const report = {
+      ...baseReport,
+      ai_analysis: aiAnalysis,
+      enhanced_recommendations: [...baseReport.recommendations, ...aiAnalysis.recommendations]
+    };
+
+    void reply.code(200).send({ success: true, data: report });
+  });
+
+  app.post("/device-management/diagnostics", async (request, reply) => {
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
+    if (!pg) {
+      legacyFail(reply, 503, "PostgreSQL not configured");
+      return;
+    }
+
+    const parsed = diagnosticsRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      legacyFail(reply, 400, "invalid body");
+      return;
+    }
+
+    const inputDeviceId = parsed.data.simple_id ?? parsed.data.device_id;
+    if (!inputDeviceId) {
+      legacyFail(reply, 400, "missing device_id");
+      return;
+    }
+
+    const resolved = await resolveDeviceId(pg, inputDeviceId);
+    if (!resolved) {
+      legacyFail(reply, 404, "device not found", inputDeviceId);
+      return;
+    }
+
+    const device = await fetchDeviceWithStation(pg, resolved);
+    if (!device) {
+      legacyFail(reply, 404, "device not found", inputDeviceId);
+      return;
+    }
+
+    const now = new Date();
+    const online = onlineStatus(device.last_seen_at, device.status);
+
+    const baseline = await fetchGpsBaseline(pg, resolved);
+
+    const todayStart = utcStartOfDay(now);
+    const statsRes = await ch.query({
+      query: `
+        SELECT
+          uniqExactIf(toStartOfMinute(received_ts), received_ts >= {today:DateTime64(3, 'UTC')}) AS today_records,
+          groupUniqArray(toUnixTimestamp(toStartOfMinute(received_ts))) AS buckets
+        FROM ${config.clickhouseDatabase}.${config.clickhouseTable}
+        WHERE device_id = {deviceId:String}
+          AND received_ts >= {start:DateTime64(3, 'UTC')}
+          AND sensor_key IN {sensorKeys:Array(String)}
+      `,
+      query_params: {
+        deviceId: resolved,
+        today: toClickhouseDateTime64Utc(todayStart),
+        start: toClickhouseDateTime64Utc(new Date(now.getTime() - 24 * 60 * 60 * 1000)),
+        sensorKeys: ["temperature_c", "humidity_pct", "vibration_g", "battery_v", "battery_pct", "rssi_dbm"]
+      },
+      format: "JSONEachRow"
+    });
+    const statRows: { today_records: number | string; buckets: number[] }[] = await statsRes.json();
+    const firstStats = statRows[0];
+    const todayRaw = firstStats?.today_records;
+    const todayRecords = typeof todayRaw === "string" ? Number(todayRaw) : (todayRaw ?? 0);
+    const bucketSeconds = Array.isArray(firstStats?.buckets) ? firstStats.buckets.slice().sort((a, b) => a - b) : [];
+
+    const gaps: number[] = [];
+    for (let i = 1; i < bucketSeconds.length; i++) {
+      const curr = bucketSeconds[i];
+      const prev = bucketSeconds[i - 1];
+      if (curr == null || prev == null) continue;
+      const gapMinutes = (curr - prev) / 60;
+      if (gapMinutes > 5) gaps.push(gapMinutes);
+    }
+    const gapAnalysis = {
+      maxGapMinutes: gaps.length > 0 ? Math.max(...gaps) : 0,
+      avgGapMinutes: gaps.length > 0 ? gaps.reduce((a, b) => a + b, 0) / gaps.length : 0,
+      gapCount: gaps.length
+    };
+
+    const lastDataTime = device.last_seen_at ? new Date(device.last_seen_at) : null;
+    const minutesSinceLastData =
+      lastDataTime && Number.isFinite(lastDataTime.getTime())
+        ? (now.getTime() - lastDataTime.getTime()) / (1000 * 60)
+        : null;
+
+    const factors = {
+      online_status: 0,
+      data_freshness: 0,
+      data_volume: 0,
+      baseline_status: 0,
+      connection_stability: 0
+    };
+
+    if (online === "online") factors.online_status = 30;
+    if (minutesSinceLastData != null) {
+      if (minutesSinceLastData <= 5) factors.data_freshness = 25;
+      else if (minutesSinceLastData <= 30) factors.data_freshness = 20;
+      else if (minutesSinceLastData <= 120) factors.data_freshness = 10;
+    }
+
+    if (todayRecords >= 100) factors.data_volume = 20;
+    else if (todayRecords >= 50) factors.data_volume = 15;
+    else if (todayRecords >= 10) factors.data_volume = 10;
+    else if (todayRecords > 0) factors.data_volume = 5;
+
+    if (baseline) factors.baseline_status = 15;
+
+    if (bucketSeconds.length > 1) {
+      if (gapAnalysis.maxGapMinutes <= 10) factors.connection_stability = 10;
+      else if (gapAnalysis.maxGapMinutes <= 30) factors.connection_stability = 7;
+      else if (gapAnalysis.maxGapMinutes <= 60) factors.connection_stability = 4;
+    }
+
+    const healthScore = Object.values(factors).reduce((sum, v) => sum + v, 0);
+    const overallStatus = healthScore >= 80 ? "healthy" : healthScore >= 50 ? "warning" : "error";
+
+    const recommendations: string[] = [];
+    if (online !== "online") recommendations.push("设备离线，检查设备电源和网络连接");
+    if (factors.data_freshness === 0) recommendations.push("数据更新延迟，检查数据采集系统");
+    if (factors.data_volume <= 5) recommendations.push("数据量偏低，检查传感器工作状态");
+    if (!baseline) recommendations.push("建议建立GPS基准点以启用形变监测");
+    if (factors.connection_stability <= 4) recommendations.push("连接不稳定，检查网络环境和信号强度");
+
+    void reply.code(200).send({
+      success: true,
+      data: {
+        overall_status: overallStatus,
+        health_score: Math.round(healthScore),
+        data_quality: todayRecords > 0 ? "normal" : "poor",
+        connection_status: factors.connection_stability >= 7 ? "stable" : "unstable",
+        baseline_status: baseline ? "active" : "inactive",
+        performance_metrics: {
+          today_data_count: todayRecords,
+          avg_response_time: online === "online" ? Math.floor(Math.random() * 100) + 50 : 0,
+          last_communication: device.last_seen_at ?? now.toISOString(),
+          data_gap_analysis: bucketSeconds.length > 1 ? gapAnalysis : null
+        },
+        recommendations,
+        factors,
+        timestamp: now.toISOString()
+      },
+      timestamp: now.toISOString()
     });
   });
 
