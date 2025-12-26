@@ -196,4 +196,58 @@ export function registerIotServerCompatRoutes(app: FastifyInstance): void {
       }
     });
   });
+
+  // Additional compat: some deployments use NEXT_PUBLIC_IOT_API_BASE=/iot/api and then call `/devices/*` under that base.
+  app.get("/iot/api/info", async (request, reply) => {
+    const res = (await app.inject({ method: "GET", url: "/info", headers: forwardAuthHeader(request) })) as unknown as InjectResult;
+    replyFromInject(reply, res);
+  });
+
+  app.get("/iot/api/devices/mappings", async (request, reply) => {
+    const res = (await app.inject({
+      method: "GET",
+      url: "/devices/mappings",
+      headers: forwardAuthHeader(request)
+    })) as unknown as InjectResult;
+    replyFromInject(reply, res);
+  });
+
+  app.get("/iot/api/devices/list", async (request, reply) => {
+    const res = (await app.inject({ method: "GET", url: "/devices/list", headers: forwardAuthHeader(request) })) as unknown as InjectResult;
+    replyFromInject(reply, res);
+  });
+
+  app.get("/iot/api/devices/info/:simpleId", async (request, reply) => {
+    const rawId =
+      typeof (request.params as { simpleId?: unknown }).simpleId === "string" ? (request.params as { simpleId: string }).simpleId : "";
+    const simpleId = rawId.trim();
+    if (!simpleId) {
+      void reply.code(400).send({ success: false, error: "invalid simpleId" });
+      return;
+    }
+
+    const res = (await app.inject({
+      method: "GET",
+      url: `/devices/info/${encodeURIComponent(simpleId)}`,
+      headers: forwardAuthHeader(request)
+    })) as unknown as InjectResult;
+    replyFromInject(reply, res);
+  });
+
+  app.get("/iot/api/devices/:deviceId", async (request, reply) => {
+    const rawId =
+      typeof (request.params as { deviceId?: unknown }).deviceId === "string" ? (request.params as { deviceId: string }).deviceId : "";
+    const deviceId = rawId.trim();
+    if (!deviceId) {
+      void reply.code(400).send({ success: false, error: "invalid deviceId" });
+      return;
+    }
+
+    const res = (await app.inject({
+      method: "GET",
+      url: `/devices/${encodeURIComponent(deviceId)}`,
+      headers: forwardAuthHeader(request)
+    })) as unknown as InjectResult;
+    replyFromInject(reply, res);
+  });
 }
