@@ -21,7 +21,9 @@ function forwardAuthHeader(request: FastifyRequest): Record<string, string> {
   return { authorization: auth };
 }
 
-async function injectJson(app: FastifyInstance, opts: { method: string; url: string; headers?: Record<string, string> }) {
+type InjectMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS" | "HEAD";
+
+async function injectJson(app: FastifyInstance, opts: { method: InjectMethod; url: string; headers?: Record<string, string> }) {
   const res = (await app.inject({
     method: opts.method,
     url: opts.url,
@@ -195,4 +197,3 @@ export function registerIotServerCompatRoutes(app: FastifyInstance): void {
     });
   });
 }
-
