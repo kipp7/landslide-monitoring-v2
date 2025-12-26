@@ -36,6 +36,9 @@ const deviceIdSchema = z.string().min(1);
 const deviceManagementQuerySchema = z.object({
   device_id: z.string().optional(),
   deviceId: z.string().optional(),
+  timeRange: z.string().optional(),
+  startTime: z.string().datetime().optional(),
+  endTime: z.string().datetime().optional(),
   limit: z.coerce.number().int().positive().max(5000).optional(),
   data_only: z.preprocess((v) => {
     if (v === "" || v === null || v === undefined) return undefined;
@@ -153,6 +156,23 @@ function clickhouseStringToIsoZ(ts: string): string {
   if (t.includes("T") && !t.endsWith("Z")) return t + "Z";
   if (t.includes(" ")) return t.replace(" ", "T") + "Z";
   return t;
+}
+
+function parseRelativeTimeRange(raw: string | undefined): { label: string; start: Date; end: Date } {
+  const end = new Date();
+  const fallback = { label: "24h", start: new Date(end.getTime() - 24 * 60 * 60 * 1000), end };
+  const input = (raw ?? "").trim().toLowerCase();
+  if (!input) return fallback;
+
+  const m = /^(\d+)\s*(h|hr|hrs|hour|hours|d|day|days)$/.exec(input);
+  if (!m) return fallback;
+
+  const n = Number.parseInt(m[1] ?? "", 10);
+  const unit = (m[2] ?? "").startsWith("d") ? "d" : "h";
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+
+  const ms = unit === "d" ? n * 24 * 60 * 60 * 1000 : n * 60 * 60 * 1000;
+  return { label: String(n) + unit, start: new Date(end.getTime() - ms), end };
 }
 
 function haversineMeters(aLat: number, aLon: number, bLat: number, bLon: number): number {
@@ -523,6 +543,53 @@ async function fetchLatestGpsTelemetry(
       LIMIT {limit:UInt32}
     `,
     query_params: { deviceId, sensorKeys, latKey, lonKey, limit },
+    format: "JSONEachRow"
+  });
+
+  const rows: Row[] = await res.json();
+  return rows
+    .filter((r): r is Row & { latitude: number; longitude: number } => typeof r.latitude === "number" && typeof r.longitude === "number")
+    .map((r) => ({ eventTime: clickhouseStringToIsoZ(r.event_time), latitude: r.latitude, longitude: r.longitude }));
+}
+
+async function fetchGpsTelemetryInRange(
+  config: AppConfig,
+  ch: ClickHouseClient,
+  deviceId: string,
+  start: Date,
+  end: Date,
+  limit: number
+): Promise<{ eventTime: string; latitude: number; longitude: number }[]> {
+  type Row = { event_time: string; latitude: number | null; longitude: number | null };
+  const latKey = "gps_latitude";
+  const lonKey = "gps_longitude";
+  const sensorKeys = [latKey, lonKey];
+
+  const res = await ch.query({
+    query: `
+      SELECT
+        toString(received_ts) AS event_time,
+        maxIf(coalesce(value_f64, toFloat64(value_i64)), sensor_key = {latKey:String}) AS latitude,
+        maxIf(coalesce(value_f64, toFloat64(value_i64)), sensor_key = {lonKey:String}) AS longitude
+      FROM ${config.clickhouseDatabase}.${config.clickhouseTable}
+      WHERE device_id = {deviceId:String}
+        AND sensor_key IN {sensorKeys:Array(String)}
+        AND received_ts >= {start:DateTime64(3, 'UTC')}
+        AND received_ts <= {end:DateTime64(3, 'UTC')}
+      GROUP BY received_ts
+      HAVING isNotNull(latitude) AND isNotNull(longitude)
+      ORDER BY received_ts DESC
+      LIMIT {limit:UInt32}
+    `,
+    query_params: {
+      deviceId,
+      sensorKeys,
+      latKey,
+      lonKey,
+      start: toClickhouseDateTime64Utc(start),
+      end: toClickhouseDateTime64Utc(end),
+      limit
+    },
     format: "JSONEachRow"
   });
 
@@ -995,7 +1062,23 @@ export function registerLegacyDeviceManagementCompatRoutes(
     }
 
     if (dataOnly) {
-      const points = await fetchLatestGpsTelemetry(config, ch, resolved, limit);
+      let points: { eventTime: string; latitude: number; longitude: number }[];
+
+      if (parsed.data.startTime && parsed.data.endTime) {
+        const start = new Date(parsed.data.startTime);
+        const end = new Date(parsed.data.endTime);
+        if (!(start < end)) {
+          legacyFail(reply, 400, "invalid time range");
+          return;
+        }
+        points = await fetchGpsTelemetryInRange(config, ch, resolved, start, end, limit);
+      } else if (parsed.data.timeRange) {
+        const r = parseRelativeTimeRange(parsed.data.timeRange);
+        points = await fetchGpsTelemetryInRange(config, ch, resolved, r.start, r.end, limit);
+      } else {
+        points = await fetchLatestGpsTelemetry(config, ch, resolved, limit);
+      }
+
       const baseline = await fetchGpsBaseline(pg, resolved);
       const computed = computeLegacyGpsRows(points, baseline);
 

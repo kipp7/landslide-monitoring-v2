@@ -24,14 +24,13 @@ export default function GpsMonitoringLayout({ children }: { children: React.Reac
     )
   }
 
-  if (user && !user.permissions.includes('data:view')) {
+  if (user && !user.permissions.includes('data:analysis')) {
     return (
       <Card>
-        <Text type="danger">无权限访问（需要 `data:view` 权限）</Text>
+        <Text type="danger">无权限访问（需要 `data:analysis` 权限）</Text>
       </Card>
     )
   }
 
   return <>{children}</>
 }
-
