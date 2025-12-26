@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { AppConfig } from "../config";
 import { requirePermission, type AdminAuthConfig } from "../authz";
