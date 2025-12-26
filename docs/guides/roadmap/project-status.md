@@ -208,6 +208,7 @@ M3（阶段 2：可告警）目标：
 - `python docs/tools/run-quality-gates.py`
 - 2025-12-26：WS-K.11（PR #244）：补齐 legacy `/api/device-management/{export,reports,diagnostics}` 端点（导出/报告/诊断），以兼容参考区 `frontend/app/api/device-management/*` 的依赖（数据源：ClickHouse 分钟桶 + Postgres 设备/基准点映射）。
 - 2025-12-26：WS-K.14（PR #242）：legacy `inspect-*`/`db-admin`/`test-*` 调试/管理端点在 v2 中显式禁用（403），并补齐说明文档 `docs/integrations/api/015-legacy-disabled-endpoints.md`
+- 2025-12-26：WS-K.15（PR #???）：补齐 legacy `device-management-optimized`/`device-management-real*`/`monitoring-stations-optimized` 端点别名（307 redirect），避免参考区旧路径 404
 - `npm run lint`
 - `npm run build`
 
