@@ -145,22 +145,22 @@ export default function AnalysisLegacyPage() {
       <div className="z-10 flex-1 overflow-hidden p-2">
         <div className="grid h-full grid-cols-4 grid-rows-4 gap-2">
           <div className="col-span-1 row-span-4 flex h-full flex-col gap-2">
-            <BaseCard title="温度趋势图 ℃ - 挂傍山监测网络(3设备)">
+            <BaseCard title="温度趋势图/°C - 挂傍山监测网络 (3设备)">
               <Suspense fallback={<Spin />}>
                 <LazyTemperatureChart />
               </Suspense>
             </BaseCard>
-            <BaseCard title="湿度趋势图 % - 挂傍山监测网络(3设备)">
+            <BaseCard title="湿度趋势图/% - 挂傍山监测网络 (3设备)">
               <Suspense fallback={<Spin />}>
                 <LazyHumidityChart />
               </Suspense>
             </BaseCard>
-            <BaseCard title="加速度趋势图 mg - 挂傍山监测网络(3设备)">
+            <BaseCard title="加速度趋势图/mg - 挂傍山监测网络 (3设备)">
               <Suspense fallback={<Spin />}>
                 <LazyAccelerationChart />
               </Suspense>
             </BaseCard>
-            <BaseCard title="陀螺仪趋势图 °/s - 挂傍山监测网络(3设备)">
+            <BaseCard title="陀螺仪趋势图/°/s - 挂傍山监测网络 (3设备)">
               <Suspense fallback={<Spin />}>
                 <LazyGyroscopeChart />
               </Suspense>
@@ -169,7 +169,7 @@ export default function AnalysisLegacyPage() {
 
           <div className="col-span-2 col-start-2 row-span-4">
             <BaseCard
-              title={`滑坡监测地图与预警(最新 ${deviceStats.lastUpdateTime ? new Date(deviceStats.lastUpdateTime).toLocaleTimeString() : '无数据'})`}
+              title={`滑坡监测地图与预警 (最新: ${deviceStats.lastUpdateTime ? new Date(deviceStats.lastUpdateTime).toLocaleTimeString() : '无数据'})`}
               extra={<MapSwitchPanel selected={mapType} onSelect={(t) => setMapType(t)} />}
             >
               <div className="flex h-full flex-col gap-2">
@@ -194,7 +194,7 @@ export default function AnalysisLegacyPage() {
                         />
                       </div>
                     ) : getDevicesForMap.length > 0 ? (
-                      <LazyMapContainer mode={mapType === '卫星图' ? '卫星图' : '2D'} devices={getDevicesForMap} center={mapCenter} zoom={16} />
+                      <LazyMapContainer mode={mapType as '2D' | '卫星图'} devices={getDevicesForMap} center={mapCenter} zoom={16} />
                     ) : (
                       <div className="flex h-full items-center justify-center rounded-lg bg-gray-50">
                         <div className="text-center text-gray-500">
@@ -215,7 +215,7 @@ export default function AnalysisLegacyPage() {
           </div>
 
           <div className="col-start-4 row-start-1">
-            <BaseCard title="雨量图 ml">
+            <BaseCard title="雨量图/ml">
               <Suspense fallback={<Spin />}>
                 <LazyBarChart />
               </Suspense>
