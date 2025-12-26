@@ -168,6 +168,7 @@ M3（阶段 2：可告警）目标：
 5) /analysis 对齐（UI/组件）：补齐 legacy ExceptionStatsChart 组件与懒加载导出（WS-N.13）
 6) 参考区组件补齐：新增 `FullScreenWrapper`（apps/web）用于全屏背景包裹（不改变现有页面行为）
 7) 参考区组件补齐：新增 `BaselineManagement`/`DeviceMappingTable`/`ClusterPopup` 与 `*Updated`/`Sidebar` 的兼容导出（apps/web）
+8) /analysis2 对齐（UI/路径）：补齐 `app/components2/*` 与 `app/config/monitoring-stations.ts`，并对齐 `app/analysis2/page.tsx` 的导入与布局
 
 ## 4) 关键入口（新 AI 只读这些就能上手）
 
