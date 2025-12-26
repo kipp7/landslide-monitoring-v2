@@ -7,7 +7,8 @@
 - 每次合并一个 PR 到 `main`，如果它改变了项目阶段/里程碑/下一步，必须更新本页。
 - 本页只记录“当前状态与下一步”，历史细节放到 `docs/incidents/` 或 PR/commit 记录中。
 
-最后更新时间：2025-12-26（WS-K.18：iot-server /devices 兼容，PR #254；WS-N.21：参考区 app/hooks 1:1 入口补齐，PR #255；WS-K.17：legacy camera alias，PR #252；WS-K.16：legacy baselines alias routes，PR #251；WS-K.15：legacy compat aliases 补齐，PR #247；WS-N.20：/analysis legacy 占位组件还原）
+最后更新时间：2025-12-26（WS-K.19：legacy data-aggregation clear_cache，PR #256；WS-K.18：iot-server /devices 兼容，PR #254；WS-N.21：参考区 app/hooks 1:1 入口补齐，PR #255；WS-K.17：legacy camera alias，PR #252；WS-K.16：legacy baselines alias routes，PR #251；WS-K.15：legacy compat aliases 补齐，PR #247；WS-N.20：/analysis legacy 占位组件还原）
+- 2025-12-26：WS-K.19（legacy data-aggregation clear_cache）：PR #256，补齐 legacy `/api/data-aggregation/clear_cache`（及相关兼容入口）的实现/转发，保证参考区“清缓存”按钮可用。
 - 2025-12-26：WS-K.18（iot-server /devices 兼容）：PR #254，补齐参考区 iot-server 顶层 `/devices/*` 的兼容别名（内部转发到 v2 legacy `/api/iot/devices/*`），减少旧前端对 baseUrl/前缀的耦合。
 - 2025-12-26：WS-K.17（legacy camera alias）：PR #252，补齐 legacy `/api/camera`（及 `/iot/api/camera`）兼容访问，避免旧前端/环境变量切换导致摄像头入口 404。
 - 2025-12-26：WS-K.16（legacy baselines alias routes）：PR #251，补齐基准点高级能力的 legacy alias 路由（避免旧前端硬编码路径失效），并在文档中记录可用的兼容访问方式。
