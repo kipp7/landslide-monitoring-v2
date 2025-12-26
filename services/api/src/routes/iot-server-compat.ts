@@ -352,8 +352,7 @@ export function registerIotServerCompatRoutes(
   });
 
   app.get("/debug/latest-data", async (_request, reply) => {
-    const request = _request as FastifyRequest;
-    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
+    if (!(await requirePermission(adminCfg, pg, _request, reply, "data:view"))) return;
 
     const now = new Date();
 
