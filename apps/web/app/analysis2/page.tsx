@@ -1,8 +1,10 @@
-import MonitoringPoints from './components/MonitoringPoints'
+'use client'
 
-export default function Analysis2Page() {
+import MonitoringPoints from '../components2/MonitoringPoints'
+
+export default function MonitoringPage() {
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen bg-gray-100 p-8">
       <MonitoringPoints />
     </div>
   )
