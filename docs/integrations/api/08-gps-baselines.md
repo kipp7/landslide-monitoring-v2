@@ -11,6 +11,10 @@ v2 约束：
 兼容说明：
 
 - 为避免旧系统前端/运营脚本依赖缺失，api-service 同时提供 legacy 兼容路径：`/api/baselines/*`（返回 `{success,data}` 形状）；其语义与本文档的 v1 端点保持一致。
+- 额外 legacy 别名（对齐参考区 `frontend/app/api/baselines/*`）：
+  - `POST /api/baselines/{deviceId}/auto-establish-advanced` → `POST /api/baselines/{deviceId}/auto-establish`
+  - `POST /api/baselines/{deviceId}/auto-establish-simple` → `POST /api/baselines/{deviceId}/auto-establish`
+  - `GET /api/baselines/{deviceId}/quality-assessment` → `GET /api/baselines/{deviceId}/quality-check`（不实现参考区 Supabase 的打分/函数逻辑）
 
 ## 1) 数据模型（PostgreSQL）
 

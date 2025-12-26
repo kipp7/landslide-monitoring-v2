@@ -7,7 +7,8 @@
 - 每次合并一个 PR 到 `main`，如果它改变了项目阶段/里程碑/下一步，必须更新本页。
 - 本页只记录“当前状态与下一步”，历史细节放到 `docs/incidents/` 或 PR/commit 记录中。
 
-最后更新时间：2025-12-26（WS-N.20：/analysis legacy 占位组件还原）
+最后更新时间：2025-12-26（WS-K.16：legacy baselines alias routes；WS-N.20：/analysis legacy 占位组件还原）
+- 2025-12-26：WS-K.16（legacy baselines alias routes）：PR #251，补齐基准点高级能力的 legacy alias 路由（避免旧前端硬编码路径失效），并在文档中记录可用的兼容访问方式。
 - 2025-12-26：WS-N.18（参考区 app/components 1:1 兼容导出补齐）：补齐 `apps/web/app/components/*` 的薄包装 re-export，覆盖图表/地图/侧边栏/管理组件。
 - 2025-12-26：WS-N.19（/analysis 大屏）：实现 legacy `useRealtimeData`/`useDeviceShadow` 数据源（基于 v2 API），并对齐 analysis-legacy 文案/标题到参考区 1:1。
 - 2025-12-26：WS-N.20（/analysis 大屏）：恢复 legacy `RealtimeAnomalyTable`/`RealtimeSensorStatus`/`AIPredictionComponent`（移除 PlaceholderChart），并新增 `useRealtimeAnomalies` 接入 v2 alerts。
