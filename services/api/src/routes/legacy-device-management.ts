@@ -256,6 +256,9 @@ async function resolveDeviceIdWithClient(client: PoolClient, input: string): Pro
          OR device_name = $1
          OR metadata->>'legacy_device_id' = $1
          OR metadata#>>'{externalIds,legacy}' = $1
+         OR metadata->>'huawei_device_id' = $1
+         OR metadata#>>'{huawei,deviceId}' = $1
+         OR metadata#>>'{externalIds,huawei}' = $1
       LIMIT 1
     `,
     [input]
