@@ -185,6 +185,7 @@ async function main(): Promise<void> {
   // Legacy-compatible prefix (reference iot-server behind nginx): /iot/*
   app.register(
     (iot, _opts, done) => {
+      registerHuaweiLegacyCompatRoutes(iot, config, ch, pg);
       registerLegacyIotDeviceEndpoints(iot, config, ch, pg);
       done();
     },
