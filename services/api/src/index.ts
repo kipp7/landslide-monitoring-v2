@@ -133,8 +133,9 @@ async function main(): Promise<void> {
     fail(reply, 500, "内部错误", request.traceId);
   });
 
-  app.get("/health", () => ({ ok: true }));
-  app.get("/iot/health", () => ({ ok: true }));
+  const healthPayload = () => ({ ok: true, service: config.serviceName, timestamp: new Date().toISOString() });
+  app.get("/health", healthPayload);
+  app.get("/iot/health", healthPayload);
 
   const ch = createClickhouseClient(config);
   const pg = createPgPool(config);
@@ -201,8 +202,6 @@ async function main(): Promise<void> {
       registerLegacyDeviceManagementCompatRoutes(api, config, ch, pg);
       registerLegacyDisabledRoutes(api, config);
       registerLegacyCompatAliasRoutes(api);
-      registerLegacyDisabledRoutes(api, config);
-      registerLegacyCompatAliasRoutes(api);
       done();
     },
     { prefix: "/api" }
@@ -219,8 +218,6 @@ async function main(): Promise<void> {
       registerAiPredictionLegacyCompatRoutes(api, config, pg);
       registerDeviceHealthExpertLegacyCompatRoutes(api, config, ch, pg);
       registerLegacyDeviceManagementCompatRoutes(api, config, ch, pg);
-      registerLegacyDisabledRoutes(api, config);
-      registerLegacyCompatAliasRoutes(api);
       registerLegacyDisabledRoutes(api, config);
       registerLegacyCompatAliasRoutes(api);
       done();
