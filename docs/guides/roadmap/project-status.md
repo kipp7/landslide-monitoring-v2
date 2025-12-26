@@ -7,13 +7,15 @@
 - 每次合并一个 PR 到 `main`，如果它改变了项目阶段/里程碑/下一步，必须更新本页。
 - 本页只记录“当前状态与下一步”，历史细节放到 `docs/incidents/` 或 PR/commit 记录中。
 
-最后更新时间：2025-12-26（WS-K.17：legacy camera alias；WS-K.16：legacy baselines alias routes；WS-K.15：legacy compat aliases 补齐；WS-N.20：/analysis legacy 占位组件还原）
+最后更新时间：2025-12-26（WS-K.18：iot-server /devices 兼容，PR #254；WS-N.21：参考区 app/hooks 1:1 入口补齐，PR #255；WS-K.17：legacy camera alias，PR #252；WS-K.16：legacy baselines alias routes，PR #251；WS-K.15：legacy compat aliases 补齐，PR #247；WS-N.20：/analysis legacy 占位组件还原）
+- 2025-12-26：WS-K.18（iot-server /devices 兼容）：PR #254，补齐参考区 iot-server 顶层 `/devices/*` 的兼容别名（内部转发到 v2 legacy `/api/iot/devices/*`），减少旧前端对 baseUrl/前缀的耦合。
 - 2025-12-26：WS-K.17（legacy camera alias）：PR #252，补齐 legacy `/api/camera`（及 `/iot/api/camera`）兼容访问，避免旧前端/环境变量切换导致摄像头入口 404。
 - 2025-12-26：WS-K.16（legacy baselines alias routes）：PR #251，补齐基准点高级能力的 legacy alias 路由（避免旧前端硬编码路径失效），并在文档中记录可用的兼容访问方式。
 - 2025-12-26：WS-K.15（legacy compat aliases）：PR #247，补齐参考区“optimized/real”等硬编码路径的别名兼容（集中在 api-service 路由层做转发/映射），减少旧前端对 URL 细节的耦合。
 - 2025-12-26：WS-N.18（参考区 app/components 1:1 兼容导出补齐）：补齐 `apps/web/app/components/*` 的薄包装 re-export，覆盖图表/地图/侧边栏/管理组件。
 - 2025-12-26：WS-N.19（/analysis 大屏）：实现 legacy `useRealtimeData`/`useDeviceShadow` 数据源（基于 v2 API），并对齐 analysis-legacy 文案/标题到参考区 1:1。
 - 2025-12-26：WS-N.20（/analysis 大屏）：恢复 legacy `RealtimeAnomalyTable`/`RealtimeSensorStatus`/`AIPredictionComponent`（移除 PlaceholderChart），并新增 `useRealtimeAnomalies` 接入 v2 alerts。
+- 2025-12-26：WS-N.21（参考区 app/hooks 1:1 入口补齐）：PR #255，补齐 `apps/web/app/hooks/*` 的同名入口（以 re-export/薄实现为主），避免旧引用路径失效。
 - 2025-12-25：WS-K.12（legacy `/api/gps-deformation/:deviceId`）：PR #233，补齐 `dataQuality`/`results`/`realTimeDisplacement` 等字段，并在 points 中提供数值型 `risk_level`（0~4）。
 - 2025-12-25：WS-K.9（legacy 设备管理形变端点）：PR #230，补齐 `/api/device-management/deformation/:deviceId`、`/trend`、`/summary`（ClickHouse + gps_baselines；含 legacy deviceId → UUID 映射）。
 - 2025-12-25：WS-K.10（legacy `/iot/api/*` 前缀兼容）：PR #232，将 legacy compat 路由额外挂载到 `/iot/api`（与 `/api/*` 保持一致），并补齐 `/iot/huawei` 禁用 stub（503）。
