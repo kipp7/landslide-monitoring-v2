@@ -7,7 +7,9 @@
 - 每次合并一个 PR 到 `main`，如果它改变了项目阶段/里程碑/下一步，必须更新本页。
 - 本页只记录“当前状态与下一步”，历史细节放到 `docs/incidents/` 或 PR/commit 记录中。
 
-最后更新时间：2025-12-26（WS-N.20：/analysis legacy 占位组件还原）
+最后更新时间：2025-12-26（WS-K.16：legacy baselines alias routes；WS-K.15：legacy compat aliases 补齐；WS-N.20：/analysis legacy 占位组件还原）
+- 2025-12-26：WS-K.16（legacy baselines alias routes）：PR #251，补齐基准点高级能力的 legacy alias 路由（避免旧前端硬编码路径失效），并在文档中记录可用的兼容访问方式。
+- 2025-12-26：WS-K.15（legacy compat aliases）：PR #247，补齐参考区“optimized/real”等硬编码路径的别名兼容（集中在 api-service 路由层做转发/映射），减少旧前端对 URL 细节的耦合。
 - 2025-12-26：WS-N.18（参考区 app/components 1:1 兼容导出补齐）：补齐 `apps/web/app/components/*` 的薄包装 re-export，覆盖图表/地图/侧边栏/管理组件。
 - 2025-12-26：WS-N.19（/analysis 大屏）：实现 legacy `useRealtimeData`/`useDeviceShadow` 数据源（基于 v2 API），并对齐 analysis-legacy 文案/标题到参考区 1:1。
 - 2025-12-26：WS-N.20（/analysis 大屏）：恢复 legacy `RealtimeAnomalyTable`/`RealtimeSensorStatus`/`AIPredictionComponent`（移除 PlaceholderChart），并新增 `useRealtimeAnomalies` 接入 v2 alerts。
@@ -207,6 +209,7 @@ M3（阶段 2：可告警）目标：
 - `python docs/tools/run-quality-gates.py`
 - 2025-12-26：WS-K.11（PR #244）：补齐 legacy `/api/device-management/{export,reports,diagnostics}` 端点（导出/报告/诊断），以兼容参考区 `frontend/app/api/device-management/*` 的依赖（数据源：ClickHouse 分钟桶 + Postgres 设备/基准点映射）。
 - 2025-12-26：WS-K.14（PR #242）：legacy `inspect-*`/`db-admin`/`test-*` 调试/管理端点在 v2 中显式禁用（403），并补齐说明文档 `docs/integrations/api/015-legacy-disabled-endpoints.md`
+- 2025-12-26：WS-K.15（PR #253）：补齐 legacy `device-management-optimized`/`device-management-real*`/`monitoring-stations-optimized` 端点别名（307 redirect），避免参考区旧路径 404
 - `npm run lint`
 - `npm run build`
 
