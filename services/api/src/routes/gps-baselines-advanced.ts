@@ -919,7 +919,16 @@ export function registerGpsBaselineLegacyCompatRoutes(
   app.post("/baselines/:deviceId/auto-establish", (request, reply) =>
     handleAutoEstablish(request, reply, config, ch, pg, adminCfg, { legacy: true })
   );
+  app.post("/baselines/:deviceId/auto-establish-advanced", (request, reply) =>
+    handleAutoEstablish(request, reply, config, ch, pg, adminCfg, { legacy: true })
+  );
+  app.post("/baselines/:deviceId/auto-establish-simple", (request, reply) =>
+    handleAutoEstablish(request, reply, config, ch, pg, adminCfg, { legacy: true })
+  );
   app.get("/baselines/:deviceId/quality-check", (request, reply) =>
+    handleQualityCheck(request, reply, config, ch, pg, adminCfg, { legacy: true })
+  );
+  app.get("/baselines/:deviceId/quality-assessment", (request, reply) =>
     handleQualityCheck(request, reply, config, ch, pg, adminCfg, { legacy: true })
   );
 }
