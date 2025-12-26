@@ -196,4 +196,135 @@ export function registerIotServerCompatRoutes(app: FastifyInstance): void {
       }
     });
   });
+
+  app.get("/devices/:deviceId/management", async (request, reply) => {
+    const rawId =
+      typeof (request.params as { deviceId?: unknown }).deviceId === "string" ? (request.params as { deviceId: string }).deviceId : "";
+    const deviceId = rawId.trim();
+    if (!deviceId) {
+      void reply.code(400).send({ success: false, error: "invalid deviceId" });
+      return;
+    }
+
+    const { res, parsed } = await injectJson(app, {
+      method: "GET",
+      url: `/api/device-management?device_id=${encodeURIComponent(deviceId)}`,
+      headers: forwardAuthHeader(request)
+    });
+
+    if (res.statusCode !== 200 || !parsed || typeof parsed !== "object") {
+      replyFromInject(reply, res);
+      return;
+    }
+
+    const obj = parsed as { success?: unknown; data?: unknown; timestamp?: unknown };
+    const data = obj.data && typeof obj.data === "object" ? obj.data : null;
+
+    let deformationData: Record<string, unknown> | null = null;
+    try {
+      const { res: defRes, parsed: defParsed } = await injectJson(app, {
+        method: "GET",
+        url: `/api/device-management/deformation/${encodeURIComponent(deviceId)}/summary`,
+        headers: forwardAuthHeader(request)
+      });
+
+      if (defRes.statusCode === 200 && defParsed && typeof defParsed === "object") {
+        const def = defParsed as {
+          hasBaseline?: unknown;
+          max_displacement?: unknown;
+          horizontal_displacement?: unknown;
+          vertical_displacement?: unknown;
+          velocity?: unknown;
+          risk_level?: unknown;
+          deformation_type?: unknown;
+          confidence?: unknown;
+        };
+
+        deformationData = {
+          latitude: null,
+          longitude: null,
+          deformation_distance_3d: def.max_displacement ?? null,
+          deformation_horizontal: def.horizontal_displacement ?? null,
+          deformation_vertical: def.vertical_displacement ?? null,
+          deformation_velocity: def.velocity ?? null,
+          deformation_risk_level: def.risk_level ?? null,
+          deformation_type: def.deformation_type ?? null,
+          deformation_confidence: def.confidence ?? null,
+          baseline_established: typeof def.hasBaseline === "boolean" ? def.hasBaseline : null
+        };
+      }
+    } catch {
+      deformationData = null;
+    }
+
+    void reply.code(200).send({
+      success: Boolean(obj.success),
+      data,
+      deformation_data: deformationData,
+      timestamp: typeof obj.timestamp === "string" ? obj.timestamp : new Date().toISOString()
+    });
+  });
+
+  app.get("/devices/:deviceId/status", async (request, reply) => {
+    const rawId =
+      typeof (request.params as { deviceId?: unknown }).deviceId === "string" ? (request.params as { deviceId: string }).deviceId : "";
+    const deviceId = rawId.trim();
+    if (!deviceId) {
+      void reply.code(400).send({ success: false, error: "invalid deviceId" });
+      return;
+    }
+
+    const { res, parsed } = await injectJson(app, {
+      method: "GET",
+      url: `/api/device-management?device_id=${encodeURIComponent(deviceId)}`,
+      headers: forwardAuthHeader(request)
+    });
+
+    if (res.statusCode !== 200 || !parsed || typeof parsed !== "object") {
+      replyFromInject(reply, res);
+      return;
+    }
+
+    const obj = parsed as { success?: unknown; data?: unknown; timestamp?: unknown };
+    const data = obj.data && typeof obj.data === "object" ? (obj.data as Record<string, unknown>) : {};
+
+    void reply.code(200).send({
+      success: Boolean(obj.success),
+      data: {
+        device_id: deviceId,
+        status: data.status ?? "offline",
+        health_score: data.health_score ?? 0,
+        battery_level: data.battery_level ?? 0,
+        last_update: data.last_data_time ?? (typeof obj.timestamp === "string" ? obj.timestamp : new Date().toISOString()),
+        current_data: {
+          temperature: data.temperature ?? null,
+          humidity: data.humidity ?? null,
+          vibration: null,
+          risk_level: data.deformation_risk_level ?? null,
+          alarm_active: null,
+          uptime: null
+        },
+        today_stats: { count: data.data_count_today ?? 0 },
+        weekly_trend: []
+      }
+    });
+  });
+
+  app.get("/debug/latest-data", async (_request, reply) => {
+    void reply.code(501).send({
+      success: false,
+      disabled: true,
+      message: "v2 does not expose legacy iot_data raw rows; use v2 /api/v1/data/* instead",
+      timestamp: new Date().toISOString()
+    });
+  });
+
+  app.get("/debug/latest-data/:deviceId", async (_request, reply) => {
+    void reply.code(501).send({
+      success: false,
+      disabled: true,
+      message: "v2 does not expose legacy iot_data raw rows; use v2 /api/v1/data/* instead",
+      timestamp: new Date().toISOString()
+    });
+  });
 }
