@@ -106,10 +106,47 @@ async function proxyDeviceManagementReal(app: FastifyInstance, request: FastifyR
   const deviceKey = getQueryStringParam(request.query, "device_id") ?? getQueryStringParam(request.query, "deviceId");
 
   if (mode === "device_specific" && deviceKey) {
+    const nowIso = new Date().toISOString();
+
+    const hierRes = await inject(
+      app,
+      request,
+      "GET",
+      `/device-management/hierarchical${toQueryString(stripModeParams(request.query))}`
+    );
+    const hierRoot = safeParseJsonObject(hierRes.body);
+    if (hierRoot?.success === true) {
+      const data = hierRoot.data;
+      const allDevices =
+        data && typeof data === "object" && Array.isArray((data as Record<string, unknown>).allDevices)
+          ? ((data as Record<string, unknown>).allDevices as Record<string, unknown>[])
+          : [];
+      const deviceRow = allDevices.find((d) => {
+        const simpleId = typeof d.simple_id === "string" ? d.simple_id : null;
+        const actualId = typeof d.actual_device_id === "string" ? d.actual_device_id : null;
+        const deviceId = typeof d.device_id === "string" ? d.device_id : null;
+        const deviceName = typeof d.device_name === "string" ? d.device_name : null;
+        return simpleId === deviceKey || actualId === deviceKey || deviceId === deviceKey || deviceName === deviceKey;
+      });
+
+      if (deviceRow) {
+        replyJson(reply, 200, {
+          success: true,
+          data: {
+            device_info: deviceRow,
+            history_data: [],
+            recent_anomalies: [],
+            analysis: { data_quality: null, stability_score: null, risk_assessment: null }
+          },
+          timestamp: nowIso
+        });
+        return;
+      }
+    }
+
     const res = await inject(app, request, "GET", `/device-management?device_id=${encodeURIComponent(deviceKey)}`);
     const root = safeParseJsonObject(res.body);
     if (root?.success === true && typeof root.data !== "undefined") {
-      const nowIso = new Date().toISOString();
       replyJson(reply, 200, {
         success: true,
         data: {
@@ -122,6 +159,7 @@ async function proxyDeviceManagementReal(app: FastifyInstance, request: FastifyR
       });
       return;
     }
+
     replyWithInjectResult(reply, res);
     return;
   }
