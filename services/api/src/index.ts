@@ -34,6 +34,7 @@ import { registerCameraLegacyCompatRoutes, registerCameraRoutes } from "./routes
 import { registerDeviceHealthExpertLegacyCompatRoutes, registerDeviceHealthExpertRoutes } from "./routes/device-health-expert";
 import { registerAiPredictionLegacyCompatRoutes, registerAiPredictionRoutes } from "./routes/ai-predictions";
 import { registerLegacyDisabledRoutes } from "./routes/legacy-disabled";
+import { registerLegacyCompatAliasRoutes } from "./routes/legacy-compat-aliases";
 import { registerLegacyDeviceManagementCompatRoutes } from "./routes/legacy-device-management";
 
 async function main(): Promise<void> {
@@ -187,6 +188,9 @@ async function main(): Promise<void> {
       registerDeviceHealthExpertLegacyCompatRoutes(api, config, ch, pg);
       registerLegacyDeviceManagementCompatRoutes(api, config, ch, pg);
       registerLegacyDisabledRoutes(api, config);
+      registerLegacyCompatAliasRoutes(api);
+      registerLegacyDisabledRoutes(api, config);
+      registerLegacyCompatAliasRoutes(api);
       done();
     },
     { prefix: "/api" }
@@ -204,6 +208,9 @@ async function main(): Promise<void> {
       registerDeviceHealthExpertLegacyCompatRoutes(api, config, ch, pg);
       registerLegacyDeviceManagementCompatRoutes(api, config, ch, pg);
       registerLegacyDisabledRoutes(api, config);
+      registerLegacyCompatAliasRoutes(api);
+      registerLegacyDisabledRoutes(api, config);
+      registerLegacyCompatAliasRoutes(api);
       done();
     },
     { prefix: "/iot/api" }
