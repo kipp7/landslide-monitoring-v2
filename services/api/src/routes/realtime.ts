@@ -524,7 +524,6 @@ export function registerRealtimeLegacyCompatRoutes(
   ch: ClickHouseClient,
   pg: PgPool | null
 ): void {
-  for (const path of ["/realtime-stream", "/api/realtime-stream", "/iot/api/realtime-stream"]) {
-    registerSseHandler(app, config, ch, pg, path, { legacyResponse: true });
-  }
+  // Note: legacy compat routes are mounted under `/api` and `/iot/api` prefixes in services/api/src/index.ts.
+  registerSseHandler(app, config, ch, pg, "/realtime-stream", { legacyResponse: true });
 }
