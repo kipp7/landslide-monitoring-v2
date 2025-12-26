@@ -82,7 +82,7 @@ async function main(): Promise<void> {
   });
 
   app.addHook("preHandler", async (request, reply) => {
-    if (request.url === "/health") return;
+    if (request.url === "/health" || request.url === "/iot/health") return;
     if (request.url.startsWith("/emqx/")) return;
     if (request.url === "/api/v1/auth/login") return;
     if (request.url === "/api/v1/auth/refresh") return;
@@ -133,7 +133,13 @@ async function main(): Promise<void> {
     fail(reply, 500, "内部错误", request.traceId);
   });
 
-  const healthPayload = () => ({ ok: true, service: config.serviceName, timestamp: new Date().toISOString() });
+  const healthPayload = () => ({
+    ok: true,
+    status: "OK",
+    timestamp: new Date().toISOString(),
+    service: config.serviceName,
+    port: config.apiPort
+  });
   app.get("/health", healthPayload);
   app.get("/iot/health", healthPayload);
 
@@ -142,7 +148,7 @@ async function main(): Promise<void> {
 
   app.addHook("onResponse", async (request, reply) => {
     if (!pg) return;
-    if (request.url === "/health") return;
+    if (request.url === "/health" || request.url === "/iot/health") return;
     if (request.url.startsWith("/emqx/")) return;
 
     const responseTimeMs = Math.max(0, Date.now() - request.startTimeMs);

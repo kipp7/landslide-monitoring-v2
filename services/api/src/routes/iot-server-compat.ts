@@ -81,11 +81,17 @@ export function registerIotServerCompatRoutes(
   const adminCfg: AdminAuthConfig = { adminApiToken: config.adminApiToken, jwtEnabled: Boolean(config.jwtAccessSecret) };
 
   app.get("/info", async (_request, reply) => {
+    const version = process.env.IOT_SERVER_COMPAT_VERSION ?? process.env.npm_package_version ?? "0.0.0";
+
     void reply.code(200).send({
+      name: "Landslide IoT Service",
+      version,
+      description: "滑坡监测IoT数据接收服务（api-service 兼容层）",
       service: "api-service",
       ok: true,
       endpoints: {
         health: "GET /health",
+        info: "GET /info",
         device_list: "GET /devices/list",
         device_mappings: "GET /devices/mappings",
         device_info: "GET /devices/info/:simpleId",
@@ -93,6 +99,8 @@ export function registerIotServerCompatRoutes(
         device_management: "GET /devices/:deviceId/management",
         device_status: "GET /devices/:deviceId/status",
         latest_data: "GET /debug/latest-data",
+        legacy_api_prefix: "/api/* (v2 legacy-compat)",
+        legacy_iot_api_prefix: "/iot/api/* (v2 legacy-compat)",
         legacy_prefix: "GET /api/iot/devices/* (preferred in v2 legacy-compat)"
       },
       timestamp: new Date().toISOString()
