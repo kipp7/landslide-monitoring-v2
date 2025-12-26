@@ -1,9 +1,24 @@
+import type { ClickHouseClient } from "@clickhouse/client";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { AdminAuthConfig } from "../authz";
+import { requirePermission } from "../authz";
+import type { AppConfig } from "../config";
+import type { PgPool } from "../postgres";
 
 type InjectResult = {
   statusCode: number;
   headers: Record<string, string | string[] | undefined>;
   payload: string;
+};
+
+type TelemetryRow = {
+  device_id: string;
+  sensor_key: string;
+  received_ts: string;
+  value_f64: number | null;
+  value_i64: number | null;
+  value_str: string | null;
+  value_bool: boolean | null;
 };
 
 function safeJsonParse(payload: string): unknown {
@@ -13,6 +28,22 @@ function safeJsonParse(payload: string): unknown {
   } catch {
     return null;
   }
+}
+
+function clickhouseStringToIsoZ(ts: string): string {
+  const t = ts.trim();
+  if (t.includes("T") && t.endsWith("Z")) return t;
+  if (t.includes("T") && !t.endsWith("Z")) return t + "Z";
+  if (t.includes(" ")) return t.replace(" ", "T") + "Z";
+  return t;
+}
+
+function normalizeTelemetryValue(row: TelemetryRow): unknown {
+  if (typeof row.value_f64 === "number" && Number.isFinite(row.value_f64)) return row.value_f64;
+  if (typeof row.value_i64 === "number" && Number.isFinite(row.value_i64)) return row.value_i64;
+  if (typeof row.value_bool === "boolean") return row.value_bool;
+  if (typeof row.value_str === "string") return row.value_str;
+  return null;
 }
 
 function forwardAuthHeader(request: FastifyRequest): Record<string, string> {
@@ -41,7 +72,14 @@ function replyFromInject(reply: FastifyReply, injected: InjectResult): void {
   void reply.send(injected.payload);
 }
 
-export function registerIotServerCompatRoutes(app: FastifyInstance): void {
+export function registerIotServerCompatRoutes(
+  app: FastifyInstance,
+  config: AppConfig,
+  ch: ClickHouseClient,
+  pg: PgPool | null
+): void {
+  const adminCfg: AdminAuthConfig = { adminApiToken: config.adminApiToken, jwtEnabled: Boolean(config.jwtAccessSecret) };
+
   app.get("/info", async (_request, reply) => {
     void reply.code(200).send({
       service: "api-service",
@@ -52,6 +90,7 @@ export function registerIotServerCompatRoutes(app: FastifyInstance): void {
         device_mappings: "GET /devices/mappings",
         device_info: "GET /devices/info/:simpleId",
         device_by_id: "GET /devices/:deviceId",
+        latest_data: "GET /debug/latest-data",
         legacy_prefix: "GET /api/iot/devices/* (preferred in v2 legacy-compat)"
       },
       timestamp: new Date().toISOString()
@@ -311,20 +350,100 @@ export function registerIotServerCompatRoutes(app: FastifyInstance): void {
   });
 
   app.get("/debug/latest-data", async (_request, reply) => {
-    void reply.code(501).send({
-      success: false,
-      disabled: true,
-      message: "v2 does not expose legacy iot_data raw rows; use v2 /api/v1/data/* instead",
-      timestamp: new Date().toISOString()
+    const request = _request as FastifyRequest;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
+
+    const now = new Date();
+
+    const sql = `
+      SELECT
+        device_id,
+        sensor_key,
+        toString(received_ts) AS received_ts,
+        value_f64,
+        value_i64,
+        value_str,
+        value_bool
+      FROM ${config.clickhouseDatabase}.${config.clickhouseTable}
+      ORDER BY received_ts DESC
+      LIMIT 10
+    `;
+
+    const result = await ch.query({ query: sql, format: "JSONEachRow" });
+    const rows: TelemetryRow[] = await result.json();
+
+    const data = rows.map((r) => {
+      const iso = clickhouseStringToIsoZ(r.received_ts);
+      const parsed = Date.parse(iso);
+      const ageSeconds = Number.isFinite(parsed) ? Math.round((now.getTime() - parsed) / 1000) : null;
+      return {
+        device_id: r.device_id,
+        sensor_key: r.sensor_key,
+        received_ts: iso,
+        value: normalizeTelemetryValue(r),
+        data_age_seconds: ageSeconds
+      };
+    });
+
+    void reply.code(200).send({
+      success: true,
+      data,
+      total_records: data.length,
+      query_time: now.toISOString(),
+      device_filter: "all"
     });
   });
 
-  app.get("/debug/latest-data/:deviceId", async (_request, reply) => {
-    void reply.code(501).send({
-      success: false,
-      disabled: true,
-      message: "v2 does not expose legacy iot_data raw rows; use v2 /api/v1/data/* instead",
-      timestamp: new Date().toISOString()
+  app.get("/debug/latest-data/:deviceId", async (request, reply) => {
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
+
+    const rawId =
+      typeof (request.params as { deviceId?: unknown }).deviceId === "string" ? (request.params as { deviceId: string }).deviceId : "";
+    const deviceId = rawId.trim();
+    if (!deviceId) {
+      void reply.code(400).send({ success: false, error: "invalid deviceId" });
+      return;
+    }
+
+    const now = new Date();
+
+    const sql = `
+      SELECT
+        device_id,
+        sensor_key,
+        toString(received_ts) AS received_ts,
+        value_f64,
+        value_i64,
+        value_str,
+        value_bool
+      FROM ${config.clickhouseDatabase}.${config.clickhouseTable}
+      WHERE device_id = {deviceId:String}
+      ORDER BY received_ts DESC
+      LIMIT 10
+    `;
+
+    const result = await ch.query({ query: sql, query_params: { deviceId }, format: "JSONEachRow" });
+    const rows: TelemetryRow[] = await result.json();
+
+    const data = rows.map((r) => {
+      const iso = clickhouseStringToIsoZ(r.received_ts);
+      const parsed = Date.parse(iso);
+      const ageSeconds = Number.isFinite(parsed) ? Math.round((now.getTime() - parsed) / 1000) : null;
+      return {
+        device_id: r.device_id,
+        sensor_key: r.sensor_key,
+        received_ts: iso,
+        value: normalizeTelemetryValue(r),
+        data_age_seconds: ageSeconds
+      };
+    });
+
+    void reply.code(200).send({
+      success: true,
+      data,
+      total_records: data.length,
+      query_time: now.toISOString(),
+      device_filter: deviceId
     });
   });
 }
