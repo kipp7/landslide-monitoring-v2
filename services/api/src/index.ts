@@ -188,7 +188,7 @@ async function main(): Promise<void> {
   registerCameraLegacyCompatRoutes(app, config, pg);
 
   // iot-server compatibility (reference system /devices/*, /info).
-  registerIotServerCompatRoutes(app);
+  registerIotServerCompatRoutes(app, config, ch, pg);
 
   // Legacy-compatible path (reference system): /api/anomaly-assessment
   app.register(
