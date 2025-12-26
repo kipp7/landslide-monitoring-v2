@@ -22,9 +22,10 @@ const listQuerySchema = z.object({
 
 const legacyAiPredictionSchema = z
   .object({
-    sensorData: z.array(z.record(z.unknown())).optional()
+    sensorData: z.union([z.array(z.record(z.unknown())), z.record(z.unknown())]).optional(),
+    sensor_data: z.union([z.array(z.record(z.unknown())), z.record(z.unknown())]).optional()
   })
-  .strict();
+  .passthrough();
 
 function clamp01(v: number): number {
   if (!Number.isFinite(v)) return 0;
@@ -289,7 +290,8 @@ export function registerAiPredictionLegacyCompatRoutes(app: FastifyInstance, con
       return;
     }
 
-    const sensorData = parsed.data.sensorData ?? [];
+    const rawSensorData = parsed.data.sensorData ?? parsed.data.sensor_data ?? [];
+    const sensorData = Array.isArray(rawSensorData) ? rawSensorData : [rawSensorData];
     const { score, level, analysis, recommendation } = buildLegacyPrediction(sensorData);
 
     const latest = sensorData[0] ?? {};
