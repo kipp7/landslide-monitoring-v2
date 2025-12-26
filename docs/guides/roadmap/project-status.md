@@ -7,8 +7,9 @@
 - 每次合并一个 PR 到 `main`，如果它改变了项目阶段/里程碑/下一步，必须更新本页。
 - 本页只记录“当前状态与下一步”，历史细节放到 `docs/incidents/` 或 PR/commit 记录中。
 
-最后更新时间：2025-12-26（WS-N.18：参考区 app/components 1:1 兼容导出补齐）
+最后更新时间：2025-12-26（WS-N.19：/analysis legacy hooks 数据对齐）
 - 2025-12-26：WS-N.18（参考区 app/components 1:1 兼容导出补齐）：补齐 `apps/web/app/components/*` 的薄包装 re-export，覆盖图表/地图/侧边栏/管理组件。
+- 2025-12-26：WS-N.19（/analysis 大屏）：实现 legacy `useRealtimeData`/`useDeviceShadow` 数据源（基于 v2 API），并对齐 analysis-legacy 文案/标题到参考区 1:1。
 - 2025-12-25：WS-K.12（legacy `/api/gps-deformation/:deviceId`）：PR #233，补齐 `dataQuality`/`results`/`realTimeDisplacement` 等字段，并在 points 中提供数值型 `risk_level`（0~4）。
 - 2025-12-25：WS-K.9（legacy 设备管理形变端点）：PR #230，补齐 `/api/device-management/deformation/:deviceId`、`/trend`、`/summary`（ClickHouse + gps_baselines；含 legacy deviceId → UUID 映射）。
 - 2025-12-25：WS-K.10（legacy `/iot/api/*` 前缀兼容）：PR #232，将 legacy compat 路由额外挂载到 `/iot/api`（与 `/api/*` 保持一致），并补齐 `/iot/huawei` 禁用 stub（503）。
