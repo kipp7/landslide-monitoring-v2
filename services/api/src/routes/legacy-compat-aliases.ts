@@ -207,6 +207,65 @@ export function registerLegacyCompatAliasRoutes(app: FastifyInstance): void {
     await proxyInject(app, request, reply, "GET", `/device-management${toQueryString(request.query)}`);
   });
 
+  app.post("/device-management-optimized", async (request, reply) => {
+    const nowIso = new Date().toISOString();
+    const body = request.body && typeof request.body === "object" ? (request.body as Record<string, unknown>) : {};
+    const action = typeof body.action === "string" ? body.action : "";
+
+    if (action === "cache_clear") {
+      replyJson(reply, 200, { success: true, cleared: true, timestamp: nowIso });
+      return;
+    }
+
+    if (action !== "health_check") {
+      replyJson(reply, 400, { success: false, error: "invalid action", timestamp: nowIso });
+      return;
+    }
+
+    const devicesRaw = body.devices;
+    const devices = Array.isArray(devicesRaw)
+      ? devicesRaw.map((d) => (typeof d === "string" ? d.trim() : "")).filter(Boolean)
+      : [];
+    if (devices.length === 0) {
+      replyJson(reply, 400, { success: false, error: "missing devices", timestamp: nowIso });
+      return;
+    }
+
+    const headers = copyRequestHeaders(request);
+    headers["content-type"] = "application/json";
+
+    const settled = await Promise.allSettled(
+      devices.map(async (deviceKey) => {
+        const injectOpts: InjectOptions = {
+          method: "POST",
+          url: "/device-management/diagnostics",
+          headers,
+          payload: JSON.stringify({ device_id: deviceKey })
+        };
+        const res = (await app.inject(injectOpts)) as unknown as InjectResult;
+        const parsed = safeParseJsonObject(res.body);
+        if (parsed?.success === true) {
+          return { device_id: deviceKey, success: true, data: parsed.data ?? null };
+        }
+        const msg =
+          parsed && typeof parsed.message === "string"
+            ? parsed.message
+            : parsed && typeof parsed.error === "string"
+              ? parsed.error
+              : `HTTP ${String(res.statusCode)}`;
+        return { device_id: deviceKey, success: false, error: msg };
+      })
+    );
+
+    const results = settled.map((r, idx) => {
+      const deviceKey = devices[idx] ?? "";
+      if (r.status === "fulfilled") return r.value;
+      return { device_id: deviceKey, success: false, error: r.reason instanceof Error ? r.reason.message : String(r.reason) };
+    });
+
+    replyJson(reply, 200, { success: true, results, timestamp: nowIso });
+  });
+
   app.get("/device-management-real", async (request, reply) => {
     await proxyDeviceManagementReal(app, request, reply);
   });
