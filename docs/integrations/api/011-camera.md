@@ -42,9 +42,8 @@ Body：
 
 为对齐参考区 Next API 的调用方式，API service 额外提供：
 
-- `GET /api/camera`
+- `GET /api/camera`（也支持 `GET /iot/api/camera`）
   - `?deviceId=...&action=status`：返回单设备状态
   - 不带参数：返回 `{devices,total,online}`
-- `POST /api/camera`
+- `POST /api/camera`（也支持 `POST /iot/api/camera`）
   - `action=add|update_status|test_connection`（参考区同名 action）
-
