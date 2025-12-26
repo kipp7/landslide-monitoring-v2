@@ -16,7 +16,7 @@
 - 2025-12-26：WS-N.18（参考区 app/components 1:1 兼容导出补齐）：补齐 `apps/web/app/components/*` 的薄包装 re-export，覆盖图表/地图/侧边栏/管理组件。
 - 2025-12-26：WS-N.19（/analysis 大屏）：实现 legacy `useRealtimeData`/`useDeviceShadow` 数据源（基于 v2 API），并对齐 analysis-legacy 文案/标题到参考区 1:1。
 - 2025-12-26：WS-N.20（/analysis 大屏）：恢复 legacy `RealtimeAnomalyTable`/`RealtimeSensorStatus`/`AIPredictionComponent`（移除 PlaceholderChart），并新增 `useRealtimeAnomalies` 接入 v2 alerts。
-- 2025-12-26：WS-N.22（参考区 app/utils 1:1 入口补齐）：PR #257，补齐 `apps/web/app/utils/*` 的同名入口（exportUtils/exportUtilsOptimized/location-naming/optimizedValidation/predictionChartUtils），避免旧引用路径失效。
+- 2025-12-26：WS-N.22（参考区 app/utils 1:1 入口补齐）：PR #257，补齐 `apps/web/app/utils/*` 同名模块（exportUtils/exportUtilsOptimized/location-naming/optimizedValidation/predictionChartUtils），用于兼容旧引用路径。
 - 2025-12-26：WS-N.21（参考区 app/hooks 1:1 入口补齐）：PR #255，补齐 `apps/web/app/hooks/*` 的同名入口（以 re-export/薄实现为主），避免旧引用路径失效。
 - 2025-12-25：WS-K.12（legacy `/api/gps-deformation/:deviceId`）：PR #233，补齐 `dataQuality`/`results`/`realTimeDisplacement` 等字段，并在 points 中提供数值型 `risk_level`（0~4）。
 - 2025-12-25：WS-K.9（legacy 设备管理形变端点）：PR #230，补齐 `/api/device-management/deformation/:deviceId`、`/trend`、`/summary`（ClickHouse + gps_baselines；含 legacy deviceId → UUID 映射）。
