@@ -1998,6 +1998,19 @@ export function registerLegacyDeviceManagementCompatRoutes(
     });
   });
 
+  app.delete("/data-aggregation", async (request, reply) => {
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
+
+    const q = request.query as { action?: unknown };
+    const action = typeof q.action === "string" ? q.action : "";
+    if (action !== "clear_cache") {
+      legacyFail(reply, 400, "invalid action");
+      return;
+    }
+
+    legacyOk(reply, { cleared: true }, "cache cleared");
+  });
+
   app.post("/data-aggregation", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
