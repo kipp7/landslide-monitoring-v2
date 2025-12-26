@@ -124,6 +124,39 @@ async function fetchDevice(pg: PgPool, deviceId: string): Promise<DeviceRow | nu
   );
 }
 
+async function fetchDeviceSensorTypes(pg: PgPool, deviceId: string): Promise<string[]> {
+  return withPgClient(pg, async (client) => {
+    const res = await client.query<{ sensor_key: string }>(
+      `
+        SELECT sensor_key
+        FROM device_sensors
+        WHERE device_id = $1
+          AND status = 'enabled'
+        ORDER BY sensor_key
+      `,
+      [deviceId]
+    );
+    return res.rows.map((r) => r.sensor_key);
+  });
+}
+
+async function fetchLatestRiskLevel(pg: PgPool, deviceId: string): Promise<"low" | "medium" | "high" | null> {
+  return withPgClient(pg, async (client) => {
+    const row = await queryOne<{ risk_level: "low" | "medium" | "high" | null }>(
+      client,
+      `
+        SELECT risk_level
+        FROM ai_predictions
+        WHERE device_id = $1
+        ORDER BY created_at DESC
+        LIMIT 1
+      `,
+      [deviceId]
+    );
+    return row?.risk_level ?? null;
+  });
+}
+
 async function listDevices(pg: PgPool): Promise<DeviceRow[]> {
   return withPgClient(pg, async (client) => {
     const res = await client.query<DeviceRow>(
@@ -375,6 +408,18 @@ export function registerLegacyIotDeviceEndpoints(
     }
 
     const online = onlineStatus(d.last_seen_at, d.status);
+    let sensorTypes: string[] = [];
+    let riskLevel: "low" | "medium" | "high" | null = null;
+    try {
+      sensorTypes = await fetchDeviceSensorTypes(pg, resolved);
+    } catch {
+      sensorTypes = [];
+    }
+    try {
+      riskLevel = await fetchLatestRiskLevel(pg, resolved);
+    } catch {
+      riskLevel = null;
+    }
     void reply.code(200).send({
       success: true,
       data: {
@@ -389,7 +434,9 @@ export function registerLegacyIotDeviceEndpoints(
         description: "",
         install_date: d.created_at,
         last_data_time: d.last_seen_at ?? d.created_at,
-        online_status: online
+        online_status: online,
+        sensor_types: sensorTypes,
+        risk_level: riskLevel ?? "medium"
       }
     });
   });
