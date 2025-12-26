@@ -251,11 +251,29 @@ export function registerCameraLegacyCompatRoutes(app: FastifyInstance, config: A
           return;
         }
         const tmp: CameraDevice = { id: "test", ip: body.ip, name: "test", status: "offline", lastSeen: 0 };
-        const updated = await fetchDeviceStatus(tmp, 5000);
-        void reply
-          .code(200)
-          .send({ success: updated.status === "online", status: updated.status, stats: updated.stats ?? null });
-        return;
+
+        try {
+          const updated = await fetchDeviceStatus(tmp, 5000);
+          const httpOk = updated.status === "online";
+          void reply.code(200).send({
+            ip: body.ip,
+            http: httpOk,
+            websocket: true,
+            stats: httpOk ? (updated.stats ?? null) : null,
+            message: httpOk ? "杩炴帴鎴愬姛" : "杩炴帴澶辫触"
+          });
+          return;
+        } catch (err) {
+          void reply.code(200).send({
+            ip: body.ip,
+            http: false,
+            websocket: false,
+            stats: null,
+            message: "杩炴帴瓒呮椂鎴栧け璐?",
+            error: err instanceof Error ? err.message : String(err)
+          });
+          return;
+        }
       }
     }
   };
