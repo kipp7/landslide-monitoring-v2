@@ -7,6 +7,7 @@ v2 的权威接口仍然是 `api-service` 的 legacy compat 前缀（`/api/*`、
 ## 1) 兼容端点
 
 - `GET /info`：返回服务信息与可用端点索引（最小实现）
+- `GET /health`：健康检查（兼容参考区 iot-server；同时支持 `/iot/health`）
 - `GET /devices/mappings`：等价于 `GET /api/iot/devices/mappings`，并补充 `count`
 - `GET /devices/{deviceId}`：等价于 `GET /api/iot/devices/{deviceId}`，并补充 `count`
 - `GET /devices/{deviceId}/management`：对齐参考区 iot-server 的设备管理聚合接口（内部转发到 v2 legacy `/api/device-management*`，并尽量补齐 `deformation_data`）
