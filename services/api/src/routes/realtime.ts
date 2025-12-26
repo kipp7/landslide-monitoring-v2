@@ -30,6 +30,26 @@ const getRealtimeQuerySchema = z.object({
   heartbeat_ms: z.coerce.number().int().min(5000).max(60000).optional()
 });
 
+async function resolveDeviceIdFromLegacySelector(pg: PgPool | null, selector: string): Promise<string | null> {
+  if (!pg) return null;
+  return withPgClient(pg, async (client) => {
+    const row = await queryOne<{ device_id: string }>(
+      client,
+      `
+        SELECT device_id
+        FROM devices
+        WHERE device_id::text = $1
+           OR device_name = $1
+           OR metadata->>'legacy_device_id' = $1
+           OR metadata#>>'{externalIds,legacy}' = $1
+        LIMIT 1
+      `,
+      [selector]
+    );
+    return row?.device_id ?? null;
+  });
+}
+
 const postRealtimeBodySchema = z
   .object({
     action: z.enum([
@@ -284,10 +304,19 @@ function registerSseHandler(
     if (deviceSelector !== "all") {
       const parseId = uuidSchema.safeParse(deviceSelector);
       if (!parseId.success) {
-        fail(reply, 400, "鍙傛暟閿欒", traceId, { field: "deviceId" });
-        return;
+        if (!opts.legacyResponse) {
+          fail(reply, 400, "鍙傛暟閿欒", traceId, { field: "deviceId" });
+          return;
+        }
+        const resolved = await resolveDeviceIdFromLegacySelector(pg, deviceSelector);
+        if (!resolved) {
+          void reply.code(404).send({ success: false, error: "device not found" });
+          return;
+        }
+        deviceId = resolved;
+      } else {
+        deviceId = parseId.data;
       }
-      deviceId = parseId.data;
     }
 
     reply.header("Content-Type", "text/event-stream; charset=utf-8");
@@ -405,6 +434,33 @@ function registerSseHandler(
 
     const { action, deviceId, data } = parseBody.data;
 
+    let resolvedDeviceId = deviceId ?? null;
+    if (action === "broadcast_device_data" || action === "broadcast_anomaly") {
+      if (!resolvedDeviceId) {
+        if (opts.legacyResponse) {
+          void reply.code(400).send({ success: false, error: "invalid deviceId" });
+        } else {
+          fail(reply, 400, "鍙傛暟閿欒", traceId, { field: "deviceId" });
+        }
+        return;
+      }
+      const uuid = uuidSchema.safeParse(resolvedDeviceId);
+      if (!uuid.success) {
+        if (!opts.legacyResponse) {
+          fail(reply, 400, "鍙傛暟閿欒", traceId, { field: "deviceId" });
+          return;
+        }
+        const resolved = await resolveDeviceIdFromLegacySelector(pg, resolvedDeviceId);
+        if (!resolved) {
+          void reply.code(404).send({ success: false, error: "device not found" });
+          return;
+        }
+        resolvedDeviceId = resolved;
+      } else {
+        resolvedDeviceId = uuid.data;
+      }
+    }
+
     if (action === "get_client_stats") {
       const stats = getClientStats();
       if (opts.legacyResponse) {
@@ -426,24 +482,15 @@ function registerSseHandler(
       return;
     }
 
-    if ((action === "broadcast_device_data" || action === "broadcast_anomaly") && (!deviceId || !uuidSchema.safeParse(deviceId).success)) {
-      if (opts.legacyResponse) {
-        void reply.code(400).send({ success: false, error: "invalid deviceId" });
-      } else {
-        fail(reply, 400, "鍙傛暟閿欒", traceId, { field: "deviceId" });
-      }
-      return;
-    }
-
     if (action === "broadcast_device_data") {
-      const ensuredDeviceId = deviceId;
+      const ensuredDeviceId = resolvedDeviceId;
       if (!ensuredDeviceId) {
         fail(reply, 400, "鍙傛暟閿欒", traceId, { field: "deviceId" });
         return;
       }
       broadcastDeviceData(ensuredDeviceId, data);
     } else if (action === "broadcast_anomaly") {
-      const ensuredDeviceId = deviceId;
+      const ensuredDeviceId = resolvedDeviceId;
       if (!ensuredDeviceId) {
         fail(reply, 400, "鍙傛暟閿欒", traceId, { field: "deviceId" });
         return;
@@ -477,5 +524,7 @@ export function registerRealtimeLegacyCompatRoutes(
   ch: ClickHouseClient,
   pg: PgPool | null
 ): void {
-  registerSseHandler(app, config, ch, pg, "/realtime-stream", { legacyResponse: true });
+  for (const path of ["/realtime-stream", "/api/realtime-stream", "/iot/api/realtime-stream"]) {
+    registerSseHandler(app, config, ch, pg, path, { legacyResponse: true });
+  }
 }
