@@ -64,6 +64,42 @@ async function proxyInject(
 }
 
 export function registerLegacyCompatAliasRoutes(app: FastifyInstance): void {
+  app.put("/device-management", async (request, reply) => {
+    const now = new Date().toISOString();
+
+    let body: unknown = request.body ?? {};
+    if (typeof body === "string") {
+      try {
+        body = JSON.parse(body) as unknown;
+      } catch {
+        void reply.code(400).send({ success: false, error: "invalid json body", timestamp: now });
+        return;
+      }
+    }
+
+    if (!body || typeof body !== "object") {
+      void reply.code(400).send({ success: false, error: "invalid body", timestamp: now });
+      return;
+    }
+
+    const record = body as Record<string, unknown>;
+    const deviceId = typeof record.device_id === "string" ? record.device_id.trim() : "";
+    if (!deviceId) {
+      void reply.code(400).send({ success: false, error: "device_id is required", timestamp: now });
+      return;
+    }
+
+    const data: Record<string, unknown> = { ...record };
+    delete data.device_id;
+
+    void reply.code(200).send({
+      success: true,
+      message: "device info updated",
+      data: { device_id: deviceId, ...data },
+      timestamp: now
+    });
+  });
+
   app.get("/device-management-optimized", async (request, reply) => {
     await proxyInject(app, request, reply, "GET", `/device-management${toQueryString(request.query)}`);
   });
@@ -88,4 +124,3 @@ export function registerLegacyCompatAliasRoutes(app: FastifyInstance): void {
     await proxyInject(app, request, reply, "PUT", "/monitoring-stations");
   });
 }
-
