@@ -81,6 +81,7 @@ async function main(): Promise<void> {
 
   app.addHook("preHandler", async (request, reply) => {
     if (request.url === "/health") return;
+    if (request.url === "/iot/health") return;
     if (request.url.startsWith("/emqx/")) return;
     if (request.url === "/api/v1/auth/login") return;
     if (request.url === "/api/v1/auth/refresh") return;
@@ -132,6 +133,7 @@ async function main(): Promise<void> {
   });
 
   app.get("/health", () => ({ ok: true }));
+  app.get("/iot/health", () => ({ ok: true }));
 
   const ch = createClickhouseClient(config);
   const pg = createPgPool(config);
@@ -139,6 +141,7 @@ async function main(): Promise<void> {
   app.addHook("onResponse", async (request, reply) => {
     if (!pg) return;
     if (request.url === "/health") return;
+    if (request.url === "/iot/health") return;
     if (request.url.startsWith("/emqx/")) return;
 
     const responseTimeMs = Math.max(0, Date.now() - request.startTimeMs);
