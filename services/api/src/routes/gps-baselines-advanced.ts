@@ -53,6 +53,29 @@ type BaselineRow = {
   updated_at: string;
 };
 
+async function resolveDeviceUuidFromLegacyKey(pg: PgPool, deviceKey: string): Promise<string | null> {
+  const deviceRow = await withPgClient(pg, async (client) =>
+    queryOne<{ device_id: string }>(
+      client,
+      `
+        SELECT device_id
+        FROM devices
+        WHERE status != 'revoked'
+          AND (
+            device_id::text = $1
+            OR device_name = $1
+            OR metadata->>'legacy_device_id' = $1
+            OR metadata#>>'{externalIds,legacy}' = $1
+          )
+        LIMIT 1
+      `,
+      [deviceKey]
+    )
+  );
+
+  return deviceRow?.device_id ?? null;
+}
+
 function legacyKeyFromMetadata(deviceName: string, metadata: unknown): string {
   const m = metadata && typeof metadata === "object" ? (metadata as Record<string, unknown>) : null;
 
@@ -447,12 +470,17 @@ async function handleAutoEstablish(
     return;
   }
 
-  const parseId = deviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
+  const parseId = (opts?.legacy ? z.string().min(1) : deviceIdSchema).safeParse((request.params as { deviceId?: unknown }).deviceId);
   if (!parseId.success) {
     respondError(reply, 400, "参数错误", traceId, opts);
     return;
   }
-  const deviceId = parseId.data;
+  const deviceId =
+    opts?.legacy && !deviceIdSchema.safeParse(parseId.data).success ? await resolveDeviceUuidFromLegacyKey(pg, parseId.data) : parseId.data;
+  if (!deviceId) {
+    respondError(reply, 404, "璧勬簮涓嶅瓨鍦?", traceId, opts);
+    return;
+  }
 
   const parseBody = autoEstablishBodySchema.safeParse(request.body ?? {});
   if (!parseBody.success) {
@@ -461,9 +489,11 @@ async function handleAutoEstablish(
   }
   const body = parseBody.data;
 
-  const exists = await withPgClient(pg, async (client) =>
-    queryOne<{ device_id: string }>(client, `SELECT device_id FROM devices WHERE device_id = $1 AND status != 'revoked'`, [deviceId])
-  );
+  const exists = deviceId
+    ? await withPgClient(pg, async (client) =>
+        queryOne<{ device_id: string }>(client, `SELECT device_id FROM devices WHERE device_id = $1 AND status != 'revoked'`, [deviceId])
+      )
+    : null;
   if (!exists) {
     respondError(reply, 404, "资源不存在", traceId, opts);
     return;
@@ -544,12 +574,18 @@ async function handleQualityCheck(
     return;
   }
 
-  const parseId = deviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
+  const parseId = (opts?.legacy ? z.string().min(1) : deviceIdSchema).safeParse((request.params as { deviceId?: unknown }).deviceId);
   if (!parseId.success) {
     respondError(reply, 400, "参数错误", traceId, opts);
     return;
   }
-  const deviceId = parseId.data;
+  const deviceId =
+    opts?.legacy && !deviceIdSchema.safeParse(parseId.data).success ? await resolveDeviceUuidFromLegacyKey(pg, parseId.data) : parseId.data;
+
+  if (!deviceId) {
+    respondError(reply, 404, "resource not found", traceId, opts);
+    return;
+  }
 
   const parseQuery = qualityCheckQuerySchema.safeParse(request.query);
   if (!parseQuery.success) {
