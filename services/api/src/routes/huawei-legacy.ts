@@ -271,7 +271,7 @@ export function registerHuaweiLegacyCompatRoutes(
     if (!(await requirePermission(adminCfg, pg, request, reply, "device:control"))) return;
 
     if (!pg || !kafkaPublisher) {
-      legacyFail(reply, 503, { error: "disabled", message: "device command pipeline not configured", disabled: true });
+      legacyFail(reply, 200, { error: "disabled", message: "device command pipeline not configured", disabled: true });
       return;
     }
 
@@ -382,7 +382,7 @@ export function registerHuaweiLegacyCompatRoutes(
 
     try {
       if (!kafkaPublisher) {
-        legacyFail(reply, 503, { error: "disabled", message: "kafka not configured", disabled: true });
+        legacyFail(reply, 200, { error: "disabled", message: "kafka not configured", disabled: true });
         return;
       }
       const issued = await issueDeviceCommand(pg, kafkaPublisher, resolved, commandType, payload);
@@ -440,7 +440,7 @@ export function registerHuaweiLegacyCompatRoutes(
     try {
       const payload = { legacy: true, ...parseBody.data } as Record<string, unknown>;
       if (!kafkaPublisher) {
-        legacyFail(reply, 503, { error: "disabled", message: "kafka not configured", disabled: true });
+        legacyFail(reply, 200, { error: "disabled", message: "kafka not configured", disabled: true });
         return;
       }
       const issued = await issueDeviceCommand(pg, kafkaPublisher, resolved, "huawei:led", payload);
@@ -489,7 +489,7 @@ export function registerHuaweiLegacyCompatRoutes(
     try {
       const payload = { legacy: true, ...parseBody.data } as Record<string, unknown>;
       if (!kafkaPublisher) {
-        legacyFail(reply, 503, { error: "disabled", message: "kafka not configured", disabled: true });
+        legacyFail(reply, 200, { error: "disabled", message: "kafka not configured", disabled: true });
         return;
       }
       const issued = await issueDeviceCommand(pg, kafkaPublisher, resolved, "huawei:motor", payload);
@@ -538,7 +538,7 @@ export function registerHuaweiLegacyCompatRoutes(
     try {
       const payload = { legacy: true, ...parseBody.data } as Record<string, unknown>;
       if (!kafkaPublisher) {
-        legacyFail(reply, 503, { error: "disabled", message: "kafka not configured", disabled: true });
+        legacyFail(reply, 200, { error: "disabled", message: "kafka not configured", disabled: true });
         return;
       }
       const issued = await issueDeviceCommand(pg, kafkaPublisher, resolved, "huawei:buzzer", payload);
@@ -581,7 +581,7 @@ export function registerHuaweiLegacyCompatRoutes(
     try {
       const payload = { legacy: true };
       if (!kafkaPublisher) {
-        legacyFail(reply, 503, { error: "disabled", message: "kafka not configured", disabled: true });
+        legacyFail(reply, 200, { error: "disabled", message: "kafka not configured", disabled: true });
         return;
       }
       const issued = await issueDeviceCommand(pg, kafkaPublisher, resolved, "huawei:reboot", payload);
