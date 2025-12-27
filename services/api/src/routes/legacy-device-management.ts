@@ -225,6 +225,77 @@ type DeviceListRow = {
   created_at: string;
 };
 
+function legacyIotFallbackMappings(nowIso: string): {
+  simple_id: string;
+  actual_device_id: string;
+  device_name: string;
+  location_name: string;
+  device_type: string;
+  latitude: number;
+  longitude: number;
+  status: "active";
+  description: string;
+  install_date: string;
+  last_data_time: string;
+  online_status: "online";
+  deviceId: string;
+  simpleId: string;
+  actualDeviceId: string;
+}[] {
+  const install = "2024-05-15T00:00:00Z";
+  const base = [
+    {
+      simple_id: "device_1",
+      actual_device_id: "hangbishan_device_001",
+      device_name: "挂壁山中心监测站",
+      location_name: "玉林师范学院东校区挂壁山中心点",
+      device_type: "rk2206",
+      latitude: 22.6847,
+      longitude: 110.1893,
+      status: "active" as const,
+      description: "挂壁山核心监测区域的主要传感器节点",
+      install_date: install,
+      last_data_time: nowIso,
+      online_status: "online" as const
+    },
+    {
+      simple_id: "device_2",
+      actual_device_id: "hangbishan_device_002",
+      device_name: "坡顶监测站",
+      location_name: "玉林师范学院东校区挂壁山坡顶",
+      device_type: "rk2206",
+      latitude: 22.685,
+      longitude: 110.189,
+      status: "active" as const,
+      description: "挂壁山坡顶位置的监测设备",
+      install_date: install,
+      last_data_time: nowIso,
+      online_status: "online" as const
+    },
+    {
+      simple_id: "device_3",
+      actual_device_id: "hangbishan_device_003",
+      device_name: "坡脚监测站",
+      location_name: "玉林师范学院东校区挂壁山坡脚",
+      device_type: "rk2206",
+      latitude: 22.6844,
+      longitude: 110.1896,
+      status: "active" as const,
+      description: "挂壁山坡脚位置的监测设备",
+      install_date: install,
+      last_data_time: nowIso,
+      online_status: "online" as const
+    }
+  ];
+
+  return base.map((d) => ({
+    ...d,
+    deviceId: d.simple_id,
+    simpleId: d.simple_id,
+    actualDeviceId: d.actual_device_id
+  }));
+}
+
 type BaselineRow = { device_id: string };
 
 function legacyKeyFromMetadata(deviceName: string, metadata: unknown): string {
@@ -1799,7 +1870,7 @@ export function registerLegacyDeviceManagementCompatRoutes(
   app.get("/iot/devices/mappings", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
-      legacyFail(reply, 503, "PostgreSQL not configured");
+      legacyOk(reply, legacyIotFallbackMappings(new Date().toISOString()));
       return;
     }
 
@@ -1828,7 +1899,20 @@ export function registerLegacyDeviceManagementCompatRoutes(
   app.get("/iot/devices/:deviceId", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
-      legacyFail(reply, 503, "PostgreSQL not configured");
+      const parsed = deviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
+      if (!parsed.success) {
+        legacyFail(reply, 400, "invalid deviceId");
+        return;
+      }
+
+      const all = legacyIotFallbackMappings(new Date().toISOString());
+      const found = all.find((d) => d.simple_id === parsed.data || d.actual_device_id === parsed.data) ?? null;
+      if (!found) {
+        legacyFail(reply, 404, "device not found");
+        return;
+      }
+
+      legacyOk(reply, found);
       return;
     }
 
