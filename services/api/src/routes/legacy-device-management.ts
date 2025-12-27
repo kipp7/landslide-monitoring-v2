@@ -1159,6 +1159,9 @@ export function registerLegacyDeviceManagementCompatRoutes(
       return;
     }
 
+    const query = (request.query ?? {}) as { mode?: unknown };
+    const mode = typeof query.mode === "string" ? query.mode.trim() : "";
+
     const devices = await listDevicesWithStations(pg);
     const deviceIds = devices.map((d) => d.device_id);
     const baselineIds = await baselineDeviceIds(pg, deviceIds);
@@ -1193,6 +1196,11 @@ export function registerLegacyDeviceManagementCompatRoutes(
         signal_strength: online === "online" ? 90 : 0
       };
     });
+
+    if (mode === "summary") {
+      legacyOk(reply, mapped);
+      return;
+    }
 
     const onlineDevices = mapped.filter((d) => d.online_status === "online").length;
     const offlineDevices = mapped.length - onlineDevices;
