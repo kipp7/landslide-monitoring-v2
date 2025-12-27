@@ -197,6 +197,14 @@ async function main(): Promise<void> {
 
   // iot-server compatibility (reference system /devices/*, /info).
   registerIotServerCompatRoutes(app, config, ch, pg);
+  // Compatibility: some reference deployments use baseUrl=/iot and call /iot/devices/*, /iot/info, etc.
+  app.register(
+    (iot, _opts, done) => {
+      registerIotServerCompatRoutes(iot, config, ch, pg);
+      done();
+    },
+    { prefix: "/iot" }
+  );
 
   // Legacy-compatible path (reference system): /api/anomaly-assessment
   app.register(

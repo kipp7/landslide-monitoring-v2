@@ -8,6 +8,7 @@ v2 的权威接口仍然是 `api-service` 的 legacy compat 前缀（`/api/*`、
 
 - `GET /info`：返回服务信息与可用端点索引（对齐参考区 iot-server 的 endpoints key；作为“索引/自描述”，不代表所有端点都由 iot-server-compat 层实现）
 - `GET /health`：健康检查（兼容参考区 iot-server；同时支持 `/iot/health`）
+- 以上端点同时提供 `/iot/*` 前缀别名（如 `/iot/info`、`/iot/devices/mappings`），用于兼容参考区常见的 `IOT_SERVICE_BASE=.../iot` 配置方式
 - `GET /devices/mappings`：等价于 `GET /api/iot/devices/mappings`，并补充 `count`
 - `GET /devices/{deviceId}`：等价于 `GET /api/iot/devices/{deviceId}`，并补充 `count`
 - `GET /devices/{deviceId}/management`：对齐参考区 iot-server 的设备管理聚合接口（内部转发到 v2 legacy `/api/device-management*`，并尽量补齐 `deformation_data`）
