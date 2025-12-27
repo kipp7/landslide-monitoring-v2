@@ -197,7 +197,7 @@ async function main(): Promise<void> {
   registerIotServerCompatRoutes(app, config, ch, pg);
   app.register(
     (iot, _opts, done) => {
-      registerIotServerCompatRoutes(iot, config, ch, pg);
+      registerIotServerCompatRoutes(iot, config, ch, pg, { injector: app });
       done();
     },
     { prefix: "/iot" }
