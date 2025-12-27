@@ -16,6 +16,18 @@ function legacyFail(reply: FastifyReply, statusCode: number, message: string, de
   void reply.code(statusCode).send({ success: false, message, error: details, timestamp: new Date().toISOString() });
 }
 
+function legacyOkWithWarnings(reply: FastifyReply, data: unknown, warnings: unknown[], message = "ok"): void {
+  if (warnings.length === 0) {
+    legacyOk(reply, data, message);
+    return;
+  }
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    legacyOk(reply, { data, warnings }, message);
+    return;
+  }
+  legacyOk(reply, { ...(data as Record<string, unknown>), warnings }, message);
+}
+
 const legacyDeviceIdSchema = z.string().min(1).max(200);
 
 const timeWindowSchema = z
@@ -444,10 +456,6 @@ export function registerGpsDeformationLegacyCompatRoutes(
   const handler = async (request: FastifyRequest, reply: FastifyReply) => {
     const t0 = Date.now();
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:analysis"))) return;
-    if (!pg) {
-      legacyFail(reply, 503, "PostgreSQL not configured");
-      return;
-    }
 
     const parseId = legacyDeviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
     if (!parseId.success) {
@@ -462,12 +470,28 @@ export function registerGpsDeformationLegacyCompatRoutes(
       return;
     }
 
-    const resolved = await resolveDeviceUuid(pg, inputDeviceId);
-    if (!resolved) {
-      legacyFail(reply, 404, "device not mapped", {
-        hint: "Use UUID or map legacy id via devices.metadata.legacy_device_id / devices.metadata.externalIds.legacy."
-      });
-      return;
+    const warnings: unknown[] = [];
+
+    let resolved: string | null = null;
+    if (!pg) {
+      warnings.push({ kind: "pg_missing", message: "PostgreSQL not configured" });
+    } else {
+      try {
+        resolved = await resolveDeviceUuid(pg, inputDeviceId);
+      } catch (err) {
+        warnings.push({
+          kind: "pg_device_resolve_failed",
+          message: "PostgreSQL query failed while resolving device id",
+          error: err instanceof Error ? err.message : String(err)
+        });
+      }
+      if (!resolved) {
+        warnings.push({
+          kind: "device_not_mapped",
+          message: "device not mapped",
+          hint: "Use UUID or map legacy id via devices.metadata.legacy_device_id / devices.metadata.externalIds.legacy."
+        });
+      }
     }
 
     const limit = parsed.data.limit ?? 2000;
@@ -491,16 +515,34 @@ export function registerGpsDeformationLegacyCompatRoutes(
       label = parsedRange.label;
     }
 
-    let baseline = await fetchBaseline(pg, resolved);
+    let baseline: Baseline | null = null;
+    if (pg && resolved) {
+      try {
+        baseline = await fetchBaseline(pg, resolved);
+      } catch (err) {
+        warnings.push({
+          kind: "pg_baseline_failed",
+          message: "PostgreSQL query failed while reading gps_baselines",
+          error: err instanceof Error ? err.message : String(err)
+        });
+        baseline = null;
+      }
+    }
     const hasBaseline = Boolean(baseline);
     const baselineSource = hasBaseline ? "gps_baselines" : null;
 
-    let points: GpsPoint[];
-    try {
-      points = await fetchGpsTelemetryInRange(config, ch, resolved, start, end, limit);
-    } catch (err) {
-      legacyFail(reply, 503, "ClickHouse query failed", err instanceof Error ? err.message : String(err));
-      return;
+    let points: GpsPoint[] = [];
+    if (resolved) {
+      try {
+        points = await fetchGpsTelemetryInRange(config, ch, resolved, start, end, limit);
+      } catch (err) {
+        warnings.push({
+          kind: "clickhouse_failed",
+          message: "ClickHouse query failed",
+          error: err instanceof Error ? err.message : String(err)
+        });
+        points = [];
+      }
     }
 
     if (!baseline && points.length > 0) {
@@ -567,7 +609,9 @@ export function registerGpsDeformationLegacyCompatRoutes(
     const ceemd = computeCeemdLikeDecomposition(rows.map((r) => r.deformation_distance_3d), timesIso);
     const prediction = computePrediction(displacementMm, timesIso, { hasBaseline, qualityScore });
 
-    legacyOk(reply, {
+    legacyOkWithWarnings(
+      reply,
+      {
       deviceId: inputDeviceId,
       resolvedDeviceId: resolved,
       timeRange: { label, start: start.toISOString(), end: end.toISOString() },
@@ -605,7 +649,10 @@ export function registerGpsDeformationLegacyCompatRoutes(
         prediction
       },
       points: pointsWithRisk
-    });
+    },
+      warnings,
+      warnings.length > 0 ? "fallback" : "ok"
+    );
   };
 
   app.get("/gps-deformation/:deviceId", handler);
