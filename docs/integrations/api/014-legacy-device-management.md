@@ -15,7 +15,9 @@
 
 ## 3) 监测站信息
 
-- `GET /api/monitoring-stations`：返回监测站（设备）列表；会从 `devices.metadata` 回填 `station_name`/`location_name`/`risk_level`/`sensor_types`/`chart_legend_name`/`status` 等字段；支持 `chartType` 参数返回图表配置（兼容旧页面图表）
+- `GET /api/monitoring-stations`：返回监测站（设备）列表；会从 `devices.metadata` 回填 `station_name`/`location_name`/`risk_level`/`sensor_types`/`chart_legend_name`/`status` 等字段；支持 `chartType` 参数返回图表配置（含 `deviceLegends`；与 `GET /api/monitoring-stations/chart-config` 对齐）
+- `GET /api/monitoring-stations/chart-config?type=...`：返回图表配置（兼容旧前端 chart config 拉取路径；`type` 也可用 `chartType`；包含基于 `devices.metadata.chart_legend_name` 的 deviceLegends）
+- `PUT /api/monitoring-stations/chart-legends`：批量更新图例配置（兼容入口；写入 `devices.metadata.chart_legend_name`）
 - `PUT /api/monitoring-stations?deviceId=...`：更新单监测站（设备）配置（写入 `devices.metadata`，用于 legacy UI 的配置保存；如需同步更新 `stations`/`devices.status`，使用 `PUT /api/monitoring-stations/{deviceId}`）
 - `POST /api/monitoring-stations`：批量更新图例配置（写入 `devices.metadata.chart_legend_name`）
 - `GET /api/monitoring-stations/{deviceId}`：返回单监测站（设备）信息
