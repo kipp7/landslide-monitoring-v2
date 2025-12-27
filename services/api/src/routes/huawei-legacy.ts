@@ -4,7 +4,6 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 import type { AppConfig } from "../config";
 import { requirePermission, type AdminAuthConfig } from "../authz";
-import { fail } from "../http";
 import type { KafkaPublisher } from "../kafka";
 import { createKafkaPublisher } from "../kafka";
 import { enqueueOperationLog } from "../operation-log";
@@ -348,11 +347,10 @@ export function registerHuaweiLegacyCompatRoutes(
   });
 
   app.post("/huawei/devices/:deviceId/commands", async (request, reply) => {
-    const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "device:control"))) return;
 
     if (!pg) {
-      fail(reply, 503, "PostgreSQL not configured", traceId);
+      legacyFail(reply, 200, { error: "disabled", message: "PostgreSQL not configured", disabled: true });
       return;
     }
 
@@ -411,10 +409,9 @@ export function registerHuaweiLegacyCompatRoutes(
   });
 
   app.post("/huawei/devices/:deviceId/led", async (request, reply) => {
-    const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "device:control"))) return;
     if (!pg) {
-      fail(reply, 503, "PostgreSQL not configured", traceId);
+      legacyFail(reply, 200, { error: "disabled", message: "PostgreSQL not configured", disabled: true });
       return;
     }
 
@@ -460,10 +457,9 @@ export function registerHuaweiLegacyCompatRoutes(
   });
 
   app.post("/huawei/devices/:deviceId/motor", async (request, reply) => {
-    const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "device:control"))) return;
     if (!pg) {
-      fail(reply, 503, "PostgreSQL not configured", traceId);
+      legacyFail(reply, 200, { error: "disabled", message: "PostgreSQL not configured", disabled: true });
       return;
     }
 
@@ -509,10 +505,9 @@ export function registerHuaweiLegacyCompatRoutes(
   });
 
   app.post("/huawei/devices/:deviceId/buzzer", async (request, reply) => {
-    const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "device:control"))) return;
     if (!pg) {
-      fail(reply, 503, "PostgreSQL not configured", traceId);
+      legacyFail(reply, 200, { error: "disabled", message: "PostgreSQL not configured", disabled: true });
       return;
     }
 
@@ -558,10 +553,9 @@ export function registerHuaweiLegacyCompatRoutes(
   });
 
   app.post("/huawei/devices/:deviceId/reboot", async (request, reply) => {
-    const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "device:control"))) return;
     if (!pg) {
-      fail(reply, 503, "PostgreSQL not configured", traceId);
+      legacyFail(reply, 200, { error: "disabled", message: "PostgreSQL not configured", disabled: true });
       return;
     }
 
