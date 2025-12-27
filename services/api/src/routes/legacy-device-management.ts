@@ -1911,15 +1911,52 @@ export function registerLegacyDeviceManagementCompatRoutes(
     }
 
     const devices = await listDevicesWithStations(pg);
-    const list = devices.map((d) => ({
-      device_id: legacyKeyFromMetadata(d.device_name, d.metadata),
-      actual_device_id: d.device_id,
-      station_name: d.station_name ?? d.device_name,
-      location_name: d.station_name ?? "",
-      latitude: d.latitude,
-      longitude: d.longitude,
-      status: d.status
-    }));
+    const list = devices.map((d) => {
+      const meta = d.metadata && typeof d.metadata === "object" ? (d.metadata as Record<string, unknown>) : null;
+
+      const metaStationNameRaw = typeof meta?.station_name === "string" ? meta.station_name.trim() : "";
+      const metaLocationNameRaw = typeof meta?.location_name === "string" ? meta.location_name.trim() : "";
+      const metaStationName = metaStationNameRaw ? metaStationNameRaw : undefined;
+      const metaLocationName = metaLocationNameRaw ? metaLocationNameRaw : undefined;
+      const stationName = metaStationName ?? metaLocationName ?? d.station_name ?? d.device_name;
+      const locationName = metaLocationName ?? d.station_name ?? "";
+
+      const chartLegendNameRaw = typeof meta?.chart_legend_name === "string" ? meta.chart_legend_name.trim() : "";
+      const chartLegendName = chartLegendNameRaw || stationName;
+
+      const riskRaw = typeof meta?.risk_level === "string" ? meta.risk_level : "";
+      const riskLevel = riskRaw === "low" || riskRaw === "high" || riskRaw === "critical" ? riskRaw : "medium";
+
+      const statusRaw = typeof meta?.status === "string" ? meta.status : "";
+      const status =
+        statusRaw === "inactive" || statusRaw === "maintenance"
+          ? statusRaw
+          : d.status === "inactive"
+            ? "inactive"
+            : "active";
+
+      const sensorTypes = Array.isArray(meta?.sensor_types) ? meta.sensor_types.filter((v) => typeof v === "string") : [];
+
+      const online = onlineStatus(d.last_seen_at, d.status);
+
+      return {
+        device_id: legacyKeyFromMetadata(d.device_name, d.metadata),
+        actual_device_id: d.device_id,
+        station_name: stationName,
+        location_name: locationName,
+        latitude: d.latitude,
+        longitude: d.longitude,
+        status,
+        risk_level: riskLevel,
+        sensor_types: sensorTypes,
+        chart_legend_name: chartLegendName,
+        description: typeof meta?.description === "string" ? meta.description : "",
+        install_date: typeof meta?.install_date === "string" ? meta.install_date : d.created_at,
+        last_data_time: d.last_seen_at ?? d.created_at,
+        is_online: online === "online",
+        online_status: online
+      };
+    });
 
     legacyOk(reply, list);
   });
@@ -2134,14 +2171,47 @@ export function registerLegacyDeviceManagementCompatRoutes(
       return;
     }
 
+    const meta = row.metadata && typeof row.metadata === "object" ? (row.metadata as Record<string, unknown>) : null;
+    const metaStationNameRaw = typeof meta?.station_name === "string" ? meta.station_name.trim() : "";
+    const metaLocationNameRaw = typeof meta?.location_name === "string" ? meta.location_name.trim() : "";
+    const metaStationName = metaStationNameRaw ? metaStationNameRaw : undefined;
+    const metaLocationName = metaLocationNameRaw ? metaLocationNameRaw : undefined;
+    const stationName = metaStationName ?? metaLocationName ?? row.station_name ?? row.device_name;
+    const locationName = metaLocationName ?? row.station_name ?? "";
+
+    const chartLegendNameRaw = typeof meta?.chart_legend_name === "string" ? meta.chart_legend_name.trim() : "";
+    const chartLegendName = chartLegendNameRaw || stationName;
+
+    const riskRaw = typeof meta?.risk_level === "string" ? meta.risk_level : "";
+    const riskLevel = riskRaw === "low" || riskRaw === "high" || riskRaw === "critical" ? riskRaw : "medium";
+
+    const statusRaw = typeof meta?.status === "string" ? meta.status : "";
+    const status =
+      statusRaw === "inactive" || statusRaw === "maintenance"
+        ? statusRaw
+        : row.status === "inactive"
+          ? "inactive"
+          : "active";
+
+    const sensorTypes = Array.isArray(meta?.sensor_types) ? meta.sensor_types.filter((v) => typeof v === "string") : [];
+    const online = onlineStatus(row.last_seen_at, row.status);
+
     legacyOk(reply, {
       device_id: legacyKeyFromMetadata(row.device_name, row.metadata),
       actual_device_id: row.device_id,
-      station_name: row.station_name ?? row.device_name,
-      location_name: row.station_name ?? "",
+      station_name: stationName,
+      location_name: locationName,
       latitude: row.latitude,
       longitude: row.longitude,
-      status: row.status
+      status,
+      risk_level: riskLevel,
+      sensor_types: sensorTypes,
+      chart_legend_name: chartLegendName,
+      description: typeof meta?.description === "string" ? meta.description : "",
+      install_date: typeof meta?.install_date === "string" ? meta.install_date : row.created_at,
+      last_data_time: row.last_seen_at ?? row.created_at,
+      is_online: online === "online",
+      online_status: online
     });
   });
 
