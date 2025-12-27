@@ -15,9 +15,11 @@
 
 ## 3) 监测站信息
 
-- `GET /api/monitoring-stations`：返回监测站（设备）列表；会从 `devices.metadata` 回填 `station_name`/`location_name`/`risk_level`/`sensor_types`/`chart_legend_name`/`status` 等字段；支持 `chartType` 参数返回图表配置（兼容旧页面图表）
+- `GET /api/monitoring-stations`：返回监测站（设备）列表；会从 `devices.metadata` 回填 `station_name`/`location_name`/`risk_level`/`sensor_types`/`chart_legend_name`/`status` 等字段；支持 `chartType` 参数返回图表配置（`deviceLegends` 从 `chart_legend_name/station_name` 生成，用于旧页面图例）
+- `GET /api/monitoring-stations/chart-config?type=...`：`chartType` 的别名写法（参考区旧文档/实现）；返回同上图表配置
 - `PUT /api/monitoring-stations?deviceId=...`：更新单监测站（设备）配置（写入 `devices.metadata`，用于 legacy UI 的配置保存；如需同步更新 `stations`/`devices.status`，使用 `PUT /api/monitoring-stations/{deviceId}`）
 - `POST /api/monitoring-stations`：批量更新图例配置（写入 `devices.metadata.chart_legend_name`）
+- `PUT /api/monitoring-stations/chart-legends`：批量更新图例配置（参考区文档写法；等价于 `POST /api/monitoring-stations`）
 - `GET /api/monitoring-stations/{deviceId}`：返回单监测站（设备）信息
 - `PUT /api/monitoring-stations/{deviceId}`：更新单监测站（设备）信息（支持 `station_name`/`latitude`/`longitude`/`status`，其余字段写入 `devices.metadata`）
 - `DELETE /api/monitoring-stations/{deviceId}`：软删除（`devices.status = revoked`）

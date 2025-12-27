@@ -196,6 +196,26 @@ function onlineStatus(lastSeenAt: string | null, status: "inactive" | "active" |
   return Date.now() - t < 5 * 60_000 ? "online" : "offline";
 }
 
+function getLegacyMonitoringStationsChartConfig(chartType: string): { title: string; unit: string; yAxisName: string } {
+  const key = chartType.trim().toLowerCase();
+  switch (key) {
+    case "temperature":
+      return { title: "温度趋势图/°C - 挂傍山监测网络", unit: "°C", yAxisName: "温度" };
+    case "humidity":
+      return { title: "湿度趋势图/% - 挂傍山监测网络", unit: "%", yAxisName: "湿度" };
+    case "acceleration":
+      return { title: "加速度趋势图/mg - 挂傍山监测网络", unit: "mg", yAxisName: "加速度" };
+    case "gyroscope":
+      return { title: "陀螺仪趋势图/°/s - 挂傍山监测网络", unit: "°/s", yAxisName: "角速度" };
+    case "rainfall":
+      return { title: "雨量趋势图/mm - 挂傍山监测网络", unit: "mm", yAxisName: "降雨量" };
+    case "gps_deformation":
+      return { title: "地质形变趋势图/mm - 挂傍山监测网络", unit: "mm", yAxisName: "位移" };
+    default:
+      return { title: `${chartType}趋势图 - 挂傍山监测网络`, unit: "", yAxisName: chartType };
+  }
+}
+
 function toZhCnTime(value: string): string {
   const d = new Date(value);
   if (Number.isFinite(d.getTime())) return d.toLocaleString("zh-CN");
@@ -1899,17 +1919,6 @@ export function registerLegacyDeviceManagementCompatRoutes(
 
     const query = (request.query ?? {}) as { chartType?: unknown };
     const chartType = typeof query.chartType === "string" ? query.chartType : "";
-    if (chartType) {
-      legacyOk(reply, {
-        chartType,
-        title: chartType,
-        unit: "",
-        yAxisName: "",
-        deviceLegends: {}
-      });
-      return;
-    }
-
     const devices = await listDevicesWithStations(pg);
     const list = devices.map((d) => {
       const meta = d.metadata && typeof d.metadata === "object" ? (d.metadata as Record<string, unknown>) : null;
@@ -1944,8 +1953,8 @@ export function registerLegacyDeviceManagementCompatRoutes(
         actual_device_id: d.device_id,
         station_name: stationName,
         location_name: locationName,
-        latitude: d.latitude,
-        longitude: d.longitude,
+        latitude: d.latitude ?? 0,
+        longitude: d.longitude ?? 0,
         status,
         risk_level: riskLevel,
         sensor_types: sensorTypes,
@@ -1958,7 +1967,66 @@ export function registerLegacyDeviceManagementCompatRoutes(
       };
     });
 
+    if (chartType) {
+      const deviceLegends = list.reduce<Record<string, string>>((acc, station) => {
+        acc[station.device_id] = station.chart_legend_name || station.station_name;
+        return acc;
+      }, {});
+
+      const cfg = getLegacyMonitoringStationsChartConfig(chartType);
+      legacyOk(reply, {
+        chartType,
+        title: cfg.title,
+        unit: cfg.unit,
+        yAxisName: cfg.yAxisName,
+        deviceLegends
+      });
+      return;
+    }
+
     legacyOk(reply, list);
+  });
+
+  // Compatibility: legacy docs use /monitoring-stations/chart-config?type=temperature
+  app.get("/monitoring-stations/chart-config", async (request, reply) => {
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
+    if (!pg) {
+      legacyFail(reply, 503, "PostgreSQL not configured");
+      return;
+    }
+
+    const query = (request.query ?? {}) as { type?: unknown; chartType?: unknown };
+    const chartType = typeof query.type === "string" ? query.type : typeof query.chartType === "string" ? query.chartType : "";
+    if (!chartType.trim()) {
+      legacyFail(reply, 400, "type is required");
+      return;
+    }
+
+    const devices = await listDevicesWithStations(pg);
+    const list = devices.map((d) => {
+      const meta = d.metadata && typeof d.metadata === "object" ? (d.metadata as Record<string, unknown>) : null;
+      const stationName = d.station_name ?? d.device_name;
+      const legendRaw = typeof meta?.chart_legend_name === "string" ? meta.chart_legend_name.trim() : "";
+      return {
+        device_id: legacyKeyFromMetadata(d.device_name, d.metadata),
+        station_name: stationName,
+        chart_legend_name: legendRaw || stationName
+      };
+    });
+
+    const deviceLegends = list.reduce<Record<string, string>>((acc, station) => {
+      acc[station.device_id] = station.chart_legend_name || station.station_name;
+      return acc;
+    }, {});
+
+    const cfg = getLegacyMonitoringStationsChartConfig(chartType);
+    legacyOk(reply, {
+      chartType: chartType.trim(),
+      title: cfg.title,
+      unit: cfg.unit,
+      yAxisName: cfg.yAxisName,
+      deviceLegends
+    });
   });
 
   app.put("/monitoring-stations", async (request, reply) => {
@@ -2067,6 +2135,56 @@ export function registerLegacyDeviceManagementCompatRoutes(
   });
 
   app.post("/monitoring-stations", async (request, reply) => {
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
+    if (!pg) {
+      legacyFail(reply, 503, "PostgreSQL not configured");
+      return;
+    }
+
+    const parsed = monitoringStationsBulkUpdateSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      legacyFail(reply, 400, "invalid body");
+      return;
+    }
+
+    const legends = parsed.data.deviceLegends ?? {};
+    const entries = Object.entries(legends).filter(([, name]) => typeof name === "string" && name.trim());
+    if (entries.length === 0) {
+      legacyOk(reply, { updated: 0 }, "no-op");
+      return;
+    }
+
+    const updated = await withPgClient(pg, async (client) => {
+      await client.query("BEGIN");
+      try {
+        let count = 0;
+        for (const [deviceKey, legendName] of entries) {
+          const resolved = await resolveDeviceIdWithClient(client, deviceKey);
+          if (!resolved) continue;
+          await client.query(
+            `
+              UPDATE devices
+              SET metadata = jsonb_set(COALESCE(metadata, '{}'::jsonb), '{chart_legend_name}', to_jsonb($2::text), true),
+                  updated_at = NOW()
+              WHERE device_id = $1
+            `,
+            [resolved, legendName]
+          );
+          count += 1;
+        }
+        await client.query("COMMIT");
+        return count;
+      } catch (err) {
+        await client.query("ROLLBACK");
+        throw err;
+      }
+    });
+
+    legacyOk(reply, { updated });
+  });
+
+  // Compatibility: legacy docs use PUT /monitoring-stations/chart-legends
+  app.put("/monitoring-stations/chart-legends", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
       legacyFail(reply, 503, "PostgreSQL not configured");
