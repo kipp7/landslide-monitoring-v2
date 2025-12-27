@@ -2022,6 +2022,82 @@ export function registerLegacyDeviceManagementCompatRoutes(
     redirectLegacyAlias(request.raw.url, reply, "/monitoring-stations-optimized", "/monitoring-stations");
   });
 
+  app.put("/monitoring-stations/:deviceId", async (request, reply) => {
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
+    if (!pg) {
+      legacyFail(reply, 503, "PostgreSQL not configured");
+      return;
+    }
+
+    const parsed = deviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
+    if (!parsed.success) {
+      legacyFail(reply, 400, "invalid deviceId");
+      return;
+    }
+
+    const resolved = await resolveDeviceId(pg, parsed.data);
+    if (!resolved) {
+      legacyFail(reply, 404, "monitoring station not found");
+      return;
+    }
+
+    const bodyParsed = monitoringStationsUpdateSchema.safeParse(request.body ?? {});
+    if (!bodyParsed.success) {
+      legacyFail(reply, 400, "invalid body");
+      return;
+    }
+
+    const patch = bodyParsed.data;
+    await withPgClient(pg, async (client) => {
+      await client.query(
+        `
+          UPDATE devices
+          SET metadata = COALESCE(metadata, '{}'::jsonb) || $2::jsonb, updated_at = NOW()
+          WHERE device_id = $1
+        `,
+        [resolved, JSON.stringify(patch)]
+      );
+    });
+
+    const updated = await fetchDeviceWithStation(pg, resolved);
+    if (!updated) {
+      legacyFail(reply, 404, "monitoring station not found");
+      return;
+    }
+
+    const meta = updated.metadata && typeof updated.metadata === "object" ? (updated.metadata as Record<string, unknown>) : null;
+    const sensorTypes = meta && Array.isArray(meta.sensor_types) ? meta.sensor_types : [];
+
+    const riskLevelRaw = meta && typeof meta.risk_level === "string" ? meta.risk_level.trim() : "";
+    const risk_level =
+      riskLevelRaw === "low" || riskLevelRaw === "medium" || riskLevelRaw === "high" || riskLevelRaw === "critical"
+        ? riskLevelRaw
+        : "low";
+
+    const legendRaw = meta && typeof meta.chart_legend_name === "string" ? meta.chart_legend_name.trim() : "";
+    const chart_legend_name = legendRaw ? legendRaw : (updated.station_name ?? updated.device_name);
+
+    legacyOk(reply, {
+      device_id: legacyKeyFromMetadata(updated.device_name, updated.metadata),
+      actual_device_id: updated.device_id,
+      station_name: updated.station_name ?? updated.device_name,
+      location_name: updated.station_name ?? "",
+      latitude: updated.latitude,
+      longitude: updated.longitude,
+      altitude: null,
+      sensor_types: sensorTypes.filter((v): v is string => typeof v === "string"),
+      chart_legend_name,
+      description: typeof meta?.description === "string" ? meta.description : "",
+      risk_level,
+      status: updated.status === "active" ? "active" : updated.status === "inactive" ? "inactive" : "inactive",
+      install_date: updated.created_at,
+      is_online: onlineStatus(updated.last_seen_at, updated.status) === "online",
+      last_data_time: updated.last_seen_at ?? updated.created_at,
+      created_at: updated.created_at,
+      updated_at: new Date().toISOString()
+    });
+  });
+
   app.get("/monitoring-stations/:deviceId", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
