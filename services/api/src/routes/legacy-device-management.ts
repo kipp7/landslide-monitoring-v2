@@ -1806,7 +1806,11 @@ export function registerLegacyDeviceManagementCompatRoutes(
     const devices = await listDevicesWithStations(pg);
     const mapped = devices.map((d) => {
       const online = onlineStatus(d.last_seen_at, d.status);
+      const simpleId = legacyKeyFromMetadata(d.device_name, d.metadata);
       return {
+        deviceId: simpleId,
+        simpleId,
+        actualDeviceId: d.device_id,
         simple_id: legacyKeyFromMetadata(d.device_name, d.metadata),
         actual_device_id: d.device_id,
         device_name: d.device_name,
@@ -1874,8 +1878,12 @@ export function registerLegacyDeviceManagementCompatRoutes(
     }
 
     const online = onlineStatus(row.last_seen_at, row.status);
+    const simpleId = legacyKeyFromMetadata(row.device_name, row.metadata);
     legacyOk(reply, {
-      simple_id: legacyKeyFromMetadata(row.device_name, row.metadata),
+      deviceId: simpleId,
+      simpleId,
+      actualDeviceId: row.device_id,
+      simple_id: simpleId,
       actual_device_id: row.device_id,
       device_name: row.device_name,
       location_name: row.station_name ?? "",
