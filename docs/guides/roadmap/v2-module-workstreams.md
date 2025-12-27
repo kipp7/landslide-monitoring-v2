@@ -175,7 +175,7 @@
 | WS-O.3 | codex | `feat/ws-o3/system-monitor-legacy` | https://github.com/kipp7/landslide-monitoring-v2/pull/216 | done | WS-G, WS-C, WS-M.1 | Web：`/system-monitor` 1:1：恢复参考区系统监控页（cache/realtime/worker 指标面板），将旧 hooks（`useOptimizedDeviceData`/`useDataAggregation`/`useRealtimeStream`/`useWebWorker`）迁移为 v2 版本；当前 v2 `/system-monitor` 仅重定向到 `/ops/system-monitor` |
 | WS-O.4 | codex | `feat/ws-o4/device-management-legacy` | https://github.com/kipp7/landslide-monitoring-v2/pull/218 | done | WS-B, WS-D, WS-M.1 | Web：`/device-management` 1:1：恢复参考区设备管理页（状态/监测站管理/基准点管理 tabs），并将依赖组件（`MonitoringStationManagement`/`DeviceMappingTable` 等）迁移到 v2 数据源；保留现有 v2 设备管理页到 `/device-management-v2` |
 | WS-O.5 | codex | `feat/ws-o5/analysis2-monitoring-points` | https://github.com/kipp7/landslide-monitoring-v2/pull/219 | done | WS-J | Web：`/analysis2` 1:1：恢复参考区 `MonitoringPoints`（监测点/传感器/异常/视图面板 demo UI），取消当前 `/analysis2` → `/analysis` 重定向 |
-| WS-O.6 | codex | `fix/ws-o6/device-management-page-backup-file` |  | claimed | WS-O.4 | Web：补齐参考区遗留文件 `frontend/app/device-management/page.tsx.backup` 在 v2 的对应落点（仅文件不缺失；不参与运行时路由）。 |
+| WS-O.6 | codex | `fix/ws-o6/device-management-page-backup-file` | https://github.com/kipp7/landslide-monitoring-v2/pull/277 | in_review | WS-O.4 | Web：补齐参考区遗留文件 `frontend/app/device-management/page.tsx.backup` 在 v2 的对应落点（仅文件不缺失；不参与运行时路由）。 |
 
 ### 4.4 对齐与验收（总集成人做）
 
