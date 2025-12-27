@@ -1,5 +1,9 @@
 function getProxyBaseUrl(): string {
-  const raw = process.env.NEXT_PUBLIC_API_BASE_URL ?? process.env.API_BASE_URL ?? process.env.BACKEND_URL
+  const raw =
+    process.env.NEXT_PUBLIC_API_BASE_URL ??
+    process.env.API_BASE_URL ??
+    process.env.NEXT_PUBLIC_BACKEND_URL ??
+    process.env.BACKEND_URL
   const trimmed = raw?.trim()
   if (trimmed) return trimmed.replace(/\/+$/, '')
 
@@ -29,7 +33,7 @@ export async function proxyLegacyApiRequest(request: Request): Promise<Response>
       JSON.stringify(
         {
           error:
-            'NEXT_PUBLIC_API_BASE_URL / API_BASE_URL / BACKEND_URL is not configured (required for Next API proxy routes)',
+            'NEXT_PUBLIC_API_BASE_URL / API_BASE_URL / NEXT_PUBLIC_BACKEND_URL / BACKEND_URL is not configured (required for Next API proxy routes)',
         },
         null,
         2
