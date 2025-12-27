@@ -115,6 +115,40 @@ type ExpertResult = {
   };
 };
 
+function fallbackResult(
+  deviceId: string,
+  metric: "all" | "battery" | "health" | "signal",
+  reason: string
+): ExpertResult {
+  const now = new Date().toISOString();
+  const warning = [reason];
+
+  const battery: ExpertBattery = { soc: 0, voltage: null, temperatureC: null, confidence: 0, warnings: warning };
+  const signal: ExpertSignal = { rssi: null, strength: 0, confidence: 0, warnings: warning };
+  const health: ExpertHealth = {
+    score: 0,
+    level: "bad",
+    components: { batteryScore: 0, signalScore: 0, dataFreshnessScore: 0 },
+    warnings: warning
+  };
+
+  return {
+    deviceId,
+    timestamp: now,
+    analysisType: analysisType(metric),
+    ...(metric === "battery" ? { battery } : {}),
+    ...(metric === "signal" ? { signal } : {}),
+    ...(metric === "health" ? { health } : {}),
+    ...(metric === "all" ? { battery, signal, health } : {}),
+    metadata: {
+      apiVersion: "2.0.0",
+      analysisMethod: "fallback_no_pg",
+      calculationTime: now,
+      cacheUsed: false
+    }
+  };
+}
+
 type DeviceStateRow = {
   state: unknown;
   updated_at: string;
@@ -367,10 +401,6 @@ export function registerDeviceHealthExpertRoutes(
   app.get("/devices/:deviceId/health/expert", async (request, reply) => {
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
-    if (!pg) {
-      fail(reply, 503, "PostgreSQL not configured", traceId);
-      return;
-    }
 
     const parseId = deviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
     if (!parseId.success) {
@@ -382,6 +412,22 @@ export function registerDeviceHealthExpertRoutes(
     const parseQuery = querySchema.safeParse(request.query ?? {});
     if (!parseQuery.success) {
       fail(reply, 400, "invalid query", traceId, { field: "query", issues: parseQuery.error.issues });
+      return;
+    }
+
+    if (!pg) {
+      const metric = parseQuery.data.metric;
+      ok(
+        reply,
+        {
+          deviceId,
+          metric,
+          runId: "fallback_no_pg",
+          result: fallbackResult(deviceId, metric, "PostgreSQL not configured"),
+          warnings: [{ kind: "pg_missing", message: "PostgreSQL not configured" }]
+        },
+        traceId
+      );
       return;
     }
 
@@ -458,10 +504,6 @@ export function registerDeviceHealthExpertRoutes(
   app.get("/devices/:deviceId/health/expert/history", async (request, reply) => {
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
-    if (!pg) {
-      fail(reply, 503, "PostgreSQL not configured", traceId);
-      return;
-    }
 
     const parseId = deviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
     if (!parseId.success) {
@@ -469,6 +511,11 @@ export function registerDeviceHealthExpertRoutes(
       return;
     }
     const deviceId = parseId.data;
+
+    if (!pg) {
+      ok(reply, { deviceId, list: [], warnings: [{ kind: "pg_missing", message: "PostgreSQL not configured" }] }, traceId);
+      return;
+    }
 
     if (!(await ensureDeviceExists(pg, deviceId))) {
       fail(reply, 404, "device not found", traceId, { deviceId });
@@ -523,10 +570,6 @@ export function registerDeviceHealthExpertRoutes(
   app.post("/devices/:deviceId/health/expert", async (request, reply) => {
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "system:config"))) return;
-    if (!pg) {
-      fail(reply, 503, "PostgreSQL not configured", traceId);
-      return;
-    }
 
     const parseId = deviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
     if (!parseId.success) {
@@ -547,6 +590,22 @@ export function registerDeviceHealthExpertRoutes(
     }
 
     const { action, parameters } = parseBody.data;
+
+    if (!pg) {
+      ok(
+        reply,
+        {
+          deviceId,
+          action,
+          actionId: "disabled_no_pg",
+          parameters: parameters ?? {},
+          message: "disabled: PostgreSQL not configured",
+          warnings: [{ kind: "pg_missing", message: "PostgreSQL not configured" }]
+        },
+        traceId
+      );
+      return;
+    }
 
     try {
       const actionId = await withPgClient(pg, async (client) => {
