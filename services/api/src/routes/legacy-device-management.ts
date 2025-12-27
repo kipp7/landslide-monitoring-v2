@@ -118,6 +118,64 @@ const monitoringStationsBulkUpdateSchema = z
   })
   .strict();
 
+type LegacyMonitoringStationsChartConfig = {
+  chartType: string;
+  title: string;
+  unit: string;
+  yAxisName: string;
+  deviceLegends: Record<string, string>;
+};
+
+const LEGACY_MONITORING_STATIONS_CHART_PRESETS: Record<
+  string,
+  Pick<LegacyMonitoringStationsChartConfig, "title" | "unit" | "yAxisName">
+> = {
+  temperature: { title: "温度趋势图/°C - 挂傍山监测网络", unit: "°C", yAxisName: "温度" },
+  humidity: { title: "湿度趋势图/% - 挂傍山监测网络", unit: "%", yAxisName: "湿度" },
+  acceleration: { title: "加速度趋势图/mg - 挂傍山监测网络", unit: "mg", yAxisName: "加速度" },
+  gyroscope: { title: "陀螺仪趋势图/°/s - 挂傍山监测网络", unit: "°/s", yAxisName: "角速度" },
+  rainfall: { title: "雨量趋势图/mm - 挂傍山监测网络", unit: "mm", yAxisName: "降雨量" },
+  gps_deformation: { title: "地质形变趋势图/mm - 挂傍山监测网络", unit: "mm", yAxisName: "位移" }
+};
+
+function getLegacyStationLegendName(row: DeviceListRow): string {
+  const meta = row.metadata;
+  const chartLegend =
+    meta && typeof meta === "object" && "chart_legend_name" in meta
+      ? (meta as { chart_legend_name?: unknown }).chart_legend_name
+      : undefined;
+  if (typeof chartLegend === "string" && chartLegend.trim()) return chartLegend.trim();
+  if (typeof row.station_name === "string" && row.station_name.trim()) return row.station_name.trim();
+  if (typeof row.device_name === "string" && row.device_name.trim()) return row.device_name.trim();
+  return row.device_id;
+}
+
+async function buildLegacyMonitoringStationsChartConfig(
+  pg: PgPool,
+  chartType: string
+): Promise<LegacyMonitoringStationsChartConfig> {
+  const preset = LEGACY_MONITORING_STATIONS_CHART_PRESETS[chartType] ?? {
+    title: `${chartType}趋势图 - 挂傍山监测网络`,
+    unit: "",
+    yAxisName: chartType
+  };
+
+  const devices = await listDevicesWithStations(pg);
+  const deviceLegends = devices.reduce<Record<string, string>>((acc, d) => {
+    const key = legacyKeyFromMetadata(d.device_name, d.metadata);
+    acc[key] = getLegacyStationLegendName(d);
+    return acc;
+  }, {});
+
+  return {
+    chartType,
+    title: preset.title,
+    unit: preset.unit,
+    yAxisName: preset.yAxisName,
+    deviceLegends
+  };
+}
+
 const baselineSchema = z.object({
   latitude: z.number().finite(),
   longitude: z.number().finite(),
@@ -1900,13 +1958,8 @@ export function registerLegacyDeviceManagementCompatRoutes(
     const query = (request.query ?? {}) as { chartType?: unknown };
     const chartType = typeof query.chartType === "string" ? query.chartType : "";
     if (chartType) {
-      legacyOk(reply, {
-        chartType,
-        title: chartType,
-        unit: "",
-        yAxisName: "",
-        deviceLegends: {}
-      });
+      const config = await buildLegacyMonitoringStationsChartConfig(pg, chartType.trim());
+      legacyOk(reply, config);
       return;
     }
 
@@ -1976,13 +2029,8 @@ export function registerLegacyDeviceManagementCompatRoutes(
       return;
     }
 
-    legacyOk(reply, {
-      chartType,
-      title: chartType,
-      unit: "",
-      yAxisName: "",
-      deviceLegends: {}
-    });
+    const config = await buildLegacyMonitoringStationsChartConfig(pg, chartType);
+    legacyOk(reply, config);
   });
 
   app.put("/monitoring-stations", async (request, reply) => {
