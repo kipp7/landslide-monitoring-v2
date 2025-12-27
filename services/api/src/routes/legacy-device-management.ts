@@ -728,7 +728,7 @@ export function registerLegacyDeviceManagementCompatRoutes(
   app.get("/device-management/deformation/:deviceId", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
-      legacyFail(reply, 503, "PostgreSQL not configured");
+      legacyFail(reply, 200, "PostgreSQL not configured", { status: "not_configured" });
       return;
     }
 
@@ -862,7 +862,7 @@ export function registerLegacyDeviceManagementCompatRoutes(
   app.get("/device-management/deformation/:deviceId/trend", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
-      legacyFail(reply, 503, "PostgreSQL not configured");
+      legacyFail(reply, 200, "PostgreSQL not configured", { status: "not_configured" });
       return;
     }
 
@@ -947,7 +947,7 @@ export function registerLegacyDeviceManagementCompatRoutes(
   app.get("/device-management/deformation/:deviceId/summary", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
-      legacyFail(reply, 503, "PostgreSQL not configured");
+      legacyFail(reply, 200, "PostgreSQL not configured", { status: "not_configured" });
       return;
     }
 
@@ -1041,7 +1041,7 @@ export function registerLegacyDeviceManagementCompatRoutes(
   app.get("/device-management", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
-      legacyFail(reply, 503, "PostgreSQL not configured");
+      legacyFail(reply, 200, "PostgreSQL not configured", { status: "not_configured" });
       return;
     }
 
@@ -1155,7 +1155,7 @@ export function registerLegacyDeviceManagementCompatRoutes(
   app.get("/device-management/hierarchical", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
-      legacyFail(reply, 503, "PostgreSQL not configured");
+      legacyFail(reply, 200, "PostgreSQL not configured", { status: "not_configured" });
       return;
     }
 
@@ -1220,7 +1220,7 @@ export function registerLegacyDeviceManagementCompatRoutes(
   app.get("/device-management/export", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
-      legacyFail(reply, 503, "PostgreSQL not configured");
+      legacyFail(reply, 200, "PostgreSQL not configured", { status: "not_configured" });
       return;
     }
 
@@ -1294,7 +1294,7 @@ export function registerLegacyDeviceManagementCompatRoutes(
   app.post("/device-management/export", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:export"))) return;
     if (!pg) {
-      legacyFail(reply, 503, "PostgreSQL not configured");
+      legacyFail(reply, 200, "PostgreSQL not configured", { status: "not_configured" });
       return;
     }
 
@@ -1385,7 +1385,7 @@ export function registerLegacyDeviceManagementCompatRoutes(
   app.get("/device-management/reports", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
-      legacyFail(reply, 503, "PostgreSQL not configured");
+      legacyFail(reply, 200, "PostgreSQL not configured", { status: "not_configured" });
       return;
     }
 
@@ -1434,7 +1434,7 @@ export function registerLegacyDeviceManagementCompatRoutes(
   app.post("/device-management/reports", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
-      legacyFail(reply, 503, "PostgreSQL not configured");
+      legacyFail(reply, 200, "PostgreSQL not configured", { status: "not_configured" });
       return;
     }
 
@@ -1658,7 +1658,7 @@ export function registerLegacyDeviceManagementCompatRoutes(
   app.post("/device-management/diagnostics", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
-      legacyFail(reply, 503, "PostgreSQL not configured");
+      legacyFail(reply, 200, "PostgreSQL not configured", { status: "not_configured" });
       return;
     }
 
@@ -1799,7 +1799,7 @@ export function registerLegacyDeviceManagementCompatRoutes(
   app.get("/iot/devices/mappings", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
-      legacyFail(reply, 503, "PostgreSQL not configured");
+      legacyFail(reply, 200, "PostgreSQL not configured", { status: "not_configured" });
       return;
     }
 
@@ -1828,7 +1828,7 @@ export function registerLegacyDeviceManagementCompatRoutes(
   app.get("/iot/devices/:deviceId", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
-      legacyFail(reply, 503, "PostgreSQL not configured");
+      legacyFail(reply, 200, "PostgreSQL not configured", { status: "not_configured" });
       return;
     }
 
@@ -1893,7 +1893,7 @@ export function registerLegacyDeviceManagementCompatRoutes(
   app.get("/monitoring-stations", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
-      legacyFail(reply, 503, "PostgreSQL not configured");
+      legacyFail(reply, 200, "PostgreSQL not configured", { status: "not_configured" });
       return;
     }
 
@@ -1964,7 +1964,7 @@ export function registerLegacyDeviceManagementCompatRoutes(
   app.put("/monitoring-stations", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
-      legacyFail(reply, 503, "PostgreSQL not configured");
+      legacyFail(reply, 200, "PostgreSQL not configured", { status: "not_configured" });
       return;
     }
 
@@ -2069,7 +2069,7 @@ export function registerLegacyDeviceManagementCompatRoutes(
   app.post("/monitoring-stations", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
-      legacyFail(reply, 503, "PostgreSQL not configured");
+      legacyFail(reply, 200, "PostgreSQL not configured", { status: "not_configured" });
       return;
     }
 
@@ -2126,7 +2126,7 @@ export function registerLegacyDeviceManagementCompatRoutes(
   app.get("/monitoring-stations/:deviceId", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
-      legacyFail(reply, 503, "PostgreSQL not configured");
+      legacyFail(reply, 200, "PostgreSQL not configured", { status: "not_configured" });
       return;
     }
 
@@ -2218,7 +2218,7 @@ export function registerLegacyDeviceManagementCompatRoutes(
   app.put("/monitoring-stations/:deviceId", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
-      legacyFail(reply, 503, "PostgreSQL not configured");
+      legacyFail(reply, 200, "PostgreSQL not configured", { status: "not_configured" });
       return;
     }
 
@@ -2322,7 +2322,7 @@ export function registerLegacyDeviceManagementCompatRoutes(
   app.delete("/monitoring-stations/:deviceId", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
-      legacyFail(reply, 503, "PostgreSQL not configured");
+      legacyFail(reply, 200, "PostgreSQL not configured", { status: "not_configured" });
       return;
     }
 
@@ -2369,7 +2369,7 @@ export function registerLegacyDeviceManagementCompatRoutes(
   app.post("/data-aggregation", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
-      legacyFail(reply, 503, "PostgreSQL not configured");
+      legacyFail(reply, 200, "PostgreSQL not configured", { status: "not_configured" });
       return;
     }
 
