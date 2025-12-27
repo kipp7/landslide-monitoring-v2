@@ -45,6 +45,43 @@ const postRealtimeBodySchema = z
   })
   .strict();
 
+async function resolveDeviceUuid(pg: PgPool, selector: string): Promise<string | null> {
+  const input = selector.trim();
+  if (!input) return null;
+  if (uuidSchema.safeParse(input).success) return input;
+
+  const row = await withPgClient(pg, async (client) =>
+    queryOne<{ device_id: string }>(
+      client,
+      `
+        SELECT device_id
+        FROM devices
+        WHERE device_id::text = $1
+           OR device_name = $1
+           OR metadata->>'legacy_device_id' = $1
+           OR metadata#>>'{externalIds,legacy}' = $1
+           OR metadata->>'huawei_device_id' = $1
+           OR metadata#>>'{huawei,deviceId}' = $1
+           OR metadata#>>'{externalIds,huawei}' = $1
+        LIMIT 1
+      `,
+      [input]
+    )
+  );
+
+  return row?.device_id ?? null;
+}
+
+function pickDeviceIdFromBody(parsed: z.infer<typeof postRealtimeBodySchema>): string | null {
+  if (typeof parsed.deviceId === "string" && parsed.deviceId.trim()) return parsed.deviceId.trim();
+
+  const data = parsed.data;
+  if (!data || typeof data !== "object") return null;
+  const embedded = (data as Record<string, unknown>).deviceId;
+  if (typeof embedded === "string" && embedded.trim()) return embedded.trim();
+  return null;
+}
+
 function newClientId(): string {
   return `${String(Date.now())}_${randomBytes(6).toString("hex")}`;
 }
@@ -282,7 +319,14 @@ function registerSseHandler(
 
     let deviceId: string | null = null;
     if (deviceSelector !== "all") {
-      const parseId = uuidSchema.safeParse(deviceSelector);
+      const selectorResolved =
+        uuidSchema.safeParse(deviceSelector).success
+          ? deviceSelector
+          : pg
+            ? await resolveDeviceUuid(pg, deviceSelector)
+            : null;
+
+      const parseId = uuidSchema.safeParse(selectorResolved ?? "");
       if (!parseId.success) {
         fail(reply, 400, "鍙傛暟閿欒", traceId, { field: "deviceId" });
         return;
@@ -403,7 +447,12 @@ function registerSseHandler(
       return;
     }
 
-    const { action, deviceId, data } = parseBody.data;
+    const { action, data } = parseBody.data;
+    let deviceId = pickDeviceIdFromBody(parseBody.data);
+
+    if ((action === "broadcast_device_data" || action === "broadcast_anomaly") && deviceId && !uuidSchema.safeParse(deviceId).success) {
+      if (pg) deviceId = (await resolveDeviceUuid(pg, deviceId)) ?? deviceId;
+    }
 
     if (action === "get_client_stats") {
       const stats = getClientStats();
