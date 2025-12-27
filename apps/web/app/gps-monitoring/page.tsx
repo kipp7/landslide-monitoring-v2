@@ -451,37 +451,42 @@ export default function GPSMonitoringPage() {
       }
 
       if (analysisResult.success) {
-        console.log('🔍 前端接收到的分析数据:', analysisResult.data);
-        console.log('🔍 完整的results结构:', analysisResult.data?.results);
-        console.log('🔍 results的所有键:', Object.keys(analysisResult.data?.results || {}));
+        const analysisData: AnalysisResult =
+          analysisResult && typeof analysisResult === 'object' && analysisResult.data && typeof analysisResult.data === 'object'
+            ? { ...(analysisResult.data as AnalysisResult), timestamp: analysisResult.timestamp ?? (analysisResult.data as AnalysisResult).timestamp }
+            : (analysisResult as AnalysisResult);
+
+        console.log('🔍 前端接收到的分析数据:', analysisData);
+        console.log('🔍 完整的results结构:', analysisData?.results);
+        console.log('🔍 results的所有键:', Object.keys(analysisData?.results || {}));
 
         // 检查风险评估数据
         console.log('⚠️ 风险评估数据检查:');
-        console.log('  - riskAssessment:', analysisResult.data?.results?.riskAssessment);
-        console.log('  - riskAssessment.level:', analysisResult.data?.results?.riskAssessment?.level);
-        console.log('  - riskAssessment.description:', analysisResult.data?.results?.riskAssessment?.description);
-        console.log('  - riskAssessment.confidence:', analysisResult.data?.results?.riskAssessment?.confidence);
-        console.log('  - riskAssessment.factors:', analysisResult.data?.results?.riskAssessment?.factors);
+        console.log('  - riskAssessment:', analysisData?.results?.riskAssessment);
+        console.log('  - riskAssessment.level:', analysisData?.results?.riskAssessment?.level);
+        console.log('  - riskAssessment.description:', analysisData?.results?.riskAssessment?.description);
+        console.log('  - riskAssessment.confidence:', analysisData?.results?.riskAssessment?.confidence);
+        console.log('  - riskAssessment.factors:', analysisData?.results?.riskAssessment?.factors);
 
         // 检查实时位移数据
         console.log('📍 实时位移数据检查:');
-        console.log('  - realTimeDisplacement:', analysisResult.data?.realTimeDisplacement);
-        console.log('  - hasBaseline:', analysisResult.data?.realTimeDisplacement?.hasBaseline);
-        console.log('  - hasLatestData:', analysisResult.data?.realTimeDisplacement?.hasLatestData);
-        console.log('  - displacement:', analysisResult.data?.realTimeDisplacement?.displacement);
-        console.log('  - error:', analysisResult.data?.realTimeDisplacement?.error);
+        console.log('  - realTimeDisplacement:', analysisData?.realTimeDisplacement);
+        console.log('  - hasBaseline:', analysisData?.realTimeDisplacement?.hasBaseline);
+        console.log('  - hasLatestData:', analysisData?.realTimeDisplacement?.hasLatestData);
+        console.log('  - displacement:', analysisData?.realTimeDisplacement?.displacement);
+        console.log('  - error:', analysisData?.realTimeDisplacement?.error);
 
-        console.log('🔍 CEEMD数据结构:', analysisResult.data?.results?.ceemdAnalysis);
+        console.log('🔍 CEEMD数据结构:', analysisData?.results?.ceemdAnalysis);
         console.log('🔍 检查其他可能的CEEMD路径:');
-        console.log('  - ceemdDecomposition:', analysisResult.data?.results?.ceemdDecomposition);
-        console.log('  - ceemd:', analysisResult.data?.results?.ceemd);
-        console.log('  - decomposition:', analysisResult.data?.results?.decomposition);
+        console.log('  - ceemdDecomposition:', analysisData?.results?.ceemdDecomposition);
+        console.log('  - ceemd:', (analysisData as any)?.results?.ceemd);
+        console.log('  - decomposition:', (analysisData as any)?.results?.decomposition);
 
         // 使用递归搜索找到IMF数据
-        const foundIMFData = findIMFData(analysisResult.data?.results);
+        const foundIMFData = findIMFData(analysisData?.results);
         console.log('🎯 递归搜索找到的IMF数据:', foundIMFData);
 
-        setAnalysis(analysisResult.data);
+        setAnalysis(analysisData);
       }
 
     } catch (error) {

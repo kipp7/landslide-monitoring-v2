@@ -8,12 +8,18 @@ import type { AppConfig } from "../config";
 import type { PgPool } from "../postgres";
 import { queryOne, withPgClient } from "../postgres";
 
-function legacyOk(reply: FastifyReply, data: unknown, message = "ok"): void {
-  void reply.code(200).send({ success: true, data, message, timestamp: new Date().toISOString() });
+function legacyOk(reply: FastifyReply, payload: Record<string, unknown>, message = "ok"): void {
+  void reply.code(200).send({ success: true, ...payload, message, timestamp: new Date().toISOString() });
 }
 
-function legacyFail(reply: FastifyReply, statusCode: number, message: string, details?: unknown): void {
-  void reply.code(statusCode).send({ success: false, message, error: details, timestamp: new Date().toISOString() });
+function legacyFail(
+  reply: FastifyReply,
+  statusCode: number,
+  message: string,
+  details?: unknown,
+  extra?: Record<string, unknown>
+): void {
+  void reply.code(statusCode).send({ success: false, message, error: details, timestamp: new Date().toISOString(), ...(extra ?? {}) });
 }
 
 const legacyDeviceIdSchema = z.string().min(1).max(200);
@@ -464,9 +470,15 @@ export function registerGpsDeformationLegacyCompatRoutes(
 
     const resolved = await resolveDeviceUuid(pg, inputDeviceId);
     if (!resolved) {
-      legacyFail(reply, 404, "device not mapped", {
-        hint: "Use UUID or map legacy id via devices.metadata.legacy_device_id / devices.metadata.externalIds.legacy."
-      });
+      legacyFail(
+        reply,
+        404,
+        "device not mapped",
+        {
+          hint: "Use UUID or map legacy id via devices.metadata.legacy_device_id / devices.metadata.externalIds.legacy."
+        },
+        { deviceId: inputDeviceId }
+      );
       return;
     }
 
@@ -499,7 +511,7 @@ export function registerGpsDeformationLegacyCompatRoutes(
     try {
       points = await fetchGpsTelemetryInRange(config, ch, resolved, start, end, limit);
     } catch (err) {
-      legacyFail(reply, 503, "ClickHouse query failed", err instanceof Error ? err.message : String(err));
+      legacyFail(reply, 503, "ClickHouse query failed", err instanceof Error ? err.message : String(err), { deviceId: inputDeviceId });
       return;
     }
 

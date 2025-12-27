@@ -22,3 +22,6 @@
 
 - `POST /api/data-aggregation`：兼容旧的聚合入口（`hierarchy_stats` / `network_stats` / `device_summary` / `real_time_dashboard`），当前实现映射到 v2 的 Postgres/ClickHouse 数据源与 dashboard 计算逻辑
 
+## 5) GPS 形变分析（legacy）
+
+- `GET /api/gps-deformation/{deviceId}`、`POST /api/gps-deformation/{deviceId}`：对齐参考区旧前端调用的形变分析入口；返回 `success/deviceId/results/points` 等字段（同时包含 `timestamp` 与 `message`），并支持 legacy id → UUID 映射。
