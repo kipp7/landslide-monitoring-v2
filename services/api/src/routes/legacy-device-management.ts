@@ -1924,6 +1924,26 @@ export function registerLegacyDeviceManagementCompatRoutes(
     legacyOk(reply, list);
   });
 
+  // Compatibility: legacy docs use /monitoring-stations/chart-config?type=temperature
+  app.get("/monitoring-stations/chart-config", async (request, reply) => {
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
+
+    const query = (request.query ?? {}) as { type?: unknown; chartType?: unknown };
+    const chartType = typeof query.type === "string" ? query.type : typeof query.chartType === "string" ? query.chartType : "";
+    if (!chartType) {
+      legacyFail(reply, 400, "type is required");
+      return;
+    }
+
+    legacyOk(reply, {
+      chartType,
+      title: chartType,
+      unit: "",
+      yAxisName: "",
+      deviceLegends: {}
+    });
+  });
+
   app.put("/monitoring-stations", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
