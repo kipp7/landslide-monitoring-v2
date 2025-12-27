@@ -171,7 +171,7 @@ export function registerLegacyDbAdminRoutes(
     }
     if (!(await requirePermission(adminCfg, pg, request, reply, "system:config"))) return;
     if (!pg) {
-      legacyFail(reply, 503, "PostgreSQL not configured");
+      legacyFail(reply, 200, "PostgreSQL not configured", { status: "not_configured" });
       return;
     }
 
