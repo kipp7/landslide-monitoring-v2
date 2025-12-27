@@ -66,6 +66,9 @@
 
 **GET** `/anomaly-assessment`
 
+说明：
+- legacy `/api/anomaly-assessment` 场景下，为了兼容参考区 Next API 的 fallback 行为：当后端数据源不可用（例如 PostgreSQL 未配置）时，接口会返回 200 + 空数据（`is_fallback: true`），避免页面直接报错。
+
 权限：`alert:view`
 
 查询参数：

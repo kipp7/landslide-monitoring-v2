@@ -47,6 +47,19 @@ function recommendedAction(level: "red" | "orange" | "yellow" | "blue" | "normal
   return map[level];
 }
 
+function legacyAnomalyAssessmentFallback(opts: { timeWindow: number; processedAt: string; source: string; error?: string }) {
+  return {
+    success: true as const,
+    data: [],
+    stats: { total: 0, red: 0, orange: 0, yellow: 0, blue: 0 },
+    time_window: opts.timeWindow,
+    processed_at: opts.processedAt,
+    is_fallback: true as const,
+    source: opts.source,
+    ...(opts.error ? { error: opts.error } : {})
+  };
+}
+
 export function registerAnomalyAssessmentCompatRoutes(
   app: FastifyInstance,
   config: AppConfig,
@@ -58,50 +71,91 @@ export function registerAnomalyAssessmentCompatRoutes(
   app.get("/anomaly-assessment", async (request, reply) => {
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "alert:view"))) return;
-    if (!pg) {
-      fail(reply, 503, "PostgreSQL 未配置", traceId);
-      return;
-    }
+    const processedAt = new Date().toISOString();
 
     const parseQuery = querySchema.safeParse(request.query);
     if (!parseQuery.success) {
+      if (opts?.legacyResponse) {
+        reply.send(
+          legacyAnomalyAssessmentFallback({
+            timeWindow: 24,
+            processedAt,
+            source: "api_service_invalid_query_fallback",
+            error: "参数错误"
+          })
+        );
+        return;
+      }
+
       fail(reply, 400, "参数错误", traceId, { field: "query", issues: parseQuery.error.issues });
       return;
     }
     const { timeWindow } = parseQuery.data;
 
-    const processedAt = new Date().toISOString();
+    if (!pg) {
+      if (opts?.legacyResponse) {
+        reply.send(
+          legacyAnomalyAssessmentFallback({
+            timeWindow,
+            processedAt,
+            source: "api_service_no_pg_fallback",
+            error: "PostgreSQL 未配置"
+          })
+        );
+        return;
+      }
 
-    const rows = await withPgClient(pg, async (client) =>
-      client.query<AnomalyAggRow>(
-        `
-          WITH e AS (
+      fail(reply, 503, "PostgreSQL 未配置", traceId);
+      return;
+    }
+
+    let rows: { rows: AnomalyAggRow[] };
+    try {
+      rows = await withPgClient(pg, async (client) =>
+        client.query<AnomalyAggRow>(
+          `
+            WITH e AS (
+              SELECT
+                COALESCE(NULLIF(title, ''), rule_id::text, alert_id::text) AS anomaly_type,
+                CASE severity
+                  WHEN 'critical' THEN 1
+                  WHEN 'high' THEN 2
+                  WHEN 'medium' THEN 3
+                  WHEN 'low' THEN 4
+                  ELSE 99
+                END AS priority,
+                created_at
+              FROM alert_events
+              WHERE created_at >= now() - ($1::int || ' hours')::interval
+                AND event_type IN ('ALERT_TRIGGER','ALERT_UPDATE')
+            )
             SELECT
-              COALESCE(NULLIF(title, ''), rule_id::text, alert_id::text) AS anomaly_type,
-              CASE severity
-                WHEN 'critical' THEN 1
-                WHEN 'high' THEN 2
-                WHEN 'medium' THEN 3
-                WHEN 'low' THEN 4
-                ELSE 99
-              END AS priority,
-              created_at
-            FROM alert_events
-            WHERE created_at >= now() - ($1::int || ' hours')::interval
-              AND event_type IN ('ALERT_TRIGGER','ALERT_UPDATE')
-          )
-          SELECT
-            anomaly_type,
-            count(*)::text AS count,
-            MIN(priority)::int AS priority,
-            to_char(MAX(created_at) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS latest_time
-          FROM e
-          GROUP BY anomaly_type
-          ORDER BY priority ASC, count(*) DESC
-        `,
-        [timeWindow]
-      )
-    );
+              anomaly_type,
+              count(*)::text AS count,
+              MIN(priority)::int AS priority,
+              to_char(MAX(created_at) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS latest_time
+            FROM e
+            GROUP BY anomaly_type
+            ORDER BY priority ASC, count(*) DESC
+          `,
+          [timeWindow]
+        )
+      );
+    } catch (err) {
+      if (opts?.legacyResponse) {
+        const message = err instanceof Error ? err.message : "unknown error";
+        reply.send(
+          legacyAnomalyAssessmentFallback({
+            timeWindow,
+            processedAt,
+            source: "api_service_query_error_fallback",
+            error: message
+          })
+        );
+        return;
+      }
+      throw err;
+    }
 
     const data = rows.rows.map((r) => {
       const severity = severityFromPriority(r.priority);
