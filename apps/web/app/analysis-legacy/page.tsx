@@ -76,7 +76,10 @@ export default function AnalysisLegacyPage() {
   useEffect(() => {
     const riskLevel = shadowData?.properties?.risk_level ?? 0
     setAlert(riskLevel >= 1)
-  }, [shadowData])
+    if (shadowError) {
+      console.error('❌ 获取设备数据失败:', shadowError)
+    }
+  }, [shadowData, shadowError])
 
   useEffect(() => {
     if (!isPerformanceGood) {
@@ -249,11 +252,6 @@ export default function AnalysisLegacyPage() {
         </div>
       </div>
 
-      {shadowError ? (
-        <div className="absolute bottom-4 right-4 z-50 max-w-[380px]">
-          <Alert type="warning" showIcon message="Shadow 数据不可用（已从 Supabase 迁移到 v2 API，待 WS-N.10 对齐）" description={shadowError} />
-        </div>
-      ) : null}
     </div>
   )
 }
