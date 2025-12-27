@@ -16,9 +16,12 @@
 ## 3) 监测站信息
 
 - `GET /api/monitoring-stations`：返回监测站（设备）列表；支持 `chartType` 参数返回图表配置占位
+- `PUT /api/monitoring-stations?deviceId=...`：更新单监测站（设备）配置（写入 `devices.metadata`，字段透传/合并）
+- `POST /api/monitoring-stations`：批量更新图例配置（写入 `devices.metadata.chart_legend_name`）
 - `GET /api/monitoring-stations/{deviceId}`：返回单监测站（设备）信息
+- `PUT /api/monitoring-stations/{deviceId}`：更新单监测站（设备）信息（支持 `station_name`/`latitude`/`longitude`/`status`，其余字段写入 `devices.metadata`）
+- `DELETE /api/monitoring-stations/{deviceId}`：软删除（`devices.status = revoked`）
 
 ## 4) 聚合接口
 
 - `POST /api/data-aggregation`：兼容旧的聚合入口（`hierarchy_stats` / `network_stats` / `device_summary` / `real_time_dashboard`），当前实现映射到 v2 的 Postgres/ClickHouse 数据源与 dashboard 计算逻辑
-
