@@ -64,6 +64,19 @@ async function proxyInject(
 }
 
 export function registerLegacyCompatAliasRoutes(app: FastifyInstance): void {
+  // Some reference paths include an extra trailing slash; keep small explicit aliases instead of changing global router config.
+  app.get("/baselines/", async (request, reply) => {
+    await proxyInject(app, request, reply, "GET", `/baselines${toQueryString(request.query)}`);
+  });
+
+  app.get("/monitoring-stations/", async (request, reply) => {
+    await proxyInject(app, request, reply, "GET", `/monitoring-stations${toQueryString(request.query)}`);
+  });
+
+  app.get("/iot/devices/mappings/", async (request, reply) => {
+    await proxyInject(app, request, reply, "GET", `/iot/devices/mappings${toQueryString(request.query)}`);
+  });
+
   app.get("/device-management-optimized", async (request, reply) => {
     await proxyInject(app, request, reply, "GET", `/device-management${toQueryString(request.query)}`);
   });
@@ -88,4 +101,3 @@ export function registerLegacyCompatAliasRoutes(app: FastifyInstance): void {
     await proxyInject(app, request, reply, "PUT", "/monitoring-stations");
   });
 }
-
