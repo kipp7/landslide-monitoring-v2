@@ -85,6 +85,7 @@ async function main(): Promise<void> {
 
   app.addHook("preHandler", async (request, reply) => {
     if (request.url === "/health" || request.url === "/iot/health") return;
+    if (request.url === "/iot/huawei" || request.url === "/iot/huawei/telemetry") return;
     if (request.url.startsWith("/emqx/")) return;
     if (request.url === "/api/v1/auth/login") return;
     if (request.url === "/api/v1/auth/refresh") return;
@@ -246,10 +247,85 @@ async function main(): Promise<void> {
   );
 
   // Legacy telemetry ingest endpoint in the reference system is disabled; keep a safe explicit stub for compatibility.
-  app.post("/iot/huawei", async (_request, reply) => {
+  app.post("/iot/huawei", async (request, reply) => {
+    if (config.huaweiIotAdapterUrl) {
+      const inboundToken = typeof request.headers["x-iot-token"] === "string" ? request.headers["x-iot-token"].trim() : "";
+      if (config.huaweiIotAdapterToken && inboundToken !== config.huaweiIotAdapterToken) {
+        void reply.code(401).send({ "Status Code": 401, message: "invalid x-iot-token", timestamp: new Date().toISOString() });
+        return;
+      }
+
+      try {
+        const upstream = new URL("/iot/huawei", config.huaweiIotAdapterUrl).toString();
+        const res = await fetch(upstream, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            ...(config.huaweiIotAdapterToken ? { "x-iot-token": config.huaweiIotAdapterToken } : inboundToken ? { "x-iot-token": inboundToken } : {})
+          },
+          body: JSON.stringify((request.body ?? {}) as unknown)
+        });
+
+        const payload = await res.text();
+        const contentType = res.headers.get("content-type");
+        if (contentType) reply.header("content-type", contentType);
+        void reply.code(res.status).send(payload);
+        return;
+      } catch {
+        void reply.code(502).send({
+          "Status Code": 502,
+          message: "failed to proxy /iot/huawei to huawei-iot-adapter",
+          timestamp: new Date().toISOString()
+        });
+        return;
+      }
+    }
+
     void reply.code(503).send({
       "Status Code": 503,
       message: "华为IoT数据接收功能已禁用",
+      timestamp: new Date().toISOString(),
+      disabled: true
+    });
+  });
+
+  app.post("/iot/huawei/telemetry", async (request, reply) => {
+    if (config.huaweiIotAdapterUrl) {
+      const inboundToken = typeof request.headers["x-iot-token"] === "string" ? request.headers["x-iot-token"].trim() : "";
+      if (config.huaweiIotAdapterToken && inboundToken !== config.huaweiIotAdapterToken) {
+        void reply.code(401).send({ "Status Code": 401, message: "invalid x-iot-token", timestamp: new Date().toISOString() });
+        return;
+      }
+
+      try {
+        const upstream = new URL("/iot/huawei/telemetry", config.huaweiIotAdapterUrl).toString();
+        const res = await fetch(upstream, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            ...(config.huaweiIotAdapterToken ? { "x-iot-token": config.huaweiIotAdapterToken } : inboundToken ? { "x-iot-token": inboundToken } : {})
+          },
+          body: JSON.stringify((request.body ?? {}) as unknown)
+        });
+
+        const payload = await res.text();
+        const contentType = res.headers.get("content-type");
+        if (contentType) reply.header("content-type", contentType);
+        void reply.code(res.status).send(payload);
+        return;
+      } catch {
+        void reply.code(502).send({
+          "Status Code": 502,
+          message: "failed to proxy /iot/huawei/telemetry to huawei-iot-adapter",
+          timestamp: new Date().toISOString()
+        });
+        return;
+      }
+    }
+
+    void reply.code(503).send({
+      "Status Code": 503,
+      message: "Huawei IoT telemetry ingress is disabled",
       timestamp: new Date().toISOString(),
       disabled: true
     });

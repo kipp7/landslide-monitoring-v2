@@ -17,12 +17,24 @@ function optionalCsvList() {
   }, z.string().min(1).transform((v) => v.split(",").map((s) => s.trim()).filter(Boolean)).optional());
 }
 
+function optionalUrlString() {
+  return z.preprocess((v) => {
+    if (typeof v !== "string") return v;
+    const trimmed = v.trim();
+    return trimmed.length === 0 ? undefined : trimmed;
+  }, z.string().url().optional());
+}
+
 const configSchema = z.object({
   serviceName: z.string().default("api-service"),
   apiHost: z.string().default("0.0.0.0"),
   apiPort: z.coerce.number().int().positive().default(8080),
 
   corsOrigins: optionalCsvList(),
+
+  // Optional: proxy legacy Huawei IoT telemetry endpoint (/iot/huawei*) to the adapter service.
+  huaweiIotAdapterUrl: optionalUrlString(),
+  huaweiIotAdapterToken: optionalNonEmptyString(),
 
   postgresUrl: z.string().url().optional(),
   postgresHost: z.string().default("localhost"),
@@ -81,6 +93,9 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
     apiPort: env.API_PORT,
 
     corsOrigins: env.CORS_ORIGINS,
+
+    huaweiIotAdapterUrl: env.HUAWEI_IOT_ADAPTER_URL,
+    huaweiIotAdapterToken: env.HUAWEI_IOT_ADAPTER_TOKEN,
 
     postgresUrl: env.POSTGRES_URL,
     postgresHost: env.POSTGRES_HOST,

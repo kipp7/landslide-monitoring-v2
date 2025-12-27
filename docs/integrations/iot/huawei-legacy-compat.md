@@ -12,6 +12,7 @@
 说明：
 - 请求体仍按 v2 `huawei-iot-adapter` 的契约解析（`deviceId/device_id` 必须是 v2 设备 UUID）。
 - 可选鉴权：`x-iot-token`（见 `services/huawei-iot-adapter/.env.example`）。
+- 部署形态：如果只对外暴露 `services/api`，可在 `services/api` 配置 `HUAWEI_IOT_ADAPTER_URL`，由 api-service 将 `/iot/huawei*` 代理转发到 `huawei-iot-adapter`（默认禁用，未配置时返回 503）。
 
 ## 2) 命令/影子：`/huawei/*`
 
@@ -43,4 +44,3 @@
 - `services/api` 已配置 Kafka（用于发布 `device.commands.v1`）
 
 缺少依赖时，会返回 `503` 且 `disabled=true`（行为与参考区“禁用端点”一致）。
-
