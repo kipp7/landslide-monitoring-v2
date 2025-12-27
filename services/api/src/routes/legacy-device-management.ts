@@ -1900,12 +1900,20 @@ export function registerLegacyDeviceManagementCompatRoutes(
     const query = (request.query ?? {}) as { chartType?: unknown };
     const chartType = typeof query.chartType === "string" ? query.chartType : "";
     if (chartType) {
+      const devices = await listDevicesWithStations(pg);
+      const deviceLegends: Record<string, string> = {};
+      for (const d of devices) {
+        const m = d.metadata && typeof d.metadata === "object" ? (d.metadata as Record<string, unknown>) : null;
+        const legend = typeof m?.chart_legend_name === "string" ? m.chart_legend_name.trim() : "";
+        const fallback = d.station_name ?? d.device_name;
+        deviceLegends[legacyKeyFromMetadata(d.device_name, d.metadata)] = legend ? legend : fallback;
+      }
       legacyOk(reply, {
         chartType,
         title: chartType,
         unit: "",
         yAxisName: "",
-        deviceLegends: {}
+        deviceLegends
       });
       return;
     }
@@ -1918,7 +1926,27 @@ export function registerLegacyDeviceManagementCompatRoutes(
       location_name: d.station_name ?? "",
       latitude: d.latitude,
       longitude: d.longitude,
-      status: d.status
+      sensor_types: [],
+      chart_legend_name: (() => {
+        const m = d.metadata && typeof d.metadata === "object" ? (d.metadata as Record<string, unknown>) : null;
+        const legend = typeof m?.chart_legend_name === "string" ? m.chart_legend_name.trim() : "";
+        return legend || (d.station_name ?? d.device_name);
+      })(),
+      description: (() => {
+        const m = d.metadata && typeof d.metadata === "object" ? (d.metadata as Record<string, unknown>) : null;
+        return typeof m?.description === "string" ? m.description : "";
+      })(),
+      risk_level: (() => {
+        const m = d.metadata && typeof d.metadata === "object" ? (d.metadata as Record<string, unknown>) : null;
+        const raw = typeof m?.risk_level === "string" ? m.risk_level.trim() : "";
+        if (raw === "low" || raw === "medium" || raw === "high" || raw === "critical") return raw;
+        return "low";
+      })(),
+      status: d.status === "active" ? "active" : d.status === "inactive" ? "inactive" : "inactive",
+      install_date: d.created_at,
+      is_online: onlineStatus(d.last_seen_at, d.status) === "online",
+      last_data_time: d.last_seen_at ?? d.created_at,
+      created_at: d.created_at
     }));
 
     legacyOk(reply, list);
