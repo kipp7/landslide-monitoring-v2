@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "next build",
+    "clean:next:types": "node ./scripts/clean-next-types.mjs",
+    "build": "npm run clean:next:types && next build",
     "start": "next start",
     "lint": "next lint",
     "format": "prettier --write .",
