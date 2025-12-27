@@ -246,7 +246,7 @@ export function registerLegacyDebugToolRoutes(
   app.get("/inspect-tables", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "system:log"))) return;
     if (!pg) {
-      legacyFail(reply, 503, "PostgreSQL not configured");
+      legacyFail(reply, 200, "PostgreSQL not configured", { status: "not_configured" });
       return;
     }
 
@@ -315,7 +315,7 @@ export function registerLegacyDebugToolRoutes(
   app.get("/inspect-all-tables", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "system:log"))) return;
     if (!pg) {
-      legacyFail(reply, 503, "PostgreSQL not configured");
+      legacyFail(reply, 200, "PostgreSQL not configured", { status: "not_configured" });
       return;
     }
 
