@@ -7,7 +7,7 @@
 - 每次合并一个 PR 到 `main`，如果它改变了项目阶段/里程碑/下一步，必须更新本页。
 - 本页只记录“当前状态与下一步”，历史细节放到 `docs/incidents/` 或 PR/commit 记录中。
 
-最后更新时间：2025-12-27（PR #270：Web `/login` 登录页 UI 1:1 对齐参考区；PR #268：Web `/` 入口重定向对齐参考区（`/` → `/login`）；PR #267：/analysis legacy 1:1 对齐 Shadow error 行为；PR #265：docs/api：扩充 iot-server /info endpoints 索引；WS-K.23：legacy frontend/lib 入口补齐（apps/web/lib/{config,supabaseClient,useIotDataStore}），PR #266；WS-K.22：legacy app/api route proxies（Next route handlers → api-service `/api/*`），PR #264；WS-K.21：legacy /gps-monitoring 1:1 + /api/gps-deformation CEEMD/预测补齐，PR #263；fix：iot-server /devices/:deviceId/management + /status 兼容，PR #262；fix：iot-server /health + /info shape 对齐，PR #261；fix：/health 返回结构对齐；docs：对齐 roadmap/workstreams 状态；WS-K.20：/iot/health + /iot/huawei/* 兼容，PR #258；WS-N.22：参考区 app/utils 1:1 入口补齐，PR #257；WS-K.19：legacy data-aggregation clear_cache，PR #256；WS-K.18：iot-server /devices 兼容，PR #254；WS-N.21：参考区 app/hooks 1:1 入口补齐，PR #255；WS-K.17：legacy camera alias，PR #252；WS-K.16：legacy baselines alias routes，PR #251；WS-K.15：legacy compat aliases 补齐，PR #247；WS-N.20：/analysis legacy 占位组件还原）
+最后更新时间：2025-12-27（PR #273：WS-K.28：legacy `/api/monitoring-stations/{deviceId}` `PUT`/`DELETE` 补齐；PR #270：Web `/login` 登录页 UI 1:1 对齐参考区；PR #268：Web `/` 入口重定向对齐参考区（`/` → `/login`）；PR #267：/analysis legacy 1:1 对齐 Shadow error 行为；PR #265：docs/api：扩充 iot-server /info endpoints 索引；WS-K.23：legacy frontend/lib 入口补齐（apps/web/lib/{config,supabaseClient,useIotDataStore}），PR #266；WS-K.22：legacy app/api route proxies（Next route handlers → api-service `/api/*`），PR #264；WS-K.21：legacy /gps-monitoring 1:1 + /api/gps-deformation CEEMD/预测补齐，PR #263；fix：iot-server /devices/:deviceId/management + /status 兼容，PR #262；fix：iot-server /health + /info shape 对齐，PR #261；fix：/health 返回结构对齐；docs：对齐 roadmap/workstreams 状态；WS-K.20：/iot/health + /iot/huawei/* 兼容，PR #258；WS-N.22：参考区 app/utils 1:1 入口补齐，PR #257；WS-K.19：legacy data-aggregation clear_cache，PR #256；WS-K.18：iot-server /devices 兼容，PR #254；WS-N.21：参考区 app/hooks 1:1 入口补齐，PR #255；WS-K.17：legacy camera alias，PR #252；WS-K.16：legacy baselines alias routes，PR #251；WS-K.15：legacy compat aliases 补齐，PR #247；WS-N.20：/analysis legacy 占位组件还原）
 - 2025-12-27：PR #270，Web `/login` 登录页 UI 1:1 对齐参考区（背景图/磨砂 Card/Tabs/其他登录方式）；保留 v2 `useAuth().login` 实际鉴权。
 - 2025-12-27：PR #268，Web `/` 入口重定向对齐参考区（`/` → `/login`，避免直接进 `/analysis`）。
 - 2025-12-27：PR #267，`/analysis` legacy 页面 Shadow error 行为对齐参考区（不再额外弹出提示，仅 `console.error` 输出）。
@@ -226,7 +226,7 @@ M3（阶段 2：可告警）目标：
 - 2025-12-26：WS-K.11（PR #244）：补齐 legacy `/api/device-management/{export,reports,diagnostics}` 端点（导出/报告/诊断），以兼容参考区 `frontend/app/api/device-management/*` 的依赖（数据源：ClickHouse 分钟桶 + Postgres 设备/基准点映射）。
 - 2025-12-26：WS-K.14（PR #242）：legacy `inspect-*`/`db-admin`/`test-*` 调试/管理端点在 v2 中显式禁用（403），并补齐说明文档 `docs/integrations/api/015-legacy-disabled-endpoints.md`
 - 2025-12-26：WS-K.15（PR #253）：补齐 legacy `device-management-optimized`/`device-management-real*`/`monitoring-stations-optimized` 端点别名（307 redirect），避免参考区旧路径 404
-- 2025-12-27：WS-K.28：补齐 legacy `/api/monitoring-stations/{deviceId}` 的 `PUT`/`DELETE` 端点（写入 stations/devices；删除为 revoke）。
+- 2025-12-27：PR #273，WS-K.28：补齐 legacy `/api/monitoring-stations/{deviceId}` 的 `PUT`/`DELETE` 端点（写入 stations/devices；删除为 revoke）。
 - `npm run lint`
 - `npm run build`
 
