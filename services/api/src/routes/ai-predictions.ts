@@ -120,11 +120,6 @@ export function registerAiPredictionRoutes(
   app.get("/ai/predictions", async (request, reply) => {
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
-    if (!pg) {
-      fail(reply, 503, "PostgreSQL not configured", traceId);
-      return;
-    }
-
     const parsed = listQuerySchema.safeParse(request.query ?? {});
     if (!parsed.success) {
       fail(reply, 400, "invalid query", traceId, { field: "query", issues: parsed.error.issues });
@@ -132,6 +127,21 @@ export function registerAiPredictionRoutes(
     }
 
     const { page, pageSize, deviceId, stationId, modelKey, riskLevel: rl, startTime, endTime } = parsed.data;
+
+    if (!pg) {
+      ok(
+        reply,
+        {
+          page,
+          pageSize,
+          total: 0,
+          list: [],
+          warnings: [{ kind: "pg_missing", message: "PostgreSQL not configured" }]
+        },
+        traceId
+      );
+      return;
+    }
     const offset = (page - 1) * pageSize;
 
     const where: string[] = [];
@@ -211,11 +221,6 @@ export function registerAiPredictionRoutes(
   app.get("/ai/predictions/:predictionId", async (request, reply) => {
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
-    if (!pg) {
-      fail(reply, 503, "PostgreSQL not configured", traceId);
-      return;
-    }
-
     const parsed = predictionIdSchema.safeParse((request.params as { predictionId?: unknown }).predictionId);
     if (!parsed.success) {
       fail(reply, 400, "invalid predictionId", traceId, { field: "predictionId" });
@@ -223,6 +228,15 @@ export function registerAiPredictionRoutes(
     }
 
     const predictionId = parsed.data;
+
+    if (!pg) {
+      ok(
+        reply,
+        { predictionId, warnings: [{ kind: "pg_missing", message: "PostgreSQL not configured" }], unavailable: true },
+        traceId
+      );
+      return;
+    }
     const row = await withPgClient(pg, async (client) =>
       queryOne<AiPredictionRow>(
         client,
