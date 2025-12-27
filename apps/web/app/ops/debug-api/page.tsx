@@ -39,6 +39,11 @@ export default function OpsDebugApiPage() {
       { label: 'GET /huawei/config (legacy)', path: '/huawei/config' },
       { label: 'GET /huawei/command-templates (legacy)', path: '/huawei/command-templates' },
       { label: 'GET /huawei/devices/:deviceId/shadow (legacy)', path: '/huawei/devices/<deviceId>/shadow' },
+      { label: 'GET /api/test-db (legacy)', path: '/api/test-db' },
+      { label: 'GET /api/inspect-db (legacy)', path: '/api/inspect-db' },
+      { label: 'GET /api/inspect-tables (legacy)', path: '/api/inspect-tables' },
+      { label: 'GET /api/inspect-all-tables (legacy)', path: '/api/inspect-all-tables' },
+      { label: 'GET /api/test-expert-health (legacy)', path: '/api/test-expert-health?device_id=<deviceId>' },
       { label: 'GET /api/v1/system/status', path: '/api/v1/system/status' },
       { label: 'GET /api/v1/dashboard', path: '/api/v1/dashboard' },
       { label: 'GET /api/v1/system/configs', path: '/api/v1/system/configs' },
@@ -68,12 +73,19 @@ export default function OpsDebugApiPage() {
   const [suiteCommandTemplates, setSuiteCommandTemplates] = useState(false)
   const [suiteShadow, setSuiteShadow] = useState(false)
   const [suiteMotor, setSuiteMotor] = useState(false)
+  const [suiteTestDb, setSuiteTestDb] = useState(false)
+  const [suiteInspectDb, setSuiteInspectDb] = useState(false)
+  const [suiteInspectTables, setSuiteInspectTables] = useState(false)
+  const [suiteInspectAllTables, setSuiteInspectAllTables] = useState(false)
+  const [suiteTestExpertHealth, setSuiteTestExpertHealth] = useState(false)
+  const [suiteDbAdmin, setSuiteDbAdmin] = useState(false)
 
   const [motorEnable, setMotorEnable] = useState(true)
   const [motorSpeed, setMotorSpeed] = useState<number>(50)
   const [motorDirection, setMotorDirection] = useState<number>(1)
   const [motorDuration, setMotorDuration] = useState<number>(2)
   const [motorConfirm, setMotorConfirm] = useState<string>('')
+  const [dbAdminConfirm, setDbAdminConfirm] = useState<string>('')
 
   const addSuiteResult = (test: string, success: boolean, data?: unknown, error?: string) => {
     setSuiteResults((prev) => [...prev, { test, success, data, error, timestamp: new Date().toLocaleString() }])
@@ -95,6 +107,10 @@ export default function OpsDebugApiPage() {
   }
 
   const runSuite = async () => {
+    if (suiteDbAdmin && dbAdminConfirm.trim().toUpperCase() !== 'DBADMIN') {
+      message.error('db-admin selected: type DBADMIN to confirm.')
+      return
+    }
     if (suiteMotor && motorConfirm.trim().toUpperCase() !== 'MOTOR') {
       message.error('已勾选“电机控制”，请先输入确认短语 MOTOR 才会执行 POST 命令。')
       return
@@ -133,6 +149,7 @@ export default function OpsDebugApiPage() {
       if (suiteCommandTemplates) await exec('命令模板', () => apiGetJson<unknown>('/huawei/command-templates'))
 
       const trimmedDeviceId = suiteDeviceId.trim()
+      const legacyDeviceId = trimmedDeviceId || 'device_1'
 
       if (suiteShadow) {
         if (!trimmedDeviceId) addSuiteResult('设备影子', false, undefined, 'deviceId 不能为空（可填 uuid 或 legacy/huawei device id）')
@@ -152,6 +169,18 @@ export default function OpsDebugApiPage() {
             }),
           )
         }
+      }
+      if (suiteTestDb) await exec('test-db (legacy)', () => apiGetJson<unknown>('/api/test-db'))
+      if (suiteInspectDb) await exec('inspect-db (legacy)', () => apiGetJson<unknown>('/api/inspect-db'))
+      if (suiteInspectTables) await exec('inspect-tables (legacy)', () => apiGetJson<unknown>('/api/inspect-tables'))
+      if (suiteInspectAllTables) await exec('inspect-all-tables (legacy)', () => apiGetJson<unknown>('/api/inspect-all-tables'))
+      if (suiteTestExpertHealth) {
+        await exec('test-expert-health (legacy)', () =>
+          apiGetJson<unknown>(`/api/test-expert-health?device_id=${encodeURIComponent(legacyDeviceId)}`),
+        )
+      }
+      if (suiteDbAdmin) {
+        await exec('db-admin (POST)', () => apiJson<unknown>('/api/db-admin', { action: 'query', query: 'SELECT 1 AS ok' }))
       }
     } finally {
       setSuiteLoading(false)
@@ -235,6 +264,24 @@ export default function OpsDebugApiPage() {
             <Checkbox checked={suiteMotor} onChange={(e) => setSuiteMotor(e.target.checked)}>
               电机控制（POST /huawei/devices/:deviceId/motor）
             </Checkbox>
+            <Checkbox checked={suiteTestDb} onChange={(e) => setSuiteTestDb(e.target.checked)}>
+              GET /api/test-db (legacy)
+            </Checkbox>
+            <Checkbox checked={suiteInspectDb} onChange={(e) => setSuiteInspectDb(e.target.checked)}>
+              GET /api/inspect-db (legacy)
+            </Checkbox>
+            <Checkbox checked={suiteInspectTables} onChange={(e) => setSuiteInspectTables(e.target.checked)}>
+              GET /api/inspect-tables (legacy)
+            </Checkbox>
+            <Checkbox checked={suiteInspectAllTables} onChange={(e) => setSuiteInspectAllTables(e.target.checked)}>
+              GET /api/inspect-all-tables (legacy)
+            </Checkbox>
+            <Checkbox checked={suiteTestExpertHealth} onChange={(e) => setSuiteTestExpertHealth(e.target.checked)}>
+              GET /api/test-expert-health (legacy)
+            </Checkbox>
+            <Checkbox checked={suiteDbAdmin} onChange={(e) => setSuiteDbAdmin(e.target.checked)}>
+              POST /api/db-admin (disabled by default)
+            </Checkbox>
           </Space>
 
           <Space wrap>
@@ -286,6 +333,23 @@ export default function OpsDebugApiPage() {
                   placeholder='输入 "MOTOR" 以确认执行'
                 />
               </Space>
+            </div>
+          ) : null}
+
+          {suiteDbAdmin ? (
+            <div className="space-y-2">
+              <Alert
+                type="info"
+                showIcon
+                message="db-admin (POST) is a privileged diagnostic tool"
+                description="Requires DB_ADMIN_ENABLED=true + permission system:config; write actions remain disabled."
+              />
+              <Input
+                style={{ width: 320 }}
+                value={dbAdminConfirm}
+                onChange={(e) => setDbAdminConfirm(e.target.value)}
+                placeholder="Type DBADMIN to confirm"
+              />
             </div>
           ) : null}
 
