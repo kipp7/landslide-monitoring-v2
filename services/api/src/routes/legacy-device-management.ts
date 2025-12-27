@@ -1965,7 +1965,99 @@ export function registerLegacyDeviceManagementCompatRoutes(
     legacyOk(reply, { updated: true });
   });
 
+  // Compatibility: some legacy docs/scripts use PUT /monitoring-stations/:deviceId
+  // (instead of PUT /monitoring-stations?deviceId=...).
+  app.put("/monitoring-stations/:deviceId", async (request, reply) => {
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
+    if (!pg) {
+      legacyFail(reply, 503, "PostgreSQL not configured");
+      return;
+    }
+
+    const parsed = deviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
+    if (!parsed.success) {
+      legacyFail(reply, 400, "invalid deviceId");
+      return;
+    }
+
+    const resolved = await resolveDeviceId(pg, parsed.data);
+    if (!resolved) {
+      legacyFail(reply, 404, "device not found");
+      return;
+    }
+
+    const bodyParsed = monitoringStationsUpdateSchema.safeParse(request.body ?? {});
+    if (!bodyParsed.success) {
+      legacyFail(reply, 400, "invalid body");
+      return;
+    }
+
+    const patch = bodyParsed.data;
+    await withPgClient(pg, async (client) => {
+      await client.query(
+        `
+          UPDATE devices
+          SET metadata = COALESCE(metadata, '{}'::jsonb) || $2::jsonb, updated_at = NOW()
+          WHERE device_id = $1
+        `,
+        [resolved, JSON.stringify(patch)]
+      );
+    });
+
+    legacyOk(reply, { updated: true });
+  });
+
   app.post("/monitoring-stations", async (request, reply) => {
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
+    if (!pg) {
+      legacyFail(reply, 503, "PostgreSQL not configured");
+      return;
+    }
+
+    const parsed = monitoringStationsBulkUpdateSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      legacyFail(reply, 400, "invalid body");
+      return;
+    }
+
+    const legends = parsed.data.deviceLegends ?? {};
+    const entries = Object.entries(legends).filter(([, name]) => typeof name === "string" && name.trim());
+    if (entries.length === 0) {
+      legacyOk(reply, { updated: 0 }, "no-op");
+      return;
+    }
+
+    const updated = await withPgClient(pg, async (client) => {
+      await client.query("BEGIN");
+      try {
+        let count = 0;
+        for (const [deviceKey, legendName] of entries) {
+          const resolved = await resolveDeviceIdWithClient(client, deviceKey);
+          if (!resolved) continue;
+          await client.query(
+            `
+              UPDATE devices
+              SET metadata = jsonb_set(COALESCE(metadata, '{}'::jsonb), '{chart_legend_name}', to_jsonb($2::text), true),
+                  updated_at = NOW()
+              WHERE device_id = $1
+            `,
+            [resolved, legendName]
+          );
+          count += 1;
+        }
+        await client.query("COMMIT");
+        return count;
+      } catch (err) {
+        await client.query("ROLLBACK");
+        throw err;
+      }
+    });
+
+    legacyOk(reply, { updated });
+  });
+
+  // Compatibility: legacy docs use PUT /monitoring-stations/chart-legends for bulk updates.
+  app.put("/monitoring-stations/chart-legends", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
       legacyFail(reply, 503, "PostgreSQL not configured");
