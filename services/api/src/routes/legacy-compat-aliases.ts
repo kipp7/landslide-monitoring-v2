@@ -7,6 +7,19 @@ type InjectResult = {
   body: string;
 };
 
+function toFiniteNumber(v: unknown): number | null {
+  if (typeof v !== "number") return null;
+  if (!Number.isFinite(v)) return null;
+  return v;
+}
+
+function standardDeviation(values: number[]): number {
+  if (values.length === 0) return 0;
+  const mean = values.reduce((sum, val) => sum + val, 0) / values.length;
+  const variance = values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / values.length;
+  return Math.sqrt(variance);
+}
+
 function toHeaders(request: FastifyRequest): Record<string, string> {
   const headers: Record<string, string> = {};
   for (const [k, v] of Object.entries(request.headers)) {
@@ -150,16 +163,71 @@ export function registerLegacyCompatAliasRoutes(app: FastifyInstance): void {
         return;
       }
 
+      const historyRes = await proxyInjectResult(
+        app,
+        request,
+        "GET",
+        `/device-management${toQueryString({ device_id: deviceId, data_only: true, timeRange: "24h", limit: 100 })}`
+      );
+      let historyData: unknown[] = [];
+      if (historyRes.statusCode >= 200 && historyRes.statusCode < 300) {
+        try {
+          const parsedHistory = JSON.parse(historyRes.body) as { success?: unknown; data?: unknown };
+          if (parsedHistory.success === true && Array.isArray(parsedHistory.data)) historyData = parsedHistory.data;
+        } catch {
+          historyData = [];
+        }
+      }
+
+      let recentAnomalies: unknown[] = [];
+      try {
+        const diagRes = (await app.inject({
+          method: "POST",
+          url: "/device-management/diagnostics",
+          headers: { ...toHeaders(request), "content-type": "application/json" },
+          payload: JSON.stringify({ device_id: deviceId, simple_id: deviceId })
+        })) as unknown as InjectResult;
+        if (diagRes.statusCode >= 200 && diagRes.statusCode < 300) {
+          const parsedDiag = JSON.parse(diagRes.body) as { success?: unknown; data?: unknown };
+          if (parsedDiag.success === true && parsedDiag.data && typeof parsedDiag.data === "object") {
+            const report = parsedDiag.data as { anomalies?: unknown };
+            const anomalies = report.anomalies;
+            if (Array.isArray(anomalies)) {
+              const nowIso = new Date().toISOString();
+              recentAnomalies = anomalies.map((a: unknown) =>
+                a && typeof a === "object" ? { ...(a as Record<string, unknown>), event_time: nowIso } : a
+              );
+            }
+          }
+        }
+      } catch {
+        recentAnomalies = [];
+      }
+
+      const historyObjects = historyData.filter((d): d is Record<string, unknown> => Boolean(d && typeof d === "object"));
+      const historyLat = historyObjects.map((d) => toFiniteNumber(d.latitude)).filter((n): n is number => n !== null);
+      const historyLng = historyObjects.map((d) => toFiniteNumber(d.longitude)).filter((n): n is number => n !== null);
+      const validPoints = historyObjects.filter((d) => toFiniteNumber(d.latitude) !== null && toFiniteNumber(d.longitude) !== null).length;
+      const dataQuality = historyObjects.length > 0 ? Math.round((validPoints / historyObjects.length) * 100) : 0;
+      const latStd = standardDeviation(historyLat);
+      const lngStd = standardDeviation(historyLng);
+      const stabilityScore = Math.round(Math.max(0, 100 - (latStd + lngStd) * 10000));
+
+      const anomalyObjects = recentAnomalies.filter((d): d is Record<string, unknown> => Boolean(d && typeof d === "object"));
+      const criticalCount = anomalyObjects.filter((a) => a.severity === "critical").length;
+      const warningCount = anomalyObjects.filter((a) => a.severity === "warning").length;
+      const riskAssessment = criticalCount > 0 ? "high" : warningCount > 0 ? "medium" : "low";
+
       void reply.code(200).send({
         success: true,
         data: {
           device_info: device,
-          history_data: [],
-          recent_anomalies: [],
+          history_data: historyData,
+          recent_anomalies: recentAnomalies,
           analysis: {
-            data_quality: "unknown",
-            stability_score: null,
-            risk_assessment: null
+            data_quality: dataQuality,
+            stability_score: stabilityScore,
+            risk_assessment: riskAssessment
           }
         },
         timestamp: new Date().toISOString()
