@@ -72,6 +72,14 @@ function replyFromInject(reply: FastifyReply, injected: InjectResult): void {
   void reply.send(injected.payload);
 }
 
+function upstreamMessage(parsed: unknown, fallback: string): string {
+  if (parsed && typeof parsed === "object") {
+    const msg = (parsed as Record<string, unknown>).message;
+    if (typeof msg === "string" && msg.trim()) return msg.trim();
+  }
+  return fallback;
+}
+
 export function registerIotServerCompatRoutes(
   app: FastifyInstance,
   config: AppConfig,
@@ -277,7 +285,16 @@ export function registerIotServerCompatRoutes(
     });
 
     if (res.statusCode !== 200 || !parsed || typeof parsed !== "object") {
-      replyFromInject(reply, res);
+      if (res.statusCode === 401 || res.statusCode === 403 || res.statusCode === 404) {
+        replyFromInject(reply, res);
+        return;
+      }
+
+      void reply.code(500).send({
+        success: false,
+        error: "获取设备管理信息失败",
+        message: upstreamMessage(parsed, `upstream /api/device-management responded ${String(res.statusCode)}`)
+      });
       return;
     }
 
@@ -345,7 +362,16 @@ export function registerIotServerCompatRoutes(
     });
 
     if (res.statusCode !== 200 || !parsed || typeof parsed !== "object") {
-      replyFromInject(reply, res);
+      if (res.statusCode === 401 || res.statusCode === 403 || res.statusCode === 404) {
+        replyFromInject(reply, res);
+        return;
+      }
+
+      void reply.code(500).send({
+        success: false,
+        error: "获取设备状态失败",
+        message: upstreamMessage(parsed, `upstream /api/device-management responded ${String(res.statusCode)}`)
+      });
       return;
     }
 
