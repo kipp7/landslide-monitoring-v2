@@ -379,22 +379,33 @@ export function registerIotServerCompatRoutes(
 
     const now = new Date();
 
-    const sql = `
-      SELECT
-        device_id,
-        sensor_key,
-        toString(received_ts) AS received_ts,
-        value_f64,
-        value_i64,
-        value_str,
-        value_bool
-      FROM ${config.clickhouseDatabase}.${config.clickhouseTable}
-      ORDER BY received_ts DESC
-      LIMIT 10
-    `;
+    let rows: TelemetryRow[];
+    try {
+      const sql = `
+        SELECT
+          device_id,
+          sensor_key,
+          toString(received_ts) AS received_ts,
+          value_f64,
+          value_i64,
+          value_str,
+          value_bool
+        FROM ${config.clickhouseDatabase}.${config.clickhouseTable}
+        ORDER BY received_ts DESC
+        LIMIT 10
+      `;
 
-    const result = await ch.query({ query: sql, format: "JSONEachRow" });
-    const rows: TelemetryRow[] = await result.json();
+      const result = await ch.query({ query: sql, format: "JSONEachRow" });
+      rows = await result.json();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "unknown error";
+      void reply.code(500).send({
+        success: false,
+        error: "获取最新数据失败",
+        message
+      });
+      return;
+    }
 
     const data = rows.map((r) => {
       const iso = clickhouseStringToIsoZ(r.received_ts);
@@ -431,23 +442,34 @@ export function registerIotServerCompatRoutes(
 
     const now = new Date();
 
-    const sql = `
-      SELECT
-        device_id,
-        sensor_key,
-        toString(received_ts) AS received_ts,
-        value_f64,
-        value_i64,
-        value_str,
-        value_bool
-      FROM ${config.clickhouseDatabase}.${config.clickhouseTable}
-      WHERE device_id = {deviceId:String}
-      ORDER BY received_ts DESC
-      LIMIT 10
-    `;
+    let rows: TelemetryRow[];
+    try {
+      const sql = `
+        SELECT
+          device_id,
+          sensor_key,
+          toString(received_ts) AS received_ts,
+          value_f64,
+          value_i64,
+          value_str,
+          value_bool
+        FROM ${config.clickhouseDatabase}.${config.clickhouseTable}
+        WHERE device_id = {deviceId:String}
+        ORDER BY received_ts DESC
+        LIMIT 10
+      `;
 
-    const result = await ch.query({ query: sql, query_params: { deviceId }, format: "JSONEachRow" });
-    const rows: TelemetryRow[] = await result.json();
+      const result = await ch.query({ query: sql, query_params: { deviceId }, format: "JSONEachRow" });
+      rows = await result.json();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "unknown error";
+      void reply.code(500).send({
+        success: false,
+        error: "获取最新数据失败",
+        message
+      });
+      return;
+    }
 
     const data = rows.map((r) => {
       const iso = clickhouseStringToIsoZ(r.received_ts);
