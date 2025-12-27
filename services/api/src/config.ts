@@ -65,6 +65,10 @@ const configSchema = z.object({
   kafkaBrokers: optionalCsvList(),
   kafkaTopicDeviceCommands: z.string().default("device.commands.v1"),
 
+  // Optional: forward legacy Huawei HTTP telemetry endpoint (/iot/huawei) to huawei-iot-adapter service.
+  huaweiIotAdapterUrl: optionalNonEmptyString(),
+  huaweiIotAdapterToken: optionalNonEmptyString(),
+
   apiMaxSeriesRangeHours: z.coerce.number().int().positive().default(168),
   apiMaxPoints: z.coerce.number().int().positive().default(100000),
   apiReplayMaxRangeHours: z.coerce.number().int().positive().default(168),
@@ -116,6 +120,9 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
     jwtRefreshExpiresInSeconds: env.JWT_REFRESH_EXPIRES_IN_SECONDS,
 
     kafkaBrokers: env.KAFKA_BROKERS,
-    kafkaTopicDeviceCommands: env.KAFKA_TOPIC_DEVICE_COMMANDS
+    kafkaTopicDeviceCommands: env.KAFKA_TOPIC_DEVICE_COMMANDS,
+
+    huaweiIotAdapterUrl: env.HUAWEI_IOT_ADAPTER_URL,
+    huaweiIotAdapterToken: env.HUAWEI_IOT_ADAPTER_TOKEN
   });
 }

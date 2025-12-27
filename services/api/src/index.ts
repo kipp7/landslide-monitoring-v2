@@ -3,6 +3,7 @@ import cors from "@fastify/cors";
 import formbody from "@fastify/formbody";
 import dotenv from "dotenv";
 import Fastify from "fastify";
+import type { FastifyReply, FastifyRequest } from "fastify";
 import path from "node:path";
 import { createClickhouseClient } from "./clickhouse";
 import { loadConfigFromEnv } from "./config";
@@ -85,6 +86,7 @@ async function main(): Promise<void> {
 
   app.addHook("preHandler", async (request, reply) => {
     if (request.url === "/health" || request.url === "/iot/health") return;
+    if (request.url.startsWith("/iot/huawei")) return;
     if (request.url.startsWith("/emqx/")) return;
     if (request.url === "/api/v1/auth/login") return;
     if (request.url === "/api/v1/auth/refresh") return;
@@ -245,15 +247,44 @@ async function main(): Promise<void> {
     { prefix: "/iot/api" }
   );
 
-  // Legacy telemetry ingest endpoint in the reference system is disabled; keep a safe explicit stub for compatibility.
-  app.post("/iot/huawei", async (_request, reply) => {
-    void reply.code(503).send({
-      "Status Code": 503,
-      message: "华为IoT数据接收功能已禁用",
-      timestamp: new Date().toISOString(),
-      disabled: true
-    });
-  });
+  const forwardHuaweiTelemetry = async (request: FastifyRequest, reply: FastifyReply) => {
+    const baseUrl = config.huaweiIotAdapterUrl?.replace(/\/+$/, "");
+    if (!baseUrl) {
+      void reply.code(503).send({
+        "Status Code": 503,
+        message: "华为IoT数据接收功能已禁用（未配置 HUAWEI_IOT_ADAPTER_URL）",
+        timestamp: new Date().toISOString(),
+        disabled: true
+      });
+      return;
+    }
+
+    const targetPath = request.url.startsWith("/iot/huawei/telemetry") ? "/iot/huawei/telemetry" : "/iot/huawei";
+    const targetUrl = `${baseUrl}${targetPath}`;
+
+    const headers: Record<string, string> = { "content-type": "application/json" };
+    if (config.huaweiIotAdapterToken) headers["x-iot-token"] = config.huaweiIotAdapterToken;
+
+    try {
+      const res = await fetch(targetUrl, {
+        method: "POST",
+        headers,
+        body: JSON.stringify((request.body ?? {}) as unknown)
+      });
+
+      const contentType = res.headers.get("content-type");
+      if (contentType) reply.header("content-type", contentType);
+      void reply.code(res.status).send(await res.text());
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      void reply.code(502).send({ success: false, message: "forward to huawei-iot-adapter failed", error: msg });
+    }
+  };
+
+  // Legacy-compatible endpoint (reference system): POST /iot/huawei
+  app.post("/iot/huawei", forwardHuaweiTelemetry);
+  // v2 endpoint
+  app.post("/iot/huawei/telemetry", forwardHuaweiTelemetry);
 
   app.register((v1, _opts, done) => {
     registerAuthRoutes(v1, config, pg);
