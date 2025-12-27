@@ -72,6 +72,34 @@ function replyFromInject(reply: FastifyReply, injected: InjectResult): void {
   void reply.send(injected.payload);
 }
 
+function iotDeviceFallback(opts: { deviceId: string; upstreamStatus: number; message: string }) {
+  const now = new Date().toISOString();
+  return {
+    success: true as const,
+    data: {
+      simple_id: opts.deviceId,
+      actual_device_id: null,
+      device_name: opts.deviceId,
+      location_name: "",
+      device_type: "unknown",
+      latitude: null,
+      longitude: null,
+      status: "inactive",
+      description: "",
+      install_date: now,
+      last_data_time: now,
+      online_status: "offline" as const,
+      sensor_types: [] as string[],
+      risk_level: "medium"
+    },
+    count: 1,
+    message: opts.message,
+    is_fallback: true as const,
+    upstream_status: opts.upstreamStatus,
+    timestamp: now
+  };
+}
+
 export function registerIotServerCompatRoutes(
   app: FastifyInstance,
   config: AppConfig,
@@ -161,7 +189,18 @@ export function registerIotServerCompatRoutes(
     });
 
     if (res.statusCode !== 200 || !parsed || typeof parsed !== "object") {
-      replyFromInject(reply, res);
+      if (res.statusCode === 404) {
+        replyFromInject(reply, res);
+        return;
+      }
+
+      void reply.code(200).send(
+        iotDeviceFallback({
+          deviceId,
+          upstreamStatus: res.statusCode,
+          message: "使用fallback数据（上游 /api/iot/devices/:deviceId 不可用）"
+        })
+      );
       return;
     }
 
@@ -229,7 +268,13 @@ export function registerIotServerCompatRoutes(
     });
 
     if (res.statusCode != 200 || !parsed || typeof parsed !== "object") {
-      replyFromInject(reply, res);
+      void reply.code(200).send(
+        iotDeviceFallback({
+          deviceId: simpleId,
+          upstreamStatus: res.statusCode,
+          message: "使用fallback数据（上游 /api/iot/devices/mappings 不可用）"
+        })
+      );
       return;
     }
 

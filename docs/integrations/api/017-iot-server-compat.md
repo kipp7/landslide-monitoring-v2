@@ -19,3 +19,4 @@ v2 的权威接口仍然是 `api-service` 的 legacy compat 前缀（`/api/*`、
 
 说明：
 - 这些端点主要用于兼容参考区的代理调用链；新代码/新 UI 仍应优先使用 v2 `/api/v1/*` 或 legacy compat `/api/*`。
+- 兼容参考区 Next API 的 fallback 行为：当 v2 的上游 legacy 端点不可用时，`/devices/mappings`、`/devices/list`、`/devices/{deviceId}`、`/devices/info/{simpleId}` 会返回 `200` + `is_fallback: true` 的结果（列表为空或返回占位设备对象），避免旧页面直接报错。
