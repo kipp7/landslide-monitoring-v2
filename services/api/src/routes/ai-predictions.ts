@@ -278,11 +278,6 @@ export function registerAiPredictionLegacyCompatRoutes(app: FastifyInstance, con
 
   app.post("/ai-prediction", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
-    if (!pg) {
-      void reply.code(503).send({ success: false, error: "PostgreSQL not configured" });
-      return;
-    }
-
     const parsed = legacyAiPredictionSchema.safeParse(request.body ?? {});
     if (!parsed.success) {
       void reply.code(400).send({ success: false, error: "invalid body" });
@@ -294,6 +289,22 @@ export function registerAiPredictionLegacyCompatRoutes(app: FastifyInstance, con
 
     const latest = sensorData[0] ?? {};
     const deviceId = typeof latest.device_id === "string" && latest.device_id.trim() ? latest.device_id.trim() : null;
+    const nowIso = new Date().toISOString();
+
+    if (!pg) {
+      void reply.code(200).send({
+        analysis,
+        result: level === "high" ? "高风险" : level === "medium" ? "中等风险" : "低风险",
+        probability: `${String(Math.round(score * 100))}%`,
+        timestamp: nowLocalTimestamp(),
+        recommendation,
+        deviceId,
+        source: "fallback_no_pg",
+        processed_at: nowIso
+      });
+      return;
+    }
+
     const stationId = deviceId ? await resolveStationId(pg, deviceId) : null;
 
     if (deviceId) {
