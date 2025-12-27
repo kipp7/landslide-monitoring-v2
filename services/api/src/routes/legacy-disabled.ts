@@ -12,12 +12,7 @@ function disabled(reply: FastifyReply, path: string): void {
 
 export function registerLegacyDisabledRoutes(app: FastifyInstance, _config: AppConfig): void {
   const routes = [
-    "/db-admin",
-    "/inspect-db",
-    "/inspect-tables",
-    "/inspect-all-tables",
-    "/test-db",
-    "/test-expert-health"
+    "/db-admin"
   ] as const;
 
   for (const path of routes) {
@@ -29,4 +24,3 @@ export function registerLegacyDisabledRoutes(app: FastifyInstance, _config: AppC
     });
   }
 }
-
