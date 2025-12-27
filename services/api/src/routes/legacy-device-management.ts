@@ -1890,10 +1890,71 @@ export function registerLegacyDeviceManagementCompatRoutes(
     });
   });
 
+  function fallbackMonitoringStations(nowIso: string) {
+    const install = "2024-05-15T00:00:00Z";
+    return [
+      {
+        device_id: "device_1",
+        actual_device_id: "hangbishan_device_001",
+        station_name: "挂壁山中心监测站",
+        location_name: "玉林师范学院东校区挂壁山中心点",
+        chart_legend_name: "挂壁山中心监测站",
+        latitude: 22.6847,
+        longitude: 110.1893,
+        sensor_types: ["temperature", "humidity", "acceleration", "illumination", "gps"],
+        risk_level: "medium",
+        status: "active",
+        is_online: true,
+        last_data_time: nowIso,
+        install_date: install
+      },
+      {
+        device_id: "device_2",
+        actual_device_id: "hangbishan_device_002",
+        station_name: "坡顶监测站",
+        location_name: "玉林师范学院东校区挂壁山坡顶",
+        chart_legend_name: "坡顶监测站",
+        latitude: 22.685,
+        longitude: 110.189,
+        sensor_types: ["temperature", "humidity", "gyroscope", "vibration", "gps"],
+        risk_level: "high",
+        status: "active",
+        is_online: true,
+        last_data_time: nowIso,
+        install_date: install
+      },
+      {
+        device_id: "device_3",
+        actual_device_id: "hangbishan_device_003",
+        station_name: "坡脚监测站",
+        location_name: "玉林师范学院东校区挂壁山坡脚",
+        chart_legend_name: "坡脚监测站",
+        latitude: 22.6844,
+        longitude: 110.1896,
+        sensor_types: ["temperature", "acceleration", "illumination", "gps", "vibration"],
+        risk_level: "low",
+        status: "active",
+        is_online: true,
+        last_data_time: nowIso,
+        install_date: install
+      }
+    ];
+  }
+
   app.get("/monitoring-stations", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
-      legacyFail(reply, 503, "PostgreSQL not configured");
+      const query = (request.query ?? {}) as { chartType?: unknown };
+      const chartType = typeof query.chartType === "string" ? query.chartType : "";
+      if (chartType) {
+        const nowIso = new Date().toISOString();
+        const stations = fallbackMonitoringStations(nowIso);
+        const deviceLegends = Object.fromEntries(stations.map((s) => [s.device_id, s.chart_legend_name]));
+        legacyOk(reply, { chartType, title: chartType, unit: "", yAxisName: "", deviceLegends });
+        return;
+      }
+
+      legacyOk(reply, fallbackMonitoringStations(new Date().toISOString()));
       return;
     }
 
@@ -2025,7 +2086,22 @@ export function registerLegacyDeviceManagementCompatRoutes(
   app.get("/monitoring-stations/:deviceId", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
-      legacyFail(reply, 503, "PostgreSQL not configured");
+      const parsed = deviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
+      if (!parsed.success) {
+        legacyFail(reply, 400, "invalid deviceId");
+        return;
+      }
+
+      const stations = fallbackMonitoringStations(new Date().toISOString());
+      const found =
+        stations.find((s) => s.device_id === parsed.data || s.actual_device_id === parsed.data || (s as { deviceId?: string }).deviceId === parsed.data) ??
+        null;
+      if (!found) {
+        legacyFail(reply, 404, "monitoring station not found");
+        return;
+      }
+
+      legacyOk(reply, found);
       return;
     }
 
