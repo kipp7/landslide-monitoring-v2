@@ -1951,15 +1951,79 @@ export function registerLegacyDeviceManagementCompatRoutes(
     }
 
     const patch = bodyParsed.data;
+
+    const stationName =
+      typeof patch.station_name === "string"
+        ? patch.station_name
+        : typeof patch.location_name === "string"
+          ? patch.location_name
+          : "";
+
+    const coerceFiniteNumber = (v: unknown): number | null => {
+      if (typeof v === "number" && Number.isFinite(v)) return v;
+      if (typeof v === "string") {
+        const x = Number(v);
+        if (Number.isFinite(x)) return x;
+      }
+      return null;
+    };
+
+    const latitude = coerceFiniteNumber(patch.latitude);
+    const longitude = coerceFiniteNumber(patch.longitude);
+    const statusInput = typeof patch.status === "string" ? patch.status : "";
+    const status =
+      statusInput === "active" ||
+      statusInput === "inactive" ||
+      statusInput === "revoked"
+        ? statusInput
+        : null;
+
     await withPgClient(pg, async (client) => {
-      await client.query(
-        `
-          UPDATE devices
-          SET metadata = COALESCE(metadata, '{}'::jsonb) || $2::jsonb, updated_at = NOW()
-          WHERE device_id = $1
-        `,
-        [resolved, JSON.stringify(patch)]
-      );
+      await client.query("BEGIN");
+      try {
+        const deviceRow = await queryOne<{ station_id: string | null }>(
+          client,
+          `SELECT station_id FROM devices WHERE device_id = $1`,
+          [resolved]
+        );
+
+        if (deviceRow?.station_id) {
+          if (stationName.trim()) {
+            await client.query(
+              `UPDATE stations SET station_name = $2, updated_at = NOW() WHERE station_id = $1`,
+              [deviceRow.station_id, stationName.trim()]
+            );
+          }
+          if (latitude !== null || longitude !== null) {
+            await client.query(
+              `
+                UPDATE stations
+                SET latitude = COALESCE($2, latitude),
+                    longitude = COALESCE($3, longitude),
+                    updated_at = NOW()
+                WHERE station_id = $1
+              `,
+              [deviceRow.station_id, latitude, longitude]
+            );
+          }
+        }
+
+        await client.query(
+          `
+            UPDATE devices
+            SET metadata = COALESCE(metadata, '{}'::jsonb) || $2::jsonb,
+                status = COALESCE($3, status),
+                updated_at = NOW()
+            WHERE device_id = $1
+          `,
+          [resolved, JSON.stringify(patch), status]
+        );
+
+        await client.query("COMMIT");
+      } catch (err) {
+        await client.query("ROLLBACK");
+        throw err;
+      }
     });
 
     legacyOk(reply, { updated: true });
@@ -2079,6 +2143,144 @@ export function registerLegacyDeviceManagementCompatRoutes(
       longitude: row.longitude,
       status: row.status
     });
+  });
+
+  app.put("/monitoring-stations/:deviceId", async (request, reply) => {
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
+    if (!pg) {
+      legacyFail(reply, 503, "PostgreSQL not configured");
+      return;
+    }
+
+    const parsed = deviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
+    if (!parsed.success) {
+      legacyFail(reply, 400, "invalid deviceId");
+      return;
+    }
+
+    const resolved = await resolveDeviceId(pg, parsed.data);
+    if (!resolved) {
+      legacyFail(reply, 404, "monitoring station not found");
+      return;
+    }
+
+    const bodyParsed = monitoringStationsUpdateSchema.safeParse(request.body ?? {});
+    if (!bodyParsed.success) {
+      legacyFail(reply, 400, "invalid body");
+      return;
+    }
+
+    const patch = bodyParsed.data;
+
+    const stationName =
+      typeof patch.station_name === "string"
+        ? patch.station_name
+        : typeof patch.location_name === "string"
+          ? patch.location_name
+          : "";
+
+    const coerceFiniteNumber = (v: unknown): number | null => {
+      if (typeof v === "number" && Number.isFinite(v)) return v;
+      if (typeof v === "string") {
+        const x = Number(v);
+        if (Number.isFinite(x)) return x;
+      }
+      return null;
+    };
+
+    const latitude = coerceFiniteNumber(patch.latitude);
+    const longitude = coerceFiniteNumber(patch.longitude);
+    const statusInput = typeof patch.status === "string" ? patch.status : "";
+    const status =
+      statusInput === "active" ||
+      statusInput === "inactive" ||
+      statusInput === "revoked"
+        ? statusInput
+        : null;
+
+    await withPgClient(pg, async (client) => {
+      await client.query("BEGIN");
+      try {
+        const deviceRow = await queryOne<{ station_id: string | null }>(
+          client,
+          `SELECT station_id FROM devices WHERE device_id = $1`,
+          [resolved]
+        );
+
+        if (deviceRow?.station_id) {
+          if (stationName.trim()) {
+            await client.query(
+              `UPDATE stations SET station_name = $2, updated_at = NOW() WHERE station_id = $1`,
+              [deviceRow.station_id, stationName.trim()]
+            );
+          }
+          if (latitude !== null || longitude !== null) {
+            await client.query(
+              `
+                UPDATE stations
+                SET latitude = COALESCE($2, latitude),
+                    longitude = COALESCE($3, longitude),
+                    updated_at = NOW()
+                WHERE station_id = $1
+              `,
+              [deviceRow.station_id, latitude, longitude]
+            );
+          }
+        }
+
+        await client.query(
+          `
+            UPDATE devices
+            SET metadata = COALESCE(metadata, '{}'::jsonb) || $2::jsonb,
+                status = COALESCE($3, status),
+                updated_at = NOW()
+            WHERE device_id = $1
+          `,
+          [resolved, JSON.stringify(patch), status]
+        );
+
+        await client.query("COMMIT");
+      } catch (err) {
+        await client.query("ROLLBACK");
+        throw err;
+      }
+    });
+
+    legacyOk(reply, { updated: true });
+  });
+
+  app.delete("/monitoring-stations/:deviceId", async (request, reply) => {
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
+    if (!pg) {
+      legacyFail(reply, 503, "PostgreSQL not configured");
+      return;
+    }
+
+    const parsed = deviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
+    if (!parsed.success) {
+      legacyFail(reply, 400, "invalid deviceId");
+      return;
+    }
+
+    const resolved = await resolveDeviceId(pg, parsed.data);
+    if (!resolved) {
+      legacyFail(reply, 404, "monitoring station not found");
+      return;
+    }
+
+    await withPgClient(pg, async (client) => {
+      await client.query(
+        `
+          UPDATE devices
+          SET status = 'revoked',
+              updated_at = NOW()
+          WHERE device_id = $1
+        `,
+        [resolved]
+      );
+    });
+
+    legacyOk(reply, { deleted: true, status: "revoked" });
   });
 
   app.delete("/data-aggregation", async (request, reply) => {
