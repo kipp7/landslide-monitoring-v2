@@ -47,3 +47,7 @@ Body：
   - 不带参数：返回 `{devices,total,online}`
 - `POST /api/camera`（也支持 `POST /iot/api/camera`）
   - `action=add|update_status|test_connection`（参考区同名 action）
+- `PUT /api/camera`（也支持 `PUT /iot/api/camera`）
+  - Body：`{ deviceId, ip?, name?, config? }`
+  - 如设备在线：会尝试透传配置到设备 `POST http://{ip}/api/config`
+- `DELETE /api/camera?deviceId=...`（也支持 `DELETE /iot/api/camera?deviceId=...`）：删除设备
