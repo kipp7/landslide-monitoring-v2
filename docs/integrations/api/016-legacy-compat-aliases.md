@@ -8,7 +8,7 @@ v2 不复刻参考区的 Supabase 直连实现，而是在 v2 api-service 的 le
 
 - `GET /api/device-management-optimized` → `GET /api/device-management`
 - `GET /api/device-management-real` → `GET /api/device-management/hierarchical`
-- `GET /api/device-management-real-db` → `GET /api/device-management/hierarchical`
+- `GET /api/device-management-real-db` → `GET /api/device-management/hierarchical`（并兼容 `mode=all|summary|device_specific`）
 - `POST /api/device-management-real/diagnostics` → `POST /api/device-management/diagnostics`
 - `GET /api/monitoring-stations-optimized` → `GET /api/monitoring-stations`
 - `PUT /api/monitoring-stations-optimized` → `PUT /api/monitoring-stations`
@@ -16,4 +16,3 @@ v2 不复刻参考区的 Supabase 直连实现，而是在 v2 api-service 的 le
 同时也适用于 legacy nginx 前缀别名：
 
 - `/iot/api/<same-paths>`
-
