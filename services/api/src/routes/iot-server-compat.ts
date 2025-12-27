@@ -219,7 +219,25 @@ export function registerIotServerCompatRoutes(
     });
 
     if (res.statusCode !== 200 || !parsed || typeof parsed !== "object") {
-      replyFromInject(reply, res);
+      const mappings = getFallbackMappings();
+      const found = mappings.find((m) => m.simple_id === deviceId || m.actual_device_id === deviceId);
+      if (!found) {
+        void reply.code(404).send({ success: false, error: "device not found" });
+        return;
+      }
+
+      void reply.code(200).send({
+        success: true,
+        data: {
+          ...found,
+          deviceId: found.simple_id,
+          simpleId: found.simple_id,
+          actualDeviceId: found.actual_device_id
+        },
+        count: 1,
+        message: "fallback",
+        timestamp: new Date().toISOString()
+      });
       return;
     }
 
