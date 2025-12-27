@@ -2096,11 +2096,6 @@ export function registerLegacyDeviceManagementCompatRoutes(
 
   app.post("/data-aggregation", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
-    if (!pg) {
-      legacyFail(reply, 503, "PostgreSQL not configured");
-      return;
-    }
-
     const parsed = aggregationSchema.safeParse(request.body);
     if (!parsed.success) {
       legacyFail(reply, 400, "invalid body");
@@ -2114,6 +2109,64 @@ export function registerLegacyDeviceManagementCompatRoutes(
     const send = (payload: Record<string, unknown>) => {
       void reply.code(200).send({ success: true, ...payload, timestamp: new Date().toISOString() });
     };
+
+    if (!pg) {
+      const nowIso = new Date().toISOString();
+      if (type === "hierarchy_stats") {
+        send({
+          type,
+          data: {
+            summary: { total_regions: 1, total_networks: 0, total_devices: 0, active_devices: 0, stations: 0 }
+          },
+          fromCache: false,
+          generatedAt: nowIso,
+          source: "fallback"
+        });
+        return;
+      }
+
+      if (type === "real_time_dashboard") {
+        send({
+          type,
+          data: {
+            todayDataCount: 0,
+            onlineDevices: 0,
+            offlineDevices: 0,
+            pendingAlerts: 0,
+            alertsBySeverity: { low: 0, medium: 0, high: 0, critical: 0 },
+            stations: 0,
+            lastUpdatedAt: nowIso
+          },
+          fromCache: false,
+          generatedAt: nowIso,
+          source: "fallback"
+        });
+        return;
+      }
+
+      if (type === "network_stats") {
+        send({
+          type,
+          data: {
+            devices: deviceIds.map((id) => ({ device_id: id, data_points: 0 })),
+            network_summary: { total_devices: deviceIds.length, total_data_points: 0, timeRange }
+          },
+          fromCache: false,
+          generatedAt: nowIso,
+          source: "fallback"
+        });
+        return;
+      }
+
+      send({
+        type,
+        data: deviceIds.map((id) => ({ device_id: id, updated_at: null, state: null })),
+        fromCache: false,
+        generatedAt: nowIso,
+        source: "fallback"
+      });
+      return;
+    }
 
     try {
       if (type === "hierarchy_stats") {
