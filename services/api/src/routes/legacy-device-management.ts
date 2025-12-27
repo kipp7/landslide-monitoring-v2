@@ -158,6 +158,17 @@ function clickhouseStringToIsoZ(ts: string): string {
   return t;
 }
 
+function getLegacyMonitoringStationsChartConfig(chartTypeRaw: string): { title: string; unit: string; yAxisName: string } {
+  const chartType = chartTypeRaw.trim().toLowerCase();
+  if (chartType === "temperature") return { title: "温度趋势图 (°C) - 挂榜山监测网络", unit: "°C", yAxisName: "温度" };
+  if (chartType === "humidity") return { title: "湿度趋势图 (%) - 挂榜山监测网络", unit: "%", yAxisName: "湿度" };
+  if (chartType === "acceleration") return { title: "加速度趋势图 (mg) - 挂榜山监测网络", unit: "mg", yAxisName: "加速度" };
+  if (chartType === "gyroscope") return { title: "角速度趋势图 (°/s) - 挂榜山监测网络", unit: "°/s", yAxisName: "角速度" };
+  if (chartType === "rainfall") return { title: "降雨量趋势图 (mm) - 挂榜山监测网络", unit: "mm", yAxisName: "降雨量" };
+  if (chartType === "gps_deformation") return { title: "GPS 位移趋势图 (mm) - 挂榜山监测网络", unit: "mm", yAxisName: "位移" };
+  return { title: `${chartTypeRaw}趋势图 - 挂榜山监测网络`, unit: "", yAxisName: chartTypeRaw };
+}
+
 function parseRelativeTimeRange(raw: string | undefined): { label: string; start: Date; end: Date } {
   const end = new Date();
   const fallback = { label: "24h", start: new Date(end.getTime() - 24 * 60 * 60 * 1000), end };
@@ -194,6 +205,69 @@ function onlineStatus(lastSeenAt: string | null, status: "inactive" | "active" |
   const t = Date.parse(lastSeenAt);
   if (!Number.isFinite(t)) return "offline";
   return Date.now() - t < 5 * 60_000 ? "online" : "offline";
+}
+
+function toMonitoringStationPayload(row: DeviceListRow): {
+  device_id: string;
+  actual_device_id: string;
+  station_name: string;
+  location_name: string;
+  latitude: number;
+  longitude: number;
+  status: "active" | "inactive" | "maintenance";
+  risk_level: "low" | "medium" | "high" | "critical";
+  sensor_types: string[];
+  chart_legend_name: string;
+  description: string;
+  install_date: string;
+  last_data_time: string;
+  is_online: boolean;
+  online_status: "online" | "offline";
+} {
+  const meta = row.metadata && typeof row.metadata === "object" ? (row.metadata as Record<string, unknown>) : null;
+
+  const metaStationNameRaw = typeof meta?.station_name === "string" ? meta.station_name.trim() : "";
+  const metaLocationNameRaw = typeof meta?.location_name === "string" ? meta.location_name.trim() : "";
+  const metaStationName = metaStationNameRaw ? metaStationNameRaw : undefined;
+  const metaLocationName = metaLocationNameRaw ? metaLocationNameRaw : undefined;
+  const stationName = metaStationName ?? metaLocationName ?? row.station_name ?? row.device_name;
+  const locationName = metaLocationName ?? row.station_name ?? "";
+
+  const chartLegendNameRaw = typeof meta?.chart_legend_name === "string" ? meta.chart_legend_name.trim() : "";
+  const chartLegendName = chartLegendNameRaw || stationName;
+
+  const riskRaw = typeof meta?.risk_level === "string" ? meta.risk_level : "";
+  const riskLevel: "low" | "medium" | "high" | "critical" =
+    riskRaw === "low" || riskRaw === "high" || riskRaw === "critical" ? riskRaw : "medium";
+
+  const statusRaw = typeof meta?.status === "string" ? meta.status : "";
+  const status: "active" | "inactive" | "maintenance" =
+    statusRaw === "inactive" || statusRaw === "maintenance"
+      ? statusRaw
+      : row.status === "inactive"
+        ? "inactive"
+        : "active";
+
+  const sensorTypes = Array.isArray(meta?.sensor_types) ? meta.sensor_types.filter((v) => typeof v === "string") : [];
+  const online = onlineStatus(row.last_seen_at, row.status);
+
+  return {
+    device_id: legacyKeyFromMetadata(row.device_name, row.metadata),
+    actual_device_id: row.device_id,
+    station_name: stationName,
+    location_name: locationName,
+    latitude: row.latitude ?? 0,
+    longitude: row.longitude ?? 0,
+    status,
+    risk_level: riskLevel,
+    sensor_types: sensorTypes,
+    chart_legend_name: chartLegendName,
+    description: typeof meta?.description === "string" ? meta.description : "",
+    install_date: typeof meta?.install_date === "string" ? meta.install_date : row.created_at,
+    last_data_time: row.last_seen_at ?? row.created_at,
+    is_online: online === "online",
+    online_status: online
+  };
 }
 
 function toZhCnTime(value: string): string {
@@ -1899,27 +1973,25 @@ export function registerLegacyDeviceManagementCompatRoutes(
 
     const query = (request.query ?? {}) as { chartType?: unknown };
     const chartType = typeof query.chartType === "string" ? query.chartType : "";
+    const devices = await listDevicesWithStations(pg);
+    const list = devices.map((d) => toMonitoringStationPayload(d));
+
     if (chartType) {
+      const deviceLegends = list.reduce<Record<string, string>>((acc, station) => {
+        acc[station.device_id] = station.chart_legend_name || station.station_name;
+        return acc;
+      }, {});
+
+      const cfg = getLegacyMonitoringStationsChartConfig(chartType);
       legacyOk(reply, {
         chartType,
-        title: chartType,
-        unit: "",
-        yAxisName: "",
-        deviceLegends: {}
+        title: cfg.title,
+        unit: cfg.unit,
+        yAxisName: cfg.yAxisName,
+        deviceLegends
       });
       return;
     }
-
-    const devices = await listDevicesWithStations(pg);
-    const list = devices.map((d) => ({
-      device_id: legacyKeyFromMetadata(d.device_name, d.metadata),
-      actual_device_id: d.device_id,
-      station_name: d.station_name ?? d.device_name,
-      location_name: d.station_name ?? "",
-      latitude: d.latitude,
-      longitude: d.longitude,
-      status: d.status
-    }));
 
     legacyOk(reply, list);
   });
@@ -1927,6 +1999,10 @@ export function registerLegacyDeviceManagementCompatRoutes(
   // Compatibility: legacy docs use /monitoring-stations/chart-config?type=temperature
   app.get("/monitoring-stations/chart-config", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
+    if (!pg) {
+      legacyFail(reply, 503, "PostgreSQL not configured");
+      return;
+    }
 
     const query = (request.query ?? {}) as { type?: unknown; chartType?: unknown };
     const chartType = typeof query.type === "string" ? query.type : typeof query.chartType === "string" ? query.chartType : "";
@@ -1935,12 +2011,20 @@ export function registerLegacyDeviceManagementCompatRoutes(
       return;
     }
 
+    const devices = await listDevicesWithStations(pg);
+    const list = devices.map((d) => toMonitoringStationPayload(d));
+    const deviceLegends = list.reduce<Record<string, string>>((acc, station) => {
+      acc[station.device_id] = station.chart_legend_name || station.station_name;
+      return acc;
+    }, {});
+
+    const cfg = getLegacyMonitoringStationsChartConfig(chartType);
     legacyOk(reply, {
       chartType,
-      title: chartType,
-      unit: "",
-      yAxisName: "",
-      deviceLegends: {}
+      title: cfg.title,
+      unit: cfg.unit,
+      yAxisName: cfg.yAxisName,
+      deviceLegends
     });
   });
 
@@ -2090,15 +2174,7 @@ export function registerLegacyDeviceManagementCompatRoutes(
       return;
     }
 
-    legacyOk(reply, {
-      device_id: legacyKeyFromMetadata(row.device_name, row.metadata),
-      actual_device_id: row.device_id,
-      station_name: row.station_name ?? row.device_name,
-      location_name: row.station_name ?? "",
-      latitude: row.latitude,
-      longitude: row.longitude,
-      status: row.status
-    });
+    legacyOk(reply, toMonitoringStationPayload(row));
   });
 
   app.delete("/data-aggregation", async (request, reply) => {
