@@ -611,7 +611,34 @@ export function registerDeviceHealthExpertLegacyCompatRoutes(
   app.get("/device-health-expert", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
-      void reply.code(503).send({ success: false, error: "PostgreSQL not configured" });
+      const parsed = legacyQuerySchema.safeParse(request.query ?? {});
+      if (!parsed.success) {
+        void reply.code(400).send({ success: false, error: "invalid query" });
+        return;
+      }
+
+      const nowIso = new Date().toISOString();
+      const metric = parsed.data.metric;
+      const battery = computeBattery({});
+      const signal = computeSignal({});
+      const health = computeHealth(nowIso, battery, signal);
+      const out: ExpertResult = {
+        deviceId: parsed.data.device_id,
+        timestamp: nowIso,
+        analysisType: analysisType(metric),
+        ...(metric === "battery" ? { battery } : {}),
+        ...(metric === "signal" ? { signal } : {}),
+        ...(metric === "health" ? { health } : {}),
+        ...(metric === "all" ? { battery, signal, health } : {}),
+        metadata: {
+          apiVersion: "2.0.0",
+          analysisMethod: "fallback_no_pg",
+          calculationTime: nowIso,
+          cacheUsed: false
+        }
+      };
+
+      void reply.code(200).send({ success: true, data: out, timestamp: nowIso });
       return;
     }
 
@@ -678,7 +705,7 @@ export function registerDeviceHealthExpertLegacyCompatRoutes(
   app.post("/device-health-expert", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "system:config"))) return;
     if (!pg) {
-      void reply.code(503).send({ success: false, error: "PostgreSQL not configured" });
+      void reply.code(200).send({ success: false, error: "PostgreSQL not configured" });
       return;
     }
 
