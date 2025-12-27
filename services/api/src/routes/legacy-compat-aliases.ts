@@ -64,6 +64,21 @@ async function proxyInject(
 }
 
 export function registerLegacyCompatAliasRoutes(app: FastifyInstance): void {
+  app.get("/info", async (_request, reply) => {
+    void reply.code(200).send({
+      ok: true,
+      service: "api-service",
+      timestamp: new Date().toISOString(),
+      endpoints: {
+        health: "GET /health",
+        iot_info: "GET /info",
+        iot_health: "GET /iot/health",
+        legacy_api_prefix: "/api/*",
+        legacy_iot_api_prefix: "/iot/api/*"
+      }
+    });
+  });
+
   app.get("/device-management-optimized", async (request, reply) => {
     await proxyInject(app, request, reply, "GET", `/device-management${toQueryString(request.query)}`);
   });
@@ -88,4 +103,3 @@ export function registerLegacyCompatAliasRoutes(app: FastifyInstance): void {
     await proxyInject(app, request, reply, "PUT", "/monitoring-stations");
   });
 }
-
