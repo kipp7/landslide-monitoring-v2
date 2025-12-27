@@ -11,9 +11,7 @@ function disabled(reply: FastifyReply, path: string): void {
 }
 
 export function registerLegacyDisabledRoutes(app: FastifyInstance, _config: AppConfig): void {
-  const routes = [
-    "/db-admin"
-  ] as const;
+  const routes = [] as const;
 
   for (const path of routes) {
     app.get(path, async (_request, reply) => {

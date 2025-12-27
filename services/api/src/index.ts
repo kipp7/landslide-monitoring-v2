@@ -37,6 +37,7 @@ import { registerLegacyDisabledRoutes } from "./routes/legacy-disabled";
 import { registerLegacyCompatAliasRoutes } from "./routes/legacy-compat-aliases";
 import { registerLegacyDeviceManagementCompatRoutes } from "./routes/legacy-device-management";
 import { registerLegacyDebugToolRoutes } from "./routes/legacy-debug-tools";
+import { registerLegacyDbAdminRoutes } from "./routes/legacy-db-admin";
 import { registerIotServerCompatRoutes } from "./routes/iot-server-compat";
 
 async function main(): Promise<void> {
@@ -208,6 +209,7 @@ async function main(): Promise<void> {
       registerDeviceHealthExpertLegacyCompatRoutes(api, config, ch, pg);
       registerLegacyDeviceManagementCompatRoutes(api, config, ch, pg);
       registerLegacyDebugToolRoutes(api, config, ch, pg, { injector: app });
+      registerLegacyDbAdminRoutes(api, config, pg);
       registerLegacyDisabledRoutes(api, config);
       registerLegacyCompatAliasRoutes(api);
       done();
@@ -227,6 +229,7 @@ async function main(): Promise<void> {
       registerDeviceHealthExpertLegacyCompatRoutes(api, config, ch, pg);
       registerLegacyDeviceManagementCompatRoutes(api, config, ch, pg);
       registerLegacyDebugToolRoutes(api, config, ch, pg, { injector: app });
+      registerLegacyDbAdminRoutes(api, config, pg);
       registerLegacyDisabledRoutes(api, config);
       registerLegacyCompatAliasRoutes(api);
       done();

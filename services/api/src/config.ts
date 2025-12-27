@@ -33,6 +33,12 @@ const configSchema = z.object({
   postgresPoolMax: z.coerce.number().int().positive().default(10),
 
   adminApiToken: z.string().optional(),
+  dbAdminEnabled: z
+    .string()
+    .optional()
+    .transform((v) => (v ?? "false").toLowerCase())
+    .pipe(z.enum(["true", "false"]))
+    .transform((v) => v === "true"),
 
   authRequired: z
     .string()
@@ -85,6 +91,7 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
     postgresPoolMax: env.POSTGRES_POOL_MAX,
 
     adminApiToken: env.ADMIN_API_TOKEN,
+    dbAdminEnabled: env.DB_ADMIN_ENABLED,
     authRequired: env.AUTH_REQUIRED,
 
     clickhouseUrl: env.CLICKHOUSE_URL,
