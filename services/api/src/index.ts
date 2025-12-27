@@ -83,6 +83,7 @@ async function main(): Promise<void> {
 
   app.addHook("preHandler", async (request, reply) => {
     if (request.url === "/health" || request.url === "/iot/health") return;
+    if (request.url === "/info" || request.url === "/iot/info") return;
     if (request.url.startsWith("/emqx/")) return;
     if (request.url === "/api/v1/auth/login") return;
     if (request.url === "/api/v1/auth/refresh") return;
