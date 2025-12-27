@@ -72,6 +72,25 @@ function replyFromInject(reply: FastifyReply, injected: InjectResult): void {
   void reply.send(injected.payload);
 }
 
+function withDeviceIdAliases(value: unknown): unknown {
+  if (!value || typeof value !== "object") return value;
+  const row = value as Record<string, unknown>;
+
+  const simpleId = typeof row.simple_id === "string" ? row.simple_id : typeof row.simpleId === "string" ? row.simpleId : null;
+  const actualId =
+    typeof row.actual_device_id === "string"
+      ? row.actual_device_id
+      : typeof row.actualDeviceId === "string"
+        ? row.actualDeviceId
+        : null;
+
+  const out: Record<string, unknown> = { ...row };
+  if (simpleId && typeof out.deviceId !== "string") out.deviceId = simpleId;
+  if (simpleId && typeof out.simpleId !== "string") out.simpleId = simpleId;
+  if (actualId && typeof out.actualDeviceId !== "string") out.actualDeviceId = actualId;
+  return out;
+}
+
 export function registerIotServerCompatRoutes(
   app: FastifyInstance,
   config: AppConfig,
@@ -120,7 +139,8 @@ export function registerIotServerCompatRoutes(
     }
 
     const obj = parsed as { success?: unknown; data?: unknown; message?: unknown; timestamp?: unknown };
-    const data = Array.isArray(obj.data) ? obj.data : [];
+    const raw = Array.isArray(obj.data) ? obj.data : [];
+    const data = raw.map(withDeviceIdAliases);
 
     void reply.code(200).send({
       success: Boolean(obj.success),
@@ -151,10 +171,11 @@ export function registerIotServerCompatRoutes(
     }
 
     const obj = parsed as { success?: unknown; data?: unknown; message?: unknown; timestamp?: unknown };
+    const data = withDeviceIdAliases(obj.data ?? null);
     void reply.code(200).send({
       success: Boolean(obj.success),
-      data: obj.data ?? null,
-      count: obj.data ? 1 : 0,
+      data,
+      count: data ? 1 : 0,
       message: typeof obj.message === "string" ? obj.message : "ok",
       timestamp: typeof obj.timestamp === "string" ? obj.timestamp : new Date().toISOString()
     });
