@@ -2070,6 +2070,18 @@ export function registerLegacyDeviceManagementCompatRoutes(
       return;
     }
 
+    const meta = row.metadata && typeof row.metadata === "object" ? (row.metadata as Record<string, unknown>) : null;
+    const sensorTypes = meta && Array.isArray(meta.sensor_types) ? meta.sensor_types : [];
+
+    const riskLevelRaw = meta && typeof meta.risk_level === "string" ? meta.risk_level.trim() : "";
+    const risk_level =
+      riskLevelRaw === "low" || riskLevelRaw === "medium" || riskLevelRaw === "high" || riskLevelRaw === "critical"
+        ? riskLevelRaw
+        : "low";
+
+    const legendRaw = meta && typeof meta.chart_legend_name === "string" ? meta.chart_legend_name.trim() : "";
+    const chart_legend_name = legendRaw ? legendRaw : (row.station_name ?? row.device_name);
+
     legacyOk(reply, {
       device_id: legacyKeyFromMetadata(row.device_name, row.metadata),
       actual_device_id: row.device_id,
@@ -2077,7 +2089,17 @@ export function registerLegacyDeviceManagementCompatRoutes(
       location_name: row.station_name ?? "",
       latitude: row.latitude,
       longitude: row.longitude,
-      status: row.status
+      altitude: null,
+      sensor_types: sensorTypes.filter((v): v is string => typeof v === "string"),
+      chart_legend_name,
+      description: meta && typeof meta.description === "string" ? meta.description : "",
+      risk_level,
+      status: row.status === "active" ? "active" : row.status === "inactive" ? "inactive" : "inactive",
+      install_date: row.created_at,
+      is_online: onlineStatus(row.last_seen_at, row.status) === "online",
+      last_data_time: row.last_seen_at ?? row.created_at,
+      created_at: row.created_at,
+      updated_at: new Date().toISOString()
     });
   });
 
