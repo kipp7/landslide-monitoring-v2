@@ -72,6 +72,18 @@ function replyFromInject(reply: FastifyReply, injected: InjectResult): void {
   void reply.send(injected.payload);
 }
 
+function iotMappingsFallback(opts: { upstreamStatus: number; message: string }) {
+  return {
+    success: true as const,
+    data: [],
+    count: 0,
+    message: opts.message,
+    is_fallback: true as const,
+    upstream_status: opts.upstreamStatus,
+    timestamp: new Date().toISOString()
+  };
+}
+
 export function registerIotServerCompatRoutes(
   app: FastifyInstance,
   config: AppConfig,
@@ -130,7 +142,12 @@ export function registerIotServerCompatRoutes(
     });
 
     if (res.statusCode !== 200 || !parsed || typeof parsed !== "object") {
-      replyFromInject(reply, res);
+      void reply.code(200).send(
+        iotMappingsFallback({
+          upstreamStatus: res.statusCode,
+          message: "使用 fallback 数据（上游 /api/iot/devices/mappings 不可用）"
+        })
+      );
       return;
     }
 
@@ -183,7 +200,15 @@ export function registerIotServerCompatRoutes(
     });
 
     if (res.statusCode !== 200 || !parsed || typeof parsed !== "object") {
-      replyFromInject(reply, res);
+      void reply.code(200).send({
+        success: true,
+        data: [],
+        count: 0,
+        message: "使用 fallback 数据（上游 /api/iot/devices/mappings 不可用）",
+        is_fallback: true,
+        upstream_status: res.statusCode,
+        timestamp: new Date().toISOString()
+      });
       return;
     }
 
