@@ -1961,6 +1961,30 @@ export function registerLegacyDeviceManagementCompatRoutes(
     legacyOk(reply, list);
   });
 
+  app.get("/monitoring-stations/chart-config", async (request, reply) => {
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
+    if (!pg) {
+      legacyFail(reply, 503, "PostgreSQL not configured");
+      return;
+    }
+
+    const query = (request.query ?? {}) as { type?: unknown; chartType?: unknown };
+    const type = typeof query.type === "string" ? query.type : typeof query.chartType === "string" ? query.chartType : "";
+    const chartType = type.trim();
+    if (!chartType) {
+      legacyFail(reply, 400, "type is required");
+      return;
+    }
+
+    legacyOk(reply, {
+      chartType,
+      title: chartType,
+      unit: "",
+      yAxisName: "",
+      deviceLegends: {}
+    });
+  });
+
   app.put("/monitoring-stations", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
@@ -2064,6 +2088,56 @@ export function registerLegacyDeviceManagementCompatRoutes(
     });
 
     legacyOk(reply, { updated: true });
+  });
+
+  app.put("/monitoring-stations/chart-legends", async (request, reply) => {
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
+    if (!pg) {
+      legacyFail(reply, 503, "PostgreSQL not configured");
+      return;
+    }
+
+    const parsed = monitoringStationsBulkUpdateSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      legacyFail(reply, 400, "invalid body");
+      return;
+    }
+
+    const chartType = typeof parsed.data.chartType === "string" ? parsed.data.chartType : "";
+    const legends = parsed.data.deviceLegends ?? {};
+    const entries = Object.entries(legends).filter(([, name]) => typeof name === "string" && name.trim());
+    if (entries.length === 0) {
+      legacyOk(reply, { updated: 0, chartType }, "no-op");
+      return;
+    }
+
+    const updated = await withPgClient(pg, async (client) => {
+      await client.query("BEGIN");
+      try {
+        let count = 0;
+        for (const [deviceKey, legendName] of entries) {
+          const resolved = await resolveDeviceIdWithClient(client, deviceKey);
+          if (!resolved) continue;
+          await client.query(
+            `
+              UPDATE devices
+              SET metadata = jsonb_set(COALESCE(metadata, '{}'::jsonb), '{chart_legend_name}', to_jsonb($2::text), true),
+                  updated_at = NOW()
+              WHERE device_id = $1
+            `,
+            [resolved, legendName]
+          );
+          count += 1;
+        }
+        await client.query("COMMIT");
+        return count;
+      } catch (err) {
+        await client.query("ROLLBACK");
+        throw err;
+      }
+    });
+
+    legacyOk(reply, { updated, chartType });
   });
 
   app.post("/monitoring-stations", async (request, reply) => {
