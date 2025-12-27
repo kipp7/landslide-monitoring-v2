@@ -58,11 +58,6 @@ export function registerAnomalyAssessmentCompatRoutes(
   app.get("/anomaly-assessment", async (request, reply) => {
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "alert:view"))) return;
-    if (!pg) {
-      fail(reply, 503, "PostgreSQL 未配置", traceId);
-      return;
-    }
-
     const parseQuery = querySchema.safeParse(request.query);
     if (!parseQuery.success) {
       fail(reply, 400, "参数错误", traceId, { field: "query", issues: parseQuery.error.issues });
@@ -71,6 +66,24 @@ export function registerAnomalyAssessmentCompatRoutes(
     const { timeWindow } = parseQuery.data;
 
     const processedAt = new Date().toISOString();
+
+    if (!pg) {
+      const fallback = {
+        data: [],
+        stats: { total: 0, red: 0, orange: 0, yellow: 0, blue: 0 },
+        time_window: timeWindow,
+        processed_at: processedAt,
+        source: "fallback_no_pg"
+      };
+
+      if (opts?.legacyResponse) {
+        reply.send({ success: false, error: "PostgreSQL 未配置", fallback_data: fallback, ...fallback });
+        return;
+      }
+
+      fail(reply, 503, "PostgreSQL 未配置", traceId);
+      return;
+    }
 
     const rows = await withPgClient(pg, async (client) =>
       client.query<AnomalyAggRow>(
