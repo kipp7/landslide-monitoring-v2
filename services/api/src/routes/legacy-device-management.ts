@@ -1155,7 +1155,34 @@ export function registerLegacyDeviceManagementCompatRoutes(
   app.get("/device-management/hierarchical", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
-      legacyFail(reply, 503, "PostgreSQL not configured");
+      const q = (request.query ?? {}) as { mode?: unknown };
+      const mode = typeof q.mode === "string" ? q.mode : "";
+
+      if (mode === "summary") {
+        legacyOk(reply, []);
+        return;
+      }
+
+      legacyOk(reply, {
+        regions: [
+          {
+            id: "default",
+            /*
+            name: "榛樿鐩戞祴鍖?,
+            */
+            name: "default",
+            devices: [],
+            total_devices: 0,
+            online_devices: 0,
+            offline_devices: 0
+          }
+        ],
+        allDevices: [],
+        totalDevices: 0,
+        onlineDevices: 0,
+        offlineDevices: 0,
+        source: "fallback_no_pg"
+      });
       return;
     }
 
