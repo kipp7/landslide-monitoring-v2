@@ -76,8 +76,10 @@ export function registerIotServerCompatRoutes(
   app: FastifyInstance,
   config: AppConfig,
   ch: ClickHouseClient,
-  pg: PgPool | null
+  pg: PgPool | null,
+  opts?: { injector?: FastifyInstance }
 ): void {
+  const injector = opts?.injector ?? app;
   const adminCfg: AdminAuthConfig = { adminApiToken: config.adminApiToken, jwtEnabled: Boolean(config.jwtAccessSecret) };
 
   app.get("/info", async (_request, reply) => {
@@ -92,12 +94,25 @@ export function registerIotServerCompatRoutes(
       endpoints: {
         health: "GET /health",
         info: "GET /info",
+        iot_data: "POST /iot/huawei (disabled in v2 api-service; use huawei-iot-adapter)",
         device_list: "GET /devices/list",
         device_mappings: "GET /devices/mappings",
         device_info: "GET /devices/info/:simpleId",
         device_by_id: "GET /devices/:deviceId",
         device_management: "GET /devices/:deviceId/management",
         device_status: "GET /devices/:deviceId/status",
+        gps_deformation_analysis: "POST /api/gps-deformation/:deviceId",
+        gps_deformation_history: "GET /api/gps-deformation/:deviceId",
+        baselines_list: "GET /api/baselines",
+        baseline_by_device: "GET /api/baselines/:deviceId",
+        baseline_create: "POST /api/baselines/:deviceId",
+        baseline_auto_establish: "POST /api/baselines/:deviceId/auto-establish",
+        baseline_quality_check: "GET /api/baselines/:deviceId/quality-check",
+        baseline_delete: "DELETE /api/baselines/:deviceId",
+        huawei_config: "GET /huawei/config",
+        device_shadow: "GET /huawei/devices/:deviceId/shadow",
+        send_command: "POST /huawei/devices/:deviceId/commands",
+        command_templates: "GET /huawei/command-templates",
         latest_data: "GET /debug/latest-data",
         legacy_api_prefix: "/api/* (v2 legacy-compat)",
         legacy_iot_api_prefix: "/iot/api/* (v2 legacy-compat)",
@@ -108,7 +123,7 @@ export function registerIotServerCompatRoutes(
   });
 
   app.get("/devices/mappings", async (request, reply) => {
-    const { res, parsed } = await injectJson(app, {
+    const { res, parsed } = await injectJson(injector, {
       method: "GET",
       url: "/api/iot/devices/mappings",
       headers: forwardAuthHeader(request)
@@ -139,7 +154,7 @@ export function registerIotServerCompatRoutes(
       return;
     }
 
-    const { res, parsed } = await injectJson(app, {
+    const { res, parsed } = await injectJson(injector, {
       method: "GET",
       url: `/api/iot/devices/${encodeURIComponent(deviceId)}`,
       headers: forwardAuthHeader(request)
@@ -161,7 +176,7 @@ export function registerIotServerCompatRoutes(
   });
 
   app.get("/devices/list", async (request, reply) => {
-    const { res, parsed } = await injectJson(app, {
+    const { res, parsed } = await injectJson(injector, {
       method: "GET",
       url: "/api/iot/devices/mappings",
       headers: forwardAuthHeader(request)
@@ -207,7 +222,7 @@ export function registerIotServerCompatRoutes(
       return;
     }
 
-    const { res, parsed } = await injectJson(app, {
+    const { res, parsed } = await injectJson(injector, {
       method: "GET",
       url: "/api/iot/devices/mappings",
       headers: forwardAuthHeader(request)
@@ -255,7 +270,7 @@ export function registerIotServerCompatRoutes(
       return;
     }
 
-    const { res, parsed } = await injectJson(app, {
+    const { res, parsed } = await injectJson(injector, {
       method: "GET",
       url: `/api/device-management?device_id=${encodeURIComponent(deviceId)}`,
       headers: forwardAuthHeader(request)
@@ -271,7 +286,7 @@ export function registerIotServerCompatRoutes(
 
     let deformationData: Record<string, unknown> | null = null;
     try {
-      const { res: defRes, parsed: defParsed } = await injectJson(app, {
+      const { res: defRes, parsed: defParsed } = await injectJson(injector, {
         method: "GET",
         url: `/api/device-management/deformation/${encodeURIComponent(deviceId)}/summary`,
         headers: forwardAuthHeader(request)
@@ -323,7 +338,7 @@ export function registerIotServerCompatRoutes(
       return;
     }
 
-    const { res, parsed } = await injectJson(app, {
+    const { res, parsed } = await injectJson(injector, {
       method: "GET",
       url: `/api/device-management?device_id=${encodeURIComponent(deviceId)}`,
       headers: forwardAuthHeader(request)
