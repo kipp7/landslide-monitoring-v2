@@ -356,6 +356,10 @@ async function handleAvailableDevices(
   const traceId = request.traceId;
   if (!(await requirePermission(adminCfg, pg, request, reply, "device:view"))) return;
   if (!pg) {
+    if (opts?.legacy) {
+      respond(reply, { availableDevices: [], totalGpsDevices: 0, devicesWithBaseline: 0, devicesNeedingBaseline: 0, lookbackDays: 0 }, traceId, opts);
+      return;
+    }
     respondError(reply, 503, "PostgreSQL 未配置", traceId, opts);
     return;
   }
@@ -443,6 +447,10 @@ async function handleAutoEstablish(
   const traceId = request.traceId;
   if (!(await requirePermission(adminCfg, pg, request, reply, "device:update"))) return;
   if (!pg) {
+    if (opts?.legacy) {
+      void reply.code(200).send({ success: false, error: "PostgreSQL 未配置" });
+      return;
+    }
     respondError(reply, 503, "PostgreSQL 未配置", traceId, opts);
     return;
   }
@@ -540,6 +548,10 @@ async function handleQualityCheck(
   const traceId = request.traceId;
   if (!(await requirePermission(adminCfg, pg, request, reply, "device:view"))) return;
   if (!pg) {
+    if (opts?.legacy) {
+      void reply.code(200).send({ success: false, error: "PostgreSQL 未配置" });
+      return;
+    }
     respondError(reply, 503, "PostgreSQL 未配置", traceId, opts);
     return;
   }
@@ -647,7 +659,7 @@ export function registerGpsBaselineLegacyCompatRoutes(
   app.get("/baselines", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "device:view"))) return;
     if (!pg) {
-      void reply.code(503).send({ success: false, error: "PostgreSQL 未配置" });
+      void reply.code(200).send({ success: true, data: [], count: 0, message: "PostgreSQL 未配置" });
       return;
     }
 
@@ -710,7 +722,7 @@ export function registerGpsBaselineLegacyCompatRoutes(
   app.get("/baselines/:deviceId", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "device:view"))) return;
     if (!pg) {
-      void reply.code(503).send({ success: false, error: "PostgreSQL 未配置" });
+      void reply.code(200).send({ success: false, error: "PostgreSQL 未配置", hasBaseline: false });
       return;
     }
 
@@ -780,7 +792,7 @@ export function registerGpsBaselineLegacyCompatRoutes(
   const upsertLegacy = async (request: FastifyRequest, reply: FastifyReply, mode: "create" | "update") => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "device:update"))) return;
     if (!pg) {
-      void reply.code(503).send({ success: false, error: "PostgreSQL 未配置" });
+      void reply.code(200).send({ success: false, error: "PostgreSQL 未配置" });
       return;
     }
 
@@ -874,7 +886,7 @@ export function registerGpsBaselineLegacyCompatRoutes(
   app.delete("/baselines/:deviceId", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "device:update"))) return;
     if (!pg) {
-      void reply.code(503).send({ success: false, error: "PostgreSQL 未配置" });
+      void reply.code(200).send({ success: false, error: "PostgreSQL 未配置" });
       return;
     }
 
