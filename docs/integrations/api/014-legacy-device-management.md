@@ -16,7 +16,7 @@
 ## 3) 监测站信息
 
 - `GET /api/monitoring-stations`：返回监测站（设备）列表；支持 `chartType` 参数返回图表配置占位
-- `PUT /api/monitoring-stations?deviceId=...`：更新单监测站（设备）配置（写入 `devices.metadata`，字段透传/合并）
+- `PUT /api/monitoring-stations?deviceId=...`：更新单监测站（设备）配置（写入 `devices.metadata`；若包含 `station_name`/`latitude`/`longitude`/`status` 则同步更新 `stations`/`devices.status`）
 - `POST /api/monitoring-stations`：批量更新图例配置（写入 `devices.metadata.chart_legend_name`）
 - `GET /api/monitoring-stations/{deviceId}`：返回单监测站（设备）信息
 - `PUT /api/monitoring-stations/{deviceId}`：更新单监测站（设备）信息（支持 `station_name`/`latitude`/`longitude`/`status`，其余字段写入 `devices.metadata`）
