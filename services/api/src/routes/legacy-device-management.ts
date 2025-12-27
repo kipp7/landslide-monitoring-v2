@@ -1040,11 +1040,6 @@ export function registerLegacyDeviceManagementCompatRoutes(
 
   app.get("/device-management", async (request, reply) => {
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
-    if (!pg) {
-      legacyFail(reply, 503, "PostgreSQL not configured");
-      return;
-    }
-
     const parsed = deviceManagementQuerySchema.safeParse(request.query ?? {});
     if (!parsed.success) {
       legacyFail(reply, 400, "invalid query");
@@ -1054,6 +1049,48 @@ export function registerLegacyDeviceManagementCompatRoutes(
     const inputDeviceId = (parsed.data.device_id ?? parsed.data.deviceId ?? "").trim() || "device_1";
     const limit = parsed.data.limit ?? 50;
     const dataOnly = parsed.data.data_only ?? parsed.data.dataOnly ?? false;
+
+    if (!pg) {
+      const nowIso = new Date().toISOString();
+      if (dataOnly) {
+        void reply.code(200).send({
+          success: true,
+          data: [],
+          count: 0,
+          deviceId: inputDeviceId,
+          hasBaseline: false,
+          calculationMode: "fallback",
+          timestamp: nowIso
+        });
+        return;
+      }
+
+      void reply.code(200).send({
+        success: true,
+        data: {
+          device_id: inputDeviceId,
+          real_name: inputDeviceId,
+          display_name: inputDeviceId,
+          status: "offline",
+          last_active: nowIso,
+          location: "",
+          coordinates: { lat: null, lng: null },
+          device_type: "unknown",
+          firmware_version: "",
+          install_date: nowIso,
+          data_count_today: 0,
+          last_data_time: nowIso,
+          health_score: 0,
+          temperature: null,
+          humidity: null,
+          battery_level: 0,
+          signal_strength: 0,
+          baseline_established: false
+        },
+        timestamp: nowIso
+      });
+      return;
+    }
 
     const resolved = await resolveDeviceId(pg, inputDeviceId);
     if (!resolved) {
