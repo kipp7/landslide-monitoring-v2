@@ -19,3 +19,4 @@ v2 的权威接口仍然是 `api-service` 的 legacy compat 前缀（`/api/*`、
 
 说明：
 - 这些端点主要用于兼容参考区的代理调用链；新代码/新 UI 仍应优先使用 v2 `/api/v1/*` 或 legacy compat `/api/*`。
+- 除根路径外，也提供同名的 `/iot/*` 前缀别名（如 `/iot/info`、`/iot/devices/mappings`、`/iot/debug/latest-data`），用于兼容参考区常见的 `apiBase=.../iot` 调用方式。
