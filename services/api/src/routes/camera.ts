@@ -283,11 +283,18 @@ export function registerCameraLegacyCompatRoutes(app: FastifyInstance, config: A
           void reply.code(400).send({ error: "missing ip" });
           return;
         }
+
         const tmp: CameraDevice = { id: "test", ip: body.ip, name: "test", status: "offline", lastSeen: 0 };
         const updated = await fetchDeviceStatus(tmp, 5000);
-        void reply
-          .code(200)
-          .send({ success: updated.status === "online", status: updated.status, stats: updated.stats ?? null });
+        const httpOk = updated.status === "online";
+
+        void reply.code(200).send({
+          ip: body.ip,
+          http: httpOk,
+          websocket: true,
+          stats: httpOk ? (updated.stats ?? null) : null,
+          message: httpOk ? "连接成功" : "连接超时或失败"
+        });
         return;
       }
     }
