@@ -72,14 +72,19 @@ async function resolveDeviceUuid(pg: PgPool, selector: string): Promise<string |
   return row?.device_id ?? null;
 }
 
-function pickDeviceIdFromBody(parsed: z.infer<typeof postRealtimeBodySchema>): string | null {
-  if (typeof parsed.deviceId === "string" && parsed.deviceId.trim()) return parsed.deviceId.trim();
+function pickBroadcastTarget(parsed: z.infer<typeof postRealtimeBodySchema>): { deviceId: string | null; payload: unknown } {
+  const topLevelDeviceId = typeof parsed.deviceId === "string" && parsed.deviceId.trim() ? parsed.deviceId.trim() : null;
 
   const data = parsed.data;
-  if (!data || typeof data !== "object") return null;
-  const embedded = (data as Record<string, unknown>).deviceId;
-  if (typeof embedded === "string" && embedded.trim()) return embedded.trim();
-  return null;
+  if (!data || typeof data !== "object") {
+    return { deviceId: topLevelDeviceId, payload: data };
+  }
+
+  const record = data as Record<string, unknown>;
+  const embeddedDeviceId = typeof record.deviceId === "string" && record.deviceId.trim() ? record.deviceId.trim() : null;
+  const embeddedPayload = Object.prototype.hasOwnProperty.call(record, "data") ? record.data : data;
+
+  return { deviceId: embeddedDeviceId ?? topLevelDeviceId, payload: embeddedPayload };
 }
 
 function newClientId(): string {
@@ -448,7 +453,8 @@ function registerSseHandler(
     }
 
     const { action, data } = parseBody.data;
-    let deviceId = pickDeviceIdFromBody(parseBody.data);
+    const target = pickBroadcastTarget(parseBody.data);
+    let deviceId = target.deviceId;
 
     if ((action === "broadcast_device_data" || action === "broadcast_anomaly") && deviceId && !uuidSchema.safeParse(deviceId).success) {
       if (pg) deviceId = (await resolveDeviceUuid(pg, deviceId)) ?? deviceId;
@@ -490,14 +496,14 @@ function registerSseHandler(
         fail(reply, 400, "鍙傛暟閿欒", traceId, { field: "deviceId" });
         return;
       }
-      broadcastDeviceData(ensuredDeviceId, data);
+      broadcastDeviceData(ensuredDeviceId, target.payload);
     } else if (action === "broadcast_anomaly") {
       const ensuredDeviceId = deviceId;
       if (!ensuredDeviceId) {
         fail(reply, 400, "鍙傛暟閿欒", traceId, { field: "deviceId" });
         return;
       }
-      broadcastAnomaly(ensuredDeviceId, data);
+      broadcastAnomaly(ensuredDeviceId, target.payload);
     } else {
       broadcastSystemStatus(data);
     }
