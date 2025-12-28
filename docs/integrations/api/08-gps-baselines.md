@@ -11,6 +11,7 @@ v2 约束：
 兼容说明：
 
 - 为避免旧系统前端/运营脚本依赖缺失，api-service 同时提供 legacy 兼容路径：`/api/baselines/*`（返回 `{success,data}` 形状）；其语义与本文档的 v1 端点保持一致。
+- 当 PostgreSQL 未配置或不可用时，legacy `/api/baselines/*` 会返回 200 fallback/disabled payload（避免旧页面直接 401/503）。
 - 额外 legacy 别名（对齐参考区 `frontend/app/api/baselines/*`）：
   - `POST /api/baselines/{deviceId}/auto-establish-advanced` → `POST /api/baselines/{deviceId}/auto-establish`
   - `POST /api/baselines/{deviceId}/auto-establish-simple` → `POST /api/baselines/{deviceId}/auto-establish`

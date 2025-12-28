@@ -643,8 +643,14 @@ export function registerGpsBaselineLegacyCompatRoutes(
   pg: PgPool | null
 ): void {
   const adminCfg: AdminAuthConfig = { adminApiToken: config.adminApiToken, jwtEnabled: Boolean(config.jwtAccessSecret) };
+  const fallbackMessage = "使用fallback数据（后端服务不可用）";
 
   app.get("/baselines", async (request, reply) => {
+    const hasPg = Boolean(pg);
+    if (!hasPg) {
+      void reply.code(200).send({ success: true, data: [], count: 0, message: fallbackMessage });
+      return;
+    }
     if (!(await requirePermission(adminCfg, pg, request, reply, "device:view"))) return;
     if (!pg) {
       void reply.code(503).send({ success: false, error: "PostgreSQL 未配置" });
@@ -703,11 +709,30 @@ export function registerGpsBaselineLegacyCompatRoutes(
     void reply.code(200).send({ success: true, data, count: data.length });
   });
 
-  app.get("/baselines/available-devices", (request, reply) =>
-    handleAvailableDevices(request, reply, config, ch, pg, adminCfg, { legacy: true })
-  );
+  app.get("/baselines/available-devices", async (request, reply) => {
+    if (!pg) {
+      void reply.code(200).send({
+        success: true,
+        data: {
+          availableDevices: ["device_1", "device_2", "device_3"],
+          totalGpsDevices: 3,
+          devicesWithBaseline: 0,
+          devicesNeedingBaseline: 3,
+          lookbackDays: 7
+        },
+        message: fallbackMessage
+      });
+      return;
+    }
+    await handleAvailableDevices(request, reply, config, ch, pg, adminCfg, { legacy: true });
+  });
 
   app.get("/baselines/:deviceId", async (request, reply) => {
+    const hasPg = Boolean(pg);
+    if (!hasPg) {
+      void reply.code(200).send({ success: false, error: "该设备没有设置基准点", hasBaseline: false, message: fallbackMessage });
+      return;
+    }
     if (!(await requirePermission(adminCfg, pg, request, reply, "device:view"))) return;
     if (!pg) {
       void reply.code(503).send({ success: false, error: "PostgreSQL 未配置" });
@@ -778,11 +803,12 @@ export function registerGpsBaselineLegacyCompatRoutes(
   });
 
   const upsertLegacy = async (request: FastifyRequest, reply: FastifyReply, mode: "create" | "update") => {
-    if (!(await requirePermission(adminCfg, pg, request, reply, "device:update"))) return;
-    if (!pg) {
-      void reply.code(503).send({ success: false, error: "PostgreSQL 未配置" });
+    const ensuredPg = pg;
+    if (!ensuredPg) {
+      void reply.code(200).send({ success: false, disabled: true, error: "PostgreSQL 未配置", message: fallbackMessage });
       return;
     }
+    if (!(await requirePermission(adminCfg, ensuredPg, request, reply, "device:update"))) return;
 
     const rawId = typeof (request.params as { deviceId?: unknown }).deviceId === "string" ? (request.params as { deviceId: string }).deviceId : "";
     const deviceKey = rawId.trim();
@@ -806,7 +832,7 @@ export function registerGpsBaselineLegacyCompatRoutes(
       return;
     }
 
-    const deviceRow = await withPgClient(pg, async (client) =>
+    const deviceRow = await withPgClient(ensuredPg, async (client) =>
       queryOne<{ device_id: string; device_name: string; metadata: unknown }>(
         client,
         `
@@ -845,7 +871,7 @@ export function registerGpsBaselineLegacyCompatRoutes(
       ...(body.pdopValue == null ? {} : { pdopValue: body.pdopValue })
     };
 
-    await upsertBaseline(pg, deviceRow.device_id, "manual", null, baseline);
+    await upsertBaseline(ensuredPg, deviceRow.device_id, "manual", null, baseline);
 
     const nowIso = new Date().toISOString();
     const key = legacyKeyFromMetadata(deviceRow.device_name, deviceRow.metadata);
@@ -916,19 +942,34 @@ export function registerGpsBaselineLegacyCompatRoutes(
     void reply.code(200).send({ success: true, message: "基准点删除成功" });
   });
 
-  app.post("/baselines/:deviceId/auto-establish", (request, reply) =>
-    handleAutoEstablish(request, reply, config, ch, pg, adminCfg, { legacy: true })
-  );
-  app.post("/baselines/:deviceId/auto-establish-advanced", (request, reply) =>
-    handleAutoEstablish(request, reply, config, ch, pg, adminCfg, { legacy: true })
-  );
-  app.post("/baselines/:deviceId/auto-establish-simple", (request, reply) =>
-    handleAutoEstablish(request, reply, config, ch, pg, adminCfg, { legacy: true })
-  );
-  app.get("/baselines/:deviceId/quality-check", (request, reply) =>
-    handleQualityCheck(request, reply, config, ch, pg, adminCfg, { legacy: true })
-  );
-  app.get("/baselines/:deviceId/quality-assessment", (request, reply) =>
-    handleQualityCheck(request, reply, config, ch, pg, adminCfg, { legacy: true })
-  );
+  const legacyDisabledWrite = async (_request: FastifyRequest, reply: FastifyReply) => {
+    void reply.code(200).send({ success: false, disabled: true, error: "PostgreSQL 未配置", message: fallbackMessage });
+  };
+
+  app.post("/baselines/:deviceId/auto-establish", async (request, reply) => {
+    if (!pg) return legacyDisabledWrite(request, reply);
+    await handleAutoEstablish(request, reply, config, ch, pg, adminCfg, { legacy: true });
+  });
+  app.post("/baselines/:deviceId/auto-establish-advanced", async (request, reply) => {
+    if (!pg) return legacyDisabledWrite(request, reply);
+    await handleAutoEstablish(request, reply, config, ch, pg, adminCfg, { legacy: true });
+  });
+  app.post("/baselines/:deviceId/auto-establish-simple", async (request, reply) => {
+    if (!pg) return legacyDisabledWrite(request, reply);
+    await handleAutoEstablish(request, reply, config, ch, pg, adminCfg, { legacy: true });
+  });
+  app.get("/baselines/:deviceId/quality-check", async (request, reply) => {
+    if (!pg) {
+      void reply.code(200).send({ success: false, error: "PostgreSQL 未配置", message: fallbackMessage });
+      return;
+    }
+    await handleQualityCheck(request, reply, config, ch, pg, adminCfg, { legacy: true });
+  });
+  app.get("/baselines/:deviceId/quality-assessment", async (request, reply) => {
+    if (!pg) {
+      void reply.code(200).send({ success: false, error: "PostgreSQL 未配置", message: fallbackMessage });
+      return;
+    }
+    await handleQualityCheck(request, reply, config, ch, pg, adminCfg, { legacy: true });
+  });
 }
