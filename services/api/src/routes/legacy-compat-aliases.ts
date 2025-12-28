@@ -7,6 +7,15 @@ type InjectResult = {
   body: string;
 };
 
+function toHeaders(request: FastifyRequest): Record<string, string> {
+  const headers: Record<string, string> = {};
+  for (const [k, v] of Object.entries(request.headers)) {
+    if (v === undefined) continue;
+    headers[k] = Array.isArray(v) ? v.join(",") : typeof v === "string" ? v : String(v);
+  }
+  return headers;
+}
+
 function toQueryString(query: unknown): string {
   if (!query || typeof query !== "object") return "";
   const params = new URLSearchParams();
@@ -45,13 +54,7 @@ async function proxyInject(
   method: "GET" | "POST" | "PUT",
   url: string
 ): Promise<void> {
-  const headers: Record<string, string> = {};
-  for (const [k, v] of Object.entries(request.headers)) {
-    if (v === undefined) continue;
-    headers[k] = Array.isArray(v) ? v.join(",") : typeof v === "string" ? v : String(v);
-  }
-
-  const injectOpts: InjectOptions = { method, url, headers };
+  const injectOpts: InjectOptions = { method, url, headers: toHeaders(request) };
   if (method !== "GET") {
     injectOpts.payload = typeof request.body === "string" ? request.body : JSON.stringify(request.body ?? {});
   }
@@ -66,6 +69,60 @@ async function proxyInject(
 export function registerLegacyCompatAliasRoutes(app: FastifyInstance): void {
   app.get("/device-management-optimized", async (request, reply) => {
     await proxyInject(app, request, reply, "GET", `/device-management${toQueryString(request.query)}`);
+  });
+
+  app.post("/device-management-optimized", async (request, reply) => {
+    const body = request.body as Record<string, unknown> | undefined;
+    const action = typeof body?.action === "string" ? body.action : "";
+
+    if (action === "cache_clear") {
+      void reply.code(200).send({ success: true, action: "cache_clear", message: "cache cleared", timestamp: new Date().toISOString() });
+      return;
+    }
+
+    if (action !== "health_check") {
+      void reply.code(400).send({ success: false, error: "unsupported action", timestamp: new Date().toISOString() });
+      return;
+    }
+
+    const devices = Array.isArray(body?.devices)
+      ? (body.devices as unknown[])
+          .filter((d): d is string => typeof d === "string" && d.trim().length > 0)
+          .map((d) => d.trim())
+      : [];
+
+    const headers = toHeaders(request);
+    const results = await Promise.all(
+      devices.map(async (deviceId) => {
+        try {
+          const res = (await app.inject({
+            method: "GET",
+            url: `/iot/devices/${encodeURIComponent(deviceId)}`,
+            headers
+          })) as unknown as InjectResult;
+          if (res.statusCode < 200 || res.statusCode >= 300) throw new Error(`status ${String(res.statusCode)}`);
+
+          const parsed = JSON.parse(res.body) as { success?: unknown; data?: unknown };
+          const data = parsed.success === true && parsed.data && typeof parsed.data === "object" ? (parsed.data as Record<string, unknown>) : null;
+          const onlineStatus = data?.online_status;
+          const lastSeen = typeof data?.last_data_time === "string" ? data.last_data_time : null;
+          const isOnline = onlineStatus === "online";
+
+          return {
+            device_id: deviceId,
+            status: isOnline ? "online" : "offline",
+            last_seen: lastSeen,
+            health_score: isOnline ? 85 : 0
+          };
+        } catch {
+          return { device_id: deviceId, status: "offline", last_seen: null, health_score: 0 };
+        }
+      })
+    );
+
+    void reply
+      .code(200)
+      .send({ success: true, action: "health_check", results, timestamp: new Date().toISOString() });
   });
 
   app.get("/device-management-real", async (request, reply) => {
@@ -88,4 +145,3 @@ export function registerLegacyCompatAliasRoutes(app: FastifyInstance): void {
     await proxyInject(app, request, reply, "PUT", "/monitoring-stations");
   });
 }
-
