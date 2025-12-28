@@ -77,7 +77,7 @@
 - `/ops/telemetry-dlq`：`apps/web/app/ops/telemetry-dlq/page.tsx`
 - `/ops/telemetry-dlq/{messageId}`：`apps/web/app/ops/telemetry-dlq/[messageId]/page.tsx`
 - `/system-monitor`：`apps/web/app/system-monitor/page.tsx`（兼容入口，最终建议统一到 `/ops/system-monitor`）
-- `/debug-api`：`apps/web/app/debug-api/page.tsx`（兼容入口，最终建议统一到 `/ops/debug-api`）
+- `/debug-api`：`apps/web/app/debug-api/page.tsx`（参考区同款调试页；另有运维版 `/ops/debug-api`）
 
 ## 4) 待确认/待补齐（需要参考区恢复后逐项验证）
 
