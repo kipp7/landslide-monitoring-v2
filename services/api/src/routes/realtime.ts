@@ -426,13 +426,20 @@ function registerSseHandler(
       return;
     }
 
-    if ((action === "broadcast_device_data" || action === "broadcast_anomaly") && (!deviceId || !uuidSchema.safeParse(deviceId).success)) {
-      if (opts.legacyResponse) {
-        void reply.code(400).send({ success: false, error: "invalid deviceId" });
-      } else {
-        fail(reply, 400, "鍙傛暟閿欒", traceId, { field: "deviceId" });
+    if (action === "broadcast_device_data" || action === "broadcast_anomaly") {
+      if (!deviceId) {
+        if (opts.legacyResponse) {
+          void reply.code(400).send({ success: false, error: "invalid deviceId" });
+        } else {
+          fail(reply, 400, "鍙傛暟閿欒", traceId, { field: "deviceId" });
+        }
+        return;
       }
-      return;
+
+      if (!opts.legacyResponse && !uuidSchema.safeParse(deviceId).success) {
+        fail(reply, 400, "鍙傛暟閿欒", traceId, { field: "deviceId" });
+        return;
+      }
     }
 
     if (action === "broadcast_device_data") {
