@@ -47,3 +47,9 @@ Body：
   - 不带参数：返回 `{devices,total,online}`
 - `POST /api/camera`（也支持 `POST /iot/api/camera`）
   - `action=add|update_status|test_connection`（参考区同名 action）
+- `PUT /api/camera`（也支持 `PUT /iot/api/camera`）
+  - body：`{ deviceId, ip?, name?, config? }`
+- `DELETE /api/camera?deviceId=...`（也支持 `DELETE /iot/api/camera?deviceId=...`）
+
+PostgreSQL 未配置时（`pg=null`）：
+- Legacy `/api/camera` 的 `GET/POST/PUT/DELETE` 会跳过鉴权（对齐参考区旧前端默认无鉴权的调用方式）。
