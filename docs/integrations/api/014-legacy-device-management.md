@@ -3,6 +3,7 @@
 说明：
 - 本文档记录参考区旧前端 `legacy-frontend/app/api/*` 的兼容端点（**不进入** `/api/v1` OpenAPI 契约）。
 - 兼容层默认受 RBAC 保护：`data:view`。
+- 当 PostgreSQL 未配置（`pg=null`）时，部分旧端点会返回 `200` 的 demo/fallback 数据并跳过鉴权（对齐参考区旧前端默认无鉴权的调用方式）。
 
 ## 1) 设备管理（分层）
 
@@ -27,3 +28,4 @@
 ## 4) 聚合接口
 
 - `POST /api/data-aggregation`：兼容旧的聚合入口（`hierarchy_stats` / `network_stats` / `device_summary` / `real_time_dashboard`），当前实现映射到 v2 的 Postgres/ClickHouse 数据源与 dashboard 计算逻辑
+- PostgreSQL 未配置（`pg=null`）时：`POST /api/data-aggregation` 返回 `200`，携带 `is_fallback: true` 与最小可用 demo 数据（默认 `device_1~3`）。
