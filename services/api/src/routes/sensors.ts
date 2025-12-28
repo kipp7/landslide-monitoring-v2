@@ -33,7 +33,7 @@ export function registerSensorRoutes(app: FastifyInstance, config: AppConfig, pg
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "device:view"))) return;
     if (!pg) {
-      fail(reply, 503, "PostgreSQL 未配置", traceId);
+      ok(reply, { list: [], warnings: [{ kind: "pg_missing", message: "PostgreSQL not configured" }], unavailable: true }, traceId);
       return;
     }
 
@@ -66,17 +66,17 @@ export function registerSensorRoutes(app: FastifyInstance, config: AppConfig, pg
   app.get("/devices/:deviceId/sensors", async (request, reply) => {
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "device:view"))) return;
-    if (!pg) {
-      fail(reply, 503, "PostgreSQL 未配置", traceId);
-      return;
-    }
-
     const parseId = deviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
     if (!parseId.success) {
       fail(reply, 400, "参数错误", traceId, { field: "deviceId" });
       return;
     }
     const deviceId = parseId.data;
+
+    if (!pg) {
+      ok(reply, { deviceId, list: [], warnings: [{ kind: "pg_missing", message: "PostgreSQL not configured" }], unavailable: true }, traceId);
+      return;
+    }
 
     const data = await withPgClient(pg, async (client) => {
       const exists = await queryOne<{ ok: boolean }>(client, "SELECT TRUE AS ok FROM devices WHERE device_id=$1", [
@@ -133,11 +133,6 @@ export function registerSensorRoutes(app: FastifyInstance, config: AppConfig, pg
   app.put("/devices/:deviceId/sensors", async (request, reply) => {
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "device:update"))) return;
-    if (!pg) {
-      fail(reply, 503, "PostgreSQL 未配置", traceId);
-      return;
-    }
-
     const parseId = deviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
     if (!parseId.success) {
       fail(reply, 400, "参数错误", traceId, { field: "deviceId" });
@@ -148,6 +143,21 @@ export function registerSensorRoutes(app: FastifyInstance, config: AppConfig, pg
     const parseBody = putDeviceSensorsSchema.safeParse(request.body);
     if (!parseBody.success) {
       fail(reply, 400, "参数错误", traceId, { field: "body", issues: parseBody.error.issues });
+      return;
+    }
+
+    if (!pg) {
+      ok(
+        reply,
+        {
+          deviceId,
+          sensors: [],
+          updatedAt: new Date().toISOString(),
+          warnings: [{ kind: "pg_missing", message: "PostgreSQL not configured" }],
+          unavailable: true
+        },
+        traceId
+      );
       return;
     }
 
