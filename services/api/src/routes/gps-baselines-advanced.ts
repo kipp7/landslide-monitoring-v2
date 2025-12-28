@@ -344,6 +344,8 @@ function respondError(reply: FastifyReply, statusCode: number, message: string, 
   fail(reply, statusCode, message, traceId);
 }
 
+const pgMissingWarnings = [{ kind: "pg_missing", message: "PostgreSQL 未配置" }] as const;
+
 async function handleAvailableDevices(
   request: FastifyRequest,
   reply: FastifyReply,
@@ -356,7 +358,22 @@ async function handleAvailableDevices(
   const traceId = request.traceId;
   if (!(await requirePermission(adminCfg, pg, request, reply, "device:view"))) return;
   if (!pg) {
-    respondError(reply, 503, "PostgreSQL 未配置", traceId, opts);
+    const parsed = availableDevicesQuerySchema.safeParse(request.query);
+    const lookbackDays = parsed.success ? parsed.data.lookbackDays : 30;
+    respond(
+      reply,
+      {
+        availableDevices: [],
+        totalGpsDevices: 0,
+        devicesWithBaseline: 0,
+        devicesNeedingBaseline: 0,
+        lookbackDays,
+        unavailable: true,
+        warnings: pgMissingWarnings
+      },
+      traceId,
+      opts
+    );
     return;
   }
 
