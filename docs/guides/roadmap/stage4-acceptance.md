@@ -32,4 +32,4 @@
 ## E. 退出条件（阶段完成判定）
 
 - [x] 本清单 A/B/C/D 均满足（允许少量“可选项”保留为下一阶段，但必须明确标记与说明理由）。
-- [ ] `docs/guides/roadmap/project-status.md` 更新：阶段 4 完成，并明确进入阶段 5 的下一步工作包。（仅在合并到 `main` 时更新）
+- [x] `docs/guides/roadmap/project-status.md` 更新：阶段 4 完成，并明确进入阶段 5 的下一步工作包。
