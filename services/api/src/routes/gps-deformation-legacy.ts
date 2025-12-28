@@ -496,11 +496,12 @@ export function registerGpsDeformationLegacyCompatRoutes(
     const baselineSource = hasBaseline ? "gps_baselines" : null;
 
     let points: GpsPoint[];
+    let clickhouseError: string | null = null;
     try {
       points = await fetchGpsTelemetryInRange(config, ch, resolved, start, end, limit);
     } catch (err) {
-      legacyFail(reply, 503, "ClickHouse query failed", err instanceof Error ? err.message : String(err));
-      return;
+      clickhouseError = err instanceof Error ? err.message : String(err);
+      points = [];
     }
 
     if (!baseline && points.length > 0) {
@@ -567,7 +568,9 @@ export function registerGpsDeformationLegacyCompatRoutes(
     const ceemd = computeCeemdLikeDecomposition(rows.map((r) => r.deformation_distance_3d), timesIso);
     const prediction = computePrediction(displacementMm, timesIso, { hasBaseline, qualityScore });
 
-    legacyOk(reply, {
+    legacyOk(
+      reply,
+      {
       deviceId: inputDeviceId,
       resolvedDeviceId: resolved,
       timeRange: { label, start: start.toISOString(), end: end.toISOString() },
@@ -576,6 +579,7 @@ export function registerGpsDeformationLegacyCompatRoutes(
       baselineSource: hasBaseline ? "gps_baselines" : points.length > 0 ? "first_point" : null,
       analysisTime: nowIso,
       processingTime: `${String(Date.now() - t0)}ms`,
+      ...(clickhouseError ? { fallback: { clickhouse: { status: "unhealthy", error: clickhouseError } } } : {}),
       realTimeDisplacement,
       dataQuality: {
         totalPoints: points.length,
@@ -605,7 +609,9 @@ export function registerGpsDeformationLegacyCompatRoutes(
         prediction
       },
       points: pointsWithRisk
-    });
+    },
+      clickhouseError ? "fallback" : "ok"
+    );
   };
 
   app.get("/gps-deformation/:deviceId", handler);
