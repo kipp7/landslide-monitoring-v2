@@ -47,17 +47,26 @@ export function registerGpsBaselineRoutes(app: FastifyInstance, config: AppConfi
   app.get("/gps/baselines", async (request, reply) => {
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "device:view"))) return;
-    if (!pg) {
-      fail(reply, 503, "PostgreSQL 未配置", traceId);
-      return;
-    }
-
     const parseQuery = listBaselinesQuerySchema.safeParse(request.query);
     if (!parseQuery.success) {
       fail(reply, 400, "参数错误", traceId, { field: "query", issues: parseQuery.error.issues });
       return;
     }
     const { page, pageSize, keyword } = parseQuery.data;
+
+    if (!pg) {
+      ok(
+        reply,
+        {
+          list: [],
+          pagination: { page, pageSize, total: 0, totalPages: 1 },
+          warnings: [{ kind: "pg_missing", message: "PostgreSQL not configured" }],
+          unavailable: true
+        },
+        traceId
+      );
+      return;
+    }
 
     const where: string[] = ["d.status != 'revoked'"];
     const params: unknown[] = [];
@@ -135,17 +144,21 @@ export function registerGpsBaselineRoutes(app: FastifyInstance, config: AppConfi
   app.get("/gps/baselines/:deviceId", async (request, reply) => {
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "device:view"))) return;
-    if (!pg) {
-      fail(reply, 503, "PostgreSQL 未配置", traceId);
-      return;
-    }
-
     const parseId = deviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
     if (!parseId.success) {
       fail(reply, 400, "参数错误", traceId, { field: "deviceId" });
       return;
     }
     const deviceId = parseId.data;
+
+    if (!pg) {
+      ok(
+        reply,
+        { deviceId, hasBaseline: false, baseline: null, warnings: [{ kind: "pg_missing", message: "PostgreSQL not configured" }], unavailable: true },
+        traceId
+      );
+      return;
+    }
 
     const row = await withPgClient(pg, async (client) =>
       queryOne<BaselineRow>(
@@ -192,11 +205,6 @@ export function registerGpsBaselineRoutes(app: FastifyInstance, config: AppConfi
   app.put("/gps/baselines/:deviceId", async (request, reply) => {
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "device:update"))) return;
-    if (!pg) {
-      fail(reply, 503, "PostgreSQL 未配置", traceId);
-      return;
-    }
-
     const parseId = deviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
     if (!parseId.success) {
       fail(reply, 400, "参数错误", traceId, { field: "deviceId" });
@@ -210,6 +218,15 @@ export function registerGpsBaselineRoutes(app: FastifyInstance, config: AppConfi
       return;
     }
     const body = parseBody.data;
+
+    if (!pg) {
+      ok(
+        reply,
+        { deviceId, saved: false, warnings: [{ kind: "pg_missing", message: "PostgreSQL not configured" }], unavailable: true },
+        traceId
+      );
+      return;
+    }
 
     const exists = await withPgClient(pg, async (client) =>
       queryOne<{ device_id: string }>(client, `SELECT device_id FROM devices WHERE device_id = $1 AND status != 'revoked'`, [
@@ -243,17 +260,21 @@ export function registerGpsBaselineRoutes(app: FastifyInstance, config: AppConfi
   app.delete("/gps/baselines/:deviceId", async (request, reply) => {
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "device:update"))) return;
-    if (!pg) {
-      fail(reply, 503, "PostgreSQL 未配置", traceId);
-      return;
-    }
-
     const parseId = deviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
     if (!parseId.success) {
       fail(reply, 400, "参数错误", traceId, { field: "deviceId" });
       return;
     }
     const deviceId = parseId.data;
+
+    if (!pg) {
+      ok(
+        reply,
+        { deviceId, deleted: false, warnings: [{ kind: "pg_missing", message: "PostgreSQL not configured" }], unavailable: true },
+        traceId
+      );
+      return;
+    }
 
     const row = await withPgClient(pg, async (client) =>
       queryOne<{ device_id: string }>(client, `DELETE FROM gps_baselines WHERE device_id = $1 RETURNING device_id`, [deviceId])
@@ -267,4 +288,3 @@ export function registerGpsBaselineRoutes(app: FastifyInstance, config: AppConfi
     ok(reply, { deviceId }, traceId);
   });
 }
-
