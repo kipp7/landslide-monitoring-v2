@@ -280,14 +280,17 @@ function registerSseHandler(
     const pollMs = q.poll_ms ?? 5000;
     const heartbeatMs = q.heartbeat_ms ?? 30000;
 
-    let deviceId: string | null = null;
+    let deviceIdUuid: string | null = null;
+    let deviceKey = deviceSelector;
     if (deviceSelector !== "all") {
       const parseId = uuidSchema.safeParse(deviceSelector);
-      if (!parseId.success) {
+      if (parseId.success) {
+        deviceIdUuid = parseId.data;
+        deviceKey = parseId.data;
+      } else if (!opts.legacyResponse) {
         fail(reply, 400, "鍙傛暟閿欒", traceId, { field: "deviceId" });
         return;
       }
-      deviceId = parseId.data;
     }
 
     reply.header("Content-Type", "text/event-stream; charset=utf-8");
@@ -302,7 +305,7 @@ function registerSseHandler(
     const clientId = newClientId();
     const meta: RealtimeClient = {
       clientId,
-      deviceId: deviceId ?? undefined,
+      deviceId: deviceSelector === "all" ? undefined : deviceKey,
       subscriptions: [deviceSelector],
       connectedAtMs: Date.now(),
       lastPingMs: Date.now(),
@@ -329,12 +332,12 @@ function registerSseHandler(
       traceId
     });
 
-    if (deviceId) {
+    if (deviceIdUuid) {
       try {
-        const state = await fetchDeviceState(config, ch, pg, deviceId);
+        const state = await fetchDeviceState(config, ch, pg, deviceIdUuid);
         meta.lastDeviceUpdatedAt = state.updatedAt;
-        latestData.set(deviceId, state);
-        writeSse(stream, { type: "initial_data", deviceId, data: state, timestamp: new Date().toISOString() });
+        latestData.set(deviceKey, state);
+        writeSse(stream, { type: "initial_data", deviceId: deviceKey, data: state, timestamp: new Date().toISOString() });
       } catch (err) {
         const status = typeof (err as { statusCode?: unknown }).statusCode === "number" ? (err as { statusCode: number }).statusCode : 500;
         if (opts.legacyResponse) {
@@ -343,6 +346,8 @@ function registerSseHandler(
           writeSse(stream, { type: "error", timestamp: new Date().toISOString(), message: "initial_data failed", status, traceId });
         }
       }
+    } else if (deviceSelector !== "all" && latestData.has(deviceKey)) {
+      writeSse(stream, { type: "initial_data", deviceId: deviceKey, data: latestData.get(deviceKey), timestamp: new Date().toISOString() });
     } else if (deviceSelector === "all" && latestData.has("all")) {
       writeSse(stream, { type: "initial_data", deviceId: "all", data: latestData.get("all"), timestamp: new Date().toISOString() });
     }
@@ -361,18 +366,18 @@ function registerSseHandler(
       }
     }, heartbeatMs);
 
-    const shouldPoll = deviceId !== null && pollMs > 0;
+    const shouldPoll = deviceIdUuid !== null && pollMs > 0;
     const poller = shouldPoll
       ? setInterval(async () => {
-          if (!deviceId) return;
+          if (!deviceIdUuid) return;
           try {
-            const state = await fetchDeviceState(config, ch, pg, deviceId);
+            const state = await fetchDeviceState(config, ch, pg, deviceIdUuid);
             if (meta.lastDeviceUpdatedAt && state.updatedAt <= meta.lastDeviceUpdatedAt) return;
             meta.lastDeviceUpdatedAt = state.updatedAt;
-            latestData.set(deviceId, state);
+            latestData.set(deviceKey, state);
             writeSse(stream, {
               type: "device_data",
-              deviceId,
+              deviceId: deviceKey,
               data: state,
               timestamp: new Date().toISOString(),
               sequence: Date.now()
