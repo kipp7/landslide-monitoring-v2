@@ -265,9 +265,21 @@ function registerSseHandler(
 ): void {
   const adminCfg: AdminAuthConfig = { adminApiToken: config.adminApiToken, jwtEnabled: Boolean(config.jwtAccessSecret) };
 
+  const applyCors = (reply: { header: (k: string, v: string) => void }): void => {
+    reply.header("Access-Control-Allow-Origin", "*");
+    reply.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+    reply.header("Access-Control-Allow-Headers", "Cache-Control, Content-Type, Authorization");
+  };
+
+  app.options(path, async (_request, reply) => {
+    if (opts.legacyResponse) applyCors(reply);
+    void reply.code(204).send();
+  });
+
   app.get(path, async (request, reply) => {
     const traceId = request.traceId;
-    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
+    if (opts.legacyResponse) applyCors(reply);
+    if (!(opts.legacyResponse && !pg) && !(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
 
     const parseQuery = getRealtimeQuerySchema.safeParse(request.query ?? {});
     if (!parseQuery.success) {
@@ -283,11 +295,11 @@ function registerSseHandler(
     let deviceId: string | null = null;
     if (deviceSelector !== "all") {
       const parseId = uuidSchema.safeParse(deviceSelector);
-      if (!parseId.success) {
+      if (!parseId.success && !opts.legacyResponse) {
         fail(reply, 400, "鍙傛暟閿欒", traceId, { field: "deviceId" });
         return;
       }
-      deviceId = parseId.data;
+      if (parseId.success) deviceId = parseId.data;
     }
 
     reply.header("Content-Type", "text/event-stream; charset=utf-8");
@@ -302,7 +314,7 @@ function registerSseHandler(
     const clientId = newClientId();
     const meta: RealtimeClient = {
       clientId,
-      deviceId: deviceId ?? undefined,
+      deviceId: deviceSelector !== "all" ? deviceSelector : undefined,
       subscriptions: [deviceSelector],
       connectedAtMs: Date.now(),
       lastPingMs: Date.now(),
@@ -329,7 +341,14 @@ function registerSseHandler(
       traceId
     });
 
-    if (deviceId) {
+    if (deviceSelector !== "all" && latestData.has(deviceSelector)) {
+      writeSse(stream, {
+        type: "initial_data",
+        deviceId: deviceSelector,
+        data: latestData.get(deviceSelector),
+        timestamp: new Date().toISOString()
+      });
+    } else if (deviceId) {
       try {
         const state = await fetchDeviceState(config, ch, pg, deviceId);
         meta.lastDeviceUpdatedAt = state.updatedAt;
@@ -395,7 +414,8 @@ function registerSseHandler(
 
   app.post(path, async (request, reply) => {
     const traceId = request.traceId;
-    if (!(await requirePermission(adminCfg, pg, request, reply, "system:config"))) return;
+    if (opts.legacyResponse) applyCors(reply);
+    if (!(opts.legacyResponse && !pg) && !(await requirePermission(adminCfg, pg, request, reply, "system:config"))) return;
 
     const parseBody = postRealtimeBodySchema.safeParse(request.body);
     if (!parseBody.success) {

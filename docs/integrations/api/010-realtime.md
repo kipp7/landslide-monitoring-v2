@@ -51,3 +51,12 @@ Body：
 为对齐参考区旧前端调用，API service 额外提供：
 - `GET /api/realtime-stream`（SSE）
 - `POST /api/realtime-stream`（广播/统计）
+
+Legacy Query：
+- `device_id` 支持 `all`、`device_1~device_3`（参考区格式）或设备 UUID；当为非 UUID 时仅按订阅推送缓存/广播数据，不做数据库快照轮询。
+
+Legacy CORS：
+- 响应包含 `Access-Control-Allow-Origin: *` 等头，便于旧前端直接跨域订阅。
+
+PostgreSQL 未配置时（`pg=null`）：
+- Legacy `/api/realtime-stream` 跳过鉴权（对齐参考区旧前端默认无鉴权的调用方式）。
