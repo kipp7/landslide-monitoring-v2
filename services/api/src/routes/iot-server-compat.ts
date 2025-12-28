@@ -72,31 +72,79 @@ function replyFromInject(reply: FastifyReply, injected: InjectResult): void {
   void reply.send(injected.payload);
 }
 
+function iotFallbackDeviceById(deviceId: string, nowIso: string): Record<string, unknown> | null {
+  if (deviceId === "device_1") {
+    return {
+      simple_id: "device_1",
+      actual_device_id: "hangbishan_device_001",
+      device_name: "挂傍山中心监测站",
+      location_name: "玉林师范学院东校区挂傍山中心点",
+      device_type: "rk2206",
+      latitude: 22.6847,
+      longitude: 110.1893,
+      status: "active",
+      description: "挂傍山核心监测区域的主要传感器节点",
+      install_date: "2024-05-15T00:00:00Z",
+      last_data_time: nowIso,
+      online_status: "online",
+      sensor_types: ["temperature", "humidity", "acceleration", "illumination", "gps"],
+      risk_level: "medium"
+    };
+  }
+
+  if (deviceId === "device_2") {
+    return {
+      simple_id: "device_2",
+      actual_device_id: "hangbishan_device_002",
+      device_name: "坡顶监测站",
+      location_name: "玉林师范学院东校区挂傍山坡顶",
+      device_type: "rk2206",
+      latitude: 22.685,
+      longitude: 110.189,
+      status: "active",
+      description: "挂傍山坡顶位置的监测设备",
+      install_date: "2024-05-15T00:00:00Z",
+      last_data_time: nowIso,
+      online_status: "online",
+      sensor_types: ["temperature", "humidity", "gyroscope", "vibration", "gps"],
+      risk_level: "high"
+    };
+  }
+
+  if (deviceId === "device_3") {
+    return {
+      simple_id: "device_3",
+      actual_device_id: "hangbishan_device_003",
+      device_name: "坡脚监测站",
+      location_name: "玉林师范学院东校区挂傍山坡脚",
+      device_type: "rk2206",
+      latitude: 22.6844,
+      longitude: 110.1896,
+      status: "active",
+      description: "挂傍山坡脚位置的监测设备",
+      install_date: "2024-05-15T00:00:00Z",
+      last_data_time: nowIso,
+      online_status: "online",
+      sensor_types: ["temperature", "acceleration", "illumination", "gps", "vibration"],
+      risk_level: "low"
+    };
+  }
+
+  return null;
+}
+
 function iotDeviceFallback(opts: { deviceId: string; upstreamStatus: number; message: string }) {
-  const now = new Date().toISOString();
+  const nowIso = new Date().toISOString();
+  const data = iotFallbackDeviceById(opts.deviceId, nowIso);
+  if (!data) return null;
   return {
     success: true as const,
-    data: {
-      simple_id: opts.deviceId,
-      actual_device_id: null,
-      device_name: opts.deviceId,
-      location_name: "",
-      device_type: "unknown",
-      latitude: null,
-      longitude: null,
-      status: "inactive",
-      description: "",
-      install_date: now,
-      last_data_time: now,
-      online_status: "offline" as const,
-      sensor_types: [] as string[],
-      risk_level: "medium"
-    },
+    data,
     count: 1,
     message: opts.message,
     is_fallback: true as const,
     upstream_status: opts.upstreamStatus,
-    timestamp: now
+    timestamp: nowIso
   };
 }
 
@@ -194,13 +242,17 @@ export function registerIotServerCompatRoutes(
         return;
       }
 
-      void reply.code(200).send(
-        iotDeviceFallback({
-          deviceId,
-          upstreamStatus: res.statusCode,
-          message: "使用fallback数据（上游 /api/iot/devices/:deviceId 不可用）"
-        })
-      );
+      const fallback = iotDeviceFallback({
+        deviceId,
+        upstreamStatus: res.statusCode,
+        message: "使用fallback数据（后端服务不可用）"
+      });
+      if (!fallback) {
+        void reply.code(404).send({ success: false, error: "设备不存在或服务不可用" });
+        return;
+      }
+
+      void reply.code(200).send(fallback);
       return;
     }
 
@@ -268,13 +320,25 @@ export function registerIotServerCompatRoutes(
     });
 
     if (res.statusCode != 200 || !parsed || typeof parsed !== "object") {
-      void reply.code(200).send(
-        iotDeviceFallback({
-          deviceId: simpleId,
-          upstreamStatus: res.statusCode,
-          message: "使用fallback数据（上游 /api/iot/devices/mappings 不可用）"
-        })
-      );
+      if (simpleId === "device_1") {
+        void reply.code(200).send({
+          success: true,
+          data: {
+            simple_id: "device_1",
+            actual_device_id: "6815a14f9314d118511807c6_rk2206",
+            device_name: "龙门滑坡监测站",
+            location: {
+              location_name: "防城港华石镇龙门村",
+              latitude: 21.6847,
+              longitude: 108.3516,
+              device_type: "rk2206"
+            }
+          }
+        });
+        return;
+      }
+
+      void reply.code(404).send({ success: false, error: "设备不存在" });
       return;
     }
 
