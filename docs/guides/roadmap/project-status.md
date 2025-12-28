@@ -14,6 +14,7 @@
 - 2025-12-28：Stage5Regression：单机回归已跑通（固件模拟器 + `ping`/`set_config`/`reboot` 命令闭环）。
 - 2025-12-28：PR #289，Web：`/debug-api` 恢复参考区同款调试页（不再重定向到 `/ops/debug-api`）。
 - 2025-12-28：PR #294，API：camera legacy compat 补齐 `PUT/DELETE /api/camera`（含 `/iot/api/camera`），并更新 `docs/integrations/api/011-camera.md`。
+- 2025-12-28：PR #300，Web：补齐参考区 `apps/web/.env.example` 示例配置文件（对齐旧项目文件存在性；文件在 `apps/web/.gitignore` 中被 `.env*` 忽略，因此以 force add 纳入版本控制）。
 - 2025-12-28：PR #283，WS-K.33：monitoring-stations 图表配置兼容（legacy `/api/monitoring-stations?chartType=...` 返回 `{chartType,title,unit,yAxisName,deviceLegends}`），并补齐 `/api/monitoring-stations/chart-config` 路由代理。
 - 2025-12-27：PR #288，Web：HoverSidebar 默认选中项行为对齐参考区（`defaultSelectedKeys`）。
 - 2025-12-27：PR #287，Web：补齐 Next API proxy 路由：`/api/monitoring-stations/chart-config` + `/api/monitoring-stations/chart-legends`（匹配参考区文档与 v2 legacy compat 端点）。
