@@ -144,6 +144,19 @@ if (-not (Test-Path $EnvFile)) {
 
 $envs = Read-EnvFile $EnvFile
 
+function Get-ComposeServiceEnv([string]$service, [string]$var) {
+  try {
+    $cmd = 'printf "%s" "$' + $var + '"'
+    $val = docker compose -f $ComposeFile --env-file $EnvFile exec -T $service sh -lc $cmd 2>$null
+    if ($LASTEXITCODE -ne 0) { return $null }
+    $t = ($val | Out-String).Trim()
+    if (-not $t) { return $null }
+    return $t
+  } catch {
+    return $null
+  }
+}
+
 $mqttUrl = if ($envs.ContainsKey("MQTT_URL")) { Resolve-EnvTemplate $envs["MQTT_URL"] $envs } else { "mqtt://localhost:1883" }
 $kafkaBrokers = if ($envs.ContainsKey("KAFKA_BROKERS")) { $envs["KAFKA_BROKERS"] } else { "localhost:9094" }
 $chUrl = if ($envs.ContainsKey("CH_HTTP_URL")) { Resolve-EnvTemplate $envs["CH_HTTP_URL"] $envs } else { "http://localhost:8123" }
@@ -156,6 +169,21 @@ $pgPort = if ($envs.ContainsKey("PG_PORT")) { $envs["PG_PORT"] } else { "5432" }
 $pgUser = if ($envs.ContainsKey("PG_USER")) { $envs["PG_USER"] } else { "landslide" }
 $pgPassword = if ($envs.ContainsKey("PG_PASSWORD")) { $envs["PG_PASSWORD"] } else { "" }
 $pgDb = if ($envs.ContainsKey("PG_DATABASE")) { $envs["PG_DATABASE"] } else { "landslide_monitor" }
+
+# If infra containers are already running, prefer their actual runtime credentials to avoid auth mismatch.
+$runtimePgUser = Get-ComposeServiceEnv "postgres" "POSTGRES_USER"
+$runtimePgPassword = Get-ComposeServiceEnv "postgres" "POSTGRES_PASSWORD"
+$runtimePgDb = Get-ComposeServiceEnv "postgres" "POSTGRES_DB"
+if ($runtimePgUser) { $pgUser = $runtimePgUser }
+if ($runtimePgPassword) { $pgPassword = $runtimePgPassword }
+if ($runtimePgDb) { $pgDb = $runtimePgDb }
+
+$runtimeChUser = Get-ComposeServiceEnv "clickhouse" "CLICKHOUSE_USER"
+$runtimeChPassword = Get-ComposeServiceEnv "clickhouse" "CLICKHOUSE_PASSWORD"
+$runtimeChDb = Get-ComposeServiceEnv "clickhouse" "CLICKHOUSE_DB"
+if ($runtimeChUser) { $chUser = $runtimeChUser }
+if ($runtimeChPassword) { $chPassword = $runtimeChPassword }
+if ($runtimeChDb) { $chDb = $runtimeChDb }
 
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $logDir = "backups/evidence/e2e-smoke-$timestamp"
