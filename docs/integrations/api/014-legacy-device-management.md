@@ -13,6 +13,9 @@
 - `GET /api/iot/devices/mappings`：返回设备映射列表（v2 中映射到 devices/stations）
 - `GET /api/iot/devices/{deviceId}`：返回单设备映射详情（支持 UUID / device_name / legacy id）
 
+说明：
+- 当 PostgreSQL 未配置时，这两个端点会返回参考区风格的 fallback 数据（`device_1~device_3`），用于保证旧页面/调试页在“纯前端/无数据库”的环境也能启动。
+
 ## 3) 监测站信息
 
 - `GET /api/monitoring-stations`：返回监测站（设备）列表；会从 `devices.metadata` 回填 `station_name`/`location_name`/`risk_level`/`sensor_types`/`chart_legend_name`/`status` 等字段；支持 `chartType` 参数返回图表配置（含 `deviceLegends`；与 `GET /api/monitoring-stations/chart-config` 对齐）
