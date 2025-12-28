@@ -267,7 +267,7 @@ function registerSseHandler(
 
   app.get(path, async (request, reply) => {
     const traceId = request.traceId;
-    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
+    if (!(opts.legacyResponse && !pg) && !(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
 
     const parseQuery = getRealtimeQuerySchema.safeParse(request.query ?? {});
     if (!parseQuery.success) {
@@ -280,14 +280,14 @@ function registerSseHandler(
     const pollMs = q.poll_ms ?? 5000;
     const heartbeatMs = q.heartbeat_ms ?? 30000;
 
-    let deviceId: string | null = null;
+    let deviceIdUuid: string | null = null;
     if (deviceSelector !== "all") {
       const parseId = uuidSchema.safeParse(deviceSelector);
-      if (!parseId.success) {
+      if (!parseId.success && !opts.legacyResponse) {
         fail(reply, 400, "鍙傛暟閿欒", traceId, { field: "deviceId" });
         return;
       }
-      deviceId = parseId.data;
+      if (parseId.success) deviceIdUuid = parseId.data;
     }
 
     reply.header("Content-Type", "text/event-stream; charset=utf-8");
@@ -302,7 +302,7 @@ function registerSseHandler(
     const clientId = newClientId();
     const meta: RealtimeClient = {
       clientId,
-      deviceId: deviceId ?? undefined,
+      deviceId: deviceSelector !== "all" ? deviceSelector : undefined,
       subscriptions: [deviceSelector],
       connectedAtMs: Date.now(),
       lastPingMs: Date.now(),
@@ -329,12 +329,12 @@ function registerSseHandler(
       traceId
     });
 
-    if (deviceId) {
+    if (deviceIdUuid) {
       try {
-        const state = await fetchDeviceState(config, ch, pg, deviceId);
+        const state = await fetchDeviceState(config, ch, pg, deviceIdUuid);
         meta.lastDeviceUpdatedAt = state.updatedAt;
-        latestData.set(deviceId, state);
-        writeSse(stream, { type: "initial_data", deviceId, data: state, timestamp: new Date().toISOString() });
+        latestData.set(deviceIdUuid, state);
+        writeSse(stream, { type: "initial_data", deviceId: deviceIdUuid, data: state, timestamp: new Date().toISOString() });
       } catch (err) {
         const status = typeof (err as { statusCode?: unknown }).statusCode === "number" ? (err as { statusCode: number }).statusCode : 500;
         if (opts.legacyResponse) {
@@ -343,6 +343,13 @@ function registerSseHandler(
           writeSse(stream, { type: "error", timestamp: new Date().toISOString(), message: "initial_data failed", status, traceId });
         }
       }
+    } else if (deviceSelector !== "all" && latestData.has(deviceSelector)) {
+      writeSse(stream, {
+        type: "initial_data",
+        deviceId: deviceSelector,
+        data: latestData.get(deviceSelector),
+        timestamp: new Date().toISOString()
+      });
     } else if (deviceSelector === "all" && latestData.has("all")) {
       writeSse(stream, { type: "initial_data", deviceId: "all", data: latestData.get("all"), timestamp: new Date().toISOString() });
     }
@@ -361,18 +368,18 @@ function registerSseHandler(
       }
     }, heartbeatMs);
 
-    const shouldPoll = deviceId !== null && pollMs > 0;
+    const shouldPoll = deviceIdUuid !== null && pollMs > 0;
     const poller = shouldPoll
       ? setInterval(async () => {
-          if (!deviceId) return;
+          if (!deviceIdUuid) return;
           try {
-            const state = await fetchDeviceState(config, ch, pg, deviceId);
+            const state = await fetchDeviceState(config, ch, pg, deviceIdUuid);
             if (meta.lastDeviceUpdatedAt && state.updatedAt <= meta.lastDeviceUpdatedAt) return;
             meta.lastDeviceUpdatedAt = state.updatedAt;
-            latestData.set(deviceId, state);
+            latestData.set(deviceIdUuid, state);
             writeSse(stream, {
               type: "device_data",
-              deviceId,
+              deviceId: deviceIdUuid,
               data: state,
               timestamp: new Date().toISOString(),
               sequence: Date.now()
@@ -395,6 +402,10 @@ function registerSseHandler(
 
   app.post(path, async (request, reply) => {
     const traceId = request.traceId;
+    if (!pg && opts.legacyResponse) {
+      void reply.code(200).send({ success: false, disabled: true, message: "PostgreSQL not configured" });
+      return;
+    }
     if (!(await requirePermission(adminCfg, pg, request, reply, "system:config"))) return;
 
     const parseBody = postRealtimeBodySchema.safeParse(request.body);
@@ -426,7 +437,10 @@ function registerSseHandler(
       return;
     }
 
-    if ((action === "broadcast_device_data" || action === "broadcast_anomaly") && (!deviceId || !uuidSchema.safeParse(deviceId).success)) {
+    if (
+      (action === "broadcast_device_data" || action === "broadcast_anomaly") &&
+      (!deviceId || (!opts.legacyResponse && !uuidSchema.safeParse(deviceId).success))
+    ) {
       if (opts.legacyResponse) {
         void reply.code(400).send({ success: false, error: "invalid deviceId" });
       } else {

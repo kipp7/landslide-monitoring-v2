@@ -51,3 +51,7 @@ Body：
 为对齐参考区旧前端调用，API service 额外提供：
 - `GET /api/realtime-stream`（SSE）
 - `POST /api/realtime-stream`（广播/统计）
+
+说明：
+- 当 PostgreSQL 未配置或不可用时，`GET /api/realtime-stream` 仍允许建立 SSE 连接（不要求 RBAC），并持续发送 `heartbeat`；若 `device_id` 不是 UUID，则仅作为订阅 key 使用（不会触发快照轮询）。
+- 当 PostgreSQL 未配置或不可用时，`POST /api/realtime-stream` 返回 200 disabled payload（避免 legacy UI/调试页出现 401/503）。
