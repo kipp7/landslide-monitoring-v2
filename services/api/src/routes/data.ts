@@ -407,18 +407,29 @@ export function registerDataRoutes(
         return;
       }
       deviceIds = [deviceId];
-    } else {
-      if (!stationId) {
-        fail(reply, 400, "参数错误", traceId, { field: "stationId" });
-        return;
-      }
-      if (!pg) {
-        fail(reply, 503, "PostgreSQL 未配置", traceId);
-        return;
-      }
-      const rows = await withPgClient(pg, async (client) => {
-        const res = await client.query<{ device_id: string }>("SELECT device_id FROM devices WHERE station_id=$1", [
-          stationId
+      } else {
+        if (!stationId) {
+          fail(reply, 400, "参数错误", traceId, { field: "stationId" });
+          return;
+        }
+        if (!pg) {
+          ok(
+            reply,
+            {
+              scope,
+              sensorKey,
+              interval,
+              buckets: [],
+              warnings: [{ kind: "pg_missing", message: "PostgreSQL not configured" }],
+              unavailable: true
+            },
+            traceId
+          );
+          return;
+        }
+        const rows = await withPgClient(pg, async (client) => {
+          const res = await client.query<{ device_id: string }>("SELECT device_id FROM devices WHERE station_id=$1", [
+            stationId
         ]);
         return res.rows;
       });
@@ -504,18 +515,28 @@ export function registerDataRoutes(
         return;
       }
       deviceIds = [deviceId];
-    } else {
-      if (!stationId) {
-        fail(reply, 400, "参数错误", traceId, { field: "stationId" });
-        return;
-      }
-      if (!pg) {
-        fail(reply, 503, "PostgreSQL 未配置", traceId);
-        return;
-      }
-      const rows = await withPgClient(pg, async (client) => {
-        const res = await client.query<{ device_id: string }>("SELECT device_id FROM devices WHERE station_id=$1", [
-          stationId
+      } else {
+        if (!stationId) {
+          fail(reply, 400, "参数错误", traceId, { field: "stationId" });
+          return;
+        }
+        if (!pg) {
+          ok(
+            reply,
+            {
+              format,
+              rows: 0,
+              data: format === "csv" ? "" : [],
+              warnings: [{ kind: "pg_missing", message: "PostgreSQL not configured" }],
+              unavailable: true
+            },
+            traceId
+          );
+          return;
+        }
+        const rows = await withPgClient(pg, async (client) => {
+          const res = await client.query<{ device_id: string }>("SELECT device_id FROM devices WHERE station_id=$1", [
+            stationId
         ]);
         return res.rows;
       });
