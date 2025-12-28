@@ -194,7 +194,7 @@ export function registerIotServerCompatRoutes(
       void reply.code(200).send(
         iotMappingsFallback({
           upstreamStatus: res.statusCode,
-          message: "使用 fallback 数据（上游 /api/iot/devices/mappings 不可用）"
+          message: "使用fallback数据（后端服务不可用）"
         })
       );
       return;
@@ -263,7 +263,7 @@ export function registerIotServerCompatRoutes(
         success: true,
         data,
         count: data.length,
-        message: "使用 fallback 数据（上游 /api/iot/devices/mappings 不可用）",
+        message: "使用fallback数据（后端服务不可用）",
         is_fallback: true,
         upstream_status: res.statusCode,
         timestamp: nowIso
