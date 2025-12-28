@@ -43,12 +43,13 @@ type RoleRow = { role_id: string; role_name: string; display_name: string; descr
 
 export function registerUserRoutes(app: FastifyInstance, config: AppConfig, pg: PgPool | null): void {
   const adminCfg: AdminAuthConfig = { adminApiToken: config.adminApiToken, jwtEnabled: Boolean(config.jwtAccessSecret) };
+  const pgMissingWarnings = [{ kind: "pg_missing", message: "PostgreSQL 未配置" }] as const;
 
   app.get("/roles", async (request, reply) => {
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "user:view"))) return;
     if (!pg) {
-      fail(reply, 503, "PostgreSQL 未配置", traceId);
+      ok(reply, { list: [], unavailable: true, warnings: pgMissingWarnings }, traceId);
       return;
     }
     const rows = await withPgClient(pg, async (client) => {
@@ -75,7 +76,7 @@ export function registerUserRoutes(app: FastifyInstance, config: AppConfig, pg: 
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "user:view"))) return;
     if (!pg) {
-      fail(reply, 503, "PostgreSQL 未配置", traceId);
+      ok(reply, { list: [], unavailable: true, warnings: pgMissingWarnings }, traceId);
       return;
     }
     const rows = await withPgClient(pg, async (client) => {
@@ -96,10 +97,6 @@ export function registerUserRoutes(app: FastifyInstance, config: AppConfig, pg: 
   app.get("/users", async (request, reply) => {
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "user:view"))) return;
-    if (!pg) {
-      fail(reply, 503, "PostgreSQL 未配置", traceId);
-      return;
-    }
 
     const parseQuery = listUsersQuerySchema.safeParse(request.query);
     if (!parseQuery.success) {
@@ -109,6 +106,15 @@ export function registerUserRoutes(app: FastifyInstance, config: AppConfig, pg: 
 
     const { page, pageSize, keyword, status, roleId } = parseQuery.data;
     const offset = (page - 1) * pageSize;
+
+    if (!pg) {
+      ok(
+        reply,
+        { list: [], pagination: { page, pageSize, total: 0 }, unavailable: true, warnings: pgMissingWarnings },
+        traceId
+      );
+      return;
+    }
 
     const where: string[] = ["u.deleted_at IS NULL"];
     const params: unknown[] = [];
