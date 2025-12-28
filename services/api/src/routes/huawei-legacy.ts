@@ -4,7 +4,6 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 import type { AppConfig } from "../config";
 import { requirePermission, type AdminAuthConfig } from "../authz";
-import { fail } from "../http";
 import type { KafkaPublisher } from "../kafka";
 import { createKafkaPublisher } from "../kafka";
 import { enqueueOperationLog } from "../operation-log";
@@ -36,6 +35,92 @@ function legacyFail(
 
 const legacyDeviceIdSchema = z.string().min(1).max(200);
 const uuidSchema = z.string().uuid();
+
+function disabledCommandId(prefix: string): string {
+  return `${prefix}${String(Date.now())}`;
+}
+
+function replyHuaweiConfigDisabled(reply: FastifyReply): void {
+  void reply.code(200).send({
+    success: false,
+    disabled: true,
+    message: "华为云IoT配置功能已禁用",
+    data: { isValid: false, disabled: true, config: {} }
+  });
+}
+
+function replyHuaweiShadowDisabled(reply: FastifyReply, deviceId: string): void {
+  void reply.code(200).send({
+    success: false,
+    disabled: true,
+    message: "华为云设备影子功能已禁用",
+    device_id: deviceId,
+    data: { shadow: [], disabled: true }
+  });
+}
+
+function replyHuaweiCommandTemplatesDisabled(reply: FastifyReply): void {
+  void reply.code(200).send({
+    success: false,
+    disabled: true,
+    message: "华为云命令模板功能已禁用",
+    data: []
+  });
+}
+
+function replyHuaweiCommandsDisabled(reply: FastifyReply, deviceId: string, commandData: unknown): void {
+  void reply.code(200).send({
+    success: false,
+    disabled: true,
+    message: "华为云命令下发功能已禁用",
+    device_id: deviceId,
+    command_data: commandData ?? null,
+    result: { command_id: disabledCommandId("disabled-"), status: "disabled" }
+  });
+}
+
+function replyHuaweiLedDisabled(reply: FastifyReply, deviceId: string, action: unknown): void {
+  void reply.code(200).send({
+    success: false,
+    disabled: true,
+    message: "LED控制功能已禁用",
+    device_id: deviceId,
+    action: action ?? null,
+    result: { command_id: disabledCommandId("disabled-led-"), status: "disabled" }
+  });
+}
+
+function replyHuaweiMotorDisabled(reply: FastifyReply, deviceId: string, parameters: unknown): void {
+  void reply.code(200).send({
+    success: false,
+    disabled: true,
+    message: "电机控制功能已禁用",
+    device_id: deviceId,
+    parameters: parameters ?? null,
+    result: { command_id: disabledCommandId("disabled-motor-"), status: "disabled" }
+  });
+}
+
+function replyHuaweiBuzzerDisabled(reply: FastifyReply, deviceId: string, parameters: unknown): void {
+  void reply.code(200).send({
+    success: false,
+    disabled: true,
+    message: "蜂鸣器控制功能已禁用",
+    device_id: deviceId,
+    parameters: parameters ?? null,
+    result: { command_id: disabledCommandId("disabled-buzzer-"), status: "disabled" }
+  });
+}
+
+function replyHuaweiRebootDisabled(reply: FastifyReply, deviceId: string): void {
+  void reply.code(200).send({
+    success: false,
+    disabled: true,
+    message: "系统重启功能已禁用",
+    device_id: deviceId,
+    result: { command_id: disabledCommandId("disabled-reboot-"), status: "disabled" }
+  });
+}
 
 async function resolveDeviceUuid(pg: PgPool | null, inputDeviceId: string): Promise<string | null> {
   const trimmed = inputDeviceId.trim();
@@ -249,18 +334,20 @@ export function registerHuaweiLegacyCompatRoutes(
 
   app.get("/huawei/config", async (request, reply) => {
     const traceId = request.traceId;
+    if (!pg || !kafkaPublisher) {
+      replyHuaweiConfigDisabled(reply);
+      return;
+    }
     if (!(await requirePermission(adminCfg, pg, request, reply, "system:config"))) return;
 
-    const enabled = Boolean(pg) && Boolean(kafkaPublisher);
+    const enabled = true;
     legacyOk(reply, {
       data: {
         enabled,
         mode: "v2-compat",
         telemetryEndpoint: "/iot/huawei (legacy) /iot/huawei/telemetry (v2)",
         commandEndpoint: "/huawei/devices/:deviceId/* (legacy) -> /api/v1/devices/:deviceId/commands (v2)",
-        note: enabled
-          ? "Commands are mapped to v2 device_commands + Kafka pipeline."
-          : "Disabled: requires PostgreSQL + Kafka in api-service."
+        note: "Commands are mapped to v2 device_commands + Kafka pipeline."
       },
       traceId
     });
@@ -268,12 +355,11 @@ export function registerHuaweiLegacyCompatRoutes(
 
   app.get("/huawei/command-templates", async (request, reply) => {
     const traceId = request.traceId;
-    if (!(await requirePermission(adminCfg, pg, request, reply, "device:control"))) return;
-
     if (!pg || !kafkaPublisher) {
-      legacyFail(reply, 503, { error: "disabled", message: "device command pipeline not configured", disabled: true });
+      replyHuaweiCommandTemplatesDisabled(reply);
       return;
     }
+    if (!(await requirePermission(adminCfg, pg, request, reply, "device:control"))) return;
 
     legacyOk(reply, {
       data: [
@@ -319,14 +405,18 @@ export function registerHuaweiLegacyCompatRoutes(
 
   app.get("/huawei/devices/:deviceId/shadow", async (request, reply) => {
     const traceId = request.traceId;
-    if (!(await requirePermission(adminCfg, pg, request, reply, "device:view"))) return;
-
     const parseId = legacyDeviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
     if (!parseId.success) {
       legacyFail(reply, 400, { error: "invalid deviceId" });
       return;
     }
     const legacyDeviceId = parseId.data;
+
+    if (!pg) {
+      replyHuaweiShadowDisabled(reply, legacyDeviceId);
+      return;
+    }
+    if (!(await requirePermission(adminCfg, pg, request, reply, "device:view"))) return;
 
     const resolved = await resolveDeviceUuid(pg, legacyDeviceId);
     if (!resolved) {
@@ -348,20 +438,18 @@ export function registerHuaweiLegacyCompatRoutes(
   });
 
   app.post("/huawei/devices/:deviceId/commands", async (request, reply) => {
-    const traceId = request.traceId;
-    if (!(await requirePermission(adminCfg, pg, request, reply, "device:control"))) return;
-
-    if (!pg) {
-      fail(reply, 503, "PostgreSQL not configured", traceId);
-      return;
-    }
-
     const parseId = legacyDeviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
     if (!parseId.success) {
       legacyFail(reply, 400, { error: "invalid deviceId" });
       return;
     }
     const legacyDeviceId = parseId.data;
+
+    if (!pg || !kafkaPublisher) {
+      replyHuaweiCommandsDisabled(reply, legacyDeviceId, request.body ?? null);
+      return;
+    }
+    if (!(await requirePermission(adminCfg, pg, request, reply, "device:control"))) return;
 
     const resolved = await resolveDeviceUuid(pg, legacyDeviceId);
     if (!resolved) {
@@ -381,10 +469,6 @@ export function registerHuaweiLegacyCompatRoutes(
     const payload = { legacy: true, endpoint: "commands", raw } as Record<string, unknown>;
 
     try {
-      if (!kafkaPublisher) {
-        legacyFail(reply, 503, { error: "disabled", message: "kafka not configured", disabled: true });
-        return;
-      }
       const issued = await issueDeviceCommand(pg, kafkaPublisher, resolved, commandType, payload);
       enqueueOperationLog(pg, request, {
         module: "device",
@@ -411,19 +495,19 @@ export function registerHuaweiLegacyCompatRoutes(
   });
 
   app.post("/huawei/devices/:deviceId/led", async (request, reply) => {
-    const traceId = request.traceId;
-    if (!(await requirePermission(adminCfg, pg, request, reply, "device:control"))) return;
-    if (!pg) {
-      fail(reply, 503, "PostgreSQL not configured", traceId);
-      return;
-    }
-
     const parseId = legacyDeviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
     if (!parseId.success) {
       legacyFail(reply, 400, { error: "invalid deviceId" });
       return;
     }
     const legacyDeviceId = parseId.data;
+
+    if (!pg || !kafkaPublisher) {
+      const action = (request.body && typeof request.body === "object" ? (request.body as Record<string, unknown>).action : null) ?? null;
+      replyHuaweiLedDisabled(reply, legacyDeviceId, action);
+      return;
+    }
+    if (!(await requirePermission(adminCfg, pg, request, reply, "device:control"))) return;
 
     const resolved = await resolveDeviceUuid(pg, legacyDeviceId);
     if (!resolved) {
@@ -439,10 +523,6 @@ export function registerHuaweiLegacyCompatRoutes(
 
     try {
       const payload = { legacy: true, ...parseBody.data } as Record<string, unknown>;
-      if (!kafkaPublisher) {
-        legacyFail(reply, 503, { error: "disabled", message: "kafka not configured", disabled: true });
-        return;
-      }
       const issued = await issueDeviceCommand(pg, kafkaPublisher, resolved, "huawei:led", payload);
       enqueueOperationLog(pg, request, {
         module: "device",
@@ -460,19 +540,25 @@ export function registerHuaweiLegacyCompatRoutes(
   });
 
   app.post("/huawei/devices/:deviceId/motor", async (request, reply) => {
-    const traceId = request.traceId;
-    if (!(await requirePermission(adminCfg, pg, request, reply, "device:control"))) return;
-    if (!pg) {
-      fail(reply, 503, "PostgreSQL not configured", traceId);
-      return;
-    }
-
     const parseId = legacyDeviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
     if (!parseId.success) {
       legacyFail(reply, 400, { error: "invalid deviceId" });
       return;
     }
     const legacyDeviceId = parseId.data;
+
+    if (!pg || !kafkaPublisher) {
+      const rawBody = request.body && typeof request.body === "object" ? (request.body as Record<string, unknown>) : {};
+      const parameters = {
+        enable: rawBody.enable ?? null,
+        speed: rawBody.speed ?? 100,
+        direction: rawBody.direction ?? 1,
+        duration: rawBody.duration ?? 5
+      };
+      replyHuaweiMotorDisabled(reply, legacyDeviceId, parameters);
+      return;
+    }
+    if (!(await requirePermission(adminCfg, pg, request, reply, "device:control"))) return;
 
     const resolved = await resolveDeviceUuid(pg, legacyDeviceId);
     if (!resolved) {
@@ -488,10 +574,6 @@ export function registerHuaweiLegacyCompatRoutes(
 
     try {
       const payload = { legacy: true, ...parseBody.data } as Record<string, unknown>;
-      if (!kafkaPublisher) {
-        legacyFail(reply, 503, { error: "disabled", message: "kafka not configured", disabled: true });
-        return;
-      }
       const issued = await issueDeviceCommand(pg, kafkaPublisher, resolved, "huawei:motor", payload);
       enqueueOperationLog(pg, request, {
         module: "device",
@@ -509,19 +591,25 @@ export function registerHuaweiLegacyCompatRoutes(
   });
 
   app.post("/huawei/devices/:deviceId/buzzer", async (request, reply) => {
-    const traceId = request.traceId;
-    if (!(await requirePermission(adminCfg, pg, request, reply, "device:control"))) return;
-    if (!pg) {
-      fail(reply, 503, "PostgreSQL not configured", traceId);
-      return;
-    }
-
     const parseId = legacyDeviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
     if (!parseId.success) {
       legacyFail(reply, 400, { error: "invalid deviceId" });
       return;
     }
     const legacyDeviceId = parseId.data;
+
+    if (!pg || !kafkaPublisher) {
+      const rawBody = request.body && typeof request.body === "object" ? (request.body as Record<string, unknown>) : {};
+      const parameters = {
+        enable: rawBody.enable ?? null,
+        frequency: rawBody.frequency ?? 2000,
+        duration: rawBody.duration ?? 3,
+        pattern: rawBody.pattern ?? 2
+      };
+      replyHuaweiBuzzerDisabled(reply, legacyDeviceId, parameters);
+      return;
+    }
+    if (!(await requirePermission(adminCfg, pg, request, reply, "device:control"))) return;
 
     const resolved = await resolveDeviceUuid(pg, legacyDeviceId);
     if (!resolved) {
@@ -537,10 +625,6 @@ export function registerHuaweiLegacyCompatRoutes(
 
     try {
       const payload = { legacy: true, ...parseBody.data } as Record<string, unknown>;
-      if (!kafkaPublisher) {
-        legacyFail(reply, 503, { error: "disabled", message: "kafka not configured", disabled: true });
-        return;
-      }
       const issued = await issueDeviceCommand(pg, kafkaPublisher, resolved, "huawei:buzzer", payload);
       enqueueOperationLog(pg, request, {
         module: "device",
@@ -558,19 +642,18 @@ export function registerHuaweiLegacyCompatRoutes(
   });
 
   app.post("/huawei/devices/:deviceId/reboot", async (request, reply) => {
-    const traceId = request.traceId;
-    if (!(await requirePermission(adminCfg, pg, request, reply, "device:control"))) return;
-    if (!pg) {
-      fail(reply, 503, "PostgreSQL not configured", traceId);
-      return;
-    }
-
     const parseId = legacyDeviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
     if (!parseId.success) {
       legacyFail(reply, 400, { error: "invalid deviceId" });
       return;
     }
     const legacyDeviceId = parseId.data;
+
+    if (!pg || !kafkaPublisher) {
+      replyHuaweiRebootDisabled(reply, legacyDeviceId);
+      return;
+    }
+    if (!(await requirePermission(adminCfg, pg, request, reply, "device:control"))) return;
 
     const resolved = await resolveDeviceUuid(pg, legacyDeviceId);
     if (!resolved) {
@@ -580,10 +663,6 @@ export function registerHuaweiLegacyCompatRoutes(
 
     try {
       const payload = { legacy: true };
-      if (!kafkaPublisher) {
-        legacyFail(reply, 503, { error: "disabled", message: "kafka not configured", disabled: true });
-        return;
-      }
       const issued = await issueDeviceCommand(pg, kafkaPublisher, resolved, "huawei:reboot", payload);
       enqueueOperationLog(pg, request, {
         module: "device",
