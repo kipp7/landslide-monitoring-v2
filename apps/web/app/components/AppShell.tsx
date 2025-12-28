@@ -18,6 +18,19 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const { user, loading, logout } = useAuth()
 
+  const isLoginRoute = pathname === '/login' || pathname.startsWith('/login/')
+  const isFullBleedRoute = [
+    '/analysis',
+    '/analysis-legacy',
+    '/gps-monitoring',
+    '/gps-deformation',
+    '/system-monitor',
+    '/baseline-management',
+    '/optimized-demo',
+  ].some((p) => pathname === p || pathname.startsWith(`${p}/`))
+
+  if (isLoginRoute) return <>{children}</>
+
   const items = (() => {
     const base = [
       { key: '/analysis', label: '概览' },
@@ -102,7 +115,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           ) : null}
         </Space>
       </Header>
-      <Content style={{ padding: 24 }}>{children}</Content>
+      <Content style={{ padding: isFullBleedRoute ? 0 : 24, minHeight: 'calc(100vh - 64px)' }}>{children}</Content>
     </Layout>
   )
 }
