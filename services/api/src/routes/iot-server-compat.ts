@@ -72,15 +72,64 @@ function replyFromInject(reply: FastifyReply, injected: InjectResult): void {
   void reply.send(injected.payload);
 }
 
+function iotFallbackMappings(nowIso: string) {
+  return [
+    {
+      simple_id: "device_1",
+      actual_device_id: "hangbishan_device_001",
+      device_name: "挂傍山中心监测站",
+      location_name: "玉林师范学院东校区挂傍山中心点",
+      device_type: "rk2206",
+      latitude: 22.6847,
+      longitude: 110.1893,
+      status: "active",
+      description: "挂傍山核心监测区域的主要传感器节点",
+      install_date: "2024-05-15T00:00:00Z",
+      last_data_time: nowIso,
+      online_status: "online"
+    },
+    {
+      simple_id: "device_2",
+      actual_device_id: "hangbishan_device_002",
+      device_name: "坡顶监测站",
+      location_name: "玉林师范学院东校区挂傍山坡顶",
+      device_type: "rk2206",
+      latitude: 22.685,
+      longitude: 110.189,
+      status: "active",
+      description: "挂傍山坡顶位置的监测设备",
+      install_date: "2024-05-15T00:00:00Z",
+      last_data_time: nowIso,
+      online_status: "online"
+    },
+    {
+      simple_id: "device_3",
+      actual_device_id: "hangbishan_device_003",
+      device_name: "坡脚监测站",
+      location_name: "玉林师范学院东校区挂傍山坡脚",
+      device_type: "rk2206",
+      latitude: 22.6844,
+      longitude: 110.1896,
+      status: "active",
+      description: "挂傍山坡脚位置的监测设备",
+      install_date: "2024-05-15T00:00:00Z",
+      last_data_time: nowIso,
+      online_status: "online"
+    }
+  ];
+}
+
 function iotMappingsFallback(opts: { upstreamStatus: number; message: string }) {
+  const nowIso = new Date().toISOString();
+  const data = iotFallbackMappings(nowIso);
   return {
     success: true as const,
-    data: [],
-    count: 0,
+    data,
+    count: data.length,
     message: opts.message,
     is_fallback: true as const,
     upstream_status: opts.upstreamStatus,
-    timestamp: new Date().toISOString()
+    timestamp: nowIso
   };
 }
 
@@ -200,14 +249,24 @@ export function registerIotServerCompatRoutes(
     });
 
     if (res.statusCode !== 200 || !parsed || typeof parsed !== "object") {
+      const nowIso = new Date().toISOString();
+      const data = iotFallbackMappings(nowIso).map((m) => ({
+        device_id: m.simple_id,
+        friendly_name: m.device_name,
+        display_name: m.device_name,
+        location_name: m.location_name,
+        device_type: m.device_type,
+        status: m.online_status === "online" ? "online" : "offline",
+        last_active: m.last_data_time
+      }));
       void reply.code(200).send({
         success: true,
-        data: [],
-        count: 0,
+        data,
+        count: data.length,
         message: "使用 fallback 数据（上游 /api/iot/devices/mappings 不可用）",
         is_fallback: true,
         upstream_status: res.statusCode,
-        timestamp: new Date().toISOString()
+        timestamp: nowIso
       });
       return;
     }
