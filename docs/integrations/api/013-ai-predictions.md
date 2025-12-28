@@ -34,6 +34,9 @@ Query（均可选）：
 为对齐旧前端 `POST /api/ai-prediction`（Next route）调用，API service 提供兼容端点：
 
 - `POST /api/ai-prediction`
+
+说明：
+- 参考区 Next API 在异常场景会直接返回 200 的 fallback 分析结果；v2 的 legacy compat 也保持该行为：当 PostgreSQL 未配置或 body 不合法时，接口返回 200 + 备用分析（用于保证旧页面/演示环境可用）。
   - body 兼容：`{ "sensorData": [ { "device_id": "uuid", "...": "..." } ] }`
   - 返回字段：`analysis` / `result` / `probability` / `timestamp` / `recommendation`
 
