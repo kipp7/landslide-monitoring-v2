@@ -42,5 +42,4 @@
 - `services/api` 已配置 PostgreSQL（用于写入 `device_commands`）
 - `services/api` 已配置 Kafka（用于发布 `device.commands.v1`）
 
-缺少依赖时，会返回 `503` 且 `disabled=true`（行为与参考区“禁用端点”一致）。
-
+缺少依赖时，会返回参考区同款“禁用端点”响应：`200` + `success=false` + `disabled=true`（例如 `/huawei/config`、`/huawei/command-templates`、`/huawei/devices/:deviceId/shadow`）。

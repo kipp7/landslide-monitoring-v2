@@ -37,6 +37,38 @@ function legacyFail(
 const legacyDeviceIdSchema = z.string().min(1).max(200);
 const uuidSchema = z.string().uuid();
 
+function huaweiCompatEnabled(pg: PgPool | null, kafkaPublisher: KafkaPublisher | null): boolean {
+  return Boolean(pg) && Boolean(kafkaPublisher);
+}
+
+function replyHuaweiConfigDisabled(reply: FastifyReply): void {
+  void reply.code(200).send({
+    success: false,
+    disabled: true,
+    message: "华为云IoT配置功能已禁用",
+    data: { isValid: false, disabled: true, config: {} }
+  });
+}
+
+function replyHuaweiShadowDisabled(reply: FastifyReply, deviceId: string): void {
+  void reply.code(200).send({
+    success: false,
+    disabled: true,
+    message: "华为云设备影子功能已禁用",
+    device_id: deviceId,
+    data: { shadow: [], disabled: true }
+  });
+}
+
+function replyHuaweiCommandTemplatesDisabled(reply: FastifyReply): void {
+  void reply.code(200).send({
+    success: false,
+    disabled: true,
+    message: "华为云命令模板功能已禁用",
+    data: []
+  });
+}
+
 async function resolveDeviceUuid(pg: PgPool | null, inputDeviceId: string): Promise<string | null> {
   const trimmed = inputDeviceId.trim();
   const asUuid = uuidSchema.safeParse(trimmed);
@@ -251,16 +283,19 @@ export function registerHuaweiLegacyCompatRoutes(
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "system:config"))) return;
 
-    const enabled = Boolean(pg) && Boolean(kafkaPublisher);
+    const enabled = huaweiCompatEnabled(pg, kafkaPublisher);
+    if (!enabled) {
+      replyHuaweiConfigDisabled(reply);
+      return;
+    }
+
     legacyOk(reply, {
       data: {
-        enabled,
+        enabled: true,
         mode: "v2-compat",
         telemetryEndpoint: "/iot/huawei (legacy) /iot/huawei/telemetry (v2)",
         commandEndpoint: "/huawei/devices/:deviceId/* (legacy) -> /api/v1/devices/:deviceId/commands (v2)",
-        note: enabled
-          ? "Commands are mapped to v2 device_commands + Kafka pipeline."
-          : "Disabled: requires PostgreSQL + Kafka in api-service."
+        note: "Commands are mapped to v2 device_commands + Kafka pipeline."
       },
       traceId
     });
@@ -270,8 +305,8 @@ export function registerHuaweiLegacyCompatRoutes(
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "device:control"))) return;
 
-    if (!pg || !kafkaPublisher) {
-      legacyFail(reply, 503, { error: "disabled", message: "device command pipeline not configured", disabled: true });
+    if (!huaweiCompatEnabled(pg, kafkaPublisher)) {
+      replyHuaweiCommandTemplatesDisabled(reply);
       return;
     }
 
@@ -327,6 +362,11 @@ export function registerHuaweiLegacyCompatRoutes(
       return;
     }
     const legacyDeviceId = parseId.data;
+
+    if (!huaweiCompatEnabled(pg, kafkaPublisher)) {
+      replyHuaweiShadowDisabled(reply, legacyDeviceId);
+      return;
+    }
 
     const resolved = await resolveDeviceUuid(pg, legacyDeviceId);
     if (!resolved) {
