@@ -56,12 +56,64 @@ while ($true) {
 }
 Write-Host "ClickHouse is ready." -ForegroundColor Green
 
+$chUser = $env:CH_USER
+if (-not $chUser) { $chUser = "landslide" }
+$chPassword = $env:CH_PASSWORD
+if (-not $chPassword) { $chPassword = "change-me" }
+$chDatabase = $env:CH_DATABASE
+if (-not $chDatabase) { $chDatabase = "landslide" }
+
+function Get-ClickhouseContainerEnv([string]$var) {
+  $cmd = 'printf "%s" "$' + $var + '"'
+  $val = docker compose -f $ComposeFile --env-file $EnvFile exec -T clickhouse sh -lc $cmd 2>$null
+  if ($LASTEXITCODE -ne 0) { return $null }
+  $t = ($val | Out-String).Trim()
+  if (-not $t) { return $null }
+  return $t
+}
+
+function Invoke-ClickhouseClient([string]$sqlText, [string]$user, [string]$password, [string]$database) {
+  try {
+    $out = $sqlText | docker compose -f $ComposeFile --env-file $EnvFile exec -T clickhouse clickhouse-client --user $user --password $password --database $database --multiquery 2>&1
+    return @{
+      Out = ($out | Out-String)
+      Code = $LASTEXITCODE
+    }
+  } catch {
+    return @{
+      Out = ($_ | Out-String)
+      Code = $LASTEXITCODE
+    }
+  }
+}
+
 $sqlFiles = Get-ChildItem -Path $SqlDir -File -Filter "*.sql" | Sort-Object Name
 foreach ($f in $sqlFiles) {
   Write-Host "Running: $($f.Name)"
   $sql = Get-Content -Raw -Encoding UTF8 $f.FullName
-  $sql | docker compose -f $ComposeFile --env-file $EnvFile exec -T clickhouse clickhouse-client --user $env:CH_USER --password $env:CH_PASSWORD --database $env:CH_DATABASE --multiquery
-  Assert-LastExitCode "clickhouse-client failed: $($f.Name)"
+
+  $res = Invoke-ClickhouseClient $sql $chUser $chPassword $chDatabase
+  $out = $res.Out
+  $code = $res.Code
+
+  if ($code -ne 0 -and ($out -match "AUTHENTICATION_FAILED|Authentication failed")) {
+    $runtimeUser = Get-ClickhouseContainerEnv "CLICKHOUSE_USER"
+    $runtimePassword = Get-ClickhouseContainerEnv "CLICKHOUSE_PASSWORD"
+    $runtimeDatabase = Get-ClickhouseContainerEnv "CLICKHOUSE_DB"
+
+    if ($runtimeUser) { $chUser = $runtimeUser }
+    if ($runtimePassword) { $chPassword = $runtimePassword }
+    if ($runtimeDatabase) { $chDatabase = $runtimeDatabase }
+
+    Write-Host "Retrying ClickHouse DDL using container credentials..." -ForegroundColor Yellow
+    $res = Invoke-ClickhouseClient $sql $chUser $chPassword $chDatabase
+    $out = $res.Out
+    $code = $res.Code
+  }
+
+  if ($code -ne 0) {
+    throw "clickhouse-client failed: $($f.Name) (exit=$code)`n$out"
+  }
 }
 
 Write-Host "ClickHouse init done."

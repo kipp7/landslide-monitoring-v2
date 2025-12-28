@@ -140,6 +140,7 @@
 | WS-G.4 | codex | `fix/api-legacy-debug-tools` | https://github.com/kipp7/landslide-monitoring-v2/pull/269 | done | WS-G | API：补齐参考区调试端点 `/api/test-db`、`/api/inspect-*`、`/api/test-expert-health`（安全只读 + 权限控制），保留 `/api/db-admin` 禁用 |
 | WS-G.5 | codex | `feat/api-db-admin-safe` | https://github.com/kipp7/landslide-monitoring-v2/pull/271 | done | WS-G.4 | API：实现安全版 `/api/db-admin`（默认关闭 + 强权限 + 只读 query/analyze/backup；写操作继续禁用） |
 | WS-G.6 | codex | `feat/ops-debug-api-legacy-tools` | https://github.com/kipp7/landslide-monitoring-v2/pull/272 | done | WS-G.4, WS-G.5 | Ops：`/ops/debug-api` 增加 legacy 调试端点 smoke tests（`/api/test-db`、`/api/inspect-*`、`/api/test-expert-health`），并对 `POST /api/db-admin` 增加二次确认 |
+| WS-G.7 | codex | `fix/ws-g7-clickhouse-auth-fallback` |  | in_progress | WS-G | Infra：`init-clickhouse.ps1` 遇到 ClickHouse 认证失败时，读取容器内实际凭据并重试，避免本地长期环境与 `.env` 不一致导致 e2e/Stage5Regression 初始化失败 |
 | WS-H | codex | `feat/ws-h/ai-prediction-worker` | https://github.com/kipp7/landslide-monitoring-v2/pull/84 | done |  | AI predictions plugin/worker |
 | WS-I | codex | `docs/ws-i/gap-audit-route-inventory` | https://github.com/kipp7/landslide-monitoring-v2/pull/121 | done |  | Docs: 扩充 `gap-audit.md`（v2 Web 路由盘点 + 参考区对照） |
 | WS-J | codex | `feat/ws-j/legacy-routes-compat` | https://github.com/kipp7/landslide-monitoring-v2/pull/125 | done |  | Web: 恢复旧系统兼容入口（`/baseline-management`、`/analysis2`、`/optimized-demo`）：baseline-management/optimized-demo 保持兼容跳转，analysis2 后续在 WS-O.5 恢复实际页面 |
