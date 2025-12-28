@@ -117,6 +117,7 @@ export function registerDataRoutes(
   pg: PgPool | null
 ): void {
   const adminCfg: AdminAuthConfig = { adminApiToken: config.adminApiToken, jwtEnabled: Boolean(config.jwtAccessSecret) };
+  const pgMissingWarnings = [{ kind: "pg_missing", message: "PostgreSQL 未配置" }] as const;
 
   app.get("/data/state/:deviceId", async (request, reply) => {
     const traceId = request.traceId;
@@ -413,7 +414,7 @@ export function registerDataRoutes(
         return;
       }
       if (!pg) {
-        fail(reply, 503, "PostgreSQL 未配置", traceId);
+        ok(reply, { scope, sensorKey, interval, buckets: [], unavailable: true, warnings: pgMissingWarnings }, traceId);
         return;
       }
       const rows = await withPgClient(pg, async (client) => {
@@ -510,7 +511,11 @@ export function registerDataRoutes(
         return;
       }
       if (!pg) {
-        fail(reply, 503, "PostgreSQL 未配置", traceId);
+        ok(
+          reply,
+          { format, rows: 0, data: format === "csv" ? "" : [], unavailable: true, warnings: pgMissingWarnings },
+          traceId
+        );
         return;
       }
       const rows = await withPgClient(pg, async (client) => {
