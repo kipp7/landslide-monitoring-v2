@@ -164,6 +164,40 @@ export function registerLegacyDbAdminRoutes(
   const adminCfg: AdminAuthConfig = { adminApiToken: config.adminApiToken, jwtEnabled: Boolean(config.jwtAccessSecret) };
   const authConfigured = Boolean(config.adminApiToken) || Boolean(config.jwtAccessSecret);
 
+  app.get("/db-admin", async (request, reply) => {
+    const q = request.query as Record<string, unknown> | undefined;
+    const action = typeof q?.action === "string" ? q.action : "help";
+
+    if (action !== "help") {
+      void reply.code(405).send({
+        success: false,
+        error: "method_not_allowed",
+        message: "GET only supports action=help",
+        timestamp: new Date().toISOString()
+      });
+      return;
+    }
+
+    legacyOk(
+      reply,
+      {
+        description: "database admin api",
+        enabled: config.dbAdminEnabled,
+        auth_configured: authConfigured,
+        endpoints: {
+          "POST /api/db-admin": "execute database admin action (restricted in v2)",
+          "GET /api/db-admin?action=help": "show help"
+        },
+        supported_actions: [
+          "query - read-only SELECT/WITH queries (v2 restricted)",
+          "backup - sample backup for a table (v2 restricted)",
+          "analyze - basic table analysis (v2 restricted)"
+        ]
+      },
+      "help"
+    );
+  });
+
   app.post("/db-admin", async (request, reply) => {
     if (!config.dbAdminEnabled || !authConfigured) {
       disabled(reply);
