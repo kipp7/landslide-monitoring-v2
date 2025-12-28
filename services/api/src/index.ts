@@ -34,7 +34,6 @@ import { registerCameraLegacyCompatRoutes, registerCameraRoutes } from "./routes
 import { registerDeviceHealthExpertLegacyCompatRoutes, registerDeviceHealthExpertRoutes } from "./routes/device-health-expert";
 import { registerAiPredictionLegacyCompatRoutes, registerAiPredictionRoutes } from "./routes/ai-predictions";
 import { registerLegacyDisabledRoutes } from "./routes/legacy-disabled";
-import { registerLegacyCompatAliasRoutes } from "./routes/legacy-compat-aliases";
 import { registerLegacyDeviceManagementCompatRoutes } from "./routes/legacy-device-management";
 import { registerLegacyDebugToolRoutes } from "./routes/legacy-debug-tools";
 import { registerLegacyDbAdminRoutes } from "./routes/legacy-db-admin";
@@ -219,7 +218,6 @@ async function main(): Promise<void> {
       registerLegacyDebugToolRoutes(api, config, ch, pg, { injector: app });
       registerLegacyDbAdminRoutes(api, config, pg);
       registerLegacyDisabledRoutes(api, config);
-      registerLegacyCompatAliasRoutes(api);
       done();
     },
     { prefix: "/api" }
@@ -239,7 +237,6 @@ async function main(): Promise<void> {
       registerLegacyDebugToolRoutes(api, config, ch, pg, { injector: app });
       registerLegacyDbAdminRoutes(api, config, pg);
       registerLegacyDisabledRoutes(api, config);
-      registerLegacyCompatAliasRoutes(api);
       done();
     },
     { prefix: "/iot/api" }
