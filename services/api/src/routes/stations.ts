@@ -57,17 +57,26 @@ export function registerStationRoutes(
   app.get("/stations", async (request, reply) => {
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "device:view"))) return;
-    if (!pg) {
-      fail(reply, 503, "PostgreSQL 未配置", traceId);
-      return;
-    }
-
     const parseQuery = listStationsQuerySchema.safeParse(request.query);
     if (!parseQuery.success) {
       fail(reply, 400, "参数错误", traceId, { field: "query", issues: parseQuery.error.issues });
       return;
     }
     const { page, pageSize, keyword, status } = parseQuery.data;
+
+    if (!pg) {
+      ok(
+        reply,
+        {
+          list: [],
+          pagination: { page, pageSize, total: 0, totalPages: 1 },
+          warnings: [{ kind: "pg_missing", message: "PostgreSQL not configured" }],
+          unavailable: true
+        },
+        traceId
+      );
+      return;
+    }
 
     const where: string[] = ["deleted_at IS NULL"];
     const params: unknown[] = [];
@@ -144,17 +153,17 @@ export function registerStationRoutes(
   app.get("/stations/:stationId", async (request, reply) => {
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "device:view"))) return;
-    if (!pg) {
-      fail(reply, 503, "PostgreSQL 未配置", traceId);
-      return;
-    }
-
     const parseId = stationIdSchema.safeParse((request.params as { stationId?: unknown }).stationId);
     if (!parseId.success) {
       fail(reply, 400, "参数错误", traceId, { field: "stationId" });
       return;
     }
     const stationId = parseId.data;
+
+    if (!pg) {
+      ok(reply, { stationId, warnings: [{ kind: "pg_missing", message: "PostgreSQL not configured" }], unavailable: true }, traceId);
+      return;
+    }
 
     const row = await withPgClient(pg, async (client) =>
       queryOne<StationRow>(
@@ -204,14 +213,18 @@ export function registerStationRoutes(
   app.post("/stations", async (request, reply) => {
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "device:create"))) return;
-    if (!pg) {
-      fail(reply, 503, "PostgreSQL 未配置", traceId);
-      return;
-    }
-
     const parseBody = createStationSchema.safeParse(request.body);
     if (!parseBody.success) {
       fail(reply, 400, "参数错误", traceId, { field: "body", issues: parseBody.error.issues });
+      return;
+    }
+
+    if (!pg) {
+      ok(
+        reply,
+        { created: false, warnings: [{ kind: "pg_missing", message: "PostgreSQL not configured" }], unavailable: true },
+        traceId
+      );
       return;
     }
 
@@ -261,11 +274,6 @@ export function registerStationRoutes(
   app.put("/stations/:stationId", async (request, reply) => {
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "device:update"))) return;
-    if (!pg) {
-      fail(reply, 503, "PostgreSQL 未配置", traceId);
-      return;
-    }
-
     const parseId = stationIdSchema.safeParse((request.params as { stationId?: unknown }).stationId);
     if (!parseId.success) {
       fail(reply, 400, "参数错误", traceId, { field: "stationId" });
@@ -276,6 +284,15 @@ export function registerStationRoutes(
     const parseBody = updateStationSchema.safeParse(request.body);
     if (!parseBody.success) {
       fail(reply, 400, "参数错误", traceId, { field: "body", issues: parseBody.error.issues });
+      return;
+    }
+
+    if (!pg) {
+      ok(
+        reply,
+        { stationId, updated: false, warnings: [{ kind: "pg_missing", message: "PostgreSQL not configured" }], unavailable: true },
+        traceId
+      );
       return;
     }
 
@@ -326,17 +343,21 @@ export function registerStationRoutes(
   app.delete("/stations/:stationId", async (request, reply) => {
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "device:delete"))) return;
-    if (!pg) {
-      fail(reply, 503, "PostgreSQL 未配置", traceId);
-      return;
-    }
-
     const parseId = stationIdSchema.safeParse((request.params as { stationId?: unknown }).stationId);
     if (!parseId.success) {
       fail(reply, 400, "参数错误", traceId, { field: "stationId" });
       return;
     }
     const stationId = parseId.data;
+
+    if (!pg) {
+      ok(
+        reply,
+        { stationId, deleted: false, warnings: [{ kind: "pg_missing", message: "PostgreSQL not configured" }], unavailable: true },
+        traceId
+      );
+      return;
+    }
 
     const row = await withPgClient(pg, async (client) =>
       queryOne<{ ok: boolean }>(
