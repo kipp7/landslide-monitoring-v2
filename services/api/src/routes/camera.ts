@@ -166,6 +166,12 @@ export function registerCameraLegacyCompatRoutes(app: FastifyInstance, config: A
     })
     .strict();
 
+  const legacyDeleteQuerySchema = z
+    .object({
+      deviceId: z.string().min(1)
+    })
+    .strict();
+
   const legacyPostSchema = z
     .object({
       action: z.enum(["add", "update_status", "test_connection"]),
@@ -174,6 +180,15 @@ export function registerCameraLegacyCompatRoutes(app: FastifyInstance, config: A
       name: z.string().optional(),
       status: z.string().optional(),
       stats: z.unknown().optional()
+    })
+    .passthrough();
+
+  const legacyPutSchema = z
+    .object({
+      deviceId: z.string().min(1),
+      ip: z.string().optional(),
+      name: z.string().optional(),
+      config: z.unknown().optional()
     })
     .passthrough();
 
@@ -260,8 +275,72 @@ export function registerCameraLegacyCompatRoutes(app: FastifyInstance, config: A
     }
   };
 
+  const handleLegacyPut = async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!(await requirePermission(adminCfg, pg, request, reply, "system:config"))) return;
+
+    const parseBody = legacyPutSchema.safeParse(request.body);
+    if (!parseBody.success) {
+      void reply.code(400).send({ error: "invalid body" });
+      return;
+    }
+
+    const body = parseBody.data;
+    const device = devices.get(body.deviceId);
+    if (!device) {
+      void reply.code(404).send({ error: "device not found" });
+      return;
+    }
+
+    if (typeof body.ip === "string" && body.ip.trim()) device.ip = body.ip.trim();
+    if (typeof body.name === "string" && body.name.trim()) device.name = body.name.trim();
+    devices.set(body.deviceId, device);
+
+    if (body.config && device.status === "online") {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        controller.abort();
+      }, 5000);
+      try {
+        await fetch(`http://${device.ip}/api/config`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body.config),
+          signal: controller.signal
+        });
+      } catch {
+        // best-effort: device may be offline / unreachable
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    }
+
+    void reply.code(200).send({ message: "device updated", device });
+  };
+
+  const handleLegacyDelete = async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!(await requirePermission(adminCfg, pg, request, reply, "system:config"))) return;
+
+    const parseQuery = legacyDeleteQuerySchema.safeParse(request.query ?? {});
+    if (!parseQuery.success) {
+      void reply.code(400).send({ error: "invalid query" });
+      return;
+    }
+
+    const { deviceId } = parseQuery.data;
+    const device = devices.get(deviceId);
+    if (!device) {
+      void reply.code(404).send({ error: "device not found" });
+      return;
+    }
+
+    devices.delete(deviceId);
+    void reply.code(200).send({ message: "device deleted", deviceId });
+  };
+
   for (const path of ["/camera", "/api/camera", "/iot/api/camera"]) {
     app.get(path, handleLegacyGet);
     app.post(path, handleLegacyPost);
+    app.put(path, handleLegacyPut);
+    app.delete(path, handleLegacyDelete);
   }
 }
