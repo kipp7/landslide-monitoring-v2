@@ -1898,7 +1898,7 @@ export function registerLegacyDeviceManagementCompatRoutes(
 
     const resolved = await resolveDeviceId(pg, parsed.data);
     if (!resolved) {
-      legacyFail(reply, 404, "device not found");
+      legacyFail(reply, 404, "设备不存在");
       return;
     }
 
@@ -1927,7 +1927,7 @@ export function registerLegacyDeviceManagementCompatRoutes(
     );
 
     if (!row) {
-      legacyFail(reply, 404, "device not found");
+      legacyFail(reply, 404, "设备不存在");
       return;
     }
 
