@@ -15,12 +15,6 @@ function legacyFail(reply: FastifyReply, statusCode: number, message: string, de
   void reply.code(statusCode).send({ success: false, message, error: details, timestamp: new Date().toISOString() });
 }
 
-function redirectLegacyAlias(rawUrl: string | undefined, reply: FastifyReply, from: string, to: string): void {
-  const input = rawUrl ?? "";
-  const target = input.includes(from) ? input.replace(from, to) : input;
-  void reply.redirect(target, 307);
-}
-
 const aggregationSchema = z
   .object({
     type: z.enum(["hierarchy_stats", "network_stats", "device_summary", "real_time_dashboard"]),
@@ -57,6 +51,12 @@ const deviceManagementQuerySchema = z.object({
     return v;
   }, z.boolean().optional())
 });
+
+const deviceManagementUpdateSchema = z
+  .object({
+    device_id: z.string().min(1)
+  })
+  .passthrough();
 
 const deformationLimitQuerySchema = z
   .object({
@@ -1194,20 +1194,17 @@ export function registerLegacyDeviceManagementCompatRoutes(
     });
   });
 
-  app.get("/device-management-optimized", async (request, reply) => {
-    redirectLegacyAlias(request.raw.url, reply, "/device-management-optimized", "/device-management");
-  });
+  app.put("/device-management", async (request, reply) => {
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
 
-  app.get("/device-management-real", async (request, reply) => {
-    redirectLegacyAlias(request.raw.url, reply, "/device-management-real", "/device-management");
-  });
+    const parsed = deviceManagementUpdateSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      legacyFail(reply, 400, "invalid body");
+      return;
+    }
 
-  app.get("/device-management-real-db", async (request, reply) => {
-    redirectLegacyAlias(request.raw.url, reply, "/device-management-real-db", "/device-management");
-  });
-
-  app.post("/device-management-real/diagnostics", async (request, reply) => {
-    redirectLegacyAlias(request.raw.url, reply, "/device-management-real/diagnostics", "/device-management/diagnostics");
+    const { device_id, ...rest } = parsed.data;
+    legacyOk(reply, { device_id, ...rest }, "设备信息更新成功");
   });
 
   app.get("/device-management/hierarchical", async (request, reply) => {
@@ -2235,14 +2232,6 @@ export function registerLegacyDeviceManagementCompatRoutes(
     });
 
     legacyOk(reply, { updated });
-  });
-
-  app.get("/monitoring-stations-optimized", async (request, reply) => {
-    redirectLegacyAlias(request.raw.url, reply, "/monitoring-stations-optimized", "/monitoring-stations");
-  });
-
-  app.put("/monitoring-stations-optimized", async (request, reply) => {
-    redirectLegacyAlias(request.raw.url, reply, "/monitoring-stations-optimized", "/monitoring-stations");
   });
 
   app.get("/monitoring-stations/:deviceId", async (request, reply) => {
