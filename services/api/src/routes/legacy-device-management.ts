@@ -822,12 +822,109 @@ export function registerLegacyDeviceManagementCompatRoutes(
 ): void {
   const adminCfg: AdminAuthConfig = { adminApiToken: config.adminApiToken, jwtEnabled: Boolean(config.jwtAccessSecret) };
 
+  const fallbackDevices = {
+    device_1: {
+      simple_id: "device_1",
+      display_name: "挂傍山中心监测站",
+      location_name: "挂傍山监测区域",
+      latitude: 21.6847,
+      longitude: 108.3516,
+      device_type: "rk2206"
+    },
+    device_2: {
+      simple_id: "device_2",
+      display_name: "挂傍山北侧监测站",
+      location_name: "挂傍山监测区域",
+      latitude: 21.6862,
+      longitude: 108.3508,
+      device_type: "rk2206"
+    },
+    device_3: {
+      simple_id: "device_3",
+      display_name: "挂傍山南侧监测站",
+      location_name: "挂傍山监测区域",
+      latitude: 21.6831,
+      longitude: 108.3522,
+      device_type: "rk2206"
+    }
+  } as const;
+
+  type FallbackDevice = (typeof fallbackDevices)[keyof typeof fallbackDevices];
+
+  const getFallbackDevice = (id: string): FallbackDevice | null => {
+    const trimmed = id.trim();
+    if (!trimmed) return null;
+    if (trimmed === "device_1" || trimmed === "device_2" || trimmed === "device_3") return fallbackDevices[trimmed];
+    return null;
+  };
+
+  const buildFallbackGpsPoints = (
+    deviceId: string,
+    limit: number
+  ): { eventTime: string; latitude: number; longitude: number }[] => {
+    const d = getFallbackDevice(deviceId);
+    if (!d) return [];
+    const n = Math.max(0, Math.min(limit, 10));
+    const now = Date.now();
+    const points: { eventTime: string; latitude: number; longitude: number }[] = [];
+    for (let i = 0; i < n; i += 1) {
+      const offset = (i + 1) * 0.00001;
+      points.push({
+        eventTime: new Date(now - i * 5 * 60 * 1000).toISOString(),
+        latitude: d.latitude + offset,
+        longitude: d.longitude - offset
+      });
+    }
+    return points;
+  };
+
   app.get("/device-management/deformation/:deviceId", async (request, reply) => {
-    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
-      legacyFail(reply, 503, "PostgreSQL not configured");
+      const parsedParams = z.object({ deviceId: z.string().min(1) }).safeParse(request.params ?? {});
+      if (!parsedParams.success) {
+        legacyFail(reply, 400, "invalid deviceId");
+        return;
+      }
+
+      const parsedQuery = deformationLimitQuerySchema.safeParse(request.query ?? {});
+      if (!parsedQuery.success) {
+        legacyFail(reply, 400, "invalid query");
+        return;
+      }
+
+      const inputDeviceId = parsedParams.data.deviceId;
+      const nowIso = new Date().toISOString();
+      void reply.code(200).send({
+        success: true,
+        deviceId: inputDeviceId,
+        timestamp: nowIso,
+        hasBaseline: false,
+        hasData: false,
+        baseline: null,
+        deformation: {
+          type: "unknown",
+          type_code: 0,
+          type_description: "无数据",
+          max_displacement: 0,
+          avg_displacement: 0,
+          horizontal_displacement: 0,
+          vertical_displacement: 0,
+          trend: "stable",
+          velocity: 0,
+          risk_level: 0,
+          risk_description: "正常",
+          risk_factors: ["fallback_no_pg"],
+          data_quality: 0,
+          confidence: 0,
+          data_count: 0
+        },
+        latest_data: null,
+        is_fallback: true
+      });
       return;
     }
+
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
 
     const parsedParams = z.object({ deviceId: deviceIdSchema }).safeParse(request.params ?? {});
     if (!parsedParams.success) {
@@ -957,11 +1054,30 @@ export function registerLegacyDeviceManagementCompatRoutes(
   });
 
   app.get("/device-management/deformation/:deviceId/trend", async (request, reply) => {
-    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
-      legacyFail(reply, 503, "PostgreSQL not configured");
+      const parsedParams = z.object({ deviceId: z.string().min(1) }).safeParse(request.params ?? {});
+      if (!parsedParams.success) {
+        legacyFail(reply, 400, "invalid deviceId");
+        return;
+      }
+      const parsedQuery = deformationTrendQuerySchema.safeParse(request.query ?? {});
+      if (!parsedQuery.success) {
+        legacyFail(reply, 400, "invalid query");
+        return;
+      }
+      void reply.code(200).send({
+        success: true,
+        deviceId: parsedParams.data.deviceId,
+        timestamp: new Date().toISOString(),
+        trend: { direction: "stable", velocity: 0, max_displacement: 0, risk_level: 0, risk_description: "正常" },
+        data_quality: 0,
+        data_count: 0,
+        is_fallback: true
+      });
       return;
     }
+
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
 
     const parsedParams = z.object({ deviceId: deviceIdSchema }).safeParse(request.params ?? {});
     if (!parsedParams.success) {
@@ -1042,11 +1158,36 @@ export function registerLegacyDeviceManagementCompatRoutes(
   });
 
   app.get("/device-management/deformation/:deviceId/summary", async (request, reply) => {
-    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
-      legacyFail(reply, 503, "PostgreSQL not configured");
+      const parsedParams = z.object({ deviceId: z.string().min(1) }).safeParse(request.params ?? {});
+      if (!parsedParams.success) {
+        legacyFail(reply, 400, "invalid deviceId");
+        return;
+      }
+      void reply.code(200).send({
+        success: true,
+        deviceId: parsedParams.data.deviceId,
+        timestamp: new Date().toISOString(),
+        hasBaseline: false,
+        hasData: false,
+        deformation_type: 0,
+        deformation_type_description: "无数据",
+        max_displacement: 0,
+        horizontal_displacement: 0,
+        vertical_displacement: 0,
+        risk_level: 0,
+        risk_description: "正常",
+        trend: "stable",
+        velocity: 0,
+        confidence: 0,
+        data_quality: 0,
+        debug_info: null,
+        is_fallback: true
+      });
       return;
     }
+
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
 
     const parsedParams = z.object({ deviceId: deviceIdSchema }).safeParse(request.params ?? {});
     if (!parsedParams.success) {
@@ -1136,11 +1277,69 @@ export function registerLegacyDeviceManagementCompatRoutes(
   });
 
   app.get("/device-management", async (request, reply) => {
-    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
-      legacyFail(reply, 503, "PostgreSQL not configured");
+      const parsed = deviceManagementQuerySchema.safeParse(request.query ?? {});
+      if (!parsed.success) {
+        legacyFail(reply, 400, "invalid query");
+        return;
+      }
+
+      const inputDeviceId = (parsed.data.device_id ?? parsed.data.deviceId ?? "").trim() || "device_1";
+      const limit = parsed.data.limit ?? 50;
+      const dataOnly = parsed.data.data_only ?? parsed.data.dataOnly ?? false;
+
+      const fallback = getFallbackDevice(inputDeviceId);
+      if (!fallback) {
+        void reply.code(404).send({ success: false, error: "设备不存在", timestamp: new Date().toISOString(), is_fallback: true });
+        return;
+      }
+
+      if (dataOnly) {
+        const points = buildFallbackGpsPoints(inputDeviceId, limit);
+        const computed = computeLegacyGpsRows(points, null);
+        void reply.code(200).send({
+          success: true,
+          data: computed.rows,
+          count: computed.rows.length,
+          deviceId: inputDeviceId,
+          hasBaseline: computed.hasBaseline,
+          calculationMode: "fallback_no_pg",
+          timestamp: new Date().toISOString(),
+          is_fallback: true
+        });
+        return;
+      }
+
+      const nowIso = new Date().toISOString();
+      void reply.code(200).send({
+        success: true,
+        data: {
+          device_id: inputDeviceId,
+          real_name: `fallback_${inputDeviceId}`,
+          display_name: fallback.display_name,
+          status: "offline",
+          last_active: nowIso,
+          location: fallback.location_name,
+          coordinates: { lat: fallback.latitude, lng: fallback.longitude },
+          device_type: fallback.device_type,
+          firmware_version: "",
+          install_date: nowIso,
+          data_count_today: 0,
+          last_data_time: null,
+          health_score: 0,
+          temperature: null,
+          humidity: null,
+          battery_level: 0,
+          signal_strength: 0,
+          baseline_established: false
+        },
+        timestamp: nowIso,
+        is_fallback: true
+      });
       return;
     }
+
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
 
     const parsed = deviceManagementQuerySchema.safeParse(request.query ?? {});
     if (!parsed.success) {
@@ -1250,11 +1449,54 @@ export function registerLegacyDeviceManagementCompatRoutes(
   });
 
   app.get("/device-management/hierarchical", async (request, reply) => {
-    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
-      legacyFail(reply, 503, "PostgreSQL not configured");
+      const mapped = Object.values(fallbackDevices).map((d) => ({
+        simple_id: d.simple_id,
+        actual_device_id: `fallback_${d.simple_id}`,
+        device_name: d.display_name,
+        location_name: d.location_name,
+        device_type: d.device_type,
+        latitude: d.latitude,
+        longitude: d.longitude,
+        status: "active",
+        description: "",
+        install_date: new Date().toISOString(),
+        last_data_time: null,
+        online_status: "offline",
+        today_data_count: 0,
+        baseline_established: false,
+        health_score: 0,
+        battery_level: 0,
+        signal_strength: 0
+      }));
+
+      const nowIso = new Date().toISOString();
+      void reply.code(200).send({
+        success: true,
+        data: {
+          regions: [
+            {
+              id: "default",
+              name: "默认监测区",
+              devices: mapped,
+              total_devices: mapped.length,
+              online_devices: 0,
+              offline_devices: mapped.length
+            }
+          ],
+          allDevices: mapped,
+          totalDevices: mapped.length,
+          onlineDevices: 0,
+          offlineDevices: mapped.length
+        },
+        message: "ok",
+        timestamp: nowIso,
+        is_fallback: true
+      });
       return;
     }
+
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
 
     const devices = await listDevicesWithStations(pg);
     const deviceIds = devices.map((d) => d.device_id);

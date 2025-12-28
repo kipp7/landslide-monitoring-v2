@@ -7,6 +7,8 @@
 ## 1) 设备管理（分层）
 
 - `GET /api/device-management/hierarchical`：返回设备分层/汇总（用于旧页面的数据源）
+- PostgreSQL 未配置（`pg=null`）时：`GET /api/device-management/hierarchical` 返回 `200` 并携带 `is_fallback: true`（返回 demo 设备 `device_1~3`）。
+- PostgreSQL 未配置（`pg=null`）时：`GET /api/device-management` 在 `data_only=true` 场景返回 demo GPS 列表（`is_fallback: true`）。
 
 ## 2) IoT 设备映射
 
