@@ -62,11 +62,12 @@ export function registerSystemRoutes(
   pg: PgPool | null
 ): void {
   const adminCfg: AdminAuthConfig = { adminApiToken: config.adminApiToken, jwtEnabled: Boolean(config.jwtAccessSecret) };
+  const pgMissingWarnings = [{ kind: "pg_missing", message: "PostgreSQL 未配置" }] as const;
 
   app.get("/system/configs", async (request, reply) => {
     const traceId = request.traceId;
     if (!pg) {
-      fail(reply, 503, "PostgreSQL 未配置", traceId);
+      ok(reply, { list: [], unavailable: true, warnings: pgMissingWarnings }, traceId);
       return;
     }
 
@@ -188,10 +189,6 @@ export function registerSystemRoutes(
   app.get("/system/logs/operation", async (request, reply) => {
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "system:log"))) return;
-    if (!pg) {
-      fail(reply, 503, "PostgreSQL 未配置", traceId);
-      return;
-    }
 
     const parseQuery = operationLogsQuerySchema.safeParse(request.query);
     if (!parseQuery.success) {
@@ -201,6 +198,15 @@ export function registerSystemRoutes(
 
     const { page, pageSize, userId, module, action, startTime, endTime } = parseQuery.data;
     const offset = (page - 1) * pageSize;
+
+    if (!pg) {
+      ok(
+        reply,
+        { page, pageSize, total: 0, list: [], unavailable: true, warnings: pgMissingWarnings },
+        traceId
+      );
+      return;
+    }
 
     const where: string[] = [];
     const params: unknown[] = [];
@@ -302,7 +308,20 @@ export function registerSystemRoutes(
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "system:log"))) return;
     if (!pg) {
-      fail(reply, 503, "PostgreSQL 未配置", traceId);
+      const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+      ok(
+        reply,
+        {
+          since,
+          total: 0,
+          byStatus: { "2xx": 0, "3xx": 0, "4xx": 0, "5xx": 0 },
+          avgResponseTimeMs: null,
+          topPaths: [],
+          unavailable: true,
+          warnings: pgMissingWarnings
+        },
+        traceId
+      );
       return;
     }
 
@@ -402,10 +421,6 @@ export function registerSystemRoutes(
   app.get("/dashboard", async (request, reply) => {
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
-    if (!pg) {
-      fail(reply, 503, "PostgreSQL 未配置", traceId);
-      return;
-    }
 
     const now = new Date();
     const start = utcStartOfDay(now);
@@ -428,6 +443,25 @@ export function registerSystemRoutes(
         return 0;
       }
     })();
+
+    if (!pg) {
+      ok(
+        reply,
+        {
+          todayDataCount,
+          onlineDevices: 0,
+          offlineDevices: 0,
+          pendingAlerts: 0,
+          alertsBySeverity: { low: 0, medium: 0, high: 0, critical: 0 },
+          stations: 0,
+          lastUpdatedAt: now.toISOString(),
+          unavailable: true,
+          warnings: pgMissingWarnings
+        },
+        traceId
+      );
+      return;
+    }
 
     const data = await withPgClient(pg, async (client) => {
       const devices = await client.query<{ status: string; count: string }>(
