@@ -21,6 +21,83 @@ function redirectLegacyAlias(rawUrl: string | undefined, reply: FastifyReply, fr
   void reply.redirect(target, 307);
 }
 
+function fallbackLegacyHierarchicalDevices(nowIso: string) {
+  const devices = [
+    {
+      simple_id: "device_1",
+      actual_device_id: "hangbishan_device_001",
+      device_name: "挂傍山中心监测站",
+      location_name: "玉林师范学院东校区挂傍山中心点",
+      device_type: "GPS监测站",
+      latitude: 22.6847,
+      longitude: 110.1893,
+      status: "active",
+      description: "挂傍山核心监测区域的主要传感器节点",
+      install_date: "2024-05-15T00:00:00Z",
+      last_data_time: nowIso,
+      online_status: "online" as const,
+      today_data_count: 0,
+      baseline_established: false,
+      health_score: 95,
+      battery_level: 85,
+      signal_strength: 90
+    },
+    {
+      simple_id: "device_2",
+      actual_device_id: "hangbishan_device_002",
+      device_name: "坡顶监测站",
+      location_name: "玉林师范学院东校区挂傍山坡顶",
+      device_type: "GPS监测站",
+      latitude: 22.685,
+      longitude: 110.189,
+      status: "active",
+      description: "挂傍山坡顶位置的监测设备",
+      install_date: "2024-05-15T00:00:00Z",
+      last_data_time: nowIso,
+      online_status: "online" as const,
+      today_data_count: 0,
+      baseline_established: false,
+      health_score: 95,
+      battery_level: 85,
+      signal_strength: 90
+    },
+    {
+      simple_id: "device_3",
+      actual_device_id: "hangbishan_device_003",
+      device_name: "坡脚监测站",
+      location_name: "玉林师范学院东校区挂傍山坡脚",
+      device_type: "GPS监测站",
+      latitude: 22.6844,
+      longitude: 110.1896,
+      status: "active",
+      description: "挂傍山坡脚位置的监测设备",
+      install_date: "2024-05-15T00:00:00Z",
+      last_data_time: nowIso,
+      online_status: "offline" as const,
+      today_data_count: 0,
+      baseline_established: false,
+      health_score: 0,
+      battery_level: 0,
+      signal_strength: 0
+    }
+  ];
+
+  const onlineDevices = devices.filter((d) => d.online_status === "online").length;
+  const offlineDevices = devices.length - onlineDevices;
+  const regions = [
+    {
+      id: "gbs",
+      name: "挂傍山监测区域",
+      devices,
+      total_devices: devices.length,
+      online_devices: onlineDevices,
+      offline_devices: offlineDevices
+    }
+  ];
+
+  return { devices, regions, onlineDevices, offlineDevices };
+}
+
 const aggregationSchema = z
   .object({
     type: z.enum(["hierarchy_stats", "network_stats", "device_summary", "real_time_dashboard"]),
@@ -1238,11 +1315,18 @@ export function registerLegacyDeviceManagementCompatRoutes(
   });
 
   app.get("/device-management-real", async (request, reply) => {
-    redirectLegacyAlias(request.raw.url, reply, "/device-management-real", "/device-management");
+    redirectLegacyAlias(request.raw.url, reply, "/device-management-real", "/device-management/hierarchical");
   });
 
   app.get("/device-management-real-db", async (request, reply) => {
-    redirectLegacyAlias(request.raw.url, reply, "/device-management-real-db", "/device-management");
+    const query = (request.query ?? {}) as { mode?: unknown };
+    const mode = typeof query.mode === "string" ? query.mode.trim() : "";
+    if (mode === "device_specific") {
+      redirectLegacyAlias(request.raw.url, reply, "/device-management-real-db", "/device-management");
+      return;
+    }
+
+    redirectLegacyAlias(request.raw.url, reply, "/device-management-real-db", "/device-management/hierarchical");
   });
 
   app.post("/device-management-real/diagnostics", async (request, reply) => {
@@ -1250,11 +1334,25 @@ export function registerLegacyDeviceManagementCompatRoutes(
   });
 
   app.get("/device-management/hierarchical", async (request, reply) => {
-    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
-      legacyFail(reply, 503, "PostgreSQL not configured");
+      const nowIso = new Date().toISOString();
+      const query = (request.query ?? {}) as { mode?: unknown };
+      const mode = typeof query.mode === "string" ? query.mode.trim() : "";
+
+      const { devices, regions, onlineDevices, offlineDevices } = fallbackLegacyHierarchicalDevices(nowIso);
+      if (mode === "summary") {
+        legacyOk(reply, devices, "使用fallback数据（后端服务不可用）");
+        return;
+      }
+
+      legacyOk(
+        reply,
+        { regions, allDevices: devices, totalDevices: devices.length, onlineDevices, offlineDevices },
+        "使用fallback数据（后端服务不可用）"
+      );
       return;
     }
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
 
     const devices = await listDevicesWithStations(pg);
     const deviceIds = devices.map((d) => d.device_id);
