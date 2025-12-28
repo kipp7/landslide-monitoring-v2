@@ -36,7 +36,7 @@ export default function HoverSidebar() {
         <Menu
           theme="dark"
           mode="inline"
-          defaultSelectedKeys={['analysis']}
+          defaultSelectedKeys={['1']}
           onClick={({ key }) => {
             if (key === 'home') router.push('/')
             if (key === 'analysis') router.push('/analysis')
@@ -56,4 +56,3 @@ export default function HoverSidebar() {
     </div>
   )
 }
-
