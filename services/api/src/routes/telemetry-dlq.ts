@@ -61,14 +61,11 @@ function previewText(value: string, maxLen: number): string {
 
 export function registerTelemetryDlqRoutes(app: FastifyInstance, config: AppConfig, pg: PgPool | null): void {
   const adminCfg: AdminAuthConfig = { adminApiToken: config.adminApiToken, jwtEnabled: Boolean(config.jwtAccessSecret) };
+  const pgMissingWarnings = [{ kind: "pg_missing", message: "PostgreSQL 未配置" }] as const;
 
   app.get("/telemetry/dlq/stats", async (request, reply) => {
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:analysis"))) return;
-    if (!pg) {
-      fail(reply, 503, "PostgreSQL 未配置", traceId);
-      return;
-    }
 
     const parseQuery = dlqStatsQuerySchema.safeParse(request.query);
     if (!parseQuery.success) {
@@ -84,6 +81,22 @@ export function registerTelemetryDlqRoutes(app: FastifyInstance, config: AppConf
         fail(reply, 400, "参数错误", traceId, { field: "timeRange" });
         return;
       }
+    }
+
+    if (!pg) {
+      ok(
+        reply,
+        {
+          window: startTime && endTime ? { startTime, endTime } : null,
+          deviceId: deviceId ?? "",
+          totals: { total: 0 },
+          byReasonCode: [],
+          unavailable: true,
+          warnings: pgMissingWarnings
+        },
+        traceId
+      );
+      return;
     }
 
     const where: string[] = [];
@@ -140,10 +153,6 @@ export function registerTelemetryDlqRoutes(app: FastifyInstance, config: AppConf
   app.get("/telemetry/dlq", async (request, reply) => {
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:analysis"))) return;
-    if (!pg) {
-      fail(reply, 503, "PostgreSQL 未配置", traceId);
-      return;
-    }
 
     const parseQuery = listDlqQuerySchema.safeParse(request.query);
     if (!parseQuery.success) {
@@ -153,6 +162,20 @@ export function registerTelemetryDlqRoutes(app: FastifyInstance, config: AppConf
 
     const { page, pageSize, reasonCode, deviceId, startTime, endTime } = parseQuery.data;
     const offset = (page - 1) * pageSize;
+
+    if (!pg) {
+      ok(
+        reply,
+        {
+          list: [],
+          pagination: { page, pageSize, total: 0, totalPages: 1 },
+          unavailable: true,
+          warnings: pgMissingWarnings
+        },
+        traceId
+      );
+      return;
+    }
 
     const where: string[] = [];
     const params: unknown[] = [];
@@ -238,10 +261,6 @@ export function registerTelemetryDlqRoutes(app: FastifyInstance, config: AppConf
   app.get("/telemetry/dlq/:messageId", async (request, reply) => {
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:analysis"))) return;
-    if (!pg) {
-      fail(reply, 503, "PostgreSQL 未配置", traceId);
-      return;
-    }
 
     const parseId = messageIdSchema.safeParse((request.params as { messageId?: unknown }).messageId);
     if (!parseId.success) {
@@ -249,6 +268,11 @@ export function registerTelemetryDlqRoutes(app: FastifyInstance, config: AppConf
       return;
     }
     const messageId = parseId.data;
+
+    if (!pg) {
+      ok(reply, null, traceId);
+      return;
+    }
 
     const row = await withPgClient(pg, async (client) =>
       queryOne<DlqRow>(
