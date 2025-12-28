@@ -255,6 +255,62 @@ function _buildLegacyMonitoringStationsDeviceLegends(devices: DeviceListRow[]): 
   }, {});
 }
 
+function fallbackLegacyMonitoringStations(nowIso: string) {
+  return [
+    {
+      device_id: "device_1",
+      actual_device_id: "hangbishan_device_001",
+      station_name: "挂傍山中心监测站",
+      location_name: "玉林师范学院东校区挂傍山中心点",
+      latitude: 22.6847,
+      longitude: 110.1893,
+      status: "active",
+      risk_level: "medium",
+      sensor_types: ["temperature", "humidity", "acceleration", "illumination", "gps"],
+      chart_legend_name: "挂傍山中心监测站",
+      description: "挂傍山核心监测区域的主要传感器节点",
+      install_date: "2024-05-15T00:00:00Z",
+      last_data_time: nowIso,
+      is_online: true,
+      online_status: "online"
+    },
+    {
+      device_id: "device_2",
+      actual_device_id: "hangbishan_device_002",
+      station_name: "坡顶监测站",
+      location_name: "玉林师范学院东校区挂傍山坡顶",
+      latitude: 22.685,
+      longitude: 110.189,
+      status: "active",
+      risk_level: "high",
+      sensor_types: ["temperature", "humidity", "gyroscope", "vibration", "gps"],
+      chart_legend_name: "坡顶监测站",
+      description: "挂傍山坡顶位置的监测设备",
+      install_date: "2024-05-15T00:00:00Z",
+      last_data_time: nowIso,
+      is_online: true,
+      online_status: "online"
+    },
+    {
+      device_id: "device_3",
+      actual_device_id: "hangbishan_device_003",
+      station_name: "坡脚监测站",
+      location_name: "玉林师范学院东校区挂傍山坡脚",
+      latitude: 22.6844,
+      longitude: 110.1896,
+      status: "active",
+      risk_level: "low",
+      sensor_types: ["temperature", "acceleration", "illumination", "gps", "vibration"],
+      chart_legend_name: "坡脚监测站",
+      description: "挂傍山坡脚位置的监测设备",
+      install_date: "2024-05-15T00:00:00Z",
+      last_data_time: nowIso,
+      is_online: true,
+      online_status: "online"
+    }
+  ];
+}
+
 function parseRelativeTimeRange(raw: string | undefined): { label: string; start: Date; end: Date } {
   const end = new Date();
   const fallback = { label: "24h", start: new Date(end.getTime() - 24 * 60 * 60 * 1000), end };
@@ -1988,11 +2044,32 @@ export function registerLegacyDeviceManagementCompatRoutes(
   });
 
   app.get("/monitoring-stations", async (request, reply) => {
-    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
-      legacyFail(reply, 503, "PostgreSQL not configured");
+      const nowIso = new Date().toISOString();
+      const query = (request.query ?? {}) as { chartType?: unknown };
+      const chartType = typeof query.chartType === "string" ? query.chartType.trim() : "";
+
+      if (chartType) {
+        const preset = LEGACY_MONITORING_STATIONS_CHART_PRESETS[chartType] ?? {
+          title: `${chartType}趋势图 - 挂傍山监测网络`,
+          unit: "",
+          yAxisName: chartType
+        };
+
+        const stations = fallbackLegacyMonitoringStations(nowIso);
+        const deviceLegends = stations.reduce<Record<string, string>>((acc, s) => {
+          acc[s.device_id] = s.chart_legend_name || s.station_name;
+          return acc;
+        }, {});
+
+        legacyOk(reply, { chartType, title: preset.title, unit: preset.unit, yAxisName: preset.yAxisName, deviceLegends });
+        return;
+      }
+
+      legacyOk(reply, fallbackLegacyMonitoringStations(nowIso), "使用fallback数据（后端服务不可用）");
       return;
     }
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
 
     const query = (request.query ?? {}) as { chartType?: unknown };
     const chartType = typeof query.chartType === "string" ? query.chartType.trim() : "";
@@ -2054,11 +2131,32 @@ export function registerLegacyDeviceManagementCompatRoutes(
   });
 
   app.get("/monitoring-stations/chart-config", async (request, reply) => {
-    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
-      legacyFail(reply, 503, "PostgreSQL not configured");
+      const query = (request.query ?? {}) as { type?: unknown; chartType?: unknown };
+      const type = typeof query.type === "string" ? query.type : typeof query.chartType === "string" ? query.chartType : "";
+      const chartType = type.trim();
+      if (!chartType) {
+        legacyFail(reply, 400, "type is required");
+        return;
+      }
+
+      const preset = LEGACY_MONITORING_STATIONS_CHART_PRESETS[chartType] ?? {
+        title: `${chartType}趋势图 - 挂傍山监测网络`,
+        unit: "",
+        yAxisName: chartType
+      };
+
+      const nowIso = new Date().toISOString();
+      const stations = fallbackLegacyMonitoringStations(nowIso);
+      const deviceLegends = stations.reduce<Record<string, string>>((acc, s) => {
+        acc[s.device_id] = s.chart_legend_name || s.station_name;
+        return acc;
+      }, {});
+
+      legacyOk(reply, { chartType, title: preset.title, unit: preset.unit, yAxisName: preset.yAxisName, deviceLegends });
       return;
     }
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
 
     const query = (request.query ?? {}) as { type?: unknown; chartType?: unknown };
     const type = typeof query.type === "string" ? query.type : typeof query.chartType === "string" ? query.chartType : "";
@@ -2285,11 +2383,25 @@ export function registerLegacyDeviceManagementCompatRoutes(
   });
 
   app.get("/monitoring-stations/:deviceId", async (request, reply) => {
-    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
-      legacyFail(reply, 503, "PostgreSQL not configured");
+      const parsed = deviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
+      if (!parsed.success) {
+        legacyFail(reply, 400, "invalid deviceId");
+        return;
+      }
+
+      const nowIso = new Date().toISOString();
+      const stations = fallbackLegacyMonitoringStations(nowIso);
+      const found = stations.find((s) => s.device_id === parsed.data.trim());
+      if (!found) {
+        legacyFail(reply, 404, `监测站 ${parsed.data.trim()} 不存在`);
+        return;
+      }
+
+      legacyOk(reply, found, "使用fallback数据（后端服务不可用）");
       return;
     }
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
 
     const parsed = deviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
     if (!parsed.success) {
