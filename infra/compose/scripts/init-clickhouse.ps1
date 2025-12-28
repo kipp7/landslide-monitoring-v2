@@ -56,12 +56,47 @@ while ($true) {
 }
 Write-Host "ClickHouse is ready." -ForegroundColor Green
 
+$chUser = $env:CH_USER
+if (-not $chUser) { $chUser = "landslide" }
+$chPassword = $env:CH_PASSWORD
+if (-not $chPassword) { $chPassword = "change-me" }
+$chDatabase = $env:CH_DATABASE
+if (-not $chDatabase) { $chDatabase = "landslide" }
+
+function Get-ClickhouseContainerEnv([string]$var) {
+  $cmd = 'printf "%s" "$' + $var + '"'
+  $val = docker compose -f $ComposeFile --env-file $EnvFile exec -T clickhouse sh -lc $cmd 2>$null
+  if ($LASTEXITCODE -ne 0) { return $null }
+  $t = ($val | Out-String).Trim()
+  if (-not $t) { return $null }
+  return $t
+}
+
 $sqlFiles = Get-ChildItem -Path $SqlDir -File -Filter "*.sql" | Sort-Object Name
 foreach ($f in $sqlFiles) {
   Write-Host "Running: $($f.Name)"
   $sql = Get-Content -Raw -Encoding UTF8 $f.FullName
-  $sql | docker compose -f $ComposeFile --env-file $EnvFile exec -T clickhouse clickhouse-client --user $env:CH_USER --password $env:CH_PASSWORD --database $env:CH_DATABASE --multiquery
-  Assert-LastExitCode "clickhouse-client failed: $($f.Name)"
+
+  $out = $sql | docker compose -f $ComposeFile --env-file $EnvFile exec -T clickhouse clickhouse-client --user $chUser --password $chPassword --database $chDatabase --multiquery 2>&1
+  $code = $LASTEXITCODE
+
+  if ($code -ne 0 -and (($out | Out-String) -match "AUTHENTICATION_FAILED|Authentication failed")) {
+    $runtimeUser = Get-ClickhouseContainerEnv "CLICKHOUSE_USER"
+    $runtimePassword = Get-ClickhouseContainerEnv "CLICKHOUSE_PASSWORD"
+    $runtimeDatabase = Get-ClickhouseContainerEnv "CLICKHOUSE_DB"
+
+    if ($runtimeUser) { $chUser = $runtimeUser }
+    if ($runtimePassword) { $chPassword = $runtimePassword }
+    if ($runtimeDatabase) { $chDatabase = $runtimeDatabase }
+
+    Write-Host "Retrying ClickHouse DDL using container credentials..." -ForegroundColor Yellow
+    $out = $sql | docker compose -f $ComposeFile --env-file $EnvFile exec -T clickhouse clickhouse-client --user $chUser --password $chPassword --database $chDatabase --multiquery 2>&1
+    $code = $LASTEXITCODE
+  }
+
+  if ($code -ne 0) {
+    throw "clickhouse-client failed: $($f.Name) (exit=$code)`n$($out | Out-String)"
+  }
 }
 
 Write-Host "ClickHouse init done."
