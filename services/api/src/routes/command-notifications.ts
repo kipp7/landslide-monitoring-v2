@@ -62,14 +62,11 @@ export function registerCommandNotificationRoutes(
   pg: PgPool | null
 ): void {
   const adminCfg: AdminAuthConfig = { adminApiToken: config.adminApiToken, jwtEnabled: Boolean(config.jwtAccessSecret) };
+  const pgMissingWarnings = [{ kind: "pg_missing", message: "PostgreSQL 未配置" }] as const;
 
   app.get("/devices/:deviceId/command-notifications", async (request, reply) => {
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "device:control"))) return;
-    if (!pg) {
-      fail(reply, 503, "PostgreSQL 未配置", traceId);
-      return;
-    }
 
     const parseId = deviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
     if (!parseId.success) {
@@ -94,6 +91,20 @@ export function registerCommandNotificationRoutes(
     const end = endTime ? new Date(endTime) : null;
     if (start && end && !(start < end)) {
       fail(reply, 400, "参数错误", traceId, { field: "timeRange" });
+      return;
+    }
+
+    if (!pg) {
+      ok(
+        reply,
+        {
+          list: [],
+          pagination: { page, pageSize, total: 0, totalPages: 1 },
+          unavailable: true,
+          warnings: pgMissingWarnings
+        },
+        traceId
+      );
       return;
     }
 
@@ -216,10 +227,6 @@ export function registerCommandNotificationRoutes(
   app.get("/devices/:deviceId/command-notifications/stats", async (request, reply) => {
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "device:control"))) return;
-    if (!pg) {
-      fail(reply, 503, "PostgreSQL 未配置", traceId);
-      return;
-    }
 
     const parseId = deviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
     if (!parseId.success) {
@@ -274,6 +281,27 @@ export function registerCommandNotificationRoutes(
         fail(reply, 400, "参数错误", traceId, { field: "bucket", reason: "time range too large" });
         return;
       }
+    }
+
+    if (!pg) {
+      ok(
+        reply,
+        {
+          deviceId,
+          window: startTime && endTime ? { startTime, endTime } : null,
+          notifyType: notifyType ?? "",
+          bucket: bucket ?? "",
+          totals: { total: 0, unread: 0 },
+          byStatus: [],
+          byNotifyType: [],
+          byEventType: [],
+          byBucket: [],
+          unavailable: true,
+          warnings: pgMissingWarnings
+        },
+        traceId
+      );
+      return;
     }
 
     const data = await withPgClient(pg, async (client) => {
@@ -408,10 +436,6 @@ export function registerCommandNotificationRoutes(
   app.get("/devices/:deviceId/command-notifications/:notificationId", async (request, reply) => {
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "device:control"))) return;
-    if (!pg) {
-      fail(reply, 503, "PostgreSQL 未配置", traceId);
-      return;
-    }
 
     const parseId = deviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
     if (!parseId.success) {
@@ -428,6 +452,11 @@ export function registerCommandNotificationRoutes(
       return;
     }
     const notificationId = parseN.data;
+
+    if (!pg) {
+      ok(reply, null, traceId);
+      return;
+    }
 
     const row = await withPgClient(pg, async (client) =>
       queryOne<NotificationRow>(
@@ -486,10 +515,6 @@ export function registerCommandNotificationRoutes(
   app.put("/devices/:deviceId/command-notifications/:notificationId/read", async (request, reply) => {
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "device:control"))) return;
-    if (!pg) {
-      fail(reply, 503, "PostgreSQL 未配置", traceId);
-      return;
-    }
 
     const parseId = deviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
     if (!parseId.success) {
@@ -506,6 +531,15 @@ export function registerCommandNotificationRoutes(
       return;
     }
     const notificationId = parseN.data;
+
+    if (!pg) {
+      ok(
+        reply,
+        { notificationId, readAt: "", unavailable: true, warnings: pgMissingWarnings },
+        traceId
+      );
+      return;
+    }
 
     const row = await withPgClient(pg, async (client) => {
       const existing = await queryOne<{ read_at: string | null }>(
