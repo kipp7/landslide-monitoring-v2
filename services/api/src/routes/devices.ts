@@ -107,17 +107,26 @@ export function registerDeviceRoutes(
   app.get("/devices", async (request, reply) => {
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "device:view"))) return;
-    if (!pg) {
-      fail(reply, 503, "PostgreSQL 未配置", traceId);
-      return;
-    }
-
     const parseQuery = listDevicesQuerySchema.safeParse(request.query);
     if (!parseQuery.success) {
       fail(reply, 400, "参数错误", traceId, { field: "query", issues: parseQuery.error.issues });
       return;
     }
     const { page, pageSize, keyword, status, stationId, deviceType } = parseQuery.data;
+
+    if (!pg) {
+      ok(
+        reply,
+        {
+          list: [],
+          pagination: { page, pageSize, total: 0, totalPages: 1 },
+          warnings: [{ kind: "pg_missing", message: "PostgreSQL not configured" }],
+          unavailable: true
+        },
+        traceId
+      );
+      return;
+    }
 
     const where: string[] = [];
     const params: unknown[] = [];
@@ -191,14 +200,22 @@ export function registerDeviceRoutes(
   app.get("/devices/:deviceId", async (request, reply) => {
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "device:view"))) return;
-    if (!pg) {
-      fail(reply, 503, "PostgreSQL 未配置", traceId);
-      return;
-    }
-
     const parseId = deviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
     if (!parseId.success) {
       fail(reply, 400, "参数错误", traceId, { field: "deviceId" });
+      return;
+    }
+
+    if (!pg) {
+      ok(
+        reply,
+        {
+          deviceId: parseId.data,
+          warnings: [{ kind: "pg_missing", message: "PostgreSQL not configured" }],
+          unavailable: true
+        },
+        traceId
+      );
       return;
     }
 
