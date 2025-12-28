@@ -8,11 +8,12 @@ const env = {
   NODE_OPTIONS: hasMaxOldSpace ? nodeOptionsRaw : `${nodeOptionsRaw} --max-old-space-size=8192`.trim()
 };
 
-const cmd = process.platform === "win32" ? "next.cmd" : "next";
-const child = spawn(cmd, ["build"], { stdio: "inherit", env });
+const child =
+  process.platform === "win32"
+    ? spawn("cmd.exe", ["/d", "/s", "/c", "next", "build"], { stdio: "inherit", env })
+    : spawn("next", ["build"], { stdio: "inherit", env });
 
 child.on("exit", (code, signal) => {
   if (signal) process.kill(process.pid, signal);
   process.exit(code ?? 1);
 });
-
