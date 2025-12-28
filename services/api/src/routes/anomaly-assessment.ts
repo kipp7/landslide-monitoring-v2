@@ -54,14 +54,11 @@ export function registerAnomalyAssessmentCompatRoutes(
   opts?: { legacyResponse?: boolean }
 ): void {
   const adminCfg: AdminAuthConfig = { adminApiToken: config.adminApiToken, jwtEnabled: Boolean(config.jwtAccessSecret) };
+  const pgMissingWarnings = [{ kind: "pg_missing", message: "PostgreSQL 未配置" }] as const;
 
   app.get("/anomaly-assessment", async (request, reply) => {
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "alert:view"))) return;
-    if (!pg) {
-      fail(reply, 503, "PostgreSQL 未配置", traceId);
-      return;
-    }
 
     const parseQuery = querySchema.safeParse(request.query);
     if (!parseQuery.success) {
@@ -71,6 +68,26 @@ export function registerAnomalyAssessmentCompatRoutes(
     const { timeWindow } = parseQuery.data;
 
     const processedAt = new Date().toISOString();
+
+    if (!pg) {
+      const payload = {
+        data: [],
+        stats: { total: 0, red: 0, orange: 0, yellow: 0, blue: 0 },
+        time_window: timeWindow,
+        processed_at: processedAt,
+        source: "v2_alerts_compat",
+        unavailable: true,
+        warnings: pgMissingWarnings
+      };
+
+      if (opts?.legacyResponse) {
+        reply.send({ success: true, ...payload });
+        return;
+      }
+
+      ok(reply, payload, traceId);
+      return;
+    }
 
     const rows = await withPgClient(pg, async (client) =>
       client.query<AnomalyAggRow>(
