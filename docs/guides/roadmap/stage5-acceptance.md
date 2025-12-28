@@ -33,5 +33,6 @@ npm run build
 powershell -NoProfile -ExecutionPolicy Bypass -File infra/compose/scripts/e2e-smoke-test.ps1 -Stage5Regression
 ```
 
-备注：`backups/` 已被 `.gitignore` 忽略；e2e evidence bundle 不要提交。
+已验证（本地）：2025-12-28 已跑通 `-Stage5Regression`（含固件模拟器 + `ping`/`set_config`/`reboot` 命令闭环）。
 
+备注：`backups/` 已被 `.gitignore` 忽略；e2e evidence bundle 不要提交。
