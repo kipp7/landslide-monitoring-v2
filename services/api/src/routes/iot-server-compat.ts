@@ -241,7 +241,7 @@ export function registerIotServerCompatRoutes(
       .find((m) => typeof m?.simple_id === "string" && m.simple_id === simpleId);
 
     if (!found) {
-      void reply.code(404).send({ success: false, error: "device not found" });
+      void reply.code(404).send({ success: false, error: "设备不存在" });
       return;
     }
 
