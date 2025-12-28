@@ -63,3 +63,6 @@ Body：
 
 Legacy 设备 ID 映射策略：
 - UUID 直通；否则按 `devices.metadata.legacy_device_id`、`devices.metadata.externalIds.legacy`、`devices.device_name` 依次尝试匹配。
+
+PostgreSQL 未配置时（`pg=null`）：
+- `GET/POST /api/device-health-expert` 返回 `200` 并携带 `is_fallback: true`（跳过鉴权以对齐参考区旧前端调用）；`data.metadata.analysisMethod` 为 `fallback_no_pg`。

@@ -609,11 +609,39 @@ export function registerDeviceHealthExpertLegacyCompatRoutes(
   const adminCfg: AdminAuthConfig = { adminApiToken: config.adminApiToken, jwtEnabled: Boolean(config.jwtAccessSecret) };
 
   app.get("/device-health-expert", async (request, reply) => {
-    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
     if (!pg) {
-      void reply.code(503).send({ success: false, error: "PostgreSQL not configured" });
+      const parsed = legacyQuerySchema.safeParse(request.query ?? {});
+      if (!parsed.success) {
+        void reply.code(400).send({ success: false, error: "invalid query" });
+        return;
+      }
+
+      const nowIso = new Date().toISOString();
+      const metric = parsed.data.metric;
+      const battery = computeBattery({});
+      const signal = computeSignal({});
+      const health = computeHealth(nowIso, battery, signal);
+      const out: ExpertResult = {
+        deviceId: parsed.data.device_id,
+        timestamp: nowIso,
+        analysisType: analysisType(metric),
+        ...(metric === "battery" ? { battery } : {}),
+        ...(metric === "signal" ? { signal } : {}),
+        ...(metric === "health" ? { health } : {}),
+        ...(metric === "all" ? { battery, signal, health } : {}),
+        metadata: {
+          apiVersion: "2.0.0",
+          analysisMethod: "fallback_no_pg",
+          calculationTime: nowIso,
+          cacheUsed: false
+        }
+      };
+
+      void reply.code(200).send({ success: true, data: out, timestamp: nowIso, is_fallback: true });
       return;
     }
+
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
 
     const parsed = legacyQuerySchema.safeParse(request.query ?? {});
     if (!parsed.success) {
@@ -676,11 +704,37 @@ export function registerDeviceHealthExpertLegacyCompatRoutes(
   });
 
   app.post("/device-health-expert", async (request, reply) => {
-    if (!(await requirePermission(adminCfg, pg, request, reply, "system:config"))) return;
     if (!pg) {
-      void reply.code(503).send({ success: false, error: "PostgreSQL not configured" });
+      const parsed = z
+        .object({
+          deviceId: z.string().min(1),
+          action: postSchema.shape.action,
+          parameters: postSchema.shape.parameters.optional()
+        })
+        .strict()
+        .safeParse(request.body);
+      if (!parsed.success) {
+        void reply.code(400).send({ success: false, error: "invalid body" });
+        return;
+      }
+
+      const nowIso = new Date().toISOString();
+      const actionId = `fallback-${parsed.data.action}-${String(Date.now())}`;
+      void reply.code(200).send({
+        success: true,
+        data: {
+          deviceId: parsed.data.deviceId,
+          action: parsed.data.action,
+          parameters: parsed.data.parameters ?? {},
+          actionId
+        },
+        timestamp: nowIso,
+        is_fallback: true
+      });
       return;
     }
+
+    if (!(await requirePermission(adminCfg, pg, request, reply, "system:config"))) return;
 
     const parsed = z
       .object({
