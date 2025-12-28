@@ -57,17 +57,26 @@ export function registerAlertRoutes(app: FastifyInstance, config: AppConfig, pg:
   app.get("/alerts", async (request, reply) => {
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "alert:view"))) return;
-    if (!pg) {
-      fail(reply, 503, "PostgreSQL 未配置", traceId);
-      return;
-    }
-
     const parseQuery = listAlertsQuerySchema.safeParse(request.query);
     if (!parseQuery.success) {
       fail(reply, 400, "参数错误", traceId, { field: "query", issues: parseQuery.error.issues });
       return;
     }
     const { page, pageSize, deviceId, stationId, severity, status, startTime, endTime } = parseQuery.data;
+
+    if (!pg) {
+      ok(
+        reply,
+        {
+          list: [],
+          pagination: { page, pageSize, total: 0, totalPages: 1 },
+          warnings: [{ kind: "pg_missing", message: "PostgreSQL not configured" }],
+          unavailable: true
+        },
+        traceId
+      );
+      return;
+    }
 
     if ((startTime && !endTime) || (!startTime && endTime)) {
       fail(reply, 400, "参数错误", traceId, { field: "timeRange" });
@@ -280,17 +289,21 @@ export function registerAlertRoutes(app: FastifyInstance, config: AppConfig, pg:
   app.get("/alerts/:alertId/events", async (request, reply) => {
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "alert:view"))) return;
-    if (!pg) {
-      fail(reply, 503, "PostgreSQL 未配置", traceId);
-      return;
-    }
-
     const parseId = alertIdSchema.safeParse((request.params as { alertId?: unknown }).alertId);
     if (!parseId.success) {
       fail(reply, 400, "参数错误", traceId, { field: "alertId" });
       return;
     }
     const alertId = parseId.data;
+
+    if (!pg) {
+      ok(
+        reply,
+        { alertId, events: [], warnings: [{ kind: "pg_missing", message: "PostgreSQL not configured" }], unavailable: true },
+        traceId
+      );
+      return;
+    }
 
     const data = await withPgClient(pg, async (client) => {
       const exists = await queryOne<{ ok: boolean }>(

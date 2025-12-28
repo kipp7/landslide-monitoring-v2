@@ -104,17 +104,17 @@ export function registerAlertRuleRoutes(app: FastifyInstance, config: AppConfig,
   app.get("/alert-rules", async (request, reply) => {
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "alert:config"))) return;
-    if (!pg) {
-      fail(reply, 503, "PostgreSQL 未配置", traceId);
-      return;
-    }
-
     const parseQuery = listRulesQuerySchema.safeParse(request.query);
     if (!parseQuery.success) {
       fail(reply, 400, "参数错误", traceId, { field: "query", issues: parseQuery.error.issues });
       return;
     }
     const { isActive, scope, deviceId, stationId } = parseQuery.data;
+
+    if (!pg) {
+      ok(reply, { list: [], warnings: [{ kind: "pg_missing", message: "PostgreSQL not configured" }], unavailable: true }, traceId);
+      return;
+    }
 
     const where: string[] = [];
     const params: unknown[] = [];
@@ -193,17 +193,35 @@ export function registerAlertRuleRoutes(app: FastifyInstance, config: AppConfig,
   app.get("/alert-rules/:ruleId", async (request, reply) => {
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "alert:config"))) return;
-    if (!pg) {
-      fail(reply, 503, "PostgreSQL 未配置", traceId);
-      return;
-    }
-
     const parseId = ruleIdSchema.safeParse((request.params as { ruleId?: unknown }).ruleId);
     if (!parseId.success) {
       fail(reply, 400, "参数错误", traceId, { field: "ruleId" });
       return;
     }
     const ruleId = parseId.data;
+
+    if (!pg) {
+      const now = new Date().toISOString();
+      ok(
+        reply,
+        {
+          rule: {
+            ruleId,
+            ruleName: "",
+            description: "",
+            scope: { type: "global" },
+            isActive: false,
+            currentVersion: 0,
+            updatedAt: now
+          },
+          currentVersion: null,
+          warnings: [{ kind: "pg_missing", message: "PostgreSQL not configured" }],
+          unavailable: true
+        },
+        traceId
+      );
+      return;
+    }
 
     const data = await withPgClient(pg, async (client) => {
       const rule = await queryOne<{
@@ -442,17 +460,17 @@ export function registerAlertRuleRoutes(app: FastifyInstance, config: AppConfig,
   app.get("/alert-rules/:ruleId/versions", async (request, reply) => {
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "alert:config"))) return;
-    if (!pg) {
-      fail(reply, 503, "PostgreSQL 未配置", traceId);
-      return;
-    }
-
     const parseId = ruleIdSchema.safeParse((request.params as { ruleId?: unknown }).ruleId);
     if (!parseId.success) {
       fail(reply, 400, "参数错误", traceId, { field: "ruleId" });
       return;
     }
     const ruleId = parseId.data;
+
+    if (!pg) {
+      ok(reply, { ruleId, list: [], warnings: [{ kind: "pg_missing", message: "PostgreSQL not configured" }], unavailable: true }, traceId);
+      return;
+    }
 
     const rows = await withPgClient(pg, async (client) => {
       const exists = await queryOne<{ ok: boolean }>(
@@ -510,11 +528,6 @@ export function registerAlertRuleRoutes(app: FastifyInstance, config: AppConfig,
   app.get("/alert-rules/:ruleId/versions/:version", async (request, reply) => {
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "alert:config"))) return;
-    if (!pg) {
-      fail(reply, 503, "PostgreSQL 未配置", traceId);
-      return;
-    }
-
     const parseId = ruleIdSchema.safeParse((request.params as { ruleId?: unknown }).ruleId);
     if (!parseId.success) {
       fail(reply, 400, "参数错误", traceId, { field: "ruleId" });
@@ -529,6 +542,22 @@ export function registerAlertRuleRoutes(app: FastifyInstance, config: AppConfig,
       return;
     }
     const version = parseVersion.data;
+
+    if (!pg) {
+      ok(
+        reply,
+        {
+          ruleId,
+          version,
+          createdAt: new Date().toISOString(),
+          dsl: {},
+          warnings: [{ kind: "pg_missing", message: "PostgreSQL not configured" }],
+          unavailable: true
+        },
+        traceId
+      );
+      return;
+    }
 
     const row = await withPgClient(pg, async (client) =>
       queryOne<{ rule_version: number; created_at: string; dsl_json: unknown }>(
