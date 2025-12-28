@@ -72,15 +72,31 @@ function Get-ClickhouseContainerEnv([string]$var) {
   return $t
 }
 
+function Invoke-ClickhouseClient([string]$sqlText, [string]$user, [string]$password, [string]$database) {
+  try {
+    $out = $sqlText | docker compose -f $ComposeFile --env-file $EnvFile exec -T clickhouse clickhouse-client --user $user --password $password --database $database --multiquery 2>&1
+    return @{
+      Out = ($out | Out-String)
+      Code = $LASTEXITCODE
+    }
+  } catch {
+    return @{
+      Out = ($_ | Out-String)
+      Code = $LASTEXITCODE
+    }
+  }
+}
+
 $sqlFiles = Get-ChildItem -Path $SqlDir -File -Filter "*.sql" | Sort-Object Name
 foreach ($f in $sqlFiles) {
   Write-Host "Running: $($f.Name)"
   $sql = Get-Content -Raw -Encoding UTF8 $f.FullName
 
-  $out = $sql | docker compose -f $ComposeFile --env-file $EnvFile exec -T clickhouse clickhouse-client --user $chUser --password $chPassword --database $chDatabase --multiquery 2>&1
-  $code = $LASTEXITCODE
+  $res = Invoke-ClickhouseClient $sql $chUser $chPassword $chDatabase
+  $out = $res.Out
+  $code = $res.Code
 
-  if ($code -ne 0 -and (($out | Out-String) -match "AUTHENTICATION_FAILED|Authentication failed")) {
+  if ($code -ne 0 -and ($out -match "AUTHENTICATION_FAILED|Authentication failed")) {
     $runtimeUser = Get-ClickhouseContainerEnv "CLICKHOUSE_USER"
     $runtimePassword = Get-ClickhouseContainerEnv "CLICKHOUSE_PASSWORD"
     $runtimeDatabase = Get-ClickhouseContainerEnv "CLICKHOUSE_DB"
@@ -90,12 +106,13 @@ foreach ($f in $sqlFiles) {
     if ($runtimeDatabase) { $chDatabase = $runtimeDatabase }
 
     Write-Host "Retrying ClickHouse DDL using container credentials..." -ForegroundColor Yellow
-    $out = $sql | docker compose -f $ComposeFile --env-file $EnvFile exec -T clickhouse clickhouse-client --user $chUser --password $chPassword --database $chDatabase --multiquery 2>&1
-    $code = $LASTEXITCODE
+    $res = Invoke-ClickhouseClient $sql $chUser $chPassword $chDatabase
+    $out = $res.Out
+    $code = $res.Code
   }
 
   if ($code -ne 0) {
-    throw "clickhouse-client failed: $($f.Name) (exit=$code)`n$($out | Out-String)"
+    throw "clickhouse-client failed: $($f.Name) (exit=$code)`n$out"
   }
 }
 
