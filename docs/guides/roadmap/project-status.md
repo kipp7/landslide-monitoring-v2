@@ -11,6 +11,7 @@
 - 2025-12-28：fix：`infra/compose/scripts/init-clickhouse.ps1` 对 ClickHouse 认证失败增加“读取容器内实际凭据后重试”，避免本地长期运行环境与 `.env` 不一致导致 Stage5Regression 初始化失败。
 - 2025-12-28：fix：移除重复注册的 legacy compat alias routes（`/api/device-management-optimized` 等），避免 Fastify 启动时报 `FST_ERR_DUPLICATED_ROUTE`，恢复 e2e/Stage5Regression 的 API 启动。
 - 2025-12-28：fix：`infra/compose/scripts/e2e-smoke-test.ps1` 生成服务 `.env` 时优先读取 compose 容器内实际 Postgres/ClickHouse 凭据，避免本地长期环境与 `infra/compose/.env` 不一致导致 Stage5Regression 访问 `/api/v1/system/status`/`/dashboard` 失败。
+- 2025-12-28：Stage5Regression：单机回归已跑通（固件模拟器 + `ping`/`set_config`/`reboot` 命令闭环）。
 - 2025-12-28：PR #289，Web：`/debug-api` 恢复参考区同款调试页（不再重定向到 `/ops/debug-api`）。
 - 2025-12-28：PR #294，API：camera legacy compat 补齐 `PUT/DELETE /api/camera`（含 `/iot/api/camera`），并更新 `docs/integrations/api/011-camera.md`。
 - 2025-12-28：PR #283，WS-K.33：monitoring-stations 图表配置兼容（legacy `/api/monitoring-stations?chartType=...` 返回 `{chartType,title,unit,yAxisName,deviceLegends}`），并补齐 `/api/monitoring-stations/chart-config` 路由代理。
