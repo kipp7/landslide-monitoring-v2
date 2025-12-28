@@ -4,13 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "next build",
+    "build": "node scripts/next-build.mjs",
     "start": "next start",
     "lint": "next lint",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "analyze": "cross-env ANALYZE=true next build",
-    "build:prod": "next build"
+    "analyze": "cross-env ANALYZE=true node scripts/next-build.mjs",
+    "build:prod": "node scripts/next-build.mjs"
   },
   "dependencies": {
     "@amap/amap-jsapi-loader": "^1.0.1",
