@@ -216,6 +216,45 @@ function clickhouseStringToIsoZ(ts: string): string {
   return t;
 }
 
+function _getLegacyMonitoringStationsChartConfig(chartTypeRaw: string): { title: string; unit: string; yAxisName: string } {
+  const chartType = chartTypeRaw.trim().toLowerCase();
+
+  const configs: Record<string, { title: string; unit: string; yAxisName: string }> = {
+    temperature: { title: "温度趋势图 (°C) - 挂榜山监测网络", unit: "°C", yAxisName: "温度" },
+    humidity: { title: "湿度趋势图 (%) - 挂榜山监测网络", unit: "%", yAxisName: "湿度" },
+    acceleration: { title: "加速度趋势图 (mg) - 挂榜山监测网络", unit: "mg", yAxisName: "加速度" },
+    gyroscope: { title: "角速度趋势图 (°/s) - 挂榜山监测网络", unit: "°/s", yAxisName: "角速度" },
+    rainfall: { title: "降雨量趋势图 (mm) - 挂榜山监测网络", unit: "mm", yAxisName: "降雨量" },
+    gps_deformation: { title: "GPS 位移趋势图 (mm) - 挂榜山监测网络", unit: "mm", yAxisName: "位移" }
+  };
+
+  return (
+    configs[chartType] ?? {
+      title: `${chartTypeRaw} 趋势图 - 挂榜山监测网络`,
+      unit: "",
+      yAxisName: chartTypeRaw
+    }
+  );
+}
+
+function _buildLegacyMonitoringStationsDeviceLegends(devices: DeviceListRow[]): Record<string, string> {
+  return devices.reduce<Record<string, string>>((acc, d) => {
+    const meta = d.metadata && typeof d.metadata === "object" ? (d.metadata as Record<string, unknown>) : null;
+
+    const metaStationNameRaw = typeof meta?.station_name === "string" ? meta.station_name.trim() : "";
+    const metaLocationNameRaw = typeof meta?.location_name === "string" ? meta.location_name.trim() : "";
+    const metaStationName = metaStationNameRaw ? metaStationNameRaw : undefined;
+    const metaLocationName = metaLocationNameRaw ? metaLocationNameRaw : undefined;
+    const stationName = metaStationName ?? metaLocationName ?? d.station_name ?? d.device_name;
+
+    const chartLegendNameRaw = typeof meta?.chart_legend_name === "string" ? meta.chart_legend_name.trim() : "";
+    const chartLegendName = chartLegendNameRaw || stationName || d.device_name;
+
+    acc[legacyKeyFromMetadata(d.device_name, d.metadata)] = chartLegendName;
+    return acc;
+  }, {});
+}
+
 function parseRelativeTimeRange(raw: string | undefined): { label: string; start: Date; end: Date } {
   const end = new Date();
   const fallback = { label: "24h", start: new Date(end.getTime() - 24 * 60 * 60 * 1000), end };
@@ -1956,7 +1995,7 @@ export function registerLegacyDeviceManagementCompatRoutes(
     }
 
     const query = (request.query ?? {}) as { chartType?: unknown };
-    const chartType = typeof query.chartType === "string" ? query.chartType : "";
+    const chartType = typeof query.chartType === "string" ? query.chartType.trim() : "";
     if (chartType) {
       const config = await buildLegacyMonitoringStationsChartConfig(pg, chartType.trim());
       legacyOk(reply, config);
