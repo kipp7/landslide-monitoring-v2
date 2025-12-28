@@ -216,7 +216,7 @@ function clickhouseStringToIsoZ(ts: string): string {
   return t;
 }
 
-function getLegacyMonitoringStationsChartConfig(chartTypeRaw: string): { title: string; unit: string; yAxisName: string } {
+function _getLegacyMonitoringStationsChartConfig(chartTypeRaw: string): { title: string; unit: string; yAxisName: string } {
   const chartType = chartTypeRaw.trim().toLowerCase();
 
   const configs: Record<string, { title: string; unit: string; yAxisName: string }> = {
@@ -237,7 +237,7 @@ function getLegacyMonitoringStationsChartConfig(chartTypeRaw: string): { title: 
   );
 }
 
-function buildLegacyMonitoringStationsDeviceLegends(devices: DeviceListRow[]): Record<string, string> {
+function _buildLegacyMonitoringStationsDeviceLegends(devices: DeviceListRow[]): Record<string, string> {
   return devices.reduce<Record<string, string>>((acc, d) => {
     const meta = d.metadata && typeof d.metadata === "object" ? (d.metadata as Record<string, unknown>) : null;
 
