@@ -189,6 +189,37 @@ const POINTS_FRAGMENT_SHADER = /* glsl */ `
   }
 `;
 
+const RIM_VERTEX_SHADER = /* glsl */ `
+  varying vec3 vNormal;
+  varying vec3 vViewDir;
+
+  void main() {
+    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+    vNormal = normalize(normalMatrix * normal);
+    vViewDir = normalize(-mvPosition.xyz);
+    gl_Position = projectionMatrix * mvPosition;
+  }
+`;
+
+const RIM_FRAGMENT_SHADER = /* glsl */ `
+  precision highp float;
+
+  uniform vec3 uRimColor;
+  uniform float uRimPower;
+  uniform float uRimAlpha;
+
+  varying vec3 vNormal;
+  varying vec3 vViewDir;
+
+  void main() {
+    float fresnel = 1.0 - clamp(dot(vNormal, vViewDir), 0.0, 1.0);
+    float rim = pow(fresnel, uRimPower);
+    float alpha = rim * uRimAlpha;
+    if (alpha < 0.01) discard;
+    gl_FragColor = vec4(uRimColor, alpha);
+  }
+`;
+
 export function TerrainBackdrop(props: TerrainBackdropProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -250,7 +281,6 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
     const heights = new Float32Array(vCount);
     let minH = Infinity;
     let maxH = -Infinity;
-    let peakIndex = 0;
 
     for (let i = 0; i < vCount; i += 1) {
       const x = pos.getX(i);
@@ -261,10 +291,7 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
       const h = terrainHeight(nx, nz, seed);
       heights[i] = h;
       minH = Math.min(minH, h);
-      if (h > maxH) {
-        maxH = h;
-        peakIndex = i;
-      }
+      maxH = Math.max(maxH, h);
       pos.setY(i, h * maxHeight);
     }
     pos.needsUpdate = true;
@@ -300,6 +327,22 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
 
     const mesh = new THREE.Mesh(geometry, meshMaterial);
     scene.add(mesh);
+
+    const rimMaterial = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      uniforms: {
+        uRimColor: { value: new THREE.Color(34 / 255, 211 / 255, 238 / 255) },
+        uRimPower: { value: 2.35 },
+        uRimAlpha: { value: 0.34 }
+      },
+      vertexShader: RIM_VERTEX_SHADER,
+      fragmentShader: RIM_FRAGMENT_SHADER
+    });
+
+    const rimMesh = new THREE.Mesh(geometry, rimMaterial);
+    scene.add(rimMesh);
 
     const ridgeMaterial = new THREE.LineBasicMaterial({
       color: 0x22d3ee,
@@ -404,119 +447,6 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
     baseGrid.position.y = -0.02;
     scene.add(baseGrid);
 
-    const markerGroup = new THREE.Group();
-    scene.add(markerGroup);
-
-    const markerGeometry = new THREE.SphereGeometry(0.04, 20, 20);
-    const markerMaterial = new THREE.MeshStandardMaterial({
-      color: 0x22d3ee,
-      emissive: 0x22d3ee,
-      emissiveIntensity: 1.25,
-      roughness: 0.3,
-      metalness: 0.1,
-      transparent: true,
-      opacity: 0.95,
-      depthWrite: false
-    });
-
-    const labelTextures: THREE.Texture[] = [];
-    const labelMaterials: THREE.SpriteMaterial[] = [];
-
-    const makeLabelSprite = (text: string) => {
-      const canvas = document.createElement("canvas");
-      canvas.width = 320;
-      canvas.height = 92;
-      const c2d = canvas.getContext("2d");
-      if (!c2d) return null;
-
-      c2d.clearRect(0, 0, canvas.width, canvas.height);
-      c2d.fillStyle = "rgba(2, 6, 23, 0.55)";
-      c2d.strokeStyle = "rgba(34, 211, 238, 0.32)";
-      c2d.lineWidth = 2;
-
-      const x = 10;
-      const y = 14;
-      const w = canvas.width - 20;
-      const h = canvas.height - 28;
-      const r = 16;
-
-      c2d.beginPath();
-      c2d.moveTo(x + r, y);
-      c2d.lineTo(x + w - r, y);
-      c2d.quadraticCurveTo(x + w, y, x + w, y + r);
-      c2d.lineTo(x + w, y + h - r);
-      c2d.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-      c2d.lineTo(x + r, y + h);
-      c2d.quadraticCurveTo(x, y + h, x, y + h - r);
-      c2d.lineTo(x, y + r);
-      c2d.quadraticCurveTo(x, y, x + r, y);
-      c2d.closePath();
-      c2d.fill();
-      c2d.stroke();
-
-      c2d.font = "700 30px system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
-      c2d.fillStyle = "rgba(226, 232, 240, 0.96)";
-      c2d.textBaseline = "middle";
-      c2d.fillText(text, 24, canvas.height / 2);
-
-      const texture = new THREE.CanvasTexture(canvas);
-      texture.colorSpace = THREE.SRGBColorSpace;
-      texture.minFilter = THREE.LinearFilter;
-      texture.magFilter = THREE.LinearFilter;
-      labelTextures.push(texture);
-
-      const mat = new THREE.SpriteMaterial({
-        map: texture,
-        transparent: true,
-        opacity: 0.95,
-        depthWrite: false
-      });
-      labelMaterials.push(mat);
-
-      const sprite = new THREE.Sprite(mat);
-      sprite.scale.set(0.62, 0.18, 1);
-      return sprite;
-    };
-
-    const sampleSurfaceY = (x: number, z: number) => {
-      const nx = x / (size * 0.5);
-      const nz = z / (size * 0.5);
-      const seed = fract(Math.sin((nx + 2.7) * 91.7 + (nz - 1.9) * 57.3) * 43758.5453);
-      return terrainHeight(nx, nz, seed) * maxHeight;
-    };
-
-    const peakX = pos.getX(peakIndex);
-    const peakZ = pos.getZ(peakIndex);
-    const peakY = pos.getY(peakIndex);
-
-    const mkMarker = (label: string, x: number, z: number, yOverride?: number) => {
-      const marker = new THREE.Group();
-      const dot = new THREE.Mesh(markerGeometry, markerMaterial);
-      marker.add(dot);
-
-      const sprite = makeLabelSprite(label);
-      if (sprite) {
-        sprite.position.set(0, 0.14, 0);
-        marker.add(sprite);
-      }
-
-      const y = yOverride ?? sampleSurfaceY(x, z);
-      marker.position.set(x, y + 0.02, z);
-      markerGroup.add(marker);
-      return marker;
-    };
-
-    mkMarker("山顶", peakX, peakZ, peakY);
-
-    const dir = new THREE.Vector3(1, 0, 0.62).normalize();
-    const midX = clamp(peakX + dir.x * (size * 0.38), -size * 0.48, size * 0.48);
-    const midZ = clamp(peakZ + dir.z * (size * 0.38), -size * 0.48, size * 0.48);
-    mkMarker("山腰", midX, midZ);
-
-    const footX = clamp(peakX + dir.x * (size * 0.62), -size * 0.48, size * 0.48);
-    const footZ = clamp(peakZ + dir.z * (size * 0.62), -size * 0.48, size * 0.48);
-    mkMarker("山脚", footX, footZ);
-
     let raf = 0;
     const clock = new THREE.Clock();
     let lastInteraction = performance.now();
@@ -577,13 +507,10 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
       controls.dispose();
       ridgeMaterial.dispose();
       ridgeGeometries.forEach((geom) => geom.dispose());
-      markerGeometry.dispose();
-      markerMaterial.dispose();
-      labelMaterials.forEach((mat) => mat.dispose());
-      labelTextures.forEach((tex) => tex.dispose());
       baseGrid.geometry.dispose();
       (baseGrid.material as THREE.Material).dispose();
       pointsMaterial.dispose();
+      rimMaterial.dispose();
       meshMaterial.dispose();
       geometry.dispose();
       renderer.dispose();
