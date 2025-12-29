@@ -10,6 +10,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { useApi } from "../api/ApiProvider";
+import { TerrainBackdrop } from "../components/TerrainBackdrop";
 import { useAuthStore } from "../stores/authStore";
 import { useSettingsStore } from "../stores/settingsStore";
 import "./login.css";
@@ -64,8 +65,25 @@ export function LoginPage() {
   return (
     <div className="desk-login">
       <img className="desk-login-bgimg" src="/images/landslide.png" alt="" />
+      <TerrainBackdrop className="desk-login-terrain" />
       <div className="desk-login-orb orb-a" aria-hidden="true" />
       <div className="desk-login-orb orb-b" aria-hidden="true" />
+      <div className="desk-login-hud" aria-hidden="true">
+        <div className="desk-login-hud-row">
+          <span className="k">COORD</span>
+          <span className="v">30.65984, 104.06335</span>
+        </div>
+        <div className="desk-login-hud-row">
+          <span className="k">SCAN</span>
+          <span className="v">ACTIVE</span>
+        </div>
+        <div className="desk-login-wave">
+          {Array.from({ length: 16 }, (_, i) => (
+            // eslint-disable-next-line react/no-array-index-key
+            <span key={i} />
+          ))}
+        </div>
+      </div>
 
       <div className="desk-login-shell">
         <div className="desk-login-hero">
@@ -81,36 +99,36 @@ export function LoginPage() {
 
           <div className="desk-login-hero-title">让风险可见，让预警更快</div>
           <div className="desk-login-hero-desc">
-            汇聚 GNSS、雨量、倾角、温湿度与视频等多源数据，构建监测站态势总览、异常告警与趋势分析，支撑风险研判与处置决策。
+            以数字孪生地形为底座，融合多源感知与预警策略，形成“监测-研判-预警-处置”的业务闭环，让关键态势一眼可见。
           </div>
 
           <div className="desk-login-features">
             <div className="desk-login-feature">
               <RadarChartOutlined className="desk-login-feature-ico" />
               <div className="desk-login-feature-txt">
-                <div className="t">趋势洞察</div>
-                <div className="d">实时曲线、阈值分级与预测提示，快速发现变化。</div>
+                <div className="t">数字孪生态势</div>
+                <div className="d">粒子化地形与监测点位叠加，态势与风险一屏掌握。</div>
               </div>
             </div>
             <div className="desk-login-feature">
               <DesktopOutlined className="desk-login-feature-ico" />
               <div className="desk-login-feature-txt">
-                <div className="t">运维管控</div>
-                <div className="d">站点与设备统一管理，状态可追踪，问题可定位。</div>
+                <div className="t">预警与处置</div>
+                <div className="d">阈值分级、规则联动、告警追踪，支撑快速响应。</div>
               </div>
             </div>
             <div className="desk-login-feature">
               <ApiOutlined className="desk-login-feature-ico" />
               <div className="desk-login-feature-txt">
-                <div className="t">可扩展对接</div>
-                <div className="d">数据源可切换，接口封装统一，便于逐步联调上线。</div>
+                <div className="t">多源数据融合</div>
+                <div className="d">GNSS、雨量、倾角、温湿度与视频统一接入与管理。</div>
               </div>
             </div>
             <div className="desk-login-feature">
               <SafetyCertificateOutlined className="desk-login-feature-ico" />
               <div className="desk-login-feature-txt">
-                <div className="t">稳定可信</div>
-                <div className="d">统一交互规范与错误兜底，保障关键操作可控可用。</div>
+                <div className="t">运维闭环管控</div>
+                <div className="d">站点配置、设备状态与远程控制，关键操作可追溯。</div>
               </div>
             </div>
           </div>
@@ -118,12 +136,13 @@ export function LoginPage() {
           <div className="desk-login-hero-foot">
             <Tag color={apiMode === "mock" ? "blue" : "geekblue"}>{apiMode === "mock" ? "演示环境" : "联调环境"}</Tag>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              当前为预览版本；正式交付将提供 Windows 11 桌面端。
+              面向 Windows 11 的桌面控制台，提供监测、预警与运维一体化入口。
             </Typography.Text>
           </div>
         </div>
 
         <div className="desk-login-panel">
+          <div className="desk-login-panel-glow" aria-hidden="true" />
           <div className="desk-login-panel-head">
             <div className="desk-login-panel-title">登录控制台</div>
             <div className="desk-login-panel-desc">请输入账号信息以进入监测与预警控制台</div>
@@ -151,7 +170,14 @@ export function LoginPage() {
                       <Input.Password size="large" placeholder="请输入密码" autoComplete="current-password" />
                     </Form.Item>
                     <Form.Item style={{ marginBottom: 8 }}>
-                      <Button type="primary" htmlType="submit" block size="large" loading={submitting}>
+                      <Button
+                        type="primary"
+                        htmlType="submit"
+                        block
+                        size="large"
+                        loading={submitting}
+                        className="desk-login-primary"
+                      >
                         登录
                       </Button>
                     </Form.Item>
@@ -176,7 +202,14 @@ export function LoginPage() {
                       <Input size="large" placeholder="请输入验证码" autoComplete="one-time-code" />
                     </Form.Item>
                     <Form.Item style={{ marginBottom: 8 }}>
-                      <Button type="primary" htmlType="submit" block size="large" loading={submitting}>
+                      <Button
+                        type="primary"
+                        htmlType="submit"
+                        block
+                        size="large"
+                        loading={submitting}
+                        className="desk-login-primary"
+                      >
                         登录
                       </Button>
                     </Form.Item>
