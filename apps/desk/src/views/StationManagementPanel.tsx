@@ -354,7 +354,7 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
         <Space size={6} wrap>
           {row.sensorTypes.length ? (
             row.sensorTypes.map((t) => (
-              <Tag key={t} color="cyan" style={{ color: "#0b1220", fontWeight: 800, marginInlineEnd: 0 }}>
+              <Tag key={t} color="cyan" style={{ fontWeight: 800, marginInlineEnd: 0 }}>
                 {deviceTypeLabel(t)}
               </Tag>
             ))
@@ -815,7 +815,7 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
                 <span className="v">
                   <Space size={6} wrap>
                     {detailStation.sensorTypes.map((t) => (
-                      <Tag key={t} color="cyan" style={{ color: "#0b1220", fontWeight: 800, marginInlineEnd: 0 }}>
+                      <Tag key={t} color="cyan" style={{ fontWeight: 800, marginInlineEnd: 0 }}>
                         {deviceTypeLabel(t)}
                       </Tag>
                     ))}

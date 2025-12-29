@@ -807,7 +807,7 @@ export function GpsMonitoringPage() {
             <span className="desk-gps-stat-value" style={{ color: riskColor(level) }}>
               {riskDesc(level)}
             </span>
-            <Tag color={riskColor(level)} style={{ color: "#0b1220", fontWeight: 800 }}>
+            <Tag color={riskColor(level)} style={{ fontWeight: 800 }}>
               等级 {level}
             </Tag>
           </div>
@@ -908,7 +908,7 @@ export function GpsMonitoringPage() {
                               title: "风险",
                               dataIndex: "riskLevel",
                               render: (v: number) => (
-                                <Tag color={riskColor(v)} style={{ color: "#0b1220", fontWeight: 800 }}>
+                                <Tag color={riskColor(v)} style={{ fontWeight: 800 }}>
                                   {riskDesc(v)}
                                 </Tag>
                               )
@@ -950,7 +950,7 @@ export function GpsMonitoringPage() {
                           <div className="desk-gps-coord-row">
                             <span className="desk-gps-coord-k">风险</span>
                             <span className="desk-gps-coord-v">
-                              <Tag color={riskColor(level)} style={{ color: "#0b1220", fontWeight: 800, marginInlineEnd: 0 }}>
+                              <Tag color={riskColor(level)} style={{ fontWeight: 800, marginInlineEnd: 0 }}>
                                 {riskDesc(level)}
                               </Tag>
                             </span>
@@ -1128,7 +1128,7 @@ export function GpsMonitoringPage() {
                           dataIndex: "riskLevel",
                           width: 110,
                           render: (v: number) => (
-                            <Tag color={riskColor(v)} style={{ color: "#0b1220", fontWeight: 800 }}>
+                            <Tag color={riskColor(v)} style={{ fontWeight: 800 }}>
                               {riskDesc(v)}
                             </Tag>
                           )
