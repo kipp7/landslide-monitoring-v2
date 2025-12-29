@@ -114,12 +114,12 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
 
-    const cols = 220;
-    const rows = 160;
+    const cols = 240;
+    const rows = 180;
     const count = cols * rows;
 
-    const worldScale = 1.72;
-    const heightScale = 1.55;
+    const worldScale = 1.92;
+    const heightScale = 1.12;
 
     const xs = new Float32Array(count);
     const zs = new Float32Array(count);
@@ -130,31 +130,27 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
     const ridgeIndexByCol = new Uint32Array(cols);
 
     const terrainHeight = (x: number, z: number, seed: number) => {
-      const mx = x * 1.1;
-      const mz = z * 1.32;
+      const mx = x * 1.06 + 0.03;
+      const mz = z * 1.28 - 0.04;
 
       const r = Math.sqrt(mx * mx + mz * mz);
-      const falloff = smoothstep(1.48, 0.16, r);
+      const base = Math.exp(-(r * r) * 1.35);
+      const falloff = smoothstep(1.56, 0.22, r);
 
-      const bumpA = Math.exp(-((mx + 0.22) * (mx + 0.22) * 2.1 + (mz - 0.08) * (mz - 0.08) * 2.4));
-      const bumpB = Math.exp(-((mx - 0.28) * (mx - 0.28) * 2.8 + (mz + 0.26) * (mz + 0.26) * 2.15));
-      const bumpC = Math.exp(-((mx + 0.06) * (mx + 0.06) * 2.3 + (mz + 0.62) * (mz + 0.62) * 3.2));
-      const massif = clamp(bumpA * 1.12 + bumpB * 0.95 + bumpC * 0.65, 0, 2.2);
+      const warp = fbm(mx * 0.85 + seed * 0.33, mz * 0.85 - seed * 0.21) * 0.16;
+      const wx = mx + warp * 1.1;
+      const wz = mz - warp * 0.9;
 
-      const warp = fbm(mx * 0.82 + seed * 0.35, mz * 0.82 - seed * 0.24) * 0.22;
-      const wx = mx + warp * 1.25;
-      const wz = mz - warp * 0.95;
+      const rg = ridged(wx * 3.25, wz * 3.25);
+      const n = fbm(wx * 7.2, wz * 7.2) * 0.18 + fbm(wx * 14.4, wz * 14.4) * 0.07;
 
-      const rg = ridged(wx * 2.85, wz * 2.85);
-      const n = fbm(wx * 5.8, wz * 5.8) * 0.22 + fbm(wx * 11.5, wz * 11.5) * 0.075;
+      const ridgeLine = Math.exp(-Math.pow(mx * 0.72 + mz * 0.28, 2) * 5.2) * 0.12;
 
-      const ridgeLine = Math.exp(-Math.pow(mx * 0.62 + mz * 0.34, 2) * 6.0) * 0.28;
-
-      let h = massif * (0.72 + rg * 0.78 + n) + ridgeLine;
+      let h = base * (0.62 + rg * 0.78 + n) + ridgeLine * base;
       h *= falloff;
       h = Math.max(0, h);
-      h = Math.pow(h, 1.08);
-      return h - 0.06;
+      h = Math.pow(h, 1.12);
+      return h - 0.03;
     };
 
     let minY = Infinity;
@@ -253,19 +249,19 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
 
       const scan = (t * 0.000085) % 1.55;
 
-      const yaw = Math.PI / 4 + Math.sin(t * 0.00005) * 0.06;
-      const pitch = -0.62 + Math.sin(t * 0.000035) * 0.01;
+      const yaw = Math.PI / 4 + Math.sin(t * 0.00005) * 0.03;
+      const pitch = -0.52 + Math.sin(t * 0.00003) * 0.006;
 
       const csY = Math.cos(yaw);
       const snY = Math.sin(yaw);
       const csX = Math.cos(pitch);
       const snX = Math.sin(pitch);
 
-      const camZ = 3.85;
+      const camZ = 4.55;
       const scale = Math.min(width, height);
-      const pxScale = scale * 0.74;
+      const pxScale = scale * 0.64;
       const cx = width * 0.5;
-      const cy = height * 0.66;
+      const cy = height * 0.74;
 
       const project = (x: number, y: number, z: number) => {
         const x1 = x * csY - z * snY;
