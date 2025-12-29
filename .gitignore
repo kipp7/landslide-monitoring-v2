@@ -26,6 +26,8 @@ yarn-error.log*
 # Node / Next.js
 node_modules/
 .next/
+.next_v2_dev/
+.next_v2_build/
 dist/
 build/
 out/
