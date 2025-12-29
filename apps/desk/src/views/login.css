@@ -140,6 +140,12 @@
   display: block;
   width: 100%;
   height: 100%;
+  cursor: grab;
+  touch-action: none;
+}
+
+.desk-login-terrain-canvas:active {
+  cursor: grabbing;
 }
 
 .desk-login-hero {

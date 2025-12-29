@@ -1,4 +1,6 @@
 import { useEffect, useRef } from "react";
+import * as THREE from "three";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
 type TerrainBackdropProps = {
   className?: string;
@@ -89,6 +91,104 @@ function heightColor(height01: number) {
   };
 }
 
+function terrainHeight(nx: number, nz: number, seed: number) {
+  const mx = nx * 1.05 + 0.03;
+  const mz = nz * 1.26 - 0.04;
+
+  const r = Math.sqrt(mx * mx + mz * mz);
+  const base = Math.exp(-(r * r) * 1.22);
+  const falloff = smoothstep(1.38, 0.18, r);
+
+  const warp = fbm(mx * 0.9 + seed * 0.33, mz * 0.9 - seed * 0.21) * 0.16;
+  const wx = mx + warp * 1.1;
+  const wz = mz - warp * 0.95;
+
+  const rg = ridged(wx * 3.35, wz * 3.35);
+  const n = fbm(wx * 7.8, wz * 7.8) * 0.16 + fbm(wx * 15.6, wz * 15.6) * 0.06;
+  const ridgeLine = Math.exp(-Math.pow(mx * 0.72 + mz * 0.28, 2) * 5.2) * 0.1;
+
+  let h = base * (0.62 + rg * 0.75 + n) + ridgeLine * base;
+  h *= falloff;
+  h = Math.max(0, h - 0.03);
+  h = Math.pow(h, 1.18);
+  return h;
+}
+
+const POINTS_VERTEX_SHADER = /* glsl */ `
+  attribute float aHeight;
+
+  uniform float uPointSize;
+  uniform float uPixelRatio;
+  uniform float uRadius;
+  uniform vec3 uLight;
+
+  varying float vHeight;
+  varying float vDist;
+  varying float vShade;
+
+  void main() {
+    vHeight = aHeight;
+    vDist = length(position.xz) / uRadius;
+
+    vec3 n = normalize(normalMatrix * normal);
+    vec3 l = normalize(uLight);
+    vShade = clamp(dot(n, l), 0.0, 1.0);
+
+    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+    float size = uPointSize * uPixelRatio * (1.0 + vHeight * 1.25);
+    gl_PointSize = size * (1.0 / max(0.35, -mvPosition.z));
+    gl_Position = projectionMatrix * mvPosition;
+  }
+`;
+
+const POINTS_FRAGMENT_SHADER = /* glsl */ `
+  precision highp float;
+
+  uniform float uTime;
+  uniform float uAlpha;
+  uniform float uScanSpeed;
+  uniform float uRingWidth;
+
+  uniform vec3 uLow;
+  uniform vec3 uMid;
+  uniform vec3 uHigh;
+  uniform vec3 uRingColor;
+
+  varying float vHeight;
+  varying float vDist;
+  varying float vShade;
+
+  vec3 heightColor(float h) {
+    if (h < 0.55) {
+      float t = h / 0.55;
+      return mix(uLow, uMid, t);
+    }
+    float t = (h - 0.55) / 0.45;
+    return mix(uMid, uHigh, t);
+  }
+
+  void main() {
+    vec2 uv = gl_PointCoord - vec2(0.5);
+    float d = length(uv);
+    float soft = smoothstep(0.52, 0.0, d);
+    float edge = smoothstep(0.5, 0.18, d);
+
+    float scan = mod(uTime * uScanSpeed, 1.35);
+    float ring = abs(vDist - scan);
+    float ringHit = smoothstep(uRingWidth, 0.0, ring);
+
+    vec3 col = heightColor(vHeight);
+    col *= (0.65 + vShade * 0.55 + vHeight * 0.12);
+    col = mix(col, uRingColor, ringHit);
+
+    float alpha = soft * uAlpha * (0.42 + vShade * 0.78);
+    alpha += ringHit * 0.25 * edge;
+
+    if (alpha < 0.01) discard;
+    gl_FragColor = vec4(col, alpha);
+  }
+`;
+
 export function TerrainBackdrop(props: TerrainBackdropProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -96,282 +196,238 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const ctx = canvas.getContext("2d", { alpha: true });
-    if (!ctx) return;
+    const renderer = new THREE.WebGLRenderer({
+      canvas,
+      alpha: true,
+      antialias: true,
+      powerPreference: "high-performance"
+    });
+    renderer.setClearColor(0x000000, 0);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+    const scene = new THREE.Scene();
+
+    const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 60);
+    camera.position.set(2.6, 1.7, 2.6);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.07;
+    controls.enablePan = false;
+    controls.enableZoom = true;
+    controls.zoomSpeed = 0.9;
+    controls.rotateSpeed = 0.65;
+    controls.minDistance = 2.2;
+    controls.maxDistance = 7.2;
+    controls.minPolarAngle = 0.75;
+    controls.maxPolarAngle = 1.35;
+    controls.target.set(0, 0.08, 0);
+    controls.update();
+    controls.saveState();
+
+    const ambient = new THREE.AmbientLight(0x0f172a, 1.25);
+    scene.add(ambient);
+
+    const key = new THREE.DirectionalLight(0xb6f7ff, 1.2);
+    key.position.set(4, 5, 2);
+    scene.add(key);
+
+    const fill = new THREE.DirectionalLight(0x60a5fa, 0.55);
+    fill.position.set(-4, 2, -3);
+    scene.add(fill);
+
+    const size = 3.95;
+    const maxHeight = 0.55;
+    const segX = 420;
+    const segZ = 320;
+
+    const geometry = new THREE.PlaneGeometry(size, size, segX, segZ);
+    geometry.rotateX(-Math.PI / 2);
+
+    const pos = geometry.attributes.position as THREE.BufferAttribute;
+    const vCount = pos.count;
+
+    const heights = new Float32Array(vCount);
+    let minH = Infinity;
+    let maxH = -Infinity;
+
+    for (let i = 0; i < vCount; i += 1) {
+      const x = pos.getX(i);
+      const z = pos.getZ(i);
+      const nx = x / (size * 0.5);
+      const nz = z / (size * 0.5);
+      const seed = fract(Math.sin((nx + 2.7) * 91.7 + (nz - 1.9) * 57.3) * 43758.5453);
+      const h = terrainHeight(nx, nz, seed);
+      heights[i] = h;
+      minH = Math.min(minH, h);
+      maxH = Math.max(maxH, h);
+      pos.setY(i, h * maxHeight);
+    }
+    pos.needsUpdate = true;
+    geometry.computeVertexNormals();
+
+    const hSpan = Math.max(0.0001, maxH - minH);
+    const aHeight = new Float32Array(vCount);
+    const colors = new Float32Array(vCount * 3);
+
+    for (let i = 0; i < vCount; i += 1) {
+      const h01 = clamp((heights[i]! - minH) / hSpan, 0, 1);
+      aHeight[i] = h01;
+      const rgb = heightColor(h01);
+      colors[i * 3] = rgb.r / 255;
+      colors[i * 3 + 1] = rgb.g / 255;
+      colors[i * 3 + 2] = rgb.b / 255;
+    }
+
+    geometry.setAttribute("aHeight", new THREE.BufferAttribute(aHeight, 1));
+    geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+
+    const meshMaterial = new THREE.MeshStandardMaterial({
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.17,
+      roughness: 0.9,
+      metalness: 0,
+      emissive: new THREE.Color(0x061021),
+      emissiveIntensity: 0.65,
+      depthWrite: false
+    });
+
+    const mesh = new THREE.Mesh(geometry, meshMaterial);
+    scene.add(mesh);
+
+    type PointsUniforms = {
+      uTime: { value: number };
+      uAlpha: { value: number };
+      uScanSpeed: { value: number };
+      uRingWidth: { value: number };
+      uPointSize: { value: number };
+      uPixelRatio: { value: number };
+      uRadius: { value: number };
+      uLight: { value: THREE.Vector3 };
+      uLow: { value: THREE.Color };
+      uMid: { value: THREE.Color };
+      uHigh: { value: THREE.Color };
+      uRingColor: { value: THREE.Color };
+    };
+
+    const pointsUniforms: PointsUniforms = {
+      uTime: { value: 0 },
+      uAlpha: { value: 0.9 },
+      uScanSpeed: { value: 0.26 },
+      uRingWidth: { value: 0.05 },
+      uPointSize: { value: 2.0 },
+      uPixelRatio: { value: 1 },
+      uRadius: { value: size * 0.5 },
+      uLight: { value: new THREE.Vector3(0.58, 0.82, 0.28) },
+      uLow: { value: new THREE.Color(30 / 255, 58 / 255, 138 / 255) },
+      uMid: { value: new THREE.Color(34 / 255, 211 / 255, 238 / 255) },
+      uHigh: { value: new THREE.Color(226 / 255, 232 / 255, 240 / 255) },
+      uRingColor: { value: new THREE.Color(249 / 255, 115 / 255, 22 / 255) }
+    };
+
+    const pointsMaterial = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      uniforms: pointsUniforms,
+      vertexShader: POINTS_VERTEX_SHADER,
+      fragmentShader: POINTS_FRAGMENT_SHADER
+    });
+
+    const points = new THREE.Points(geometry, pointsMaterial);
+    scene.add(points);
+
+    const baseGrid = new THREE.GridHelper(size * 1.04, 22, 0x22d3ee, 0x1e3a8a);
+    baseGrid.material = new THREE.LineBasicMaterial({
+      color: 0x22d3ee,
+      transparent: true,
+      opacity: 0.1
+    });
+    baseGrid.position.y = -0.02;
+    scene.add(baseGrid);
+
+    const ringGeom = new THREE.RingGeometry(size * 0.18, size * 0.19, 160);
+    ringGeom.rotateX(-Math.PI / 2);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0xf97316,
+      transparent: true,
+      opacity: 0.62,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    });
+    const ring = new THREE.Mesh(ringGeom, ringMat);
+    ring.position.y = -0.018;
+    scene.add(ring);
 
     let raf = 0;
-    let width = 0;
-    let height = 0;
-    let dpr = 1;
+    const clock = new THREE.Clock();
+    let lastInteraction = performance.now();
+
+    const onStart = () => {
+      lastInteraction = performance.now();
+      controls.autoRotate = false;
+    };
+
+    const onEnd = () => {
+      lastInteraction = performance.now();
+    };
+
+    controls.addEventListener("start", onStart);
+    controls.addEventListener("end", onEnd);
+
+    const onDblClick = () => {
+      controls.reset();
+      lastInteraction = performance.now();
+    };
+    canvas.addEventListener("dblclick", onDblClick);
 
     const resize = () => {
       const rect = canvas.getBoundingClientRect();
-      width = Math.max(1, Math.floor(rect.width));
-      height = Math.max(1, Math.floor(rect.height));
-      dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-      canvas.width = Math.floor(width * dpr);
-      canvas.height = Math.floor(height * dpr);
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const nextW = Math.max(1, Math.floor(rect.width));
+      const nextH = Math.max(1, Math.floor(rect.height));
+      const pixelRatio = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+      renderer.setPixelRatio(pixelRatio);
+      renderer.setSize(nextW, nextH, false);
+      camera.aspect = nextW / nextH;
+      camera.updateProjectionMatrix();
+      pointsUniforms.uPixelRatio.value = pixelRatio;
     };
 
-    const cols = 240;
-    const rows = 180;
-    const count = cols * rows;
+    const render = () => {
+      const t = clock.getElapsedTime();
+      const now = performance.now();
+      controls.autoRotate = now - lastInteraction > 2200;
+      controls.autoRotateSpeed = 0.25;
 
-    const worldScale = 1.92;
-    const heightScale = 1.12;
+      pointsUniforms.uTime.value = t;
+      ring.scale.setScalar(1 + (t * 0.13) % 1.15);
+      ringMat.opacity = 0.65 * (1 - ((t * 0.13) % 1.15) / 1.15);
 
-    const xs = new Float32Array(count);
-    const zs = new Float32Array(count);
-    const ys = new Float32Array(count);
-    const ds = new Float32Array(count);
-    const height01s = new Float32Array(count);
-    const fillStyles = new Array<string>(count);
-    const ridgeIndexByCol = new Uint32Array(cols);
-
-    const terrainHeight = (x: number, z: number, seed: number) => {
-      const mx = x * 1.06 + 0.03;
-      const mz = z * 1.28 - 0.04;
-
-      const r = Math.sqrt(mx * mx + mz * mz);
-      const base = Math.exp(-(r * r) * 1.35);
-      const falloff = smoothstep(1.56, 0.22, r);
-
-      const warp = fbm(mx * 0.85 + seed * 0.33, mz * 0.85 - seed * 0.21) * 0.16;
-      const wx = mx + warp * 1.1;
-      const wz = mz - warp * 0.9;
-
-      const rg = ridged(wx * 3.25, wz * 3.25);
-      const n = fbm(wx * 7.2, wz * 7.2) * 0.18 + fbm(wx * 14.4, wz * 14.4) * 0.07;
-
-      const ridgeLine = Math.exp(-Math.pow(mx * 0.72 + mz * 0.28, 2) * 5.2) * 0.12;
-
-      let h = base * (0.62 + rg * 0.78 + n) + ridgeLine * base;
-      h *= falloff;
-      h = Math.max(0, h);
-      h = Math.pow(h, 1.12);
-      return h - 0.03;
-    };
-
-    let minY = Infinity;
-    let maxY = -Infinity;
-
-    for (let r = 0; r < rows; r += 1) {
-      for (let c = 0; c < cols; c += 1) {
-        const i = r * cols + c;
-        const nx = (c / (cols - 1)) * 2 - 1;
-        const nz = (r / (rows - 1)) * 2 - 1;
-        const seed = fract(Math.sin((c + 1) * 12.9898 + (r + 1) * 78.233) * 43758.5453);
-
-        const y = terrainHeight(nx, nz, seed);
-
-        xs[i] = nx * worldScale;
-        zs[i] = nz * worldScale;
-        ys[i] = y * heightScale;
-        ds[i] = Math.sqrt(nx * nx + nz * nz);
-
-        minY = Math.min(minY, y);
-        maxY = Math.max(maxY, y);
-      }
-    }
-
-    const ySpan = Math.max(0.0001, maxY - minY);
-
-    for (let c = 0; c < cols; c += 1) {
-      let best = 0;
-      let bestY = -Infinity;
-      for (let r = 0; r < rows; r += 1) {
-        const i = r * cols + c;
-        const y = ys[i]!;
-        if (y > bestY) {
-          bestY = y;
-          best = i;
-        }
-      }
-      ridgeIndexByCol[c] = best;
-    }
-
-    const light = (() => {
-      const lx = 0.58;
-      const ly = 0.82;
-      const lz = 0.28;
-      const len = Math.sqrt(lx * lx + ly * ly + lz * lz);
-      return { x: lx / len, y: ly / len, z: lz / len };
-    })();
-
-    for (let r = 0; r < rows; r += 1) {
-      for (let c = 0; c < cols; c += 1) {
-        const i = r * cols + c;
-
-        const yRaw = ys[i]! / heightScale;
-        const h01 = clamp((yRaw - minY) / ySpan, 0, 1);
-        height01s[i] = h01;
-
-        const cL = Math.max(0, c - 1);
-        const cR = Math.min(cols - 1, c + 1);
-        const rU = Math.max(0, r - 1);
-        const rD = Math.min(rows - 1, r + 1);
-
-        const yL = ys[r * cols + cL]! / heightScale;
-        const yR = ys[r * cols + cR]! / heightScale;
-        const yU = ys[rU * cols + c]! / heightScale;
-        const yD = ys[rD * cols + c]! / heightScale;
-
-        const sx = 2.2;
-        const sz = 2.2;
-        let nx = -(yR - yL) * sx;
-        let ny = 1.0;
-        let nz = -(yD - yU) * sz;
-        const nLen = Math.sqrt(nx * nx + ny * ny + nz * nz);
-        nx /= nLen;
-        ny /= nLen;
-        nz /= nLen;
-
-        const ndotl = clamp(nx * light.x + ny * light.y + nz * light.z, 0, 1);
-        const shade = clamp(0.62 + ndotl * 0.55 + h01 * 0.12, 0, 1.15);
-
-        const base = heightColor(h01);
-        const rr = clamp(Math.round(base.r * shade), 0, 255);
-        const gg = clamp(Math.round(base.g * shade), 0, 255);
-        const bb = clamp(Math.round(base.b * shade), 0, 255);
-        fillStyles[i] = `rgb(${rr}, ${gg}, ${bb})`;
-      }
-    }
-
-    const draw = (t: number) => {
-      ctx.clearRect(0, 0, width, height);
-
-      const vignette = ctx.createRadialGradient(width * 0.5, height * 0.5, 20, width * 0.5, height * 0.55, Math.max(width, height));
-      vignette.addColorStop(0, "rgba(2, 6, 23, 0.00)");
-      vignette.addColorStop(1, "rgba(2, 6, 23, 0.45)");
-      ctx.fillStyle = vignette;
-      ctx.fillRect(0, 0, width, height);
-
-      const scan = (t * 0.000085) % 1.55;
-
-      const yaw = Math.PI / 4 + Math.sin(t * 0.00005) * 0.03;
-      const pitch = -0.52 + Math.sin(t * 0.00003) * 0.006;
-
-      const csY = Math.cos(yaw);
-      const snY = Math.sin(yaw);
-      const csX = Math.cos(pitch);
-      const snX = Math.sin(pitch);
-
-      const camZ = 4.55;
-      const scale = Math.min(width, height);
-      const pxScale = scale * 0.64;
-      const cx = width * 0.5;
-      const cy = height * 0.6;
-
-      const project = (x: number, y: number, z: number) => {
-        const x1 = x * csY - z * snY;
-        const z1 = x * snY + z * csY;
-
-        const y2 = y * csX - z1 * snX;
-        const z2 = y * snX + z1 * csX + camZ;
-
-        const depth = Math.max(0.7, z2);
-        const persp = 1 / (depth * 0.92);
-        const sx = cx + x1 * persp * pxScale;
-        const sy = cy - y2 * persp * pxScale;
-        return { sx, sy, depth };
-      };
-
-      const ridgePts: { sx: number; sy: number }[] = [];
-      ridgePts.length = cols;
-      for (let c = 0; c < cols; c += 1) {
-        const i = ridgeIndexByCol[c]!;
-        const p3 = project(xs[i]!, ys[i]!, zs[i]!);
-        ridgePts[c] = { sx: p3.sx, sy: p3.sy };
-      }
-      ridgePts.sort((a, b) => a.sx - b.sx);
-
-      ctx.save();
-      const ridgeFill = ctx.createLinearGradient(0, height * 0.2, 0, height);
-      ridgeFill.addColorStop(0, "rgba(34, 211, 238, 0.12)");
-      ridgeFill.addColorStop(1, "rgba(2, 6, 23, 0.00)");
-      ctx.fillStyle = ridgeFill;
-      ctx.beginPath();
-      for (let i = 0; i < ridgePts.length; i += 1) {
-        const p = ridgePts[i]!;
-        if (i === 0) ctx.moveTo(p.sx, p.sy);
-        else ctx.lineTo(p.sx, p.sy);
-      }
-      ctx.lineTo(ridgePts[ridgePts.length - 1]!.sx, height);
-      ctx.lineTo(ridgePts[0]!.sx, height);
-      ctx.closePath();
-      ctx.fill();
-      ctx.restore();
-
-      const rowStep = 3;
-      const colStep = 4;
-
-      ctx.lineWidth = 1;
-      for (let r = 0; r < rows; r += rowStep) {
-        ctx.beginPath();
-        for (let c = 0; c < cols; c += 1) {
-          const i = r * cols + c;
-          const p3 = project(xs[i]!, ys[i]!, zs[i]!);
-          if (c === 0) ctx.moveTo(p3.sx, p3.sy);
-          else ctx.lineTo(p3.sx, p3.sy);
-        }
-        ctx.strokeStyle = "rgba(34, 211, 238, 0.11)";
-        ctx.stroke();
-      }
-
-      for (let c = 0; c < cols; c += colStep) {
-        ctx.beginPath();
-        for (let r = 0; r < rows; r += 1) {
-          const i = r * cols + c;
-          const p3 = project(xs[i]!, ys[i]!, zs[i]!);
-          if (r === 0) ctx.moveTo(p3.sx, p3.sy);
-          else ctx.lineTo(p3.sx, p3.sy);
-        }
-        ctx.strokeStyle = "rgba(96, 165, 250, 0.06)";
-        ctx.stroke();
-      }
-
-      ctx.beginPath();
-      for (let i = 0; i < ridgePts.length; i += 1) {
-        const rp = ridgePts[i]!;
-        if (i === 0) ctx.moveTo(rp.sx, rp.sy);
-        else ctx.lineTo(rp.sx, rp.sy);
-      }
-      ctx.strokeStyle = "rgba(34, 211, 238, 0.28)";
-      ctx.lineWidth = 1.45;
-      ctx.stroke();
-
-      ctx.save();
-      ctx.globalCompositeOperation = "lighter";
-      const ringFill = "rgb(249, 115, 22)";
-      for (let i = 0; i < count; i += 1) {
-        const p3 = project(xs[i]!, ys[i]!, zs[i]!);
-        const ring = Math.abs(ds[i]! - scan);
-        const ringHit = ring < 0.028;
-
-        const depthFade = clamp(1.35 - p3.depth * 0.33, 0, 1);
-        const height01 = height01s[i]!;
-        const heightGlow = clamp(0.22 + height01 * 1.05, 0, 1);
-        const baseAlpha = 0.03 + 0.34 * depthFade * heightGlow;
-
-        const alpha = ringHit ? clamp(baseAlpha + 0.26, 0, 0.78) : clamp(baseAlpha, 0, 0.54);
-        const size = clamp(0.85 + height01 * 2.6 + (ringHit ? 0.9 : 0), 0.8, 3.8);
-
-        ctx.globalAlpha = alpha;
-        ctx.fillStyle = ringHit ? ringFill : fillStyles[i]!;
-        ctx.fillRect(p3.sx, p3.sy, size, size);
-      }
-      ctx.restore();
-
-      raf = window.requestAnimationFrame(draw);
+      controls.update();
+      renderer.render(scene, camera);
+      raf = window.requestAnimationFrame(render);
     };
 
     resize();
     window.addEventListener("resize", resize);
-    raf = window.requestAnimationFrame(draw);
+    raf = window.requestAnimationFrame(render);
+
     return () => {
       window.removeEventListener("resize", resize);
+      canvas.removeEventListener("dblclick", onDblClick);
       window.cancelAnimationFrame(raf);
+      controls.removeEventListener("start", onStart);
+      controls.removeEventListener("end", onEnd);
+      controls.dispose();
+      ringGeom.dispose();
+      ringMat.dispose();
+      baseGrid.geometry.dispose();
+      (baseGrid.material as THREE.Material).dispose();
+      pointsMaterial.dispose();
+      meshMaterial.dispose();
+      geometry.dispose();
+      renderer.dispose();
     };
   }, []);
 
