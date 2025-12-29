@@ -4,12 +4,6 @@ type TerrainBackdropProps = {
   className?: string;
 };
 
-type Point = {
-  x: number;
-  z: number;
-  seed: number;
-};
-
 function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
@@ -105,19 +99,6 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
     const ctx = canvas.getContext("2d", { alpha: true });
     if (!ctx) return;
 
-    const points: Point[] = [];
-    const cols = 160;
-    const rows = 120;
-
-    for (let r = 0; r < rows; r += 1) {
-      for (let c = 0; c < cols; c += 1) {
-        const nx = (c / (cols - 1)) * 2 - 1;
-        const nz = (r / (rows - 1)) * 2 - 1;
-        const seed = (Math.sin((c + 1) * 12.9898 + (r + 1) * 78.233) * 43758.5453) % 1;
-        points.push({ x: nx, z: nz, seed });
-      }
-    }
-
     let raf = 0;
     let width = 0;
     let height = 0;
@@ -133,49 +114,133 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
 
-    const terrainHeight = (x: number, z: number, t: number, seed: number) => {
-      const mx = x * 1.05;
-      const mz = z * 1.2;
-      const bump1 = Math.exp(-((mx + 0.32) * (mx + 0.32) * 2.2 + (mz + 0.08) * (mz + 0.08) * 2.6));
-      const bump2 = Math.exp(-((mx - 0.18) * (mx - 0.18) * 2.9 + (mz - 0.22) * (mz - 0.22) * 2.3));
-      const bump3 = Math.exp(-((mx + 0.05) * (mx + 0.05) * 2.3 + (mz - 0.52) * (mz - 0.52) * 3.4));
-      const bump = clamp(bump1 * 1.08 + bump2 * 0.86 + bump3 * 0.62, 0, 1.8);
+    const cols = 220;
+    const rows = 160;
+    const count = cols * rows;
 
-      const warp = fbm(x * 0.95 + seed * 0.35 + t * 0.00002, z * 0.95 - seed * 0.22) * 0.22;
-      const n = fbm(x * 2.6 + warp, z * 2.6 - warp);
-      const rg = ridged(x * 4.2 - warp, z * 4.2 + warp);
+    const worldScale = 1.72;
+    const heightScale = 1.55;
 
-      const ridgeLine = Math.exp(-Math.pow(mx * 0.72 + mz * 0.38, 2) * 6.5) * 0.22;
+    const xs = new Float32Array(count);
+    const zs = new Float32Array(count);
+    const ys = new Float32Array(count);
+    const ds = new Float32Array(count);
+    const height01s = new Float32Array(count);
+    const fillStyles = new Array<string>(count);
+    const ridgeIndexByCol = new Uint32Array(cols);
 
-      let h = bump * (0.78 + 0.62 * rg + 0.22 * n) + ridgeLine;
+    const terrainHeight = (x: number, z: number, seed: number) => {
+      const mx = x * 1.1;
+      const mz = z * 1.32;
+
+      const r = Math.sqrt(mx * mx + mz * mz);
+      const falloff = smoothstep(1.48, 0.16, r);
+
+      const bumpA = Math.exp(-((mx + 0.22) * (mx + 0.22) * 2.1 + (mz - 0.08) * (mz - 0.08) * 2.4));
+      const bumpB = Math.exp(-((mx - 0.28) * (mx - 0.28) * 2.8 + (mz + 0.26) * (mz + 0.26) * 2.15));
+      const bumpC = Math.exp(-((mx + 0.06) * (mx + 0.06) * 2.3 + (mz + 0.62) * (mz + 0.62) * 3.2));
+      const massif = clamp(bumpA * 1.12 + bumpB * 0.95 + bumpC * 0.65, 0, 2.2);
+
+      const warp = fbm(mx * 0.82 + seed * 0.35, mz * 0.82 - seed * 0.24) * 0.22;
+      const wx = mx + warp * 1.25;
+      const wz = mz - warp * 0.95;
+
+      const rg = ridged(wx * 2.85, wz * 2.85);
+      const n = fbm(wx * 5.8, wz * 5.8) * 0.22 + fbm(wx * 11.5, wz * 11.5) * 0.075;
+
+      const ridgeLine = Math.exp(-Math.pow(mx * 0.62 + mz * 0.34, 2) * 6.0) * 0.28;
+
+      let h = massif * (0.72 + rg * 0.78 + n) + ridgeLine;
+      h *= falloff;
       h = Math.max(0, h);
-      h = Math.pow(h, 1.05);
-      return h - 0.10;
+      h = Math.pow(h, 1.08);
+      return h - 0.06;
     };
 
-    const project = (x: number, y: number, z: number, t: number) => {
-      const rotY = t * 0.000045;
-      const pitch = -0.76 + Math.sin(t * 0.00007) * 0.02;
+    let minY = Infinity;
+    let maxY = -Infinity;
 
-      const csY = Math.cos(rotY);
-      const snY = Math.sin(rotY);
+    for (let r = 0; r < rows; r += 1) {
+      for (let c = 0; c < cols; c += 1) {
+        const i = r * cols + c;
+        const nx = (c / (cols - 1)) * 2 - 1;
+        const nz = (r / (rows - 1)) * 2 - 1;
+        const seed = fract(Math.sin((c + 1) * 12.9898 + (r + 1) * 78.233) * 43758.5453);
 
-      const csX = Math.cos(pitch);
-      const snX = Math.sin(pitch);
+        const y = terrainHeight(nx, nz, seed);
 
-      const x1 = x * csY - z * snY;
-      const z1 = x * snY + z * csY;
+        xs[i] = nx * worldScale;
+        zs[i] = nz * worldScale;
+        ys[i] = y * heightScale;
+        ds[i] = Math.sqrt(nx * nx + nz * nz);
 
-      const y2 = y * csX - z1 * snX;
-      const z2 = y * snX + z1 * csX + 3.35;
+        minY = Math.min(minY, y);
+        maxY = Math.max(maxY, y);
+      }
+    }
 
-      const depth = Math.max(0.9, z2);
-      const scale = Math.min(width, height);
-      const persp = 1 / (depth * 0.92);
-      const sx = width * 0.5 + x1 * persp * scale * 0.72;
-      const sy = height * 0.62 - y2 * persp * scale * 0.72;
-      return { sx, sy, depth };
-    };
+    const ySpan = Math.max(0.0001, maxY - minY);
+
+    for (let c = 0; c < cols; c += 1) {
+      let best = 0;
+      let bestY = -Infinity;
+      for (let r = 0; r < rows; r += 1) {
+        const i = r * cols + c;
+        const y = ys[i]!;
+        if (y > bestY) {
+          bestY = y;
+          best = i;
+        }
+      }
+      ridgeIndexByCol[c] = best;
+    }
+
+    const light = (() => {
+      const lx = 0.58;
+      const ly = 0.82;
+      const lz = 0.28;
+      const len = Math.sqrt(lx * lx + ly * ly + lz * lz);
+      return { x: lx / len, y: ly / len, z: lz / len };
+    })();
+
+    for (let r = 0; r < rows; r += 1) {
+      for (let c = 0; c < cols; c += 1) {
+        const i = r * cols + c;
+
+        const yRaw = ys[i]! / heightScale;
+        const h01 = clamp((yRaw - minY) / ySpan, 0, 1);
+        height01s[i] = h01;
+
+        const cL = Math.max(0, c - 1);
+        const cR = Math.min(cols - 1, c + 1);
+        const rU = Math.max(0, r - 1);
+        const rD = Math.min(rows - 1, r + 1);
+
+        const yL = ys[r * cols + cL]! / heightScale;
+        const yR = ys[r * cols + cR]! / heightScale;
+        const yU = ys[rU * cols + c]! / heightScale;
+        const yD = ys[rD * cols + c]! / heightScale;
+
+        const sx = 2.2;
+        const sz = 2.2;
+        let nx = -(yR - yL) * sx;
+        let ny = 1.0;
+        let nz = -(yD - yU) * sz;
+        const nLen = Math.sqrt(nx * nx + ny * ny + nz * nz);
+        nx /= nLen;
+        ny /= nLen;
+        nz /= nLen;
+
+        const ndotl = clamp(nx * light.x + ny * light.y + nz * light.z, 0, 1);
+        const shade = clamp(0.62 + ndotl * 0.55 + h01 * 0.12, 0, 1.15);
+
+        const base = heightColor(h01);
+        const rr = clamp(Math.round(base.r * shade), 0, 255);
+        const gg = clamp(Math.round(base.g * shade), 0, 255);
+        const bb = clamp(Math.round(base.b * shade), 0, 255);
+        fillStyles[i] = `rgb(${rr}, ${gg}, ${bb})`;
+      }
+    }
 
     const draw = (t: number) => {
       ctx.clearRect(0, 0, width, height);
@@ -187,8 +252,60 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
       ctx.fillRect(0, 0, width, height);
 
       const scan = (t * 0.000085) % 1.55;
-      const scanCenterX = 0;
-      const scanCenterZ = 0;
+
+      const yaw = Math.PI / 4 + Math.sin(t * 0.00005) * 0.06;
+      const pitch = -0.62 + Math.sin(t * 0.000035) * 0.01;
+
+      const csY = Math.cos(yaw);
+      const snY = Math.sin(yaw);
+      const csX = Math.cos(pitch);
+      const snX = Math.sin(pitch);
+
+      const camZ = 3.85;
+      const scale = Math.min(width, height);
+      const pxScale = scale * 0.74;
+      const cx = width * 0.5;
+      const cy = height * 0.66;
+
+      const project = (x: number, y: number, z: number) => {
+        const x1 = x * csY - z * snY;
+        const z1 = x * snY + z * csY;
+
+        const y2 = y * csX - z1 * snX;
+        const z2 = y * snX + z1 * csX + camZ;
+
+        const depth = Math.max(0.7, z2);
+        const persp = 1 / (depth * 0.92);
+        const sx = cx + x1 * persp * pxScale;
+        const sy = cy - y2 * persp * pxScale;
+        return { sx, sy, depth };
+      };
+
+      const ridgePts: { sx: number; sy: number }[] = [];
+      ridgePts.length = cols;
+      for (let c = 0; c < cols; c += 1) {
+        const i = ridgeIndexByCol[c]!;
+        const p3 = project(xs[i]!, ys[i]!, zs[i]!);
+        ridgePts[c] = { sx: p3.sx, sy: p3.sy };
+      }
+      ridgePts.sort((a, b) => a.sx - b.sx);
+
+      ctx.save();
+      const ridgeFill = ctx.createLinearGradient(0, height * 0.2, 0, height);
+      ridgeFill.addColorStop(0, "rgba(34, 211, 238, 0.12)");
+      ridgeFill.addColorStop(1, "rgba(2, 6, 23, 0.00)");
+      ctx.fillStyle = ridgeFill;
+      ctx.beginPath();
+      for (let i = 0; i < ridgePts.length; i += 1) {
+        const p = ridgePts[i]!;
+        if (i === 0) ctx.moveTo(p.sx, p.sy);
+        else ctx.lineTo(p.sx, p.sy);
+      }
+      ctx.lineTo(ridgePts[ridgePts.length - 1]!.sx, height);
+      ctx.lineTo(ridgePts[0]!.sx, height);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
 
       const rowStep = 3;
       const colStep = 4;
@@ -197,45 +314,25 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
       for (let r = 0; r < rows; r += rowStep) {
         ctx.beginPath();
         for (let c = 0; c < cols; c += 1) {
-          const p = points[r * cols + c]!;
-          const y = terrainHeight(p.x, p.z, t, p.seed);
-          const p3 = project(p.x * 1.72, y * 1.28, p.z * 1.72, t);
+          const i = r * cols + c;
+          const p3 = project(xs[i]!, ys[i]!, zs[i]!);
           if (c === 0) ctx.moveTo(p3.sx, p3.sy);
           else ctx.lineTo(p3.sx, p3.sy);
         }
-        ctx.strokeStyle = "rgba(34, 211, 238, 0.10)";
+        ctx.strokeStyle = "rgba(34, 211, 238, 0.11)";
         ctx.stroke();
       }
 
       for (let c = 0; c < cols; c += colStep) {
         ctx.beginPath();
         for (let r = 0; r < rows; r += 1) {
-          const p = points[r * cols + c]!;
-          const y = terrainHeight(p.x, p.z, t, p.seed);
-          const p3 = project(p.x * 1.72, y * 1.28, p.z * 1.72, t);
+          const i = r * cols + c;
+          const p3 = project(xs[i]!, ys[i]!, zs[i]!);
           if (r === 0) ctx.moveTo(p3.sx, p3.sy);
           else ctx.lineTo(p3.sx, p3.sy);
         }
         ctx.strokeStyle = "rgba(96, 165, 250, 0.06)";
         ctx.stroke();
-      }
-
-      const ridgePts: { sx: number; sy: number }[] = [];
-      for (let c = 0; c < cols; c += 1) {
-        let bestIdx = 0;
-        let bestH = -999;
-        for (let r = 0; r < rows; r += 1) {
-          const p = points[r * cols + c]!;
-          const y = terrainHeight(p.x, p.z, t, p.seed);
-          if (y > bestH) {
-            bestH = y;
-            bestIdx = r * cols + c;
-          }
-        }
-        const p = points[bestIdx]!;
-        const y = bestH;
-        const p3 = project(p.x * 1.72, y * 1.28, p.z * 1.72, t);
-        ridgePts.push({ sx: p3.sx, sy: p3.sy });
       }
 
       ctx.beginPath();
@@ -244,38 +341,28 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
         if (i === 0) ctx.moveTo(rp.sx, rp.sy);
         else ctx.lineTo(rp.sx, rp.sy);
       }
-      ctx.strokeStyle = "rgba(34, 211, 238, 0.26)";
-      ctx.lineWidth = 1.4;
+      ctx.strokeStyle = "rgba(34, 211, 238, 0.28)";
+      ctx.lineWidth = 1.45;
       ctx.stroke();
 
       ctx.save();
       ctx.globalCompositeOperation = "lighter";
-      for (let i = 0; i < points.length; i += 1) {
-        const p = points[i]!;
-        const y = terrainHeight(p.x, p.z, t, p.seed);
-        const p3 = project(p.x * 1.72, y * 1.28, p.z * 1.72, t);
-
-        const dx = p.x - scanCenterX;
-        const dz = p.z - scanCenterZ;
-        const dist = Math.sqrt(dx * dx + dz * dz);
-        const ring = Math.abs(dist - scan);
+      const ringFill = "rgb(249, 115, 22)";
+      for (let i = 0; i < count; i += 1) {
+        const p3 = project(xs[i]!, ys[i]!, zs[i]!);
+        const ring = Math.abs(ds[i]! - scan);
         const ringHit = ring < 0.028;
 
         const depthFade = clamp(1.35 - p3.depth * 0.33, 0, 1);
-        const height01 = clamp((y + 0.08) / 1.25, 0, 1);
+        const height01 = height01s[i]!;
         const heightGlow = clamp(0.22 + height01 * 1.05, 0, 1);
         const baseAlpha = 0.03 + 0.34 * depthFade * heightGlow;
 
         const alpha = ringHit ? clamp(baseAlpha + 0.26, 0, 0.78) : clamp(baseAlpha, 0, 0.54);
         const size = clamp(0.85 + height01 * 2.6 + (ringHit ? 0.9 : 0), 0.8, 3.8);
 
-        if (ringHit) {
-          ctx.fillStyle = `rgba(249, 115, 22, ${alpha})`;
-        } else {
-          const rgb = heightColor(height01);
-          ctx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
-        }
-
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = ringHit ? ringFill : fillStyles[i]!;
         ctx.fillRect(p3.sx, p3.sy, size, size);
       }
       ctx.restore();
