@@ -73,6 +73,28 @@ function ridged(x: number, z: number) {
   return sum;
 }
 
+function heightColor(height01: number) {
+  const low = { r: 30, g: 58, b: 138 };
+  const mid = { r: 34, g: 211, b: 238 };
+  const high = { r: 226, g: 232, b: 240 };
+
+  if (height01 < 0.55) {
+    const t = height01 / 0.55;
+    return {
+      r: Math.round(lerp(low.r, mid.r, t)),
+      g: Math.round(lerp(low.g, mid.g, t)),
+      b: Math.round(lerp(low.b, mid.b, t))
+    };
+  }
+
+  const t = (height01 - 0.55) / 0.45;
+  return {
+    r: Math.round(lerp(mid.r, high.r, t)),
+    g: Math.round(lerp(mid.g, high.g, t)),
+    b: Math.round(lerp(mid.b, high.b, t))
+  };
+}
+
 export function TerrainBackdrop(props: TerrainBackdropProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -84,8 +106,8 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
     if (!ctx) return;
 
     const points: Point[] = [];
-    const cols = 120;
-    const rows = 86;
+    const cols = 160;
+    const rows = 120;
 
     for (let r = 0; r < rows; r += 1) {
       for (let c = 0; c < cols; c += 1) {
@@ -112,41 +134,46 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
     };
 
     const terrainHeight = (x: number, z: number, t: number, seed: number) => {
-      const mx = x * 1.15;
-      const mz = z * 1.4;
-      const r2 = mx * mx + mz * mz;
-      const bump = Math.exp(-r2 * 1.9);
-      const warp = fbm(x * 0.9 + seed * 0.4 + t * 0.00003, z * 0.9 - seed * 0.2) * 0.22;
+      const mx = x * 1.05;
+      const mz = z * 1.2;
+      const bump1 = Math.exp(-((mx + 0.32) * (mx + 0.32) * 2.2 + (mz + 0.08) * (mz + 0.08) * 2.6));
+      const bump2 = Math.exp(-((mx - 0.18) * (mx - 0.18) * 2.9 + (mz - 0.22) * (mz - 0.22) * 2.3));
+      const bump3 = Math.exp(-((mx + 0.05) * (mx + 0.05) * 2.3 + (mz - 0.52) * (mz - 0.52) * 3.4));
+      const bump = clamp(bump1 * 1.08 + bump2 * 0.86 + bump3 * 0.62, 0, 1.8);
 
-      const n = fbm(x * 2.0 + warp, z * 2.0 - warp);
-      const rg = ridged(x * 3.0 - warp, z * 3.0 + warp);
+      const warp = fbm(x * 0.95 + seed * 0.35 + t * 0.00002, z * 0.95 - seed * 0.22) * 0.22;
+      const n = fbm(x * 2.6 + warp, z * 2.6 - warp);
+      const rg = ridged(x * 4.2 - warp, z * 4.2 + warp);
 
-      let h = bump * (0.95 + 0.55 * rg + 0.18 * n);
+      const ridgeLine = Math.exp(-Math.pow(mx * 0.72 + mz * 0.38, 2) * 6.5) * 0.22;
+
+      let h = bump * (0.78 + 0.62 * rg + 0.22 * n) + ridgeLine;
       h = Math.max(0, h);
-      h = Math.pow(h, 1.1);
-      const base = 0.08;
-      return h - base;
+      h = Math.pow(h, 1.05);
+      return h - 0.10;
     };
 
     const project = (x: number, y: number, z: number, t: number) => {
-      const rotY = t * 0.00006;
-      const cs = Math.cos(rotY);
-      const sn = Math.sin(rotY);
+      const rotY = t * 0.000045;
+      const pitch = -0.76 + Math.sin(t * 0.00007) * 0.02;
 
-      const tilt = 0.85;
-      const cst = Math.cos(tilt);
-      const snt = Math.sin(tilt);
+      const csY = Math.cos(rotY);
+      const snY = Math.sin(rotY);
 
-      const x1 = x * cs - z * sn;
-      const z1 = x * sn + z * cs;
+      const csX = Math.cos(pitch);
+      const snX = Math.sin(pitch);
 
-      const y2 = y * cst - z1 * snt;
-      const z2 = y * snt + z1 * cst + 3.1;
+      const x1 = x * csY - z * snY;
+      const z1 = x * snY + z * csY;
 
-      const depth = z2;
-      const persp = 1 / (depth * 0.88);
-      const sx = width * (0.5 + x1 * persp * 0.62);
-      const sy = height * (0.58 - y2 * persp * 0.85);
+      const y2 = y * csX - z1 * snX;
+      const z2 = y * snX + z1 * csX + 3.35;
+
+      const depth = Math.max(0.9, z2);
+      const scale = Math.min(width, height);
+      const persp = 1 / (depth * 0.92);
+      const sx = width * 0.5 + x1 * persp * scale * 0.72;
+      const sy = height * 0.62 - y2 * persp * scale * 0.72;
       return { sx, sy, depth };
     };
 
@@ -163,8 +190,8 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
       const scanCenterX = 0;
       const scanCenterZ = 0;
 
-      const rowStep = 2;
-      const colStep = 3;
+      const rowStep = 3;
+      const colStep = 4;
 
       ctx.lineWidth = 1;
       for (let r = 0; r < rows; r += rowStep) {
@@ -172,7 +199,7 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
         for (let c = 0; c < cols; c += 1) {
           const p = points[r * cols + c]!;
           const y = terrainHeight(p.x, p.z, t, p.seed);
-          const p3 = project(p.x * 1.55, y * 1.25, p.z * 1.55, t);
+          const p3 = project(p.x * 1.72, y * 1.28, p.z * 1.72, t);
           if (c === 0) ctx.moveTo(p3.sx, p3.sy);
           else ctx.lineTo(p3.sx, p3.sy);
         }
@@ -185,7 +212,7 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
         for (let r = 0; r < rows; r += 1) {
           const p = points[r * cols + c]!;
           const y = terrainHeight(p.x, p.z, t, p.seed);
-          const p3 = project(p.x * 1.55, y * 1.25, p.z * 1.55, t);
+          const p3 = project(p.x * 1.72, y * 1.28, p.z * 1.72, t);
           if (r === 0) ctx.moveTo(p3.sx, p3.sy);
           else ctx.lineTo(p3.sx, p3.sy);
         }
@@ -207,7 +234,7 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
         }
         const p = points[bestIdx]!;
         const y = bestH;
-        const p3 = project(p.x * 1.55, y * 1.25, p.z * 1.55, t);
+        const p3 = project(p.x * 1.72, y * 1.28, p.z * 1.72, t);
         ridgePts.push({ sx: p3.sx, sy: p3.sy });
       }
 
@@ -221,38 +248,35 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
       ctx.lineWidth = 1.4;
       ctx.stroke();
 
-      type Dot = { sx: number; sy: number; depth: number; alpha: number; size: number; color: string };
-      const dots: Dot[] = [];
-
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
       for (let i = 0; i < points.length; i += 1) {
         const p = points[i]!;
         const y = terrainHeight(p.x, p.z, t, p.seed);
-        const p3 = project(p.x * 1.55, y * 1.25, p.z * 1.55, t);
+        const p3 = project(p.x * 1.72, y * 1.28, p.z * 1.72, t);
 
         const dx = p.x - scanCenterX;
         const dz = p.z - scanCenterZ;
         const dist = Math.sqrt(dx * dx + dz * dz);
         const ring = Math.abs(dist - scan);
-        const ringHit = ring < 0.03;
+        const ringHit = ring < 0.028;
 
         const depthFade = clamp(1.35 - p3.depth * 0.33, 0, 1);
-        const heightGlow = clamp(0.18 + y * 1.05, 0, 1);
-        const baseAlpha = 0.03 + 0.32 * depthFade * heightGlow;
+        const height01 = clamp((y + 0.08) / 1.25, 0, 1);
+        const heightGlow = clamp(0.22 + height01 * 1.05, 0, 1);
+        const baseAlpha = 0.03 + 0.34 * depthFade * heightGlow;
 
-        const alpha = ringHit ? clamp(baseAlpha + 0.26, 0, 0.78) : clamp(baseAlpha, 0, 0.52);
-        const size = clamp(0.9 + heightGlow * 2.3 + (ringHit ? 0.9 : 0), 0.8, 3.6);
-        const base = ringHit ? "249, 115, 22" : "34, 211, 238";
-        const color = `rgba(${base}, ${alpha})`;
+        const alpha = ringHit ? clamp(baseAlpha + 0.26, 0, 0.78) : clamp(baseAlpha, 0, 0.54);
+        const size = clamp(0.85 + height01 * 2.6 + (ringHit ? 0.9 : 0), 0.8, 3.8);
 
-        dots.push({ sx: p3.sx, sy: p3.sy, depth: p3.depth, alpha, size, color });
-      }
+        if (ringHit) {
+          ctx.fillStyle = `rgba(249, 115, 22, ${alpha})`;
+        } else {
+          const rgb = heightColor(height01);
+          ctx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
+        }
 
-      dots.sort((a, b) => b.depth - a.depth);
-      ctx.save();
-      ctx.globalCompositeOperation = "lighter";
-      for (const d of dots) {
-        ctx.fillStyle = d.color;
-        ctx.fillRect(d.sx, d.sy, d.size, d.size);
+        ctx.fillRect(p3.sx, p3.sy, size, size);
       }
       ctx.restore();
 
