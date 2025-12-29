@@ -238,8 +238,8 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
 
     const size = 3.95;
     const maxHeight = 0.55;
-    const segX = 420;
-    const segZ = 320;
+    const segX = 560;
+    const segZ = 420;
 
     const geometry = new THREE.PlaneGeometry(size, size, segX, segZ);
     geometry.rotateX(-Math.PI / 2);
@@ -250,6 +250,7 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
     const heights = new Float32Array(vCount);
     let minH = Infinity;
     let maxH = -Infinity;
+    let peakIndex = 0;
 
     for (let i = 0; i < vCount; i += 1) {
       const x = pos.getX(i);
@@ -260,7 +261,10 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
       const h = terrainHeight(nx, nz, seed);
       heights[i] = h;
       minH = Math.min(minH, h);
-      maxH = Math.max(maxH, h);
+      if (h > maxH) {
+        maxH = h;
+        peakIndex = i;
+      }
       pos.setY(i, h * maxHeight);
     }
     pos.needsUpdate = true;
@@ -274,9 +278,10 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
       const h01 = clamp((heights[i]! - minH) / hSpan, 0, 1);
       aHeight[i] = h01;
       const rgb = heightColor(h01);
-      colors[i * 3] = rgb.r / 255;
-      colors[i * 3 + 1] = rgb.g / 255;
-      colors[i * 3 + 2] = rgb.b / 255;
+      const tone = 0.42 + h01 * 0.26;
+      colors[i * 3] = (rgb.r / 255) * tone;
+      colors[i * 3 + 1] = (rgb.g / 255) * tone;
+      colors[i * 3 + 2] = (rgb.b / 255) * tone;
     }
 
     geometry.setAttribute("aHeight", new THREE.BufferAttribute(aHeight, 1));
@@ -285,7 +290,7 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
     const meshMaterial = new THREE.MeshStandardMaterial({
       vertexColors: true,
       transparent: true,
-      opacity: 0.17,
+      opacity: 0.24,
       roughness: 0.9,
       metalness: 0,
       emissive: new THREE.Color(0x061021),
@@ -295,6 +300,58 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
 
     const mesh = new THREE.Mesh(geometry, meshMaterial);
     scene.add(mesh);
+
+    const ridgeMaterial = new THREE.LineBasicMaterial({
+      color: 0x22d3ee,
+      transparent: true,
+      opacity: 0.28
+    });
+
+    const ridgeGeometries: THREE.BufferGeometry[] = [];
+
+    const buildRidgeLine = (axis: "x" | "z") => {
+      const stride = segX + 1;
+      const points: number[] = [];
+      if (axis === "x") {
+        for (let ix = 0; ix <= segX; ix += 1) {
+          let bestIdx = ix;
+          let bestY = -Infinity;
+          for (let iz = 0; iz <= segZ; iz += 1) {
+            const idx = iz * stride + ix;
+            const y = pos.getY(idx);
+            if (y > bestY) {
+              bestY = y;
+              bestIdx = idx;
+            }
+          }
+          points.push(pos.getX(bestIdx), pos.getY(bestIdx) + 0.01, pos.getZ(bestIdx));
+        }
+      } else {
+        for (let iz = 0; iz <= segZ; iz += 1) {
+          let bestIdx = iz * stride;
+          let bestY = -Infinity;
+          for (let ix = 0; ix <= segX; ix += 1) {
+            const idx = iz * stride + ix;
+            const y = pos.getY(idx);
+            if (y > bestY) {
+              bestY = y;
+              bestIdx = idx;
+            }
+          }
+          points.push(pos.getX(bestIdx), pos.getY(bestIdx) + 0.01, pos.getZ(bestIdx));
+        }
+      }
+
+      const geom = new THREE.BufferGeometry();
+      geom.setAttribute("position", new THREE.Float32BufferAttribute(points, 3));
+      ridgeGeometries.push(geom);
+      return new THREE.Line(geom, ridgeMaterial);
+    };
+
+    const ridgeX = buildRidgeLine("x");
+    const ridgeZ = buildRidgeLine("z");
+    scene.add(ridgeX);
+    scene.add(ridgeZ);
 
     type PointsUniforms = {
       uTime: { value: number };
@@ -313,10 +370,10 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
 
     const pointsUniforms: PointsUniforms = {
       uTime: { value: 0 },
-      uAlpha: { value: 0.9 },
-      uScanSpeed: { value: 0.26 },
-      uRingWidth: { value: 0.05 },
-      uPointSize: { value: 2.0 },
+      uAlpha: { value: 0.82 },
+      uScanSpeed: { value: 0.24 },
+      uRingWidth: { value: 0.04 },
+      uPointSize: { value: 1.35 },
       uPixelRatio: { value: 1 },
       uRadius: { value: size * 0.5 },
       uLight: { value: new THREE.Vector3(0.58, 0.82, 0.28) },
@@ -347,18 +404,118 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
     baseGrid.position.y = -0.02;
     scene.add(baseGrid);
 
-    const ringGeom = new THREE.RingGeometry(size * 0.18, size * 0.19, 160);
-    ringGeom.rotateX(-Math.PI / 2);
-    const ringMat = new THREE.MeshBasicMaterial({
-      color: 0xf97316,
+    const markerGroup = new THREE.Group();
+    scene.add(markerGroup);
+
+    const markerGeometry = new THREE.SphereGeometry(0.04, 20, 20);
+    const markerMaterial = new THREE.MeshStandardMaterial({
+      color: 0x22d3ee,
+      emissive: 0x22d3ee,
+      emissiveIntensity: 1.25,
+      roughness: 0.3,
+      metalness: 0.1,
       transparent: true,
-      opacity: 0.62,
-      side: THREE.DoubleSide,
+      opacity: 0.95,
       depthWrite: false
     });
-    const ring = new THREE.Mesh(ringGeom, ringMat);
-    ring.position.y = -0.018;
-    scene.add(ring);
+
+    const labelTextures: THREE.Texture[] = [];
+    const labelMaterials: THREE.SpriteMaterial[] = [];
+
+    const makeLabelSprite = (text: string) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 320;
+      canvas.height = 92;
+      const c2d = canvas.getContext("2d");
+      if (!c2d) return null;
+
+      c2d.clearRect(0, 0, canvas.width, canvas.height);
+      c2d.fillStyle = "rgba(2, 6, 23, 0.55)";
+      c2d.strokeStyle = "rgba(34, 211, 238, 0.32)";
+      c2d.lineWidth = 2;
+
+      const x = 10;
+      const y = 14;
+      const w = canvas.width - 20;
+      const h = canvas.height - 28;
+      const r = 16;
+
+      c2d.beginPath();
+      c2d.moveTo(x + r, y);
+      c2d.lineTo(x + w - r, y);
+      c2d.quadraticCurveTo(x + w, y, x + w, y + r);
+      c2d.lineTo(x + w, y + h - r);
+      c2d.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      c2d.lineTo(x + r, y + h);
+      c2d.quadraticCurveTo(x, y + h, x, y + h - r);
+      c2d.lineTo(x, y + r);
+      c2d.quadraticCurveTo(x, y, x + r, y);
+      c2d.closePath();
+      c2d.fill();
+      c2d.stroke();
+
+      c2d.font = "700 30px system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
+      c2d.fillStyle = "rgba(226, 232, 240, 0.96)";
+      c2d.textBaseline = "middle";
+      c2d.fillText(text, 24, canvas.height / 2);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.minFilter = THREE.LinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      labelTextures.push(texture);
+
+      const mat = new THREE.SpriteMaterial({
+        map: texture,
+        transparent: true,
+        opacity: 0.95,
+        depthWrite: false
+      });
+      labelMaterials.push(mat);
+
+      const sprite = new THREE.Sprite(mat);
+      sprite.scale.set(0.62, 0.18, 1);
+      return sprite;
+    };
+
+    const sampleSurfaceY = (x: number, z: number) => {
+      const nx = x / (size * 0.5);
+      const nz = z / (size * 0.5);
+      const seed = fract(Math.sin((nx + 2.7) * 91.7 + (nz - 1.9) * 57.3) * 43758.5453);
+      return terrainHeight(nx, nz, seed) * maxHeight;
+    };
+
+    const peakX = pos.getX(peakIndex);
+    const peakZ = pos.getZ(peakIndex);
+    const peakY = pos.getY(peakIndex);
+
+    const mkMarker = (label: string, x: number, z: number, yOverride?: number) => {
+      const marker = new THREE.Group();
+      const dot = new THREE.Mesh(markerGeometry, markerMaterial);
+      marker.add(dot);
+
+      const sprite = makeLabelSprite(label);
+      if (sprite) {
+        sprite.position.set(0, 0.14, 0);
+        marker.add(sprite);
+      }
+
+      const y = yOverride ?? sampleSurfaceY(x, z);
+      marker.position.set(x, y + 0.02, z);
+      markerGroup.add(marker);
+      return marker;
+    };
+
+    mkMarker("山顶", peakX, peakZ, peakY);
+
+    const dir = new THREE.Vector3(1, 0, 0.62).normalize();
+    const midX = clamp(peakX + dir.x * (size * 0.38), -size * 0.48, size * 0.48);
+    const midZ = clamp(peakZ + dir.z * (size * 0.38), -size * 0.48, size * 0.48);
+    mkMarker("山腰", midX, midZ);
+
+    const footX = clamp(peakX + dir.x * (size * 0.62), -size * 0.48, size * 0.48);
+    const footZ = clamp(peakZ + dir.z * (size * 0.62), -size * 0.48, size * 0.48);
+    mkMarker("山脚", footX, footZ);
 
     let raf = 0;
     const clock = new THREE.Clock();
@@ -401,8 +558,6 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
       controls.autoRotateSpeed = 0.25;
 
       pointsUniforms.uTime.value = t;
-      ring.scale.setScalar(1 + (t * 0.13) % 1.15);
-      ringMat.opacity = 0.65 * (1 - ((t * 0.13) % 1.15) / 1.15);
 
       controls.update();
       renderer.render(scene, camera);
@@ -420,8 +575,12 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
       controls.removeEventListener("start", onStart);
       controls.removeEventListener("end", onEnd);
       controls.dispose();
-      ringGeom.dispose();
-      ringMat.dispose();
+      ridgeMaterial.dispose();
+      ridgeGeometries.forEach((geom) => geom.dispose());
+      markerGeometry.dispose();
+      markerMaterial.dispose();
+      labelMaterials.forEach((mat) => mat.dispose());
+      labelTextures.forEach((tex) => tex.dispose());
       baseGrid.geometry.dispose();
       (baseGrid.material as THREE.Material).dispose();
       pointsMaterial.dispose();
