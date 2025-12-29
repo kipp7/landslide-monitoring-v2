@@ -69,24 +69,8 @@ export function LoginPage() {
       <div className="desk-login-orb orb-b" aria-hidden="true" />
 
       <div className="desk-login-shell">
-        <div className="desk-login-terrain-card">
-          <div className="desk-login-terrain-head">
-            <div>
-              <div className="desk-login-terrain-title">地形扫描</div>
-              <div className="desk-login-terrain-sub">粒子点云 · 扫描中（演示）</div>
-            </div>
-            <Tag color="volcano">SCAN</Tag>
-          </div>
-
-          <div className="desk-login-terrain-view">
-            <TerrainBackdrop className="desk-login-terrain-canvas" />
-          </div>
-
-          <div className="desk-login-terrain-foot">
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              提示：此区域为 UI 演示的地形扫描视图。
-            </Typography.Text>
-          </div>
+        <div className="desk-login-terrain-pane" aria-hidden="true">
+          <TerrainBackdrop className="desk-login-terrain-canvas" />
         </div>
 
         <div className="desk-login-hero">
