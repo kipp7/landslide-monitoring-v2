@@ -261,7 +261,7 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
       const scale = Math.min(width, height);
       const pxScale = scale * 0.64;
       const cx = width * 0.5;
-      const cy = height * 0.74;
+      const cy = height * 0.6;
 
       const project = (x: number, y: number, z: number) => {
         const x1 = x * csY - z * snY;
