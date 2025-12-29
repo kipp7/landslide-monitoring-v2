@@ -74,59 +74,59 @@ export function LoginPage() {
               <EnvironmentOutlined />
             </div>
             <div>
-              <div className="desk-login-brand-name">山体滑坡监测系统</div>
-              <div className="desk-login-brand-sub">Landslide Monitoring Platform</div>
+              <div className="desk-login-brand-name">山体滑坡监测预警平台</div>
+              <div className="desk-login-brand-sub">Landslide Monitoring & Early Warning</div>
             </div>
           </div>
 
-          <div className="desk-login-hero-title">面向预警与处置的实时监测桌面端</div>
+          <div className="desk-login-hero-title">让风险可见，让预警更快</div>
           <div className="desk-login-hero-desc">
-            以监测站为核心，连接 GNSS、雨量、倾角、温湿度与视频，提供实时异常、趋势分析与预测入口（Mock 优先）。
+            汇聚 GNSS、雨量、倾角、温湿度与视频等多源数据，构建监测站态势总览、异常告警与趋势分析，支撑风险研判与处置决策。
           </div>
 
           <div className="desk-login-features">
             <div className="desk-login-feature">
               <RadarChartOutlined className="desk-login-feature-ico" />
               <div className="desk-login-feature-txt">
-                <div className="t">形变趋势与预测</div>
-                <div className="d">多时间尺度曲线、阈值与预测卡片。</div>
+                <div className="t">趋势洞察</div>
+                <div className="d">实时曲线、阈值分级与预测提示，快速发现变化。</div>
               </div>
             </div>
             <div className="desk-login-feature">
               <DesktopOutlined className="desk-login-feature-ico" />
               <div className="desk-login-feature-txt">
-                <div className="t">设备管理中心</div>
-                <div className="d">状态监控、站点管理、基线管理与控制面板。</div>
+                <div className="t">运维管控</div>
+                <div className="d">站点与设备统一管理，状态可追踪，问题可定位。</div>
               </div>
             </div>
             <div className="desk-login-feature">
               <ApiOutlined className="desk-login-feature-ico" />
               <div className="desk-login-feature-txt">
-                <div className="t">接口封装可替换</div>
-                <div className="d">Mock / HTTP 一键切换，为后端联调预留。</div>
+                <div className="t">可扩展对接</div>
+                <div className="d">数据源可切换，接口封装统一，便于逐步联调上线。</div>
               </div>
             </div>
             <div className="desk-login-feature">
               <SafetyCertificateOutlined className="desk-login-feature-ico" />
               <div className="desk-login-feature-txt">
-                <div className="t">更稳的交互与兜底</div>
-                <div className="d">统一暗色主题、错误兜底与提示一致性。</div>
+                <div className="t">稳定可信</div>
+                <div className="d">统一交互规范与错误兜底，保障关键操作可控可用。</div>
               </div>
             </div>
           </div>
 
           <div className="desk-login-hero-foot">
-            <Tag color={apiMode === "mock" ? "blue" : "geekblue"}>{apiMode.toUpperCase()}</Tag>
+            <Tag color={apiMode === "mock" ? "blue" : "geekblue"}>{apiMode === "mock" ? "演示环境" : "联调环境"}</Tag>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              当前为 UI 原型（浏览器预览），后续封装为 Windows 11 桌面端。
+              当前为预览版本；正式交付将提供 Windows 11 桌面端。
             </Typography.Text>
           </div>
         </div>
 
         <div className="desk-login-panel">
           <div className="desk-login-panel-head">
-            <div className="desk-login-panel-title">欢迎回来</div>
-            <div className="desk-login-panel-desc">登录以进入系统</div>
+            <div className="desk-login-panel-title">登录控制台</div>
+            <div className="desk-login-panel-desc">请输入账号信息以进入监测与预警控制台</div>
           </div>
 
           <Tabs
@@ -194,16 +194,16 @@ export function LoginPage() {
                 type="link"
                 onClick={() => {
                   accountForm.setFieldsValue({ username: "admin", password: "admin" });
-                  message.success("已填充演示账号");
+                  message.success("已填充体验账号");
                 }}
               >
-                填充演示账号
+                快速体验
               </Button>
               <span className="desk-login-sep" aria-hidden="true" />
               <Button
                 type="link"
                 onClick={() => {
-                  message.info("请联系管理员处理（Mock）");
+                  message.info("请联系管理员重置密码");
                 }}
               >
                 忘记密码
@@ -212,14 +212,14 @@ export function LoginPage() {
               <Button
                 type="link"
                 onClick={() => {
-                  message.info("可在系统设置中切换 Mock / HTTP（Mock 推荐）");
+                  message.info("可在系统设置中切换演示/联调数据源");
                 }}
               >
-                账号帮助
+                登录帮助
               </Button>
             </Space>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              提示：Mock 模式下无需真实验证码；仅用于 UI 演示。
+              提示：演示环境不校验真实验证码；正式环境以实际短信服务为准。
             </Typography.Text>
           </div>
         </div>
