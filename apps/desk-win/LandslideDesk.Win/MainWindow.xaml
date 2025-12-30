@@ -12,7 +12,6 @@
         MinHeight="720"
         MinWidth="1200"
         WindowStartupLocation="CenterScreen"
-        Icon="Assets/LandslideDesk.ico"
         Background="#0B1220">
     <Grid>
         <wv2:WebView2 x:Name="DeskWebView" />
