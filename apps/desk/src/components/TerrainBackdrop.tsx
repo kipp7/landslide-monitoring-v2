@@ -70,9 +70,9 @@ function ridged(x: number, z: number) {
 }
 
 function heightColor(height01: number) {
-  const low = { r: 30, g: 58, b: 138 };
+  const low = { r: 28, g: 110, b: 160 };
   const mid = { r: 34, g: 211, b: 238 };
-  const high = { r: 226, g: 232, b: 240 };
+  const high = { r: 232, g: 250, b: 255 };
 
   if (height01 < 0.55) {
     const t = height01 / 0.55;
@@ -178,11 +178,11 @@ const POINTS_FRAGMENT_SHADER = /* glsl */ `
     float ringHit = smoothstep(uRingWidth, 0.0, ring);
 
     vec3 col = heightColor(vHeight);
-    col *= (0.65 + vShade * 0.55 + vHeight * 0.12);
+    col *= (0.72 + vShade * 0.55 + vHeight * 0.12);
     col = mix(col, uRingColor, ringHit);
 
     float alpha = soft * uAlpha * (0.42 + vShade * 0.78);
-    alpha += ringHit * 0.25 * edge;
+    alpha += ringHit * 0.18 * edge;
 
     if (alpha < 0.01) discard;
     gl_FragColor = vec4(col, alpha);
@@ -235,6 +235,8 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
     });
     renderer.setClearColor(0x000000, 0);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.12;
 
     const scene = new THREE.Scene();
 
@@ -256,14 +258,18 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
     controls.update();
     controls.saveState();
 
-    const ambient = new THREE.AmbientLight(0x0f172a, 1.25);
+    const ambient = new THREE.AmbientLight(0x0b2a3a, 1.05);
     scene.add(ambient);
 
-    const key = new THREE.DirectionalLight(0xb6f7ff, 1.2);
+    const hemi = new THREE.HemisphereLight(0xe6fbff, 0x061021, 0.52);
+    hemi.position.set(0, 2.1, 0);
+    scene.add(hemi);
+
+    const key = new THREE.DirectionalLight(0xe6fbff, 1.1);
     key.position.set(4, 5, 2);
     scene.add(key);
 
-    const fill = new THREE.DirectionalLight(0x60a5fa, 0.55);
+    const fill = new THREE.DirectionalLight(0x93c5fd, 0.6);
     fill.position.set(-4, 2, -3);
     scene.add(fill);
 
@@ -305,7 +311,7 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
       const h01 = clamp((heights[i]! - minH) / hSpan, 0, 1);
       aHeight[i] = h01;
       const rgb = heightColor(h01);
-      const tone = 0.42 + h01 * 0.26;
+      const tone = 0.54 + h01 * 0.26;
       colors[i * 3] = (rgb.r / 255) * tone;
       colors[i * 3 + 1] = (rgb.g / 255) * tone;
       colors[i * 3 + 2] = (rgb.b / 255) * tone;
@@ -317,11 +323,11 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
     const meshMaterial = new THREE.MeshStandardMaterial({
       vertexColors: true,
       transparent: true,
-      opacity: 0.24,
+      opacity: 0.26,
       roughness: 0.9,
       metalness: 0,
-      emissive: new THREE.Color(0x061021),
-      emissiveIntensity: 0.65,
+      emissive: new THREE.Color(0x0b2a3a),
+      emissiveIntensity: 0.88,
       depthWrite: false
     });
 
@@ -333,9 +339,9 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
       depthWrite: false,
       blending: THREE.AdditiveBlending,
       uniforms: {
-        uRimColor: { value: new THREE.Color(34 / 255, 211 / 255, 238 / 255) },
-        uRimPower: { value: 2.35 },
-        uRimAlpha: { value: 0.34 }
+        uRimColor: { value: new THREE.Color(125 / 255, 211 / 255, 252 / 255) },
+        uRimPower: { value: 2.6 },
+        uRimAlpha: { value: 0.22 }
       },
       vertexShader: RIM_VERTEX_SHADER,
       fragmentShader: RIM_FRAGMENT_SHADER
@@ -345,9 +351,9 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
     scene.add(rimMesh);
 
     const ridgeMaterial = new THREE.LineBasicMaterial({
-      color: 0x22d3ee,
+      color: 0x7dd3fc,
       transparent: true,
-      opacity: 0.28
+      opacity: 0.2
     });
 
     const ridgeGeometries: THREE.BufferGeometry[] = [];
@@ -420,10 +426,10 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
       uPixelRatio: { value: 1 },
       uRadius: { value: size * 0.5 },
       uLight: { value: new THREE.Vector3(0.58, 0.82, 0.28) },
-      uLow: { value: new THREE.Color(30 / 255, 58 / 255, 138 / 255) },
+      uLow: { value: new THREE.Color(28 / 255, 110 / 255, 160 / 255) },
       uMid: { value: new THREE.Color(34 / 255, 211 / 255, 238 / 255) },
-      uHigh: { value: new THREE.Color(226 / 255, 232 / 255, 240 / 255) },
-      uRingColor: { value: new THREE.Color(249 / 255, 115 / 255, 22 / 255) }
+      uHigh: { value: new THREE.Color(232 / 255, 250 / 255, 255 / 255) },
+      uRingColor: { value: new THREE.Color(245 / 255, 158 / 255, 11 / 255) }
     };
 
     const pointsMaterial = new THREE.ShaderMaterial({
@@ -440,9 +446,9 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
 
     const baseGrid = new THREE.GridHelper(size * 1.04, 22, 0x22d3ee, 0x1e3a8a);
     baseGrid.material = new THREE.LineBasicMaterial({
-      color: 0x22d3ee,
+      color: 0x7dd3fc,
       transparent: true,
-      opacity: 0.1
+      opacity: 0.07
     });
     baseGrid.position.y = -0.02;
     scene.add(baseGrid);
