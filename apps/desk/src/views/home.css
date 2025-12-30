@@ -1,0 +1,145 @@
+.desk-home-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  gap: 12px;
+}
+
+@media (max-width: 1100px) {
+  .desk-home-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.desk-home-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  padding: 6px;
+}
+
+@media (max-width: 1100px) {
+  .desk-home-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.desk-home-metric {
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(2, 6, 23, 0.25);
+  border-radius: 12px;
+  padding: 10px 12px;
+  position: relative;
+  overflow: hidden;
+}
+
+.desk-home-metric::after {
+  content: "";
+  position: absolute;
+  inset: -30px -40px auto auto;
+  width: 120px;
+  height: 120px;
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.18), transparent 60%);
+  transform: rotate(15deg);
+}
+
+.desk-home-metric-label {
+  position: relative;
+  z-index: 1;
+  font-size: 12px;
+  color: rgba(148, 163, 184, 0.9);
+}
+
+.desk-home-metric-value {
+  position: relative;
+  z-index: 1;
+  margin-top: 4px;
+  font-size: 22px;
+  font-weight: 900;
+  color: rgba(226, 232, 240, 0.96);
+}
+
+.desk-home-metric-sub {
+  position: relative;
+  z-index: 1;
+  margin-top: 2px;
+  font-size: 12px;
+  color: rgba(148, 163, 184, 0.9);
+}
+
+.desk-home-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 6px;
+}
+
+@media (max-width: 1100px) {
+  .desk-home-shortcuts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.desk-home-shortcut {
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(2, 6, 23, 0.22);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 112px;
+}
+
+.desk-home-shortcut-title {
+  font-weight: 900;
+  color: rgba(226, 232, 240, 0.96);
+}
+
+.desk-home-shortcut-desc {
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(148, 163, 184, 0.95);
+}
+
+.desk-home-anomaly {
+  padding: 6px;
+}
+
+.desk-home-anomaly-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  background: rgba(15, 23, 42, 0.22);
+}
+
+.desk-home-anomaly-row + .desk-home-anomaly-row {
+  margin-top: 8px;
+}
+
+.desk-home-anomaly-left {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.desk-home-anomaly-name {
+  font-weight: 800;
+  color: rgba(226, 232, 240, 0.95);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desk-home-anomaly-meta {
+  font-size: 12px;
+  color: rgba(148, 163, 184, 0.92);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
