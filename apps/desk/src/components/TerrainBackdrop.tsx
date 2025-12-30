@@ -241,7 +241,7 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
     const scene = new THREE.Scene();
 
     const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 60);
-    camera.position.set(2.6, 1.7, 2.6);
+    camera.position.set(2.2, 3.2, 2.2);
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
