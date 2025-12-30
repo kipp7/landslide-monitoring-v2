@@ -72,7 +72,7 @@ function ridged(x: number, z: number) {
 function heightColor(height01: number) {
   const low = { r: 28, g: 110, b: 160 };
   const mid = { r: 34, g: 211, b: 238 };
-  const high = { r: 232, g: 250, b: 255 };
+  const high = { r: 220, g: 245, b: 255 };
 
   if (height01 < 0.55) {
     const t = height01 / 0.55;
@@ -178,7 +178,8 @@ const POINTS_FRAGMENT_SHADER = /* glsl */ `
     float ringHit = smoothstep(uRingWidth, 0.0, ring);
 
     vec3 col = heightColor(vHeight);
-    col *= (0.72 + vShade * 0.55 + vHeight * 0.12);
+    float peakFade = 1.0 - smoothstep(0.78, 1.0, vHeight) * 0.18;
+    col *= (0.66 + vShade * 0.46 + vHeight * 0.06) * peakFade;
     col = mix(col, uRingColor, ringHit);
 
     float alpha = soft * uAlpha * (0.42 + vShade * 0.78);
@@ -241,7 +242,7 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
     const scene = new THREE.Scene();
 
     const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 60);
-    camera.position.set(2.2, 3.0, 2.2);
+    camera.position.set(2.2, 2.5, 2.3);
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
@@ -311,7 +312,8 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
       const h01 = clamp((heights[i]! - minH) / hSpan, 0, 1);
       aHeight[i] = h01;
       const rgb = heightColor(h01);
-      const tone = 0.54 + h01 * 0.26;
+      const peakFade = 1 - smoothstep(0.72, 1.0, h01) * 0.18;
+      const tone = (0.54 + h01 * 0.26) * peakFade;
       colors[i * 3] = (rgb.r / 255) * tone;
       colors[i * 3 + 1] = (rgb.g / 255) * tone;
       colors[i * 3 + 2] = (rgb.b / 255) * tone;
@@ -428,7 +430,7 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
       uLight: { value: new THREE.Vector3(0.58, 0.82, 0.28) },
       uLow: { value: new THREE.Color(28 / 255, 110 / 255, 160 / 255) },
       uMid: { value: new THREE.Color(34 / 255, 211 / 255, 238 / 255) },
-      uHigh: { value: new THREE.Color(232 / 255, 250 / 255, 255 / 255) },
+      uHigh: { value: new THREE.Color(220 / 255, 245 / 255, 255 / 255) },
       uRingColor: { value: new THREE.Color(245 / 255, 158 / 255, 11 / 255) }
     };
 
