@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Interop;
@@ -20,7 +21,20 @@ public partial class MainWindow : Window
     private const int VkF11 = 0x7A;
     private const int VkEscape = 0x1B;
 
+    private const int DwmwaUseImmersiveDarkMode19 = 19;
+    private const int DwmwaUseImmersiveDarkMode20 = 20;
+    private const int DwmwaWindowCornerPreference = 33;
+    private const int DwmwaSystemBackdropType = 38;
+
+    private string? _devServerUrl;
+    private string? _localWebRoot;
+    private bool _hasLocalWebAssets;
+    private string? _lastNavigationUrl;
+
     private bool _isFullscreen;
+    private bool _isHotkeyScopeActive;
+    private bool _isHotkeyF11Registered;
+    private bool _isHotkeyEscRegistered;
     private WindowState _restoreWindowState;
     private WindowStyle _restoreWindowStyle;
     private ResizeMode _restoreResizeMode;
@@ -34,6 +48,8 @@ public partial class MainWindow : Window
         InitializeComponent();
         SourceInitialized += OnSourceInitialized;
         Loaded += OnLoaded;
+        Activated += OnActivated;
+        Deactivated += OnDeactivated;
         Closed += OnClosed;
     }
 
@@ -48,13 +64,37 @@ public partial class MainWindow : Window
 
         _hwndSource = HwndSource.FromHwnd(_windowHandle);
         _hwndSource?.AddHook(WndProc);
+        ApplyWin11WindowStyles();
+    }
 
-        RegisterHotKey(_windowHandle, HotkeyToggleFullscreen, 0, VkF11);
+    private void OnActivated(object? sender, System.EventArgs e)
+    {
+        if (_windowHandle == nint.Zero || _isHotkeyScopeActive)
+        {
+            return;
+        }
+
+        _isHotkeyScopeActive = true;
+        EnsureFullscreenHotkeys();
+    }
+
+    private void OnDeactivated(object? sender, System.EventArgs e)
+    {
+        if (!_isHotkeyScopeActive)
+        {
+            return;
+        }
+
+        _isHotkeyScopeActive = false;
+        RemoveFullscreenHotkeys();
     }
 
     private void OnClosed(object? sender, System.EventArgs e)
     {
         Closed -= OnClosed;
+        Activated -= OnActivated;
+        Deactivated -= OnDeactivated;
+        RemoveFullscreenHotkeys();
 
         if (_hwndSource is not null)
         {
@@ -64,8 +104,15 @@ public partial class MainWindow : Window
 
         if (_windowHandle != nint.Zero)
         {
-            UnregisterHotKey(_windowHandle, HotkeyToggleFullscreen);
-            UnregisterHotKey(_windowHandle, HotkeyExitFullscreen);
+            if (_isHotkeyF11Registered)
+            {
+                UnregisterHotKey(_windowHandle, HotkeyToggleFullscreen);
+            }
+
+            if (_isHotkeyEscRegistered)
+            {
+                UnregisterHotKey(_windowHandle, HotkeyExitFullscreen);
+            }
         }
     }
 
@@ -84,6 +131,15 @@ public partial class MainWindow : Window
 
     private async Task InitializeWebViewAsync()
     {
+        _devServerUrl = System.Environment.GetEnvironmentVariable(DevServerEnv)?.Trim();
+        if (string.IsNullOrWhiteSpace(_devServerUrl))
+        {
+            _devServerUrl = null;
+        }
+
+        _localWebRoot = Path.Combine(System.AppContext.BaseDirectory, "web");
+        _hasLocalWebAssets = File.Exists(Path.Combine(_localWebRoot, "index.html"));
+
         var userDataFolder = Path.Combine(
             System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData),
             "LandslideDesk.Win",
@@ -94,25 +150,23 @@ public partial class MainWindow : Window
         await DeskWebView.EnsureCoreWebView2Async(env);
 
         var core = DeskWebView.CoreWebView2;
-        core.Settings.AreDevToolsEnabled = Debugger.IsAttached;
+        ConfigureWebView(core);
+        HookWebViewEvents(core);
 
-        var devUrl = System.Environment.GetEnvironmentVariable(DevServerEnv);
-        if (!string.IsNullOrWhiteSpace(devUrl))
+        if (_devServerUrl is not null)
         {
-            core.Navigate(devUrl.Trim());
+            NavigateToUrl(core, _devServerUrl);
             return;
         }
 
-        var webRoot = Path.Combine(System.AppContext.BaseDirectory, "web");
-        var indexFile = Path.Combine(webRoot, "index.html");
-        if (File.Exists(indexFile))
+        if (_hasLocalWebAssets && _localWebRoot is not null)
         {
             core.SetVirtualHostNameToFolderMapping(
                 VirtualHostName,
-                webRoot,
+                _localWebRoot,
                 CoreWebView2HostResourceAccessKind.Allow
             );
-            core.Navigate($"https://{VirtualHostName}/index.html");
+            NavigateToUrl(core, $"https://{VirtualHostName}/index.html");
             return;
         }
 
@@ -201,7 +255,264 @@ dotnet publish apps/desk-win/LandslideDesk.Win/LandslideDesk.Win.csproj -c Relea
 </html>
 """;
 
+        HideOverlays();
         DeskWebView.NavigateToString(html);
+    }
+
+    private void ConfigureWebView(CoreWebView2 core)
+    {
+        core.Settings.AreDevToolsEnabled = Debugger.IsAttached;
+        core.Settings.AreDefaultContextMenusEnabled = Debugger.IsAttached;
+        core.Settings.IsStatusBarEnabled = false;
+        core.Settings.IsZoomControlEnabled = false;
+        core.Settings.AreBrowserAcceleratorKeysEnabled = Debugger.IsAttached;
+    }
+
+    private void HookWebViewEvents(CoreWebView2 core)
+    {
+        core.NavigationStarting += (_, e) =>
+        {
+            _lastNavigationUrl = e.Uri;
+            Dispatcher.Invoke(() => ShowLoading("正在加载页面..."));
+        };
+
+        core.NavigationCompleted += (_, e) =>
+        {
+            Dispatcher.Invoke(() =>
+            {
+                if (e.IsSuccess)
+                {
+                    HideOverlays();
+                    return;
+                }
+
+                ShowError(
+                    "无法加载页面",
+                    BuildNavigationErrorText(_lastNavigationUrl, e.WebErrorStatus),
+                    canSwitchToLocal: _devServerUrl is not null && _hasLocalWebAssets
+                );
+            });
+        };
+
+        core.ProcessFailed += (_, e) =>
+        {
+            Dispatcher.Invoke(() =>
+            {
+                ShowError(
+                    "浏览器进程异常",
+                    $"WebView2 进程异常：{e.ProcessFailedKind}\n可以尝试重新加载。",
+                    canSwitchToLocal: _devServerUrl is not null && _hasLocalWebAssets
+                );
+            });
+        };
+
+        core.NewWindowRequested += (_, e) =>
+        {
+            e.Handled = true;
+            if (string.IsNullOrWhiteSpace(e.Uri))
+            {
+                return;
+            }
+
+            TryOpenExternal(e.Uri);
+        };
+
+        core.WebMessageReceived += (_, e) =>
+        {
+            var msg = e.TryGetWebMessageAsString();
+            if (string.IsNullOrWhiteSpace(msg))
+            {
+                return;
+            }
+
+            Dispatcher.Invoke(() => HandleWebMessage(core, msg));
+        };
+
+        core.WindowCloseRequested += (_, _) =>
+        {
+            Dispatcher.Invoke(Close);
+        };
+    }
+
+    private static void TryOpenExternal(string uri)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(uri) { UseShellExecute = true });
+        }
+        catch
+        {
+        }
+    }
+
+    private static string BuildNavigationErrorText(string? uri, CoreWebView2WebErrorStatus status)
+    {
+        var target = string.IsNullOrWhiteSpace(uri) ? "(unknown)" : uri;
+        return $"目标：{target}\n错误：{status}\n\n如果你在开发模式，请先确认前端服务是否启动。";
+    }
+
+    private void HandleWebMessage(CoreWebView2 core, string message)
+    {
+        if (message.StartsWith("app:", System.StringComparison.OrdinalIgnoreCase))
+        {
+            HandleAppAction(core, message["app:".Length..], payload: null);
+            return;
+        }
+
+        if (!message.TrimStart().StartsWith("{", System.StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(message);
+            var root = doc.RootElement;
+            if (!root.TryGetProperty("type", out var typeEl))
+            {
+                return;
+            }
+
+            var type = typeEl.GetString();
+            if (!string.Equals(type, "app", System.StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            if (!root.TryGetProperty("action", out var actionEl))
+            {
+                return;
+            }
+
+            var action = actionEl.GetString();
+            if (string.IsNullOrWhiteSpace(action))
+            {
+                return;
+            }
+
+            HandleAppAction(core, action!, root);
+        }
+        catch
+        {
+        }
+    }
+
+    private void HandleAppAction(CoreWebView2 core, string action, JsonElement? payload)
+    {
+        switch (action.Trim().ToLowerInvariant())
+        {
+            case "quit":
+                Application.Current.Shutdown();
+                break;
+            case "togglefullscreen":
+                ToggleFullscreen();
+                break;
+            case "enterfullscreen":
+                EnterFullscreen();
+                break;
+            case "exitfullscreen":
+                ExitFullscreen();
+                break;
+            case "reload":
+                ShowLoading("正在重新加载...");
+                core.Reload();
+                break;
+            case "minimize":
+                WindowState = WindowState.Minimized;
+                break;
+            case "maximize":
+                if (!_isFullscreen)
+                {
+                    WindowState = WindowState.Maximized;
+                }
+                break;
+            case "restore":
+                if (!_isFullscreen)
+                {
+                    WindowState = WindowState.Normal;
+                }
+                break;
+            case "openexternal":
+                if (payload is not null && payload.Value.TryGetProperty("url", out var urlEl))
+                {
+                    var url = urlEl.GetString();
+                    if (!string.IsNullOrWhiteSpace(url))
+                    {
+                        TryOpenExternal(url);
+                    }
+                }
+                break;
+        }
+    }
+
+    private void NavigateToUrl(CoreWebView2 core, string url)
+    {
+        _lastNavigationUrl = url;
+        ShowLoading("正在加载页面...");
+        core.Navigate(url);
+    }
+
+    private void ShowLoading(string subtitle)
+    {
+        LoadingSubtitle.Text = subtitle;
+        LoadingOverlay.Visibility = Visibility.Visible;
+        ErrorOverlay.Visibility = Visibility.Collapsed;
+        SwitchToLocalButton.Visibility = Visibility.Collapsed;
+    }
+
+    private void HideOverlays()
+    {
+        LoadingOverlay.Visibility = Visibility.Collapsed;
+        ErrorOverlay.Visibility = Visibility.Collapsed;
+        SwitchToLocalButton.Visibility = Visibility.Collapsed;
+    }
+
+    private void ShowError(string title, string detail, bool canSwitchToLocal)
+    {
+        ErrorTitle.Text = title;
+        ErrorDetail.Text = detail;
+        ErrorOverlay.Visibility = Visibility.Visible;
+        LoadingOverlay.Visibility = Visibility.Collapsed;
+        SwitchToLocalButton.Visibility = canSwitchToLocal ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void OnRetryClick(object sender, RoutedEventArgs e)
+    {
+        if (DeskWebView.CoreWebView2 is null)
+        {
+            return;
+        }
+
+        ShowLoading("正在重新加载...");
+
+        if (!string.IsNullOrWhiteSpace(_lastNavigationUrl))
+        {
+            DeskWebView.CoreWebView2.Navigate(_lastNavigationUrl);
+            return;
+        }
+
+        DeskWebView.Reload();
+    }
+
+    private void OnSwitchToLocalClick(object sender, RoutedEventArgs e)
+    {
+        if (DeskWebView.CoreWebView2 is null || !_hasLocalWebAssets || _localWebRoot is null)
+        {
+            return;
+        }
+
+        ShowLoading("正在切换到本地资源...");
+        DeskWebView.CoreWebView2.SetVirtualHostNameToFolderMapping(
+            VirtualHostName,
+            _localWebRoot,
+            CoreWebView2HostResourceAccessKind.Allow
+        );
+        NavigateToUrl(DeskWebView.CoreWebView2, $"https://{VirtualHostName}/index.html");
+    }
+
+    private void OnExitClick(object sender, RoutedEventArgs e)
+    {
+        Application.Current.Shutdown();
     }
 
     private void ToggleFullscreen()
@@ -240,10 +551,7 @@ dotnet publish apps/desk-win/LandslideDesk.Win/LandslideDesk.Win.csproj -c Relea
         Width = bounds.Width;
         Height = bounds.Height;
 
-        if (_windowHandle != nint.Zero)
-        {
-            RegisterHotKey(_windowHandle, HotkeyExitFullscreen, 0, VkEscape);
-        }
+        EnsureFullscreenHotkeys();
     }
 
     private void ExitFullscreen()
@@ -259,10 +567,7 @@ dotnet publish apps/desk-win/LandslideDesk.Win/LandslideDesk.Win.csproj -c Relea
         ResizeMode = _restoreResizeMode;
         WindowState = _restoreWindowState;
 
-        if (_windowHandle != nint.Zero)
-        {
-            UnregisterHotKey(_windowHandle, HotkeyExitFullscreen);
-        }
+        EnsureFullscreenHotkeys();
 
         if (WindowState == WindowState.Normal)
         {
@@ -371,9 +676,89 @@ dotnet publish apps/desk-win/LandslideDesk.Win/LandslideDesk.Win.csproj -c Relea
         return nint.Zero;
     }
 
+    private void EnsureFullscreenHotkeys()
+    {
+        if (!_isHotkeyScopeActive || _windowHandle == nint.Zero)
+        {
+            return;
+        }
+
+        if (!_isHotkeyF11Registered)
+        {
+            _isHotkeyF11Registered = RegisterHotKey(_windowHandle, HotkeyToggleFullscreen, 0, VkF11);
+        }
+
+        if (_isFullscreen)
+        {
+            if (!_isHotkeyEscRegistered)
+            {
+                _isHotkeyEscRegistered = RegisterHotKey(_windowHandle, HotkeyExitFullscreen, 0, VkEscape);
+            }
+        }
+        else if (_isHotkeyEscRegistered)
+        {
+            UnregisterHotKey(_windowHandle, HotkeyExitFullscreen);
+            _isHotkeyEscRegistered = false;
+        }
+    }
+
+    private void RemoveFullscreenHotkeys()
+    {
+        if (_windowHandle == nint.Zero)
+        {
+            return;
+        }
+
+        if (_isHotkeyF11Registered)
+        {
+            UnregisterHotKey(_windowHandle, HotkeyToggleFullscreen);
+            _isHotkeyF11Registered = false;
+        }
+
+        if (_isHotkeyEscRegistered)
+        {
+            UnregisterHotKey(_windowHandle, HotkeyExitFullscreen);
+            _isHotkeyEscRegistered = false;
+        }
+    }
+
+    private void ApplyWin11WindowStyles()
+    {
+        if (_windowHandle == nint.Zero)
+        {
+            return;
+        }
+
+        var enabled = 1;
+        DwmSetWindowAttribute(_windowHandle, DwmwaUseImmersiveDarkMode19, ref enabled, Marshal.SizeOf<int>());
+        DwmSetWindowAttribute(_windowHandle, DwmwaUseImmersiveDarkMode20, ref enabled, Marshal.SizeOf<int>());
+
+        var cornerPreference = 2;
+        DwmSetWindowAttribute(
+            _windowHandle,
+            DwmwaWindowCornerPreference,
+            ref cornerPreference,
+            Marshal.SizeOf<int>()
+        );
+
+        if (System.OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000))
+        {
+            var backdropType = 2;
+            DwmSetWindowAttribute(
+                _windowHandle,
+                DwmwaSystemBackdropType,
+                ref backdropType,
+                Marshal.SizeOf<int>()
+            );
+        }
+    }
+
     [DllImport("user32.dll")]
     private static extern bool RegisterHotKey(nint hWnd, int id, uint fsModifiers, uint vk);
 
     [DllImport("user32.dll")]
     private static extern bool UnregisterHotKey(nint hWnd, int id);
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(nint hwnd, int dwAttribute, ref int pvAttribute, int cbAttribute);
 }

@@ -6,6 +6,7 @@ import { useApi } from "../api/ApiProvider";
 import { useAuthStore } from "../stores/authStore";
 import { useSettingsStore } from "../stores/settingsStore";
 import { BaseCard } from "../components/BaseCard";
+import { isDeskHost, requestDeskQuit } from "../native/deskHost";
 
 export function SettingsPage() {
   const api = useApi();
@@ -20,8 +21,10 @@ export function SettingsPage() {
   const reset = useSettingsStore((s) => s.reset);
   const clearAuth = useAuthStore((s) => s.clear);
   const user = useAuthStore((s) => s.user);
+  const runningInDeskHost = isDeskHost();
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [logoutSubmitting, setLogoutSubmitting] = useState(false);
+  const [quitOpen, setQuitOpen] = useState(false);
 
   const doLogout = async () => {
     setLogoutSubmitting(true);
@@ -36,6 +39,14 @@ export function SettingsPage() {
       setLogoutOpen(false);
       navigate("/login", { replace: true });
     }
+  };
+
+  const doQuitApp = () => {
+    const ok = requestDeskQuit();
+    if (!ok) {
+      message.error("当前运行环境不支持退出软件");
+    }
+    setQuitOpen(false);
   };
 
   return (
@@ -63,6 +74,17 @@ export function SettingsPage() {
           >
             退出登录
           </Button>
+          {runningInDeskHost && (
+            <Button
+              type="primary"
+              danger
+              onClick={() => {
+                setQuitOpen(true);
+              }}
+            >
+              退出软件
+            </Button>
+          )}
         </Space>
       </div>
 
@@ -126,6 +148,25 @@ export function SettingsPage() {
           当前账号：{user?.name ?? "未知用户"}
         </Typography.Paragraph>
         <Typography.Text type="secondary">退出后将回到登录页；登录状态会被清空。</Typography.Text>
+      </Modal>
+
+      <Modal
+        title="确认退出软件"
+        open={quitOpen}
+        okButtonProps={{ danger: true }}
+        okText="退出"
+        cancelText="取消"
+        onOk={() => {
+          doQuitApp();
+        }}
+        onCancel={() => {
+          setQuitOpen(false);
+        }}
+      >
+        <Typography.Paragraph style={{ marginBottom: 8, color: "rgba(226,232,240,0.9)" }}>
+          当前账号：{user?.name ?? "未知用户"}
+        </Typography.Paragraph>
+        <Typography.Text type="secondary">确认退出桌面端软件？</Typography.Text>
       </Modal>
     </div>
   );
