@@ -236,7 +236,7 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
     const renderer = new THREE.WebGLRenderer({
       canvas,
       alpha: true,
-      antialias: true,
+      antialias: false,
       powerPreference: "high-performance"
     });
     renderer.setClearColor(0x000000, 0);
@@ -281,8 +281,8 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
 
     const size = 3.95;
     const maxHeight = 0.55;
-    const segX = 560;
-    const segZ = 420;
+    const segX = 360;
+    const segZ = 270;
 
     const geometry = new THREE.PlaneGeometry(size, size, segX, segZ);
     geometry.rotateX(-Math.PI / 2);
@@ -434,7 +434,7 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
       const rect = canvas.getBoundingClientRect();
       const nextW = Math.max(1, Math.floor(rect.width));
       const nextH = Math.max(1, Math.floor(rect.height));
-      const pixelRatio = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+      const pixelRatio = Math.max(1, Math.min(1.5, window.devicePixelRatio || 1));
       renderer.setPixelRatio(pixelRatio);
       renderer.setSize(nextW, nextH, false);
       camera.aspect = nextW / nextH;
