@@ -8,6 +8,8 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
+using Drawing = System.Drawing;
+using Forms = System.Windows.Forms;
 using Microsoft.Web.WebView2.Core;
 
 namespace LandslideDesk.Win;
@@ -50,6 +52,10 @@ public partial class MainWindow : Window
     private HwndSource? _hwndSource;
     private nint _windowHandle;
 
+    private Forms.NotifyIcon? _trayIcon;
+    private Forms.ContextMenuStrip? _trayMenu;
+    private bool _trayHintShown;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -58,8 +64,11 @@ public partial class MainWindow : Window
         Loaded += OnLoaded;
         Activated += OnActivated;
         Deactivated += OnDeactivated;
+        StateChanged += OnStateChanged;
         Closing += OnClosing;
         Closed += OnClosed;
+
+        InitializeTrayIcon();
     }
 
     private void OnSourceInitialized(object? sender, System.EventArgs e)
@@ -98,13 +107,144 @@ public partial class MainWindow : Window
         RemoveFullscreenHotkeys();
     }
 
+    private void OnStateChanged(object? sender, EventArgs e)
+    {
+        if (WindowState == WindowState.Minimized)
+        {
+            HideToTray(showHint: true);
+        }
+    }
+
+    private void InitializeTrayIcon()
+    {
+        if (_trayIcon is not null)
+        {
+            return;
+        }
+
+        try
+        {
+            _trayMenu = new Forms.ContextMenuStrip();
+
+            var openItem = new Forms.ToolStripMenuItem("打开主窗口");
+            openItem.Click += (_, _) => Dispatcher.Invoke(ShowFromTray);
+
+            var settingsItem = new Forms.ToolStripMenuItem("系统设置");
+            settingsItem.Click += (_, _) => Dispatcher.Invoke(() =>
+            {
+                ShowFromTray();
+                NavigateToAppRoute("/app/settings");
+            });
+
+            var fullscreenItem = new Forms.ToolStripMenuItem("切换全屏 (F11)");
+            fullscreenItem.Click += (_, _) => Dispatcher.Invoke(ToggleFullscreen);
+
+            var exitItem = new Forms.ToolStripMenuItem("退出");
+            exitItem.Click += (_, _) => Dispatcher.Invoke(() => App.RequestAppShutdown());
+
+            _trayMenu.Items.Add(openItem);
+            _trayMenu.Items.Add(settingsItem);
+            _trayMenu.Items.Add(fullscreenItem);
+            _trayMenu.Items.Add(new Forms.ToolStripSeparator());
+            _trayMenu.Items.Add(exitItem);
+
+            _trayIcon = new Forms.NotifyIcon
+            {
+                Text = "滑坡监测预警平台",
+                Visible = true,
+                ContextMenuStrip = _trayMenu
+            };
+
+            var exePath = Process.GetCurrentProcess().MainModule?.FileName;
+            if (!string.IsNullOrWhiteSpace(exePath) && File.Exists(exePath))
+            {
+                try
+                {
+                    _trayIcon.Icon = Drawing.Icon.ExtractAssociatedIcon(exePath);
+                }
+                catch
+                {
+                }
+            }
+
+            _trayIcon.Icon ??= Drawing.SystemIcons.Application;
+            _trayIcon.DoubleClick += (_, _) => Dispatcher.Invoke(ShowFromTray);
+        }
+        catch
+        {
+            DisposeTrayIcon();
+        }
+    }
+
+    private void DisposeTrayIcon()
+    {
+        try
+        {
+            if (_trayIcon is not null)
+            {
+                _trayIcon.Visible = false;
+                _trayIcon.Dispose();
+                _trayIcon = null;
+            }
+
+            if (_trayMenu is not null)
+            {
+                _trayMenu.Dispose();
+                _trayMenu = null;
+            }
+        }
+        catch
+        {
+        }
+    }
+
+    private void ShowFromTray()
+    {
+        try
+        {
+            ShowInTaskbar = true;
+            Show();
+            if (WindowState == WindowState.Minimized)
+            {
+                WindowState = WindowState.Normal;
+            }
+
+            Activate();
+        }
+        catch
+        {
+        }
+    }
+
+    private void HideToTray(bool showHint)
+    {
+        try
+        {
+            ShowInTaskbar = false;
+            Hide();
+
+            if (showHint && _trayIcon is not null && !_trayHintShown)
+            {
+                _trayHintShown = true;
+                _trayIcon.BalloonTipTitle = "已最小化到托盘";
+                _trayIcon.BalloonTipText = "应用仍在后台运行，可从系统托盘打开。";
+                _trayIcon.ShowBalloonTip(2500);
+            }
+        }
+        catch
+        {
+        }
+    }
+
     private void OnClosed(object? sender, System.EventArgs e)
     {
         Closed -= OnClosed;
         Activated -= OnActivated;
         Deactivated -= OnDeactivated;
+        StateChanged -= OnStateChanged;
         Closing -= OnClosing;
         RemoveFullscreenHotkeys();
+        DisposeTrayIcon();
 
         if (_hwndSource is not null)
         {
@@ -135,7 +275,7 @@ public partial class MainWindow : Window
         }
         catch (System.Exception ex)
         {
-            MessageBox.Show(this, ex.Message, "启动失败", MessageBoxButton.OK, MessageBoxImage.Error);
+            System.Windows.MessageBox.Show(this, ex.Message, "启动失败", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
@@ -361,6 +501,20 @@ dotnet publish apps/desk-win/LandslideDesk.Win/LandslideDesk.Win.csproj -c Relea
         return $"目标：{target}\n错误：{status}\n\n如果你在开发模式，请先确认前端服务是否启动。";
     }
 
+    private void NavigateToAppRoute(string path)
+    {
+        var core = DeskWebView.CoreWebView2;
+        if (core is null)
+        {
+            return;
+        }
+
+        var route = path.StartsWith("/") ? path : $"/{path}";
+        var hash = $"#{route}";
+        var escaped = hash.Replace("\\", "\\\\").Replace("'", "\\'");
+        _ = core.ExecuteScriptAsync($"location.hash='{escaped}';");
+    }
+
     private void HandleWebMessage(CoreWebView2 core, string message)
     {
         if (message.StartsWith("app:", System.StringComparison.OrdinalIgnoreCase))
@@ -412,7 +566,13 @@ dotnet publish apps/desk-win/LandslideDesk.Win/LandslideDesk.Win.csproj -c Relea
         switch (action.Trim().ToLowerInvariant())
         {
             case "quit":
-                Application.Current.Shutdown();
+                App.RequestAppShutdown();
+                break;
+            case "show":
+                ShowFromTray();
+                break;
+            case "hide":
+                HideToTray(showHint: false);
                 break;
             case "togglefullscreen":
                 ToggleFullscreen();
@@ -522,12 +682,25 @@ dotnet publish apps/desk-win/LandslideDesk.Win/LandslideDesk.Win.csproj -c Relea
 
     private void OnExitClick(object sender, RoutedEventArgs e)
     {
-        Application.Current.Shutdown();
+        App.RequestAppShutdown();
     }
 
     private void OnClosing(object? sender, CancelEventArgs e)
     {
         SaveWindowPlacement();
+
+        if (_trayIcon is null)
+        {
+            return;
+        }
+
+        if (System.Windows.Application.Current is App app && app.IsShuttingDown)
+        {
+            return;
+        }
+
+        e.Cancel = true;
+        HideToTray(showHint: true);
     }
 
     private sealed class WindowSnapshot
@@ -754,8 +927,8 @@ dotnet publish apps/desk-win/LandslideDesk.Win/LandslideDesk.Win.csproj -c Relea
 
         var transform = PresentationSource.FromVisual(this)?.CompositionTarget?.TransformFromDevice ?? Matrix.Identity;
 
-        var topLeft = transform.Transform(new Point(info.rcMonitor.Left, info.rcMonitor.Top));
-        var bottomRight = transform.Transform(new Point(info.rcMonitor.Right, info.rcMonitor.Bottom));
+        var topLeft = transform.Transform(new System.Windows.Point(info.rcMonitor.Left, info.rcMonitor.Top));
+        var bottomRight = transform.Transform(new System.Windows.Point(info.rcMonitor.Right, info.rcMonitor.Bottom));
 
         return new Rect(
             topLeft.X,

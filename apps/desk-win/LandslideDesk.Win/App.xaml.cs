@@ -8,19 +8,36 @@ using System.Windows.Threading;
 
 namespace LandslideDesk.Win;
 
-public partial class App : Application
+public partial class App : System.Windows.Application
 {
     private Mutex? _singleInstanceMutex;
+    private bool _isShuttingDown;
+
+    internal bool IsShuttingDown => _isShuttingDown;
+
+    internal static void RequestAppShutdown(int exitCode = 0)
+    {
+        if (Current is App app)
+        {
+            app._isShuttingDown = true;
+            app.Shutdown(exitCode);
+            return;
+        }
+
+        Current?.Shutdown(exitCode);
+    }
 
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
 
+        ShutdownMode = ShutdownMode.OnExplicitShutdown;
+
         _singleInstanceMutex = new Mutex(true, "LandslideDesk.Win.SingleInstance", out var createdNew);
         if (!createdNew)
         {
             TryActivateExistingInstance();
-            Shutdown();
+            RequestAppShutdown();
             return;
         }
 
@@ -59,11 +76,12 @@ public partial class App : Application
     private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
         e.Handled = true;
+        _isShuttingDown = true;
 
         var path = SafeWriteCrash(e.Exception);
         if (!string.IsNullOrWhiteSpace(path))
         {
-            MessageBox.Show(
+            System.Windows.MessageBox.Show(
                 $"程序发生未处理异常，已写入崩溃日志：\n{path}\n\n即将退出。",
                 "程序异常",
                 MessageBoxButton.OK,
@@ -72,7 +90,7 @@ public partial class App : Application
         }
         else
         {
-            MessageBox.Show(
+            System.Windows.MessageBox.Show(
                 "程序发生未处理异常，即将退出。",
                 "程序异常",
                 MessageBoxButton.OK,
@@ -80,7 +98,7 @@ public partial class App : Application
             );
         }
 
-        Shutdown(-1);
+        RequestAppShutdown(-1);
     }
 
     private void OnUnhandledException(object? sender, UnhandledExceptionEventArgs e)
