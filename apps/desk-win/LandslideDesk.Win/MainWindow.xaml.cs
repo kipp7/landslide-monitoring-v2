@@ -55,6 +55,7 @@ public partial class MainWindow : Window
     private Forms.NotifyIcon? _trayIcon;
     private Forms.ContextMenuStrip? _trayMenu;
     private bool _trayHintShown;
+    private string? _pendingTrayNotificationRoute;
 
     public MainWindow()
     {
@@ -109,7 +110,7 @@ public partial class MainWindow : Window
 
     private void OnStateChanged(object? sender, EventArgs e)
     {
-        if (WindowState == WindowState.Minimized)
+        if (WindowState == WindowState.Minimized && _trayIcon is not null)
         {
             HideToTray(showHint: true);
         }
@@ -169,6 +170,17 @@ public partial class MainWindow : Window
 
             _trayIcon.Icon ??= Drawing.SystemIcons.Application;
             _trayIcon.DoubleClick += (_, _) => Dispatcher.Invoke(ShowFromTray);
+            _trayIcon.BalloonTipClicked += (_, _) => Dispatcher.Invoke(() =>
+            {
+                var route = _pendingTrayNotificationRoute;
+                _pendingTrayNotificationRoute = null;
+                ShowFromTray();
+
+                if (!string.IsNullOrWhiteSpace(route))
+                {
+                    NavigateToAppRoute(route);
+                }
+            });
         }
         catch
         {
@@ -220,6 +232,12 @@ public partial class MainWindow : Window
     {
         try
         {
+            if (_trayIcon is null)
+            {
+                WindowState = WindowState.Minimized;
+                return;
+            }
+
             ShowInTaskbar = false;
             Hide();
 
@@ -234,6 +252,46 @@ public partial class MainWindow : Window
         catch
         {
         }
+    }
+
+    private void ShowTrayNotification(
+        string title,
+        string message,
+        Forms.ToolTipIcon icon = Forms.ToolTipIcon.Info,
+        int timeoutMs = 2500,
+        string? route = null
+    )
+    {
+        try
+        {
+            if (_trayIcon is null)
+            {
+                return;
+            }
+
+            _pendingTrayNotificationRoute = route;
+            _trayIcon.BalloonTipTitle = title;
+            _trayIcon.BalloonTipText = message;
+            _trayIcon.BalloonTipIcon = icon;
+            _trayIcon.ShowBalloonTip(timeoutMs);
+        }
+        catch
+        {
+        }
+    }
+
+    private void SetTrayEnabled(bool enabled)
+    {
+        if (enabled)
+        {
+            InitializeTrayIcon();
+            System.Windows.Application.Current.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            return;
+        }
+
+        DisposeTrayIcon();
+        System.Windows.Application.Current.ShutdownMode = ShutdownMode.OnMainWindowClose;
+        Dispatcher.Invoke(ShowFromTray);
     }
 
     private void OnClosed(object? sender, System.EventArgs e)
@@ -392,12 +450,15 @@ public partial class MainWindow : Window
         <pre>
 开发模式：
 npm -w apps/desk run dev
-set {{DevServerEnv}}=http://localhost:5174/
-dotnet run --project apps/desk-win/LandslideDesk.Win/LandslideDesk.Win.csproj
+PowerShell（仓库根目录）：
+$env:{{DevServerEnv}}="http://localhost:5174/"; dotnet run --project .\apps\desk-win\LandslideDesk.Win\LandslideDesk.Win.csproj
+PowerShell（当前目录为 apps/desk-win）：
+$env:{{DevServerEnv}}="http://localhost:5174/"; dotnet run --project .\LandslideDesk.Win\LandslideDesk.Win.csproj
 
 生产构建：
 npm -w apps/desk run build
-dotnet publish apps/desk-win/LandslideDesk.Win/LandslideDesk.Win.csproj -c Release -r win-x64
+dotnet publish .\apps\desk-win\LandslideDesk.Win\LandslideDesk.Win.csproj -c Release -r win-x64
+dotnet publish .\LandslideDesk.Win\LandslideDesk.Win.csproj -c Release -r win-x64
         </pre>
       </div>
     </div>
@@ -574,6 +635,27 @@ dotnet publish apps/desk-win/LandslideDesk.Win/LandslideDesk.Win.csproj -c Relea
             case "hide":
                 HideToTray(showHint: false);
                 break;
+            case "focus":
+                ShowFromTray();
+                break;
+            case "toggletray":
+            {
+                var data = ExtractPayload(payload);
+                if (data is not null && data.Value.TryGetProperty("enabled", out var enabledEl) && enabledEl.ValueKind == JsonValueKind.True)
+                {
+                    SetTrayEnabled(true);
+                    break;
+                }
+
+                if (data is not null && data.Value.TryGetProperty("enabled", out enabledEl) && enabledEl.ValueKind == JsonValueKind.False)
+                {
+                    SetTrayEnabled(false);
+                    break;
+                }
+
+                SetTrayEnabled(_trayIcon is null);
+                break;
+            }
             case "togglefullscreen":
                 ToggleFullscreen();
                 break;
@@ -603,7 +685,9 @@ dotnet publish apps/desk-win/LandslideDesk.Win/LandslideDesk.Win.csproj -c Relea
                 }
                 break;
             case "openexternal":
-                if (payload is not null && payload.Value.TryGetProperty("url", out var urlEl))
+            {
+                var data = ExtractPayload(payload);
+                if (data is not null && data.Value.TryGetProperty("url", out var urlEl))
                 {
                     var url = urlEl.GetString();
                     if (!string.IsNullOrWhiteSpace(url))
@@ -612,7 +696,83 @@ dotnet publish apps/desk-win/LandslideDesk.Win/LandslideDesk.Win.csproj -c Relea
                     }
                 }
                 break;
+            }
+            case "notify":
+            {
+                var data = ExtractPayload(payload);
+                if (data is null)
+                {
+                    break;
+                }
+
+                var title = "通知";
+                if (data.Value.TryGetProperty("title", out var titleEl))
+                {
+                    var value = titleEl.GetString();
+                    if (!string.IsNullOrWhiteSpace(value))
+                    {
+                        title = value;
+                    }
+                }
+
+                var text = string.Empty;
+                if (data.Value.TryGetProperty("message", out var msgEl))
+                {
+                    text = msgEl.GetString() ?? string.Empty;
+                }
+                else if (data.Value.TryGetProperty("text", out var textEl))
+                {
+                    text = textEl.GetString() ?? string.Empty;
+                }
+
+                if (string.IsNullOrWhiteSpace(text))
+                {
+                    break;
+                }
+
+                string? route = null;
+                if (data.Value.TryGetProperty("route", out var routeEl))
+                {
+                    route = routeEl.GetString();
+                }
+
+                var icon = Forms.ToolTipIcon.Info;
+                if (data.Value.TryGetProperty("level", out var levelEl))
+                {
+                    var level = levelEl.GetString()?.Trim().ToLowerInvariant();
+                    icon = level switch
+                    {
+                        "error" => Forms.ToolTipIcon.Error,
+                        "warning" => Forms.ToolTipIcon.Warning,
+                        _ => Forms.ToolTipIcon.Info
+                    };
+                }
+
+                var timeoutMs = 2500;
+                if (data.Value.TryGetProperty("timeoutMs", out var timeoutEl) && timeoutEl.TryGetInt32(out var timeoutValue))
+                {
+                    timeoutMs = Math.Clamp(timeoutValue, 800, 10000);
+                }
+
+                ShowTrayNotification(title, text.Trim(), icon, timeoutMs, route);
+                break;
+            }
         }
+    }
+
+    private static JsonElement? ExtractPayload(JsonElement? root)
+    {
+        if (root is null)
+        {
+            return null;
+        }
+
+        if (root.Value.TryGetProperty("payload", out var payloadEl) && payloadEl.ValueKind == JsonValueKind.Object)
+        {
+            return payloadEl;
+        }
+
+        return root;
     }
 
     private void NavigateToUrl(CoreWebView2 core, string url)
