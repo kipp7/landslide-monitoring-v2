@@ -1,3 +1,5 @@
+using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -14,6 +16,11 @@ public partial class MainWindow : Window
 {
     private const string VirtualHostName = "appassets.local";
     private const string DevServerEnv = "DESK_DEV_SERVER_URL";
+    private static readonly string AppDataRoot = Path.Combine(
+        System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData),
+        "LandslideDesk.Win"
+    );
+    private static readonly string WindowStateFile = Path.Combine(AppDataRoot, "window-state.json");
 
     private const int WmHotkey = 0x0312;
     private const int HotkeyToggleFullscreen = 1;
@@ -46,10 +53,12 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        RestoreWindowPlacement();
         SourceInitialized += OnSourceInitialized;
         Loaded += OnLoaded;
         Activated += OnActivated;
         Deactivated += OnDeactivated;
+        Closing += OnClosing;
         Closed += OnClosed;
     }
 
@@ -94,6 +103,7 @@ public partial class MainWindow : Window
         Closed -= OnClosed;
         Activated -= OnActivated;
         Deactivated -= OnDeactivated;
+        Closing -= OnClosing;
         RemoveFullscreenHotkeys();
 
         if (_hwndSource is not null)
@@ -513,6 +523,135 @@ dotnet publish apps/desk-win/LandslideDesk.Win/LandslideDesk.Win.csproj -c Relea
     private void OnExitClick(object sender, RoutedEventArgs e)
     {
         Application.Current.Shutdown();
+    }
+
+    private void OnClosing(object? sender, CancelEventArgs e)
+    {
+        SaveWindowPlacement();
+    }
+
+    private sealed class WindowSnapshot
+    {
+        public double Left { get; set; }
+        public double Top { get; set; }
+        public double Width { get; set; }
+        public double Height { get; set; }
+        public bool IsMaximized { get; set; }
+    }
+
+    private void RestoreWindowPlacement()
+    {
+        var snapshot = LoadWindowPlacement();
+        if (snapshot is null)
+        {
+            return;
+        }
+
+        if (!IsFinite(snapshot.Left) || !IsFinite(snapshot.Top) || !IsFinite(snapshot.Width) || !IsFinite(snapshot.Height))
+        {
+            return;
+        }
+
+        if (snapshot.Width < 300 || snapshot.Height < 300)
+        {
+            return;
+        }
+
+        var virtualLeft = SystemParameters.VirtualScreenLeft;
+        var virtualTop = SystemParameters.VirtualScreenTop;
+        var virtualRight = virtualLeft + SystemParameters.VirtualScreenWidth;
+        var virtualBottom = virtualTop + SystemParameters.VirtualScreenHeight;
+
+        var safeLeft = Clamp(snapshot.Left, virtualLeft, virtualRight - 80);
+        var safeTop = Clamp(snapshot.Top, virtualTop, virtualBottom - 80);
+
+        WindowStartupLocation = WindowStartupLocation.Manual;
+        Left = safeLeft;
+        Top = safeTop;
+        Width = Math.Max(MinWidth, snapshot.Width);
+        Height = Math.Max(MinHeight, snapshot.Height);
+
+        if (snapshot.IsMaximized)
+        {
+            WindowState = WindowState.Maximized;
+        }
+    }
+
+    private void SaveWindowPlacement()
+    {
+        try
+        {
+            Rect bounds;
+            var isMaximized = false;
+
+            if (_isFullscreen)
+            {
+                bounds = _restoreBounds;
+                isMaximized = _restoreWindowState == WindowState.Maximized;
+            }
+            else if (WindowState == WindowState.Maximized)
+            {
+                bounds = RestoreBounds;
+                isMaximized = true;
+            }
+            else if (WindowState == WindowState.Minimized)
+            {
+                bounds = RestoreBounds;
+            }
+            else
+            {
+                bounds = new Rect(Left, Top, Width, Height);
+            }
+
+            Directory.CreateDirectory(AppDataRoot);
+            var snapshot = new WindowSnapshot
+            {
+                Left = bounds.Left,
+                Top = bounds.Top,
+                Width = bounds.Width,
+                Height = bounds.Height,
+                IsMaximized = isMaximized
+            };
+
+            var json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(WindowStateFile, json);
+        }
+        catch
+        {
+        }
+    }
+
+    private static WindowSnapshot? LoadWindowPlacement()
+    {
+        try
+        {
+            if (!File.Exists(WindowStateFile))
+            {
+                return null;
+            }
+
+            var json = File.ReadAllText(WindowStateFile);
+            return JsonSerializer.Deserialize<WindowSnapshot>(json);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static bool IsFinite(double value)
+    {
+        return !double.IsNaN(value) && !double.IsInfinity(value);
+    }
+
+    private static double Clamp(double value, double min, double max)
+    {
+        if (min > max)
+        {
+            return min;
+        }
+
+        return Math.Max(min, Math.Min(max, value));
     }
 
     private void ToggleFullscreen()
