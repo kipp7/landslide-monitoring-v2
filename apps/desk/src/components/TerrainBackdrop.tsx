@@ -357,58 +357,6 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
     const rimMesh = new THREE.Mesh(geometry, rimMaterial);
     scene.add(rimMesh);
 
-    const ridgeMaterial = new THREE.LineBasicMaterial({
-      color: 0x7dd3fc,
-      transparent: true,
-      opacity: 0.2
-    });
-
-    const ridgeGeometries: THREE.BufferGeometry[] = [];
-
-    const buildRidgeLine = (axis: "x" | "z") => {
-      const stride = segX + 1;
-      const points: number[] = [];
-      if (axis === "x") {
-        for (let ix = 0; ix <= segX; ix += 1) {
-          let bestIdx = ix;
-          let bestY = -Infinity;
-          for (let iz = 0; iz <= segZ; iz += 1) {
-            const idx = iz * stride + ix;
-            const y = pos.getY(idx);
-            if (y > bestY) {
-              bestY = y;
-              bestIdx = idx;
-            }
-          }
-          points.push(pos.getX(bestIdx), pos.getY(bestIdx) + 0.01, pos.getZ(bestIdx));
-        }
-      } else {
-        for (let iz = 0; iz <= segZ; iz += 1) {
-          let bestIdx = iz * stride;
-          let bestY = -Infinity;
-          for (let ix = 0; ix <= segX; ix += 1) {
-            const idx = iz * stride + ix;
-            const y = pos.getY(idx);
-            if (y > bestY) {
-              bestY = y;
-              bestIdx = idx;
-            }
-          }
-          points.push(pos.getX(bestIdx), pos.getY(bestIdx) + 0.01, pos.getZ(bestIdx));
-        }
-      }
-
-      const geom = new THREE.BufferGeometry();
-      geom.setAttribute("position", new THREE.Float32BufferAttribute(points, 3));
-      ridgeGeometries.push(geom);
-      return new THREE.Line(geom, ridgeMaterial);
-    };
-
-    const ridgeX = buildRidgeLine("x");
-    const ridgeZ = buildRidgeLine("z");
-    scene.add(ridgeX);
-    scene.add(ridgeZ);
-
     type PointsUniforms = {
       uTime: { value: number };
       uAlpha: { value: number };
@@ -518,8 +466,6 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
       controls.removeEventListener("start", onStart);
       controls.removeEventListener("end", onEnd);
       controls.dispose();
-      ridgeMaterial.dispose();
-      ridgeGeometries.forEach((geom) => geom.dispose());
       baseGrid.geometry.dispose();
       (baseGrid.material as THREE.Material).dispose();
       pointsMaterial.dispose();
