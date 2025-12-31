@@ -137,6 +137,9 @@ public partial class MainWindow : Window
                 NavigateToAppRoute("/app/settings");
             });
 
+            var logsItem = new Forms.ToolStripMenuItem("打开日志目录");
+            logsItem.Click += (_, _) => Dispatcher.Invoke(OpenLogsDirectory);
+
             var fullscreenItem = new Forms.ToolStripMenuItem("切换全屏 (F11)");
             fullscreenItem.Click += (_, _) => Dispatcher.Invoke(ToggleFullscreen);
 
@@ -145,6 +148,7 @@ public partial class MainWindow : Window
 
             _trayMenu.Items.Add(openItem);
             _trayMenu.Items.Add(settingsItem);
+            _trayMenu.Items.Add(logsItem);
             _trayMenu.Items.Add(fullscreenItem);
             _trayMenu.Items.Add(new Forms.ToolStripSeparator());
             _trayMenu.Items.Add(exitItem);
@@ -248,6 +252,18 @@ public partial class MainWindow : Window
                 _trayIcon.BalloonTipText = "应用仍在后台运行，可从系统托盘打开。";
                 _trayIcon.ShowBalloonTip(2500);
             }
+        }
+        catch
+        {
+        }
+    }
+
+    private void OpenLogsDirectory()
+    {
+        try
+        {
+            Directory.CreateDirectory(AppDataRoot);
+            TryOpenExternal(AppDataRoot);
         }
         catch
         {
@@ -697,6 +713,9 @@ dotnet publish .\LandslideDesk.Win\LandslideDesk.Win.csproj -c Release -r win-x6
                 }
                 break;
             }
+            case "openlogsdir":
+                OpenLogsDirectory();
+                break;
             case "notify":
             {
                 var data = ExtractPayload(payload);

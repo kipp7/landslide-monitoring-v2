@@ -6,7 +6,13 @@ import { useApi } from "../api/ApiProvider";
 import { useAuthStore } from "../stores/authStore";
 import { useSettingsStore } from "../stores/settingsStore";
 import { BaseCard } from "../components/BaseCard";
-import { isDeskHost, requestDeskNotify, requestDeskQuit, requestDeskToggleTray } from "../native/deskHost";
+import {
+  isDeskHost,
+  requestDeskNotify,
+  requestDeskOpenLogsDir,
+  requestDeskQuit,
+  requestDeskToggleTray
+} from "../native/deskHost";
 
 export function SettingsPage() {
   const api = useApi();
@@ -71,6 +77,13 @@ export function SettingsPage() {
     });
     if (!ok) {
       message.error("当前运行环境不支持通知");
+    }
+  };
+
+  const openLogsDir = () => {
+    const ok = requestDeskOpenLogsDir();
+    if (!ok) {
+      message.error("当前运行环境不支持打开日志目录");
     }
   };
 
@@ -187,13 +200,22 @@ export function SettingsPage() {
                 }}
               />
               {runningInDeskHost ? (
-                <Button
-                  onClick={() => {
-                    sendTestNotification();
-                  }}
-                >
-                  发送测试通知
-                </Button>
+                <Space size={8} wrap>
+                  <Button
+                    onClick={() => {
+                      openLogsDir();
+                    }}
+                  >
+                    打开日志目录
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      sendTestNotification();
+                    }}
+                  >
+                    发送测试通知
+                  </Button>
+                </Space>
               ) : (
                 <Typography.Text type="secondary">浏览器模式无法使用托盘/通知。</Typography.Text>
               )}

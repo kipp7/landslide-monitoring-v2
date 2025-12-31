@@ -3,6 +3,7 @@ type DeskHostMessage =
   | { type: "app"; action: "show" }
   | { type: "app"; action: "hide" }
   | { type: "app"; action: "focus" }
+  | { type: "app"; action: "openLogsDir" }
   | { type: "app"; action: "toggleTray"; payload?: { enabled?: boolean } }
   | { type: "app"; action: "toggleFullscreen" }
   | { type: "app"; action: "enterFullscreen" }
@@ -70,4 +71,8 @@ export function requestDeskNotify(input: {
 
 export function requestDeskOpenExternal(url: string): boolean {
   return postDeskHostMessage({ type: "app", action: "openExternal", payload: { url } });
+}
+
+export function requestDeskOpenLogsDir(): boolean {
+  return postDeskHostMessage({ type: "app", action: "openLogsDir" });
 }
