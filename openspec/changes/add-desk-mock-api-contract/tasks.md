@@ -4,23 +4,23 @@
 - [ ] 1.3 定义时间范围/粒度枚举（用于趋势与历史）
 - [ ] 1.4 定义错误模型：`ApiError`（code/message/details/retryable）
 - [ ] 1.5 定义分页/排序/过滤通用参数（sortBy/sortOrder/filters）
-- [ ] 1.6 定义枚举：设备类型、传感器类型、在线状态、告警等级
+- [x] 1.6 定义枚举：设备类型、传感器类型、在线状态、告警等级
 - [ ] 1.7 定义 GIS/地图模型：经纬度、坐标系、边界框
-- [ ] 1.8 定义监测站模型：`StationSummary`/`StationDetail`
-- [ ] 1.9 定义设备模型：`DeviceSummary`/`DeviceDetail`/`DeviceStatus`
+- [x] 1.8 定义监测站模型：`StationSummary`/`StationDetail`
+- [x] 1.9 定义设备模型：`DeviceSummary`/`DeviceDetail`/`DeviceStatus`
 - [ ] 1.10 定义传感器模型：`SensorSummary`/`SensorDetail`/`TelemetryPoint`
 - [ ] 1.11 定义时间序列响应：`TimeseriesPoint`/`Series`/`DownsampledSeries`
 - [ ] 1.12 定义导出模型：`ExportJob`/`ExportFormat`（先用于 mock）
 
 ## 2. API Provider 抽象
-- [ ] 2.1 定义 `DeskApi` 接口（按 domain 分组：auth/stations/devices/gps/alerts）
-- [ ] 2.2 Mock 实现：数据工厂 + 可控延迟 + 失败注入（用于演示与测试）
-- [ ] 2.3 HTTP 实现骨架：baseUrl/token/headers/timeout（先不联调）
+- [x] 2.1 定义 `DeskApi` 接口（按 domain 分组：auth/stations/devices/gps/alerts）
+- [x] 2.2 Mock 实现：数据工厂 + 可控延迟 + 失败注入（用于演示与测试）
+- [x] 2.3 HTTP 实现骨架：baseUrl/token/headers/timeout（先不联调）
 - [ ] 2.4 HTTP 实现：统一 request 封装（超时/重试/headers）
 - [ ] 2.5 支持请求取消（AbortController）与竞态处理（最新请求覆盖旧请求）
 - [ ] 2.6 支持缓存策略（内存缓存：列表/详情短缓存）
-- [ ] 2.7 统一鉴权 token 存取（localStorage/sessionStorage）
-- [ ] 2.8 统一 baseUrl 配置与环境切换（dev/mock/http）
+- [x] 2.7 统一鉴权 token 存取（localStorage/sessionStorage）
+- [x] 2.8 统一 baseUrl 配置与环境切换（dev/mock/http）
 - [ ] 2.9 Provider 侧基础埋点：请求耗时、失败率（先 console）
 - [ ] 2.10 为关键方法补齐示例与注释（便于其他 AI 并行开发）
 
@@ -47,7 +47,7 @@
 - [ ] 4.6 离线模式提示策略（网络断开时降级到 mock）
 
 ## 5. 切换与配置
-- [ ] 5.1 设置页支持切换数据源：Mock / HTTP（持久化）
+- [x] 5.1 设置页支持切换数据源：Mock / HTTP（持久化）
 - [ ] 5.2 增加 `DESK_API_MODE` 环境变量（默认 mock）
 - [ ] 5.3 调试面板：显示当前模式/baseUrl/最近请求（仅开发态）
 - [ ] 5.4 快速重置 mock 数据（清 seed/重建数据）

@@ -12,6 +12,7 @@ import { addDays, clamp, nowIso, sleep } from "./mockUtils";
 
 type MockOptions = {
   delayMs?: number;
+  failureRate?: number;
 };
 
 function makeStations(): Station[] {
@@ -175,6 +176,7 @@ function makeGpsSeries(devices: Device[], deviceId: string, days: number): GpsSe
 
 export function createMockClient(options: MockOptions = {}): ApiClient {
   const delayMs = options.delayMs ?? 200;
+  const failureRate = clamp(options.failureRate ?? 0, 0, 1);
   const stations = makeStations();
   const devices = makeDevices(stations);
   const weeklyTrend = makeWeeklyTrend();
@@ -182,8 +184,16 @@ export function createMockClient(options: MockOptions = {}): ApiClient {
   const systemStatus = makeSystemStatus();
   let baselines = makeBaselines(devices, stations);
 
-  const upsertBaseline: ApiClient["baselines"]["upsert"] = async (input) => {
+  const afterDelay = async (endpoint: string) => {
     await sleep(delayMs);
+    if (failureRate <= 0) return;
+    if (Math.random() < failureRate) {
+      throw new Error(`Mock 故障注入：${endpoint}`);
+    }
+  };
+
+  const upsertBaseline: ApiClient["baselines"]["upsert"] = async (input) => {
+    await afterDelay("baselines.upsert");
     const device = devices.find((d) => d.id === input.deviceId);
     const establishedTime = input.establishedTime ?? nowIso();
 
@@ -208,7 +218,7 @@ export function createMockClient(options: MockOptions = {}): ApiClient {
   return {
     auth: {
       async login(input) {
-        await sleep(delayMs);
+        await afterDelay("auth.login");
         const name = "username" in input ? input.username : input.mobile;
         return {
           token: `mock-token-${String(Date.now())}`,
@@ -216,49 +226,50 @@ export function createMockClient(options: MockOptions = {}): ApiClient {
         };
       },
       async logout() {
-        await sleep(delayMs);
+        await afterDelay("auth.logout");
       }
     },
     dashboard: {
       async getSummary() {
-        await sleep(delayMs);
+        await afterDelay("dashboard.getSummary");
         return summary;
       },
       async getWeeklyTrend() {
-        await sleep(delayMs);
+        await afterDelay("dashboard.getWeeklyTrend");
         return weeklyTrend;
       }
     },
     stations: {
       async list() {
-        await sleep(delayMs);
+        await afterDelay("stations.list");
         return stations;
       }
     },
     devices: {
       async list(input) {
-        await sleep(delayMs);
+        await afterDelay("devices.list");
         if (!input?.stationId) return devices;
         return devices.filter((d) => d.stationId === input.stationId);
       }
     },
     gps: {
       async getSeries(input) {
-        await sleep(delayMs);
+        await afterDelay("gps.getSeries");
         return makeGpsSeries(devices, input.deviceId, input.days ?? 7);
       }
     },
     baselines: {
       async list() {
-        await sleep(delayMs);
+        await afterDelay("baselines.list");
         return baselines;
       },
       upsert: upsertBaseline,
       async remove(input) {
-        await sleep(delayMs);
+        await afterDelay("baselines.remove");
         baselines = baselines.filter((b) => b.deviceId !== input.deviceId);
       },
       async autoEstablish(input) {
+        await afterDelay("baselines.autoEstablish");
         const device = devices.find((d) => d.id === input.deviceId);
         const st = stations.find((s) => s.id === device?.stationId);
         const lat = Number(((st?.lat ?? 30.6) + (Math.random() - 0.5) * 0.0006).toFixed(6));
@@ -276,7 +287,7 @@ export function createMockClient(options: MockOptions = {}): ApiClient {
     },
     system: {
       async getStatus() {
-        await sleep(delayMs);
+        await afterDelay("system.getStatus");
         return systemStatus;
       }
     }

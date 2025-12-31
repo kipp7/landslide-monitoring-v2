@@ -29,10 +29,22 @@ type WebView2Bridge = {
   postMessage: (message: unknown) => void;
 };
 
+export type DeskHostInfo = {
+  app?: { name?: string; version?: string };
+  webview2?: { browserVersion?: string; userDataFolder?: string; additionalArgs?: string };
+  os?: { version?: string };
+};
+
 function getBridge(): WebView2Bridge | null {
   if (typeof window === "undefined") return null;
   const chromeLike = (window as unknown as { chrome?: { webview?: WebView2Bridge } }).chrome;
   return chromeLike?.webview ?? null;
+}
+
+export function getDeskHostInfo(): DeskHostInfo | null {
+  if (typeof window === "undefined") return null;
+  const w = window as unknown as { __DESK_HOST_INFO?: DeskHostInfo };
+  return w.__DESK_HOST_INFO ?? null;
 }
 
 export function isDeskHost(): boolean {
@@ -75,4 +87,12 @@ export function requestDeskOpenExternal(url: string): boolean {
 
 export function requestDeskOpenLogsDir(): boolean {
   return postDeskHostMessage({ type: "app", action: "openLogsDir" });
+}
+
+export function requestDeskToggleFullscreen(): boolean {
+  return postDeskHostMessage({ type: "app", action: "toggleFullscreen" });
+}
+
+export function requestDeskReload(): boolean {
+  return postDeskHostMessage({ type: "app", action: "reload" });
 }

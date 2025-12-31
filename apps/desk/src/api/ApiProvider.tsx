@@ -9,15 +9,20 @@ export type ApiProviderConfig = {
   baseUrl: string;
   token: string | null;
   mockDelayMs?: number;
+  mockFailureRate?: number;
 };
 
 const ApiContext = createContext<ApiClient | null>(null);
 
 export function ApiProvider(props: React.PropsWithChildren<{ config: ApiProviderConfig }>) {
-  const { mode, baseUrl, token, mockDelayMs } = props.config;
+  const { mode, baseUrl, token, mockDelayMs, mockFailureRate } = props.config;
   const delayMs = mockDelayMs ?? 200;
+  const failureRate = mockFailureRate ?? 0;
 
-  const mockClient = useMemo<ApiClient>(() => createMockClient({ delayMs }), [delayMs]);
+  const mockClient = useMemo<ApiClient>(
+    () => createMockClient({ delayMs, failureRate }),
+    [delayMs, failureRate]
+  );
   const httpClient = useMemo<ApiClient>(
     () => createHttpClient({ baseUrl, getToken: () => token }),
     [baseUrl, token]

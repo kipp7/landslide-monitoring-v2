@@ -189,3 +189,12 @@ body {
 .desk-page .ant-pagination .ant-pagination-item-active a {
   color: rgba(165, 243, 252, 0.95) !important;
 }
+
+.desk-reduced-motion *,
+.desk-reduced-motion *::before,
+.desk-reduced-motion *::after {
+  transition-duration: 0s !important;
+  animation-duration: 0s !important;
+  animation-delay: 0s !important;
+  scroll-behavior: auto !important;
+}

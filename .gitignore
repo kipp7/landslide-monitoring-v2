@@ -57,6 +57,9 @@ venv/
 /volumes/
 /backups/
 
+# Tools (installed separately)
+/OpenSpec-main/
+
 # Local scratch docs
 database_table_analysis.md
 Supabase模拟数据生成/

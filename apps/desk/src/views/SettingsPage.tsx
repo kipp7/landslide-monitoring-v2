@@ -1,5 +1,5 @@
 import { App as AntApp, Button, Form, Input, InputNumber, Modal, Radio, Space, Switch, Typography } from "antd";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { useApi } from "../api/ApiProvider";
@@ -7,10 +7,13 @@ import { useAuthStore } from "../stores/authStore";
 import { useSettingsStore } from "../stores/settingsStore";
 import { BaseCard } from "../components/BaseCard";
 import {
+  getDeskHostInfo,
   isDeskHost,
   requestDeskNotify,
   requestDeskOpenLogsDir,
   requestDeskQuit,
+  requestDeskReload,
+  requestDeskToggleFullscreen,
   requestDeskToggleTray
 } from "../native/deskHost";
 
@@ -21,20 +24,52 @@ export function SettingsPage() {
   const apiMode = useSettingsStore((s) => s.apiMode);
   const apiBaseUrl = useSettingsStore((s) => s.apiBaseUrl);
   const mockDelayMs = useSettingsStore((s) => s.mockDelayMs);
+  const mockFailureRate = useSettingsStore((s) => s.mockFailureRate);
   const terrainQuality = useSettingsStore((s) => s.terrainQuality);
+  const reducedMotion = useSettingsStore((s) => s.reducedMotion);
   const trayEnabled = useSettingsStore((s) => s.trayEnabled);
   const setApiMode = useSettingsStore((s) => s.setApiMode);
   const setApiBaseUrl = useSettingsStore((s) => s.setApiBaseUrl);
   const setMockDelayMs = useSettingsStore((s) => s.setMockDelayMs);
+  const setMockFailureRate = useSettingsStore((s) => s.setMockFailureRate);
   const setTerrainQuality = useSettingsStore((s) => s.setTerrainQuality);
+  const setReducedMotion = useSettingsStore((s) => s.setReducedMotion);
   const setTrayEnabled = useSettingsStore((s) => s.setTrayEnabled);
   const reset = useSettingsStore((s) => s.reset);
   const clearAuth = useAuthStore((s) => s.clear);
   const user = useAuthStore((s) => s.user);
   const runningInDeskHost = isDeskHost();
+  const hostInfo = getDeskHostInfo();
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [logoutSubmitting, setLogoutSubmitting] = useState(false);
   const [quitOpen, setQuitOpen] = useState(false);
+
+  const runtimeInfo = useMemo(() => {
+    const ua = typeof navigator !== "undefined" ? navigator.userAgent : "-";
+    const dpr = typeof window !== "undefined" ? window.devicePixelRatio : 1;
+    const cores = typeof navigator !== "undefined" ? navigator.hardwareConcurrency : 0;
+    let webgl = "-";
+    try {
+      const canvas = document.createElement("canvas");
+      const gl = (canvas.getContext("webgl") ?? canvas.getContext("experimental-webgl")) as WebGLRenderingContext | null;
+      if (gl) {
+        const dbg = gl.getExtension("WEBGL_debug_renderer_info") as
+          | { UNMASKED_VENDOR_WEBGL: number; UNMASKED_RENDERER_WEBGL: number }
+          | null;
+        if (dbg) {
+          const vendor = gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL);
+          const renderer = gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL);
+          webgl = `${String(vendor)} / ${String(renderer)}`;
+        } else {
+          webgl = String(gl.getParameter(gl.RENDERER));
+        }
+      }
+    } catch {
+      webgl = "-";
+    }
+
+    return { ua, dpr, cores, webgl };
+  }, []);
 
   const doLogout = async () => {
     setLogoutSubmitting(true);
@@ -84,6 +119,20 @@ export function SettingsPage() {
     const ok = requestDeskOpenLogsDir();
     if (!ok) {
       message.error("当前运行环境不支持打开日志目录");
+    }
+  };
+
+  const toggleFullscreen = () => {
+    const ok = requestDeskToggleFullscreen();
+    if (!ok) {
+      message.error("当前运行环境不支持全屏切换");
+    }
+  };
+
+  const reloadApp = () => {
+    const ok = requestDeskReload();
+    if (!ok) {
+      message.error("当前运行环境不支持重载");
     }
   };
 
@@ -162,6 +211,21 @@ export function SettingsPage() {
               }}
             />
           </Form.Item>
+          <Form.Item label="Mock 故障注入（%）">
+            <InputNumber
+              min={0}
+              max={100}
+              step={5}
+              value={Math.round(mockFailureRate * 100)}
+              onChange={(v) => {
+                const n = typeof v === "number" ? v : 0;
+                setMockFailureRate(Math.max(0, Math.min(1, n / 100)));
+              }}
+            />
+            <Typography.Paragraph type="secondary" style={{ marginBottom: 0, marginTop: 8 }}>
+              说明：用于演示“加载失败/重试”等交互；默认 0%，建议不要长期开启。
+            </Typography.Paragraph>
+          </Form.Item>
           <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
             说明：现在以 Mock 完成 UI；后续再逐步把 HTTP 对接到 v2 后端（当前不阻塞 UI）。
           </Typography.Paragraph>
@@ -186,6 +250,31 @@ export function SettingsPage() {
                 { label: "低（更流畅）", value: "low" }
               ]}
             />
+          </Form.Item>
+
+          <Form.Item label="低性能模式（减少动效）">
+            <Space wrap>
+              <Switch
+                checked={reducedMotion}
+                checkedChildren="已启用"
+                unCheckedChildren="已禁用"
+                onChange={(checked) => {
+                  setReducedMotion(checked);
+                }}
+              />
+              <Typography.Text type="secondary">开启后会减少动效与过渡，提升流畅度。</Typography.Text>
+            </Space>
+          </Form.Item>
+
+          <Form.Item label="运行环境（诊断）">
+            <div style={{ lineHeight: 1.6 }}>
+              <Typography.Text type="secondary">
+                DPR：{String(runtimeInfo.dpr)}；核心：{String(runtimeInfo.cores)}；WebGL：{runtimeInfo.webgl}
+              </Typography.Text>
+              <div style={{ marginTop: 6 }}>
+                <Typography.Text type="secondary">UA：{runtimeInfo.ua}</Typography.Text>
+              </div>
+            </div>
           </Form.Item>
 
           <Form.Item label="系统托盘（仅桌面端）">
@@ -215,11 +304,30 @@ export function SettingsPage() {
                   >
                     发送测试通知
                   </Button>
+                  <Button
+                    onClick={() => {
+                      toggleFullscreen();
+                    }}
+                  >
+                    切换全屏
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      reloadApp();
+                    }}
+                  >
+                    重载页面
+                  </Button>
                 </Space>
               ) : (
                 <Typography.Text type="secondary">浏览器模式无法使用托盘/通知。</Typography.Text>
               )}
             </Space>
+            {runningInDeskHost ? (
+              <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
+                桌面端壳版本：{hostInfo?.app?.version ?? "-"}；WebView2：{hostInfo?.webview2?.browserVersion ?? "-"}
+              </Typography.Paragraph>
+            ) : null}
             <Typography.Paragraph type="secondary" style={{ marginBottom: 0, marginTop: 8 }}>
               说明：启用托盘时，最小化/关闭窗口默认进入托盘；禁用托盘时，关闭窗口将直接退出软件。
             </Typography.Paragraph>

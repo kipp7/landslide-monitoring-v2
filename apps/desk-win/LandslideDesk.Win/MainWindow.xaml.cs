@@ -18,6 +18,8 @@ public partial class MainWindow : Window
 {
     private const string VirtualHostName = "appassets.local";
     private const string DevServerEnv = "DESK_DEV_SERVER_URL";
+    private const string WebView2ArgsEnv = "DESK_WEBVIEW2_ARGS";
+    private const string WebView2DisableGpuEnv = "DESK_WEBVIEW2_DISABLE_GPU";
     private static readonly string AppDataRoot = Path.Combine(
         System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData),
         "LandslideDesk.Win"
@@ -127,6 +129,9 @@ public partial class MainWindow : Window
         {
             _trayMenu = new Forms.ContextMenuStrip();
 
+            var version = typeof(MainWindow).Assembly.GetName().Version?.ToString() ?? "unknown";
+            var versionItem = new Forms.ToolStripMenuItem($"版本 {version}") { Enabled = false };
+
             var openItem = new Forms.ToolStripMenuItem("打开主窗口");
             openItem.Click += (_, _) => Dispatcher.Invoke(ShowFromTray);
 
@@ -146,6 +151,8 @@ public partial class MainWindow : Window
             var exitItem = new Forms.ToolStripMenuItem("退出");
             exitItem.Click += (_, _) => Dispatcher.Invoke(() => App.RequestAppShutdown());
 
+            _trayMenu.Items.Add(versionItem);
+            _trayMenu.Items.Add(new Forms.ToolStripSeparator());
             _trayMenu.Items.Add(openItem);
             _trayMenu.Items.Add(settingsItem);
             _trayMenu.Items.Add(logsItem);
@@ -370,10 +377,23 @@ public partial class MainWindow : Window
             "WebView2"
         );
 
-        var env = await CoreWebView2Environment.CreateAsync(userDataFolder: userDataFolder);
+        var additionalArgs = System.Environment.GetEnvironmentVariable(WebView2ArgsEnv)?.Trim() ?? string.Empty;
+        if (IsTruthy(System.Environment.GetEnvironmentVariable(WebView2DisableGpuEnv)))
+        {
+            additionalArgs = $"{additionalArgs} --disable-gpu --disable-gpu-compositing".Trim();
+        }
+
+        CoreWebView2EnvironmentOptions? options = null;
+        if (!string.IsNullOrWhiteSpace(additionalArgs))
+        {
+            options = new CoreWebView2EnvironmentOptions { AdditionalBrowserArguments = additionalArgs };
+        }
+
+        var env = await CoreWebView2Environment.CreateAsync(userDataFolder: userDataFolder, options: options);
         await DeskWebView.EnsureCoreWebView2Async(env);
 
         var core = DeskWebView.CoreWebView2;
+        await InjectHostInfoAsync(core, userDataFolder, additionalArgs);
         ConfigureWebView(core);
         HookWebViewEvents(core);
 
@@ -555,10 +575,66 @@ dotnet publish .\LandslideDesk.Win\LandslideDesk.Win.csproj -c Release -r win-x6
             Dispatcher.Invoke(() => HandleWebMessage(core, msg));
         };
 
+        core.AcceleratorKeyPressed += (_, e) =>
+        {
+            if (e.KeyEventKind != CoreWebView2KeyEventKind.KeyDown && e.KeyEventKind != CoreWebView2KeyEventKind.SystemKeyDown)
+            {
+                return;
+            }
+
+            if ((int)e.VirtualKey == VkF11)
+            {
+                e.Handled = true;
+                Dispatcher.Invoke(ToggleFullscreen);
+                return;
+            }
+
+            if ((int)e.VirtualKey == VkEscape && _isFullscreen)
+            {
+                e.Handled = true;
+                Dispatcher.Invoke(ExitFullscreen);
+            }
+        };
+
         core.WindowCloseRequested += (_, _) =>
         {
             Dispatcher.Invoke(Close);
         };
+    }
+
+    private static bool IsTruthy(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        return value.Trim().ToLowerInvariant() is "1" or "true" or "yes" or "y" or "on";
+    }
+
+    private static Task InjectHostInfoAsync(CoreWebView2 core, string userDataFolder, string additionalArgs)
+    {
+        var info = new
+        {
+            app = new
+            {
+                name = "LandslideDesk.Win",
+                version = typeof(MainWindow).Assembly.GetName().Version?.ToString() ?? "unknown"
+            },
+            webview2 = new
+            {
+                browserVersion = core.Environment.BrowserVersionString,
+                userDataFolder,
+                additionalArgs
+            },
+            os = new
+            {
+                version = System.Environment.OSVersion.VersionString
+            }
+        };
+
+        var json = JsonSerializer.Serialize(info);
+        return core.AddScriptToExecuteOnDocumentCreatedAsync($"window.__DESK_HOST_INFO = {json};");
     }
 
     private static void TryOpenExternal(string uri)
