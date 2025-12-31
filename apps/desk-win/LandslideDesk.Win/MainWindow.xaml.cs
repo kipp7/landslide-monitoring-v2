@@ -575,27 +575,6 @@ dotnet publish .\LandslideDesk.Win\LandslideDesk.Win.csproj -c Release -r win-x6
             Dispatcher.Invoke(() => HandleWebMessage(core, msg));
         };
 
-        core.AcceleratorKeyPressed += (_, e) =>
-        {
-            if (e.KeyEventKind != CoreWebView2KeyEventKind.KeyDown && e.KeyEventKind != CoreWebView2KeyEventKind.SystemKeyDown)
-            {
-                return;
-            }
-
-            if ((int)e.VirtualKey == VkF11)
-            {
-                e.Handled = true;
-                Dispatcher.Invoke(ToggleFullscreen);
-                return;
-            }
-
-            if ((int)e.VirtualKey == VkEscape && _isFullscreen)
-            {
-                e.Handled = true;
-                Dispatcher.Invoke(ExitFullscreen);
-            }
-        };
-
         core.WindowCloseRequested += (_, _) =>
         {
             Dispatcher.Invoke(Close);
