@@ -16,7 +16,6 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
-    // eslint-disable-next-line no-console
     console.error("[desk] render error:", error, info);
   }
 
@@ -111,4 +110,3 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
     );
   }
 }
-
