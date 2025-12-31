@@ -1,10 +1,78 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
+import type { TerrainQuality } from "../stores/settingsStore";
+
 type TerrainBackdropProps = {
   className?: string;
+  quality?: TerrainQuality;
 };
+
+type ResolvedTerrainQuality = Exclude<TerrainQuality, "auto">;
+
+type TerrainPreset = {
+  segX: number;
+  segZ: number;
+  maxPixelRatio: number;
+  pointSize: number;
+  pointsAlpha: number;
+  meshOpacity: number;
+  enableRim: boolean;
+  enableGrid: boolean;
+  scanSpeed: number;
+  ringWidth: number;
+};
+
+function resolveInitialQuality(quality: TerrainQuality): ResolvedTerrainQuality {
+  if (quality === "auto") return "medium";
+  return quality;
+}
+
+function getPreset(quality: ResolvedTerrainQuality): TerrainPreset {
+  if (quality === "high") {
+    return {
+      segX: 360,
+      segZ: 270,
+      maxPixelRatio: 1.5,
+      pointSize: 1.35,
+      pointsAlpha: 0.82,
+      meshOpacity: 0.26,
+      enableRim: true,
+      enableGrid: true,
+      scanSpeed: 0.24,
+      ringWidth: 0.04
+    };
+  }
+
+  if (quality === "low") {
+    return {
+      segX: 160,
+      segZ: 120,
+      maxPixelRatio: 1,
+      pointSize: 1.1,
+      pointsAlpha: 0.72,
+      meshOpacity: 0.2,
+      enableRim: false,
+      enableGrid: false,
+      scanSpeed: 0.2,
+      ringWidth: 0.05
+    };
+  }
+
+  return {
+    segX: 240,
+    segZ: 180,
+    maxPixelRatio: 1.25,
+    pointSize: 1.25,
+    pointsAlpha: 0.78,
+    meshOpacity: 0.24,
+    enableRim: true,
+    enableGrid: true,
+    scanSpeed: 0.22,
+    ringWidth: 0.045
+  };
+}
 
 function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
@@ -228,10 +296,20 @@ const RIM_FRAGMENT_SHADER = /* glsl */ `
 
 export function TerrainBackdrop(props: TerrainBackdropProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const requestedQuality: TerrainQuality = props.quality ?? "auto";
+  const [quality, setQuality] = useState<ResolvedTerrainQuality>(() => resolveInitialQuality(requestedQuality));
+  const autoLockedRef = useRef(false);
+
+  useEffect(() => {
+    autoLockedRef.current = false;
+    setQuality(resolveInitialQuality(requestedQuality));
+  }, [requestedQuality]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+
+    const preset = getPreset(quality);
 
     const renderer = new THREE.WebGLRenderer({
       canvas,
@@ -281,8 +359,8 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
 
     const size = 3.95;
     const maxHeight = 0.55;
-    const segX = 360;
-    const segZ = 270;
+    const segX = preset.segX;
+    const segZ = preset.segZ;
 
     const geometry = new THREE.PlaneGeometry(size, size, segX, segZ);
     geometry.rotateX(-Math.PI / 2);
@@ -330,7 +408,7 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
     const meshMaterial = new THREE.MeshStandardMaterial({
       vertexColors: true,
       transparent: true,
-      opacity: 0.26,
+      opacity: preset.meshOpacity,
       roughness: 0.9,
       metalness: 0,
       emissive: new THREE.Color(0x0b2a3a),
@@ -341,21 +419,23 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
     const mesh = new THREE.Mesh(geometry, meshMaterial);
     scene.add(mesh);
 
-    const rimMaterial = new THREE.ShaderMaterial({
-      transparent: true,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-      uniforms: {
-        uRimColor: { value: new THREE.Color(125 / 255, 211 / 255, 252 / 255) },
-        uRimPower: { value: 2.6 },
-        uRimAlpha: { value: 0.18 }
-      },
-      vertexShader: RIM_VERTEX_SHADER,
-      fragmentShader: RIM_FRAGMENT_SHADER
-    });
+    const rimMaterial = preset.enableRim
+      ? new THREE.ShaderMaterial({
+          transparent: true,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+          uniforms: {
+            uRimColor: { value: new THREE.Color(125 / 255, 211 / 255, 252 / 255) },
+            uRimPower: { value: 2.6 },
+            uRimAlpha: { value: 0.18 }
+          },
+          vertexShader: RIM_VERTEX_SHADER,
+          fragmentShader: RIM_FRAGMENT_SHADER
+        })
+      : null;
 
-    const rimMesh = new THREE.Mesh(geometry, rimMaterial);
-    scene.add(rimMesh);
+    const rimMesh = rimMaterial ? new THREE.Mesh(geometry, rimMaterial) : null;
+    if (rimMesh) scene.add(rimMesh);
 
     type PointsUniforms = {
       uTime: { value: number };
@@ -374,10 +454,10 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
 
     const pointsUniforms: PointsUniforms = {
       uTime: { value: 0 },
-      uAlpha: { value: 0.82 },
-      uScanSpeed: { value: 0.24 },
-      uRingWidth: { value: 0.04 },
-      uPointSize: { value: 1.35 },
+      uAlpha: { value: preset.pointsAlpha },
+      uScanSpeed: { value: preset.scanSpeed },
+      uRingWidth: { value: preset.ringWidth },
+      uPointSize: { value: preset.pointSize },
       uPixelRatio: { value: 1 },
       uRadius: { value: size * 0.5 },
       uLight: { value: new THREE.Vector3(0.58, 0.82, 0.28) },
@@ -399,18 +479,25 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
     const points = new THREE.Points(geometry, pointsMaterial);
     scene.add(points);
 
-    const baseGrid = new THREE.GridHelper(size * 1.04, 22, 0x22d3ee, 0x1e3a8a);
-    baseGrid.material = new THREE.LineBasicMaterial({
-      color: 0x7dd3fc,
-      transparent: true,
-      opacity: 0.07
-    });
-    baseGrid.position.y = -0.02;
-    scene.add(baseGrid);
+    const baseGrid = preset.enableGrid ? new THREE.GridHelper(size * 1.04, 22, 0x22d3ee, 0x1e3a8a) : null;
+    if (baseGrid) {
+      baseGrid.material = new THREE.LineBasicMaterial({
+        color: 0x7dd3fc,
+        transparent: true,
+        opacity: 0.07
+      });
+      baseGrid.position.y = -0.02;
+      scene.add(baseGrid);
+    }
 
     let raf = 0;
     const clock = new THREE.Clock();
     let lastInteraction = performance.now();
+    let lastFrameAt = performance.now();
+    let lastDrawAt = performance.now();
+    let sampleCount = 0;
+    let sampleTotalDt = 0;
+    const minFrameMs = quality === "low" ? 1000 / 30 : 0;
 
     const onStart = () => {
       lastInteraction = performance.now();
@@ -434,7 +521,7 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
       const rect = canvas.getBoundingClientRect();
       const nextW = Math.max(1, Math.floor(rect.width));
       const nextH = Math.max(1, Math.floor(rect.height));
-      const pixelRatio = Math.max(1, Math.min(1.5, window.devicePixelRatio || 1));
+      const pixelRatio = Math.max(1, Math.min(preset.maxPixelRatio, window.devicePixelRatio || 1));
       renderer.setPixelRatio(pixelRatio);
       renderer.setSize(nextW, nextH, false);
       camera.aspect = nextW / nextH;
@@ -445,6 +532,15 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
     const render = () => {
       const t = clock.getElapsedTime();
       const now = performance.now();
+
+      const dt = now - lastFrameAt;
+      lastFrameAt = now;
+      if (minFrameMs > 0 && now - lastDrawAt < minFrameMs) {
+        raf = window.requestAnimationFrame(render);
+        return;
+      }
+      lastDrawAt = now;
+
       controls.autoRotate = now - lastInteraction > 2200;
       controls.autoRotateSpeed = 0.25;
 
@@ -452,6 +548,21 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
 
       controls.update();
       renderer.render(scene, camera);
+
+      if (requestedQuality === "auto" && !autoLockedRef.current && sampleCount < 90) {
+        sampleCount += 1;
+        sampleTotalDt += dt;
+        if (sampleCount >= 90) {
+          const avgDt = sampleTotalDt / Math.max(1, sampleCount);
+          const fps = 1000 / Math.max(1, avgDt);
+          const next: ResolvedTerrainQuality = fps < 45 ? "low" : fps < 58 ? "medium" : "high";
+          autoLockedRef.current = true;
+          if (next !== quality) {
+            setQuality(next);
+          }
+        }
+      }
+
       raf = window.requestAnimationFrame(render);
     };
 
@@ -466,15 +577,17 @@ export function TerrainBackdrop(props: TerrainBackdropProps) {
       controls.removeEventListener("start", onStart);
       controls.removeEventListener("end", onEnd);
       controls.dispose();
-      baseGrid.geometry.dispose();
-      (baseGrid.material as THREE.Material).dispose();
+      if (baseGrid) {
+        baseGrid.geometry.dispose();
+        (baseGrid.material as THREE.Material).dispose();
+      }
       pointsMaterial.dispose();
-      rimMaterial.dispose();
+      rimMaterial?.dispose();
       meshMaterial.dispose();
       geometry.dispose();
       renderer.dispose();
     };
-  }, []);
+  }, [quality, requestedQuality]);
 
   return <canvas ref={canvasRef} className={props.className} aria-hidden="true" />;
 }

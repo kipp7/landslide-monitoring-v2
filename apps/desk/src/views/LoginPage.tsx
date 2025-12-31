@@ -20,6 +20,7 @@ export function LoginPage() {
   const token = useAuthStore((s) => s.token);
   const setSession = useAuthStore((s) => s.setSession);
   const apiMode = useSettingsStore((s) => s.apiMode);
+  const terrainQuality = useSettingsStore((s) => s.terrainQuality);
   const navigate = useNavigate();
   const location = useLocation();
   const { message } = AntApp.useApp();
@@ -70,7 +71,7 @@ export function LoginPage() {
 
       <div className="desk-login-shell">
         <div className="desk-login-terrain-pane" aria-hidden="true">
-          <TerrainBackdrop className="desk-login-terrain-canvas" />
+          <TerrainBackdrop className="desk-login-terrain-canvas" quality={terrainQuality} />
         </div>
 
         <div className="desk-login-hero">

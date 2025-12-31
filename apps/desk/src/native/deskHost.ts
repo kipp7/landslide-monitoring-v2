@@ -1,5 +1,9 @@
 type DeskHostMessage =
   | { type: "app"; action: "quit" }
+  | { type: "app"; action: "show" }
+  | { type: "app"; action: "hide" }
+  | { type: "app"; action: "focus" }
+  | { type: "app"; action: "toggleTray"; payload?: { enabled?: boolean } }
   | { type: "app"; action: "toggleFullscreen" }
   | { type: "app"; action: "enterFullscreen" }
   | { type: "app"; action: "exitFullscreen" }
@@ -7,7 +11,18 @@ type DeskHostMessage =
   | { type: "app"; action: "minimize" }
   | { type: "app"; action: "maximize" }
   | { type: "app"; action: "restore" }
-  | { type: "app"; action: "openExternal"; url: string };
+  | { type: "app"; action: "openExternal"; payload: { url: string } }
+  | {
+      type: "app";
+      action: "notify";
+      payload: {
+        title?: string;
+        message: string;
+        route?: string;
+        level?: "info" | "warning" | "error";
+        timeoutMs?: number;
+      };
+    };
 
 type WebView2Bridge = {
   postMessage: (message: unknown) => void;
@@ -34,3 +49,25 @@ export function requestDeskQuit(): boolean {
   return postDeskHostMessage({ type: "app", action: "quit" });
 }
 
+export function requestDeskFocus(): boolean {
+  return postDeskHostMessage({ type: "app", action: "focus" });
+}
+
+export function requestDeskToggleTray(enabled?: boolean): boolean {
+  const payload = enabled === undefined ? undefined : { enabled };
+  return postDeskHostMessage({ type: "app", action: "toggleTray", ...(payload ? { payload } : {}) });
+}
+
+export function requestDeskNotify(input: {
+  title?: string;
+  message: string;
+  route?: string;
+  level?: "info" | "warning" | "error";
+  timeoutMs?: number;
+}): boolean {
+  return postDeskHostMessage({ type: "app", action: "notify", payload: input });
+}
+
+export function requestDeskOpenExternal(url: string): boolean {
+  return postDeskHostMessage({ type: "app", action: "openExternal", payload: { url } });
+}
