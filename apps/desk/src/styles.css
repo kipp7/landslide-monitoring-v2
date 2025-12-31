@@ -72,6 +72,16 @@ body {
   background: rgba(71, 85, 105, 0.22);
 }
 
+.desk-pill-tag {
+  border: 1px solid rgba(34, 211, 238, 0.28) !important;
+  background: rgba(34, 211, 238, 0.12) !important;
+  color: rgba(165, 243, 252, 0.95) !important;
+  font-weight: 800;
+  border-radius: 999px;
+  padding-inline: 8px;
+  margin-inline-end: 0 !important;
+}
+
 /* Ant Design Table dark tweaks (used with .desk-dark-table wrapper) */
 .desk-dark-table .ant-table,
 .desk-dark-table .ant-table-container,

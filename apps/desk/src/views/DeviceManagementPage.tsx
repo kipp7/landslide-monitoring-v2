@@ -506,7 +506,7 @@ export function DeviceManagementPage() {
                       </div>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <Tag color="cyan">{selectedDevice.type.toUpperCase()}</Tag>
+                      <Tag className="desk-pill-tag">{deviceTypeLabel(selectedDevice)}</Tag>
                       <StatusTag value={selectedDevice.status} />
                     </div>
                   </div>

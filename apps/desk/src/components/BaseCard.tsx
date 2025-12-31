@@ -37,6 +37,8 @@ export function BaseCard(props: {
       className={clsx("desk-basecard", props.className)}
       style={{
         height: "100%",
+        display: "flex",
+        flexDirection: "column",
         backgroundColor: "rgba(255, 255, 255, 0.03)",
         border: "1px solid rgba(0, 255, 255, 0.12)",
         borderRadius: 12,
@@ -52,7 +54,8 @@ export function BaseCard(props: {
           borderBottom: "1px solid rgba(255, 255, 255, 0.10)"
         },
         body: {
-          height: "calc(100% - 40px)",
+          flex: 1,
+          minHeight: 0,
           padding: 8
         }
       }}
