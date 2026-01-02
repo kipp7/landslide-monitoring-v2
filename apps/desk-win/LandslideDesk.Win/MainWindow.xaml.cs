@@ -41,6 +41,8 @@ public partial class MainWindow : Window
     private string? _localWebRoot;
     private bool _hasLocalWebAssets;
     private string? _lastNavigationUrl;
+    private string? _webViewUserDataFolder;
+    private string _webViewAdditionalArgs = string.Empty;
 
     private bool _isFullscreen;
     private bool _isHotkeyScopeActive;
@@ -58,6 +60,8 @@ public partial class MainWindow : Window
     private Forms.ContextMenuStrip? _trayMenu;
     private bool _trayHintShown;
     private string? _pendingTrayNotificationRoute;
+    private bool _minimizeToTray = true;
+    private bool _closeToTray = true;
 
     public MainWindow()
     {
@@ -112,7 +116,7 @@ public partial class MainWindow : Window
 
     private void OnStateChanged(object? sender, EventArgs e)
     {
-        if (WindowState == WindowState.Minimized && _trayIcon is not null)
+        if (WindowState == WindowState.Minimized && _trayIcon is not null && _minimizeToTray)
         {
             HideToTray(showHint: true);
         }
@@ -376,12 +380,14 @@ public partial class MainWindow : Window
             "LandslideDesk.Win",
             "WebView2"
         );
+        _webViewUserDataFolder = userDataFolder;
 
         var additionalArgs = System.Environment.GetEnvironmentVariable(WebView2ArgsEnv)?.Trim() ?? string.Empty;
         if (IsTruthy(System.Environment.GetEnvironmentVariable(WebView2DisableGpuEnv)))
         {
             additionalArgs = $"{additionalArgs} --disable-gpu --disable-gpu-compositing".Trim();
         }
+        _webViewAdditionalArgs = additionalArgs;
 
         CoreWebView2EnvironmentOptions? options = null;
         if (!string.IsNullOrWhiteSpace(additionalArgs))
@@ -651,7 +657,7 @@ dotnet publish .\LandslideDesk.Win\LandslideDesk.Win.csproj -c Release -r win-x6
     {
         if (message.StartsWith("app:", System.StringComparison.OrdinalIgnoreCase))
         {
-            HandleAppAction(core, message["app:".Length..], payload: null);
+            HandleAppAction(core, message["app:".Length..], payload: null, requestId: null);
             return;
         }
 
@@ -686,15 +692,23 @@ dotnet publish .\LandslideDesk.Win\LandslideDesk.Win.csproj -c Release -r win-x6
                 return;
             }
 
-            HandleAppAction(core, action!, root);
+            string? requestId = null;
+            if (root.TryGetProperty("requestId", out var requestIdEl) && requestIdEl.ValueKind == JsonValueKind.String)
+            {
+                requestId = requestIdEl.GetString();
+            }
+
+            HandleAppAction(core, action!, root, requestId);
         }
         catch
         {
         }
     }
 
-    private void HandleAppAction(CoreWebView2 core, string action, JsonElement? payload)
+    private void HandleAppAction(CoreWebView2 core, string action, JsonElement? payload, string? requestId)
     {
+        try
+        {
         switch (action.Trim().ToLowerInvariant())
         {
             case "quit":
@@ -725,6 +739,22 @@ dotnet publish .\LandslideDesk.Win\LandslideDesk.Win.csproj -c Release -r win-x6
                 }
 
                 SetTrayEnabled(_trayIcon is null);
+                break;
+            }
+            case "settraybehavior":
+            {
+                var data = ExtractPayload(payload);
+                var minimizeToTray = TryGetBool(data, "minimizeToTray");
+                if (minimizeToTray is not null)
+                {
+                    _minimizeToTray = minimizeToTray.Value;
+                }
+
+                var closeToTray = TryGetBool(data, "closeToTray");
+                if (closeToTray is not null)
+                {
+                    _closeToTray = closeToTray.Value;
+                }
                 break;
             }
             case "togglefullscreen":
@@ -771,6 +801,105 @@ dotnet publish .\LandslideDesk.Win\LandslideDesk.Win.csproj -c Release -r win-x6
             case "openlogsdir":
                 OpenLogsDirectory();
                 break;
+            case "getappinfo":
+            {
+                if (string.IsNullOrWhiteSpace(requestId))
+                {
+                    break;
+                }
+
+                var info = new
+                {
+                    app = new
+                    {
+                        name = "LandslideDesk.Win",
+                        version = typeof(MainWindow).Assembly.GetName().Version?.ToString() ?? "unknown"
+                    },
+                    webview2 = new
+                    {
+                        browserVersion = core.Environment.BrowserVersionString,
+                        userDataFolder = _webViewUserDataFolder,
+                        additionalArgs = _webViewAdditionalArgs
+                    },
+                    os = new
+                    {
+                        version = System.Environment.OSVersion.VersionString
+                    }
+                };
+
+                PostAppResult(core, requestId, ok: true, payload: info);
+                return;
+            }
+            case "importfile":
+            {
+                if (string.IsNullOrWhiteSpace(requestId))
+                {
+                    break;
+                }
+
+                var data = ExtractPayload(payload);
+                var dialog = new Microsoft.Win32.OpenFileDialog
+                {
+                    Title = TryGetString(data, "title") ?? "导入文件",
+                    Multiselect = TryGetBool(data, "multiple") ?? false,
+                    CheckFileExists = true,
+                    Filter = BuildFileDialogFilter(data)
+                };
+
+                var ok = dialog.ShowDialog(this) == true;
+                var result = new
+                {
+                    canceled = !ok,
+                    files = ok ? dialog.FileNames : Array.Empty<string>()
+                };
+                PostAppResult(core, requestId, ok: true, payload: result);
+                return;
+            }
+            case "exportfile":
+            {
+                if (string.IsNullOrWhiteSpace(requestId))
+                {
+                    break;
+                }
+
+                var data = ExtractPayload(payload);
+                var dialog = new Microsoft.Win32.SaveFileDialog
+                {
+                    Title = TryGetString(data, "title") ?? "导出文件",
+                    FileName = TryGetString(data, "suggestedFileName") ?? string.Empty,
+                    DefaultExt = TryGetString(data, "defaultExt") ?? string.Empty,
+                    Filter = BuildFileDialogFilter(data)
+                };
+
+                var ok = dialog.ShowDialog(this) == true;
+                var result = new
+                {
+                    canceled = !ok,
+                    filePath = ok ? dialog.FileName : null
+                };
+                PostAppResult(core, requestId, ok: true, payload: result);
+                return;
+            }
+            case "writetextfile":
+            {
+                if (string.IsNullOrWhiteSpace(requestId))
+                {
+                    break;
+                }
+
+                var data = ExtractPayload(payload);
+                var path = TryGetString(data, "filePath") ?? TryGetString(data, "path");
+                var content = TryGetString(data, "content");
+                if (string.IsNullOrWhiteSpace(path) || content is null)
+                {
+                    PostAppResult(core, requestId, ok: false, payload: new { message = "缺少 filePath/content" });
+                    return;
+                }
+
+                File.WriteAllText(path, content);
+                PostAppResult(core, requestId, ok: true, payload: new { ok = true });
+                return;
+            }
             case "notify":
             {
                 var data = ExtractPayload(payload);
@@ -831,6 +960,81 @@ dotnet publish .\LandslideDesk.Win\LandslideDesk.Win.csproj -c Release -r win-x6
                 ShowTrayNotification(title, text.Trim(), icon, timeoutMs, route);
                 break;
             }
+        }
+
+        if (!string.IsNullOrWhiteSpace(requestId))
+        {
+            PostAppResult(core, requestId, ok: true, payload: null);
+        }
+        }
+        catch (Exception ex)
+        {
+            if (!string.IsNullOrWhiteSpace(requestId))
+            {
+                PostAppResult(core, requestId, ok: false, payload: new { message = ex.Message });
+            }
+        }
+    }
+
+    private static string? TryGetString(JsonElement? root, string propertyName)
+    {
+        if (root is null)
+        {
+            return null;
+        }
+
+        if (!root.Value.TryGetProperty(propertyName, out var el) || el.ValueKind != JsonValueKind.String)
+        {
+            return null;
+        }
+
+        var value = el.GetString();
+        return string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+
+    private static bool? TryGetBool(JsonElement? root, string propertyName)
+    {
+        if (root is null)
+        {
+            return null;
+        }
+
+        if (!root.Value.TryGetProperty(propertyName, out var el))
+        {
+            return null;
+        }
+
+        return el.ValueKind switch
+        {
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            _ => null
+        };
+    }
+
+    private static string BuildFileDialogFilter(JsonElement? data)
+    {
+        var overrideFilter = TryGetString(data, "filter");
+        if (!string.IsNullOrWhiteSpace(overrideFilter))
+        {
+            return overrideFilter!;
+        }
+
+        return "CSV (*.csv)|*.csv|Excel (*.xlsx)|*.xlsx|JSON (*.json)|*.json|图片 (*.png)|*.png|全部文件 (*.*)|*.*";
+    }
+
+    private static void PostAppResult(CoreWebView2 core, string requestId, bool ok, object? payload)
+    {
+        try
+        {
+            object body = ok
+                ? new { type = "appResult", requestId, ok = true, payload }
+                : new { type = "appResult", requestId, ok = false, error = payload };
+
+            core.PostWebMessageAsString(JsonSerializer.Serialize(body));
+        }
+        catch
+        {
         }
     }
 
@@ -933,8 +1137,14 @@ dotnet publish .\LandslideDesk.Win\LandslideDesk.Win.csproj -c Release -r win-x6
             return;
         }
 
-        e.Cancel = true;
-        HideToTray(showHint: true);
+        if (_closeToTray)
+        {
+            e.Cancel = true;
+            HideToTray(showHint: true);
+            return;
+        }
+
+        App.RequestAppShutdown();
     }
 
     private sealed class WindowSnapshot

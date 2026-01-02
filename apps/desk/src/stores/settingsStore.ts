@@ -13,6 +13,8 @@ type SettingsState = {
   terrainQuality: TerrainQuality;
   reducedMotion: boolean;
   trayEnabled: boolean;
+  minimizeToTray: boolean;
+  closeToTray: boolean;
   setApiMode: (mode: ApiMode) => void;
   setApiBaseUrl: (url: string) => void;
   setMockDelayMs: (ms: number) => void;
@@ -20,6 +22,8 @@ type SettingsState = {
   setTerrainQuality: (quality: TerrainQuality) => void;
   setReducedMotion: (enabled: boolean) => void;
   setTrayEnabled: (enabled: boolean) => void;
+  setMinimizeToTray: (enabled: boolean) => void;
+  setCloseToTray: (enabled: boolean) => void;
   reset: () => void;
 };
 
@@ -32,6 +36,8 @@ const defaults: Pick<
   | "terrainQuality"
   | "reducedMotion"
   | "trayEnabled"
+  | "minimizeToTray"
+  | "closeToTray"
 > = {
   apiMode: "mock",
   apiBaseUrl: "http://127.0.0.1:3000",
@@ -39,7 +45,9 @@ const defaults: Pick<
   mockFailureRate: 0,
   terrainQuality: "auto",
   reducedMotion: false,
-  trayEnabled: true
+  trayEnabled: true,
+  minimizeToTray: true,
+  closeToTray: true
 };
 
 export const useSettingsStore = create<SettingsState>()(
@@ -66,6 +74,12 @@ export const useSettingsStore = create<SettingsState>()(
       },
       setTrayEnabled: (trayEnabled) => {
         set({ trayEnabled });
+      },
+      setMinimizeToTray: (minimizeToTray) => {
+        set({ minimizeToTray });
+      },
+      setCloseToTray: (closeToTray) => {
+        set({ closeToTray });
       },
       reset: () => {
         set({ ...defaults });

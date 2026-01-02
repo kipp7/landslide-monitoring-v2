@@ -8,7 +8,7 @@ import { ApiProvider } from "./api/ApiProvider";
 import { AppRoutes } from "./routes/AppRoutes";
 import { useAuthStore } from "./stores/authStore";
 import { useSettingsStore } from "./stores/settingsStore";
-import { isDeskHost, requestDeskToggleTray } from "./native/deskHost";
+import { isDeskHost, requestDeskSetTrayBehavior, requestDeskToggleTray } from "./native/deskHost";
 
 export function App() {
   const apiMode = useSettingsStore((s) => s.apiMode);
@@ -16,6 +16,8 @@ export function App() {
   const mockDelayMs = useSettingsStore((s) => s.mockDelayMs);
   const mockFailureRate = useSettingsStore((s) => s.mockFailureRate);
   const trayEnabled = useSettingsStore((s) => s.trayEnabled);
+  const minimizeToTray = useSettingsStore((s) => s.minimizeToTray);
+  const closeToTray = useSettingsStore((s) => s.closeToTray);
   const reducedMotion = useSettingsStore((s) => s.reducedMotion);
   const token = useAuthStore((s) => s.token);
 
@@ -23,6 +25,11 @@ export function App() {
     if (!isDeskHost()) return;
     requestDeskToggleTray(trayEnabled);
   }, [trayEnabled]);
+
+  useEffect(() => {
+    if (!isDeskHost()) return;
+    requestDeskSetTrayBehavior({ minimizeToTray, closeToTray });
+  }, [minimizeToTray, closeToTray]);
 
   useEffect(() => {
     document.documentElement.classList.toggle("desk-reduced-motion", reducedMotion);

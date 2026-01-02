@@ -9,12 +9,14 @@ import { BaseCard } from "../components/BaseCard";
 import {
   getDeskHostInfo,
   isDeskHost,
+  requestDeskExportFile,
   requestDeskNotify,
   requestDeskOpenLogsDir,
   requestDeskQuit,
   requestDeskReload,
   requestDeskToggleFullscreen,
-  requestDeskToggleTray
+  requestDeskToggleTray,
+  requestDeskWriteTextFile
 } from "../native/deskHost";
 
 export function SettingsPage() {
@@ -28,6 +30,8 @@ export function SettingsPage() {
   const terrainQuality = useSettingsStore((s) => s.terrainQuality);
   const reducedMotion = useSettingsStore((s) => s.reducedMotion);
   const trayEnabled = useSettingsStore((s) => s.trayEnabled);
+  const minimizeToTray = useSettingsStore((s) => s.minimizeToTray);
+  const closeToTray = useSettingsStore((s) => s.closeToTray);
   const setApiMode = useSettingsStore((s) => s.setApiMode);
   const setApiBaseUrl = useSettingsStore((s) => s.setApiBaseUrl);
   const setMockDelayMs = useSettingsStore((s) => s.setMockDelayMs);
@@ -35,6 +39,8 @@ export function SettingsPage() {
   const setTerrainQuality = useSettingsStore((s) => s.setTerrainQuality);
   const setReducedMotion = useSettingsStore((s) => s.setReducedMotion);
   const setTrayEnabled = useSettingsStore((s) => s.setTrayEnabled);
+  const setMinimizeToTray = useSettingsStore((s) => s.setMinimizeToTray);
+  const setCloseToTray = useSettingsStore((s) => s.setCloseToTray);
   const reset = useSettingsStore((s) => s.reset);
   const clearAuth = useAuthStore((s) => s.clear);
   const user = useAuthStore((s) => s.user);
@@ -70,6 +76,55 @@ export function SettingsPage() {
 
     return { ua, dpr, cores, webgl };
   }, []);
+
+  const exportDiagnostics = async () => {
+    if (!runningInDeskHost) {
+      message.error("当前运行环境不是桌面端");
+      return;
+    }
+
+    const diag = {
+      time: new Date().toISOString(),
+      user,
+      hostInfo,
+      runtime: runtimeInfo,
+      settings: {
+        apiMode,
+        apiBaseUrl,
+        mockDelayMs,
+        mockFailureRate,
+        terrainQuality,
+        reducedMotion,
+        trayEnabled,
+        minimizeToTray,
+        closeToTray
+      }
+    };
+
+    try {
+      const res = await requestDeskExportFile({
+        title: "导出诊断信息",
+        suggestedFileName: `desk-diagnostics-${Date.now()}.json`,
+        defaultExt: ".json",
+        filter: "JSON (*.json)|*.json|全部文件 (*.*)|*.*",
+        timeoutMs: 20000
+      });
+
+      if (res.canceled || !res.filePath) {
+        message.info("已取消导出");
+        return;
+      }
+
+      await requestDeskWriteTextFile({
+        filePath: res.filePath,
+        content: JSON.stringify(diag, null, 2),
+        timeoutMs: 20000
+      });
+      message.success("诊断信息已导出");
+    } catch (err) {
+      message.error((err as Error).message);
+    }
+  };
 
   const doLogout = async () => {
     setLogoutSubmitting(true);
@@ -274,6 +329,19 @@ export function SettingsPage() {
               <div style={{ marginTop: 6 }}>
                 <Typography.Text type="secondary">UA：{runtimeInfo.ua}</Typography.Text>
               </div>
+              {runningInDeskHost ? (
+                <div style={{ marginTop: 10 }}>
+                  <Space wrap>
+                    <Button
+                      onClick={() => {
+                        void exportDiagnostics();
+                      }}
+                    >
+                      导出诊断信息
+                    </Button>
+                  </Space>
+                </div>
+              ) : null}
             </div>
           </Form.Item>
 
@@ -323,6 +391,32 @@ export function SettingsPage() {
                 <Typography.Text type="secondary">浏览器模式无法使用托盘/通知。</Typography.Text>
               )}
             </Space>
+            <div style={{ marginTop: 10 }}>
+              <Space wrap>
+                <Space size={8}>
+                  <Switch
+                    checked={minimizeToTray}
+                    disabled={!runningInDeskHost || !trayEnabled}
+                    checkedChildren="最小化进托盘"
+                    unCheckedChildren="最小化保留任务栏"
+                    onChange={(checked) => {
+                      setMinimizeToTray(checked);
+                    }}
+                  />
+                </Space>
+                <Space size={8}>
+                  <Switch
+                    checked={closeToTray}
+                    disabled={!runningInDeskHost || !trayEnabled}
+                    checkedChildren="关闭进托盘"
+                    unCheckedChildren="关闭退出软件"
+                    onChange={(checked) => {
+                      setCloseToTray(checked);
+                    }}
+                  />
+                </Space>
+              </Space>
+            </div>
             {runningInDeskHost ? (
               <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
                 桌面端壳版本：{hostInfo?.app?.version ?? "-"}；WebView2：{hostInfo?.webview2?.browserVersion ?? "-"}

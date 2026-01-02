@@ -20,7 +20,7 @@
 - [x] 1.3 主窗口最小化到托盘（最小化时隐藏任务栏图标）
 - [x] 1.4 托盘单击/双击行为：显示并激活窗口
 - [x] 1.5 托盘提示气泡（可用于“更新可用/告警通知”）
-- [ ] 1.6 设置项：最小化/关闭到托盘行为可配置
+- [x] 1.6 设置项：最小化/关闭到托盘行为可配置
 - [x] 1.7 设置项：托盘启用/禁用（禁用时允许直接关闭退出）
 - [x] 1.8.1 托盘菜单：显示版本号
 - [x] 1.8.2 托盘菜单：打开日志目录
@@ -52,10 +52,10 @@
 - [ ] 4.4 Host Bridge：允许前端请求“复制 deep link / 打开 deep link”
 
 ## 5. 原生文件对话框（导入/导出）
-- [ ] 5.1 Host Bridge：`export:file`（SaveFileDialog）
-- [ ] 5.2 Host Bridge：`import:file`（OpenFileDialog）
-- [ ] 5.3 统一文件类型过滤（csv/xlsx/json/png）
-- [ ] 5.4 处理取消/权限/路径非法等异常场景
+- [x] 5.1 Host Bridge：`export:file`（SaveFileDialog）
+- [x] 5.2 Host Bridge：`import:file`（OpenFileDialog）
+- [x] 5.3 统一文件类型过滤（csv/xlsx/json/png）
+- [x] 5.4 处理取消/权限/路径非法等异常场景
 
 ## 6. 诊断与日志
 - [ ] 6.1 定义日志目录与轮转策略（LocalAppData）
@@ -70,9 +70,9 @@
 - [x] 7.2.2 动作：`focus`
 - [x] 7.2.3 动作：`toggleTray`
 - [x] 7.2.4 动作：`notify`（先托盘气泡，后 Toast）
-- [ ] 7.3 增加返回值/回执机制（WebMessage -> WebMessage response）
+- [x] 7.3 增加返回值/回执机制（WebMessage -> WebMessage response）
 - [ ] 7.4 增加权限边界：仅允许白名单动作，拒绝任意 shell 执行
-- [ ] 7.5 增加 `getAppInfo` 动作：版本/运行模式/系统信息（脱敏）
+- [x] 7.5 增加 `getAppInfo` 动作：版本/运行模式/系统信息（脱敏）
 - [x] 7.6 增加 `openLogsDir` 动作：打开日志目录（Explorer）
 - [ ] 7.7 增加 `clearWebViewData` 动作：清理 WebView2 UserData（需确认提示）
 
