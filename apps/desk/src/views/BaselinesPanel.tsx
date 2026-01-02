@@ -11,9 +11,9 @@ type EditState =
   | { open: true; mode: "create" | "edit"; deviceId?: string; baseline?: Baseline };
 
 function baselineStatusTag(status: BaselineStatus) {
-  if (status === "active") return <Tag color="green">已建立</Tag>;
-  if (status === "draft") return <Tag color="blue">草稿</Tag>;
-  return <Tag color="red">缺失</Tag>;
+  if (status === "active") return <Tag className="desk-tag desk-tag-baseline-active">已建立</Tag>;
+  if (status === "draft") return <Tag className="desk-tag desk-tag-baseline-draft">草稿</Tag>;
+  return <Tag className="desk-tag desk-tag-baseline-missing">缺失</Tag>;
 }
 
 export function BaselinesPanel(props: { className?: string; style?: React.CSSProperties }) {

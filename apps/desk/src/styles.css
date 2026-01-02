@@ -82,6 +82,70 @@ body {
   margin-inline-end: 0 !important;
 }
 
+.desk-tag {
+  margin-inline-end: 0 !important;
+  border-radius: 999px !important;
+  padding-inline: 8px !important;
+  font-weight: 900 !important;
+  border: 1px solid rgba(148, 163, 184, 0.22) !important;
+  background: rgba(51, 65, 85, 0.18) !important;
+  color: rgba(226, 232, 240, 0.92) !important;
+}
+
+.desk-tag-online {
+  background: rgba(34, 197, 94, 0.14) !important;
+  border-color: rgba(34, 197, 94, 0.35) !important;
+  color: rgba(134, 239, 172, 0.96) !important;
+}
+
+.desk-tag-warning {
+  background: rgba(245, 158, 11, 0.14) !important;
+  border-color: rgba(245, 158, 11, 0.35) !important;
+  color: rgba(253, 230, 138, 0.96) !important;
+}
+
+.desk-tag-offline {
+  background: rgba(239, 68, 68, 0.14) !important;
+  border-color: rgba(239, 68, 68, 0.35) !important;
+  color: rgba(252, 165, 165, 0.96) !important;
+}
+
+.desk-tag-risk-high {
+  background: rgba(239, 68, 68, 0.14) !important;
+  border-color: rgba(239, 68, 68, 0.35) !important;
+  color: rgba(252, 165, 165, 0.96) !important;
+}
+
+.desk-tag-risk-mid {
+  background: rgba(245, 158, 11, 0.14) !important;
+  border-color: rgba(245, 158, 11, 0.35) !important;
+  color: rgba(253, 230, 138, 0.96) !important;
+}
+
+.desk-tag-risk-low {
+  background: rgba(34, 197, 94, 0.14) !important;
+  border-color: rgba(34, 197, 94, 0.35) !important;
+  color: rgba(134, 239, 172, 0.96) !important;
+}
+
+.desk-tag-baseline-active {
+  background: rgba(34, 197, 94, 0.14) !important;
+  border-color: rgba(34, 197, 94, 0.35) !important;
+  color: rgba(134, 239, 172, 0.96) !important;
+}
+
+.desk-tag-baseline-draft {
+  background: rgba(59, 130, 246, 0.14) !important;
+  border-color: rgba(59, 130, 246, 0.35) !important;
+  color: rgba(191, 219, 254, 0.96) !important;
+}
+
+.desk-tag-baseline-missing {
+  background: rgba(239, 68, 68, 0.14) !important;
+  border-color: rgba(239, 68, 68, 0.35) !important;
+  color: rgba(252, 165, 165, 0.96) !important;
+}
+
 /* Ant Design Table dark tweaks (used with .desk-dark-table wrapper) */
 .desk-dark-table .ant-table,
 .desk-dark-table .ant-table-container,

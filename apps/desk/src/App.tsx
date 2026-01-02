@@ -6,6 +6,7 @@ import { HashRouter } from "react-router-dom";
 
 import { ApiProvider } from "./api/ApiProvider";
 import { AppRoutes } from "./routes/AppRoutes";
+import { TitleSync } from "./routes/TitleSync";
 import { useAuthStore } from "./stores/authStore";
 import { useSettingsStore } from "./stores/settingsStore";
 import { isDeskHost, requestDeskSetTrayBehavior, requestDeskToggleTray } from "./native/deskHost";
@@ -46,6 +47,7 @@ export function App() {
       <AntApp>
         <ApiProvider config={{ mode: apiMode, baseUrl: apiBaseUrl, token, mockDelayMs, mockFailureRate }}>
           <HashRouter>
+            <TitleSync />
             <AppRoutes />
           </HashRouter>
         </ApiProvider>

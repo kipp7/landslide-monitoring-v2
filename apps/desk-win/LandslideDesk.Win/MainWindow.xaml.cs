@@ -21,6 +21,8 @@ public partial class MainWindow : Window
     private const string DevServerEnv = "DESK_DEV_SERVER_URL";
     private const string WebView2ArgsEnv = "DESK_WEBVIEW2_ARGS";
     private const string WebView2DisableGpuEnv = "DESK_WEBVIEW2_DISABLE_GPU";
+    private const string ProductTitle = "山体滑坡监测预警平台";
+    private const string DesktopTitleSuffix = "（桌面端）";
     private static readonly string AppDataRoot = Path.Combine(
         System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData),
         "LandslideDesk.Win"
@@ -44,6 +46,7 @@ public partial class MainWindow : Window
     private string? _lastNavigationUrl;
     private string? _webViewUserDataFolder;
     private string _webViewAdditionalArgs = string.Empty;
+    private readonly string _defaultWindowTitle;
 
     private bool _isFullscreen;
     private bool _isHotkeyScopeActive;
@@ -67,6 +70,8 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        _defaultWindowTitle = $"{ProductTitle}{DesktopTitleSuffix}";
+        Title = _defaultWindowTitle;
         RestoreWindowPlacement();
         SourceInitialized += OnSourceInitialized;
         Loaded += OnLoaded;
@@ -524,6 +529,11 @@ dotnet publish .\LandslideDesk.Win\LandslideDesk.Win.csproj -c Release -r win-x6
 
     private void HookWebViewEvents(CoreWebView2 core)
     {
+        core.DocumentTitleChanged += (_, _) =>
+        {
+            Dispatcher.Invoke(() => SyncWindowTitle(core));
+        };
+
         core.NavigationStarting += (_, e) =>
         {
             _lastNavigationUrl = e.Uri;
@@ -537,6 +547,7 @@ dotnet publish .\LandslideDesk.Win\LandslideDesk.Win.csproj -c Release -r win-x6
                 if (e.IsSuccess)
                 {
                     HideOverlays();
+                    SyncWindowTitle(core);
                     return;
                 }
 
@@ -586,6 +597,30 @@ dotnet publish .\LandslideDesk.Win\LandslideDesk.Win.csproj -c Release -r win-x6
         {
             Dispatcher.Invoke(Close);
         };
+    }
+
+    private void SyncWindowTitle(CoreWebView2 core)
+    {
+        var docTitle = core.DocumentTitle?.Trim();
+        if (string.IsNullOrWhiteSpace(docTitle))
+        {
+            Title = _defaultWindowTitle;
+            return;
+        }
+
+        if (docTitle.Contains(DesktopTitleSuffix, StringComparison.Ordinal))
+        {
+            Title = docTitle;
+            return;
+        }
+
+        if (docTitle.Contains(ProductTitle, StringComparison.Ordinal))
+        {
+            Title = docTitle.Replace(ProductTitle, $"{ProductTitle}{DesktopTitleSuffix}", StringComparison.Ordinal);
+            return;
+        }
+
+        Title = $"{docTitle} - {ProductTitle}{DesktopTitleSuffix}";
     }
 
     private static bool IsTruthy(string? value)
