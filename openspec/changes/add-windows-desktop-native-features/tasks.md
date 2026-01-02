@@ -62,7 +62,7 @@
 - [x] 6.2 增加“打开日志目录”动作（Host Bridge）
 - [ ] 6.3 增加“复制版本信息/运行环境”动作（Host Bridge）
 - [ ] 6.4 增加内置诊断页（Web UI 或原生对话框均可）
-- [ ] 6.5 提供“一键导出诊断包”（日志 + 配置 + 版本信息）
+- [x] 6.5 提供“一键导出诊断包”（日志 + 配置 + 版本信息）
 
 ## 7. Host Bridge 协议完善
 - [x] 7.1 统一消息格式（type/action/payload）
@@ -74,7 +74,7 @@
 - [ ] 7.4 增加权限边界：仅允许白名单动作，拒绝任意 shell 执行
 - [x] 7.5 增加 `getAppInfo` 动作：版本/运行模式/系统信息（脱敏）
 - [x] 7.6 增加 `openLogsDir` 动作：打开日志目录（Explorer）
-- [ ] 7.7 增加 `clearWebViewData` 动作：清理 WebView2 UserData（需确认提示）
+- [x] 7.7 增加 `clearWebViewData` 动作：清理 WebView2 UserData（需确认提示）
 
 ## 8. 验收与文档
 - [x] 8.1 更新 `apps/desk-win/README.md`（开发/发布/常见问题）

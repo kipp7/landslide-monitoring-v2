@@ -260,3 +260,25 @@ export function requestDeskWriteTextFile(input: {
     ...(timeoutMs !== undefined ? { timeoutMs } : {})
   }).then(() => undefined);
 }
+
+export function requestDeskClearWebViewData(input?: { timeoutMs?: number }): Promise<{ ok: boolean } | { canceled: boolean }> {
+  const timeoutMs = input?.timeoutMs;
+  return requestDeskHost<typeof input, { ok: boolean } | { canceled: boolean }>({
+    action: "clearWebViewData",
+    payload: input,
+    ...(timeoutMs !== undefined ? { timeoutMs } : {})
+  });
+}
+
+export function requestDeskExportDiagnosticsBundle(input: {
+  filePath: string;
+  frontEndJson?: string;
+  timeoutMs?: number;
+}): Promise<{ ok: boolean; filePath?: string }> {
+  const timeoutMs = input.timeoutMs;
+  return requestDeskHost<typeof input, { ok: boolean; filePath?: string }>({
+    action: "exportDiagnosticsBundle",
+    payload: input,
+    ...(timeoutMs !== undefined ? { timeoutMs } : {})
+  });
+}

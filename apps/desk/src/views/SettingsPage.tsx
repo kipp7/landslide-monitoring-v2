@@ -9,7 +9,9 @@ import { BaseCard } from "../components/BaseCard";
 import {
   getDeskHostInfo,
   isDeskHost,
+  requestDeskClearWebViewData,
   requestDeskExportFile,
+  requestDeskExportDiagnosticsBundle,
   requestDeskNotify,
   requestDeskOpenLogsDir,
   requestDeskQuit,
@@ -100,6 +102,7 @@ export function SettingsPage() {
         closeToTray
       }
     };
+    const diagJson = JSON.stringify(diag, null, 2);
 
     try {
       const res = await requestDeskExportFile({
@@ -117,10 +120,78 @@ export function SettingsPage() {
 
       await requestDeskWriteTextFile({
         filePath: res.filePath,
-        content: JSON.stringify(diag, null, 2),
+        content: diagJson,
         timeoutMs: 20000
       });
       message.success("诊断信息已导出");
+    } catch (err) {
+      message.error((err as Error).message);
+    }
+  };
+
+  const exportDiagnosticsBundle = async () => {
+    if (!runningInDeskHost) {
+      message.error("当前运行环境不是桌面端");
+      return;
+    }
+
+    const diag = {
+      time: new Date().toISOString(),
+      user,
+      hostInfo,
+      runtime: runtimeInfo,
+      settings: {
+        apiMode,
+        apiBaseUrl,
+        mockDelayMs,
+        mockFailureRate,
+        terrainQuality,
+        reducedMotion,
+        trayEnabled,
+        minimizeToTray,
+        closeToTray
+      }
+    };
+    const diagJson = JSON.stringify(diag, null, 2);
+
+    try {
+      const res = await requestDeskExportFile({
+        title: "导出诊断包",
+        suggestedFileName: `desk-diagnostics-${Date.now()}.zip`,
+        defaultExt: ".zip",
+        filter: "ZIP (*.zip)|*.zip|全部文件 (*.*)|*.*",
+        timeoutMs: 20000
+      });
+
+      if (res.canceled || !res.filePath) {
+        message.info("已取消导出");
+        return;
+      }
+
+      await requestDeskExportDiagnosticsBundle({
+        filePath: res.filePath,
+        frontEndJson: diagJson,
+        timeoutMs: 60000
+      });
+      message.success("诊断包已导出");
+    } catch (err) {
+      message.error((err as Error).message);
+    }
+  };
+
+  const clearWebViewData = async () => {
+    if (!runningInDeskHost) {
+      message.error("当前运行环境不是桌面端");
+      return;
+    }
+
+    try {
+      const res = await requestDeskClearWebViewData({ timeoutMs: 60000 });
+      if ("canceled" in res && res.canceled) {
+        message.info("已取消清理");
+        return;
+      }
+      message.success("已清理缓存");
     } catch (err) {
       message.error((err as Error).message);
     }
@@ -338,6 +409,21 @@ export function SettingsPage() {
                       }}
                     >
                       导出诊断信息
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        void exportDiagnosticsBundle();
+                      }}
+                    >
+                      导出诊断包
+                    </Button>
+                    <Button
+                      danger
+                      onClick={() => {
+                        void clearWebViewData();
+                      }}
+                    >
+                      清理缓存
                     </Button>
                   </Space>
                 </div>

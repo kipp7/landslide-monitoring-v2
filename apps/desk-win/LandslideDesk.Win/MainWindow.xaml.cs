@@ -2,6 +2,7 @@ using System;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -808,26 +809,7 @@ dotnet publish .\LandslideDesk.Win\LandslideDesk.Win.csproj -c Release -r win-x6
                     break;
                 }
 
-                var info = new
-                {
-                    app = new
-                    {
-                        name = "LandslideDesk.Win",
-                        version = typeof(MainWindow).Assembly.GetName().Version?.ToString() ?? "unknown"
-                    },
-                    webview2 = new
-                    {
-                        browserVersion = core.Environment.BrowserVersionString,
-                        userDataFolder = _webViewUserDataFolder,
-                        additionalArgs = _webViewAdditionalArgs
-                    },
-                    os = new
-                    {
-                        version = System.Environment.OSVersion.VersionString
-                    }
-                };
-
-                PostAppResult(core, requestId, ok: true, payload: info);
+                PostAppResult(core, requestId, ok: true, payload: BuildAppInfo(core));
                 return;
             }
             case "importfile":
@@ -878,6 +860,48 @@ dotnet publish .\LandslideDesk.Win\LandslideDesk.Win.csproj -c Release -r win-x6
                     filePath = ok ? dialog.FileName : null
                 };
                 PostAppResult(core, requestId, ok: true, payload: result);
+                return;
+            }
+            case "clearwebviewdata":
+            {
+                if (string.IsNullOrWhiteSpace(requestId))
+                {
+                    break;
+                }
+
+                var confirm = System.Windows.MessageBox.Show(
+                    this,
+                    "将清理 WebView2 缓存与站点数据（可能需要重新登录）。\n是否继续？",
+                    "清理缓存",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning
+                );
+                if (confirm != System.Windows.MessageBoxResult.Yes)
+                {
+                    PostAppResult(core, requestId, ok: true, payload: new { canceled = true });
+                    return;
+                }
+
+                _ = ClearWebViewDataAsync(core, requestId);
+                return;
+            }
+            case "exportdiagnosticsbundle":
+            {
+                if (string.IsNullOrWhiteSpace(requestId))
+                {
+                    break;
+                }
+
+                var data = ExtractPayload(payload);
+                var filePath = TryGetString(data, "filePath") ?? TryGetString(data, "path");
+                if (string.IsNullOrWhiteSpace(filePath))
+                {
+                    PostAppResult(core, requestId, ok: false, payload: new { message = "缺少 filePath" });
+                    return;
+                }
+
+                var frontEndJson = TryGetString(data, "frontEndJson") ?? TryGetString(data, "frontendJson");
+                _ = ExportDiagnosticsBundleAsync(core, requestId, filePath!, frontEndJson);
                 return;
             }
             case "writetextfile":
@@ -972,6 +996,104 @@ dotnet publish .\LandslideDesk.Win\LandslideDesk.Win.csproj -c Release -r win-x6
             if (!string.IsNullOrWhiteSpace(requestId))
             {
                 PostAppResult(core, requestId, ok: false, payload: new { message = ex.Message });
+            }
+        }
+    }
+
+    private object BuildAppInfo(CoreWebView2 core)
+    {
+        return new
+        {
+            app = new
+            {
+                name = "LandslideDesk.Win",
+                version = typeof(MainWindow).Assembly.GetName().Version?.ToString() ?? "unknown"
+            },
+            webview2 = new
+            {
+                browserVersion = core.Environment.BrowserVersionString,
+                userDataFolder = _webViewUserDataFolder,
+                additionalArgs = _webViewAdditionalArgs
+            },
+            os = new
+            {
+                version = System.Environment.OSVersion.VersionString
+            }
+        };
+    }
+
+    private async Task ClearWebViewDataAsync(CoreWebView2 core, string requestId)
+    {
+        try
+        {
+            await core.Profile.ClearBrowsingDataAsync(CoreWebView2BrowsingDataKinds.AllProfile);
+            PostAppResult(core, requestId, ok: true, payload: new { ok = true });
+            core.Reload();
+        }
+        catch (Exception ex)
+        {
+            PostAppResult(core, requestId, ok: false, payload: new { message = ex.Message });
+        }
+    }
+
+    private async Task ExportDiagnosticsBundleAsync(CoreWebView2 core, string requestId, string zipPath, string? frontEndJson)
+    {
+        var tmpDir = Path.Combine(AppDataRoot, $"diag-{DateTime.Now:yyyyMMdd-HHmmss}-{Guid.NewGuid():N}");
+        try
+        {
+            Directory.CreateDirectory(tmpDir);
+
+            var hostInfoPath = Path.Combine(tmpDir, "host-info.json");
+            await File.WriteAllTextAsync(hostInfoPath, JsonSerializer.Serialize(BuildAppInfo(core), new JsonSerializerOptions { WriteIndented = true }));
+
+            if (!string.IsNullOrWhiteSpace(frontEndJson))
+            {
+                await File.WriteAllTextAsync(Path.Combine(tmpDir, "frontend-diag.json"), frontEndJson!);
+            }
+
+            var windowStatePath = WindowStateFile;
+            if (File.Exists(windowStatePath))
+            {
+                File.Copy(windowStatePath, Path.Combine(tmpDir, "window-state.json"), overwrite: true);
+            }
+
+            var crashLogs = Directory.Exists(AppDataRoot)
+                ? Directory.GetFiles(AppDataRoot, "crash-*.log", SearchOption.TopDirectoryOnly)
+                : Array.Empty<string>();
+            if (crashLogs.Length > 0)
+            {
+                var logsDir = Path.Combine(tmpDir, "logs");
+                Directory.CreateDirectory(logsDir);
+                foreach (var file in crashLogs)
+                {
+                    var dest = Path.Combine(logsDir, Path.GetFileName(file));
+                    File.Copy(file, dest, overwrite: true);
+                }
+            }
+
+            if (File.Exists(zipPath))
+            {
+                File.Delete(zipPath);
+            }
+
+            ZipFile.CreateFromDirectory(tmpDir, zipPath, CompressionLevel.Optimal, includeBaseDirectory: false);
+            PostAppResult(core, requestId, ok: true, payload: new { ok = true, filePath = zipPath });
+        }
+        catch (Exception ex)
+        {
+            PostAppResult(core, requestId, ok: false, payload: new { message = ex.Message });
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(tmpDir))
+                {
+                    Directory.Delete(tmpDir, recursive: true);
+                }
+            }
+            catch
+            {
             }
         }
     }
