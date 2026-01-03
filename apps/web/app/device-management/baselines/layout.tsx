@@ -11,8 +11,6 @@ export default function BaselinesLayout({ children }: { children: React.ReactNod
   const { user, loading } = useAuth()
   const tokenPresent = Boolean(getApiBearerToken())
 
-  if (loading) return <div className="p-6">Loading…</div>
-
   if (!tokenPresent) {
     return (
       <Card>
@@ -23,7 +21,7 @@ export default function BaselinesLayout({ children }: { children: React.ReactNod
     )
   }
 
-  if (user && !user.permissions.includes('device:view')) {
+  if (!loading && user && !user.permissions.includes('device:view')) {
     return (
       <Card>
         <Text type="danger">无权限访问（需要 device:view 权限）</Text>
@@ -33,4 +31,3 @@ export default function BaselinesLayout({ children }: { children: React.ReactNod
 
   return <>{children}</>
 }
-

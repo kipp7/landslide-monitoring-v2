@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { Card, Typography } from 'antd'
+import { getApiBearerToken } from '../../../lib/v2Api'
 import { useAuth } from '../../components/AuthProvider'
 
 const { Text } = Typography
@@ -13,10 +14,9 @@ function hasAnyPermission(perms: string[] | undefined, required: string[]): bool
 
 export default function AlertRulesLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
+  const tokenPresent = Boolean(getApiBearerToken())
 
-  if (loading) return <div className="p-6">Loading...</div>
-
-  if (!user) {
+  if (!tokenPresent) {
     return (
       <Card>
         <Text type="secondary">
@@ -26,15 +26,16 @@ export default function AlertRulesLayout({ children }: { children: React.ReactNo
     )
   }
 
-  const ok = hasAnyPermission(user.permissions, ['alert:config'])
-  if (!ok) {
-    return (
-      <Card>
-        <Text type="danger">Forbidden (requires alert:config)</Text>
-      </Card>
-    )
+  if (!loading && user) {
+    const ok = hasAnyPermission(user.permissions, ['alert:config'])
+    if (!ok) {
+      return (
+        <Card>
+          <Text type="danger">Forbidden (requires alert:config)</Text>
+        </Card>
+      )
+    }
   }
 
   return <>{children}</>
 }
-
