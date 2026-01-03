@@ -1,0 +1,23 @@
+.desk-hover-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100%;
+  z-index: 1000;
+}
+
+.desk-hover-sider {
+  height: 100%;
+  transition: all 300ms ease-in-out;
+}
+
+.desk-hover-sider-head {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #22d3ee;
+  font-weight: 700;
+  font-size: 18px;
+}
+

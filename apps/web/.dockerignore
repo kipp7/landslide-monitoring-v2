@@ -1,0 +1,10 @@
+node_modules
+.next
+.next_v2*
+dist
+build
+out
+.env
+.env.*
+*.log
+
