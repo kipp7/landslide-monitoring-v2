@@ -85,7 +85,7 @@ npm -w services/api run start
 ```powershell
 cd "E:\学校\02 项目\99 山体滑坡优化完善\landslide-monitoring-v2\apps\web"
 $env:NODE_OPTIONS="--max-old-space-size=8192"
-node "..\..\node_modules\next\dist\bin\next" dev --port 3000
+npm run dev
 ```
 
 ## 鉴权（开发最省事方式）
@@ -109,13 +109,15 @@ Stop-Process -Id (Get-NetTCPConnection -LocalPort 8080 -State Listen).OwningProc
 ```
 
 - Docker 报 `docker_engine` 找不到：先启动 Docker Desktop（或用 `-SkipDocker`）。
-- 前端启动报 Turbopack 错误（例如 `Next.js package not found`）：用不带 Turbopack 的方式启动：
+- 前端启动报 Turbopack 错误（例如 `Next.js package not found`）：用不带 Turbopack 的方式启动（默认 `npm run dev` 就是不带 Turbopack）：
 
 ```powershell
 cd "E:\学校\02 项目\99 山体滑坡优化完善\landslide-monitoring-v2\apps\web"
-npm run dev:webpack
+npm run dev
+# 或：npm run dev:webpack
 ```
 
+- 生产构建报 `EPERM ... .next_web\\trace`（Windows 常见）：先关闭正在运行的 Web dev（3000 端口），再重试 `npm -w apps/web run build`。
 - 页面请求走错 API BaseUrl：清空浏览器运行时配置：
 
 ```js
