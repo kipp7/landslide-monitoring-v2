@@ -55,3 +55,71 @@
 ## 6. 验证与演示
 - [ ] 6.1 Mock 模式：全页面数据一致性检查（站点/设备/GPS）
 - [ ] 6.2 HTTP 模式：可切换且不会导致页面崩溃（接口不可用也可进入页面）
+
+## 7. 告警与处置 Contract（面向实际使用）
+- [ ] 7.1 定义枚举：`AlertLevel`、`AlertStatus`、`AlertSourceType`
+- [ ] 7.2 定义模型：`AlertEventSummary`/`AlertEventDetail`（关联站点/设备/传感器）
+- [ ] 7.3 定义模型：`AlertRuleSummary`/`AlertRuleDetail`（阈值/策略/静默）
+- [ ] 7.4 增加 `alerts.list`：分页/过滤/排序（level/status/stationId/deviceId/timeRange）
+- [ ] 7.5 增加 `alerts.get`：按 id 获取详情（含最近数据点）
+- [ ] 7.6 增加 `alerts.ack`：确认告警（可选备注）
+- [ ] 7.7 增加 `alerts.assign`：指派责任人/班组（Mock）
+- [ ] 7.8 增加 `alerts.close`：关闭告警（结论/原因/措施，Mock）
+- [ ] 7.9 增加 `alerts.silence`：按站点/设备静默一段时间（Mock）
+- [ ] 7.10 增加 `alerts.stats`：用于首页/大屏的汇总统计（按等级/状态）
+- [ ] 7.11 增加 `alerts.trend`：告警趋势（24h/7d/30d）
+- [ ] 7.12 Mock：告警事件生成器（与时间序列异常相关联）
+- [ ] 7.13 Mock：告警可复现（seed 固定，刷新不乱跳）
+- [ ] 7.14 Mock：支持“新增告警”模拟（用于演示通知/处置流程）
+- [ ] 7.15 HTTP：实现骨架与路由映射（不联调也可运行）
+- [ ] 7.16 错误模型：告警处置字段校验（fieldErrors）
+- [ ] 7.17 定义导出模型：`AlertExportJob`（先 mock）
+- [ ] 7.18 契约文档：补齐 alert 相关示例 payload（请求/响应）
+- [ ] 7.19 Provider：告警域缓存策略（列表短缓存，详情按需缓存）
+- [ ] 7.20 验证：为告警域补齐最小 contract 校验用例
+
+## 8. 待办/工单 Contract（闭环处置）
+- [ ] 8.1 定义枚举：`WorkOrderStatus`、`WorkOrderPriority`、`WorkOrderType`
+- [ ] 8.2 定义模型：`WorkOrderSummary`/`WorkOrderDetail`（关联告警/站点/设备）
+- [ ] 8.3 增加 `workorders.list`：分页/过滤/排序（status/priority/assignee/timeRange）
+- [ ] 8.4 增加 `workorders.create`：创建工单（Mock）
+- [ ] 8.5 增加 `workorders.update`：编辑工单（Mock）
+- [ ] 8.6 增加 `workorders.transition`：状态流转（新建->处理中->待复核->已完成）
+- [ ] 8.7 增加 `workorders.comment`：追加处理记录（Mock）
+- [ ] 8.8 增加 `workorders.attach`：附件元数据（文件由桌面端导入/导出提供）
+- [ ] 8.9 增加 `workorders.export`：导出工单清单（Mock）
+- [ ] 8.10 定义模型：`TodoSuggestion`（系统建议：离线/预警/缺基线）
+- [ ] 8.11 增加 `todos.suggestions`：获取系统建议列表（由前端或后端生成）
+- [ ] 8.12 增加 `todos.list/create/update/delete/complete`：人工待办 CRUD（Mock）
+- [ ] 8.13 Mock：待办与工单数据关联（建议可一键转工单）
+- [ ] 8.14 权限：viewer 只读，admin 可写（Contract 层体现）
+- [ ] 8.15 验证：为待办/工单域补齐最小 contract 校验用例
+
+## 9. 公告/配置中心 Contract（面向运维）
+- [ ] 9.1 定义模型：`Announcement`（level/category/pinned/route/expireAt）
+- [ ] 9.2 增加 `announcements.list`：分页/过滤（category/activeOnly）
+- [ ] 9.3 增加 `announcements.create/update/delete`：公告管理（admin）
+- [ ] 9.4 增加 `announcements.markRead`：标记已读（按用户）
+- [ ] 9.5 定义模型：`AppConfig`（首页小组件/刷新频率/默认时间范围）
+- [ ] 9.6 增加 `config.get/set`：配置读取与更新（Mock）
+- [ ] 9.7 Mock：公告与配置的 seed 与持久化（演示可用）
+- [ ] 9.8 HTTP：公告/配置路由骨架（不联调也可运行）
+- [ ] 9.9 错误模型：公告字段校验与权限错误（403）
+- [ ] 9.10 验证：为公告/配置域补齐最小 contract 校验用例
+
+## 10. 诊断/审计 Contract（现场可排障）
+- [ ] 10.1 定义模型：`AuditEvent`（actor/action/resource/route/result/time）
+- [ ] 10.2 增加 `audit.list`：审计日志查询（过滤 actor/action/timeRange）
+- [ ] 10.3 增加 `system.info`：版本/构建信息（前端/桌面壳/后端）
+- [ ] 10.4 增加 `system.healthDetail`：更完整的健康信息（DB/队列/缓存）
+- [ ] 10.5 定义模型：`DiagnosticsBundleRequest`（用于导出诊断包）
+- [ ] 10.6 增加 `diagnostics.export`：生成诊断包任务（先 mock）
+- [ ] 10.7 统一 requestId：贯穿 provider 请求链路（便于排障）
+- [ ] 10.8 统一重试标记：`retryable` 与推荐重试策略
+- [ ] 10.9 增加“运行时能力”标记：桌面端/浏览器差异（capabilities）
+- [ ] 10.10 增加 “feature flags” 模型（逐步上线开关）
+- [ ] 10.11 Mock：审计事件生成与持久化（关键操作写入）
+- [ ] 10.12 HTTP：诊断/审计路由骨架（不联调也可运行）
+- [ ] 10.13 文档：诊断/审计示例 payload 与常见错误码
+- [ ] 10.14 Provider：日志采样与脱敏策略（不输出敏感信息）
+- [ ] 10.15 验证：为诊断/审计域补齐最小 contract 校验用例
