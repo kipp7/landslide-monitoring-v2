@@ -1,0 +1,36 @@
+# Git / editor
+.git
+.github
+.cursor
+.vscode
+.idea
+
+# Local env / secrets
+.env
+.env.*
+infra/compose/.env
+
+# Node / build outputs
+node_modules
+**/node_modules
+dist
+**/dist
+build
+**/build
+out
+**/out
+.next
+**/.next
+.next_v2*
+**/.next_v2*
+
+# Local data / backups
+data
+volumes
+backups
+
+# Logs / archives
+*.log
+*.rar
+*.zip
+

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import useSensorData from '../hooks/useSensorData'
+import { getApiAuthHeaders } from '../../../../lib/v2Api'
 
 interface PredictionData {
   analysis: string
@@ -36,6 +37,7 @@ const AIPredictionComponent = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...getApiAuthHeaders(),
         },
         body: JSON.stringify({
           sensorData: sensorData || [],

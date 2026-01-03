@@ -1,0 +1,25 @@
+.desk-basecard {
+  transition: transform 150ms ease;
+}
+
+.desk-basecard:hover {
+  transform: scale(1.01);
+}
+
+.desk-basecard-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 12px;
+}
+
+.desk-basecard-title {
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 12px;
+}
+
+.desk-basecard-extra {
+  flex: none;
+}
+

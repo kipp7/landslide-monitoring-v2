@@ -26,6 +26,10 @@ export function getStoredRefreshToken(): string | undefined {
 
 export function setStoredTokens(tokens: Partial<AuthTokens>): void {
   if (!canUseStorage()) return
+
+  const prevAccess = window.localStorage.getItem(ACCESS_KEY)
+  const prevRefresh = window.localStorage.getItem(REFRESH_KEY)
+
   if (tokens.accessToken !== undefined) {
     const v = tokens.accessToken.trim()
     if (v) window.localStorage.setItem(ACCESS_KEY, v)
@@ -36,13 +40,20 @@ export function setStoredTokens(tokens: Partial<AuthTokens>): void {
     if (v) window.localStorage.setItem(REFRESH_KEY, v)
     else window.localStorage.removeItem(REFRESH_KEY)
   }
-  window.dispatchEvent(new Event('lsmv2-auth-changed'))
+
+  const nextAccess = window.localStorage.getItem(ACCESS_KEY)
+  const nextRefresh = window.localStorage.getItem(REFRESH_KEY)
+  if (prevAccess !== nextAccess || prevRefresh !== nextRefresh) {
+    window.dispatchEvent(new Event('lsmv2-auth-changed'))
+  }
 }
 
 export function clearStoredTokens(): void {
   if (!canUseStorage()) return
+  const prevAccess = window.localStorage.getItem(ACCESS_KEY)
+  const prevRefresh = window.localStorage.getItem(REFRESH_KEY)
+  if (prevAccess === null && prevRefresh === null) return
   window.localStorage.removeItem(ACCESS_KEY)
   window.localStorage.removeItem(REFRESH_KEY)
   window.dispatchEvent(new Event('lsmv2-auth-changed'))
 }
-

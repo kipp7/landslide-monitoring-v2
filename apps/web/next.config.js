@@ -1,7 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Workaround (Windows): avoid `.next/trace` permission/lock issues that can hang `next build`.
-  distDir: '.next_v2',
+  distDir: '.next_web',
+  reactStrictMode: false,
   // 抑制 React 版本兼容性警告
   onDemandEntries: {
     // 开发模式下的配置

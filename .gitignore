@@ -26,9 +26,16 @@ yarn-error.log*
 # Node / Next.js
 node_modules/
 .next/
+.next_v2_dev/
+.next_v2_build/
 dist/
 build/
 out/
+
+# .NET
+.vs/
+**/bin/
+**/obj/
 
 # Flutter / Dart
 .dart_tool/
@@ -49,6 +56,9 @@ venv/
 /data/
 /volumes/
 /backups/
+
+# Tools (installed separately)
+/OpenSpec-main/
 
 # Local scratch docs
 database_table_analysis.md

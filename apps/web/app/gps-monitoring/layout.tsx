@@ -11,7 +11,9 @@ export default function GpsMonitoringLayout({ children }: { children: React.Reac
   const { user, loading } = useAuth()
   const tokenPresent = Boolean(getApiBearerToken())
 
-  if (loading) return <div className="p-6">Loading…</div>
+  // Don't block rendering on `AuthProvider` loading for this page.
+  // In local-dev "static bearer" mode, `/api/v1/auth/me` can be 401 and toggling `loading`
+  // would cause a visible "Loading…" flash loop.
 
   if (!tokenPresent) {
     return (
@@ -24,7 +26,9 @@ export default function GpsMonitoringLayout({ children }: { children: React.Reac
     )
   }
 
-  if (user && !user.permissions.includes('data:analysis')) {
+  // If the user is logged-in via JWT, enforce permission check.
+  // In "static bearer" mode, `user` can be null; allow access as long as token is present.
+  if (!loading && user && !user.permissions.includes('data:analysis')) {
     return (
       <Card>
         <Text type="danger">无权限访问（需要 `data:analysis` 权限）</Text>

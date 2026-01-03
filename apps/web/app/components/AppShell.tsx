@@ -18,6 +18,24 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const { user, loading, logout } = useAuth()
 
+  // Full-screen legacy pages: they already include their own sidebar/layout (HoverSidebar etc),
+  // so wrapping them with the global top menu layout would cause duplicated menus / broken sizing.
+  const fullScreenPaths = new Set([
+    '/',
+    '/login',
+    '/analysis',
+    '/analysis-legacy',
+    '/device-management',
+    '/gps-monitoring',
+    '/baseline-management',
+    '/optimized-demo',
+    '/system-monitor',
+  ])
+
+  if (fullScreenPaths.has(pathname)) {
+    return <>{children}</>
+  }
+
   const items = (() => {
     const base = [
       { key: '/analysis', label: '概览' },

@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { Card, Typography } from 'antd'
+import { getApiBearerToken } from '../../lib/v2Api'
 import { useAuth } from '../components/AuthProvider'
 
 const { Text } = Typography
@@ -13,10 +14,9 @@ function hasAnyPermission(perms: string[] | undefined, required: string[]): bool
 
 export default function DataLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
+  const tokenPresent = Boolean(getApiBearerToken())
 
-  if (loading) return <div className="p-6">Loading…</div>
-
-  if (!user) {
+  if (!tokenPresent) {
     return (
       <Card>
         <Text type="secondary">
@@ -26,15 +26,16 @@ export default function DataLayout({ children }: { children: React.ReactNode }) 
     )
   }
 
-  const ok = hasAnyPermission(user.permissions, ['data:view', 'data:analysis', 'data:export'])
-  if (!ok) {
-    return (
-      <Card>
-        <Text type="danger">无权限访问（需要 data:view / data:analysis / data:export 权限）</Text>
-      </Card>
-    )
+  if (!loading && user) {
+    const ok = hasAnyPermission(user.permissions, ['data:view', 'data:analysis', 'data:export'])
+    if (!ok) {
+      return (
+        <Card>
+          <Text type="danger">无权限访问（需要 data:view / data:analysis / data:export 权限）</Text>
+        </Card>
+      )
+    }
   }
 
   return <>{children}</>
 }
-
