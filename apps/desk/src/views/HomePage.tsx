@@ -3,10 +3,13 @@ import { App as AntApp, Button, Skeleton, Space, Typography } from "antd";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import type { DashboardSummary, Device } from "../api/client";
+import type { DashboardSummary, Device, Station } from "../api/client";
 import { useApi } from "../api/ApiProvider";
 import { BaseCard } from "../components/BaseCard";
 import { StatusTag } from "../components/StatusTag";
+import { HomeAnnouncementsCard } from "./home/HomeAnnouncementsCard";
+import { HomeKeySitesCard } from "./home/HomeKeySitesCard";
+import { HomeTodosCard } from "./home/HomeTodosCard";
 import "./home.css";
 
 type HomeAnomaly = {
@@ -30,15 +33,17 @@ export function HomePage() {
   const { message } = AntApp.useApp();
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [stations, setStations] = useState<Station[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
   const [updatedAt, setUpdatedAt] = useState<string>("");
 
   const load = async (silent?: boolean) => {
     if (!silent) setLoading(true);
     try {
-      const [s, d] = await Promise.all([api.dashboard.getSummary(), api.devices.list()]);
+      const [s, d, st] = await Promise.all([api.dashboard.getSummary(), api.devices.list(), api.stations.list()]);
       setSummary(s);
       setDevices(d);
+      setStations(st);
       setUpdatedAt(new Date().toLocaleString("zh-CN"));
       if (silent) message.success("已刷新");
     } catch (err) {
@@ -91,7 +96,7 @@ export function HomePage() {
       </div>
 
       <div className="desk-home-grid">
-        <div style={{ display: "grid", gridTemplateRows: "220px 1fr", gap: 12, minHeight: 0 }}>
+        <div className="desk-home-col">
           <BaseCard title="关键指标" extra={summary ? <span style={{ color: health.color, fontWeight: 900 }}>健康：{health.text}</span> : null}>
             {loading ? (
               <div style={{ padding: 10 }}>
@@ -122,6 +127,8 @@ export function HomePage() {
               </div>
             )}
           </BaseCard>
+
+          <HomeTodosCard loading={loading} stations={stations} devices={devices} />
 
           <BaseCard title="快捷入口">
             <div className="desk-home-shortcuts">
@@ -192,7 +199,7 @@ export function HomePage() {
           </BaseCard>
         </div>
 
-        <div style={{ display: "grid", gridTemplateRows: "1fr", gap: 12, minHeight: 0 }}>
+        <div className="desk-home-col">
           <BaseCard
             title="最新异常设备（Mock）"
             extra={
@@ -226,6 +233,9 @@ export function HomePage() {
               )}
             </div>
           </BaseCard>
+
+          <HomeKeySitesCard loading={loading} stations={stations} devices={devices} />
+          <HomeAnnouncementsCard loading={loading} />
         </div>
       </div>
     </div>

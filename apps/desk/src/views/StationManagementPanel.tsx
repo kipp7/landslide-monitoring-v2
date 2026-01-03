@@ -167,7 +167,7 @@ function hierarchyData(stations: MonitoringStation[]) {
   return { mainRegion, mainNetwork, additionalRegions, allRegions: [mainRegion, ...additionalRegions] };
 }
 
-export function StationManagementPanel(props: { className?: string; style?: React.CSSProperties }) {
+export function StationManagementPanel(props: { className?: string; style?: React.CSSProperties; initialStationId?: string | null }) {
   const api = useApi();
   const { message } = AntApp.useApp();
   const [viewMode, setViewMode] = useState<ViewMode>("list");
@@ -180,6 +180,11 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
   const [edit, setEdit] = useState<EditState>({ open: false });
   const [legend, setLegend] = useState<LegendState>({ open: false });
   const [detailStationId, setDetailStationId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!props.initialStationId) return;
+    setDetailStationId(props.initialStationId);
+  }, [props.initialStationId]);
 
   const [form] = Form.useForm<{
     stationId: string;

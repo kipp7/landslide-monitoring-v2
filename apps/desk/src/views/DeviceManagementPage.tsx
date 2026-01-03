@@ -83,8 +83,12 @@ export function DeviceManagementPage() {
   const [controlLogs, setControlLogs] = useState<ControlLogRow[]>([]);
 
   useEffect(() => {
-    const tab = new URLSearchParams(location.search).get("tab");
+    const params = new URLSearchParams(location.search);
+    const tab = params.get("tab");
     if (tab === "status" || tab === "management" || tab === "baselines") setActiveTab(tab);
+
+    const qDeviceId = params.get("deviceId");
+    if (qDeviceId) setSelectedDeviceId(qDeviceId);
   }, [location.search]);
 
   const setTab = (tab: TabKey) => {
@@ -101,6 +105,8 @@ export function DeviceManagementPage() {
     return () => clearInterval(timer);
   }, []);
 
+  const queryStationId = useMemo(() => new URLSearchParams(location.search).get("stationId"), [location.search]);
+
   useEffect(() => {
     const abort = new AbortController();
     setLoading(true);
@@ -112,7 +118,10 @@ export function DeviceManagementPage() {
         setStations(s);
         setDevices(d);
         setBaselines(b);
-        setSelectedDeviceId((prev) => prev || d[0]?.id || "");
+        setSelectedDeviceId((prev) => {
+          if (prev && d.some((x) => x.id === prev)) return prev;
+          return d[0]?.id || "";
+        });
         setLastUpdateTime(new Date().toLocaleTimeString("zh-CN"));
       } catch (err) {
         if (abort.signal.aborted) return;
@@ -775,7 +784,7 @@ export function DeviceManagementPage() {
 
       {activeTab === "management" ? (
         <div className="desk-dm-content">
-          <StationManagementPanel style={{ height: "calc(100vh - 216px)" }} />
+          <StationManagementPanel style={{ height: "calc(100vh - 216px)" }} initialStationId={queryStationId} />
         </div>
       ) : null}
 
