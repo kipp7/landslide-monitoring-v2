@@ -5,6 +5,20 @@
 ## 权威文档入口（Docs Hub）
 
 - `docs/README.md`
+- 本地启动（Windows）：`docs/LOCAL_DEV.md`
+- API/鉴权/数据格式快速测试：`docs/guides/testing/api-tools.md`
+- 生产部署（Docker Compose）：`docs/PRODUCTION.md`
+
+## 快速启动（Windows）
+
+```powershell
+cd "E:\学校\02 项目\99 山体滑坡优化完善\landslide-monitoring-v2"
+npm install
+powershell -ExecutionPolicy Bypass -File scripts/dev/start-local.ps1 -ForceKillPorts
+```
+
+- Web：`http://localhost:3000/analysis`
+- API：`http://localhost:8080/health`
 
 ## 目录结构（v2 目标）
 

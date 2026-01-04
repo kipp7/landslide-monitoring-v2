@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "cross-env NODE_OPTIONS=--max-old-space-size=8192 NEXT_DIST_DIR=.next_dev next dev --port 3000",
+    "dev:webpack": "cross-env NODE_OPTIONS=--max-old-space-size=8192 NEXT_DIST_DIR=.next_dev next dev --port 3000",
+    "dev:turbopack": "cross-env NODE_OPTIONS=--max-old-space-size=8192 NEXT_DIST_DIR=.next_dev next dev --turbopack --port 3000",
     "build": "node scripts/next-build.mjs",
     "start": "next start",
     "lint": "next lint",

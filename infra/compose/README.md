@@ -24,7 +24,8 @@
 
 2. 修改密码与数据目录：
 
-   - 编辑 `infra/compose/.env`，至少修改 `PG_PASSWORD`、`CH_PASSWORD`、`REDIS_PASSWORD`、`EMQX_DASHBOARD_PASSWORD`、`JWT_SECRET`
+   - 编辑 `infra/compose/.env`，至少修改 `PG_PASSWORD`、`CH_PASSWORD`、`REDIS_PASSWORD`、`EMQX_DASHBOARD_PASSWORD`
+   - 如果你要跑全栈（含 api + web），并且开启登录：还需要设置 `JWT_ACCESS_SECRET`、`JWT_REFRESH_SECRET`
    - `DATA_DIR` 默认指向仓库根目录下 `data/`（推荐保留）
 
 3. 启动基础设施：
@@ -49,7 +50,7 @@
 默认开启在 profile `ops` 下：
 
 - 启动（含 UI）：`docker compose -f infra/compose/docker-compose.yml --env-file infra/compose/.env --profile ops up -d`
-- 访问：`http://localhost:8080`
+- 访问：默认 `http://localhost:8081`（可通过 `.env` 的 `KAFKA_UI_PORT` 修改）
 
 ### 3.2 EMQX Dashboard
 

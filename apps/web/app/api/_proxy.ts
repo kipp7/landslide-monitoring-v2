@@ -22,6 +22,12 @@ function buildForwardHeaders(request: Request): Headers {
   return headers
 }
 
+function getDefaultBearerToken(): string | undefined {
+  const raw = process.env.NEXT_PUBLIC_API_BEARER_TOKEN ?? process.env.API_BEARER_TOKEN
+  const token = raw?.trim()
+  return token ? token : undefined
+}
+
 export async function proxyLegacyApiRequest(request: Request): Promise<Response> {
   const base = getProxyBaseUrl()
   if (!base) {
@@ -44,6 +50,10 @@ export async function proxyLegacyApiRequest(request: Request): Promise<Response>
   const targetUrl = `${base}${incoming.pathname}${incoming.search}`
 
   const headers = buildForwardHeaders(request)
+  if (!headers.has('authorization')) {
+    const token = getDefaultBearerToken()
+    if (token) headers.set('authorization', `Bearer ${token}`)
+  }
   const init: RequestInit & { duplex?: 'half' } = {
     method: request.method,
     headers,
@@ -67,4 +77,3 @@ export async function proxyLegacyApiRequest(request: Request): Promise<Response>
 
   return new Response(resp.body, { status: resp.status, headers: outHeaders })
 }
-

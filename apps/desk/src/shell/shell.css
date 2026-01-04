@@ -1,0 +1,20 @@
+.desk-app {
+  min-height: 100vh;
+  position: relative;
+  overflow: hidden;
+  background: radial-gradient(circle at 15% 10%, rgba(34, 211, 238, 0.16), transparent 45%),
+    radial-gradient(circle at 85% 80%, rgba(96, 165, 250, 0.14), transparent 45%),
+    linear-gradient(135deg, #0f172a 0%, #1e293b 55%, #0f172a 100%);
+}
+
+.desk-topright {
+  position: fixed;
+  top: 12px;
+  right: 16px;
+  z-index: 1100;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(34, 211, 238, 0.14);
+  background: rgba(15, 23, 42, 0.35);
+  backdrop-filter: blur(8px);
+}

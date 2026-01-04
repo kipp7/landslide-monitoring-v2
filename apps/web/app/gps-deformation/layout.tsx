@@ -11,8 +11,6 @@ export default function GpsDeformationLayout({ children }: { children: React.Rea
   const { user, loading } = useAuth()
   const tokenPresent = Boolean(getApiBearerToken())
 
-  if (loading) return <div className="p-6">Loading…</div>
-
   if (!tokenPresent) {
     return (
       <Card>
@@ -24,7 +22,7 @@ export default function GpsDeformationLayout({ children }: { children: React.Rea
     )
   }
 
-  if (user && !user.permissions.includes('data:analysis')) {
+  if (!loading && user && !user.permissions.includes('data:analysis')) {
     return (
       <Card>
         <Text type="danger">无权限访问（需要 `data:analysis` 权限）</Text>
@@ -34,4 +32,3 @@ export default function GpsDeformationLayout({ children }: { children: React.Rea
 
   return <>{children}</>
 }
-

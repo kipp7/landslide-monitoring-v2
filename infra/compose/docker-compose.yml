@@ -129,7 +129,8 @@ services:
       KAFKA_CLUSTERS_0_NAME: local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
     ports:
-      - "8080:8080"
+      # Avoid conflict with api-service (default 8080 in docker-compose.app.yml).
+      - "${KAFKA_UI_PORT:-8081}:8080"
     depends_on:
       kafka:
         condition: service_healthy

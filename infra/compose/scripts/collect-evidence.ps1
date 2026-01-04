@@ -17,11 +17,11 @@ function Redact-Secrets([string]$content) {
 
   # Common key=value patterns
   $out = $out -replace '(?im)^(.*?(PASSWORD|SECRET|TOKEN)\s*=\s*).+$', '$1***REDACTED***'
-  $out = $out -replace '(?im)^(.*?(PG_PASSWORD|REDIS_PASSWORD|CH_PASSWORD|JWT_SECRET|EMQX_DASHBOARD_PASSWORD|EMQX_WEBHOOK_TOKEN|MQTT_INTERNAL_PASSWORD)\s*=\s*).+$', '$1***REDACTED***'
+  $out = $out -replace '(?im)^(.*?(PG_PASSWORD|REDIS_PASSWORD|CH_PASSWORD|JWT_ACCESS_SECRET|JWT_REFRESH_SECRET|EMQX_DASHBOARD_PASSWORD|EMQX_WEBHOOK_TOKEN|MQTT_INTERNAL_PASSWORD)\s*=\s*).+$', '$1***REDACTED***'
 
   # YAML-ish patterns (compose config, env lists)
   $out = $out -replace '(?im)^(\s*(password|secret|token)\s*:\s*).+$', '$1***REDACTED***'
-  $out = $out -replace '(?im)^(\s*(PG_PASSWORD|REDIS_PASSWORD|CH_PASSWORD|JWT_SECRET|EMQX_DASHBOARD_PASSWORD|EMQX_WEBHOOK_TOKEN|MQTT_INTERNAL_PASSWORD)\s*:\s*).+$', '$1***REDACTED***'
+  $out = $out -replace '(?im)^(\s*(PG_PASSWORD|REDIS_PASSWORD|CH_PASSWORD|JWT_ACCESS_SECRET|JWT_REFRESH_SECRET|EMQX_DASHBOARD_PASSWORD|EMQX_WEBHOOK_TOKEN|MQTT_INTERNAL_PASSWORD)\s*:\s*).+$', '$1***REDACTED***'
 
   # Very common "Authorization: Bearer xxx" cases
   $out = $out -replace '(?im)^(authorization:\s*bearer\s+).+$', '$1***REDACTED***'
