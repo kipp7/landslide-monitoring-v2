@@ -1,0 +1,80 @@
+# Full stack composition (adds app services on top of infra/compose/docker-compose.yml)
+#
+# Usage:
+# - Copy env: `copy infra/compose/env.example infra/compose/.env` (then edit secrets)
+# - Start: `docker compose -f infra/compose/docker-compose.yml -f infra/compose/docker-compose.app.yml --env-file infra/compose/.env up -d`
+
+services:
+  # Attach schema init scripts (only runs automatically on first init when the data dir is empty).
+  postgres:
+    volumes:
+      - ../../docs/integrations/storage/postgres/tables:/docker-entrypoint-initdb.d:ro
+
+  # ClickHouse image supports init scripts in /docker-entrypoint-initdb.d (safe here thanks to IF NOT EXISTS).
+  clickhouse:
+    volumes:
+      - ../../docs/integrations/storage/clickhouse:/docker-entrypoint-initdb.d:ro
+
+  api:
+    image: lsmv2/api-service:latest
+    build:
+      context: ../..
+      dockerfile: services/api/Dockerfile
+    container_name: lsmv2_api
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: api-service
+      API_HOST: 0.0.0.0
+      API_PORT: 8080
+
+      # Security (set in infra/compose/.env)
+      AUTH_REQUIRED: ${AUTH_REQUIRED:-true}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-}
+      ADMIN_API_TOKEN: ${ADMIN_API_TOKEN:-}
+      DB_ADMIN_ENABLED: ${DB_ADMIN_ENABLED:-false}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+
+      # Postgres (inside compose network)
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: ${PG_PORT:-5432}
+      POSTGRES_USER: ${PG_USER:-landslide}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-change-me}
+      POSTGRES_DATABASE: ${PG_DATABASE:-landslide_monitor}
+
+      # ClickHouse (inside compose network)
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_USERNAME: ${CH_USER:-landslide}
+      CLICKHOUSE_PASSWORD: ${CH_PASSWORD:-change-me}
+      CLICKHOUSE_DATABASE: ${CH_DATABASE:-landslide}
+
+      # Optional integrations
+      KAFKA_BROKERS: ${KAFKA_BROKERS:-}
+      MQTT_INTERNAL_USERNAME: ${MQTT_INTERNAL_USERNAME:-ingest-service}
+      MQTT_INTERNAL_PASSWORD: ${MQTT_INTERNAL_PASSWORD:-}
+      EMQX_WEBHOOK_TOKEN: ${EMQX_WEBHOOK_TOKEN:-}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+
+  web:
+    image: lsmv2/web:latest
+    build:
+      context: ../../apps/web
+      dockerfile: Dockerfile
+    container_name: lsmv2_web
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: "1"
+      # Next server-side proxy target (apps/web/app/api/*).
+      API_BASE_URL: http://api:8080
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_started

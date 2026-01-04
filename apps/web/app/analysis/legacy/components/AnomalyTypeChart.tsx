@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react'
 import * as echarts from 'echarts'
+import { getApiAuthHeaders } from '../../../../lib/v2Api'
 
 interface AnomalyData {
   anomaly_type: string
@@ -37,6 +38,7 @@ const AnomalyTypeChart = () => {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
+          ...getApiAuthHeaders(),
         },
       })
 

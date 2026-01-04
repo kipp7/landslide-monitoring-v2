@@ -23,6 +23,7 @@
 补充：
 
 - 换窗口/换模型/换 AI 的交接指南：`docs/guides/ai/handoff.md`
+- Desk（桌面端）AI 记忆：`docs/guides/ai/desk-memory.md`
 
 ## 3. Hooks 建议（实现阶段）
 
