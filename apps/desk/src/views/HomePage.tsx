@@ -96,147 +96,148 @@ export function HomePage() {
       </div>
 
       <div className="desk-home-grid">
-        <div className="desk-home-col">
-          <BaseCard title="关键指标" extra={summary ? <span style={{ color: health.color, fontWeight: 900 }}>健康：{health.text}</span> : null}>
+        <BaseCard
+          className="desk-home-metrics-card"
+          title="关键指标"
+          extra={summary ? <span style={{ color: health.color, fontWeight: 900 }}>健康：{health.text}</span> : null}
+        >
+          {loading ? (
+            <div style={{ padding: 10 }}>
+              <Skeleton active paragraph={{ rows: 3 }} />
+            </div>
+          ) : (
+            <div className="desk-home-metrics">
+              <div className="desk-home-metric">
+                <div className="desk-home-metric-label">监测点</div>
+                <div className="desk-home-metric-value">{String(summary?.stationCount ?? 0)}</div>
+                <div className="desk-home-metric-sub">覆盖区域：3（Mock）</div>
+              </div>
+              <div className="desk-home-metric">
+                <div className="desk-home-metric-label">在线设备</div>
+                <div className="desk-home-metric-value">{String(summary?.deviceOnlineCount ?? 0)}</div>
+                <div className="desk-home-metric-sub">采集链路：正常（Mock）</div>
+              </div>
+              <div className="desk-home-metric">
+                <div className="desk-home-metric-label">今日预警</div>
+                <div className="desk-home-metric-value">{String(summary?.alertCountToday ?? 0)}</div>
+                <div className="desk-home-metric-sub">规则：默认策略（Mock）</div>
+              </div>
+              <div className="desk-home-metric">
+                <div className="desk-home-metric-label">系统健康度</div>
+                <div className="desk-home-metric-value">{String(summary?.systemHealthPercent ?? 0)}%</div>
+                <div className="desk-home-metric-sub">状态：{health.text}</div>
+              </div>
+            </div>
+          )}
+        </BaseCard>
+
+        <BaseCard
+          className="desk-home-anomalies-card"
+          title="最新异常设备（Mock）"
+          extra={
+            <Button
+              size="small"
+              onClick={() => {
+                navigate("/app/analysis");
+              }}
+            >
+              查看更多
+            </Button>
+          }
+        >
+          <div className="desk-home-anomaly">
             {loading ? (
-              <div style={{ padding: 10 }}>
-                <Skeleton active paragraph={{ rows: 3 }} />
-              </div>
-            ) : (
-              <div className="desk-home-metrics">
-                <div className="desk-home-metric">
-                  <div className="desk-home-metric-label">监测点</div>
-                  <div className="desk-home-metric-value">{String(summary?.stationCount ?? 0)}</div>
-                  <div className="desk-home-metric-sub">覆盖区域：3（Mock）</div>
-                </div>
-                <div className="desk-home-metric">
-                  <div className="desk-home-metric-label">在线设备</div>
-                  <div className="desk-home-metric-value">{String(summary?.deviceOnlineCount ?? 0)}</div>
-                  <div className="desk-home-metric-sub">采集链路：正常（Mock）</div>
-                </div>
-                <div className="desk-home-metric">
-                  <div className="desk-home-metric-label">今日预警</div>
-                  <div className="desk-home-metric-value">{String(summary?.alertCountToday ?? 0)}</div>
-                  <div className="desk-home-metric-sub">规则：默认策略（Mock）</div>
-                </div>
-                <div className="desk-home-metric">
-                  <div className="desk-home-metric-label">系统健康度</div>
-                  <div className="desk-home-metric-value">{String(summary?.systemHealthPercent ?? 0)}%</div>
-                  <div className="desk-home-metric-sub">状态：{health.text}</div>
-                </div>
-              </div>
-            )}
-          </BaseCard>
-
-          <HomeTodosCard loading={loading} stations={stations} devices={devices} />
-
-          <BaseCard title="快捷入口">
-            <div className="desk-home-shortcuts">
-              <div className="desk-home-shortcut">
-                <div className="desk-home-shortcut-title">数据分析大屏</div>
-                <div className="desk-home-shortcut-desc">总览、实时异常、趋势图与 AI 提示（Mock）。</div>
-                <div style={{ marginTop: "auto" }}>
-                  <Button
-                    type="primary"
-                    icon={<ArrowRightOutlined />}
-                    onClick={() => {
-                      navigate("/app/analysis");
-                    }}
-                  >
-                    进入
-                  </Button>
-                </div>
-              </div>
-
-              <div className="desk-home-shortcut">
-                <div className="desk-home-shortcut-title">设备管理中心</div>
-                <div className="desk-home-shortcut-desc">设备状态监控、站点管理、基线管理与控制面板。</div>
-                <div style={{ marginTop: "auto" }}>
-                  <Button
-                    type="primary"
-                    icon={<ArrowRightOutlined />}
-                    onClick={() => {
-                      navigate("/app/device-management");
-                    }}
-                  >
-                    进入
-                  </Button>
-                </div>
-              </div>
-
-              <div className="desk-home-shortcut">
-                <div className="desk-home-shortcut-title">GPS 形变监测</div>
-                <div className="desk-home-shortcut-desc">位移曲线、阈值配置、预测趋势与导出入口（Mock）。</div>
-                <div style={{ marginTop: "auto" }}>
-                  <Button
-                    type="primary"
-                    icon={<ArrowRightOutlined />}
-                    onClick={() => {
-                      navigate("/app/gps-monitoring");
-                    }}
-                  >
-                    进入
-                  </Button>
-                </div>
-              </div>
-
-              <div className="desk-home-shortcut">
-                <div className="desk-home-shortcut-title">系统设置</div>
-                <div className="desk-home-shortcut-desc">Mock / HTTP 切换、调试参数与退出登录。</div>
-                <div style={{ marginTop: "auto" }}>
-                  <Button
-                    type="primary"
-                    icon={<ArrowRightOutlined />}
-                    onClick={() => {
-                      navigate("/app/settings");
-                    }}
-                  >
-                    进入
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </BaseCard>
-        </div>
-
-        <div className="desk-home-col">
-          <BaseCard
-            title="最新异常设备（Mock）"
-            extra={
-              <Button
-                size="small"
-                onClick={() => {
-                  navigate("/app/analysis");
-                }}
-              >
-                查看更多
-              </Button>
-            }
-          >
-            <div className="desk-home-anomaly">
-              {loading ? (
-                <Skeleton active paragraph={{ rows: 6 }} />
-              ) : anomalies.length ? (
-                anomalies.map((r) => (
-                  <div className="desk-home-anomaly-row" key={r.id}>
-                    <div className="desk-home-anomaly-left">
-                      <div className="desk-home-anomaly-name">{r.deviceName}</div>
-                      <div className="desk-home-anomaly-meta">
-                        {r.stationName} · {r.time}
-                      </div>
+              <Skeleton active paragraph={{ rows: 6 }} />
+            ) : anomalies.length ? (
+              anomalies.map((r) => (
+                <div className="desk-home-anomaly-row" key={r.id}>
+                  <div className="desk-home-anomaly-left">
+                    <div className="desk-home-anomaly-name">{r.deviceName}</div>
+                    <div className="desk-home-anomaly-meta">
+                      {r.stationName} · {r.time}
                     </div>
-                    <StatusTag value={r.status} />
                   </div>
-                ))
-              ) : (
-                <Typography.Text type="secondary">当前无异常（Mock）</Typography.Text>
-              )}
-            </div>
-          </BaseCard>
+                  <StatusTag value={r.status} />
+                </div>
+              ))
+            ) : (
+              <Typography.Text type="secondary">当前无异常（Mock）</Typography.Text>
+            )}
+          </div>
+        </BaseCard>
 
-          <HomeKeySitesCard loading={loading} stations={stations} devices={devices} />
-          <HomeAnnouncementsCard loading={loading} />
-        </div>
+        <HomeTodosCard className="desk-home-todos-card" loading={loading} stations={stations} devices={devices} />
+        <HomeKeySitesCard className="desk-home-sites-card" loading={loading} stations={stations} devices={devices} />
+
+        <BaseCard className="desk-home-shortcuts-card" title="快捷入口">
+          <div className="desk-home-shortcuts">
+            <div className="desk-home-shortcut">
+              <div className="desk-home-shortcut-title">数据分析大屏</div>
+              <div className="desk-home-shortcut-desc">总览、实时异常、趋势图与 AI 提示（Mock）。</div>
+              <div style={{ marginTop: "auto" }}>
+                <Button
+                  type="primary"
+                  icon={<ArrowRightOutlined />}
+                  onClick={() => {
+                    navigate("/app/analysis");
+                  }}
+                >
+                  进入
+                </Button>
+              </div>
+            </div>
+
+            <div className="desk-home-shortcut">
+              <div className="desk-home-shortcut-title">设备管理中心</div>
+              <div className="desk-home-shortcut-desc">设备状态监控、站点管理、基线管理与控制面板。</div>
+              <div style={{ marginTop: "auto" }}>
+                <Button
+                  type="primary"
+                  icon={<ArrowRightOutlined />}
+                  onClick={() => {
+                    navigate("/app/device-management");
+                  }}
+                >
+                  进入
+                </Button>
+              </div>
+            </div>
+
+            <div className="desk-home-shortcut">
+              <div className="desk-home-shortcut-title">GPS 形变监测</div>
+              <div className="desk-home-shortcut-desc">位移曲线、阈值配置、预测趋势与导出入口（Mock）。</div>
+              <div style={{ marginTop: "auto" }}>
+                <Button
+                  type="primary"
+                  icon={<ArrowRightOutlined />}
+                  onClick={() => {
+                    navigate("/app/gps-monitoring");
+                  }}
+                >
+                  进入
+                </Button>
+              </div>
+            </div>
+
+            <div className="desk-home-shortcut">
+              <div className="desk-home-shortcut-title">系统设置</div>
+              <div className="desk-home-shortcut-desc">Mock / HTTP 切换、调试参数与退出登录。</div>
+              <div style={{ marginTop: "auto" }}>
+                <Button
+                  type="primary"
+                  icon={<ArrowRightOutlined />}
+                  onClick={() => {
+                    navigate("/app/settings");
+                  }}
+                >
+                  进入
+                </Button>
+              </div>
+            </div>
+          </div>
+        </BaseCard>
+
+        <HomeAnnouncementsCard className="desk-home-announcements-card" loading={loading} />
       </div>
     </div>
   );

@@ -99,6 +99,17 @@ npm run dev
 Invoke-WebRequest "http://localhost:8080/api/inspect-db" -UseBasicParsing -Headers @{ Authorization="Bearer dev" } | Select-Object -ExpandProperty Content
 ```
 
+## 设备上报模拟（按生产链路）
+
+如果你要模拟“单片机/设备上报 → 后端入库 → 前端能查到”，推荐直接跑一键端到端冒烟：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File infra/compose/scripts/e2e-smoke-test.ps1 -Stage1Regression
+```
+
+- 说明与更多用例：`docs/guides/testing/e2e-smoke-test.md`
+- 设备侧（MQTT）脚本：`scripts/dev/firmware-sim.js`、`scripts/dev/publish-telemetry.js`
+
 ## 常见问题
 
 - 端口占用（以 8080 为例）：

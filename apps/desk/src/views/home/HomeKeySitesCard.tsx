@@ -9,7 +9,7 @@ import { RiskTag } from "../../components/RiskTag";
 import { StatusTag } from "../../components/StatusTag";
 import { loadPins, savePins } from "./homePersist";
 
-export function HomeKeySitesCard(props: { loading: boolean; stations: Station[]; devices: Device[] }) {
+export function HomeKeySitesCard(props: { loading: boolean; stations: Station[]; devices: Device[]; className?: string }) {
   const navigate = useNavigate();
   const { message } = AntApp.useApp();
   const [pinnedStationIds, setPinnedStationIds] = useState<string[]>(() => loadPins());
@@ -102,6 +102,7 @@ export function HomeKeySitesCard(props: { loading: boolean; stations: Station[];
 
   return (
     <BaseCard
+      className={props.className}
       title="重点站点"
       extra={
         <Button
@@ -187,4 +188,3 @@ export function HomeKeySitesCard(props: { loading: boolean; stations: Station[];
     </BaseCard>
   );
 }
-

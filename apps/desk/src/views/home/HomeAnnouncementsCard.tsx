@@ -16,7 +16,7 @@ import {
 } from "./homePersist";
 import type { HomeAnnouncement, HomeAnnouncementLevel, HomeAnnouncementPersist } from "./homePersist";
 
-export function HomeAnnouncementsCard(props: { loading: boolean }) {
+export function HomeAnnouncementsCard(props: { loading: boolean; className?: string }) {
   const navigate = useNavigate();
   const { message, modal } = AntApp.useApp();
   const user = useAuthStore((s) => s.user);
@@ -126,6 +126,7 @@ export function HomeAnnouncementsCard(props: { loading: boolean }) {
   return (
     <>
       <BaseCard
+        className={props.className}
         title={
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
             <BellOutlined /> 系统公告
@@ -247,4 +248,3 @@ export function HomeAnnouncementsCard(props: { loading: boolean }) {
     </>
   );
 }
-

@@ -8,7 +8,7 @@ import { BaseCard } from "../../components/BaseCard";
 import { buildSystemTasks, createId, loadTodos, priorityLabel, saveTodos } from "./homePersist";
 import type { HomeTask, HomeTaskPriority, HomeTodoPersist } from "./homePersist";
 
-export function HomeTodosCard(props: { loading: boolean; stations: Station[]; devices: Device[] }) {
+export function HomeTodosCard(props: { loading: boolean; stations: Station[]; devices: Device[]; className?: string }) {
   const navigate = useNavigate();
   const { message, modal } = AntApp.useApp();
   const [persist, setPersist] = useState<HomeTodoPersist>(() => loadTodos());
@@ -203,6 +203,7 @@ export function HomeTodosCard(props: { loading: boolean; stations: Station[]; de
   return (
     <>
       <BaseCard
+        className={props.className}
         title="待处理事项"
         extra={
           <Space size={8}>
