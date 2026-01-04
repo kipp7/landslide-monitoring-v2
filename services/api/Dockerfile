@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1
-
 FROM node:20-alpine AS deps
 WORKDIR /repo
 
@@ -49,4 +47,3 @@ COPY --from=builder /repo/services/api/dist /repo/services/api/dist
 
 EXPOSE 8080
 CMD ["node", "services/api/dist/index.js"]
-
