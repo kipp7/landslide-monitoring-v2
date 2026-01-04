@@ -91,4 +91,4 @@ Invoke-WebRequest "http://localhost:8080/api/v1/anomaly-assessment?timeWindow=24
 - `502/503`：后端没启动，或 `NEXT_PUBLIC_API_BASE_URL` 配错了
 - `401`：没带 token（或 token 为空）
 - 页面一直 Loading：通常是某个接口一直失败（打开浏览器控制台看是哪个 URL）
-
+- `Module not found ... next/dist/pages/_app.js`：多半是 `apps/web/node_modules/next` 目录“残了”，删掉它后在仓库根目录执行 `npm install` 再试
