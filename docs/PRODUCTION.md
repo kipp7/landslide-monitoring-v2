@@ -49,8 +49,9 @@ docker compose -f infra/compose/docker-compose.yml -f infra/compose/docker-compo
 2) 用管理员 Token 创建用户（示例，按你们需要填 roleIds）：
 
 ```powershell
-$token = "<ADMIN_API_TOKEN>"
-$body = @{ username="admin"; password="change-me-please"; realName="管理员" } | ConvertTo-Json
+$token = Read-Host "ADMIN_API_TOKEN"
+$password = Read-Host "Admin password (set a strong one)"
+$body = @{ username="admin"; password=$password; realName="管理员" } | ConvertTo-Json
 Invoke-RestMethod "http://localhost:8080/api/v1/users" -Method POST -Headers @{ Authorization="Bearer $token" } -ContentType "application/json" -Body $body
 ```
 
