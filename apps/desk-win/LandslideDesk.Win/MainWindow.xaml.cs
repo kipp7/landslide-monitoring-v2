@@ -37,6 +37,11 @@ public partial class MainWindow : Window
     private const int DwmwaWindowCornerPreference = 33;
     private const int DwmwaSystemBackdropType = 38;
 
+    private static readonly nint HwndTopmost = new(-1);
+    private const uint SwpNoSize = 0x0001;
+    private const uint SwpNoMove = 0x0002;
+    private const uint SwpShowWindow = 0x0040;
+
     private string? _devServerUrl;
     private string? _localWebRoot;
     private bool _hasLocalWebAssets;
@@ -55,9 +60,9 @@ public partial class MainWindow : Window
     private nint _windowHandle;
 
     private Forms.NotifyIcon? _trayIcon;
-    private Forms.ContextMenuStrip? _trayMenu;
     private bool _trayHintShown;
     private string? _pendingTrayNotificationRoute;
+    private TrayFlyoutWindow? _trayFlyout;
 
     public MainWindow()
     {
@@ -127,44 +132,10 @@ public partial class MainWindow : Window
 
         try
         {
-            _trayMenu = new Forms.ContextMenuStrip();
-
-            var version = typeof(MainWindow).Assembly.GetName().Version?.ToString() ?? "unknown";
-            var versionItem = new Forms.ToolStripMenuItem($"版本 {version}") { Enabled = false };
-
-            var openItem = new Forms.ToolStripMenuItem("打开主窗口");
-            openItem.Click += (_, _) => Dispatcher.Invoke(ShowFromTray);
-
-            var settingsItem = new Forms.ToolStripMenuItem("系统设置");
-            settingsItem.Click += (_, _) => Dispatcher.Invoke(() =>
-            {
-                ShowFromTray();
-                NavigateToAppRoute("/app/settings");
-            });
-
-            var logsItem = new Forms.ToolStripMenuItem("打开日志目录");
-            logsItem.Click += (_, _) => Dispatcher.Invoke(OpenLogsDirectory);
-
-            var fullscreenItem = new Forms.ToolStripMenuItem("切换全屏 (F11)");
-            fullscreenItem.Click += (_, _) => Dispatcher.Invoke(ToggleFullscreen);
-
-            var exitItem = new Forms.ToolStripMenuItem("退出");
-            exitItem.Click += (_, _) => Dispatcher.Invoke(() => App.RequestAppShutdown());
-
-            _trayMenu.Items.Add(versionItem);
-            _trayMenu.Items.Add(new Forms.ToolStripSeparator());
-            _trayMenu.Items.Add(openItem);
-            _trayMenu.Items.Add(settingsItem);
-            _trayMenu.Items.Add(logsItem);
-            _trayMenu.Items.Add(fullscreenItem);
-            _trayMenu.Items.Add(new Forms.ToolStripSeparator());
-            _trayMenu.Items.Add(exitItem);
-
             _trayIcon = new Forms.NotifyIcon
             {
                 Text = "滑坡监测预警平台",
-                Visible = true,
-                ContextMenuStrip = _trayMenu
+                Visible = true
             };
 
             var exePath = Process.GetCurrentProcess().MainModule?.FileName;
@@ -181,6 +152,13 @@ public partial class MainWindow : Window
 
             _trayIcon.Icon ??= Drawing.SystemIcons.Application;
             _trayIcon.DoubleClick += (_, _) => Dispatcher.Invoke(ShowFromTray);
+            _trayIcon.MouseUp += (_, e) => Dispatcher.Invoke(() =>
+            {
+                if (e.Button == Forms.MouseButtons.Left || e.Button == Forms.MouseButtons.Right)
+                {
+                    ToggleTrayFlyout();
+                }
+            });
             _trayIcon.BalloonTipClicked += (_, _) => Dispatcher.Invoke(() =>
             {
                 var route = _pendingTrayNotificationRoute;
@@ -203,18 +181,111 @@ public partial class MainWindow : Window
     {
         try
         {
+            HideTrayFlyout();
             if (_trayIcon is not null)
             {
                 _trayIcon.Visible = false;
                 _trayIcon.Dispose();
                 _trayIcon = null;
             }
+        }
+        catch
+        {
+        }
+    }
 
-            if (_trayMenu is not null)
+    private void EnsureTrayFlyout()
+    {
+        if (_trayFlyout is not null)
+        {
+            return;
+        }
+
+        _trayFlyout = new TrayFlyoutWindow();
+        _trayFlyout.OpenMainRequested += () => Dispatcher.Invoke(ShowFromTray);
+        _trayFlyout.NavigateRequested += route => Dispatcher.Invoke(() =>
+        {
+            ShowFromTray();
+            NavigateToAppRoute(route);
+        });
+        _trayFlyout.OpenLogsRequested += () => Dispatcher.Invoke(OpenLogsDirectory);
+        _trayFlyout.ToggleFullscreenRequested += () => Dispatcher.Invoke(ToggleFullscreen);
+        _trayFlyout.ReloadRequested += () => Dispatcher.Invoke(() =>
+        {
+            if (DeskWebView.CoreWebView2 is null)
             {
-                _trayMenu.Dispose();
-                _trayMenu = null;
+                return;
             }
+
+            ShowLoading("正在重新加载...");
+            DeskWebView.CoreWebView2.Reload();
+        });
+        _trayFlyout.ExitRequested += () => Dispatcher.Invoke(() => App.RequestAppShutdown());
+    }
+
+    private void ToggleTrayFlyout()
+    {
+        try
+        {
+            EnsureTrayFlyout();
+            if (_trayFlyout is null)
+            {
+                return;
+            }
+
+            if (_trayFlyout.IsVisible)
+            {
+                _trayFlyout.Hide();
+                return;
+            }
+
+            var version = typeof(MainWindow).Assembly.GetName().Version?.ToString() ?? "unknown";
+            var status = ShowInTaskbar ? "应用已打开" : "后台运行中";
+            _trayFlyout.UpdateHeader(version, status);
+            PositionTrayFlyout(_trayFlyout);
+            _trayFlyout.Show();
+            _trayFlyout.Activate();
+        }
+        catch
+        {
+        }
+    }
+
+    private static void PositionTrayFlyout(Window flyout)
+    {
+        try
+        {
+            flyout.Measure(new System.Windows.Size(double.PositiveInfinity, double.PositiveInfinity));
+            flyout.Arrange(new System.Windows.Rect(flyout.DesiredSize));
+            flyout.UpdateLayout();
+        }
+        catch
+        {
+        }
+
+        var workArea = SystemParameters.WorkArea;
+        var flyoutWidth = !double.IsNaN(flyout.Width) && flyout.Width > 0 ? flyout.Width : flyout.DesiredSize.Width;
+        var flyoutHeight = !double.IsNaN(flyout.Height) && flyout.Height > 0 ? flyout.Height : flyout.DesiredSize.Height;
+
+        var left = workArea.Right - flyoutWidth - 14;
+        var top = workArea.Bottom - flyoutHeight - 14;
+
+        flyout.Left = Math.Max(workArea.Left + 8, left);
+        flyout.Top = Math.Max(workArea.Top + 8, top);
+    }
+
+    private void HideTrayFlyout()
+    {
+        try
+        {
+            if (_trayFlyout is null)
+            {
+                return;
+            }
+
+            _trayFlyout.Hide();
+            _trayFlyout.Close();
+            _trayFlyout = null;
         }
         catch
         {
@@ -225,6 +296,11 @@ public partial class MainWindow : Window
     {
         try
         {
+            if (_trayFlyout is not null && _trayFlyout.IsVisible)
+            {
+                _trayFlyout.Hide();
+            }
+
             ShowInTaskbar = true;
             Show();
             if (WindowState == WindowState.Minimized)
@@ -243,6 +319,11 @@ public partial class MainWindow : Window
     {
         try
         {
+            if (_trayFlyout is not null && _trayFlyout.IsVisible)
+            {
+                _trayFlyout.Hide();
+            }
+
             if (_trayIcon is null)
             {
                 WindowState = WindowState.Minimized;
@@ -1097,6 +1178,12 @@ dotnet publish .\LandslideDesk.Win\LandslideDesk.Win.csproj -c Release -r win-x6
         Width = bounds.Width;
         Height = bounds.Height;
 
+        if (_windowHandle != nint.Zero)
+        {
+            SetWindowPos(_windowHandle, HwndTopmost, 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpShowWindow);
+        }
+
+        Activate();
         EnsureFullscreenHotkeys();
     }
 
@@ -1304,6 +1391,9 @@ dotnet publish .\LandslideDesk.Win\LandslideDesk.Win.csproj -c Release -r win-x6
 
     [DllImport("user32.dll")]
     private static extern bool UnregisterHotKey(nint hWnd, int id);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetWindowPos(nint hWnd, nint hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
 
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(nint hwnd, int dwAttribute, ref int pvAttribute, int cbAttribute);

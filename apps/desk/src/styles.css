@@ -198,3 +198,41 @@ body {
   animation-delay: 0s !important;
   scroll-behavior: auto !important;
 }
+
+/* Modern scrollbars (Chromium/WebView2 + Firefox fallback) */
+:root {
+  --desk-scrollbar-thumb: rgba(148, 163, 184, 0.32);
+  --desk-scrollbar-thumb-hover: rgba(34, 211, 238, 0.48);
+  --desk-scrollbar-track: rgba(2, 6, 23, 0.24);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--desk-scrollbar-thumb) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--desk-scrollbar-thumb);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--desk-scrollbar-thumb-hover);
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
