@@ -71,7 +71,10 @@ $requiredImages = @(
   "redis:7-alpine",
   "clickhouse/clickhouse-server:24.10",
   "emqx/emqx:5.7.2",
-  "apache/kafka:3.7.0",
+  "apache/kafka:3.7.0"
+)
+$optionalImages = @(
+  # kafka-ui is only started when using compose profile "ops".
   "provectuslabs/kafka-ui:v0.7.2"
 )
 $missing = 0
@@ -81,6 +84,14 @@ foreach ($img in $requiredImages) {
 if ($missing -gt 0) {
   Write-Host "`nSome images are missing. If Docker Hub is slow/blocked, configure registry mirror in Docker Desktop." -ForegroundColor Yellow
   Write-Host "Then pull images manually or run compose up again." -ForegroundColor Yellow
+}
+
+$optionalMissing = 0
+foreach ($img in $optionalImages) {
+  if (-not (Check-Image $img)) { $optionalMissing++ }
+}
+if ($optionalMissing -gt 0) {
+  Write-Host "`nOptional images are missing (only needed for optional profiles such as kafka-ui)." -ForegroundColor DarkGray
 }
 
 Write-Host "`n== Compose status ==" -ForegroundColor Cyan

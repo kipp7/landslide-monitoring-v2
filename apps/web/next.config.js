@@ -1,39 +1,84 @@
 /** @type {import('next').NextConfig} */
+const distDir = (process.env.NEXT_DIST_DIR || '.next_web').trim()
+
 const nextConfig = {
   // Workaround (Windows): avoid `.next/trace` permission/lock issues that can hang `next build`.
-  distDir: '.next_web',
+  distDir,
   reactStrictMode: false,
-  // 抑制 React 版本兼容性警告
-  onDemandEntries: {
-    // 开发模式下的配置
-    maxInactiveAge: 25 * 1000,
-    pagesBufferLength: 2,
-  },
-  
-  // 抑制控制台警告
-  webpack: (config, { dev, isServer }) => {
-    if (dev && !isServer) {
-      // 在开发模式下抑制特定警告
-      const originalEntry = config.entry;
-      config.entry = async () => {
-        const entries = await originalEntry();
-        
-        // 添加警告抑制
-        if (entries['main.js'] && !entries['main.js'].includes('./suppress-warnings.js')) {
-          entries['main.js'].unshift('./suppress-warnings.js');
-        }
-        
-        return entries;
-      };
-    }
-    
-    return config;
-  },
-  
-  // 实验性功能
+  transpilePackages: ['cesium'],
+  output: 'standalone',
+
   experimental: {
-    // Next.js 15 支持的实验性功能
+    optimizeCss: true,
+    optimizePackageImports: ['antd', 'echarts', '@ant-design/pro-components'],
   },
-};
+
+  images: {
+    formats: ['image/webp', 'image/avif'],
+    minimumCacheTTL: 60,
+  },
+
+  compress: true,
+
+  webpack: (config, { dev, isServer }) => {
+    config.resolve = config.resolve || {}
+    config.resolve.fallback = { ...(config.resolve.fallback || {}), fs: false }
+
+    if (dev && !isServer) {
+      const originalEntry = config.entry
+      config.entry = async () => {
+        const entries = await originalEntry()
+        const main = entries['main.js']
+
+        if (main) {
+          const has = Array.isArray(main)
+            ? main.includes('./suppress-warnings.js')
+            : String(main).includes('./suppress-warnings.js')
+
+          if (!has) {
+            if (Array.isArray(main)) entries['main.js'] = ['./suppress-warnings.js', ...main]
+            else entries['main.js'] = ['./suppress-warnings.js', main]
+          }
+        }
+
+        return entries
+      }
+    }
+
+    if (!dev && !isServer) {
+      config.optimization = config.optimization || {}
+      config.optimization.splitChunks = {
+        chunks: 'all',
+        cacheGroups: {
+          vendor: {
+            test: /[\\/]node_modules[\\/]/,
+            name: 'vendors',
+            chunks: 'all',
+          },
+          cesium: {
+            test: /[\\/]node_modules[\\/]cesium[\\/]/,
+            name: 'cesium',
+            chunks: 'all',
+            priority: 10,
+          },
+          echarts: {
+            test: /[\\/]node_modules[\\/]echarts[\\/]/,
+            name: 'echarts',
+            chunks: 'all',
+            priority: 10,
+          },
+          antd: {
+            test: /[\\/]node_modules[\\/]antd[\\/]/,
+            name: 'antd',
+            chunks: 'all',
+            priority: 10,
+          },
+        },
+      }
+    }
+
+    return config
+  },
+}
 
 module.exports = nextConfig;
