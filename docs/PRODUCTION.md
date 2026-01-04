@@ -2,7 +2,11 @@
 
 生产环境建议用 Docker Compose 一次性拉起：数据库 + 后端 + 前端。
 
-如果你只是做“内网演示/临时验收”，也可以先把 `AUTH_REQUIRED=false`（不需要登录）；正式上线建议一定要开启登录并配置 JWT 密钥（见下文）。
+如果你只是做“内网演示/临时验收”，也可以先把 `AUTH_REQUIRED=false`（不需要登录）。
+
+正式上线建议一定要开启登录，并设置两段“登录加密密钥”（系统自己用来签发登录票据）：
+- `JWT_ACCESS_SECRET`
+- `JWT_REFRESH_SECRET`
 
 ## 1) 准备环境变量
 
@@ -12,12 +16,12 @@ notepad infra\\compose\\.env
 ```
 
 最少需要改这些（不要用默认值）：
-- 数据库密码：`PG_PASSWORD`、`CH_PASSWORD`
-- 登录密钥（开启登录时必须）：`JWT_ACCESS_SECRET`、`JWT_REFRESH_SECRET`
-- 允许前端访问的域名（有域名再填）：`CORS_ORIGINS`
+- 数据库密码（一定要改）：`PG_PASSWORD`、`CH_PASSWORD`
+- 登录加密密钥（开启登录时必须）：`JWT_ACCESS_SECRET`、`JWT_REFRESH_SECRET`
+- 允许访问的前端地址白名单（有域名再填，没有就留空）：`CORS_ORIGINS`
 
 可选（但很有用）：
-- `ADMIN_API_TOKEN`：用于“第一次创建管理员账号”
+- `ADMIN_API_TOKEN`：用于“第一次创建管理员账号”的临时通行证
 - `DB_ADMIN_ENABLED`：是否打开数据库管理接口（不建议长期打开）
 
 ## 2) 构建并启动（DB + API + Web）
@@ -58,4 +62,19 @@ Invoke-RestMethod "http://localhost:8080/api/v1/users" -Method POST -Headers @{ 
 - OpenAPI：`docs/integrations/api/openapi.yaml`
 - Compose：`infra/compose/docker-compose.yml` + `infra/compose/docker-compose.app.yml`
 
-可直接运行：`powershell -ExecutionPolicy Bypass -File scripts/release/package-prod.ps1`
+### 4.1 一键生成“交付包”（推荐）
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/release/package-brand.ps1 -BuildDockerImages -SaveDockerImages
+```
+
+产物在：`backups/releases/lsmv2-prod-<tag>-<sha>/`
+- `deploy/`：给运维同学直接用（含 `start.ps1`、`stop.ps1`、`.env.example`、Compose、Postman）
+- `images/`：离线镜像包（可选，`-SaveDockerImages` 才会生成）
+- `src/`：源代码压缩包（可复现）
+
+### 4.2 仅导出源代码包
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/release/package-prod.ps1
+```
