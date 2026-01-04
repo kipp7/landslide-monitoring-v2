@@ -6,6 +6,7 @@
 
 - `docs/README.md`
 - 本地启动（Windows）：`docs/LOCAL_DEV.md`
+- API/鉴权/数据格式快速测试：`docs/guides/testing/api-tools.md`
 
 ## 快速启动（Windows）
 
