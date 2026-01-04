@@ -16,7 +16,9 @@ export function AppShell() {
   const apiMode = useSettingsStore((s) => s.apiMode);
   const user = useAuthStore((s) => s.user);
   const clearAuth = useAuthStore((s) => s.clear);
-  const showTopRight = !location.pathname.startsWith("/app/analysis");
+  const isAnalysis = location.pathname.startsWith("/app/analysis");
+  const showSidebar = !isAnalysis;
+  const showTopRight = !isAnalysis;
 
   const logout = async () => {
     modal.confirm({
@@ -40,7 +42,7 @@ export function AppShell() {
 
   return (
     <div className="desk-app">
-      <HoverSidebar />
+      {showSidebar ? <HoverSidebar /> : null}
       {showTopRight ? (
         <div className="desk-topright">
           <Space size={8}>

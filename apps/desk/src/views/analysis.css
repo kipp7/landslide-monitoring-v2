@@ -41,7 +41,7 @@
 }
 
 .desk-analysis-nav.left {
-  left: 88px;
+  left: 32px;
 }
 
 .desk-analysis-nav.right {
@@ -163,7 +163,7 @@
   flex: 1;
   min-height: 0;
   overflow: hidden;
-  padding: 8px;
+  padding: 8px 18px 18px 18px;
   z-index: 10;
 }
 
