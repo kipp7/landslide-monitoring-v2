@@ -3,7 +3,7 @@
 说明：
 - `apps/desk` 支持 `mock` / `http` 两种模式（`/app/settings` 可切换）。
 - 本文档记录**桌面端当前 HTTP 客户端实现**与**OpenAPI(/api/v1) 契约**的差异，便于联调与生产对接。
-- 当前 `apps/desk/src/api/httpClient.ts` 走 legacy `/api/*` 路径，且默认不做 `SuccessResponse` 解包；若后端返回统一包裹，需要在桌面端增加 adapter（或改为 `/api/v1`）。
+- 当前 `apps/desk/src/api/httpClient.ts` 走 legacy `/api/*` 路径；但 `fetchJson()` 已支持识别 OpenAPI 的 `SuccessResponse` 包裹并自动解包 `data`（错误时也会解析 `message/traceId`）。
 
 ## 1) 开关与运行方式
 
@@ -61,9 +61,9 @@
 ### 3.2 响应包裹（SuccessResponse）
 
 OpenAPI 统一响应格式包含 `code/message/timestamp/traceId/data`（见 `docs/integrations/api/api-design.md`）。
-当前 desk `httpClient.fetchJson()` 直接返回 JSON 本体，不会自动解包 `data`：
+当前 desk `httpClient.fetchJson()` 会在检测到 `success: boolean` 时自动解包 `data`：
 
-- 若后端按 OpenAPI 返回，需要：`fetchJson()` 解包 `data`（并在错误分支解析 `message/traceId`）。
+- 若后端按 OpenAPI 返回，桌面端无需额外处理（已支持解包与错误信息）。
 - 或者后端提供兼容的“直出”端点（继续走 `/api/*`）。
 
 ### 3.3 GPS 数据形态
@@ -86,4 +86,3 @@ OpenAPI 的 GPS 形变序列是基于 baseline + 经纬度的聚合结果（水�
 - auth：将 `auth.login/logout` 改为真实请求，对齐 `docs/integrations/api/01-auth.md`
 - 统一：决定 desk 走 `/api/v1` 还是继续 `/api/*`（legacy），并实现对应的 response adapter
 - GPS：对齐 `docs/integrations/api/09-gps-deformations.md` 的数据形态与参数（start/end/interval 等）
-
