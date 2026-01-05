@@ -96,7 +96,7 @@ export function HomePage() {
       </div>
 
       <div className="desk-home-grid">
-        <div className="desk-home-col">
+        <div className="desk-home-cell metrics">
           <BaseCard title="关键指标" extra={summary ? <span style={{ color: health.color, fontWeight: 900 }}>健康：{health.text}</span> : null}>
             {loading ? (
               <div style={{ padding: 10 }}>
@@ -127,9 +127,13 @@ export function HomePage() {
               </div>
             )}
           </BaseCard>
+        </div>
 
+        <div className="desk-home-cell todos">
           <HomeTodosCard loading={loading} stations={stations} devices={devices} />
+        </div>
 
+        <div className="desk-home-cell shortcuts">
           <BaseCard title="快捷入口">
             <div className="desk-home-shortcuts">
               <div className="desk-home-shortcut">
@@ -199,7 +203,7 @@ export function HomePage() {
           </BaseCard>
         </div>
 
-        <div className="desk-home-col">
+        <div className="desk-home-cell anomalies">
           <BaseCard
             title="最新异常设备（Mock）"
             extra={
@@ -233,8 +237,13 @@ export function HomePage() {
               )}
             </div>
           </BaseCard>
+        </div>
 
+        <div className="desk-home-cell sites">
           <HomeKeySitesCard loading={loading} stations={stations} devices={devices} />
+        </div>
+
+        <div className="desk-home-cell announcements">
           <HomeAnnouncementsCard loading={loading} />
         </div>
       </div>
