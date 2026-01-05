@@ -2,6 +2,7 @@ using System;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -242,7 +243,15 @@ public partial class MainWindow : Window
             var version = typeof(MainWindow).Assembly.GetName().Version?.ToString() ?? "unknown";
             var status = ShowInTaskbar ? "应用已打开" : "后台运行中";
             _trayFlyout.UpdateHeader(version, status);
-            PositionTrayFlyout(_trayFlyout);
+
+            var anchorRect = _trayIcon is null ? null : TryGetNotifyIconRect(_trayIcon);
+            if (anchorRect is null)
+            {
+                var cursor = Forms.Cursor.Position;
+                anchorRect = new Drawing.Rectangle(cursor.X, cursor.Y, 1, 1);
+            }
+
+            PositionTrayFlyout(_trayFlyout, anchorRect.Value);
             _trayFlyout.Show();
             _trayFlyout.Activate();
         }
@@ -251,7 +260,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private static void PositionTrayFlyout(Window flyout)
+    private static void PositionTrayFlyout(Window flyout, Drawing.Rectangle anchorRectPx)
     {
         try
         {
@@ -263,15 +272,179 @@ public partial class MainWindow : Window
         {
         }
 
-        var workArea = SystemParameters.WorkArea;
         var flyoutWidth = !double.IsNaN(flyout.Width) && flyout.Width > 0 ? flyout.Width : flyout.DesiredSize.Width;
         var flyoutHeight = !double.IsNaN(flyout.Height) && flyout.Height > 0 ? flyout.Height : flyout.DesiredSize.Height;
 
-        var left = workArea.Right - flyoutWidth - 14;
-        var top = workArea.Bottom - flyoutHeight - 14;
+        var anchorCenterPx = new Drawing.Point(
+            anchorRectPx.Left + Math.Max(1, anchorRectPx.Width) / 2,
+            anchorRectPx.Top + Math.Max(1, anchorRectPx.Height) / 2
+        );
 
-        flyout.Left = Math.Max(workArea.Left + 8, left);
-        flyout.Top = Math.Max(workArea.Top + 8, top);
+        var scale = GetDpiScaleForPoint(anchorCenterPx);
+        var screen = Forms.Screen.FromPoint(anchorCenterPx);
+        var workAreaPx = screen.WorkingArea;
+        var workArea = new Rect(
+            workAreaPx.Left / scale,
+            workAreaPx.Top / scale,
+            workAreaPx.Width / scale,
+            workAreaPx.Height / scale
+        );
+
+        var anchorCenterX = Clamp(anchorCenterPx.X / scale, workArea.Left, workArea.Right);
+        var anchorCenterY = Clamp(anchorCenterPx.Y / scale, workArea.Top, workArea.Bottom);
+        var inset = 8d;
+        var gap = 10d;
+
+        var placeLeft = anchorCenterX >= workArea.Left + workArea.Width / 2;
+        var placeAbove = anchorCenterY >= workArea.Top + workArea.Height / 2;
+
+        var anchorLeftPx = Math.Clamp(anchorRectPx.Left, workAreaPx.Left, workAreaPx.Right);
+        var anchorRightPx = Math.Clamp(anchorRectPx.Right, workAreaPx.Left, workAreaPx.Right);
+        var anchorTopPx = Math.Clamp(anchorRectPx.Top, workAreaPx.Top, workAreaPx.Bottom);
+        var anchorBottomPx = Math.Clamp(anchorRectPx.Bottom, workAreaPx.Top, workAreaPx.Bottom);
+
+        var anchorX = (placeLeft ? anchorRightPx : anchorLeftPx) / scale;
+        var anchorY = (placeAbove ? anchorTopPx : anchorBottomPx) / scale;
+
+        var left = placeLeft ? anchorX - flyoutWidth - gap : anchorX + gap;
+        var top = placeAbove ? anchorY - flyoutHeight - gap : anchorY + gap;
+
+        flyout.Left = Clamp(left, workArea.Left + inset, workArea.Right - flyoutWidth - inset);
+        flyout.Top = Clamp(top, workArea.Top + inset, workArea.Bottom - flyoutHeight - inset);
+    }
+
+    private static double GetDpiScaleForPoint(Drawing.Point pointPx)
+    {
+        try
+        {
+            var monitor = MonitorFromPoint(new POINT { X = pointPx.X, Y = pointPx.Y }, MonitorDefaultToNearest);
+            if (monitor != nint.Zero)
+            {
+                var hr = GetDpiForMonitor(monitor, MonitorDpiType.EffectiveDpi, out var dpiX, out _);
+                if (hr == 0 && dpiX > 0)
+                {
+                    return dpiX / 96d;
+                }
+            }
+        }
+        catch
+        {
+        }
+
+        try
+        {
+            var transform =
+                PresentationSource.FromVisual(System.Windows.Application.Current?.MainWindow)?.CompositionTarget
+                    ?.TransformFromDevice ?? Matrix.Identity;
+            if (transform.M11 > 0)
+            {
+                return 1d / transform.M11;
+            }
+        }
+        catch
+        {
+        }
+
+        return 1d;
+    }
+
+    private static Drawing.Rectangle? TryGetNotifyIconRect(Forms.NotifyIcon trayIcon)
+    {
+        try
+        {
+            if (!TryGetNotifyIconIdentifiers(trayIcon, out var hwnd, out var id))
+            {
+                return null;
+            }
+
+            var identifier = new NOTIFYICONIDENTIFIER
+            {
+                cbSize = (uint)Marshal.SizeOf<NOTIFYICONIDENTIFIER>(),
+                hWnd = hwnd,
+                uID = id,
+                guidItem = Guid.Empty
+            };
+
+            var hr = Shell_NotifyIconGetRect(ref identifier, out var rect);
+            if (hr != 0)
+            {
+                return null;
+            }
+
+            var width = Math.Max(1, rect.Right - rect.Left);
+            var height = Math.Max(1, rect.Bottom - rect.Top);
+            return new Drawing.Rectangle(rect.Left, rect.Top, width, height);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static bool TryGetNotifyIconIdentifiers(Forms.NotifyIcon trayIcon, out nint hwnd, out uint id)
+    {
+        hwnd = nint.Zero;
+        id = 0;
+
+        try
+        {
+            var trayIconType = trayIcon.GetType();
+
+            object? windowObj = null;
+            foreach (var fieldName in new[] { "_window", "window" })
+            {
+                windowObj = trayIconType.GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance)
+                    ?.GetValue(trayIcon);
+                if (windowObj is not null)
+                {
+                    break;
+                }
+            }
+
+            object? idObj = null;
+            foreach (var fieldName in new[] { "_id", "id" })
+            {
+                idObj = trayIconType.GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance)
+                    ?.GetValue(trayIcon);
+                if (idObj is not null)
+                {
+                    break;
+                }
+            }
+
+            switch (idObj)
+            {
+                case int intId when intId != 0:
+                    id = unchecked((uint)intId);
+                    break;
+                case uint uintId when uintId != 0:
+                    id = uintId;
+                    break;
+                default:
+                    return false;
+            }
+
+            switch (windowObj)
+            {
+                case Forms.NativeWindow nativeWindow when nativeWindow.Handle != IntPtr.Zero:
+                    hwnd = nativeWindow.Handle;
+                    break;
+                case not null:
+                {
+                    var handleProperty = windowObj.GetType()
+                        .GetProperty("Handle", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                    var handleValue = handleProperty?.GetValue(windowObj);
+                    hwnd = handleValue is IntPtr handle ? handle : nint.Zero;
+                    break;
+                }
+            }
+
+            return hwnd != nint.Zero && id != 0;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private void HideTrayFlyout()
@@ -1264,8 +1437,33 @@ dotnet publish .\LandslideDesk.Win\LandslideDesk.Win.csproj -c Release -r win-x6
     [DllImport("user32.dll")]
     private static extern nint MonitorFromWindow(nint hwnd, int dwFlags);
 
+    [DllImport("user32.dll")]
+    private static extern nint MonitorFromPoint(POINT pt, int dwFlags);
+
+    private enum MonitorDpiType
+    {
+        EffectiveDpi = 0,
+        AngularDpi = 1,
+        RawDpi = 2
+    }
+
+    [DllImport("Shcore.dll")]
+    private static extern int GetDpiForMonitor(nint hmonitor, MonitorDpiType dpiType, out uint dpiX, out uint dpiY);
+
     [DllImport("user32.dll", CharSet = CharSet.Auto)]
     private static extern bool GetMonitorInfo(nint hMonitor, ref MONITORINFO lpmi);
+
+    [DllImport("shell32.dll")]
+    private static extern int Shell_NotifyIconGetRect(ref NOTIFYICONIDENTIFIER identifier, out RECT iconLocation);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NOTIFYICONIDENTIFIER
+    {
+        public uint cbSize;
+        public nint hWnd;
+        public uint uID;
+        public Guid guidItem;
+    }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
     private struct MONITORINFO
@@ -1283,6 +1481,13 @@ dotnet publish .\LandslideDesk.Win\LandslideDesk.Win.csproj -c Release -r win-x6
         public int Top;
         public int Right;
         public int Bottom;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT
+    {
+        public int X;
+        public int Y;
     }
 
     private nint WndProc(nint hwnd, int msg, nint wParam, nint lParam, ref bool handled)
