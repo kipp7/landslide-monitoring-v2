@@ -245,9 +245,9 @@ public partial class MainWindow : Window
             _trayFlyout.UpdateHeader(version, status);
 
             var anchorRect = _trayIcon is null ? null : TryGetNotifyIconRect(_trayIcon);
-            if (anchorRect is null)
+            var cursor = Forms.Cursor.Position;
+            if (anchorRect is null || !IsPlausibleNotifyIconRect(anchorRect.Value) || !IsRectNearPoint(anchorRect.Value, cursor, 600))
             {
-                var cursor = Forms.Cursor.Position;
                 anchorRect = new Drawing.Rectangle(cursor.X, cursor.Y, 1, 1);
             }
 
@@ -346,6 +346,46 @@ public partial class MainWindow : Window
         }
 
         return 1d;
+    }
+
+    private static bool IsPlausibleNotifyIconRect(Drawing.Rectangle rectPx)
+    {
+        if (rectPx.Width <= 0 || rectPx.Height <= 0)
+        {
+            return false;
+        }
+
+        if (rectPx.Width > 128 || rectPx.Height > 128)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool IsRectNearPoint(Drawing.Rectangle rectPx, Drawing.Point pointPx, int maxDistancePx)
+    {
+        var dx = 0;
+        if (pointPx.X < rectPx.Left)
+        {
+            dx = rectPx.Left - pointPx.X;
+        }
+        else if (pointPx.X > rectPx.Right)
+        {
+            dx = pointPx.X - rectPx.Right;
+        }
+
+        var dy = 0;
+        if (pointPx.Y < rectPx.Top)
+        {
+            dy = rectPx.Top - pointPx.Y;
+        }
+        else if (pointPx.Y > rectPx.Bottom)
+        {
+            dy = pointPx.Y - rectPx.Bottom;
+        }
+
+        return dx * dx + dy * dy <= maxDistancePx * maxDistancePx;
     }
 
     private static Drawing.Rectangle? TryGetNotifyIconRect(Forms.NotifyIcon trayIcon)
