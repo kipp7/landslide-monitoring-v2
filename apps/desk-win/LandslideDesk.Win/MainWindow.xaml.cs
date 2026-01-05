@@ -317,6 +317,31 @@ public partial class MainWindow : Window
     {
         try
         {
+            // In some DPI awareness modes Windows will virtualize Win32/WinForms coordinates to 96-DPI units.
+            // When that happens, the coordinates we get from Cursor/Screen/NotifyIconGetRect already match WPF DIPs,
+            // so converting again would shift the flyout away from the tray icon.
+            var formsVirtual = Forms.SystemInformation.VirtualScreen;
+            var wpfVirtualWidth = SystemParameters.VirtualScreenWidth;
+            var wpfVirtualHeight = SystemParameters.VirtualScreenHeight;
+
+            if (wpfVirtualWidth > 0 && wpfVirtualHeight > 0)
+            {
+                var ratioX = formsVirtual.Width / wpfVirtualWidth;
+                var ratioY = formsVirtual.Height / wpfVirtualHeight;
+                var ratio = (ratioX + ratioY) / 2d;
+
+                if (IsFinite(ratio) && Math.Abs(ratio - 1d) < 0.05)
+                {
+                    return 1d;
+                }
+            }
+        }
+        catch
+        {
+        }
+
+        try
+        {
             var monitor = MonitorFromPoint(new POINT { X = pointPx.X, Y = pointPx.Y }, MonitorDefaultToNearest);
             if (monitor != nint.Zero)
             {
