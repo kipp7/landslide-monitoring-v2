@@ -246,7 +246,9 @@ public partial class MainWindow : Window
 
             var anchorRect = _trayIcon is null ? null : TryGetNotifyIconRect(_trayIcon);
             var cursor = Forms.Cursor.Position;
-            if (anchorRect is null || !IsPlausibleNotifyIconRect(anchorRect.Value) || !IsRectNearPoint(anchorRect.Value, cursor, 600))
+            if (anchorRect is null
+                || !IsPlausibleNotifyIconRect(anchorRect.Value)
+                || !IsPointInRectExpanded(cursor, anchorRect.Value, paddingPx: 10))
             {
                 anchorRect = new Drawing.Rectangle(cursor.X, cursor.Y, 1, 1);
             }
@@ -290,27 +292,22 @@ public partial class MainWindow : Window
             workAreaPx.Height / scale
         );
 
-        var anchorCenterX = Clamp(anchorCenterPx.X / scale, workArea.Left, workArea.Right);
-        var anchorCenterY = Clamp(anchorCenterPx.Y / scale, workArea.Top, workArea.Bottom);
         var inset = 8d;
         var gap = 10d;
 
-        var placeLeft = anchorCenterX >= workArea.Left + workArea.Width / 2;
-        var placeAbove = anchorCenterY >= workArea.Top + workArea.Height / 2;
+        var anchorCenterX = anchorCenterPx.X / scale;
+        var anchorTopY = anchorRectPx.Top / scale;
+        var anchorBottomY = anchorRectPx.Bottom / scale;
 
-        var anchorLeftPx = Math.Clamp(anchorRectPx.Left, workAreaPx.Left, workAreaPx.Right);
-        var anchorRightPx = Math.Clamp(anchorRectPx.Right, workAreaPx.Left, workAreaPx.Right);
-        var anchorTopPx = Math.Clamp(anchorRectPx.Top, workAreaPx.Top, workAreaPx.Bottom);
-        var anchorBottomPx = Math.Clamp(anchorRectPx.Bottom, workAreaPx.Top, workAreaPx.Bottom);
+        var desiredLeft = anchorCenterX - flyoutWidth / 2;
+        var desiredTop = anchorTopY - flyoutHeight - gap;
+        if (desiredTop < workArea.Top + inset)
+        {
+            desiredTop = anchorBottomY + gap;
+        }
 
-        var anchorX = (placeLeft ? anchorRightPx : anchorLeftPx) / scale;
-        var anchorY = (placeAbove ? anchorTopPx : anchorBottomPx) / scale;
-
-        var left = placeLeft ? anchorX - flyoutWidth - gap : anchorX + gap;
-        var top = placeAbove ? anchorY - flyoutHeight - gap : anchorY + gap;
-
-        flyout.Left = Clamp(left, workArea.Left + inset, workArea.Right - flyoutWidth - inset);
-        flyout.Top = Clamp(top, workArea.Top + inset, workArea.Bottom - flyoutHeight - inset);
+        flyout.Left = Clamp(desiredLeft, workArea.Left + inset, workArea.Right - flyoutWidth - inset);
+        flyout.Top = Clamp(desiredTop, workArea.Top + inset, workArea.Bottom - flyoutHeight - inset);
     }
 
     private static double GetDpiScaleForPoint(Drawing.Point pointPx)
@@ -388,29 +385,10 @@ public partial class MainWindow : Window
         return true;
     }
 
-    private static bool IsRectNearPoint(Drawing.Rectangle rectPx, Drawing.Point pointPx, int maxDistancePx)
+    private static bool IsPointInRectExpanded(Drawing.Point pointPx, Drawing.Rectangle rectPx, int paddingPx)
     {
-        var dx = 0;
-        if (pointPx.X < rectPx.Left)
-        {
-            dx = rectPx.Left - pointPx.X;
-        }
-        else if (pointPx.X > rectPx.Right)
-        {
-            dx = pointPx.X - rectPx.Right;
-        }
-
-        var dy = 0;
-        if (pointPx.Y < rectPx.Top)
-        {
-            dy = rectPx.Top - pointPx.Y;
-        }
-        else if (pointPx.Y > rectPx.Bottom)
-        {
-            dy = pointPx.Y - rectPx.Bottom;
-        }
-
-        return dx * dx + dy * dy <= maxDistancePx * maxDistancePx;
+        rectPx.Inflate(paddingPx, paddingPx);
+        return rectPx.Contains(pointPx);
     }
 
     private static Drawing.Rectangle? TryGetNotifyIconRect(Forms.NotifyIcon trayIcon)
