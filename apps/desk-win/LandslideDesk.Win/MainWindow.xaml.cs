@@ -153,13 +153,18 @@ public partial class MainWindow : Window
 
             _trayIcon.Icon ??= Drawing.SystemIcons.Application;
             _trayIcon.DoubleClick += (_, _) => Dispatcher.Invoke(ShowFromTray);
-            _trayIcon.MouseUp += (_, e) => Dispatcher.Invoke(() =>
+            _trayIcon.MouseUp += (_, e) =>
             {
-                if (e.Button == Forms.MouseButtons.Left || e.Button == Forms.MouseButtons.Right)
+                if (e.Button != Forms.MouseButtons.Left && e.Button != Forms.MouseButtons.Right)
                 {
-                    ToggleTrayFlyout();
+                    return;
                 }
-            });
+
+                // Capture the click position immediately; the first open can be slower (window creation/layout),
+                // and using the live cursor position can drift if the user moves the mouse meanwhile.
+                var clickPosition = Forms.Control.MousePosition;
+                Dispatcher.Invoke(() => ToggleTrayFlyout(clickPosition));
+            };
             _trayIcon.BalloonTipClicked += (_, _) => Dispatcher.Invoke(() =>
             {
                 var route = _pendingTrayNotificationRoute;
@@ -224,7 +229,7 @@ public partial class MainWindow : Window
         _trayFlyout.ExitRequested += () => Dispatcher.Invoke(() => App.RequestAppShutdown());
     }
 
-    private void ToggleTrayFlyout()
+    private void ToggleTrayFlyout(Drawing.Point clickPositionPx)
     {
         try
         {
@@ -245,12 +250,11 @@ public partial class MainWindow : Window
             _trayFlyout.UpdateHeader(version, status);
 
             var anchorRect = _trayIcon is null ? null : TryGetNotifyIconRect(_trayIcon);
-            var cursor = Forms.Cursor.Position;
             if (anchorRect is null
                 || !IsPlausibleNotifyIconRect(anchorRect.Value)
-                || !IsPointInRectExpanded(cursor, anchorRect.Value, paddingPx: 10))
+                || !IsPointInRectExpanded(clickPositionPx, anchorRect.Value, paddingPx: 10))
             {
-                anchorRect = new Drawing.Rectangle(cursor.X, cursor.Y, 1, 1);
+                anchorRect = new Drawing.Rectangle(clickPositionPx.X, clickPositionPx.Y, 1, 1);
             }
 
             PositionTrayFlyout(_trayFlyout, anchorRect.Value);
