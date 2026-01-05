@@ -64,6 +64,7 @@ public partial class MainWindow : Window
     private bool _trayHintShown;
     private string? _pendingTrayNotificationRoute;
     private TrayFlyoutWindow? _trayFlyout;
+    private int _trayFlyoutOpenSequence;
 
     public MainWindow()
     {
@@ -245,35 +246,22 @@ public partial class MainWindow : Window
             _trayFlyout.UpdateHeader(version, status);
 
             var clickPoint = Forms.Cursor.Position;
-            var trayAreaRect = TryGetTrayNotificationAreaRect();
-            var overflowRect = TryGetNotifyIconOverflowRect();
+            var openSequence = ++_trayFlyoutOpenSequence;
 
-            var iconRect = _trayIcon is null ? null : TryGetNotifyIconRect(_trayIcon);
-            var clickRect = new Drawing.Rectangle(clickPoint.X, clickPoint.Y, 1, 1);
+            var anchorRect = _trayIcon is null ? null : TryGetNotifyIconRect(_trayIcon);
+            var useAnchor = anchorRect is not null && IsTrayAnchorNearClick(anchorRect.Value, clickPoint);
+            var anchorRectForOpen = useAnchor
+                ? anchorRect!.Value
+                : new Drawing.Rectangle(clickPoint.X, clickPoint.Y, 1, 1);
 
-            Drawing.Rectangle anchorRect;
-            if (iconRect is not null
-                && IsTrayAnchorNearClick(iconRect.Value, clickPoint)
-                && IsNotifyIconRectInTrayArea(iconRect.Value, trayAreaRect, overflowRect))
-            {
-                anchorRect = iconRect.Value;
-            }
-            else if (overflowRect is not null && IsPointInRectExpanded(clickPoint, overflowRect.Value, 24))
-            {
-                anchorRect = clickRect;
-            }
-            else if (trayAreaRect is not null)
-            {
-                anchorRect = trayAreaRect.Value;
-            }
-            else
-            {
-                anchorRect = clickRect;
-            }
-
-            PositionTrayFlyout(_trayFlyout, anchorRect);
+            PositionTrayFlyout(_trayFlyout, anchorRectForOpen);
             _trayFlyout.Show();
             _trayFlyout.Activate();
+
+            if (!useAnchor)
+            {
+                _ = TryRepositionTrayFlyoutAsync(openSequence, clickPoint);
+            }
         }
         catch
         {
@@ -368,6 +356,44 @@ public partial class MainWindow : Window
         return 1d;
     }
 
+    private async Task TryRepositionTrayFlyoutAsync(int openSequence, Drawing.Point clickPointPx)
+    {
+        try
+        {
+            for (var attempt = 0; attempt < 4; attempt++)
+            {
+                await Task.Delay(120);
+
+                if (_trayFlyout is null || !_trayFlyout.IsVisible || openSequence != _trayFlyoutOpenSequence)
+                {
+                    return;
+                }
+
+                if (_trayIcon is null)
+                {
+                    return;
+                }
+
+                var rect = TryGetNotifyIconRect(_trayIcon);
+                if (rect is null)
+                {
+                    continue;
+                }
+
+                if (!IsTrayAnchorNearClick(rect.Value, clickPointPx))
+                {
+                    continue;
+                }
+
+                PositionTrayFlyout(_trayFlyout, rect.Value);
+                return;
+            }
+        }
+        catch
+        {
+        }
+    }
+
     private static bool IsTrayAnchorNearClick(Drawing.Rectangle anchorRectPx, Drawing.Point clickPointPx)
     {
         if (anchorRectPx.Width <= 0 || anchorRectPx.Height <= 0)
@@ -402,125 +428,6 @@ public partial class MainWindow : Window
 
         var distanceSq = dx * dx + dy * dy;
         return distanceSq <= 400 * 400;
-    }
-
-    private static bool IsNotifyIconRectInTrayArea(
-        Drawing.Rectangle iconRectPx,
-        Drawing.Rectangle? trayAreaRectPx,
-        Drawing.Rectangle? overflowRectPx
-    )
-    {
-        if (trayAreaRectPx is not null)
-        {
-            var trayArea = trayAreaRectPx.Value;
-            trayArea.Inflate(64, 64);
-            if (trayArea.IntersectsWith(iconRectPx) || trayArea.Contains(iconRectPx))
-            {
-                return true;
-            }
-        }
-
-        if (overflowRectPx is not null)
-        {
-            var overflowArea = overflowRectPx.Value;
-            overflowArea.Inflate(64, 64);
-            if (overflowArea.IntersectsWith(iconRectPx) || overflowArea.Contains(iconRectPx))
-            {
-                return true;
-            }
-        }
-
-        return trayAreaRectPx is null && overflowRectPx is null;
-    }
-
-    private static bool IsPointInRectExpanded(Drawing.Point pointPx, Drawing.Rectangle rectPx, int inflatePx)
-    {
-        rectPx.Inflate(inflatePx, inflatePx);
-        return rectPx.Contains(pointPx);
-    }
-
-    private static Drawing.Rectangle? TryGetTrayNotificationAreaRect()
-    {
-        try
-        {
-            var taskbar = FindWindow("Shell_TrayWnd", null);
-            if (taskbar == nint.Zero)
-            {
-                return null;
-            }
-
-            var notifyWnd = FindWindowEx(taskbar, nint.Zero, "TrayNotifyWnd", null);
-            var rect = TryGetWindowRectPx(notifyWnd != nint.Zero ? notifyWnd : taskbar);
-            if (rect is null)
-            {
-                return null;
-            }
-
-            if (notifyWnd == nint.Zero)
-            {
-                rect = ApproximateNotificationArea(rect.Value);
-            }
-
-            return rect;
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static Drawing.Rectangle? TryGetNotifyIconOverflowRect()
-    {
-        try
-        {
-            var overflow = FindWindow("NotifyIconOverflowWindow", null);
-            if (overflow == nint.Zero || !IsWindowVisible(overflow))
-            {
-                return null;
-            }
-
-            return TryGetWindowRectPx(overflow);
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static Drawing.Rectangle? TryGetWindowRectPx(nint hwnd)
-    {
-        try
-        {
-            if (hwnd == nint.Zero || !GetWindowRect(hwnd, out var rect))
-            {
-                return null;
-            }
-
-            var width = Math.Max(1, rect.Right - rect.Left);
-            var height = Math.Max(1, rect.Bottom - rect.Top);
-            return new Drawing.Rectangle(rect.Left, rect.Top, width, height);
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static Drawing.Rectangle ApproximateNotificationArea(Drawing.Rectangle taskbarRectPx)
-    {
-        var slice = taskbarRectPx;
-        if (slice.Width >= slice.Height)
-        {
-            var sliceWidth = Math.Min(420, slice.Width);
-            slice.X = slice.Right - sliceWidth;
-            slice.Width = sliceWidth;
-            return slice;
-        }
-
-        var sliceHeight = Math.Min(420, slice.Height);
-        slice.Y = slice.Bottom - sliceHeight;
-        slice.Height = sliceHeight;
-        return slice;
     }
 
     private static Drawing.Rectangle? TryGetNotifyIconRect(Forms.NotifyIcon trayIcon)
@@ -1627,18 +1534,6 @@ dotnet publish .\LandslideDesk.Win\LandslideDesk.Win.csproj -c Release -r win-x6
 
     [DllImport("user32.dll", CharSet = CharSet.Auto)]
     private static extern bool GetMonitorInfo(nint hMonitor, ref MONITORINFO lpmi);
-
-    [DllImport("user32.dll", CharSet = CharSet.Auto)]
-    private static extern nint FindWindow(string? lpClassName, string? lpWindowName);
-
-    [DllImport("user32.dll", CharSet = CharSet.Auto)]
-    private static extern nint FindWindowEx(nint hwndParent, nint hwndChildAfter, string? lpszClass, string? lpszWindow);
-
-    [DllImport("user32.dll")]
-    private static extern bool GetWindowRect(nint hwnd, out RECT lpRect);
-
-    [DllImport("user32.dll")]
-    private static extern bool IsWindowVisible(nint hwnd);
 
     [DllImport("shell32.dll")]
     private static extern int Shell_NotifyIconGetRect(ref NOTIFYICONIDENTIFIER identifier, out RECT iconLocation);
