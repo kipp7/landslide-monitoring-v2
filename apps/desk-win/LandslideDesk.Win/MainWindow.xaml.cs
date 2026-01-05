@@ -64,6 +64,7 @@ public partial class MainWindow : Window
     private bool _trayHintShown;
     private string? _pendingTrayNotificationRoute;
     private TrayFlyoutWindow? _trayFlyout;
+    private int _trayFlyoutOpenSequence;
 
     public MainWindow()
     {
@@ -244,16 +245,23 @@ public partial class MainWindow : Window
             var status = ShowInTaskbar ? "应用已打开" : "后台运行中";
             _trayFlyout.UpdateHeader(version, status);
 
-            var anchorRect = _trayIcon is null ? null : TryGetNotifyIconRect(_trayIcon);
-            if (anchorRect is null)
-            {
-                var cursor = Forms.Cursor.Position;
-                anchorRect = new Drawing.Rectangle(cursor.X, cursor.Y, 1, 1);
-            }
+            var clickPoint = Forms.Cursor.Position;
+            var openSequence = ++_trayFlyoutOpenSequence;
 
-            PositionTrayFlyout(_trayFlyout, anchorRect.Value);
+            var anchorRect = _trayIcon is null ? null : TryGetNotifyIconRect(_trayIcon);
+            var useAnchor = anchorRect is not null && IsTrayAnchorNearClick(anchorRect.Value, clickPoint);
+            var anchorRectForOpen = useAnchor
+                ? anchorRect!.Value
+                : new Drawing.Rectangle(clickPoint.X, clickPoint.Y, 1, 1);
+
+            PositionTrayFlyout(_trayFlyout, anchorRectForOpen);
             _trayFlyout.Show();
             _trayFlyout.Activate();
+
+            if (!useAnchor)
+            {
+                _ = TryRepositionTrayFlyoutAsync(openSequence, clickPoint);
+            }
         }
         catch
         {
@@ -346,6 +354,80 @@ public partial class MainWindow : Window
         }
 
         return 1d;
+    }
+
+    private async Task TryRepositionTrayFlyoutAsync(int openSequence, Drawing.Point clickPointPx)
+    {
+        try
+        {
+            for (var attempt = 0; attempt < 4; attempt++)
+            {
+                await Task.Delay(120);
+
+                if (_trayFlyout is null || !_trayFlyout.IsVisible || openSequence != _trayFlyoutOpenSequence)
+                {
+                    return;
+                }
+
+                if (_trayIcon is null)
+                {
+                    return;
+                }
+
+                var rect = TryGetNotifyIconRect(_trayIcon);
+                if (rect is null)
+                {
+                    continue;
+                }
+
+                if (!IsTrayAnchorNearClick(rect.Value, clickPointPx))
+                {
+                    continue;
+                }
+
+                PositionTrayFlyout(_trayFlyout, rect.Value);
+                return;
+            }
+        }
+        catch
+        {
+        }
+    }
+
+    private static bool IsTrayAnchorNearClick(Drawing.Rectangle anchorRectPx, Drawing.Point clickPointPx)
+    {
+        if (anchorRectPx.Width <= 0 || anchorRectPx.Height <= 0)
+        {
+            return false;
+        }
+
+        if (anchorRectPx.Width > 256 || anchorRectPx.Height > 256)
+        {
+            return false;
+        }
+
+        var dx = 0;
+        if (clickPointPx.X < anchorRectPx.Left)
+        {
+            dx = anchorRectPx.Left - clickPointPx.X;
+        }
+        else if (clickPointPx.X > anchorRectPx.Right)
+        {
+            dx = clickPointPx.X - anchorRectPx.Right;
+        }
+
+        var dy = 0;
+        if (clickPointPx.Y < anchorRectPx.Top)
+        {
+            dy = anchorRectPx.Top - clickPointPx.Y;
+        }
+        else if (clickPointPx.Y > anchorRectPx.Bottom)
+        {
+            dy = clickPointPx.Y - anchorRectPx.Bottom;
+        }
+
+        var distanceSq = dx * dx + dy * dy;
+        return distanceSq <= 400 * 400;
     }
 
     private static Drawing.Rectangle? TryGetNotifyIconRect(Forms.NotifyIcon trayIcon)
