@@ -41,6 +41,7 @@ public partial class MainWindow : Window
     private static readonly nint HwndTopmost = new(-1);
     private const uint SwpNoSize = 0x0001;
     private const uint SwpNoMove = 0x0002;
+    private const uint SwpNoActivate = 0x0010;
     private const uint SwpShowWindow = 0x0040;
 
     private string? _devServerUrl;
@@ -257,8 +258,12 @@ public partial class MainWindow : Window
                 anchorRect = new Drawing.Rectangle(clickPositionPx.X, clickPositionPx.Y, 1, 1);
             }
 
-            PositionTrayFlyout(_trayFlyout, anchorRect.Value);
+            _trayFlyout.Opacity = 0;
+            _trayFlyout.Left = -10000;
+            _trayFlyout.Top = -10000;
             _trayFlyout.Show();
+            PositionTrayFlyout(_trayFlyout, anchorRect.Value);
+            _trayFlyout.Opacity = 1;
             _trayFlyout.Activate();
         }
         catch
@@ -268,50 +273,68 @@ public partial class MainWindow : Window
 
     private static void PositionTrayFlyout(Window flyout, Drawing.Rectangle anchorRectPx)
     {
+        nint hwnd;
         try
         {
-            flyout.Measure(new System.Windows.Size(double.PositiveInfinity, double.PositiveInfinity));
-            flyout.Arrange(new System.Windows.Rect(flyout.DesiredSize));
-            flyout.UpdateLayout();
+            hwnd = new WindowInteropHelper(flyout).Handle;
+            if (hwnd == nint.Zero)
+            {
+                hwnd = new WindowInteropHelper(flyout).EnsureHandle();
+            }
         }
         catch
         {
+            return;
         }
 
-        var flyoutWidth = !double.IsNaN(flyout.Width) && flyout.Width > 0 ? flyout.Width : flyout.DesiredSize.Width;
-        var flyoutHeight = !double.IsNaN(flyout.Height) && flyout.Height > 0 ? flyout.Height : flyout.DesiredSize.Height;
+        if (hwnd == nint.Zero)
+        {
+            return;
+        }
+
+        if (!GetWindowRect(hwnd, out var windowRect))
+        {
+            return;
+        }
+
+        var flyoutWidth = Math.Max(1, windowRect.Right - windowRect.Left);
+        var flyoutHeight = Math.Max(1, windowRect.Bottom - windowRect.Top);
 
         var anchorCenterPx = new Drawing.Point(
             anchorRectPx.Left + Math.Max(1, anchorRectPx.Width) / 2,
             anchorRectPx.Top + Math.Max(1, anchorRectPx.Height) / 2
         );
 
-        var scale = GetDpiScaleForPoint(anchorCenterPx);
-        var screen = Forms.Screen.FromPoint(anchorCenterPx);
-        var workAreaPx = screen.WorkingArea;
-        var workArea = new Rect(
-            workAreaPx.Left / scale,
-            workAreaPx.Top / scale,
-            workAreaPx.Width / scale,
-            workAreaPx.Height / scale
-        );
-
-        var inset = 8d;
-        var gap = 10d;
-
-        var anchorCenterX = anchorCenterPx.X / scale;
-        var anchorTopY = anchorRectPx.Top / scale;
-        var anchorBottomY = anchorRectPx.Bottom / scale;
-
-        var desiredLeft = anchorCenterX - flyoutWidth / 2;
-        var desiredTop = anchorTopY - flyoutHeight - gap;
-        if (desiredTop < workArea.Top + inset)
+        var monitor = MonitorFromPoint(new POINT { X = anchorCenterPx.X, Y = anchorCenterPx.Y }, MonitorDefaultToNearest);
+        if (monitor == nint.Zero)
         {
-            desiredTop = anchorBottomY + gap;
+            return;
         }
 
-        flyout.Left = Clamp(desiredLeft, workArea.Left + inset, workArea.Right - flyoutWidth - inset);
-        flyout.Top = Clamp(desiredTop, workArea.Top + inset, workArea.Bottom - flyoutHeight - inset);
+        var info = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
+        if (!GetMonitorInfo(monitor, ref info))
+        {
+            return;
+        }
+
+        var inset = 8;
+        var gap = 10;
+        var workArea = info.rcWork;
+
+        var desiredTop = anchorRectPx.Top - flyoutHeight - gap;
+        if (desiredTop < workArea.Top + inset)
+        {
+            desiredTop = anchorRectPx.Bottom + gap;
+        }
+
+        var workCenterX = workArea.Left + (workArea.Right - workArea.Left) / 2;
+        var preferRightAlign = anchorCenterPx.X >= workCenterX;
+        var desiredLeft = preferRightAlign ? anchorRectPx.Right - flyoutWidth : anchorRectPx.Left;
+
+        var left = ClampInt(desiredLeft, workArea.Left + inset, workArea.Right - flyoutWidth - inset);
+        var top = ClampInt(desiredTop, workArea.Top + inset, workArea.Bottom - flyoutHeight - inset);
+
+        SetWindowPos(hwnd, HwndTopmost, left, top, 0, 0, SwpNoSize | SwpNoActivate);
     }
 
     private static double GetDpiScaleForPoint(Drawing.Point pointPx)
@@ -1352,6 +1375,16 @@ dotnet publish .\LandslideDesk.Win\LandslideDesk.Win.csproj -c Release -r win-x6
         return !double.IsNaN(value) && !double.IsInfinity(value);
     }
 
+    private static int ClampInt(int value, int min, int max)
+    {
+        if (min > max)
+        {
+            return min;
+        }
+
+        return Math.Max(min, Math.Min(max, value));
+    }
+
     private static double Clamp(double value, double min, double max)
     {
         if (min > max)
@@ -1502,6 +1535,9 @@ dotnet publish .\LandslideDesk.Win\LandslideDesk.Win.csproj -c Release -r win-x6
 
     [DllImport("shell32.dll")]
     private static extern int Shell_NotifyIconGetRect(ref NOTIFYICONIDENTIFIER identifier, out RECT iconLocation);
+
+    [DllImport("user32.dll")]
+    private static extern bool GetWindowRect(nint hWnd, out RECT lpRect);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct NOTIFYICONIDENTIFIER
