@@ -1,19 +1,52 @@
 .desk-home-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  grid-template-areas:
+    "metrics anomalies"
+    "todos sites"
+    "shortcuts announcements";
   gap: 12px;
-  align-items: start;
+  align-items: stretch;
 }
 
-.desk-home-col {
-  display: grid;
-  gap: 12px;
+.desk-home-cell {
   min-height: 0;
+}
+
+.desk-home-cell.metrics {
+  grid-area: metrics;
+}
+
+.desk-home-cell.anomalies {
+  grid-area: anomalies;
+}
+
+.desk-home-cell.todos {
+  grid-area: todos;
+}
+
+.desk-home-cell.sites {
+  grid-area: sites;
+}
+
+.desk-home-cell.shortcuts {
+  grid-area: shortcuts;
+}
+
+.desk-home-cell.announcements {
+  grid-area: announcements;
 }
 
 @media (max-width: 1100px) {
   .desk-home-grid {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "metrics"
+      "todos"
+      "shortcuts"
+      "anomalies"
+      "sites"
+      "announcements";
   }
 }
 
