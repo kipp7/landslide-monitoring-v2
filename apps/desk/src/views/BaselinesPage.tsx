@@ -10,7 +10,7 @@ export function BaselinesPage() {
           <Typography.Title level={3} style={{ margin: 0, color: "rgba(226,232,240,0.96)" }}>
             基线管理
           </Typography.Title>
-          <Typography.Text type="secondary">GNSS 基线（Mock 数据，可切换 HTTP）</Typography.Text>
+          <Typography.Text type="secondary">GNSS 基线管理与校验</Typography.Text>
         </div>
       </div>
 
@@ -18,4 +18,3 @@ export function BaselinesPage() {
     </div>
   );
 }
-

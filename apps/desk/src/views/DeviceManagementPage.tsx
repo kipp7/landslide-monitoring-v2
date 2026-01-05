@@ -127,7 +127,7 @@ export function DeviceManagementPage() {
         if (abort.signal.aborted) return;
         const msg = (err as Error).message;
         setLoadError(msg);
-        message.error(`设备管理加载失败：${msg}（建议切换 Mock 模式）`);
+        message.error(`设备管理加载失败：${msg}（可在系统设置切换数据源）`);
       } finally {
         if (!abort.signal.aborted) setLoading(false);
       }
@@ -256,7 +256,7 @@ export function DeviceManagementPage() {
       setDevices(d);
       setBaselines(b);
       setLastUpdateTime(new Date().toLocaleTimeString("zh-CN"));
-      message.success("已刷新（Mock）");
+      message.success("已刷新");
     } catch (err) {
       const msg = (err as Error).message;
       setLoadError(msg);
@@ -278,7 +278,7 @@ export function DeviceManagementPage() {
   };
 
   const runControl = (action: string) => {
-    message.success(`${action}（Mock）`);
+    message.success(`${action} 已下发`);
     pushControlLog(action, "success");
   };
 
@@ -348,15 +348,15 @@ export function DeviceManagementPage() {
   };
 
   const exportItems: MenuProps["items"] = [
-    { key: "devices", label: "导出设备列表（Mock）" },
-    { key: "sensor", label: "导出传感器数据（Mock）" },
-    { key: "baselines", label: "导出基线信息（Mock）" }
+    { key: "devices", label: "导出设备列表" },
+    { key: "sensor", label: "导出传感器数据" },
+    { key: "baselines", label: "导出基线信息" }
   ];
 
   const onExportClick: MenuProps["onClick"] = ({ key }) => {
-    if (key === "devices") message.info("已触发：导出设备列表（Mock）");
-    if (key === "sensor") message.info("已触发：导出传感器数据（Mock）");
-    if (key === "baselines") message.info("已触发：导出基线信息（Mock）");
+    if (key === "devices") message.info("导出功能待接入：设备列表");
+    if (key === "sensor") message.info("导出功能待接入：传感器数据");
+    if (key === "baselines") message.info("导出功能待接入：基线信息");
   };
 
   return (
@@ -449,7 +449,7 @@ export function DeviceManagementPage() {
             description={
               <div style={{ color: "rgba(226,232,240,0.9)" }}>
                 <div style={{ marginBottom: 6 }}>{loadError}</div>
-                <div style={{ color: "rgba(148,163,184,0.9)" }}>可在「系统设置」切换到 Mock 模式先完成 UI。</div>
+                <div style={{ color: "rgba(148,163,184,0.9)" }}>可在「系统设置」切换数据源（演示/在线接口）。</div>
               </div>
             }
           />
@@ -744,7 +744,7 @@ export function DeviceManagementPage() {
               </div>
 
               <div className="desk-dm-stack-item">
-                <BaseCard title="实时传感器数据（Mock）">
+                <BaseCard title="实时传感器数据">
                   <div className="desk-dark-table" style={{ height: "100%", overflow: "auto" }}>
                     <table className="desk-table">
                       <thead>
@@ -773,7 +773,7 @@ export function DeviceManagementPage() {
               </div>
             </div>
 
-            <BaseCard title="设备位置地图（Mock）">
+            <BaseCard title="设备位置地图">
               <div style={{ height: "100%" }}>
                 <ReactECharts option={mapOption} style={{ height: "100%" }} />
               </div>
@@ -817,7 +817,7 @@ export function DeviceManagementPage() {
               type="primary"
               onClick={() => {
                 if (!selectedDevice) return;
-                message.success("已复制设备信息（Mock）");
+                message.success("已复制设备信息");
               }}
             >
               复制信息

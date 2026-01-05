@@ -316,7 +316,7 @@ export function AnalysisPage() {
             type="error"
             showIcon
             message="存在离线设备"
-            description="当前有设备离线（Mock），请检查网络/供电/采集链路。"
+            description="当前有设备离线，请检查网络/供电/采集链路。"
           />
         </div>
       ) : hasWarn ? (
@@ -325,7 +325,7 @@ export function AnalysisPage() {
             type="warning"
             showIcon
             message="存在预警设备"
-            description="当前有设备触发预警（Mock），请关注形变、雨量等指标。"
+            description="当前有设备触发预警，请关注形变、雨量等指标。"
           />
         </div>
       ) : null}
@@ -339,16 +339,16 @@ export function AnalysisPage() {
       <div className="desk-analysis-content">
         <div className="desk-analysis-grid">
           <div className="desk-analysis-leftcol">
-            <BaseCard title="温度趋势图（°C）- 模拟监测网络(3设备)">
+            <BaseCard title="温度趋势（°C）">
               <ReactECharts option={temperatureOption} style={{ height: "100%" }} />
             </BaseCard>
-            <BaseCard title="湿度趋势图（%）- 模拟监测网络(3设备)">
+            <BaseCard title="湿度趋势（%）">
               <ReactECharts option={humidityOption} style={{ height: "100%" }} />
             </BaseCard>
-            <BaseCard title="加速度趋势图（mg）- 模拟监测网络(3设备)">
+            <BaseCard title="加速度趋势（mg）">
               <ReactECharts option={accelOption} style={{ height: "100%" }} />
             </BaseCard>
-            <BaseCard title="陀螺仪趋势图（°/s）- 模拟监测网络(3设备)">
+            <BaseCard title="陀螺仪趋势（°/s）">
               <ReactECharts option={gyroOption} style={{ height: "100%" }} />
             </BaseCard>
           </div>
@@ -361,15 +361,15 @@ export function AnalysisPage() {
               <div className="desk-analysis-mapstack">
                 <div className="desk-analysis-maptop">
                   {mapType === "视频" ? (
-                    <div className="desk-video-mock">视频流（Mock）</div>
+                    <div className="desk-video-mock">视频流（接入后展示）</div>
                   ) : mapType === "3D" ? (
-                    <div className="desk-video-mock">3D 地图（Mock）</div>
+                    <div className="desk-video-mock">3D 地图（接入后展示）</div>
                   ) : (
                     <ReactECharts option={mapOption} style={{ height: "100%" }} />
                   )}
                 </div>
                 <div className="desk-analysis-mapbottom">
-                  <div className="desk-analysis-subtitle">实时异常（Mock）</div>
+                  <div className="desk-analysis-subtitle">实时异常</div>
                   <div style={{ height: 8 }} />
                   <div className="desk-dark-table">
                     <table className="desk-table">
@@ -410,11 +410,11 @@ export function AnalysisPage() {
             </div>
 
             <div className="desk-analysis-right-mid">
-              <BaseCard title="AI 分析与预测（Mock）">
+              <BaseCard title="AI 分析与预测">
                 <div className="desk-ai-box">
                   <div className="desk-ai-line">
                     <span className="desk-ai-dot" />
-                    <span>短时风险：中（模拟）</span>
+                    <span>短时风险：中（演示）</span>
                   </div>
                   <div className="desk-ai-line">
                     <span className="desk-ai-dot" />
@@ -422,14 +422,14 @@ export function AnalysisPage() {
                   </div>
                   <div className="desk-ai-line">
                     <span className="desk-ai-dot" />
-                    <span>说明：后续可切换到真实后端 API / AI 服务。</span>
+                    <span>说明：后续可切换到真实后端 API 与预测服务。</span>
                   </div>
                 </div>
               </BaseCard>
             </div>
 
             <div className="desk-analysis-right-bot">
-              <BaseCard title="实时传感器状态与异常分析（Mock）">
+              <BaseCard title="传感器状态与异常分析">
                 <div className="desk-sensor-row">
                   <div className="desk-sensor-col">
                     <div className="desk-sensor-item">

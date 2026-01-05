@@ -76,7 +76,7 @@ export function HomeAnnouncementsCard(props: { loading: boolean }) {
   const deleteAnnouncement = (id: string) => {
     modal.confirm({
       title: "删除公告",
-      content: "该操作只影响本地 Mock 数据（不会影响真实系统）。",
+      content: "该操作只影响本地演示数据（不会影响真实系统）。",
       okText: "删除",
       cancelText: "取消",
       okButtonProps: { danger: true },
@@ -247,4 +247,3 @@ export function HomeAnnouncementsCard(props: { loading: boolean }) {
     </>
   );
 }
-

@@ -185,7 +185,7 @@ export function GpsMonitoringPage() {
         if (abort.signal.aborted) return;
         const msg = (err as Error).message;
         setLoadError(msg);
-        message.error(`GPS 页面加载失败：${msg}（建议切换 Mock 模式）`);
+        message.error(`GPS 页面加载失败：${msg}（可在系统设置切换数据源）`);
       } finally {
         if (!abort.signal.aborted) setLoading(false);
       }
@@ -673,10 +673,10 @@ export function GpsMonitoringPage() {
   const realtimeRows = useMemo(() => chartData.slice(-24).reverse(), [chartData]);
 
   const exportItems: MenuProps["items"] = [
-    { key: "csv", label: "导出当前设备数据（Mock）" },
-    { key: "analysis", label: "导出分析结果（Mock）" },
-    { key: "report", label: "导出综合报告（Mock）" },
-    { key: "chart", label: "导出图表图片（Mock）" }
+    { key: "csv", label: "导出当前设备数据" },
+    { key: "analysis", label: "导出分析结果" },
+    { key: "report", label: "导出综合报告" },
+    { key: "chart", label: "导出图表图片" }
   ];
 
   return (
@@ -740,10 +740,10 @@ export function GpsMonitoringPage() {
               menu={{
                 items: exportItems,
                 onClick: ({ key }) => {
-                  if (key === "csv") message.info("导出：Mock（后续接入 Excel/报告导出）");
-                  if (key === "analysis") message.info("导出分析：Mock（后续接入）");
-                  if (key === "report") message.info("导出报告：Mock（后续接入）");
-                  if (key === "chart") message.info("导出图表：Mock（后续接入）");
+                  if (key === "csv") message.info("导出功能待接入：Excel/报告导出");
+                  if (key === "analysis") message.info("导出功能待接入：分析结果");
+                  if (key === "report") message.info("导出功能待接入：综合报告");
+                  if (key === "chart") message.info("导出功能待接入：图表图片");
                 }
               }}
               placement="bottomLeft"
@@ -793,7 +793,7 @@ export function GpsMonitoringPage() {
             description={
               <div style={{ color: "rgba(226,232,240,0.9)" }}>
                 <div style={{ marginBottom: 6 }}>{loadError}</div>
-                <div style={{ color: "rgba(148,163,184,0.9)" }}>可在「系统设置」切换到 Mock 模式先完成 UI。</div>
+                <div style={{ color: "rgba(148,163,184,0.9)" }}>可在「系统设置」切换数据源（演示/在线接口）。</div>
               </div>
             }
           />
@@ -870,7 +870,7 @@ export function GpsMonitoringPage() {
               children: (
                 <Row gutter={[12, 12]}>
                   <Col xs={24} lg={12}>
-                    <BaseCard title="位移趋势图（Mock）">
+                    <BaseCard title="位移趋势图">
                       {loading ? (
                         <div className="desk-loading">加载中…</div>
                       ) : (
@@ -879,17 +879,17 @@ export function GpsMonitoringPage() {
                     </BaseCard>
                   </Col>
                   <Col xs={24} lg={12}>
-                    <BaseCard title="形变速度（Mock）">
+                    <BaseCard title="形变速度">
                       {loading ? <div className="desk-loading">加载中…</div> : <ReactECharts option={velocityOption} style={{ height: 320 }} />}
                     </BaseCard>
                   </Col>
                   <Col xs={24} lg={12}>
-                    <BaseCard title="环境因素（Mock）">
+                    <BaseCard title="环境因素">
                       {loading ? <div className="desk-loading">加载中…</div> : <ReactECharts option={envOption} style={{ height: 320 }} />}
                     </BaseCard>
                   </Col>
                   <Col xs={24} lg={12}>
-                    <BaseCard title="最近数据（Mock）">
+                    <BaseCard title="最近数据">
                       <div className="desk-dark-table">
                         <Table<GpsChartRow>
                           rowKey="key"
@@ -919,7 +919,7 @@ export function GpsMonitoringPage() {
                     </BaseCard>
                   </Col>
                   <Col span={24}>
-                    <BaseCard title="基线 / 最新坐标（Mock）">
+                    <BaseCard title="基线 / 最新坐标">
                       <div className="desk-gps-coord">
                         <div className="desk-gps-coord-kv">
                           <div className="desk-gps-coord-title">GPS 坐标</div>
@@ -955,7 +955,7 @@ export function GpsMonitoringPage() {
                               </Tag>
                             </span>
                           </div>
-                          <div className="desk-gps-coord-tip">提示：地图为 UI Mock（散点展示基线点与最新点）。</div>
+                          <div className="desk-gps-coord-tip">提示：地图为示意（散点展示基线点与最新点）。</div>
                         </div>
                         <div className="desk-gps-coord-chart">
                           {loading ? <div className="desk-loading">加载中…</div> : <ReactECharts option={coordOption} style={{ height: 220 }} />}
@@ -972,7 +972,7 @@ export function GpsMonitoringPage() {
               children: (
                 <Row gutter={[12, 12]}>
                   <Col xs={24} lg={16}>
-                    <BaseCard title="分解结果（Mock）">
+                    <BaseCard title="分解结果">
                       {loading ? (
                         <div className="desk-loading">加载中…</div>
                       ) : (
@@ -981,12 +981,12 @@ export function GpsMonitoringPage() {
                     </BaseCard>
                   </Col>
                   <Col xs={24} lg={8}>
-                    <BaseCard title="能量分布（Mock）">
+                    <BaseCard title="能量分布">
                       {loading ? <div className="desk-loading">加载中…</div> : <ReactECharts option={ceemdEnergyOption} style={{ height: 360 }} />}
                     </BaseCard>
                   </Col>
                   <Col span={24}>
-                    <BaseCard title="CEEMD 分解概览（Mock）">
+                    <BaseCard title="CEEMD 分解概览">
                       <Row gutter={[12, 12]}>
                         <Col xs={24} lg={10}>
                           <div className="desk-gps-ceemd-metrics">
@@ -1002,17 +1002,17 @@ export function GpsMonitoringPage() {
                             <div className="desk-gps-ceemd-metric">
                               <div className="desk-gps-ceemd-k">重构误差</div>
                               <div className="desk-gps-ceemd-v">{ceemdMetrics.recon}</div>
-                              <div className="desk-gps-ceemd-muted">越小越好（Mock）</div>
+                              <div className="desk-gps-ceemd-muted">越小越好</div>
                             </div>
                             <div className="desk-gps-ceemd-metric">
                               <div className="desk-gps-ceemd-k">正交性</div>
                               <div className="desk-gps-ceemd-v">{ceemdMetrics.ortho}</div>
-                              <div className="desk-gps-ceemd-muted">0~1（Mock）</div>
+                              <div className="desk-gps-ceemd-muted">0~1</div>
                             </div>
                             <div className="desk-gps-ceemd-metric">
                               <div className="desk-gps-ceemd-k">SNR</div>
                               <div className="desk-gps-ceemd-v">{ceemdMetrics.snr} dB</div>
-                              <div className="desk-gps-ceemd-muted">信噪比（Mock）</div>
+                              <div className="desk-gps-ceemd-muted">信噪比</div>
                             </div>
                           </div>
                         </Col>
@@ -1028,10 +1028,10 @@ export function GpsMonitoringPage() {
                     </BaseCard>
                   </Col>
                   <Col span={24}>
-                    <BaseCard title="说明（Mock）">
+                    <BaseCard title="说明">
                       <div className="desk-gps-note">
                         <div className="desk-gps-note-title">CEEMD 说明</div>
-                        <div className="desk-gps-note-line">- 该页为 UI Mock：展示分解曲线与能量占比。</div>
+                        <div className="desk-gps-note-line">- 本页为演示：展示分解曲线与能量占比。</div>
                         <div className="desk-gps-note-line">- 后续可对接 v2 后端：CEEMD 分解 / IMF 分量 / 质量指标。</div>
                       </div>
                     </BaseCard>
@@ -1045,12 +1045,12 @@ export function GpsMonitoringPage() {
               children: (
                 <Row gutter={[12, 12]}>
                   <Col xs={24} lg={16}>
-                    <BaseCard title="短期预测（Mock）">
+                    <BaseCard title="短期预测">
                       {loading ? <div className="desk-loading">加载中…</div> : <ReactECharts option={predictionOption} style={{ height: 360 }} />}
                     </BaseCard>
                   </Col>
                   <Col xs={24} lg={8}>
-                    <BaseCard title="分析摘要（Mock）">
+                    <BaseCard title="分析摘要">
                       <div className="desk-gps-note">
                         <div className="desk-gps-note-title">建议</div>
                         <div className="desk-gps-note-line">
@@ -1073,12 +1073,12 @@ export function GpsMonitoringPage() {
                     </BaseCard>
                   </Col>
                   <Col xs={24} lg={16}>
-                    <BaseCard title="长期预测（Mock）">
+                    <BaseCard title="长期预测">
                       {loading ? <div className="desk-loading">加载中…</div> : <ReactECharts option={longTermPredictionOption} style={{ height: 360 }} />}
                     </BaseCard>
                   </Col>
                   <Col xs={24} lg={8}>
-                    <BaseCard title="预测指标（Mock）">
+                    <BaseCard title="预测指标">
                       <div className="desk-gps-ceemd-metrics">
                         <div className="desk-gps-ceemd-metric">
                           <div className="desk-gps-ceemd-k">预测范围</div>
@@ -1101,7 +1101,7 @@ export function GpsMonitoringPage() {
                         </div>
                       </div>
                       <div className="desk-gps-note-muted" style={{ marginTop: 8 }}>
-                        提示：指标为 UI Mock，后续对接 v2 后端预测服务。
+                        提示：指标为演示数据，后续对接 v2 后端预测服务。
                       </div>
                     </BaseCard>
                   </Col>
@@ -1112,7 +1112,7 @@ export function GpsMonitoringPage() {
               key: "data",
               label: "数据详情",
               children: (
-                <BaseCard title="GPS 数据表（Mock）" style={{ height: "calc(100vh - 360px)" }}>
+                <BaseCard title="GPS 数据表" style={{ height: "calc(100vh - 360px)" }}>
                   <div className="desk-dark-table">
                     <Table<GpsChartRow>
                       rowKey="key"
@@ -1179,7 +1179,7 @@ export function GpsMonitoringPage() {
             <InputNumber min={0} precision={2} style={{ width: "100%" }} />
           </Form.Item>
           <div style={{ color: "rgba(148,163,184,0.9)", fontSize: 12 }}>
-            仅影响本页 UI 展示（Mock），后续可从后端配置中心下发。
+            仅影响本页展示，后续可从后端配置中心下发。
           </div>
         </Form>
       </Modal>
@@ -1207,7 +1207,7 @@ export function GpsMonitoringPage() {
             <InputNumber min={50} max={2000} precision={0} style={{ width: "100%" }} />
           </Form.Item>
           <div style={{ color: "rgba(148,163,184,0.9)", fontSize: 12 }}>
-            说明：仅影响本页图表与表格的展示条数（Mock），不会影响后端数据。
+            说明：仅影响本页图表与表格的展示条数，不会影响后端数据。
           </div>
         </Form>
       </Modal>

@@ -155,7 +155,7 @@ export function HomeTodosCard(props: { loading: boolean; stations: Station[]; de
 
   const renderList = (list: HomeTask[]) => {
     if (props.loading) return <Skeleton active paragraph={{ rows: 4 }} />;
-    if (!list.length) return <Typography.Text type="secondary">暂无待处理事项（Mock）</Typography.Text>;
+    if (!list.length) return <Typography.Text type="secondary">暂无待处理事项</Typography.Text>;
 
     return list.map((t) => {
       const doneAt = persist.doneAtById[t.id];
