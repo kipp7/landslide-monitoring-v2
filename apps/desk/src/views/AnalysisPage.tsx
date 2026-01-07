@@ -141,7 +141,7 @@ export function AnalysisPage() {
     return {
       backgroundColor: "transparent",
       textStyle: { color: "rgba(226, 232, 240, 0.9)" },
-      grid: { left: 42, right: 14, top: 22, bottom: 30 },
+      grid: { left: 54, right: 18, top: 22, bottom: 30, containLabel: true },
       tooltip: { trigger: "axis", ...darkTooltip() },
       xAxis: {
         type: "category",
@@ -155,7 +155,7 @@ export function AnalysisPage() {
   const tempHumOption = useMemo(() => {
     return {
       ...chartBase,
-      grid: { left: 42, right: 42, top: 22, bottom: 30 },
+      grid: { left: 54, right: 54, top: 22, bottom: 30, containLabel: true },
       legend: {
         top: 6,
         right: 10,
@@ -165,8 +165,8 @@ export function AnalysisPage() {
       },
       xAxis: { ...chartBase.xAxis, data: Array.from({ length: 12 }, (_, i) => `${String(i + 1)}时`) },
       yAxis: [
-        { type: "value", name: "°C", ...darkAxis() },
-        { type: "value", name: "%", ...darkAxis() }
+        { type: "value", name: "°C", ...darkAxis(), axisLabel: { ...darkAxis().axisLabel, margin: 8 } },
+        { type: "value", name: "%", ...darkAxis(), axisLabel: { ...darkAxis().axisLabel, margin: 8 } }
       ],
       series: [
         {
@@ -195,7 +195,7 @@ export function AnalysisPage() {
   const vibrationOption = useMemo(() => {
     return {
       ...chartBase,
-      grid: { left: 42, right: 42, top: 22, bottom: 30 },
+      grid: { left: 54, right: 54, top: 22, bottom: 30, containLabel: true },
       legend: {
         top: 6,
         right: 10,
@@ -205,8 +205,8 @@ export function AnalysisPage() {
       },
       xAxis: { ...chartBase.xAxis, data: Array.from({ length: 12 }, (_, i) => `${String(i + 1)}时`) },
       yAxis: [
-        { type: "value", name: "mg", ...darkAxis() },
-        { type: "value", name: "°/s", ...darkAxis() }
+        { type: "value", name: "mg", ...darkAxis(), axisLabel: { ...darkAxis().axisLabel, margin: 8 } },
+        { type: "value", name: "°/s", ...darkAxis(), axisLabel: { ...darkAxis().axisLabel, margin: 8 } }
       ],
       series: [
         {
@@ -240,10 +240,10 @@ export function AnalysisPage() {
     return {
       backgroundColor: "transparent",
       textStyle: { color: "rgba(226, 232, 240, 0.9)" },
-      grid: { left: 42, right: 14, top: 18, bottom: 32 },
+      grid: { left: 54, right: 18, top: 18, bottom: 32, containLabel: true },
       tooltip: { trigger: "axis", ...darkTooltip() },
       xAxis: { type: "category", data: labels, ...darkAxis() },
-      yAxis: { type: "value", name: is24h ? "mm/h" : "mm", ...darkAxis() },
+      yAxis: { type: "value", name: is24h ? "mm/h" : "mm", ...darkAxis(), axisLabel: { ...darkAxis().axisLabel, margin: 8 } },
       series: [
         {
           name: "雨量",
@@ -260,6 +260,9 @@ export function AnalysisPage() {
     const high = stations.filter((s) => s.risk === "high").length;
     const mid = stations.filter((s) => s.risk === "mid").length;
     const low = stations.filter((s) => s.risk === "low").length;
+    const total = stations.length;
+    const centerX = "38%";
+    const centerY = "55%";
 
     return {
       backgroundColor: "transparent",
@@ -275,39 +278,22 @@ export function AnalysisPage() {
         {
           type: "pie",
           radius: ["52%", "78%"],
-          center: ["38%", "55%"],
-          label: { show: false },
+          center: [centerX, centerY],
+          label: {
+            show: true,
+            position: "center",
+            formatter: `{v|${String(total)}}\n{l|监测站}`,
+            rich: {
+              v: { color: "rgba(226, 232, 240, 0.96)", fontSize: 22, fontWeight: 900, lineHeight: 24 },
+              l: { color: "rgba(148, 163, 184, 0.9)", fontSize: 12, fontWeight: 800, lineHeight: 16 }
+            }
+          },
+          labelLine: { show: false },
           data: [
             { name: "高风险", value: high, itemStyle: { color: "#ef4444" } },
             { name: "中风险", value: mid, itemStyle: { color: "#f59e0b" } },
             { name: "低风险", value: low, itemStyle: { color: "#22c55e" } }
           ]
-        }
-      ],
-      graphic: [
-        {
-          type: "text",
-          left: "38%",
-          top: "47%",
-          style: {
-            text: String(stations.length),
-            fill: "rgba(226, 232, 240, 0.96)",
-            fontSize: 22,
-            fontWeight: 900,
-            align: "center"
-          }
-        },
-        {
-          type: "text",
-          left: "38%",
-          top: "62%",
-          style: {
-            text: "监测站",
-            fill: "rgba(148, 163, 184, 0.9)",
-            fontSize: 12,
-            fontWeight: 800,
-            align: "center"
-          }
         }
       ]
     };

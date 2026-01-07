@@ -63,3 +63,6 @@ venv/
 # Local scratch docs
 database_table_analysis.md
 Supabase模拟数据生成/
+
+# Local screenshots (do not commit)
+图*.png
