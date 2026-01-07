@@ -32,6 +32,9 @@ function RecenterOnReset(props: { resetKey: number | undefined; bounds: L.LatLng
 }
 
 export function RealMapView(props: RealMapViewProps) {
+  const tdtKey = (import.meta.env.VITE_TDT_KEY as string | undefined) ?? "";
+  const useTdt = Boolean(tdtKey);
+
   const bounds = useMemo<L.LatLngBoundsExpression>(() => {
     const pts = props.stations
       .filter((s) => Number.isFinite(s.lat) && Number.isFinite(s.lng))
@@ -49,16 +52,25 @@ export function RealMapView(props: RealMapViewProps) {
   const esriAttribution =
     `Tiles &copy; Esri` +
     ` &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community`;
+  const tdtAttribution = `&copy; 天地图`;
 
-  const tile = props.layer === "卫星图"
-    ? {
-        url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-        attribution: esriAttribution
-      }
-    : {
-        url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-        attribution: osmAttribution
-      };
+  const tdtBaseLayer = props.layer === "卫星图" ? "img" : "vec";
+  const tdtLabelLayer = props.layer === "卫星图" ? "cia" : "cva";
+  const tdtUrl = (layer: string) =>
+    `https://t{s}.tianditu.gov.cn/${layer}_w/wmts?tk=${tdtKey}` +
+    `&SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=${layer}&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles` +
+    `&TILECOL={x}&TILEROW={y}&TILEMATRIX={z}`;
+
+  const fallbackTile =
+    props.layer === "卫星图"
+      ? {
+          url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+          attribution: esriAttribution
+        }
+      : {
+          url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+          attribution: osmAttribution
+        };
 
   return (
     <MapContainer
@@ -71,7 +83,14 @@ export function RealMapView(props: RealMapViewProps) {
       attributionControl
       preferCanvas
     >
-      <TileLayer url={tile.url} attribution={tile.attribution} />
+      {useTdt ? (
+        <>
+          <TileLayer url={tdtUrl(tdtBaseLayer)} attribution={tdtAttribution} subdomains={["0", "1", "2", "3", "4", "5", "6", "7"]} />
+          <TileLayer url={tdtUrl(tdtLabelLayer)} attribution={tdtAttribution} subdomains={["0", "1", "2", "3", "4", "5", "6", "7"]} />
+        </>
+      ) : (
+        <TileLayer url={fallbackTile.url} attribution={fallbackTile.attribution} />
+      )}
       <RecenterOnReset resetKey={props.resetKey} bounds={bounds} />
 
       {props.stations.map((s) => {
