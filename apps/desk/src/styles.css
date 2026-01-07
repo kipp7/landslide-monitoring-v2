@@ -134,6 +134,118 @@ body {
   --desk-tag-fg: rgba(187, 247, 208, 0.96);
 }
 
+/* Global tag system (for plain Ant <Tag/> usages) */
+.desk-app .ant-tag,
+.desk-page .ant-tag {
+  --desk-tag-border: rgba(148, 163, 184, 0.22);
+  --desk-tag-bg: rgba(148, 163, 184, 0.12);
+  --desk-tag-fg: rgba(226, 232, 240, 0.92);
+  border: 1px solid var(--desk-tag-border) !important;
+  background: var(--desk-tag-bg) !important;
+  color: var(--desk-tag-fg) !important;
+  border-radius: 999px;
+  padding-inline: 8px;
+  font-weight: 800;
+  margin-inline-end: 0 !important;
+}
+
+.desk-app .ant-tag.ant-tag-cyan,
+.desk-page .ant-tag.ant-tag-cyan {
+  --desk-tag-border: rgba(34, 211, 238, 0.32);
+  --desk-tag-bg: rgba(34, 211, 238, 0.12);
+  --desk-tag-fg: rgba(165, 243, 252, 0.96);
+}
+
+.desk-app .ant-tag.ant-tag-blue,
+.desk-page .ant-tag.ant-tag-blue {
+  --desk-tag-border: rgba(96, 165, 250, 0.32);
+  --desk-tag-bg: rgba(96, 165, 250, 0.12);
+  --desk-tag-fg: rgba(191, 219, 254, 0.96);
+}
+
+.desk-app .ant-tag.ant-tag-geekblue,
+.desk-page .ant-tag.ant-tag-geekblue {
+  --desk-tag-border: rgba(56, 189, 248, 0.32);
+  --desk-tag-bg: rgba(56, 189, 248, 0.12);
+  --desk-tag-fg: rgba(186, 230, 253, 0.96);
+}
+
+.desk-app .ant-tag.ant-tag-purple,
+.desk-page .ant-tag.ant-tag-purple {
+  --desk-tag-border: rgba(168, 85, 247, 0.32);
+  --desk-tag-bg: rgba(168, 85, 247, 0.12);
+  --desk-tag-fg: rgba(233, 213, 255, 0.96);
+}
+
+.desk-app .ant-tag.ant-tag-orange,
+.desk-page .ant-tag.ant-tag-orange {
+  --desk-tag-border: rgba(245, 158, 11, 0.32);
+  --desk-tag-bg: rgba(245, 158, 11, 0.12);
+  --desk-tag-fg: rgba(254, 215, 170, 0.96);
+}
+
+.desk-app .ant-tag.ant-tag-red,
+.desk-page .ant-tag.ant-tag-red {
+  --desk-tag-border: rgba(239, 68, 68, 0.32);
+  --desk-tag-bg: rgba(239, 68, 68, 0.12);
+  --desk-tag-fg: rgba(254, 202, 202, 0.96);
+}
+
+.desk-app .ant-tag.ant-tag-green,
+.desk-page .ant-tag.ant-tag-green {
+  --desk-tag-border: rgba(34, 197, 94, 0.32);
+  --desk-tag-bg: rgba(34, 197, 94, 0.12);
+  --desk-tag-fg: rgba(187, 247, 208, 0.96);
+}
+
+/* Global button system */
+.desk-app .ant-btn,
+.desk-page .ant-btn {
+  border-radius: 999px;
+}
+
+.desk-app .ant-btn-default,
+.desk-page .ant-btn-default {
+  background: rgba(15, 23, 42, 0.24) !important;
+  border-color: rgba(148, 163, 184, 0.28) !important;
+  color: rgba(226, 232, 240, 0.92) !important;
+}
+
+.desk-app .ant-btn-default:hover,
+.desk-page .ant-btn-default:hover {
+  background: rgba(34, 211, 238, 0.08) !important;
+  border-color: rgba(34, 211, 238, 0.38) !important;
+}
+
+.desk-app .ant-btn-primary,
+.desk-page .ant-btn-primary {
+  background: linear-gradient(135deg, rgba(34, 211, 238, 0.96), rgba(56, 189, 248, 0.9)) !important;
+  border-color: transparent !important;
+  color: #061021 !important;
+  font-weight: 900;
+  box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.18), 0 10px 22px rgba(34, 211, 238, 0.12);
+}
+
+.desk-app .ant-btn-primary:hover,
+.desk-page .ant-btn-primary:hover {
+  background: linear-gradient(135deg, rgba(34, 211, 238, 1), rgba(56, 189, 248, 0.98)) !important;
+}
+
+.desk-app .ant-btn-primary:disabled,
+.desk-page .ant-btn-primary:disabled,
+.desk-app .ant-btn-primary.ant-btn-disabled,
+.desk-page .ant-btn-primary.ant-btn-disabled {
+  box-shadow: none;
+  filter: saturate(0.65) brightness(0.95);
+}
+
+.desk-app .ant-btn-dangerous.ant-btn-primary,
+.desk-page .ant-btn-dangerous.ant-btn-primary {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.92), rgba(245, 158, 11, 0.42)) !important;
+  color: rgba(254, 242, 242, 0.96) !important;
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.18), 0 10px 22px rgba(239, 68, 68, 0.10);
+}
+
 /* Ant Design Table dark tweaks (used with .desk-dark-table wrapper) */
 .desk-dark-table .ant-table,
 .desk-dark-table .ant-table-container,
