@@ -38,16 +38,6 @@ function darkTooltip() {
   };
 }
 
-function darkCategoryAxis(data: string[]) {
-  const { axisLabel: _unusedAxisLabel, ...rest } = darkAxis();
-  return {
-    type: "category" as const,
-    data,
-    ...rest,
-    axisLabel: { ...darkAxis().axisLabel, hideOverlap: true }
-  };
-}
-
 export function AnalysisPage() {
   const api = useApi();
   const navigate = useNavigate();
@@ -180,8 +170,8 @@ export function AnalysisPage() {
         axisLabel: { ...darkAxis().axisLabel, hideOverlap: true }
       },
       yAxis: [
-        { type: "value", name: "°C", ...darkAxis(), axisLabel: { ...darkAxis().axisLabel, margin: 6 } },
-        { type: "value", name: "%", ...darkAxis(), axisLabel: { ...darkAxis().axisLabel, margin: 6 } }
+        { type: "value", name: "°C", ...darkAxis(), axisLabel: { ...darkAxis().axisLabel, margin: 3 } },
+        { type: "value", name: "%", ...darkAxis(), axisLabel: { ...darkAxis().axisLabel, margin: 3 } }
       ],
       series: [
         {
@@ -225,8 +215,8 @@ export function AnalysisPage() {
         axisLabel: { ...darkAxis().axisLabel, hideOverlap: true }
       },
       yAxis: [
-        { type: "value", name: "mg", ...darkAxis(), axisLabel: { ...darkAxis().axisLabel, margin: 6 } },
-        { type: "value", name: "°/s", ...darkAxis(), axisLabel: { ...darkAxis().axisLabel, margin: 6 } }
+        { type: "value", name: "mg", ...darkAxis(), axisLabel: { ...darkAxis().axisLabel, margin: 3 } },
+        { type: "value", name: "°/s", ...darkAxis(), axisLabel: { ...darkAxis().axisLabel, margin: 3 } }
       ],
       series: [
         {
@@ -260,9 +250,9 @@ export function AnalysisPage() {
     return {
       backgroundColor: "transparent",
       textStyle: { color: "rgba(226, 232, 240, 0.9)" },
-      grid: { left: "10%", right: "6%", top: 42, bottom: 32, containLabel: true },
+      grid: { left: "0%", right: "0%", top: 30, bottom: 0, containLabel: true },
       tooltip: { trigger: "axis", ...darkTooltip() },
-      xAxis: darkCategoryAxis(labels),
+      xAxis: { type: "category", data: labels, ...darkAxis() },
       yAxis: { type: "value", name: is24h ? "mm/h" : "mm", ...darkAxis(), axisLabel: { ...darkAxis().axisLabel, margin: 6 } },
       series: [
         {
@@ -334,15 +324,15 @@ export function AnalysisPage() {
       backgroundColor: "transparent",
       textStyle: { color: "rgba(226, 232, 240, 0.9)" },
       tooltip: { trigger: "axis", ...darkTooltip() },
-      grid: { left: 30, right: 18, top: 40, bottom: 28, containLabel: true },
+      grid: { left: "0%", right: "0%", top: 30, bottom: 0, containLabel: true },
       legend: {
-        top: 6,
-        left: 10,
+        top: 8,
+        left: "center",
         textStyle: { color: "rgba(226, 232, 240, 0.82)" },
         itemWidth: 10,
         itemHeight: 10
       },
-      xAxis: darkCategoryAxis(labels),
+      xAxis: { type: "category", data: labels, ...darkAxis() },
       yAxis: { type: "value", ...darkAxis() },
       series: [
         {
