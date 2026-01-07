@@ -16,35 +16,37 @@ type MockOptions = {
 };
 
 function makeStations(): Station[] {
+  const baseLat = 22.6263;
+  const baseLng = 110.1805;
   return [
     {
       id: "station_a",
       name: "滑坡点 A",
-      area: "XX 省 XX 市",
+      area: "广西 玉林市 玉林师范学院",
       risk: "high",
       status: "warning",
-      lat: 30.65984,
-      lng: 104.06335,
+      lat: baseLat + 0.0062,
+      lng: baseLng - 0.0074,
       deviceCount: 8
     },
     {
       id: "station_b",
       name: "滑坡点 B",
-      area: "XX 省 XX 市",
+      area: "广西 玉林市 玉林师范学院",
       risk: "mid",
       status: "online",
-      lat: 30.57227,
-      lng: 104.06654,
+      lat: baseLat - 0.0036,
+      lng: baseLng + 0.0045,
       deviceCount: 6
     },
     {
       id: "station_c",
       name: "滑坡点 C",
-      area: "XX 省 XX 市",
+      area: "广西 玉林市 玉林师范学院",
       risk: "low",
       status: "online",
-      lat: 30.54518,
-      lng: 104.07966,
+      lat: baseLat - 0.0088,
+      lng: baseLng - 0.0012,
       deviceCount: 4
     }
   ];
