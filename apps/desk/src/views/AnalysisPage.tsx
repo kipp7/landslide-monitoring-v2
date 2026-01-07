@@ -25,6 +25,51 @@ type AnomalyRow = {
   time: string;
 };
 
+function fmtMm(v: number | null | undefined) {
+  if (v === null || v === undefined || Number.isNaN(v)) return "—";
+  return `${v.toFixed(2)}`;
+}
+
+function fmtMmPerH(v: number | null | undefined) {
+  if (v === null || v === undefined || Number.isNaN(v)) return "—";
+  return `${v.toFixed(2)}`;
+}
+
+function hoursBetween(a: Date, b: Date) {
+  return Math.abs(a.getTime() - b.getTime()) / (60 * 60 * 1000);
+}
+
+function findPointAtOrBefore(points: { ts: string; dispMm: number }[], target: Date) {
+  for (let i = points.length - 1; i >= 0; i -= 1) {
+    const pt = points[i];
+    if (!pt) continue;
+    const t = new Date(pt.ts);
+    if (t.getTime() <= target.getTime()) return pt;
+  }
+  return null;
+}
+
+function calcDelta(points: { ts: string; dispMm: number }[], hours: number) {
+  if (points.length < 2) return null;
+  const last = points.at(-1);
+  if (!last) return null;
+  const lastT = new Date(last.ts);
+  const p = findPointAtOrBefore(points, new Date(lastT.getTime() - hours * 60 * 60 * 1000));
+  if (!p) return null;
+  return Number((last.dispMm - p.dispMm).toFixed(2));
+}
+
+function calcSlopeMmPerH(points: { ts: string; dispMm: number }[], hours: number) {
+  if (points.length < 2) return null;
+  const last = points.at(-1);
+  if (!last) return null;
+  const lastT = new Date(last.ts);
+  const p = findPointAtOrBefore(points, new Date(lastT.getTime() - hours * 60 * 60 * 1000));
+  if (!p) return null;
+  const dt = Math.max(0.1, hoursBetween(lastT, new Date(p.ts)));
+  return Number(((last.dispMm - p.dispMm) / dt).toFixed(2));
+}
+
 function darkAxis() {
   return {
     axisLine: { lineStyle: { color: "rgba(148, 163, 184, 0.45)" } },
@@ -64,6 +109,9 @@ export function AnalysisPage() {
   const [stationPanelExpanded, setStationPanelExpanded] = useState(false);
   const [stationPanelPage, setStationPanelPage] = useState(0);
   const [stationPanelPlaying, setStationPanelPlaying] = useState(true);
+  const [stationPanelActiveId, setStationPanelActiveId] = useState<string | null>(null);
+  const [gpsCache, setGpsCache] = useState<Record<string, { deviceId: string; deviceName: string; points: { ts: string; dispMm: number }[] }>>({});
+  const gpsAbortRef = useRef<AbortController | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -405,22 +453,47 @@ export function AnalysisPage() {
     return stations.filter((s) => set.has(s.id));
   }, [selectedStationIds, stations]);
 
+  const sortedSelectedStations = useMemo(() => {
+    const score = (r: Station["risk"]) => (r === "high" ? 3 : r === "mid" ? 2 : 1);
+    return selectedStations
+      .slice()
+      .sort((a, b) => score(b.risk) - score(a.risk) || a.name.localeCompare(b.name));
+  }, [selectedStations]);
+
+  const stationPanelPageSize = stationPanelExpanded ? 4 : 6;
+  const stationPanelPages = useMemo(() => {
+    return Math.max(1, Math.ceil(sortedSelectedStations.length / stationPanelPageSize));
+  }, [sortedSelectedStations.length, stationPanelPageSize]);
+
   useEffect(() => {
     if (!selectedStationIds.length) {
       setStationPanelExpanded(false);
       setStationPanelPage(0);
+      setStationPanelActiveId(null);
     }
   }, [selectedStationIds.length]);
 
   useEffect(() => {
     if (!stationPanelPlaying) return;
-    const pages = Math.max(1, Math.ceil(selectedStations.length / 3));
-    if (pages <= 1) return;
+    if (stationPanelPages <= 1) return;
     const t = window.setInterval(() => {
-      setStationPanelPage((p) => (p + 1) % pages);
+      setStationPanelPage((p) => (p + 1) % stationPanelPages);
     }, 5000);
     return () => window.clearInterval(t);
-  }, [selectedStations.length, stationPanelPlaying]);
+  }, [stationPanelPages, stationPanelPlaying]);
+
+  useEffect(() => {
+    if (!sortedSelectedStations.length) return;
+    if (stationPanelActiveId && sortedSelectedStations.some((s) => s.id === stationPanelActiveId)) return;
+    const first = sortedSelectedStations.at(0);
+    if (first) setStationPanelActiveId(first.id);
+  }, [sortedSelectedStations, stationPanelActiveId]);
+
+  useEffect(() => {
+    if (!stationPanelPages) return;
+    if (stationPanelPage < stationPanelPages) return;
+    setStationPanelPage(0);
+  }, [stationPanelPage, stationPanelPages]);
 
   const metricsByStationId = useMemo(() => {
     type Metrics = {
@@ -453,6 +526,134 @@ export function AnalysisPage() {
 
     return map;
   }, [devices]);
+
+  const selectedSummary = useMemo(() => {
+    const high = sortedSelectedStations.filter((s) => s.risk === "high").length;
+    const mid = sortedSelectedStations.filter((s) => s.risk === "mid").length;
+    const low = sortedSelectedStations.filter((s) => s.risk === "low").length;
+    const warn = sortedSelectedStations.filter((s) => s.status === "warning").length;
+    const off = sortedSelectedStations.filter((s) => s.status === "offline").length;
+    return { high, mid, low, warn, off, total: sortedSelectedStations.length };
+  }, [sortedSelectedStations]);
+
+  const activeStation = useMemo(() => {
+    if (!stationPanelActiveId) return null;
+    return sortedSelectedStations.find((s) => s.id === stationPanelActiveId) ?? null;
+  }, [sortedSelectedStations, stationPanelActiveId]);
+
+  const activeGnssDevice = useMemo(() => {
+    if (!activeStation) return null;
+    return devices.find((d) => d.stationId === activeStation.id && d.type === "gnss") ?? null;
+  }, [activeStation, devices]);
+
+  useEffect(() => {
+    if (!activeGnssDevice) return;
+    if (gpsCache[activeGnssDevice.id]) return;
+
+    gpsAbortRef.current?.abort();
+    const abort = new AbortController();
+    gpsAbortRef.current = abort;
+
+    (async () => {
+      try {
+        const series = await api.gps.getSeries({ deviceId: activeGnssDevice.id, days: 1 });
+        if (abort.signal.aborted) return;
+        setGpsCache((prev) => ({
+          ...prev,
+          [activeGnssDevice.id]: series
+        }));
+      } catch {
+        // ignore for now (mock/http may not support)
+      }
+    })();
+
+    return () => abort.abort();
+  }, [activeGnssDevice, api.gps, gpsCache]);
+
+  const activeDisplacementOption = useMemo(() => {
+    if (!activeGnssDevice) return null;
+    const series = gpsCache[activeGnssDevice.id];
+    if (!series) return null;
+    const pts = series.points.slice(-36);
+    return {
+      backgroundColor: "transparent",
+      grid: { left: 24, right: 10, top: 10, bottom: 18, containLabel: true },
+      xAxis: {
+        type: "category",
+        data: pts.map((p) => p.ts.slice(11, 16)),
+        ...darkAxis(),
+        axisLabel: { ...darkAxis().axisLabel, fontSize: 10 }
+      },
+      yAxis: {
+        type: "value",
+        ...darkAxis(),
+        axisLabel: { ...darkAxis().axisLabel, fontSize: 10 }
+      },
+      tooltip: { trigger: "axis", ...darkTooltip() },
+      series: [
+        {
+          type: "line",
+          smooth: true,
+          showSymbol: false,
+          data: pts.map((p) => p.dispMm),
+          lineStyle: { width: 2, color: "#22d3ee" },
+          areaStyle: { color: "rgba(34, 211, 238, 0.14)" }
+        }
+      ]
+    };
+  }, [activeGnssDevice, gpsCache]);
+
+  const activeGnssStats = useMemo(() => {
+    if (!activeGnssDevice) return null;
+    const series = gpsCache[activeGnssDevice.id];
+    if (!series) return null;
+    const pts = series.points.slice();
+    if (!pts.length) return null;
+    const last = pts.at(-1);
+    if (!last) return null;
+    const d1h = calcDelta(pts, 1);
+    const d6h = calcDelta(pts, 6);
+    const d24h = calcDelta(pts, 24);
+    const v1h = calcSlopeMmPerH(pts, 1);
+    const v6h = calcSlopeMmPerH(pts, 6);
+    const lastAt = new Date(last.ts);
+    return {
+      lastMm: last.dispMm,
+      lastAt: lastAt.toLocaleString("zh-CN"),
+      d1h,
+      d6h,
+      d24h,
+      v1h,
+      v6h
+    };
+  }, [activeGnssDevice, gpsCache]);
+
+  const activeAssessment = useMemo(() => {
+    if (!activeStation) return null;
+    const m = metricsByStationId[activeStation.id];
+    const base = activeStation.risk === "high" ? 2 : activeStation.risk === "mid" ? 1 : 0;
+    const status = activeStation.status === "offline" ? 2 : activeStation.status === "warning" ? 1 : 0;
+    const offline = (m?.deviceOffline ?? 0) > 0 ? 1 : 0;
+    const warn = (m?.deviceWarn ?? 0) > 0 ? 1 : 0;
+    const slope = activeGnssStats?.v1h ?? null;
+    const d24h = activeGnssStats?.d24h ?? null;
+
+    let score = base + status + offline + warn;
+    if (slope !== null) score += slope >= 0.6 ? 2 : slope >= 0.3 ? 1 : 0;
+    if (d24h !== null) score += d24h >= 10 ? 2 : d24h >= 6 ? 1 : 0;
+    score = Math.min(7, Math.max(0, score));
+
+    const level = score >= 5 ? "高" : score >= 3 ? "中" : "低";
+    const color = level === "高" ? "red" : level === "中" ? "orange" : "green";
+    const actions =
+      level === "高"
+        ? ["优先复核 GNSS 形变曲线与基线", "核对雨量与阈值配置", "检查离线设备供电与通信"]
+        : level === "中"
+          ? ["关注近 6 小时形变速率变化", "核对预警设备与异常条目", "保持站点巡检记录更新"]
+          : ["持续监测，保持数据上报稳定", "定期校验基线与设备时钟"];
+
+    return { level, color, score, actions };
+  }, [activeGnssStats?.d24h, activeGnssStats?.v1h, activeStation, metricsByStationId]);
 
   return (
     <div className="desk-analysis-screen">
@@ -637,10 +838,15 @@ export function AnalysisPage() {
                           低风险
                         </div>
                         {selectedStations.length ? (
-                          <div className="desk-analysis-map-selectedpanel">
+                          <div className={clsx("desk-analysis-map-selectedpanel", !stationPanelExpanded && "is-collapsed")}>
                             <div className="desk-analysis-map-selectedpanel-head">
-                              <div className="desk-analysis-map-selectedpanel-title">已选站点</div>
+                              <div className="desk-analysis-map-selectedpanel-title">
+                                已选站点 <span className="muted">({selectedSummary.total})</span>
+                              </div>
                               <div className="desk-analysis-map-selectedpanel-actions">
+                                <div className="desk-analysis-map-selectedpanel-page">
+                                  {stationPanelPages > 1 ? `${stationPanelPage + 1} / ${stationPanelPages}` : "—"}
+                                </div>
                                 <button
                                   type="button"
                                   className="desk-analysis-map-selectedpanel-close"
@@ -659,71 +865,216 @@ export function AnalysisPage() {
                             </div>
                             <div className="desk-analysis-map-selectedpanel-body">
                               <div className="desk-analysis-map-selectedpanel-summary">
-                                <span className="badge">{selectedStations.length} 个站点</span>
-                                <button
-                                  type="button"
-                                  className="desk-analysis-map-selectedpanel-pill"
-                                  onClick={() => setStationPanelPlaying((v) => !v)}
-                                >
-                                  {stationPanelPlaying ? "暂停轮播" : "开始轮播"}
-                                </button>
-                                <button
-                                  type="button"
-                                  className="desk-analysis-map-selectedpanel-pill"
-                                  onClick={() => setSelectedStationIds([])}
-                                >
-                                  清空
-                                </button>
+                                <span className="badge">{selectedSummary.total} 个站点</span>
+                                <span className="chip">高 {selectedSummary.high}</span>
+                                <span className="chip">中 {selectedSummary.mid}</span>
+                                <span className="chip">低 {selectedSummary.low}</span>
+                                <span className="chip">预警 {selectedSummary.warn}</span>
+                                <span className="chip">离线 {selectedSummary.off}</span>
+                                <span className="hint">Ctrl/Shift 多选</span>
                               </div>
 
-                              <div className="desk-analysis-map-selectedpanel-list">
-                                {selectedStations
-                                  .slice()
-                                  .sort((a, b) => {
-                                    const score = (r: Station["risk"]) => (r === "high" ? 3 : r === "mid" ? 2 : 1);
-                                    const diff = score(b.risk) - score(a.risk);
-                                    if (diff) return diff;
-                                    return a.name.localeCompare(b.name);
-                                  })
-                                  .slice(stationPanelPage * 3, stationPanelPage * 3 + 3)
-                                  .map((s) => {
-                                    const m = metricsByStationId[s.id];
-                                    const risk = s.risk === "high" ? "高风险" : s.risk === "mid" ? "中风险" : "低风险";
-                                    const status = s.status === "online" ? "在线" : s.status === "warning" ? "预警" : "离线";
-                                    return (
+                              <div className={clsx("desk-analysis-map-selectedpanel-split", !stationPanelExpanded && "is-collapsed")}>
+                                <div className="desk-analysis-map-selectedpanel-list">
+                                  <div className="desk-analysis-map-selectedpanel-listhead">
+                                    <div className="left">
                                       <button
-                                        key={s.id}
                                         type="button"
-                                        className="desk-analysis-map-selectedpanel-item"
-                                        onClick={() => setSelectedStationIds([s.id])}
+                                        className="desk-analysis-map-selectedpanel-pill"
+                                        onClick={() => {
+                                          setStationPanelPlaying((v) => !v);
+                                        }}
                                       >
-                                        <div className="n">{s.name}</div>
-                                        <div className="m">
-                                          <span className={`t ${s.risk}`}>{risk}</span>
-                                          <span className={`t ${s.status}`}>{status}</span>
-                                          <span className="t">传感器 {s.deviceCount}</span>
-                                        </div>
-                                        <div className="m2">
-                                          <span>在线 {m?.deviceOnline ?? 0}</span>
-                                          <span>预警 {m?.deviceWarn ?? 0}</span>
-                                          <span>离线 {m?.deviceOffline ?? 0}</span>
-                                          <span>更新 {m?.lastSeenAt?.slice(11, 19) ?? "—"}</span>
-                                        </div>
-                                        {stationPanelExpanded ? (
-                                          <div className="m3">
-                                            <span>坐标 {s.lng.toFixed(5)}, {s.lat.toFixed(5)}</span>
-                                            <span>
-                                              类型{" "}
-                                              {Object.entries(m?.types ?? {})
-                                                .map(([t, n]) => `${t}:${String(n)}`)
-                                                .join("  ") || "—"}
-                                            </span>
-                                            <span className="area">{s.area}</span>
-                                          </div>
-                                        ) : null}
+                                        {stationPanelPlaying ? "暂停轮播" : "开始轮播"}
                                       </button>
-                                    );
-                                  })}
+                                      <button
+                                        type="button"
+                                        className="desk-analysis-map-selectedpanel-pill"
+                                        onClick={() => {
+                                          setStationPanelPage((p) => (p - 1 + stationPanelPages) % stationPanelPages);
+                                          setStationPanelPlaying(false);
+                                        }}
+                                        disabled={stationPanelPages <= 1}
+                                      >
+                                        上一页
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="desk-analysis-map-selectedpanel-pill"
+                                        onClick={() => {
+                                          setStationPanelPage((p) => (p + 1) % stationPanelPages);
+                                          setStationPanelPlaying(false);
+                                        }}
+                                        disabled={stationPanelPages <= 1}
+                                      >
+                                        下一页
+                                      </button>
+                                    </div>
+                                    <div className="right">
+                                      <button
+                                        type="button"
+                                        className="desk-analysis-map-selectedpanel-pill"
+                                        onClick={() => {
+                                          setSelectedStationIds([]);
+                                        }}
+                                      >
+                                        清空
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  <div className="desk-analysis-map-selectedpanel-listbody">
+                                    {sortedSelectedStations
+                                      .slice(stationPanelPage * stationPanelPageSize, stationPanelPage * stationPanelPageSize + stationPanelPageSize)
+                                      .map((s) => {
+                                        const m = metricsByStationId[s.id];
+                                        const risk = s.risk === "high" ? "高风险" : s.risk === "mid" ? "中风险" : "低风险";
+                                        const status = s.status === "online" ? "在线" : s.status === "warning" ? "预警" : "离线";
+                                        const isActive = stationPanelActiveId === s.id;
+                                        const hasGnss = (m?.types?.gnss ?? 0) > 0;
+
+                                        return (
+                                          <button
+                                            key={s.id}
+                                            type="button"
+                                            className={clsx("desk-analysis-map-selectedpanel-item", isActive && "is-active")}
+                                            onClick={() => {
+                                              setStationPanelActiveId(s.id);
+                                              setStationPanelPlaying(false);
+                                              if (!stationPanelExpanded && sortedSelectedStations.length === 1) setStationPanelExpanded(true);
+                                            }}
+                                          >
+                                            <div className="row1">
+                                              <span className="n">{s.name}</span>
+                                              <span className={`t ${s.risk}`}>{risk}</span>
+                                            </div>
+                                            <div className="row2">
+                                              <span className={`t ${s.status}`}>{status}</span>
+                                              <span className="t">{s.area}</span>
+                                              <span className="t">传感器 {s.deviceCount}</span>
+                                              <span className="t">预警 {m?.deviceWarn ?? 0}</span>
+                                              <span className="t">离线 {m?.deviceOffline ?? 0}</span>
+                                              <span className={clsx("t", hasGnss ? "ok" : "muted")}>GNSS {hasGnss ? "有" : "无"}</span>
+                                            </div>
+                                          </button>
+                                        );
+                                      })}
+                                  </div>
+                                </div>
+
+                                <div className="desk-analysis-map-selectedpanel-detail">
+                                  {activeStation ? (
+                                    <>
+                                      <div className="h">
+                                        <div className="n">{activeStation.name}</div>
+                                        <div className="sub">
+                                          <span className={`pill ${activeStation.risk}`}>
+                                            {activeStation.risk === "high" ? "高风险" : activeStation.risk === "mid" ? "中风险" : "低风险"}
+                                          </span>
+                                          <span className={`pill ${activeStation.status}`}>
+                                            {activeStation.status === "online" ? "在线" : activeStation.status === "warning" ? "预警" : "离线"}
+                                          </span>
+                                          <span className="pill">传感器 {activeStation.deviceCount}</span>
+                                        </div>
+                                      </div>
+
+                                      <div className="kpis">
+                                        {(() => {
+                                          const lastSeenAt = metricsByStationId[activeStation.id]?.lastSeenAt;
+                                          const lastSeenLabel = lastSeenAt ? new Date(lastSeenAt).toLocaleString("zh-CN") : "—";
+                                          return (
+                                            <>
+                                        <div className="kpi">
+                                          <div className="k">区域</div>
+                                          <div className="v">{activeStation.area}</div>
+                                        </div>
+                                        <div className="kpi">
+                                          <div className="k">坐标</div>
+                                          <div className="v">
+                                            {activeStation.lat.toFixed(5)}, {activeStation.lng.toFixed(5)}
+                                          </div>
+                                        </div>
+                                        <div className="kpi">
+                                          <div className="k">最后上报</div>
+                                          <div className="v">{lastSeenLabel}</div>
+                                        </div>
+                                        <div className="kpi">
+                                          <div className="k">预警设备</div>
+                                          <div className="v">{metricsByStationId[activeStation.id]?.deviceWarn ?? 0}</div>
+                                        </div>
+                                        <div className="kpi">
+                                          <div className="k">离线设备</div>
+                                          <div className="v">{metricsByStationId[activeStation.id]?.deviceOffline ?? 0}</div>
+                                        </div>
+                                        <div className="kpi">
+                                          <div className="k">GNSS</div>
+                                          <div className="v">{activeGnssDevice ? "已接入" : "未接入"}</div>
+                                        </div>
+                                            </>
+                                          );
+                                        })()}
+                                      </div>
+
+                                      <div className="trend">
+                                        <div className="tt">
+                                          形变趋势 <span className="muted">（mm）</span>
+                                        </div>
+                                        {activeDisplacementOption ? (
+                                          <div className="trendwrap">
+                                            <div className="trendtop">
+                                              <div className="metric">
+                                                <div className="k">最新</div>
+                                                <div className="v">{fmtMm(activeGnssStats?.lastMm)}</div>
+                                              </div>
+                                              <div className="metric">
+                                                <div className="k">近 1h Δ</div>
+                                                <div className="v">{fmtMm(activeGnssStats?.d1h)}</div>
+                                              </div>
+                                              <div className="metric">
+                                                <div className="k">近 24h Δ</div>
+                                                <div className="v">{fmtMm(activeGnssStats?.d24h)}</div>
+                                              </div>
+                                              <div className="metric">
+                                                <div className="k">速率（mm/h）</div>
+                                                <div className="v">{fmtMmPerH(activeGnssStats?.v6h)}</div>
+                                              </div>
+                                            </div>
+                                            <ReactECharts option={activeDisplacementOption} style={{ height: 104 }} />
+                                            <div className="trendfoot">采样至 {activeGnssStats?.lastAt ?? "—"}</div>
+                                          </div>
+                                        ) : (
+                                          <div className="empty">暂无 GNSS 形变数据</div>
+                                        )}
+                                      </div>
+
+                                      <div className="pred">
+                                        <div className="tt">
+                                          研判摘要 <span className="muted">（6h）</span>
+                                        </div>
+                                        {activeAssessment ? (
+                                          <div className="predwrap">
+                                            <div className="predhead">
+                                              <span className={clsx("badge", activeAssessment.color)}>{activeAssessment.level}关注</span>
+                                              <span className="score">综合评分 {activeAssessment.score}</span>
+                                            </div>
+                                            <div className="pd">
+                                              <div className="pdtitle">建议动作</div>
+                                              <ul className="pdlist">
+                                                {activeAssessment.actions.map((a) => (
+                                                  <li key={a}>{a}</li>
+                                                ))}
+                                              </ul>
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          <div className="empty">请选择一个站点查看详情</div>
+                                        )}
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <div className="empty">请选择一个站点查看详情</div>
+                                  )}
+                                </div>
                               </div>
                             </div>
                             <div className="desk-analysis-map-selectedpanel-foot">
