@@ -1,4 +1,4 @@
-import { Alert, Spin } from "antd";
+import { Alert, Spin, Tag } from "antd";
 import ReactECharts from "echarts-for-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -8,6 +8,8 @@ import { useApi } from "../api/ApiProvider";
 import { BaseCard } from "../components/BaseCard";
 import { MapSwitchPanel, type MapType } from "../components/MapSwitchPanel";
 import { StatusTag } from "../components/StatusTag";
+import { useAuthStore } from "../stores/authStore";
+import { useSettingsStore } from "../stores/settingsStore";
 
 import "./analysis.css";
 
@@ -31,11 +33,34 @@ function darkAxis() {
 export function AnalysisPage() {
   const api = useApi();
   const navigate = useNavigate();
+  const apiMode = useSettingsStore((s) => s.apiMode);
+  const user = useAuthStore((s) => s.user);
   const [mapType, setMapType] = useState<MapType>("卫星图");
   const [loading, setLoading] = useState(true);
   const [stations, setStations] = useState<Station[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
   const [alertOn, setAlertOn] = useState(false);
+  const [now, setNow] = useState<Date>(() => new Date());
+  const [online, setOnline] = useState<boolean>(() => (typeof navigator !== "undefined" ? navigator.onLine : true));
+
+  useEffect(() => {
+    const t = window.setInterval(() => {
+      setNow(new Date());
+    }, 1000);
+    return () => {
+      window.clearInterval(t);
+    };
+  }, []);
+
+  useEffect(() => {
+    const update = () => setOnline(navigator.onLine);
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
+  }, []);
 
   useEffect(() => {
     const abort = new AbortController();
@@ -250,6 +275,7 @@ export function AnalysisPage() {
 
   const hasCritical = stats.offline > 0;
   const hasWarn = stats.warn > 0;
+  const apiModeLabel = apiMode === "mock" ? "演示环境" : "联调环境";
 
   return (
     <div className="desk-analysis-screen">
@@ -287,6 +313,25 @@ export function AnalysisPage() {
         </div>
 
         <div className="desk-analysis-title">山体滑坡数据监测大屏</div>
+        <div className="desk-analysis-meta" role="status" aria-label="系统信息">
+          <div className="desk-analysis-meta-group">
+            <span className="desk-analysis-meta-dot" aria-hidden="true" />
+            <span>{now.toLocaleDateString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", weekday: "short" })}</span>
+            <span className="desk-analysis-meta-muted">{now.toLocaleTimeString("zh-CN")}</span>
+          </div>
+          <div className="desk-analysis-meta-group">
+            <Tag color={apiMode === "mock" ? "geekblue" : "blue"}>{apiModeLabel}</Tag>
+            <Tag color={online ? "green" : "red"}>{online ? "网络正常" : "网络离线"}</Tag>
+            <Tag color="cyan">{user?.name ?? "未登录"}</Tag>
+          </div>
+          <div className="desk-analysis-meta-group">
+            <Tag color="cyan">站点 {stats.stations}</Tag>
+            <Tag color="green">在线 {stats.online}</Tag>
+            <Tag color={hasWarn ? "orange" : "blue"}>预警 {stats.warn}</Tag>
+            <Tag color={hasCritical ? "red" : "blue"}>离线 {stats.offline}</Tag>
+            <span className="desk-analysis-meta-muted">更新 {stats.lastUpdate}</span>
+          </div>
+        </div>
 
         <div className="desk-analysis-nav right">
           <button
