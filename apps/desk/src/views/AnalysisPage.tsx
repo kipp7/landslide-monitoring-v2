@@ -30,6 +30,14 @@ function darkAxis() {
   };
 }
 
+function darkTooltip() {
+  return {
+    backgroundColor: "rgba(15, 23, 42, 0.96)",
+    borderColor: "rgba(34, 211, 238, 0.22)",
+    textStyle: { color: "rgba(226, 232, 240, 0.92)" }
+  };
+}
+
 export function AnalysisPage() {
   const api = useApi();
   const navigate = useNavigate();
@@ -100,12 +108,12 @@ export function AnalysisPage() {
     setAlertOn(shouldAlert);
   }, [stats.offline, stats.warn]);
 
-  const leftLineBase = useMemo(() => {
+  const chartBase = useMemo(() => {
     return {
       backgroundColor: "transparent",
       textStyle: { color: "rgba(226, 232, 240, 0.9)" },
-      grid: { left: 42, right: 14, top: 18, bottom: 32 },
-      tooltip: { trigger: "axis" },
+      grid: { left: 42, right: 14, top: 22, bottom: 30 },
+      tooltip: { trigger: "axis", ...darkTooltip() },
       xAxis: {
         type: "category",
         data: Array.from({ length: 12 }, (_, i) => String(i + 1)),
@@ -115,10 +123,22 @@ export function AnalysisPage() {
     };
   }, []);
 
-  const temperatureOption = useMemo(() => {
+  const tempHumOption = useMemo(() => {
     return {
-      ...leftLineBase,
-      yAxis: { ...leftLineBase.yAxis, name: "°C" },
+      ...chartBase,
+      grid: { left: 42, right: 42, top: 22, bottom: 30 },
+      legend: {
+        top: 0,
+        right: 10,
+        textStyle: { color: "rgba(226, 232, 240, 0.82)" },
+        itemWidth: 10,
+        itemHeight: 10
+      },
+      xAxis: { ...chartBase.xAxis, data: Array.from({ length: 12 }, (_, i) => `${String(i + 1)}时`) },
+      yAxis: [
+        { type: "value", name: "°C", ...darkAxis() },
+        { type: "value", name: "%", ...darkAxis() }
+      ],
       series: [
         {
           name: "温度",
@@ -128,19 +148,11 @@ export function AnalysisPage() {
           data: [14, 14.3, 14.1, 14.8, 15.2, 15.9, 16.1, 16.2, 16.5, 16.8, 16.4, 16.0],
           lineStyle: { width: 2, color: "#22d3ee" },
           areaStyle: { color: "rgba(34, 211, 238, 0.18)" }
-        }
-      ]
-    };
-  }, [leftLineBase]);
-
-  const humidityOption = useMemo(() => {
-    return {
-      ...leftLineBase,
-      yAxis: { ...leftLineBase.yAxis, name: "%" },
-      series: [
+        },
         {
           name: "湿度",
           type: "line",
+          yAxisIndex: 1,
           smooth: true,
           showSymbol: false,
           data: [82, 83, 84, 85, 86, 87, 86, 85, 84, 83, 83, 82],
@@ -149,12 +161,24 @@ export function AnalysisPage() {
         }
       ]
     };
-  }, [leftLineBase]);
+  }, [chartBase]);
 
-  const accelOption = useMemo(() => {
+  const vibrationOption = useMemo(() => {
     return {
-      ...leftLineBase,
-      yAxis: { ...leftLineBase.yAxis, name: "mg" },
+      ...chartBase,
+      grid: { left: 42, right: 42, top: 22, bottom: 30 },
+      legend: {
+        top: 0,
+        right: 10,
+        textStyle: { color: "rgba(226, 232, 240, 0.82)" },
+        itemWidth: 10,
+        itemHeight: 10
+      },
+      xAxis: { ...chartBase.xAxis, data: Array.from({ length: 12 }, (_, i) => `${String(i + 1)}时`) },
+      yAxis: [
+        { type: "value", name: "mg", ...darkAxis() },
+        { type: "value", name: "°/s", ...darkAxis() }
+      ],
       series: [
         {
           name: "加速度",
@@ -163,36 +187,28 @@ export function AnalysisPage() {
           showSymbol: false,
           data: [2, 3, 2, 4, 5, 6, 5, 7, 6, 8, 6, 5],
           lineStyle: { width: 2, color: "#34d399" },
-          areaStyle: { color: "rgba(52, 211, 153, 0.14)" }
-        }
-      ]
-    };
-  }, [leftLineBase]);
-
-  const gyroOption = useMemo(() => {
-    return {
-      ...leftLineBase,
-      yAxis: { ...leftLineBase.yAxis, name: "°/s" },
-      series: [
+          areaStyle: { color: "rgba(52, 211, 153, 0.12)" }
+        },
         {
           name: "陀螺仪",
           type: "line",
+          yAxisIndex: 1,
           smooth: true,
           showSymbol: false,
           data: [0.2, 0.4, 0.3, 0.6, 0.8, 1.1, 0.9, 1.3, 1.1, 1.6, 1.2, 1.0],
           lineStyle: { width: 2, color: "#fbbf24" },
-          areaStyle: { color: "rgba(251, 191, 36, 0.12)" }
+          areaStyle: { color: "rgba(251, 191, 36, 0.10)" }
         }
       ]
     };
-  }, [leftLineBase]);
+  }, [chartBase]);
 
   const rainfallOption = useMemo(() => {
     return {
       backgroundColor: "transparent",
       textStyle: { color: "rgba(226, 232, 240, 0.9)" },
       grid: { left: 42, right: 14, top: 18, bottom: 32 },
-      tooltip: { trigger: "axis" },
+      tooltip: { trigger: "axis", ...darkTooltip() },
       xAxis: { type: "category", data: ["周一", "周二", "周三", "周四", "周五", "周六", "周日"], ...darkAxis() },
       yAxis: { type: "value", ...darkAxis() },
       series: [
@@ -206,6 +222,118 @@ export function AnalysisPage() {
       ]
     };
   }, []);
+
+  const riskDistributionOption = useMemo(() => {
+    const high = stations.filter((s) => s.risk === "high").length;
+    const mid = stations.filter((s) => s.risk === "mid").length;
+    const low = stations.filter((s) => s.risk === "low").length;
+
+    return {
+      backgroundColor: "transparent",
+      textStyle: { color: "rgba(226, 232, 240, 0.9)" },
+      tooltip: { trigger: "item", ...darkTooltip() },
+      legend: {
+        top: 6,
+        right: 10,
+        orient: "vertical",
+        textStyle: { color: "rgba(226, 232, 240, 0.82)" }
+      },
+      series: [
+        {
+          type: "pie",
+          radius: ["52%", "78%"],
+          center: ["38%", "55%"],
+          label: { show: false },
+          data: [
+            { name: "高风险", value: high, itemStyle: { color: "#ef4444" } },
+            { name: "中风险", value: mid, itemStyle: { color: "#f59e0b" } },
+            { name: "低风险", value: low, itemStyle: { color: "#22c55e" } }
+          ]
+        }
+      ],
+      graphic: [
+        {
+          type: "text",
+          left: "38%",
+          top: "47%",
+          style: {
+            text: String(stations.length),
+            fill: "rgba(226, 232, 240, 0.96)",
+            fontSize: 22,
+            fontWeight: 900,
+            align: "center"
+          }
+        },
+        {
+          type: "text",
+          left: "38%",
+          top: "62%",
+          style: {
+            text: "监测站",
+            fill: "rgba(148, 163, 184, 0.9)",
+            fontSize: 12,
+            fontWeight: 800,
+            align: "center"
+          }
+        }
+      ]
+    };
+  }, [stations]);
+
+  const alertTrendOption = useMemo(() => {
+    const labels = Array.from({ length: 12 }, (_, i) => `${String(12 - i).padStart(2, "0")}:00`).reverse();
+    const seed = stations.length * 13 + devices.length * 7 + stats.warn * 3 + stats.offline * 11;
+    const clamp = (n: number) => Math.max(0, Math.round(n));
+    const warnBase = Math.max(0, stats.warn);
+    const offBase = Math.max(0, stats.offline);
+
+    const warnSeries = labels.map((_, idx) => clamp(warnBase * 0.55 + Math.sin((idx + seed) / 2.1) * 2 + (idx % 3 === 0 ? 1 : 0)));
+    const offlineSeries = labels.map((_, idx) => clamp(offBase * 0.35 + Math.cos((idx + seed) / 3.2) * 1.2 + (idx % 4 === 0 ? 1 : 0)));
+    const total = labels.map((_, idx) => (warnSeries[idx] ?? 0) + (offlineSeries[idx] ?? 0));
+
+    return {
+      backgroundColor: "transparent",
+      textStyle: { color: "rgba(226, 232, 240, 0.9)" },
+      tooltip: { trigger: "axis", ...darkTooltip() },
+      grid: { left: 42, right: 14, top: 24, bottom: 28 },
+      legend: {
+        top: 0,
+        left: 10,
+        textStyle: { color: "rgba(226, 232, 240, 0.82)" },
+        itemWidth: 10,
+        itemHeight: 10
+      },
+      xAxis: { type: "category", data: labels, ...darkAxis() },
+      yAxis: { type: "value", ...darkAxis() },
+      series: [
+        {
+          name: "预警",
+          type: "line",
+          smooth: true,
+          showSymbol: false,
+          data: warnSeries,
+          lineStyle: { width: 2, color: "#f59e0b" },
+          areaStyle: { color: "rgba(245, 158, 11, 0.10)" }
+        },
+        {
+          name: "离线",
+          type: "line",
+          smooth: true,
+          showSymbol: false,
+          data: offlineSeries,
+          lineStyle: { width: 2, color: "#ef4444" },
+          areaStyle: { color: "rgba(239, 68, 68, 0.08)" }
+        },
+        {
+          name: "总计",
+          type: "bar",
+          data: total,
+          barWidth: 10,
+          itemStyle: { color: "rgba(34, 211, 238, 0.55)" }
+        }
+      ]
+    };
+  }, [devices.length, stations.length, stats.offline, stats.warn]);
 
   const mapOption = useMemo(() => {
     const points = stations.map((s) => ({
@@ -384,17 +512,17 @@ export function AnalysisPage() {
       <div className="desk-analysis-content">
         <div className="desk-analysis-grid">
           <div className="desk-analysis-leftcol">
-            <BaseCard title="温度趋势（°C）">
-              <ReactECharts option={temperatureOption} style={{ height: "100%" }} />
+            <BaseCard title="站点风险分布">
+              <ReactECharts option={riskDistributionOption} style={{ height: "100%" }} />
             </BaseCard>
-            <BaseCard title="湿度趋势（%）">
-              <ReactECharts option={humidityOption} style={{ height: "100%" }} />
+            <BaseCard title="告警趋势（近 12 小时）">
+              <ReactECharts option={alertTrendOption} style={{ height: "100%" }} />
             </BaseCard>
-            <BaseCard title="加速度趋势（mg）">
-              <ReactECharts option={accelOption} style={{ height: "100%" }} />
+            <BaseCard title="环境趋势（温度/湿度）">
+              <ReactECharts option={tempHumOption} style={{ height: "100%" }} />
             </BaseCard>
-            <BaseCard title="陀螺仪趋势（°/s）">
-              <ReactECharts option={gyroOption} style={{ height: "100%" }} />
+            <BaseCard title="振动趋势（加速度/陀螺仪）">
+              <ReactECharts option={vibrationOption} style={{ height: "100%" }} />
             </BaseCard>
           </div>
 
