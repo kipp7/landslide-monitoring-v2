@@ -544,6 +544,30 @@
   margin-bottom: 6px;
 }
 
+.desk-analysis-map-selectedpanel-item .row1 .r {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.desk-analysis-map-selectedpanel-item .row1 .rm {
+  appearance: none;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(2, 6, 23, 0.22);
+  color: rgba(226, 232, 240, 0.86);
+  border-radius: 999px;
+  padding: 2px 8px;
+  cursor: pointer;
+  font-weight: 800;
+  font-size: 11px;
+}
+
+.desk-analysis-map-selectedpanel-item .row1 .rm:hover {
+  border-color: rgba(34, 211, 238, 0.35);
+  background: rgba(8, 145, 178, 0.10);
+}
+
 .desk-analysis-map-selectedpanel-item .row1 .n {
   font-weight: 900;
   overflow: hidden;

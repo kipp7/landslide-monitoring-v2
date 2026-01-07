@@ -541,6 +541,22 @@ export function AnalysisPage() {
     return sortedSelectedStations.find((s) => s.id === stationPanelActiveId) ?? null;
   }, [sortedSelectedStations, stationPanelActiveId]);
 
+  const activeArea = useMemo(() => {
+    return activeStation?.area ?? sortedSelectedStations.at(0)?.area ?? null;
+  }, [activeStation?.area, sortedSelectedStations]);
+
+  const areaSummary = useMemo(() => {
+    if (!activeArea) return null;
+    const inArea = stations.filter((s) => s.area === activeArea);
+    const high = inArea.filter((s) => s.risk === "high").length;
+    const mid = inArea.filter((s) => s.risk === "mid").length;
+    const low = inArea.filter((s) => s.risk === "low").length;
+    const warn = inArea.filter((s) => s.status === "warning").length;
+    const off = inArea.filter((s) => s.status === "offline").length;
+    const on = inArea.filter((s) => s.status === "online").length;
+    return { area: activeArea, total: inArea.length, high, mid, low, warn, off, on };
+  }, [activeArea, stations]);
+
   const activeGnssDevice = useMemo(() => {
     if (!activeStation) return null;
     return devices.find((d) => d.stationId === activeStation.id && d.type === "gnss") ?? null;
@@ -865,12 +881,18 @@ export function AnalysisPage() {
                             </div>
                             <div className="desk-analysis-map-selectedpanel-body">
                               <div className="desk-analysis-map-selectedpanel-summary">
-                                <span className="badge">{selectedSummary.total} 个站点</span>
-                                <span className="chip">高 {selectedSummary.high}</span>
-                                <span className="chip">中 {selectedSummary.mid}</span>
-                                <span className="chip">低 {selectedSummary.low}</span>
-                                <span className="chip">预警 {selectedSummary.warn}</span>
-                                <span className="chip">离线 {selectedSummary.off}</span>
+                                <span className="badge">已选 {selectedSummary.total}</span>
+                                {areaSummary ? (
+                                  <>
+                                    <span className="chip">区域 {areaSummary.area}</span>
+                                    <span className="chip">站点 {areaSummary.total}</span>
+                                    <span className="chip">高 {areaSummary.high}</span>
+                                    <span className="chip">中 {areaSummary.mid}</span>
+                                    <span className="chip">低 {areaSummary.low}</span>
+                                    <span className="chip">预警 {areaSummary.warn}</span>
+                                    <span className="chip">离线 {areaSummary.off}</span>
+                                  </>
+                                ) : null}
                                 <span className="hint">Ctrl/Shift 多选</span>
                               </div>
 
@@ -946,7 +968,19 @@ export function AnalysisPage() {
                                           >
                                             <div className="row1">
                                               <span className="n">{s.name}</span>
-                                              <span className={`t ${s.risk}`}>{risk}</span>
+                                              <div className="r">
+                                                <span className={`t ${s.risk}`}>{risk}</span>
+                                                <button
+                                                  type="button"
+                                                  className="rm"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setSelectedStationIds((prev) => prev.filter((id) => id !== s.id));
+                                                  }}
+                                                >
+                                                  移除
+                                                </button>
+                                              </div>
                                             </div>
                                             <div className="row2">
                                               <span className={`t ${s.status}`}>{status}</span>
