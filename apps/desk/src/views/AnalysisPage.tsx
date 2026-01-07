@@ -70,6 +70,15 @@ function calcSlopeMmPerH(points: { ts: string; dispMm: number }[], hours: number
   return Number(((last.dispMm - p.dispMm) / dt).toFixed(2));
 }
 
+function deviceTypeLabel(t: Device["type"]) {
+  if (t === "gnss") return "GNSS";
+  if (t === "rain") return "雨量";
+  if (t === "tilt") return "倾角";
+  if (t === "temp_hum") return "温湿度";
+  if (t === "camera") return "摄像头";
+  return t;
+}
+
 function darkAxis() {
   return {
     axisLine: { lineStyle: { color: "rgba(148, 163, 184, 0.45)" } },
@@ -1016,23 +1025,31 @@ export function AnalysisPage() {
                                         {(() => {
                                           const lastSeenAt = metricsByStationId[activeStation.id]?.lastSeenAt;
                                           const lastSeenLabel = lastSeenAt ? new Date(lastSeenAt).toLocaleString("zh-CN") : "—";
+                                          const m = metricsByStationId[activeStation.id];
+                                          const total = activeStation.deviceCount || 0;
+                                          const on = m?.deviceOnline ?? 0;
+                                          const health = total > 0 ? Math.round((on / total) * 100) : 0;
                                           return (
                                             <>
-                                        <div className="kpi">
-                                          <div className="k">区域</div>
-                                          <div className="v">{activeStation.area}</div>
-                                        </div>
-                                        <div className="kpi">
-                                          <div className="k">坐标</div>
-                                          <div className="v">
-                                            {activeStation.lat.toFixed(5)}, {activeStation.lng.toFixed(5)}
-                                          </div>
-                                        </div>
-                                        <div className="kpi">
-                                          <div className="k">最后上报</div>
-                                          <div className="v">{lastSeenLabel}</div>
-                                        </div>
-                                        <div className="kpi">
+                                              <div className="kpi">
+                                                <div className="k">区域</div>
+                                                <div className="v">{activeStation.area}</div>
+                                              </div>
+                                              <div className="kpi">
+                                                <div className="k">坐标</div>
+                                                <div className="v">
+                                                  {activeStation.lat.toFixed(5)}, {activeStation.lng.toFixed(5)}
+                                                </div>
+                                              </div>
+                                              <div className="kpi">
+                                                <div className="k">设备健康</div>
+                                                <div className="v">{total > 0 ? `${health}%（在线 ${on}/${total}）` : "—"}</div>
+                                              </div>
+                                              <div className="kpi">
+                                                <div className="k">最后上报</div>
+                                                <div className="v">{lastSeenLabel}</div>
+                                              </div>
+                                              <div className="kpi">
                                           <div className="k">预警设备</div>
                                           <div className="v">{metricsByStationId[activeStation.id]?.deviceWarn ?? 0}</div>
                                         </div>
@@ -1040,11 +1057,32 @@ export function AnalysisPage() {
                                           <div className="k">离线设备</div>
                                           <div className="v">{metricsByStationId[activeStation.id]?.deviceOffline ?? 0}</div>
                                         </div>
-                                        <div className="kpi">
-                                          <div className="k">GNSS</div>
-                                          <div className="v">{activeGnssDevice ? "已接入" : "未接入"}</div>
-                                        </div>
+                                              <div className="kpi">
+                                                <div className="k">GNSS</div>
+                                                <div className="v">{activeGnssDevice ? "已接入" : "未接入"}</div>
+                                              </div>
                                             </>
+                                          );
+                                        })()}
+                                      </div>
+
+                                      <div className="sensors">
+                                        <div className="tt">传感器构成</div>
+                                        {(() => {
+                                          const m = metricsByStationId[activeStation.id];
+                                          const types = m?.types ?? {};
+                                          const entries = (Object.entries(types) as Array<[Device["type"], number]>)
+                                            .filter(([, c]) => (c ?? 0) > 0)
+                                            .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0));
+                                          if (!entries.length) return <div className="empty tiny">暂无设备信息</div>;
+                                          return (
+                                            <div className="sensorchips">
+                                              {entries.map(([t, c]) => (
+                                                <span key={t} className={clsx("sensorchip", t)}>
+                                                  {deviceTypeLabel(t)} {c}
+                                                </span>
+                                              ))}
+                                            </div>
                                           );
                                         })()}
                                       </div>
