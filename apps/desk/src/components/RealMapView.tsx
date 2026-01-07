@@ -2,7 +2,7 @@ import "leaflet/dist/leaflet.css";
 
 import L from "leaflet";
 import { useEffect, useMemo } from "react";
-import { CircleMarker, MapContainer, TileLayer, Tooltip, useMap } from "react-leaflet";
+import { MapContainer, Marker, TileLayer, Tooltip, useMap } from "react-leaflet";
 
 import type { Station } from "../api/client";
 
@@ -20,6 +20,12 @@ function riskColor(risk: Station["risk"]) {
   if (risk === "high") return "#ef4444";
   if (risk === "mid") return "#f59e0b";
   return "#22c55e";
+}
+
+function riskClass(risk: Station["risk"]) {
+  if (risk === "high") return "is-high";
+  if (risk === "mid") return "is-mid";
+  return "is-low";
 }
 
 function RecenterOnReset(props: { resetKey: number | undefined; bounds: L.LatLngBoundsExpression }) {
@@ -45,6 +51,36 @@ export function RealMapView(props: RealMapViewProps) {
   const useTdt = Boolean(tdtKey);
   const defaultLat = 22.6263;
   const defaultLng = 110.1805;
+
+  const icons = useMemo(() => {
+    const byId = new Map<string, L.DivIcon>();
+
+    for (const s of props.stations) {
+      const isSelected = props.selectedStationId === s.id;
+      const cls = `${riskClass(s.risk)}${isSelected ? " is-selected" : ""}`;
+      const count = Math.max(0, Math.round(s.deviceCount ?? 0));
+      const badge = count > 0 ? `<span class="badge">${count}</span>` : "";
+      const html =
+        `<div class="desk-map-marker ${cls}">` +
+        `<span class="halo"></span>` +
+        `<span class="pulse"></span>` +
+        `<span class="core"></span>` +
+        badge +
+        `</div>`;
+
+      byId.set(
+        s.id,
+        L.divIcon({
+          className: "desk-map-marker-icon",
+          html,
+          iconSize: [34, 34],
+          iconAnchor: [17, 17]
+        })
+      );
+    }
+
+    return byId;
+  }, [props.selectedStationId, props.stations]);
 
   const bounds = useMemo<L.LatLngBoundsExpression>(() => {
     const pts = props.stations
@@ -115,32 +151,30 @@ export function RealMapView(props: RealMapViewProps) {
 
       {props.stations.map((s) => {
         const isSelected = props.selectedStationId === s.id;
-        const color = riskColor(s.risk);
-        const stroke = isSelected ? "rgba(34, 211, 238, 1)" : "rgba(15, 23, 42, 0.85)";
-        const weight = isSelected ? 3 : 2;
+        const icon = icons.get(s.id);
+        if (!icon) return null;
+        const risk = s.risk === "high" ? "高风险" : s.risk === "mid" ? "中风险" : "低风险";
+        const status = s.status === "online" ? "在线" : s.status === "warning" ? "预警" : "离线";
 
         return (
-          <CircleMarker
+          <Marker
             key={s.id}
-            center={[s.lat, s.lng]}
-            radius={isSelected ? 10 : 7}
-            pathOptions={{
-              color: stroke,
-              weight,
-              fillColor: color,
-              fillOpacity: 0.95
-            }}
+            position={[s.lat, s.lng]}
+            icon={icon}
             eventHandlers={{
               click: () => props.onSelectStationId(s.id)
             }}
           >
-            <Tooltip direction="top" offset={[0, -8]} opacity={1} sticky>
-              <div style={{ fontWeight: 800 }}>{s.name}</div>
+            <Tooltip direction="top" offset={[0, -12]} opacity={1} sticky>
+              <div style={{ fontWeight: 900 }}>{s.name}</div>
+              <div style={{ opacity: 0.92, fontSize: 12 }}>
+                {risk} | {status}
+              </div>
               <div style={{ opacity: 0.9, fontSize: 12 }}>
                 区域：{s.area} 传感器：{s.deviceCount}
               </div>
             </Tooltip>
-          </CircleMarker>
+          </Marker>
         );
       })}
     </MapContainer>
