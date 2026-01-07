@@ -158,7 +158,7 @@ export function AnalysisPage() {
       ...chartBase,
       grid: { left: "0%", right: "0%", top: 30, bottom: 0, containLabel: true },
       legend: {
-        top: 8,
+        top: 2,
         left: "center",
         textStyle: { color: "rgba(226, 232, 240, 0.82)" },
         itemWidth: 10,
@@ -170,8 +170,26 @@ export function AnalysisPage() {
         axisLabel: { ...darkAxis().axisLabel, hideOverlap: true }
       },
       yAxis: [
-        { type: "value", name: "°C", ...darkAxis(), axisLabel: { ...darkAxis().axisLabel, margin: 3 } },
-        { type: "value", name: "%", ...darkAxis(), axisLabel: { ...darkAxis().axisLabel, margin: 3 } }
+        {
+          type: "value",
+          name: "°C",
+          position: "left",
+          ...darkAxis(),
+          axisLabel: { ...darkAxis().axisLabel, margin: 6, align: "right" },
+          nameLocation: "end",
+          nameGap: 6,
+          nameTextStyle: { color: "rgba(226, 232, 240, 0.72)", fontWeight: 800, align: "right" }
+        },
+        {
+          type: "value",
+          name: "%",
+          position: "right",
+          ...darkAxis(),
+          axisLabel: { ...darkAxis().axisLabel, margin: 6, align: "left" },
+          nameLocation: "end",
+          nameGap: 6,
+          nameTextStyle: { color: "rgba(226, 232, 240, 0.72)", fontWeight: 800, align: "left" }
+        }
       ],
       series: [
         {
@@ -203,7 +221,7 @@ export function AnalysisPage() {
       ...chartBase,
       grid: { left: "0%", right: "0%", top: 30, bottom: 0, containLabel: true },
       legend: {
-        top: 8,
+        top: 2,
         left: "center",
         textStyle: { color: "rgba(226, 232, 240, 0.82)" },
         itemWidth: 10,
@@ -215,8 +233,26 @@ export function AnalysisPage() {
         axisLabel: { ...darkAxis().axisLabel, hideOverlap: true }
       },
       yAxis: [
-        { type: "value", name: "mg", ...darkAxis(), axisLabel: { ...darkAxis().axisLabel, margin: 3 } },
-        { type: "value", name: "°/s", ...darkAxis(), axisLabel: { ...darkAxis().axisLabel, margin: 3 } }
+        {
+          type: "value",
+          name: "mg",
+          position: "left",
+          ...darkAxis(),
+          axisLabel: { ...darkAxis().axisLabel, margin: 6, align: "right" },
+          nameLocation: "end",
+          nameGap: 6,
+          nameTextStyle: { color: "rgba(226, 232, 240, 0.72)", fontWeight: 800, align: "right" }
+        },
+        {
+          type: "value",
+          name: "°/s",
+          position: "right",
+          ...darkAxis(),
+          axisLabel: { ...darkAxis().axisLabel, margin: 6, align: "left" },
+          nameLocation: "end",
+          nameGap: 6,
+          nameTextStyle: { color: "rgba(226, 232, 240, 0.72)", fontWeight: 800, align: "left" }
+        }
       ],
       series: [
         {
@@ -253,7 +289,16 @@ export function AnalysisPage() {
       grid: { left: "0%", right: "0%", top: 30, bottom: 0, containLabel: true },
       tooltip: { trigger: "axis", ...darkTooltip() },
       xAxis: { type: "category", data: labels, ...darkAxis() },
-      yAxis: { type: "value", name: is24h ? "mm/h" : "mm", ...darkAxis(), axisLabel: { ...darkAxis().axisLabel, margin: 6 } },
+      yAxis: {
+        type: "value",
+        name: is24h ? "mm/h" : "mm",
+        position: "left",
+        ...darkAxis(),
+        axisLabel: { ...darkAxis().axisLabel, margin: 6, align: "right" },
+        nameLocation: "end",
+        nameGap: 6,
+        nameTextStyle: { color: "rgba(226, 232, 240, 0.72)", fontWeight: 800, align: "right" }
+      },
       series: [
         {
           name: "雨量",
