@@ -1,6 +1,6 @@
-import { Alert, Spin, Tag } from "antd";
+import { Alert, Button, Spin, Switch, Tag } from "antd";
 import ReactECharts from "echarts-for-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import type { Device, Station } from "../api/client";
@@ -42,14 +42,20 @@ export function AnalysisPage() {
   const api = useApi();
   const navigate = useNavigate();
   const apiMode = useSettingsStore((s) => s.apiMode);
+  const reducedMotion = useSettingsStore((s) => s.reducedMotion);
   const user = useAuthStore((s) => s.user);
   const [mapType, setMapType] = useState<MapType>("卫星图");
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [lastUpdate, setLastUpdate] = useState<string>("");
   const [stations, setStations] = useState<Station[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
   const [alertOn, setAlertOn] = useState(false);
   const [now, setNow] = useState<Date>(() => new Date());
   const [online, setOnline] = useState<boolean>(() => (typeof navigator !== "undefined" ? navigator.onLine : true));
+  const [rainRange, setRainRange] = useState<"7d" | "24h">("7d");
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     const t = window.setInterval(() => {
@@ -70,24 +76,48 @@ export function AnalysisPage() {
     };
   }, []);
 
-  useEffect(() => {
-    const abort = new AbortController();
-    setLoading(true);
-    const run = async () => {
+  const loadData = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      const silent = opts?.silent ?? false;
+      abortRef.current?.abort();
+      const abort = new AbortController();
+      abortRef.current = abort;
+
+      if (!silent) setLoading(true);
+      else setRefreshing(true);
+
       try {
         const [s, d] = await Promise.all([api.stations.list(), api.devices.list()]);
         if (abort.signal.aborted) return;
         setStations(s);
         setDevices(d);
+        setLastUpdate(new Date().toLocaleString("zh-CN"));
       } finally {
-        if (!abort.signal.aborted) setLoading(false);
+        if (!abort.signal.aborted) {
+          setLoading(false);
+          setRefreshing(false);
+        }
       }
-    };
-    void run();
+    },
+    [api]
+  );
+
+  useEffect(() => {
+    void loadData();
     return () => {
-      abort.abort();
+      abortRef.current?.abort();
     };
-  }, [api]);
+  }, [loadData]);
+
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const t = window.setInterval(() => {
+      void loadData({ silent: true });
+    }, 15000);
+    return () => {
+      window.clearInterval(t);
+    };
+  }, [autoRefresh, loadData]);
 
   const stats = useMemo(() => {
     const online = devices.filter((d) => d.status === "online").length;
@@ -98,8 +128,7 @@ export function AnalysisPage() {
       devices: devices.length,
       online,
       warn,
-      offline,
-      lastUpdate: new Date().toLocaleString("zh-CN")
+      offline
     };
   }, [devices, stations.length]);
 
@@ -204,24 +233,28 @@ export function AnalysisPage() {
   }, [chartBase]);
 
   const rainfallOption = useMemo(() => {
+    const is24h = rainRange === "24h";
+    const labels = is24h ? Array.from({ length: 12 }, (_, i) => `${String(i * 2).padStart(2, "0")}:00`) : ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
+    const data = is24h ? [0, 0.6, 0.8, 2.6, 3.2, 1.8, 0.9, 0.5, 1.2, 2.8, 1.1, 0.4] : [12, 8, 15, 6, 9, 18, 11];
+
     return {
       backgroundColor: "transparent",
       textStyle: { color: "rgba(226, 232, 240, 0.9)" },
       grid: { left: 42, right: 14, top: 18, bottom: 32 },
       tooltip: { trigger: "axis", ...darkTooltip() },
-      xAxis: { type: "category", data: ["周一", "周二", "周三", "周四", "周五", "周六", "周日"], ...darkAxis() },
-      yAxis: { type: "value", ...darkAxis() },
+      xAxis: { type: "category", data: labels, ...darkAxis() },
+      yAxis: { type: "value", name: is24h ? "mm/h" : "mm", ...darkAxis() },
       series: [
         {
           name: "雨量",
           type: "bar",
-          data: [12, 8, 15, 6, 9, 18, 11],
+          data,
           itemStyle: { color: "rgba(34, 211, 238, 0.85)" },
           barWidth: 14
         }
       ]
     };
-  }, []);
+  }, [rainRange]);
 
   const riskDistributionOption = useMemo(() => {
     const high = stations.filter((s) => s.risk === "high").length;
@@ -347,16 +380,41 @@ export function AnalysisPage() {
       return "#22c55e";
     };
 
+    const lngs = stations.map((s) => s.lng);
+    const lats = stations.map((s) => s.lat);
+    const minX = lngs.length ? Math.min(...lngs) - 0.02 : 0;
+    const maxX = lngs.length ? Math.max(...lngs) + 0.02 : 1;
+    const minY = lats.length ? Math.min(...lats) - 0.02 : 0;
+    const maxY = lats.length ? Math.max(...lats) + 0.02 : 1;
+
+    const zones = stations
+      .filter((s) => s.risk !== "low")
+      .slice(0, 4)
+      .map((s) => {
+        const pad = s.risk === "high" ? 0.012 : 0.009;
+        return [
+          { coord: [s.lng - pad, s.lat - pad] },
+          { coord: [s.lng + pad, s.lat + pad] }
+        ];
+      });
+
     return {
       backgroundColor: "transparent",
       textStyle: { color: "rgba(226, 232, 240, 0.9)" },
       tooltip: {
         trigger: "item",
-        formatter: (p: { name: string }) => p.name
+        ...darkTooltip(),
+        formatter: (p: { name: string; value?: [number, number, Station["risk"]] }) => {
+          const risk = p.value?.[2];
+          const riskText = risk === "high" ? "高风险" : risk === "mid" ? "中风险" : "低风险";
+          return `${p.name}<br/>${riskText}`;
+        }
       },
       grid: { left: 16, right: 16, top: 10, bottom: 16 },
       xAxis: {
         type: "value",
+        min: minX,
+        max: maxX,
         axisLabel: { show: false },
         axisTick: { show: false },
         axisLine: { show: false },
@@ -364,6 +422,8 @@ export function AnalysisPage() {
       },
       yAxis: {
         type: "value",
+        min: minY,
+        max: maxY,
         axisLabel: { show: false },
         axisTick: { show: false },
         axisLine: { show: false },
@@ -378,7 +438,22 @@ export function AnalysisPage() {
             color: (params: { data: { value: [number, number, Station["risk"]] } }) => riskColor(params.data.value[2]),
             shadowBlur: 12,
             shadowColor: "rgba(0,255,255,0.18)"
-          }
+          },
+          markArea: zones.length
+            ? {
+                silent: true,
+                itemStyle: { color: "rgba(245, 158, 11, 0.06)", borderColor: "rgba(245, 158, 11, 0.22)", borderWidth: 1 },
+                data: zones
+              }
+            : undefined
+        },
+        {
+          type: "effectScatter",
+          symbolSize: 18,
+          data: points.filter((p) => p.value[2] === "high").map((p) => ({ name: p.name, value: p.value })),
+          rippleEffect: { scale: 2.2, brushType: "stroke" },
+          itemStyle: { color: "#ef4444" },
+          zlevel: 3
         }
       ]
     };
@@ -457,7 +532,7 @@ export function AnalysisPage() {
             <Tag color="green">在线 {stats.online}</Tag>
             <Tag color={hasWarn ? "orange" : "blue"}>预警 {stats.warn}</Tag>
             <Tag color={hasCritical ? "red" : "blue"}>离线 {stats.offline}</Tag>
-            <span className="desk-analysis-meta-muted">更新 {stats.lastUpdate}</span>
+            <span className="desk-analysis-meta-muted">更新 {lastUpdate || "—"}</span>
           </div>
         </div>
 
@@ -528,8 +603,27 @@ export function AnalysisPage() {
 
           <div className="desk-analysis-mapcol">
             <BaseCard
-              title={`滑坡监测地图与预警（最新 ${stats.lastUpdate}）`}
-              extra={<MapSwitchPanel selected={mapType} onSelect={setMapType} />}
+              title={
+                <span>
+                  <span className={`desk-live-dot${refreshing && !reducedMotion ? " is-loading" : ""}`} aria-hidden="true" />
+                  滑坡监测地图与预警
+                </span>
+              }
+              extra={
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <Tag color={hasCritical ? "red" : hasWarn ? "orange" : "green"}>{hasCritical ? "告警" : hasWarn ? "预警" : "正常"}</Tag>
+                  <Switch checked={autoRefresh} size="small" onChange={setAutoRefresh} />
+                  <Button
+                    size="small"
+                    onClick={() => {
+                      void loadData({ silent: true });
+                    }}
+                  >
+                    刷新
+                  </Button>
+                  <MapSwitchPanel selected={mapType} onSelect={setMapType} />
+                </div>
+              }
             >
               <div className="desk-analysis-mapstack">
                 <div className="desk-analysis-maptop">
@@ -577,7 +671,31 @@ export function AnalysisPage() {
 
           <div className="desk-analysis-rightcol">
             <div className="desk-analysis-right-top">
-              <BaseCard title="雨量图（mm）">
+              <BaseCard
+                title={rainRange === "24h" ? "降雨强度（24 小时）" : "累计雨量（7 天）"}
+                extra={
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <Button
+                      size="small"
+                      type={rainRange === "24h" ? "primary" : "default"}
+                      onClick={() => {
+                        setRainRange("24h");
+                      }}
+                    >
+                      24h
+                    </Button>
+                    <Button
+                      size="small"
+                      type={rainRange === "7d" ? "primary" : "default"}
+                      onClick={() => {
+                        setRainRange("7d");
+                      }}
+                    >
+                      7d
+                    </Button>
+                  </div>
+                }
+              >
                 <ReactECharts option={rainfallOption} style={{ height: "100%" }} />
               </BaseCard>
             </div>

@@ -266,6 +266,48 @@
   letter-spacing: 0.06em;
 }
 
+.desk-analysis-mapbottom .desk-dark-table {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.desk-analysis-mapbottom .desk-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.desk-live-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  margin-right: 6px;
+  background: rgba(34, 211, 238, 0.95);
+  box-shadow: 0 0 10px rgba(34, 211, 238, 0.28);
+}
+
+.desk-live-dot.is-loading {
+  animation: desk-live-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes desk-live-pulse {
+  0% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.45;
+  }
+}
+
+.desk-reduced-motion .desk-live-dot.is-loading {
+  animation: none !important;
+}
+
 .desk-video-mock {
   height: 100%;
   display: flex;
