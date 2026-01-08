@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { useApi } from "../api/ApiProvider";
+import { loadMockSimConfig, resetMockSimulation, saveMockSimConfig, type DemoScenario } from "../api/mockSim";
 import { useAuthStore } from "../stores/authStore";
 import { useSettingsStore } from "../stores/settingsStore";
 import { BaseCard } from "../components/BaseCard";
@@ -45,6 +46,7 @@ export function SettingsPage() {
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [logoutSubmitting, setLogoutSubmitting] = useState(false);
   const [quitOpen, setQuitOpen] = useState(false);
+  const [mockSim, setMockSim] = useState(() => loadMockSimConfig());
 
   const runtimeInfo = useMemo(() => {
     const ua = typeof navigator !== "undefined" ? navigator.userAgent : "-";
@@ -134,8 +136,19 @@ export function SettingsPage() {
   const reloadApp = () => {
     const ok = requestDeskReload();
     if (!ok) {
-      message.error("当前运行环境不支持重载");
+      try {
+        window.location.reload();
+      } catch {
+        message.error("当前运行环境不支持重载");
+      }
     }
+  };
+
+  const applyMockSim = (next: typeof mockSim) => {
+    setMockSim(next);
+    saveMockSimConfig(next);
+    message.success("已应用演示仿真参数");
+    reloadApp();
   };
 
   return (
@@ -233,6 +246,95 @@ export function SettingsPage() {
           </Typography.Paragraph>
         </Form>
       </BaseCard>
+
+      {apiMode === "mock" ? (
+        <BaseCard title="展厅演示（仿真数据）" style={{ maxWidth: 820, marginTop: 14 }}>
+          <Form layout="vertical">
+            <Form.Item label="演示场景">
+              <Radio.Group
+                value={mockSim.scenario}
+                onChange={(e) => {
+                  const v: unknown = e.target.value;
+                  const ok: DemoScenario | null =
+                    v === "normal" || v === "rainstorm" || v === "landslide_warning" || v === "comms_outage" ? v : null;
+                  if (!ok) return;
+                  applyMockSim({ ...mockSim, scenario: ok });
+                }}
+                options={[
+                  { label: "正常", value: "normal" },
+                  { label: "暴雨过程（推荐）", value: "rainstorm" },
+                  { label: "滑坡预警", value: "landslide_warning" },
+                  { label: "通信异常", value: "comms_outage" }
+                ]}
+              />
+            </Form.Item>
+
+            <Form.Item label="仿真速度（倍速）">
+              <Space wrap>
+                <InputNumber
+                  min={1}
+                  max={720}
+                  value={mockSim.speed}
+                  onChange={(v) => {
+                    const n = typeof v === "number" ? Math.max(1, Math.min(720, Math.round(v))) : 30;
+                    setMockSim((prev) => ({ ...prev, speed: n }));
+                  }}
+                />
+                <Button
+                  onClick={() => {
+                    applyMockSim(mockSim);
+                  }}
+                >
+                  应用
+                </Button>
+                <Typography.Text type="secondary">建议 30～60（便于现场看到趋势变化）</Typography.Text>
+              </Space>
+            </Form.Item>
+
+            <Form.Item label="演示种子（可复现）">
+              <Space wrap>
+                <Input
+                  value={mockSim.seed}
+                  onChange={(e) => {
+                    setMockSim((prev) => ({ ...prev, seed: e.target.value }));
+                  }}
+                  placeholder="例如 YLNU-DEMO"
+                />
+                <Button
+                  onClick={() => {
+                    applyMockSim(mockSim);
+                  }}
+                >
+                  应用
+                </Button>
+                <Button
+                  danger
+                  onClick={() => {
+                    Modal.confirm({
+                      title: "重置演示仿真",
+                      content: "将重置仿真时钟与演示基线数据（不会影响在线接口模式）。",
+                      okText: "确认重置",
+                      cancelText: "取消",
+                      okButtonProps: { danger: true },
+                      onOk: () => {
+                        resetMockSimulation({ keepSeed: true });
+                        message.success("已重置演示仿真");
+                        reloadApp();
+                      }
+                    });
+                  }}
+                >
+                  重置仿真
+                </Button>
+              </Space>
+            </Form.Item>
+
+            <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+              说明：该仿真用于展厅演示与 UI 验收，数据会随着时间自动变化，页面之间可联动。
+            </Typography.Paragraph>
+          </Form>
+        </BaseCard>
+      ) : null}
 
       <BaseCard title="界面与性能" style={{ maxWidth: 820, marginTop: 14 }}>
         <Form layout="vertical">
