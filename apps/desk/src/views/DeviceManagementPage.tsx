@@ -1,6 +1,21 @@
 import type { MenuProps } from "antd";
 import { ExportOutlined, ReloadOutlined, SettingOutlined, ToolOutlined } from "@ant-design/icons";
-import { App as AntApp, Alert, Button, Dropdown, Input, Modal, Progress, Select, Space, Switch, Tag, Typography } from "antd";
+import {
+  App as AntApp,
+  Alert,
+  Button,
+  Drawer,
+  Dropdown,
+  Input,
+  Modal,
+  Progress,
+  Select,
+  Space,
+  Switch,
+  Table,
+  Tag,
+  Typography
+} from "antd";
 import ReactECharts from "echarts-for-react";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -28,11 +43,13 @@ type ControlLogRow = {
   id: string;
   time: string;
   action: string;
+  target?: string;
   result: "success" | "pending" | "failed";
 };
 
 type StatusFilter = "all" | OnlineStatus;
 type TypeFilter = "all" | Device["type"];
+type StatusView = "cards" | "table";
 
 function stablePercent(seed: string, min: number, max: number) {
   let h = 2166136261;
@@ -61,6 +78,14 @@ function deviceTypeLabel(device: Device) {
   if (device.type === "rain") return "雨量";
   if (device.type === "tilt") return "倾角";
   if (device.type === "temp_hum") return "温湿度";
+  return "摄像头";
+}
+
+function deviceTypeLabelFromType(type: Device["type"]) {
+  if (type === "gnss") return "GNSS";
+  if (type === "rain") return "雨量";
+  if (type === "tilt") return "倾角";
+  if (type === "temp_hum") return "温湿度";
   return "摄像头";
 }
 
@@ -100,6 +125,8 @@ export function DeviceManagementPage() {
   const [keyword, setKeyword] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [statusView, setStatusView] = useState<StatusView>("cards");
+  const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -207,6 +234,24 @@ export function DeviceManagementPage() {
 
   const canControl = !!selectedDevice && selectedDevice.status !== "offline";
 
+  const deviceMetricsById = useMemo(() => {
+    const map = new Map<
+      string,
+      { health: number; battery: number; signal: number; todayCount: number; baselineEstablished: boolean }
+    >();
+    for (const d of devices) {
+      const seed = d.id;
+      const baseHealth = stablePercent(`${seed}-health`, 45, 100);
+      const health = d.status === "offline" ? Math.min(baseHealth, 35) : d.status === "warning" ? Math.min(baseHealth, 65) : baseHealth;
+      const battery = stablePercent(`${seed}-battery`, 18, 100);
+      const signal = stablePercent(`${seed}-signal`, 25, 100);
+      const todayCount = stablePercent(`${seed}-count`, 120, 520);
+      const baselineEstablished = !!baselineByDeviceId.get(d.id);
+      map.set(d.id, { health, battery, signal, todayCount, baselineEstablished });
+    }
+    return map;
+  }, [baselineByDeviceId, devices]);
+
   const deviceMetrics = useMemo(() => {
     if (!selectedDevice) {
       return {
@@ -217,14 +262,15 @@ export function DeviceManagementPage() {
         baselineEstablished: false
       };
     }
-    const seed = selectedDevice.id;
-    const baseHealth = stablePercent(`${seed}-health`, 45, 100);
-    const health = selectedDevice.status === "offline" ? Math.min(baseHealth, 35) : selectedDevice.status === "warning" ? Math.min(baseHealth, 65) : baseHealth;
-    const battery = stablePercent(`${seed}-battery`, 18, 100);
-    const signal = stablePercent(`${seed}-signal`, 25, 100);
-    const todayCount = stablePercent(`${seed}-count`, 120, 520);
-    const baselineEstablished = !!baselineByDeviceId.get(selectedDevice.id);
-    return { health, battery, signal, todayCount, baselineEstablished };
+    return (
+      deviceMetricsById.get(selectedDevice.id) ?? {
+        health: 0,
+        battery: 0,
+        signal: 0,
+        todayCount: 0,
+        baselineEstablished: false
+      }
+    );
   }, [baselineByDeviceId, selectedDevice]);
 
   const sensorRows: SensorRow[] = useMemo(() => {
@@ -322,6 +368,18 @@ export function DeviceManagementPage() {
     setControlLogs((prev) => [row, ...prev].slice(0, 12));
   };
 
+  const pushControlLogFor = (target: string, action: string, result: ControlLogRow["result"] = "success") => {
+    const now = new Date();
+    const row: ControlLogRow = {
+      id: `${now.getTime()}-${Math.random().toString(16).slice(2)}`,
+      time: now.toLocaleTimeString("zh-CN"),
+      action,
+      target,
+      result
+    };
+    setControlLogs((prev) => [row, ...prev].slice(0, 16));
+  };
+
   const runControl = (action: string) => {
     if (!selectedDevice) {
       message.info("请先选择设备");
@@ -347,6 +405,24 @@ export function DeviceManagementPage() {
       cancelText: "取消",
       ...(danger ? { okButtonProps: { danger: true } } : {}),
       onOk: () => runControl(action)
+    });
+  };
+
+  const runBulkAction = (action: string, danger = false) => {
+    if (!selectedRowKeys.length) {
+      message.info("请先选择设备");
+      return;
+    }
+    modal.confirm({
+      title: danger ? "确认批量执行高风险操作？" : "确认批量下发？",
+      content: `将对 ${selectedRowKeys.length} 台设备执行「${action}」。`,
+      okText: "确认下发",
+      cancelText: "取消",
+      ...(danger ? { okButtonProps: { danger: true } } : {}),
+      onOk: () => {
+        for (const id of selectedRowKeys) pushControlLogFor(id, action, "success");
+        message.success(`已下发：${action}`);
+      }
     });
   };
 
@@ -425,6 +501,34 @@ export function DeviceManagementPage() {
     if (key === "devices") message.info("导出功能待接入：设备列表");
     if (key === "sensor") message.info("导出功能待接入：传感器数据");
     if (key === "baselines") message.info("导出功能待接入：基线信息");
+  };
+
+  const copySelectedDeviceInfo = async () => {
+    if (!selectedDevice) {
+      message.info("请先选择设备");
+      return;
+    }
+
+    const lines = [
+      `设备名称：${selectedDevice.name}`,
+      `设备ID：${selectedDevice.id}`,
+      `设备类型：${deviceTypeLabel(selectedDevice)}`,
+      `站点：${selectedDevice.stationName}`,
+      `状态：${selectedDevice.status}`,
+      `最后上报：${new Date(selectedDevice.lastSeenAt).toLocaleString("zh-CN")}`,
+      `健康度：${deviceMetrics.health}%`,
+      `电池：${deviceMetrics.battery}%`,
+      `信号：${deviceMetrics.signal}%`,
+      `基线：${deviceMetrics.baselineEstablished ? "已建立" : "待建立"}`
+    ];
+    const text = lines.join("\n");
+
+    try {
+      await navigator.clipboard.writeText(text);
+      message.success("已复制设备信息");
+    } catch {
+      message.info("复制失败：当前环境不支持剪贴板权限");
+    }
   };
 
   return (
@@ -548,6 +652,22 @@ export function DeviceManagementPage() {
 
               <div className="desk-dm-field">
                 <div className="desk-dm-label">监测设备</div>
+                <div className="desk-dm-viewtoggle">
+                  <button
+                    type="button"
+                    className={statusView === "cards" ? "active" : ""}
+                    onClick={() => setStatusView("cards")}
+                  >
+                    列表
+                  </button>
+                  <button
+                    type="button"
+                    className={statusView === "table" ? "active" : ""}
+                    onClick={() => setStatusView("table")}
+                  >
+                    台账
+                  </button>
+                </div>
                 <div className="desk-dm-filterbar">
                   <Input
                     allowClear
@@ -583,28 +703,165 @@ export function DeviceManagementPage() {
                     ]}
                   />
                 </div>
-                <div className="desk-dm-devlist">
-                  {filteredDevices.map((d) => (
-                    <button
-                      key={d.id}
-                      type="button"
-                      className={`desk-dm-devitem ${d.id === selectedDeviceId ? "active" : ""}`}
-                      onClick={() => setSelectedDeviceId(d.id)}
-                    >
-                      <span className="desk-dm-dot" style={{ backgroundColor: statusDotColor(d.status) }} />
-                      <span className="desk-dm-devmeta">
-                        <span className="desk-dm-devname">{d.name}</span>
-                        <span className="desk-dm-devsub">
-                          {deviceTypeLabel(d)} · {d.stationName}
+                {statusView === "cards" ? (
+                  <div className="desk-dm-devlist">
+                    {filteredDevices.map((d) => (
+                      <button
+                        key={d.id}
+                        type="button"
+                        className={`desk-dm-devitem ${d.id === selectedDeviceId ? "active" : ""}`}
+                        onClick={() => setSelectedDeviceId(d.id)}
+                      >
+                        <span className="desk-dm-dot" style={{ backgroundColor: statusDotColor(d.status) }} />
+                        <span className="desk-dm-devmeta">
+                          <span className="desk-dm-devname">{d.name}</span>
+                          <span className="desk-dm-devsub">
+                            {deviceTypeLabel(d)} · {d.stationName}
+                          </span>
+                          <span className="desk-dm-devsub">{relativeTime(d.lastSeenAt)} · {d.id}</span>
                         </span>
-                        <span className="desk-dm-devsub">{relativeTime(d.lastSeenAt)} · {d.id}</span>
-                      </span>
-                      <span className="desk-dm-devstatus">
-                        <StatusTag value={d.status} />
-                      </span>
-                    </button>
-                  ))}
-                </div>
+                        <span className="desk-dm-devstatus">
+                          <StatusTag value={d.status} />
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="desk-dm-ledger">
+                    <div className="desk-dm-ledger-actions">
+                      <Button size="small" onClick={() => setSelectedRowKeys([])}>
+                        清空选择
+                      </Button>
+                      <Button size="small" onClick={() => runBulkAction("远程重启")}>
+                        批量重启
+                      </Button>
+                      <Button size="small" danger onClick={() => runBulkAction("下线设备", true)}>
+                        批量下线
+                      </Button>
+                    </div>
+                    <div className="desk-dark-table">
+                      <Table<Device>
+                        rowKey="id"
+                        size="small"
+                        dataSource={filteredDevices}
+                        pagination={{ pageSize: 6 }}
+                        rowSelection={{
+                          selectedRowKeys,
+                          onChange: (keys) => setSelectedRowKeys(keys.map(String))
+                        }}
+                        onRow={(row) => ({
+                          onClick: () => {
+                            setSelectedDeviceId(row.id);
+                          },
+                          onDoubleClick: () => {
+                            setSelectedDeviceId(row.id);
+                            setDetailOpen(true);
+                          }
+                        })}
+                        columns={[
+                          {
+                            title: "设备",
+                            key: "device",
+                            render: (_: unknown, row) => (
+                              <div style={{ minWidth: 220 }}>
+                                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                                  <div style={{ fontWeight: 900, color: "rgba(226,232,240,0.96)" }}>{row.name}</div>
+                                  <StatusTag value={row.status} />
+                                </div>
+                                <div style={{ fontSize: 12, color: "rgba(148,163,184,0.9)" }}>
+                                  {deviceTypeLabelFromType(row.type)} · {row.stationName}
+                                </div>
+                              </div>
+                            )
+                          },
+                          {
+                            title: "健康",
+                            key: "health",
+                            width: 90,
+                            render: (_: unknown, row) => {
+                              const m = deviceMetricsById.get(row.id);
+                              const v = m?.health ?? 0;
+                              return (
+                                <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}>
+                                  {v}%
+                                </span>
+                              );
+                            }
+                          },
+                          {
+                            title: "电量",
+                            key: "battery",
+                            width: 90,
+                            render: (_: unknown, row) => {
+                              const m = deviceMetricsById.get(row.id);
+                              const v = m?.battery ?? 0;
+                              return (
+                                <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}>
+                                  {v}%
+                                </span>
+                              );
+                            }
+                          },
+                          {
+                            title: "信号",
+                            key: "signal",
+                            width: 90,
+                            render: (_: unknown, row) => {
+                              const m = deviceMetricsById.get(row.id);
+                              const v = m?.signal ?? 0;
+                              return (
+                                <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}>
+                                  {v}%
+                                </span>
+                              );
+                            }
+                          },
+                          {
+                            title: "基线",
+                            key: "baseline",
+                            width: 90,
+                            render: (_: unknown, row) => {
+                              const ok = deviceMetricsById.get(row.id)?.baselineEstablished ?? false;
+                              return (
+                                <Tag color={ok ? "green" : "orange"} style={{ marginInlineEnd: 0 }}>
+                                  {ok ? "已建立" : "待建立"}
+                                </Tag>
+                              );
+                            }
+                          },
+                          {
+                            title: "最后上报",
+                            key: "lastSeenAt",
+                            width: 120,
+                            render: (_: unknown, row) => (
+                              <span style={{ fontSize: 12, color: "rgba(226,232,240,0.9)" }}>{relativeTime(row.lastSeenAt)}</span>
+                            )
+                          },
+                          {
+                            title: "操作",
+                            key: "actions",
+                            width: 110,
+                            render: (_: unknown, row) => (
+                              <Space size={6}>
+                                <Button
+                                  size="small"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedDeviceId(row.id);
+                                    setDetailOpen(true);
+                                  }}
+                                >
+                                  详情
+                                </Button>
+                              </Space>
+                            )
+                          }
+                        ]}
+                      />
+                    </div>
+                    <div className="desk-dm-muted">提示：双击某行可快速打开详情。</div>
+                  </div>
+                )}
               </div>
             </BaseCard>
 
@@ -917,52 +1174,93 @@ export function DeviceManagementPage() {
         </div>
       ) : null}
 
-      <Modal
-        title="设备详细信息"
+      <Drawer
+        title={selectedDevice ? `设备详情 - ${selectedDevice.name}` : "设备详情"}
         open={detailOpen}
-        onCancel={() => setDetailOpen(false)}
-        footer={
+        onClose={() => setDetailOpen(false)}
+        width={560}
+        extra={
           <Space>
             <Button
+              size="small"
               onClick={() => {
-                setDetailOpen(false);
+                if (!selectedStation) return;
+                navigate(`/app/device-management?tab=management&stationId=${encodeURIComponent(selectedStation.id)}`);
               }}
+              disabled={!selectedStation}
             >
-              关闭
+              站点
             </Button>
             <Button
-              type="primary"
+              size="small"
               onClick={() => {
                 if (!selectedDevice) return;
-                message.success("已复制设备信息");
+                navigate(`/app/gps-monitoring?deviceId=${encodeURIComponent(selectedDevice.id)}`);
+              }}
+              disabled={!selectedDevice}
+            >
+              GPS
+            </Button>
+            <Button
+              size="small"
+              onClick={() => {
+                navigate("/app/device-management?tab=baselines");
               }}
             >
-              复制信息
+              基线
+            </Button>
+            <Button size="small" type="primary" onClick={() => void copySelectedDeviceInfo()}>
+              复制
             </Button>
           </Space>
         }
-        width={860}
       >
         {selectedDevice ? (
           <div className="desk-dm-detail">
-            <div className="desk-dm-detail-grid">
+            <div className="desk-dm-detail-card">
+              <div className="desk-dm-detail-title">概览</div>
+              <div className="desk-dm-detail-item">
+                <span className="desk-dm-detail-k">状态</span>
+                <span className="desk-dm-detail-v">
+                  <StatusTag value={selectedDevice.status} />
+                </span>
+              </div>
+              <div className="desk-dm-detail-item">
+                <span className="desk-dm-detail-k">设备类型</span>
+                <span className="desk-dm-detail-v">{deviceTypeLabel(selectedDevice)}</span>
+              </div>
+              <div className="desk-dm-detail-item">
+                <span className="desk-dm-detail-k">所属站点</span>
+                <span className="desk-dm-detail-v">{selectedDevice.stationName}</span>
+              </div>
+              <div className="desk-dm-detail-item">
+                <span className="desk-dm-detail-k">最后上报</span>
+                <span className="desk-dm-detail-v">{new Date(selectedDevice.lastSeenAt).toLocaleString("zh-CN")}</span>
+              </div>
+              <div className="desk-dm-detail-item">
+                <span className="desk-dm-detail-k">基线状态</span>
+                <span className="desk-dm-detail-v" style={{ color: deviceMetrics.baselineEstablished ? "#22c55e" : "#f59e0b" }}>
+                  {deviceMetrics.baselineEstablished ? "已建立" : "待建立"}
+                </span>
+              </div>
+            </div>
+
+            <div className="desk-dm-detail-grid" style={{ marginTop: 12 }}>
               <div className="desk-dm-detail-card">
-                <div className="desk-dm-detail-title">基本信息</div>
+                <div className="desk-dm-detail-title">设备信息</div>
                 <div className="desk-dm-detail-item">
                   <span className="desk-dm-detail-k">设备名称</span>
                   <span className="desk-dm-detail-v">{selectedDevice.name}</span>
                 </div>
                 <div className="desk-dm-detail-item">
-                  <span className="desk-dm-detail-k">设备类型</span>
-                  <span className="desk-dm-detail-v">{deviceTypeLabel(selectedDevice)}</span>
+                  <span className="desk-dm-detail-k">设备 ID</span>
+                  <span className="desk-dm-detail-v" style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}>
+                    {selectedDevice.id}
+                  </span>
                 </div>
                 <div className="desk-dm-detail-item">
-                  <span className="desk-dm-detail-k">所属站点</span>
-                  <span className="desk-dm-detail-v">{selectedDevice.stationName}</span>
-                </div>
-                <div className="desk-dm-detail-item">
-                  <span className="desk-dm-detail-k">最后上报</span>
-                  <span className="desk-dm-detail-v">{new Date(selectedDevice.lastSeenAt).toLocaleString("zh-CN")}</span>
+                  <span className="desk-dm-detail-k">今日数据</span>
+                  <span className="desk-dm-detail-v">{deviceMetrics.todayCount} 条</span>
                 </div>
               </div>
 
@@ -981,36 +1279,115 @@ export function DeviceManagementPage() {
                   <span className="desk-dm-detail-v">{deviceMetrics.signal}%</span>
                 </div>
                 <div className="desk-dm-detail-item">
-                  <span className="desk-dm-detail-k">基线状态</span>
-                  <span className="desk-dm-detail-v">{deviceMetrics.baselineEstablished ? "已建立" : "待建立"}</span>
+                  <span className="desk-dm-detail-k">控制能力</span>
+                  <span className="desk-dm-detail-v" style={{ color: canControl ? "#22c55e" : "#f59e0b" }}>
+                    {canControl ? "可下发" : "不可下发"}
+                  </span>
                 </div>
               </div>
             </div>
 
+            {selectedStation ? (
+              <div className="desk-dm-detail-card" style={{ marginTop: 12 }}>
+                <div className="desk-dm-detail-title">站点信息</div>
+                <div className="desk-dm-detail-grid" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
+                  <div className="desk-dm-detail-item">
+                    <span className="desk-dm-detail-k">区域</span>
+                    <span className="desk-dm-detail-v">{selectedStation.area}</span>
+                  </div>
+                  <div className="desk-dm-detail-item">
+                    <span className="desk-dm-detail-k">风险</span>
+                    <span className="desk-dm-detail-v">
+                      <Tag color={selectedStation.risk === "high" ? "red" : selectedStation.risk === "mid" ? "orange" : "green"} style={{ marginInlineEnd: 0 }}>
+                        {selectedStation.risk}
+                      </Tag>
+                    </span>
+                  </div>
+                  <div className="desk-dm-detail-item">
+                    <span className="desk-dm-detail-k">坐标</span>
+                    <span className="desk-dm-detail-v" style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}>
+                      {selectedStation.lat.toFixed(6)}, {selectedStation.lng.toFixed(6)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
             <div className="desk-dm-detail-card" style={{ marginTop: 12 }}>
-              <div className="desk-dm-detail-title">站点信息</div>
-              <div className="desk-dm-detail-grid" style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}>
-                <div className="desk-dm-detail-item">
-                  <span className="desk-dm-detail-k">区域</span>
-                  <span className="desk-dm-detail-v">{selectedStation?.area ?? "-"}</span>
-                </div>
-                <div className="desk-dm-detail-item">
-                  <span className="desk-dm-detail-k">风险</span>
-                  <span className="desk-dm-detail-v">{selectedStation ? <Tag color={selectedStation.risk === "high" ? "red" : selectedStation.risk === "mid" ? "orange" : "green"}>{selectedStation.risk}</Tag> : "-"}</span>
-                </div>
-                <div className="desk-dm-detail-item">
-                  <span className="desk-dm-detail-k">坐标</span>
-                  <span className="desk-dm-detail-v" style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}>
-                    {selectedStation ? `${selectedStation.lat.toFixed(6)}, ${selectedStation.lng.toFixed(6)}` : "-"}
-                  </span>
-                </div>
+              <div className="desk-dm-detail-title">实时数据（预览）</div>
+              <div className="desk-dark-table" style={{ maxHeight: 220, overflow: "auto" }}>
+                <table className="desk-table">
+                  <thead>
+                    <tr>
+                      <th>时间</th>
+                      <th>温度</th>
+                      <th>湿度</th>
+                      <th>位移</th>
+                      <th>雨量</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sensorRows.slice(-6).map((r) => (
+                      <tr key={r.id}>
+                        <td>{r.time}</td>
+                        <td>{r.temperature}°C</td>
+                        <td>{r.humidity}%</td>
+                        <td>{r.dispMm}mm</td>
+                        <td>{r.rainMm}mm</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="desk-dm-detail-card" style={{ marginTop: 12 }}>
+              <div className="desk-dm-detail-title">控制记录</div>
+              <div className="desk-dark-table" style={{ maxHeight: 180, overflow: "auto" }}>
+                <table className="desk-table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: 92 }}>时间</th>
+                      <th>动作</th>
+                      <th style={{ width: 120 }}>目标</th>
+                      <th style={{ width: 90 }}>结果</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {controlLogs.length ? (
+                      controlLogs.map((row) => (
+                        <tr key={row.id}>
+                          <td>{row.time}</td>
+                          <td>{row.action}</td>
+                          <td style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}>
+                            {row.target ?? "--"}
+                          </td>
+                          <td>
+                            <Tag
+                              color={row.result === "success" ? "green" : row.result === "pending" ? "gold" : "red"}
+                              style={{ marginInlineEnd: 0 }}
+                            >
+                              {row.result === "success" ? "成功" : row.result === "pending" ? "执行中" : "失败"}
+                            </Tag>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={4} style={{ color: "rgba(148,163,184,0.9)" }}>
+                          暂无控制记录
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
         ) : (
           <div className="desk-dm-empty">请选择设备</div>
         )}
-      </Modal>
+      </Drawer>
     </div>
   );
 }

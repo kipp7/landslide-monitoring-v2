@@ -244,6 +244,53 @@
   margin-bottom: 10px;
 }
 
+.desk-dm-viewtoggle {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(2, 6, 23, 0.22);
+  margin-bottom: 10px;
+}
+
+.desk-dm-viewtoggle button {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: rgba(148, 163, 184, 0.92);
+  font-size: 12px;
+  font-weight: 800;
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 160ms ease;
+}
+
+.desk-dm-viewtoggle button:hover {
+  background: rgba(71, 85, 105, 0.18);
+  color: rgba(226, 232, 240, 0.92);
+}
+
+.desk-dm-viewtoggle button.active {
+  background: rgba(34, 211, 238, 0.14);
+  color: rgba(165, 243, 252, 0.95);
+  border: 1px solid rgba(34, 211, 238, 0.28);
+}
+
+.desk-dm-ledger {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.desk-dm-ledger-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .desk-dm-filterbar .ant-input-affix-wrapper,
 .desk-dm-filterbar .ant-input {
   background: rgba(2, 6, 23, 0.22) !important;
