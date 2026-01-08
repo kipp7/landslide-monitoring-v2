@@ -330,8 +330,8 @@
   top: 10px;
   right: 10px;
   z-index: 20;
-  width: min(560px, calc(100% - 20px));
-  max-height: calc(100% - 20px);
+  width: clamp(320px, 25%, 440px);
+  max-height: clamp(220px, 25%, 420px);
   display: flex;
   flex-direction: column;
   border-radius: 12px;
@@ -345,7 +345,7 @@
 }
 
 .desk-analysis-map-selectedpanel.is-collapsed {
-  width: min(460px, calc(100% - 20px));
+  width: clamp(300px, 22%, 400px);
 }
 
 .desk-analysis-map-selectedpanel *::-webkit-scrollbar {
