@@ -4,6 +4,7 @@ import {
   Alert,
   Button,
   Col,
+  Drawer,
   Dropdown,
   Form,
   InputNumber,
@@ -132,6 +133,16 @@ export function GpsMonitoringPage() {
   });
   const [showLimit, setShowLimit] = useState(false);
   const [limitForm] = Form.useForm<{ limit: number }>();
+
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [selectedRowKey, setSelectedRowKey] = useState<string>("");
+  const [selectedRow, setSelectedRow] = useState<GpsChartRow | null>(null);
+
+  const openRowDetail = (row: GpsChartRow) => {
+    setSelectedRowKey(row.key);
+    setSelectedRow(row);
+    setDetailOpen(true);
+  };
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -343,6 +354,18 @@ export function GpsMonitoringPage() {
           areaStyle: { color: "rgba(96, 165, 250, 0.10)" }
         }
       ]
+    };
+  }, [chartData]);
+
+  const onChartEvents = useMemo(() => {
+    return {
+      click: (params: { dataIndex?: number }) => {
+        const idx = params.dataIndex;
+        if (typeof idx !== "number") return;
+        const row = chartData[idx];
+        if (!row) return;
+        openRowDetail(row);
+      }
     };
   }, [chartData]);
 
@@ -874,7 +897,7 @@ export function GpsMonitoringPage() {
                       {loading ? (
                         <div className="desk-loading">加载中…</div>
                       ) : (
-                        <ReactECharts option={displacementOption} style={{ height: 320 }} />
+                        <ReactECharts option={displacementOption} style={{ height: 320 }} onEvents={onChartEvents} />
                       )}
                     </BaseCard>
                   </Col>
@@ -896,6 +919,10 @@ export function GpsMonitoringPage() {
                           size="small"
                           dataSource={realtimeRows}
                           pagination={{ pageSize: 8 }}
+                          rowClassName={(row) => (row.key === selectedRowKey ? "desk-gps-row-active" : "")}
+                          onRow={(row) => ({
+                            onClick: () => openRowDetail(row)
+                          })}
                           columns={[
                             {
                               title: "时间",
@@ -1121,6 +1148,10 @@ export function GpsMonitoringPage() {
                       loading={loading}
                       pagination={{ pageSize: 12 }}
                       scroll={{ x: 1200 }}
+                      rowClassName={(row) => (row.key === selectedRowKey ? "desk-gps-row-active" : "")}
+                      onRow={(row) => ({
+                        onClick: () => openRowDetail(row)
+                      })}
                       columns={[
                         { title: "时间", dataIndex: "ts", width: 170, render: (v: string) => dayjs(v).format("YYYY-MM-DD HH:mm:ss") },
                         {
@@ -1151,6 +1182,135 @@ export function GpsMonitoringPage() {
           ]}
         />
       </div>
+
+      <Drawer
+        title={selectedRow ? `数据详情 - ${dayjs(selectedRow.ts).format("YYYY-MM-DD HH:mm:ss")}` : "数据详情"}
+        placement="right"
+        width={560}
+        open={detailOpen}
+        onClose={() => setDetailOpen(false)}
+        extra={
+          <Space>
+            <Button
+              size="small"
+              onClick={() => {
+                if (!selectedDeviceId) return;
+                navigate(`/app/device-management?tab=status&deviceId=${encodeURIComponent(selectedDeviceId)}`);
+              }}
+              disabled={!selectedDeviceId}
+            >
+              设备
+            </Button>
+            <Button
+              size="small"
+              onClick={() => {
+                navigate(`/app/device-management?tab=baselines`);
+              }}
+            >
+              基线
+            </Button>
+            <Button
+              size="small"
+              type="primary"
+              onClick={() => {
+                if (!selectedRow) return;
+                message.success("已生成数据快照（演示）");
+              }}
+              disabled={!selectedRow}
+            >
+              快照
+            </Button>
+          </Space>
+        }
+      >
+        {selectedRow ? (
+          <div className="desk-gps-detail">
+            <div className="desk-gps-detail-hero">
+              <div>
+                <div className="desk-gps-detail-title">风险评估</div>
+                <div className="desk-gps-detail-risk" style={{ color: riskColor(selectedRow.riskLevel) }}>
+                  {riskDesc(selectedRow.riskLevel)}
+                </div>
+              </div>
+              <div className="desk-gps-detail-meta">
+                <div className="k">设备</div>
+                <div className="v">{selectedDeviceId || "--"}</div>
+              </div>
+            </div>
+
+            <div className="desk-gps-detail-card">
+              <div className="desk-gps-detail-card-title">形变数据</div>
+              <div className="desk-gps-detail-grid">
+                <div className="kv">
+                  <div className="k">总位移</div>
+                  <div className="v">{selectedRow.displacement.toFixed(2)} mm</div>
+                </div>
+                <div className="kv">
+                  <div className="k">速度</div>
+                  <div className="v">{selectedRow.velocityMmH.toFixed(2)} mm/h</div>
+                </div>
+                <div className="kv">
+                  <div className="k">水平</div>
+                  <div className="v">{selectedRow.horizontal.toFixed(2)} mm</div>
+                </div>
+                <div className="kv">
+                  <div className="k">垂直</div>
+                  <div className="v">{selectedRow.vertical.toFixed(2)} mm</div>
+                </div>
+              </div>
+              <div className="desk-gps-detail-note">
+                阈值：蓝 {thresholds.blue} / 黄 {thresholds.yellow} / 红 {thresholds.red}（mm）
+              </div>
+            </div>
+
+            <div className="desk-gps-detail-card">
+              <div className="desk-gps-detail-card-title">环境因素</div>
+              <div className="desk-gps-detail-grid">
+                <div className="kv">
+                  <div className="k">温度</div>
+                  <div className="v">{selectedRow.temperature.toFixed(1)} °C</div>
+                </div>
+                <div className="kv">
+                  <div className="k">湿度</div>
+                  <div className="v">{selectedRow.humidity.toFixed(0)} %</div>
+                </div>
+                <div className="kv">
+                  <div className="k">模型置信度</div>
+                  <div className="v">{Math.round(selectedRow.confidence * 100)}%</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="desk-gps-detail-card">
+              <div className="desk-gps-detail-card-title">坐标与基线</div>
+              <div className="desk-gps-detail-grid">
+                <div className="kv">
+                  <div className="k">当前坐标</div>
+                  <div className="v">
+                    <span className="desk-gps-mono">
+                      {selectedRow.lat.toFixed(6)}, {selectedRow.lng.toFixed(6)}
+                    </span>
+                  </div>
+                </div>
+                <div className="kv">
+                  <div className="k">基线</div>
+                  <div className="v">
+                    {baseline ? (
+                      <span className="desk-gps-mono">
+                        {baseline.baselineLat.toFixed(6)}, {baseline.baselineLng.toFixed(6)}
+                      </span>
+                    ) : (
+                      <span style={{ color: "rgba(148,163,184,0.9)" }}>未建立</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div style={{ color: "rgba(148,163,184,0.9)" }}>请选择一条数据</div>
+        )}
+      </Drawer>
 
       <Modal
         title="监测阈值设置"
