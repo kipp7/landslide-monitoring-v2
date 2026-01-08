@@ -162,18 +162,14 @@ function AreaOverlays(props: {
         `<span class="ring r2"></span>` +
         `<span class="ring r3"></span>` +
         `<span class="drop"></span>` +
-        `<div class="label">` +
-        `<div class="t">${o.area}</div>` +
-        `<div class="s">站点 ${o.stats.total} · 高 ${o.stats.high} · 预警 ${o.stats.warn} · 离线 ${o.stats.off}</div>` +
-        `</div>` +
         `</div>`;
       byArea.set(
         o.area,
         L.divIcon({
           className: "desk-map-area-icon",
           html,
-          iconSize: [280, 72],
-          iconAnchor: [140, 36]
+          iconSize: [72, 72],
+          iconAnchor: [36, 36]
         })
       );
     }
