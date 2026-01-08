@@ -2,7 +2,7 @@ import "leaflet/dist/leaflet.css";
 
 import L from "leaflet";
 import { useEffect, useMemo } from "react";
-import { MapContainer, Marker, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
+import { MapContainer, Marker, Polygon, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
 
 import type { Station } from "../api/client";
 
@@ -47,6 +47,194 @@ function riskClass(risk: Station["risk"]) {
   if (risk === "high") return "is-high";
   if (risk === "mid") return "is-mid";
   return "is-low";
+}
+
+type AreaOverlay = {
+  area: string;
+  stationIds: string[];
+  bounds: L.LatLngBounds;
+  center: L.LatLng;
+  stats: {
+    total: number;
+    high: number;
+    mid: number;
+    low: number;
+    warn: number;
+    off: number;
+    online: number;
+  };
+};
+
+function areaSeed(area: string) {
+  let h = 2166136261;
+  for (let i = 0; i < area.length; i += 1) {
+    h ^= area.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0) / 4294967295;
+}
+
+function areaColor(area: string) {
+  const x = areaSeed(area);
+  if (x < 0.33) return { stroke: "rgba(34, 211, 238, 0.55)", fill: "rgba(34, 211, 238, 0.10)" };
+  if (x < 0.66) return { stroke: "rgba(96, 165, 250, 0.55)", fill: "rgba(96, 165, 250, 0.10)" };
+  return { stroke: "rgba(16, 185, 129, 0.55)", fill: "rgba(16, 185, 129, 0.10)" };
+}
+
+function makeAreaOverlay(stations: Station[], metrics?: Record<string, StationMapMetrics | undefined>) {
+  const byArea = new Map<string, Station[]>();
+  for (const s of stations) {
+    const key = (s.area || "未分区").trim() || "未分区";
+    const list = byArea.get(key) ?? [];
+    list.push(s);
+    byArea.set(key, list);
+  }
+
+  const overlays: AreaOverlay[] = [];
+  for (const [area, list] of byArea) {
+    const pts = list
+      .filter((s) => Number.isFinite(s.lat) && Number.isFinite(s.lng))
+      .map((s) => L.latLng(s.lat, s.lng));
+    if (!pts.length) continue;
+    const bounds = L.latLngBounds(pts);
+    const padLat = Math.max(0.0025, (bounds.getNorth() - bounds.getSouth()) * 0.25);
+    const padLng = Math.max(0.0025, (bounds.getEast() - bounds.getWest()) * 0.25);
+    const padded = L.latLngBounds(
+      L.latLng(bounds.getSouth() - padLat, bounds.getWest() - padLng),
+      L.latLng(bounds.getNorth() + padLat, bounds.getEast() + padLng)
+    );
+
+    const stats = {
+      total: list.length,
+      high: list.filter((s) => s.risk === "high").length,
+      mid: list.filter((s) => s.risk === "mid").length,
+      low: list.filter((s) => s.risk === "low").length,
+      warn: list.filter((s) => s.status === "warning").length,
+      off: list.filter((s) => s.status === "offline").length,
+      online: list.filter((s) => s.status === "online").length
+    };
+
+    // Blend in device-level anomalies when available (warn/offline device counts)
+    if (metrics) {
+      let deviceWarn = 0;
+      let deviceOff = 0;
+      for (const s of list) {
+        const m = metrics[s.id];
+        deviceWarn += m?.deviceWarn ?? 0;
+        deviceOff += m?.deviceOffline ?? 0;
+      }
+      if (deviceWarn > 0) stats.warn += 1;
+      if (deviceOff > 0) stats.off += 1;
+    }
+
+    overlays.push({
+      area,
+      stationIds: list.map((s) => s.id),
+      bounds: padded,
+      center: padded.getCenter(),
+      stats
+    });
+  }
+
+  overlays.sort((a, b) => b.stats.total - a.stats.total || a.area.localeCompare(b.area));
+  return overlays;
+}
+
+function AreaOverlays(props: {
+  overlays: AreaOverlay[];
+  selectedStationIds: string[];
+  onSelectStationIds: (ids: string[]) => void;
+}) {
+  const map = useMap();
+
+  const labelIcons = useMemo(() => {
+    const byArea = new Map<string, L.DivIcon>();
+    for (const o of props.overlays) {
+      const c = areaColor(o.area);
+      const html =
+        `<div class="desk-map-area-label" style="--desk-area-stroke:${c.stroke};--desk-area-fill:${c.fill};">` +
+        `<div class="t">${o.area}</div>` +
+        `<div class="s">站点 ${o.stats.total} · 高 ${o.stats.high} · 预警 ${o.stats.warn} · 离线 ${o.stats.off}</div>` +
+        `</div>`;
+      byArea.set(
+        o.area,
+        L.divIcon({
+          className: "desk-map-area-icon",
+          html,
+          iconSize: [240, 44],
+          iconAnchor: [120, 22]
+        })
+      );
+    }
+    return byArea;
+  }, [props.overlays]);
+
+  const handleSelect = (o: AreaOverlay, e?: L.LeafletMouseEvent) => {
+    e?.originalEvent?.stopPropagation?.();
+    e?.originalEvent?.preventDefault?.();
+    props.onSelectStationIds(o.stationIds);
+    map.fitBounds(o.bounds, { padding: [24, 24] });
+  };
+
+  return (
+    <>
+      {props.overlays.map((o) => {
+        const c = areaColor(o.area);
+        const icon = labelIcons.get(o.area);
+        const coords: [number, number][] = [
+          [o.bounds.getSouth(), o.bounds.getWest()],
+          [o.bounds.getSouth(), o.bounds.getEast()],
+          [o.bounds.getNorth(), o.bounds.getEast()],
+          [o.bounds.getNorth(), o.bounds.getWest()]
+        ];
+        return (
+          <Polygon
+            key={`area-poly:${o.area}`}
+            positions={coords}
+            pathOptions={{
+              color: c.stroke,
+              weight: o.stats.high > 0 ? 2 : 1.5,
+              opacity: 0.9,
+              fillColor: c.fill,
+              fillOpacity: 0.55
+            }}
+            eventHandlers={{
+              click: (e) => {
+                handleSelect(o, e as unknown as L.LeafletMouseEvent);
+              }
+            }}
+          />
+        );
+      })}
+
+      {props.overlays.map((o) => {
+        const icon = labelIcons.get(o.area);
+        return (
+          <Marker
+            key={`area-label:${o.area}`}
+            position={o.center}
+            icon={icon}
+            eventHandlers={{
+              click: (e) => {
+                handleSelect(o, e as unknown as L.LeafletMouseEvent);
+              }
+            }}
+          >
+            <Tooltip className="desk-map-tooltip" direction="top" offset={[0, -10]} opacity={1} sticky>
+              <div style={{ fontWeight: 900 }}>{o.area}</div>
+              <div style={{ opacity: 0.9, fontSize: 12 }}>
+                站点 {o.stats.total} · 高 {o.stats.high} · 中 {o.stats.mid} · 低 {o.stats.low}
+              </div>
+              <div style={{ opacity: 0.9, fontSize: 12 }}>
+                在线 {o.stats.online} · 预警 {o.stats.warn} · 离线 {o.stats.off}
+              </div>
+              <div style={{ opacity: 0.8, fontSize: 12 }}>点击聚焦并选中区域站点</div>
+            </Tooltip>
+          </Marker>
+        );
+      })}
+    </>
+  );
 }
 
 function RecenterOnReset(props: { resetKey: number | undefined; bounds: L.LatLngBoundsExpression }) {
@@ -123,6 +311,10 @@ export function RealMapView(props: RealMapViewProps) {
     return pts as unknown as L.LatLngBoundsExpression;
   }, [props.stations]);
 
+  const areaOverlays = useMemo(() => {
+    return makeAreaOverlay(props.stations, props.metricsByStationId);
+  }, [props.metricsByStationId, props.stations]);
+
   const osmAttribution = `&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors`;
   const esriAttribution =
     `Tiles &copy; Esri` +
@@ -186,6 +378,7 @@ export function RealMapView(props: RealMapViewProps) {
           props.onSelectStationIds([]);
         }}
       />
+      <AreaOverlays overlays={areaOverlays} selectedStationIds={props.selectedStationIds} onSelectStationIds={props.onSelectStationIds} />
 
       {props.stations.map((s) => {
         const isSelected = props.selectedStationIds.includes(s.id);
