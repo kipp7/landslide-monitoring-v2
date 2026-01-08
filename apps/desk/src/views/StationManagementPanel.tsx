@@ -2,6 +2,7 @@ import {
   App as AntApp,
   Button,
   Col,
+  Drawer,
   Form,
   Input,
   Modal,
@@ -791,13 +792,16 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
         ) : null}
       </Modal>
 
-      <Modal
-        title="监测站详情"
+      <Drawer
+        title={detailStation ? `监测站详情 - ${detailStation.stationName}` : "监测站详情"}
+        placement="right"
+        width={560}
         open={!!detailStationId}
-        onCancel={() => setDetailStationId(null)}
-        footer={
+        onClose={() => setDetailStationId(null)}
+        extra={
           <Space>
             <Button
+              size="small"
               onClick={() => {
                 if (!detailStation) return;
                 navigate(`/app/device-management?tab=status&stationId=${encodeURIComponent(detailStation.stationId)}`);
@@ -806,6 +810,7 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
               查看站点设备
             </Button>
             <Button
+              size="small"
               type="primary"
               onClick={() => {
                 setDetailStationId(null);
@@ -815,7 +820,6 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
             </Button>
           </Space>
         }
-        width={760}
       >
         {detailStation ? (
           <div className="desk-sm-detail">
@@ -932,7 +936,7 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
         ) : (
           <div style={{ color: "rgba(148,163,184,0.9)" }}>-</div>
         )}
-      </Modal>
+      </Drawer>
     </BaseCard>
   );
 }
