@@ -122,6 +122,7 @@ export function AnalysisPage() {
   const apiMode = useSettingsStore((s) => s.apiMode);
   const reducedMotion = useSettingsStore((s) => s.reducedMotion);
   const terrainQuality = useSettingsStore((s) => s.terrainQuality);
+  const alertAtmosphere = useSettingsStore((s) => s.alertAtmosphere);
   const user = useAuthStore((s) => s.user);
   const [mapType, setMapType] = useState<MapType>("卫星图");
   const [loading, setLoading] = useState(true);
@@ -769,7 +770,7 @@ export function AnalysisPage() {
 
   return (
     <div className="desk-analysis-screen">
-      {alertOn ? (
+      {alertOn && alertAtmosphere ? (
         <div className="desk-analysis-alert-glow" aria-hidden="true">
           <div className="desk-analysis-alert-top" />
           <div className="desk-analysis-alert-bottom" />

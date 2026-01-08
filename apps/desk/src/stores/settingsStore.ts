@@ -12,6 +12,7 @@ type SettingsState = {
   mockFailureRate: number;
   terrainQuality: TerrainQuality;
   reducedMotion: boolean;
+  alertAtmosphere: boolean;
   trayEnabled: boolean;
   setApiMode: (mode: ApiMode) => void;
   setApiBaseUrl: (url: string) => void;
@@ -19,6 +20,7 @@ type SettingsState = {
   setMockFailureRate: (rate: number) => void;
   setTerrainQuality: (quality: TerrainQuality) => void;
   setReducedMotion: (enabled: boolean) => void;
+  setAlertAtmosphere: (enabled: boolean) => void;
   setTrayEnabled: (enabled: boolean) => void;
   reset: () => void;
 };
@@ -31,6 +33,7 @@ const defaults: Pick<
   | "mockFailureRate"
   | "terrainQuality"
   | "reducedMotion"
+  | "alertAtmosphere"
   | "trayEnabled"
 > = {
   apiMode: "mock",
@@ -39,6 +42,7 @@ const defaults: Pick<
   mockFailureRate: 0,
   terrainQuality: "auto",
   reducedMotion: false,
+  alertAtmosphere: false,
   trayEnabled: true
 };
 
@@ -63,6 +67,9 @@ export const useSettingsStore = create<SettingsState>()(
       },
       setReducedMotion: (reducedMotion) => {
         set({ reducedMotion });
+      },
+      setAlertAtmosphere: (alertAtmosphere) => {
+        set({ alertAtmosphere });
       },
       setTrayEnabled: (trayEnabled) => {
         set({ trayEnabled });

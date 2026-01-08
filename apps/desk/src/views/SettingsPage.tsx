@@ -27,6 +27,7 @@ export function SettingsPage() {
   const mockFailureRate = useSettingsStore((s) => s.mockFailureRate);
   const terrainQuality = useSettingsStore((s) => s.terrainQuality);
   const reducedMotion = useSettingsStore((s) => s.reducedMotion);
+  const alertAtmosphere = useSettingsStore((s) => s.alertAtmosphere);
   const trayEnabled = useSettingsStore((s) => s.trayEnabled);
   const setApiMode = useSettingsStore((s) => s.setApiMode);
   const setApiBaseUrl = useSettingsStore((s) => s.setApiBaseUrl);
@@ -34,6 +35,7 @@ export function SettingsPage() {
   const setMockFailureRate = useSettingsStore((s) => s.setMockFailureRate);
   const setTerrainQuality = useSettingsStore((s) => s.setTerrainQuality);
   const setReducedMotion = useSettingsStore((s) => s.setReducedMotion);
+  const setAlertAtmosphere = useSettingsStore((s) => s.setAlertAtmosphere);
   const setTrayEnabled = useSettingsStore((s) => s.setTrayEnabled);
   const reset = useSettingsStore((s) => s.reset);
   const clearAuth = useAuthStore((s) => s.clear);
@@ -263,6 +265,20 @@ export function SettingsPage() {
                 }}
               />
               <Typography.Text type="secondary">开启后会减少动效与过渡，提升流畅度。</Typography.Text>
+            </Space>
+          </Form.Item>
+
+          <Form.Item label="告警氛围（红色边框）">
+            <Space wrap>
+              <Switch
+                checked={alertAtmosphere}
+                checkedChildren="已启用"
+                unCheckedChildren="已禁用"
+                onChange={(checked) => {
+                  setAlertAtmosphere(checked);
+                }}
+              />
+              <Typography.Text type="secondary">默认关闭，避免影响观感与截图。</Typography.Text>
             </Space>
           </Form.Item>
 
