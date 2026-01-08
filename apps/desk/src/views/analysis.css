@@ -1236,6 +1236,325 @@
   font-size: 13px;
 }
 
+.desk-ai2 {
+  height: 100%;
+  border-radius: 12px;
+  border: 1px solid rgba(34, 211, 238, 0.14);
+  background: radial-gradient(circle at 20% 20%, rgba(34, 211, 238, 0.08), transparent 50%),
+    rgba(15, 23, 42, 0.18);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: rgba(226, 232, 240, 0.9);
+  min-height: 0;
+}
+
+.desk-ai2-tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.desk-ai2-spacer {
+  flex: 1;
+}
+
+.desk-ai2-tab {
+  appearance: none;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(2, 6, 23, 0.22);
+  color: rgba(226, 232, 240, 0.9);
+  border-radius: 999px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-weight: 900;
+  font-size: 12px;
+}
+
+.desk-ai2-tab:hover {
+  border-color: rgba(34, 211, 238, 0.32);
+}
+
+.desk-ai2-tab.is-active {
+  border-color: rgba(34, 211, 238, 0.32);
+  background: rgba(8, 145, 178, 0.16);
+}
+
+.desk-ai2-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.desk-ai2-body::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.desk-ai2-body::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.25);
+  border-radius: 999px;
+  border: 2px solid rgba(2, 6, 23, 0.25);
+}
+
+.desk-ai2-overview {
+  display: grid;
+  grid-template-columns: 1fr 160px;
+  gap: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(2, 6, 23, 0.22);
+  border-radius: 12px;
+  padding: 8px 10px;
+}
+
+.desk-ai2-overview .t {
+  color: rgba(148, 163, 184, 0.92);
+  font-weight: 800;
+  font-size: 12px;
+}
+
+.desk-ai2-overview .v {
+  margin-top: 4px;
+  color: rgba(226, 232, 240, 0.96);
+  font-weight: 900;
+  font-size: 14px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.desk-ai2-overview .s {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+}
+
+.desk-ai2-overview .chip {
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(15, 23, 42, 0.18);
+  color: rgba(226, 232, 240, 0.9);
+  font-weight: 800;
+  font-size: 12px;
+}
+
+.desk-ai2-overview .badge {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 12px;
+  padding: 10px 8px;
+  font-weight: 900;
+  font-size: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(2, 6, 23, 0.22);
+  color: rgba(226, 232, 240, 0.92);
+}
+
+.desk-ai2-overview .badge .unit {
+  font-size: 12px;
+  color: rgba(148, 163, 184, 0.92);
+  font-weight: 900;
+}
+
+.desk-ai2-overview .badge.red {
+  border-color: rgba(239, 68, 68, 0.26);
+  background: rgba(239, 68, 68, 0.10);
+}
+
+.desk-ai2-overview .badge.orange {
+  border-color: rgba(245, 158, 11, 0.24);
+  background: rgba(245, 158, 11, 0.10);
+}
+
+.desk-ai2-overview .badge.green {
+  border-color: rgba(34, 197, 94, 0.22);
+  background: rgba(34, 197, 94, 0.10);
+}
+
+.desk-ai2-overview .meta {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: 4px 8px;
+  font-size: 12px;
+}
+
+.desk-ai2-overview .meta .k {
+  color: rgba(148, 163, 184, 0.92);
+  font-weight: 800;
+}
+
+.desk-ai2-overview .meta .v {
+  color: rgba(226, 232, 240, 0.92);
+  font-weight: 900;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.desk-ai2-section {
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(2, 6, 23, 0.22);
+  border-radius: 12px;
+  padding: 8px 10px;
+}
+
+.desk-ai2-section .h {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.desk-ai2-section .tt {
+  font-weight: 900;
+  color: rgba(226, 232, 240, 0.92);
+}
+
+.desk-ai2-section .muted {
+  color: rgba(148, 163, 184, 0.92);
+  font-weight: 800;
+  font-size: 12px;
+}
+
+.desk-ai2-section .link {
+  margin-left: auto;
+  appearance: none;
+  border: 1px solid rgba(34, 211, 238, 0.18);
+  background: rgba(8, 145, 178, 0.10);
+  color: rgba(226, 232, 240, 0.92);
+  border-radius: 999px;
+  padding: 3px 10px;
+  cursor: pointer;
+  font-weight: 900;
+  font-size: 12px;
+}
+
+.desk-ai2-section .link:hover {
+  border-color: rgba(34, 211, 238, 0.32);
+  background: rgba(6, 182, 212, 0.14);
+}
+
+.desk-ai2-section .list {
+  display: grid;
+  gap: 6px;
+}
+
+.desk-ai2-section .row {
+  appearance: none;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  background: rgba(15, 23, 42, 0.18);
+  border-radius: 12px;
+  padding: 7px 10px;
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  align-items: center;
+  gap: 8px;
+  color: rgba(226, 232, 240, 0.92);
+  text-align: left;
+}
+
+.desk-ai2-section .row:hover {
+  border-color: rgba(34, 211, 238, 0.22);
+  background: rgba(15, 23, 42, 0.24);
+}
+
+.desk-ai2-section .row .name {
+  font-weight: 900;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.desk-ai2-section .row .pill {
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(2, 6, 23, 0.22);
+  font-weight: 900;
+  font-size: 12px;
+}
+
+.desk-ai2-section .row .pill.red {
+  border-color: rgba(239, 68, 68, 0.26);
+  background: rgba(239, 68, 68, 0.10);
+}
+
+.desk-ai2-section .row .pill.orange {
+  border-color: rgba(245, 158, 11, 0.24);
+  background: rgba(245, 158, 11, 0.10);
+}
+
+.desk-ai2-section .row .pill.green {
+  border-color: rgba(34, 197, 94, 0.22);
+  background: rgba(34, 197, 94, 0.10);
+}
+
+.desk-ai2-section .row .muted {
+  color: rgba(148, 163, 184, 0.92);
+  font-weight: 800;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.desk-ai2-section .advice {
+  color: rgba(226, 232, 240, 0.9);
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.desk-ai2-section .ul {
+  margin: 0;
+  padding-left: 16px;
+  display: grid;
+  gap: 4px;
+}
+
+.desk-ai2-section .factors {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 10px;
+}
+
+.desk-ai2-section .kv {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  background: rgba(15, 23, 42, 0.18);
+  border-radius: 12px;
+  padding: 7px 10px;
+}
+
+.desk-ai2-section .kv .k {
+  color: rgba(148, 163, 184, 0.92);
+  font-weight: 800;
+  font-size: 12px;
+}
+
+.desk-ai2-section .kv .v {
+  color: rgba(226, 232, 240, 0.92);
+  font-weight: 900;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.desk-ai2-section .note {
+  margin-top: 8px;
+  color: rgba(148, 163, 184, 0.92);
+  font-weight: 700;
+  line-height: 1.45;
+}
+
 .desk-ai-line {
   display: flex;
   align-items: flex-start;

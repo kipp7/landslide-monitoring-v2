@@ -79,6 +79,27 @@ function deviceTypeLabel(t: Device["type"]) {
   return t;
 }
 
+function stable01(input: string) {
+  let h = 2166136261;
+  for (let i = 0; i < input.length; i += 1) {
+    h ^= input.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0) / 4294967295;
+}
+
+function riskTextShort(r: Station["risk"]) {
+  if (r === "high") return "高";
+  if (r === "mid") return "中";
+  return "低";
+}
+
+function statusTextShort(s: Station["status"]) {
+  if (s === "online") return "在线";
+  if (s === "warning") return "预警";
+  return "离线";
+}
+
 function darkAxis() {
   return {
     axisLine: { lineStyle: { color: "rgba(148, 163, 184, 0.45)" } },
@@ -119,6 +140,7 @@ export function AnalysisPage() {
   const [stationPanelPage, setStationPanelPage] = useState(0);
   const [stationPanelPlaying, setStationPanelPlaying] = useState(true);
   const [stationPanelActiveId, setStationPanelActiveId] = useState<string | null>(null);
+  const [aiTab, setAiTab] = useState<"区域研判" | "站点研判" | "模型状态">("区域研判");
   const [gpsCache, setGpsCache] = useState<Record<string, { deviceId: string; deviceName: string; points: { ts: string; dispMm: number }[] }>>({});
   const gpsAbortRef = useRef<AbortController | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -336,6 +358,21 @@ export function AnalysisPage() {
         }
       ]
     };
+  }, [rainRange]);
+
+  const rainSignal = useMemo(() => {
+    const is24h = rainRange === "24h";
+    const data = is24h ? [0, 0.6, 0.8, 2.6, 3.2, 1.8, 0.9, 0.5, 1.2, 2.8, 1.1, 0.4] : [12, 8, 15, 6, 9, 18, 11];
+    if (is24h) {
+      const max = Math.max(...data);
+      const severity = max >= 3 ? "高" : max >= 1.6 ? "中" : "低";
+      const hint = max >= 3 ? "短时强降雨" : max >= 1.6 ? "降雨增强" : "降雨偏弱";
+      return { mode: "24h" as const, max, sum: data.reduce((a, b) => a + b, 0), severity, hint };
+    }
+    const sum = data.reduce((a, b) => a + b, 0);
+    const severity = sum >= 60 ? "高" : sum >= 35 ? "中" : "低";
+    const hint = sum >= 60 ? "累积雨量较大" : sum >= 35 ? "累积雨量偏高" : "累积雨量偏低";
+    return { mode: "7d" as const, max: Math.max(...data), sum, severity, hint };
   }, [rainRange]);
 
   const riskDistributionOption = useMemo(() => {
@@ -679,6 +716,56 @@ export function AnalysisPage() {
 
     return { level, color, score, actions };
   }, [activeGnssStats?.d24h, activeGnssStats?.v1h, activeStation, metricsByStationId]);
+
+  const aiFocusStations = useMemo(() => {
+    const base = activeArea ? stations.filter((s) => s.area === activeArea) : stations.slice();
+    const scoreRisk = (r: Station["risk"]) => (r === "high" ? 3 : r === "mid" ? 2 : 1);
+    const scoreStatus = (s: Station["status"]) => (s === "offline" ? 3 : s === "warning" ? 2 : 1);
+    const toScore = (s: Station) => {
+      const m = metricsByStationId[s.id];
+      const healthPenalty = (m?.deviceOffline ?? 0) > 0 ? 1 : 0;
+      const warnPenalty = (m?.deviceWarn ?? 0) > 0 ? 1 : 0;
+      const gnssBoost = (m?.types?.gnss ?? 0) > 0 ? 0.6 : 0;
+      const noise = stable01(s.id) * 0.6;
+      const rainBoost = rainSignal.severity === "高" ? 1.1 : rainSignal.severity === "中" ? 0.6 : 0.2;
+      return scoreRisk(s.risk) * 2 + scoreStatus(s.status) + healthPenalty + warnPenalty + gnssBoost + noise + rainBoost;
+    };
+    return base
+      .slice()
+      .sort((a, b) => toScore(b) - toScore(a))
+      .slice(0, 6)
+      .map((s) => {
+        const m = metricsByStationId[s.id];
+        const score = toScore(s);
+        const riskNext = score >= 7 ? "高" : score >= 5.2 ? "中" : "低";
+        const conf = Math.round((0.72 + stable01(`c:${s.id}`) * 0.22) * 100);
+        return {
+          station: s,
+          score,
+          riskNext,
+          conf,
+          hasGnss: (m?.types?.gnss ?? 0) > 0,
+          warn: m?.deviceWarn ?? 0,
+          off: m?.deviceOffline ?? 0
+        };
+      });
+  }, [activeArea, metricsByStationId, rainSignal.severity, stations]);
+
+  const aiRegionLevel = useMemo(() => {
+    if (!areaSummary) return { level: "—", color: "blue" as const, text: "请选择站点或在地图上框选关注区域。" };
+    const base = areaSummary.high * 2 + areaSummary.warn + areaSummary.off;
+    const rain = rainSignal.severity === "高" ? 3 : rainSignal.severity === "中" ? 2 : 1;
+    const score = base + rain;
+    const level = score >= 7 ? "高" : score >= 4 ? "中" : "低";
+    const color = level === "高" ? ("red" as const) : level === "中" ? ("orange" as const) : ("green" as const);
+    const text =
+      level === "高"
+        ? "建议提升巡检频次，优先复核高风险站点的形变趋势与设备上报。"
+        : level === "中"
+          ? "建议关注雨量变化与预警站点，保持 24h 连续观测。"
+          : "总体平稳，保持常态化监测与数据质量检查。";
+    return { level, color, text };
+  }, [areaSummary, rainSignal.severity]);
 
   return (
     <div className="desk-analysis-screen">
@@ -1241,19 +1328,219 @@ export function AnalysisPage() {
 
             <div className="desk-analysis-right-mid">
               <BaseCard title="AI 分析与预测">
-                <div className="desk-ai-box">
-                  <div className="desk-ai-line">
-                    <span className="desk-ai-dot" />
-                    <span>短时风险：中（演示）</span>
+                <div className="desk-ai2">
+                  <div className="desk-ai2-tabs" role="tablist" aria-label="AI 视图切换">
+                    {(["区域研判", "站点研判", "模型状态"] as const).map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        className={clsx("desk-ai2-tab", aiTab === t && "is-active")}
+                        onClick={() => setAiTab(t)}
+                      >
+                        {t}
+                      </button>
+                    ))}
+                    <span className="desk-ai2-spacer" />
+                    <Tag color={apiMode === "mock" ? "geekblue" : "blue"}>演示</Tag>
                   </div>
-                  <div className="desk-ai-line">
-                    <span className="desk-ai-dot" />
-                    <span>建议：加强雨后 24h 监测，关注 GNSS 位移变化。</span>
-                  </div>
-                  <div className="desk-ai-line">
-                    <span className="desk-ai-dot" />
-                    <span>说明：后续可切换到真实后端 API 与预测服务。</span>
-                  </div>
+
+                  {aiTab === "区域研判" ? (
+                    <div className="desk-ai2-body">
+                      <div className="desk-ai2-overview">
+                        <div className="l">
+                          <div className="t">关注区域</div>
+                          <div className="v">{areaSummary?.area ?? "—"}</div>
+                          <div className="s">
+                            {areaSummary ? (
+                              <>
+                                <span className="chip">站点 {areaSummary.total}</span>
+                                <span className="chip">
+                                  高 {areaSummary.high} / 中 {areaSummary.mid} / 低 {areaSummary.low}
+                                </span>
+                                {areaSummary.warn ? <span className="chip">预警 {areaSummary.warn}</span> : null}
+                                {areaSummary.off ? <span className="chip">离线 {areaSummary.off}</span> : null}
+                              </>
+                            ) : (
+                              <span className="chip">点击地图站点以载入区域研判</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="r">
+                          <div className={clsx("badge", aiRegionLevel.color)}>
+                            {aiRegionLevel.level}
+                            <span className="unit">关注</span>
+                          </div>
+                          <div className="meta">
+                            <span className="k">雨量</span>
+                            <span className="v">
+                              {rainSignal.mode === "24h" ? `${rainSignal.max.toFixed(1)} mm/h` : `${Math.round(rainSignal.sum)} mm`}
+                            </span>
+                            <span className="k">提示</span>
+                            <span className="v">{rainSignal.hint}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="desk-ai2-section">
+                        <div className="h">
+                          <span className="tt">重点站点（6h）</span>
+                          <button
+                            type="button"
+                            className="link"
+                            onClick={() => {
+                              setAiTab("站点研判");
+                            }}
+                          >
+                            查看详情
+                          </button>
+                        </div>
+                        <div className="list">
+                          {aiFocusStations.map((it) => (
+                            <button
+                              key={it.station.id}
+                              type="button"
+                              className="row"
+                              onClick={() => {
+                                setMapType("卫星图");
+                                setSelectedStationIds([it.station.id]);
+                                setStationPanelActiveId(it.station.id);
+                                setStationPanelExpanded(true);
+                              }}
+                            >
+                              <span className="name">{it.station.name}</span>
+                              <span className={clsx("pill", it.riskNext === "高" ? "red" : it.riskNext === "中" ? "orange" : "green")}>
+                                {it.riskNext}关注
+                              </span>
+                              <span className="muted">{statusTextShort(it.station.status)}</span>
+                              <span className="muted">置信 {it.conf}%</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="desk-ai2-section">
+                        <div className="h">
+                          <span className="tt">建议动作</span>
+                          <span className="muted">（演示）</span>
+                        </div>
+                        <div className="advice">{aiRegionLevel.text}</div>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {aiTab === "站点研判" ? (
+                    <div className="desk-ai2-body">
+                      <div className="desk-ai2-overview">
+                        <div className="l">
+                          <div className="t">当前站点</div>
+                          <div className="v">{activeStation?.name ?? "—"}</div>
+                          <div className="s">
+                            <span className="chip">风险 {activeStation ? riskTextShort(activeStation.risk) : "—"}</span>
+                            <span className="chip">状态 {activeStation ? statusTextShort(activeStation.status) : "—"}</span>
+                            <span className="chip">GNSS {activeGnssDevice ? "已接入" : "未接入"}</span>
+                            <span className="chip">雨量 {rainSignal.severity}</span>
+                          </div>
+                        </div>
+                        <div className="r">
+                          <div className={clsx("badge", activeAssessment?.color ?? "blue")}>
+                            {(activeAssessment?.level ?? "—") + "关注"}
+                          </div>
+                          <div className="meta">
+                            <span className="k">评分</span>
+                            <span className="v">{activeAssessment?.score ?? "—"}</span>
+                            <span className="k">速率</span>
+                            <span className="v">{activeGnssStats?.v6h != null ? `${fmtMmPerH(activeGnssStats.v6h)} mm/h` : "—"}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="desk-ai2-section">
+                        <div className="h">
+                          <span className="tt">形变与风险因子</span>
+                          <button
+                            type="button"
+                            className="link"
+                            onClick={() => {
+                              navigate("/app/gps-monitoring");
+                            }}
+                          >
+                            前往形变监测
+                          </button>
+                        </div>
+                        <div className="factors">
+                          <div className="kv">
+                            <span className="k">近 24h 位移 Δ</span>
+                            <span className="v">{activeGnssStats?.d24h != null ? `${fmtMm(activeGnssStats.d24h)} mm` : "—"}</span>
+                          </div>
+                          <div className="kv">
+                            <span className="k">近 1h 位移 Δ</span>
+                            <span className="v">{activeGnssStats?.d1h != null ? `${fmtMm(activeGnssStats.d1h)} mm` : "—"}</span>
+                          </div>
+                          <div className="kv">
+                            <span className="k">雨量提示</span>
+                            <span className="v">{rainSignal.hint}</span>
+                          </div>
+                          <div className="kv">
+                            <span className="k">设备异常</span>
+                            <span className="v">
+                              {activeStation
+                                ? `预警 ${metricsByStationId[activeStation.id]?.deviceWarn ?? 0} / 离线 ${metricsByStationId[activeStation.id]?.deviceOffline ?? 0}`
+                                : "—"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="desk-ai2-section">
+                        <div className="h">
+                          <span className="tt">建议动作</span>
+                        </div>
+                        <div className="advice">
+                          {activeAssessment?.actions?.length ? (
+                            <ul className="ul">
+                              {activeAssessment.actions.map((a) => (
+                                <li key={a}>{a}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            "点击地图站点以生成站点研判。"
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {aiTab === "模型状态" ? (
+                    <div className="desk-ai2-body">
+                      <div className="desk-ai2-section">
+                        <div className="h">
+                          <span className="tt">推理服务</span>
+                          <span className="muted">（演示）</span>
+                        </div>
+                        <div className="factors">
+                          <div className="kv">
+                            <span className="k">运行状态</span>
+                            <span className="v">{online ? "可用" : "网络离线"}</span>
+                          </div>
+                          <div className="kv">
+                            <span className="k">数据覆盖</span>
+                            <span className="v">{stats.devices ? `${Math.round((stats.online / stats.devices) * 100)}%` : "—"}</span>
+                          </div>
+                          <div className="kv">
+                            <span className="k">刷新周期</span>
+                            <span className="v">{autoRefresh ? "15s" : "手动"}</span>
+                          </div>
+                          <div className="kv">
+                            <span className="k">更新时间</span>
+                            <span className="v">{lastUpdate || "—"}</span>
+                          </div>
+                        </div>
+                        <div className="note">
+                          后续对接：预测服务、阈值评估、站点画像与告警归因，统一走 v2 后端接口。
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               </BaseCard>
             </div>
