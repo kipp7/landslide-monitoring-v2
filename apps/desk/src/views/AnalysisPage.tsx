@@ -897,14 +897,6 @@ export function AnalysisPage() {
                   >
                     重置视图
                   </Button>
-                  <div className="desk-analysis-map-legend is-header" aria-label="风险图例">
-                    <span className="dot high" />
-                    高风险
-                    <span className="dot mid" />
-                    中风险
-                    <span className="dot low" />
-                    低风险
-                  </div>
                   {selectedStations.length ? <Tag color="cyan">已选 {selectedStations.length}</Tag> : null}
                   <MapSwitchPanel selected={mapType} onSelect={setMapType} />
                 </div>

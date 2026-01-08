@@ -208,7 +208,7 @@
   height: 100%;
   min-height: 0;
   display: grid;
-  grid-template-columns: clamp(320px, 22vw, 420px) 1fr clamp(340px, 24vw, 460px);
+  grid-template-columns: clamp(340px, 22vw, 480px) 1fr clamp(380px, 28vw, 560px);
   gap: 12px;
 }
 
@@ -1231,18 +1231,6 @@
   color: rgba(226, 232, 240, 0.9);
   font-size: 12px;
   font-weight: 700;
-}
-
-.desk-analysis-map-legend.is-header {
-  background: rgba(2, 6, 23, 0.20);
-  padding: 5px 9px;
-  font-size: 11px;
-  gap: 8px;
-  border-color: rgba(148, 163, 184, 0.14);
-}
-
-.desk-analysis-map-extra .desk-analysis-map-legend {
-  margin-left: 2px;
 }
 
 .desk-analysis-map-legend .dot {
