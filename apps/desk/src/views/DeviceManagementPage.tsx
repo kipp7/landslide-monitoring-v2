@@ -1,6 +1,6 @@
 import type { MenuProps } from "antd";
 import { ExportOutlined, ReloadOutlined, SettingOutlined, ToolOutlined } from "@ant-design/icons";
-import { App as AntApp, Alert, Button, Dropdown, Modal, Progress, Select, Space, Switch, Tag, Typography } from "antd";
+import { App as AntApp, Alert, Button, Dropdown, Input, Modal, Progress, Select, Space, Switch, Tag, Typography } from "antd";
 import ReactECharts from "echarts-for-react";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -30,6 +30,9 @@ type ControlLogRow = {
   action: string;
   result: "success" | "pending" | "failed";
 };
+
+type StatusFilter = "all" | OnlineStatus;
+type TypeFilter = "all" | Device["type"];
 
 function stablePercent(seed: string, min: number, max: number) {
   let h = 2166136261;
@@ -61,6 +64,19 @@ function deviceTypeLabel(device: Device) {
   return "摄像头";
 }
 
+function relativeTime(input: string) {
+  const t = new Date(input).getTime();
+  if (!Number.isFinite(t)) return input;
+  const diffMs = Date.now() - t;
+  const min = Math.max(0, Math.round(diffMs / 60000));
+  if (min <= 1) return "刚刚";
+  if (min < 60) return `${min} 分钟前`;
+  const hr = Math.round(min / 60);
+  if (hr < 24) return `${hr} 小时前`;
+  const day = Math.round(hr / 24);
+  return `${day} 天前`;
+}
+
 export function DeviceManagementPage() {
   const api = useApi();
   const navigate = useNavigate();
@@ -81,6 +97,9 @@ export function DeviceManagementPage() {
   const [buzzerOn, setBuzzerOn] = useState(false);
   const [samplingInterval, setSamplingInterval] = useState<number>(10);
   const [controlLogs, setControlLogs] = useState<ControlLogRow[]>([]);
+  const [keyword, setKeyword] = useState<string>("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -145,10 +164,31 @@ export function DeviceManagementPage() {
   const baselineByDeviceId = useMemo(() => new Map(baselines.map((b) => [b.deviceId, b] as const)), [baselines]);
 
   const filteredDevices = useMemo(() => {
-    if (selectedRegion === "all") return devices;
-    const stationIdsInRegion = new Set(stations.filter((s) => s.area === selectedRegion).map((s) => s.id));
-    return devices.filter((d) => stationIdsInRegion.has(d.stationId));
-  }, [devices, selectedRegion, stations]);
+    const normalize = (v: string) => v.trim().toLowerCase();
+    const q = normalize(keyword);
+
+    let base = devices;
+    if (selectedRegion !== "all") {
+      const stationIdsInRegion = new Set(stations.filter((s) => s.area === selectedRegion).map((s) => s.id));
+      base = base.filter((d) => stationIdsInRegion.has(d.stationId));
+    }
+
+    if (statusFilter !== "all") base = base.filter((d) => d.status === statusFilter);
+    if (typeFilter !== "all") base = base.filter((d) => d.type === typeFilter);
+    if (q) {
+      base = base.filter((d) => {
+        const hay = normalize(`${d.name} ${d.stationName} ${d.id}`);
+        return hay.includes(q);
+      });
+    }
+
+    const statusRank = (s: OnlineStatus) => (s === "warning" ? 0 : s === "offline" ? 1 : 2);
+    return [...base].sort((a, b) => {
+      const sr = statusRank(a.status) - statusRank(b.status);
+      if (sr !== 0) return sr;
+      return new Date(b.lastSeenAt).getTime() - new Date(a.lastSeenAt).getTime();
+    });
+  }, [devices, keyword, selectedRegion, stations, statusFilter, typeFilter]);
 
   useEffect(() => {
     if (!selectedDeviceId) return;
@@ -161,6 +201,8 @@ export function DeviceManagementPage() {
     () => (selectedDevice ? stationsById.get(selectedDevice.stationId) ?? null : null),
     [selectedDevice, stationsById]
   );
+
+  const canControl = !!selectedDevice && selectedDevice.status !== "offline";
 
   const deviceMetrics = useMemo(() => {
     if (!selectedDevice) {
@@ -278,8 +320,31 @@ export function DeviceManagementPage() {
   };
 
   const runControl = (action: string) => {
+    if (!selectedDevice) {
+      message.info("请先选择设备");
+      return;
+    }
+    if (!canControl) {
+      message.warning("设备离线，暂不可下发控制指令");
+      return;
+    }
     message.success(`${action} 已下发`);
     pushControlLog(action, "success");
+  };
+
+  const runControlWithConfirm = (action: string, danger = false) => {
+    if (!selectedDevice) {
+      message.info("请先选择设备");
+      return;
+    }
+    modal.confirm({
+      title: danger ? "确认执行高风险操作？" : "确认下发控制指令？",
+      content: `${action} - ${selectedDevice.name}`,
+      okText: "确认下发",
+      cancelText: "取消",
+      ...(danger ? { okButtonProps: { danger: true } } : {}),
+      onOk: () => runControl(action)
+    });
   };
 
   const showDiagnostics = () => {
@@ -480,6 +545,41 @@ export function DeviceManagementPage() {
 
               <div className="desk-dm-field">
                 <div className="desk-dm-label">监测设备</div>
+                <div className="desk-dm-filterbar">
+                  <Input
+                    allowClear
+                    size="small"
+                    placeholder="搜索设备/站点/ID"
+                    value={keyword}
+                    onChange={(e) => setKeyword(e.target.value)}
+                  />
+                  <Select
+                    size="small"
+                    value={statusFilter}
+                    style={{ width: 120 }}
+                    onChange={(v) => setStatusFilter(v)}
+                    options={[
+                      { label: "全部状态", value: "all" },
+                      { label: "在线", value: "online" },
+                      { label: "预警", value: "warning" },
+                      { label: "离线", value: "offline" }
+                    ]}
+                  />
+                  <Select
+                    size="small"
+                    value={typeFilter}
+                    style={{ width: 120 }}
+                    onChange={(v) => setTypeFilter(v)}
+                    options={[
+                      { label: "全部类型", value: "all" },
+                      { label: "GNSS", value: "gnss" },
+                      { label: "雨量", value: "rain" },
+                      { label: "倾角", value: "tilt" },
+                      { label: "温湿度", value: "temp_hum" },
+                      { label: "摄像头", value: "camera" }
+                    ]}
+                  />
+                </div>
                 <div className="desk-dm-devlist">
                   {filteredDevices.map((d) => (
                     <button
@@ -494,6 +594,7 @@ export function DeviceManagementPage() {
                         <span className="desk-dm-devsub">
                           {deviceTypeLabel(d)} · {d.stationName}
                         </span>
+                        <span className="desk-dm-devsub">{relativeTime(d.lastSeenAt)} · {d.id}</span>
                       </span>
                       <span className="desk-dm-devstatus">
                         <StatusTag value={d.status} />
@@ -514,9 +615,19 @@ export function DeviceManagementPage() {
                         {deviceTypeLabel(selectedDevice)} · {selectedDevice.stationName}
                       </div>
                     </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
                       <Tag className="desk-pill-tag">{deviceTypeLabel(selectedDevice)}</Tag>
                       <StatusTag value={selectedDevice.status} />
+                      {selectedStation ? (
+                        <Button
+                          size="small"
+                          onClick={() => {
+                            navigate(`/app/device-management?tab=management&stationId=${encodeURIComponent(selectedStation.id)}`);
+                          }}
+                        >
+                          站点管理
+                        </Button>
+                      ) : null}
                     </div>
                   </div>
 
@@ -601,7 +712,7 @@ export function DeviceManagementPage() {
                 <Button
                   block
                   onClick={() => {
-                    runControl("远程重启");
+                    runControlWithConfirm("远程重启");
                   }}
                 >
                   远程重启
@@ -610,7 +721,7 @@ export function DeviceManagementPage() {
                   danger
                   block
                   onClick={() => {
-                    runControl("下线设备");
+                    runControlWithConfirm("下线设备", true);
                   }}
                 >
                   下线设备
@@ -621,9 +732,15 @@ export function DeviceManagementPage() {
           </div>
 
           <div className="desk-dm-grid-bottom">
-            <div className="desk-dm-stack">
-              <div className="desk-dm-stack-item">
-                <BaseCard title={`设备控制 - ${selectedDevice ? selectedDevice.id : "--"}`}>
+            <div className="desk-dm-bottom-left">
+              <BaseCard
+                title={`设备控制${selectedDevice ? ` - ${selectedDevice.id}` : ""}`}
+                extra={
+                  <Space size={8}>
+                    <Tag className="desk-pill-tag desk-tone-neutral">{canControl ? "可控制" : "不可控制"}</Tag>
+                  </Space>
+                }
+              >
                   <div className="desk-dm-ctrl">
                     <div className="desk-dm-ctrl-section">
                       <div className="desk-dm-ctrl-title">电机控制</div>
@@ -631,7 +748,7 @@ export function DeviceManagementPage() {
                         <Button
                           size="small"
                           type="primary"
-                          disabled={!selectedDevice}
+                          disabled={!canControl}
                           onClick={() => {
                             setMotorRunning(true);
                             runControl("启动电机");
@@ -642,7 +759,7 @@ export function DeviceManagementPage() {
                         <Button
                           size="small"
                           danger
-                          disabled={!selectedDevice}
+                          disabled={!canControl}
                           onClick={() => {
                             setMotorRunning(false);
                             runControl("停止电机");
@@ -659,7 +776,7 @@ export function DeviceManagementPage() {
                       <div className="desk-dm-ctrl-row">
                         <Switch
                           checked={buzzerOn}
-                          disabled={!selectedDevice}
+                          disabled={!canControl}
                           onChange={(v) => {
                             setBuzzerOn(v);
                             runControl(v ? "开启蜂鸣器" : "关闭蜂鸣器");
@@ -676,7 +793,7 @@ export function DeviceManagementPage() {
                           size="small"
                           value={samplingInterval}
                           style={{ width: 140 }}
-                          disabled={!selectedDevice}
+                          disabled={!canControl}
                           onChange={(v) => {
                             setSamplingInterval(v);
                             runControl(`设置采样间隔 ${v}s`);
@@ -691,7 +808,7 @@ export function DeviceManagementPage() {
                         />
                         <Button
                           size="small"
-                          disabled={!selectedDevice}
+                          disabled={!canControl}
                           onClick={() => {
                             runControl("手动采集一次");
                           }}
@@ -741,36 +858,33 @@ export function DeviceManagementPage() {
                     </div>
                   </div>
                 </BaseCard>
-              </div>
 
-              <div className="desk-dm-stack-item">
-                <BaseCard title="实时传感器数据">
-                  <div className="desk-dark-table" style={{ height: "100%", overflow: "auto" }}>
-                    <table className="desk-table">
-                      <thead>
-                        <tr>
-                          <th>时间</th>
-                          <th>温度（°C）</th>
-                          <th>湿度（%）</th>
-                          <th>位移（mm）</th>
-                          <th>雨量（mm）</th>
+              <BaseCard title="实时传感器数据">
+                <div className="desk-dark-table" style={{ height: "100%", overflow: "auto" }}>
+                  <table className="desk-table">
+                    <thead>
+                      <tr>
+                        <th>时间</th>
+                        <th>温度（°C）</th>
+                        <th>湿度（%）</th>
+                        <th>位移（mm）</th>
+                        <th>雨量（mm）</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sensorRows.map((r) => (
+                        <tr key={r.id}>
+                          <td>{r.time}</td>
+                          <td>{r.temperature}</td>
+                          <td>{r.humidity}</td>
+                          <td>{r.dispMm}</td>
+                          <td>{r.rainMm}</td>
                         </tr>
-                      </thead>
-                      <tbody>
-                        {sensorRows.map((r) => (
-                          <tr key={r.id}>
-                            <td>{r.time}</td>
-                            <td>{r.temperature}</td>
-                            <td>{r.humidity}</td>
-                            <td>{r.dispMm}</td>
-                            <td>{r.rainMm}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </BaseCard>
-              </div>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </BaseCard>
             </div>
 
             <BaseCard title="设备位置地图">
