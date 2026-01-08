@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { Button, Spin, Switch, Tag } from "antd";
+import { Button, Drawer, Space, Spin, Switch, Tag } from "antd";
 import ReactECharts from "echarts-for-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -33,6 +33,19 @@ function fmtMm(v: number | null | undefined) {
 function fmtMmPerH(v: number | null | undefined) {
   if (v === null || v === undefined || Number.isNaN(v)) return "—";
   return `${v.toFixed(2)}`;
+}
+
+function relativeTime(input: string) {
+  const t = new Date(input).getTime();
+  if (!Number.isFinite(t)) return input;
+  const diffMs = Date.now() - t;
+  const min = Math.max(0, Math.round(diffMs / 60000));
+  if (min <= 1) return "刚刚";
+  if (min < 60) return `${min} 分钟前`;
+  const hr = Math.round(min / 60);
+  if (hr < 24) return `${hr} 小时前`;
+  const day = Math.round(hr / 24);
+  return `${day} 天前`;
 }
 
 function hoursBetween(a: Date, b: Date) {
@@ -141,6 +154,7 @@ export function AnalysisPage() {
   const [stationPanelPage, setStationPanelPage] = useState(0);
   const [stationPanelPlaying, setStationPanelPlaying] = useState(true);
   const [stationPanelActiveId, setStationPanelActiveId] = useState<string | null>(null);
+  const [stationDrawerOpen, setStationDrawerOpen] = useState(false);
   const [aiTab, setAiTab] = useState<"区域研判" | "站点研判" | "模型状态">("区域研判");
   const [gpsCache, setGpsCache] = useState<Record<string, { deviceId: string; deviceName: string; points: { ts: string; dispMm: number }[] }>>({});
   const gpsAbortRef = useRef<AbortController | null>(null);
@@ -517,6 +531,7 @@ export function AnalysisPage() {
       setStationPanelExpanded(false);
       setStationPanelPage(0);
       setStationPanelActiveId(null);
+      setStationDrawerOpen(false);
     }
   }, [selectedStationIds.length]);
 
@@ -607,6 +622,15 @@ export function AnalysisPage() {
   const activeGnssDevice = useMemo(() => {
     if (!activeStation) return null;
     return devices.find((d) => d.stationId === activeStation.id && d.type === "gnss") ?? null;
+  }, [activeStation, devices]);
+
+  const activeStationDevices = useMemo(() => {
+    if (!activeStation) return [];
+    const statusRank = (s: Device["status"]) => (s === "warning" ? 0 : s === "offline" ? 1 : 2);
+    return devices
+      .filter((d) => d.stationId === activeStation.id)
+      .slice()
+      .sort((a, b) => statusRank(a.status) - statusRank(b.status) || b.lastSeenAt.localeCompare(a.lastSeenAt));
   }, [activeStation, devices]);
 
   useEffect(() => {
@@ -1093,6 +1117,13 @@ export function AnalysisPage() {
                                             {activeStation.status === "online" ? "在线" : activeStation.status === "warning" ? "预警" : "离线"}
                                           </span>
                                           <span className="pill">传感器 {activeStation.deviceCount}</span>
+                                          <button
+                                            type="button"
+                                            className="pill action"
+                                            onClick={() => setStationDrawerOpen(true)}
+                                          >
+                                            详情
+                                          </button>
                                         </div>
                                       </div>
 
@@ -1390,6 +1421,7 @@ export function AnalysisPage() {
                                 setSelectedStationIds([it.station.id]);
                                 setStationPanelActiveId(it.station.id);
                                 setStationPanelExpanded(true);
+                                setStationDrawerOpen(true);
                               }}
                             >
                               <span className="name">{it.station.name}</span>
@@ -1589,6 +1621,153 @@ export function AnalysisPage() {
           </div>
         </div>
       </div>
+
+      <Drawer
+        title={activeStation ? `站点详情 - ${activeStation.name}` : "站点详情"}
+        placement="right"
+        width={560}
+        open={stationDrawerOpen}
+        onClose={() => setStationDrawerOpen(false)}
+        extra={
+          <Space>
+            <Button
+              size="small"
+              onClick={() => {
+                if (!activeStation) return;
+                navigate(`/app/device-management?tab=status&stationId=${encodeURIComponent(activeStation.id)}`);
+              }}
+              disabled={!activeStation}
+            >
+              设备
+            </Button>
+            <Button
+              size="small"
+              onClick={() => {
+                if (!activeStation) return;
+                navigate(`/app/device-management?tab=management&stationId=${encodeURIComponent(activeStation.id)}`);
+              }}
+              disabled={!activeStation}
+            >
+              管理
+            </Button>
+            <Button
+              size="small"
+              onClick={() => {
+                if (!activeGnssDevice) return;
+                navigate(`/app/gps-monitoring?deviceId=${encodeURIComponent(activeGnssDevice.id)}`);
+              }}
+              disabled={!activeGnssDevice}
+            >
+              GNSS
+            </Button>
+            <Button size="small" type="primary" onClick={() => setStationDrawerOpen(false)}>
+              关闭
+            </Button>
+          </Space>
+        }
+      >
+        {activeStation ? (
+          <div className="desk-analysis-drawer">
+            <div className="desk-analysis-drawer-hero">
+              <div className="title">{activeStation.name}</div>
+              <div className="sub">
+                <Tag color={activeStation.risk === "high" ? "red" : activeStation.risk === "mid" ? "orange" : "green"} style={{ marginInlineEnd: 0 }}>
+                  {activeStation.risk === "high" ? "高风险" : activeStation.risk === "mid" ? "中风险" : "低风险"}
+                </Tag>
+                <Tag color={activeStation.status === "online" ? "green" : activeStation.status === "warning" ? "orange" : "red"} style={{ marginInlineEnd: 0 }}>
+                  {activeStation.status === "online" ? "在线" : activeStation.status === "warning" ? "预警" : "离线"}
+                </Tag>
+              </div>
+              <div className="meta">
+                <div className="kv">
+                  <div className="k">区域</div>
+                  <div className="v">{activeStation.area}</div>
+                </div>
+                <div className="kv">
+                  <div className="k">坐标</div>
+                  <div className="v mono">
+                    {activeStation.lat.toFixed(6)}, {activeStation.lng.toFixed(6)}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="desk-analysis-drawer-card">
+              <div className="tt">站点概览</div>
+              <div className="grid">
+                <div className="kv">
+                  <div className="k">设备总数</div>
+                  <div className="v">{activeStation.deviceCount}</div>
+                </div>
+                <div className="kv">
+                  <div className="k">在线</div>
+                  <div className="v">{metricsByStationId[activeStation.id]?.deviceOnline ?? 0}</div>
+                </div>
+                <div className="kv">
+                  <div className="k">预警</div>
+                  <div className="v">{metricsByStationId[activeStation.id]?.deviceWarn ?? 0}</div>
+                </div>
+                <div className="kv">
+                  <div className="k">离线</div>
+                  <div className="v">{metricsByStationId[activeStation.id]?.deviceOffline ?? 0}</div>
+                </div>
+              </div>
+              <div className="note">
+                最后上报：
+                {metricsByStationId[activeStation.id]?.lastSeenAt
+                  ? `${new Date(metricsByStationId[activeStation.id]?.lastSeenAt ?? "").toLocaleString("zh-CN")}（${relativeTime(
+                      metricsByStationId[activeStation.id]?.lastSeenAt ?? ""
+                    )}）`
+                  : "—"}
+              </div>
+            </div>
+
+            <div className="desk-analysis-drawer-card">
+              <div className="tt">设备列表</div>
+              <div className="desk-dark-table" style={{ maxHeight: 320, overflow: "auto" }}>
+                <table className="desk-table">
+                  <thead>
+                    <tr>
+                      <th>设备</th>
+                      <th>类型</th>
+                      <th>状态</th>
+                      <th>上报</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activeStationDevices.map((d) => (
+                      <tr
+                        key={d.id}
+                        onClick={() => {
+                          navigate(`/app/device-management?tab=status&deviceId=${encodeURIComponent(d.id)}`);
+                        }}
+                        style={{ cursor: "pointer" }}
+                      >
+                        <td>{d.name}</td>
+                        <td>{deviceTypeLabel(d.type)}</td>
+                        <td>
+                          <StatusTag value={d.status} />
+                        </td>
+                        <td>{relativeTime(d.lastSeenAt)}</td>
+                      </tr>
+                    ))}
+                    {activeStationDevices.length ? null : (
+                      <tr>
+                        <td colSpan={4} style={{ color: "rgba(148,163,184,0.9)" }}>
+                          暂无设备
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <div className="note">提示：点击设备行可直达设备状态监控。</div>
+            </div>
+          </div>
+        ) : (
+          <div style={{ color: "rgba(148,163,184,0.9)" }}>请选择一个站点</div>
+        )}
+      </Drawer>
     </div>
   );
 }
