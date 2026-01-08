@@ -837,6 +837,40 @@ dotnet publish .\LandslideDesk.Win\LandslideDesk.Win.csproj -c Release -r win-x6
         core.Settings.IsStatusBarEnabled = false;
         core.Settings.IsZoomControlEnabled = false;
         core.Settings.AreBrowserAcceleratorKeysEnabled = Debugger.IsAttached;
+
+        TryResetWebViewZoom(1.0);
+    }
+
+    private void TryResetWebViewZoom(double zoomFactor)
+    {
+        try
+        {
+            // WPF WebView2: Some versions expose ZoomFactor on the control; others expose a controller object.
+            var view = (object)DeskWebView;
+            var viewType = view.GetType();
+
+            var zoomProp = viewType.GetProperty("ZoomFactor");
+            if (zoomProp is not null && zoomProp.CanWrite)
+            {
+                zoomProp.SetValue(view, zoomFactor);
+                return;
+            }
+
+            var controllerProp = viewType.GetProperty("CoreWebView2Controller") ?? viewType.GetProperty("Controller");
+            if (controllerProp?.GetValue(view) is not null and object controller)
+            {
+                var ctrlType = controller.GetType();
+                var ctrlZoomProp = ctrlType.GetProperty("ZoomFactor");
+                if (ctrlZoomProp is not null && ctrlZoomProp.CanWrite)
+                {
+                    ctrlZoomProp.SetValue(controller, zoomFactor);
+                }
+            }
+        }
+        catch
+        {
+            // ignore
+        }
     }
 
     private void HookWebViewEvents(CoreWebView2 core)
@@ -851,6 +885,7 @@ dotnet publish .\LandslideDesk.Win\LandslideDesk.Win.csproj -c Release -r win-x6
         {
             Dispatcher.Invoke(() =>
             {
+                TryResetWebViewZoom(1.0);
                 if (e.IsSuccess)
                 {
                     HideOverlays();
