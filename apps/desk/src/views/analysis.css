@@ -128,8 +128,10 @@
 }
 
 .desk-analysis-alert-glow {
-  position: absolute;
+  position: fixed;
   inset: 0;
+  width: 100vw;
+  height: 100vh;
   pointer-events: none;
   z-index: 50;
   animation: desk-analysis-pulse 1.35s ease-in-out infinite;
