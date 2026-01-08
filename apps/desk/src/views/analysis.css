@@ -402,6 +402,10 @@
   font-size: 12px;
 }
 
+.desk-analysis-map-selectedpanel-page.is-hidden {
+  display: none;
+}
+
 .desk-analysis-map-selectedpanel-close {
   appearance: none;
   border: 1px solid rgba(148, 163, 184, 0.18);
@@ -440,6 +444,10 @@
   margin-left: auto;
   color: rgba(148, 163, 184, 0.9);
   font-weight: 700;
+}
+
+.desk-analysis-map-selectedpanel-summary .chip {
+  max-width: 100%;
 }
 
 .desk-analysis-map-selectedpanel-summary .badge {

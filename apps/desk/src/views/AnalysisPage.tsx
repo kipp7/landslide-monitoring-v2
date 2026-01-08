@@ -869,7 +869,7 @@ export function AnalysisPage() {
                                 已选站点 <span className="muted">({selectedSummary.total})</span>
                               </div>
                               <div className="desk-analysis-map-selectedpanel-actions">
-                                <div className="desk-analysis-map-selectedpanel-page">
+                                <div className={clsx("desk-analysis-map-selectedpanel-page", stationPanelPages <= 1 && "is-hidden")}>
                                   {stationPanelPages > 1 ? `${stationPanelPage + 1} / ${stationPanelPages}` : "—"}
                                 </div>
                                 <button
@@ -895,11 +895,11 @@ export function AnalysisPage() {
                                   <>
                                     <span className="chip">区域 {areaSummary.area}</span>
                                     <span className="chip">站点 {areaSummary.total}</span>
-                                    <span className="chip">高 {areaSummary.high}</span>
-                                    <span className="chip">中 {areaSummary.mid}</span>
-                                    <span className="chip">低 {areaSummary.low}</span>
-                                    <span className="chip">预警 {areaSummary.warn}</span>
-                                    <span className="chip">离线 {areaSummary.off}</span>
+                                    <span className="chip">
+                                      高 {areaSummary.high} / 中 {areaSummary.mid} / 低 {areaSummary.low}
+                                    </span>
+                                    {areaSummary.warn ? <span className="chip">预警 {areaSummary.warn}</span> : null}
+                                    {areaSummary.off ? <span className="chip">离线 {areaSummary.off}</span> : null}
                                   </>
                                 ) : null}
                                 <span className="hint">Ctrl/Shift 多选</span>
@@ -918,28 +918,30 @@ export function AnalysisPage() {
                                       >
                                         {stationPanelPlaying ? "暂停轮播" : "开始轮播"}
                                       </button>
-                                      <button
-                                        type="button"
-                                        className="desk-analysis-map-selectedpanel-pill"
-                                        onClick={() => {
-                                          setStationPanelPage((p) => (p - 1 + stationPanelPages) % stationPanelPages);
-                                          setStationPanelPlaying(false);
-                                        }}
-                                        disabled={stationPanelPages <= 1}
-                                      >
-                                        上一页
-                                      </button>
-                                      <button
-                                        type="button"
-                                        className="desk-analysis-map-selectedpanel-pill"
-                                        onClick={() => {
-                                          setStationPanelPage((p) => (p + 1) % stationPanelPages);
-                                          setStationPanelPlaying(false);
-                                        }}
-                                        disabled={stationPanelPages <= 1}
-                                      >
-                                        下一页
-                                      </button>
+                                      {stationPanelPages > 1 ? (
+                                        <>
+                                          <button
+                                            type="button"
+                                            className="desk-analysis-map-selectedpanel-pill"
+                                            onClick={() => {
+                                              setStationPanelPage((p) => (p - 1 + stationPanelPages) % stationPanelPages);
+                                              setStationPanelPlaying(false);
+                                            }}
+                                          >
+                                            上一页
+                                          </button>
+                                          <button
+                                            type="button"
+                                            className="desk-analysis-map-selectedpanel-pill"
+                                            onClick={() => {
+                                              setStationPanelPage((p) => (p + 1) % stationPanelPages);
+                                              setStationPanelPlaying(false);
+                                            }}
+                                          >
+                                            下一页
+                                          </button>
+                                        </>
+                                      ) : null}
                                     </div>
                                     <div className="right">
                                       <button
@@ -963,7 +965,9 @@ export function AnalysisPage() {
                                         const status = s.status === "online" ? "在线" : s.status === "warning" ? "预警" : "离线";
                                         const isActive = stationPanelActiveId === s.id;
                                         const hasGnss = (m?.types?.gnss ?? 0) > 0;
-
+                                        const total = s.deviceCount || 0;
+                                        const onlineCount = m?.deviceOnline ?? 0;
+                                        
                                         return (
                                           <button
                                             key={s.id}
@@ -993,10 +997,9 @@ export function AnalysisPage() {
                                             </div>
                                             <div className="row2">
                                               <span className={`t ${s.status}`}>{status}</span>
-                                              <span className="t">{s.area}</span>
-                                              <span className="t">传感器 {s.deviceCount}</span>
-                                              <span className="t">预警 {m?.deviceWarn ?? 0}</span>
-                                              <span className="t">离线 {m?.deviceOffline ?? 0}</span>
+                                              <span className="t">在线 {total ? `${onlineCount}/${total}` : "—"}</span>
+                                              {(m?.deviceWarn ?? 0) ? <span className="t">预警 {m?.deviceWarn ?? 0}</span> : null}
+                                              {(m?.deviceOffline ?? 0) ? <span className="t">离线 {m?.deviceOffline ?? 0}</span> : null}
                                               <span className={clsx("t", hasGnss ? "ok" : "muted")}>GNSS {hasGnss ? "有" : "无"}</span>
                                             </div>
                                           </button>
