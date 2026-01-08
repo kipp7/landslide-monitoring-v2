@@ -168,6 +168,9 @@ export function DeviceManagementPage() {
     const q = normalize(keyword);
 
     let base = devices;
+    if (activeTab === "status" && queryStationId) {
+      base = base.filter((d) => d.stationId === queryStationId);
+    }
     if (selectedRegion !== "all") {
       const stationIdsInRegion = new Set(stations.filter((s) => s.area === selectedRegion).map((s) => s.id));
       base = base.filter((d) => stationIdsInRegion.has(d.stationId));
@@ -188,7 +191,7 @@ export function DeviceManagementPage() {
       if (sr !== 0) return sr;
       return new Date(b.lastSeenAt).getTime() - new Date(a.lastSeenAt).getTime();
     });
-  }, [devices, keyword, selectedRegion, stations, statusFilter, typeFilter]);
+  }, [activeTab, devices, keyword, queryStationId, selectedRegion, stations, statusFilter, typeFilter]);
 
   useEffect(() => {
     if (!selectedDeviceId) return;

@@ -24,6 +24,7 @@ import {
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import type { Device, DeviceType, OnlineStatus, RiskLevel, Station } from "../api/client";
 import { useApi } from "../api/ApiProvider";
@@ -86,6 +87,27 @@ function deviceTypeLabel(type: DeviceType) {
   if (type === "tilt") return "倾角";
   if (type === "temp_hum") return "温湿度";
   return "摄像头";
+}
+
+function deviceTypeTone(type: DeviceType) {
+  if (type === "gnss") return "desk-tone-blue";
+  if (type === "rain") return "desk-tone-cyan";
+  if (type === "temp_hum") return "desk-tone-orange";
+  if (type === "tilt") return "desk-tone-purple";
+  return "desk-tone-neutral";
+}
+
+function relativeTime(input: string) {
+  const t = new Date(input).getTime();
+  if (!Number.isFinite(t)) return input;
+  const diffMs = Date.now() - t;
+  const min = Math.max(0, Math.round(diffMs / 60000));
+  if (min <= 1) return "刚刚";
+  if (min < 60) return `${min} 分钟前`;
+  const hr = Math.round(min / 60);
+  if (hr < 24) return `${hr} 小时前`;
+  const day = Math.round(hr / 24);
+  return `${day} 天前`;
 }
 
 function mergeFromApi(existing: MonitoringStation[], fromApi: Station[], devices: Device[]): MonitoringStation[] {
@@ -169,6 +191,7 @@ function hierarchyData(stations: MonitoringStation[]) {
 
 export function StationManagementPanel(props: { className?: string; style?: React.CSSProperties; initialStationId?: string | null }) {
   const api = useApi();
+  const navigate = useNavigate();
   const { message } = AntApp.useApp();
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -176,6 +199,7 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
   const [error, setError] = useState<string | null>(null);
   const [lastUpdateTime, setLastUpdateTime] = useState<string>("");
   const [stations, setStations] = useState<MonitoringStation[]>(() => loadStations() ?? []);
+  const [devices, setDevices] = useState<Device[]>([]);
 
   const [edit, setEdit] = useState<EditState>({ open: false });
   const [legend, setLegend] = useState<LegendState>({ open: false });
@@ -203,6 +227,7 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
     try {
       const [stationList, deviceList] = await Promise.all([api.stations.list(), api.devices.list()]);
       const next = mergeFromApi(stations, stationList, deviceList);
+      setDevices(deviceList);
       setStations(next);
       saveStations(next);
       const t = new Date().toLocaleTimeString("zh-CN");
@@ -359,7 +384,7 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
         <Space size={6} wrap>
           {row.sensorTypes.length ? (
             row.sensorTypes.map((t) => (
-              <Tag key={t} className="desk-pill-tag">
+              <Tag key={t} className={`desk-pill-tag ${deviceTypeTone(t)}`}>
                 {deviceTypeLabel(t)}
               </Tag>
             ))
@@ -389,13 +414,21 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
       render: (_: unknown, row) => (
         <Space>
           <Tooltip title="编辑监测站">
-            <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(row.stationId)} />
+            <Button
+              size="small"
+              icon={<EditOutlined />}
+              onClick={(e) => {
+                e.stopPropagation();
+                openEdit(row.stationId);
+              }}
+            />
           </Tooltip>
           <Tooltip title="查看详情">
             <Button
               size="small"
               icon={<EyeOutlined />}
-              onClick={() => {
+              onClick={(e) => {
+                e.stopPropagation();
                 setDetailStationId(row.stationId);
               }}
             />
@@ -510,6 +543,11 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
               pagination={false}
               scroll={{ x: 1200, y: 420 }}
               columns={columns}
+              onRow={(row) => ({
+                onClick: () => {
+                  setDetailStationId(row.stationId);
+                }
+              })}
             />
           </div>
         ) : (
@@ -758,14 +796,24 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
         open={!!detailStationId}
         onCancel={() => setDetailStationId(null)}
         footer={
-          <Button
-            type="primary"
-            onClick={() => {
-              setDetailStationId(null);
-            }}
-          >
-            关闭
-          </Button>
+          <Space>
+            <Button
+              onClick={() => {
+                if (!detailStation) return;
+                navigate(`/app/device-management?tab=status&stationId=${encodeURIComponent(detailStation.stationId)}`);
+              }}
+            >
+              查看站点设备
+            </Button>
+            <Button
+              type="primary"
+              onClick={() => {
+                setDetailStationId(null);
+              }}
+            >
+              关闭
+            </Button>
+          </Space>
         }
         width={760}
       >
@@ -820,7 +868,7 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
                 <span className="v">
                   <Space size={6} wrap>
                     {detailStation.sensorTypes.map((t) => (
-                      <Tag key={t} className="desk-pill-tag">
+                      <Tag key={t} className={`desk-pill-tag ${deviceTypeTone(t)}`}>
                         {deviceTypeLabel(t)}
                       </Tag>
                     ))}
@@ -840,6 +888,44 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
                 <span className="v" style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}>
                   {detailStation.lat.toFixed(6)}, {detailStation.lng.toFixed(6)}
                 </span>
+              </div>
+            </div>
+
+            <div className="desk-sm-detail-card" style={{ marginTop: 12 }}>
+              <div className="desk-sm-detail-title">设备列表</div>
+              <div className="desk-sm-devlist">
+                {devices
+                  .filter((d) => d.stationId === detailStation.stationId)
+                  .sort((a, b) => new Date(b.lastSeenAt).getTime() - new Date(a.lastSeenAt).getTime())
+                  .map((d) => (
+                    <button
+                      key={d.id}
+                      type="button"
+                      className="desk-sm-devitem"
+                      onClick={() => {
+                        navigate(`/app/device-management?tab=status&deviceId=${encodeURIComponent(d.id)}`);
+                      }}
+                    >
+                      <div className="desk-sm-devleft">
+                        <div className="desk-sm-devname">{d.name}</div>
+                        <div className="desk-sm-devsub">
+                          <Tag className={`desk-pill-tag ${deviceTypeTone(d.type)}`} style={{ marginInlineEnd: 0 }}>
+                            {deviceTypeLabel(d.type)}
+                          </Tag>
+                          <span style={{ marginLeft: 6 }}>·</span>
+                          <span>{relativeTime(d.lastSeenAt)}</span>
+                          <span> · </span>
+                          <span className="desk-sm-mono">{d.id}</span>
+                        </div>
+                      </div>
+                      <div className="desk-sm-devright">
+                        <StatusTag value={d.status} />
+                      </div>
+                    </button>
+                  ))}
+                {devices.some((d) => d.stationId === detailStation.stationId) ? null : (
+                  <div style={{ color: "rgba(148,163,184,0.9)", fontSize: 12 }}>该站点暂无设备</div>
+                )}
               </div>
             </div>
           </div>

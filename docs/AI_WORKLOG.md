@@ -26,6 +26,7 @@
 - UI 数据模式：Mock / HTTP 可切换（入口：`/app/settings`）
 - 数据大屏：`/app/analysis` 采用沉浸模式（隐藏侧栏，避免遮挡图表）
 - Windows：支持托盘驻留、全屏切换（F11 / ESC）
+- 设备管理中心：支持 `tab=status|management|baselines`，并可通过 query 参数实现跨页联动（见 `docs/API_INTEGRATION.md`）
 
 ## 已知问题（待办）
 

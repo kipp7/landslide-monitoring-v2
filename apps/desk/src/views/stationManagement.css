@@ -437,6 +437,66 @@
   text-align: right;
 }
 
+.desk-sm-devlist {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.desk-sm-devitem {
+  width: 100%;
+  text-align: left;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.14);
+  padding: 10px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  transition: all 160ms ease;
+}
+
+.desk-sm-devitem:hover {
+  border-color: rgba(34, 211, 238, 0.25);
+  background: rgba(15, 23, 42, 0.20);
+}
+
+.desk-sm-devleft {
+  min-width: 0;
+}
+
+.desk-sm-devname {
+  font-weight: 900;
+  color: rgba(226, 232, 240, 0.96);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.desk-sm-devsub {
+  margin-top: 2px;
+  font-size: 12px;
+  color: rgba(148, 163, 184, 0.9);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.desk-sm-devtype {
+  font-weight: 900;
+  color: rgba(226, 232, 240, 0.92);
+}
+
+.desk-sm-devright {
+  flex: none;
+}
+
+.desk-sm-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
 @media (max-width: 1100px) {
   .desk-sm-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -41,6 +41,21 @@
 - `GET|PUT|DELETE|POST {baseUrl}/api/baselines*`
 - `GET {baseUrl}/api/system/status`
 
+## Desk 路由约定（用于联动跳转/验收）
+
+- 设备管理中心：`/app/device-management`
+  - `tab=status`：设备状态监控
+    - `deviceId=<id>`：默认选中某设备
+    - `stationId=<id>`：按站点过滤设备列表（用于从“监测站详情”一键跳转）
+  - `tab=management`：监测站管理
+    - `stationId=<id>`：默认打开某站点详情
+  - `tab=baselines`：GNSS 基线管理
+
+- GPS 形变监测：`/app/gps-monitoring`
+  - `deviceId=<id>`：默认选中某 GNSS 设备
+  - `range=7d|15d|30d|...`：时间窗（见页面实现）
+  - `autoRefresh=0|1`：自动刷新
+
 ## 联调检查清单
 
 1) `/app/settings` 切到 `http`，把 Base URL 指向实际 API（例如 `http://localhost:8080`）

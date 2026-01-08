@@ -1,6 +1,7 @@
 import { App as AntApp, Button, Form, Input, InputNumber, Modal, Popconfirm, Select, Skeleton, Space, Table, Tag } from "antd";
 import dayjs from "dayjs";
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import type { Baseline, BaselineStatus, Device } from "../api/client";
 import { useApi } from "../api/ApiProvider";
@@ -18,11 +19,15 @@ function baselineStatusTag(status: BaselineStatus) {
 
 export function BaselinesPanel(props: { className?: string; style?: React.CSSProperties }) {
   const api = useApi();
+  const navigate = useNavigate();
   const { message } = AntApp.useApp();
   const [loading, setLoading] = useState(true);
   const [devices, setDevices] = useState<Device[]>([]);
   const [baselines, setBaselines] = useState<Baseline[]>([]);
   const [edit, setEdit] = useState<EditState>({ open: false });
+  const [keyword, setKeyword] = useState<string>("");
+  const [statusFilter, setStatusFilter] = useState<BaselineStatus | "all">("all");
+  const [autoingDeviceId, setAutoingDeviceId] = useState<string>("");
   const [form] = Form.useForm<{
     deviceId: string;
     baselineLat: number;
@@ -50,13 +55,31 @@ export function BaselinesPanel(props: { className?: string; style?: React.CSSPro
   const baselineByDeviceId = useMemo(() => new Map(baselines.map((b) => [b.deviceId, b] as const)), [baselines]);
 
   const rows = useMemo(() => {
-    return devices.map((d) => ({
+    const normalize = (v: string) => v.trim().toLowerCase();
+    const q = normalize(keyword);
+    const statusRank = (s: BaselineStatus | "missing") => (s === "missing" ? 0 : s === "draft" ? 1 : 2);
+
+    const base = devices.map((d) => ({
       deviceId: d.id,
       deviceName: d.name,
       stationName: d.stationName,
       baseline: baselineByDeviceId.get(d.id)
     }));
-  }, [baselineByDeviceId, devices]);
+
+    let filtered = base;
+    if (statusFilter !== "all") filtered = filtered.filter((r) => (r.baseline?.status ?? "missing") === statusFilter);
+    if (q) {
+      filtered = filtered.filter((r) => normalize(`${r.deviceName} ${r.stationName} ${r.deviceId}`).includes(q));
+    }
+
+    return [...filtered].sort((a, b) => {
+      const as = a.baseline?.status ?? "missing";
+      const bs = b.baseline?.status ?? "missing";
+      const sr = statusRank(as) - statusRank(bs);
+      if (sr !== 0) return sr;
+      return a.stationName.localeCompare(b.stationName, "zh-Hans-CN");
+    });
+  }, [baselineByDeviceId, devices, keyword, statusFilter]);
 
   const openCreate = (deviceId?: string) => {
     setEdit(deviceId ? { open: true, mode: "create", deviceId } : { open: true, mode: "create" });
@@ -115,6 +138,18 @@ export function BaselinesPanel(props: { className?: string; style?: React.CSSPro
           >
             刷新
           </Button>
+          <Select
+            size="small"
+            value={statusFilter}
+            style={{ width: 120 }}
+            onChange={(v) => setStatusFilter(v)}
+            options={[
+              { label: "全部状态", value: "all" },
+              { label: "缺失", value: "missing" },
+              { label: "草稿", value: "draft" },
+              { label: "已建立", value: "active" }
+            ]}
+          />
           <Button
             type="primary"
             onClick={() => {
@@ -130,6 +165,22 @@ export function BaselinesPanel(props: { className?: string; style?: React.CSSPro
         <Skeleton active />
       ) : (
         <div className="desk-dark-table">
+          <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+            <Input
+              allowClear
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              placeholder="搜索设备/站点/ID"
+            />
+            <Button
+              onClick={() => {
+                setKeyword("");
+                setStatusFilter("all");
+              }}
+            >
+              重置
+            </Button>
+          </div>
           <Table<(typeof rows)[number]>
             rowKey="deviceId"
             dataSource={rows}
@@ -163,10 +214,30 @@ export function BaselinesPanel(props: { className?: string; style?: React.CSSPro
                   )
               },
               {
+                title: "高程",
+                dataIndex: "baseline",
+                width: 100,
+                render: (baseline?: Baseline) =>
+                  baseline?.baselineAlt !== undefined ? (
+                    <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}>
+                      {baseline.baselineAlt.toFixed(2)} m
+                    </span>
+                  ) : (
+                    <span style={{ color: "rgba(148,163,184,0.9)" }}>-</span>
+                  )
+              },
+              {
                 title: "建立时间",
                 dataIndex: "baseline",
                 render: (baseline?: Baseline) =>
                   baseline ? dayjs(baseline.establishedTime).format("YYYY-MM-DD HH:mm") : <span style={{ color: "rgba(148,163,184,0.9)" }}>-</span>
+              },
+              {
+                title: "备注",
+                dataIndex: "baseline",
+                ellipsis: true,
+                render: (baseline?: Baseline) =>
+                  baseline?.notes ? <span title={baseline.notes}>{baseline.notes}</span> : <span style={{ color: "rgba(148,163,184,0.9)" }}>-</span>
               },
               {
                 title: "操作",
@@ -178,6 +249,22 @@ export function BaselinesPanel(props: { className?: string; style?: React.CSSPro
                       <Button
                         size="small"
                         onClick={() => {
+                          navigate(`/app/device-management?tab=status&deviceId=${encodeURIComponent(row.deviceId)}`);
+                        }}
+                      >
+                        设备
+                      </Button>
+                      <Button
+                        size="small"
+                        onClick={() => {
+                          navigate(`/app/gps-monitoring?deviceId=${encodeURIComponent(row.deviceId)}`);
+                        }}
+                      >
+                        GPS
+                      </Button>
+                      <Button
+                        size="small"
+                        onClick={() => {
                           if (row.baseline) openEdit(row.baseline);
                           else openCreate(row.deviceId);
                         }}
@@ -186,24 +273,33 @@ export function BaselinesPanel(props: { className?: string; style?: React.CSSPro
                       </Button>
                       <Button
                         size="small"
+                        loading={autoingDeviceId === row.deviceId}
                         onClick={() => {
-                          setLoading(true);
-                          void api.baselines
-                            .autoEstablish({ deviceId: row.deviceId })
-                            .then((b) => {
-                              setBaselines((prev) => {
-                                const idx = prev.findIndex((x) => x.deviceId === b.deviceId);
-                                if (idx >= 0) return prev.map((x) => (x.deviceId === b.deviceId ? b : x));
-                                return [...prev, b];
-                              });
-                              message.success("已自动建立基线");
-                            })
-                            .catch((err: unknown) => {
-                              message.error((err as Error).message);
-                            })
-                            .finally(() => {
-                              setLoading(false);
-                            });
+                          Modal.confirm({
+                            title: "自动建立基线",
+                            content: `将对设备「${row.deviceName}」执行自动基线建立（演示版）。`,
+                            okText: "开始",
+                            cancelText: "取消",
+                            onOk: () => {
+                              setAutoingDeviceId(row.deviceId);
+                              return api.baselines
+                                .autoEstablish({ deviceId: row.deviceId })
+                                .then((b) => {
+                                  setBaselines((prev) => {
+                                    const idx = prev.findIndex((x) => x.deviceId === b.deviceId);
+                                    if (idx >= 0) return prev.map((x) => (x.deviceId === b.deviceId ? b : x));
+                                    return [...prev, b];
+                                  });
+                                  message.success("已自动建立基线");
+                                })
+                                .catch((err: unknown) => {
+                                  message.error((err as Error).message);
+                                })
+                                .finally(() => {
+                                  setAutoingDeviceId("");
+                                });
+                            }
+                          });
                         }}
                       >
                         自动
