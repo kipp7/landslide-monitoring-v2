@@ -2,7 +2,7 @@ import "leaflet/dist/leaflet.css";
 
 import L from "leaflet";
 import { useEffect, useMemo } from "react";
-import { MapContainer, Marker, Polygon, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
+import { Circle, MapContainer, Marker, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
 
 import type { Station } from "../api/client";
 
@@ -54,6 +54,7 @@ type AreaOverlay = {
   stationIds: string[];
   bounds: L.LatLngBounds;
   center: L.LatLng;
+  radiusMeters: number;
   stats: {
     total: number;
     high: number;
@@ -103,6 +104,9 @@ function makeAreaOverlay(stations: Station[], metrics?: Record<string, StationMa
       L.latLng(bounds.getSouth() - padLat, bounds.getWest() - padLng),
       L.latLng(bounds.getNorth() + padLat, bounds.getEast() + padLng)
     );
+    const center = padded.getCenter();
+    const maxDist = pts.reduce((acc, p) => Math.max(acc, center.distanceTo(p)), 0);
+    const radiusMeters = Math.max(120, Math.min(1600, maxDist * 1.25));
 
     const stats = {
       total: list.length,
@@ -131,7 +135,8 @@ function makeAreaOverlay(stations: Station[], metrics?: Record<string, StationMa
       area,
       stationIds: list.map((s) => s.id),
       bounds: padded,
-      center: padded.getCenter(),
+      center,
+      radiusMeters,
       stats
     });
   }
@@ -152,17 +157,23 @@ function AreaOverlays(props: {
     for (const o of props.overlays) {
       const c = areaColor(o.area);
       const html =
-        `<div class="desk-map-area-label" style="--desk-area-stroke:${c.stroke};--desk-area-fill:${c.fill};">` +
+        `<div class="desk-map-area-ripple" style="--desk-area-stroke:${c.stroke};--desk-area-fill:${c.fill};">` +
+        `<span class="ring r1"></span>` +
+        `<span class="ring r2"></span>` +
+        `<span class="ring r3"></span>` +
+        `<span class="drop"></span>` +
+        `<div class="label">` +
         `<div class="t">${o.area}</div>` +
         `<div class="s">站点 ${o.stats.total} · 高 ${o.stats.high} · 预警 ${o.stats.warn} · 离线 ${o.stats.off}</div>` +
+        `</div>` +
         `</div>`;
       byArea.set(
         o.area,
         L.divIcon({
           className: "desk-map-area-icon",
           html,
-          iconSize: [240, 44],
-          iconAnchor: [120, 22]
+          iconSize: [280, 72],
+          iconAnchor: [140, 36]
         })
       );
     }
@@ -180,23 +191,18 @@ function AreaOverlays(props: {
     <>
       {props.overlays.map((o) => {
         const c = areaColor(o.area);
-        const icon = labelIcons.get(o.area);
-        const coords: [number, number][] = [
-          [o.bounds.getSouth(), o.bounds.getWest()],
-          [o.bounds.getSouth(), o.bounds.getEast()],
-          [o.bounds.getNorth(), o.bounds.getEast()],
-          [o.bounds.getNorth(), o.bounds.getWest()]
-        ];
         return (
-          <Polygon
-            key={`area-poly:${o.area}`}
-            positions={coords}
+          <Circle
+            key={`area-diffuse:${o.area}`}
+            center={o.center}
+            radius={o.radiusMeters}
             pathOptions={{
+              className: "desk-map-area-diffuse",
               color: c.stroke,
-              weight: o.stats.high > 0 ? 2 : 1.5,
-              opacity: 0.9,
+              weight: 1.5,
+              opacity: 0.75,
               fillColor: c.fill,
-              fillOpacity: 0.55
+              fillOpacity: 0.35
             }}
             eventHandlers={{
               click: (e) => {

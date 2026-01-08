@@ -1060,22 +1060,14 @@
   border: none;
 }
 
-.desk-analysis-maptop.is-realmap .desk-map-area-label {
-  width: 240px;
-  border-radius: 12px;
-  border: 1px solid var(--desk-area-stroke, rgba(34, 211, 238, 0.5));
-  background:
-    radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.08), transparent 55%),
-    linear-gradient(180deg, rgba(2, 6, 23, 0.78), rgba(2, 6, 23, 0.62));
-  box-shadow: 0 0 22px rgba(34, 211, 238, 0.10);
-  backdrop-filter: blur(10px);
-  padding: 8px 10px 7px;
-  color: rgba(226, 232, 240, 0.92);
+.desk-analysis-maptop.is-realmap .desk-map-area-ripple {
+  width: 280px;
+  height: 72px;
   position: relative;
   overflow: hidden;
 }
 
-.desk-analysis-maptop.is-realmap .desk-map-area-label::before {
+.desk-analysis-maptop.is-realmap .desk-map-area-ripple::before {
   content: "";
   position: absolute;
   inset: -40%;
@@ -1085,12 +1077,80 @@
   pointer-events: none;
 }
 
-.desk-analysis-maptop.is-realmap .desk-map-area-label .t,
-.desk-analysis-maptop.is-realmap .desk-map-area-label .s {
+/* Ripple + droplet + label */
+.desk-analysis-maptop.is-realmap .desk-map-area-ripple .ring,
+.desk-analysis-maptop.is-realmap .desk-map-area-ripple .drop,
+.desk-analysis-maptop.is-realmap .desk-map-area-ripple .label {
+  position: absolute;
+}
+
+.desk-analysis-maptop.is-realmap .desk-map-area-ripple .ring {
+  left: 36px;
+  top: 36px;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  border: 2px solid var(--desk-area-stroke, rgba(34, 211, 238, 0.5));
+  transform: translate(-50%, -50%) scale(0.6);
+  opacity: 0;
+  filter: drop-shadow(0 0 10px rgba(34, 211, 238, 0.16));
+}
+
+.desk-analysis-maptop.is-realmap .desk-map-area-ripple .ring.r1 {
+  animation: desk-area-ripple 2.0s ease-out infinite;
+}
+
+.desk-analysis-maptop.is-realmap .desk-map-area-ripple .ring.r2 {
+  animation: desk-area-ripple 2.0s ease-out infinite;
+  animation-delay: 0.65s;
+}
+
+.desk-analysis-maptop.is-realmap .desk-map-area-ripple .ring.r3 {
+  animation: desk-area-ripple 2.0s ease-out infinite;
+  animation-delay: 1.3s;
+}
+
+.desk-reduced-motion .desk-analysis-maptop.is-realmap .desk-map-area-ripple .ring {
+  animation: none !important;
+  opacity: 0.18;
+  transform: translate(-50%, -50%) scale(1.4);
+}
+
+.desk-analysis-maptop.is-realmap .desk-map-area-ripple .drop {
+  left: 36px;
+  top: 36px;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px 999px 999px 0;
+  transform: translate(-50%, -60%) rotate(-45deg);
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.10));
+  box-shadow: 0 0 18px rgba(34, 211, 238, 0.12);
+  border: 2px solid rgba(226, 232, 240, 0.7);
+}
+
+.desk-analysis-maptop.is-realmap .desk-map-area-ripple .label {
+  left: 66px;
+  top: 8px;
+  right: 8px;
+  bottom: 8px;
+  border-radius: 12px;
+  border: 1px solid var(--desk-area-stroke, rgba(34, 211, 238, 0.5));
+  background:
+    radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.08), transparent 55%),
+    linear-gradient(180deg, rgba(2, 6, 23, 0.78), rgba(2, 6, 23, 0.62));
+  box-shadow: 0 0 22px rgba(34, 211, 238, 0.10);
+  backdrop-filter: blur(10px);
+  padding: 8px 10px 7px;
+  color: rgba(226, 232, 240, 0.92);
+  overflow: hidden;
+}
+
+.desk-analysis-maptop.is-realmap .desk-map-area-ripple .t,
+.desk-analysis-maptop.is-realmap .desk-map-area-ripple .s {
   position: relative;
 }
 
-.desk-analysis-maptop.is-realmap .desk-map-area-label .t {
+.desk-analysis-maptop.is-realmap .desk-map-area-ripple .t {
   font-weight: 900;
   letter-spacing: 0.02em;
   overflow: hidden;
@@ -1098,7 +1158,7 @@
   text-overflow: ellipsis;
 }
 
-.desk-analysis-maptop.is-realmap .desk-map-area-label .s {
+.desk-analysis-maptop.is-realmap .desk-map-area-ripple .s {
   margin-top: 3px;
   color: rgba(148, 163, 184, 0.92);
   font-weight: 800;
@@ -1110,6 +1170,28 @@
 
 .desk-analysis-maptop.is-realmap .leaflet-overlay-pane .leaflet-interactive {
   filter: drop-shadow(0 0 10px rgba(34, 211, 238, 0.10));
+}
+
+.desk-analysis-maptop.is-realmap .leaflet-overlay-pane .desk-map-area-diffuse {
+  mix-blend-mode: screen;
+}
+
+@keyframes desk-area-ripple {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.6);
+  }
+  20% {
+    opacity: 0.35;
+  }
+  70% {
+    opacity: 0.10;
+    transform: translate(-50%, -50%) scale(3.8);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(4.2);
+  }
 }
 
 .desk-analysis-3dwrap {
