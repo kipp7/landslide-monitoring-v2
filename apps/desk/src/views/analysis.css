@@ -1233,6 +1233,18 @@
   font-weight: 700;
 }
 
+.desk-analysis-map-legend.is-header {
+  background: rgba(2, 6, 23, 0.20);
+  padding: 5px 9px;
+  font-size: 11px;
+  gap: 8px;
+  border-color: rgba(148, 163, 184, 0.14);
+}
+
+.desk-analysis-map-extra .desk-analysis-map-legend {
+  margin-left: 2px;
+}
+
 .desk-analysis-map-legend .dot {
   width: 10px;
   height: 10px;

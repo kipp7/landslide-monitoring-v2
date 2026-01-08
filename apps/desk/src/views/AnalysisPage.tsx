@@ -897,6 +897,14 @@ export function AnalysisPage() {
                   >
                     重置视图
                   </Button>
+                  <div className="desk-analysis-map-legend is-header" aria-label="风险图例">
+                    <span className="dot high" />
+                    高风险
+                    <span className="dot mid" />
+                    中风险
+                    <span className="dot low" />
+                    低风险
+                  </div>
                   {selectedStations.length ? <Tag color="cyan">已选 {selectedStations.length}</Tag> : null}
                   <MapSwitchPanel selected={mapType} onSelect={setMapType} />
                 </div>
@@ -919,14 +927,6 @@ export function AnalysisPage() {
                       <TerrainBackdrop className="desk-analysis-terrain" quality={terrainQuality} />
                       <div className="desk-analysis-map-overlay">
                         <div className="desk-analysis-map-hint">3D 视图：拖拽旋转，滚轮缩放，双击聚焦</div>
-                        <div className="desk-analysis-map-legend">
-                          <span className="dot high" />
-                          高风险
-                          <span className="dot mid" />
-                          中风险
-                          <span className="dot low" />
-                          低风险
-                        </div>
                       </div>
                     </div>
                   ) : (
@@ -941,14 +941,6 @@ export function AnalysisPage() {
                       />
                       <div className="desk-analysis-map-overlay">
                         <div className="desk-analysis-map-hint">拖拽移动，滚轮缩放，点击站点查看详情</div>
-                        <div className="desk-analysis-map-legend">
-                          <span className="dot high" />
-                          高风险
-                          <span className="dot mid" />
-                          中风险
-                          <span className="dot low" />
-                          低风险
-                        </div>
                         {selectedStations.length ? (
                           <div className={clsx("desk-analysis-map-selectedpanel", !stationPanelExpanded && "is-collapsed")}>
                             <div className="desk-analysis-map-selectedpanel-head">
