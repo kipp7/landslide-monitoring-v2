@@ -199,6 +199,9 @@ function AreaOverlays(props: {
               color: c.stroke,
               weight: 2.0,
               opacity: 0.82,
+              dashArray: "6 10",
+              lineCap: "round",
+              lineJoin: "round",
               fillColor: c.fill,
               fillOpacity: 0.22
             }}
