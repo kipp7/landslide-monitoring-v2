@@ -286,30 +286,35 @@ function makeSystemStatus(cfg: MockSimConfig, devices: Device[]): SystemStatus {
 
 function gpsGeneratePoints(cfg: MockSimConfig, station: Station, deviceId: string, days: number): GpsPoint[] {
   const simNow = getSimNow(cfg);
-  const totalHours = Math.max(24, days * 24);
-  const step = Math.max(1, Math.ceil(totalHours / 200));
   const points: GpsPoint[] = [];
 
-  const start = new Date(simNow.getTime() - (totalHours - 1) * 60 * 60 * 1000);
-  start.setMinutes(0, 0, 0);
+  const totalMinutes = Math.max(60, Math.round(days * 24 * 60));
+  const maxPoints = days <= 1 ? 360 : 240;
+  const baseStepMinutes = days <= 1 ? 5 : days <= 7 ? 30 : 60;
+  const stepMinutes = Math.max(baseStepMinutes, Math.ceil(totalMinutes / maxPoints / baseStepMinutes) * baseStepMinutes);
+  const stepHours = stepMinutes / 60;
+
+  const start = new Date(simNow.getTime() - (totalMinutes - stepMinutes) * 60 * 1000);
+  start.setSeconds(0, 0);
 
   const base = (rand01(`${cfg.seed}:${deviceId}:base`) * 8 + (station.risk === "high" ? 10 : station.risk === "mid" ? 6 : 3)) * scenarioBias(cfg.scenario).slide;
   let v = base;
   const rate = baseRateMmPerH(station.risk) * scenarioBias(cfg.scenario).slide;
 
-  for (let h = 0; h < totalHours; h += step) {
-    const ts = new Date(start.getTime() + h * 60 * 60 * 1000);
-    let delta = rate * step;
+  for (let m = 0; m < totalMinutes; m += stepMinutes) {
+    const ts = new Date(start.getTime() + m * 60 * 1000);
+    let delta = rate * stepHours;
 
-    const rainAvg = sumRain(ts, station.id, Math.min(6, step), cfg) / Math.min(6, step);
-    delta += rainAvg * (station.risk === "high" ? 0.06 : station.risk === "mid" ? 0.035 : 0.02) * step;
+    // Rainfall effect (approx): use current mm/h as instantaneous intensity.
+    const mmh = rainMmPerH(ts, station.id, cfg);
+    delta += mmh * (station.risk === "high" ? 0.06 : station.risk === "mid" ? 0.035 : 0.02) * stepHours;
 
     const hourKey = Math.floor(ts.getTime() / (60 * 60 * 1000));
-    const noise = (rand01(`${cfg.seed}:${deviceId}:n:${hourKey}`) - 0.5) * 0.22 * step;
+    const noise = (rand01(`${cfg.seed}:${deviceId}:n:${hourKey}`) - 0.5) * 0.22 * stepHours;
     delta += noise;
 
     if (cfg.scenario === "landslide_warning" && station.id === "st_a" && ts.getHours() >= 18 && ts.getHours() <= 22) {
-      delta += 0.5 * step;
+      delta += 0.5 * stepHours;
     }
 
     v = Math.max(0, v + delta);

@@ -61,6 +61,21 @@ function daysFromRange(range: TimeRange) {
   return 30;
 }
 
+function windowHoursFromRange(range: TimeRange) {
+  if (range === "1h") return 1;
+  if (range === "6h") return 6;
+  if (range === "24h") return 24;
+  if (range === "7d") return 7 * 24;
+  if (range === "15d") return 15 * 24;
+  return 30 * 24;
+}
+
+function tickFormatFromRange(range: TimeRange, ts: string) {
+  if (range === "1h" || range === "6h") return dayjs(ts).format("HH:mm");
+  if (range === "24h") return dayjs(ts).format("MM-DD HH:mm");
+  return dayjs(ts).format("MM-DD");
+}
+
 function stable01(seed: string) {
   let h = 2166136261;
   for (let i = 0; i < seed.length; i += 1) {
@@ -251,9 +266,15 @@ export function GpsMonitoringPage() {
     const baseLng = baseline?.baselineLng ?? 110.189371;
     const rows: GpsChartRow[] = [];
 
-    for (let i = 0; i < pts.length; i += 1) {
-      const p = pts[i]!;
-      const prev = i > 0 ? pts[i - 1]! : null;
+    const hours = windowHoursFromRange(timeRange);
+    const endTs = pts.at(-1)?.ts;
+    const end = endTs ? new Date(endTs) : null;
+    const startCutoff = end ? new Date(end.getTime() - hours * 60 * 60 * 1000) : null;
+    const rangePts = startCutoff ? pts.filter((p) => new Date(p.ts).getTime() >= startCutoff.getTime()) : pts;
+
+    for (let i = 0; i < rangePts.length; i += 1) {
+      const p = rangePts[i]!;
+      const prev = i > 0 ? rangePts[i - 1]! : null;
       const disp = p.dispMm;
 
       const horizontal = Number((disp * 0.72 + noise(`${selectedDeviceId}-h-${i}`, 0.18)).toFixed(2));
@@ -279,7 +300,7 @@ export function GpsMonitoringPage() {
       rows.push({
         key: `${p.ts}-${i}`,
         ts: p.ts,
-        time: dayjs(p.ts).format("MM-DD HH:mm"),
+        time: tickFormatFromRange(timeRange, p.ts),
         displacement: Number(disp.toFixed(2)),
         horizontal,
         vertical,
@@ -294,7 +315,7 @@ export function GpsMonitoringPage() {
     }
 
     return rows.slice(-dataLimit);
-  }, [baseline?.baselineLat, baseline?.baselineLng, dataLimit, pts, selectedDeviceId, thresholds]);
+  }, [baseline?.baselineLat, baseline?.baselineLng, dataLimit, pts, selectedDeviceId, thresholds, timeRange]);
 
   const latest = chartData.at(-1) ?? null;
 
@@ -302,7 +323,7 @@ export function GpsMonitoringPage() {
   const level = riskFromDispMm(latestDisp, thresholds);
 
   const quality = useMemo(() => {
-    const expected = Math.min(200, daysFromRange(timeRange) * 24);
+    const expected = Math.min(200, windowHoursFromRange(timeRange));
     const score = expected > 0 ? Math.min(1, pts.length / expected) : 0;
     return { score, pct: Number((score * 100).toFixed(1)) };
   }, [pts.length, timeRange]);
