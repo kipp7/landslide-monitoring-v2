@@ -89,6 +89,23 @@
   transform: scale(0.92);
 }
 
+.desk-analysis-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(2, 6, 23, 0.22);
+}
+
+.desk-analysis-toggle .label {
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(148, 163, 184, 0.92);
+  letter-spacing: 0.02em;
+}
+
 .desk-analysis-range-extra {
   display: flex;
   align-items: center;
