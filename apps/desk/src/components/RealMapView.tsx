@@ -149,8 +149,10 @@ function AreaOverlays(props: {
   overlays: AreaOverlay[];
   selectedStationIds: string[];
   onSelectStationIds: (ids: string[]) => void;
+  showLabels?: boolean;
 }) {
   const map = useMap();
+  const showLabels = props.showLabels ?? true;
 
   const labelIcons = useMemo(() => {
     const byArea = new Map<string, L.DivIcon>();
@@ -195,10 +197,11 @@ function AreaOverlays(props: {
             pathOptions={{
               className: "desk-map-area-diffuse",
               color: c.stroke,
-              weight: 1.5,
-              opacity: 0.75,
+              weight: 2.25,
+              opacity: 0.9,
+              dashArray: "6 6",
               fillColor: c.fill,
-              fillOpacity: 0.35
+              fillOpacity: 0.26
             }}
             eventHandlers={{
               click: (e) => {
@@ -209,32 +212,34 @@ function AreaOverlays(props: {
         );
       })}
 
-      {props.overlays.map((o) => {
-        const icon = labelIcons.get(o.area);
-        return (
-          <Marker
-            key={`area-label:${o.area}`}
-            position={o.center}
-            icon={icon}
-            eventHandlers={{
-              click: (e) => {
-                handleSelect(o, e as unknown as L.LeafletMouseEvent);
-              }
-            }}
-          >
-            <Tooltip className="desk-map-tooltip" direction="top" offset={[0, -10]} opacity={1} sticky>
-              <div style={{ fontWeight: 900 }}>{o.area}</div>
-              <div style={{ opacity: 0.9, fontSize: 12 }}>
-                站点 {o.stats.total} · 高 {o.stats.high} · 中 {o.stats.mid} · 低 {o.stats.low}
-              </div>
-              <div style={{ opacity: 0.9, fontSize: 12 }}>
-                在线 {o.stats.online} · 预警 {o.stats.warn} · 离线 {o.stats.off}
-              </div>
-              <div style={{ opacity: 0.8, fontSize: 12 }}>点击聚焦并选中区域站点</div>
-            </Tooltip>
-          </Marker>
-        );
-      })}
+      {showLabels
+        ? props.overlays.map((o) => {
+            const icon = labelIcons.get(o.area);
+            return (
+              <Marker
+                key={`area-label:${o.area}`}
+                position={o.center}
+                icon={icon}
+                eventHandlers={{
+                  click: (e) => {
+                    handleSelect(o, e as unknown as L.LeafletMouseEvent);
+                  }
+                }}
+              >
+                <Tooltip className="desk-map-tooltip" direction="top" offset={[0, -10]} opacity={1} sticky>
+                  <div style={{ fontWeight: 900 }}>{o.area}</div>
+                  <div style={{ opacity: 0.9, fontSize: 12 }}>
+                    站点 {o.stats.total} · 高 {o.stats.high} · 中 {o.stats.mid} · 低 {o.stats.low}
+                  </div>
+                  <div style={{ opacity: 0.9, fontSize: 12 }}>
+                    在线 {o.stats.online} · 预警 {o.stats.warn} · 离线 {o.stats.off}
+                  </div>
+                  <div style={{ opacity: 0.8, fontSize: 12 }}>点击聚焦并选中区域站点</div>
+                </Tooltip>
+              </Marker>
+            );
+          })
+        : null}
     </>
   );
 }
@@ -310,7 +315,7 @@ export function RealMapView(props: RealMapViewProps) {
   const userMovedRef = useRef(false);
   const [zoom, setZoom] = useState(12);
 
-  const showAreaOverlays = zoom <= 13;
+  const showAreaLabels = zoom <= 13;
   const showStationMarkers = zoom >= 14;
 
   const icons = useMemo(() => {
@@ -420,9 +425,12 @@ export function RealMapView(props: RealMapViewProps) {
           props.onSelectStationIds([]);
         }}
       />
-      {showAreaOverlays ? (
-        <AreaOverlays overlays={areaOverlays} selectedStationIds={props.selectedStationIds} onSelectStationIds={props.onSelectStationIds} />
-      ) : null}
+      <AreaOverlays
+        overlays={areaOverlays}
+        selectedStationIds={props.selectedStationIds}
+        onSelectStationIds={props.onSelectStationIds}
+        showLabels={showAreaLabels}
+      />
 
       {showStationMarkers
         ? props.stations.map((s) => {

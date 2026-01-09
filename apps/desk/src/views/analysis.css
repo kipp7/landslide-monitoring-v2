@@ -1087,8 +1087,9 @@
 
 .desk-analysis-maptop.is-realmap .desk-map-marker {
   position: relative;
-  width: 34px;
-  height: 34px;
+  width: 38px;
+  height: 38px;
+  filter: drop-shadow(0 8px 14px rgba(2, 6, 23, 0.55));
 }
 
 .desk-analysis-maptop.is-realmap .desk-map-marker .halo,
@@ -1113,8 +1114,11 @@
 
 .desk-analysis-maptop.is-realmap .desk-map-marker .core {
   inset: 9px;
-  border: 2px solid rgba(255, 255, 255, 0.9);
-  box-shadow: 0 0 18px rgba(34, 211, 238, 0.12);
+  border-radius: 999px;
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.92),
+    0 0 0 4px rgba(2, 6, 23, 0.55),
+    0 0 18px rgba(34, 211, 238, 0.18);
 }
 
 .desk-analysis-maptop.is-realmap .desk-map-marker .badge {
