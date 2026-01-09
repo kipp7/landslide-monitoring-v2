@@ -59,7 +59,7 @@ type LegendState =
   | { open: false }
   | { open: true; draft: Record<string, string> };
 
-const STORAGE_KEY = "desk.station-management.v1";
+const STORAGE_KEY = "desk.station-management.v2";
 
 function safeJsonParse<T>(input: string): T | null {
   try {
@@ -144,9 +144,7 @@ function mergeFromApi(existing: MonitoringStation[], fromApi: Station[], devices
     });
   }
 
-  const apiIds = new Set(fromApi.map((s) => s.id));
-  const extras = existing.filter((s) => !apiIds.has(s.stationId));
-  return [...extras, ...next];
+  return next;
 }
 
 function hierarchyData(stations: MonitoringStation[]) {

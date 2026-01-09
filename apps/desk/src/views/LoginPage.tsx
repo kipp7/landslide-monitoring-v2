@@ -122,7 +122,6 @@ export function LoginPage() {
           </div>
 
           <div className="desk-login-hero-foot">
-            <Tag color={apiMode === "mock" ? "blue" : "geekblue"}>{apiMode === "mock" ? "演示环境" : "联调环境"}</Tag>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
               当前为预览版本；正式交付将提供 Windows 11 桌面端。
             </Typography.Text>
@@ -225,7 +224,7 @@ export function LoginPage() {
               </Button>
             </Space>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              提示：演示环境不校验真实验证码；正式环境以实际短信服务为准。
+              提示：测试账号仅用于展厅演示；正式环境以实际短信服务为准。
             </Typography.Text>
           </div>
         </div>

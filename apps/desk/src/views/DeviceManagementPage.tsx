@@ -5,7 +5,7 @@ import ReactECharts from "echarts-for-react";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
-import type { Baseline, Device, OnlineStatus, Station } from "../api/client";
+import type { Baseline, Device, GpsSeries, OnlineStatus, Station } from "../api/client";
 import { useApi } from "../api/ApiProvider";
 import { BaseCard } from "../components/BaseCard";
 import { StatusTag } from "../components/StatusTag";
@@ -75,6 +75,26 @@ function relativeTime(input: string) {
   if (hr < 24) return `${hr} 小时前`;
   const day = Math.round(hr / 24);
   return `${day} 天前`;
+}
+
+function stable01(seed: string) {
+  let h = 2166136261;
+  for (let i = 0; i < seed.length; i += 1) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0) / 4294967295;
+}
+
+function envAt(ts: string, stationId: string) {
+  const t = new Date(ts);
+  const hour = t.getHours() + t.getMinutes() / 60;
+  const wave = Math.sin((hour / 24) * Math.PI * 2);
+  const wobbleT = (stable01(`${stationId}:t:${ts}`) - 0.5) * 0.6;
+  const wobbleH = (stable01(`${stationId}:h:${ts}`) - 0.5) * 2.0;
+  const temp = 18.8 + wave * 1.6 + wobbleT;
+  const hum = 72 + Math.cos((hour / 24) * Math.PI * 2) * 4.5 + wobbleH;
+  return { temp: Number(temp.toFixed(1)), hum: Math.max(50, Math.min(95, Math.round(hum))) };
 }
 
 export function DeviceManagementPage() {
@@ -204,6 +224,37 @@ export function DeviceManagementPage() {
     () => (selectedDevice ? stationsById.get(selectedDevice.stationId) ?? null : null),
     [selectedDevice, stationsById]
   );
+  const [stationGnssSeries, setStationGnssSeries] = useState<GpsSeries | null>(null);
+
+  useEffect(() => {
+    const stationId = selectedStation?.id;
+    if (!stationId) {
+      setStationGnssSeries(null);
+      return;
+    }
+
+    const gnss = devices.find((d) => d.stationId === stationId && d.type === "gnss") ?? null;
+    if (!gnss) {
+      setStationGnssSeries(null);
+      return;
+    }
+
+    let canceled = false;
+    void api.gps
+      .getSeries({ deviceId: gnss.id, days: 1 })
+      .then((s) => {
+        if (canceled) return;
+        setStationGnssSeries(s);
+      })
+      .catch(() => {
+        if (canceled) return;
+        setStationGnssSeries(null);
+      });
+
+    return () => {
+      canceled = true;
+    };
+  }, [api, devices, selectedStation?.id]);
 
   const canControl = !!selectedDevice && selectedDevice.status !== "offline";
 
@@ -229,23 +280,42 @@ export function DeviceManagementPage() {
 
   const sensorRows: SensorRow[] = useMemo(() => {
     if (!selectedDevice) return [];
+
+    const stationId = selectedStation?.id ?? selectedDevice.stationId;
+    const points = stationGnssSeries?.points?.length ? stationGnssSeries.points : [];
+    const tail = points.length >= 10 ? points.slice(-10) : points;
+
+    if (tail.length) {
+      return tail.map((p) => {
+        const e = envAt(p.ts, stationId);
+        return {
+          id: `${stationId}:${p.ts}`,
+          time: new Date(p.ts).toLocaleTimeString("zh-CN"),
+          temperature: e.temp,
+          humidity: e.hum,
+          dispMm: Number(p.dispMm.toFixed(2)),
+          rainMm: 0
+        };
+      });
+    }
+
+    // Fallback when GNSS series is not available (still keep exhibition "no rain").
     const now = Date.now();
     return Array.from({ length: 10 }, (_, idx) => {
-      const t = now - idx * 6 * 60 * 1000;
-      const temp = 14 + stablePercent(`${selectedDevice.id}-temp-${idx}`, 0, 30) / 10;
-      const hum = 70 + stablePercent(`${selectedDevice.id}-hum-${idx}`, 0, 25);
-      const dispMm = stablePercent(`${selectedDevice.id}-disp-${idx}`, 0, 120) / 10;
-      const rainMm = stablePercent(`${selectedDevice.id}-rain-${idx}`, 0, 18);
+      const t = new Date(now - idx * 6 * 60 * 1000);
+      const iso = t.toISOString();
+      const e = envAt(iso, stationId);
+      const dispMm = stablePercent(`${stationId}-disp-${idx}`, 0, 120) / 10;
       return {
-        id: `${selectedDevice.id}-${idx}`,
-        time: new Date(t).toLocaleTimeString("zh-CN"),
-        temperature: Number(temp.toFixed(1)),
-        humidity: Number(hum.toFixed(0)),
+        id: `${stationId}-${idx}`,
+        time: t.toLocaleTimeString("zh-CN"),
+        temperature: e.temp,
+        humidity: e.hum,
         dispMm: Number(dispMm.toFixed(2)),
-        rainMm: Number(rainMm.toFixed(0))
+        rainMm: 0
       };
     }).reverse();
-  }, [selectedDevice]);
+  }, [selectedDevice, selectedStation?.id, stationGnssSeries?.points]);
 
   const mapOption = useMemo(() => {
     const riskColor = (risk: Station["risk"]) => {
