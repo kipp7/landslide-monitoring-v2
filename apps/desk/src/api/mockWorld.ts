@@ -107,24 +107,24 @@ function deviceCatalog(stations: Station[]): Array<Omit<Device, "stationName" | 
 }
 
 function makeStations(cfg: MockSimConfig): Station[] {
-  const baseLat = 22.6263;
-  const baseLng = 110.1805;
+  // Guabang Mountain (Yulin Normal University, East Campus) – aligns with reference demo data center.
+  const baseLat = 22.6847;
+  const baseLng = 110.1893;
   const areas = [
-    "广西 玉林市 玉林师范学院 东校区",
-    "广西 玉林市 玉林师范学院 西校区",
-    "广西 玉林市 玉州区 挂傍山",
-    "广西 玉林市 玉州区 南流江流域"
+    "广西 玉林市 玉林师范学院 东校区 挂傍山监测区域"
   ];
 
   const defs: Array<{ id: string; name: string; areaIdx: number; dLat: number; dLng: number; baseRisk: RiskLevel; deviceCount: number }> = [
-    { id: "st_a", name: "挂傍山滑坡点 A", areaIdx: 2, dLat: 0.0062, dLng: -0.0074, baseRisk: "high", deviceCount: 9 },
-    { id: "st_b", name: "挂傍山滑坡点 B", areaIdx: 2, dLat: 0.0032, dLng: -0.0049, baseRisk: "mid", deviceCount: 8 },
-    { id: "st_c", name: "挂傍山滑坡点 C", areaIdx: 2, dLat: 0.0011, dLng: -0.0022, baseRisk: "mid", deviceCount: 7 },
-    { id: "st_d", name: "玉林师院滑坡点 D", areaIdx: 0, dLat: -0.0024, dLng: 0.0042, baseRisk: "mid", deviceCount: 7 },
-    { id: "st_e", name: "玉林师院滑坡点 E", areaIdx: 0, dLat: -0.0043, dLng: 0.0024, baseRisk: "low", deviceCount: 6 },
-    { id: "st_f", name: "玉林师院滑坡点 F", areaIdx: 1, dLat: -0.0065, dLng: -0.0012, baseRisk: "low", deviceCount: 6 },
-    { id: "st_g", name: "南流江监测点 G", areaIdx: 3, dLat: -0.0091, dLng: 0.0086, baseRisk: "mid", deviceCount: 7 },
-    { id: "st_h", name: "南流江监测点 H", areaIdx: 3, dLat: -0.011, dLng: 0.0046, baseRisk: "low", deviceCount: 6 }
+    // Keep all stations clustered on the mountain (within ~500m) to match the exhibition storyline.
+    // Reference points: center (22.6847, 110.1893), top (22.6850, 110.1890), foot (22.6844, 110.1896)
+    { id: "st_a", name: "挂傍山中心监测站", areaIdx: 0, dLat: 0.0, dLng: 0.0, baseRisk: "high", deviceCount: 9 },
+    { id: "st_b", name: "挂傍山坡顶监测点", areaIdx: 0, dLat: 0.0003, dLng: -0.0003, baseRisk: "high", deviceCount: 8 },
+    { id: "st_c", name: "挂傍山坡脚基准点", areaIdx: 0, dLat: -0.0003, dLng: 0.0003, baseRisk: "mid", deviceCount: 7 },
+    { id: "st_d", name: "挂傍山东侧边坡点", areaIdx: 0, dLat: -0.0001, dLng: 0.0007, baseRisk: "mid", deviceCount: 7 },
+    { id: "st_e", name: "挂傍山西侧边坡点", areaIdx: 0, dLat: 0.0001, dLng: -0.0007, baseRisk: "low", deviceCount: 6 },
+    { id: "st_f", name: "挂傍山北侧沟谷点", areaIdx: 0, dLat: 0.0007, dLng: 0.0002, baseRisk: "mid", deviceCount: 6 },
+    { id: "st_g", name: "挂傍山南侧坡面点", areaIdx: 0, dLat: -0.0007, dLng: -0.0001, baseRisk: "low", deviceCount: 7 },
+    { id: "st_h", name: "挂傍山次级滑带点", areaIdx: 0, dLat: 0.0004, dLng: 0.0006, baseRisk: "mid", deviceCount: 6 }
   ];
 
   const simNow = getSimNow(cfg);
