@@ -197,11 +197,10 @@ function AreaOverlays(props: {
             pathOptions={{
               className: "desk-map-area-diffuse",
               color: c.stroke,
-              weight: 2.25,
-              opacity: 0.9,
-              dashArray: "6 6",
+              weight: 2.0,
+              opacity: 0.82,
               fillColor: c.fill,
-              fillOpacity: 0.26
+              fillOpacity: 0.22
             }}
             eventHandlers={{
               click: (e) => {
