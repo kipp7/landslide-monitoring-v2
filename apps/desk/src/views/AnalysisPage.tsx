@@ -177,6 +177,21 @@ function clampNum(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
 
+function TrendRangePicker(props: { value: TrendRange; onChange: (v: TrendRange) => void }) {
+  const opts: TrendRange[] = ["1h", "6h", "12h", "24h", "7d"];
+  return (
+    <div className="desk-trend-range" aria-label="趋势时间窗">
+      <Space.Compact>
+        {opts.map((r) => (
+          <Button key={r} size="small" type={props.value === r ? "primary" : "default"} onClick={() => props.onChange(r)}>
+            {trendRangeText(r)}
+          </Button>
+        ))}
+      </Space.Compact>
+    </div>
+  );
+}
+
 export function AnalysisPage() {
   const api = useApi();
   const navigate = useNavigate();
@@ -194,7 +209,9 @@ export function AnalysisPage() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [alertOn, setAlertOn] = useState(false);
   const [now, setNow] = useState<Date>(() => new Date());
-  const [trendRange, setTrendRange] = useState<TrendRange>("12h");
+  const [alertTrendRange, setAlertTrendRange] = useState<TrendRange>("12h");
+  const [envTrendRange, setEnvTrendRange] = useState<TrendRange>("12h");
+  const [vibTrendRange, setVibTrendRange] = useState<TrendRange>("12h");
   const [trendAxisNow, setTrendAxisNow] = useState<number>(() => Date.now());
   const [online, setOnline] = useState<boolean>(() => (typeof navigator !== "undefined" ? navigator.onLine : true));
   const [rainRange, setRainRange] = useState<"7d" | "24h">("7d");
@@ -318,27 +335,9 @@ export function AnalysisPage() {
     };
   }, []);
 
-  const trendAxis = useMemo(() => buildTrendAxis(trendRange, trendAxisNow), [trendAxisNow, trendRange]);
-
-  const trendExtra = useMemo(() => {
-    const opts: TrendRange[] = ["1h", "6h", "12h", "24h", "7d"];
-    return (
-      <div className="desk-analysis-range-extra" aria-label="趋势时间窗">
-        <Space.Compact>
-          {opts.map((r) => (
-            <Button
-              key={r}
-              size="small"
-              type={trendRange === r ? "primary" : "default"}
-              onClick={() => setTrendRange(r)}
-            >
-              {trendRangeText(r)}
-            </Button>
-          ))}
-        </Space.Compact>
-      </div>
-    );
-  }, [trendRange]);
+  const alertTrendAxis = useMemo(() => buildTrendAxis(alertTrendRange, trendAxisNow), [alertTrendRange, trendAxisNow]);
+  const envTrendAxis = useMemo(() => buildTrendAxis(envTrendRange, trendAxisNow), [envTrendRange, trendAxisNow]);
+  const vibTrendAxis = useMemo(() => buildTrendAxis(vibTrendRange, trendAxisNow), [trendAxisNow, vibTrendRange]);
 
   const tempHumOption = useMemo(() => {
     const { axisLabel: _unusedAxisLabel, ...baseXAxis } = chartBase.xAxis as Record<string, unknown>;
@@ -346,14 +345,14 @@ export function AnalysisPage() {
       stable01(`${String(stations.length)}-${String(devices.length)}-${String(user?.id ?? user?.name ?? "")}-env`) * 10000
     );
 
-    const temp = trendAxis.times.map((t, idx) => {
+    const temp = envTrendAxis.times.map((t, idx) => {
       const hour = t.getHours() + t.getMinutes() / 60;
       const base = 16.2 + Math.sin((hour / 24) * Math.PI * 2) * 1.6;
       const wobble = (stable01(`${String(seed)}-t-${String(t.getTime())}-${String(idx)}`) - 0.5) * 0.6;
       return Number((base + wobble).toFixed(1));
     });
 
-    const hum = trendAxis.times.map((t, idx) => {
+    const hum = envTrendAxis.times.map((t, idx) => {
       const hour = t.getHours() + t.getMinutes() / 60;
       const base = 82.5 + Math.cos((hour / 24) * Math.PI * 2) * 4.5;
       const wobble = (stable01(`${String(seed)}-h-${String(t.getTime())}-${String(idx)}`) - 0.5) * 1.8;
@@ -372,7 +371,7 @@ export function AnalysisPage() {
       },
       xAxis: {
         ...baseXAxis,
-        data: trendAxis.labels,
+        data: envTrendAxis.labels,
         axisLabel: { ...darkAxis().axisLabel, hideOverlap: true }
       },
       yAxis: [
@@ -401,7 +400,7 @@ export function AnalysisPage() {
         }
       ]
     };
-  }, [chartBase, devices.length, stations.length, trendAxis.labels, trendAxis.times, user?.id, user?.name]);
+  }, [chartBase, devices.length, envTrendAxis.labels, envTrendAxis.times, stations.length, user?.id, user?.name]);
 
   const vibrationOption = useMemo(() => {
     const { axisLabel: _unusedAxisLabel, ...baseXAxis } = chartBase.xAxis as Record<string, unknown>;
@@ -409,14 +408,14 @@ export function AnalysisPage() {
       stable01(`${String(stations.length)}-${String(devices.length)}-${String(user?.id ?? user?.name ?? "")}-vib`) * 10000
     );
 
-    const acc = trendAxis.times.map((t, idx) => {
+    const acc = vibTrendAxis.times.map((t, idx) => {
       const hour = t.getHours() + t.getMinutes() / 60;
       const base = 4.2 + Math.sin((hour / 24) * Math.PI * 2) * 1.2;
       const spike = (idx % 6 === 0 ? 0.9 : 0) + (stable01(`${String(seed)}-a-${String(t.getTime())}-${String(idx)}`) - 0.5) * 0.8;
       return clampNum(Number((base + spike).toFixed(1)), 0, 12);
     });
 
-    const gyro = trendAxis.times.map((t, idx) => {
+    const gyro = vibTrendAxis.times.map((t, idx) => {
       const hour = t.getHours() + t.getMinutes() / 60;
       const base = 0.9 + Math.cos((hour / 24) * Math.PI * 2) * 0.35;
       const spike = (idx % 7 === 0 ? 0.35 : 0) + (stable01(`${String(seed)}-g-${String(t.getTime())}-${String(idx)}`) - 0.5) * 0.25;
@@ -435,7 +434,7 @@ export function AnalysisPage() {
       },
       xAxis: {
         ...baseXAxis,
-        data: trendAxis.labels,
+        data: vibTrendAxis.labels,
         axisLabel: { ...darkAxis().axisLabel, hideOverlap: true }
       },
       yAxis: [
@@ -464,7 +463,7 @@ export function AnalysisPage() {
         }
       ]
     };
-  }, [chartBase, devices.length, stations.length, trendAxis.labels, trendAxis.times, user?.id, user?.name]);
+  }, [chartBase, devices.length, stations.length, user?.id, user?.name, vibTrendAxis.labels, vibTrendAxis.times]);
 
   const rainfallOption = useMemo(() => {
     const is24h = rainRange === "24h";
@@ -549,13 +548,14 @@ export function AnalysisPage() {
   }, [stations]);
 
   const alertTrendOption = useMemo(() => {
-    const labels = trendAxis.labels;
+    const labels = alertTrendAxis.labels;
     const seed = stations.length * 13 + devices.length * 7 + stats.warn * 3 + stats.offline * 11;
     const clamp = (n: number) => Math.max(0, Math.round(n));
     const warnBase = Math.max(0, stats.warn);
     const offBase = Math.max(0, stats.offline);
 
-    const denseFactor = trendRange === "1h" ? 1.2 : trendRange === "6h" ? 1 : trendRange === "12h" ? 0.9 : trendRange === "24h" ? 0.8 : 0.6;
+    const denseFactor =
+      alertTrendRange === "1h" ? 1.2 : alertTrendRange === "6h" ? 1 : alertTrendRange === "12h" ? 0.9 : alertTrendRange === "24h" ? 0.8 : 0.6;
     const warnSeries = labels.map((_, idx) =>
       clamp(warnBase * (0.55 * denseFactor) + Math.sin((idx + seed) / 2.1) * 2 + (idx % 3 === 0 ? 1 : 0))
     );
@@ -606,7 +606,7 @@ export function AnalysisPage() {
         }
       ]
     };
-  }, [devices.length, stations.length, stats.offline, stats.warn, trendAxis.labels, trendRange]);
+  }, [alertTrendAxis.labels, alertTrendRange, devices.length, stations.length, stats.offline, stats.warn]);
 
   const anomalies: AnomalyRow[] = useMemo(() => {
     const sample = devices.slice(0, 6);
@@ -1002,13 +1002,13 @@ export function AnalysisPage() {
             <BaseCard title="站点风险分布">
               <ReactECharts option={riskDistributionOption} style={{ height: "100%" }} />
             </BaseCard>
-            <BaseCard title="告警趋势" extra={trendExtra}>
+            <BaseCard title="告警趋势" extra={<TrendRangePicker value={alertTrendRange} onChange={setAlertTrendRange} />}>
               <ReactECharts option={alertTrendOption} style={{ height: "100%" }} />
             </BaseCard>
-            <BaseCard title="环境趋势（温度 °C / 湿度 %）" extra={trendExtra}>
+            <BaseCard title="环境趋势（温度 °C / 湿度 %）" extra={<TrendRangePicker value={envTrendRange} onChange={setEnvTrendRange} />}>
               <ReactECharts option={tempHumOption} style={{ height: "100%" }} />
             </BaseCard>
-            <BaseCard title="振动趋势（加速度 mg / 陀螺仪 °/s）" extra={trendExtra}>
+            <BaseCard title="振动趋势（加速度 mg / 陀螺仪 °/s）" extra={<TrendRangePicker value={vibTrendRange} onChange={setVibTrendRange} />}>
               <ReactECharts option={vibrationOption} style={{ height: "100%" }} />
             </BaseCard>
           </div>
