@@ -1,7 +1,7 @@
 import "leaflet/dist/leaflet.css";
 
 import L from "leaflet";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Circle, MapContainer, Marker, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
 
 import type { Station } from "../api/client";
@@ -288,12 +288,30 @@ function MarkUserMoved(props: { userMovedRef: React.MutableRefObject<boolean> })
   return null;
 }
 
+function TrackZoom(props: { onZoomChange: (zoom: number) => void }) {
+  const map = useMap();
+  useEffect(() => {
+    props.onZoomChange(map.getZoom());
+  }, [map, props]);
+
+  useMapEvents({
+    zoomend: () => {
+      props.onZoomChange(map.getZoom());
+    }
+  });
+  return null;
+}
+
 export function RealMapView(props: RealMapViewProps) {
   const tdtKey = (import.meta.env.VITE_TDT_KEY as string | undefined) ?? "";
   const useTdt = Boolean(tdtKey);
-  const defaultLat = 22.6263;
-  const defaultLng = 110.1805;
+  const defaultLat = 22.6847;
+  const defaultLng = 110.1893;
   const userMovedRef = useRef(false);
+  const [zoom, setZoom] = useState(12);
+
+  const showAreaOverlays = zoom <= 13;
+  const showStationMarkers = zoom >= 14;
 
   const icons = useMemo(() => {
     const byId = new Map<string, L.DivIcon>();
@@ -394,6 +412,7 @@ export function RealMapView(props: RealMapViewProps) {
         <TileLayer url={fallbackTile.url} attribution={fallbackTile.attribution} maxZoom={18} maxNativeZoom={18} detectRetina updateWhenIdle />
       )}
       <RemoveLeafletAttributionPrefix />
+      <TrackZoom onZoomChange={setZoom} />
       <MarkUserMoved userMovedRef={userMovedRef} />
       <AutoFitBounds resetKey={props.resetKey} bounds={bounds} userMovedRef={userMovedRef} />
       <ClearSelectionOnMapClick
@@ -401,54 +420,59 @@ export function RealMapView(props: RealMapViewProps) {
           props.onSelectStationIds([]);
         }}
       />
-      <AreaOverlays overlays={areaOverlays} selectedStationIds={props.selectedStationIds} onSelectStationIds={props.onSelectStationIds} />
+      {showAreaOverlays ? (
+        <AreaOverlays overlays={areaOverlays} selectedStationIds={props.selectedStationIds} onSelectStationIds={props.onSelectStationIds} />
+      ) : null}
 
-      {props.stations.map((s) => {
-        const isSelected = props.selectedStationIds.includes(s.id);
-        const icon = icons.get(s.id);
-        if (!icon) return null;
-        const risk = riskText(s.risk);
-        const status = statusText(s.status);
-        const m = props.metricsByStationId?.[s.id];
+      {showStationMarkers
+        ? props.stations.map((s) => {
+            const isSelected = props.selectedStationIds.includes(s.id);
+            const icon = icons.get(s.id);
+            if (!icon) return null;
+            const risk = riskText(s.risk);
+            const status = statusText(s.status);
+            const m = props.metricsByStationId?.[s.id];
 
-        return (
-          <Marker
-            key={s.id}
-            position={[s.lat, s.lng]}
-            icon={icon}
-            eventHandlers={{
-              click: (e) => {
-                e.originalEvent?.stopPropagation?.();
-                e.originalEvent?.preventDefault?.();
-                const multi = Boolean(e.originalEvent && ("ctrlKey" in e.originalEvent ? (e.originalEvent as MouseEvent).ctrlKey : false)) ||
-                  Boolean(e.originalEvent && ("shiftKey" in e.originalEvent ? (e.originalEvent as MouseEvent).shiftKey : false));
+            return (
+              <Marker
+                key={s.id}
+                position={[s.lat, s.lng]}
+                icon={icon}
+                eventHandlers={{
+                  click: (e) => {
+                    e.originalEvent?.stopPropagation?.();
+                    e.originalEvent?.preventDefault?.();
+                    const multi =
+                      Boolean(e.originalEvent && ("ctrlKey" in e.originalEvent ? (e.originalEvent as MouseEvent).ctrlKey : false)) ||
+                      Boolean(e.originalEvent && ("shiftKey" in e.originalEvent ? (e.originalEvent as MouseEvent).shiftKey : false));
 
-                if (!multi) {
-                  props.onSelectStationIds([s.id]);
-                  return;
-                }
+                    if (!multi) {
+                      props.onSelectStationIds([s.id]);
+                      return;
+                    }
 
-                const set = new Set(props.selectedStationIds);
-                if (set.has(s.id)) set.delete(s.id);
-                else set.add(s.id);
-                props.onSelectStationIds(Array.from(set));
-              }
-            }}
-          >
-            <Tooltip className="desk-map-tooltip" direction="top" offset={[0, -12]} opacity={1} sticky>
-              <div style={{ fontWeight: 900 }}>{s.name}</div>
-              <div style={{ opacity: 0.9, fontSize: 12 }}>
-                {risk} · {status} · 传感器 {s.deviceCount}
-              </div>
-              {m ? (
-                <div style={{ opacity: 0.9, fontSize: 12 }}>
-                  在线 {m.deviceOnline} 预警 {m.deviceWarn} 离线 {m.deviceOffline}
-                </div>
-              ) : null}
-            </Tooltip>
-          </Marker>
-        );
-      })}
+                    const set = new Set(props.selectedStationIds);
+                    if (set.has(s.id)) set.delete(s.id);
+                    else set.add(s.id);
+                    props.onSelectStationIds(Array.from(set));
+                  }
+                }}
+              >
+                <Tooltip className="desk-map-tooltip" direction="top" offset={[0, -12]} opacity={1} sticky>
+                  <div style={{ fontWeight: 900 }}>{s.name}</div>
+                  <div style={{ opacity: 0.9, fontSize: 12 }}>
+                    {risk} · {status} · 传感器 {s.deviceCount}
+                  </div>
+                  {m ? (
+                    <div style={{ opacity: 0.9, fontSize: 12 }}>
+                      在线 {m.deviceOnline} 预警 {m.deviceWarn} 离线 {m.deviceOffline}
+                    </div>
+                  ) : null}
+                </Tooltip>
+              </Marker>
+            );
+          })
+        : null}
     </MapContainer>
   );
 }
