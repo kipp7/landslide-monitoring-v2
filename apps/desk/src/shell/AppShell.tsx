@@ -1,4 +1,4 @@
-import { App as AntApp, Button, Space, Tag, Typography } from "antd";
+import { App as AntApp, Button, Space, Typography } from "antd";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { useApi } from "../api/ApiProvider";
@@ -16,7 +16,6 @@ export function AppShell() {
   const user = useAuthStore((s) => s.user);
   const clearAuth = useAuthStore((s) => s.clear);
   const isAnalysis = location.pathname.startsWith("/app/analysis");
-  const showTopRight = !isAnalysis;
 
   const logout = async () => {
     modal.confirm({
@@ -41,21 +40,6 @@ export function AppShell() {
   return (
     <div className="desk-app">
       {isAnalysis ? null : <HoverSidebar />}
-      {showTopRight ? (
-        <div className="desk-topright">
-          <Space size={8}>
-            <Typography.Text type="secondary">{user?.name ?? "未登录"}</Typography.Text>
-            <Button
-              size="small"
-              onClick={() => {
-                void logout();
-              }}
-            >
-              退出
-            </Button>
-          </Space>
-        </div>
-      ) : null}
       <ErrorBoundary key={location.pathname}>
         <Outlet />
       </ErrorBoundary>

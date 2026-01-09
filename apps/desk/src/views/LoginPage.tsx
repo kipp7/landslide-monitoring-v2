@@ -121,11 +121,7 @@ export function LoginPage() {
             </div>
           </div>
 
-          <div className="desk-login-hero-foot">
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              当前为预览版本；正式交付将提供 Windows 11 桌面端。
-            </Typography.Text>
-          </div>
+          <div className="desk-login-hero-foot" />
         </div>
 
         <div className="desk-login-panel">
@@ -223,9 +219,7 @@ export function LoginPage() {
                 登录帮助
               </Button>
             </Space>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              提示：测试账号仅用于展厅演示；正式环境以实际短信服务为准。
-            </Typography.Text>
+            <span />
           </div>
         </div>
       </div>
