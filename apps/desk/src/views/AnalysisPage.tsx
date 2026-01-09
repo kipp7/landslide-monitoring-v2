@@ -129,6 +129,54 @@ function darkTooltip() {
   };
 }
 
+type TrendRange = "1h" | "6h" | "12h" | "24h" | "7d";
+
+function trendRangeText(r: TrendRange) {
+  if (r === "1h") return "1h";
+  if (r === "6h") return "6h";
+  if (r === "12h") return "12h";
+  if (r === "24h") return "24h";
+  return "7d";
+}
+
+function buildTrendAxis(range: TrendRange, anchorMs: number) {
+  if (range === "7d") {
+    const end = new Date(anchorMs);
+    end.setHours(0, 0, 0, 0);
+    const endMs = end.getTime();
+    const stepMs = 24 * 60 * 60 * 1000;
+    const count = 7;
+    const times = Array.from({ length: count }, (_, i) => new Date(endMs - (count - 1 - i) * stepMs));
+    const labels = times.map((t) => {
+      const m = String(t.getMonth() + 1).padStart(2, "0");
+      const d = String(t.getDate()).padStart(2, "0");
+      return `${m}-${d}`;
+    });
+    return { times, labels, stepMs };
+  }
+
+  const cfg: Record<Exclude<TrendRange, "7d">, { count: number; stepMs: number }> = {
+    "1h": { count: 12, stepMs: 5 * 60 * 1000 },
+    "6h": { count: 12, stepMs: 30 * 60 * 1000 },
+    "12h": { count: 12, stepMs: 60 * 60 * 1000 },
+    "24h": { count: 12, stepMs: 2 * 60 * 60 * 1000 }
+  };
+
+  const { count, stepMs } = cfg[range];
+  const endMs = Math.floor(anchorMs / stepMs) * stepMs;
+  const times = Array.from({ length: count }, (_, i) => new Date(endMs - (count - 1 - i) * stepMs));
+  const labels = times.map((t) => {
+    const h = String(t.getHours()).padStart(2, "0");
+    const m = String(t.getMinutes()).padStart(2, "0");
+    return `${h}:${m}`;
+  });
+  return { times, labels, stepMs };
+}
+
+function clampNum(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n));
+}
+
 export function AnalysisPage() {
   const api = useApi();
   const navigate = useNavigate();
@@ -146,6 +194,8 @@ export function AnalysisPage() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [alertOn, setAlertOn] = useState(false);
   const [now, setNow] = useState<Date>(() => new Date());
+  const [trendRange, setTrendRange] = useState<TrendRange>("12h");
+  const [trendAxisNow, setTrendAxisNow] = useState<number>(() => Date.now());
   const [online, setOnline] = useState<boolean>(() => (typeof navigator !== "undefined" ? navigator.onLine : true));
   const [rainRange, setRainRange] = useState<"7d" | "24h">("7d");
   const [selectedStationIds, setSelectedStationIds] = useState<string[]>([]);
@@ -167,6 +217,13 @@ export function AnalysisPage() {
     return () => {
       window.clearInterval(t);
     };
+  }, []);
+
+  useEffect(() => {
+    const t = window.setInterval(() => {
+      setTrendAxisNow(Date.now());
+    }, 30000);
+    return () => window.clearInterval(t);
   }, []);
 
   useEffect(() => {
@@ -261,11 +318,51 @@ export function AnalysisPage() {
     };
   }, []);
 
+  const trendAxis = useMemo(() => buildTrendAxis(trendRange, trendAxisNow), [trendAxisNow, trendRange]);
+
+  const trendExtra = useMemo(() => {
+    const opts: TrendRange[] = ["1h", "6h", "12h", "24h", "7d"];
+    return (
+      <div className="desk-analysis-range-extra" aria-label="趋势时间窗">
+        <Space.Compact>
+          {opts.map((r) => (
+            <Button
+              key={r}
+              size="small"
+              type={trendRange === r ? "primary" : "default"}
+              onClick={() => setTrendRange(r)}
+            >
+              {trendRangeText(r)}
+            </Button>
+          ))}
+        </Space.Compact>
+      </div>
+    );
+  }, [trendRange]);
+
   const tempHumOption = useMemo(() => {
     const { axisLabel: _unusedAxisLabel, ...baseXAxis } = chartBase.xAxis as Record<string, unknown>;
+    const seed = Math.round(
+      stable01(`${String(stations.length)}-${String(devices.length)}-${String(user?.id ?? user?.name ?? "")}-env`) * 10000
+    );
+
+    const temp = trendAxis.times.map((t, idx) => {
+      const hour = t.getHours() + t.getMinutes() / 60;
+      const base = 16.2 + Math.sin((hour / 24) * Math.PI * 2) * 1.6;
+      const wobble = (stable01(`${String(seed)}-t-${String(t.getTime())}-${String(idx)}`) - 0.5) * 0.6;
+      return Number((base + wobble).toFixed(1));
+    });
+
+    const hum = trendAxis.times.map((t, idx) => {
+      const hour = t.getHours() + t.getMinutes() / 60;
+      const base = 82.5 + Math.cos((hour / 24) * Math.PI * 2) * 4.5;
+      const wobble = (stable01(`${String(seed)}-h-${String(t.getTime())}-${String(idx)}`) - 0.5) * 1.8;
+      return clampNum(Number((base + wobble).toFixed(0)), 60, 98);
+    });
+
     return {
       ...chartBase,
-      grid: { left: "0%", right: "0%", top: 30, bottom: 0, containLabel: true },
+      grid: { left: "6%", right: "6%", top: 36, bottom: 18, containLabel: true },
       legend: {
         top: 2,
         left: "center",
@@ -275,7 +372,7 @@ export function AnalysisPage() {
       },
       xAxis: {
         ...baseXAxis,
-        data: Array.from({ length: 12 }, (_, i) => `${String(i + 1)}时`),
+        data: trendAxis.labels,
         axisLabel: { ...darkAxis().axisLabel, hideOverlap: true }
       },
       yAxis: [
@@ -288,7 +385,7 @@ export function AnalysisPage() {
           type: "line",
           smooth: true,
           showSymbol: false,
-          data: [14, 14.3, 14.1, 14.8, 15.2, 15.9, 16.1, 16.2, 16.5, 16.8, 16.4, 16.0],
+          data: temp,
           lineStyle: { width: 2, color: "#22d3ee" },
           areaStyle: { color: "rgba(34, 211, 238, 0.18)" }
         },
@@ -298,19 +395,37 @@ export function AnalysisPage() {
           yAxisIndex: 1,
           smooth: true,
           showSymbol: false,
-          data: [82, 83, 84, 85, 86, 87, 86, 85, 84, 83, 83, 82],
+          data: hum,
           lineStyle: { width: 2, color: "#60a5fa" },
           areaStyle: { color: "rgba(96, 165, 250, 0.14)" }
         }
       ]
     };
-  }, [chartBase]);
+  }, [chartBase, devices.length, stations.length, trendAxis.labels, trendAxis.times, user?.id, user?.name]);
 
   const vibrationOption = useMemo(() => {
     const { axisLabel: _unusedAxisLabel, ...baseXAxis } = chartBase.xAxis as Record<string, unknown>;
+    const seed = Math.round(
+      stable01(`${String(stations.length)}-${String(devices.length)}-${String(user?.id ?? user?.name ?? "")}-vib`) * 10000
+    );
+
+    const acc = trendAxis.times.map((t, idx) => {
+      const hour = t.getHours() + t.getMinutes() / 60;
+      const base = 4.2 + Math.sin((hour / 24) * Math.PI * 2) * 1.2;
+      const spike = (idx % 6 === 0 ? 0.9 : 0) + (stable01(`${String(seed)}-a-${String(t.getTime())}-${String(idx)}`) - 0.5) * 0.8;
+      return clampNum(Number((base + spike).toFixed(1)), 0, 12);
+    });
+
+    const gyro = trendAxis.times.map((t, idx) => {
+      const hour = t.getHours() + t.getMinutes() / 60;
+      const base = 0.9 + Math.cos((hour / 24) * Math.PI * 2) * 0.35;
+      const spike = (idx % 7 === 0 ? 0.35 : 0) + (stable01(`${String(seed)}-g-${String(t.getTime())}-${String(idx)}`) - 0.5) * 0.25;
+      return clampNum(Number((base + spike).toFixed(2)), 0, 4);
+    });
+
     return {
       ...chartBase,
-      grid: { left: "0%", right: "0%", top: 30, bottom: 0, containLabel: true },
+      grid: { left: "6%", right: "6%", top: 36, bottom: 18, containLabel: true },
       legend: {
         top: 2,
         left: "center",
@@ -320,7 +435,7 @@ export function AnalysisPage() {
       },
       xAxis: {
         ...baseXAxis,
-        data: Array.from({ length: 12 }, (_, i) => `${String(i + 1)}时`),
+        data: trendAxis.labels,
         axisLabel: { ...darkAxis().axisLabel, hideOverlap: true }
       },
       yAxis: [
@@ -333,7 +448,7 @@ export function AnalysisPage() {
           type: "line",
           smooth: true,
           showSymbol: false,
-          data: [2, 3, 2, 4, 5, 6, 5, 7, 6, 8, 6, 5],
+          data: acc,
           lineStyle: { width: 2, color: "#34d399" },
           areaStyle: { color: "rgba(52, 211, 153, 0.12)" }
         },
@@ -343,13 +458,13 @@ export function AnalysisPage() {
           yAxisIndex: 1,
           smooth: true,
           showSymbol: false,
-          data: [0.2, 0.4, 0.3, 0.6, 0.8, 1.1, 0.9, 1.3, 1.1, 1.6, 1.2, 1.0],
+          data: gyro,
           lineStyle: { width: 2, color: "#fbbf24" },
           areaStyle: { color: "rgba(251, 191, 36, 0.10)" }
         }
       ]
     };
-  }, [chartBase]);
+  }, [chartBase, devices.length, stations.length, trendAxis.labels, trendAxis.times, user?.id, user?.name]);
 
   const rainfallOption = useMemo(() => {
     const is24h = rainRange === "24h";
@@ -434,21 +549,26 @@ export function AnalysisPage() {
   }, [stations]);
 
   const alertTrendOption = useMemo(() => {
-    const labels = Array.from({ length: 12 }, (_, i) => `${String(12 - i).padStart(2, "0")}:00`).reverse();
+    const labels = trendAxis.labels;
     const seed = stations.length * 13 + devices.length * 7 + stats.warn * 3 + stats.offline * 11;
     const clamp = (n: number) => Math.max(0, Math.round(n));
     const warnBase = Math.max(0, stats.warn);
     const offBase = Math.max(0, stats.offline);
 
-    const warnSeries = labels.map((_, idx) => clamp(warnBase * 0.55 + Math.sin((idx + seed) / 2.1) * 2 + (idx % 3 === 0 ? 1 : 0)));
-    const offlineSeries = labels.map((_, idx) => clamp(offBase * 0.35 + Math.cos((idx + seed) / 3.2) * 1.2 + (idx % 4 === 0 ? 1 : 0)));
+    const denseFactor = trendRange === "1h" ? 1.2 : trendRange === "6h" ? 1 : trendRange === "12h" ? 0.9 : trendRange === "24h" ? 0.8 : 0.6;
+    const warnSeries = labels.map((_, idx) =>
+      clamp(warnBase * (0.55 * denseFactor) + Math.sin((idx + seed) / 2.1) * 2 + (idx % 3 === 0 ? 1 : 0))
+    );
+    const offlineSeries = labels.map((_, idx) =>
+      clamp(offBase * (0.35 * denseFactor) + Math.cos((idx + seed) / 3.2) * 1.2 + (idx % 4 === 0 ? 1 : 0))
+    );
     const total = labels.map((_, idx) => (warnSeries[idx] ?? 0) + (offlineSeries[idx] ?? 0));
 
     return {
       backgroundColor: "transparent",
       textStyle: { color: "rgba(226, 232, 240, 0.9)" },
       tooltip: { trigger: "axis", ...darkTooltip() },
-      grid: { left: "0%", right: "0%", top: 30, bottom: 0, containLabel: true },
+      grid: { left: "6%", right: "6%", top: 36, bottom: 18, containLabel: true },
       legend: {
         top: 2,
         left: "center",
@@ -457,7 +577,7 @@ export function AnalysisPage() {
         itemHeight: 10
       },
       xAxis: { type: "category", data: labels, ...darkAxis() },
-      yAxis: { type: "value", ...darkAxis() },
+      yAxis: { type: "value", minInterval: 1, ...darkAxis() },
       series: [
         {
           name: "预警",
@@ -486,7 +606,7 @@ export function AnalysisPage() {
         }
       ]
     };
-  }, [devices.length, stations.length, stats.offline, stats.warn]);
+  }, [devices.length, stations.length, stats.offline, stats.warn, trendAxis.labels, trendRange]);
 
   const anomalies: AnomalyRow[] = useMemo(() => {
     const sample = devices.slice(0, 6);
@@ -877,18 +997,18 @@ export function AnalysisPage() {
       ) : null}
 
       <div className="desk-analysis-content">
-        <div className="desk-analysis-grid">
+          <div className="desk-analysis-grid">
           <div className="desk-analysis-leftcol">
             <BaseCard title="站点风险分布">
               <ReactECharts option={riskDistributionOption} style={{ height: "100%" }} />
             </BaseCard>
-            <BaseCard title="告警趋势（近 12 小时）">
+            <BaseCard title="告警趋势" extra={trendExtra}>
               <ReactECharts option={alertTrendOption} style={{ height: "100%" }} />
             </BaseCard>
-            <BaseCard title="环境趋势（温度 °C / 湿度 %）">
+            <BaseCard title="环境趋势（温度 °C / 湿度 %）" extra={trendExtra}>
               <ReactECharts option={tempHumOption} style={{ height: "100%" }} />
             </BaseCard>
-            <BaseCard title="振动趋势（加速度 mg / 陀螺仪 °/s）">
+            <BaseCard title="振动趋势（加速度 mg / 陀螺仪 °/s）" extra={trendExtra}>
               <ReactECharts option={vibrationOption} style={{ height: "100%" }} />
             </BaseCard>
           </div>
