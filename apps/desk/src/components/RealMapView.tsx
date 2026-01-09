@@ -1,7 +1,7 @@
 import "leaflet/dist/leaflet.css";
 
 import L from "leaflet";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Circle, MapContainer, Marker, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
 
 import type { Station } from "../api/client";
@@ -239,10 +239,17 @@ function AreaOverlays(props: {
   );
 }
 
-function RecenterOnReset(props: { resetKey: number | undefined; bounds: L.LatLngBoundsExpression }) {
+function AutoFitBounds(props: { resetKey: number | undefined; bounds: L.LatLngBoundsExpression; userMovedRef: React.MutableRefObject<boolean> }) {
   const map = useMap();
+  const prevResetRef = useRef<number | undefined>(undefined);
   useEffect(() => {
-    if (props.resetKey == null) return;
+    const resetChanged = props.resetKey != null && props.resetKey !== prevResetRef.current;
+    if (resetChanged) {
+      prevResetRef.current = props.resetKey;
+      props.userMovedRef.current = false;
+    }
+
+    if (props.userMovedRef.current) return;
     map.fitBounds(props.bounds, { padding: [24, 24] });
   }, [map, props.bounds, props.resetKey]);
   return null;
@@ -269,11 +276,24 @@ function ClearSelectionOnMapClick(props: { onClear: () => void }) {
   return null;
 }
 
+function MarkUserMoved(props: { userMovedRef: React.MutableRefObject<boolean> }) {
+  useMapEvents({
+    dragstart: () => {
+      props.userMovedRef.current = true;
+    },
+    zoomstart: () => {
+      props.userMovedRef.current = true;
+    }
+  });
+  return null;
+}
+
 export function RealMapView(props: RealMapViewProps) {
   const tdtKey = (import.meta.env.VITE_TDT_KEY as string | undefined) ?? "";
   const useTdt = Boolean(tdtKey);
   const defaultLat = 22.6263;
   const defaultLng = 110.1805;
+  const userMovedRef = useRef(false);
 
   const icons = useMemo(() => {
     const byId = new Map<string, L.DivIcon>();
@@ -340,8 +360,8 @@ export function RealMapView(props: RealMapViewProps) {
 
   return (
     <MapContainer
-      bounds={bounds}
-      boundsOptions={{ padding: [24, 24] }}
+      center={[defaultLat, defaultLng]}
+      zoom={12}
       style={{ height: "100%", width: "100%" }}
       zoomControl={false}
       doubleClickZoom
@@ -374,7 +394,8 @@ export function RealMapView(props: RealMapViewProps) {
         <TileLayer url={fallbackTile.url} attribution={fallbackTile.attribution} maxZoom={18} maxNativeZoom={18} detectRetina updateWhenIdle />
       )}
       <RemoveLeafletAttributionPrefix />
-      <RecenterOnReset resetKey={props.resetKey} bounds={bounds} />
+      <MarkUserMoved userMovedRef={userMovedRef} />
+      <AutoFitBounds resetKey={props.resetKey} bounds={bounds} userMovedRef={userMovedRef} />
       <ClearSelectionOnMapClick
         onClear={() => {
           props.onSelectStationIds([]);
