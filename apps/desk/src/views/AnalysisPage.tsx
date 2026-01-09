@@ -317,6 +317,13 @@ export function AnalysisPage() {
     };
   }, [devices, stations.length]);
 
+  const stationStats = useMemo(() => {
+    const online = stations.filter((s) => s.status === "online").length;
+    const warn = stations.filter((s) => s.status === "warning").length;
+    const offline = stations.filter((s) => s.status === "offline").length;
+    return { online, warn, offline };
+  }, [stations]);
+
   useEffect(() => {
     const shouldAlert = stats.offline > 0 || stats.warn > 0;
     setAlertOn(shouldAlert);
@@ -969,9 +976,15 @@ export function AnalysisPage() {
           </div>
           <div className="desk-analysis-meta-group">
             <Tag color="cyan">站点 {stats.stations}</Tag>
-            <Tag color="green">在线 {stats.online}</Tag>
-            <Tag color={hasWarn ? "orange" : "blue"}>预警 {stats.warn}</Tag>
-            <Tag color={hasCritical ? "red" : "blue"}>离线 {stats.offline}</Tag>
+            <Tag color="geekblue">设备 {stats.devices}</Tag>
+            <Tag color="green">设备在线 {stats.online}</Tag>
+            <Tag color={hasWarn ? "orange" : "blue"}>设备预警 {stats.warn}</Tag>
+            <Tag color={hasCritical ? "red" : "blue"}>设备离线 {stats.offline}</Tag>
+            {stats.stations ? (
+              <span className="desk-analysis-meta-muted">
+                站点：在线 {stationStats.online} / 预警 {stationStats.warn} / 离线 {stationStats.offline}
+              </span>
+            ) : null}
             <span className="desk-analysis-meta-muted">更新 {lastUpdate || "—"}</span>
           </div>
         </div>
@@ -1032,6 +1045,7 @@ export function AnalysisPage() {
               extra={
                 <div className="desk-analysis-map-extra">
                   <Tag color={hasCritical ? "red" : hasWarn ? "orange" : "green"}>{hasCritical ? "告警" : hasWarn ? "预警" : "正常"}</Tag>
+                  <span className="desk-analysis-switch-label">自动刷新</span>
                   <Switch checked={autoRefresh} size="small" onChange={setAutoRefresh} />
                   <Button
                     size="small"

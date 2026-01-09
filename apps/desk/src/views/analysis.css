@@ -89,6 +89,12 @@
   transform: scale(0.92);
 }
 
+.desk-analysis-switch-label {
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(148, 163, 184, 0.92);
+}
+
 .desk-analysis-range-extra {
   display: flex;
   align-items: center;
