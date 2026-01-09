@@ -118,8 +118,8 @@ function makeStations(cfg: MockSimConfig): Station[] {
   const defs: Array<{ id: string; name: string; areaIdx: number; dLat: number; dLng: number; baseRisk: RiskLevel; deviceCount: number }> = [
     // Keep all stations clustered on the mountain (within ~500m) to match the exhibition storyline.
     // Reference points: center (22.6847, 110.1893), top (22.6850, 110.1890), foot (22.6844, 110.1896)
-    { id: "st_a", name: "挂傍山中心监测站", areaIdx: 0, dLat: 0.0, dLng: 0.0, baseRisk: "high", deviceCount: 9 },
-    { id: "st_b", name: "挂傍山坡顶监测点", areaIdx: 0, dLat: 0.0003, dLng: -0.0003, baseRisk: "high", deviceCount: 8 },
+    { id: "st_a", name: "挂傍山中心监测站", areaIdx: 0, dLat: 0.0, dLng: 0.0, baseRisk: "mid", deviceCount: 9 },
+    { id: "st_b", name: "挂傍山坡顶监测点", areaIdx: 0, dLat: 0.0003, dLng: -0.0003, baseRisk: "mid", deviceCount: 8 },
     { id: "st_c", name: "挂傍山坡脚基准点", areaIdx: 0, dLat: -0.0003, dLng: 0.0003, baseRisk: "mid", deviceCount: 7 },
     { id: "st_d", name: "挂傍山东侧边坡点", areaIdx: 0, dLat: -0.0001, dLng: 0.0007, baseRisk: "mid", deviceCount: 7 },
     { id: "st_e", name: "挂傍山西侧边坡点", areaIdx: 0, dLat: 0.0001, dLng: -0.0007, baseRisk: "low", deviceCount: 6 },
@@ -134,7 +134,8 @@ function makeStations(cfg: MockSimConfig): Station[] {
     const rainRisk = r24 >= 55 ? 2 : r24 >= 25 ? 1 : 0;
     const baseScore = d.baseRisk === "high" ? 2 : d.baseRisk === "mid" ? 1 : 0;
     const score = Math.min(2, baseScore + rainRisk + riskBoost);
-    const risk: RiskLevel = score >= 2 ? "high" : score >= 1 ? "mid" : "low";
+    // Exhibition default: avoid "high risk" to reduce anxiety for leaders; max is "mid".
+    const risk: RiskLevel = score >= 1 ? "mid" : "low";
 
     let status: OnlineStatus = score >= 2 ? "warning" : score >= 1 && r24 >= 30 ? "warning" : "online";
     if (cfg.scenario === "comms_outage" && (d.id === "st_e" || d.id === "st_f")) status = "offline";
