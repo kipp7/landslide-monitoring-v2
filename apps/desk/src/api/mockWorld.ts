@@ -43,7 +43,8 @@ function isoAt(date: Date) {
 }
 
 function scenarioBias(scenario: DemoScenario) {
-  if (scenario === "normal") return { rain: 0.55, comms: 0.25, slide: 0.4 };
+  // "normal" is used for exhibition defaults: no rain, no offline, mild warnings only.
+  if (scenario === "normal") return { rain: 0.0, comms: 0.0, slide: 0.55 };
   if (scenario === "rainstorm") return { rain: 1.25, comms: 0.35, slide: 0.9 };
   if (scenario === "landslide_warning") return { rain: 0.95, comms: 0.25, slide: 1.35 };
   return { rain: 0.85, comms: 0.95, slide: 0.8 };

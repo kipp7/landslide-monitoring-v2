@@ -33,7 +33,10 @@ export function loadMockSimConfig(): MockSimConfig {
   const seed = typeof parsed?.seed === "string" && parsed.seed ? parsed.seed : "YLNU-DEMO";
   const speedRaw = typeof parsed?.speed === "number" ? parsed.speed : 30;
   const speed = clampNumber(Math.round(speedRaw), 1, 720);
-  const scenario = parsed?.scenario === "normal" || parsed?.scenario === "rainstorm" || parsed?.scenario === "landslide_warning" || parsed?.scenario === "comms_outage" ? parsed.scenario : "rainstorm";
+  const scenario =
+    parsed?.scenario === "normal" || parsed?.scenario === "rainstorm" || parsed?.scenario === "landslide_warning" || parsed?.scenario === "comms_outage"
+      ? parsed.scenario
+      : "normal";
   return { seed, speed, scenario };
 }
 
@@ -85,4 +88,3 @@ export function resetMockSimulation(opts?: { keepSeed?: boolean }) {
   localStorage.removeItem(CLOCK_KEY);
   localStorage.removeItem("desk.mock.baselines.v1");
 }
-

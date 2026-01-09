@@ -4,7 +4,7 @@ import ReactECharts from "echarts-for-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import type { Device, Station } from "../api/client";
+import type { Device, Station, WeeklyTrend } from "../api/client";
 import { useApi } from "../api/ApiProvider";
 import { BaseCard } from "../components/BaseCard";
 import { MapSwitchPanel, type MapType } from "../components/MapSwitchPanel";
@@ -207,6 +207,7 @@ export function AnalysisPage() {
   const [lastUpdate, setLastUpdate] = useState<string>("");
   const [stations, setStations] = useState<Station[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
+  const [weeklyTrend, setWeeklyTrend] = useState<WeeklyTrend | null>(null);
   const [alertOn, setAlertOn] = useState(false);
   const [now, setNow] = useState<Date>(() => new Date());
   const [alertTrendRange, setAlertTrendRange] = useState<TrendRange>("12h");
@@ -264,10 +265,11 @@ export function AnalysisPage() {
       else setRefreshing(true);
 
       try {
-        const [s, d] = await Promise.all([api.stations.list(), api.devices.list()]);
+        const [s, d, w] = await Promise.all([api.stations.list(), api.devices.list(), api.dashboard.getWeeklyTrend()]);
         if (abort.signal.aborted) return;
         setStations(s);
         setDevices(d);
+        setWeeklyTrend(w);
         setLastUpdate(new Date().toLocaleString("zh-CN"));
       } finally {
         if (!abort.signal.aborted) {
@@ -467,8 +469,12 @@ export function AnalysisPage() {
 
   const rainfallOption = useMemo(() => {
     const is24h = rainRange === "24h";
-    const labels = is24h ? Array.from({ length: 12 }, (_, i) => `${String(i * 2).padStart(2, "0")}:00`) : ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
-    const data = is24h ? [0, 0.6, 0.8, 2.6, 3.2, 1.8, 0.9, 0.5, 1.2, 2.8, 1.1, 0.4] : [12, 8, 15, 6, 9, 18, 11];
+    const weekLabels = weeklyTrend?.labels?.length ? weeklyTrend.labels : ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
+    const weekData = weeklyTrend?.rainfallMm?.length ? weeklyTrend.rainfallMm : [0, 0, 0, 0, 0, 0, 0];
+
+    const labels = is24h ? Array.from({ length: 12 }, (_, i) => `${String(i * 2).padStart(2, "0")}:00`) : weekLabels;
+    const hasAnyRain = weekData.some((v) => (Number.isFinite(v) ? v : 0) > 0.05);
+    const data = is24h ? (hasAnyRain ? [0, 0.6, 0.8, 2.6, 3.2, 1.8, 0.9, 0.5, 1.2, 2.8, 1.1, 0.4] : new Array(12).fill(0)) : weekData;
 
     return {
       backgroundColor: "transparent",
@@ -487,11 +493,13 @@ export function AnalysisPage() {
         }
       ]
     };
-  }, [rainRange]);
+  }, [rainRange, weeklyTrend]);
 
   const rainSignal = useMemo(() => {
     const is24h = rainRange === "24h";
-    const data = is24h ? [0, 0.6, 0.8, 2.6, 3.2, 1.8, 0.9, 0.5, 1.2, 2.8, 1.1, 0.4] : [12, 8, 15, 6, 9, 18, 11];
+    const weekData = weeklyTrend?.rainfallMm?.length ? weeklyTrend.rainfallMm : [0, 0, 0, 0, 0, 0, 0];
+    const hasAnyRain = weekData.some((v) => (Number.isFinite(v) ? v : 0) > 0.05);
+    const data = is24h ? (hasAnyRain ? [0, 0.6, 0.8, 2.6, 3.2, 1.8, 0.9, 0.5, 1.2, 2.8, 1.1, 0.4] : new Array(12).fill(0)) : weekData;
     if (is24h) {
       const max = Math.max(...data);
       const severity = max >= 3 ? "高" : max >= 1.6 ? "中" : "低";
@@ -502,7 +510,7 @@ export function AnalysisPage() {
     const severity = sum >= 60 ? "高" : sum >= 35 ? "中" : "低";
     const hint = sum >= 60 ? "累积雨量较大" : sum >= 35 ? "累积雨量偏高" : "累积雨量偏低";
     return { mode: "7d" as const, max: Math.max(...data), sum, severity, hint };
-  }, [rainRange]);
+  }, [rainRange, weeklyTrend]);
 
   const riskDistributionOption = useMemo(() => {
     const high = stations.filter((s) => s.risk === "high").length;
