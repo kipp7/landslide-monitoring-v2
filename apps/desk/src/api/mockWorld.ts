@@ -79,29 +79,40 @@ function sumRain(ts: Date, stationId: string, hours: number, cfg: MockSimConfig)
 
 function deviceCatalog(stations: Station[]): Array<Omit<Device, "stationName" | "status" | "lastSeenAt">> {
   const rows: Array<Omit<Device, "stationName" | "status" | "lastSeenAt">> = [];
-  const push = (stationId: string, type: DeviceType, name: string, suffix: string) => {
+  const typeName = (type: DeviceType) => {
+    if (type === "gnss") return "GNSS";
+    if (type === "rain") return "雨量计";
+    if (type === "tilt") return "倾角计";
+    if (type === "temp_hum") return "温湿度";
+    return "摄像头";
+  };
+
+  const push = (stationId: string, type: DeviceType, suffix: string) => {
+    const suf = stationId.slice(-1).toUpperCase();
     rows.push({
       id: `${stationId}_${type}_${suffix}`,
-      name,
+      name: `${typeName(type)}-${suf}${suffix}`,
       stationId,
       type
     });
   };
 
   for (const st of stations) {
-    const suf = st.id.slice(-1).toUpperCase();
+    const target = Math.max(0, Math.round(st.deviceCount ?? 0));
+    const base: DeviceType[] = ["gnss", "rain", "tilt", "temp_hum", "camera"];
 
-    // Base sensors (5)
-    push(st.id, "gnss", `GNSS-${suf}01`, "01");
-    push(st.id, "rain", `雨量计-${suf}01`, "01");
-    push(st.id, "tilt", `倾角计-${suf}01`, "01");
-    push(st.id, "temp_hum", `温湿度-${suf}01`, "01");
-    push(st.id, "camera", `摄像头-${suf}01`, "01");
+    const add = (type: DeviceType) => {
+      const idx = rows.filter((r) => r.stationId === st.id && r.type === type).length + 1;
+      const suffix = String(idx).padStart(2, "0");
+      push(st.id, type, suffix);
+    };
 
-    // Add redundancy for higher-profile stations (stable by station.deviceCount)
-    if (st.deviceCount >= 7) push(st.id, "gnss", `GNSS-${suf}02`, "02");
-    if (st.deviceCount >= 8) push(st.id, "tilt", `倾角计-${suf}02`, "02");
-    if (st.deviceCount >= 9) push(st.id, "camera", `摄像头-${suf}02`, "02");
+    // Guarantee at least the base set, then fill up to station.deviceCount for consistent KPIs.
+    for (const t of base) add(t);
+    while (rows.filter((r) => r.stationId === st.id).length < Math.max(base.length, target)) {
+      const cycle = base[rows.filter((r) => r.stationId === st.id).length % base.length] ?? "gnss";
+      add(cycle);
+    }
   }
 
   return rows;

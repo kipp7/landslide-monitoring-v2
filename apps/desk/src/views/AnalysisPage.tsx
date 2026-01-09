@@ -642,7 +642,6 @@ export function AnalysisPage() {
 
   const hasCritical = stats.offline > 0;
   const hasWarn = stats.warn > 0;
-  const apiModeLabel = apiMode === "mock" ? "演示环境" : "联调环境";
   const selectedStations = useMemo(() => {
     if (!selectedStationIds.length) return [];
     const set = new Set(selectedStationIds);
@@ -970,7 +969,6 @@ export function AnalysisPage() {
             <span className="desk-analysis-meta-muted">{now.toLocaleTimeString("zh-CN")}</span>
           </div>
           <div className="desk-analysis-meta-group">
-            <Tag color={apiMode === "mock" ? "geekblue" : "blue"}>{apiModeLabel}</Tag>
             <Tag color={online ? "green" : "red"}>{online ? "网络正常" : "网络离线"}</Tag>
             <Tag color="cyan">{user?.name ?? "未登录"}</Tag>
           </div>
@@ -1044,17 +1042,8 @@ export function AnalysisPage() {
               }
               extra={
                 <div className="desk-analysis-map-extra">
-                  <Tag color={hasCritical ? "red" : hasWarn ? "orange" : "green"}>{hasCritical ? "告警" : hasWarn ? "预警" : "正常"}</Tag>
                   <span className="desk-analysis-switch-label">自动刷新</span>
                   <Switch checked={autoRefresh} size="small" onChange={setAutoRefresh} />
-                  <Button
-                    size="small"
-                    onClick={() => {
-                      void loadData({ silent: true });
-                    }}
-                  >
-                    刷新
-                  </Button>
                   <Button
                     size="small"
                     onClick={() => {
@@ -1499,7 +1488,6 @@ export function AnalysisPage() {
                       </button>
                     ))}
                     <span className="desk-ai2-spacer" />
-                    <Tag color={apiMode === "mock" ? "geekblue" : "blue"}>演示</Tag>
                   </div>
 
                   {aiTab === "区域研判" ? (
