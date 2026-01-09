@@ -199,7 +199,6 @@ export function AnalysisPage() {
   const reducedMotion = useSettingsStore((s) => s.reducedMotion);
   const terrainQuality = useSettingsStore((s) => s.terrainQuality);
   const alertAtmosphere = useSettingsStore((s) => s.alertAtmosphere);
-  const setAlertAtmosphere = useSettingsStore((s) => s.setAlertAtmosphere);
   const user = useAuthStore((s) => s.user);
   const [mapType, setMapType] = useState<MapType>("卫星图");
   const [loading, setLoading] = useState(true);
@@ -1033,14 +1032,7 @@ export function AnalysisPage() {
               extra={
                 <div className="desk-analysis-map-extra">
                   <Tag color={hasCritical ? "red" : hasWarn ? "orange" : "green"}>{hasCritical ? "告警" : hasWarn ? "预警" : "正常"}</Tag>
-                  <div className="desk-analysis-toggle">
-                    <span className="label">自动刷新</span>
-                    <Switch checked={autoRefresh} size="small" onChange={setAutoRefresh} />
-                  </div>
-                  <div className="desk-analysis-toggle">
-                    <span className="label">预警氛围</span>
-                    <Switch checked={alertAtmosphere} size="small" onChange={setAlertAtmosphere} disabled={!alertOn} />
-                  </div>
+                  <Switch checked={autoRefresh} size="small" onChange={setAutoRefresh} />
                   <Button
                     size="small"
                     onClick={() => {
