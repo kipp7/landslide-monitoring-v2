@@ -133,12 +133,13 @@ function mergeFromApi(existing: MonitoringStation[], fromApi: Station[], devices
       locationName: prev?.locationName ?? st.area,
       description: prev?.description ?? "用于统一管理监测站配置、图表图例和传感器设置",
       chartLegendName: prev?.chartLegendName ?? st.name,
-      riskLevel: prev?.riskLevel ?? st.risk,
-      status: prev?.status ?? st.status,
+      // Always use API risk/status to keep all pages consistent (exhibition mode).
+      riskLevel: st.risk,
+      status: st.status,
       lat: st.lat,
       lng: st.lng,
-      deviceCount: st.deviceCount,
-      sensorTypes: prev?.sensorTypes?.length ? prev.sensorTypes : sensorTypes,
+      deviceCount: ds.length || st.deviceCount,
+      sensorTypes,
       lastDataTime: prev?.lastDataTime ?? lastDataTime
     });
   }
@@ -163,31 +164,12 @@ function hierarchyData(stations: MonitoringStation[]) {
     network_name: "挂傍山立体监测网络",
     network_code: "GBS-N001",
     network_type: "立体监测网络",
-    configured_station_count: 3,
+    configured_station_count: stations.length,
     actual_station_count: stations.length,
     online_stations: onlineCount
   };
 
-  const additionalRegions = [
-    {
-      region_name: "玉林师范学院东校区",
-      region_code: "YLNU",
-      network_count: 1,
-      station_count: 2,
-      online_stations: 1,
-      region_coverage_area: 0.45
-    },
-    {
-      region_name: "南流江流域监测区",
-      region_code: "NLJ",
-      network_count: 2,
-      station_count: 6,
-      online_stations: 5,
-      region_coverage_area: 2.15
-    }
-  ];
-
-  return { mainRegion, mainNetwork, additionalRegions, allRegions: [mainRegion, ...additionalRegions] };
+  return { mainRegion, mainNetwork, additionalRegions: [], allRegions: [mainRegion] };
 }
 
 export function StationManagementPanel(props: { className?: string; style?: React.CSSProperties; initialStationId?: string | null }) {

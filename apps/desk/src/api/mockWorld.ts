@@ -99,7 +99,9 @@ function deviceCatalog(stations: Station[]): Array<Omit<Device, "stationName" | 
 
   for (const st of stations) {
     const target = Math.max(0, Math.round(st.deviceCount ?? 0));
+    // Keep exactly one GNSS per station to simplify baseline management and exhibition narrative.
     const base: DeviceType[] = ["gnss", "rain", "tilt", "temp_hum", "camera"];
+    const extras: DeviceType[] = ["tilt", "camera", "temp_hum", "rain"];
 
     const add = (type: DeviceType) => {
       const idx = rows.filter((r) => r.stationId === st.id && r.type === type).length + 1;
@@ -110,7 +112,8 @@ function deviceCatalog(stations: Station[]): Array<Omit<Device, "stationName" | 
     // Guarantee at least the base set, then fill up to station.deviceCount for consistent KPIs.
     for (const t of base) add(t);
     while (rows.filter((r) => r.stationId === st.id).length < Math.max(base.length, target)) {
-      const cycle = base[rows.filter((r) => r.stationId === st.id).length % base.length] ?? "gnss";
+      const idx = rows.filter((r) => r.stationId === st.id).length - base.length;
+      const cycle = extras[idx % extras.length] ?? "tilt";
       add(cycle);
     }
   }
