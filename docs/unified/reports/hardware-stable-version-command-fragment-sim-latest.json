@@ -1,0 +1,61 @@
+﻿{
+  "generatedAt": "2026-03-25T20:17:14.272Z",
+  "conclusion": "hardware-stable-version-xl01-receive-path-can-reassemble-command-json-fragments-in-source",
+  "scenarios": [
+    {
+      "name": "chunked_pretty_json_is_reassembled",
+      "chunks": [
+        "{\n  \"schema_version\": 1,\n  \"command_id\": \"000000",
+        "00-0000-4000-8000-000000001111\",\n  \"device_id\": \"2c1f2d8e-2bb7-4f58-bb6a-6c2a0f4a7a4c\",\n  ",
+        "\"command_type\": \"set_sampling_interval\",\n  \"payload\": {\n    \"intervalSeconds\": 10,\n    \"source\": \"gateway-pretty-json\"\n  },\n  \"issued_ts\": \"2026-03-26T12:00:00Z\"\n}"
+      ],
+      "linkAckReceived": false,
+      "platformCommandReady": true,
+      "platformCommandBuffer": "{\n  \"schema_version\": 1,\n  \"command_id\": \"00000000-0000-4000-8000-000000001111\",\n  \"device_id\": \"2c1f2d8e-2bb7-4f58-bb6a-6c2a0f4a7a4c\",\n  \"command_type\": \"set_sampling_interval\",\n  \"payload\": {\n    \"intervalSeconds\": 10,\n    \"source\": \"gateway-pretty-json\"\n  },\n  \"issued_ts\": \"2026-03-26T12:00:00Z\"\n}",
+      "droppedFrames": [],
+      "incompleteAssemblyLeftover": ""
+    },
+    {
+      "name": "ack_and_chunked_json_can_coexist",
+      "chunks": [
+        "ACK\r\n{\n  \"schema_version\": 1,\n  \"command_id\": \"00000000-0000-4000-8000-000000",
+        "001111\",\n  \"device_id\": \"2c1f2d8e-2bb7-4f58-bb6a-6c2a0f4a7a4c\",\n  \"comma",
+        "nd_type\": \"set_sampling_interval\",\n  \"payload\": {\n    \"intervalSeconds\": 10,\n    \"source\": \"gateway-pretty-json\"\n  },\n  \"issued_ts\": \"2026-03-26T12:00:00Z\"\n}"
+      ],
+      "linkAckReceived": true,
+      "platformCommandReady": true,
+      "platformCommandBuffer": "{\n  \"schema_version\": 1,\n  \"command_id\": \"00000000-0000-4000-8000-000000001111\",\n  \"device_id\": \"2c1f2d8e-2bb7-4f58-bb6a-6c2a0f4a7a4c\",\n  \"command_type\": \"set_sampling_interval\",\n  \"payload\": {\n    \"intervalSeconds\": 10,\n    \"source\": \"gateway-pretty-json\"\n  },\n  \"issued_ts\": \"2026-03-26T12:00:00Z\"\n}",
+      "droppedFrames": [],
+      "incompleteAssemblyLeftover": ""
+    },
+    {
+      "name": "invalid_json_frame_is_dropped",
+      "chunks": [
+        "{\n  \"schema_version\": 1,\n  \"command_id\": \"00000000-0000-4000-8000-000000001112\",\n  \"device_id\": \"2c1f2d8e-2bb7-4f58-bb6a-6c2a0f4a7a4c\",\n  \"command_type\": \"manual_collect\",\n  \"payload\": []\n}\n"
+      ],
+      "linkAckReceived": false,
+      "platformCommandReady": false,
+      "platformCommandBuffer": "",
+      "droppedFrames": [
+        "{\n  \"schema_version\": 1,\n  \"command_id\": \"00000000-0000-4000-8000-000000001112\",\n  \"device_id\": \"2c1f2d8e-2bb7-4f58-bb6a-6c2a0f4a7a4c\",\n  \"command_type\": \"manual_collect\",\n  \"payload\": []\n}"
+      ],
+      "incompleteAssemblyLeftover": ""
+    },
+    {
+      "name": "unfinished_fragment_is_not_promoted",
+      "chunks": [
+        "{\n  \"schema_version\": 1,\n  \"command_id\": \"00000000-0000-4000-8000-000000001111\",\n  \""
+      ],
+      "linkAckReceived": false,
+      "platformCommandReady": false,
+      "platformCommandBuffer": "",
+      "droppedFrames": [],
+      "incompleteAssemblyLeftover": "{\n  \"schema_version\": 1,\n  \"command_id\": \"00000000-0000-4000-8000-000000001111\",\n  \""
+    }
+  ],
+  "remainingGaps": [
+    "prove the same chunked receive behavior on the real UART path",
+    "verify command reassembly under larger bursts and interleaved non-command traffic",
+    "capture real-board evidence for chunked pretty JSON plus device_id mismatch handling"
+  ]
+}

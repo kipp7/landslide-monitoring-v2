@@ -102,6 +102,8 @@
 
 - 现在 `xl01_driver` 层已经不再把链路 ACK 和平台命令回执混成一个概念
 - 后续接 `DeviceCommandAck v1` 主流程时，有明确接口落点
+- 当前 `xl01_driver` 接收侧也已开始具备最小 JSON 分片重组能力
+- pretty JSON / 分片 JSON / `ACK + JSON` 混合到达场景，已经有软件侧留证
 
 ### 1. 命令接收主循环已开始切到标准 `DeviceCommand v1`
 
@@ -151,17 +153,22 @@
 
 - `docs/unified/reports/hardware-stable-version-command-path-sim-latest.json`
 - `docs/unified/reports/hardware-stable-version-command-guard-sim-latest.json`
+- `docs/unified/reports/hardware-stable-version-command-fragment-sim-latest.json`
 
 当前仿真结论：
 
 - `hardware-stable-version-command-path-can-be-aligned-to-platform-command-contract-in-source`
 - `hardware-stable-version-command-guards-can-be-aligned-to-platform-contract-in-source`
+- `hardware-stable-version-xl01-receive-path-can-reassemble-command-json-fragments-in-source`
 
 当前已额外证明：
 
 - pretty JSON / 正常带空格命令体可被当前 parser 接受
 - `device_id` 不匹配的命令会被忽略，且不会产生执行副作用
 - `payload` 不是对象的非法命令会被忽略
+- chunked pretty JSON 可被接收侧重组
+- `ACK/OK` 与 chunked JSON 可在同一接收流中共存
+- 未完成的半截 JSON 不会被误提升成可执行命令
 
 当前仍未真正完成：
 
