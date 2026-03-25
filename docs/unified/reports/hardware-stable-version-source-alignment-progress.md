@@ -150,10 +150,18 @@
 同时已补软件侧命令路径仿真：
 
 - `docs/unified/reports/hardware-stable-version-command-path-sim-latest.json`
+- `docs/unified/reports/hardware-stable-version-command-guard-sim-latest.json`
 
 当前仿真结论：
 
 - `hardware-stable-version-command-path-can-be-aligned-to-platform-command-contract-in-source`
+- `hardware-stable-version-command-guards-can-be-aligned-to-platform-contract-in-source`
+
+当前已额外证明：
+
+- pretty JSON / 正常带空格命令体可被当前 parser 接受
+- `device_id` 不匹配的命令会被忽略，且不会产生执行副作用
+- `payload` 不是对象的非法命令会被忽略
 
 当前仍未真正完成：
 

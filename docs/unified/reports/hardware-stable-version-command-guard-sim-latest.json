@@ -1,0 +1,168 @@
+{
+  "generatedAt": "2026-03-25T20:05:42.797Z",
+  "conclusion": "hardware-stable-version-command-guards-can-be-aligned-to-platform-contract-in-source",
+  "localDeviceId": "2c1f2d8e-2bb7-4f58-bb6a-6c2a0f4a7a4c",
+  "executionGuards": [
+    "schema_version must be 1",
+    "payload must remain a JSON object",
+    "command.device_id must match local device identity before execution"
+  ],
+  "scenarios": [
+    {
+      "name": "formatted_set_config_command_is_accepted",
+      "commandSchemaValid": true,
+      "commandSchemaErrors": [],
+      "execution": {
+        "outcome": "executed",
+        "reason": "matched_device",
+        "parsed": {
+          "command_id": "1b4c81aa-3c5f-4c14-8f9e-1c0fbe9d2c3d",
+          "device_id": "2c1f2d8e-2bb7-4f58-bb6a-6c2a0f4a7a4c",
+          "command_type": "set_config",
+          "has_sampling_s": true,
+          "sampling_s": 5,
+          "has_report_interval_s": true,
+          "report_interval_s": 5,
+          "has_interval_seconds": false,
+          "interval_seconds": 0
+        },
+        "ack": {
+          "schema_version": 1,
+          "command_id": "1b4c81aa-3c5f-4c14-8f9e-1c0fbe9d2c3d",
+          "device_id": "2c1f2d8e-2bb7-4f58-bb6a-6c2a0f4a7a4c",
+          "ack_ts": "1970-01-01T00:00:00Z",
+          "status": "acked",
+          "result": {
+            "applied": true,
+            "applied_keys": [
+              "sampling_s",
+              "report_interval_s"
+            ],
+            "runtime_config": {
+              "sampling_s": 5,
+              "report_interval_s": 5
+            }
+          }
+        },
+        "ackSchemaValid": true,
+        "ackSchemaErrors": [],
+        "runtimeAfter": {
+          "sampling_s": 5,
+          "report_interval_s": 5,
+          "uplink_enabled": true,
+          "manual_collect_requested": false,
+          "motor_state": "stopped",
+          "buzzer_on": false
+        }
+      }
+    },
+    {
+      "name": "formatted_manual_collect_command_is_accepted",
+      "commandSchemaValid": true,
+      "commandSchemaErrors": [],
+      "execution": {
+        "outcome": "executed",
+        "reason": "matched_device",
+        "parsed": {
+          "command_id": "00000000-0000-4000-8000-000000000777",
+          "device_id": "2c1f2d8e-2bb7-4f58-bb6a-6c2a0f4a7a4c",
+          "command_type": "manual_collect",
+          "has_sampling_s": false,
+          "sampling_s": 0,
+          "has_report_interval_s": false,
+          "report_interval_s": 0,
+          "has_interval_seconds": false,
+          "interval_seconds": 0
+        },
+        "ack": {
+          "schema_version": 1,
+          "command_id": "00000000-0000-4000-8000-000000000777",
+          "device_id": "2c1f2d8e-2bb7-4f58-bb6a-6c2a0f4a7a4c",
+          "ack_ts": "1970-01-01T00:00:00Z",
+          "status": "acked",
+          "result": {
+            "collect_requested": true,
+            "reason": "manual_trigger"
+          }
+        },
+        "ackSchemaValid": true,
+        "ackSchemaErrors": [],
+        "runtimeAfter": {
+          "sampling_s": 1,
+          "report_interval_s": 5,
+          "uplink_enabled": true,
+          "manual_collect_requested": true,
+          "motor_state": "stopped",
+          "buzzer_on": false
+        }
+      }
+    },
+    {
+      "name": "mismatched_device_id_command_is_ignored",
+      "commandSchemaValid": true,
+      "commandSchemaErrors": [],
+      "execution": {
+        "outcome": "ignored_device_mismatch",
+        "reason": "device_id_mismatch",
+        "parsed": {
+          "command_id": "00000000-0000-4000-8000-000000000778",
+          "device_id": "99999999-9999-4999-8999-999999999999",
+          "command_type": "deactivate_device",
+          "has_sampling_s": false,
+          "sampling_s": 0,
+          "has_report_interval_s": false,
+          "report_interval_s": 0,
+          "has_interval_seconds": false,
+          "interval_seconds": 0
+        },
+        "ack": null,
+        "ackSchemaValid": null,
+        "ackSchemaErrors": [],
+        "runtimeAfter": {
+          "sampling_s": 1,
+          "report_interval_s": 5,
+          "uplink_enabled": true,
+          "manual_collect_requested": false,
+          "motor_state": "stopped",
+          "buzzer_on": false
+        }
+      }
+    },
+    {
+      "name": "invalid_payload_shape_is_ignored",
+      "commandSchemaValid": false,
+      "commandSchemaErrors": [
+        {
+          "instancePath": "/payload",
+          "schemaPath": "#/properties/payload/type",
+          "keyword": "type",
+          "params": {
+            "type": "object"
+          },
+          "message": "must be object"
+        }
+      ],
+      "execution": {
+        "outcome": "ignored_invalid_command",
+        "reason": "payload_must_be_object",
+        "parsed": null,
+        "ack": null,
+        "ackSchemaValid": null,
+        "ackSchemaErrors": [],
+        "runtimeAfter": {
+          "sampling_s": 1,
+          "report_interval_s": 5,
+          "uplink_enabled": true,
+          "manual_collect_requested": false,
+          "motor_state": "stopped",
+          "buzzer_on": false
+        }
+      }
+    }
+  ],
+  "remainingGaps": [
+    "run the same guard cases through a real gateway-delivered payload path",
+    "capture a real-board proof that mismatched device_id commands are ignored without side effects",
+    "replace placeholder ack_ts with a better device-side time source"
+  ]
+}
