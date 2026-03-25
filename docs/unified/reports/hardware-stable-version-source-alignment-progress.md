@@ -154,12 +154,14 @@
 - `docs/unified/reports/hardware-stable-version-command-path-sim-latest.json`
 - `docs/unified/reports/hardware-stable-version-command-guard-sim-latest.json`
 - `docs/unified/reports/hardware-stable-version-command-fragment-sim-latest.json`
+- `docs/unified/reports/hardware-stable-version-openharmony-command-harness-latest.json`
 
 当前仿真结论：
 
 - `hardware-stable-version-command-path-can-be-aligned-to-platform-command-contract-in-source`
 - `hardware-stable-version-command-guards-can-be-aligned-to-platform-contract-in-source`
 - `hardware-stable-version-xl01-receive-path-can-reassemble-command-json-fragments-in-source`
+- `hardware-stable-version-openharmony-command-harness-confirms-source-level-command-path-behavior`
 
 当前已额外证明：
 
@@ -169,11 +171,29 @@
 - chunked pretty JSON 可被接收侧重组
 - `ACK/OK` 与 chunked JSON 可在同一接收流中共存
 - 未完成的半截 JSON 不会被误提升成可执行命令
+- 已可通过 Emscripten harness 直接编译并运行：
+  - `fifo.c`
+  - `device_command_parser.c`
+  - `device_identity.c`
+  - `command_ack_builder.c`
+  - `xl01_driver.c`
+  这批真实 C 源码
+
+当前新增发现：
+
+- 当前源码级 harness 使用的本机 `DEVICE_ID` 仍是：
+  - `00000000-0000-0000-0000-000000000001`
+- 当前主线 MQTT 命令示例使用的是：
+  - `2c1f2d8e-2bb7-4f58-bb6a-6c2a0f4a7a4c`
+- 这意味着：
+  - 当前 guard 逻辑本身是对的
+  - 但硬件稳定版身份真值与主线命令样本真值还未统一
 
 当前仍未真正完成：
 
 - 真机环境下的正式构建与运行验证
 - 让这批命令分支在真实板卡上完成端到端留证
+- 统一硬件稳定版 `DEVICE_ID` 与主线平台命令样本的身份真值
 - 为 `deactivate_device` 设计明确的重新启用路径
 - 更可信的 `ack_ts` 时间来源
 
