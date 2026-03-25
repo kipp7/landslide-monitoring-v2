@@ -398,7 +398,7 @@ export default function DeviceManagementPage() {
                   设备管理
                 </Link>
                 <Link
-                  href="/gps-monitoring"
+                  href="/gps-deformation"
                   className="text-slate-300 hover:text-cyan-200 px-4 py-2 text-sm rounded-md hover:bg-slate-700/50 transition-all"
                 >
                   地质形变监测

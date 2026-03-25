@@ -1,0 +1,50 @@
+﻿{
+    "generatedAt":  "2026-03-24T01:38:35Z",
+    "packageManifest":  "docs/unified/reports/desk-win-package-latest.json",
+    "checks":  [
+                   {
+                       "key":  "dotnetCommand",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "windowsDesktopRuntime8",
+                       "ok":  true,
+                       "actual":  "Microsoft.WindowsDesktop.App 8.0.22 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]",
+                       "expected":  "Microsoft.WindowsDesktop.App 8.x"
+                   },
+                   {
+                       "key":  "webView2Runtime",
+                       "ok":  true,
+                       "actual":  "146.0.3856.72",
+                       "expected":  "installed"
+                   },
+                   {
+                       "key":  "packageManifest",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "packagedExe",
+                       "ok":  true,
+                       "actual":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\win-x64\\LandslideDesk.Win.exe",
+                       "expected":  "existing exe path"
+                   },
+                   {
+                       "key":  "packagedWebIndex",
+                       "ok":  true,
+                       "actual":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\win-x64\\web\\index.html",
+                       "expected":  "existing web/index.html"
+                   }
+               ],
+    "summary":  {
+                    "dotnetExists":  true,
+                    "desktopRuntime":  "Microsoft.WindowsDesktop.App 8.0.22 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]",
+                    "webView2Version":  "146.0.3856.72",
+                    "packageManifestPresent":  true,
+                    "packagedExePath":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\win-x64\\LandslideDesk.Win.exe",
+                    "packagedWebIndexPath":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\win-x64\\web\\index.html"
+                }
+}

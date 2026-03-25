@@ -1,0 +1,21 @@
+﻿{
+    "generatedAt":  "2026-03-23T14:10:13Z",
+    "installerReportFile":  "docs/unified/reports/desk-win-customba-installer-latest.json",
+    "installerExe":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\customba-installer\\LandslideDesk-CustomBA-Setup-938f86e-20260323-220857.exe",
+    "installRoot":  "C:\\Users\\Administrator\\AppData\\Local\\LandslideDeskModernInstallerSmoke\\run-20260323-220952",
+    "precleanLog":  "C:\\Users\\Administrator\\AppData\\Local\\LandslideDeskModernInstallerSmoke\\run-20260323-220952\\preclean.log",
+    "installDir":  "C:\\Users\\Administrator\\AppData\\Local\\Programs\\山体滑坡监测桌面端\\",
+    "installLog":  "C:\\Users\\Administrator\\AppData\\Local\\LandslideDeskModernInstallerSmoke\\run-20260323-220952\\install.log",
+    "uninstallLog":  "C:\\Users\\Administrator\\AppData\\Local\\LandslideDeskModernInstallerSmoke\\run-20260323-220952\\uninstall.log",
+    "installedExe":  "C:\\Users\\Administrator\\AppData\\Local\\Programs\\山体滑坡监测桌面端\\LandslideDesk.Win.exe",
+    "installedWeb":  "C:\\Users\\Administrator\\AppData\\Local\\Programs\\山体滑坡监测桌面端\\web\\index.html",
+    "installExitCode":  0,
+    "aliveAfterLaunch":  true,
+    "stoppedAfterVerify":  true,
+    "uninstallExitCode":  0,
+    "removedExeAfterUninstall":  true,
+    "removedCoreRegistryAfterUninstall":  true,
+    "removedBundleRegistryAfterUninstall":  true,
+    "failureMessage":  null,
+    "ready":  true
+}

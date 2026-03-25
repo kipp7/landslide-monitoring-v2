@@ -148,15 +148,6 @@ async function main(): Promise<void> {
     logger.error({ err }, "mqtt error");
   });
 
-  // Do not fail fast on initial auth errors: EMQX webhooks may still be coming up,
-  // and the mqtt client will retry and eventually emit "connect" when ready.
-  await new Promise<void>((resolve) => {
-    mqttClient.on("connect", () => {
-      resolve();
-    });
-  });
-  logger.info({ mqttUrl: config.mqttUrl }, "mqtt connected");
-
   const kafka = new Kafka({
     clientId: config.kafkaClientId,
     brokers: config.kafkaBrokers,
@@ -169,6 +160,16 @@ async function main(): Promise<void> {
   await consumer.connect();
   await consumer.subscribe({ topic: config.kafkaTopicDeviceCommandAcks, fromBeginning: false });
 
+  logger.info(
+    {
+      mqttUrl: config.mqttUrl,
+      mqttTopic: `${config.mqttTopicAckPrefix}+`,
+      kafkaTopicDeviceCommandAcks: config.kafkaTopicDeviceCommandAcks,
+      kafkaTopicDeviceCommandEvents: config.kafkaTopicDeviceCommandEvents
+    },
+    "command-ack-receiver started"
+  );
+
   const publishCommandEvent = async (event: DeviceCommandEventV1) => {
     if (!validateEvent.validate(event)) {
       logger.error({ errors: validateEvent.errors, event }, "device.command_events schema invalid (BUG)");
@@ -180,9 +181,12 @@ async function main(): Promise<void> {
     });
   };
 
-  mqttClient.subscribe(`${config.mqttTopicAckPrefix}+`, { qos: 1 }, (err) => {
-    if (err) logger.error({ err }, "mqtt subscribe failed");
-    else logger.info({ topic: `${config.mqttTopicAckPrefix}+` }, "mqtt subscribed");
+  mqttClient.on("connect", () => {
+    logger.info({ mqttUrl: config.mqttUrl }, "mqtt connected");
+    mqttClient.subscribe(`${config.mqttTopicAckPrefix}+`, { qos: 1 }, (err) => {
+      if (err) logger.error({ err }, "mqtt subscribe failed");
+      else logger.info({ topic: `${config.mqttTopicAckPrefix}+` }, "mqtt subscribed");
+    });
   });
 
   mqttClient.on("message", async (topic, payload) => {

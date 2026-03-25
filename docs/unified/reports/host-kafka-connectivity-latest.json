@@ -1,0 +1,14 @@
+﻿{
+  "ok": true,
+  "broker": "127.0.0.1:9094",
+  "elapsedMs": 75,
+  "topics": [
+    "alerts.events.v1",
+    "presence.events.v1",
+    "telemetry.dlq.v1",
+    "device.command_events.v1",
+    "device.commands.v1",
+    "telemetry.raw.v1",
+    "device.command_acks.v1"
+  ]
+}

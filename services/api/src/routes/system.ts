@@ -1,5 +1,6 @@
 import type { ClickHouseClient } from "@clickhouse/client";
-import type { FastifyInstance } from "fastify";
+import type { PoolClient } from "pg";
+import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 import type { AppConfig } from "../config";
 import { requirePermission, type AdminAuthConfig } from "../authz";
@@ -35,8 +36,18 @@ function utcStartOfDay(d: Date): Date {
   return x;
 }
 
+function utcTomorrowStart(d: Date): Date {
+  const x = utcStartOfDay(d);
+  x.setUTCDate(x.getUTCDate() + 1);
+  return x;
+}
+
 function toClickhouseDateTime64Utc(d: Date): string {
   return d.toISOString().replace("T", " ").replace("Z", "");
+}
+
+function legacyOk(reply: FastifyReply, data: unknown): void {
+  void reply.code(200).send(data);
 }
 
 const updateConfigsSchema = z
@@ -44,6 +55,36 @@ const updateConfigsSchema = z
     configs: z.array(z.object({ key: z.string().min(1), value: z.string() }).strict()).min(1)
   })
   .strict();
+
+const successNotificationPolicySchema = z.enum(["silent", "always_notify"]);
+const commandSuccessNotificationPolicySchema = z
+  .object({
+    systemDefault: successNotificationPolicySchema,
+    commandTypeDefaults: z.record(z.string().min(1), successNotificationPolicySchema)
+  })
+  .strict();
+
+const updateCommandSuccessNotificationPolicySchema = z
+  .object({
+    systemDefault: successNotificationPolicySchema,
+    commandTypeDefaults: z.record(z.string().min(1), successNotificationPolicySchema)
+  })
+  .strict();
+
+const COMMAND_SUCCESS_NOTIFICATION_SYSTEM_DEFAULT_KEY = "command.success_notification.system_default";
+const COMMAND_SUCCESS_NOTIFICATION_COMMAND_TYPE_DEFAULTS_KEY = "command.success_notification.command_type_defaults";
+const DEFAULT_COMMAND_SUCCESS_NOTIFICATION_POLICY = {
+  systemDefault: "silent" as const,
+  commandTypeDefaults: {
+    set_config: "always_notify" as const,
+    reboot: "always_notify" as const,
+    restart_device: "always_notify" as const,
+    deactivate_device: "always_notify" as const,
+    set_sampling_interval: "always_notify" as const,
+    manual_collect: "always_notify" as const,
+    "huawei:reboot": "always_notify" as const
+  }
+};
 
 const operationLogsQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
@@ -54,6 +95,424 @@ const operationLogsQuerySchema = z.object({
   startTime: z.string().datetime().optional(),
   endTime: z.string().datetime().optional()
 });
+
+type SystemCheck = {
+  status: string;
+  error?: string;
+};
+
+type SystemStatusItemKey = "postgres" | "clickhouse" | "kafka";
+type SystemStatusItemState = "healthy" | "degraded" | "not_configured" | "unknown";
+
+type SystemStatusItem = {
+  key: SystemStatusItemKey;
+  label: string;
+  status: SystemStatusItemState;
+  detail: string;
+};
+
+type SystemStatusData = {
+  uptimeS: number;
+  postgres: SystemCheck;
+  clickhouse: SystemCheck;
+  kafka: SystemCheck;
+  emqx: { status: string };
+  source: "health_summary";
+  note: string;
+  items: SystemStatusItem[];
+};
+
+type DashboardSummaryData = {
+  todayDataCount: number;
+  onlineDevices: number;
+  offlineDevices: number;
+  pendingAlerts: number;
+  todayAlerts: number;
+  alertsBySeverity: Record<"low" | "medium" | "high" | "critical", number>;
+  stations: number;
+  freshDevices: number;
+  totalDevices: number;
+  lastUpdatedAt: string;
+};
+
+type DeskDashboardSummaryData = {
+  stationCount: number;
+  deviceOnlineCount: number;
+  alertCountToday: number;
+  systemHealthPercent: number;
+};
+
+type DashboardWeeklyTrendData = {
+  labels: string[];
+  rainfallMm: number[];
+  alertCount: number[];
+  source: "derived_summary";
+  note: string;
+};
+
+type CommandSuccessNotificationPolicy = z.infer<typeof commandSuccessNotificationPolicySchema>;
+
+function healthStateFromCheck(input: SystemCheck): SystemStatusItemState {
+  if (input.status === "healthy" || input.status === "configured") return "healthy";
+  if (input.status === "unhealthy") return "degraded";
+  if (input.status === "not_configured") return "not_configured";
+  return "unknown";
+}
+
+function detailFromCheck(input: SystemCheck): string {
+  return input.error ? `${input.status}: ${input.error}` : input.status;
+}
+
+function buildSystemStatusItems(postgres: SystemCheck, clickhouse: SystemCheck, kafka: SystemCheck): SystemStatusItem[] {
+  return [
+    {
+      key: "postgres",
+      label: "PostgreSQL",
+      status: healthStateFromCheck(postgres),
+      detail: detailFromCheck(postgres)
+    },
+    {
+      key: "clickhouse",
+      label: "ClickHouse",
+      status: healthStateFromCheck(clickhouse),
+      detail: detailFromCheck(clickhouse)
+    },
+    {
+      key: "kafka",
+      label: "Kafka",
+      status: healthStateFromCheck(kafka),
+      detail: detailFromCheck(kafka)
+    }
+  ];
+}
+
+async function buildSystemStatusData(
+  config: AppConfig,
+  ch: ClickHouseClient,
+  pg: PgPool | null
+): Promise<SystemStatusData> {
+  const postgres = await checkPostgres(pg);
+  const clickhouse = await checkClickhouse(ch);
+  const kafka: SystemCheck = { status: config.kafkaBrokers && config.kafkaBrokers.length > 0 ? "configured" : "not_configured" };
+
+  return {
+    uptimeS: Math.floor(process.uptime()),
+    postgres,
+    clickhouse,
+    kafka,
+    emqx: { status: "unknown" },
+    source: "health_summary",
+    note: "当前展示的是服务健康摘要，不表示真实 CPU/内存/磁盘占用。",
+    items: buildSystemStatusItems(postgres, clickhouse, kafka)
+  };
+}
+
+async function queryTodayDataCount(config: AppConfig, ch: ClickHouseClient, start: Date): Promise<number> {
+  try {
+    const res = await ch.query({
+      query: `
+        SELECT count()::UInt64 AS c
+        FROM ${config.clickhouseDatabase}.${config.clickhouseTable}
+        WHERE received_ts >= {start:DateTime64(3, 'UTC')}
+      `,
+      query_params: { start: toClickhouseDateTime64Utc(start) },
+      format: "JSONEachRow"
+    });
+    const rows: { c: number | string }[] = await res.json();
+    const value = rows[0]?.c;
+    return typeof value === "string" ? Number(value) : value ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+async function buildDashboardSummaryData(
+  config: AppConfig,
+  ch: ClickHouseClient,
+  pg: PgPool
+): Promise<DashboardSummaryData> {
+  const now = new Date();
+  const start = utcStartOfDay(now);
+  const todayDataCount = await queryTodayDataCount(config, ch, start);
+  const freshThreshold = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+  const data = await withPgClient(pg, async (client) => {
+    const devices = await client.query<{ status: string; count: string }>(
+      `
+        SELECT status, count(*)::text AS count
+        FROM devices
+        GROUP BY status
+      `
+    );
+    const onlineDevices = await queryOne<{ count: string }>(
+      client,
+      `
+        SELECT count(*)::text AS count
+        FROM devices
+        WHERE status = 'active'
+          AND last_seen_at IS NOT NULL
+          AND last_seen_at >= $1
+      `,
+      [freshThreshold]
+    );
+    const freshDevices = await queryOne<{ count: string }>(
+      client,
+      `
+        SELECT count(*)::text AS count
+        FROM devices
+        WHERE status != 'revoked'
+          AND last_seen_at IS NOT NULL
+          AND last_seen_at >= $1
+      `,
+      [freshThreshold]
+    );
+    const stations = await queryOne<{ count: string }>(client, "SELECT count(*)::text AS count FROM stations", []);
+
+    const alerts = await client.query<{ status: string; severity: string; count: string }>(
+      `
+        WITH latest AS (
+          SELECT DISTINCT ON (alert_id)
+            alert_id,
+            event_type,
+            severity,
+            created_at AS last_event_at
+          FROM alert_events
+          ORDER BY alert_id, created_at DESC
+        ),
+        a AS (
+          SELECT
+            alert_id,
+            CASE
+              WHEN event_type IN ('ALERT_TRIGGER','ALERT_UPDATE') THEN 'active'
+              WHEN event_type = 'ALERT_ACK' THEN 'acked'
+              ELSE 'resolved'
+            END AS status,
+            severity
+          FROM latest
+        )
+        SELECT status, severity, count(*)::text AS count
+        FROM a
+        GROUP BY status, severity
+      `
+    );
+    const todayAlerts = await queryOne<{ count: string }>(
+      client,
+      `
+        SELECT count(DISTINCT alert_id)::text AS count
+        FROM alert_events
+        WHERE created_at >= $1
+          AND created_at < $2
+          AND event_type IN ('ALERT_TRIGGER', 'ALERT_UPDATE')
+      `,
+      [start, now]
+    );
+
+    return {
+      devices: devices.rows,
+      onlineDevices: Number(onlineDevices?.count ?? "0"),
+      freshDevices: Number(freshDevices?.count ?? "0"),
+      stations: Number(stations?.count ?? "0"),
+      todayAlerts: Number(todayAlerts?.count ?? "0"),
+      alerts: alerts.rows
+    };
+  });
+
+  const deviceCounts: Record<string, number> = {};
+  for (const row of data.devices) deviceCounts[row.status] = Number(row.count);
+  const totalDevices = Math.max(0, (deviceCounts.active ?? 0) + (deviceCounts.inactive ?? 0));
+  const onlineDevices = data.onlineDevices;
+  const offlineDevices = Math.max(0, totalDevices - onlineDevices);
+
+  const alertsBySeverity: Record<"low" | "medium" | "high" | "critical", number> = {
+    low: 0,
+    medium: 0,
+    high: 0,
+    critical: 0
+  };
+  let pendingAlerts = 0;
+  for (const row of data.alerts) {
+    const count = Number(row.count);
+    if (row.status === "active" || row.status === "acked") pendingAlerts += count;
+    if (row.status === "active" || row.status === "acked") {
+      const severity = row.severity as keyof typeof alertsBySeverity;
+      alertsBySeverity[severity] = (alertsBySeverity[severity] ?? 0) + count;
+    }
+  }
+
+  return {
+    todayDataCount,
+    onlineDevices,
+    offlineDevices,
+    pendingAlerts,
+    todayAlerts: data.todayAlerts,
+    alertsBySeverity,
+    stations: data.stations,
+    freshDevices: data.freshDevices,
+    totalDevices,
+    lastUpdatedAt: now.toISOString()
+  };
+}
+
+function buildDeskDashboardSummary(summary: DashboardSummaryData): DeskDashboardSummaryData {
+  const totalDevices = Math.max(1, summary.totalDevices);
+  const availability = summary.onlineDevices / totalDevices;
+  const freshness = summary.freshDevices / totalDevices;
+
+  const weightedRiskLoad =
+    (summary.alertsBySeverity.low * 0.05) +
+    (summary.alertsBySeverity.medium * 0.1) +
+    (summary.alertsBySeverity.high * 0.18) +
+    (summary.alertsBySeverity.critical * 0.28);
+  const riskScore = Math.max(0, 1 - Math.min(0.8, weightedRiskLoad));
+
+  const healthScore = availability * 0.4 + freshness * 0.2 + riskScore * 0.4;
+
+  return {
+    stationCount: summary.stations,
+    deviceOnlineCount: summary.onlineDevices,
+    alertCountToday: summary.todayAlerts,
+    systemHealthPercent: Math.max(0, Math.min(100, Math.round(healthScore * 100)))
+  };
+}
+
+async function buildDashboardWeeklyTrendData(
+  config: AppConfig,
+  ch: ClickHouseClient,
+  pg: PgPool | null
+): Promise<DashboardWeeklyTrendData> {
+  const now = new Date();
+  const start = utcStartOfDay(new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000));
+  const end = utcTomorrowStart(now);
+  const dayKeys = Array.from({ length: 7 }, (_, index) => {
+    const day = new Date(start.getTime() + index * 24 * 60 * 60 * 1000);
+    return day.toISOString().slice(0, 10);
+  });
+
+  const rainfallByDay = new Map<string, number>();
+  const alertCountByDay = new Map<string, number>();
+  const noteParts = ["近 7 天按 telemetry `rainfall_mm` 与 `alert_events` 聚合生成，缺失日补 0。"];
+
+  try {
+    const res = await ch.query({
+      query: `
+        SELECT
+          formatDateTime(toStartOfDay(received_ts), '%F', 'UTC') AS day,
+          sum(COALESCE(value_f64, toFloat64(value_i64))) AS rainfall
+        FROM ${config.clickhouseDatabase}.${config.clickhouseTable}
+        WHERE received_ts >= {start:DateTime64(3, 'UTC')}
+          AND received_ts < {end:DateTime64(3, 'UTC')}
+          AND sensor_key = 'rainfall_mm'
+        GROUP BY day
+        ORDER BY day
+      `,
+      query_params: { start: toClickhouseDateTime64Utc(start), end: toClickhouseDateTime64Utc(end) },
+      format: "JSONEachRow"
+    });
+    const rows: Array<{ day: string; rainfall: number | string | null }> = await res.json();
+    for (const row of rows) {
+      const value = typeof row.rainfall === "string" ? Number(row.rainfall) : row.rainfall ?? 0;
+      rainfallByDay.set(row.day, Number(value.toFixed(2)));
+    }
+  } catch {
+    noteParts.push("雨量聚合失败时已回退为 0。");
+  }
+
+  if (!pg) {
+    noteParts.push("未配置 PostgreSQL，告警数已回退为 0。");
+  } else {
+    try {
+      const rows = await withPgClient(pg, async (client) => {
+        const res = await client.query<{ day: string; alert_count: string }>(
+          `
+            SELECT
+              to_char(date_trunc('day', created_at AT TIME ZONE 'UTC'), 'YYYY-MM-DD') AS day,
+              count(DISTINCT alert_id)::text AS alert_count
+            FROM alert_events
+            WHERE created_at >= $1
+              AND created_at < $2
+              AND event_type IN ('ALERT_TRIGGER', 'ALERT_UPDATE')
+            GROUP BY 1
+            ORDER BY 1
+          `,
+          [start, end]
+        );
+        return res.rows;
+      });
+      for (const row of rows) {
+        alertCountByDay.set(row.day, Number(row.alert_count));
+      }
+    } catch {
+      noteParts.push("告警聚合失败时已回退为 0。");
+    }
+  }
+
+  return {
+    labels: dayKeys.map((day) => day.slice(5)),
+    rainfallMm: dayKeys.map((day) => rainfallByDay.get(day) ?? 0),
+    alertCount: dayKeys.map((day) => alertCountByDay.get(day) ?? 0),
+    source: "derived_summary",
+    note: noteParts.join(" ")
+  };
+}
+
+function parseCommandTypeDefaults(
+  raw: string | null | undefined
+): CommandSuccessNotificationPolicy["commandTypeDefaults"] {
+  if (!raw || !raw.trim()) return { ...DEFAULT_COMMAND_SUCCESS_NOTIFICATION_POLICY.commandTypeDefaults };
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    const checked = z.record(z.string().min(1), successNotificationPolicySchema).safeParse(parsed);
+    if (!checked.success) return { ...DEFAULT_COMMAND_SUCCESS_NOTIFICATION_POLICY.commandTypeDefaults };
+    return checked.data;
+  } catch {
+    return { ...DEFAULT_COMMAND_SUCCESS_NOTIFICATION_POLICY.commandTypeDefaults };
+  }
+}
+
+async function loadCommandSuccessNotificationPolicy(client: PoolClient): Promise<CommandSuccessNotificationPolicy> {
+  const rows = await client.query<{ config_key: string; config_value: string | null }>(
+    `
+      SELECT config_key, config_value
+      FROM system_configs
+      WHERE config_key IN ($1, $2)
+    `,
+    [COMMAND_SUCCESS_NOTIFICATION_SYSTEM_DEFAULT_KEY, COMMAND_SUCCESS_NOTIFICATION_COMMAND_TYPE_DEFAULTS_KEY]
+  );
+  const byKey = new Map(rows.rows.map((row) => [row.config_key, row.config_value] as const));
+  const systemDefaultParsed = successNotificationPolicySchema.safeParse(byKey.get(COMMAND_SUCCESS_NOTIFICATION_SYSTEM_DEFAULT_KEY));
+  return {
+    systemDefault: systemDefaultParsed.success
+      ? systemDefaultParsed.data
+      : DEFAULT_COMMAND_SUCCESS_NOTIFICATION_POLICY.systemDefault,
+    commandTypeDefaults: parseCommandTypeDefaults(byKey.get(COMMAND_SUCCESS_NOTIFICATION_COMMAND_TYPE_DEFAULTS_KEY))
+  };
+}
+
+async function saveCommandSuccessNotificationPolicy(
+  client: PoolClient,
+  input: CommandSuccessNotificationPolicy
+): Promise<void> {
+  await client.query(
+    `
+      INSERT INTO system_configs (config_key, config_value, config_type, description, is_public)
+      VALUES
+        ($1, $2, 'string', '命令成功通知系统默认策略', FALSE),
+        ($3, $4, 'json', '命令成功通知按 command_type 的默认策略表', FALSE)
+      ON CONFLICT (config_key) DO UPDATE
+      SET
+        config_value = EXCLUDED.config_value,
+        config_type = EXCLUDED.config_type,
+        description = EXCLUDED.description,
+        updated_at = NOW()
+    `,
+    [
+      COMMAND_SUCCESS_NOTIFICATION_SYSTEM_DEFAULT_KEY,
+      input.systemDefault,
+      COMMAND_SUCCESS_NOTIFICATION_COMMAND_TYPE_DEFAULTS_KEY,
+      JSON.stringify(input.commandTypeDefaults)
+    ]
+  );
+}
 
 export function registerSystemRoutes(
   app: FastifyInstance,
@@ -183,6 +642,69 @@ export function registerSystemRoutes(
     }).catch(() => undefined);
 
     ok(reply, { updated: updated.updated }, traceId);
+  });
+
+  app.get("/system/command-success-notification-policy", async (request, reply) => {
+    const traceId = request.traceId;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "system:config"))) return;
+    if (!pg) {
+      fail(reply, 503, "PostgreSQL 未配置", traceId);
+      return;
+    }
+
+    const policy = await withPgClient(pg, async (client) => loadCommandSuccessNotificationPolicy(client));
+    ok(reply, policy, traceId);
+  });
+
+  app.put("/system/command-success-notification-policy", async (request, reply) => {
+    const traceId = request.traceId;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "system:config"))) return;
+    if (!pg) {
+      fail(reply, 503, "PostgreSQL 未配置", traceId);
+      return;
+    }
+
+    const parseBody = updateCommandSuccessNotificationPolicySchema.safeParse(request.body);
+    if (!parseBody.success) {
+      fail(reply, 400, "参数错误", traceId, { field: "body", issues: parseBody.error.issues });
+      return;
+    }
+
+    const policy = parseBody.data;
+    const previousPolicy = await withPgClient(pg, async (client) => loadCommandSuccessNotificationPolicy(client));
+    await withPgClient(pg, async (client) => {
+      await client.query("BEGIN");
+      try {
+        await saveCommandSuccessNotificationPolicy(client, policy);
+        await client.query("COMMIT");
+      } catch (err) {
+        await client.query("ROLLBACK");
+        throw err;
+      }
+    });
+
+    void withPgClient(pg, async (client) => {
+      await client.query(
+        `
+          INSERT INTO operation_logs (user_id, username, module, action, description, request_data, response_data, ip_address, user_agent, status)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        `,
+        [
+          request.user?.userId ?? null,
+          request.user?.username ?? "admin",
+          "system",
+          "update_command_success_notification_policy",
+          "update command success notification policy",
+          { previousPolicy, nextPolicy: policy },
+          { updatedPolicy: policy },
+          request.ip,
+          typeof request.headers["user-agent"] === "string" ? request.headers["user-agent"] : null,
+          "success"
+        ]
+      );
+    }).catch(() => undefined);
+
+    ok(reply, policy, traceId);
   });
 
   app.get("/system/logs/operation", async (request, reply) => {
@@ -382,21 +904,7 @@ export function registerSystemRoutes(
   app.get("/system/status", async (request, reply) => {
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "system:log"))) return;
-
-    const postgres = await checkPostgres(pg);
-    const clickhouse = await checkClickhouse(ch);
-
-    ok(
-      reply,
-      {
-        uptimeS: Math.floor(process.uptime()),
-        postgres,
-        clickhouse,
-        kafka: { status: config.kafkaBrokers && config.kafkaBrokers.length > 0 ? "configured" : "not_configured" },
-        emqx: { status: "unknown" }
-      },
-      traceId
-    );
+    ok(reply, await buildSystemStatusData(config, ch, pg), traceId);
   });
 
   app.get("/dashboard", async (request, reply) => {
@@ -406,97 +914,41 @@ export function registerSystemRoutes(
       fail(reply, 503, "PostgreSQL 未配置", traceId);
       return;
     }
+    ok(reply, await buildDashboardSummaryData(config, ch, pg), traceId);
+  });
 
-    const now = new Date();
-    const start = utcStartOfDay(now);
+  app.get("/dashboard/weekly-trend", async (request, reply) => {
+    const traceId = request.traceId;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
+    ok(reply, await buildDashboardWeeklyTrendData(config, ch, pg), traceId);
+  });
+}
 
-    const todayDataCount = await (async () => {
-      try {
-        const res = await ch.query({
-          query: `
-            SELECT count()::UInt64 AS c
-            FROM ${config.clickhouseDatabase}.${config.clickhouseTable}
-            WHERE received_ts >= {start:DateTime64(3, 'UTC')}
-          `,
-          query_params: { start: toClickhouseDateTime64Utc(start) },
-          format: "JSONEachRow"
-        });
-        const rows: { c: number | string }[] = await res.json();
-        const v = rows[0]?.c;
-        return typeof v === "string" ? Number(v) : v ?? 0;
-      } catch {
-        return 0;
-      }
-    })();
+export function registerSystemLegacyCompatRoutes(
+  app: FastifyInstance,
+  config: AppConfig,
+  ch: ClickHouseClient,
+  pg: PgPool | null
+): void {
+  const adminCfg: AdminAuthConfig = { adminApiToken: config.adminApiToken, jwtEnabled: Boolean(config.jwtAccessSecret) };
 
-    const data = await withPgClient(pg, async (client) => {
-      const devices = await client.query<{ status: string; count: string }>(
-        `
-          SELECT status, count(*)::text AS count
-          FROM devices
-          GROUP BY status
-        `
-      );
-      const stations = await queryOne<{ count: string }>(client, "SELECT count(*)::text AS count FROM stations", []);
+  app.get("/system/status", async (request, reply) => {
+    if (!(await requirePermission(adminCfg, pg, request, reply, "system:log"))) return;
+    legacyOk(reply, await buildSystemStatusData(config, ch, pg));
+  });
 
-      const alerts = await client.query<{ status: string; severity: string; count: string }>(
-        `
-          WITH latest AS (
-            SELECT DISTINCT ON (alert_id)
-              alert_id,
-              event_type,
-              severity,
-              created_at AS last_event_at
-            FROM alert_events
-            ORDER BY alert_id, created_at DESC
-          ),
-          a AS (
-            SELECT
-              alert_id,
-              CASE
-                WHEN event_type IN ('ALERT_TRIGGER','ALERT_UPDATE') THEN 'active'
-                WHEN event_type = 'ALERT_ACK' THEN 'acked'
-                ELSE 'resolved'
-              END AS status,
-              severity
-            FROM latest
-          )
-          SELECT status, severity, count(*)::text AS count
-          FROM a
-          GROUP BY status, severity
-        `
-      );
-
-      return { devices: devices.rows, stations: Number(stations?.count ?? "0"), alerts: alerts.rows };
-    });
-
-    const deviceCounts: Record<string, number> = {};
-    for (const r of data.devices) deviceCounts[r.status] = Number(r.count);
-    const onlineDevices = deviceCounts.active ?? 0;
-    const offlineDevices = deviceCounts.inactive ?? 0;
-
-    const alertsBySeverity: Record<string, number> = { low: 0, medium: 0, high: 0, critical: 0 };
-    let pendingAlerts = 0;
-    for (const r of data.alerts) {
-      const c = Number(r.count);
-      if (r.status === "active" || r.status === "acked") pendingAlerts += c;
-      if (r.status === "active" || r.status === "acked") {
-        alertsBySeverity[r.severity] = (alertsBySeverity[r.severity] ?? 0) + c;
-      }
+  app.get("/dashboard/summary", async (request, reply) => {
+    const traceId = request.traceId;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
+    if (!pg) {
+      fail(reply, 503, "PostgreSQL 未配置", traceId);
+      return;
     }
+    legacyOk(reply, buildDeskDashboardSummary(await buildDashboardSummaryData(config, ch, pg)));
+  });
 
-    ok(
-      reply,
-      {
-        todayDataCount,
-        onlineDevices,
-        offlineDevices,
-        pendingAlerts,
-        alertsBySeverity,
-        stations: data.stations,
-        lastUpdatedAt: now.toISOString()
-      },
-      traceId
-    );
+  app.get("/dashboard/weekly-trend", async (request, reply) => {
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
+    legacyOk(reply, await buildDashboardWeeklyTrendData(config, ch, pg));
   });
 }

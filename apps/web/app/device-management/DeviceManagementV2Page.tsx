@@ -61,6 +61,9 @@ type DeviceCommand = {
   deviceId: string
   commandType: string
   payload: Record<string, unknown>
+  notifyOnAck: boolean
+  successNotificationPolicy: 'inherit' | 'silent' | 'always_notify'
+  effectiveSuccessNotificationPolicy: 'silent' | 'always_notify'
   status: 'queued' | 'sent' | 'acked' | 'failed' | 'timeout' | 'canceled'
   createdAt: string
   updatedAt: string
@@ -112,6 +115,12 @@ function formatValue(value: unknown): string {
   } catch {
     return String(value)
   }
+}
+
+function successNotificationPolicyLabel(policy: 'inherit' | 'silent' | 'always_notify'): string {
+  if (policy === 'always_notify') return '始终通知'
+  if (policy === 'silent') return '静默'
+  return '继承默认'
 }
 
 export default function DeviceManagementPage() {
@@ -355,7 +364,11 @@ export default function DeviceManagementPage() {
 
   const sendCommand = async () => {
     if (!selectedDeviceId) return
-    const values = (await commandForm.validateFields()) as { commandType: string; payloadJson: string }
+    const values = (await commandForm.validateFields()) as {
+      commandType: string
+      payloadJson: string
+      successNotificationPolicy?: 'inherit' | 'silent' | 'always_notify'
+    }
     let payload: Record<string, unknown>
     try {
       payload = JSON.parse(values.payloadJson) as Record<string, unknown>
@@ -365,8 +378,16 @@ export default function DeviceManagementPage() {
     }
 
     try {
-      const json = await createDeviceCommand(selectedDeviceId, { commandType: values.commandType, payload })
-      message.success(`命令已创建：${json.data.commandId}（${json.data.status}）`)
+      const json = await createDeviceCommand(selectedDeviceId, {
+        commandType: values.commandType,
+        successNotificationPolicy: values.successNotificationPolicy ?? 'inherit',
+        payload
+      })
+      message.success(
+        `命令已创建：${json.data.commandId}（${json.data.status} / ${successNotificationPolicyLabel(
+          json.data.effectiveSuccessNotificationPolicy
+        )}）`
+      )
       commandForm.resetFields()
       await fetchCommands()
     } catch (caught) {
@@ -435,12 +456,21 @@ export default function DeviceManagementPage() {
       </Card>
 
       <Card title="设备命令">
-        <Form form={commandForm} layout="inline" style={{ gap: 12, marginBottom: 12 }}>
+        <Form form={commandForm} layout="inline" initialValues={{ successNotificationPolicy: 'inherit' }} style={{ gap: 12, marginBottom: 12 }}>
           <Form.Item name="commandType" rules={[{ required: true, message: 'commandType 必填' }]} style={{ minWidth: 260 }}>
             <Input placeholder="commandType，例如 ping / reboot / set_config" />
           </Form.Item>
           <Form.Item name="payloadJson" rules={[{ required: true, message: 'payloadJson 必填' }]} style={{ flex: 1, minWidth: 360 }}>
             <Input.TextArea placeholder='payload JSON，例如 {"seq":1}' autoSize />
+          </Form.Item>
+          <Form.Item name="successNotificationPolicy" style={{ minWidth: 180, marginInlineEnd: 0 }}>
+            <Select
+              options={[
+                { value: 'inherit', label: '继承默认' },
+                { value: 'silent', label: '静默' },
+                { value: 'always_notify', label: '始终通知' },
+              ]}
+            />
           </Form.Item>
           <Button type="primary" icon={<SendOutlined />} onClick={() => void sendCommand()}>
             下发
@@ -449,6 +479,9 @@ export default function DeviceManagementPage() {
             刷新
           </Button>
         </Form>
+        <div style={{ marginBottom: 12 }}>
+          <Text type="secondary">成功通知策略：继承默认会继续走 command-type default 和 system default。</Text>
+        </div>
 
         <Table
           rowKey="commandId"
@@ -459,6 +492,19 @@ export default function DeviceManagementPage() {
           columns={[
             { title: 'commandId', dataIndex: 'commandId', render: (v: string) => <span className="font-mono">{v}</span> },
             { title: 'type', dataIndex: 'commandType' },
+            {
+              title: 'policy',
+              dataIndex: 'successNotificationPolicy',
+              width: 120,
+              render: (v: DeviceCommand['successNotificationPolicy']) => successNotificationPolicyLabel(v),
+            },
+            {
+              title: 'effective',
+              dataIndex: 'effectiveSuccessNotificationPolicy',
+              width: 120,
+              render: (v: DeviceCommand['effectiveSuccessNotificationPolicy']) => successNotificationPolicyLabel(v),
+            },
+            { title: 'notifyOnAck', dataIndex: 'notifyOnAck', width: 110, render: (v: boolean) => (v ? 'yes' : 'no') },
             { title: 'status', dataIndex: 'status', render: (v: string) => <Tag>{v}</Tag> },
             { title: 'createdAt', dataIndex: 'createdAt', render: (v: string) => <span className="font-mono">{v}</span> },
           ]}

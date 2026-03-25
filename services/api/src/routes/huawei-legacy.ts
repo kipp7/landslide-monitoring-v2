@@ -180,6 +180,7 @@ async function issueDeviceCommand(
   deviceId: string,
   commandType: string,
   payload: Record<string, unknown>,
+  notifyOnAck = false,
 ): Promise<{ commandId: string; status: string; issuedAt: string }> {
   const created = await withPgClient(pg, async (client) => {
     const device = await queryOne<{ status: string }>(client, "SELECT status FROM devices WHERE device_id=$1", [deviceId]);
@@ -192,16 +193,16 @@ async function issueDeviceCommand(
         client,
         `
           INSERT INTO device_commands (
-            device_id, command_type, payload, status, requested_by, request_source
+            device_id, command_type, payload, notify_on_acked, status, requested_by, request_source
           ) VALUES (
-            $1, $2, $3::jsonb, 'queued', NULL, 'legacy-huawei'
+            $1, $2, $3::jsonb, $4::boolean, 'queued', NULL, 'legacy-huawei'
           )
           RETURNING
             command_id,
             status,
             to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS issued_ts
         `,
-        [deviceId, commandType, JSON.stringify(payload)]
+        [deviceId, commandType, JSON.stringify(payload), notifyOnAck]
       );
       if (!row) throw new Error("insert failed");
 

@@ -39,6 +39,7 @@ const configSchema = z.object({
   batchFlushIntervalMs: z.coerce.number().int().positive().default(1000),
 
   messageMaxBytes: z.coerce.number().int().positive().max(10_000_000).default(256 * 1024),
+  highFrequencyBudgetBytes: z.coerce.number().int().positive().max(10_000_000).default(192),
   dlqRawPayloadMaxBytes: z.coerce.number().int().positive().max(10_000_000).default(64 * 1024),
   statsLogIntervalMs: z.coerce.number().int().positive().max(600_000).default(30_000),
 
@@ -81,6 +82,7 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
     batchFlushIntervalMs: env.BATCH_FLUSH_INTERVAL_MS,
 
     messageMaxBytes: env.MESSAGE_MAX_BYTES,
+    highFrequencyBudgetBytes: env.HIGH_FREQUENCY_BUDGET_BYTES,
     dlqRawPayloadMaxBytes: env.DLQ_RAW_PAYLOAD_MAX_BYTES,
     statsLogIntervalMs: env.STATS_LOG_INTERVAL_MS,
 

@@ -1,0 +1,14 @@
+﻿{
+    "success":  true,
+    "code":  200,
+    "message":  "ok",
+    "data":  {
+                 "deviceId":  "bbc65525-3f4f-4393-82b6-5a5237117955",
+                 "deviceSecret":  "***REDACTED***",
+                 "schemaVersion":  1,
+                 "credVersion":  1
+             },
+    "timestamp":  "2026-03-25T01:23:29.223Z",
+    "traceId":  "34d280d0-8a92-41bf-aa16-a4c956b3dbcf",
+    "secretFile":  "backups/evidence/field-rehearsal-device-latest.json"
+}

@@ -43,6 +43,24 @@
 
    - `powershell -ExecutionPolicy Bypass -File infra/compose/scripts/create-kafka-topics.ps1`
 
+## 2.1 一键部署入口（推荐）
+
+如果你希望把上面的步骤收成一条命令，可以直接在仓库根目录执行：
+
+- 仅检查环境配置：
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release/deploy-docker-oneclick.ps1 -ValidateOnly`
+- 本地/演示一键部署：
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release/deploy-docker-oneclick.ps1 -AllowUnsafeSecrets`
+- 本地/演示一键部署并种 demo 数据：
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release/deploy-docker-oneclick.ps1 -AllowUnsafeSecrets -SeedDemo`
+
+说明：
+
+- 脚本会自动检查 `infra/compose/.env` 是否存在；不存在时会从 `env.example` 复制。
+- 默认会校验密码/密钥是否还是 `change-me`；如果只是本地演示，可以加 `-AllowUnsafeSecrets` 放行。
+- 运行结果会写到：
+  - `docs/unified/reports/docker-deploy-latest.json`
+
 ## 3) 运维入口
 
 ### 3.1 Kafka UI

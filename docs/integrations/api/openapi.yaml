@@ -2022,6 +2022,60 @@ paths:
         default:
           $ref: "#/components/responses/ErrorResponse"
 
+  /system/command-success-notification-policy:
+    get:
+      tags: [system]
+      summary: Get command success notification policy
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/CommandSuccessNotificationPolicy"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+    put:
+      tags: [system]
+      summary: Update command success notification policy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommandSuccessNotificationPolicy"
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/CommandSuccessNotificationPolicy"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
   /system/logs/operation:
     get:
       tags: [system]
@@ -2118,6 +2172,31 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/DashboardSummary"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /dashboard/weekly-trend:
+    get:
+      tags: [system]
+      summary: Dashboard weekly trend
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DashboardWeeklyTrend"
         "401":
           $ref: "#/components/responses/UnauthorizedResponse"
         "403":
@@ -2444,6 +2523,56 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/GpsDeformationSeries"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /gps/deformations/{deviceId}/analysis:
+    get:
+      tags: [gps]
+      summary: Get GPS derived analysis by deviceId
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: timeRange
+          in: query
+          required: false
+          schema: { type: string }
+        - name: startTime
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: endTime
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 5000, default: 200 }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/GpsDerivedAnalysis"
         "400":
           $ref: "#/components/responses/ErrorResponse"
         "401":
@@ -3085,7 +3214,7 @@ components:
 
     SystemStatus:
       type: object
-      required: [uptimeS, postgres, clickhouse, kafka, emqx]
+      required: [uptimeS, postgres, clickhouse, kafka, emqx, source, note, items]
       properties:
         uptimeS: { type: integer, minimum: 0 }
         postgres:
@@ -3110,6 +3239,21 @@ components:
           required: [status]
           properties:
             status: { type: string }
+        source:
+          type: string
+          enum: [health_summary]
+        note:
+          type: string
+        items:
+          type: array
+          items:
+            type: object
+            required: [key, label, status, detail]
+            properties:
+              key: { type: string, enum: [postgres, clickhouse, kafka] }
+              label: { type: string }
+              status: { type: string, enum: [healthy, degraded, not_configured, unknown] }
+              detail: { type: string }
 
     DashboardSummary:
       type: object
@@ -3130,25 +3274,51 @@ components:
         stations: { type: integer, minimum: 0 }
         lastUpdatedAt: { type: string, format: date-time }
 
+    DashboardWeeklyTrend:
+      type: object
+      required: [labels, rainfallMm, alertCount, source, note]
+      properties:
+        labels:
+          type: array
+          items: { type: string }
+        rainfallMm:
+          type: array
+          items: { type: number }
+        alertCount:
+          type: array
+          items: { type: integer, minimum: 0 }
+        source:
+          type: string
+          enum: [derived_summary]
+        note:
+          type: string
+
     CreateDeviceCommandRequest:
       type: object
       required: [commandType, payload]
       properties:
         commandType: { type: string }
+        notifyOnAck:
+          type: boolean
+          description: Legacy compatibility field. true=always_notify, false=silent.
+        successNotificationPolicy: { type: string, enum: [inherit, silent, always_notify] }
         payload:
           type: object
           additionalProperties: true
 
     CreateDeviceCommandResponse:
       type: object
-      required: [commandId, status]
+      required: [commandId, status, notifyOnAck, successNotificationPolicy, effectiveSuccessNotificationPolicy]
       properties:
         commandId: { type: string, format: uuid }
         status: { type: string, enum: [queued, sent, acked, failed, timeout] }
+        notifyOnAck: { type: boolean }
+        successNotificationPolicy: { type: string, enum: [inherit, silent, always_notify] }
+        effectiveSuccessNotificationPolicy: { type: string, enum: [silent, always_notify] }
 
     DeviceCommand:
       type: object
-      required: [commandId, deviceId, commandType, payload, status, createdAt, updatedAt]
+      required: [commandId, deviceId, commandType, payload, notifyOnAck, successNotificationPolicy, effectiveSuccessNotificationPolicy, status, createdAt, updatedAt]
       properties:
         commandId: { type: string, format: uuid }
         deviceId: { type: string, format: uuid }
@@ -3156,6 +3326,9 @@ components:
         payload:
           type: object
           additionalProperties: true
+        notifyOnAck: { type: boolean }
+        successNotificationPolicy: { type: string, enum: [inherit, silent, always_notify] }
+        effectiveSuccessNotificationPolicy: { type: string, enum: [silent, always_notify] }
         status: { type: string, enum: [queued, sent, acked, failed, timeout, canceled] }
         sentAt: { type: string, format: date-time, nullable: true }
         ackedAt: { type: string, format: date-time, nullable: true }
@@ -3914,6 +4087,19 @@ components:
               key: { type: string }
               value: { type: string }
 
+    CommandSuccessNotificationPolicy:
+      type: object
+      required: [systemDefault, commandTypeDefaults]
+      properties:
+        systemDefault:
+          type: string
+          enum: [silent, always_notify]
+        commandTypeDefaults:
+          type: object
+          additionalProperties:
+            type: string
+            enum: [silent, always_notify]
+
     GpsBaselinePoint:
       type: object
       required: [latitude, longitude]
@@ -4108,6 +4294,52 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/GpsDeformationPoint"
+
+    GpsDerivedCeemd:
+      type: object
+      required: [imfs, residue, energyDistribution, dominantFrequencies, qualityScore, reconstructionError, orthogonality]
+      properties:
+        imfs:
+          type: array
+          items:
+            type: array
+            items: { type: number }
+        residue:
+          type: array
+          items: { type: number }
+        energyDistribution:
+          type: array
+          items: { type: number }
+        dominantFrequencies:
+          type: array
+          items: { type: number }
+        qualityScore: { type: number }
+        reconstructionError: { type: number }
+        orthogonality: { type: number }
+
+    GpsDerivedPrediction:
+      type: object
+      required: [confidence, shortTerm, longTerm]
+      properties:
+        confidence: { type: number }
+        shortTerm:
+          type: array
+          items: { type: number }
+        longTerm:
+          type: array
+          items: { type: number }
+
+    GpsDerivedAnalysis:
+      type: object
+      required: [deviceId, hasBaseline, qualityScore]
+      properties:
+        deviceId: { type: string, format: uuid }
+        hasBaseline: { type: boolean }
+        qualityScore: { type: number }
+        ceemd:
+          $ref: "#/components/schemas/GpsDerivedCeemd"
+        prediction:
+          $ref: "#/components/schemas/GpsDerivedPrediction"
 
     AiPrediction:
       type: object

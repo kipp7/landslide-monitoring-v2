@@ -1,0 +1,60 @@
+﻿{
+    "generatedAt":  "2026-03-24T14:53:16Z",
+    "currentBoundary":  "broker-and-api-selfcheck-only",
+    "compose":  {
+                    "appComposeIncludesIngest":  false,
+                    "appComposeIncludesTelemetryWriter":  false
+                },
+    "runtime":  {
+                    "containers":  [
+                                       {
+                                           "name":  "lsmv2_api",
+                                           "running":  true,
+                                           "status":  "Up 5 hours"
+                                       },
+                                       {
+                                           "name":  "lsmv2_web",
+                                           "running":  true,
+                                           "status":  "Up 5 hours (healthy)"
+                                       },
+                                       {
+                                           "name":  "lsmv2_emqx",
+                                           "running":  true,
+                                           "status":  "Up 5 hours"
+                                       },
+                                       {
+                                           "name":  "lsmv2_kafka",
+                                           "running":  true,
+                                           "status":  "Up 5 hours (healthy)"
+                                       },
+                                       {
+                                           "name":  "lsmv2_clickhouse",
+                                           "running":  true,
+                                           "status":  "Up 5 hours (healthy)"
+                                       },
+                                       {
+                                           "name":  "lsmv2_postgres",
+                                           "running":  true,
+                                           "status":  "Up 5 hours (healthy)"
+                                       }
+                                   ],
+                    "hostProcesses":  [
+                                          {
+                                              "name":  "ingest-service",
+                                              "running":  false
+                                          },
+                                          {
+                                              "name":  "telemetry-writer",
+                                              "running":  false
+                                          }
+                                      ]
+                },
+    "code":  {
+                 "apiDataRawTimeFilterFixPresent":  true
+             },
+    "notes":  [
+                  "Current Docker app stack only proves MQTT publish + API self-check unless ingest-service and telemetry-writer are also running.",
+                  "A real downstream semantic proof requires telemetry to reach device_state or ClickHouse, not just successful publish output."
+              ],
+    "nextAction":  "Start ingest-service and telemetry-writer (or add them to compose) before claiming full-path downstream proof."
+}

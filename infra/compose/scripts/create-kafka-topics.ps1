@@ -67,4 +67,15 @@ foreach ($t in $topics) {
   Assert-LastExitCode "kafka-topics create failed: $t"
 }
 
+Write-Host "Ensuring internal topic: __consumer_offsets"
+Invoke-KafkaTopics @(
+  "--bootstrap-server", "kafka:9092",
+  "--create", "--if-not-exists",
+  "--topic", "__consumer_offsets",
+  "--partitions", "50",
+  "--replication-factor", "1",
+  "--config", "cleanup.policy=compact"
+) 1>$null
+Assert-LastExitCode "kafka-topics create failed: __consumer_offsets"
+
 Write-Host "Done."

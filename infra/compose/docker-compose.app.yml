@@ -71,6 +71,7 @@ services:
     environment:
       NODE_ENV: production
       NEXT_TELEMETRY_DISABLED: "1"
+      HOSTNAME: 0.0.0.0
       # Next server-side proxy target (apps/web/app/api/*).
       API_BASE_URL: http://api:8080
     ports:

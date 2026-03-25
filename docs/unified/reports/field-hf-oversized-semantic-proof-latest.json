@@ -1,0 +1,45 @@
+﻿{
+    "generatedAt":  "2026-03-24T16:21:29Z",
+    "baseline":  {
+                     "acceptedSample":  "hf-normal",
+                     "candidateSample":  "hf-oversized"
+                 },
+    "governance":  {
+                       "hfNormal":  {
+                                        "budgetExceeded":  false,
+                                        "semanticDisposition":  "high-frequency-accepted-class"
+                                    },
+                       "hfOversized":  {
+                                           "budgetExceeded":  true,
+                                           "semanticDisposition":  "reject-or-downgrade-candidate",
+                                           "warnings":  [
+                                                            "high-frequency budget exceeded: 669 \u003e 192"
+                                                        ]
+                                       }
+                   },
+    "fullPath":  {
+                     "hfNormal":  {
+                                      "boundary":  "full-path-ok",
+                                      "clickhouseObserved":  true,
+                                      "postgresShadowObserved":  true
+                                  },
+                     "hfOversized":  {
+                                         "boundary":  "downstream-not-confirmed",
+                                         "clickhouseObserved":  false,
+                                         "postgresShadowObserved":  false,
+                                         "dlqObserved":  true
+                                     }
+                 },
+    "conclusion":  "hf-oversized-now-rejected-or-downgraded-before-persistence",
+    "notes":  [
+                  "hf-normal is used as the accepted-class baseline.",
+                  "hf-oversized is expected to be a reject-or-downgrade candidate at the semantic layer.",
+                  "If hf-oversized still reaches ClickHouse and device_state, the current stack has not yet implemented downstream reject/downgrade behavior.",
+                  "If hf-oversized no longer reaches ClickHouse/device_state and writer logs show DLQ routing, the downstream reject/downgrade path is considered implemented."
+              ],
+    "artifacts":  {
+                      "normalFullPath":  "docs/unified/reports/field-http-full-path-hf-normal-latest.json",
+                      "oversizedFullPath":  "docs/unified/reports/field-http-full-path-hf-oversized-latest.json",
+                      "governance":  "docs/unified/reports/field-docker-mqtt-governance-latest.json"
+                  }
+}

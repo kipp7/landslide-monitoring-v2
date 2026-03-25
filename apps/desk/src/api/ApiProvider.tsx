@@ -8,6 +8,9 @@ export type ApiProviderConfig = {
   mode: ApiMode;
   baseUrl: string;
   token: string | null;
+  refreshToken?: string | null;
+  onAuthTokens?: (input: { token: string; refreshToken?: string }) => void;
+  onAuthFailure?: () => void;
   mockDelayMs?: number;
   mockFailureRate?: number;
 };
@@ -15,7 +18,7 @@ export type ApiProviderConfig = {
 const ApiContext = createContext<ApiClient | null>(null);
 
 export function ApiProvider(props: React.PropsWithChildren<{ config: ApiProviderConfig }>) {
-  const { mode, baseUrl, token, mockDelayMs, mockFailureRate } = props.config;
+  const { mode, baseUrl, token, refreshToken, onAuthTokens, onAuthFailure, mockDelayMs, mockFailureRate } = props.config;
   const delayMs = mockDelayMs ?? 200;
   const failureRate = mockFailureRate ?? 0;
 
@@ -23,10 +26,16 @@ export function ApiProvider(props: React.PropsWithChildren<{ config: ApiProvider
     () => createMockClient({ delayMs, failureRate }),
     [delayMs, failureRate]
   );
-  const httpClient = useMemo<ApiClient>(
-    () => createHttpClient({ baseUrl, getToken: () => token }),
-    [baseUrl, token]
-  );
+  const httpClient = useMemo<ApiClient>(() => {
+    const next = {
+      baseUrl,
+      getToken: () => token,
+      getRefreshToken: () => refreshToken ?? null,
+      ...(onAuthTokens ? { onAuthTokens } : {}),
+      ...(onAuthFailure ? { onAuthFailure } : {})
+    };
+    return createHttpClient(next);
+  }, [baseUrl, onAuthFailure, onAuthTokens, refreshToken, token]);
 
   const client = mode === "http" ? httpClient : mockClient;
 

@@ -14,9 +14,11 @@ export function AppShell() {
   const location = useLocation();
   const { message, modal } = AntApp.useApp();
   const apiMode = useSettingsStore((s) => s.apiMode);
+  const apiModeLabel = apiMode === "mock" ? "演示环境" : "联调环境";
   const user = useAuthStore((s) => s.user);
   const clearAuth = useAuthStore((s) => s.clear);
-  const showTopRight = !location.pathname.startsWith("/app/analysis");
+  const isAnalysis = location.pathname.startsWith("/app/analysis");
+  const showTopRight = !isAnalysis;
 
   const logout = async () => {
     modal.confirm({
@@ -40,11 +42,11 @@ export function AppShell() {
 
   return (
     <div className="desk-app">
-      <HoverSidebar />
+      {isAnalysis ? null : <HoverSidebar />}
       {showTopRight ? (
         <div className="desk-topright">
           <Space size={8}>
-            <Tag color={apiMode === "mock" ? "blue" : "geekblue"}>{apiMode.toUpperCase()}</Tag>
+            <Tag color={apiMode === "mock" ? "blue" : "geekblue"}>{apiModeLabel}</Tag>
             <Typography.Text type="secondary">{user?.name ?? "未登录"}</Typography.Text>
             <Button
               size="small"

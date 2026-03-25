@@ -10,17 +10,18 @@ import { verifyAccessToken } from "./auth";
 import { fail } from "./http";
 import { createPgPool } from "./postgres";
 import { registerDataRoutes } from "./routes/data";
-import { registerDeviceRoutes } from "./routes/devices";
+import { registerDeviceLegacyCompatRoutes, registerDeviceRoutes } from "./routes/devices";
 import { registerEmqxRoutes } from "./routes/emqx";
 import { registerSensorRoutes } from "./routes/sensors";
 import { registerStationRoutes } from "./routes/stations";
 import { registerCommandEventRoutes } from "./routes/command-events";
 import { registerCommandNotificationRoutes } from "./routes/command-notifications";
 import { registerAlertRoutes } from "./routes/alerts";
+import { registerAlertNotificationRoutes } from "./routes/alert-notifications";
 import { registerAlertRuleRoutes } from "./routes/alert-rules";
 import { registerAlertRuleReplayRoutes } from "./routes/alert-rules-replay";
 import { registerTelemetryDlqRoutes } from "./routes/telemetry-dlq";
-import { registerSystemRoutes } from "./routes/system";
+import { registerSystemLegacyCompatRoutes, registerSystemRoutes } from "./routes/system";
 import { registerAuthRoutes } from "./routes/auth";
 import { registerUserRoutes } from "./routes/users";
 import { registerGpsBaselineRoutes } from "./routes/gps-baselines";
@@ -87,10 +88,25 @@ async function main(): Promise<void> {
     if (request.url.startsWith("/emqx/")) return;
     if (request.url === "/api/v1/auth/login") return;
     if (request.url === "/api/v1/auth/refresh") return;
-    if (!config.authRequired) return;
 
     const traceId = request.traceId;
     const auth = request.headers.authorization;
+    if (!config.authRequired) {
+      if (!auth || !auth.startsWith("Bearer ") || auth.trim() === "Bearer") return;
+
+      const token = auth.slice("Bearer ".length).trim();
+      if (config.adminApiToken && token === config.adminApiToken) {
+        request.user = null;
+        return;
+      }
+
+      const u = verifyAccessToken(config, token);
+      if (u) {
+        request.user = u;
+      }
+      return;
+    }
+
     if (!auth || !auth.startsWith("Bearer ") || auth.trim() === "Bearer") {
       fail(reply, 401, "未认证", traceId);
       return;
@@ -215,6 +231,8 @@ async function main(): Promise<void> {
       registerAiPredictionLegacyCompatRoutes(api, config, pg);
       registerDeviceHealthExpertLegacyCompatRoutes(api, config, ch, pg);
       registerLegacyDeviceManagementCompatRoutes(api, config, ch, pg);
+      registerDeviceLegacyCompatRoutes(api, config, pg);
+      registerSystemLegacyCompatRoutes(api, config, ch, pg);
       registerLegacyDebugToolRoutes(api, config, ch, pg, { injector: app });
       registerLegacyDbAdminRoutes(api, config, pg);
       registerLegacyDisabledRoutes(api, config);
@@ -234,6 +252,8 @@ async function main(): Promise<void> {
       registerAiPredictionLegacyCompatRoutes(api, config, pg);
       registerDeviceHealthExpertLegacyCompatRoutes(api, config, ch, pg);
       registerLegacyDeviceManagementCompatRoutes(api, config, ch, pg);
+      registerDeviceLegacyCompatRoutes(api, config, pg);
+      registerSystemLegacyCompatRoutes(api, config, ch, pg);
       registerLegacyDebugToolRoutes(api, config, ch, pg, { injector: app });
       registerLegacyDbAdminRoutes(api, config, pg);
       registerLegacyDisabledRoutes(api, config);
@@ -260,6 +280,7 @@ async function main(): Promise<void> {
     registerSensorRoutes(v1, config, pg);
     registerStationRoutes(v1, config, pg);
     registerAlertRoutes(v1, config, pg);
+    registerAlertNotificationRoutes(v1, config, pg);
     registerAlertRuleRoutes(v1, config, pg);
     registerAlertRuleReplayRoutes(v1, config, ch, pg);
     registerCommandEventRoutes(v1, config, pg);

@@ -1,0 +1,6 @@
+﻿<Include>
+  <?define CoreInstallerPath = "E:\学校\02 项目\99 山体滑坡优化完善\landslide-monitoring-v2-mainline\artifacts\desk-win\installer\LandslideDesk-Setup-win-x64-938f86e.exe" ?>
+  <?define CustomBAOutputDir = "E:\学校\02 项目\99 山体滑坡优化完善\landslide-monitoring-v2-mainline\artifacts\desk-win\customba-shell" ?>
+  <?define BundleVersion = "0.1.0" ?>
+  <?define AppVersion = "0.1.0" ?>
+</Include>

@@ -199,7 +199,7 @@ export function LoginPage() {
               <Button
                 type="link"
                 onClick={() => {
-                  accountForm.setFieldsValue({ username: "admin", password: "admin" });
+                  accountForm.setFieldsValue({ username: "admin", password: "123456" });
                   message.success("已填充体验账号");
                 }}
               >

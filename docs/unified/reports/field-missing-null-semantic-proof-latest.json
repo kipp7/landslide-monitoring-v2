@@ -1,0 +1,18 @@
+﻿{
+    "generatedAt":  "2026-03-24T17:41:18Z",
+    "deviceId":  "558cb398-a7c5-423b-9ab7-b7254965a934",
+    "state":  {
+                  "version":  2,
+                  "tilt_x_deg":  "\u003cnull\u003e",
+                  "tilt_y_deg":  "0.09",
+                  "battery_pct":  "86",
+                  "packet_class":  "lf_sparse_null",
+                  "note":  "missing-null-proof"
+              },
+    "conclusion":  "missing-fields-preserve-state-and-null-fields-clear-only-targeted-metric",
+    "notes":  [
+                  "Missing metrics should preserve prior values in device_state.",
+                  "Explicit null for a metric should only clear that targeted metric.",
+                  "The followup sparse payload omits tilt_y_deg and sets tilt_x_deg to null."
+              ]
+}

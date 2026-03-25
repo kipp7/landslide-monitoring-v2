@@ -1,0 +1,159 @@
+﻿{
+    "generatedAt":  "2026-03-25T06:00:48Z",
+    "baseUrl":  "http://127.0.0.1:8081",
+    "latest":  {
+                   "json":  "docs/unified/reports/desk-mainline-proof-latest.json",
+                   "summary":  "docs/unified/reports/desk-mainline-proof-summary-latest.md",
+                   "historyIndex":  "docs/unified/reports/desk-mainline-proof-history-latest.md",
+                   "diff":  "docs/unified/reports/desk-mainline-proof-diff-latest.json"
+               },
+    "history":  {
+                    "dir":  "docs/unified/reports/history",
+                    "totalSnapshots":  20,
+                    "currentStamp":  "20260325-140047",
+                    "previousStamp":  "20260325-135827",
+                    "maxSnapshots":  20
+                },
+    "summarySnapshot":  {
+                            "generatedAt":  "2026-03-25T06:00:47Z",
+                            "baseUrl":  "http://127.0.0.1:8081",
+                            "buildExecuted":  false,
+                            "completedChecks":  45,
+                            "healthOk":  true,
+                            "auth":  {
+                                         "username":  "admin",
+                                         "role":  "admin",
+                                         "hasRefreshToken":  true,
+                                         "refreshWorks":  true
+                                     },
+                            "demoTruth":  {
+                                              "stationCount":  2,
+                                              "totalDevices":  6,
+                                              "onlineDevices":  3,
+                                              "alertCountToday":  1,
+                                              "rainfallSum":  79,
+                                              "alertSum":  3,
+                                              "missingBaselineCount":  3
+                                          },
+                            "pageProofs":  {
+                                               "homeRefreshStable":  true,
+                                               "analysisAnomalies":  3,
+                                               "stationManagementStations":  2,
+                                               "gpsCandidateCount":  3,
+                                               "gpsTrendDirection":  "decreasing",
+                                               "gpsTrendSlopeMmPerHour":  -0.0007,
+                                               "gpsTrendFitR2":  0.0002,
+                                               "gpsThresholdBlue":  2.5,
+                                               "gpsThresholdBlueForecastBreached":  true,
+                                               "gpsThresholdRedForecastBreached":  true,
+                                               "gpsThresholdRedForecastEtaHours":  1,
+                                               "gpsSampleProfiles":  3,
+                                               "gpsProfileEvaluationProfiles":  3,
+                                               "gpsProfileBacktestProfiles":  3,
+                                               "gpsProfileErrorProfiles":  3,
+                                               "gpsProfileAlertProfiles":  3,
+                                               "gpsThresholdPrecisionProfiles":  3,
+                                               "gpsThresholdErrorProfiles":  3,
+                                               "gpsThresholdMatrixProfiles":  3,
+                                               "gpsThresholdHorizonErrorProfiles":  3,
+                                               "gpsThresholdGovernanceProfiles":  3,
+                                               "gpsThresholdFullMatrixProfiles":  3,
+                                               "gpsThresholdScorecardProfiles":  3,
+                                               "gpsThresholdRankingProfiles":  3,
+                                               "gpsThresholdPolicyProfiles":  3,
+                                               "gpsThresholdExecutionProfiles":  3,
+                                               "gpsThresholdRunbookProfiles":  3,
+                                               "gpsThresholdSlaProfiles":  3,
+                                               "gpsThresholdOperatingProfiles":  3,
+                                               "gpsDataLimit":  320,
+                                               "gpsV1AnalysisImfCount":  3,
+                                               "gpsShortPredictionBandPoints":  24,
+                                               "gpsLongPredictionBandPoints":  168,
+                                               "deviceCommandsLoaded":  10,
+                                               "commandNotifyOnAckDefault":  true,
+                                               "commandNotifyOnAckOptIn":  true,
+                                               "diagnosticsType":  "expert_comprehensive_health"
+                                           },
+                            "exports":  {
+                                            "gpsChart":  "desk-gps-chart.svg",
+                                            "gpsCsv":  "desk-gps-monitoring.csv",
+                                            "deviceCsv":  "desk-devices.csv",
+                                            "deviceDetailCopyReady":  true
+                                        },
+                            "viewerBoundary":  {
+                                                   "deniedCount":  5,
+                                                   "deniedKeys":  [
+                                                                      "gps",
+                                                                      "system",
+                                                                      "baselineUpsert",
+                                                                      "deviceCommandIssue",
+                                                                      "deviceCommandList"
+                                                                  ]
+                                               },
+                            "stress":  {
+                                           "paginationIncluded":  false,
+                                           "commandPaginationIncluded":  false
+                                       }
+                        },
+    "diff":  {
+                 "generatedAt":  "2026-03-25T06:00:48Z",
+                 "hasPrevious":  true,
+                 "current":  {
+                                 "stamp":  "20260325-140047",
+                                 "generatedAt":  "2026-03-25T06:00:47Z",
+                                 "checks":  45,
+                                 "stations":  2,
+                                 "devices":  6,
+                                 "online":  3,
+                                 "alerts":  1,
+                                 "rainfall":  79,
+                                 "missingBaselines":  3,
+                                 "denied":  5
+                             },
+                 "previous":  {
+                                  "stamp":  "20260325-135827",
+                                  "generatedAt":  "2026-03-25T05:58:27Z",
+                                  "checks":  45,
+                                  "stations":  2,
+                                  "devices":  6,
+                                  "online":  3,
+                                  "alerts":  1,
+                                  "rainfall":  79,
+                                  "missingBaselines":  3,
+                                  "denied":  5
+                              },
+                 "delta":  {
+                               "checks":  0,
+                               "stations":  0,
+                               "devices":  0,
+                               "online":  0,
+                               "alerts":  0,
+                               "rainfall":  0,
+                               "missingBaselines":  0,
+                               "viewerDenied":  0
+                           },
+                 "hasLastMatching":  true,
+                 "lastMatching":  {
+                                      "stamp":  "20260325-135827",
+                                      "generatedAt":  "2026-03-25T05:58:27Z",
+                                      "checks":  45,
+                                      "stations":  2,
+                                      "devices":  6,
+                                      "online":  3,
+                                      "alerts":  1,
+                                      "rainfall":  79,
+                                      "missingBaselines":  3,
+                                      "denied":  5
+                                  },
+                 "deltaFromLastMatching":  {
+                                               "checks":  0,
+                                               "stations":  0,
+                                               "devices":  0,
+                                               "online":  0,
+                                               "alerts":  0,
+                                               "rainfall":  0,
+                                               "missingBaselines":  0,
+                                               "viewerDenied":  0
+                                           }
+             }
+}

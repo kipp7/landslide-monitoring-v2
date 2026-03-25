@@ -62,7 +62,7 @@ Body：
   "method": "manual",
   "pointsCount": 20,
   "baseline": {
-    "latitude": 21.6847,
+    "latitude": 22.6847,
     "longitude": 108.3516,
     "altitude": 12.3,
     "positionAccuracyMeters": 1.5,

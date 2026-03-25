@@ -57,7 +57,7 @@ export function StationsPage() {
       <Typography.Title level={3} style={{ marginTop: 0 }}>
         监测点
       </Typography.Title>
-      <Card title="监测点列表（Mock）">
+      <Card title="监测点列表">
         {loading ? (
           <Skeleton active />
         ) : (
@@ -119,7 +119,7 @@ export function StationsPage() {
 
             <div style={{ height: 16 }} />
             <Typography.Title level={5} style={{ margin: 0 }}>
-              设备（Mock）
+              设备
             </Typography.Title>
             <div style={{ height: 8 }} />
             {devicesLoading ? (

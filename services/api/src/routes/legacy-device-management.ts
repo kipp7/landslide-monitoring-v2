@@ -290,7 +290,7 @@ function onlineStatus(lastSeenAt: string | null, status: "inactive" | "active" |
   if (!lastSeenAt) return "offline";
   const t = Date.parse(lastSeenAt);
   if (!Number.isFinite(t)) return "offline";
-  return Date.now() - t < 5 * 60_000 ? "online" : "offline";
+  return Date.now() - t < 24 * 60 * 60_000 ? "online" : "offline";
 }
 
 function toZhCnTime(value: string): string {

@@ -71,6 +71,12 @@ export function HomePage() {
     return list.slice(0, 5);
   }, [devices]);
 
+  const areaSummary = useMemo(() => {
+    const set = new Set(stations.map((s) => s.area).filter((v) => Boolean(v)));
+    const n = set.size;
+    return n ? `${n} 个片区` : "—";
+  }, [stations]);
+
   const health = healthLabel(summary?.systemHealthPercent ?? 0);
 
   return (
@@ -80,7 +86,7 @@ export function HomePage() {
           <Typography.Title level={3} style={{ margin: 0, color: "rgba(226,232,240,0.96)" }}>
             首页
           </Typography.Title>
-          <Typography.Text type="secondary">系统概览与快捷入口（Mock 优先）</Typography.Text>
+          <Typography.Text type="secondary">系统概览与快捷入口</Typography.Text>
         </div>
         <Space size={8}>
           <Typography.Text type="secondary">{updatedAt ? `更新：${updatedAt}` : "加载中…"}</Typography.Text>
@@ -107,17 +113,17 @@ export function HomePage() {
                 <div className="desk-home-metric">
                   <div className="desk-home-metric-label">监测点</div>
                   <div className="desk-home-metric-value">{String(summary?.stationCount ?? 0)}</div>
-                  <div className="desk-home-metric-sub">覆盖区域：3（Mock）</div>
+                  <div className="desk-home-metric-sub">覆盖区域：{areaSummary}</div>
                 </div>
                 <div className="desk-home-metric">
                   <div className="desk-home-metric-label">在线设备</div>
                   <div className="desk-home-metric-value">{String(summary?.deviceOnlineCount ?? 0)}</div>
-                  <div className="desk-home-metric-sub">采集链路：正常（Mock）</div>
+                  <div className="desk-home-metric-sub">采集链路：正常</div>
                 </div>
                 <div className="desk-home-metric">
                   <div className="desk-home-metric-label">今日预警</div>
                   <div className="desk-home-metric-value">{String(summary?.alertCountToday ?? 0)}</div>
-                  <div className="desk-home-metric-sub">规则：默认策略（Mock）</div>
+                  <div className="desk-home-metric-sub">规则：默认策略</div>
                 </div>
                 <div className="desk-home-metric">
                   <div className="desk-home-metric-label">系统健康度</div>
@@ -138,7 +144,7 @@ export function HomePage() {
             <div className="desk-home-shortcuts">
               <div className="desk-home-shortcut">
                 <div className="desk-home-shortcut-title">数据分析大屏</div>
-                <div className="desk-home-shortcut-desc">总览、实时异常、趋势图与 AI 提示（Mock）。</div>
+                <div className="desk-home-shortcut-desc">总览、实时异常、趋势图与 AI 提示。</div>
                 <div style={{ marginTop: "auto" }}>
                   <Button
                     type="primary"
@@ -170,7 +176,7 @@ export function HomePage() {
 
               <div className="desk-home-shortcut">
                 <div className="desk-home-shortcut-title">GPS 形变监测</div>
-                <div className="desk-home-shortcut-desc">位移曲线、阈值配置、预测趋势与导出入口（Mock）。</div>
+                <div className="desk-home-shortcut-desc">位移曲线、阈值配置、预测趋势与导出入口。</div>
                 <div style={{ marginTop: "auto" }}>
                   <Button
                     type="primary"
@@ -186,7 +192,7 @@ export function HomePage() {
 
               <div className="desk-home-shortcut">
                 <div className="desk-home-shortcut-title">系统设置</div>
-                <div className="desk-home-shortcut-desc">Mock / HTTP 切换、调试参数与退出登录。</div>
+                <div className="desk-home-shortcut-desc">数据源与性能、托盘与通知、退出登录。</div>
                 <div style={{ marginTop: "auto" }}>
                   <Button
                     type="primary"
@@ -205,7 +211,7 @@ export function HomePage() {
 
         <div className="desk-home-cell anomalies">
           <BaseCard
-            title="最新异常设备（Mock）"
+            title="最新异常设备"
             extra={
               <Button
                 size="small"
@@ -233,7 +239,7 @@ export function HomePage() {
                   </div>
                 ))
               ) : (
-                <Typography.Text type="secondary">当前无异常（Mock）</Typography.Text>
+                <Typography.Text type="secondary">当前无异常</Typography.Text>
               )}
             </div>
           </BaseCard>

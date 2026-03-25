@@ -95,6 +95,9 @@ export type DeviceCommand = {
   deviceId: string
   commandType: string
   payload: Record<string, unknown>
+  notifyOnAck: boolean
+  successNotificationPolicy: SuccessNotificationPolicy
+  effectiveSuccessNotificationPolicy: EffectiveSuccessNotificationPolicy
   status: 'queued' | 'sent' | 'acked' | 'failed' | 'timeout' | 'canceled'
   sentAt?: string | null
   ackedAt?: string | null
@@ -102,6 +105,30 @@ export type DeviceCommand = {
   errorMessage?: string
   createdAt: string
   updatedAt: string
+}
+
+export type SuccessNotificationPolicy = 'inherit' | 'silent' | 'always_notify'
+export type EffectiveSuccessNotificationPolicy = Exclude<SuccessNotificationPolicy, 'inherit'>
+
+function deriveSuccessNotificationPolicy(input: {
+  notifyOnAck?: boolean
+  successNotificationPolicy?: SuccessNotificationPolicy
+  effectiveSuccessNotificationPolicy?: EffectiveSuccessNotificationPolicy
+}): {
+  notifyOnAck: boolean
+  successNotificationPolicy: SuccessNotificationPolicy
+  effectiveSuccessNotificationPolicy: EffectiveSuccessNotificationPolicy
+} {
+  const successNotificationPolicy =
+    input.successNotificationPolicy ?? (input.notifyOnAck ? 'always_notify' : 'silent')
+  const effectiveSuccessNotificationPolicy =
+    input.effectiveSuccessNotificationPolicy ??
+    (successNotificationPolicy === 'inherit' ? (input.notifyOnAck ? 'always_notify' : 'silent') : successNotificationPolicy)
+  return {
+    notifyOnAck: Boolean(input.notifyOnAck ?? effectiveSuccessNotificationPolicy === 'always_notify'),
+    successNotificationPolicy,
+    effectiveSuccessNotificationPolicy,
+  }
 }
 
 export type PaginatedDeviceCommands = {
@@ -123,18 +150,61 @@ export async function listDeviceCommands(
   params.set('page', String(query.page))
   params.set('pageSize', String(query.pageSize))
   if (query.status) params.set('status', query.status)
-  return apiGetJson<ApiSuccessResponse<PaginatedDeviceCommands>>(
+  const json = await apiGetJson<ApiSuccessResponse<{
+    list: Array<{
+      commandId: string
+      deviceId: string
+      commandType: string
+      payload: Record<string, unknown>
+      notifyOnAck?: boolean
+      successNotificationPolicy?: SuccessNotificationPolicy
+      effectiveSuccessNotificationPolicy?: EffectiveSuccessNotificationPolicy
+      status: DeviceCommand['status']
+      sentAt?: string | null
+      ackedAt?: string | null
+      result?: Record<string, unknown>
+      errorMessage?: string
+      createdAt: string
+      updatedAt: string
+    }>
+    pagination: PaginatedDeviceCommands['pagination']
+  }>>(
     `/api/v1/devices/${encodeURIComponent(deviceId)}/commands?${params.toString()}`
   )
+  return {
+    ...json,
+    data: {
+      list: json.data.list.map((item) => ({
+        commandId: item.commandId,
+        deviceId: item.deviceId,
+        commandType: item.commandType,
+        payload: item.payload ?? {},
+        ...deriveSuccessNotificationPolicy(item),
+        status: item.status,
+        sentAt: item.sentAt,
+        ackedAt: item.ackedAt,
+        result: item.result,
+        errorMessage: item.errorMessage,
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+      })),
+      pagination: json.data.pagination,
+    },
+  }
 }
 
 export type CreateDeviceCommandRequest = {
   commandType: string
+  notifyOnAck?: boolean
+  successNotificationPolicy?: SuccessNotificationPolicy
   payload: Record<string, unknown>
 }
 
 export type CreateDeviceCommandResponse = {
   commandId: string
+  notifyOnAck: boolean
+  successNotificationPolicy: SuccessNotificationPolicy
+  effectiveSuccessNotificationPolicy: EffectiveSuccessNotificationPolicy
   status: 'queued' | 'sent' | 'acked' | 'failed' | 'timeout'
 }
 
@@ -142,10 +212,36 @@ export async function createDeviceCommand(
   deviceId: string,
   body: CreateDeviceCommandRequest
 ): Promise<ApiSuccessResponse<CreateDeviceCommandResponse>> {
-  return apiJson<ApiSuccessResponse<CreateDeviceCommandResponse>>(
+  const json = await apiJson<ApiSuccessResponse<{
+    commandId: string
+    notifyOnAck?: boolean
+    successNotificationPolicy?: SuccessNotificationPolicy
+    effectiveSuccessNotificationPolicy?: EffectiveSuccessNotificationPolicy
+    status: 'queued' | 'sent' | 'acked' | 'failed' | 'timeout'
+  }>>(
     `/api/v1/devices/${encodeURIComponent(deviceId)}/commands`,
-    body
+    {
+      commandType: body.commandType,
+      ...(body.notifyOnAck === undefined ? {} : { notifyOnAck: body.notifyOnAck }),
+      ...(body.successNotificationPolicy === undefined
+        ? {}
+        : {
+            successNotificationPolicy: body.successNotificationPolicy,
+            ...(body.successNotificationPolicy === 'inherit'
+              ? {}
+              : { notifyOnAck: body.successNotificationPolicy === 'always_notify' }),
+          }),
+      payload: body.payload,
+    }
   )
+  return {
+    ...json,
+    data: {
+      commandId: json.data.commandId,
+      status: json.data.status,
+      ...deriveSuccessNotificationPolicy(json.data),
+    },
+  }
 }
 
 type DeviceCommandEvent = {

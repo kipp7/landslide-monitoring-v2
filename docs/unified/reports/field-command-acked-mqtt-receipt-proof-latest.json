@@ -1,0 +1,97 @@
+﻿{
+    "generatedAt":  "2026-03-25T04:22:50Z",
+    "deviceId":  "52088571-8dbf-4849-b418-587189ca5967",
+    "commandId":  "a9a26965-240d-4f8a-ac56-a0a04b47339b",
+    "event":  {
+                  "eventId":  "b528bf52-8d06-410f-af0b-bb09327ca35b",
+                  "eventType":  "COMMAND_ACKED",
+                  "commandId":  "a9a26965-240d-4f8a-ac56-a0a04b47339b",
+                  "deviceId":  "52088571-8dbf-4849-b418-587189ca5967",
+                  "status":  "acked",
+                  "detail":  ""
+              },
+    "notification":  null,
+    "conclusion":  "mqtt-command-acked-receipt-updates-command-and-event-without-command-notification",
+    "notes":  [
+                  "The proof creates a rehearsal device, issues a sent command, and publishes an acked MQTT ack to cmd_ack/\u003cdevice_id\u003e.",
+                  "command-ack-receiver should accept the MQTT ack, publish device.command_acks.v1, apply the acked receipt, and emit COMMAND_ACKED.",
+                  "Current command notification strategy should not create device_command_notifications for COMMAND_ACKED."
+              ],
+    "command":  {
+                    "commandId":  "a9a26965-240d-4f8a-ac56-a0a04b47339b",
+                    "deviceId":  "52088571-8dbf-4849-b418-587189ca5967",
+                    "commandType":  "set_config",
+                    "payload":  {
+                                    "sampling_s":  10,
+                                    "report_interval_s":  60
+                                },
+                    "notifyOnAck":  false,
+                    "status":  "acked",
+                    "sentAt":  "2026-03-25T04:22:48Z",
+                    "ackedAt":  "2026-03-25T04:22:49Z",
+                    "result":  {
+                                   "applied":  true
+                               },
+                    "errorMessage":  "",
+                    "createdAt":  "2026-03-25T04:22:48Z",
+                    "updatedAt":  "2026-03-25T04:22:49Z"
+                },
+    "events":  {
+                   "list":  [
+                                {
+                                    "eventId":  "b528bf52-8d06-410f-af0b-bb09327ca35b",
+                                    "eventType":  "COMMAND_ACKED",
+                                    "commandId":  "a9a26965-240d-4f8a-ac56-a0a04b47339b",
+                                    "deviceId":  "52088571-8dbf-4849-b418-587189ca5967",
+                                    "status":  "acked",
+                                    "detail":  "",
+                                    "result":  {
+                                                   "applied":  true
+                                               },
+                                    "createdAt":  "2026-03-25T04:22:49Z",
+                                    "ingestedAt":  "2026-03-25T04:22:49Z"
+                                }
+                            ],
+                   "pagination":  {
+                                      "page":  1,
+                                      "pageSize":  20,
+                                      "total":  1,
+                                      "totalPages":  1
+                                  }
+               },
+    "notifications":  {
+                          "list":  {
+                                       "list":  [
+
+                                                ],
+                                       "pagination":  {
+                                                          "page":  1,
+                                                          "pageSize":  20,
+                                                          "total":  0,
+                                                          "totalPages":  1
+                                                      }
+                                   },
+                          "stats":  {
+                                        "deviceId":  "52088571-8dbf-4849-b418-587189ca5967",
+                                        "window":  null,
+                                        "notifyType":  "",
+                                        "bucket":  "",
+                                        "totals":  {
+                                                       "total":  0,
+                                                       "unread":  0
+                                                   },
+                                        "byStatus":  [
+
+                                                     ],
+                                        "byNotifyType":  [
+
+                                                         ],
+                                        "byEventType":  [
+
+                                                        ],
+                                        "byBucket":  [
+
+                                                     ]
+                                    }
+                      }
+}

@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "device_id": "2c1f2d8e-2bb7-4f58-bb6a-6c2a0f4a7a4c",
+  "seq": 999,
+  "metrics": {
+    "tilt_x_deg": 0.14,
+    "tilt_y_deg": 0.06,
+    "battery_pct": 88,
+    "warning_flag": false
+  }
+}

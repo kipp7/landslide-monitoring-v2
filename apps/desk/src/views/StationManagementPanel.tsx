@@ -25,7 +25,7 @@ import {
 import dayjs from "dayjs";
 import { useEffect, useMemo, useState } from "react";
 
-import type { Device, DeviceType, OnlineStatus, RiskLevel, Station } from "../api/client";
+import type { DeviceType, OnlineStatus, RiskLevel, StationManagementStation } from "../api/client";
 import { useApi } from "../api/ApiProvider";
 import { BaseCard } from "../components/BaseCard";
 import { RiskTag } from "../components/RiskTag";
@@ -33,21 +33,6 @@ import { StatusTag } from "../components/StatusTag";
 import "./stationManagement.css";
 
 type ViewMode = "list" | "hierarchy";
-
-type MonitoringStation = {
-  stationId: string;
-  stationName: string;
-  locationName: string;
-  description: string;
-  chartLegendName: string;
-  riskLevel: RiskLevel;
-  status: OnlineStatus;
-  lat: number;
-  lng: number;
-  deviceCount: number;
-  sensorTypes: DeviceType[];
-  lastDataTime: string;
-};
 
 type EditState =
   | { open: false }
@@ -57,29 +42,6 @@ type LegendState =
   | { open: false }
   | { open: true; draft: Record<string, string> };
 
-const STORAGE_KEY = "desk.station-management.v1";
-
-function safeJsonParse<T>(input: string): T | null {
-  try {
-    return JSON.parse(input) as T;
-  } catch {
-    return null;
-  }
-}
-
-function saveStations(stations: MonitoringStation[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 1, stations }));
-}
-
-function loadStations(): MonitoringStation[] | null {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) return null;
-  const parsed = safeJsonParse<{ version: number; stations: MonitoringStation[] }>(raw);
-  if (!parsed || parsed.version !== 1) return null;
-  if (!Array.isArray(parsed.stations)) return null;
-  return parsed.stations;
-}
-
 function deviceTypeLabel(type: DeviceType) {
   if (type === "gnss") return "GNSS";
   if (type === "rain") return "雨量";
@@ -88,44 +50,7 @@ function deviceTypeLabel(type: DeviceType) {
   return "摄像头";
 }
 
-function mergeFromApi(existing: MonitoringStation[], fromApi: Station[], devices: Device[]): MonitoringStation[] {
-  const prevById = new Map(existing.map((s) => [s.stationId, s] as const));
-  const devicesByStation = new Map<string, Device[]>();
-  for (const d of devices) {
-    const list = devicesByStation.get(d.stationId) ?? [];
-    list.push(d);
-    devicesByStation.set(d.stationId, list);
-  }
-
-  const next: MonitoringStation[] = [];
-  for (const st of fromApi) {
-    const prev = prevById.get(st.id);
-    const ds = devicesByStation.get(st.id) ?? [];
-    const sensorTypes = Array.from(new Set(ds.map((d) => d.type))).sort();
-    const lastDataTime = ds.map((d) => d.lastSeenAt).sort().at(-1) ?? dayjs().subtract(10, "minute").toISOString();
-
-    next.push({
-      stationId: st.id,
-      stationName: prev?.stationName ?? st.name,
-      locationName: prev?.locationName ?? st.area,
-      description: prev?.description ?? "用于统一管理监测站配置、图表图例和传感器设置（Mock）",
-      chartLegendName: prev?.chartLegendName ?? st.name,
-      riskLevel: prev?.riskLevel ?? st.risk,
-      status: prev?.status ?? st.status,
-      lat: st.lat,
-      lng: st.lng,
-      deviceCount: st.deviceCount,
-      sensorTypes: prev?.sensorTypes?.length ? prev.sensorTypes : sensorTypes,
-      lastDataTime: prev?.lastDataTime ?? lastDataTime
-    });
-  }
-
-  const apiIds = new Set(fromApi.map((s) => s.id));
-  const extras = existing.filter((s) => !apiIds.has(s.stationId));
-  return [...extras, ...next];
-}
-
-function hierarchyData(stations: MonitoringStation[]) {
+function hierarchyData(stations: StationManagementStation[]) {
   const onlineCount = stations.filter((s) => s.status === "online").length;
   const mainRegion = {
     region_name: "挂傍山监测区域",
@@ -175,7 +100,7 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdateTime, setLastUpdateTime] = useState<string>("");
-  const [stations, setStations] = useState<MonitoringStation[]>(() => loadStations() ?? []);
+  const [stations, setStations] = useState<StationManagementStation[]>([]);
 
   const [edit, setEdit] = useState<EditState>({ open: false });
   const [legend, setLegend] = useState<LegendState>({ open: false });
@@ -201,13 +126,11 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
     setLoading(true);
     setError(null);
     try {
-      const [stationList, deviceList] = await Promise.all([api.stations.list(), api.devices.list()]);
-      const next = mergeFromApi(stations, stationList, deviceList);
+      const next = await api.stations.listManagement();
       setStations(next);
-      saveStations(next);
       const t = new Date().toLocaleTimeString("zh-CN");
       setLastUpdateTime(t);
-      if (showToast) message.success("已刷新（Mock）");
+      if (showToast) message.success("已刷新");
     } catch (err) {
       setError((err as Error).message);
       if (showToast) message.error((err as Error).message);
@@ -217,10 +140,6 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
   };
 
   useEffect(() => {
-    if (stations.length) {
-      setLoading(false);
-      return;
-    }
     void refresh(false);
   }, [api]);
 
@@ -230,7 +149,7 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
       void refresh(false);
     }, 30_000);
     return () => clearInterval(t);
-  }, [autoRefresh, api, stations]);
+  }, [autoRefresh]);
 
   const counts = useMemo(() => {
     const total = stations.length;
@@ -293,24 +212,18 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
 
   const saveEdit = async () => {
     const values = await form.validateFields();
-    setStations((prev) => {
-      const next = prev.map((s) => {
-        if (s.stationId !== values.stationId) return s;
-        return {
-          ...s,
-          stationName: values.stationName,
-          chartLegendName: values.chartLegendName,
-          locationName: values.locationName,
-          description: values.description,
-          riskLevel: values.riskLevel,
-          status: values.status,
-          sensorTypes: values.sensorTypes
-        };
-      });
-      saveStations(next);
-      return next;
+    await api.stations.updateManagement({
+      stationId: values.stationId,
+      stationName: values.stationName,
+      chartLegendName: values.chartLegendName,
+      locationName: values.locationName,
+      description: values.description,
+      riskLevel: values.riskLevel,
+      status: values.status,
+      sensorTypes: values.sensorTypes
     });
-    message.success("已保存（本地 Mock）");
+    await refresh(false);
+    message.success("已保存");
     setEdit({ open: false });
   };
 
@@ -322,13 +235,16 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
 
   const saveLegendConfig = () => {
     if (!legend.open) return;
-    setStations((prev) => {
-      const next = prev.map((s) => ({ ...s, chartLegendName: legend.draft[s.stationId] ?? s.chartLegendName }));
-      saveStations(next);
-      return next;
-    });
-    message.success("已更新图例名称（本地 Mock）");
-    setLegend({ open: false });
+    void api.stations
+      .updateLegendNames({ legends: legend.draft })
+      .then(async () => {
+        await refresh(false);
+        message.success("已更新图例名称");
+        setLegend({ open: false });
+      })
+      .catch((err: unknown) => {
+        message.error((err as Error).message);
+      });
   };
 
   const detailStation = useMemo(
@@ -336,7 +252,7 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
     [detailStationId, stations]
   );
 
-  const columns: Parameters<typeof Table<MonitoringStation>>[0]["columns"] = [
+  const columns: Parameters<typeof Table<StationManagementStation>>[0]["columns"] = [
     {
       title: "监测站",
       key: "station",
@@ -449,7 +365,7 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
       }
     >
       <div className="desk-sm-body">
-        <div className="desk-sm-subtitle">统一管理监测站配置、图表图例和传感器设置（Mock）</div>
+        <div className="desk-sm-subtitle">统一管理监测站配置、图表图例和传感器设置</div>
 
         <div className="desk-sm-stats">
           <div className="desk-sm-stat">
@@ -502,7 +418,7 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
 
         {viewMode === "list" ? (
           <div className="desk-dark-table">
-            <Table<MonitoringStation>
+            <Table<StationManagementStation>
               rowKey="stationId"
               size="small"
               dataSource={stations}
@@ -671,7 +587,7 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
             <Input placeholder="例如：玉林师范学院东校区挂傍山中心点" />
           </Form.Item>
           <Form.Item name="description" label="详细描述">
-            <Input.TextArea rows={3} placeholder="监测站的详细描述信息（Mock）" />
+            <Input.TextArea rows={3} placeholder="监测站的详细描述信息" />
           </Form.Item>
           <Row gutter={12}>
             <Col span={12}>
@@ -710,14 +626,12 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
               ]}
             />
           </Form.Item>
-          <div style={{ color: "rgba(148,163,184,0.9)", fontSize: 12 }}>
-            提示：该页面为 UI Mock，编辑结果保存在本地浏览器缓存，用于先把前端交互与样式对齐参考区。
-          </div>
+          <div style={{ color: "rgba(148,163,184,0.9)", fontSize: 12 }}>提示：用于统一管理监测站配置、图表图例和传感器设置。</div>
         </Form>
       </Modal>
 
       <Modal
-        title="图例配置（Mock）"
+        title="图例配置"
         open={legend.open}
         onCancel={() => setLegend({ open: false })}
         onOk={saveLegendConfig}
@@ -754,7 +668,7 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
       </Modal>
 
       <Modal
-        title="监测站详情（Mock）"
+        title="监测站详情"
         open={!!detailStationId}
         onCancel={() => setDetailStationId(null)}
         footer={

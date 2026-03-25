@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Threading;
 using Drawing = System.Drawing;
 using Forms = System.Windows.Forms;
 using Microsoft.Web.WebView2.Core;
@@ -25,6 +26,7 @@ public partial class MainWindow : Window
         "LandslideDesk.Win"
     );
     private static readonly string WindowStateFile = Path.Combine(AppDataRoot, "window-state.json");
+    private static readonly string RuntimeLogFile = Path.Combine(AppDataRoot, "runtime.log");
 
     private const int WmHotkey = 0x0312;
     private const int HotkeyToggleFullscreen = 1;
@@ -44,8 +46,11 @@ public partial class MainWindow : Window
 
     private string? _devServerUrl;
     private string? _localWebRoot;
+    private string? _localIndexUrl;
     private bool _hasLocalWebAssets;
     private string? _lastNavigationUrl;
+    private bool _appReady;
+    private DispatcherTimer? _startupWatchdog;
 
     private bool _isFullscreen;
     private bool _isHotkeyScopeActive;
@@ -443,6 +448,7 @@ public partial class MainWindow : Window
 
     private async Task InitializeWebViewAsync()
     {
+        LogRuntime("InitializeWebView start");
         _devServerUrl = System.Environment.GetEnvironmentVariable(DevServerEnv)?.Trim();
         if (string.IsNullOrWhiteSpace(_devServerUrl))
         {
@@ -450,7 +456,9 @@ public partial class MainWindow : Window
         }
 
         _localWebRoot = Path.Combine(System.AppContext.BaseDirectory, "web");
-        _hasLocalWebAssets = File.Exists(Path.Combine(_localWebRoot, "index.html"));
+        var localIndexPath = Path.Combine(_localWebRoot, "index.html");
+        _hasLocalWebAssets = File.Exists(localIndexPath);
+        _localIndexUrl = _hasLocalWebAssets ? BuildLocalIndexUrl(localIndexPath) : null;
 
         var userDataFolder = Path.Combine(
             System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData),
@@ -477,6 +485,7 @@ public partial class MainWindow : Window
         await InjectHostInfoAsync(core, userDataFolder, additionalArgs);
         ConfigureWebView(core);
         HookWebViewEvents(core);
+        LogRuntime($"WebView ready browser={core.Environment.BrowserVersionString} localAssets={_hasLocalWebAssets} devServer={_devServerUrl ?? "(none)"}");
 
         if (_devServerUrl is not null)
         {
@@ -491,7 +500,7 @@ public partial class MainWindow : Window
                 _localWebRoot,
                 CoreWebView2HostResourceAccessKind.Allow
             );
-            NavigateToUrl(core, $"https://{VirtualHostName}/index.html");
+            NavigateToUrl(core, _localIndexUrl ?? $"https://{VirtualHostName}/index.html");
             return;
         }
 
@@ -594,6 +603,7 @@ dotnet publish .\LandslideDesk.Win\LandslideDesk.Win.csproj -c Release -r win-x6
         core.Settings.IsStatusBarEnabled = false;
         core.Settings.IsZoomControlEnabled = false;
         core.Settings.AreBrowserAcceleratorKeysEnabled = Debugger.IsAttached;
+        core.Settings.IsWebMessageEnabled = true;
     }
 
     private void HookWebViewEvents(CoreWebView2 core)
@@ -601,6 +611,9 @@ dotnet publish .\LandslideDesk.Win\LandslideDesk.Win.csproj -c Release -r win-x6
         core.NavigationStarting += (_, e) =>
         {
             _lastNavigationUrl = e.Uri;
+            _appReady = false;
+            StartStartupWatchdog();
+            LogRuntime("NavigationStarting uri=" + e.Uri);
             Dispatcher.Invoke(() => ShowLoading("正在加载页面..."));
         };
 
@@ -608,12 +621,13 @@ dotnet publish .\LandslideDesk.Win\LandslideDesk.Win.csproj -c Release -r win-x6
         {
             Dispatcher.Invoke(() =>
             {
+                LogRuntime("NavigationCompleted success=" + e.IsSuccess + " status=" + e.WebErrorStatus + " uri=" + (_lastNavigationUrl ?? "(unknown)"));
                 if (e.IsSuccess)
                 {
-                    HideOverlays();
                     return;
                 }
 
+                StopStartupWatchdog();
                 ShowError(
                     "无法加载页面",
                     BuildNavigationErrorText(_lastNavigationUrl, e.WebErrorStatus),
@@ -626,6 +640,8 @@ dotnet publish .\LandslideDesk.Win\LandslideDesk.Win.csproj -c Release -r win-x6
         {
             Dispatcher.Invoke(() =>
             {
+                StopStartupWatchdog();
+                LogRuntime("ProcessFailed kind=" + e.ProcessFailedKind);
                 ShowError(
                     "浏览器进程异常",
                     $"WebView2 进程异常：{e.ProcessFailedKind}\n可以尝试重新加载。",
@@ -647,12 +663,22 @@ dotnet publish .\LandslideDesk.Win\LandslideDesk.Win.csproj -c Release -r win-x6
 
         core.WebMessageReceived += (_, e) =>
         {
-            var msg = e.TryGetWebMessageAsString();
+            string? msg = null;
+            try
+            {
+                msg = e.TryGetWebMessageAsString();
+            }
+            catch (ArgumentException)
+            {
+                msg = e.WebMessageAsJson;
+            }
+
             if (string.IsNullOrWhiteSpace(msg))
             {
                 return;
             }
 
+            LogRuntime("WebMessageReceived " + msg);
             Dispatcher.Invoke(() => HandleWebMessage(core, msg));
         };
 
@@ -694,7 +720,46 @@ dotnet publish .\LandslideDesk.Win\LandslideDesk.Win.csproj -c Release -r win-x6
         };
 
         var json = JsonSerializer.Serialize(info);
-        return core.AddScriptToExecuteOnDocumentCreatedAsync($"window.__DESK_HOST_INFO = {json};");
+        var bootstrapScript = $$"""
+window.__DESK_HOST_INFO = {{json}};
+(function() {
+  function postRuntimeError(payload) {
+    try {
+      window.chrome?.webview?.postMessage({
+        type: "app",
+        action: "runtimeError",
+        payload: payload
+      });
+    } catch {}
+  }
+
+  window.addEventListener("error", function(event) {
+    postRuntimeError({
+      message: event.message || "Unknown document error",
+      source: event.filename || "window.error",
+      stack: event.error && event.error.stack ? event.error.stack : undefined
+    });
+  });
+
+  window.addEventListener("unhandledrejection", function(event) {
+    var reason = event.reason;
+    if (reason && typeof reason === "object") {
+      postRuntimeError({
+        message: reason.message || "Unhandled promise rejection",
+        source: "unhandledrejection",
+        stack: reason.stack
+      });
+      return;
+    }
+
+    postRuntimeError({
+      message: typeof reason === "string" ? reason : "Unhandled promise rejection",
+      source: "unhandledrejection"
+    });
+  });
+})();
+""";
+        return core.AddScriptToExecuteOnDocumentCreatedAsync(bootstrapScript);
     }
 
     private static void TryOpenExternal(string uri)
@@ -852,6 +917,49 @@ dotnet publish .\LandslideDesk.Win\LandslideDesk.Win.csproj -c Release -r win-x6
             case "openlogsdir":
                 OpenLogsDirectory();
                 break;
+            case "ready":
+                _appReady = true;
+                StopStartupWatchdog();
+                HideOverlays();
+                LogRuntime("App ready handshake received");
+                break;
+            case "runtimeerror":
+            {
+                var data = ExtractPayload(payload);
+                var message = "前端发生未处理错误。";
+                var detail = string.Empty;
+                if (data is not null && data.Value.TryGetProperty("message", out var messageEl))
+                {
+                    message = messageEl.GetString() ?? message;
+                }
+
+                if (data is not null && data.Value.TryGetProperty("source", out var sourceEl))
+                {
+                    var source = sourceEl.GetString();
+                    if (!string.IsNullOrWhiteSpace(source))
+                    {
+                        detail += "来源：" + source + "\n";
+                    }
+                }
+
+                if (data is not null && data.Value.TryGetProperty("stack", out var stackEl))
+                {
+                    var stack = stackEl.GetString();
+                    if (!string.IsNullOrWhiteSpace(stack))
+                    {
+                        detail += stack;
+                    }
+                }
+
+                StopStartupWatchdog();
+                LogRuntime("Frontend runtime error: " + message + " " + detail);
+                ShowError(
+                    "前端加载异常",
+                    message + "\n\n" + (string.IsNullOrWhiteSpace(detail) ? "可在日志目录查看 runtime.log 与 crash 日志。" : detail),
+                    canSwitchToLocal: false
+                );
+                break;
+            }
             case "notify":
             {
                 var data = ExtractPayload(payload);
@@ -955,7 +1063,7 @@ dotnet publish .\LandslideDesk.Win\LandslideDesk.Win.csproj -c Release -r win-x6
     private void ShowError(string title, string detail, bool canSwitchToLocal)
     {
         ErrorTitle.Text = title;
-        ErrorDetail.Text = detail;
+        ErrorDetail.Text = detail + "\n\n日志目录：" + AppDataRoot;
         ErrorOverlay.Visibility = Visibility.Visible;
         LoadingOverlay.Visibility = Visibility.Collapsed;
         SwitchToLocalButton.Visibility = canSwitchToLocal ? Visibility.Visible : Visibility.Collapsed;
@@ -992,12 +1100,76 @@ dotnet publish .\LandslideDesk.Win\LandslideDesk.Win.csproj -c Release -r win-x6
             _localWebRoot,
             CoreWebView2HostResourceAccessKind.Allow
         );
-        NavigateToUrl(DeskWebView.CoreWebView2, $"https://{VirtualHostName}/index.html");
+        NavigateToUrl(DeskWebView.CoreWebView2, _localIndexUrl ?? $"https://{VirtualHostName}/index.html");
+    }
+
+    private static string BuildLocalIndexUrl(string indexPath)
+    {
+        try
+        {
+            var stamp = File.GetLastWriteTimeUtc(indexPath).Ticks.ToString();
+            return $"https://{VirtualHostName}/index.html?v={stamp}";
+        }
+        catch
+        {
+            return $"https://{VirtualHostName}/index.html";
+        }
     }
 
     private void OnExitClick(object sender, RoutedEventArgs e)
     {
         App.RequestAppShutdown();
+    }
+
+    private void StartStartupWatchdog()
+    {
+        StopStartupWatchdog();
+        _startupWatchdog = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(20)
+        };
+        _startupWatchdog.Tick += OnStartupWatchdogTick;
+        _startupWatchdog.Start();
+    }
+
+    private void StopStartupWatchdog()
+    {
+        if (_startupWatchdog is null)
+        {
+            return;
+        }
+
+        _startupWatchdog.Stop();
+        _startupWatchdog.Tick -= OnStartupWatchdogTick;
+        _startupWatchdog = null;
+    }
+
+    private void OnStartupWatchdogTick(object? sender, EventArgs e)
+    {
+        StopStartupWatchdog();
+        if (_appReady)
+        {
+            return;
+        }
+
+        LogRuntime("Startup watchdog timeout uri=" + (_lastNavigationUrl ?? "(unknown)"));
+        ShowError(
+            "页面启动超时",
+            "桌面端页面在预期时间内没有完成初始化。\n可先尝试重新加载；若重复出现，请打开日志目录查看 runtime.log。",
+            canSwitchToLocal: _devServerUrl is not null && _hasLocalWebAssets
+        );
+    }
+
+    private static void LogRuntime(string message)
+    {
+        try
+        {
+            Directory.CreateDirectory(AppDataRoot);
+            File.AppendAllText(RuntimeLogFile, DateTime.Now.ToString("O") + " " + message + Environment.NewLine);
+        }
+        catch
+        {
+        }
     }
 
     private void OnClosing(object? sender, CancelEventArgs e)

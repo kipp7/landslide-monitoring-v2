@@ -26,7 +26,7 @@
         "stationCode": "LM001",
         "stationName": "龙门监测点",
         "status": "active",
-        "latitude": 21.6847,
+        "latitude": 22.6847,
         "longitude": 108.3516,
         "metadata": { "riskArea": "A" },
         "createdAt": "2025-01-01T00:00:00Z",
@@ -57,7 +57,7 @@
     "stationCode": "LM001",
     "stationName": "龙门监测点",
     "status": "active",
-    "latitude": 21.6847,
+    "latitude": 22.6847,
     "longitude": 108.3516,
     "metadata": { "riskArea": "A", "note": "重点监测" },
     "createdAt": "2025-01-01T00:00:00Z",
@@ -79,7 +79,7 @@
 {
   "stationCode": "LM001",
   "stationName": "龙门监测点",
-  "latitude": 21.6847,
+  "latitude": 22.6847,
   "longitude": 108.3516,
   "metadata": {
     "riskArea": "A",

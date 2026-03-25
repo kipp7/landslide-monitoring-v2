@@ -1,0 +1,132 @@
+﻿{
+    "generatedAt":  "2026-03-24T16:21:26Z",
+    "sample":  "hf-oversized",
+    "deviceId":  "8389ecf5-0dc6-4e11-bb38-3422c8280c0e",
+    "createdDevice":  {
+                          "deviceId":  "8389ecf5-0dc6-4e11-bb38-3422c8280c0e",
+                          "secretFile":  "backups/evidence/field-rehearsal-device-latest.json"
+                      },
+    "boundary":  "downstream-not-confirmed",
+    "publish":  {
+                    "success":  true,
+                    "traceId":  "b6004fdd-a6da-4af0-851b-697a92a6118d"
+                },
+    "kafka":  {
+                  "writerGroupId":  "telemetry-writer-proof-20260325001924",
+                  "offsetsBefore":  [
+                                        {
+                                            "topic":  "telemetry.raw.v1",
+                                            "partition":  0,
+                                            "offset":  3
+                                        },
+                                        {
+                                            "topic":  "telemetry.raw.v1",
+                                            "partition":  1,
+                                            "offset":  3
+                                        },
+                                        {
+                                            "topic":  "telemetry.raw.v1",
+                                            "partition":  2,
+                                            "offset":  1
+                                        },
+                                        {
+                                            "topic":  "telemetry.raw.v1",
+                                            "partition":  3,
+                                            "offset":  2
+                                        },
+                                        {
+                                            "topic":  "telemetry.raw.v1",
+                                            "partition":  4,
+                                            "offset":  1
+                                        },
+                                        {
+                                            "topic":  "telemetry.raw.v1",
+                                            "partition":  5,
+                                            "offset":  2
+                                        }
+                                    ],
+                  "offsetsAfter":  [
+                                       {
+                                           "topic":  "telemetry.raw.v1",
+                                           "partition":  0,
+                                           "offset":  3
+                                       },
+                                       {
+                                           "topic":  "telemetry.raw.v1",
+                                           "partition":  1,
+                                           "offset":  3
+                                       },
+                                       {
+                                           "topic":  "telemetry.raw.v1",
+                                           "partition":  2,
+                                           "offset":  1
+                                       },
+                                       {
+                                           "topic":  "telemetry.raw.v1",
+                                           "partition":  3,
+                                           "offset":  3
+                                       },
+                                       {
+                                           "topic":  "telemetry.raw.v1",
+                                           "partition":  4,
+                                           "offset":  1
+                                       },
+                                       {
+                                           "topic":  "telemetry.raw.v1",
+                                           "partition":  5,
+                                           "offset":  2
+                                       }
+                                   ],
+                  "offsetDelta":  [
+                                      {
+                                          "partition":  0,
+                                          "before":  3,
+                                          "after":  3,
+                                          "delta":  0
+                                      },
+                                      {
+                                          "partition":  1,
+                                          "before":  3,
+                                          "after":  3,
+                                          "delta":  0
+                                      },
+                                      {
+                                          "partition":  2,
+                                          "before":  1,
+                                          "after":  1,
+                                          "delta":  0
+                                      },
+                                      {
+                                          "partition":  3,
+                                          "before":  2,
+                                          "after":  3,
+                                          "delta":  1
+                                      },
+                                      {
+                                          "partition":  4,
+                                          "before":  1,
+                                          "after":  1,
+                                          "delta":  0
+                                      },
+                                      {
+                                          "partition":  5,
+                                          "before":  2,
+                                          "after":  2,
+                                          "delta":  0
+                                      }
+                                  ],
+                  "anyOffsetAdvanced":  true,
+                  "consumerGroup":  "GROUP                                 TOPIC            PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG             CONSUMER-ID                                                                HOST            CLIENT-ID\r\ntelemetry-writer-proof-20260325001924 telemetry.raw.v1 2          -               1               -               telemetry-writer-proof-20260325001924-bb67e079-8308-46ae-8084-a5ef2f249b01 /172.21.0.1     telemetry-writer-proof-20260325001924\r\ntelemetry-writer-proof-20260325001924 telemetry.raw.v1 3          -               3               -               telemetry-writer-proof-20260325001924-bb67e079-8308-46ae-8084-a5ef2f249b01 /172.21.0.1     telemetry-writer-proof-20260325001924\r\ntelemetry-writer-proof-20260325001924 telemetry.raw.v1 0          -               3               -               telemetry-writer-proof-20260325001924-bb67e079-8308-46ae-8084-a5ef2f249b01 /172.21.0.1     telemetry-writer-proof-20260325001924\r\ntelemetry-writer-proof-20260325001924 telemetry.raw.v1 5          -               2               -               telemetry-writer-proof-20260325001924-bb67e079-8308-46ae-8084-a5ef2f249b01 /172.21.0.1     telemetry-writer-proof-20260325001924\r\ntelemetry-writer-proof-20260325001924 telemetry.raw.v1 1          -               3               -               telemetry-writer-proof-20260325001924-bb67e079-8308-46ae-8084-a5ef2f249b01 /172.21.0.1     telemetry-writer-proof-20260325001924\r\ntelemetry-writer-proof-20260325001924 telemetry.raw.v1 4          -               1               -               telemetry-writer-proof-20260325001924-bb67e079-8308-46ae-8084-a5ef2f249b01 /172.21.0.1     telemetry-writer-proof-20260325001924"
+              },
+    "postgresShadowObserved":  false,
+    "clickhouseObserved":  false,
+    "postgresShadow":  null,
+    "clickhouseRows":  null,
+    "logs":  {
+                 "adapterBaseUrl":  "http://127.0.0.1:18092",
+                 "adapterStdout":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\backups\\evidence\\field-http-full-path-20260325-001930\\adapter.stdout.log",
+                 "adapterStderr":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\backups\\evidence\\field-http-full-path-20260325-001930\\adapter.stderr.log",
+                 "writerStdout":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\backups\\evidence\\field-http-full-path-20260325-001930\\writer.stdout.log",
+                 "writerStderr":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\backups\\evidence\\field-http-full-path-20260325-001930\\writer.stderr.log"
+             }
+}

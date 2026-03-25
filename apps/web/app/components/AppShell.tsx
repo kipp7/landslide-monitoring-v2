@@ -56,7 +56,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     if (gpsMonitoringVisible || gpsDeformationVisible) {
       const stationIndex = base.findIndex((i) => i.key === '/stations')
       const insertAt = stationIndex >= 0 ? stationIndex + 1 : base.length
-      if (gpsMonitoringVisible) base.splice(insertAt, 0, { key: '/gps-monitoring', label: 'GPS 监测' })
+      if (gpsMonitoringVisible) base.splice(insertAt, 0, { key: '/gps-deformation', label: 'GPS 监测' })
       if (gpsDeformationVisible)
         base.splice(insertAt + (gpsMonitoringVisible ? 1 : 0), 0, { key: '/gps-deformation', label: 'GPS 形变' })
     }

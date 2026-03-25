@@ -16,7 +16,8 @@ const autoEstablishBodySchema = z
     lookbackDays: z.number().int().positive().max(365).default(30),
     latKey: z.string().min(1).default("gps_latitude"),
     lonKey: z.string().min(1).default("gps_longitude"),
-    altKey: z.string().min(1).optional()
+    altKey: z.string().min(1).optional(),
+    persist: z.boolean().default(true)
   })
   .strict()
   .default({});
@@ -97,7 +98,8 @@ const legacyBaselineUpsertBodySchema = z
     positionAccuracy: coerceOptionalNumber(),
     measurementDuration: coerceOptionalInt(),
     satelliteCount: coerceOptionalInt(),
-    pdopValue: coerceOptionalNumber()
+    pdopValue: coerceOptionalNumber(),
+    persist: z.boolean().default(true)
   })
   .strict();
 
@@ -265,6 +267,27 @@ async function upsertBaseline(pg: PgPool, deviceId: string, method: "auto" | "ma
       [deviceId, method, pointsCount, JSON.stringify(baseline)]
     );
   });
+}
+
+async function resolveLegacyOrUuidDeviceId(pg: PgPool, input: string): Promise<string | null> {
+  return withPgClient(pg, async (client) =>
+    queryOne<{ device_id: string }>(
+      client,
+      `
+        SELECT device_id
+        FROM devices
+        WHERE status != 'revoked'
+          AND (
+            device_id::text = $1
+            OR device_name = $1
+            OR metadata->>'legacy_device_id' = $1
+            OR metadata#>>'{externalIds,legacy}' = $1
+          )
+        LIMIT 1
+      `,
+      [input]
+    )
+  ).then((row) => row?.device_id ?? null);
 }
 
 type GpsPoint = { ts: string; lat: number; lon: number; alt: number | null };
@@ -447,12 +470,45 @@ async function handleAutoEstablish(
     return;
   }
 
-  const parseId = deviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
-  if (!parseId.success) {
-    respondError(reply, 400, "参数错误", traceId, opts);
-    return;
+  let deviceId = "";
+  if (opts?.legacy) {
+    const rawId = typeof (request.params as { deviceId?: unknown }).deviceId === "string" ? (request.params as { deviceId: string }).deviceId : "";
+    const deviceKey = rawId.trim();
+    if (!deviceKey) {
+      respondError(reply, 400, "参数错误", traceId, opts);
+      return;
+    }
+    const deviceRow = await withPgClient(pg, async (client) =>
+      queryOne<{ device_id: string }>(
+        client,
+        `
+          SELECT device_id
+          FROM devices
+          WHERE status != 'revoked'
+            AND (
+              device_id::text = $1
+              OR device_name = $1
+              OR metadata->>'legacy_device_id' = $1
+              OR metadata#>>'{externalIds,legacy}' = $1
+            )
+          LIMIT 1
+        `,
+        [deviceKey]
+      )
+    );
+    if (!deviceRow) {
+      respondError(reply, 404, "资源不存在", traceId, opts);
+      return;
+    }
+    deviceId = deviceRow.device_id;
+  } else {
+    const parseId = deviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
+    if (!parseId.success) {
+      respondError(reply, 400, "参数错误", traceId, opts);
+      return;
+    }
+    deviceId = parseId.data;
   }
-  const deviceId = parseId.data;
 
   const parseBody = autoEstablishBodySchema.safeParse(request.body ?? {});
   if (!parseBody.success) {
@@ -502,7 +558,9 @@ async function handleAutoEstablish(
     notes: `auto-establish (${String(points.length)} points)`
   });
 
-  await upsertBaseline(pg, deviceId, "auto", points.length, baseline);
+  if (body.persist) {
+    await upsertBaseline(pg, deviceId, "auto", points.length, baseline);
+  }
 
   const tsValues = points.map((p) => p.ts);
   const startTs = tsValues.length > 0 ? tsValues[tsValues.length - 1] : null;
@@ -513,6 +571,7 @@ async function handleAutoEstablish(
     {
       deviceId,
       pointsUsed: points.length,
+      persisted: body.persist,
       lookbackDays: body.lookbackDays,
       keys: { latKey: body.latKey, lonKey: body.lonKey, altKey: body.altKey ?? null },
       baseline,
@@ -544,12 +603,45 @@ async function handleQualityCheck(
     return;
   }
 
-  const parseId = deviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
-  if (!parseId.success) {
-    respondError(reply, 400, "参数错误", traceId, opts);
-    return;
+  let deviceId = "";
+  if (opts?.legacy) {
+    const rawId = typeof (request.params as { deviceId?: unknown }).deviceId === "string" ? (request.params as { deviceId: string }).deviceId : "";
+    const deviceKey = rawId.trim();
+    if (!deviceKey) {
+      respondError(reply, 400, "参数错误", traceId, opts);
+      return;
+    }
+    const deviceRow = await withPgClient(pg, async (client) =>
+      queryOne<{ device_id: string }>(
+        client,
+        `
+          SELECT device_id
+          FROM devices
+          WHERE status != 'revoked'
+            AND (
+              device_id::text = $1
+              OR device_name = $1
+              OR metadata->>'legacy_device_id' = $1
+              OR metadata#>>'{externalIds,legacy}' = $1
+            )
+          LIMIT 1
+        `,
+        [deviceKey]
+      )
+    );
+    if (!deviceRow) {
+      respondError(reply, 404, "资源不存在", traceId, opts);
+      return;
+    }
+    deviceId = deviceRow.device_id;
+  } else {
+    const parseId = deviceIdSchema.safeParse((request.params as { deviceId?: unknown }).deviceId);
+    if (!parseId.success) {
+      respondError(reply, 400, "参数错误", traceId, opts);
+      return;
+    }
+    deviceId = parseId.data;
   }
-  const deviceId = parseId.data;
 
   const parseQuery = qualityCheckQuerySchema.safeParse(request.query);
   if (!parseQuery.success) {
@@ -845,7 +937,9 @@ export function registerGpsBaselineLegacyCompatRoutes(
       ...(body.pdopValue == null ? {} : { pdopValue: body.pdopValue })
     };
 
-    await upsertBaseline(pg, deviceRow.device_id, "manual", null, baseline);
+    if (body.persist) {
+      await upsertBaseline(pg, deviceRow.device_id, "manual", null, baseline);
+    }
 
     const nowIso = new Date().toISOString();
     const key = legacyKeyFromMetadata(deviceRow.device_name, deviceRow.metadata);
@@ -865,7 +959,12 @@ export function registerGpsBaselineLegacyCompatRoutes(
 
     void reply
       .code(200)
-      .send({ success: true, data: record, message: mode === "update" ? "基准点更新成功" : "基准点设置成功" });
+      .send({
+        success: true,
+        data: record,
+        persisted: body.persist,
+        message: mode === "update" ? "基准点更新成功" : "基准点设置成功"
+      });
   };
 
   app.post("/baselines/:deviceId", async (request, reply) => upsertLegacy(request, reply, "create"));
@@ -917,7 +1016,24 @@ export function registerGpsBaselineLegacyCompatRoutes(
   });
 
   app.post("/baselines/:deviceId/auto-establish", (request, reply) =>
-    handleAutoEstablish(request, reply, config, ch, pg, adminCfg, { legacy: true })
+    (async () => {
+      if (!pg) {
+        void reply.code(503).send({ success: false, error: "PostgreSQL 未配置" });
+        return;
+      }
+      const rawId = typeof (request.params as { deviceId?: unknown }).deviceId === "string" ? (request.params as { deviceId: string }).deviceId.trim() : "";
+      if (!rawId) {
+        void reply.code(400).send({ success: false, error: "参数错误" });
+        return;
+      }
+      const resolved = await resolveLegacyOrUuidDeviceId(pg, rawId);
+      if (!resolved) {
+        void reply.code(404).send({ success: false, error: "设备不存在" });
+        return;
+      }
+      (request.params as { deviceId: string }).deviceId = resolved;
+      await handleAutoEstablish(request, reply, config, ch, pg, adminCfg, { legacy: true });
+    })()
   );
   app.post("/baselines/:deviceId/auto-establish-advanced", (request, reply) =>
     handleAutoEstablish(request, reply, config, ch, pg, adminCfg, { legacy: true })
@@ -926,9 +1042,43 @@ export function registerGpsBaselineLegacyCompatRoutes(
     handleAutoEstablish(request, reply, config, ch, pg, adminCfg, { legacy: true })
   );
   app.get("/baselines/:deviceId/quality-check", (request, reply) =>
-    handleQualityCheck(request, reply, config, ch, pg, adminCfg, { legacy: true })
+    (async () => {
+      if (!pg) {
+        void reply.code(503).send({ success: false, error: "PostgreSQL 未配置" });
+        return;
+      }
+      const rawId = typeof (request.params as { deviceId?: unknown }).deviceId === "string" ? (request.params as { deviceId: string }).deviceId.trim() : "";
+      if (!rawId) {
+        void reply.code(400).send({ success: false, error: "参数错误" });
+        return;
+      }
+      const resolved = await resolveLegacyOrUuidDeviceId(pg, rawId);
+      if (!resolved) {
+        void reply.code(404).send({ success: false, error: "设备不存在" });
+        return;
+      }
+      (request.params as { deviceId: string }).deviceId = resolved;
+      await handleQualityCheck(request, reply, config, ch, pg, adminCfg, { legacy: true });
+    })()
   );
   app.get("/baselines/:deviceId/quality-assessment", (request, reply) =>
-    handleQualityCheck(request, reply, config, ch, pg, adminCfg, { legacy: true })
+    (async () => {
+      if (!pg) {
+        void reply.code(503).send({ success: false, error: "PostgreSQL 未配置" });
+        return;
+      }
+      const rawId = typeof (request.params as { deviceId?: unknown }).deviceId === "string" ? (request.params as { deviceId: string }).deviceId.trim() : "";
+      if (!rawId) {
+        void reply.code(400).send({ success: false, error: "参数错误" });
+        return;
+      }
+      const resolved = await resolveLegacyOrUuidDeviceId(pg, rawId);
+      if (!resolved) {
+        void reply.code(404).send({ success: false, error: "设备不存在" });
+        return;
+      }
+      (request.params as { deviceId: string }).deviceId = resolved;
+      await handleQualityCheck(request, reply, config, ch, pg, adminCfg, { legacy: true });
+    })()
   );
 }

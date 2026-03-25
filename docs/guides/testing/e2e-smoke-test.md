@@ -88,6 +88,11 @@
 - `powershell -ExecutionPolicy Bypass -File infra/compose/scripts/init-clickhouse.ps1`
 - `powershell -ExecutionPolicy Bypass -File infra/compose/scripts/create-kafka-topics.ps1`
 
+说明：
+
+- 当前 `create-kafka-topics.ps1` 也会补齐单节点 Kafka 的 `__consumer_offsets`
+- 这样 consumer-group 路径在单 broker KRaft 环境下不会因为内部 topic 缺失而直接失效
+
 验收（必须）：
 - `http://localhost:8123/ping` 返回 `Ok.`
 - EMQX Dashboard 可打开：`http://localhost:18083`

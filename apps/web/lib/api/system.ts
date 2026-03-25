@@ -18,6 +18,26 @@ export async function putSystemConfigs(configs: Array<{ key: string; value: stri
   return apiPutJson<ApiSuccessResponse<unknown>>('/api/v1/system/configs', { configs })
 }
 
+export type SuccessNotificationPolicy = 'silent' | 'always_notify'
+
+export type CommandSuccessNotificationPolicyResponse = {
+  systemDefault: SuccessNotificationPolicy
+  commandTypeDefaults: Record<string, SuccessNotificationPolicy>
+}
+
+export async function getCommandSuccessNotificationPolicy(): Promise<ApiSuccessResponse<CommandSuccessNotificationPolicyResponse>> {
+  return apiGetJson<ApiSuccessResponse<CommandSuccessNotificationPolicyResponse>>('/api/v1/system/command-success-notification-policy')
+}
+
+export async function putCommandSuccessNotificationPolicy(
+  body: CommandSuccessNotificationPolicyResponse
+): Promise<ApiSuccessResponse<CommandSuccessNotificationPolicyResponse>> {
+  return apiPutJson<ApiSuccessResponse<CommandSuccessNotificationPolicyResponse>>(
+    '/api/v1/system/command-success-notification-policy',
+    body
+  )
+}
+
 export type ApiStatsResponse = {
   since: string
   total: number
@@ -76,4 +96,3 @@ export async function getOperationLogs(query: OperationLogsQuery): Promise<ApiSu
   params.set('endTime', query.endTime)
   return apiGetJson<ApiSuccessResponse<OperationLogsResponse>>(`/api/v1/system/logs/operation?${params.toString()}`)
 }
-

@@ -1,0 +1,36 @@
+{
+  "generatedAt": "2026-03-24T15:45:00Z",
+  "conclusion": "consumer-group-coordinator-repaired-host-run-full-path-ok",
+  "notes": [
+    "Host-side Kafka producer path to 127.0.0.1:9094 is working: topic offsets increase after produce.",
+    "The original group coordinator failure was traced to missing __consumer_offsets and missing single-node consumer-group settings in Kafka.",
+    "Kafka compose and topic bootstrap have been updated so __consumer_offsets exists with replication-factor 1.",
+    "Broker logs now show consumer groups can join and receive assignments.",
+    "Host-run HTTP full-path proof now reaches telemetry.raw.v1, ClickHouse, and PostgreSQL device_state.",
+    "A minimal generic loopback consumer receipt proof still remains noisy, but it no longer blocks current rehearsal hardening."
+  ],
+  "evidence": {
+    "hostKafkaConnectivity": {
+      "status": "ok",
+      "detail": "Host admin/list-topics probe succeeded."
+    },
+    "producerOnlyProof": {
+      "status": "ok",
+      "detail": "A host-side producer send advanced telemetry.raw.v1 offsets."
+    },
+    "consumerLoopbackProof": {
+      "status": "noisy",
+      "detail": "After the Kafka repair, broker logs show group join/assignment for host loopback consumers, but a clean receipt proof has not yet been captured within the current script window.",
+      "warning": "Host-side kafkajs runs still exhibit TimeoutNegativeWarning noise."
+    },
+    "consumerCoordinatorFix": {
+      "status": "ok",
+      "detail": "Kafka broker now has __consumer_offsets and single-node consumer-group settings; broker logs show group coordinator elections and assignments."
+    },
+    "httpFullPathProof": {
+      "status": "ok",
+      "detail": "HTTP adapter publish succeeded, Kafka offsets advanced, telemetry-writer consumed, ClickHouse rows were written, and PostgreSQL device_state shadow was updated once the device was pre-created."
+    }
+  },
+  "nextAction": "Use the repaired Kafka broker settings as the new baseline and move on to higher-level semantic proofs rather than generic host consumer loopback diagnostics."
+}

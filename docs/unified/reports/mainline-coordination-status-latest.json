@@ -1,0 +1,52 @@
+﻿{
+    "generatedAt":  "2026-03-22T12:03:18Z",
+    "manifestGeneratedAt":  "2026-03-20T14:53:31Z",
+    "latestBatch":  {
+                        "order":  128,
+                        "taskId":  "desk-batch-128-desk-vendor-chunk-split",
+                        "status":  "completed",
+                        "topic":  "Desk vendor chunk 继续细拆收口",
+                        "note":  "已继续细拆 antd/echarts vendor chunk，主 chunk 明显下降，当前仅 `vendor-antd-core` 仍略高于 500k"
+                    },
+    "proof":  {
+                  "completedChecks":  44,
+                  "stations":  2,
+                  "devices":  6,
+                  "online":  3,
+                  "alerts":  1,
+                  "rainfall":  79,
+                  "viewerDenied":  5
+              },
+    "history":  {
+                    "totalSnapshots":  20,
+                    "currentStamp":  "20260320-225331",
+                    "previousStamp":  "20260320-221824"
+                },
+    "diff":  {
+                 "hasPrevious":  true,
+                 "unchanged":  true,
+                 "hasLastMatching":  true,
+                 "lastMatchingStamp":  "20260320-221824",
+                 "unchangedVsLastMatching":  true,
+                 "delta":  {
+                               "checks":  0,
+                               "stations":  0,
+                               "devices":  0,
+                               "online":  0,
+                               "alerts":  0,
+                               "rainfall":  0,
+                               "missingBaselines":  0,
+                               "viewerDenied":  0
+                           },
+                 "deltaFromLastMatching":  {
+                                               "checks":  0,
+                                               "stations":  0,
+                                               "devices":  0,
+                                               "online":  0,
+                                               "alerts":  0,
+                                               "rainfall":  0,
+                                               "missingBaselines":  0,
+                                               "viewerDenied":  0
+                                           }
+             }
+}

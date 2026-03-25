@@ -1,0 +1,69 @@
+﻿{
+    "generatedAt":  "2026-03-24T01:38:35Z",
+    "ready":  true,
+    "inputs":  {
+                   "packageManifestFile":  "docs/unified/reports/desk-win-package-latest.json",
+                   "packageVerifyFile":  "docs/unified/reports/desk-win-package-verify-latest.json",
+                   "prerequisitesFile":  "docs/unified/reports/desk-win-prerequisites-latest.json"
+               },
+    "summary":  {
+                    "outputDir":  "artifacts/desk-win/win-x64",
+                    "exePath":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\win-x64\\LandslideDesk.Win.exe",
+                    "webIndex":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\win-x64\\web\\index.html",
+                    "packageFileCount":  401,
+                    "packageTotalBytes":  167416908
+                },
+    "checks":  [
+                   {
+                       "key":  "packageExe",
+                       "ok":  true,
+                       "actual":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\win-x64\\LandslideDesk.Win.exe",
+                       "expected":  "packaged exe path"
+                   },
+                   {
+                       "key":  "packageWebIndex",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "verifyAliveAfterLaunch",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "verifyReadyAfterLaunch",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "verifyStoppedAfterVerify",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "prereqDotnet",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "prereqWindowsDesktopRuntime",
+                       "ok":  true,
+                       "actual":  "Microsoft.WindowsDesktop.App 8.0.22 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]",
+                       "expected":  "Microsoft.WindowsDesktop.App 8.x"
+                   },
+                   {
+                       "key":  "prereqWebView2",
+                       "ok":  true,
+                       "actual":  "146.0.3856.72",
+                       "expected":  "installed"
+                   }
+               ],
+    "failedKeys":  [
+
+                   ]
+}

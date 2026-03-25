@@ -33,8 +33,8 @@ const defaults: Pick<
   | "reducedMotion"
   | "trayEnabled"
 > = {
-  apiMode: "mock",
-  apiBaseUrl: "http://127.0.0.1:3000",
+  apiMode: "http",
+  apiBaseUrl: "http://127.0.0.1:8081",
   mockDelayMs: 200,
   mockFailureRate: 0,
   terrainQuality: "auto",
@@ -71,6 +71,26 @@ export const useSettingsStore = create<SettingsState>()(
         set({ ...defaults });
       }
     }),
-    { name: "desk_settings_v1" }
+    {
+      name: "desk_settings_v1",
+      version: 2,
+      migrate: (persistedState, version) => {
+        const state = (persistedState ?? {}) as Partial<SettingsState>;
+        if (version < 2) {
+          const looksLikeOldLocalDefault =
+            state.apiMode === "mock" &&
+            (state.apiBaseUrl === "http://127.0.0.1:3000" || state.apiBaseUrl === "http://localhost:3000");
+
+          if (looksLikeOldLocalDefault) {
+            return {
+              ...state,
+              apiMode: "http",
+              apiBaseUrl: "http://127.0.0.1:8081"
+            } as SettingsState;
+          }
+        }
+        return { ...defaults, ...state } as SettingsState;
+      }
+    }
   )
 );

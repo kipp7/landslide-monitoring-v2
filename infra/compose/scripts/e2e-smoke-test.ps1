@@ -104,6 +104,46 @@ function Exec-ToFile([string]$path, [scriptblock]$cmd) {
   }
 }
 
+function Cleanup-SmokeArtifacts() {
+  $sql = @"
+DELETE FROM alert_notifications
+WHERE user_id IN (SELECT user_id FROM users WHERE username LIKE 'smoke_user_%');
+
+DELETE FROM user_alert_subscriptions
+WHERE user_id IN (SELECT user_id FROM users WHERE username LIKE 'smoke_user_%')
+   OR device_id IN (SELECT device_id FROM devices WHERE COALESCE(metadata->>'note','') = 'smoke_test');
+
+DELETE FROM alert_events
+WHERE device_id IN (SELECT device_id FROM devices WHERE COALESCE(metadata->>'note','') = 'smoke_test');
+
+DELETE FROM ai_predictions
+WHERE device_id IN (SELECT device_id FROM devices WHERE COALESCE(metadata->>'note','') = 'smoke_test');
+
+DELETE FROM device_command_events
+WHERE device_id IN (SELECT device_id FROM devices WHERE COALESCE(metadata->>'note','') = 'smoke_test');
+
+DELETE FROM device_commands
+WHERE device_id IN (SELECT device_id FROM devices WHERE COALESCE(metadata->>'note','') = 'smoke_test');
+
+DELETE FROM device_presence
+WHERE device_id IN (SELECT device_id FROM devices WHERE COALESCE(metadata->>'note','') = 'smoke_test');
+
+DELETE FROM device_state
+WHERE device_id IN (SELECT device_id FROM devices WHERE COALESCE(metadata->>'note','') = 'smoke_test');
+
+DELETE FROM gps_baselines
+WHERE device_id IN (SELECT device_id FROM devices WHERE COALESCE(metadata->>'note','') = 'smoke_test');
+
+DELETE FROM devices
+WHERE COALESCE(metadata->>'note','') = 'smoke_test';
+
+DELETE FROM users
+WHERE username LIKE 'smoke_user_%';
+"@
+  docker compose -f $ComposeFile --env-file $EnvFile exec -T postgres psql -v ON_ERROR_STOP=1 -U $pgUser -d $pgDb -c $sql 1>$null
+  Assert-LastExitCode "psql failed to cleanup smoke artifacts"
+}
+
 function Wait-ForLogMatch([string]$path, [string]$pattern, [int]$timeoutSeconds) {
   $deadline = (Get-Date).AddSeconds($timeoutSeconds)
   while ((Get-Date) -lt $deadline) {
@@ -759,6 +799,9 @@ try {
 
   $deviceSecret = $null
   if ($CreateDevice) {
+    Write-Host "Cleaning stale smoke artifacts..." -ForegroundColor Cyan
+    Cleanup-SmokeArtifacts
+
     Write-Host "Creating a test device via API..." -ForegroundColor Cyan
     $body = @{
       deviceId = $DeviceId
@@ -1524,6 +1567,14 @@ VALUES ('$testUserId', '$DeviceId', 'low', TRUE, TRUE);
 
   exit 1
 } finally {
+  try {
+    if ($CreateDevice) {
+      Write-Host "Cleaning smoke artifacts..." -ForegroundColor Cyan
+      Cleanup-SmokeArtifacts
+    }
+  } catch {
+    Write-Host "WARN: smoke cleanup failed: $($_.Exception.Message)" -ForegroundColor Yellow
+  }
   Write-Host "Stopping services..." -ForegroundColor Cyan
   foreach ($p in @($firmwareProc, $presenceProc, $ingestProc, $writerProc, $apiProc, $cmdProc, $ackProc, $timeoutProc, $eventsProc, $notifyProc, $alertNotifyProc, $ruleProc, $dlqProc)) {
     if ($null -eq $p) { continue }

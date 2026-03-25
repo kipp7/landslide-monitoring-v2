@@ -17,7 +17,9 @@ INSERT INTO system_configs (config_key, config_value, config_type, description, 
 ('system.version', '2.0.0', 'string', '系统版本', TRUE),
 ('telemetry.raw_ttl_days', '30', 'number', 'ClickHouse 原始遥测保留天数（策略值）', FALSE),
 ('alert.default_cooldown_min', '30', 'number', '默认告警冷却时间（分钟）', FALSE),
-('device.offline_threshold_s', '300', 'number', '设备离线阈值（秒）', FALSE);
+('device.offline_threshold_s', '300', 'number', '设备离线阈值（秒）', FALSE),
+('command.success_notification.system_default', 'silent', 'string', '命令成功通知系统默认策略', FALSE),
+('command.success_notification.command_type_defaults', '{"set_config":"always_notify","reboot":"always_notify","restart_device":"always_notify","deactivate_device":"always_notify","set_sampling_interval":"always_notify","manual_collect":"always_notify","huawei:reboot":"always_notify"}', 'json', '命令成功通知按 command_type 的默认策略表', FALSE);
 
 -- 操作审计（建议分区；此处仅定义表结构）
 CREATE TABLE operation_logs (

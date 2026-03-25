@@ -1,0 +1,19 @@
+﻿{
+  "auth": {
+    "user": "Local Admin",
+    "role": "admin",
+    "baseUrl": "http://127.0.0.1:8081"
+  },
+  "commandNotifyOnAck": {
+    "deviceId": "00000000-0000-0000-0000-000000000001",
+    "defaultCommandId": "11fbe395-4735-4f6d-94f9-4fa5ad2ed302",
+    "defaultNotifyOnAck": false,
+    "defaultSuccessNotificationPolicy": "silent",
+    "defaultEffectiveSuccessNotificationPolicy": "silent",
+    "optInCommandId": "bb4a9cb7-060a-469c-91df-1ca0b5425da8",
+    "optInNotifyOnAck": true,
+    "optInSuccessNotificationPolicy": "always_notify",
+    "optInEffectiveSuccessNotificationPolicy": "always_notify",
+    "commandsLoaded": 20
+  }
+}

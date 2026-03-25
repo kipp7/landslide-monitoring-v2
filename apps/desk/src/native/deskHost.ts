@@ -3,6 +3,12 @@ type DeskHostMessage =
   | { type: "app"; action: "show" }
   | { type: "app"; action: "hide" }
   | { type: "app"; action: "focus" }
+  | { type: "app"; action: "ready" }
+  | {
+      type: "app";
+      action: "runtimeError";
+      payload: { message: string; source?: string; stack?: string };
+    }
   | { type: "app"; action: "openLogsDir" }
   | { type: "app"; action: "toggleTray"; payload?: { enabled?: boolean } }
   | { type: "app"; action: "toggleFullscreen" }
@@ -95,4 +101,16 @@ export function requestDeskToggleFullscreen(): boolean {
 
 export function requestDeskReload(): boolean {
   return postDeskHostMessage({ type: "app", action: "reload" });
+}
+
+export function notifyDeskAppReady(): boolean {
+  return postDeskHostMessage({ type: "app", action: "ready" });
+}
+
+export function notifyDeskRuntimeError(input: {
+  message: string;
+  source?: string;
+  stack?: string;
+}): boolean {
+  return postDeskHostMessage({ type: "app", action: "runtimeError", payload: input });
 }

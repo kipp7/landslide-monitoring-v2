@@ -1,0 +1,76 @@
+{
+  "generatedAt": "2026-03-25T14:35:06.083Z",
+  "conclusion": "hardware-stable-version-legacy-payload-can-be-adapted-to-platform-telemetry-envelope-in-software",
+  "legacyPayload": {
+    "node": "A",
+    "seq": 1,
+    "uptime": 30,
+    "temp": 25.6,
+    "humi": 61.2,
+    "temp_ok": 1,
+    "ax": 0.05,
+    "ay": 0.09,
+    "az": 1.01,
+    "gx": 0.4,
+    "gy": -0.2,
+    "gz": 0.1,
+    "tilt_x": 3.2,
+    "tilt_y": 1.4,
+    "imu_ok": 1,
+    "lat": 22.543012,
+    "lon": 114.057923,
+    "gps_ok": 1,
+    "bat": 83,
+    "warn": 0
+  },
+  "mappedTelemetryEnvelope": {
+    "schema_version": 1,
+    "device_id": "00000000-0000-0000-0000-000000000001",
+    "event_ts": "2026-03-25T14:35:06.083Z",
+    "seq": 1,
+    "metrics": {
+      "temperature_c": 25.6,
+      "humidity_pct": 61.2,
+      "accel_x_g": 0.05,
+      "accel_y_g": 0.09,
+      "accel_z_g": 1.01,
+      "gyro_x_dps": 0.4,
+      "gyro_y_dps": -0.2,
+      "gyro_z_dps": 0.1,
+      "tilt_x_deg": 3.2,
+      "tilt_y_deg": 1.4,
+      "gps_latitude": 22.543012,
+      "gps_longitude": 114.057923,
+      "battery_pct": 83,
+      "warning_flag": false
+    },
+    "meta": {
+      "source": "hardware_stable_version_adapter_sim",
+      "legacy_node": "A",
+      "uptime_s": 30,
+      "legacy_valid_flags": {
+        "temp_ok": 1,
+        "imu_ok": 1,
+        "gps_ok": 1
+      }
+    }
+  },
+  "schemaValidation": {
+    "available": true,
+    "valid": true,
+    "errors": []
+  },
+  "identifiedGaps": [
+    "legacy payload still uses node instead of device_id as the primary identity",
+    "legacy payload is still flat JSON and needs mapping into metrics/meta structure",
+    "legacy string ACK/OK is only a transport-level ack and does not satisfy cmd_ack/{device_id} platform command receipt requirements",
+    "GPS/UART current truth is not fully frozen across code and hardware docs"
+  ],
+  "suggestedFirmwareChanges": [
+    "replace node with a provisioned device_id/device_secret identity package",
+    "emit TelemetryEnvelope v1 directly or make the gateway perform a deterministic legacy->envelope conversion",
+    "move temp/humi/lat/lon/bat/warn to canonical metrics keys such as temperature_c, humidity_pct, gps_latitude, gps_longitude, battery_pct, warning_flag",
+    "treat ACK/OK as link ack only and emit standard cmd_ack/{device_id} payloads for platform command receipts",
+    "freeze one final GPS UART mapping and update code plus docs to the same source of truth"
+  ]
+}

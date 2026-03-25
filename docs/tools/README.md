@@ -38,6 +38,22 @@ Windows（可选）：
 - `python docs/tools/run-quality-gates.py`
 - `powershell -ExecutionPolicy Bypass -File docs/tools/run-quality-gates.ps1`
 
+## field-rehearsal
+
+当前 A 路线“软件优先联调”的第一批工具物料在：
+
+- `docs/tools/field-rehearsal/README.md`
+
+包含：
+
+- 节点模拟器样例包库
+- Node-RED 调试流模板
+- MQTTX probe 清单
+
+配套校验脚本：
+
+- `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/check-field-rehearsal-samples.ps1`
+
 ## OpenAPI codegen 占位门禁（重要）
 
 当前仓库还未落地真实的 TS/Dart API Client 生成，但为了避免“OpenAPI 改了却没人更新下游”，我们先引入一个**可追踪的占位门禁**：

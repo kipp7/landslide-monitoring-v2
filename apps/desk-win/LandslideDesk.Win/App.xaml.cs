@@ -45,9 +45,36 @@ public partial class App : System.Windows.Application
         AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
         TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
 
-        var mainWindow = new MainWindow();
-        MainWindow = mainWindow;
-        mainWindow.Show();
+        if (!StartupPreflight.TryRun(out var preflightMessage))
+        {
+            System.Windows.MessageBox.Show(
+                preflightMessage,
+                "启动前置检查失败",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error
+            );
+            RequestAppShutdown(-1);
+            return;
+        }
+
+        try
+        {
+            var mainWindow = new MainWindow();
+            MainWindow = mainWindow;
+            mainWindow.Show();
+        }
+        catch (Exception ex)
+        {
+            var path = SafeWriteCrash(ex);
+            var detail = string.IsNullOrWhiteSpace(path) ? string.Empty : $"\n\n崩溃日志：{path}";
+            System.Windows.MessageBox.Show(
+                "桌面端在创建主窗口时发生异常。可先检查 WebView2 Runtime、前端资源以及 startup-diagnostic-latest.txt。" + detail,
+                "启动失败",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error
+            );
+            RequestAppShutdown(-1);
+        }
     }
 
     protected override void OnExit(ExitEventArgs e)

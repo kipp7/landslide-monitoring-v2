@@ -1,0 +1,60 @@
+﻿{
+    "generatedAt":  "2026-03-24T01:41:21Z",
+    "latestZip":  "artifacts/desk-win/latest.zip",
+    "installerExe":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\installer\\LandslideDesk-Setup-win-x64-938f86e.exe",
+    "customInstallerExe":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\customba-installer\\LandslideDesk-CustomBA-Setup-938f86e-20260324-094034.exe",
+    "checks":  [
+                   {
+                       "id":  "zip-open",
+                       "title":  "latest.zip unpack and launch",
+                       "target":  "artifacts/desk-win/latest.zip",
+                       "expected":  [
+                                        "Archive can be unpacked successfully",
+                                        "Application reaches visible UI after launch",
+                                        "readyAfterLaunch=true in automated verification"
+                                    ],
+                       "automatedReference":  {
+                                                  "report":  "docs/unified/reports/desk-win-latest-package-verify-latest.json",
+                                                  "aliveAfterLaunch":  true,
+                                                  "readyAfterLaunch":  true,
+                                                  "stoppedAfterVerify":  true
+                                              }
+                   },
+                   {
+                       "id":  "inno-install",
+                       "title":  "Inno install, launch, uninstall",
+                       "target":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\installer\\LandslideDesk-Setup-win-x64-938f86e.exe",
+                       "expected":  [
+                                        "Installer completes successfully",
+                                        "Installed app reaches visible UI",
+                                        "Installed files are removed after uninstall"
+                                    ],
+                       "automatedReference":  {
+                                                  "report":  "docs/unified/reports/desk-win-installer-verify-latest.json",
+                                                  "installExitCode":  0,
+                                                  "aliveAfterLaunch":  true,
+                                                  "readyAfterLaunch":  true,
+                                                  "uninstallExitCode":  0,
+                                                  "ready":  true
+                                              }
+                   },
+                   {
+                       "id":  "customba-install",
+                       "title":  "Custom BA install, launch, uninstall",
+                       "target":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\customba-installer\\LandslideDesk-CustomBA-Setup-938f86e-20260324-094034.exe",
+                       "expected":  [
+                                        "Custom BA can complete guided install",
+                                        "Installed app reaches visible UI",
+                                        "Managed uninstall path removes the recorded version"
+                                    ],
+                       "automatedReference":  {
+                                                  "report":  "docs/unified/reports/desk-win-customba-installer-verify-latest.json",
+                                                  "installExitCode":  0,
+                                                  "aliveAfterLaunch":  true,
+                                                  "readyAfterLaunch":  true,
+                                                  "uninstallExitCode":  0,
+                                                  "ready":  true
+                                              }
+                   }
+               ]
+}

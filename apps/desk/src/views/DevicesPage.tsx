@@ -53,7 +53,7 @@ export function DevicesPage() {
           <Typography.Title level={3} style={{ margin: 0, color: "rgba(226,232,240,0.96)" }}>
             设备管理
           </Typography.Title>
-          <Typography.Text type="secondary">基于 Mock 数据渲染（后续可切换 HTTP）</Typography.Text>
+          <Typography.Text type="secondary">设备清单与状态概览</Typography.Text>
         </div>
         <Space>
           <Select
@@ -86,7 +86,7 @@ export function DevicesPage() {
         </Space>
       </div>
 
-      <BaseCard title="设备列表（Mock）" style={{ height: "calc(100vh - 132px)" }}>
+      <BaseCard title="设备列表" style={{ height: "calc(100vh - 132px)" }}>
         {loading ? (
           <Skeleton active />
         ) : (

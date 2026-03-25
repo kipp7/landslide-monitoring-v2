@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -26,6 +27,8 @@ function findUpstreamNextPackageDir(fromDir) {
   return null;
 }
 
+const upstreamNextDir = findUpstreamNextPackageDir(path.resolve(process.cwd(), ".."));
+
 // Workaround (Windows/npm workspaces): sometimes `apps/web/node_modules/next` becomes a broken partial folder
 // (missing package.json / dist/shared), which causes `next build` to fail. Remove it so Node resolves to the
 // workspace root `node_modules/next` instead.
@@ -37,13 +40,32 @@ try {
     const broken = !fs.existsSync(localPkg) || !fs.existsSync(localSharedUtils);
 
     if (broken) {
-      const upstream = findUpstreamNextPackageDir(path.resolve(process.cwd(), ".."));
-      if (upstream && upstream !== localNextDir) {
+      if (upstreamNextDir && upstreamNextDir !== localNextDir) {
         fs.rmSync(localNextDir, { recursive: true, force: true });
         console.warn(
-          `[next-build] Removed broken local Next.js folder: ${localNextDir} (using upstream: ${upstream})`
+          `[next-build] Removed broken local Next.js folder: ${localNextDir} (using upstream: ${upstreamNextDir})`
         );
       }
+    }
+  }
+} catch {
+  // best-effort only
+}
+
+try {
+  const localNodeModulesDir = path.resolve(process.cwd(), "node_modules");
+  const localNextDir = path.join(localNodeModulesDir, "next");
+  if (upstreamNextDir && !fs.existsSync(path.join(localNextDir, "dist", "shared", "lib", "utils.js"))) {
+    fs.mkdirSync(localNodeModulesDir, { recursive: true });
+    fs.rmSync(localNextDir, { recursive: true, force: true });
+    try {
+      fs.symlinkSync(upstreamNextDir, localNextDir, "junction");
+      console.warn(`[next-build] Linked local Next.js folder to upstream package: ${localNextDir} -> ${upstreamNextDir}`);
+    } catch {
+      execFileSync("cmd.exe", ["/d", "/s", "/c", `mklink /J "${localNextDir}" "${upstreamNextDir}"`], {
+        stdio: "ignore"
+      });
+      console.warn(`[next-build] Linked local Next.js folder to upstream package via cmd mklink: ${localNextDir} -> ${upstreamNextDir}`);
     }
   }
 } catch {
@@ -60,10 +82,13 @@ try {
   // best-effort only
 }
 
-const child =
-  process.platform === "win32"
-    ? spawn("cmd.exe", ["/d", "/s", "/c", "next", "build"], { stdio: "inherit", env })
-    : spawn("next", ["build"], { stdio: "inherit", env });
+if (!upstreamNextDir) {
+  console.error("[next-build] Unable to locate an upstream Next.js package.");
+  process.exit(1);
+}
+
+const nextBin = path.join(upstreamNextDir, "dist", "bin", "next");
+const child = spawn(process.execPath, [nextBin, "build"], { stdio: "inherit", env });
 
 child.on("exit", (code, signal) => {
   if (signal) process.kill(process.pid, signal);

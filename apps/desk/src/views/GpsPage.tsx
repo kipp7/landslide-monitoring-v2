@@ -3,13 +3,14 @@ import dayjs from "dayjs";
 import ReactECharts from "echarts-for-react";
 import { useEffect, useMemo, useState } from "react";
 
-import type { Device, GpsSeries } from "../api/client";
+import type { Baseline, Device, GpsSeries } from "../api/client";
 import { useApi } from "../api/ApiProvider";
 import { BaseCard } from "../components/BaseCard";
 
 export function GpsPage() {
   const api = useApi();
   const [devices, setDevices] = useState<Device[]>([]);
+  const [baselines, setBaselines] = useState<Baseline[]>([]);
   const [deviceId, setDeviceId] = useState<string | undefined>(undefined);
   const [days, setDays] = useState<number>(7);
   const [series, setSeries] = useState<GpsSeries | null>(null);
@@ -20,11 +21,13 @@ export function GpsPage() {
     setLoading(true);
     const run = async () => {
       try {
-        const list = await api.devices.list();
+        const [list, baselineList] = await Promise.all([api.devices.list(), api.baselines.list()]);
         if (abort.signal.aborted) return;
-        const gnss = list.filter((d) => d.type === "gnss");
+        const baselineIds = new Set(baselineList.map((item) => item.deviceId));
+        const gnss = list.filter((d) => d.type === "gnss" && baselineIds.has(d.id));
         setDevices(gnss);
-        setDeviceId((prev) => prev ?? gnss[0]?.id);
+        setBaselines(baselineList);
+        setDeviceId((prev) => (prev && baselineIds.has(prev) ? prev : gnss[0]?.id));
       } finally {
         if (!abort.signal.aborted) setLoading(false);
       }
@@ -99,7 +102,7 @@ export function GpsPage() {
           <Typography.Title level={3} style={{ margin: 0, color: "rgba(226,232,240,0.96)" }}>
             地质形变监测 · GPS
           </Typography.Title>
-          <Typography.Text type="secondary">GNSS 形变曲线（Mock）</Typography.Text>
+          <Typography.Text type="secondary">GNSS 形变曲线</Typography.Text>
         </div>
       </div>
 
@@ -122,7 +125,7 @@ export function GpsPage() {
           <BaseCard title="设备选择">
             <Row gutter={12} wrap={false}>
               <Col flex="none">
-                <Select
+              <Select
                   value={deviceId}
                   options={devices.map((d) => ({ label: `${d.name}（${d.stationName}）`, value: d.id }))}
                   style={{ width: 360 }}

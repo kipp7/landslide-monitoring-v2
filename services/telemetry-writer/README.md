@@ -35,6 +35,8 @@
 
 注意：
 - writer 会将“无法解析 JSON / schema 不匹配 / ClickHouse 写入失败（疑似数据错误）”的消息写入 `telemetry.dlq.v1`，避免坏消息阻塞消费并保留可追溯线索。
+- 对带高频 `packet_class` 的消息，writer 会按 `HIGH_FREQUENCY_BUDGET_BYTES` 做语义预算检查；超限时直接写入 `telemetry.dlq.v1`，不再写 ClickHouse，也不再更新 `device_state`。
+- 对低频补充包（如 `lf_meta`），writer 在更新 `device_state` 时会按稀疏字段合并已有 `metrics/meta`，不会因为低频包缺少高频字段就把已有高频状态抹掉。
 - 对“ClickHouse 不可达/网络超时”等疑似基础设施问题，writer 会重试并在多次失败后中止本批次处理（不提交 offset），等待恢复后重放。
   - 可通过 `CLICKHOUSE_UNAVAILABLE_COOLDOWN_MS` / `CLICKHOUSE_UNAVAILABLE_COOLDOWN_MAX_MS` 控制故障冷却窗口（避免 ClickHouse 长时间故障时产生日志风暴与无意义重试）。
 - writer 默认对 Kafka 单条消息大小设置保护（`MESSAGE_MAX_BYTES`），并会截断 DLQ 的 `raw_payload`（`DLQ_RAW_PAYLOAD_MAX_BYTES`），避免极端 payload 造成内存压力与日志/消息膨胀。

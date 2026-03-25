@@ -1,0 +1,31 @@
+﻿{
+    "generatedAt":  "2026-03-22T13:21:12Z",
+    "envFile":  "infra/compose/.env",
+    "envCreated":  false,
+    "validateOnly":  false,
+    "withOps":  false,
+    "allowUnsafeSecrets":  false,
+    "docker":  {
+                   "commandFound":  true
+               },
+    "compose":  {
+                    "base":  "infra/compose/docker-compose.yml",
+                    "app":  "infra/compose/docker-compose.app.yml"
+                },
+    "status":  {
+                   "started":  true,
+                   "initialized":  true,
+                   "seeded":  true
+               },
+    "warnings":  [
+
+                 ],
+    "errors":  [
+
+               ],
+    "nextCommands":  [
+                         "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release/deploy-docker-oneclick.ps1 -AllowUnsafeSecrets",
+                         "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release/deploy-docker-oneclick.ps1 -AllowUnsafeSecrets -WithOps",
+                         "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release/deploy-docker-oneclick.ps1 -AllowUnsafeSecrets -SeedDemo"
+                     ]
+}

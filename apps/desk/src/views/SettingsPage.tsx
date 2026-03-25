@@ -143,7 +143,7 @@ export function SettingsPage() {
           <Typography.Title level={3} style={{ margin: 0, color: "rgba(226,232,240,0.96)" }}>
             系统设置
           </Typography.Title>
-          <Typography.Text type="secondary">桌面端 Mock / HTTP 切换（预留）</Typography.Text>
+          <Typography.Text type="secondary">桌面端运行参数与集成设置</Typography.Text>
         </div>
         <Space>
           <Button
@@ -185,8 +185,8 @@ export function SettingsPage() {
                 if (v === "mock" || v === "http") setApiMode(v);
               }}
               options={[
-                { label: "Mock（推荐）", value: "mock" },
-                { label: "HTTP（后续对接）", value: "http" }
+                { label: "演示数据（推荐）", value: "mock" },
+                { label: "在线接口（联调）", value: "http" }
               ]}
             />
           </Form.Item>
@@ -200,7 +200,7 @@ export function SettingsPage() {
               }}
             />
           </Form.Item>
-          <Form.Item label="Mock 延迟（ms）">
+          <Form.Item label="演示延迟（ms）">
             <InputNumber
               min={0}
               max={5000}
@@ -211,7 +211,7 @@ export function SettingsPage() {
               }}
             />
           </Form.Item>
-          <Form.Item label="Mock 故障注入（%）">
+          <Form.Item label="演示故障注入（%）">
             <InputNumber
               min={0}
               max={100}
@@ -227,7 +227,7 @@ export function SettingsPage() {
             </Typography.Paragraph>
           </Form.Item>
           <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-            说明：现在以 Mock 完成 UI；后续再逐步把 HTTP 对接到 v2 后端（当前不阻塞 UI）。
+            说明：当前以演示数据完善 UI；后续再逐步把在线接口对接到 v2 后端（不阻塞前端进度）。
           </Typography.Paragraph>
         </Form>
       </BaseCard>

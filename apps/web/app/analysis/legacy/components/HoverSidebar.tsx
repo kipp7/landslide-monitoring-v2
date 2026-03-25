@@ -41,7 +41,7 @@ export default function HoverSidebar() {
             if (key === 'home') router.push('/')
             if (key === 'analysis') router.push('/analysis')
             if (key === 'device-management') router.push('/device-management')
-            if (key === 'gps-monitoring') router.push('/gps-monitoring')
+            if (key === 'gps-monitoring') router.push('/gps-deformation')
             if (key === 'settings') router.push('/settings')
           }}
           items={[

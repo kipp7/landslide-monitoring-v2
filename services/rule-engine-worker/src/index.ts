@@ -67,6 +67,7 @@ function makeActiveKey(ruleId: string, deviceId: string): ActiveKey {
 
 type DeviceInfo = { stationId: string | null; expiresAtMs: number };
 type SeriesState = Map<string, MetricPoint[]>; // sensorKey -> points
+type DeviceSensorInfo = { declared: Map<string, "enabled" | "disabled" | "missing">; expiresAtMs: number };
 
 type AlertEventV1 = {
   schema_version: 1;
@@ -171,6 +172,7 @@ async function main(): Promise<void> {
 
   const windowByKey = new Map<ActiveKey, WindowState>();
   const deviceInfoById = new Map<string, DeviceInfo>();
+  const deviceSensorsById = new Map<string, DeviceSensorInfo>();
   const seriesByKey = new Map<ActiveKey, SeriesState>();
 
   const getDeviceInfo = async (deviceId: string): Promise<DeviceInfo> => {
@@ -185,6 +187,30 @@ async function main(): Promise<void> {
     const stationId = row.rows[0]?.station_id ?? null;
     const next: DeviceInfo = { stationId, expiresAtMs: now + 60_000 };
     deviceInfoById.set(deviceId, next);
+    return next;
+  };
+
+  const getDeviceSensorInfo = async (deviceId: string): Promise<DeviceSensorInfo> => {
+    const now = Date.now();
+    const cached = deviceSensorsById.get(deviceId);
+    if (cached && cached.expiresAtMs > now) return cached;
+
+    const rows = await pg.query<{ sensor_key: string; status: "enabled" | "disabled" | "missing" }>(
+      `
+        SELECT sensor_key, status
+        FROM device_sensors
+        WHERE device_id = $1
+      `,
+      [deviceId]
+    );
+
+    const declared = new Map<string, "enabled" | "disabled" | "missing">();
+    for (const row of rows.rows) {
+      declared.set(row.sensor_key, row.status);
+    }
+
+    const next: DeviceSensorInfo = { declared, expiresAtMs: now + 60_000 };
+    deviceSensorsById.set(deviceId, next);
     return next;
   };
 
@@ -416,9 +442,22 @@ async function main(): Promise<void> {
         }
 
         const missingCfg = missing?.policy === "raise_missing_alert" ? missing : null;
+        let governedMissingKeys: string[] = [];
+        if (missingCfg) {
+          const sensorInfo = await getDeviceSensorInfo(deviceId);
+          if (sensorInfo.declared.size > 0) {
+            governedMissingKeys = missingCfg.sensorKeys.filter((k) => {
+              const status = sensorInfo.declared.get(k);
+              return status === "enabled" || status === "missing";
+            });
+          } else {
+            governedMissingKeys = missingCfg.sensorKeys.slice();
+          }
+        }
         const missingNow =
           missingCfg !== null &&
-          (okNow === null || !windowReady || missingCfg.sensorKeys.some((k) => typeof metrics[k] !== "number"));
+          governedMissingKeys.length > 0 &&
+          (okNow === null || !windowReady || governedMissingKeys.some((k) => typeof metrics[k] !== "number"));
 
         if (!windowReady) {
           if (missingPolicy !== "raise_missing_alert") continue;
@@ -483,7 +522,7 @@ async function main(): Promise<void> {
             continue;
           }
           const missingKeys =
-            missingCfg.sensorKeys.filter((k) => typeof metrics[k] !== "number");
+            governedMissingKeys.filter((k) => typeof metrics[k] !== "number");
           const alertId = crypto.randomUUID();
           await insertAlertEvent({
             alertId,

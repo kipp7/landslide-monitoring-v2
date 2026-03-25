@@ -1,0 +1,79 @@
+﻿{
+    "frozenAt":  "2026-03-20T14:46:38Z",
+    "freezeStamp":  "20260320-144638",
+    "freezeDate":  "2026-03-20",
+    "accepted":  true,
+    "readyToFreeze":  true,
+    "baseline":  {
+                     "latestBatchTaskId":  "desk-batch-88-closeout-acceptance",
+                     "completedChecks":  44,
+                     "rainfall":  79,
+                     "viewerDenied":  5,
+                     "openGaps":  0,
+                     "operatingProfiles":  3,
+                     "historyStamp":  "20260320-221824",
+                     "manifestGeneratedAt":  "2026-03-20T14:18:24Z",
+                     "summaryGeneratedAt":  "2026-03-20T14:18:23Z"
+                 },
+    "constraints":  {
+                        "freezeScope":  "Desk mainline closeout baseline",
+                        "uiChangesAllowed":  false,
+                        "nextActionPolicy":  "only_fix_required_defects"
+                    },
+    "checks":  [
+                   {
+                       "key":  "completedChecks",
+                       "ok":  true,
+                       "actual":  44,
+                       "expected":  "\u003e=44"
+                   },
+                   {
+                       "key":  "operatingProfiles",
+                       "ok":  true,
+                       "actual":  3,
+                       "expected":  3
+                   },
+                   {
+                       "key":  "operatingModelAlignment",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "responseOrdering",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "escalationCoverage",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "openGaps",
+                       "ok":  true,
+                       "actual":  0,
+                       "expected":  0
+                   },
+                   {
+                       "key":  "rainfallTruth",
+                       "ok":  true,
+                       "actual":  79,
+                       "expected":  79
+                   },
+                   {
+                       "key":  "viewerBoundary",
+                       "ok":  true,
+                       "actual":  5,
+                       "expected":  5
+                   },
+                   {
+                       "key":  "healthOk",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   }
+               ]
+}

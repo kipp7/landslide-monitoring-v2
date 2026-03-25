@@ -1,0 +1,65 @@
+﻿{
+    "generatedAt":  "2026-03-24T01:41:22Z",
+    "ready":  true,
+    "latest":  {
+                   "packageDir":  "artifacts/desk-win/latest",
+                   "packageZip":  "artifacts/desk-win/latest.zip",
+                   "executable":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\win-x64\\LandslideDesk.Win.exe",
+                   "webIndex":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\win-x64\\web\\index.html"
+               },
+    "hashes":  {
+                   "exe":  "e6f33723dd96abaf2dfc6bc4a7302bd77d55a4e826204c62551940af9b0dcc43",
+                   "webIndex":  "116953072022e8e84f1423def3f4430355d9d4abcab9a83279854243059dc4b4",
+                   "bundleZip":  "d210c6b699913b317203f771dae37721f8e3813e9b3c20a4a2e90658601bec23"
+               },
+    "env":  {
+                "configured":  18,
+                "placeholder":  0,
+                "missing":  0,
+                "emptyOptional":  2
+            },
+    "buildChunks":  {
+                        "oversizeJsCount":  1,
+                        "largestJs":  "index-B1qoZq4t.js",
+                        "largestJsKb":  3036.08
+                    },
+    "installer":  {
+                      "exe":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\installer\\LandslideDesk-Setup-win-x64-938f86e.exe",
+                      "sha256":  "6b2cdb9e78620ed48fa59af2f94409b340442a2f944136a5298d009a5fa8cb12",
+                      "verified":  true,
+                      "dotnetDesktopRuntimeHandledBy":  "self-contained",
+                      "webView2HandledBy":  "bootstrapper"
+                  },
+    "customInstaller":  {
+                            "exe":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\customba-installer\\LandslideDesk-CustomBA-Setup-938f86e-20260324-094034.exe",
+                            "sha256":  "43257051d1ad98ba0b00c0fa1110b553b26a9195570c67113901655a41823c2c",
+                            "verified":  true
+                        },
+    "handoff":  {
+                    "mandatoryFiles":  [
+                                           "docs/unified/reports/desk-win-delivery-summary-latest.md",
+                                           "docs/unified/reports/desk-win-release-notes-latest.md",
+                                           "docs/unified/reports/desk-win-manual-acceptance-latest.md",
+                                           "docs/unified/reports/desk-win-delivery-index-latest.json",
+                                           "docs/unified/reports/desk-win-delivery-hash-latest.json"
+                                       ],
+                    "nextActions":  [
+                                        "使用 latest.zip 或 latest/ 作为主交付件",
+                                        "Use latest.zip or latest/ as the primary handoff package",
+                                        "按接收场景提供 Inno 或 custom BA 安装器",
+                                        "Provide the Inno or custom BA installer based on the receiver scenario",
+                                        "附带交付索引、发布说明和人工验收清单",
+                                        "Include the delivery index, release notes, and manual acceptance checklist",
+                                        "仅修复真实交接或试交付中暴露的问题",
+                                        "Only fix defects discovered during real handoff or trial distribution"
+                                    ],
+                    "acceptanceSteps":  [
+                                            "解压 latest.zip 或直接使用 latest/ 目录",
+                                            "Unzip latest.zip or use the latest/ directory directly",
+                                            "启动 LandslideDesk.Win.exe，并确认进入可见 UI",
+                                            "Launch LandslideDesk.Win.exe and confirm that it reaches a visible UI",
+                                            "如走安装器路径，完成一次安装、启动和卸载验证",
+                                            "If the installer path is used, complete one install, launch, and uninstall cycle"
+                                        ]
+                }
+}

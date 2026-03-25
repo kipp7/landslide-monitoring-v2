@@ -52,7 +52,85 @@
   "code": 200,
   "message": "ok",
   "data": {
-    "updated": ["device.offline_threshold_s"]
+    "updated": 1
+  },
+  "timestamp": "2025-12-15T10:00:00Z",
+  "traceId": "req_01J..."
+}
+```
+
+当前与命令成功通知策略直接相关的系统配置键：
+
+- `command.success_notification.system_default`
+  - 取值：`silent | always_notify`
+  - 含义：当命令未命中 command-type default 且未显式 override 时的系统默认策略
+- `command.success_notification.command_type_defaults`
+  - 类型：JSON object
+  - 值示例：
+```json
+{
+  "set_config": "always_notify",
+  "reboot": "always_notify",
+  "restart_device": "always_notify"
+}
+```
+  - 含义：按 `commandType` 指定 success-notification 默认策略
+
+## 2.1 获取命令成功通知默认表
+
+**GET** `/system/command-success-notification-policy`
+
+权限：`system:config`
+
+响应：
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "ok",
+  "data": {
+    "systemDefault": "silent",
+    "commandTypeDefaults": {
+      "set_config": "always_notify",
+      "reboot": "always_notify"
+    }
+  },
+  "timestamp": "2025-12-15T10:00:00Z",
+  "traceId": "req_01J..."
+}
+```
+
+## 2.2 更新命令成功通知默认表
+
+**PUT** `/system/command-success-notification-policy`
+
+权限：`system:config`
+
+请求：
+```json
+{
+  "systemDefault": "silent",
+  "commandTypeDefaults": {
+    "set_config": "always_notify",
+    "reboot": "always_notify",
+    "restart_device": "always_notify"
+  }
+}
+```
+
+响应：
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "ok",
+  "data": {
+    "systemDefault": "silent",
+    "commandTypeDefaults": {
+      "set_config": "always_notify",
+      "reboot": "always_notify",
+      "restart_device": "always_notify"
+    }
   },
   "timestamp": "2025-12-15T10:00:00Z",
   "traceId": "req_01J..."
@@ -134,13 +212,18 @@
   "code": 200,
   "message": "ok",
   "data": {
-    "version": "2.0.0",
     "uptimeS": 86400,
     "postgres": { "status": "healthy" },
-    "redis": { "status": "healthy" },
     "clickhouse": { "status": "healthy" },
-    "kafka": { "status": "healthy" },
-    "emqx": { "status": "healthy" }
+    "kafka": { "status": "configured" },
+    "emqx": { "status": "unknown" },
+    "source": "health_summary",
+    "note": "当前展示的是服务健康摘要，不表示真实 CPU/内存/磁盘占用。",
+    "items": [
+      { "key": "postgres", "label": "PostgreSQL", "status": "healthy", "detail": "healthy" },
+      { "key": "clickhouse", "label": "ClickHouse", "status": "healthy", "detail": "healthy" },
+      { "key": "kafka", "label": "Kafka", "status": "healthy", "detail": "configured" }
+    ]
   },
   "timestamp": "2025-12-15T10:00:00Z",
   "traceId": "req_01J..."
@@ -193,6 +276,37 @@
     "pendingAlerts": 3,
     "alertsBySeverity": { "low": 1, "medium": 1, "high": 1, "critical": 0 },
     "lastUpdatedAt": "2025-12-15T10:00:00Z"
+  },
+  "timestamp": "2025-12-15T10:00:00Z",
+  "traceId": "req_01J..."
+}
+```
+
+## 8. 仪表盘一周趋势
+
+**GET** `/dashboard/weekly-trend`
+
+权限：`data:view`
+
+说明：
+- 近 7 天趋势由两部分聚合得到：
+  - ClickHouse 遥测表中的 `rainfall_mm`
+  - PostgreSQL `alert_events` 中的告警事件
+- 缺失日补 0
+- `source/note` 用于向 Desk 明确说明该趋势的来源与口径
+
+响应（示例）：
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "ok",
+  "data": {
+    "labels": ["03-08", "03-09", "03-10", "03-11", "03-12", "03-13", "03-14"],
+    "rainfallMm": [0, 12.5, 8, 0, 5.5, 18, 6],
+    "alertCount": [0, 1, 0, 0, 2, 1, 0],
+    "source": "derived_summary",
+    "note": "近 7 天按 telemetry `rainfall_mm` 与 `alert_events` 聚合生成，缺失日补 0。"
   },
   "timestamp": "2025-12-15T10:00:00Z",
   "traceId": "req_01J..."

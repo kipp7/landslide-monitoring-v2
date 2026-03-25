@@ -110,6 +110,10 @@ function clickhouseStringToIsoZ(ts: string): string {
   return t;
 }
 
+function toClickhouseDateTime64Expr(paramName: string): string {
+  return `toDateTime64({${paramName}:String}, 3, 'UTC')`;
+}
+
 export function registerDataRoutes(
   app: FastifyInstance,
   config: AppConfig,
@@ -229,10 +233,12 @@ export function registerDataRoutes(
     }
 
     const timeExpr = timeField === "event" ? "event_ts" : "received_ts";
+    const startExpr = toClickhouseDateTime64Expr("start");
+    const endExpr = toClickhouseDateTime64Expr("end");
     const timeFilter =
       timeField === "event"
-        ? `event_ts IS NOT NULL AND event_ts >= {start:DateTime64(3, 'UTC')} AND event_ts <= {end:DateTime64(3, 'UTC')}`
-        : `received_ts >= {start:DateTime64(3, 'UTC')} AND received_ts <= {end:DateTime64(3, 'UTC')}`;
+        ? `event_ts IS NOT NULL AND event_ts >= ${startExpr} AND event_ts <= ${endExpr}`
+        : `received_ts >= ${startExpr} AND received_ts <= ${endExpr}`;
 
     let sql: string;
 
@@ -348,8 +354,8 @@ export function registerDataRoutes(
       FROM ${config.clickhouseDatabase}.${config.clickhouseTable}
       WHERE device_id = {deviceId:String}
         AND sensor_key = {sensorKey:String}
-        AND received_ts >= {start:DateTime64(3, 'UTC')}
-        AND received_ts <= {end:DateTime64(3, 'UTC')}
+        AND received_ts >= ${toClickhouseDateTime64Expr("start")}
+        AND received_ts <= ${toClickhouseDateTime64Expr("end")}
       ORDER BY received_ts ${order === "asc" ? "ASC" : "DESC"}
       LIMIT {limit:UInt32}
     `;
@@ -441,8 +447,8 @@ export function registerDataRoutes(
       FROM ${config.clickhouseDatabase}.${config.clickhouseTable}
       WHERE device_id IN {deviceIds:Array(String)}
         AND sensor_key = {sensorKey:String}
-        AND received_ts >= {start:DateTime64(3, 'UTC')}
-        AND received_ts <= {end:DateTime64(3, 'UTC')}
+        AND received_ts >= ${toClickhouseDateTime64Expr("start")}
+        AND received_ts <= ${toClickhouseDateTime64Expr("end")}
       GROUP BY ts
       ORDER BY ts ASC
       LIMIT {limit:UInt32}
@@ -542,8 +548,8 @@ export function registerDataRoutes(
       FROM ${config.clickhouseDatabase}.${config.clickhouseTable}
       WHERE device_id IN {deviceIds:Array(String)}
         AND sensor_key IN {sensorKeys:Array(String)}
-        AND received_ts >= {start:DateTime64(3, 'UTC')}
-        AND received_ts <= {end:DateTime64(3, 'UTC')}
+        AND received_ts >= ${toClickhouseDateTime64Expr("start")}
+        AND received_ts <= ${toClickhouseDateTime64Expr("end")}
       ORDER BY device_id, received_ts ASC
       LIMIT {limit:UInt32}
     `;

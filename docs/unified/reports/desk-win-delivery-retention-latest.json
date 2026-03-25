@@ -1,0 +1,21 @@
+﻿{
+    "generatedAt":  "2026-03-24T01:41:55Z",
+    "deliveryDir":  "artifacts/desk-win/delivery",
+    "keep":  3,
+    "keptDirectories":  [
+                            "desk-win-delivery-20260324-094122",
+                            "desk-win-delivery-20260324-093559",
+                            "desk-win-delivery-20260324-015337"
+                        ],
+    "deletedDirectories":  [
+                               "desk-win-delivery-20260324-014304"
+                           ],
+    "keptZips":  [
+                     "desk-win-delivery-20260324-094122.zip",
+                     "desk-win-delivery-20260324-093559.zip",
+                     "desk-win-delivery-20260324-015337.zip"
+                 ],
+    "deletedZips":  [
+                        "desk-win-delivery-20260324-014304.zip"
+                    ]
+}

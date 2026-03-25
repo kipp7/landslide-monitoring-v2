@@ -39,8 +39,18 @@ ON CONFLICT (sensor_key) DO NOTHING;
 
 INSERT INTO stations (station_code, station_name, latitude, longitude, metadata)
 VALUES
-  ('DEMO001', '示例监测点', 21.6847, 108.3516, '{"note":"seed demo"}')
+  ('DEMO001', '示例监测点A', 22.6847, 108.3516, '{"note":"seed demo","locationName":"示例监测区A","riskLevel":"medium","risk_level":"medium"}')
 ON CONFLICT (station_code) DO NOTHING;
+
+INSERT INTO system_configs (config_key, config_value, config_type, description, is_public)
+VALUES
+  ('gps.displacement_threshold_blue_mm', '2', 'number', 'GPS blue threshold mm', TRUE),
+  ('gps.displacement_threshold_yellow_mm', '5', 'number', 'GPS yellow threshold mm', TRUE),
+  ('gps.displacement_threshold_red_mm', '8', 'number', 'GPS red threshold mm', TRUE),
+  ('gps.data_limit', '200', 'number', 'GPS data limit', TRUE),
+  ('command.success_notification.system_default', 'silent', 'string', 'Command success notification system default policy', FALSE),
+  ('command.success_notification.command_type_defaults', '{"set_config":"always_notify","reboot":"always_notify","restart_device":"always_notify","deactivate_device":"always_notify","set_sampling_interval":"always_notify","manual_collect":"always_notify","huawei:reboot":"always_notify"}', 'json', 'Command success notification policy defaults by command type', FALSE)
+ON CONFLICT (config_key) DO NOTHING;
 
 -- -----------------------------
 -- devices：示例设备（不建议在生产环境用固定 hash）
@@ -59,4 +69,3 @@ ON CONFLICT (station_code) DO NOTHING;
 --   '$2b$10$replace_with_real_hash',
 --   '{"note":"seed demo"}'
 -- );
-

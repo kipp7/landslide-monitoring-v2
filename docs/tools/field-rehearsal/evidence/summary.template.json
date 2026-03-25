@@ -1,0 +1,31 @@
+{
+  "runId": "field-rehearsal-YYYYMMDD-HHMMSS",
+  "scope": "node-gateway | gateway-platform | end-to-end",
+  "tooling": {
+    "nodeSimulator": "payload-samples | replay script | firmware-sim",
+    "gatewayHarness": "Node-RED | custom adapter harness",
+    "platformProbe": "MQTTX | API probes | Desk/Web checks"
+  },
+  "samples": [
+    "hf-normal.json",
+    "lf-meta.json",
+    "hf-duplicate.json",
+    "hf-out-of-order.json",
+    "hf-oversized.json",
+    "hf-replay.json"
+  ],
+  "results": {
+    "accepted": 0,
+    "rejected": 0,
+    "replayed": 0
+  },
+  "checks": {
+    "schemaProbe": false,
+    "ingestProbe": false,
+    "kafkaRawProbe": false,
+    "apiProbe": false,
+    "deskWebVisibilityProbe": false
+  },
+  "notes": [],
+  "conclusion": "pending"
+}

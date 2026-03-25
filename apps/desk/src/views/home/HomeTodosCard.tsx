@@ -155,7 +155,7 @@ export function HomeTodosCard(props: { loading: boolean; stations: Station[]; de
 
   const renderList = (list: HomeTask[]) => {
     if (props.loading) return <Skeleton active paragraph={{ rows: 4 }} />;
-    if (!list.length) return <Typography.Text type="secondary">暂无待处理事项（Mock）</Typography.Text>;
+    if (!list.length) return <Typography.Text type="secondary">暂无待处理事项</Typography.Text>;
 
     return list.map((t) => {
       const doneAt = persist.doneAtById[t.id];
@@ -171,10 +171,12 @@ export function HomeTodosCard(props: { loading: boolean; stations: Station[]; de
           <div className="desk-home-todo-main">
             <div className="desk-home-todo-title">{t.title}</div>
             <div className="desk-home-todo-tags">
-              <Tag color={t.source === "system" ? "cyan" : "geekblue"}>{t.source === "system" ? "系统建议" : "我的待办"}</Tag>
-              <Tag color={p.color}>{p.text}</Tag>
-              {t.stationName ? <Tag color="blue">{t.stationName}</Tag> : null}
-              {t.deviceName ? <Tag color="purple">{t.deviceName}</Tag> : null}
+              <Tag className={`desk-pill-tag desk-tone-${t.source === "system" ? "cyan" : "geekblue"}`}>
+                {t.source === "system" ? "系统建议" : "我的待办"}
+              </Tag>
+              <Tag className={`desk-pill-tag desk-tone-${p.color}`}>{p.text}</Tag>
+              {t.stationName ? <Tag className="desk-pill-tag desk-tone-blue">{t.stationName}</Tag> : null}
+              {t.deviceName ? <Tag className="desk-pill-tag desk-tone-purple">{t.deviceName}</Tag> : null}
             </div>
             <div className="desk-home-todo-meta">
               <span>{t.description ?? "—"}</span>
@@ -188,6 +190,8 @@ export function HomeTodosCard(props: { loading: boolean; stations: Station[]; de
           <div className="desk-home-todo-actions">
             <Button
               size="small"
+              shape="round"
+              className="desk-home-go-btn"
               onClick={() => {
                 goToTask(t);
               }}
@@ -206,10 +210,10 @@ export function HomeTodosCard(props: { loading: boolean; stations: Station[]; de
         title="待处理事项"
         extra={
           <Space size={8}>
-            <Button size="small" icon={<PlusOutlined />} onClick={openCreate}>
+            <Button size="small" shape="round" type="primary" className="desk-home-action-primary" icon={<PlusOutlined />} onClick={openCreate}>
               新建
             </Button>
-            <Button size="small" icon={<ReloadOutlined />} onClick={resetTodos}>
+            <Button size="small" shape="round" className="desk-home-action-secondary" icon={<ReloadOutlined />} onClick={resetTodos}>
               重置
             </Button>
           </Space>

@@ -1,0 +1,172 @@
+﻿{
+    "generatedAt":  "2026-03-25T02:58:41Z",
+    "deviceId":  "ba76b73d-58a1-43c3-a924-eaa2b9b9d393",
+    "commandId":  "614c1e10-1b38-40bb-a51b-d5fee2265043",
+    "notification":  {
+                         "notificationId":  "0341aac2-d369-4091-bb1c-0f0c67e6527f",
+                         "eventId":  "a9f93836-ba46-4183-8c4b-be2e12189368",
+                         "eventType":  "COMMAND_FAILED",
+                         "commandId":  "614c1e10-1b38-40bb-a51b-d5fee2265043",
+                         "deviceId":  "ba76b73d-58a1-43c3-a924-eaa2b9b9d393",
+                         "status":  "pending",
+                         "notifyType":  "app",
+                         "title":  "命令失败：614c1e10-1b38-40bb-a51b-d5fee2265043"
+                     },
+    "conclusion":  "mqtt-command-failed-receipt-now-produces-readable-command-notification",
+    "notes":  [
+                  "The proof creates a rehearsal device, issues a sent command, and publishes a failed MQTT ack to cmd_ack/\u003cdevice_id\u003e.",
+                  "command-ack-receiver should accept the MQTT ack, publish device.command_acks.v1, apply the failed receipt, emit COMMAND_FAILED, and keep the downstream event + notification chain readable.",
+                  "This proof covers cmd_ack/\u003cdevice_id\u003e -\u003e command-ack-receiver -\u003e device.command_acks.v1 -\u003e device.command_events.v1 -\u003e device_command_notifications -\u003e API."
+              ],
+    "command":  {
+                    "commandId":  "614c1e10-1b38-40bb-a51b-d5fee2265043",
+                    "deviceId":  "ba76b73d-58a1-43c3-a924-eaa2b9b9d393",
+                    "commandType":  "set_config",
+                    "payload":  {
+                                    "sampling_s":  10,
+                                    "report_interval_s":  60
+                                },
+                    "status":  "failed",
+                    "sentAt":  "2026-03-25T02:58:39Z",
+                    "ackedAt":  "2026-03-25T02:58:39Z",
+                    "result":  {
+                                   "error_message":  "simulated mqtt receipt failure for field proof"
+                               },
+                    "errorMessage":  "simulated mqtt receipt failure for field proof",
+                    "createdAt":  "2026-03-25T02:58:38Z",
+                    "updatedAt":  "2026-03-25T02:58:39Z"
+                },
+    "events":  {
+                   "list":  [
+                                {
+                                    "eventId":  "a9f93836-ba46-4183-8c4b-be2e12189368",
+                                    "eventType":  "COMMAND_FAILED",
+                                    "commandId":  "614c1e10-1b38-40bb-a51b-d5fee2265043",
+                                    "deviceId":  "ba76b73d-58a1-43c3-a924-eaa2b9b9d393",
+                                    "status":  "failed",
+                                    "detail":  "simulated mqtt receipt failure for field proof",
+                                    "result":  {
+                                                   "error_message":  "simulated mqtt receipt failure for field proof"
+                                               },
+                                    "createdAt":  "2026-03-25T02:58:40Z",
+                                    "ingestedAt":  "2026-03-25T02:58:40Z"
+                                }
+                            ],
+                   "pagination":  {
+                                      "page":  1,
+                                      "pageSize":  20,
+                                      "total":  1,
+                                      "totalPages":  1
+                                  }
+               },
+    "api":  {
+                "list":  {
+                             "list":  [
+                                          {
+                                              "notificationId":  "0341aac2-d369-4091-bb1c-0f0c67e6527f",
+                                              "eventId":  "a9f93836-ba46-4183-8c4b-be2e12189368",
+                                              "eventType":  "COMMAND_FAILED",
+                                              "commandId":  "614c1e10-1b38-40bb-a51b-d5fee2265043",
+                                              "deviceId":  "ba76b73d-58a1-43c3-a924-eaa2b9b9d393",
+                                              "notifyType":  "app",
+                                              "status":  "pending",
+                                              "title":  "命令失败：614c1e10-1b38-40bb-a51b-d5fee2265043",
+                                              "content":  "命令失败\ndeviceId=ba76b73d-58a1-43c3-a924-eaa2b9b9d393\ncommandId=614c1e10-1b38-40bb-a51b-d5fee2265043\nstatus=failed\ndetail=simulated mqtt receipt failure for field proof\n",
+                                              "errorMessage":  "",
+                                              "createdAt":  "2026-03-25T02:58:40Z",
+                                              "sentAt":  null,
+                                              "deliveredAt":  null,
+                                              "readAt":  null
+                                          }
+                                      ],
+                             "pagination":  {
+                                                "page":  1,
+                                                "pageSize":  20,
+                                                "total":  1,
+                                                "totalPages":  1
+                                            }
+                         },
+                "statsBefore":  {
+                                    "deviceId":  "ba76b73d-58a1-43c3-a924-eaa2b9b9d393",
+                                    "window":  null,
+                                    "notifyType":  "",
+                                    "bucket":  "",
+                                    "totals":  {
+                                                   "total":  1,
+                                                   "unread":  1
+                                               },
+                                    "byStatus":  [
+                                                     {
+                                                         "status":  "pending",
+                                                         "count":  1
+                                                     }
+                                                 ],
+                                    "byNotifyType":  [
+                                                         {
+                                                             "notifyType":  "app",
+                                                             "count":  1
+                                                         }
+                                                     ],
+                                    "byEventType":  [
+                                                        {
+                                                            "eventType":  "COMMAND_FAILED",
+                                                            "count":  1
+                                                        }
+                                                    ],
+                                    "byBucket":  [
+
+                                                 ]
+                                },
+                "detail":  {
+                               "notificationId":  "0341aac2-d369-4091-bb1c-0f0c67e6527f",
+                               "eventId":  "a9f93836-ba46-4183-8c4b-be2e12189368",
+                               "eventType":  "COMMAND_FAILED",
+                               "commandId":  "614c1e10-1b38-40bb-a51b-d5fee2265043",
+                               "deviceId":  "ba76b73d-58a1-43c3-a924-eaa2b9b9d393",
+                               "notifyType":  "app",
+                               "status":  "pending",
+                               "title":  "命令失败：614c1e10-1b38-40bb-a51b-d5fee2265043",
+                               "content":  "命令失败\ndeviceId=ba76b73d-58a1-43c3-a924-eaa2b9b9d393\ncommandId=614c1e10-1b38-40bb-a51b-d5fee2265043\nstatus=failed\ndetail=simulated mqtt receipt failure for field proof\n",
+                               "errorMessage":  "",
+                               "createdAt":  "2026-03-25T02:58:40Z",
+                               "sentAt":  null,
+                               "deliveredAt":  null,
+                               "readAt":  null
+                           },
+                "read":  {
+                             "notificationId":  "0341aac2-d369-4091-bb1c-0f0c67e6527f",
+                             "readAt":  "2026-03-25T02:58:41Z"
+                         },
+                "statsAfter":  {
+                                   "deviceId":  "ba76b73d-58a1-43c3-a924-eaa2b9b9d393",
+                                   "window":  null,
+                                   "notifyType":  "",
+                                   "bucket":  "",
+                                   "totals":  {
+                                                  "total":  1,
+                                                  "unread":  0
+                                              },
+                                   "byStatus":  [
+                                                    {
+                                                        "status":  "pending",
+                                                        "count":  1
+                                                    }
+                                                ],
+                                   "byNotifyType":  [
+                                                        {
+                                                            "notifyType":  "app",
+                                                            "count":  1
+                                                        }
+                                                    ],
+                                   "byEventType":  [
+                                                       {
+                                                           "eventType":  "COMMAND_FAILED",
+                                                           "count":  1
+                                                       }
+                                                   ],
+                                   "byBucket":  [
+
+                                                ]
+                               }
+            }
+}

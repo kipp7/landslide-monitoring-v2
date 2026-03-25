@@ -1,0 +1,19 @@
+﻿{
+  "auth": {
+    "username": "admin",
+    "roleCount": 1,
+    "baseUrl": "http://127.0.0.1:8081"
+  },
+  "webCommandNotifyOnAck": {
+    "deviceId": "00000000-0000-0000-0000-000000000001",
+    "defaultCommandId": "1736d297-76f5-4774-8b67-d9acfa03d732",
+    "defaultNotifyOnAck": false,
+    "defaultSuccessNotificationPolicy": "silent",
+    "defaultEffectiveSuccessNotificationPolicy": "silent",
+    "optInCommandId": "c1df46cf-7e8c-4461-bdc0-0ed4c0541909",
+    "optInNotifyOnAck": true,
+    "optInSuccessNotificationPolicy": "always_notify",
+    "optInEffectiveSuccessNotificationPolicy": "always_notify",
+    "commandsLoaded": 23
+  }
+}

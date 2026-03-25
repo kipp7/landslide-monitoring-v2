@@ -1,0 +1,68 @@
+﻿{
+    "generatedAt":  "2026-03-20T14:51:38Z",
+    "accepted":  true,
+    "closeout":  {
+                     "readyToFreeze":  true,
+                     "latestBatchTaskId":  "desk-batch-89-closeout-freeze",
+                     "completedChecks":  44,
+                     "rainfall":  79,
+                     "openGaps":  0,
+                     "operatingProfiles":  3
+                 },
+    "checks":  [
+                   {
+                       "key":  "completedChecks",
+                       "ok":  true,
+                       "actual":  44,
+                       "expected":  "\u003e=44"
+                   },
+                   {
+                       "key":  "operatingProfiles",
+                       "ok":  true,
+                       "actual":  3,
+                       "expected":  3
+                   },
+                   {
+                       "key":  "operatingModelAlignment",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "responseOrdering",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "escalationCoverage",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "openGaps",
+                       "ok":  true,
+                       "actual":  0,
+                       "expected":  0
+                   },
+                   {
+                       "key":  "rainfallTruth",
+                       "ok":  true,
+                       "actual":  79,
+                       "expected":  79
+                   },
+                   {
+                       "key":  "viewerBoundary",
+                       "ok":  true,
+                       "actual":  5,
+                       "expected":  5
+                   },
+                   {
+                       "key":  "healthOk",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   }
+               ]
+}

@@ -83,7 +83,7 @@ export function DashboardPage() {
           </Card>
         </Col>
         <Col span={24}>
-          <Card title="一周趋势（Mock）">
+          <Card title="一周趋势">
             {loading ? <Skeleton active /> : <ReactECharts option={option} style={{ height: 320 }} />}
           </Card>
         </Col>

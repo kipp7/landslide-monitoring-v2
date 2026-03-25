@@ -40,6 +40,20 @@ type TelemetryRow = {
   schema_version: number;
 };
 
+type TelemetryEnvelopeProjection = {
+  schema_version: 1;
+  device_id: string;
+  event_ts?: string | null;
+  seq?: number | null;
+  metrics: Record<string, number | string | boolean | null>;
+  meta?: Record<string, unknown>;
+};
+
+type ShadowState = {
+  metrics: Record<string, number | string | boolean | null>;
+  meta: Record<string, unknown>;
+};
+
 function repoRootFromHere(): string {
   return path.resolve(__dirname, "..", "..", "..");
 }
@@ -122,6 +136,100 @@ function toClickhouseDateTime64Utc(value: string): string {
   // We normalize through Date to ensure UTC and keep millisecond precision.
   const iso = new Date(value).toISOString(); // always ends with 'Z'
   return iso.replace("T", " ").replace("Z", "");
+}
+
+function toEnvelopeProjection(payload: TelemetryRawV1): TelemetryEnvelopeProjection {
+  return {
+    schema_version: payload.schema_version,
+    device_id: payload.device_id,
+    ...(payload.event_ts !== undefined ? { event_ts: payload.event_ts ?? null } : {}),
+    ...(payload.seq !== undefined ? { seq: payload.seq ?? null } : {}),
+    metrics: payload.metrics,
+    ...(payload.meta ? { meta: payload.meta } : {})
+  };
+}
+
+function getSemanticPayloadBytes(payload: TelemetryRawV1): number {
+  return Buffer.byteLength(JSON.stringify(toEnvelopeProjection(payload)), "utf8");
+}
+
+function getPacketClass(payload: TelemetryRawV1): string | null {
+  const meta = payload.meta;
+  if (!meta || typeof meta !== "object") return null;
+  const packetClass = (meta as Record<string, unknown>).packet_class;
+  if (typeof packetClass !== "string") return null;
+  const trimmed = packetClass.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function isHighFrequencyPacket(payload: TelemetryRawV1): boolean {
+  const packetClass = getPacketClass(payload);
+  return Boolean(packetClass && packetClass.toLowerCase().startsWith("hf_"));
+}
+
+function normalizeShadowState(state: unknown): ShadowState {
+  if (!state || typeof state !== "object") {
+    return { metrics: {}, meta: {} };
+  }
+
+  const obj = state as { metrics?: unknown; meta?: unknown };
+  const metrics =
+    obj.metrics && typeof obj.metrics === "object"
+      ? ({ ...(obj.metrics as Record<string, number | string | boolean | null>) } as Record<string, number | string | boolean | null>)
+      : {};
+  const meta = obj.meta && typeof obj.meta === "object" ? { ...(obj.meta as Record<string, unknown>) } : {};
+  return { metrics, meta };
+}
+
+function buildShadowState(payload: TelemetryRawV1, previousState: unknown): ShadowState {
+  const previous = normalizeShadowState(previousState);
+  const meta: Record<string, unknown> = {
+    ...previous.meta,
+    ...(payload.meta && typeof payload.meta === "object" ? (payload.meta as Record<string, unknown>) : {})
+  };
+
+  const writerMeta: Record<string, unknown> =
+    meta._writer && typeof meta._writer === "object" ? { ...(meta._writer as Record<string, unknown>) } : {};
+
+  if (payload.seq != null) writerMeta.last_seq = payload.seq;
+  writerMeta.last_received_ts = payload.received_ts;
+  meta._writer = writerMeta;
+
+  return {
+    metrics: {
+      ...previous.metrics,
+      ...payload.metrics
+    },
+    meta
+  };
+}
+
+async function getLatestShadowSeq(pool: Pool, deviceId: string): Promise<number | null> {
+  const row = await pool.query<{ last_seq: string | null }>(
+    `
+      SELECT state #>> '{meta,_writer,last_seq}' AS last_seq
+      FROM device_state
+      WHERE device_id = $1
+    `,
+    [deviceId]
+  );
+  const value = row.rows[0]?.last_seq ?? null;
+  if (value == null) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+async function getLatestShadowState(pool: Pool, deviceId: string): Promise<ShadowState | null> {
+  const row = await pool.query<{ state: unknown }>(
+    `
+      SELECT state
+      FROM device_state
+      WHERE device_id = $1
+    `,
+    [deviceId]
+  );
+  if (row.rowCount === 0) return null;
+  return normalizeShadowState(row.rows[0]?.state);
 }
 
 function toTelemetryRows(payload: TelemetryRawV1): TelemetryRow[] {
@@ -369,6 +477,8 @@ async function main(): Promise<void> {
       let pendingRowsCount = 0;
       let lastFlushAt = Date.now();
       const deviceStateByDeviceId = new Map<string, { updatedAtIso: string; state: unknown }>();
+      const latestSeqByDeviceId = new Map<string, number | null>();
+      const latestShadowStateByDeviceId = new Map<string, ShadowState | null>();
 
       const flush = async (reason: string) => {
         if (pending.length === 0) return;
@@ -400,6 +510,8 @@ async function main(): Promise<void> {
           for (const p of pending) ctx.resolveOffset(p.offset);
           pending.length = 0;
           deviceStateByDeviceId.clear();
+          latestSeqByDeviceId.clear();
+          latestShadowStateByDeviceId.clear();
           await ctx.commitOffsetsIfNecessary();
           return;
         } catch (err) {
@@ -437,7 +549,7 @@ async function main(): Promise<void> {
               const updatedAtIso = new Date(p.payload.received_ts).toISOString();
               shadowUpdates.set(p.payload.device_id, {
                 updatedAtIso,
-                state: { metrics: p.payload.metrics, meta: p.payload.meta ?? {} }
+                state: buildShadowState(p.payload, latestShadowStateByDeviceId.get(p.payload.device_id))
               });
 
               ctx.resolveOffset(p.offset);
@@ -474,6 +586,8 @@ async function main(): Promise<void> {
 
           pending.length = 0;
           deviceStateByDeviceId.clear();
+          latestSeqByDeviceId.clear();
+          latestShadowStateByDeviceId.clear();
           await ctx.commitOffsetsIfNecessary();
           return;
         }
@@ -525,6 +639,86 @@ async function main(): Promise<void> {
           }
 
           const payload: TelemetryRawV1 = parsed;
+          if (payload.seq != null) {
+            let latestSeq: number | null = null;
+            if (latestSeqByDeviceId.has(payload.device_id)) {
+              latestSeq = latestSeqByDeviceId.get(payload.device_id) ?? null;
+            } else if (pg) {
+              latestSeq = await getLatestShadowSeq(pg, payload.device_id);
+              latestSeqByDeviceId.set(payload.device_id, latestSeq);
+            }
+
+            if (latestSeq != null && payload.seq <= latestSeq) {
+              const reasonCode = payload.seq === latestSeq ? "duplicate_seq" : "stale_seq";
+              await publishDlq({
+                schema_version: 1,
+                reason_code: reasonCode,
+                reason_detail:
+                  "device_id=" +
+                  payload.device_id +
+                  " seq=" +
+                  String(payload.seq) +
+                  " is not newer than latest_seq=" +
+                  String(latestSeq),
+                received_ts: payload.received_ts,
+                device_id: payload.device_id,
+                raw_payload: raw
+              });
+              logger.warn(
+                {
+                  traceId,
+                  topic: batch.topic,
+                  partition: batch.partition,
+                  deviceId: payload.device_id,
+                  seq: payload.seq,
+                  latestSeq,
+                  reasonCode
+                },
+                "telemetry seq rejected before persistence (dlq)"
+              );
+              ctx.resolveOffset(message.offset);
+              stats.kafkaMessagesSkipped += 1;
+              continue;
+            }
+
+            latestSeqByDeviceId.set(payload.device_id, payload.seq);
+          }
+          if (pg && !latestShadowStateByDeviceId.has(payload.device_id)) {
+            latestShadowStateByDeviceId.set(payload.device_id, await getLatestShadowState(pg, payload.device_id));
+          }
+          const semanticBytes = getSemanticPayloadBytes(payload);
+          const packetClass = getPacketClass(payload);
+          if (isHighFrequencyPacket(payload) && semanticBytes > config.highFrequencyBudgetBytes) {
+            await publishDlq({
+              schema_version: 1,
+              reason_code: "high_frequency_budget_exceeded",
+              reason_detail:
+                "packet_class=" +
+                String(packetClass) +
+                " semantic_bytes=" +
+                String(semanticBytes) +
+                " exceeds HIGH_FREQUENCY_BUDGET_BYTES=" +
+                String(config.highFrequencyBudgetBytes),
+              received_ts: payload.received_ts,
+              device_id: payload.device_id,
+              raw_payload: raw
+            });
+            logger.warn(
+              {
+                traceId,
+                topic: batch.topic,
+                partition: batch.partition,
+                deviceId: payload.device_id,
+                packetClass,
+                semanticBytes,
+                limitBytes: config.highFrequencyBudgetBytes
+              },
+              "high-frequency packet exceeded semantic budget (dlq)"
+            );
+            ctx.resolveOffset(message.offset);
+            stats.kafkaMessagesSkipped += 1;
+            continue;
+          }
           const messageRows = toTelemetryRows(payload);
           if (messageRows.length > 0) {
             pending.push({ offset: message.offset, raw, payload, rows: messageRows });
@@ -533,10 +727,15 @@ async function main(): Promise<void> {
             const updatedAtIso = new Date(payload.received_ts).toISOString();
             const existing = deviceStateByDeviceId.get(payload.device_id);
             if (!existing || existing.updatedAtIso <= updatedAtIso) {
+              const previousState = existing
+                ? normalizeShadowState(existing.state)
+                : latestShadowStateByDeviceId.get(payload.device_id);
+              const nextState = buildShadowState(payload, previousState);
               deviceStateByDeviceId.set(payload.device_id, {
                 updatedAtIso,
-                state: { metrics: payload.metrics, meta: payload.meta ?? {} }
+                state: nextState
               });
+              latestShadowStateByDeviceId.set(payload.device_id, nextState);
             }
             stats.kafkaMessagesOk += 1;
           } else {

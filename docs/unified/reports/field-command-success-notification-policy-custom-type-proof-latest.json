@@ -1,0 +1,152 @@
+﻿{
+    "generatedAt":  "2026-03-25T10:56:43Z",
+    "deviceId":  "699b596c-3c8d-4c44-9e32-758655a7b47c",
+    "commandId":  "253c736c-8223-4c62-a063-b67a624545b2",
+    "customCommandType":  "custom_success_policy_proof",
+    "policyBefore":  {
+                         "systemDefault":  "silent",
+                         "commandTypeDefaults":  {
+                                                     "set_config":  "always_notify",
+                                                     "reboot":  "always_notify",
+                                                     "restart_device":  "always_notify",
+                                                     "deactivate_device":  "always_notify",
+                                                     "set_sampling_interval":  "always_notify",
+                                                     "manual_collect":  "always_notify",
+                                                     "huawei:reboot":  "always_notify"
+                                                 }
+                     },
+    "policyApplied":  {
+                          "systemDefault":  "silent",
+                          "commandTypeDefaults":  {
+                                                      "huawei:reboot":  "always_notify",
+                                                      "restart_device":  "always_notify",
+                                                      "reboot":  "always_notify",
+                                                      "manual_collect":  "always_notify",
+                                                      "custom_success_policy_proof":  "always_notify",
+                                                      "set_config":  "always_notify",
+                                                      "deactivate_device":  "always_notify",
+                                                      "set_sampling_interval":  "always_notify"
+                                                  }
+                      },
+    "notification":  {
+                         "notificationId":  "d0496b83-e65b-48a7-9474-07ddb3b5ddb3",
+                         "eventId":  "644599b9-9325-4d1c-8b62-ccf151aa6401",
+                         "eventType":  "COMMAND_ACKED",
+                         "commandId":  "253c736c-8223-4c62-a063-b67a624545b2",
+                         "deviceId":  "699b596c-3c8d-4c44-9e32-758655a7b47c",
+                         "status":  "pending",
+                         "notifyType":  "app",
+                         "title":  "命令已确认：253c736c-8223-4c62-a063-b67a624545b2"
+                     },
+    "conclusion":  "command-success-notification-policy-custom-type-now-controls-runtime-behavior",
+    "notes":  [
+                  "The proof reads the current command success-notification policy through the dedicated system API, adds a new custom command type default through the same API, and then issues that custom command type.",
+                  "A custom command type added to commandTypeDefaults should be treated as a first-class default table entry and resolve inherit to always_notify.",
+                  "command-notify-worker should therefore create a COMMAND_ACKED notification for the new custom command type."
+              ],
+    "command":  {
+                    "commandId":  "253c736c-8223-4c62-a063-b67a624545b2",
+                    "deviceId":  "699b596c-3c8d-4c44-9e32-758655a7b47c",
+                    "commandType":  "custom_success_policy_proof",
+                    "payload":  {
+                                    "source":  "field-command-success-policy-custom-type-proof",
+                                    "expectedPolicy":  "custom_type_added_via_management_api"
+                                },
+                    "successNotificationPolicy":  "inherit",
+                    "effectiveSuccessNotificationPolicy":  "always_notify",
+                    "notifyOnAck":  true,
+                    "status":  "acked",
+                    "sentAt":  "2026-03-25T10:56:41Z",
+                    "ackedAt":  "2026-03-25T10:56:41Z",
+                    "result":  {
+                                   "source":  "command_success_notification_policy_custom_type_proof",
+                                   "applied":  true
+                               },
+                    "errorMessage":  "",
+                    "createdAt":  "2026-03-25T10:56:33Z",
+                    "updatedAt":  "2026-03-25T10:56:41Z"
+                },
+    "events":  {
+                   "list":  [
+                                {
+                                    "eventId":  "644599b9-9325-4d1c-8b62-ccf151aa6401",
+                                    "eventType":  "COMMAND_ACKED",
+                                    "commandId":  "253c736c-8223-4c62-a063-b67a624545b2",
+                                    "deviceId":  "699b596c-3c8d-4c44-9e32-758655a7b47c",
+                                    "status":  "acked",
+                                    "detail":  "command success notification policy custom type proof",
+                                    "result":  {
+                                                   "source":  "command_success_notification_policy_custom_type_proof",
+                                                   "applied":  true
+                                               },
+                                    "createdAt":  "2026-03-25T10:56:41Z",
+                                    "ingestedAt":  "2026-03-25T10:56:41Z"
+                                }
+                            ],
+                   "pagination":  {
+                                      "page":  1,
+                                      "pageSize":  20,
+                                      "total":  1,
+                                      "totalPages":  1
+                                  }
+               },
+    "notifications":  {
+                          "list":  {
+                                       "list":  [
+                                                    {
+                                                        "notificationId":  "d0496b83-e65b-48a7-9474-07ddb3b5ddb3",
+                                                        "eventId":  "644599b9-9325-4d1c-8b62-ccf151aa6401",
+                                                        "eventType":  "COMMAND_ACKED",
+                                                        "commandId":  "253c736c-8223-4c62-a063-b67a624545b2",
+                                                        "deviceId":  "699b596c-3c8d-4c44-9e32-758655a7b47c",
+                                                        "notifyType":  "app",
+                                                        "status":  "pending",
+                                                        "title":  "命令已确认：253c736c-8223-4c62-a063-b67a624545b2",
+                                                        "content":  "命令已确认\ndeviceId=699b596c-3c8d-4c44-9e32-758655a7b47c\ncommandId=253c736c-8223-4c62-a063-b67a624545b2\nstatus=acked\n",
+                                                        "errorMessage":  "",
+                                                        "createdAt":  "2026-03-25T10:56:42Z",
+                                                        "sentAt":  null,
+                                                        "deliveredAt":  null,
+                                                        "readAt":  null
+                                                    }
+                                                ],
+                                       "pagination":  {
+                                                          "page":  1,
+                                                          "pageSize":  20,
+                                                          "total":  1,
+                                                          "totalPages":  1
+                                                      }
+                                   },
+                          "stats":  {
+                                        "deviceId":  "699b596c-3c8d-4c44-9e32-758655a7b47c",
+                                        "window":  null,
+                                        "notifyType":  "",
+                                        "bucket":  "",
+                                        "totals":  {
+                                                       "total":  1,
+                                                       "unread":  1
+                                                   },
+                                        "byStatus":  [
+                                                         {
+                                                             "status":  "pending",
+                                                             "count":  1
+                                                         }
+                                                     ],
+                                        "byNotifyType":  [
+                                                             {
+                                                                 "notifyType":  "app",
+                                                                 "count":  1
+                                                             }
+                                                         ],
+                                        "byEventType":  [
+                                                            {
+                                                                "eventType":  "COMMAND_ACKED",
+                                                                "count":  1
+                                                            }
+                                                        ],
+                                        "byBucket":  [
+
+                                                     ]
+                                    }
+                      }
+}

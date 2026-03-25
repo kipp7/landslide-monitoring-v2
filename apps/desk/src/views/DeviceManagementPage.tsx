@@ -5,10 +5,19 @@ import ReactECharts from "echarts-for-react";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
-import type { Baseline, Device, OnlineStatus, Station } from "../api/client";
+import type {
+  Baseline,
+  Device,
+  DeviceCommand,
+  DeviceHealthExpertResult,
+  OnlineStatus,
+  Station,
+  SuccessNotificationPolicy
+} from "../api/client";
 import { useApi } from "../api/ApiProvider";
 import { BaseCard } from "../components/BaseCard";
 import { StatusTag } from "../components/StatusTag";
+import { buildBaselinesExport, buildDeviceDetailText, buildDevicesExport, buildSensorExport, copyTextContent, triggerPreparedExport } from "./deviceManagementExport";
 import { BaselinesPanel } from "./BaselinesPanel";
 import { StationManagementPanel } from "./StationManagementPanel";
 import "./deviceManagement.css";
@@ -53,6 +62,18 @@ function progressColor(value: number) {
   return "#ef4444";
 }
 
+function mapCommandStatus(status: DeviceCommand["status"]): ControlLogRow["result"] {
+  if (status === "queued" || status === "sent") return "pending";
+  if (status === "acked") return "success";
+  return "failed";
+}
+
+function successNotificationPolicyLabel(policy: SuccessNotificationPolicy): string {
+  if (policy === "always_notify") return "始终通知";
+  if (policy === "silent") return "静默";
+  return "继承默认";
+}
+
 function deviceTypeLabel(device: Device) {
   if (device.type === "gnss") return "GNSS";
   if (device.type === "rain") return "雨量";
@@ -79,8 +100,11 @@ export function DeviceManagementPage() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [motorRunning, setMotorRunning] = useState(false);
   const [buzzerOn, setBuzzerOn] = useState(false);
+  const [successNotificationPolicy, setSuccessNotificationPolicy] = useState<SuccessNotificationPolicy>("inherit");
   const [samplingInterval, setSamplingInterval] = useState<number>(10);
   const [controlLogs, setControlLogs] = useState<ControlLogRow[]>([]);
+  const [sensorRows, setSensorRows] = useState<SensorRow[]>([]);
+  const [deviceExpert, setDeviceExpert] = useState<DeviceHealthExpertResult | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -120,14 +144,15 @@ export function DeviceManagementPage() {
         setBaselines(b);
         setSelectedDeviceId((prev) => {
           if (prev && d.some((x) => x.id === prev)) return prev;
-          return d[0]?.id || "";
+          const preferred = d.find((x) => x.status === "online") ?? d.find((x) => x.status === "warning") ?? d[0];
+          return preferred?.id || "";
         });
         setLastUpdateTime(new Date().toLocaleTimeString("zh-CN"));
       } catch (err) {
         if (abort.signal.aborted) return;
         const msg = (err as Error).message;
         setLoadError(msg);
-        message.error(`设备管理加载失败：${msg}（建议切换 Mock 模式）`);
+        message.error(`设备管理加载失败：${msg}（可在系统设置切换数据源）`);
       } finally {
         if (!abort.signal.aborted) setLoading(false);
       }
@@ -153,7 +178,8 @@ export function DeviceManagementPage() {
   useEffect(() => {
     if (!selectedDeviceId) return;
     if (filteredDevices.some((d) => d.id === selectedDeviceId)) return;
-    setSelectedDeviceId(filteredDevices[0]?.id ?? "");
+    const preferred = filteredDevices.find((d) => d.status === "online") ?? filteredDevices.find((d) => d.status === "warning") ?? filteredDevices[0];
+    setSelectedDeviceId(preferred?.id ?? "");
   }, [filteredDevices, selectedDeviceId]);
 
   const selectedDevice = useMemo(() => devices.find((d) => d.id === selectedDeviceId) ?? null, [devices, selectedDeviceId]);
@@ -173,34 +199,14 @@ export function DeviceManagementPage() {
       };
     }
     const seed = selectedDevice.id;
-    const baseHealth = stablePercent(`${seed}-health`, 45, 100);
-    const health = selectedDevice.status === "offline" ? Math.min(baseHealth, 35) : selectedDevice.status === "warning" ? Math.min(baseHealth, 65) : baseHealth;
-    const battery = stablePercent(`${seed}-battery`, 18, 100);
-    const signal = stablePercent(`${seed}-signal`, 25, 100);
-    const todayCount = stablePercent(`${seed}-count`, 120, 520);
+    const fallbackTodayCount = stablePercent(`${seed}-count`, 120, 520);
+    const health = deviceExpert?.result.health?.score ?? 0;
+    const battery = deviceExpert?.result.battery?.soc ?? 0;
+    const signal = deviceExpert?.result.signal?.strength ?? 0;
+    const todayCount = sensorRows.length > 0 ? sensorRows.length : fallbackTodayCount;
     const baselineEstablished = !!baselineByDeviceId.get(selectedDevice.id);
     return { health, battery, signal, todayCount, baselineEstablished };
-  }, [baselineByDeviceId, selectedDevice]);
-
-  const sensorRows: SensorRow[] = useMemo(() => {
-    if (!selectedDevice) return [];
-    const now = Date.now();
-    return Array.from({ length: 10 }, (_, idx) => {
-      const t = now - idx * 6 * 60 * 1000;
-      const temp = 14 + stablePercent(`${selectedDevice.id}-temp-${idx}`, 0, 30) / 10;
-      const hum = 70 + stablePercent(`${selectedDevice.id}-hum-${idx}`, 0, 25);
-      const dispMm = stablePercent(`${selectedDevice.id}-disp-${idx}`, 0, 120) / 10;
-      const rainMm = stablePercent(`${selectedDevice.id}-rain-${idx}`, 0, 18);
-      return {
-        id: `${selectedDevice.id}-${idx}`,
-        time: new Date(t).toLocaleTimeString("zh-CN"),
-        temperature: Number(temp.toFixed(1)),
-        humidity: Number(hum.toFixed(0)),
-        dispMm: Number(dispMm.toFixed(2)),
-        rainMm: Number(rainMm.toFixed(0))
-      };
-    }).reverse();
-  }, [selectedDevice]);
+  }, [baselineByDeviceId, deviceExpert, selectedDevice, sensorRows.length]);
 
   const mapOption = useMemo(() => {
     const riskColor = (risk: Station["risk"]) => {
@@ -256,13 +262,29 @@ export function DeviceManagementPage() {
       setDevices(d);
       setBaselines(b);
       setLastUpdateTime(new Date().toLocaleTimeString("zh-CN"));
-      message.success("已刷新（Mock）");
+      message.success("已刷新");
     } catch (err) {
       const msg = (err as Error).message;
       setLoadError(msg);
       message.error(`刷新失败：${msg}`);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const refreshCommandLogs = async (deviceId: string) => {
+    try {
+      const commands = await api.devices.listCommands({ deviceId });
+      setControlLogs(
+        commands.slice(0, 12).map((command) => ({
+          id: command.commandId,
+          time: new Date(command.createdAt).toLocaleTimeString("zh-CN"),
+          action: command.commandType,
+          result: mapCommandStatus(command.status)
+        }))
+      );
+    } catch {
+      // keep current logs on failure
     }
   };
 
@@ -277,10 +299,121 @@ export function DeviceManagementPage() {
     setControlLogs((prev) => [row, ...prev].slice(0, 12));
   };
 
-  const runControl = (action: string) => {
-    message.success(`${action}（Mock）`);
-    pushControlLog(action, "success");
+  const issueSelectedCommand = async (
+    action: string,
+    commandType: string,
+    payload: Record<string, unknown> = {},
+    overrideSuccessNotificationPolicy?: SuccessNotificationPolicy
+  ) => {
+    if (!selectedDevice) {
+      message.info("请先选择设备");
+      return;
+    }
+    try {
+      const issued = await api.devices.issueCommand({
+        deviceId: selectedDevice.id,
+        commandType,
+        payload,
+        successNotificationPolicy: overrideSuccessNotificationPolicy ?? successNotificationPolicy
+      });
+      message.success(`${action} 已下发（${successNotificationPolicyLabel(issued.effectiveSuccessNotificationPolicy)}）`);
+      pushControlLog(`${action}（${issued.commandId.slice(0, 8)}）`, issued.status === "queued" ? "pending" : "success");
+      await refreshCommandLogs(selectedDevice.id);
+    } catch (err) {
+      message.error((err as Error).message);
+      pushControlLog(action, "failed");
+    }
   };
+
+  useEffect(() => {
+    if (!selectedDeviceId) {
+      setControlLogs([]);
+      return;
+    }
+    void refreshCommandLogs(selectedDeviceId);
+  }, [selectedDeviceId]);
+
+  useEffect(() => {
+    if (!selectedDevice) {
+      setDeviceExpert(null);
+      return;
+    }
+    const abort = new AbortController();
+    const run = async () => {
+      try {
+        const expert = await api.devices.getHealthExpert({ deviceId: selectedDevice.id, metric: "all" });
+        if (!abort.signal.aborted) setDeviceExpert(expert);
+      } catch {
+        if (!abort.signal.aborted) setDeviceExpert(null);
+      }
+    };
+    void run();
+    return () => abort.abort();
+  }, [api, selectedDevice]);
+
+  useEffect(() => {
+    if (!selectedDevice) {
+      setSensorRows([]);
+      return;
+    }
+    const abort = new AbortController();
+    const run = async () => {
+      try {
+        const endTime = new Date().toISOString();
+        const start = new Date();
+        start.setHours(start.getHours() - 24);
+        const startTime = start.toISOString();
+
+        const [temperature, humidity, rain, gps] = await Promise.all([
+          api.telemetry.getSeries({ deviceId: selectedDevice.id, sensorKey: "temperature_c", startTime, endTime, interval: "1h" }),
+          api.telemetry.getSeries({ deviceId: selectedDevice.id, sensorKey: "humidity_pct", startTime, endTime, interval: "1h" }),
+          api.telemetry.getSeries({ deviceId: selectedDevice.id, sensorKey: "rainfall_mm", startTime, endTime, interval: "1h" }),
+          baselineByDeviceId.get(selectedDevice.id)
+            ? api.gps.getSeries({ deviceId: selectedDevice.id, days: 7 })
+            : Promise.resolve(null)
+        ]);
+        if (abort.signal.aborted) return;
+
+        const rows = new Map<string, SensorRow>();
+        const upsert = (ts: string) => {
+          const existing = rows.get(ts);
+          if (existing) return existing;
+          const created: SensorRow = {
+            id: ts,
+            time: new Date(ts).toLocaleTimeString("zh-CN"),
+            temperature: 0,
+            humidity: 0,
+            dispMm: 0,
+            rainMm: 0
+          };
+          rows.set(ts, created);
+          return created;
+        };
+
+        for (const point of temperature) {
+          upsert(point.ts).temperature = Number(point.value.toFixed(1));
+        }
+        for (const point of humidity) {
+          upsert(point.ts).humidity = Number(point.value.toFixed(0));
+        }
+        for (const point of rain) {
+          upsert(point.ts).rainMm = Number(point.value.toFixed(0));
+        }
+        for (const point of gps?.points ?? []) {
+          upsert(point.ts).dispMm = Number(point.dispMm.toFixed(2));
+        }
+
+        const ordered = Array.from(rows.values())
+          .sort((a, b) => new Date(a.id).getTime() - new Date(b.id).getTime())
+          .slice(-10);
+        setSensorRows(ordered);
+      } catch {
+        if (!abort.signal.aborted) setSensorRows([]);
+      }
+    };
+    void run();
+    return () => abort.abort();
+  }, [api, baselineByDeviceId, selectedDevice]);
 
   const showDiagnostics = () => {
     if (!selectedDevice) {
@@ -288,75 +421,98 @@ export function DeviceManagementPage() {
       return;
     }
 
-    const overall = selectedDevice.status === "online" ? "healthy" : selectedDevice.status === "warning" ? "warning" : "error";
-    const overallLabel = overall === "healthy" ? "健康" : overall === "warning" ? "需要关注" : "异常";
-    const overallColor = overall === "healthy" ? "#22c55e" : overall === "warning" ? "#f59e0b" : "#ef4444";
+    void api.devices
+      .getHealthExpert({ deviceId: selectedDevice.id, metric: "all" })
+      .then((expert) => {
+        const health = expert.result.health;
+        const battery = expert.result.battery;
+        const signal = expert.result.signal;
+        const overallLevel = health?.level ?? "bad";
+        const overallLabel = overallLevel === "good" ? "健康" : overallLevel === "warn" ? "需要关注" : "异常";
+        const overallColor = overallLevel === "good" ? "#22c55e" : overallLevel === "warn" ? "#f59e0b" : "#ef4444";
 
-    modal.info({
-      title: (
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <ToolOutlined style={{ color: "rgba(34,211,238,0.95)" }} />
-          <span>设备诊断结果 - {selectedDevice.name}</span>
-        </div>
-      ),
-      width: 640,
-      okText: "确定",
-      content: (
-        <div style={{ marginTop: 12, color: "rgba(226,232,240,0.92)" }}>
-          <div
-            style={{
-              border: "1px solid rgba(148,163,184,0.18)",
-              background: "rgba(2,6,23,0.28)",
-              borderRadius: 12,
-              padding: 12,
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center"
-            }}
-          >
-            <span style={{ color: "rgba(148,163,184,0.9)" }}>整体状态</span>
-            <span style={{ color: overallColor, fontWeight: 800 }}>{overallLabel}</span>
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12, marginTop: 12 }}>
-            <div>
-              <div style={{ fontSize: 12, color: "rgba(148,163,184,0.9)" }}>健康评分</div>
-              <div style={{ fontSize: 18, fontWeight: 900 }}>{deviceMetrics.health}%</div>
+        modal.info({
+          title: (
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <ToolOutlined style={{ color: "rgba(34,211,238,0.95)" }} />
+              <span>设备诊断结果 - {selectedDevice.name}</span>
             </div>
-            <div>
-              <div style={{ fontSize: 12, color: "rgba(148,163,184,0.9)" }}>基线状态</div>
-              <div style={{ fontSize: 18, fontWeight: 900, color: deviceMetrics.baselineEstablished ? "#22c55e" : "#f59e0b" }}>
-                {deviceMetrics.baselineEstablished ? "已建立" : "待建立"}
+          ),
+          width: 640,
+          okText: "确定",
+          content: (
+            <div style={{ marginTop: 12, color: "rgba(226,232,240,0.92)" }}>
+              <div
+                style={{
+                  border: "1px solid rgba(148,163,184,0.18)",
+                  background: "rgba(2,6,23,0.28)",
+                  borderRadius: 12,
+                  padding: 12,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center"
+                }}
+              >
+                <span style={{ color: "rgba(148,163,184,0.9)" }}>整体状态</span>
+                <span style={{ color: overallColor, fontWeight: 800 }}>{overallLabel}</span>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12, marginTop: 12 }}>
+                <div>
+                  <div style={{ fontSize: 12, color: "rgba(148,163,184,0.9)" }}>健康评分</div>
+                  <div style={{ fontSize: 18, fontWeight: 900 }}>{health?.score ?? 0}%</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 12, color: "rgba(148,163,184,0.9)" }}>基线状态</div>
+                  <div style={{ fontSize: 18, fontWeight: 900, color: deviceMetrics.baselineEstablished ? "#22c55e" : "#f59e0b" }}>
+                    {deviceMetrics.baselineEstablished ? "已建立" : "待建立"}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 12, color: "rgba(148,163,184,0.9)" }}>电池电量</div>
+                  <div style={{ fontSize: 18, fontWeight: 900 }}>{battery?.soc ?? 0}%</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 12, color: "rgba(148,163,184,0.9)" }}>信号强度</div>
+                  <div style={{ fontSize: 18, fontWeight: 900 }}>{signal?.strength ?? 0}%</div>
+                </div>
+              </div>
+
+              <div style={{ marginTop: 12, fontSize: 12, color: "rgba(148,163,184,0.9)" }}>
+                诊断时间：{new Date(expert.result.metadata.calculationTime).toLocaleString("zh-CN")}
               </div>
             </div>
-            <div>
-              <div style={{ fontSize: 12, color: "rgba(148,163,184,0.9)" }}>电池电量</div>
-              <div style={{ fontSize: 18, fontWeight: 900 }}>{deviceMetrics.battery}%</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 12, color: "rgba(148,163,184,0.9)" }}>信号强度</div>
-              <div style={{ fontSize: 18, fontWeight: 900 }}>{deviceMetrics.signal}%</div>
-            </div>
-          </div>
-
-          <div style={{ marginTop: 12, fontSize: 12, color: "rgba(148,163,184,0.9)" }}>
-            诊断时间：{new Date().toLocaleString("zh-CN")}
-          </div>
-        </div>
-      )
-    });
+          )
+        });
+      })
+      .catch((err: unknown) => {
+        message.error((err as Error).message);
+      });
   };
 
   const exportItems: MenuProps["items"] = [
-    { key: "devices", label: "导出设备列表（Mock）" },
-    { key: "sensor", label: "导出传感器数据（Mock）" },
-    { key: "baselines", label: "导出基线信息（Mock）" }
+    { key: "devices", label: "导出设备列表" },
+    { key: "sensor", label: "导出传感器数据" },
+    { key: "baselines", label: "导出基线信息" }
   ];
 
   const onExportClick: MenuProps["onClick"] = ({ key }) => {
-    if (key === "devices") message.info("已触发：导出设备列表（Mock）");
-    if (key === "sensor") message.info("已触发：导出传感器数据（Mock）");
-    if (key === "baselines") message.info("已触发：导出基线信息（Mock）");
+    try {
+      if (key === "devices") {
+        triggerPreparedExport(buildDevicesExport(filteredDevices));
+        message.success("已导出设备列表");
+      }
+      if (key === "sensor") {
+        triggerPreparedExport(buildSensorExport(sensorRows));
+        message.success("已导出传感器数据");
+      }
+      if (key === "baselines") {
+        triggerPreparedExport(buildBaselinesExport(baselines));
+        message.success("已导出基线信息");
+      }
+    } catch (err) {
+      message.error((err as Error).message);
+    }
   };
 
   return (
@@ -449,7 +605,7 @@ export function DeviceManagementPage() {
             description={
               <div style={{ color: "rgba(226,232,240,0.9)" }}>
                 <div style={{ marginBottom: 6 }}>{loadError}</div>
-                <div style={{ color: "rgba(148,163,184,0.9)" }}>可在「系统设置」切换到 Mock 模式先完成 UI。</div>
+                <div style={{ color: "rgba(148,163,184,0.9)" }}>可在「系统设置」切换数据源（演示/在线接口）。</div>
               </div>
             }
           />
@@ -601,7 +757,7 @@ export function DeviceManagementPage() {
                 <Button
                   block
                   onClick={() => {
-                    runControl("远程重启");
+                    void issueSelectedCommand("远程重启", "restart_device", { source: "desk-device-management" });
                   }}
                 >
                   远程重启
@@ -610,7 +766,7 @@ export function DeviceManagementPage() {
                   danger
                   block
                   onClick={() => {
-                    runControl("下线设备");
+                    void issueSelectedCommand("下线设备", "deactivate_device", { source: "desk-device-management" });
                   }}
                 >
                   下线设备
@@ -634,7 +790,7 @@ export function DeviceManagementPage() {
                           disabled={!selectedDevice}
                           onClick={() => {
                             setMotorRunning(true);
-                            runControl("启动电机");
+                            void issueSelectedCommand("启动电机", "motor_start", { source: "desk-device-management" });
                           }}
                         >
                           启动
@@ -645,7 +801,7 @@ export function DeviceManagementPage() {
                           disabled={!selectedDevice}
                           onClick={() => {
                             setMotorRunning(false);
-                            runControl("停止电机");
+                            void issueSelectedCommand("停止电机", "motor_stop", { source: "desk-device-management" });
                           }}
                         >
                           停止
@@ -662,7 +818,9 @@ export function DeviceManagementPage() {
                           disabled={!selectedDevice}
                           onChange={(v) => {
                             setBuzzerOn(v);
-                            runControl(v ? "开启蜂鸣器" : "关闭蜂鸣器");
+                            void issueSelectedCommand(v ? "开启蜂鸣器" : "关闭蜂鸣器", v ? "buzzer_on" : "buzzer_off", {
+                              source: "desk-device-management"
+                            });
                           }}
                         />
                         <span className="desk-dm-muted">{buzzerOn ? "已开启" : "已关闭"}</span>
@@ -679,7 +837,10 @@ export function DeviceManagementPage() {
                           disabled={!selectedDevice}
                           onChange={(v) => {
                             setSamplingInterval(v);
-                            runControl(`设置采样间隔 ${v}s`);
+                            void issueSelectedCommand(`设置采样间隔 ${v}s`, "set_sampling_interval", {
+                              source: "desk-device-management",
+                              intervalSeconds: v
+                            });
                           }}
                           options={[
                             { label: "1s", value: 1 },
@@ -693,11 +854,29 @@ export function DeviceManagementPage() {
                           size="small"
                           disabled={!selectedDevice}
                           onClick={() => {
-                            runControl("手动采集一次");
+                            void issueSelectedCommand("手动采集一次", "manual_collect", { source: "desk-device-management" });
                           }}
                         >
                           手动采集
                         </Button>
+                      </div>
+                    </div>
+
+                    <div className="desk-dm-ctrl-section">
+                      <div className="desk-dm-ctrl-title">成功回执通知</div>
+                      <div className="desk-dm-ctrl-row">
+                        <Select
+                          size="small"
+                          value={successNotificationPolicy}
+                          style={{ width: 160 }}
+                          onChange={(value) => setSuccessNotificationPolicy(value)}
+                          options={[
+                            { label: "继承默认", value: "inherit" },
+                            { label: "静默", value: "silent" },
+                            { label: "始终通知", value: "always_notify" }
+                          ]}
+                        />
+                        <span className="desk-dm-muted">{successNotificationPolicyLabel(successNotificationPolicy)}</span>
                       </div>
                     </div>
 
@@ -744,7 +923,7 @@ export function DeviceManagementPage() {
               </div>
 
               <div className="desk-dm-stack-item">
-                <BaseCard title="实时传感器数据（Mock）">
+                <BaseCard title="实时传感器数据">
                   <div className="desk-dark-table" style={{ height: "100%", overflow: "auto" }}>
                     <table className="desk-table">
                       <thead>
@@ -773,7 +952,7 @@ export function DeviceManagementPage() {
               </div>
             </div>
 
-            <BaseCard title="设备位置地图（Mock）">
+            <BaseCard title="设备位置地图">
               <div style={{ height: "100%" }}>
                 <ReactECharts option={mapOption} style={{ height: "100%" }} />
               </div>
@@ -817,7 +996,19 @@ export function DeviceManagementPage() {
               type="primary"
               onClick={() => {
                 if (!selectedDevice) return;
-                message.success("已复制设备信息（Mock）");
+                void copyTextContent(
+                  buildDeviceDetailText({
+                    device: selectedDevice,
+                    station: selectedStation,
+                    metrics: deviceMetrics
+                  })
+                )
+                  .then(() => {
+                    message.success("已复制设备信息");
+                  })
+                  .catch((err: unknown) => {
+                    message.error((err as Error).message);
+                  });
               }}
             >
               复制信息

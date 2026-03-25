@@ -1,0 +1,23 @@
+﻿{
+    "generatedAt":  "2026-03-24T01:40:34Z",
+    "installerReportFile":  "docs/unified/reports/desk-win-installer-latest.json",
+    "installerExe":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\installer\\LandslideDesk-Setup-win-x64-938f86e.exe",
+    "installRoot":  "C:\\Users\\Administrator\\AppData\\Local\\LandslideDeskInstallerSmoke\\run-20260324-094017",
+    "installDir":  "C:\\Users\\Administrator\\AppData\\Local\\LandslideDeskInstallerSmoke\\run-20260324-094017\\app",
+    "installLog":  "C:\\Users\\Administrator\\AppData\\Local\\LandslideDeskInstallerSmoke\\run-20260324-094017\\installer-install.log",
+    "uninstallLog":  "C:\\Users\\Administrator\\AppData\\Local\\LandslideDeskInstallerSmoke\\run-20260324-094017\\installer-uninstall.log",
+    "installedExe":  "C:\\Users\\Administrator\\AppData\\Local\\LandslideDeskInstallerSmoke\\run-20260324-094017\\app\\LandslideDesk.Win.exe",
+    "installedWeb":  "C:\\Users\\Administrator\\AppData\\Local\\LandslideDeskInstallerSmoke\\run-20260324-094017\\app\\web\\index.html",
+    "uninstallExe":  "C:\\Users\\Administrator\\AppData\\Local\\LandslideDeskInstallerSmoke\\run-20260324-094017\\app\\unins000.exe",
+    "installExitCode":  0,
+    "aliveAfterLaunch":  true,
+    "readyAfterLaunch":  true,
+    "stoppedAfterVerify":  true,
+    "uninstallExitCode":  0,
+    "runtimeLog":  "C:\\Users\\Administrator\\AppData\\Local\\LandslideDesk.Win\\runtime.log",
+    "removedExeAfterUninstall":  true,
+    "removedRegistryAfterUninstall":  true,
+    "cleanupFallbackUsed":  false,
+    "failureMessage":  null,
+    "ready":  true
+}

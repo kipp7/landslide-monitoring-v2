@@ -1,0 +1,20 @@
+﻿{
+    "generatedAt":  "2026-03-24T01:38:35Z",
+    "targets":  {
+                    "exe":  {
+                                "path":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\win-x64\\LandslideDesk.Win.exe",
+                                "sha256":  "e6f33723dd96abaf2dfc6bc4a7302bd77d55a4e826204c62551940af9b0dcc43",
+                                "sizeBytes":  226816
+                            },
+                    "webIndex":  {
+                                     "path":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\win-x64\\web\\index.html",
+                                     "sha256":  "116953072022e8e84f1423def3f4430355d9d4abcab9a83279854243059dc4b4",
+                                     "sizeBytes":  430
+                                 },
+                    "bundleZip":  {
+                                      "path":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\delivery\\desk-win-delivery-20260324-093559.zip",
+                                      "sha256":  "09db30cb9c1488cacaf69294b156294b394b8d1ad95d31699c8115fc5044b0f2",
+                                      "sizeBytes":  176472162
+                                  }
+                }
+}

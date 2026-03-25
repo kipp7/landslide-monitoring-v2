@@ -101,8 +101,8 @@ export function defaultAnnouncements(): HomeAnnouncement[] {
     {
       id: "sys:mock-mode",
       level: "info",
-      title: "当前为 Mock 演示模式",
-      body: "当前页面数据来自 Mock（本地模拟）。你可以在「系统设置」里切换到 HTTP 模式，但 v2 后端仍在修复阶段，建议先用 Mock 把 UI 做精致。",
+      title: "当前为演示模式",
+      body: "当前页面数据来自本地演示数据。你可以在「系统设置」里切换到在线接口模式，但 v2 后端仍在修复阶段，建议先把 UI 与交互做精致。",
       createdAt: now,
       route: "/app/settings"
     },

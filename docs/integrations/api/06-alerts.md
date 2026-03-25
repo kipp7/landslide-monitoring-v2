@@ -212,6 +212,92 @@
 }
 ```
 
+## 4.1 告警通知列表
+
+**GET** `/alerts/{alertId}/notifications`
+
+权限：`alert:view`
+
+查询参数：
+- `page`, `pageSize`
+- `status`（pending/sent/delivered/failed）
+- `notifyType`（app/sms/email/wechat）
+- `unreadOnly`（true/false）
+
+响应（示例）：
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "ok",
+  "data": {
+    "list": [
+      {
+        "notificationId": "1e40def3-f941-4c89-8ce7-dee3753ae853",
+        "eventId": "1c783ddf-fa66-44b2-a19d-19e00ea90bca",
+        "eventType": "ALERT_TRIGGER",
+        "alertId": "f867d9b8-6c14-40a6-84d4-ef328efc9c29",
+        "userId": "20000000-0000-0000-0000-000000000001",
+        "notifyType": "app",
+        "status": "pending",
+        "title": "告警：f867d9b8-6c14-40a6-84d4-ef328efc9c29",
+        "content": "eventType=ALERT_TRIGGER\nseverity=medium\n...",
+        "errorMessage": "",
+        "createdAt": "2026-03-25T01:23:34Z",
+        "sentAt": null,
+        "deliveredAt": null,
+        "readAt": null
+      }
+    ],
+    "pagination": { "page": 1, "pageSize": 20, "total": 1, "totalPages": 1 }
+  },
+  "timestamp": "2026-03-25T01:23:35Z",
+  "traceId": "req_01J..."
+}
+```
+
+## 4.2 告警通知统计
+
+**GET** `/alerts/{alertId}/notifications/stats`
+
+权限：`alert:view`
+
+查询参数：
+- `notifyType`（可选）
+
+响应（示例）：
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "ok",
+  "data": {
+    "alertId": "f867d9b8-6c14-40a6-84d4-ef328efc9c29",
+    "notifyType": "",
+    "totals": { "total": 1, "unread": 1 },
+    "byStatus": [{ "status": "pending", "count": 1 }],
+    "byNotifyType": [{ "notifyType": "app", "count": 1 }]
+  },
+  "timestamp": "2026-03-25T01:23:35Z",
+  "traceId": "req_01J..."
+}
+```
+
+## 4.3 告警通知详情
+
+**GET** `/alerts/{alertId}/notifications/{notificationId}`
+
+权限：`alert:view`
+
+## 4.4 标记告警通知已读
+
+**PUT** `/alerts/{alertId}/notifications/{notificationId}/read`
+
+权限：`alert:view`
+
+说明：
+- 幂等；重复调用返回同一 `readAt`
+
 ## 5. 规则列表（规则容器）
 
 **GET** `/alert-rules`

@@ -276,12 +276,26 @@
 ```json
 {
   "commandType": "set_config",
+  "notifyOnAck": false,
+  "successNotificationPolicy": "silent",
   "payload": {
     "sampling_s": 5,
     "report_interval_s": 5
   }
 }
 ```
+
+说明：
+- `successNotificationPolicy` 可选：`inherit | silent | always_notify`
+- `notifyOnAck` 继续保留为兼容字段：
+  - `notifyOnAck=true` 等价于 `successNotificationPolicy=always_notify`
+  - `notifyOnAck=false` 等价于 `successNotificationPolicy=silent`
+- 当两个字段都不传时，本条命令使用 `successNotificationPolicy=inherit`，由后端继续按 `command-type default -> system default` 解析
+- 当前 `command-type default` / `system default` 已接入正式 `system_configs`：
+  - `command.success_notification.system_default`
+  - `command.success_notification.command_type_defaults`
+- 当最终有效策略为 `always_notify` 时，`COMMAND_ACKED` 会进入命令通知链路
+- 当最终有效策略为 `silent` 时，`COMMAND_ACKED` 只更新命令状态与事件流，不生成命令通知
 
 响应：
 ```json
@@ -291,7 +305,10 @@
   "message": "ok",
   "data": {
     "commandId": "1b4c81aa-3c5f-4c14-8f9e-1c0fbe9d2c3d",
-    "status": "queued"
+    "status": "queued",
+    "notifyOnAck": false,
+    "successNotificationPolicy": "silent",
+    "effectiveSuccessNotificationPolicy": "silent"
   },
   "timestamp": "2025-12-15T10:00:00Z",
   "traceId": "req_01J..."
@@ -321,6 +338,9 @@
         "deviceId": "2c1f2d8e-2bb7-4f58-bb6a-6c2a0f4a7a4c",
         "commandType": "set_config",
         "payload": { "sampling_s": 5 },
+        "notifyOnAck": false,
+        "successNotificationPolicy": "inherit",
+        "effectiveSuccessNotificationPolicy": "silent",
         "status": "acked",
         "sentAt": "2025-12-15T10:00:01Z",
         "ackedAt": "2025-12-15T10:00:02Z",
@@ -354,6 +374,9 @@
     "deviceId": "2c1f2d8e-2bb7-4f58-bb6a-6c2a0f4a7a4c",
     "commandType": "set_config",
     "payload": { "sampling_s": 5 },
+    "notifyOnAck": false,
+    "successNotificationPolicy": "inherit",
+    "effectiveSuccessNotificationPolicy": "silent",
     "status": "acked",
     "sentAt": "2025-12-15T10:00:01Z",
     "ackedAt": "2025-12-15T10:00:02Z",
@@ -479,6 +502,14 @@
 - `status`（可选：pending/sent/delivered/failed）
 - `notifyType`（可选：app/sms/email/wechat）
 - `unreadOnly`（可选：true/false；只返回未读）
+
+说明：
+- 默认情况下，`COMMAND_ACKED` 不会出现在该列表
+- 当某条命令的最终有效 success-notification policy 为 `always_notify` 时，`COMMAND_ACKED` 会生成命令通知并可在此查询
+- 这可以来自：
+  - 显式 `notifyOnAck=true`
+  - 显式 `successNotificationPolicy=always_notify`
+  - `successNotificationPolicy=inherit` 后命中 command-type default / system default
 
 响应（示例）：
 ```json

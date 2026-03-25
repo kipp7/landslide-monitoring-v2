@@ -23,13 +23,19 @@ import ReactECharts from "echarts-for-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
-import type { Baseline, Device, GpsSeries } from "../api/client";
+import type { Baseline, Device, GpsDerivedAnalysis, GpsSeries } from "../api/client";
 import { useApi } from "../api/ApiProvider";
 import { BaseCard } from "../components/BaseCard";
+import { buildGpsAnalysisExport, buildGpsChartExport, buildGpsCsvExport, buildGpsReportExport, triggerPreparedExport } from "./gpsMonitoringExport";
 import "./gpsMonitoring.css";
 
 type TimeRange = "1h" | "6h" | "24h" | "7d" | "15d" | "30d";
 type Thresholds = { blue: number; yellow: number; red: number };
+
+const GPS_THRESHOLD_BLUE_KEY = "gps.displacement_threshold_blue_mm";
+const GPS_THRESHOLD_YELLOW_KEY = "gps.displacement_threshold_yellow_mm";
+const GPS_THRESHOLD_RED_KEY = "gps.displacement_threshold_red_mm";
+const GPS_DATA_LIMIT_KEY = "gps.data_limit";
 
 function isTimeRange(value: string): value is TimeRange {
   return value === "1h" || value === "6h" || value === "24h" || value === "7d" || value === "15d" || value === "30d";
@@ -116,21 +122,24 @@ export function GpsMonitoringPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [series, setSeries] = useState<GpsSeries | null>(null);
+  const [derivedAnalysis, setDerivedAnalysis] = useState<GpsDerivedAnalysis | null>(null);
   const [lastUpdateTime, setLastUpdateTime] = useState<string>("");
   const [nowTime, setNowTime] = useState<string>(new Date().toLocaleTimeString("zh-CN"));
 
   const [showSettings, setShowSettings] = useState(false);
   const [thresholds, setThresholds] = useState<Thresholds>({ blue: 2, yellow: 5, red: 8 });
+  const [thresholdSaving, setThresholdSaving] = useState(false);
   const [form] = Form.useForm<Thresholds>();
 
-  const DATA_LIMIT_KEY = "desk.gps.dataLimit.v1";
+  const DATA_LIMIT_STORAGE_KEY = "desk.gps.dataLimit.v1";
   const [dataLimit, setDataLimit] = useState<number>(() => {
-    const raw = localStorage.getItem(DATA_LIMIT_KEY);
+    const raw = localStorage.getItem(DATA_LIMIT_STORAGE_KEY);
     const parsed = raw ? Number(raw) : 200;
     const safe = Number.isFinite(parsed) ? Math.trunc(parsed) : 200;
     return Math.max(50, Math.min(2000, safe));
   });
   const [showLimit, setShowLimit] = useState(false);
+  const [limitSaving, setLimitSaving] = useState(false);
   const [limitForm] = Form.useForm<{ limit: number }>();
 
   useEffect(() => {
@@ -177,17 +186,46 @@ export function GpsMonitoringPage() {
       try {
         const [deviceList, baselineList] = await Promise.all([api.devices.list(), api.baselines.list()]);
         if (abort.signal.aborted) return;
-        const gnss = deviceList.filter((d) => d.type === "gnss");
+        const baselineIds = new Set(baselineList.map((item) => item.deviceId));
+        const gnss = deviceList.filter((d) => d.type === "gnss" && baselineIds.has(d.id));
         setDevices(gnss);
         setBaselines(baselineList);
-        setSelectedDeviceId((prev) => prev || gnss[0]?.id || "");
+        setSelectedDeviceId((prev) => (prev && baselineIds.has(prev) ? prev : gnss[0]?.id || ""));
       } catch (err) {
         if (abort.signal.aborted) return;
         const msg = (err as Error).message;
         setLoadError(msg);
-        message.error(`GPS 页面加载失败：${msg}（建议切换 Mock 模式）`);
+        message.error(`GPS 页面加载失败：${msg}（可在系统设置切换数据源）`);
       } finally {
         if (!abort.signal.aborted) setLoading(false);
+      }
+    };
+    void run();
+    return () => abort.abort();
+  }, [api]);
+
+  useEffect(() => {
+    const abort = new AbortController();
+    const run = async () => {
+      try {
+        const configs = await api.system.getConfigs();
+        if (abort.signal.aborted) return;
+        const getNumber = (key: string, fallback: number) => {
+          const value = configs.find((item) => item.key === key)?.value;
+          const parsed = typeof value === "string" ? Number(value) : Number.NaN;
+          return Number.isFinite(parsed) ? parsed : fallback;
+        };
+        setThresholds({
+          blue: getNumber(GPS_THRESHOLD_BLUE_KEY, 2),
+          yellow: getNumber(GPS_THRESHOLD_YELLOW_KEY, 5),
+          red: getNumber(GPS_THRESHOLD_RED_KEY, 8)
+        });
+        const configuredLimit = getNumber(GPS_DATA_LIMIT_KEY, 200);
+        const normalizedLimit = Math.max(50, Math.min(2000, Math.trunc(configuredLimit)));
+        setDataLimit(normalizedLimit);
+        localStorage.setItem(DATA_LIMIT_STORAGE_KEY, String(normalizedLimit));
+      } catch {
+        // keep local defaults when config read is unavailable
       }
     };
     void run();
@@ -200,8 +238,12 @@ export function GpsMonitoringPage() {
     setLoadError(null);
     try {
       const days = daysFromRange(timeRange);
-      const s = await api.gps.getSeries({ deviceId: selectedDeviceId, days });
+      const [s, analysis] = await Promise.all([
+        api.gps.getSeries({ deviceId: selectedDeviceId, days }),
+        api.gps.getDerivedAnalysis({ deviceId: selectedDeviceId, rangeLabel: timeRange, limit: dataLimit })
+      ]);
       setSeries(s);
+      setDerivedAnalysis(analysis);
       setLastUpdateTime(new Date().toLocaleTimeString("zh-CN"));
     } catch (err) {
       const msg = (err as Error).message;
@@ -214,7 +256,7 @@ export function GpsMonitoringPage() {
 
   useEffect(() => {
     void refresh();
-  }, [selectedDeviceId, timeRange]);
+  }, [dataLimit, selectedDeviceId, timeRange]);
 
   useEffect(() => {
     if (!autoRefresh) return;
@@ -460,14 +502,55 @@ export function GpsMonitoringPage() {
   }, [baseline?.baselineLat, baseline?.baselineLng, latest?.lat, latest?.lng, level]);
 
   const ceemdMetrics = useMemo(() => {
+    if (derivedAnalysis?.ceemd) {
+      return {
+        q: Math.round(derivedAnalysis.ceemd.qualityScore * 100),
+        snr: Number((Math.max(0, (derivedAnalysis.ceemd.dominantFrequencies[0] ?? 0) * 10000)).toFixed(1)),
+        ortho: Number(derivedAnalysis.ceemd.orthogonality.toFixed(2)),
+        recon: Number(derivedAnalysis.ceemd.reconstructionError.toFixed(3))
+      };
+    }
     const q = Math.round(72 + stable01(`${selectedDeviceId}-ceemd-q`) * 26);
     const snr = Number((14 + stable01(`${selectedDeviceId}-ceemd-snr`) * 12).toFixed(1));
     const ortho = Number((0.82 + stable01(`${selectedDeviceId}-ceemd-ortho`) * 0.16).toFixed(2));
     const recon = Number((0.04 + stable01(`${selectedDeviceId}-ceemd-recon`) * 0.18).toFixed(3));
     return { q, snr, ortho, recon };
-  }, [selectedDeviceId]);
+  }, [derivedAnalysis, selectedDeviceId]);
 
   const longTermPredictionOption = useMemo(() => {
+    if (derivedAnalysis?.prediction?.longTerm?.length) {
+      const history = chartData.slice(-30);
+      const historyX = history.map((x) => x.time);
+      const historyY = history.map((x) => x.displacement);
+      const future = derivedAnalysis.prediction.longTerm;
+      const longLower = derivedAnalysis.prediction.confidenceIntervals?.longTermLower ?? [];
+      const longUpper = derivedAnalysis.prediction.confidenceIntervals?.longTermUpper ?? [];
+      const futureX = Array.from({ length: future.length }, (_, idx) => dayjs().add(idx + 1, "day").format("MM-DD"));
+      const allX = [...historyX, ...futureX];
+      const historyPad: (number | null)[] = [...historyY, ...future.map(() => null)];
+      const predPad: (number | null)[] = [...historyY.map(() => null), ...future];
+      const lower: (number | null)[] = [...historyY.map(() => null), ...(longLower.length ? longLower : future.map((v) => Number((v - 1.8).toFixed(2))))];
+      const upper: (number | null)[] = [...historyY.map(() => null), ...(longUpper.length ? longUpper : future.map((v) => Number((v + 1.8).toFixed(2))))];
+      return {
+        backgroundColor: "transparent",
+        textStyle: { color: "rgba(226, 232, 240, 0.9)" },
+        tooltip: { trigger: "axis" },
+        legend: {
+          data: ["历史", "预测", "置信区间"],
+          top: 10,
+          textStyle: { color: "rgba(226, 232, 240, 0.85)", fontSize: 12 }
+        },
+        grid: { left: 54, right: 16, top: 44, bottom: 54 },
+        xAxis: { type: "category", data: allX, ...axisTheme() },
+        yAxis: { type: "value", name: "mm", ...axisTheme() },
+        series: [
+          { name: "历史", type: "line", showSymbol: false, data: historyPad, lineStyle: { width: 2.5, color: "#22d3ee" } },
+          { name: "预测", type: "line", showSymbol: false, data: predPad, lineStyle: { width: 2.5, color: "#34d399" }, areaStyle: { color: "rgba(52, 211, 153, 0.10)" } },
+          { name: "置信区间", type: "line", showSymbol: false, data: lower, lineStyle: { opacity: 0 }, stack: "band-long" },
+          { name: "置信区间", type: "line", showSymbol: false, data: upper, lineStyle: { opacity: 0 }, areaStyle: { color: "rgba(52, 211, 153, 0.14)" }, stack: "band-long" }
+        ]
+      };
+    }
     const history = chartData.slice(-30);
     const historyX = history.map((x) => x.time);
     const historyY = history.map((x) => x.displacement);
@@ -535,9 +618,30 @@ export function GpsMonitoringPage() {
         }
       ]
     };
-  }, [chartData, selectedDeviceId]);
+  }, [chartData, derivedAnalysis, selectedDeviceId]);
 
   const ceemdSeriesOption = useMemo(() => {
+    if (derivedAnalysis?.ceemd?.imfs?.length) {
+      return {
+        backgroundColor: "transparent",
+        textStyle: { color: "rgba(226, 232, 240, 0.9)" },
+        tooltip: { trigger: "axis" },
+        legend: {
+          data: ["IMF-1", "IMF-2", "IMF-3", "Residue"],
+          top: 10,
+          textStyle: { color: "rgba(226, 232, 240, 0.85)", fontSize: 12 }
+        },
+        grid: { left: 54, right: 16, top: 44, bottom: 54 },
+        xAxis: { type: "category", data: chartData.map((x) => x.time), ...axisTheme() },
+        yAxis: { type: "value", name: "分量", ...axisTheme() },
+        series: [
+          { name: "IMF-1", type: "line", showSymbol: false, smooth: true, data: derivedAnalysis.ceemd.imfs[0] ?? [], lineStyle: { width: 2, color: "#22d3ee" } },
+          { name: "IMF-2", type: "line", showSymbol: false, smooth: true, data: derivedAnalysis.ceemd.imfs[1] ?? [], lineStyle: { width: 2, color: "#34d399" } },
+          { name: "IMF-3", type: "line", showSymbol: false, smooth: true, data: derivedAnalysis.ceemd.imfs[2] ?? [], lineStyle: { width: 2, color: "#60a5fa" } },
+          { name: "Residue", type: "line", showSymbol: false, smooth: true, data: derivedAnalysis.ceemd.residue ?? [], lineStyle: { width: 2.5, color: "#fbbf24" } }
+        ]
+      };
+    }
     const imf1 = chartData.map((_, i) =>
       Number((Math.sin(i / 1.8) * 0.4 + noise(`${selectedDeviceId}-imf1-${i}`, 0.08)).toFixed(3))
     );
@@ -570,9 +674,36 @@ export function GpsMonitoringPage() {
         { name: "Residue", type: "line", showSymbol: false, smooth: true, data: residue, lineStyle: { width: 2.5, color: "#fbbf24" } }
       ]
     };
-  }, [chartData, selectedDeviceId]);
+  }, [chartData, derivedAnalysis, selectedDeviceId]);
 
   const ceemdEnergyOption = useMemo(() => {
+    if (derivedAnalysis?.ceemd?.energyDistribution?.length) {
+      const energies = derivedAnalysis.ceemd.energyDistribution.map((value) => Math.round(value * 100));
+      const e1 = energies[0] ?? 0;
+      const e2 = energies[1] ?? 0;
+      const e3 = energies[2] ?? 0;
+      const e4 = Math.max(1, 100 - e1 - e2 - e3);
+      return {
+        backgroundColor: "transparent",
+        textStyle: { color: "rgba(226, 232, 240, 0.9)" },
+        tooltip: { trigger: "item" },
+        grid: { left: 40, right: 16, top: 20, bottom: 40 },
+        xAxis: { type: "category", data: ["IMF-1", "IMF-2", "IMF-3", "Residue"], ...axisTheme() },
+        yAxis: { type: "value", name: "%", ...axisTheme() },
+        series: [
+          {
+            type: "bar",
+            data: [
+              { value: e1, itemStyle: { color: "#22d3ee" } },
+              { value: e2, itemStyle: { color: "#34d399" } },
+              { value: e3, itemStyle: { color: "#60a5fa" } },
+              { value: e4, itemStyle: { color: "#fbbf24" } }
+            ],
+            barWidth: 18
+          }
+        ]
+      };
+    }
     const e1 = Math.round(20 + stable01(`${selectedDeviceId}-e1`) * 20);
     const e2 = Math.round(25 + stable01(`${selectedDeviceId}-e2`) * 18);
     const e3 = Math.round(15 + stable01(`${selectedDeviceId}-e3`) * 25);
@@ -598,9 +729,42 @@ export function GpsMonitoringPage() {
         }
       ]
     };
-  }, [selectedDeviceId]);
+  }, [derivedAnalysis, selectedDeviceId]);
 
   const predictionOption = useMemo(() => {
+    if (derivedAnalysis?.prediction?.shortTerm?.length) {
+      const history = chartData.slice(-24);
+      const historyX = history.map((x) => x.time);
+      const historyY = history.map((x) => x.displacement);
+      const future = derivedAnalysis.prediction.shortTerm;
+      const shortLower = derivedAnalysis.prediction.confidenceIntervals?.shortTermLower ?? [];
+      const shortUpper = derivedAnalysis.prediction.confidenceIntervals?.shortTermUpper ?? [];
+      const futureX = Array.from({ length: future.length }, (_, idx) => dayjs().add(idx + 1, "hour").format("MM-DD HH:mm"));
+      const allX = [...historyX, ...futureX];
+      const historyPad: (number | null)[] = [...historyY, ...future.map(() => null)];
+      const predPad: (number | null)[] = [...historyY.map(() => null), ...future];
+      const lower: (number | null)[] = [...historyY.map(() => null), ...(shortLower.length ? shortLower : future.map((v) => Number((v - 0.8).toFixed(2))))];
+      const upper: (number | null)[] = [...historyY.map(() => null), ...(shortUpper.length ? shortUpper : future.map((v) => Number((v + 0.8).toFixed(2))))];
+      return {
+        backgroundColor: "transparent",
+        textStyle: { color: "rgba(226, 232, 240, 0.9)" },
+        tooltip: { trigger: "axis" },
+        legend: {
+          data: ["历史", "预测", "置信区间"],
+          top: 10,
+          textStyle: { color: "rgba(226, 232, 240, 0.85)", fontSize: 12 }
+        },
+        grid: { left: 54, right: 16, top: 44, bottom: 54 },
+        xAxis: { type: "category", data: allX, ...axisTheme() },
+        yAxis: { type: "value", name: "mm", ...axisTheme() },
+        series: [
+          { name: "历史", type: "line", showSymbol: false, data: historyPad, lineStyle: { width: 2.5, color: "#22d3ee" } },
+          { name: "预测", type: "line", showSymbol: false, data: predPad, lineStyle: { width: 2.5, color: "#a78bfa" }, areaStyle: { color: "rgba(167, 139, 250, 0.10)" } },
+          { name: "置信区间", type: "line", showSymbol: false, data: lower, lineStyle: { opacity: 0 }, stack: "band" },
+          { name: "置信区间", type: "line", showSymbol: false, data: upper, lineStyle: { opacity: 0 }, areaStyle: { color: "rgba(167, 139, 250, 0.14)" }, stack: "band" }
+        ]
+      };
+    }
     const history = chartData.slice(-24);
     const historyX = history.map((x) => x.time);
     const historyY = history.map((x) => x.displacement);
@@ -668,15 +832,15 @@ export function GpsMonitoringPage() {
         }
       ]
     };
-  }, [chartData, selectedDeviceId]);
+  }, [chartData, derivedAnalysis, selectedDeviceId]);
 
   const realtimeRows = useMemo(() => chartData.slice(-24).reverse(), [chartData]);
 
   const exportItems: MenuProps["items"] = [
-    { key: "csv", label: "导出当前设备数据（Mock）" },
-    { key: "analysis", label: "导出分析结果（Mock）" },
-    { key: "report", label: "导出综合报告（Mock）" },
-    { key: "chart", label: "导出图表图片（Mock）" }
+    { key: "csv", label: "导出当前设备数据" },
+    { key: "analysis", label: "导出分析结果" },
+    { key: "report", label: "导出综合报告" },
+    { key: "chart", label: "导出图表图片" }
   ];
 
   return (
@@ -740,10 +904,49 @@ export function GpsMonitoringPage() {
               menu={{
                 items: exportItems,
                 onClick: ({ key }) => {
-                  if (key === "csv") message.info("导出：Mock（后续接入 Excel/报告导出）");
-                  if (key === "analysis") message.info("导出分析：Mock（后续接入）");
-                  if (key === "report") message.info("导出报告：Mock（后续接入）");
-                  if (key === "chart") message.info("导出图表：Mock（后续接入）");
+                  try {
+                    if (key === "csv") {
+                      triggerPreparedExport(buildGpsCsvExport(chartData));
+                      message.success("已导出当前设备数据");
+                    }
+                    if (key === "analysis") {
+                      triggerPreparedExport(
+                        buildGpsAnalysisExport({
+                          device: selectedDevice,
+                          baseline,
+                          timeRange,
+                          rowCount: chartData.length,
+                          rows: chartData,
+                          derivedAnalysis
+                        })
+                      );
+                      message.success("已导出分析结果");
+                    }
+                    if (key === "report") {
+                      triggerPreparedExport(
+                        buildGpsReportExport({
+                          device: selectedDevice,
+                          baseline,
+                          timeRange,
+                          rows: chartData,
+                          derivedAnalysis
+                        })
+                      );
+                      message.success("已导出综合报告");
+                    }
+                    if (key === "chart") {
+                      triggerPreparedExport(
+                        buildGpsChartExport({
+                          device: selectedDevice,
+                          timeRange,
+                          rows: chartData
+                        })
+                      );
+                      message.success("已导出图表图片");
+                    }
+                  } catch (err) {
+                    message.error((err as Error).message);
+                  }
                 }
               }}
               placement="bottomLeft"
@@ -793,7 +996,7 @@ export function GpsMonitoringPage() {
             description={
               <div style={{ color: "rgba(226,232,240,0.9)" }}>
                 <div style={{ marginBottom: 6 }}>{loadError}</div>
-                <div style={{ color: "rgba(148,163,184,0.9)" }}>可在「系统设置」切换到 Mock 模式先完成 UI。</div>
+                <div style={{ color: "rgba(148,163,184,0.9)" }}>可在「系统设置」切换数据源（演示/在线接口）。</div>
               </div>
             }
           />
@@ -870,7 +1073,7 @@ export function GpsMonitoringPage() {
               children: (
                 <Row gutter={[12, 12]}>
                   <Col xs={24} lg={12}>
-                    <BaseCard title="位移趋势图（Mock）">
+                    <BaseCard title="位移趋势图">
                       {loading ? (
                         <div className="desk-loading">加载中…</div>
                       ) : (
@@ -879,17 +1082,17 @@ export function GpsMonitoringPage() {
                     </BaseCard>
                   </Col>
                   <Col xs={24} lg={12}>
-                    <BaseCard title="形变速度（Mock）">
+                    <BaseCard title="形变速度">
                       {loading ? <div className="desk-loading">加载中…</div> : <ReactECharts option={velocityOption} style={{ height: 320 }} />}
                     </BaseCard>
                   </Col>
                   <Col xs={24} lg={12}>
-                    <BaseCard title="环境因素（Mock）">
+                    <BaseCard title="环境因素">
                       {loading ? <div className="desk-loading">加载中…</div> : <ReactECharts option={envOption} style={{ height: 320 }} />}
                     </BaseCard>
                   </Col>
                   <Col xs={24} lg={12}>
-                    <BaseCard title="最近数据（Mock）">
+                    <BaseCard title="最近数据">
                       <div className="desk-dark-table">
                         <Table<GpsChartRow>
                           rowKey="key"
@@ -919,7 +1122,7 @@ export function GpsMonitoringPage() {
                     </BaseCard>
                   </Col>
                   <Col span={24}>
-                    <BaseCard title="基线 / 最新坐标（Mock）">
+                    <BaseCard title="基线 / 最新坐标">
                       <div className="desk-gps-coord">
                         <div className="desk-gps-coord-kv">
                           <div className="desk-gps-coord-title">GPS 坐标</div>
@@ -955,7 +1158,7 @@ export function GpsMonitoringPage() {
                               </Tag>
                             </span>
                           </div>
-                          <div className="desk-gps-coord-tip">提示：地图为 UI Mock（散点展示基线点与最新点）。</div>
+                          <div className="desk-gps-coord-tip">提示：地图为示意（散点展示基线点与最新点）。</div>
                         </div>
                         <div className="desk-gps-coord-chart">
                           {loading ? <div className="desk-loading">加载中…</div> : <ReactECharts option={coordOption} style={{ height: 220 }} />}
@@ -972,7 +1175,7 @@ export function GpsMonitoringPage() {
               children: (
                 <Row gutter={[12, 12]}>
                   <Col xs={24} lg={16}>
-                    <BaseCard title="分解结果（Mock）">
+                    <BaseCard title="分解结果">
                       {loading ? (
                         <div className="desk-loading">加载中…</div>
                       ) : (
@@ -981,12 +1184,12 @@ export function GpsMonitoringPage() {
                     </BaseCard>
                   </Col>
                   <Col xs={24} lg={8}>
-                    <BaseCard title="能量分布（Mock）">
+                    <BaseCard title="能量分布">
                       {loading ? <div className="desk-loading">加载中…</div> : <ReactECharts option={ceemdEnergyOption} style={{ height: 360 }} />}
                     </BaseCard>
                   </Col>
                   <Col span={24}>
-                    <BaseCard title="CEEMD 分解概览（Mock）">
+                    <BaseCard title="CEEMD 分解概览">
                       <Row gutter={[12, 12]}>
                         <Col xs={24} lg={10}>
                           <div className="desk-gps-ceemd-metrics">
@@ -1002,17 +1205,17 @@ export function GpsMonitoringPage() {
                             <div className="desk-gps-ceemd-metric">
                               <div className="desk-gps-ceemd-k">重构误差</div>
                               <div className="desk-gps-ceemd-v">{ceemdMetrics.recon}</div>
-                              <div className="desk-gps-ceemd-muted">越小越好（Mock）</div>
+                              <div className="desk-gps-ceemd-muted">越小越好</div>
                             </div>
                             <div className="desk-gps-ceemd-metric">
                               <div className="desk-gps-ceemd-k">正交性</div>
                               <div className="desk-gps-ceemd-v">{ceemdMetrics.ortho}</div>
-                              <div className="desk-gps-ceemd-muted">0~1（Mock）</div>
+                              <div className="desk-gps-ceemd-muted">0~1</div>
                             </div>
                             <div className="desk-gps-ceemd-metric">
                               <div className="desk-gps-ceemd-k">SNR</div>
                               <div className="desk-gps-ceemd-v">{ceemdMetrics.snr} dB</div>
-                              <div className="desk-gps-ceemd-muted">信噪比（Mock）</div>
+                              <div className="desk-gps-ceemd-muted">信噪比</div>
                             </div>
                           </div>
                         </Col>
@@ -1028,10 +1231,10 @@ export function GpsMonitoringPage() {
                     </BaseCard>
                   </Col>
                   <Col span={24}>
-                    <BaseCard title="说明（Mock）">
+                    <BaseCard title="说明">
                       <div className="desk-gps-note">
                         <div className="desk-gps-note-title">CEEMD 说明</div>
-                        <div className="desk-gps-note-line">- 该页为 UI Mock：展示分解曲线与能量占比。</div>
+                        <div className="desk-gps-note-line">- 本页展示分解曲线与能量占比。</div>
                         <div className="desk-gps-note-line">- 后续可对接 v2 后端：CEEMD 分解 / IMF 分量 / 质量指标。</div>
                       </div>
                     </BaseCard>
@@ -1045,12 +1248,12 @@ export function GpsMonitoringPage() {
               children: (
                 <Row gutter={[12, 12]}>
                   <Col xs={24} lg={16}>
-                    <BaseCard title="短期预测（Mock）">
+                    <BaseCard title="短期预测">
                       {loading ? <div className="desk-loading">加载中…</div> : <ReactECharts option={predictionOption} style={{ height: 360 }} />}
                     </BaseCard>
                   </Col>
                   <Col xs={24} lg={8}>
-                    <BaseCard title="分析摘要（Mock）">
+                    <BaseCard title="分析摘要">
                       <div className="desk-gps-note">
                         <div className="desk-gps-note-title">建议</div>
                         <div className="desk-gps-note-line">
@@ -1073,12 +1276,12 @@ export function GpsMonitoringPage() {
                     </BaseCard>
                   </Col>
                   <Col xs={24} lg={16}>
-                    <BaseCard title="长期预测（Mock）">
+                    <BaseCard title="长期预测">
                       {loading ? <div className="desk-loading">加载中…</div> : <ReactECharts option={longTermPredictionOption} style={{ height: 360 }} />}
                     </BaseCard>
                   </Col>
                   <Col xs={24} lg={8}>
-                    <BaseCard title="预测指标（Mock）">
+                    <BaseCard title="预测指标">
                       <div className="desk-gps-ceemd-metrics">
                         <div className="desk-gps-ceemd-metric">
                           <div className="desk-gps-ceemd-k">预测范围</div>
@@ -1101,7 +1304,7 @@ export function GpsMonitoringPage() {
                         </div>
                       </div>
                       <div className="desk-gps-note-muted" style={{ marginTop: 8 }}>
-                        提示：指标为 UI Mock，后续对接 v2 后端预测服务。
+                        提示：指标为演示数据，后续对接 v2 后端预测服务。
                       </div>
                     </BaseCard>
                   </Col>
@@ -1112,7 +1315,7 @@ export function GpsMonitoringPage() {
               key: "data",
               label: "数据详情",
               children: (
-                <BaseCard title="GPS 数据表（Mock）" style={{ height: "calc(100vh - 360px)" }}>
+                <BaseCard title="GPS 数据表" style={{ height: "calc(100vh - 360px)" }}>
                   <div className="desk-dark-table">
                     <Table<GpsChartRow>
                       rowKey="key"
@@ -1157,15 +1360,30 @@ export function GpsMonitoringPage() {
         open={showSettings}
         onCancel={() => setShowSettings(false)}
         okText="保存"
+        confirmLoading={thresholdSaving}
         onOk={async () => {
           const values = await form.validateFields();
           if (values.blue >= values.yellow || values.yellow >= values.red) {
             message.error("阈值需要满足：蓝 < 黄 < 红");
             return;
           }
-          setThresholds(values);
-          setShowSettings(false);
-          message.success("已保存（本地）");
+          setThresholdSaving(true);
+          try {
+            await api.system.updateConfigs({
+              configs: [
+                { key: GPS_THRESHOLD_BLUE_KEY, value: String(values.blue) },
+                { key: GPS_THRESHOLD_YELLOW_KEY, value: String(values.yellow) },
+                { key: GPS_THRESHOLD_RED_KEY, value: String(values.red) }
+              ]
+            });
+            setThresholds(values);
+            setShowSettings(false);
+            message.success("已保存");
+          } catch (err) {
+            message.error((err as Error).message);
+          } finally {
+            setThresholdSaving(false);
+          }
         }}
       >
         <Form form={form} layout="vertical">
@@ -1178,9 +1396,7 @@ export function GpsMonitoringPage() {
           <Form.Item name="red" label="红色预警阈值（mm）" rules={[{ required: true }]}>
             <InputNumber min={0} precision={2} style={{ width: "100%" }} />
           </Form.Item>
-          <div style={{ color: "rgba(148,163,184,0.9)", fontSize: 12 }}>
-            仅影响本页 UI 展示（Mock），后续可从后端配置中心下发。
-          </div>
+          <div style={{ color: "rgba(148,163,184,0.9)", fontSize: 12 }}>仅影响本页展示，后续可从后端配置中心下发。</div>
         </Form>
       </Modal>
 
@@ -1189,6 +1405,7 @@ export function GpsMonitoringPage() {
         open={showLimit}
         onCancel={() => setShowLimit(false)}
         okText="保存"
+        confirmLoading={limitSaving}
         onOk={async () => {
           const values = await limitForm.validateFields();
           const limit = Math.trunc(values.limit);
@@ -1196,19 +1413,27 @@ export function GpsMonitoringPage() {
             message.error("请输入有效的数据点数（50-2000）");
             return;
           }
-          setDataLimit(limit);
-          localStorage.setItem(DATA_LIMIT_KEY, String(limit));
-          setShowLimit(false);
-          message.success(`数据点数已更新为 ${limit} 条`);
+          setLimitSaving(true);
+          try {
+            await api.system.updateConfigs({
+              configs: [{ key: GPS_DATA_LIMIT_KEY, value: String(limit) }]
+            });
+            setDataLimit(limit);
+            localStorage.setItem(DATA_LIMIT_STORAGE_KEY, String(limit));
+            setShowLimit(false);
+            message.success(`数据点数已更新为 ${limit} 条`);
+          } catch (err) {
+            message.error((err as Error).message);
+          } finally {
+            setLimitSaving(false);
+          }
         }}
       >
         <Form form={limitForm} layout="vertical">
           <Form.Item name="limit" label="数据点数限制" rules={[{ required: true }]}>
             <InputNumber min={50} max={2000} precision={0} style={{ width: "100%" }} />
           </Form.Item>
-          <div style={{ color: "rgba(148,163,184,0.9)", fontSize: 12 }}>
-            说明：仅影响本页图表与表格的展示条数（Mock），不会影响后端数据。
-          </div>
+          <div style={{ color: "rgba(148,163,184,0.9)", fontSize: 12 }}>说明：仅影响本页图表与表格的展示条数，不会影响后端数据。</div>
         </Form>
       </Modal>
     </div>

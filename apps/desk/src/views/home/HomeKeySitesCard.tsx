@@ -94,7 +94,7 @@ export function HomeKeySitesCard(props: { loading: boolean; stations: Station[];
     const stationDevices = devicesByStationId.get(stationId) ?? [];
     const gnss = stationDevices.find((d) => d.type === "gnss") ?? null;
     if (!gnss) {
-      message.warning("该站点暂无 GNSS 设备（Mock）");
+      message.warning("该站点暂无 GNSS 设备");
       return;
     }
     navigate(`/app/gps-monitoring?deviceId=${encodeURIComponent(gnss.id)}&range=7d&autoRefresh=1`);
@@ -181,10 +181,9 @@ export function HomeKeySitesCard(props: { loading: boolean; stations: Station[];
             );
           })
         ) : (
-          <Typography.Text type="secondary">暂无站点数据（Mock）</Typography.Text>
+          <Typography.Text type="secondary">暂无站点数据</Typography.Text>
         )}
       </div>
     </BaseCard>
   );
 }
-

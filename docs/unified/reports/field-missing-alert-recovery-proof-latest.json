@@ -1,0 +1,14 @@
+﻿{
+    "generatedAt":  "2026-03-25T01:07:37Z",
+    "deviceId":  "419b3c16-7ce0-4653-a695-03efb550e2fb",
+    "alertId":  "e56e917a-3e88-4b3b-8f96-1f9657a0c92e",
+    "eventTypes":  [
+                       "ALERT_TRIGGER",
+                       "ALERT_RESOLVE"
+                   ],
+    "conclusion":  "missing-alert-now-resolves-when-sensor-recovers",
+    "notes":  [
+                  "hf-normal does not contain humidity_pct, so a declared humidity sensor should trigger a missing alert.",
+                  "lf-meta restores humidity_pct, so the missing alert should resolve."
+              ]
+}

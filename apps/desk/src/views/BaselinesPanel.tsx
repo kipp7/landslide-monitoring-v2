@@ -103,7 +103,7 @@ export function BaselinesPanel(props: { className?: string; style?: React.CSSPro
 
   return (
     <BaseCard
-      title="GNSS 基线（Mock）"
+      title="GNSS 基线"
       className={props.className}
       style={props.style}
       extra={
@@ -276,7 +276,7 @@ export function BaselinesPanel(props: { className?: string; style?: React.CSSPro
             />
           </Form.Item>
           <Form.Item name="notes" label="备注">
-            <Input.TextArea rows={3} placeholder="可填写测量时长、精度等备注（Mock）" />
+            <Input.TextArea rows={3} placeholder="可填写测量时长、精度等备注" />
           </Form.Item>
         </Form>
       </Modal>

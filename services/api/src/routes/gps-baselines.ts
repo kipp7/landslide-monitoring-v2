@@ -27,7 +27,8 @@ const baselineSchema = z.object({
 const upsertBaselineSchema = z.object({
   method: z.enum(["auto", "manual"]).optional(),
   pointsCount: z.number().int().positive().optional(),
-  baseline: baselineSchema
+  baseline: baselineSchema,
+  persist: z.boolean().default(true)
 });
 
 type BaselineRow = {
@@ -221,23 +222,32 @@ export function registerGpsBaselineRoutes(app: FastifyInstance, config: AppConfi
       return;
     }
 
-    await withPgClient(pg, async (client) => {
-      await client.query(
-        `
-          INSERT INTO gps_baselines (device_id, method, points_count, baseline, computed_at, updated_at)
-          VALUES ($1, $2, $3, $4::jsonb, NOW(), NOW())
-          ON CONFLICT (device_id) DO UPDATE SET
-            method = EXCLUDED.method,
-            points_count = EXCLUDED.points_count,
-            baseline = EXCLUDED.baseline,
-            computed_at = NOW(),
-            updated_at = NOW()
-        `,
-        [deviceId, body.method ?? "manual", body.pointsCount ?? null, JSON.stringify(body.baseline)]
-      );
-    });
+    if (body.persist) {
+      await withPgClient(pg, async (client) => {
+        await client.query(
+          `
+            INSERT INTO gps_baselines (device_id, method, points_count, baseline, computed_at, updated_at)
+            VALUES ($1, $2, $3, $4::jsonb, NOW(), NOW())
+            ON CONFLICT (device_id) DO UPDATE SET
+              method = EXCLUDED.method,
+              points_count = EXCLUDED.points_count,
+              baseline = EXCLUDED.baseline,
+              computed_at = NOW(),
+              updated_at = NOW()
+          `,
+          [deviceId, body.method ?? "manual", body.pointsCount ?? null, JSON.stringify(body.baseline)]
+        );
+      });
+    }
 
-    ok(reply, { deviceId }, traceId);
+    ok(
+      reply,
+      {
+        deviceId,
+        persisted: body.persist
+      },
+      traceId
+    );
   });
 
   app.delete("/gps/baselines/:deviceId", async (request, reply) => {
@@ -267,4 +277,3 @@ export function registerGpsBaselineRoutes(app: FastifyInstance, config: AppConfi
     ok(reply, { deviceId }, traceId);
   });
 }
-

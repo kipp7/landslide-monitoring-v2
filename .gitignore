@@ -16,6 +16,7 @@ yarn-error.log*
 # Archives / large artifacts
 *.rar
 *.zip
+artifacts/
 
 # Env files (never commit real secrets)
 .env
@@ -56,6 +57,7 @@ venv/
 /data/
 /volumes/
 /backups/
+.tmp/
 
 # Tools (installed separately)
 /OpenSpec-main/
@@ -63,3 +65,8 @@ venv/
 # Local scratch docs
 database_table_analysis.md
 Supabase模拟数据生成/
+
+# Local runtime outputs
+services/api/stdout.txt
+services/api/stderr.txt
+apps/desk-win/installer-customba/artifacts/
