@@ -194,6 +194,11 @@ async function main() {
       ackErrors: representativeCase.validation.ackErrors
     },
     supportedCommandTypes: commandCases.map((item) => item.commandType),
+    executionGuards: [
+      "schema_version must be 1",
+      "payload must be a JSON object",
+      "command.device_id must match local device identity before execution"
+    ],
     sourceReferences: [
       "apps/desk/src/views/DeviceManagementPage.tsx",
       "apps/web/app/device-management/DeviceManagementV2Page.tsx",
@@ -204,9 +209,9 @@ async function main() {
     ],
     commandCases,
     pendingSourceWork: [
-      "sync hardware command parser and ack builder with the expanded desk/web command set",
-      "decide whether set_sampling_interval should normalize into set_config or keep a dedicated device-side branch",
-      "bind deactivate_device, manual_collect, motor_*, buzzer_* to real device-side state transitions",
+      "prove the updated command parser against real gateway-delivered JSON in hardware runtime",
+      "decide whether deactivate_device should have a dedicated re-activate path",
+      "complete real-board evidence for set_sampling_interval, manual_collect, motor_*, and buzzer_* branches",
       "replace placeholder ack_ts with a better device-side time source when available"
     ]
   };

@@ -1,5 +1,5 @@
 ﻿{
-  "generatedAt": "2026-03-25T19:07:43.750Z",
+  "generatedAt": "2026-03-25T19:55:30.058Z",
   "conclusion": "hardware-stable-version-command-path-can-be-aligned-to-platform-command-contract-in-source",
   "inputCommand": {
     "schema_version": 1,
@@ -50,6 +50,11 @@
     "motor_stop",
     "buzzer_on",
     "buzzer_off"
+  ],
+  "executionGuards": [
+    "schema_version must be 1",
+    "payload must be a JSON object",
+    "command.device_id must match local device identity before execution"
   ],
   "sourceReferences": [
     "apps/desk/src/views/DeviceManagementPage.tsx",
@@ -402,9 +407,9 @@
     }
   ],
   "pendingSourceWork": [
-    "sync hardware command parser and ack builder with the expanded desk/web command set",
-    "decide whether set_sampling_interval should normalize into set_config or keep a dedicated device-side branch",
-    "bind deactivate_device, manual_collect, motor_*, buzzer_* to real device-side state transitions",
+    "prove the updated command parser against real gateway-delivered JSON in hardware runtime",
+    "decide whether deactivate_device should have a dedicated re-activate path",
+    "complete real-board evidence for set_sampling_interval, manual_collect, motor_*, and buzzer_* branches",
     "replace placeholder ack_ts with a better device-side time source when available"
   ]
 }

@@ -122,6 +122,16 @@
 - `xl01_driver` 已可识别标准 `DeviceCommand v1` JSON
 - `xl01_driver` 已可暂存并出队平台命令 payload
 - `DataProcessTask()` 已开始处理平台命令
+- 命令识别与解析已不再强依赖“无空格压缩 JSON”这一种格式
+- 命令执行前已开始校验：
+  - `cmd.device_id == local device_id`
+- `set_config` 回执已开始返回：
+  - `applied_keys`
+  - `runtime_config`
+- `set_sampling_interval` 已真正作用到运行时采样间隔
+- `manual_collect` 已真正触发一次待执行的即时上报
+- `deactivate_device` 已真正压下后续周期性 uplink
+- `motor_*` / `buzzer_*` 已开始作用到运行态控制变量
 - 当前最小支持命令：
   - `ping`
   - `set_config`
@@ -148,7 +158,8 @@
 当前仍未真正完成：
 
 - 真机环境下的正式构建与运行验证
-- 让硬件源码里的命令解析 / 执行 / 回执与当前 Desk/Web 主要命令型完全一致
+- 让这批命令分支在真实板卡上完成端到端留证
+- 为 `deactivate_device` 设计明确的重新启用路径
 - 更可信的 `ack_ts` 时间来源
 
 ### 2. GPS 真值仍需继续统一到驱动双实现

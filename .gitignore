@@ -1,4 +1,4 @@
-# OS / editor
+﻿# OS / editor
 .DS_Store
 Thumbs.db
 .vscode/
@@ -64,9 +64,24 @@ venv/
 
 # Local scratch docs
 database_table_analysis.md
-Supabase模拟数据生成/
+Supabase妯℃嫙鏁版嵁鐢熸垚/
 
 # Local runtime outputs
 services/api/stdout.txt
 services/api/stderr.txt
 apps/desk-win/installer-customba/artifacts/
+
+# memory-context-workspace
+.context/
+.bm-state/
+.tools/
+.venv/
+node_modules/
+__pycache__/
+*.log
+ctx-*.log
+*.db
+*.sqlite
+*.sqlite3
+# /memory-context-workspace
+
