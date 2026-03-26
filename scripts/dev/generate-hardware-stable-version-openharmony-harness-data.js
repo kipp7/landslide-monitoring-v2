@@ -44,9 +44,15 @@ function buildScenarios(repoRoot) {
   const setConfig = report.alignedSamples.find((item) => item.commandType === "set_config");
   const manualCollect = report.alignedSamples.find((item) => item.commandType === "manual_collect");
   const deactivateDevice = report.alignedSamples.find((item) => item.commandType === "deactivate_device");
+  const reboot = report.alignedSamples.find((item) => item.commandType === "reboot");
+  const restartDevice = report.alignedSamples.find((item) => item.commandType === "restart_device");
+  const motorStart = report.alignedSamples.find((item) => item.commandType === "motor_start");
+  const motorStop = report.alignedSamples.find((item) => item.commandType === "motor_stop");
+  const buzzerOn = report.alignedSamples.find((item) => item.commandType === "buzzer_on");
+  const buzzerOff = report.alignedSamples.find((item) => item.commandType === "buzzer_off");
   const mismatch = report.mismatchSample;
 
-  if (!setSampling || !setConfig || !manualCollect || !deactivateDevice || !mismatch) {
+  if (!setSampling || !setConfig || !manualCollect || !deactivateDevice || !reboot || !restartDevice || !motorStart || !motorStop || !buzzerOn || !buzzerOff || !mismatch) {
     throw new Error("Missing required gateway-aligned samples");
   }
 
@@ -54,6 +60,12 @@ function buildScenarios(repoRoot) {
   const setConfigText = fs.readFileSync(path.join(sampleDir, setConfig.fileName), "utf8").trimEnd();
   const manualCollectText = fs.readFileSync(path.join(sampleDir, manualCollect.fileName), "utf8").trimEnd();
   const deactivateDeviceText = fs.readFileSync(path.join(sampleDir, deactivateDevice.fileName), "utf8").trimEnd();
+  const rebootText = fs.readFileSync(path.join(sampleDir, reboot.fileName), "utf8").trimEnd();
+  const restartDeviceText = fs.readFileSync(path.join(sampleDir, restartDevice.fileName), "utf8").trimEnd();
+  const motorStartText = fs.readFileSync(path.join(sampleDir, motorStart.fileName), "utf8").trimEnd();
+  const motorStopText = fs.readFileSync(path.join(sampleDir, motorStop.fileName), "utf8").trimEnd();
+  const buzzerOnText = fs.readFileSync(path.join(sampleDir, buzzerOn.fileName), "utf8").trimEnd();
+  const buzzerOffText = fs.readFileSync(path.join(sampleDir, buzzerOff.fileName), "utf8").trimEnd();
   const mismatchText = fs.readFileSync(path.join(sampleDir, mismatch.fileName), "utf8").trimEnd();
 
   return [
@@ -76,6 +88,30 @@ function buildScenarios(repoRoot) {
     {
       name: "aligned_deactivate_device_pretty_json",
       chunks: chunkString(deactivateDeviceText, 80)
+    },
+    {
+      name: "aligned_reboot_pretty_json",
+      chunks: chunkString(rebootText, 80)
+    },
+    {
+      name: "aligned_restart_device_pretty_json",
+      chunks: chunkString(restartDeviceText, 80)
+    },
+    {
+      name: "aligned_motor_start_pretty_json",
+      chunks: chunkString(motorStartText, 80)
+    },
+    {
+      name: "aligned_motor_stop_pretty_json",
+      chunks: chunkString(motorStopText, 80)
+    },
+    {
+      name: "aligned_buzzer_on_pretty_json",
+      chunks: chunkString(buzzerOnText, 80)
+    },
+    {
+      name: "aligned_buzzer_off_pretty_json",
+      chunks: chunkString(buzzerOffText, 80)
     },
     {
       name: "mismatched_manual_collect_pretty_json",

@@ -16,6 +16,10 @@ typedef struct {
     unsigned int report_interval_s;
     int uplink_enabled;
     int manual_collect_requested;
+    int reboot_requested;
+    int restart_requested;
+    const char *motor_state;
+    int buzzer_on;
 } HarnessRuntimeState;
 
 static const char *const *g_active_chunks = NULL;
@@ -233,6 +237,78 @@ static int ExecuteCommandLikeMainLoop(
         );
     }
 
+    if (strcmp(cmd->command_type, "reboot") == 0) {
+        runtime->reboot_requested = 1;
+        return BuildDeviceCommandAckV1(
+            cmd->command_id,
+            "acked",
+            "{\"rebooting\":true}",
+            "1970-01-01T00:00:00Z",
+            ack_buffer,
+            ack_buffer_size
+        );
+    }
+
+    if (strcmp(cmd->command_type, "restart_device") == 0) {
+        runtime->restart_requested = 1;
+        return BuildDeviceCommandAckV1(
+            cmd->command_id,
+            "acked",
+            "{\"restart_requested\":true,\"rebooting\":true}",
+            "1970-01-01T00:00:00Z",
+            ack_buffer,
+            ack_buffer_size
+        );
+    }
+
+    if (strcmp(cmd->command_type, "motor_start") == 0) {
+        runtime->motor_state = "running";
+        return BuildDeviceCommandAckV1(
+            cmd->command_id,
+            "acked",
+            "{\"motor_state\":\"running\"}",
+            "1970-01-01T00:00:00Z",
+            ack_buffer,
+            ack_buffer_size
+        );
+    }
+
+    if (strcmp(cmd->command_type, "motor_stop") == 0) {
+        runtime->motor_state = "stopped";
+        return BuildDeviceCommandAckV1(
+            cmd->command_id,
+            "acked",
+            "{\"motor_state\":\"stopped\"}",
+            "1970-01-01T00:00:00Z",
+            ack_buffer,
+            ack_buffer_size
+        );
+    }
+
+    if (strcmp(cmd->command_type, "buzzer_on") == 0) {
+        runtime->buzzer_on = 1;
+        return BuildDeviceCommandAckV1(
+            cmd->command_id,
+            "acked",
+            "{\"buzzer_on\":true}",
+            "1970-01-01T00:00:00Z",
+            ack_buffer,
+            ack_buffer_size
+        );
+    }
+
+    if (strcmp(cmd->command_type, "buzzer_off") == 0) {
+        runtime->buzzer_on = 0;
+        return BuildDeviceCommandAckV1(
+            cmd->command_id,
+            "acked",
+            "{\"buzzer_on\":false}",
+            "1970-01-01T00:00:00Z",
+            ack_buffer,
+            ack_buffer_size
+        );
+    }
+
     return BuildDeviceCommandAckV1(
         cmd->command_id,
         "failed",
@@ -246,7 +322,7 @@ static int ExecuteCommandLikeMainLoop(
 static void RunScenario(const HarnessScenario *scenario, int include_trailing_comma)
 {
     Statistics stats = {0};
-    HarnessRuntimeState runtime = {1, 5, 1, 0};
+    HarnessRuntimeState runtime = {1, 5, 1, 0, 0, 0, "stopped", 0};
     DeviceCommandMessage cmd;
     char command_buffer[512];
     char ack_buffer[512];
@@ -302,7 +378,13 @@ static void RunScenario(const HarnessScenario *scenario, int include_trailing_co
     fprintf(stdout, "        \"sampling_s\": %u,\n", runtime.sampling_s);
     fprintf(stdout, "        \"report_interval_s\": %u,\n", runtime.report_interval_s);
     fprintf(stdout, "        \"uplink_enabled\": %s,\n", runtime.uplink_enabled ? "true" : "false");
-    fprintf(stdout, "        \"manual_collect_requested\": %s\n", runtime.manual_collect_requested ? "true" : "false");
+    fprintf(stdout, "        \"manual_collect_requested\": %s,\n", runtime.manual_collect_requested ? "true" : "false");
+    fprintf(stdout, "        \"reboot_requested\": %s,\n", runtime.reboot_requested ? "true" : "false");
+    fprintf(stdout, "        \"restart_requested\": %s,\n", runtime.restart_requested ? "true" : "false");
+    fprintf(stdout, "        \"motor_state\": ");
+    PrintJsonEscaped(runtime.motor_state);
+    fprintf(stdout, ",\n");
+    fprintf(stdout, "        \"buzzer_on\": %s\n", runtime.buzzer_on ? "true" : "false");
     fprintf(stdout, "      }\n");
     fprintf(stdout, "    }%s\n", include_trailing_comma ? "," : "");
 }

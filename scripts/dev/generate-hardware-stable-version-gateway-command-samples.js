@@ -107,6 +107,48 @@ function main() {
       "deactivate_device",
       { source: "gateway-pretty-json" },
       "2026-03-26T14:03:00Z"
+    ),
+    buildCommand(
+      "00000000-0000-4000-8000-000000002005",
+      hardware.deviceId,
+      "reboot",
+      {},
+      "2026-03-26T14:04:00Z"
+    ),
+    buildCommand(
+      "00000000-0000-4000-8000-000000002006",
+      hardware.deviceId,
+      "restart_device",
+      { source: "gateway-pretty-json" },
+      "2026-03-26T14:05:00Z"
+    ),
+    buildCommand(
+      "00000000-0000-4000-8000-000000002007",
+      hardware.deviceId,
+      "motor_start",
+      { source: "gateway-pretty-json" },
+      "2026-03-26T14:06:00Z"
+    ),
+    buildCommand(
+      "00000000-0000-4000-8000-000000002008",
+      hardware.deviceId,
+      "motor_stop",
+      { source: "gateway-pretty-json" },
+      "2026-03-26T14:07:00Z"
+    ),
+    buildCommand(
+      "00000000-0000-4000-8000-000000002009",
+      hardware.deviceId,
+      "buzzer_on",
+      { source: "gateway-pretty-json" },
+      "2026-03-26T14:08:00Z"
+    ),
+    buildCommand(
+      "00000000-0000-4000-8000-000000002010",
+      hardware.deviceId,
+      "buzzer_off",
+      { source: "gateway-pretty-json" },
+      "2026-03-26T14:09:00Z"
     )
   ];
 
@@ -115,7 +157,7 @@ function main() {
     "99999999-9999-4999-8999-999999999999",
     "manual_collect",
     { source: "gateway-pretty-json" },
-    "2026-03-26T14:09:00Z"
+    "2026-03-26T14:19:00Z"
   );
 
   const files = [];
