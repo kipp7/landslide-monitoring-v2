@@ -1,5 +1,5 @@
 ﻿{
-  "generatedAt": "2026-03-26T08:42:16Z",
+  "generatedAt": "2026-03-26T09:18:50Z",
   "conclusion": "hardware-stable-version-openharmony-command-harness-confirms-source-level-command-path-behavior",
   "toolchain": "emscripten-emcc",
   "localDeviceId": "00000000-0000-0000-0000-000000000001",
@@ -33,6 +33,38 @@
         "sampling_s": 5,
         "report_interval_s": 5,
         "uplink_enabled": true,
+        "manual_collect_requested": false
+      }
+    },
+    {
+      "name": "aligned_manual_collect_pretty_json",
+      "chunkCount": 4,
+      "linkAckReceived": false,
+      "commandReady": true,
+      "parsedOk": true,
+      "deviceMatch": true,
+      "commandBuffer": "{\n  \"schema_version\": 1,\n  \"command_id\": \"00000000-0000-4000-8000-000000002003\",\n  \"device_id\": \"00000000-0000-0000-0000-000000000001\",\n  \"command_type\": \"manual_collect\",\n  \"payload\": {\n    \"source\": \"gateway-pretty-json\"\n  },\n  \"issued_ts\": \"2026-03-26T14:02:00Z\"\n}",
+      "ack": "{\"schema_version\":1,\"command_id\":\"00000000-0000-4000-8000-000000002003\",\"device_id\":\"00000000-0000-0000-0000-000000000001\",\"ack_ts\":\"1970-01-01T00:00:00Z\",\"status\":\"acked\",\"result\":{\"collect_requested\":true,\"reason\":\"manual_trigger\"}}\n",
+      "runtimeAfter": {
+        "sampling_s": 1,
+        "report_interval_s": 5,
+        "uplink_enabled": true,
+        "manual_collect_requested": true
+      }
+    },
+    {
+      "name": "aligned_deactivate_device_pretty_json",
+      "chunkCount": 4,
+      "linkAckReceived": false,
+      "commandReady": true,
+      "parsedOk": true,
+      "deviceMatch": true,
+      "commandBuffer": "{\n  \"schema_version\": 1,\n  \"command_id\": \"00000000-0000-4000-8000-000000002004\",\n  \"device_id\": \"00000000-0000-0000-0000-000000000001\",\n  \"command_type\": \"deactivate_device\",\n  \"payload\": {\n    \"source\": \"gateway-pretty-json\"\n  },\n  \"issued_ts\": \"2026-03-26T14:03:00Z\"\n}",
+      "ack": "{\"schema_version\":1,\"command_id\":\"00000000-0000-4000-8000-000000002004\",\"device_id\":\"00000000-0000-0000-0000-000000000001\",\"ack_ts\":\"1970-01-01T00:00:00Z\",\"status\":\"acked\",\"result\":{\"deactivated\":true,\"uplink_suppressed\":true}}\n",
+      "runtimeAfter": {
+        "sampling_s": 1,
+        "report_interval_s": 5,
+        "uplink_enabled": false,
         "manual_collect_requested": false
       }
     },

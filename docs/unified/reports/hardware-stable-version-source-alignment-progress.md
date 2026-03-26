@@ -194,6 +194,8 @@
   - `harnessLocalDeviceMatchesHardware=true`
   - `setSamplingExecuted=true`
   - `setConfigExecuted=true`
+  - `manualCollectExecuted=true`
+  - `deactivateExecuted=true`
   - `mismatchRejected=true`
 
 当前新增发现：

@@ -1,5 +1,5 @@
 ﻿{
-  "generatedAt": "2026-03-26T08:59:51.402Z",
+  "generatedAt": "2026-03-26T09:09:40.872Z",
   "conclusion": "hardware-stable-version-gateway-samples-drive-openharmony-command-injection-proof-in-source",
   "hardwareDeviceId": "00000000-0000-0000-0000-000000000001",
   "commandTopic": "cmd/00000000-0000-0000-0000-000000000001",
@@ -9,6 +9,8 @@
     "harnessLocalDeviceMatchesHardware": true,
     "setSamplingExecuted": true,
     "setConfigExecuted": true,
+    "manualCollectExecuted": false,
+    "deactivateExecuted": false,
     "mismatchRejected": true
   },
   "scenarioLinks": {
@@ -54,6 +56,48 @@
         "\n  \"device_id\": \"00000000-0000-0000-0000-000000000001\",\n  \"command_type\": \"set_c",
         "onfig\",\n  \"payload\": {\n    \"sampling_s\": 5,\n    \"report_interval_s\": 5\n  },\n  \"i",
         "ssued_ts\": \"2026-03-26T14:00:00Z\"\n}"
+      ]
+    },
+    "sampleManualCollect": {
+      "fileName": "manual_collect.pretty.json",
+      "commandType": "manual_collect",
+      "topic": "cmd/00000000-0000-0000-0000-000000000001",
+      "command": {
+        "schema_version": 1,
+        "command_id": "00000000-0000-4000-8000-000000002003",
+        "device_id": "00000000-0000-0000-0000-000000000001",
+        "command_type": "manual_collect",
+        "payload": {
+          "source": "gateway-pretty-json"
+        },
+        "issued_ts": "2026-03-26T14:02:00Z"
+      },
+      "suggestedChunks80": [
+        "{\n  \"schema_version\": 1,\n  \"command_id\": \"00000000-0000-4000-8000-000000002003\",",
+        "\n  \"device_id\": \"00000000-0000-0000-0000-000000000001\",\n  \"command_type\": \"manua",
+        "l_collect\",\n  \"payload\": {\n    \"source\": \"gateway-pretty-json\"\n  },\n  \"issued_ts",
+        "\": \"2026-03-26T14:02:00Z\"\n}"
+      ]
+    },
+    "sampleDeactivateDevice": {
+      "fileName": "deactivate_device.pretty.json",
+      "commandType": "deactivate_device",
+      "topic": "cmd/00000000-0000-0000-0000-000000000001",
+      "command": {
+        "schema_version": 1,
+        "command_id": "00000000-0000-4000-8000-000000002004",
+        "device_id": "00000000-0000-0000-0000-000000000001",
+        "command_type": "deactivate_device",
+        "payload": {
+          "source": "gateway-pretty-json"
+        },
+        "issued_ts": "2026-03-26T14:03:00Z"
+      },
+      "suggestedChunks80": [
+        "{\n  \"schema_version\": 1,\n  \"command_id\": \"00000000-0000-4000-8000-000000002004\",",
+        "\n  \"device_id\": \"00000000-0000-0000-0000-000000000001\",\n  \"command_type\": \"deact",
+        "ivate_device\",\n  \"payload\": {\n    \"source\": \"gateway-pretty-json\"\n  },\n  \"issued",
+        "_ts\": \"2026-03-26T14:03:00Z\"\n}"
       ]
     },
     "sampleMismatch": {
@@ -103,6 +147,8 @@
         "manual_collect_requested": false
       }
     },
+    "harnessManualCollect": null,
+    "harnessDeactivateDevice": null,
     "harnessMismatch": {
       "name": "mismatched_manual_collect_pretty_json",
       "chunkCount": 4,

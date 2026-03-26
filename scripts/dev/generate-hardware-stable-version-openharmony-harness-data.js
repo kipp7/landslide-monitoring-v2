@@ -42,14 +42,18 @@ function buildScenarios(repoRoot) {
 
   const setSampling = report.alignedSamples.find((item) => item.commandType === "set_sampling_interval");
   const setConfig = report.alignedSamples.find((item) => item.commandType === "set_config");
+  const manualCollect = report.alignedSamples.find((item) => item.commandType === "manual_collect");
+  const deactivateDevice = report.alignedSamples.find((item) => item.commandType === "deactivate_device");
   const mismatch = report.mismatchSample;
 
-  if (!setSampling || !setConfig || !mismatch) {
+  if (!setSampling || !setConfig || !manualCollect || !deactivateDevice || !mismatch) {
     throw new Error("Missing required gateway-aligned samples");
   }
 
   const setSamplingText = fs.readFileSync(path.join(sampleDir, setSampling.fileName), "utf8").trimEnd();
   const setConfigText = fs.readFileSync(path.join(sampleDir, setConfig.fileName), "utf8").trimEnd();
+  const manualCollectText = fs.readFileSync(path.join(sampleDir, manualCollect.fileName), "utf8").trimEnd();
+  const deactivateDeviceText = fs.readFileSync(path.join(sampleDir, deactivateDevice.fileName), "utf8").trimEnd();
   const mismatchText = fs.readFileSync(path.join(sampleDir, mismatch.fileName), "utf8").trimEnd();
 
   return [
@@ -64,6 +68,14 @@ function buildScenarios(repoRoot) {
         chunks[0] = `ACK\r\n${chunks[0]}`;
         return chunks;
       })()
+    },
+    {
+      name: "aligned_manual_collect_pretty_json",
+      chunks: chunkString(manualCollectText, 80)
+    },
+    {
+      name: "aligned_deactivate_device_pretty_json",
+      chunks: chunkString(deactivateDeviceText, 80)
     },
     {
       name: "mismatched_manual_collect_pretty_json",
