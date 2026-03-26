@@ -1,3 +1,4 @@
+const fs = require("node:fs");
 const path = require("node:path");
 
 let loadAndCompileSchema = null;
@@ -30,6 +31,47 @@ const COMMAND_CASES = [
   { command_type: "buzzer_on", payload: { source: "desk-device-management" }, origin: "desk-device-management" },
   { command_type: "buzzer_off", payload: { source: "desk-device-management" }, origin: "desk-device-management" }
 ];
+
+function findHardwareStableRoot(startDir, depth = 4) {
+  if (depth < 0) return null;
+  let entries = [];
+  try {
+    entries = fs.readdirSync(startDir, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    if (entry.name === "xl01_landslide_monitor_v1.0") {
+      return path.join(startDir, entry.name);
+    }
+  }
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    if ([".git", "node_modules", ".tmp", "artifacts", "backups", "data"].includes(entry.name)) continue;
+    const nested = findHardwareStableRoot(path.join(startDir, entry.name), depth - 1);
+    if (nested) return nested;
+  }
+
+  return null;
+}
+
+function readHardwareDeviceId(repoRoot) {
+  const workspaceRoot = path.dirname(repoRoot);
+  const hardwareRoot = findHardwareStableRoot(workspaceRoot);
+  if (!hardwareRoot) return null;
+  const appConfigPath = path.join(hardwareRoot, "config", "app_config.h");
+  let raw = "";
+  try {
+    raw = fs.readFileSync(appConfigPath, "utf8");
+  } catch {
+    return null;
+  }
+  const match = raw.match(/#define\s+DEVICE_ID\s+"([^"]+)"/);
+  return match ? match[1] : null;
+}
 
 async function loadValidator(repoRoot, relativePath) {
   if (!loadAndCompileSchema) return null;
@@ -156,6 +198,7 @@ function emulateFirmwareCommandHandling(command) {
 
 async function main() {
   const repoRoot = process.cwd();
+  const hardwareDeviceId = readHardwareDeviceId(repoRoot);
   const cmdValidator = await loadValidator(repoRoot, path.join("docs", "integrations", "mqtt", "schemas", "device-command.v1.schema.json"));
   const ackValidator = await loadValidator(repoRoot, path.join("docs", "integrations", "mqtt", "schemas", "device-command-ack.v1.schema.json"));
   const commandCases = COMMAND_CASES.map((item, index) => {
@@ -199,6 +242,17 @@ async function main() {
       "payload must be a JSON object",
       "command.device_id must match local device identity before execution"
     ],
+    identityAlignment: {
+      platformExampleDeviceId: representativeCase.command.device_id,
+      hardwareDeviceId,
+      deviceIdMatches: hardwareDeviceId ? hardwareDeviceId === representativeCase.command.device_id : null,
+      hardwareAlignedCommandExample: hardwareDeviceId
+        ? {
+            ...representativeCase.command,
+            device_id: hardwareDeviceId
+          }
+        : null
+    },
     sourceReferences: [
       "apps/desk/src/views/DeviceManagementPage.tsx",
       "apps/web/app/device-management/DeviceManagementV2Page.tsx",

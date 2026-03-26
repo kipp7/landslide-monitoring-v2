@@ -188,6 +188,12 @@
 - 这意味着：
   - 当前 guard 逻辑本身是对的
   - 但硬件稳定版身份真值与主线命令样本真值还未统一
+- 当前命令路径仿真报告已开始显式输出：
+  - `platformExampleDeviceId`
+  - `hardwareDeviceId`
+  - `deviceIdMatches`
+  - `hardwareAlignedCommandExample`
+  后续做 gateway 注入时，可直接取当前硬件真值对齐后的命令样本
 
 当前仍未真正完成：
 

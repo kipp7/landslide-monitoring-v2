@@ -1,5 +1,5 @@
 ﻿{
-  "generatedAt": "2026-03-25T19:55:30.058Z",
+  "generatedAt": "2026-03-26T06:36:01.495Z",
   "conclusion": "hardware-stable-version-command-path-can-be-aligned-to-platform-command-contract-in-source",
   "inputCommand": {
     "schema_version": 1,
@@ -56,6 +56,22 @@
     "payload must be a JSON object",
     "command.device_id must match local device identity before execution"
   ],
+  "identityAlignment": {
+    "platformExampleDeviceId": "2c1f2d8e-2bb7-4f58-bb6a-6c2a0f4a7a4c",
+    "hardwareDeviceId": "00000000-0000-0000-0000-000000000001",
+    "deviceIdMatches": false,
+    "hardwareAlignedCommandExample": {
+      "schema_version": 1,
+      "command_id": "00000000-0000-4000-8000-000000000002",
+      "device_id": "00000000-0000-0000-0000-000000000001",
+      "command_type": "set_config",
+      "payload": {
+        "sampling_s": 5,
+        "report_interval_s": 5
+      },
+      "issued_ts": "2026-03-26T10:01:00Z"
+    }
+  },
   "sourceReferences": [
     "apps/desk/src/views/DeviceManagementPage.tsx",
     "apps/web/app/device-management/DeviceManagementV2Page.tsx",
