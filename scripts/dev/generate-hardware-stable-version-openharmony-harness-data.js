@@ -2,7 +2,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 function readJson(filePath) {
-  return JSON.parse(fs.readFileSync(filePath, "utf8"));
+  const raw = fs.readFileSync(filePath, "utf8").replace(/^\uFEFF/, "");
+  return JSON.parse(raw);
 }
 
 function chunkString(input, size) {

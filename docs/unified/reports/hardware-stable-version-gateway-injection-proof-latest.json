@@ -1,5 +1,5 @@
 ﻿{
-  "generatedAt": "2026-03-26T09:32:26.633Z",
+  "generatedAt": "2026-03-26T10:18:26.690Z",
   "conclusion": "hardware-stable-version-gateway-samples-drive-openharmony-command-injection-proof-in-source",
   "hardwareDeviceId": "00000000-0000-0000-0000-000000000001",
   "commandTopic": "cmd/00000000-0000-0000-0000-000000000001",
@@ -106,12 +106,129 @@
         "_ts\": \"2026-03-26T14:03:00Z\"\n}"
       ]
     },
-    "sampleReboot": null,
-    "sampleRestartDevice": null,
-    "sampleMotorStart": null,
-    "sampleMotorStop": null,
-    "sampleBuzzerOn": null,
-    "sampleBuzzerOff": null,
+    "sampleReboot": {
+      "fileName": "reboot.pretty.json",
+      "commandType": "reboot",
+      "topic": "cmd/00000000-0000-0000-0000-000000000001",
+      "command": {
+        "schema_version": 1,
+        "command_id": "00000000-0000-4000-8000-000000002005",
+        "device_id": "00000000-0000-0000-0000-000000000001",
+        "command_type": "reboot",
+        "payload": {},
+        "issued_ts": "2026-03-26T14:04:00Z"
+      },
+      "suggestedChunks80": [
+        "{\n  \"schema_version\": 1,\n  \"command_id\": \"00000000-0000-4000-8000-000000002005\",",
+        "\n  \"device_id\": \"00000000-0000-0000-0000-000000000001\",\n  \"command_type\": \"reboo",
+        "t\",\n  \"payload\": {},\n  \"issued_ts\": \"2026-03-26T14:04:00Z\"\n}"
+      ]
+    },
+    "sampleRestartDevice": {
+      "fileName": "restart_device.pretty.json",
+      "commandType": "restart_device",
+      "topic": "cmd/00000000-0000-0000-0000-000000000001",
+      "command": {
+        "schema_version": 1,
+        "command_id": "00000000-0000-4000-8000-000000002006",
+        "device_id": "00000000-0000-0000-0000-000000000001",
+        "command_type": "restart_device",
+        "payload": {
+          "source": "gateway-pretty-json"
+        },
+        "issued_ts": "2026-03-26T14:05:00Z"
+      },
+      "suggestedChunks80": [
+        "{\n  \"schema_version\": 1,\n  \"command_id\": \"00000000-0000-4000-8000-000000002006\",",
+        "\n  \"device_id\": \"00000000-0000-0000-0000-000000000001\",\n  \"command_type\": \"resta",
+        "rt_device\",\n  \"payload\": {\n    \"source\": \"gateway-pretty-json\"\n  },\n  \"issued_ts",
+        "\": \"2026-03-26T14:05:00Z\"\n}"
+      ]
+    },
+    "sampleMotorStart": {
+      "fileName": "motor_start.pretty.json",
+      "commandType": "motor_start",
+      "topic": "cmd/00000000-0000-0000-0000-000000000001",
+      "command": {
+        "schema_version": 1,
+        "command_id": "00000000-0000-4000-8000-000000002007",
+        "device_id": "00000000-0000-0000-0000-000000000001",
+        "command_type": "motor_start",
+        "payload": {
+          "source": "gateway-pretty-json"
+        },
+        "issued_ts": "2026-03-26T14:06:00Z"
+      },
+      "suggestedChunks80": [
+        "{\n  \"schema_version\": 1,\n  \"command_id\": \"00000000-0000-4000-8000-000000002007\",",
+        "\n  \"device_id\": \"00000000-0000-0000-0000-000000000001\",\n  \"command_type\": \"motor",
+        "_start\",\n  \"payload\": {\n    \"source\": \"gateway-pretty-json\"\n  },\n  \"issued_ts\": ",
+        "\"2026-03-26T14:06:00Z\"\n}"
+      ]
+    },
+    "sampleMotorStop": {
+      "fileName": "motor_stop.pretty.json",
+      "commandType": "motor_stop",
+      "topic": "cmd/00000000-0000-0000-0000-000000000001",
+      "command": {
+        "schema_version": 1,
+        "command_id": "00000000-0000-4000-8000-000000002008",
+        "device_id": "00000000-0000-0000-0000-000000000001",
+        "command_type": "motor_stop",
+        "payload": {
+          "source": "gateway-pretty-json"
+        },
+        "issued_ts": "2026-03-26T14:07:00Z"
+      },
+      "suggestedChunks80": [
+        "{\n  \"schema_version\": 1,\n  \"command_id\": \"00000000-0000-4000-8000-000000002008\",",
+        "\n  \"device_id\": \"00000000-0000-0000-0000-000000000001\",\n  \"command_type\": \"motor",
+        "_stop\",\n  \"payload\": {\n    \"source\": \"gateway-pretty-json\"\n  },\n  \"issued_ts\": \"",
+        "2026-03-26T14:07:00Z\"\n}"
+      ]
+    },
+    "sampleBuzzerOn": {
+      "fileName": "buzzer_on.pretty.json",
+      "commandType": "buzzer_on",
+      "topic": "cmd/00000000-0000-0000-0000-000000000001",
+      "command": {
+        "schema_version": 1,
+        "command_id": "00000000-0000-4000-8000-000000002009",
+        "device_id": "00000000-0000-0000-0000-000000000001",
+        "command_type": "buzzer_on",
+        "payload": {
+          "source": "gateway-pretty-json"
+        },
+        "issued_ts": "2026-03-26T14:08:00Z"
+      },
+      "suggestedChunks80": [
+        "{\n  \"schema_version\": 1,\n  \"command_id\": \"00000000-0000-4000-8000-000000002009\",",
+        "\n  \"device_id\": \"00000000-0000-0000-0000-000000000001\",\n  \"command_type\": \"buzze",
+        "r_on\",\n  \"payload\": {\n    \"source\": \"gateway-pretty-json\"\n  },\n  \"issued_ts\": \"2",
+        "026-03-26T14:08:00Z\"\n}"
+      ]
+    },
+    "sampleBuzzerOff": {
+      "fileName": "buzzer_off.pretty.json",
+      "commandType": "buzzer_off",
+      "topic": "cmd/00000000-0000-0000-0000-000000000001",
+      "command": {
+        "schema_version": 1,
+        "command_id": "00000000-0000-4000-8000-000000002010",
+        "device_id": "00000000-0000-0000-0000-000000000001",
+        "command_type": "buzzer_off",
+        "payload": {
+          "source": "gateway-pretty-json"
+        },
+        "issued_ts": "2026-03-26T14:09:00Z"
+      },
+      "suggestedChunks80": [
+        "{\n  \"schema_version\": 1,\n  \"command_id\": \"00000000-0000-4000-8000-000000002010\",",
+        "\n  \"device_id\": \"00000000-0000-0000-0000-000000000001\",\n  \"command_type\": \"buzze",
+        "r_off\",\n  \"payload\": {\n    \"source\": \"gateway-pretty-json\"\n  },\n  \"issued_ts\": \"",
+        "2026-03-26T14:09:00Z\"\n}"
+      ]
+    },
     "sampleMismatch": {
       "fileName": "manual_collect.mismatched-device.pretty.json",
       "topic": "cmd/99999999-9999-4999-8999-999999999999",
@@ -123,7 +240,7 @@
         "payload": {
           "source": "gateway-pretty-json"
         },
-        "issued_ts": "2026-03-26T14:09:00Z"
+        "issued_ts": "2026-03-26T14:19:00Z"
       },
       "purpose": "prove device_id mismatch is ignored by the current command guards"
     },

@@ -1,3 +1,9 @@
+---
+title: hardware-stable-version-source-alignment-progress
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/unified/reports/hardware-stable-version-source-alignment-progress
+---
+
 # 硬件稳定版源码对齐软件主线进展
 
 ## 状态
@@ -188,6 +194,14 @@
 - 当前最新源码级 harness 已直接验证：
   - `aligned_set_sampling_interval_pretty_json`
   - `ack_plus_aligned_set_config_pretty_json`
+  - `aligned_manual_collect_pretty_json`
+  - `aligned_deactivate_device_pretty_json`
+  - `aligned_reboot_pretty_json`
+  - `aligned_restart_device_pretty_json`
+  - `aligned_motor_start_pretty_json`
+  - `aligned_motor_stop_pretty_json`
+  - `aligned_buzzer_on_pretty_json`
+  - `aligned_buzzer_off_pretty_json`
   - `mismatched_manual_collect_pretty_json`
 - 当前 gateway injection proof 已自动断言：
   - `alignedCommandTopicStable=true`
@@ -196,7 +210,30 @@
   - `setConfigExecuted=true`
   - `manualCollectExecuted=true`
   - `deactivateExecuted=true`
+  - `rebootExecuted=true`
+  - `restartExecuted=true`
+  - `motorStartExecuted=true`
+  - `motorStopExecuted=true`
+  - `buzzerOnExecuted=true`
+  - `buzzerOffExecuted=true`
   - `mismatchRejected=true`
+
+这意味着当前样本驱动总 proof 已覆盖：
+
+- 配置类：
+  - `set_config`
+  - `set_sampling_interval`
+- 控制类：
+  - `manual_collect`
+  - `deactivate_device`
+  - `reboot`
+  - `restart_device`
+  - `motor_start`
+  - `motor_stop`
+  - `buzzer_on`
+  - `buzzer_off`
+- 守卫类：
+  - mismatch `manual_collect`
 
 当前新增发现：
 
