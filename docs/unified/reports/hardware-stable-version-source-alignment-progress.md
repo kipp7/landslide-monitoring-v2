@@ -155,6 +155,8 @@
 - `docs/unified/reports/hardware-stable-version-command-guard-sim-latest.json`
 - `docs/unified/reports/hardware-stable-version-command-fragment-sim-latest.json`
 - `docs/unified/reports/hardware-stable-version-openharmony-command-harness-latest.json`
+- `docs/unified/reports/hardware-stable-version-gateway-command-samples-latest.json`
+- `docs/unified/reports/hardware-stable-version-gateway-injection-proof-latest.json`
 
 当前仿真结论：
 
@@ -162,6 +164,7 @@
 - `hardware-stable-version-command-guards-can-be-aligned-to-platform-contract-in-source`
 - `hardware-stable-version-xl01-receive-path-can-reassemble-command-json-fragments-in-source`
 - `hardware-stable-version-openharmony-command-harness-confirms-source-level-command-path-behavior`
+- `hardware-stable-version-gateway-samples-drive-openharmony-command-injection-proof-in-source`
 
 当前已额外证明：
 
@@ -186,6 +189,12 @@
   - `aligned_set_sampling_interval_pretty_json`
   - `ack_plus_aligned_set_config_pretty_json`
   - `mismatched_manual_collect_pretty_json`
+- 当前 gateway injection proof 已自动断言：
+  - `alignedCommandTopicStable=true`
+  - `harnessLocalDeviceMatchesHardware=true`
+  - `setSamplingExecuted=true`
+  - `setConfigExecuted=true`
+  - `mismatchRejected=true`
 
 当前新增发现：
 

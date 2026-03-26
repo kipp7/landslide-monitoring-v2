@@ -1,0 +1,128 @@
+﻿{
+  "generatedAt": "2026-03-26T08:59:51.402Z",
+  "conclusion": "hardware-stable-version-gateway-samples-drive-openharmony-command-injection-proof-in-source",
+  "hardwareDeviceId": "00000000-0000-0000-0000-000000000001",
+  "commandTopic": "cmd/00000000-0000-0000-0000-000000000001",
+  "harnessLocalDeviceId": "00000000-0000-0000-0000-000000000001",
+  "checks": {
+    "alignedCommandTopicStable": true,
+    "harnessLocalDeviceMatchesHardware": true,
+    "setSamplingExecuted": true,
+    "setConfigExecuted": true,
+    "mismatchRejected": true
+  },
+  "scenarioLinks": {
+    "sampleSetSampling": {
+      "fileName": "set_sampling_interval.pretty.json",
+      "commandType": "set_sampling_interval",
+      "topic": "cmd/00000000-0000-0000-0000-000000000001",
+      "command": {
+        "schema_version": 1,
+        "command_id": "00000000-0000-4000-8000-000000002002",
+        "device_id": "00000000-0000-0000-0000-000000000001",
+        "command_type": "set_sampling_interval",
+        "payload": {
+          "source": "gateway-pretty-json",
+          "intervalSeconds": 10
+        },
+        "issued_ts": "2026-03-26T14:01:00Z"
+      },
+      "suggestedChunks80": [
+        "{\n  \"schema_version\": 1,\n  \"command_id\": \"00000000-0000-4000-8000-000000002002\",",
+        "\n  \"device_id\": \"00000000-0000-0000-0000-000000000001\",\n  \"command_type\": \"set_s",
+        "ampling_interval\",\n  \"payload\": {\n    \"source\": \"gateway-pretty-json\",\n    \"inte",
+        "rvalSeconds\": 10\n  },\n  \"issued_ts\": \"2026-03-26T14:01:00Z\"\n}"
+      ]
+    },
+    "sampleSetConfig": {
+      "fileName": "set_config.pretty.json",
+      "commandType": "set_config",
+      "topic": "cmd/00000000-0000-0000-0000-000000000001",
+      "command": {
+        "schema_version": 1,
+        "command_id": "00000000-0000-4000-8000-000000002001",
+        "device_id": "00000000-0000-0000-0000-000000000001",
+        "command_type": "set_config",
+        "payload": {
+          "sampling_s": 5,
+          "report_interval_s": 5
+        },
+        "issued_ts": "2026-03-26T14:00:00Z"
+      },
+      "suggestedChunks80": [
+        "{\n  \"schema_version\": 1,\n  \"command_id\": \"00000000-0000-4000-8000-000000002001\",",
+        "\n  \"device_id\": \"00000000-0000-0000-0000-000000000001\",\n  \"command_type\": \"set_c",
+        "onfig\",\n  \"payload\": {\n    \"sampling_s\": 5,\n    \"report_interval_s\": 5\n  },\n  \"i",
+        "ssued_ts\": \"2026-03-26T14:00:00Z\"\n}"
+      ]
+    },
+    "sampleMismatch": {
+      "fileName": "manual_collect.mismatched-device.pretty.json",
+      "topic": "cmd/99999999-9999-4999-8999-999999999999",
+      "command": {
+        "schema_version": 1,
+        "command_id": "00000000-0000-4000-8000-000000002099",
+        "device_id": "99999999-9999-4999-8999-999999999999",
+        "command_type": "manual_collect",
+        "payload": {
+          "source": "gateway-pretty-json"
+        },
+        "issued_ts": "2026-03-26T14:09:00Z"
+      },
+      "purpose": "prove device_id mismatch is ignored by the current command guards"
+    },
+    "harnessSetSampling": {
+      "name": "aligned_set_sampling_interval_pretty_json",
+      "chunkCount": 4,
+      "linkAckReceived": false,
+      "commandReady": true,
+      "parsedOk": true,
+      "deviceMatch": true,
+      "commandBuffer": "{\n  \"schema_version\": 1,\n  \"command_id\": \"00000000-0000-4000-8000-000000002002\",\n  \"device_id\": \"00000000-0000-0000-0000-000000000001\",\n  \"command_type\": \"set_sampling_interval\",\n  \"payload\": {\n    \"source\": \"gateway-pretty-json\",\n    \"intervalSeconds\": 10\n  },\n  \"issued_ts\": \"2026-03-26T14:01:00Z\"\n}",
+      "ack": "{\"schema_version\":1,\"command_id\":\"00000000-0000-4000-8000-000000002002\",\"device_id\":\"00000000-0000-0000-0000-000000000001\",\"ack_ts\":\"1970-01-01T00:00:00Z\",\"status\":\"acked\",\"result\":{\"applied\":true,\"sampling_s\":10}}\n",
+      "runtimeAfter": {
+        "sampling_s": 10,
+        "report_interval_s": 5,
+        "uplink_enabled": true,
+        "manual_collect_requested": false
+      }
+    },
+    "harnessSetConfig": {
+      "name": "ack_plus_aligned_set_config_pretty_json",
+      "chunkCount": 4,
+      "linkAckReceived": true,
+      "commandReady": true,
+      "parsedOk": true,
+      "deviceMatch": true,
+      "commandBuffer": "{\n  \"schema_version\": 1,\n  \"command_id\": \"00000000-0000-4000-8000-000000002001\",\n  \"device_id\": \"00000000-0000-0000-0000-000000000001\",\n  \"command_type\": \"set_config\",\n  \"payload\": {\n    \"sampling_s\": 5,\n    \"report_interval_s\": 5\n  },\n  \"issued_ts\": \"2026-03-26T14:00:00Z\"\n}",
+      "ack": "{\"schema_version\":1,\"command_id\":\"00000000-0000-4000-8000-000000002001\",\"device_id\":\"00000000-0000-0000-0000-000000000001\",\"ack_ts\":\"1970-01-01T00:00:00Z\",\"status\":\"acked\",\"result\":{\"applied\":true,\"applied_keys\":[\"sampling_s\",\"report_interval_s\"],\"runtime_config\":{\"sampling_s\":5,\"report_interval_s\":5}}}\n",
+      "runtimeAfter": {
+        "sampling_s": 5,
+        "report_interval_s": 5,
+        "uplink_enabled": true,
+        "manual_collect_requested": false
+      }
+    },
+    "harnessMismatch": {
+      "name": "mismatched_manual_collect_pretty_json",
+      "chunkCount": 4,
+      "linkAckReceived": false,
+      "commandReady": true,
+      "parsedOk": true,
+      "deviceMatch": false,
+      "commandBuffer": "{\n  \"schema_version\": 1,\n  \"command_id\": \"00000000-0000-4000-8000-000000002099\",\n  \"device_id\": \"99999999-9999-4999-8999-999999999999\",\n  \"command_type\": \"manual_collect\",\n  \"payload\": {\n    \"source\": \"gateway-pretty-json\"\n  },\n  \"issued_ts\": \"2026-03-26T14:09:00Z\"\n}",
+      "ack": null,
+      "runtimeAfter": {
+        "sampling_s": 1,
+        "report_interval_s": 5,
+        "uplink_enabled": true,
+        "manual_collect_requested": false
+      }
+    }
+  },
+  "remainingGaps": [
+    "publish the same aligned samples through a real gateway path instead of only the source-level harness",
+    "capture a real board proof that the generated mismatch sample is ignored end-to-end",
+    "decide whether the platform demo command example should be switched to the hardware-aligned device_id"
+  ]
+}
