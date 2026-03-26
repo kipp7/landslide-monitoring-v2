@@ -377,3 +377,22 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/check-field-http
 - 用于联调和探针
 - 用于留证
 - 不等于最终生产网关实现
+
+## hardware-stable-version 命令样本
+
+当前已新增：
+
+- `docs/tools/field-rehearsal/payload-samples/hardware-stable-version/`
+
+用途：
+
+- 为当前硬件稳定版 `DEVICE_ID` 直接生成可注入 `cmd/{device_id}` 的 pretty JSON 命令样本
+- 同时提供：
+  - `suggestedChunks80`
+  - `mismatchSample`
+  便于做 UART/gateway 分片与守卫验证
+
+生成与报告：
+
+- `scripts/dev/check-hardware-stable-version-gateway-command-samples.ps1`
+- `docs/unified/reports/hardware-stable-version-gateway-command-samples-latest.json`

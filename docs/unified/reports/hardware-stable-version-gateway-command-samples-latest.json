@@ -1,0 +1,115 @@
+{
+  "generatedAt": "2026-03-26T06:48:53.891Z",
+  "conclusion": "hardware-stable-version-gateway-command-samples-are-ready-for-current-device-identity",
+  "hardwareDeviceId": "00000000-0000-0000-0000-000000000001",
+  "commandTopic": "cmd/00000000-0000-0000-0000-000000000001",
+  "hardwareConfigSource": "../硬件稳定版/xl01_landslide_monitor_v1.0/config/app_config.h",
+  "alignedSamples": [
+    {
+      "fileName": "set_config.pretty.json",
+      "commandType": "set_config",
+      "topic": "cmd/00000000-0000-0000-0000-000000000001",
+      "command": {
+        "schema_version": 1,
+        "command_id": "00000000-0000-4000-8000-000000002001",
+        "device_id": "00000000-0000-0000-0000-000000000001",
+        "command_type": "set_config",
+        "payload": {
+          "sampling_s": 5,
+          "report_interval_s": 5
+        },
+        "issued_ts": "2026-03-26T14:00:00Z"
+      },
+      "suggestedChunks80": [
+        "{\n  \"schema_version\": 1,\n  \"command_id\": \"00000000-0000-4000-8000-000000002001\",",
+        "\n  \"device_id\": \"00000000-0000-0000-0000-000000000001\",\n  \"command_type\": \"set_c",
+        "onfig\",\n  \"payload\": {\n    \"sampling_s\": 5,\n    \"report_interval_s\": 5\n  },\n  \"i",
+        "ssued_ts\": \"2026-03-26T14:00:00Z\"\n}"
+      ]
+    },
+    {
+      "fileName": "set_sampling_interval.pretty.json",
+      "commandType": "set_sampling_interval",
+      "topic": "cmd/00000000-0000-0000-0000-000000000001",
+      "command": {
+        "schema_version": 1,
+        "command_id": "00000000-0000-4000-8000-000000002002",
+        "device_id": "00000000-0000-0000-0000-000000000001",
+        "command_type": "set_sampling_interval",
+        "payload": {
+          "source": "gateway-pretty-json",
+          "intervalSeconds": 10
+        },
+        "issued_ts": "2026-03-26T14:01:00Z"
+      },
+      "suggestedChunks80": [
+        "{\n  \"schema_version\": 1,\n  \"command_id\": \"00000000-0000-4000-8000-000000002002\",",
+        "\n  \"device_id\": \"00000000-0000-0000-0000-000000000001\",\n  \"command_type\": \"set_s",
+        "ampling_interval\",\n  \"payload\": {\n    \"source\": \"gateway-pretty-json\",\n    \"inte",
+        "rvalSeconds\": 10\n  },\n  \"issued_ts\": \"2026-03-26T14:01:00Z\"\n}"
+      ]
+    },
+    {
+      "fileName": "manual_collect.pretty.json",
+      "commandType": "manual_collect",
+      "topic": "cmd/00000000-0000-0000-0000-000000000001",
+      "command": {
+        "schema_version": 1,
+        "command_id": "00000000-0000-4000-8000-000000002003",
+        "device_id": "00000000-0000-0000-0000-000000000001",
+        "command_type": "manual_collect",
+        "payload": {
+          "source": "gateway-pretty-json"
+        },
+        "issued_ts": "2026-03-26T14:02:00Z"
+      },
+      "suggestedChunks80": [
+        "{\n  \"schema_version\": 1,\n  \"command_id\": \"00000000-0000-4000-8000-000000002003\",",
+        "\n  \"device_id\": \"00000000-0000-0000-0000-000000000001\",\n  \"command_type\": \"manua",
+        "l_collect\",\n  \"payload\": {\n    \"source\": \"gateway-pretty-json\"\n  },\n  \"issued_ts",
+        "\": \"2026-03-26T14:02:00Z\"\n}"
+      ]
+    },
+    {
+      "fileName": "deactivate_device.pretty.json",
+      "commandType": "deactivate_device",
+      "topic": "cmd/00000000-0000-0000-0000-000000000001",
+      "command": {
+        "schema_version": 1,
+        "command_id": "00000000-0000-4000-8000-000000002004",
+        "device_id": "00000000-0000-0000-0000-000000000001",
+        "command_type": "deactivate_device",
+        "payload": {
+          "source": "gateway-pretty-json"
+        },
+        "issued_ts": "2026-03-26T14:03:00Z"
+      },
+      "suggestedChunks80": [
+        "{\n  \"schema_version\": 1,\n  \"command_id\": \"00000000-0000-4000-8000-000000002004\",",
+        "\n  \"device_id\": \"00000000-0000-0000-0000-000000000001\",\n  \"command_type\": \"deact",
+        "ivate_device\",\n  \"payload\": {\n    \"source\": \"gateway-pretty-json\"\n  },\n  \"issued",
+        "_ts\": \"2026-03-26T14:03:00Z\"\n}"
+      ]
+    }
+  ],
+  "mismatchSample": {
+    "fileName": "manual_collect.mismatched-device.pretty.json",
+    "topic": "cmd/99999999-9999-4999-8999-999999999999",
+    "command": {
+      "schema_version": 1,
+      "command_id": "00000000-0000-4000-8000-000000002099",
+      "device_id": "99999999-9999-4999-8999-999999999999",
+      "command_type": "manual_collect",
+      "payload": {
+        "source": "gateway-pretty-json"
+      },
+      "issued_ts": "2026-03-26T14:09:00Z"
+    },
+    "purpose": "prove device_id mismatch is ignored by the current command guards"
+  },
+  "nextUse": [
+    "publish one aligned sample to cmd/{hardwareDeviceId} through the real gateway path",
+    "publish the mismatch sample to prove device guard behavior end-to-end",
+    "reuse suggestedChunks80 when the gateway or UART path fragments pretty JSON"
+  ]
+}

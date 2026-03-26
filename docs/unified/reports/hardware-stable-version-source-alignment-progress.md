@@ -194,6 +194,13 @@
   - `deviceIdMatches`
   - `hardwareAlignedCommandExample`
   后续做 gateway 注入时，可直接取当前硬件真值对齐后的命令样本
+- 当前已新增一组可直接用于 gateway 注入的 pretty JSON 样本：
+  - `docs/tools/field-rehearsal/payload-samples/hardware-stable-version/`
+  - 并已输出：
+    - `commandTopic`
+    - `alignedSamples[]`
+    - `mismatchSample`
+    - `suggestedChunks80`
 
 当前仍未真正完成：
 
