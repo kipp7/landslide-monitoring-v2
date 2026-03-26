@@ -5,6 +5,7 @@
 #include <stdarg.h>
 
 #include "iot_uart.h"
+#include "scenario_data.h"
 #include "drivers/xl01/xl01_driver.h"
 #include "app/device_command_parser.h"
 #include "app/command_ack_builder.h"
@@ -17,13 +18,7 @@ typedef struct {
     int manual_collect_requested;
 } HarnessRuntimeState;
 
-typedef struct {
-    const char *name;
-    const char *chunks[8];
-    int chunk_count;
-} HarnessScenario;
-
-static const char **g_active_chunks = NULL;
+static const char *const *g_active_chunks = NULL;
 static int g_active_chunk_count = 0;
 static int g_active_chunk_index = 0;
 
@@ -80,57 +75,6 @@ static void ResetMockChunks(const HarnessScenario *scenario)
     g_active_chunks = scenario->chunks;
     g_active_chunk_count = scenario->chunk_count;
     g_active_chunk_index = 0;
-}
-
-static void CopySlice(char *target, int target_size, const char *source, int start, int length)
-{
-    int source_len;
-    if (target == NULL || target_size <= 0 || source == NULL || start < 0 || length < 0) {
-        return;
-    }
-
-    source_len = (int)strlen(source);
-    if (start > source_len) {
-        target[0] = '\0';
-        return;
-    }
-    if (start + length > source_len) {
-        length = source_len - start;
-    }
-    if (length >= target_size) {
-        length = target_size - 1;
-    }
-    memcpy(target, source + start, (size_t)length);
-    target[length] = '\0';
-}
-
-static int BuildPrettyCommandJson(
-    char *output,
-    int output_size,
-    const char *command_id,
-    const char *device_id,
-    const char *command_type,
-    const char *payload_body,
-    const char *issued_ts
-)
-{
-    return snprintf(
-        output,
-        (size_t)output_size,
-        "{\n"
-        "  \"schema_version\": 1,\n"
-        "  \"command_id\": \"%s\",\n"
-        "  \"device_id\": \"%s\",\n"
-        "  \"command_type\": \"%s\",\n"
-        "  \"payload\": %s,\n"
-        "  \"issued_ts\": \"%s\"\n"
-        "}",
-        command_id,
-        device_id,
-        command_type,
-        payload_body,
-        issued_ts
-    );
 }
 
 static void PrintJsonEscaped(const char *text)
@@ -366,20 +310,6 @@ static void RunScenario(const HarnessScenario *scenario, int include_trailing_co
 int main(void)
 {
     const DeviceIdentity *identity = DeviceIdentity_Get();
-    char scenario1_json[768];
-    char scenario2_json[768];
-    char scenario3_json[768];
-    char scenario1_chunk1[256];
-    char scenario1_chunk2[256];
-    char scenario1_chunk3[256];
-    char scenario2_chunk1[256];
-    char scenario2_chunk2[256];
-    char scenario2_chunk3[256];
-    char scenario3_chunk1[256];
-    char scenario3_chunk2[256];
-    char scenario3_chunk3[256];
-    HarnessScenario scenarios[3];
-    int scenario_count = 3;
     int i;
 
     if (identity == NULL || identity->device_id == NULL) {
@@ -392,64 +322,6 @@ int main(void)
         return 0;
     }
 
-    BuildPrettyCommandJson(
-        scenario1_json,
-        sizeof(scenario1_json),
-        "00000000-0000-4000-8000-000000001201",
-        identity->device_id,
-        "set_sampling_interval",
-        "{\n    \"intervalSeconds\": 10\n  }",
-        "2026-03-26T13:00:00Z"
-    );
-    BuildPrettyCommandJson(
-        scenario2_json,
-        sizeof(scenario2_json),
-        "00000000-0000-4000-8000-000000001202",
-        identity->device_id,
-        "set_config",
-        "{\n    \"sampling_s\": 7,\n    \"report_interval_s\": 9\n  }",
-        "2026-03-26T13:01:00Z"
-    );
-    BuildPrettyCommandJson(
-        scenario3_json,
-        sizeof(scenario3_json),
-        "00000000-0000-4000-8000-000000001203",
-        "99999999-9999-4999-8999-999999999999",
-        "manual_collect",
-        "{\n    \"source\": \"gateway-pretty-json\"\n  }",
-        "2026-03-26T13:02:00Z"
-    );
-
-    CopySlice(scenario1_chunk1, sizeof(scenario1_chunk1), scenario1_json, 0, 48);
-    CopySlice(scenario1_chunk2, sizeof(scenario1_chunk2), scenario1_json, 48, 96);
-    CopySlice(scenario1_chunk3, sizeof(scenario1_chunk3), scenario1_json, 144, (int)strlen(scenario1_json) - 144);
-
-    snprintf(scenario2_chunk1, sizeof(scenario2_chunk1), "ACK\r\n%.*s", 72, scenario2_json);
-    CopySlice(scenario2_chunk2, sizeof(scenario2_chunk2), scenario2_json, 72, 72);
-    CopySlice(scenario2_chunk3, sizeof(scenario2_chunk3), scenario2_json, 144, (int)strlen(scenario2_json) - 144);
-
-    CopySlice(scenario3_chunk1, sizeof(scenario3_chunk1), scenario3_json, 0, 72);
-    CopySlice(scenario3_chunk2, sizeof(scenario3_chunk2), scenario3_json, 72, 72);
-    CopySlice(scenario3_chunk3, sizeof(scenario3_chunk3), scenario3_json, 144, (int)strlen(scenario3_json) - 144);
-
-    scenarios[0].name = "chunked_pretty_json_set_sampling_interval";
-    scenarios[0].chunks[0] = scenario1_chunk1;
-    scenarios[0].chunks[1] = scenario1_chunk2;
-    scenarios[0].chunks[2] = scenario1_chunk3;
-    scenarios[0].chunk_count = 3;
-
-    scenarios[1].name = "ack_plus_chunked_pretty_json_set_config";
-    scenarios[1].chunks[0] = scenario2_chunk1;
-    scenarios[1].chunks[1] = scenario2_chunk2;
-    scenarios[1].chunks[2] = scenario2_chunk3;
-    scenarios[1].chunk_count = 3;
-
-    scenarios[2].name = "chunked_pretty_json_with_mismatched_device_id_is_not_executed";
-    scenarios[2].chunks[0] = scenario3_chunk1;
-    scenarios[2].chunks[1] = scenario3_chunk2;
-    scenarios[2].chunks[2] = scenario3_chunk3;
-    scenarios[2].chunk_count = 3;
-
     fprintf(stdout, "{\n");
     fprintf(stdout, "  \"generatedAt\": ");
     PrintNowIsoString();
@@ -460,8 +332,8 @@ int main(void)
     PrintJsonEscaped(identity->device_id);
     fprintf(stdout, ",\n");
     fprintf(stdout, "  \"scenarios\": [\n");
-    for (i = 0; i < scenario_count; ++i) {
-        RunScenario(&scenarios[i], i + 1 < scenario_count);
+    for (i = 0; i < generated_scenario_count; ++i) {
+        RunScenario(&generated_scenarios[i], i + 1 < generated_scenario_count);
     }
     fprintf(stdout, "  ]\n");
     fprintf(stdout, "}\n");

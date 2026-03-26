@@ -178,6 +178,10 @@
   - `command_ack_builder.c`
   - `xl01_driver.c`
   这批真实 C 源码
+- 当前 OpenHarmony harness 已切到直接消费：
+  - `hardware-stable-version-gateway-command-samples-latest.json`
+  - `docs/tools/field-rehearsal/payload-samples/hardware-stable-version/`
+  不再依赖手写内嵌场景
 
 当前新增发现：
 

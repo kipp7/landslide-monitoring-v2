@@ -11,9 +11,12 @@ if (-not $hardwareRoot) {
 $harnessRoot = Join-Path $repoRoot "scripts\dev\openharmony-harness"
 $harnessC = Join-Path $harnessRoot "command_receive_harness.c"
 $includeRoot = Join-Path $harnessRoot "include"
+$gatewaySampleGenerator = Join-Path $repoRoot "scripts\dev\generate-hardware-stable-version-gateway-command-samples.js"
+$generatedScenarioSourceScript = Join-Path $repoRoot "scripts\dev\generate-hardware-stable-version-openharmony-harness-data.js"
 $tmpRoot = Join-Path $repoRoot ".tmp\openharmony-command-harness"
 $stagedHardwareRoot = Join-Path $tmpRoot "hardware-src"
 $cfgFile = Join-Path $tmpRoot ".emscripten"
+$generatedScenarioSource = Join-Path $tmpRoot "generated_gateway_samples.c"
 $outJs = Join-Path $tmpRoot "command_receive_harness.js"
 $outJson = Join-Path $repoRoot "docs\unified\reports\hardware-stable-version-openharmony-command-harness-latest.json"
 $emcc = "C:\Program Files\dotnet\packs\Microsoft.NET.Runtime.Emscripten.3.1.34.Sdk.win-x64\8.0.22\tools\emscripten\emcc.bat"
@@ -61,8 +64,19 @@ JS_ENGINES = [NODE_JS]
 
 $env:EM_CONFIG = $cfgFile
 
+& $nodeExe $gatewaySampleGenerator | Out-Null
+if ($LASTEXITCODE -ne 0) {
+  throw "gateway command sample generation failed (exit=$LASTEXITCODE)"
+}
+
+& $nodeExe $generatedScenarioSourceScript $generatedScenarioSource | Out-Null
+if ($LASTEXITCODE -ne 0) {
+  throw "openharmony harness scenario generation failed (exit=$LASTEXITCODE)"
+}
+
 $sources = @(
   $harnessC,
+  $generatedScenarioSource,
   (Join-Path $stagedHardwareRoot "utils\fifo.c"),
   (Join-Path $stagedHardwareRoot "app\device_command_parser.c"),
   (Join-Path $stagedHardwareRoot "app\device_identity.c"),
