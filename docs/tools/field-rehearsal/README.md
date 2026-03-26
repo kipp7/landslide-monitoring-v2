@@ -396,3 +396,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/check-field-http
 
 - `scripts/dev/check-hardware-stable-version-gateway-command-samples.ps1`
 - `docs/unified/reports/hardware-stable-version-gateway-command-samples-latest.json`
+
+若要进一步跑 OpenHarmony 风格源码级接收仿真：
+
+- `scripts/dev/check-hardware-stable-version-openharmony-command-harness.ps1`
+- `docs/unified/reports/hardware-stable-version-openharmony-command-harness-latest.json`
+
+当前这条 harness 已直接消费上面的 `hardware-stable-version` 命令样本，而不是手写测试场景。

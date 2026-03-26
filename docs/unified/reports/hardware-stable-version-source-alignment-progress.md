@@ -182,6 +182,10 @@
   - `hardware-stable-version-gateway-command-samples-latest.json`
   - `docs/tools/field-rehearsal/payload-samples/hardware-stable-version/`
   不再依赖手写内嵌场景
+- 当前最新源码级 harness 已直接验证：
+  - `aligned_set_sampling_interval_pretty_json`
+  - `ack_plus_aligned_set_config_pretty_json`
+  - `mismatched_manual_collect_pretty_json`
 
 当前新增发现：
 
