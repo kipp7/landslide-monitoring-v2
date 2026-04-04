@@ -93,6 +93,29 @@ Push the current hardware-stable-version command proof from source-level and bro
 - the peer-side wrapper dry-run has been verified:
   - direct sample injection can target a peer port such as `COM9` while separately documenting `COM5` as the board log port
   - MQTT relay dry-run resolves to `cmd/00000000-0000-0000-0000-000000000001` and now redacts the relay password in wrapper output
+- the Windows CH340 conflict has now been fixed locally:
+  - root cause was a second CH340 device instance also assigned `PortName=COM5`
+  - the failing instance had `Problem Code 31` with `Problem Status 0xC0000035`, i.e. object-name collision
+  - the second CH340 instance was reassigned from `COM5` to `COM9` and restarted successfully
+  - current visible ports are now:
+    - `COM5`
+    - `COM9`
+- later host-side verification refined the real port mapping:
+  - `COM9` is the center-node XL01 adapter on the host
+  - `COM5` is the board-side XL01 adapter when directly attached for configuration
+- the XL01 pairing/network side is now materially validated:
+  - `COM5` module has been identified as node `0003` (sub-node / board side)
+  - `COM9` module has been identified as node `0001` (center node)
+  - real air-link uplink proof has been captured on `COM9`
+  - observed payload is no longer sample text only; the center node receives live telemetry chunks from the RK2206 firmware such as:
+    - `temperature_c`
+    - `humidity_pct`
+    - `accel_x_g`
+    - `tilt_x_deg`
+    - `gps_latitude`
+    - `meta.install_label=FIELD-NODE-A`
+- a local script compatibility fix was also applied:
+  - `scripts/dev/inject-hardware-stable-version-command.ps1` now forces `System.IO.Ports.SerialPort` loading before falling back, so `uart-com` writes can execute in the current PowerShell/.NET environment
 - the current shared report for this boundary is now:
   - `docs/unified/reports/hardware-stable-version-xl01-peer-command-plan-latest.md`
 
@@ -107,12 +130,16 @@ Push the current hardware-stable-version command proof from source-level and bro
 - after the first successful flash, the immediate blocker is no longer flashing itself but runtime stability on-device
 - do not repurpose `PB2/PB3`; they are the board-side XL01 UART and already match the established hardware truth
 - do not use `COM5` as the command injection port; any live command write must go to the host-side peer XL01 serial port
+- current working assumption is:
+  - `COM9` is the center-node XL01 host port for current live air-link observation/injection
+  - `COM5` is the board-side XL01 adapter when directly connected to the PC for configuration
 
 ## Plan
 
 - identify the host-side peer XL01 serial port (`PeerPort`) rather than revisiting the board log port
-- use `scripts/dev/send-hardware-stable-version-xl01-peer-command.ps1` to inject one non-destructive aligned sample such as `manual_collect`
-- keep `COM5 @ 115200` open only for board-side observation while sending through `PeerPort`
+- keep the current verified uplink path intact and use `COM9` as the center-node XL01 host port
+- next verify one non-destructive downlink command such as `manual_collect` from the center node into the paired node `0003`
+- if a dedicated RK2206 debug/log port is reintroduced, capture board-side consume evidence there while sending through `COM9`
 - once direct peer injection is proven, switch to `scripts/dev/start-hardware-stable-version-xl01-peer-relay.ps1` for real MQTT -> UART -> XL01 relay proof
 - capture one aligned command end-to-end through:
   - MQTT publish
@@ -124,8 +151,8 @@ Push the current hardware-stable-version command proof from source-level and bro
 
 ## Open Questions
 
-- which host serial port belongs to the peer XL01 module that will act as gateway-side ingress
-- can the first real air-link proof be captured with `manual_collect` while watching `COM5`
+- with pairing now confirmed, does downlink `manual_collect` from center node `0001` reach node `0003`
+- what is the cleanest way to capture board-side command-consume evidence in parallel with the center-node serial feed
 - after direct peer injection succeeds, can the same peer port be kept for MQTT relay proof without changing wiring
 - when the peer UART is confirmed, which first command is safest to use for real board-side proof:
   - `manual_collect`
