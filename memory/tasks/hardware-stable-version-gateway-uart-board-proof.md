@@ -49,12 +49,52 @@ Push the current hardware-stable-version command proof from source-level and bro
     - `/root/workspace/txsmartropenharmony/out/rk2206/isoftstone-rk2206/liteos.bin`
     - `/root/workspace/txsmartropenharmony/out/rk2206/isoftstone-rk2206/liteos.elf`
     - `/root/workspace/txsmartropenharmony/out/rk2206/isoftstone-rk2206/liteos.hex`
+- the board has now been flashed once successfully via Rockchip `RKDevTool` in `MASKROM` mode
+- post-flash passive boot logs on `COM5` at `115200` confirm the firmware is running and emitting readable console text
+- the first flashed runtime exposed a real on-device blocker:
+  - `ProcessTask` repeated `stack overflow!`
+- a follow-up source fix has already been applied in:
+  - `vendor/isoftstone/rk2206/samples/xl01_landslide_monitor_v1.0/main/landslide_main.c`
+  by raising `ProcessTask` stack size from `2048` to `4096`
+- the fixed image has been rebuilt successfully and is ready for reflash
+- the fixed image has now been reflashed and validated on-device:
+  - `ProcessTask` no longer reports repeated `stack overflow!`
+  - boot reaches stable task startup including:
+    - `Data Process started`
+    - `Sensor Collection started`
+    - `Data Upload started`
+- current live blockers have shifted to runtime integration issues:
+  - repeated `MPU6050 I2C read failed (ret=-1)`
+  - upload path shows retry logs due to missing ACK / link-side response
+- to remove non-essential hardware blockers during proof rehearsal, the sample has now been switched to a no-sensor rehearsal profile:
+  - `ENABLE_GPS=0`
+  - `ENABLE_MPU6050=0`
+  - `ENABLE_VIRTUAL=1`
+  - `ENABLE_ACK_CHECK=0`
+- the no-sensor rehearsal image has been rebuilt successfully and is ready to flash
+- the no-sensor rehearsal image has now been flashed and observed on-device
+- current serial output confirms the board is emitting stable virtual telemetry such as:
+  - `[SEND #111] 511 bytes ... (sent)`
+  - `Temp:20.0... Humi:54.1% Tilt:29.60... GPS:(22.544109,114.059006)`
+- the prior blockers are no longer present in the latest observed runtime slice:
+  - no repeated `MPU6050 I2C read failed`
+  - no `No ACK after 3 retries`
+  - no `ProcessTask stack overflow`
+- this means the firmware mainline can now be exercised on real hardware without physical sensors attached, as long as claims stay scoped to virtual-data / command-path proof rather than real-sensor proof
 - the host now sees a real physical serial adapter:
   - `USB-SERIAL CH340 (COM5)`
-- passive read-only probing shows traffic on `COM5`, but it currently looks like noise rather than readable UART text:
-  - `docs/unified/reports/hardware-stable-version-passive-serial-probe-latest.json`
-- current serial root-cause evidence points to wiring/level/target-UART mismatch rather than missing drivers:
-  - `docs/unified/reports/hardware-stable-version-serial-root-cause-latest.json`
+- current hardware truth is now narrowed further:
+  - `COM5` is the board log/debug port and should be treated as read-only observation
+  - the real command ingress remains the board-side XL01 wired to `PB2/PB3 (EUART2_M1)`
+  - the missing physical leg is the peer XL01 side on the host/gateway
+- peer-side command/relay wrappers now exist to make that topology explicit and prevent accidental writes to the log port:
+  - `scripts/dev/send-hardware-stable-version-xl01-peer-command.ps1`
+  - `scripts/dev/start-hardware-stable-version-xl01-peer-relay.ps1`
+- the peer-side wrapper dry-run has been verified:
+  - direct sample injection can target a peer port such as `COM9` while separately documenting `COM5` as the board log port
+  - MQTT relay dry-run resolves to `cmd/00000000-0000-0000-0000-000000000001` and now redacts the relay password in wrapper output
+- the current shared report for this boundary is now:
+  - `docs/unified/reports/hardware-stable-version-xl01-peer-command-plan-latest.md`
 
 ## Constraints
 
@@ -64,27 +104,30 @@ Push the current hardware-stable-version command proof from source-level and bro
 - preserve the existing sample-driven proof chain instead of replacing it with ad hoc manual traffic
 - current board-side blocker appears to be physical path correctness, not broker/auth/relay software
 - if the attached CH340 path is not the intended command UART, do not treat noise on `COM5` as command-path failure
+- after the first successful flash, the immediate blocker is no longer flashing itself but runtime stability on-device
+- do not repurpose `PB2/PB3`; they are the board-side XL01 UART and already match the established hardware truth
+- do not use `COM5` as the command injection port; any live command write must go to the host-side peer XL01 serial port
 
 ## Plan
 
-- verify the intended board-side UART path, including TX/RX crossover, shared GND, voltage compatibility, and target UART selection
-- confirm whether the currently connected RK2206 is the board that may receive the newly built `liteos.bin`
-- keep using passive serial probing until the observed signal is readable enough to trust that the correct UART has been found
-- once the correct UART path is confirmed, switch the existing relay from `file` sink to `uart-com`
+- identify the host-side peer XL01 serial port (`PeerPort`) rather than revisiting the board log port
+- use `scripts/dev/send-hardware-stable-version-xl01-peer-command.ps1` to inject one non-destructive aligned sample such as `manual_collect`
+- keep `COM5 @ 115200` open only for board-side observation while sending through `PeerPort`
+- once direct peer injection is proven, switch to `scripts/dev/start-hardware-stable-version-xl01-peer-relay.ps1` for real MQTT -> UART -> XL01 relay proof
 - capture one aligned command end-to-end through:
   - MQTT publish
   - gateway-style relay
-  - real UART write
+  - real peer-UART write
   - board-side receive evidence
-- capture one mismatch sample end-to-end through the same path and prove board-side ignore behavior
+- capture one mismatch sample end-to-end through the same peer-XL01 path and prove board-side ignore behavior
 - update unified reports and journal after each real hardware boundary is crossed
 
 ## Open Questions
 
-- is the current `CH340 (COM5)` attached to the intended command UART, or to another board/UART path
-- is the currently connected RK2206 the intended flash target for the newly built `liteos.bin`
-- does the target board expose readable UART text when idle, or only binary/noisy electrical patterns unless the correct pins are attached
-- when the correct UART is confirmed, which first command is safest to use for real board-side proof:
+- which host serial port belongs to the peer XL01 module that will act as gateway-side ingress
+- can the first real air-link proof be captured with `manual_collect` while watching `COM5`
+- after direct peer injection succeeds, can the same peer port be kept for MQTT relay proof without changing wiring
+- when the peer UART is confirmed, which first command is safest to use for real board-side proof:
   - `manual_collect`
   - `set_sampling_interval`
   - another non-destructive command
