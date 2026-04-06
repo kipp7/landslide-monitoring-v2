@@ -209,6 +209,39 @@ Push the current hardware-stable-version command proof from source-level and bro
     - the relay process timed out before a publish arrived
     - the PowerShell helper line used `Select-Object -Last1` instead of `-Last 1`
     - because that expression failed, `$pwd` stayed empty and the later MQTT publish was rejected as `Not authorized`
+- the full local MQTT -> UART -> XL01 -> board proof is now also real:
+  - on `2026-04-06`, `start-hardware-stable-version-mqtt-uart-relay.ps1` was run live with:
+    - `MqttUrl=mqtt://127.0.0.1:1883`
+    - `Sink=uart-com`
+    - `Port=COM5`
+    - `ChunkStrategy=whole`
+    - `ReadAfterWriteSeconds=20`
+  - the relay subscribed successfully to:
+    - `cmd/00000000-0000-0000-0000-000000000001`
+  - the relay received the published MQTT command with matching:
+    - `commandId=00000000-0000-4000-8000-000000002003`
+    - `deviceId=00000000-0000-0000-0000-000000000001`
+    - `commandType=manual_collect`
+  - the relay then wrote the command to `COM5` successfully and captured live board-side evidence:
+    - ack:
+      - `status=acked`
+      - `command_id=00000000-0000-4000-8000-000000002003`
+      - `result.collect_requested=true`
+    - telemetry:
+      - `seq=248`
+      - `meta.last_command_type=manual_collect`
+      - `meta.last_command_id=00000000-0000-4000-8000-000000002003`
+      - `meta.last_command_uptime_s=1326`
+      - `meta.upload_trigger=manual_collect`
+  - later frames `seq=249/250/251` retained the same accepted command metadata while `upload_trigger` returned to `periodic`
+  - this proves the complete command path:
+    - local MQTT publish
+    - EMQX authn/authz
+    - relay topic subscription
+    - host UART write on `COM5`
+    - XL01 air link delivery
+    - RK2206 board-side command parse/apply
+    - ack and telemetry capture on the relay path
 - the current shared report for this boundary is now:
   - `docs/unified/reports/hardware-stable-version-xl01-peer-command-plan-latest.md`
 
@@ -250,9 +283,16 @@ Push the current hardware-stable-version command proof from source-level and bro
 - capture one mismatch sample end-to-end through the same peer-XL01 path and prove board-side ignore behavior
 - update unified reports and journal after each real hardware boundary is crossed
 - next for MQTT relay proof:
-  - ensure no serial assistant or other process is holding `COM5`
-  - rerun the direct relay attempt using `start-hardware-stable-version-mqtt-uart-relay.ps1`
-  - capture the returned `sinkResult.capture` as the final board-side evidence
+  - preserve the now-working local baseline:
+    - `EMQX`
+    - `lsmv2_api`
+    - center-node `COM5`
+    - `ChunkStrategy=whole`
+    - `report_interval_s=5`
+  - next extend the same relay path to:
+    - `set-report-300`
+    - mismatch proof
+  - then freeze direct serial and move attention to higher-level gateway integration only
 
 ## Open Questions
 
@@ -273,4 +313,5 @@ Push the current hardware-stable-version command proof from source-level and bro
 - the same `set_config` path is proven reversible by restoring `set-report-5`
 - at least one mismatch command is proven ignored through the same real path
 - the current relay wrappers can be used on the real UART path without ad hoc command reconstruction
+- at least one aligned command is proven through the full local MQTT -> EMQX -> relay -> UART -> board path
 - the unified reports and monthly journal reflect the real hardware boundary, not only software-side proof

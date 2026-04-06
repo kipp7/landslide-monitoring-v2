@@ -220,7 +220,10 @@ async function main() {
 
       const report = {
         generatedAt: new Date().toISOString(),
-        conclusion: "mqtt-command-received-and-converted-into-uart-ready-relay-plan",
+        conclusion:
+          sink === "uart-com" && sinkResult && sinkResult.capture && Number(sinkResult.capture.bytes || 0) > 0
+            ? "mqtt-command-received-and-forwarded-to-uart-com-with-live-capture"
+            : "mqtt-command-received-and-converted-into-uart-ready-relay-plan",
         mqttUrl,
         topic,
         sink,
