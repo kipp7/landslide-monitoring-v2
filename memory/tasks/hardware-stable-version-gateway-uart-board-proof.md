@@ -192,6 +192,9 @@ Push the current hardware-stable-version command proof from source-level and bro
     - `scripts/dev/start-hardware-stable-version-mqtt-uart-relay.ps1`
     - `scripts/dev/relay-hardware-stable-version-command-to-uart.js`
     both now accept/pass `ReadAfterWriteSeconds`
+  - `scripts/dev/inject-hardware-stable-version-command.ps1` now auto-loads:
+    - `MQTT_INTERNAL_PASSWORD`
+    from `services/api/.env` for `mode=mqtt` when `-Password` is omitted
   - a real MQTT relay attempt was executed:
     - the relay subscribed successfully to `cmd/00000000-0000-0000-0000-000000000001`
     - the relay received the published command with matching:
@@ -202,6 +205,10 @@ Push the current hardware-stable-version command proof from source-level and bro
       - `Access to the port 'COM5' is denied`
   - this means the remaining blocker for full MQTT -> UART -> board proof is no longer broker/auth/topic routing
     but exclusive access to `COM5`
+  - one failed user retry was later explained by operator-side issues rather than transport logic:
+    - the relay process timed out before a publish arrived
+    - the PowerShell helper line used `Select-Object -Last1` instead of `-Last 1`
+    - because that expression failed, `$pwd` stayed empty and the later MQTT publish was rejected as `Not authorized`
 - the current shared report for this boundary is now:
   - `docs/unified/reports/hardware-stable-version-xl01-peer-command-plan-latest.md`
 

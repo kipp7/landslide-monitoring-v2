@@ -70,6 +70,11 @@ Carry the RK2206 + XL01 transparent serial work from stable uplink proof into th
   - the relay failed only when opening `COM5`, with:
     - `Access to the port 'COM5' is denied`
   - relay scripts were updated to support `ReadAfterWriteSeconds` so final board-side capture is available once `COM5` is free
+  - the MQTT injection wrapper now auto-loads `MQTT_INTERNAL_PASSWORD` from `services/api/.env` when `-Password` is omitted
+  - one failed retry was diagnosed as:
+    - relay timeout before publish arrival
+    - user-side PowerShell typo `-Last1` causing empty `$pwd`
+    - resulting `Not authorized` on MQTT publish
 
 ## In Progress
 

@@ -7,6 +7,7 @@ param(
   [string]$Topic = "",
   [string]$Username = "",
   [string]$Password = "",
+  [string]$ApiEnvFile = "services/api/.env",
   [ValidateSet("suggested", "whole", "fixed")]
   [string]$ChunkStrategy = "suggested",
   [int]$ChunkSize = 0,
@@ -17,6 +18,9 @@ param(
   [string]$PayloadLabel = "",
   [string]$Port = "",
   [int]$BaudRate = 115200,
+  [int]$ReadAfterWriteSeconds = 0,
+  [int]$ReadPollMs = 100,
+  [int]$PostWriteDelayMs = 150,
   [string]$OutFile = ""
 )
 
@@ -71,6 +75,58 @@ function Send-ChunksViaFileStream {
   }
 }
 
+function Read-AfterWrite {
+  param(
+    [System.IO.Ports.SerialPort]$SerialPort,
+    [int]$Seconds,
+    [int]$PollMs
+  )
+
+  $builder = New-Object System.Text.StringBuilder
+  $deadline = (Get-Date).AddSeconds($Seconds)
+  $effectivePollMs = if ($PollMs -gt 0) { $PollMs } else { 100 }
+
+  while ((Get-Date) -lt $deadline) {
+    try {
+      $text = $SerialPort.ReadExisting()
+      if ($text) {
+        [void]$builder.Append($text)
+      }
+    } catch {
+    }
+    Start-Sleep -Milliseconds $effectivePollMs
+  }
+
+  $capturedText = $builder.ToString()
+  return [ordered]@{
+    seconds = $Seconds
+    pollMs = $effectivePollMs
+    bytes = [System.Text.Encoding]::UTF8.GetByteCount($capturedText)
+    lineCount = @(($capturedText -split "`r?`n") | Where-Object { $_ -ne "" }).Count
+    text = $capturedText
+  }
+}
+
+function Read-EnvValue {
+  param(
+    [string]$Path,
+    [string]$Key
+  )
+
+  if (-not (Test-Path $Path)) { return $null }
+  $lines = Get-Content -Encoding UTF8 $Path
+  $last = $null
+  foreach ($line in $lines) {
+    $t = $line.Trim()
+    if ($t.StartsWith("#")) { continue }
+    if ($t.StartsWith("$Key=")) {
+      $v = $t.Substring($Key.Length + 1).Trim()
+      if ($v.Length -gt 0) { $last = $v }
+    }
+  }
+  return $last
+}
+
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Push-Location $repoRoot
 try {
@@ -96,9 +152,11 @@ try {
   }
 
   if ($Mode -eq "mqtt") {
+    $resolvedUsername = if ($Username) { $Username } else { "ingest-service" }
+    $resolvedPassword = if ($Password) { $Password } else { Read-EnvValue -Path (Join-Path $repoRoot $ApiEnvFile) -Key "MQTT_INTERNAL_PASSWORD" }
     $args = @($commonArgs + @("--mode", "mqtt", "--mqtt", $MqttUrl))
-    if ($Username) { $args += @("--username", $Username) }
-    if ($Password) { $args += @("--password", $Password) }
+    if ($resolvedUsername) { $args += @("--username", $resolvedUsername) }
+    if ($resolvedPassword) { $args += @("--password", $resolvedPassword) }
 
     & node @args
     if ($LASTEXITCODE -ne 0) {
@@ -132,20 +190,35 @@ try {
 
   $serialPortType = Get-SerialPortType
   $writeMethod = "mode+filestream"
+  $capture = $null
   if ($serialPortType) {
     $writeMethod = "system.io.ports"
     $serial = New-Object System.IO.Ports.SerialPort $Port, $BaudRate, ([System.IO.Ports.Parity]::None), 8, ([System.IO.Ports.StopBits]::One)
     $serial.Encoding = [System.Text.Encoding]::UTF8
+    $serial.Handshake = [System.IO.Ports.Handshake]::None
+    $serial.DtrEnable = $false
+    $serial.RtsEnable = $false
     $serial.ReadTimeout = 1000
     $serial.WriteTimeout = 5000
 
     try {
       $serial.Open()
+      $serial.DiscardInBuffer()
+      $serial.DiscardOutBuffer()
       foreach ($chunk in $plan.chunks) {
-        $serial.Write($chunk)
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes([string]$chunk)
+        $serial.Write($bytes, 0, $bytes.Length)
         if ($InterChunkDelayMs -gt 0) {
           Start-Sleep -Milliseconds $InterChunkDelayMs
         }
+      }
+
+      if ($PostWriteDelayMs -gt 0) {
+        Start-Sleep -Milliseconds $PostWriteDelayMs
+      }
+
+      if ($ReadAfterWriteSeconds -gt 0) {
+        $capture = Read-AfterWrite -SerialPort $serial -Seconds $ReadAfterWriteSeconds -PollMs $ReadPollMs
       }
     } finally {
       if ($serial.IsOpen) {
@@ -165,14 +238,18 @@ try {
     baudRate = $BaudRate
     writeMethod = $writeMethod
     chunkStrategy = $plan.chunkStrategy
+    chunkSize = $plan.chunkSize
     chunkCount = $plan.chunkCount
     payloadBytes = $plan.payloadBytes
     interChunkDelayMs = $InterChunkDelayMs
+    postWriteDelayMs = $PostWriteDelayMs
     ackPrefix = $AckPrefix
+    readAfterWriteSeconds = if ($ReadAfterWriteSeconds -gt 0) { $ReadAfterWriteSeconds } else { $null }
     topic = $plan.topic
     commandType = $plan.commandType
     commandId = $plan.commandId
     deviceId = $plan.deviceId
+    capture = $capture
   }
 
   $resultJson = $result | ConvertTo-Json -Depth 5
