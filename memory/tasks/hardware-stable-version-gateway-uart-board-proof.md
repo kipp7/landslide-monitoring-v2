@@ -165,6 +165,17 @@ Push the current hardware-stable-version command proof from source-level and bro
     - center-node `COM5`
     - `ChunkStrategy=whole`
     - report interval `5s`
+- the mismatch guard proof is now also real:
+  - on `2026-04-06`, a `manual_collect` command with mismatched:
+    - `device_id=99999999-9999-4999-8999-999999999999`
+    was injected from center-node `COM5`
+  - no ack for the mismatch `command_id=50f08cef-15f7-4eb1-98d6-7b7714b7035d` appeared in the 20-second capture
+  - follow-up telemetry frames `seq=900/901/902/903` continued reporting:
+    - `meta.last_command_type=set_config`
+    - `meta.last_command_id=3a516d8d-998c-4281-821c-5dffa530a1f7`
+    - `meta.last_command_uptime_s=3661`
+    - `meta.upload_trigger=periodic`
+  - this proves the board ignored the mismatched command exactly as intended
 - a local script compatibility fix was also applied:
   - `scripts/dev/inject-hardware-stable-version-command.ps1` now forces `System.IO.Ports.SerialPort` loading before falling back, so `uart-com` writes can execute in the current PowerShell/.NET environment
 - the current shared report for this boundary is now:
@@ -198,10 +209,7 @@ Push the current hardware-stable-version command proof from source-level and bro
   - `manual_collect` over `ChunkStrategy=whole` is proven good
   - `set-report-300` over `ChunkStrategy=whole` is proven good
   - `set-report-5` over `ChunkStrategy=whole` is proven good
-- next verify one additional downlink class, preferably either:
-  - mismatch `manual_collect`
-- before mismatch testing, restore the report cadence to `5s` so follow-up evidence is fast to observe
-- for mismatch, prove board-side ignore behavior by showing no matching ack and no `last_command_*` update to the mismatch command id
+- mismatch `manual_collect` is now also proven good as a guard case
 - once direct peer injection is proven, switch to `scripts/dev/start-hardware-stable-version-xl01-peer-relay.ps1` for real MQTT -> UART -> XL01 relay proof
 - capture one aligned command end-to-end through:
   - MQTT publish

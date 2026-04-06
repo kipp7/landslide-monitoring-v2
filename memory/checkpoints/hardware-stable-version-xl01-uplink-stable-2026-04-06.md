@@ -51,20 +51,28 @@ Carry the RK2206 + XL01 transparent serial work from stable uplink proof into th
     - `result.runtime_config.report_interval_s=5`
   - the user confirmed the live upload cadence returned to `5s`
   - follow-up telemetry preserved the matching `last_command_id=3a516d8d-998c-4281-821c-5dffa530a1f7`
+- the mismatch guard is now proven too:
+  - `mismatch` was sent through center-node `COM5`
+  - the injected command carried:
+    - `device_id=99999999-9999-4999-8999-999999999999`
+    - `command_id=50f08cef-15f7-4eb1-98d6-7b7714b7035d`
+  - no ack for that mismatch command appeared in the 20-second capture
+  - follow-up telemetry kept the previous accepted command metadata:
+    - `meta.last_command_type=set_config`
+    - `meta.last_command_id=3a516d8d-998c-4281-821c-5dffa530a1f7`
+    - `meta.last_command_uptime_s=3661`
 
 ## In Progress
 
-- durable memory and the monthly journal are being updated to reflect that `manual_collect`, `set-report-300`, and `set-report-5` are now proven
-- the next transition is from direct transparent command proof to mismatch guard proof and relay proof
+- durable memory and the monthly journal are being updated to reflect that aligned and mismatch transparent proofs are now complete
+- the next transition is from direct transparent proof to MQTT relay proof
 
 ## Next Actions
 
 - keep the current wiring and transparent-serial settings unchanged
 - treat center-node `COM5` + `ChunkStrategy=whole` as the current frozen-good baseline
-- next verify one additional command path:
-- then mismatch `manual_collect` to prove guard/ignore behavior
-- if verifying mismatch, prove ignore behavior from absence of matching ack and unchanged `last_command_*`
 - after that, move to relay proof rather than reopening UART-route debugging
+- if relay work is deferred, preserve the current baseline and stop changing ports, wiring, or serial mode
 
 ## Risks
 
@@ -75,4 +83,4 @@ Carry the RK2206 + XL01 transparent serial work from stable uplink proof into th
 
 ## Resume Prompt
 
-Continue from this checkpoint by preserving the current `COM5` transparent baseline at `report_interval_s=5`, then prove mismatch ignore behavior before moving to MQTT relay.
+Continue from this checkpoint by preserving the current `COM5` transparent baseline at `report_interval_s=5`; transparent aligned commands and mismatch guard are now proven, so the next meaningful step is MQTT relay proof.
