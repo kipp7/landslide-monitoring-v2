@@ -125,6 +125,24 @@ Push the current hardware-stable-version command proof from source-level and bro
     - `metrics.gps_latitude=22.543200`
     - `meta.install_label=FIELD-NODE-A`
   - this materially validates the current chunked transparent-uplink strategy as the working baseline for field-node -> air-link -> center-node serial observation
+- the first non-destructive transparent downlink proof is now also real:
+  - on `2026-04-06`, `manual_collect` was injected from the center-node serial port `COM5`
+  - the returned capture included a matching command ack for:
+    - `command_id=9b839b88-46bc-4029-887d-8da10bd6e605`
+    - `status=acked`
+    - `result.collect_requested=true`
+  - the immediately following telemetry frame proved board-side command consumption:
+    - `meta.last_command_type=manual_collect`
+    - `meta.last_command_id=9b839b88-46bc-4029-887d-8da10bd6e605`
+    - `meta.last_command_uptime_s=1903`
+    - `meta.upload_trigger=manual_collect`
+  - later periodic frames retained the same `last_command_*` metadata while `upload_trigger` returned to `periodic`
+  - this proves the full transparent downlink chain:
+    - center-node serial write
+    - XL01 air-link delivery
+    - RK2206 board-side command parse/apply
+    - ack return
+    - follow-up telemetry metadata reflection
 - a local script compatibility fix was also applied:
   - `scripts/dev/inject-hardware-stable-version-command.ps1` now forces `System.IO.Ports.SerialPort` loading before falling back, so `uart-com` writes can execute in the current PowerShell/.NET environment
 - the current shared report for this boundary is now:
@@ -149,13 +167,14 @@ Push the current hardware-stable-version command proof from source-level and bro
 
 - identify the host-side peer XL01 serial port (`PeerPort`) rather than revisiting the board log port
 - keep the current verified chunked uplink path intact as the frozen baseline
-- once the current dock/adapter layout is stable again, identify the host-side peer XL01 serial port (`PeerPort`) rather than revisiting the board log port
-- next verify one non-destructive downlink command such as `manual_collect` from the center node into the paired node `0003`
-- prefer proving command consumption from follow-up uplink metadata if a simultaneous board debug port is inconvenient:
-  - `meta.last_command_type`
-  - `meta.last_command_id`
-  - `meta.last_command_uptime_s`
-- if a dedicated RK2206 debug/log port is reintroduced, capture board-side consume evidence there while sending through `COM9`
+- freeze the current working transparent baseline:
+  - center-node serial port currently observed as `COM5`
+  - `manual_collect` over `ChunkStrategy=whole` is proven good
+- next verify one additional downlink class, preferably either:
+  - `set-report-300`
+  - mismatch `manual_collect`
+- for `set-report-300`, prove effect from subsequent telemetry cadence and metadata
+- for mismatch, prove board-side ignore behavior by showing no matching ack and no `last_command_*` update to the mismatch command id
 - once direct peer injection is proven, switch to `scripts/dev/start-hardware-stable-version-xl01-peer-relay.ps1` for real MQTT -> UART -> XL01 relay proof
 - capture one aligned command end-to-end through:
   - MQTT publish
@@ -167,18 +186,16 @@ Push the current hardware-stable-version command proof from source-level and bro
 
 ## Open Questions
 
-- with pairing now confirmed, does downlink `manual_collect` from center node `0001` reach node `0003`
 - what is the cleanest way to capture board-side command-consume evidence in parallel with the center-node serial feed
 - under the current USB dock setup, what is the stable two-port mapping when both the center-node serial adapter and any second debug/config adapter are connected
 - after direct peer injection succeeds, can the same peer port be kept for MQTT relay proof without changing wiring
 - when the peer UART is confirmed, which first command is safest to use for real board-side proof:
-  - `manual_collect`
   - `set_sampling_interval`
   - another non-destructive command
 
 ## Done When
 
-- at least one aligned command is proven through real broker -> relay -> UART -> board receive evidence
+- at least one aligned command is proven through real center-node UART -> XL01 -> board receive/apply evidence
 - at least one mismatch command is proven ignored through the same real path
 - the current relay wrappers can be used on the real UART path without ad hoc command reconstruction
 - the unified reports and monthly journal reflect the real hardware boundary, not only software-side proof
