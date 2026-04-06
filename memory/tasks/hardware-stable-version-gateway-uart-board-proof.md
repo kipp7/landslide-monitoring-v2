@@ -143,6 +143,15 @@ Push the current hardware-stable-version command proof from source-level and bro
     - RK2206 board-side command parse/apply
     - ack return
     - follow-up telemetry metadata reflection
+- a second transparent downlink class is now also proven:
+  - on `2026-04-06`, `set-report-300` was injected from center-node `COM5`
+  - the returned capture included a matching config ack for:
+    - `command_id=d25a8d32-518e-4cf9-8cde-d8f708ae34ce`
+    - `status=acked`
+    - `result.applied=true`
+    - `result.runtime_config.report_interval_s=300`
+  - the user also confirmed the live telemetry cadence changed from `5s` to `300s`
+  - this proves `set_config` is being consumed and applied on-device, not merely transported
 - a local script compatibility fix was also applied:
   - `scripts/dev/inject-hardware-stable-version-command.ps1` now forces `System.IO.Ports.SerialPort` loading before falling back, so `uart-com` writes can execute in the current PowerShell/.NET environment
 - the current shared report for this boundary is now:
@@ -155,13 +164,12 @@ Push the current hardware-stable-version command proof from source-level and bro
 - prefer passive observation first when the board identity or UART path is uncertain
 - preserve the existing sample-driven proof chain instead of replacing it with ad hoc manual traffic
 - current board-side blocker appears to be physical path correctness, not broker/auth/relay software
-- if the attached CH340 path is not the intended command UART, do not treat noise on `COM5` as command-path failure
 - after the first successful flash, the immediate blocker is no longer flashing itself but runtime stability on-device
 - do not repurpose `PB2/PB3`; they are the board-side XL01 UART and already match the established hardware truth
-- do not use `COM5` as the command injection port; any live command write must go to the host-side peer XL01 serial port
 - current working assumption is:
-  - `COM9` is the center-node XL01 host port for current live air-link observation/injection
-  - `COM5` is the board-side XL01 adapter when directly connected to the PC for configuration
+  - the current live center-node XL01 host port is `COM5`
+  - `COM5` can now be treated as the validated transparent injection/observation port for this setup snapshot
+  - older `COM9`/board-config mapping notes are historical and should not override the latest live proof
 
 ## Plan
 
@@ -170,10 +178,10 @@ Push the current hardware-stable-version command proof from source-level and bro
 - freeze the current working transparent baseline:
   - center-node serial port currently observed as `COM5`
   - `manual_collect` over `ChunkStrategy=whole` is proven good
+  - `set-report-300` over `ChunkStrategy=whole` is proven good
 - next verify one additional downlink class, preferably either:
-  - `set-report-300`
   - mismatch `manual_collect`
-- for `set-report-300`, prove effect from subsequent telemetry cadence and metadata
+- before mismatch testing, restore the report cadence to `5s` so follow-up evidence is fast to observe
 - for mismatch, prove board-side ignore behavior by showing no matching ack and no `last_command_*` update to the mismatch command id
 - once direct peer injection is proven, switch to `scripts/dev/start-hardware-stable-version-xl01-peer-relay.ps1` for real MQTT -> UART -> XL01 relay proof
 - capture one aligned command end-to-end through:
@@ -196,6 +204,9 @@ Push the current hardware-stable-version command proof from source-level and bro
 ## Done When
 
 - at least one aligned command is proven through real center-node UART -> XL01 -> board receive/apply evidence
+- at least two aligned command classes are proven through the same real transparent path:
+  - `manual_collect`
+  - `set_config` / `set-report-300`
 - at least one mismatch command is proven ignored through the same real path
 - the current relay wrappers can be used on the real UART path without ad hoc command reconstruction
 - the unified reports and monthly journal reflect the real hardware boundary, not only software-side proof

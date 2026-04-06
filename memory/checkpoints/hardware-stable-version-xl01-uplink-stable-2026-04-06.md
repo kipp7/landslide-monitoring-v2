@@ -37,20 +37,26 @@ Carry the RK2206 + XL01 transparent serial work from stable uplink proof into th
     - `meta.last_command_type=manual_collect`
     - `meta.last_command_id=9b839b88-46bc-4029-887d-8da10bd6e605`
     - `meta.last_command_uptime_s=1903`
+- a second command class is now proven too:
+  - `set-report-300` was sent through center-node `COM5`
+  - the returned ack showed:
+    - `status=acked`
+    - `result.applied=true`
+    - `result.runtime_config.report_interval_s=300`
+  - the user confirmed the live upload cadence actually changed to `300s`
 
 ## In Progress
 
-- durable memory and the monthly journal are being updated to reflect that the first non-destructive downlink proof is now complete
-- the next transition is from first downlink proof to second-class command proof and relay proof
+- durable memory and the monthly journal are being updated to reflect that both `manual_collect` and `set-report-300` are now proven
+- the next transition is from direct transparent command proof to mismatch guard proof and relay proof
 
 ## Next Actions
 
 - keep the current wiring and transparent-serial settings unchanged
-- treat center-node `COM5` + `manual_collect` + `ChunkStrategy=whole` as the current frozen-good baseline
+- treat center-node `COM5` + `ChunkStrategy=whole` as the current frozen-good baseline
 - next verify one additional command path:
-  - `set-report-300`
-  - or mismatch `manual_collect`
-- if verifying `set-report-300`, prove success from slower follow-up report cadence and any related metadata
+- `set-report-5` to restore fast observation cadence
+- then mismatch `manual_collect` to prove guard/ignore behavior
 - if verifying mismatch, prove ignore behavior from absence of matching ack and unchanged `last_command_*`
 - after that, move to relay proof rather than reopening UART-route debugging
 
@@ -59,7 +65,8 @@ Carry the RK2206 + XL01 transparent serial work from stable uplink proof into th
 - the USB dock may not enumerate both CH340 devices consistently, which can hide the real peer port
 - changing wiring or serial settings now would destroy the newly proven good uplink + downlink baseline
 - future failures on other commands may still come from command semantics or runtime state rather than transport
+- leaving the node at `300s` report cadence will slow down follow-up validation and can look like a regression when it is not
 
 ## Resume Prompt
 
-Continue from this checkpoint by preserving the current `COM5` transparent baseline, then prove one more non-destructive command class beyond `manual_collect` before moving to MQTT relay.
+Continue from this checkpoint by preserving the current `COM5` transparent baseline, first restore `set-report-5`, then prove mismatch ignore behavior before moving to MQTT relay.
