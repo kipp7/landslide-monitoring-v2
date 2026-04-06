@@ -114,6 +114,17 @@ Push the current hardware-stable-version command proof from source-level and bro
     - `tilt_x_deg`
     - `gps_latitude`
     - `meta.install_label=FIELD-NODE-A`
+- center-node serial reception is now stable and readable rather than garbled:
+  - on `2026-04-06`, the center node received a full telemetry frame in continuous `79`-byte chunks
+  - the reconstructed payload remained valid JSON with normal fields including:
+    - `schema_version=1`
+    - `seq=21`
+    - `metrics.temperature_c=29.5`
+    - `metrics.humidity_pct=50.1`
+    - `metrics.tilt_x_deg=5.12`
+    - `metrics.gps_latitude=22.543200`
+    - `meta.install_label=FIELD-NODE-A`
+  - this materially validates the current chunked transparent-uplink strategy as the working baseline for field-node -> air-link -> center-node serial observation
 - a local script compatibility fix was also applied:
   - `scripts/dev/inject-hardware-stable-version-command.ps1` now forces `System.IO.Ports.SerialPort` loading before falling back, so `uart-com` writes can execute in the current PowerShell/.NET environment
 - the current shared report for this boundary is now:
@@ -137,8 +148,13 @@ Push the current hardware-stable-version command proof from source-level and bro
 ## Plan
 
 - identify the host-side peer XL01 serial port (`PeerPort`) rather than revisiting the board log port
-- keep the current verified uplink path intact and use `COM9` as the center-node XL01 host port
+- keep the current verified chunked uplink path intact as the frozen baseline
+- once the current dock/adapter layout is stable again, identify the host-side peer XL01 serial port (`PeerPort`) rather than revisiting the board log port
 - next verify one non-destructive downlink command such as `manual_collect` from the center node into the paired node `0003`
+- prefer proving command consumption from follow-up uplink metadata if a simultaneous board debug port is inconvenient:
+  - `meta.last_command_type`
+  - `meta.last_command_id`
+  - `meta.last_command_uptime_s`
 - if a dedicated RK2206 debug/log port is reintroduced, capture board-side consume evidence there while sending through `COM9`
 - once direct peer injection is proven, switch to `scripts/dev/start-hardware-stable-version-xl01-peer-relay.ps1` for real MQTT -> UART -> XL01 relay proof
 - capture one aligned command end-to-end through:
@@ -153,6 +169,7 @@ Push the current hardware-stable-version command proof from source-level and bro
 
 - with pairing now confirmed, does downlink `manual_collect` from center node `0001` reach node `0003`
 - what is the cleanest way to capture board-side command-consume evidence in parallel with the center-node serial feed
+- under the current USB dock setup, what is the stable two-port mapping when both the center-node serial adapter and any second debug/config adapter are connected
 - after direct peer injection succeeds, can the same peer port be kept for MQTT relay proof without changing wiring
 - when the peer UART is confirmed, which first command is safest to use for real board-side proof:
   - `manual_collect`
