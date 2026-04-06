@@ -1,0 +1,31 @@
+﻿{
+    "generatedAt":  "2026-04-04T17:44:09Z",
+    "conclusion":  "hardware-stable-version-passive-serial-probe-captured-current-com-port-signal-shape-without-writing-bytes",
+    "port":  "COM5",
+    "checks":  {
+                   "anyTrafficObserved":  false,
+                   "anyReadableAsciiObserved":  false,
+                   "dominantProbeLooksLikeNoise":  false
+               },
+    "likelyCause":  "port-is-present-but-no-useful-readable-output-was-observed-during-passive-probe",
+    "probes":  [
+                   {
+                       "baud":  115200,
+                       "durationSeconds":  6,
+                       "byteCount":  0,
+                       "ffCount":  0,
+                       "zeroCount":  0,
+                       "asciiCount":  0,
+                       "newlineCount":  0,
+                       "highByteRatio":  0,
+                       "classification":  "silent",
+                       "hexPreview":  ""
+                   }
+               ],
+    "recommendedNextSteps":  [
+                                 "verify TX/RX are crossed correctly and that GND is shared",
+                                 "verify the attached board really exposes a UART TX on this CH340 path instead of another USB function",
+                                 "verify voltage level compatibility and avoid attaching the CH340 RX to a floating or powered-off line",
+                                 "if this is expected to be the XL01 path, start with 115200 and look for non-0xFF traffic after confirming wiring"
+                             ]
+}

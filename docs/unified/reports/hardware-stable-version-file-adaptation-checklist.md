@@ -1,3 +1,9 @@
+---
+title: hardware-stable-version-file-adaptation-checklist
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/unified/reports/hardware-stable-version-file-adaptation-checklist
+---
+
 # 硬件稳定版逐文件适配清单
 
 ## 状态

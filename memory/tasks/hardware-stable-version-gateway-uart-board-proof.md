@@ -242,6 +242,51 @@ Push the current hardware-stable-version command proof from source-level and bro
     - XL01 air link delivery
     - RK2206 board-side command parse/apply
     - ack and telemetry capture on the relay path
+- the MQTT relay path is now no longer limited to `manual_collect`:
+  - on `2026-04-06`, a runtime-payload `set_config` command was published through local MQTT relay with:
+    - `command_id=8adad80a-921e-4888-98c0-1b3cf812d9fb`
+    - `payload.report_interval_s=300`
+  - the relay captured a matching config ack on `COM5`:
+    - `status=acked`
+    - `result.applied=true`
+    - `result.runtime_config.report_interval_s=300`
+  - on the same day, the `5s` baseline was restored through the same MQTT relay path with:
+    - `command_id=aad1160e-ad74-4b30-9703-a6870406b0bc`
+    - `payload.report_interval_s=5`
+  - the relay captured:
+    - `status=acked`
+    - `result.runtime_config.report_interval_s=5`
+  - follow-up telemetry frames `seq=505/506/507/508` confirmed the restored live cadence and preserved:
+    - `meta.last_command_type=set_config`
+    - `meta.last_command_id=aad1160e-ad74-4b30-9703-a6870406b0bc`
+- the MQTT relay mismatch guard proof is now also real:
+  - on `2026-04-06`, the relay subscribed to:
+    - `cmd/99999999-9999-4999-8999-999999999999`
+  - it received and forwarded mismatch command:
+    - `command_id=00000000-0000-4000-8000-000000002099`
+    - `device_id=99999999-9999-4999-8999-999999999999`
+  - the `COM5` capture produced no ack for that mismatch command
+  - follow-up telemetry frames `seq=514/515/516` kept the previous accepted command metadata:
+    - `meta.last_command_type=set_config`
+    - `meta.last_command_id=aad1160e-ad74-4b30-9703-a6870406b0bc`
+    - `meta.upload_trigger=periodic`
+  - this proves the full MQTT relay path preserves the device-id guard and does not cause accidental execution
+- live relay execution guidance is now sharper:
+  - the foreground relay plus a delayed publish process is the current known-good reproduction pattern for live MQTT proof
+  - in the current shell automation, `start-hardware-stable-version-mqtt-uart-relay.ps1 -RunInBackground` timed out even while:
+    - direct `wait-for-command.js` subscribers received the same published messages
+    - foreground relay runs succeeded immediately on the same broker/topic
+  - treat background relay mode as non-baseline until its process orchestration is revisited
+- a one-shot live helper now exists for the known-good foreground pattern:
+  - `scripts/dev/run-hardware-stable-version-mqtt-uart-relay-live.ps1`
+  - it computes the relay topic from the chosen sample/payload, starts a delayed MQTT publish process, runs the foreground relay, and returns:
+    - relay plan
+    - publish result
+    - relay capture
+  - on `2026-04-06`, it was validated successfully with a runtime `set_config` restore command:
+    - `command_id=4627c805-0a7a-4da6-910f-2d4c05a2eead`
+    - `result.runtime_config.report_interval_s=5`
+    - telemetry updated `meta.last_command_id=4627c805-0a7a-4da6-910f-2d4c05a2eead`
 - the current shared report for this boundary is now:
   - `docs/unified/reports/hardware-stable-version-xl01-peer-command-plan-latest.md`
 
@@ -289,9 +334,11 @@ Push the current hardware-stable-version command proof from source-level and bro
     - center-node `COM5`
     - `ChunkStrategy=whole`
     - `report_interval_s=5`
-  - next extend the same relay path to:
+  - treat the following MQTT relay proofs as complete on real hardware:
+    - `manual_collect`
     - `set-report-300`
-    - mismatch proof
+    - `set-report-5`
+    - mismatch guard
   - then freeze direct serial and move attention to higher-level gateway integration only
 
 ## Open Questions
@@ -299,10 +346,7 @@ Push the current hardware-stable-version command proof from source-level and bro
 - what is the cleanest way to capture board-side command-consume evidence in parallel with the center-node serial feed
 - under the current USB dock setup, what is the stable two-port mapping when both the center-node serial adapter and any second debug/config adapter are connected
 - after direct peer injection succeeds, can the same peer port be kept for MQTT relay proof without changing wiring
-- which local process is still holding `COM5` during the relay attempt
-- when the peer UART is confirmed, which first command is safest to use for real board-side proof:
-  - `set_sampling_interval`
-  - another non-destructive command
+- do we want to fix `-RunInBackground` relay orchestration now that the foreground relay path is proven and sufficient
 
 ## Done When
 
@@ -314,4 +358,50 @@ Push the current hardware-stable-version command proof from source-level and bro
 - at least one mismatch command is proven ignored through the same real path
 - the current relay wrappers can be used on the real UART path without ad hoc command reconstruction
 - at least one aligned command is proven through the full local MQTT -> EMQX -> relay -> UART -> board path
+- at least one config-class command is proven through the same full MQTT relay path and restored safely
+- at least one mismatch command is proven ignored through the same full MQTT relay path
 - the unified reports and monthly journal reflect the real hardware boundary, not only software-side proof
+- operator-side live usage no longer requires manually typing a runtime `manual_collect` payload block:
+  - `scripts/dev/run-hardware-stable-version-mqtt-uart-relay-live-manual-collect.ps1`
+  - this wrapper auto-generates a fresh runtime `manual_collect` JSON with:
+    - new `command_id`
+    - current UTC `issued_ts`
+  - then forwards it into:
+    - `scripts/dev/run-hardware-stable-version-mqtt-uart-relay-live.ps1`
+  - the wrapper has also been hardened so it no longer reports a false failure when the helper already completed and wrote its JSON result
+  - latest verified runtime `manual_collect` proof through this wrapper used:
+    - `command_id=57df552d-5735-43c0-947a-7d9eb02d6b99`
+  - and returned:
+    - `status=acked`
+    - `result.collect_requested=true`
+  - with immediate telemetry:
+    - `seq=1146`
+    - `meta.last_command_type=manual_collect`
+    - `meta.last_command_id=57df552d-5735-43c0-947a-7d9eb02d6b99`
+    - `meta.upload_trigger=manual_collect`
+- operator-side live usage now also has a runtime `set_config/report_interval_s` wrapper:
+  - `scripts/dev/run-hardware-stable-version-mqtt-uart-relay-live-set-report.ps1`
+  - it auto-generates fresh runtime `set_config` payloads with:
+    - new `command_id`
+    - current UTC `issued_ts`
+    - `sampling_s`
+    - `report_interval_s`
+  - this removes the need to hand-create files such as:
+    - `.tmp/set-report-300-runtime.json`
+- the live helper stack is now also aligned to the user's actual shell runtime:
+  - Windows PowerShell 5.1
+  - `System.IO.Path.GetRelativePath()` dependency has been removed from the live helper and both runtime wrappers
+- latest verified runtime `set-report-300` proof through the live wrapper used:
+  - `command_id=1c0d9c6f-8854-46cc-90e7-001f135c51a5`
+  - returned:
+    - `status=acked`
+    - `result.applied=true`
+    - `result.runtime_config.report_interval_s=300`
+- latest verified runtime `set-report-5` restore through the live wrapper used:
+  - `command_id=99907ef1-a5fb-4bf0-97bc-6d9276b264b6`
+  - returned:
+    - `status=acked`
+    - `result.applied=true`
+    - `result.runtime_config.report_interval_s=5`
+  - follow-up telemetry retained:
+    - `meta.last_command_id=99907ef1-a5fb-4bf0-97bc-6d9276b264b6`

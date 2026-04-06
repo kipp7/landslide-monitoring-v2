@@ -163,6 +163,13 @@ permalink: landslide-monitoring-v2-mainline/docs/unified/reports/hardware-stable
 - `docs/unified/reports/hardware-stable-version-openharmony-command-harness-latest.json`
 - `docs/unified/reports/hardware-stable-version-gateway-command-samples-latest.json`
 - `docs/unified/reports/hardware-stable-version-gateway-injection-proof-latest.json`
+- `docs/unified/reports/hardware-stable-version-gateway-uart-injection-readiness-latest.json`
+- `docs/unified/reports/hardware-stable-version-mqtt-command-publish-proof-latest.json`
+- `docs/unified/reports/hardware-stable-version-mqtt-to-uart-relay-proof-latest.json`
+- `docs/unified/reports/hardware-stable-version-mqtt-to-uart-relay-matrix-latest.json`
+- `docs/unified/reports/hardware-stable-version-live-relay-wrapper-proof-latest.json`
+- `docs/unified/reports/hardware-stable-version-serial-root-cause-latest.json`
+- `docs/unified/reports/hardware-stable-version-passive-serial-probe-latest.json`
 
 当前仿真结论：
 
@@ -217,6 +224,80 @@ permalink: landslide-monitoring-v2-mainline/docs/unified/reports/hardware-stable
   - `buzzerOnExecuted=true`
   - `buzzerOffExecuted=true`
   - `mismatchRejected=true`
+- 当前 gateway / UART readiness 报告已额外明确：
+  - 所有 aligned 样本与 mismatch 样本都已具备：
+    - `uart-plan`
+    - `uart-com`
+    - `mqtt`
+    推荐执行命令
+  - 当前本机：
+    - `mqtt://127.0.0.1:1883` 已监听
+    - 但还没有可见 `COM` 口
+- 当前本机 EMQX broker proof 已额外验证：
+  - `manual_collect` 样本已可通过本机 `EMQX` 真发布到：
+    - `cmd/00000000-0000-0000-0000-000000000001`
+  - 且订阅侧已收到同一条：
+    - `command_id`
+    - `device_id`
+    - `command_type`
+    命令体
+- 当前本机 gateway-style relay proof 已额外验证：
+  - `manual_collect` 样本已从本机 `EMQX` 进入 relay
+  - relay 已基于收到的原始命令 payload 生成：
+    - `runtime-payload`
+    - `suggested` chunking
+    - `chunkCount=4`
+  - 也就是说，当前这条链已经不只是：
+    - `MQTT publish`
+    而是已推进到：
+    - `MQTT broker -> gateway-style relay -> UART-ready chunk plan`
+- 当前本机 gateway-style relay matrix 已额外验证：
+  - 10 条 aligned 样本全部可经由：
+    - `MQTT broker -> relay -> suggested UART chunks`
+  - mismatch `manual_collect` 也已可经由：
+    - `cmd/99999999-9999-4999-8999-999999999999`
+    - `relay`
+    - `suggested UART chunks`
+  - 当前矩阵断言已全部为通过：
+    - `allSamplesPassed=true`
+    - `alignedSampleCount=10`
+    - `mismatchSampleIncluded=true`
+    - `totalScenarioCount=11`
+- 当前本机 live relay wrapper proof 已额外验证：
+  - 后台 wrapper 已可：
+    - 拉起 relay
+    - 写出 metadata
+    - 完成 `cmd/{device_id}` 订阅
+    - 正常进入“已停止或已自行退出”状态判定
+  - 这意味着当前不仅有 proof 脚本
+  - 也有可直接常驻运行的 relay 操作入口
+- 当前本机 serial root-cause 报告已额外明确：
+  - 当前 `Ports` 类设备只有：
+    - 蓝牙 RFCOMM `COM5/6/15/16/17`
+  - 当前没有任何 present 的物理 USB 串口设备
+  - 但本机已安装多类 USB-UART 驱动包：
+    - `CH341`
+    - `FTDI`
+    - `Prolific`
+    - `Qualcomm`
+    - `SEGGER`
+  - 最近系统事件反复出现：
+    - `USB 2.0 BILLBOARD`
+  - 因此当前最可能的 blocker 已收窄为：
+    - 设备/线材/转接路径把连接枚举成了 Billboard 或其他非串口功能
+    - 而不是单纯缺少串口驱动
+- 当前本机 passive serial probe 已额外明确：
+  - 真实可用物理串口现在是：
+    - `USB-SERIAL CH340 (COM5)`
+  - 但在只读探针下：
+    - `115200` 有持续输入
+    - 输入几乎全是 `FF/F0/F8/FE`
+    - 没有可读 ASCII / 没有换行
+  - 这更像：
+    - 浮空线
+    - 电平不匹配
+    - TX/RX/GND 接法不对
+    - 或当前接到的并不是期望的日志 UART
 
 这意味着当前样本驱动总 proof 已覆盖：
 

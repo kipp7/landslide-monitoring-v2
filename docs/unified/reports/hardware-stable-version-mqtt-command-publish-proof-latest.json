@@ -1,0 +1,51 @@
+﻿{
+    "generatedAt":  "2026-03-26T11:21:36Z",
+    "conclusion":  "hardware-stable-version-command-sample-can-be-published-to-local-mqtt-broker-and-observed-on-cmd-topic",
+    "sample":  "manual_collect",
+    "hardwareDeviceId":  "00000000-0000-0000-0000-000000000001",
+    "checks":  {
+                   "localMqttReachable":  true,
+                   "publishCommandSucceeded":  true,
+                   "subscriberExitedCleanly":  true,
+                   "commandObservedOnTopic":  true,
+                   "observedCommandIdMatches":  true,
+                   "observedDeviceIdMatches":  true,
+                   "observedCommandTypeMatches":  true
+               },
+    "publish":  {
+                    "generatedAt":  "2026-03-26T11:21:36.209Z",
+                    "mode":  "mqtt",
+                    "sample":  "manual_collect",
+                    "sampleKind":  "aligned",
+                    "topic":  "cmd/00000000-0000-0000-0000-000000000001",
+                    "mqttUrl":  "mqtt://127.0.0.1:1883",
+                    "commandType":  "manual_collect",
+                    "commandId":  "00000000-0000-4000-8000-000000002003",
+                    "deviceId":  "00000000-0000-0000-0000-000000000001",
+                    "payloadBytes":  267
+                },
+    "subscribe":  {
+                      "username":  "ingest-service",
+                      "exitCode":  null,
+                      "topic":  "cmd/00000000-0000-0000-0000-000000000001",
+                      "deviceId":  "00000000-0000-0000-0000-000000000001",
+                      "commandId":  "00000000-0000-4000-8000-000000002003",
+                      "stdout":  "subscribed: cmd/00000000-0000-0000-0000-000000000001\nreceived: {\"schema_version\":1,\"command_id\":\"00000000-0000-4000-8000-000000002003\",\"device_id\":\"00000000-0000-0000-0000-000000000001\",\"command_type\":\"manual_collect\",\"payload\":{\"source\":\"gateway-pretty-json\"},\"issued_ts\":\"2026-03-26T14:02:00Z\"}",
+                      "stderr":  "",
+                      "receivedPayload":  {
+                                              "schema_version":  1,
+                                              "command_id":  "00000000-0000-4000-8000-000000002003",
+                                              "device_id":  "00000000-0000-0000-0000-000000000001",
+                                              "command_type":  "manual_collect",
+                                              "payload":  {
+                                                              "source":  "gateway-pretty-json"
+                                                          },
+                                              "issued_ts":  "2026-03-26T14:02:00Z"
+                                          }
+                  },
+    "remainingGaps":  [
+                          "bind the same MQTT publish proof to a real gateway subscriber instead of the wait-for-command probe",
+                          "capture board-side UART receive evidence after the broker publishes the command",
+                          "prove mismatch command publish plus board-side ignore behavior end-to-end"
+                      ]
+}

@@ -88,22 +88,67 @@ Carry the RK2206 + XL01 transparent serial work from stable uplink proof into th
       - `meta.upload_trigger=manual_collect`
   - subsequent periodic frames retained the same accepted command metadata
   - this closes the local `MQTT -> EMQX -> relay -> COM5 -> XL01 -> RK2206` loop
+- MQTT relay command coverage is now broader on the same real path:
+  - `set-report-300` was published through local MQTT relay with:
+    - `command_id=8adad80a-921e-4888-98c0-1b3cf812d9fb`
+    - `payload.report_interval_s=300`
+  - the captured ack on `COM5` showed:
+    - `status=acked`
+    - `result.applied=true`
+    - `result.runtime_config.report_interval_s=300`
+  - `set-report-5` was then published through the same MQTT relay path with:
+    - `command_id=aad1160e-ad74-4b30-9703-a6870406b0bc`
+  - the captured ack showed:
+    - `status=acked`
+    - `result.runtime_config.report_interval_s=5`
+  - follow-up telemetry frames `seq=505/506/507/508` preserved:
+    - `meta.last_command_type=set_config`
+    - `meta.last_command_id=aad1160e-ad74-4b30-9703-a6870406b0bc`
+- MQTT relay mismatch guard is now also complete:
+  - the relay subscribed to mismatch topic:
+    - `cmd/99999999-9999-4999-8999-999999999999`
+  - it received mismatch command:
+    - `command_id=00000000-0000-4000-8000-000000002099`
+    - `device_id=99999999-9999-4999-8999-999999999999`
+  - the `COM5` capture contained no ack for that mismatch command
+  - later telemetry frames `seq=514/515/516` kept:
+    - `meta.last_command_type=set_config`
+    - `meta.last_command_id=aad1160e-ad74-4b30-9703-a6870406b0bc`
+    - `meta.upload_trigger=periodic`
+  - this proves the device-id guard survives the full MQTT relay path too
+- relay execution method is now partially qualified:
+  - foreground relay plus delayed publish is the known-good live proof pattern
+  - in the current shell automation, `-RunInBackground` timed out even though:
+    - direct `wait-for-command.js` subscribers received the same MQTT messages
+    - foreground relay runs succeeded immediately afterward
+  - keep treating foreground relay as the frozen-good path unless background orchestration is explicitly repaired
+- the foreground pattern is now packaged into a reusable helper:
+  - `scripts/dev/run-hardware-stable-version-mqtt-uart-relay-live.ps1`
+  - it has been validated on `2026-04-06` with a runtime `set_config` restore command:
+    - `command_id=4627c805-0a7a-4da6-910f-2d4c05a2eead`
+    - ack showed `result.runtime_config.report_interval_s=5`
+    - follow-up telemetry updated `meta.last_command_id=4627c805-0a7a-4da6-910f-2d4c05a2eead`
+  - this means the known-good manual choreography no longer requires two separate operator windows
 
 ## In Progress
 
-- durable memory and the monthly journal are being updated to reflect that transparent proofs and the first full local MQTT relay proof are now complete
-- the next transition is from first local MQTT relay proof to expanding command coverage over the same relay path
+- durable memory and the monthly journal are being updated to reflect that MQTT relay coverage now includes:
+  - `manual_collect`
+  - `set-report-300`
+  - `set-report-5`
+  - mismatch
+- the next transition is no longer broader command proof on this path, but whether to stop at the frozen-good baseline or repair background relay orchestration
 
 ## Next Actions
 
 - keep the current wiring and transparent-serial settings unchanged
 - treat center-node `COM5` + `ChunkStrategy=whole` as the current frozen-good baseline
-- after that, move to relay proof rather than reopening UART-route debugging
+- after that, do not reopen UART-route debugging unless hardware facts change
 - if relay work is deferred, preserve the current baseline and stop changing ports, wiring, or serial mode
-- next extend the same relay path to:
-  - `set-report-300`
-  - mismatch
 - if no more relay coverage is needed, stop here and preserve this known-good baseline
+- if more tooling work is wanted, the only meaningful software-side follow-up is:
+  - repair `-RunInBackground`
+  - or refine the new foreground live helper if we want cleaner output or narrower command presets
 
 ## Risks
 
@@ -112,7 +157,84 @@ Carry the RK2206 + XL01 transparent serial work from stable uplink proof into th
 - future failures on other commands may still come from command semantics or runtime state rather than transport
 - future port remapping, dock enumeration drift, or switching back to non-baseline modes can recreate the earlier false-failure symptoms
 - a serial monitor or other host process can still steal `COM5` on future runs and recreate false relay failures
+- `-RunInBackground` is not yet a trusted reproduction path for live MQTT relay proof in this shell environment
+- the new helper is trusted for runtime `set_config` proof, but `manual_collect` should still be sent with a fresh runtime payload rather than a reused static sample when board-side ack evidence matters
+- a dedicated operator wrapper now exists for that fresh runtime `manual_collect` case:
+  - `scripts/dev/run-hardware-stable-version-mqtt-uart-relay-live-manual-collect.ps1`
+  - it auto-generates a new payload JSON and invokes the foreground live relay helper in one command
+- on `2026-04-06`, the first wrapper revision falsely reported helper failure even though the underlying relay run completed:
+  - runtime `manual_collect` command id:
+    - `377d900f-a95f-40fb-b884-13290c144c67`
+  - MQTT publish and relay-to-`COM5` succeeded
+  - captured telemetry remained periodic only:
+    - `seq=982/983/984/985`
+    - `meta.last_command_type=set_config`
+    - `meta.last_command_id=4627c805-0a7a-4da6-910f-2d4c05a2eead`
+    - `meta.upload_trigger=periodic`
+  - so that run does not prove board-side `manual_collect` consumption
+- the wrapper was then corrected to:
+  - invoke the helper directly instead of trusting nested native-process exit code handling
+  - read the helper JSON out file first
+  - include underlying helper detail in future failure messages
+- on `2026-04-06`, a rerun with fresh runtime `manual_collect` produced full success evidence even though the wrapper still surfaced a false terminal failure message:
+  - `command_id=57df552d-5735-43c0-947a-7d9eb02d6b99`
+  - ack returned:
+    - `status=acked`
+    - `result.collect_requested=true`
+    - `result.reason=manual_trigger`
+  - the immediate telemetry frame `seq=1146` showed:
+    - `meta.last_command_type=manual_collect`
+    - `meta.last_command_id=57df552d-5735-43c0-947a-7d9eb02d6b99`
+    - `meta.upload_trigger=manual_collect`
+  - later periodic frames `seq=1147/1148/1149` retained the same accepted command metadata
+- the wrapper has now been hardened again so that:
+  - a valid helper JSON out file suppresses the false terminal failure
+  - the successful run should be reported as success on the next invocation
+- a matching runtime `set_report` live wrapper now also exists:
+  - `scripts/dev/run-hardware-stable-version-mqtt-uart-relay-live-set-report.ps1`
+  - use it instead of raw `-PayloadFile .tmp/set-report-300-runtime.json` commands when no prebuilt payload file exists
+- on `2026-04-06`, Windows PowerShell 5.1 compatibility was tightened for the live helper stack:
+  - removed reliance on `[System.IO.Path]::GetRelativePath()`
+  - updated:
+    - `scripts/dev/run-hardware-stable-version-mqtt-uart-relay-live.ps1`
+    - `scripts/dev/run-hardware-stable-version-mqtt-uart-relay-live-manual-collect.ps1`
+    - `scripts/dev/run-hardware-stable-version-mqtt-uart-relay-live-set-report.ps1`
+  - this avoids false failures on the user's `powershell.exe` environment after a command has already succeeded
+- on `2026-04-06`, the runtime `set_report` wrapper was hardened against silent hangs:
+  - `scripts/dev/run-hardware-stable-version-mqtt-uart-relay-live-set-report.ps1`
+  - it now prints stage/heartbeat lines while waiting
+  - and enforces an outer wall-clock timeout around the helper process
+  - this makes "no output for many minutes" diagnosable instead of a blind wait
+- on `2026-04-06`, fresh runtime `set-report-300` succeeded through the live wrapper path:
+  - `command_id=1c0d9c6f-8854-46cc-90e7-001f135c51a5`
+  - ack returned:
+    - `status=acked`
+    - `result.applied=true`
+    - `result.runtime_config.sampling_s=5`
+    - `result.runtime_config.report_interval_s=300`
+  - the wrapper also captured the helper-side boundary files:
+    - payload file
+    - helper stdout/stderr
+    - helper runner script
+- on `2026-04-06`, fresh runtime `set-report-5` restore succeeded through the same live wrapper path:
+  - `command_id=99907ef1-a5fb-4bf0-97bc-6d9276b264b6`
+  - ack returned:
+    - `status=acked`
+    - `result.applied=true`
+    - `result.runtime_config.sampling_s=5`
+    - `result.runtime_config.report_interval_s=5`
+  - follow-up telemetry frames `seq=1367/1368/1369/1370` preserved:
+    - `meta.last_command_type=set_config`
+    - `meta.last_command_id=99907ef1-a5fb-4bf0-97bc-6d9276b264b6`
+    - `meta.upload_trigger=periodic`
+  - this restores the frozen-good runtime baseline to `report_interval_s=5`
+- the last residual helper noise was identified as:
+  - `run-hardware-stable-version-mqtt-uart-relay-live.ps1` trying to parse a null relay stdout string
+  - the helper has now been hardened to:
+    - tolerate null text in `Convert-MixedJsonText`
+    - suppress progress output
+    - fall back to reading the relay JSON out file directly
 
 ## Resume Prompt
 
-Continue from this checkpoint by preserving the current `COM5` transparent baseline at `report_interval_s=5`; transparent aligned commands, mismatch guard, and the first full local MQTT relay proof are all complete, so the next meaningful step is wider command coverage over the same relay path or stopping at this milestone.
+Continue from this checkpoint by preserving the current `COM5` transparent baseline at `report_interval_s=5`; direct transparent proofs and full MQTT relay proofs now cover `manual_collect`, `set-report-300`, `set-report-5`, and mismatch, and a one-shot foreground live helper exists for runtime payloads, so the next meaningful step is either to stop at this frozen-good milestone or explicitly repair background relay orchestration rather than reopening transport debugging.

@@ -1,3 +1,9 @@
+---
+title: hardware-stable-version-adaptation-gap
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/unified/reports/hardware-stable-version-adaptation-gap
+---
+
 # 硬件稳定版适配当前平台主线差距评估
 
 ## 状态

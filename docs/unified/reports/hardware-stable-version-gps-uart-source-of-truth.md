@@ -1,3 +1,9 @@
+---
+title: hardware-stable-version-gps-uart-source-of-truth
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/unified/reports/hardware-stable-version-gps-uart-source-of-truth
+---
+
 # 硬件稳定版 GPS / UART 单一当前真值
 
 ## 状态
@@ -139,4 +145,3 @@
 3. 再往下做 `TelemetryEnvelope v1` 和 `cmd_ack/{device_id}` 的固件适配
 
 也就是说，当前优先级不是继续讨论 3 套 GPS 候选，而是先让当前工程只剩 1 套当前真值。
-

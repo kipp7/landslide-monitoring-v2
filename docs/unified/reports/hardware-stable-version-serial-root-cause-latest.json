@@ -1,0 +1,390 @@
+﻿{
+    "generatedAt":  "2026-03-26T13:03:16Z",
+    "conclusion":  "hardware-stable-version-current-host-has-no-present-physical-com-port-and-the-most-likely-blocker-is-device-or-cable-enumeration-mode",
+    "checks":  {
+                   "anyPortsClassDevices":  true,
+                   "anyNonBluetoothPortsPresent":  false,
+                   "bluetoothPortsOnly":  true,
+                   "usbSerialPresent":  false,
+                   "billboardSignalsPresent":  true,
+                   "serialDriverPackagesInstalled":  true
+               },
+    "likelyCause":  "connected-device-is-enumerating-as-usb-billboard-or-non-serial-usb-function-instead-of-usb-uart-com-port",
+    "currentPorts":  {
+                         "all":  [
+                                     {
+                                         "Status":  "Unknown",
+                                         "Class":  "Ports",
+                                         "FriendlyName":  "蓝牙链接上的标准串行 (COM6)",
+                                         "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_00000000"
+                                     },
+                                     {
+                                         "Status":  "Unknown",
+                                         "Class":  "Ports",
+                                         "FriendlyName":  "蓝牙链接上的标准串行 (COM15)",
+                                         "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_00000001"
+                                     },
+                                     {
+                                         "Status":  "Unknown",
+                                         "Class":  "Ports",
+                                         "FriendlyName":  "蓝牙链接上的标准串行 (COM16)",
+                                         "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_00000002"
+                                     },
+                                     {
+                                         "Status":  "Unknown",
+                                         "Class":  "Ports",
+                                         "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
+                                         "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_0000000A"
+                                     },
+                                     {
+                                         "Status":  "Unknown",
+                                         "Class":  "Ports",
+                                         "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
+                                         "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_0000000C"
+                                     },
+                                     {
+                                         "Status":  "Unknown",
+                                         "Class":  "Ports",
+                                         "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
+                                         "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_VID\u0026000105D6_PID\u0026000A\\7\u0026387A3EE1\u00260\u0026651C83C5A278_C00000000"
+                                     },
+                                     {
+                                         "Status":  "Unknown",
+                                         "Class":  "Ports",
+                                         "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
+                                         "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_VID\u002600010075_PID\u0026A013\\7\u0026387A3EE1\u00260\u0026DCCCE6F558B3_C00000000"
+                                     },
+                                     {
+                                         "Status":  "Unknown",
+                                         "Class":  "Ports",
+                                         "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
+                                         "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_VID\u002600010075_PID\u0026A013\\7\u0026387A3EE1\u00260\u002654104FF53E3D_C00000000"
+                                     },
+                                     {
+                                         "Status":  "Unknown",
+                                         "Class":  "Ports",
+                                         "FriendlyName":  "蓝牙链接上的标准串行 (COM17)",
+                                         "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260002\\7\u0026387A3EE1\u00260\u00260135B4C7BFBD_C00000000"
+                                     }
+                                 ],
+                         "nonBluetooth":  [
+
+                                          ],
+                         "bluetooth":  [
+                                           {
+                                               "Status":  "Unknown",
+                                               "Class":  "Ports",
+                                               "FriendlyName":  "蓝牙链接上的标准串行 (COM6)",
+                                               "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_00000000"
+                                           },
+                                           {
+                                               "Status":  "Unknown",
+                                               "Class":  "Ports",
+                                               "FriendlyName":  "蓝牙链接上的标准串行 (COM15)",
+                                               "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_00000001"
+                                           },
+                                           {
+                                               "Status":  "Unknown",
+                                               "Class":  "Ports",
+                                               "FriendlyName":  "蓝牙链接上的标准串行 (COM16)",
+                                               "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_00000002"
+                                           },
+                                           {
+                                               "Status":  "Unknown",
+                                               "Class":  "Ports",
+                                               "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
+                                               "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_0000000A"
+                                           },
+                                           {
+                                               "Status":  "Unknown",
+                                               "Class":  "Ports",
+                                               "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
+                                               "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_0000000C"
+                                           },
+                                           {
+                                               "Status":  "Unknown",
+                                               "Class":  "Ports",
+                                               "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
+                                               "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_VID\u0026000105D6_PID\u0026000A\\7\u0026387A3EE1\u00260\u0026651C83C5A278_C00000000"
+                                           },
+                                           {
+                                               "Status":  "Unknown",
+                                               "Class":  "Ports",
+                                               "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
+                                               "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_VID\u002600010075_PID\u0026A013\\7\u0026387A3EE1\u00260\u0026DCCCE6F558B3_C00000000"
+                                           },
+                                           {
+                                               "Status":  "Unknown",
+                                               "Class":  "Ports",
+                                               "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
+                                               "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_VID\u002600010075_PID\u0026A013\\7\u0026387A3EE1\u00260\u002654104FF53E3D_C00000000"
+                                           },
+                                           {
+                                               "Status":  "Unknown",
+                                               "Class":  "Ports",
+                                               "FriendlyName":  "蓝牙链接上的标准串行 (COM17)",
+                                               "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260002\\7\u0026387A3EE1\u00260\u00260135B4C7BFBD_C00000000"
+                                           }
+                                       ]
+                     },
+    "suspiciousUsbDevices":  [
+                                 {
+                                     "Status":  "OK",
+                                     "Class":  "USB",
+                                     "FriendlyName":  "USB Composite Device",
+                                     "InstanceId":  "USB\\VID_04F2\u0026PID_B67D\\5\u00267A08FDB\u00260\u00266"
+                                 },
+                                 {
+                                     "Status":  "Unknown",
+                                     "Class":  "USB",
+                                     "FriendlyName":  "USB Composite Device",
+                                     "InstanceId":  "USB\\VID_3302\u0026PID_23D7\\330223D7250415"
+                                 },
+                                 {
+                                     "Status":  "OK",
+                                     "Class":  "USB",
+                                     "FriendlyName":  "USB Composite Device",
+                                     "InstanceId":  "USB\\VID_046D\u0026PID_C539\\6\u002632422B62\u00260\u00262"
+                                 },
+                                 {
+                                     "Status":  "Unknown",
+                                     "Class":  "AndroidUsbDeviceClass",
+                                     "FriendlyName":  "Android Composite ADB Interface",
+                                     "InstanceId":  "USB\\VID_2717\u0026PID_FF48\u0026MI_01\\6\u002686AE889\u00260\u00260001"
+                                 },
+                                 {
+                                     "Status":  "OK",
+                                     "Class":  "USB",
+                                     "FriendlyName":  "USB Composite Device",
+                                     "InstanceId":  "USB\\VID_0B05\u0026PID_1951\\6\u002632422B62\u00260\u00261"
+                                 },
+                                 {
+                                     "Status":  "Unknown",
+                                     "Class":  "USB",
+                                     "FriendlyName":  "USB Composite Device",
+                                     "InstanceId":  "USB\\VID_0B05\u0026PID_1951\\6\u002632422B62\u00260\u00262"
+                                 },
+                                 {
+                                     "Status":  "Unknown",
+                                     "Class":  "USB",
+                                     "FriendlyName":  "USB Composite Device",
+                                     "InstanceId":  "USB\\VID_046D\u0026PID_C088\\7F974B3E6FFD4FA1"
+                                 },
+                                 {
+                                     "Status":  "Unknown",
+                                     "Class":  "USB",
+                                     "FriendlyName":  "USB Composite Device",
+                                     "InstanceId":  "USB\\VID_046D\u0026PID_C539\\5\u00267A08FDB\u00260\u00261"
+                                 },
+                                 {
+                                     "Status":  "OK",
+                                     "Class":  "USBDevice",
+                                     "FriendlyName":  "USB 2.0 BILLBOARD             ",
+                                     "InstanceId":  "USB\\VID_2109\u0026PID_0103\\0000000000000001"
+                                 },
+                                 {
+                                     "Status":  "Unknown",
+                                     "Class":  "USB",
+                                     "FriendlyName":  "USB Composite Device",
+                                     "InstanceId":  "USB\\VID_30FA\u0026PID_2031\\6\u002632422B62\u00260\u00262"
+                                 },
+                                 {
+                                     "Status":  "Unknown",
+                                     "Class":  "USB",
+                                     "FriendlyName":  "USB Composite Device",
+                                     "InstanceId":  "USB\\VID_2717\u0026PID_FF48\\BMEUXK4LT8JFMBAE"
+                                 }
+                             ],
+    "installedSerialDrivers":  [
+                                   {
+                                       "PublishedName":  "oem71.inf",
+                                       "OriginalName":  "adafruitcircuitplayground.inf",
+                                       "ProviderName":  "Adafruit Industries LLC",
+                                       "ClassName":  "Ports",
+                                       "DriverVersion":  "02/25/2016 6.2.2600.0",
+                                       "SignerName":  "Adafruit Industries"
+                                   },
+                                   {
+                                       "PublishedName":  "oem72.inf",
+                                       "OriginalName":  "arduino-org.inf",
+                                       "ProviderName":  "Arduino Srl (www.arduino.org)",
+                                       "ClassName":  "Ports",
+                                       "DriverVersion":  "03/19/2015 1.1.1.0",
+                                       "SignerName":  "Arduino srl"
+                                   },
+                                   {
+                                       "PublishedName":  "oem73.inf",
+                                       "OriginalName":  "arduino.inf",
+                                       "ProviderName":  "Arduino LLC (www.arduino.cc)",
+                                       "ClassName":  "Ports",
+                                       "DriverVersion":  "11/24/2015 1.2.3.0",
+                                       "SignerName":  "Arduino SA"
+                                   },
+                                   {
+                                       "PublishedName":  "oem81.inf",
+                                       "OriginalName":  "ch341ser.inf",
+                                       "ProviderName":  "wch.cn",
+                                       "ClassName":  "Ports",
+                                       "DriverVersion":  "01/30/2019 3.5.2019.1",
+                                       "SignerName":  "Microsoft Windows Hardware Compatibility Publisher"
+                                   },
+                                   {
+                                       "PublishedName":  "oem98.inf",
+                                       "OriginalName":  "ch341ser.inf",
+                                       "ProviderName":  "wch.cn",
+                                       "ClassName":  "Ports",
+                                       "DriverVersion":  "11/04/2011 3.3.2011.11",
+                                       "SignerName":  "Microsoft Windows Hardware Compatibility Publisher"
+                                   },
+                                   {
+                                       "PublishedName":  "oem67.inf",
+                                       "OriginalName":  "ch341ser.inf",
+                                       "ProviderName":  "wch.cn",
+                                       "ClassName":  "Ports",
+                                       "DriverVersion":  "06/03/2009 3.1.2009.6",
+                                       "SignerName":  "Microsoft Windows Hardware Compatibility Publisher"
+                                   },
+                                   {
+                                       "PublishedName":  "oem79.inf",
+                                       "OriginalName":  "ftdibus.inf",
+                                       "ProviderName":  "FTDI",
+                                       "ClassName":  "USB",
+                                       "DriverVersion":  "08/16/2017 2.12.28.0",
+                                       "SignerName":  "Microsoft Windows Hardware Compatibility Publisher"
+                                   },
+                                   {
+                                       "PublishedName":  "oem77.inf",
+                                       "OriginalName":  "ftdibus.inf",
+                                       "ProviderName":  "FTDI",
+                                       "ClassName":  "USB",
+                                       "DriverVersion":  "10/28/2024 2.12.36.20",
+                                       "SignerName":  "Microsoft Windows Hardware Compatibility Publisher"
+                                   },
+                                   {
+                                       "PublishedName":  "oem80.inf",
+                                       "OriginalName":  "ftdiport.inf",
+                                       "ProviderName":  "FTDI",
+                                       "ClassName":  "Ports",
+                                       "DriverVersion":  "08/16/2017 2.12.28.0",
+                                       "SignerName":  "Microsoft Windows Hardware Compatibility Publisher"
+                                   },
+                                   {
+                                       "PublishedName":  "oem78.inf",
+                                       "OriginalName":  "ftdiport.inf",
+                                       "ProviderName":  "FTDI",
+                                       "ClassName":  "Ports",
+                                       "DriverVersion":  "10/28/2024 2.12.36.20",
+                                       "SignerName":  "Microsoft Windows Hardware Compatibility Publisher"
+                                   },
+                                   {
+                                       "PublishedName":  "oem74.inf",
+                                       "OriginalName":  "genuino.inf",
+                                       "ProviderName":  "Arduino LLC (www.arduino.cc)",
+                                       "ClassName":  "Ports",
+                                       "DriverVersion":  "01/07/2016 1.0.3.0",
+                                       "SignerName":  "Arduino LLC"
+                                   },
+                                   {
+                                       "PublishedName":  "oem94.inf",
+                                       "OriginalName":  "jlinkcdc.inf",
+                                       "ProviderName":  "SEGGER",
+                                       "ClassName":  "Ports",
+                                       "DriverVersion":  "01/25/2012 6.0.2600.4",
+                                       "SignerName":  "Microsoft Windows Hardware Compatibility Publisher"
+                                   },
+                                   {
+                                       "PublishedName":  "oem96.inf",
+                                       "OriginalName":  "jlinkcdc.inf",
+                                       "ProviderName":  "SEGGER",
+                                       "ClassName":  "Ports",
+                                       "DriverVersion":  "08/28/2014 6.0.2601.5",
+                                       "SignerName":  "Microsoft Windows Hardware Compatibility Publisher"
+                                   },
+                                   {
+                                       "PublishedName":  "oem75.inf",
+                                       "OriginalName":  "linino.inf",
+                                       "ProviderName":  "Linino",
+                                       "ClassName":  "Ports",
+                                       "DriverVersion":  "01/13/2014 1.0.0.0",
+                                       "SignerName":  "Arduino srl"
+                                   },
+                                   {
+                                       "PublishedName":  "oem107.inf",
+                                       "OriginalName":  "qcser.inf",
+                                       "ProviderName":  "Qualcomm Incorporated",
+                                       "ClassName":  "Ports",
+                                       "DriverVersion":  "01/04/2013 2.1.0.5",
+                                       "SignerName":  "Microsoft Windows Hardware Compatibility Publisher"
+                                   },
+                                   {
+                                       "PublishedName":  "oem104.inf",
+                                       "OriginalName":  "ser2pl.inf",
+                                       "ProviderName":  "Prolific",
+                                       "ClassName":  "Ports",
+                                       "DriverVersion":  "07/12/2018 3.8.25.0",
+                                       "SignerName":  "Microsoft Windows Hardware Compatibility Publisher"
+                                   },
+                                   {
+                                       "PublishedName":  "oem87.inf",
+                                       "OriginalName":  "sprdvcom.inf",
+                                       "ProviderName":  "FIBOCOM Communications Inc.",
+                                       "ClassName":  "Ports",
+                                       "DriverVersion":  "04/13/2020 4.19.38.135",
+                                       "SignerName":  "Microsoft Windows Hardware Compatibility Publisher"
+                                   },
+                                   {
+                                       "PublishedName":  "oem76.inf",
+                                       "OriginalName":  "arduino_gemma.inf",
+                                       "ProviderName":  "libusb-win32",
+                                       "ClassName":  "libusb-win32 devices",
+                                       "DriverVersion":  "04/21/2015 1.0.0.0",
+                                       "SignerName":  "Arduino LLC"
+                                   },
+                                   {
+                                       "PublishedName":  "oem88.inf",
+                                       "OriginalName":  "sprdvmdm.inf",
+                                       "ProviderName":  "FIBOCOM Communications Inc",
+                                       "ClassName":  "Modem",
+                                       "DriverVersion":  "04/13/2020 4.19.38.135",
+                                       "SignerName":  "Microsoft Windows Hardware Compatibility Publisher"
+                                   }
+                               ],
+    "recentBillboardEvents":  [
+                                  {
+                                      "TimeCreated":  "\/Date(1774523478275)\/",
+                                      "Id":  112,
+                                      "LevelDisplayName":  "信息",
+                                      "Message":  "已为设备“USB 2.0 BILLBOARD”({d850308c-15ab-530d-97cb-a20f75fb35bf})提供服务，处理了 1 个任务，写入了 34 个属性，活动工作时间为 23869 毫秒。"
+                                  },
+                                  {
+                                      "TimeCreated":  "\/Date(1774523440369)\/",
+                                      "Id":  112,
+                                      "LevelDisplayName":  "信息",
+                                      "Message":  "已为设备“USB 2.0 BILLBOARD”({d850308c-15ab-530d-97cb-a20f75fb35bf})提供服务，处理了 1 个任务，写入了 0 个属性，活动工作时间为 6 毫秒。"
+                                  },
+                                  {
+                                      "TimeCreated":  "\/Date(1774523410079)\/",
+                                      "Id":  112,
+                                      "LevelDisplayName":  "信息",
+                                      "Message":  "已为设备“USB 2.0 BILLBOARD”({d850308c-15ab-530d-97cb-a20f75fb35bf})提供服务，处理了 1 个任务，写入了 0 个属性，活动工作时间为 8 毫秒。"
+                                  },
+                                  {
+                                      "TimeCreated":  "\/Date(1774523407029)\/",
+                                      "Id":  112,
+                                      "LevelDisplayName":  "信息",
+                                      "Message":  "已为设备“USB 2.0 BILLBOARD”({d850308c-15ab-530d-97cb-a20f75fb35bf})提供服务，处理了 4 个任务，写入了 0 个属性，活动工作时间为 25 毫秒。"
+                                  },
+                                  {
+                                      "TimeCreated":  "\/Date(1774513777449)\/",
+                                      "Id":  112,
+                                      "LevelDisplayName":  "信息",
+                                      "Message":  "已为设备“USB 2.0 BILLBOARD”({d850308c-15ab-530d-97cb-a20f75fb35bf})提供服务，处理了 1 个任务，写入了 34 个属性，活动工作时间为 1228 毫秒。"
+                                  }
+                              ],
+    "recommendedNextSteps":  [
+                                 "reconnect the board or adapter with a known data-capable USB cable, not a charge-only cable",
+                                 "prefer a direct USB-A/USB-C data connection or a known USB-UART dongle that should enumerate as CH340/CP210/FTDI instead of a Type-C alternate-mode adapter path",
+                                 "avoid the current USB Billboard path; per Microsoft, Billboard enumeration indicates alternate-mode negotiation or compatibility failure rather than a normal UART/COM function",
+                                 "after reconnecting, rerun scripts/dev/show-hardware-stable-version-serial-ports.ps1 and expect a non-Bluetooth Started COM device"
+                             ]
+}

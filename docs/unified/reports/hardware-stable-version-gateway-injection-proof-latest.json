@@ -1,5 +1,5 @@
 ﻿{
-  "generatedAt": "2026-03-26T10:18:26.690Z",
+  "generatedAt": "2026-03-26T10:37:56.657Z",
   "conclusion": "hardware-stable-version-gateway-samples-drive-openharmony-command-injection-proof-in-source",
   "hardwareDeviceId": "00000000-0000-0000-0000-000000000001",
   "commandTopic": "cmd/00000000-0000-0000-0000-000000000001",
@@ -11,12 +11,12 @@
     "setConfigExecuted": true,
     "manualCollectExecuted": true,
     "deactivateExecuted": true,
-    "rebootExecuted": false,
-    "restartExecuted": false,
-    "motorStartExecuted": false,
-    "motorStopExecuted": false,
-    "buzzerOnExecuted": false,
-    "buzzerOffExecuted": false,
+    "rebootExecuted": true,
+    "restartExecuted": true,
+    "motorStartExecuted": true,
+    "motorStopExecuted": true,
+    "buzzerOnExecuted": true,
+    "buzzerOffExecuted": true,
     "mismatchRejected": true
   },
   "scenarioLinks": {
@@ -257,7 +257,11 @@
         "sampling_s": 10,
         "report_interval_s": 5,
         "uplink_enabled": true,
-        "manual_collect_requested": false
+        "manual_collect_requested": false,
+        "reboot_requested": false,
+        "restart_requested": false,
+        "motor_state": "stopped",
+        "buzzer_on": false
       }
     },
     "harnessSetConfig": {
@@ -273,7 +277,11 @@
         "sampling_s": 5,
         "report_interval_s": 5,
         "uplink_enabled": true,
-        "manual_collect_requested": false
+        "manual_collect_requested": false,
+        "reboot_requested": false,
+        "restart_requested": false,
+        "motor_state": "stopped",
+        "buzzer_on": false
       }
     },
     "harnessManualCollect": {
@@ -289,7 +297,11 @@
         "sampling_s": 1,
         "report_interval_s": 5,
         "uplink_enabled": true,
-        "manual_collect_requested": true
+        "manual_collect_requested": true,
+        "reboot_requested": false,
+        "restart_requested": false,
+        "motor_state": "stopped",
+        "buzzer_on": false
       }
     },
     "harnessDeactivateDevice": {
@@ -305,15 +317,133 @@
         "sampling_s": 1,
         "report_interval_s": 5,
         "uplink_enabled": false,
-        "manual_collect_requested": false
+        "manual_collect_requested": false,
+        "reboot_requested": false,
+        "restart_requested": false,
+        "motor_state": "stopped",
+        "buzzer_on": false
       }
     },
-    "harnessReboot": null,
-    "harnessRestartDevice": null,
-    "harnessMotorStart": null,
-    "harnessMotorStop": null,
-    "harnessBuzzerOn": null,
-    "harnessBuzzerOff": null,
+    "harnessReboot": {
+      "name": "aligned_reboot_pretty_json",
+      "chunkCount": 3,
+      "linkAckReceived": false,
+      "commandReady": true,
+      "parsedOk": true,
+      "deviceMatch": true,
+      "commandBuffer": "{\n  \"schema_version\": 1,\n  \"command_id\": \"00000000-0000-4000-8000-000000002005\",\n  \"device_id\": \"00000000-0000-0000-0000-000000000001\",\n  \"command_type\": \"reboot\",\n  \"payload\": {},\n  \"issued_ts\": \"2026-03-26T14:04:00Z\"\n}",
+      "ack": "{\"schema_version\":1,\"command_id\":\"00000000-0000-4000-8000-000000002005\",\"device_id\":\"00000000-0000-0000-0000-000000000001\",\"ack_ts\":\"1970-01-01T00:00:00Z\",\"status\":\"acked\",\"result\":{\"rebooting\":true}}\n",
+      "runtimeAfter": {
+        "sampling_s": 1,
+        "report_interval_s": 5,
+        "uplink_enabled": true,
+        "manual_collect_requested": false,
+        "reboot_requested": true,
+        "restart_requested": false,
+        "motor_state": "stopped",
+        "buzzer_on": false
+      }
+    },
+    "harnessRestartDevice": {
+      "name": "aligned_restart_device_pretty_json",
+      "chunkCount": 4,
+      "linkAckReceived": false,
+      "commandReady": true,
+      "parsedOk": true,
+      "deviceMatch": true,
+      "commandBuffer": "{\n  \"schema_version\": 1,\n  \"command_id\": \"00000000-0000-4000-8000-000000002006\",\n  \"device_id\": \"00000000-0000-0000-0000-000000000001\",\n  \"command_type\": \"restart_device\",\n  \"payload\": {\n    \"source\": \"gateway-pretty-json\"\n  },\n  \"issued_ts\": \"2026-03-26T14:05:00Z\"\n}",
+      "ack": "{\"schema_version\":1,\"command_id\":\"00000000-0000-4000-8000-000000002006\",\"device_id\":\"00000000-0000-0000-0000-000000000001\",\"ack_ts\":\"1970-01-01T00:00:00Z\",\"status\":\"acked\",\"result\":{\"restart_requested\":true,\"rebooting\":true}}\n",
+      "runtimeAfter": {
+        "sampling_s": 1,
+        "report_interval_s": 5,
+        "uplink_enabled": true,
+        "manual_collect_requested": false,
+        "reboot_requested": false,
+        "restart_requested": true,
+        "motor_state": "stopped",
+        "buzzer_on": false
+      }
+    },
+    "harnessMotorStart": {
+      "name": "aligned_motor_start_pretty_json",
+      "chunkCount": 4,
+      "linkAckReceived": false,
+      "commandReady": true,
+      "parsedOk": true,
+      "deviceMatch": true,
+      "commandBuffer": "{\n  \"schema_version\": 1,\n  \"command_id\": \"00000000-0000-4000-8000-000000002007\",\n  \"device_id\": \"00000000-0000-0000-0000-000000000001\",\n  \"command_type\": \"motor_start\",\n  \"payload\": {\n    \"source\": \"gateway-pretty-json\"\n  },\n  \"issued_ts\": \"2026-03-26T14:06:00Z\"\n}",
+      "ack": "{\"schema_version\":1,\"command_id\":\"00000000-0000-4000-8000-000000002007\",\"device_id\":\"00000000-0000-0000-0000-000000000001\",\"ack_ts\":\"1970-01-01T00:00:00Z\",\"status\":\"acked\",\"result\":{\"motor_state\":\"running\"}}\n",
+      "runtimeAfter": {
+        "sampling_s": 1,
+        "report_interval_s": 5,
+        "uplink_enabled": true,
+        "manual_collect_requested": false,
+        "reboot_requested": false,
+        "restart_requested": false,
+        "motor_state": "running",
+        "buzzer_on": false
+      }
+    },
+    "harnessMotorStop": {
+      "name": "aligned_motor_stop_pretty_json",
+      "chunkCount": 4,
+      "linkAckReceived": false,
+      "commandReady": true,
+      "parsedOk": true,
+      "deviceMatch": true,
+      "commandBuffer": "{\n  \"schema_version\": 1,\n  \"command_id\": \"00000000-0000-4000-8000-000000002008\",\n  \"device_id\": \"00000000-0000-0000-0000-000000000001\",\n  \"command_type\": \"motor_stop\",\n  \"payload\": {\n    \"source\": \"gateway-pretty-json\"\n  },\n  \"issued_ts\": \"2026-03-26T14:07:00Z\"\n}",
+      "ack": "{\"schema_version\":1,\"command_id\":\"00000000-0000-4000-8000-000000002008\",\"device_id\":\"00000000-0000-0000-0000-000000000001\",\"ack_ts\":\"1970-01-01T00:00:00Z\",\"status\":\"acked\",\"result\":{\"motor_state\":\"stopped\"}}\n",
+      "runtimeAfter": {
+        "sampling_s": 1,
+        "report_interval_s": 5,
+        "uplink_enabled": true,
+        "manual_collect_requested": false,
+        "reboot_requested": false,
+        "restart_requested": false,
+        "motor_state": "stopped",
+        "buzzer_on": false
+      }
+    },
+    "harnessBuzzerOn": {
+      "name": "aligned_buzzer_on_pretty_json",
+      "chunkCount": 4,
+      "linkAckReceived": false,
+      "commandReady": true,
+      "parsedOk": true,
+      "deviceMatch": true,
+      "commandBuffer": "{\n  \"schema_version\": 1,\n  \"command_id\": \"00000000-0000-4000-8000-000000002009\",\n  \"device_id\": \"00000000-0000-0000-0000-000000000001\",\n  \"command_type\": \"buzzer_on\",\n  \"payload\": {\n    \"source\": \"gateway-pretty-json\"\n  },\n  \"issued_ts\": \"2026-03-26T14:08:00Z\"\n}",
+      "ack": "{\"schema_version\":1,\"command_id\":\"00000000-0000-4000-8000-000000002009\",\"device_id\":\"00000000-0000-0000-0000-000000000001\",\"ack_ts\":\"1970-01-01T00:00:00Z\",\"status\":\"acked\",\"result\":{\"buzzer_on\":true}}\n",
+      "runtimeAfter": {
+        "sampling_s": 1,
+        "report_interval_s": 5,
+        "uplink_enabled": true,
+        "manual_collect_requested": false,
+        "reboot_requested": false,
+        "restart_requested": false,
+        "motor_state": "stopped",
+        "buzzer_on": true
+      }
+    },
+    "harnessBuzzerOff": {
+      "name": "aligned_buzzer_off_pretty_json",
+      "chunkCount": 4,
+      "linkAckReceived": false,
+      "commandReady": true,
+      "parsedOk": true,
+      "deviceMatch": true,
+      "commandBuffer": "{\n  \"schema_version\": 1,\n  \"command_id\": \"00000000-0000-4000-8000-000000002010\",\n  \"device_id\": \"00000000-0000-0000-0000-000000000001\",\n  \"command_type\": \"buzzer_off\",\n  \"payload\": {\n    \"source\": \"gateway-pretty-json\"\n  },\n  \"issued_ts\": \"2026-03-26T14:09:00Z\"\n}",
+      "ack": "{\"schema_version\":1,\"command_id\":\"00000000-0000-4000-8000-000000002010\",\"device_id\":\"00000000-0000-0000-0000-000000000001\",\"ack_ts\":\"1970-01-01T00:00:00Z\",\"status\":\"acked\",\"result\":{\"buzzer_on\":false}}\n",
+      "runtimeAfter": {
+        "sampling_s": 1,
+        "report_interval_s": 5,
+        "uplink_enabled": true,
+        "manual_collect_requested": false,
+        "reboot_requested": false,
+        "restart_requested": false,
+        "motor_state": "stopped",
+        "buzzer_on": false
+      }
+    },
     "harnessMismatch": {
       "name": "mismatched_manual_collect_pretty_json",
       "chunkCount": 4,
@@ -321,13 +451,17 @@
       "commandReady": true,
       "parsedOk": true,
       "deviceMatch": false,
-      "commandBuffer": "{\n  \"schema_version\": 1,\n  \"command_id\": \"00000000-0000-4000-8000-000000002099\",\n  \"device_id\": \"99999999-9999-4999-8999-999999999999\",\n  \"command_type\": \"manual_collect\",\n  \"payload\": {\n    \"source\": \"gateway-pretty-json\"\n  },\n  \"issued_ts\": \"2026-03-26T14:09:00Z\"\n}",
+      "commandBuffer": "{\n  \"schema_version\": 1,\n  \"command_id\": \"00000000-0000-4000-8000-000000002099\",\n  \"device_id\": \"99999999-9999-4999-8999-999999999999\",\n  \"command_type\": \"manual_collect\",\n  \"payload\": {\n    \"source\": \"gateway-pretty-json\"\n  },\n  \"issued_ts\": \"2026-03-26T14:19:00Z\"\n}",
       "ack": null,
       "runtimeAfter": {
         "sampling_s": 1,
         "report_interval_s": 5,
         "uplink_enabled": true,
-        "manual_collect_requested": false
+        "manual_collect_requested": false,
+        "reboot_requested": false,
+        "restart_requested": false,
+        "motor_state": "stopped",
+        "buzzer_on": false
       }
     }
   },
