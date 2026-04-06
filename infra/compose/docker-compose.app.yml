@@ -49,7 +49,8 @@ services:
       CLICKHOUSE_DATABASE: ${CH_DATABASE:-landslide}
 
       # Optional integrations
-      KAFKA_BROKERS: ${KAFKA_BROKERS:-}
+      # App containers must use the compose-network broker address, not host-loopback localhost:9094.
+      KAFKA_BROKERS: ${KAFKA_BROKERS_INTERNAL:-kafka:9092}
       MQTT_INTERNAL_USERNAME: ${MQTT_INTERNAL_USERNAME:-ingest-service}
       MQTT_INTERNAL_PASSWORD: ${MQTT_INTERNAL_PASSWORD:-}
       EMQX_WEBHOOK_TOKEN: ${EMQX_WEBHOOK_TOKEN:-}

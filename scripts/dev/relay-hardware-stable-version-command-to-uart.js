@@ -14,6 +14,10 @@ function getArg(name, fallback = undefined) {
   return process.argv[idx + 1] ?? fallback;
 }
 
+function hasFlag(name) {
+  return process.argv.includes(`--${name}`);
+}
+
 function requireArg(name) {
   const value = getArg(name);
   if (!value) {
@@ -45,10 +49,114 @@ function parseJsonOrThrow(text) {
   return JSON.parse(text.replace(/^\uFEFF/, ""));
 }
 
+function tryParseJson(text) {
+  try {
+    return parseJsonOrThrow(text);
+  } catch {
+    return null;
+  }
+}
+
 async function loadCommandValidator(repoRoot) {
   if (!loadAndCompileSchema) return null;
   const schemaPath = path.join(repoRoot, "docs", "integrations", "mqtt", "schemas", "device-command.v1.schema.json");
   return loadAndCompileSchema(schemaPath);
+}
+
+async function loadAckValidator(repoRoot) {
+  if (!loadAndCompileSchema) return null;
+  const schemaPath = path.join(repoRoot, "docs", "integrations", "mqtt", "schemas", "device-command-ack.v1.schema.json");
+  return loadAndCompileSchema(schemaPath);
+}
+
+function isAckPayload(value) {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      value.schema_version === 1 &&
+      typeof value.command_id === "string" &&
+      typeof value.device_id === "string" &&
+      typeof value.ack_ts === "string" &&
+      (value.status === "acked" || value.status === "failed")
+  );
+}
+
+function extractJsonObjects(text) {
+  const results = [];
+  let start = -1;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+
+    if (start === -1) {
+      if (ch === "{") {
+        start = i;
+        depth = 1;
+        inString = false;
+        escaped = false;
+      }
+      continue;
+    }
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (ch === "\\") {
+        escaped = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+
+    if (ch === "{") {
+      depth += 1;
+      continue;
+    }
+
+    if (ch === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        results.push(text.slice(start, i + 1));
+        start = -1;
+      }
+    }
+  }
+
+  return results;
+}
+
+function extractCapturedAck(captureText, expectedCommandId, expectedDeviceId) {
+  if (typeof captureText !== "string" || captureText.trim().length === 0) {
+    return null;
+  }
+
+  for (const candidate of extractJsonObjects(captureText)) {
+    const parsed = tryParseJson(candidate);
+    if (!isAckPayload(parsed)) continue;
+    if (expectedCommandId && parsed.command_id !== expectedCommandId) continue;
+    if (expectedDeviceId && parsed.device_id !== expectedDeviceId) continue;
+    return parsed;
+  }
+
+  return null;
+}
+
+function mqttPublish(client, topic, payload) {
+  return new Promise((resolve, reject) => {
+    client.publish(topic, payload, { qos: 1 }, (err) => {
+      if (err) reject(err);
+      else resolve();
+    });
+  });
 }
 
 function runNode(repoRoot, args) {
@@ -95,6 +203,8 @@ async function main() {
   const readAfterWriteSeconds = Number(getArg("readAfterWriteSeconds", "0"));
   const port = getArg("port", "");
   const baudRate = Number(getArg("baudRate", "115200"));
+  const publishCapturedAck = hasFlag("publishCapturedAck");
+  const ackTopicPrefix = getArg("ackTopicPrefix", process.env.MQTT_TOPIC_ACK_PREFIX || "cmd_ack/");
   const stamp = getArg("stamp", nowStamp());
   const outFileArg = getArg("outFile", `.tmp/mqtt-uart-relay-${stamp}.json`);
 
@@ -109,6 +219,7 @@ async function main() {
   ensureDir(path.dirname(payloadFile));
 
   const validator = await loadCommandValidator(repoRoot);
+  const ackValidator = await loadAckValidator(repoRoot);
   const deadline = Date.now() + (Number.isFinite(timeoutSeconds) ? timeoutSeconds : 30) * 1000;
 
   const result = await new Promise((resolve, reject) => {
@@ -138,7 +249,7 @@ async function main() {
       });
     });
 
-    client.on("message", (_topic, payloadBuf) => {
+    client.on("message", async (_topic, payloadBuf) => {
       clearInterval(timer);
       const payloadText = payloadBuf.toString("utf8");
       let message;
@@ -181,6 +292,8 @@ async function main() {
       const plan = parseJsonOrThrow(planText);
 
       let sinkResult = null;
+      let capturedAck = null;
+      let ackPublish = null;
       if (sink === "stdout") {
         sinkResult = { mode: "stdout" };
         console.log(planText);
@@ -211,6 +324,37 @@ async function main() {
         }
         const sinkText = runPowerShell(repoRoot, sinkArgs);
         sinkResult = sinkText ? parseJsonOrThrow(sinkText) : { mode: "uart-com" };
+        capturedAck = extractCapturedAck(
+          sinkResult?.capture?.text,
+          message.command_id || null,
+          message.device_id || null
+        );
+        if (capturedAck && ackValidator && !ackValidator.validate(capturedAck)) {
+          ackPublish = {
+            published: false,
+            topic: `${ackTopicPrefix}${message.device_id || ""}`,
+            reason: "captured-ack-failed-schema-validation",
+            errors: ackValidator.errors
+          };
+          capturedAck = null;
+        }
+        if (publishCapturedAck) {
+          const ackTopic = `${ackTopicPrefix}${message.device_id || ""}`;
+          if (!capturedAck) {
+            ackPublish = {
+              published: false,
+              topic: ackTopic,
+              reason: "no-standard-ack-found-in-capture"
+            };
+          } else {
+            await mqttPublish(client, ackTopic, JSON.stringify(capturedAck));
+            ackPublish = {
+              published: true,
+              topic: ackTopic,
+              ack: capturedAck
+            };
+          }
+        }
       } else {
         sinkResult = {
           mode: "file",
@@ -229,16 +373,20 @@ async function main() {
         sink,
         readAfterWriteSeconds: Number.isFinite(readAfterWriteSeconds) && readAfterWriteSeconds > 0 ? readAfterWriteSeconds : null,
         payloadFile: path.relative(repoRoot, payloadFile).replace(/\\/g, "/"),
+        publishCapturedAck,
         command: {
           commandId: message.command_id || null,
           deviceId: message.device_id || null,
           commandType: message.command_type || null
         },
         plan,
-        sinkResult
+        sinkResult,
+        capturedAck,
+        ackPublish
       };
 
       fs.writeFileSync(outFile, JSON.stringify(report, null, 2) + "\n", "utf8");
+      client.removeAllListeners();
       client.end(true);
       resolve(report);
     });
@@ -250,10 +398,15 @@ async function main() {
     });
   });
 
-  console.log(JSON.stringify(result, null, 2));
+  return result;
 }
 
-main().catch((err) => {
-  console.error(err instanceof Error ? err.message : String(err));
-  process.exit(1);
-});
+main()
+  .then((result) => {
+    process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+    process.exit(0);
+  })
+  .catch((err) => {
+    process.stderr.write((err instanceof Error ? err.message : String(err)) + "\n");
+    process.exit(1);
+  });

@@ -148,6 +148,24 @@ async function main(): Promise<void> {
     logger.error({ err }, "mqtt error");
   });
 
+  let mqttSubscribeInFlight = false;
+  const ensureAckSubscription = () => {
+    if (!mqttClient.connected || mqttSubscribeInFlight) return;
+
+    mqttSubscribeInFlight = true;
+    logger.info({ mqttUrl: config.mqttUrl }, "mqtt connected");
+    mqttClient.subscribe(`${config.mqttTopicAckPrefix}+`, { qos: 1 }, (err) => {
+      mqttSubscribeInFlight = false;
+      if (err) logger.error({ err }, "mqtt subscribe failed");
+      else logger.info({ topic: `${config.mqttTopicAckPrefix}+` }, "mqtt subscribed");
+    });
+  };
+
+  mqttClient.on("connect", () => {
+    mqttSubscribeInFlight = false;
+    ensureAckSubscription();
+  });
+
   const kafka = new Kafka({
     clientId: config.kafkaClientId,
     brokers: config.kafkaBrokers,
@@ -181,13 +199,7 @@ async function main(): Promise<void> {
     });
   };
 
-  mqttClient.on("connect", () => {
-    logger.info({ mqttUrl: config.mqttUrl }, "mqtt connected");
-    mqttClient.subscribe(`${config.mqttTopicAckPrefix}+`, { qos: 1 }, (err) => {
-      if (err) logger.error({ err }, "mqtt subscribe failed");
-      else logger.info({ topic: `${config.mqttTopicAckPrefix}+` }, "mqtt subscribed");
-    });
-  });
+  ensureAckSubscription();
 
   mqttClient.on("message", async (topic, payload) => {
     const traceId = newTraceId();

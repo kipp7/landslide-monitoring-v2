@@ -340,13 +340,44 @@ Push the current hardware-stable-version command proof from source-level and bro
     - `set-report-5`
     - mismatch guard
   - then freeze direct serial and move attention to higher-level gateway integration only
+- the new software-side bridge for that higher-level integration now exists:
+  - `scripts/dev/relay-hardware-stable-version-command-to-uart.js`
+    can publish a captured standard board ack back to:
+    - `cmd_ack/{device_id}`
+  - `scripts/dev/start-hardware-stable-version-mqtt-uart-relay.ps1`
+    and
+  - `scripts/dev/run-hardware-stable-version-mqtt-uart-relay-live.ps1`
+    now expose:
+    - `-PublishCapturedAck`
+  - `scripts/dev/run-hardware-stable-version-api-command-live.ps1`
+    is the new operator entrypoint for one-shot:
+    - `API -> Kafka -> command-dispatcher -> MQTT -> relay -> COM5 -> XL01 -> RK2206 -> cmd_ack -> command-ack-receiver -> API`
+- the first real API-entry hardware/system proof is now complete on `2026-04-06`:
+  - command path:
+    - `scripts/dev/run-hardware-stable-version-api-command-live.ps1 -Action manual-collect`
+  - verified command:
+    - `command_id=502e939c-6ea2-493e-b333-8cf15cbb7695`
+  - verified system-side outcome:
+    - `/api/v1/devices/{device_id}/commands/{command_id}` returned `status=acked`
+    - `/api/v1/devices/{device_id}/command-events` contained `COMMAND_ACKED`
+    - `/api/v1/devices/{device_id}/command-notifications` contained the matching `COMMAND_ACKED` notification
+  - persisted local proof file:
+    - `.tmp/hardware-stable-version-api-command-live-latest.json`
+  - report conclusion:
+    - `api-command-live-proof-succeeded-with-api-close-loop`
+  - software fixes applied along the way:
+    - `services/command-ack-receiver/src/index.ts` now avoids missing the early MQTT `connect` event before subscription
+    - `infra/compose/docker-compose.yml` now pins Kafka hostname as `kafka`
+    - `infra/compose/docker-compose.app.yml` now forces app containers to use `kafka:9092` rather than container-local `localhost:9094`
+    - `scripts/dev/run-hardware-stable-version-api-command-live.ps1` now survives Windows PowerShell 5.1 file encoding limits, logs every major stage, and always writes a result file
+    - `scripts/dev/relay-hardware-stable-version-command-to-uart.js` now exits cleanly after relay completion instead of leaving the parent PowerShell blocked
 
 ## Open Questions
 
 - what is the cleanest way to capture board-side command-consume evidence in parallel with the center-node serial feed
 - under the current USB dock setup, what is the stable two-port mapping when both the center-node serial adapter and any second debug/config adapter are connected
 - after direct peer injection succeeds, can the same peer port be kept for MQTT relay proof without changing wiring
-- do we want to fix `-RunInBackground` relay orchestration now that the foreground relay path is proven and sufficient
+- after the new ack bridge is in place, does one real API-entry `manual_collect` run already satisfy the next milestone, or do we also want dedicated `Web` / `Desk` wrappers afterward
 
 ## Done When
 
@@ -405,3 +436,15 @@ Push the current hardware-stable-version command proof from source-level and bro
     - `result.runtime_config.report_interval_s=5`
   - follow-up telemetry retained:
     - `meta.last_command_id=99907ef1-a5fb-4bf0-97bc-6d9276b264b6`
+- system-entry tooling is now ready for the next boundary:
+- system-entry tooling is now proven on real hardware too:
+  - the relay can optionally publish captured board acks into:
+    - `cmd_ack/{device_id}`
+  - a one-shot API live script now exists:
+    - `scripts/dev/run-hardware-stable-version-api-command-live.ps1`
+  - the first real run is now verified with:
+    - `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\run-hardware-stable-version-api-command-live.ps1 -Action manual-collect`
+  - and it has already been observed to:
+    - become `acked` in `/api/v1/devices/{device_id}/commands/{command_id}`
+    - emit `COMMAND_ACKED` through `/api/v1/devices/{device_id}/command-events`
+    - emit a readable command notification when `notifyOnAck=true`

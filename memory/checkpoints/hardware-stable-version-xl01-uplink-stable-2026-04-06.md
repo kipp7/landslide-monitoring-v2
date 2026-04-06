@@ -147,8 +147,13 @@ Carry the RK2206 + XL01 transparent serial work from stable uplink proof into th
 - if relay work is deferred, preserve the current baseline and stop changing ports, wiring, or serial mode
 - if no more relay coverage is needed, stop here and preserve this known-good baseline
 - if more tooling work is wanted, the only meaningful software-side follow-up is:
-  - repair `-RunInBackground`
-  - or refine the new foreground live helper if we want cleaner output or narrower command presets
+  - run one real API-entry proof with:
+    - `scripts/dev/run-hardware-stable-version-api-command-live.ps1 -Action manual-collect`
+  - verify:
+    - API command status becomes `acked`
+    - `COMMAND_ACKED` is visible through API
+    - command notification is visible when `notifyOnAck=true`
+  - only after that decide whether `Web` / `Desk` still need dedicated operator wrappers
 
 ## Risks
 
@@ -234,7 +239,41 @@ Carry the RK2206 + XL01 transparent serial work from stable uplink proof into th
     - tolerate null text in `Convert-MixedJsonText`
     - suppress progress output
     - fall back to reading the relay JSON out file directly
+- the next system-entry tooling gap is now addressed in code:
+  - `scripts/dev/relay-hardware-stable-version-command-to-uart.js`
+    now supports optional captured-ack publish back to:
+    - `cmd_ack/{device_id}`
+  - the PowerShell relay entrypoints now expose:
+    - `-PublishCapturedAck`
+  - a new operator script now exists:
+    - `scripts/dev/run-hardware-stable-version-api-command-live.ps1`
+  - it is intended to:
+    - start local `command-dispatcher`
+    - start local `command-ack-receiver`
+    - start local `command-events-recorder`
+    - start local `command-notify-worker`
+    - issue a delayed API command to `/api/v1/devices/{device_id}/commands`
+    - run the foreground `COM5` relay on the frozen-good UART path
+    - bridge the captured board ack into `cmd_ack/{device_id}`
+    - poll API command state / events / notifications for system-side closeout
+- the first real API-entry live proof is now complete on `2026-04-06`:
+  - command:
+    - `manual_collect`
+    - `command_id=502e939c-6ea2-493e-b333-8cf15cbb7695`
+  - operator entrypoint:
+    - `scripts/dev/run-hardware-stable-version-api-command-live.ps1 -Action manual-collect`
+  - validated result:
+    - API command status became `acked`
+    - API event list contained `COMMAND_ACKED`
+    - API notification list contained the matching command notification
+  - persisted proof report:
+    - `.tmp/hardware-stable-version-api-command-live-latest.json`
+  - current conclusion string:
+    - `api-command-live-proof-succeeded-with-api-close-loop`
+  - remaining nuance:
+    - `relayPublishedCapturedAck=false` can still happen because the board-side ack is not guaranteed to appear as a clean standalone JSON object inside the UART capture window
+    - but the real system close loop is already proven through API state, event, and notification evidence
 
 ## Resume Prompt
 
-Continue from this checkpoint by preserving the current `COM5` transparent baseline at `report_interval_s=5`; direct transparent proofs and full MQTT relay proofs now cover `manual_collect`, `set-report-300`, `set-report-5`, and mismatch, and a one-shot foreground live helper exists for runtime payloads, so the next meaningful step is either to stop at this frozen-good milestone or explicitly repair background relay orchestration rather than reopening transport debugging.
+Continue from this checkpoint by preserving the current `COM5` transparent baseline at `report_interval_s=5`; direct transparent proofs, full MQTT relay proofs, and one real API-entry live proof now cover `manual_collect`, `set-report-300`, `set-report-5`, and mismatch, so the next meaningful step is no longer more transport proof but higher-level system reuse of the already-closed path, e.g. `Web` / `Desk` entrypoints against the same `API -> Kafka -> command-dispatcher -> MQTT -> relay -> COM5 -> XL01 -> RK2206 -> cmd_ack -> command-ack-receiver -> API` chain.
