@@ -152,6 +152,19 @@ Push the current hardware-stable-version command proof from source-level and bro
     - `result.runtime_config.report_interval_s=300`
   - the user also confirmed the live telemetry cadence changed from `5s` to `300s`
   - this proves `set_config` is being consumed and applied on-device, not merely transported
+- the fast observation baseline has now been restored too:
+  - on `2026-04-06`, `set-report-5` was injected from center-node `COM5`
+  - the returned capture included:
+    - `status=acked`
+    - `result.runtime_config.report_interval_s=5`
+  - the user confirmed the live serial cadence returned to `5s`
+  - subsequent telemetry frames `seq=622/623/624/625` preserved:
+    - `meta.last_command_type=set_config`
+    - `meta.last_command_id=3a516d8d-998c-4281-821c-5dffa530a1f7`
+  - this re-establishes the practical frozen-good baseline for further testing:
+    - center-node `COM5`
+    - `ChunkStrategy=whole`
+    - report interval `5s`
 - a local script compatibility fix was also applied:
   - `scripts/dev/inject-hardware-stable-version-command.ps1` now forces `System.IO.Ports.SerialPort` loading before falling back, so `uart-com` writes can execute in the current PowerShell/.NET environment
 - the current shared report for this boundary is now:
@@ -170,6 +183,11 @@ Push the current hardware-stable-version command proof from source-level and bro
   - the current live center-node XL01 host port is `COM5`
   - `COM5` can now be treated as the validated transparent injection/observation port for this setup snapshot
   - older `COM9`/board-config mapping notes are historical and should not override the latest live proof
+  - current baseline behavior should be treated as:
+    - transparent mode
+    - `COM5`
+    - `ChunkStrategy=whole`
+    - `report_interval_s=5`
 
 ## Plan
 
@@ -179,6 +197,7 @@ Push the current hardware-stable-version command proof from source-level and bro
   - center-node serial port currently observed as `COM5`
   - `manual_collect` over `ChunkStrategy=whole` is proven good
   - `set-report-300` over `ChunkStrategy=whole` is proven good
+  - `set-report-5` over `ChunkStrategy=whole` is proven good
 - next verify one additional downlink class, preferably either:
   - mismatch `manual_collect`
 - before mismatch testing, restore the report cadence to `5s` so follow-up evidence is fast to observe
@@ -207,6 +226,7 @@ Push the current hardware-stable-version command proof from source-level and bro
 - at least two aligned command classes are proven through the same real transparent path:
   - `manual_collect`
   - `set_config` / `set-report-300`
+- the same `set_config` path is proven reversible by restoring `set-report-5`
 - at least one mismatch command is proven ignored through the same real path
 - the current relay wrappers can be used on the real UART path without ad hoc command reconstruction
 - the unified reports and monthly journal reflect the real hardware boundary, not only software-side proof

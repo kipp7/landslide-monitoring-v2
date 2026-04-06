@@ -44,10 +44,17 @@ Carry the RK2206 + XL01 transparent serial work from stable uplink proof into th
     - `result.applied=true`
     - `result.runtime_config.report_interval_s=300`
   - the user confirmed the live upload cadence actually changed to `300s`
+- the fast baseline has now been restored:
+  - `set-report-5` was sent through center-node `COM5`
+  - the returned ack showed:
+    - `status=acked`
+    - `result.runtime_config.report_interval_s=5`
+  - the user confirmed the live upload cadence returned to `5s`
+  - follow-up telemetry preserved the matching `last_command_id=3a516d8d-998c-4281-821c-5dffa530a1f7`
 
 ## In Progress
 
-- durable memory and the monthly journal are being updated to reflect that both `manual_collect` and `set-report-300` are now proven
+- durable memory and the monthly journal are being updated to reflect that `manual_collect`, `set-report-300`, and `set-report-5` are now proven
 - the next transition is from direct transparent command proof to mismatch guard proof and relay proof
 
 ## Next Actions
@@ -55,7 +62,6 @@ Carry the RK2206 + XL01 transparent serial work from stable uplink proof into th
 - keep the current wiring and transparent-serial settings unchanged
 - treat center-node `COM5` + `ChunkStrategy=whole` as the current frozen-good baseline
 - next verify one additional command path:
-- `set-report-5` to restore fast observation cadence
 - then mismatch `manual_collect` to prove guard/ignore behavior
 - if verifying mismatch, prove ignore behavior from absence of matching ack and unchanged `last_command_*`
 - after that, move to relay proof rather than reopening UART-route debugging
@@ -65,8 +71,8 @@ Carry the RK2206 + XL01 transparent serial work from stable uplink proof into th
 - the USB dock may not enumerate both CH340 devices consistently, which can hide the real peer port
 - changing wiring or serial settings now would destroy the newly proven good uplink + downlink baseline
 - future failures on other commands may still come from command semantics or runtime state rather than transport
-- leaving the node at `300s` report cadence will slow down follow-up validation and can look like a regression when it is not
+- future port remapping, dock enumeration drift, or switching back to non-baseline modes can recreate the earlier false-failure symptoms
 
 ## Resume Prompt
 
-Continue from this checkpoint by preserving the current `COM5` transparent baseline, first restore `set-report-5`, then prove mismatch ignore behavior before moving to MQTT relay.
+Continue from this checkpoint by preserving the current `COM5` transparent baseline at `report_interval_s=5`, then prove mismatch ignore behavior before moving to MQTT relay.
