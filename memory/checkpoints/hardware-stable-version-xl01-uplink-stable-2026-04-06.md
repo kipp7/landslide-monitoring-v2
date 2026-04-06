@@ -61,11 +61,20 @@ Carry the RK2206 + XL01 transparent serial work from stable uplink proof into th
     - `meta.last_command_type=set_config`
     - `meta.last_command_id=3a516d8d-998c-4281-821c-5dffa530a1f7`
     - `meta.last_command_uptime_s=3661`
+- the local MQTT side is now also partially proven:
+  - local `EMQX` was started and confirmed listening on `127.0.0.1:1883`
+  - local `lsmv2_api` was started with valid MQTT internal credentials and webhook token
+  - direct MQTT publish of `manual_collect` now succeeds to:
+    - `cmd/00000000-0000-0000-0000-000000000001`
+  - a real relay run subscribed and received that same command successfully
+  - the relay failed only when opening `COM5`, with:
+    - `Access to the port 'COM5' is denied`
+  - relay scripts were updated to support `ReadAfterWriteSeconds` so final board-side capture is available once `COM5` is free
 
 ## In Progress
 
-- durable memory and the monthly journal are being updated to reflect that aligned and mismatch transparent proofs are now complete
-- the next transition is from direct transparent proof to MQTT relay proof
+- durable memory and the monthly journal are being updated to reflect that transparent proofs are complete and MQTT ingress/relay subscription are now proven too
+- the next transition is from partial MQTT relay proof to full MQTT -> UART -> board proof
 
 ## Next Actions
 
@@ -73,6 +82,11 @@ Carry the RK2206 + XL01 transparent serial work from stable uplink proof into th
 - treat center-node `COM5` + `ChunkStrategy=whole` as the current frozen-good baseline
 - after that, move to relay proof rather than reopening UART-route debugging
 - if relay work is deferred, preserve the current baseline and stop changing ports, wiring, or serial mode
+- close every tool still holding `COM5`
+- rerun the direct MQTT relay with `ReadAfterWriteSeconds=20`
+- validate final success from:
+  - relay `sinkResult.capture`
+  - matching ack / telemetry on the COM5 path
 
 ## Risks
 
@@ -80,7 +94,8 @@ Carry the RK2206 + XL01 transparent serial work from stable uplink proof into th
 - changing wiring or serial settings now would destroy the newly proven good uplink + downlink baseline
 - future failures on other commands may still come from command semantics or runtime state rather than transport
 - future port remapping, dock enumeration drift, or switching back to non-baseline modes can recreate the earlier false-failure symptoms
+- a serial monitor or other host process may silently hold `COM5` and make the MQTT relay look broken even when broker/auth/topic routing are already correct
 
 ## Resume Prompt
 
-Continue from this checkpoint by preserving the current `COM5` transparent baseline at `report_interval_s=5`; transparent aligned commands and mismatch guard are now proven, so the next meaningful step is MQTT relay proof.
+Continue from this checkpoint by preserving the current `COM5` transparent baseline at `report_interval_s=5`; transparent aligned commands and mismatch guard are proven, MQTT publish and relay subscription are proven, and the only remaining blocker to full MQTT relay proof is freeing `COM5` for the relay writer.

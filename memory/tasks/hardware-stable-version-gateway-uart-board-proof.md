@@ -178,6 +178,30 @@ Push the current hardware-stable-version command proof from source-level and bro
   - this proves the board ignored the mismatched command exactly as intended
 - a local script compatibility fix was also applied:
   - `scripts/dev/inject-hardware-stable-version-command.ps1` now forces `System.IO.Ports.SerialPort` loading before falling back, so `uart-com` writes can execute in the current PowerShell/.NET environment
+- the local MQTT relay path is now materially advanced:
+  - local `EMQX` on `127.0.0.1:1883` was brought up from compose
+  - local `lsmv2_api` was brought up with matching:
+    - `MQTT_INTERNAL_PASSWORD`
+    - `EMQX_WEBHOOK_TOKEN`
+  - `infra/compose/.env` was updated locally so future compose restarts preserve those values
+  - direct MQTT command publish is now real and successful for:
+    - `sample=manual_collect`
+    - `topic=cmd/00000000-0000-0000-0000-000000000001`
+    - `command_id=00000000-0000-4000-8000-000000002003`
+  - relay tooling now supports UART capture during MQTT relay writes:
+    - `scripts/dev/start-hardware-stable-version-mqtt-uart-relay.ps1`
+    - `scripts/dev/relay-hardware-stable-version-command-to-uart.js`
+    both now accept/pass `ReadAfterWriteSeconds`
+  - a real MQTT relay attempt was executed:
+    - the relay subscribed successfully to `cmd/00000000-0000-0000-0000-000000000001`
+    - the relay received the published command with matching:
+      - `commandId=00000000-0000-4000-8000-000000002003`
+      - `deviceId=00000000-0000-0000-0000-000000000001`
+      - `commandType=manual_collect`
+    - the relay then failed only at the final UART-open step with:
+      - `Access to the port 'COM5' is denied`
+  - this means the remaining blocker for full MQTT -> UART -> board proof is no longer broker/auth/topic routing
+    but exclusive access to `COM5`
 - the current shared report for this boundary is now:
   - `docs/unified/reports/hardware-stable-version-xl01-peer-command-plan-latest.md`
 
@@ -218,12 +242,17 @@ Push the current hardware-stable-version command proof from source-level and bro
   - board-side receive evidence
 - capture one mismatch sample end-to-end through the same peer-XL01 path and prove board-side ignore behavior
 - update unified reports and journal after each real hardware boundary is crossed
+- next for MQTT relay proof:
+  - ensure no serial assistant or other process is holding `COM5`
+  - rerun the direct relay attempt using `start-hardware-stable-version-mqtt-uart-relay.ps1`
+  - capture the returned `sinkResult.capture` as the final board-side evidence
 
 ## Open Questions
 
 - what is the cleanest way to capture board-side command-consume evidence in parallel with the center-node serial feed
 - under the current USB dock setup, what is the stable two-port mapping when both the center-node serial adapter and any second debug/config adapter are connected
 - after direct peer injection succeeds, can the same peer port be kept for MQTT relay proof without changing wiring
+- which local process is still holding `COM5` during the relay attempt
 - when the peer UART is confirmed, which first command is safest to use for real board-side proof:
   - `set_sampling_interval`
   - another non-destructive command
