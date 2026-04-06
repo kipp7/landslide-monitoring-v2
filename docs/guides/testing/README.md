@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/testing/readme
+---
+
 # guides/testing/
 
 本目录用于“可执行验收”的测试与验证文档，目标是让重构过程具备闭环：
@@ -10,6 +16,8 @@
 
 - 单机基础设施冒烟测试：`docs/guides/testing/single-host-smoke-test.md`
 - Web 本地登录联调：`docs/guides/testing/web-local-dev.md`
+- 正式命令入口稳定线路：`docs/guides/testing/command-entry-stable-route.md`
+- 正式命令入口统一总检：`powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/check-command-entry-stable-route.ps1`
 - Desk `notifyOnAck` 客户端回归：`powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/check-desk-command-notify-on-ack.ps1`
 - Web `notifyOnAck` 客户端回归：`powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/check-web-command-notify-on-ack.ps1`
 - 命令 success-notification command-type default proof：`powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/check-field-command-success-notification-type-default-proof.ps1`

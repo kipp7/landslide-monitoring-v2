@@ -299,6 +299,7 @@ Push the current hardware-stable-version command proof from source-level and bro
 - current board-side blocker appears to be physical path correctness, not broker/auth/relay software
 - after the first successful flash, the immediate blocker is no longer flashing itself but runtime stability on-device
 - do not repurpose `PB2/PB3`; they are the board-side XL01 UART and already match the established hardware truth
+- do not create a new business-side command path when a fresh hardware gate fails; keep formal entry at `/api/v1/devices/{deviceId}/commands`
 - current working assumption is:
   - the current live center-node XL01 host port is `COM5`
   - `COM5` can now be treated as the validated transparent injection/observation port for this setup snapshot
@@ -371,6 +372,23 @@ Push the current hardware-stable-version command proof from source-level and bro
     - `infra/compose/docker-compose.app.yml` now forces app containers to use `kafka:9092` rather than container-local `localhost:9094`
     - `scripts/dev/run-hardware-stable-version-api-command-live.ps1` now survives Windows PowerShell 5.1 file encoding limits, logs every major stage, and always writes a result file
     - `scripts/dev/relay-hardware-stable-version-command-to-uart.js` now exits cleanly after relay completion instead of leaving the parent PowerShell blocked
+- the product-side route is now frozen too:
+  - `Desk` and `Web` both enter through:
+    - `POST /api/v1/devices/{deviceId}/commands`
+  - `scripts/dev/check-command-entry-stable-route.ps1`
+    now provides the unified route-health report:
+    - `docs/unified/reports/command-entry-stable-route-summary-latest.json`
+  - on `2026-04-07`, the checker itself was hardened for:
+    - Windows PowerShell 5.1
+    - Chinese and space-containing repo paths
+    - child-process hang avoidance via direct `WaitForExit()`
+  - the latest fresh rerun also exposed the current field regression explicitly:
+    - `command_id=4507a1ff-d76d-4163-a3b3-882888aeeaf7`
+    - API command status stayed `sent`
+    - relay capture stayed at:
+      - `bytes=0`
+      - `lineCount=0`
+    - this means the route is now formally fixed, but fresh hardware live remains a real gate
 
 ## Open Questions
 
@@ -378,6 +396,7 @@ Push the current hardware-stable-version command proof from source-level and bro
 - under the current USB dock setup, what is the stable two-port mapping when both the center-node serial adapter and any second debug/config adapter are connected
 - after direct peer injection succeeds, can the same peer port be kept for MQTT relay proof without changing wiring
 - after the new ack bridge is in place, does one real API-entry `manual_collect` run already satisfy the next milestone, or do we also want dedicated `Web` / `Desk` wrappers afterward
+- what changed in the field state between the successful API live proofs and the `2026-04-07` rerun where `COM5` returned `0` capture bytes
 
 ## Done When
 
@@ -448,3 +467,6 @@ Push the current hardware-stable-version command proof from source-level and bro
     - become `acked` in `/api/v1/devices/{device_id}/commands/{command_id}`
     - emit `COMMAND_ACKED` through `/api/v1/devices/{device_id}/command-events`
     - emit a readable command notification when `notifyOnAck=true`
+- higher-level route stability now also requires:
+  - `Desk` / `Web` still converging on `/api/v1/devices/{deviceId}/commands`
+  - the latest fresh API live gate not regressing into `status=sent` with `relayCaptureBytes=0`

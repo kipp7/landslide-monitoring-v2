@@ -1,0 +1,54 @@
+﻿{
+    "generatedAt":  "2026-04-06T17:54:08Z",
+    "officialRoute":  {
+                          "sourceOfTruth":  "api-v1-device-commands",
+                          "endpoint":  "/api/v1/devices/{deviceId}/commands",
+                          "frozenHardwareBaseline":  {
+                                                         "port":  "COM5",
+                                                         "xl01Mode":  "transparent USR",
+                                                         "chunkStrategy":  "whole",
+                                                         "reportIntervalSeconds":  5
+                                                     },
+                          "quickCommandGate":  "powershell -NoProfile -ExecutionPolicy Bypass -File .\\\\scripts\\\\dev\\\\run-hardware-stable-version-api-command-live.ps1 -Action manual-collect",
+                          "summaryScript":  "powershell -NoProfile -ExecutionPolicy Bypass -File .\\\\scripts\\\\dev\\\\check-command-entry-stable-route.ps1"
+                      },
+    "checks":  {
+                   "deskClientContract":  {
+                                              "ok":  true,
+                                              "baseUrl":  "http://127.0.0.1:8081",
+                                              "deviceId":  "00000000-0000-0000-0000-000000000002",
+                                              "defaultCommandId":  "f9c361a2-b405-4b65-a75e-085f166d0db3",
+                                              "optInCommandId":  "75031f7d-bc2a-444f-8e59-ef2c609e5f94",
+                                              "reportFile":  "docs/unified/reports/desk-command-notify-on-ack-proof-latest.json"
+                                          },
+                   "webClientContract":  {
+                                             "ok":  true,
+                                             "baseUrl":  "http://127.0.0.1:8081",
+                                             "deviceId":  "b0f9382d-464a-4cce-a36c-3a890d1c63a8",
+                                             "defaultCommandId":  "076b6310-0ad9-4e7f-8e0b-5108da05f8c6",
+                                             "optInCommandId":  "1f06f74b-9cb2-44af-b6f1-3f6c58dc2919",
+                                             "reportFile":  "docs/unified/reports/web-command-notify-on-ack-proof-latest.json"
+                                         },
+                   "hardwareApiLive":  {
+                                           "ok":  false,
+                                           "generatedAt":  "2026-04-06T17:46:29Z",
+                                           "action":  "manual-collect",
+                                           "apiBaseUrl":  "http://127.0.0.1:8081/api/v1",
+                                           "commandId":  "4507a1ff-d76d-4163-a3b3-882888aeeaf7",
+                                           "commandStatus":  "sent",
+                                           "relayConclusion":  "mqtt-command-received-and-converted-into-uart-ready-relay-plan",
+                                           "relayPublishedCapturedAck":  false,
+                                           "relayCaptureBytes":  0,
+                                           "relayCaptureLines":  0,
+                                           "reportFile":  ".tmp/hardware-stable-version-api-command-live-latest.json",
+                                           "conclusion":  "api-command-live-proof-needs-review"
+                                       }
+               },
+    "allChecksOk":  false,
+    "conclusion":  "client-entry-contracts-verified-but-hardware-api-live-needs-refresh",
+    "nextUse":  [
+                    "Use Desk/Web only through /api/v1/devices/{deviceId}/commands for formal command entry",
+                    "Use run-hardware-stable-version-api-command-live.ps1 as the hardware gate before field changes",
+                    "Do not reopen UART route debugging while the frozen baseline remains COM5 + transparent USR + whole + 5s"
+                ]
+}

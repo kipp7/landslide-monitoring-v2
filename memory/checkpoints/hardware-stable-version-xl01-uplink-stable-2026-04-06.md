@@ -129,15 +129,34 @@ Carry the RK2206 + XL01 transparent serial work from stable uplink proof into th
     - ack showed `result.runtime_config.report_interval_s=5`
     - follow-up telemetry updated `meta.last_command_id=4627c805-0a7a-4da6-910f-2d4c05a2eead`
   - this means the known-good manual choreography no longer requires two separate operator windows
+- the formal product route is now frozen to:
+  - `Desk/Web -> POST /api/v1/devices/{deviceId}/commands`
+- a unified route-health checker now exists:
+  - `scripts/dev/check-command-entry-stable-route.ps1`
+  - output:
+    - `docs/unified/reports/command-entry-stable-route-summary-latest.json`
+- on `2026-04-07`, that checker was hardened for Windows PowerShell 5.1 plus Chinese-path child-process handling
+- the latest no-refresh run confirmed:
+  - Desk client contract `ok=true`
+  - Web client contract `ok=true`
+  - hardware live report `ok=true`
+  - unified conclusion:
+    - `command-entry-stable-route-verified-across-desk-web-and-hardware-api-live`
+- a later fresh hardware rerun through the same checker exposed the current field risk:
+  - `command_id=4507a1ff-d76d-4163-a3b3-882888aeeaf7`
+  - API command state stayed `sent`
+  - relay capture stayed at:
+    - `bytes=0`
+    - `lineCount=0`
+  - the checker now reports that regression directly instead of hanging
 
 ## In Progress
 
-- durable memory and the monthly journal are being updated to reflect that MQTT relay coverage now includes:
-  - `manual_collect`
-  - `set-report-300`
-  - `set-report-5`
-  - mismatch
-- the next transition is no longer broader command proof on this path, but whether to stop at the frozen-good baseline or repair background relay orchestration
+- durable memory and the monthly journal are being updated to reflect that the formal route is now:
+  - `Desk/Web -> API -> Kafka -> dispatcher -> MQTT -> relay -> COM5 -> XL01 -> RK2206 -> cmd_ack -> API`
+- the immediate blocker is no longer script orchestration but the latest fresh hardware rerun that produced:
+  - `status=sent`
+  - `relayCaptureBytes=0`
 
 ## Next Actions
 
@@ -146,14 +165,14 @@ Carry the RK2206 + XL01 transparent serial work from stable uplink proof into th
 - after that, do not reopen UART-route debugging unless hardware facts change
 - if relay work is deferred, preserve the current baseline and stop changing ports, wiring, or serial mode
 - if no more relay coverage is needed, stop here and preserve this known-good baseline
-- if more tooling work is wanted, the only meaningful software-side follow-up is:
-  - run one real API-entry proof with:
-    - `scripts/dev/run-hardware-stable-version-api-command-live.ps1 -Action manual-collect`
-  - verify:
-    - API command status becomes `acked`
-    - `COMMAND_ACKED` is visible through API
-    - command notification is visible when `notifyOnAck=true`
-  - only after that decide whether `Web` / `Desk` still need dedicated operator wrappers
+- keep the only formal business entry at:
+  - `POST /api/v1/devices/{deviceId}/commands`
+- use:
+  - `scripts/dev/check-command-entry-stable-route.ps1`
+  as the first route-health command
+- before any new higher-level acceptance run, restore a fresh successful hardware gate:
+  - rerun `manual-collect`
+  - confirm the summary no longer shows `status=sent` plus `relayCaptureBytes=0`
 
 ## Risks
 
@@ -162,6 +181,9 @@ Carry the RK2206 + XL01 transparent serial work from stable uplink proof into th
 - future failures on other commands may still come from command semantics or runtime state rather than transport
 - future port remapping, dock enumeration drift, or switching back to non-baseline modes can recreate the earlier false-failure symptoms
 - a serial monitor or other host process can still steal `COM5` on future runs and recreate false relay failures
+- even when `Desk` / `Web` contract checks pass, a fresh API live rerun can still fail at the field boundary with:
+  - `status=sent`
+  - `relayCaptureBytes=0`
 - `-RunInBackground` is not yet a trusted reproduction path for live MQTT relay proof in this shell environment
 - the new helper is trusted for runtime `set_config` proof, but `manual_collect` should still be sent with a fresh runtime payload rather than a reused static sample when board-side ack evidence matters
 - a dedicated operator wrapper now exists for that fresh runtime `manual_collect` case:
@@ -276,4 +298,4 @@ Carry the RK2206 + XL01 transparent serial work from stable uplink proof into th
 
 ## Resume Prompt
 
-Continue from this checkpoint by preserving the current `COM5` transparent baseline at `report_interval_s=5`; direct transparent proofs, full MQTT relay proofs, and one real API-entry live proof now cover `manual_collect`, `set-report-300`, `set-report-5`, and mismatch, so the next meaningful step is no longer more transport proof but higher-level system reuse of the already-closed path, e.g. `Web` / `Desk` entrypoints against the same `API -> Kafka -> command-dispatcher -> MQTT -> relay -> COM5 -> XL01 -> RK2206 -> cmd_ack -> command-ack-receiver -> API` chain.
+Continue from this checkpoint by preserving the current `COM5` transparent baseline at `report_interval_s=5`; the formal product route is now fixed to `Desk/Web -> /api/v1/devices/{deviceId}/commands`, and `scripts/dev/check-command-entry-stable-route.ps1` is the unified gate. Verify the latest summary first. If it shows a fresh hardware regression such as `status=sent` with `relayCaptureBytes=0`, treat that as a current field-state problem on the frozen route and do not create a new command side-path. Once a fresh API live `manual_collect` succeeds again, continue higher-level reuse of the same `API -> Kafka -> command-dispatcher -> MQTT -> relay -> COM5 -> XL01 -> RK2206 -> cmd_ack -> command-ack-receiver -> API` chain.
