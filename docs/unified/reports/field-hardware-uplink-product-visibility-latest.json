@@ -1,0 +1,98 @@
+{
+  "generatedAt": "2026-04-07T16:20:24.108Z",
+  "mode": "field-hardware-uplink-product-visibility",
+  "replayReport": "docs/unified/reports/field-hardware-uplink-replay-latest.json",
+  "webBaseUrl": "http://127.0.0.1:3000",
+  "deviceId": "1e0358b7-eaee-4079-aef1-1fc3162dbbfe",
+  "pageChecks": [
+    {
+      "url": "http://127.0.0.1:3000/login",
+      "status": 200,
+      "ok": true,
+      "bodyPreview": "<!DOCTYPE html><html lang=\"en\"><head><meta charSet=\"utf-8\"/><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/><link rel=\"preload\" href=\"/_next/static/media/4cf2300e9c8272f7-s.p.woff"
+    },
+    {
+      "url": "http://127.0.0.1:3000/device-management",
+      "status": 200,
+      "ok": true,
+      "bodyPreview": "<!DOCTYPE html><html lang=\"en\"><head><meta charSet=\"utf-8\"/><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/><link rel=\"preload\" href=\"/_next/static/media/4cf2300e9c8272f7-s.p.woff"
+    }
+  ],
+  "proxyAuth": {
+    "loginUrl": "http://127.0.0.1:3000/api/v1/auth/login",
+    "userId": "20000000-0000-0000-0000-000000000001",
+    "username": "admin",
+    "roleCount": 1,
+    "meStatus": 200
+  },
+  "proxyReadPath": {
+    "devicesUrl": "http://127.0.0.1:3000/api/v1/devices?page=1&pageSize=100",
+    "stateUrl": "http://127.0.0.1:3000/api/v1/data/state/1e0358b7-eaee-4079-aef1-1fc3162dbbfe",
+    "deviceFound": true,
+    "listCount": 10,
+    "matchedDeviceLastSeenAt": "2026-04-07T16:07:20.595Z",
+    "updatedAt": "2026-04-07T16:07:20Z",
+    "metricsKeys": [
+      "accel_x_g",
+      "accel_y_g",
+      "accel_z_g",
+      "gyro_x_dps",
+      "gyro_y_dps",
+      "gyro_z_dps",
+      "tilt_x_deg",
+      "tilt_y_deg",
+      "battery_pct",
+      "gps_latitude",
+      "humidity_pct",
+      "warning_flag",
+      "gps_longitude",
+      "temperature_c"
+    ],
+    "metricsPreview": {
+      "temperature_c": 29.5,
+      "humidity_pct": 50.1,
+      "tilt_x_deg": 5.12,
+      "gps_latitude": 22.5432
+    },
+    "metaPreview": {
+      "install_label": "FIELD-NODE-A",
+      "replay_kind": "real_hardware_capture",
+      "upload_trigger": "periodic"
+    }
+  },
+  "webClientReadPath": {
+    "meUserId": "20000000-0000-0000-0000-000000000001",
+    "meUsername": "admin",
+    "deviceFound": true,
+    "listCount": 10,
+    "updatedAt": "2026-04-07T16:07:20Z",
+    "metricsKeys": [
+      "accel_x_g",
+      "accel_y_g",
+      "accel_z_g",
+      "gyro_x_dps",
+      "gyro_y_dps",
+      "gyro_z_dps",
+      "tilt_x_deg",
+      "tilt_y_deg",
+      "battery_pct",
+      "gps_latitude",
+      "humidity_pct",
+      "warning_flag",
+      "gps_longitude",
+      "temperature_c"
+    ],
+    "metricsPreview": {
+      "temperature_c": 29.5,
+      "humidity_pct": 50.1,
+      "tilt_x_deg": 5.12,
+      "gps_latitude": 22.5432
+    },
+    "metaPreview": {
+      "install_label": "FIELD-NODE-A",
+      "replay_kind": "real_hardware_capture",
+      "upload_trigger": "periodic"
+    }
+  },
+  "conclusion": "real-hardware-uplink-visible-through-web-product-read-path"
+}

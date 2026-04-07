@@ -64,9 +64,22 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - host-run `ingest-service` consumed MQTT and wrote Kafka
     - host-run `telemetry-writer` updated `device_state`
     - `/api/v1/data/state/{deviceId}` returned replayed metrics and meta
+- product-side Web visibility proof now also exists for the same replayed device:
+  - script:
+    - `scripts/dev/run-field-hardware-uplink-product-visibility.ps1`
+  - latest report:
+    - `docs/unified/reports/field-hardware-uplink-product-visibility-latest.json`
+  - latest conclusion:
+    - `real-hardware-uplink-visible-through-web-product-read-path`
+  - latest proof confirms:
+    - `http://127.0.0.1:3000/login` and `http://127.0.0.1:3000/device-management` respond normally
+    - `http://127.0.0.1:3000/api/v1/auth/login` can proxy login and return JWT
+    - `http://127.0.0.1:3000/api/v1/devices` includes the replayed device
+    - `http://127.0.0.1:3000/api/v1/data/state/{deviceId}` returns the replayed real-hardware metrics
+    - `apps/web/lib/api/*` can read the same device state through the Web-side client path
 - the decisive unfinished boundary is no longer command delivery; it is:
   - gateway-owned adaptation of field telemetry into a platform-acceptable uplink contract
-  - and proof that the data is visible through ingest/API/Desk-side read paths
+  - and making the field-side ingress path repeatable without depending on ad hoc host-run steps
 
 ## Constraints
 
@@ -93,17 +106,18 @@ Freeze and execute the next major phase after command-route stabilization: prove
 - stage 3: platform visibility rehearsal
   - replay path to API state is now proven through:
     - `scripts/dev/run-field-hardware-uplink-replay-full-path.ps1`
-  - keep the remaining visibility gap focused on:
-    - Desk/Web-visible read-path impact if available
+  - replay path to Web product read visibility is now proven through:
+    - `scripts/dev/run-field-hardware-uplink-product-visibility.ps1`
+  - current next focus after visibility proof is:
+    - make the gateway/uplink rehearsal path more repeatable and less host-manual
 
 ## Open Questions
 
 - should the short-term gateway adapter publish MQTT as the primary rehearsal path immediately, or use HTTP fallback only as a temporary debug side path
 - what is the minimal acceptable gateway-side spool/cache record for replay and outage evidence
-- which read path should be treated as the primary product proof for phase 1:
-  - raw ingest acceptance
+- phase 1 product proof is now effectively satisfied by:
   - API query visibility
-  - Desk/Web UI visibility
+  - Web-side proxy/client visibility
 - should `ingest-service` and `telemetry-writer` remain host-run rehearsal processes, or be added to the compose app stack for repeatable local full-path proof
 
 ## Done When
@@ -120,4 +134,7 @@ Freeze and execute the next major phase after command-route stabilization: prove
   - MQTT topic
   - `device_state`
   - `/api/v1/data/state/{deviceId}`
+- the same replayed telemetry is visible through the Web product read path via:
+  - `http://127.0.0.1:3000/api/v1/*`
+  - `apps/web/lib/api/*`
 - a later session can resume this phase directly from this note without re-deriving the current command-route baseline

@@ -223,19 +223,34 @@ permalink: landslide-monitoring-v2-mainline/docs/unified/reports/field-uplink-pl
 
 以下问题仍然真实存在，但它们不再阻止我们进入一期上行 rehearsal：
 
-### 6.1 平台可见性证据还没补齐
+### 6.1 平台可见性证据已经补齐，但重复性还要继续收口
 
 目前我们已经有：
 
 - 现场串口可见
 - 命令闭环可见
-
-但还缺：
-
-- 一条真实或回放的现场遥测消息进入平台后的：
+- 真机样本经 replay 进入平台后的：
   - ingest acceptance
   - API visibility
   - Desk/Web visibility
+
+当前已经存在两条关键证据：
+
+- `docs/unified/reports/field-hardware-uplink-replay-latest.json`
+  - 证明真机样本已经进入：
+    - MQTT
+    - `device_state`
+    - `/api/v1/data/state/{deviceId}`
+- `docs/unified/reports/field-hardware-uplink-product-visibility-latest.json`
+  - 证明同一 replay 设备已经能通过：
+    - `http://127.0.0.1:3000/api/v1/devices`
+    - `http://127.0.0.1:3000/api/v1/data/state/{deviceId}`
+    - `apps/web/lib/api/*`
+    被产品侧读到
+
+因此，当前剩下的问题已经不再是“能不能看见”，而是：
+
+- 这条现场上行 -> 平台 -> 产品读路径怎样变成更稳定、可重复、少人工的标准 rehearsal 线
 
 ### 6.2 时间戳策略还没冻结
 
@@ -267,10 +282,11 @@ permalink: landslide-monitoring-v2-mainline/docs/unified/reports/field-uplink-pl
 - 输入：串口分片文本流或已捕获文本
 - 输出：平台可接受遥测消息
 
-3. 做三段 acceptance probe
+3. 保持三段 acceptance probe 为固定验收项
 - ingest acceptance
 - API visibility
 - Desk/Web visibility
+- 当前这三段都已经至少成功留证一次
 
 4. 生成一份单次 rehearsal 证据包
 - 原始样本
@@ -285,7 +301,8 @@ permalink: landslide-monitoring-v2-mainline/docs/unified/reports/field-uplink-pl
 - 现场节点上行已经不是“老旧扁平 JSON 还没贴平台”的状态
 - 当前一期网关应按“薄适配器”来设计
 - 当前阶段主 blocker 也不再是命令链，而是：
-  - 把已接近标准的现场遥测稳定送进平台并证明可见
+  - 把已接近标准的现场遥测稳定送进平台
+  - 并把这条 rehearsal 线做成可重复、低人工依赖的固定流程
 
 因此，从这份基线开始，当前阶段的主问题不再表述为：
 
@@ -302,3 +319,5 @@ permalink: landslide-monitoring-v2-mainline/docs/unified/reports/field-uplink-pl
 - [hardware-stable-version-adaptation-gap.md](/E:/学校/02 项目/99 山体滑坡优化完善/landslide-monitoring-v2-mainline/docs/unified/reports/hardware-stable-version-adaptation-gap.md)
 - [field-hardware-gateway-architecture-eval.md](/E:/学校/02 项目/99 山体滑坡优化完善/landslide-monitoring-v2-mainline/docs/unified/reports/field-hardware-gateway-architecture-eval.md)
 - [command-entry-stable-route-summary-latest.json](/E:/学校/02 项目/99 山体滑坡优化完善/landslide-monitoring-v2-mainline/docs/unified/reports/command-entry-stable-route-summary-latest.json)
+- [field-hardware-uplink-replay-latest.json](/E:/学校/02 项目/99 山体滑坡优化完善/landslide-monitoring-v2-mainline/docs/unified/reports/field-hardware-uplink-replay-latest.json)
+- [field-hardware-uplink-product-visibility-latest.json](/E:/学校/02 项目/99 山体滑坡优化完善/landslide-monitoring-v2-mainline/docs/unified/reports/field-hardware-uplink-product-visibility-latest.json)
