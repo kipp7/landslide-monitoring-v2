@@ -60,6 +60,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-command-
 
 - `docs/unified/reports/command-entry-stable-route-summary-latest.json`
 
+硬件 live 脚本还会在成功时额外维护：
+
+- `.tmp/hardware-stable-version-api-command-live-last-success.json`
+
 ## 4) 需要真机重新跑一遍时
 
 如果你希望在总检时顺带刷新一条新的真机命令闭环：
@@ -121,6 +125,26 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-command-
 - `relayCaptureBytes = 0`
 
 优先判断为“本次 fresh hardware gate 没拿到 `COM5` 的现场回包”，而不是先回退去怀疑 `Desk` / `Web` 命令入口契约。
+
+如果还带有：
+
+- `failureClass = uart-no-capture-after-write`
+- `passiveSerialProbe.classification = silent`
+
+优先判断为“这次 `COM5` 在命令写入后就是静默的”。
+
+如果存在：
+
+- `checks.hardwareApiLiveLastSuccess.available = true`
+
+说明这条正式线路曾经在同一路径上通过过，只是最新现场状态回落了，不要因此另开新的业务命令入口。
+
+如果 summary 里还有：
+
+- `checks.hardwarePassiveProbe.anyTrafficObserved = false`
+- `checks.hardwarePassiveProbe.dominantClassification = silent`
+
+说明最新被动观察下，`COM5` 本身就没有可读流量。
 
 如果是某个子检查脚本自身失败，再看：
 

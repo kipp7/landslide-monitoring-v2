@@ -15,6 +15,8 @@ param(
   [int]$RelayTimeoutSeconds = 60,
   [int]$PublishDelaySeconds = 10,
   [int]$CommandPollTimeoutSeconds = 30,
+  [int]$FailurePassiveProbeSeconds = 4,
+  [string]$LatestSuccessOutFile = ".tmp/hardware-stable-version-api-command-live-last-success.json",
   [string]$OutFile = ".tmp/hardware-stable-version-api-command-live-latest.json"
 )
 
@@ -175,6 +177,106 @@ function Get-RepoRelativePath {
     return [System.Uri]::UnescapeDataString($relativeUri.ToString()).Replace('/', '/')
   } catch {
     return $targetFull.Replace('\', '/')
+  }
+}
+
+function Get-SerialPortType {
+  try {
+    return [System.IO.Ports.SerialPort]
+  } catch {
+  }
+
+  try {
+    Add-Type -AssemblyName "System.IO.Ports" -ErrorAction Stop
+    return [System.IO.Ports.SerialPort]
+  } catch {
+  }
+
+  $type = [System.Type]::GetType("System.IO.Ports.SerialPort, System.IO.Ports")
+  if (-not $type) {
+    $type = [System.Type]::GetType("System.IO.Ports.SerialPort")
+  }
+  return $type
+}
+
+function Invoke-PassiveSerialProbe {
+  param(
+    [string]$PortName,
+    [int]$PortBaudRate,
+    [int]$Seconds,
+    [int]$PollMs = 100
+  )
+
+  if ($Seconds -le 0) {
+    return $null
+  }
+
+  $serialPortType = Get-SerialPortType
+  if (-not $serialPortType) {
+    return [ordered]@{
+      executed = $false
+      reason = "system-io-ports-unavailable"
+    }
+  }
+
+  $serial = New-Object System.IO.Ports.SerialPort $PortName, $PortBaudRate, ([System.IO.Ports.Parity]::None), 8, ([System.IO.Ports.StopBits]::One)
+  $serial.Handshake = [System.IO.Ports.Handshake]::None
+  $serial.DtrEnable = $false
+  $serial.RtsEnable = $false
+  $serial.ReadTimeout = 250
+  $builder = New-Object System.Text.StringBuilder
+  $effectivePollMs = if ($PollMs -gt 0) { $PollMs } else { 100 }
+  $start = Get-Date
+
+  try {
+    $serial.Open()
+    while (((Get-Date) - $start).TotalSeconds -lt $Seconds) {
+      try {
+        $text = $serial.ReadExisting()
+        if ($text) {
+          [void]$builder.Append($text)
+        }
+      } catch {
+      }
+      Start-Sleep -Milliseconds $effectivePollMs
+    }
+  } catch {
+    return [ordered]@{
+      executed = $false
+      reason = "serial-open-failed"
+      message = $_.Exception.Message
+      port = $PortName
+      baudRate = $PortBaudRate
+    }
+  } finally {
+    if ($serial.IsOpen) {
+      $serial.Close()
+    }
+    $serial.Dispose()
+  }
+
+  $capturedText = $builder.ToString()
+  $bytes = [System.Text.Encoding]::UTF8.GetByteCount($capturedText)
+  $asciiBytes = [System.Text.Encoding]::UTF8.GetBytes($capturedText) | Where-Object { $_ -ge 0x20 -and $_ -le 0x7E } | Measure-Object | Select-Object -ExpandProperty Count
+  $lineCount = @(($capturedText -split "`r?`n") | Where-Object { $_ -ne "" }).Count
+
+  return [ordered]@{
+    executed = $true
+    port = $PortName
+    baudRate = $PortBaudRate
+    seconds = $Seconds
+    pollMs = $effectivePollMs
+    bytes = $bytes
+    lineCount = $lineCount
+    asciiByteCount = $asciiBytes
+    classification = if ($bytes -eq 0) {
+      "silent"
+    } elseif ($asciiBytes -gt 0) {
+      "contains-readable-text"
+    } else {
+      "binary-or-unstructured-stream"
+    }
+    textPreview = if ($capturedText.Length -gt 400) { $capturedText.Substring(0, 400) } else { $capturedText }
   }
 }
 
@@ -923,10 +1025,36 @@ try {
   Write-LiveDebugStage -Path $debugLogFile -Stage "notification-ready" -Detail ("count={0}" -f @($notificationList.data.list).Count)
 
   $relayAckPublished = [bool]($relayResult -and $relayResult.ackPublish -and $relayResult.ackPublish.published)
+  $relayCaptureBytes = if ($relayResult -and $relayResult.sinkResult -and $relayResult.sinkResult.capture) {
+    [int]$relayResult.sinkResult.capture.bytes
+  } else {
+    0
+  }
+  $relayCaptureLines = if ($relayResult -and $relayResult.sinkResult -and $relayResult.sinkResult.capture) {
+    [int]$relayResult.sinkResult.capture.lineCount
+  } else {
+    0
+  }
   $commandAcked = [string]$commandState.data.status -eq "acked"
   $hasAckEvent = [bool](@($eventList.data.list | Where-Object { $_.eventType -eq "COMMAND_ACKED" -and $_.commandId -eq $commandId }).Count -ge 1)
   $hasAckNotification = [bool](@($notificationList.data.list | Where-Object { $_.eventType -eq "COMMAND_ACKED" }).Count -ge 1)
   $systemCloseLoop = $commandAcked -and $hasAckEvent -and $hasAckNotification
+  $passiveProbe = if (-not $systemCloseLoop) {
+    Invoke-PassiveSerialProbe -PortName $Port -PortBaudRate $BaudRate -Seconds $FailurePassiveProbeSeconds
+  } else {
+    $null
+  }
+  $failureClass = if ($systemCloseLoop) {
+    ""
+  } elseif ($relayResult -and $relayCaptureBytes -eq 0) {
+    "uart-no-capture-after-write"
+  } elseif ($relayCaptureBytes -gt 0 -and -not $relayAckPublished) {
+    "uart-capture-without-standard-ack"
+  } elseif ($commandAcked -and (-not $hasAckEvent -or -not $hasAckNotification)) {
+    "api-acked-but-close-loop-artifacts-missing"
+  } else {
+    "api-command-live-needs-review"
+  }
 
   $report = [ordered]@{
     generatedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
@@ -979,6 +1107,13 @@ try {
         stderr = Get-RepoRelativePath -BasePath $repoRoot -TargetPath $notifyErr
       }
     }
+    diagnostics = [ordered]@{
+      latestAttemptSucceeded = $systemCloseLoop
+      failureClass = $failureClass
+      relayCaptureBytes = $relayCaptureBytes
+      relayCaptureLines = $relayCaptureLines
+      passiveSerialProbe = $passiveProbe
+    }
   }
 
   $report["proof"] = [ordered]@{
@@ -1010,6 +1145,15 @@ try {
   $reportJson = $report | ConvertTo-Json -Depth 12
   Write-LiveDebugStage -Path $debugLogFile -Stage "report-json-ready"
   Write-Utf8NoBomText -Path $fullOutFile -Value $reportJson
+  if ($systemCloseLoop -and $LatestSuccessOutFile) {
+    $fullLatestSuccessOutFile = Join-Path $repoRoot $LatestSuccessOutFile
+    $latestSuccessOutDir = Split-Path -Parent $fullLatestSuccessOutFile
+    if ($latestSuccessOutDir) {
+      Ensure-TempDirectory -Path $latestSuccessOutDir
+    }
+    Write-Utf8NoBomText -Path $fullLatestSuccessOutFile -Value $reportJson
+    Write-LiveDebugStage -Path $debugLogFile -Stage "last-success-written" -Detail (Get-RepoRelativePath -BasePath $repoRoot -TargetPath $fullLatestSuccessOutFile)
+  }
   Write-LiveDebugStage -Path $debugLogFile -Stage "report-written" -Detail (Get-RepoRelativePath -BasePath $repoRoot -TargetPath $fullOutFile)
   $reportJson
 } catch {

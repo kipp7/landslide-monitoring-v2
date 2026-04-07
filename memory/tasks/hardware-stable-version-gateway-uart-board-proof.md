@@ -389,6 +389,13 @@ Push the current hardware-stable-version command proof from source-level and bro
       - `bytes=0`
       - `lineCount=0`
     - this means the route is now formally fixed, but fresh hardware live remains a real gate
+  - on the same day, a passive read-only probe on `COM5` also returned:
+    - `byteCount=0`
+    - `classification=silent`
+    - `likelyCause=port-is-present-but-no-useful-readable-output-was-observed-during-passive-probe`
+  - this narrows the current blocker further:
+    - it is not only "no ack after manual_collect"
+    - it is "the frozen COM5 path is currently silent even without writing bytes"
 
 ## Open Questions
 

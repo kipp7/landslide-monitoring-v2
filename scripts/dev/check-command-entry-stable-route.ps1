@@ -8,6 +8,8 @@ param(
   [string]$DeskFile = "docs/unified/reports/desk-command-notify-on-ack-proof-latest.json",
   [string]$WebFile = "docs/unified/reports/web-command-notify-on-ack-proof-latest.json",
   [string]$HardwareFile = ".tmp/hardware-stable-version-api-command-live-latest.json",
+  [string]$HardwareLastSuccessFile = ".tmp/hardware-stable-version-api-command-live-last-success.json",
+  [string]$HardwarePassiveProbeFile = "docs/unified/reports/hardware-stable-version-passive-serial-probe-latest.json",
   [string]$OutFile = "docs/unified/reports/command-entry-stable-route-summary-latest.json"
 )
 
@@ -155,6 +157,10 @@ try {
   $desk = Read-JsonFile (Join-Path $repoRoot $DeskFile)
   $web = Read-JsonFile (Join-Path $repoRoot $WebFile)
   $hardware = Read-JsonFile (Join-Path $repoRoot $HardwareFile)
+  $hardwareLastSuccessPath = Join-Path $repoRoot $HardwareLastSuccessFile
+  $hardwareLastSuccess = if (Test-Path $hardwareLastSuccessPath) { Read-JsonFile $hardwareLastSuccessPath } else { $null }
+  $hardwarePassiveProbePath = Join-Path $repoRoot $HardwarePassiveProbeFile
+  $hardwarePassiveProbe = if (Test-Path $hardwarePassiveProbePath) { Read-JsonFile $hardwarePassiveProbePath } else { $null }
 
   $deskOk = (
     $desk.commandNotifyOnAck.defaultNotifyOnAck -eq $false -and
@@ -220,13 +226,51 @@ try {
         relayPublishedCapturedAck = if ($hardware.proof) { [bool]$hardware.proof.relayPublishedCapturedAck } else { $false }
         relayCaptureBytes = if ($hardware.relay -and $hardware.relay.sinkResult -and $hardware.relay.sinkResult.capture) { [int]$hardware.relay.sinkResult.capture.bytes } else { 0 }
         relayCaptureLines = if ($hardware.relay -and $hardware.relay.sinkResult -and $hardware.relay.sinkResult.capture) { [int]$hardware.relay.sinkResult.capture.lineCount } else { 0 }
+        failureClass = if ($hardware.diagnostics) { [string]$hardware.diagnostics.failureClass } else { "" }
+        passiveSerialProbe = if ($hardware.diagnostics) { $hardware.diagnostics.passiveSerialProbe } else { $null }
         reportFile = $HardwareFile
         conclusion = $hardware.conclusion
+      }
+      hardwareApiLiveLastSuccess = if ($hardwareLastSuccess) {
+        [ordered]@{
+          available = $true
+          generatedAt = $hardwareLastSuccess.generatedAt
+          action = $hardwareLastSuccess.action
+          apiBaseUrl = $hardwareLastSuccess.apiBaseUrl
+          commandId = $hardwareLastSuccess.command.data.commandId
+          commandStatus = $hardwareLastSuccess.command.data.status
+          reportFile = $HardwareLastSuccessFile
+          conclusion = $hardwareLastSuccess.conclusion
+        }
+      } else {
+        [ordered]@{
+          available = $false
+          reportFile = $HardwareLastSuccessFile
+        }
+      }
+      hardwarePassiveProbe = if ($hardwarePassiveProbe) {
+        [ordered]@{
+          available = $true
+          generatedAt = $hardwarePassiveProbe.generatedAt
+          port = $hardwarePassiveProbe.port
+          anyTrafficObserved = [bool]$hardwarePassiveProbe.checks.anyTrafficObserved
+          anyReadableAsciiObserved = [bool]$hardwarePassiveProbe.checks.anyReadableAsciiObserved
+          likelyCause = [string]$hardwarePassiveProbe.likelyCause
+          dominantClassification = if ($hardwarePassiveProbe.probes -and @($hardwarePassiveProbe.probes).Count -gt 0) { [string]@($hardwarePassiveProbe.probes)[0].classification } else { "" }
+          reportFile = $HardwarePassiveProbeFile
+        }
+      } else {
+        [ordered]@{
+          available = $false
+          reportFile = $HardwarePassiveProbeFile
+        }
       }
     }
     allChecksOk = ($deskOk -and $webOk -and $hardwareCloseLoopOk)
     conclusion = if ($deskOk -and $webOk -and $hardwareCloseLoopOk) {
       "command-entry-stable-route-verified-across-desk-web-and-hardware-api-live"
+    } elseif ($deskOk -and $webOk -and $hardwareLastSuccess) {
+      "client-entry-contracts-verified-but-latest-hardware-api-live-regressed-from-last-known-good"
     } elseif ($deskOk -and $webOk) {
       "client-entry-contracts-verified-but-hardware-api-live-needs-refresh"
     } else {

@@ -1,5 +1,5 @@
 ﻿{
-    "generatedAt":  "2026-04-06T17:54:08Z",
+    "generatedAt":  "2026-04-07T06:07:02Z",
     "officialRoute":  {
                           "sourceOfTruth":  "api-v1-device-commands",
                           "endpoint":  "/api/v1/devices/{deviceId}/commands",
@@ -40,12 +40,45 @@
                                            "relayPublishedCapturedAck":  false,
                                            "relayCaptureBytes":  0,
                                            "relayCaptureLines":  0,
+                                           "failureClass":  "uart-no-capture-after-write",
+                                           "passiveSerialProbe":  {
+                                                                      "executed":  true,
+                                                                      "port":  "COM5",
+                                                                      "baudRate":  115200,
+                                                                      "seconds":  4,
+                                                                      "pollMs":  100,
+                                                                      "bytes":  0,
+                                                                      "lineCount":  0,
+                                                                      "asciiByteCount":  0,
+                                                                      "classification":  "silent",
+                                                                      "textPreview":  ""
+                                                                  },
                                            "reportFile":  ".tmp/hardware-stable-version-api-command-live-latest.json",
                                            "conclusion":  "api-command-live-proof-needs-review"
-                                       }
+                                       },
+                   "hardwareApiLiveLastSuccess":  {
+                                                      "available":  true,
+                                                      "generatedAt":  "2026-04-07T06:04:11Z",
+                                                      "action":  "manual-collect",
+                                                      "apiBaseUrl":  "http://127.0.0.1:8081/api/v1",
+                                                      "commandId":  "502e939c-6ea2-493e-b333-8cf15cbb7695",
+                                                      "commandStatus":  "acked",
+                                                      "reportFile":  ".tmp/hardware-stable-version-api-command-live-last-success.json",
+                                                      "conclusion":  "api-command-live-proof-succeeded-with-api-close-loop"
+                                                  },
+                   "hardwarePassiveProbe":  {
+                                                "available":  true,
+                                                "generatedAt":  "2026-04-07T06:04:39Z",
+                                                "port":  "COM5",
+                                                "anyTrafficObserved":  false,
+                                                "anyReadableAsciiObserved":  false,
+                                                "likelyCause":  "port-is-present-but-no-useful-readable-output-was-observed-during-passive-probe",
+                                                "dominantClassification":  "silent",
+                                                "reportFile":  "docs/unified/reports/hardware-stable-version-passive-serial-probe-latest.json"
+                                            }
                },
     "allChecksOk":  false,
-    "conclusion":  "client-entry-contracts-verified-but-hardware-api-live-needs-refresh",
+    "conclusion":  "client-entry-contracts-verified-but-latest-hardware-api-live-regressed-from-last-known-good",
     "nextUse":  [
                     "Use Desk/Web only through /api/v1/devices/{deviceId}/commands for formal command entry",
                     "Use run-hardware-stable-version-api-command-live.ps1 as the hardware gate before field changes",

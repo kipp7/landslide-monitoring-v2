@@ -1,5 +1,5 @@
 ﻿{
-    "generatedAt":  "2026-04-04T17:44:09Z",
+    "generatedAt":  "2026-04-07T06:04:39Z",
     "conclusion":  "hardware-stable-version-passive-serial-probe-captured-current-com-port-signal-shape-without-writing-bytes",
     "port":  "COM5",
     "checks":  {
@@ -11,7 +11,7 @@
     "probes":  [
                    {
                        "baud":  115200,
-                       "durationSeconds":  6,
+                       "durationSeconds":  4,
                        "byteCount":  0,
                        "ffCount":  0,
                        "zeroCount":  0,

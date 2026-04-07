@@ -149,6 +149,12 @@ Carry the RK2206 + XL01 transparent serial work from stable uplink proof into th
     - `bytes=0`
     - `lineCount=0`
   - the checker now reports that regression directly instead of hanging
+- a follow-up passive serial probe on `2026-04-07` tightened the diagnosis:
+  - command-free read on `COM5 @ 115200` for `4s`
+  - returned:
+    - `byteCount=0`
+    - `classification=silent`
+  - so the current blocker is not limited to missing command ack parsing; the frozen `COM5` path itself is presently silent
 
 ## In Progress
 
@@ -157,6 +163,8 @@ Carry the RK2206 + XL01 transparent serial work from stable uplink proof into th
 - the immediate blocker is no longer script orchestration but the latest fresh hardware rerun that produced:
   - `status=sent`
   - `relayCaptureBytes=0`
+- a passive follow-up probe also confirms:
+  - `COM5` is currently silent without writes
 
 ## Next Actions
 
@@ -184,6 +192,7 @@ Carry the RK2206 + XL01 transparent serial work from stable uplink proof into th
 - even when `Desk` / `Web` contract checks pass, a fresh API live rerun can still fail at the field boundary with:
   - `status=sent`
   - `relayCaptureBytes=0`
+- even outside the command window, `COM5` can currently present as a silent port rather than an active telemetry/log stream
 - `-RunInBackground` is not yet a trusted reproduction path for live MQTT relay proof in this shell environment
 - the new helper is trusted for runtime `set_config` proof, but `manual_collect` should still be sent with a fresh runtime payload rather than a reused static sample when board-side ack evidence matters
 - a dedicated operator wrapper now exists for that fresh runtime `manual_collect` case:
