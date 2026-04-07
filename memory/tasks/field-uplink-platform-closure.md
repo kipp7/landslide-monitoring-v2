@@ -96,6 +96,16 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - RK3568 gateway program
     - RK2206 firmware
     - center deployment/platform topology
+- a more formal phased architecture baseline now exists for the next execution stage:
+  - `docs/unified/reports/field-rk3568-rk2206-center-phased-architecture-2026-04.md`
+  - it binds the next stage to:
+    - `3 x RK2206`
+    - `1 x RK3568`
+    - `1 x center server`
+  - and freezes:
+    - role boundaries
+    - phase order
+    - task-package split
 - the decisive unfinished boundary is no longer command delivery; it is:
   - gateway-owned adaptation of field telemetry into a platform-acceptable uplink contract
   - and making the field-side ingress path repeatable without depending on ad hoc host-run steps
