@@ -301,21 +301,25 @@ Push the current hardware-stable-version command proof from source-level and bro
 - do not repurpose `PB2/PB3`; they are the board-side XL01 UART and already match the established hardware truth
 - do not create a new business-side command path when a fresh hardware gate fails; keep formal entry at `/api/v1/devices/{deviceId}/commands`
 - current working assumption is:
-  - the current live center-node XL01 host port is `COM5`
-  - `COM5` can now be treated as the validated transparent injection/observation port for this setup snapshot
-  - older `COM9`/board-config mapping notes are historical and should not override the latest live proof
+  - the current live host command-egress XL01 port is `COM9`
+  - `COM5` is the board log observation port
+  - older notes that froze command injection on `COM5` are historical and should not override the latest live proof
   - current baseline behavior should be treated as:
     - transparent mode
-    - `COM5`
+    - command egress on `COM9`
+    - board log observation on `COM5`
     - `ChunkStrategy=whole`
     - `report_interval_s=5`
+    - `PublishDelaySeconds=3` for `run-hardware-stable-version-api-command-live.ps1`
+    - one controlled retry is allowed for `uart-capture-without-standard-ack`
 
 ## Plan
 
 - identify the host-side peer XL01 serial port (`PeerPort`) rather than revisiting the board log port
 - keep the current verified chunked uplink path intact as the frozen baseline
 - freeze the current working transparent baseline:
-  - center-node serial port currently observed as `COM5`
+  - command egress port currently observed as `COM9`
+  - board log observation port currently observed as `COM5`
   - `manual_collect` over `ChunkStrategy=whole` is proven good
   - `set-report-300` over `ChunkStrategy=whole` is proven good
   - `set-report-5` over `ChunkStrategy=whole` is proven good
@@ -332,7 +336,7 @@ Push the current hardware-stable-version command proof from source-level and bro
   - preserve the now-working local baseline:
     - `EMQX`
     - `lsmv2_api`
-    - center-node `COM5`
+    - command egress `COM9`
     - `ChunkStrategy=whole`
     - `report_interval_s=5`
   - treat the following MQTT relay proofs as complete on real hardware:
@@ -352,7 +356,7 @@ Push the current hardware-stable-version command proof from source-level and bro
     - `-PublishCapturedAck`
   - `scripts/dev/run-hardware-stable-version-api-command-live.ps1`
     is the new operator entrypoint for one-shot:
-    - `API -> Kafka -> command-dispatcher -> MQTT -> relay -> COM5 -> XL01 -> RK2206 -> cmd_ack -> command-ack-receiver -> API`
+    - `API -> Kafka -> command-dispatcher -> MQTT -> relay -> COM9 -> peer XL01 -> air -> board XL01 -> RK2206 -> cmd_ack -> command-ack-receiver -> API`
 - the first real API-entry hardware/system proof is now complete on `2026-04-06`:
   - command path:
     - `scripts/dev/run-hardware-stable-version-api-command-live.ps1 -Action manual-collect`
@@ -371,6 +375,21 @@ Push the current hardware-stable-version command proof from source-level and bro
     - `infra/compose/docker-compose.yml` now pins Kafka hostname as `kafka`
     - `infra/compose/docker-compose.app.yml` now forces app containers to use `kafka:9092` rather than container-local `localhost:9094`
     - `scripts/dev/run-hardware-stable-version-api-command-live.ps1` now survives Windows PowerShell 5.1 file encoding limits, logs every major stage, and always writes a result file
+  - on `2026-04-07`, the post-reboot host state refined the remaining stability rule further:
+    - direct `COM9` serial `manual_collect` still returned standard `ack`
+    - standalone `MQTT -> COM9` relay `manual_collect` still returned standard `ack`
+    - repeated formal API live reruns failed only when the helper kept the old default:
+      - `PublishDelaySeconds=10`
+    - the same formal API live route returned to:
+      - `status=acked`
+      - `COMMAND_ACKED`
+      - command notification present
+      after rerunning with:
+      - `PublishDelaySeconds=3`
+    - this indicates the current instability was timing alignment on the transparent radio path, not a regression of:
+      - API contract
+      - COM mapping
+      - direct UART/relay command execution
     - `scripts/dev/relay-hardware-stable-version-command-to-uart.js` now exits cleanly after relay completion instead of leaving the parent PowerShell blocked
 - the product-side route is now frozen too:
   - `Desk` and `Web` both enter through:

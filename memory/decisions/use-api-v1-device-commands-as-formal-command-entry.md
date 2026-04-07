@@ -38,10 +38,12 @@ Hardware live scripts remain gates and diagnostics only:
 
 The tied field baseline stays:
 
-- `COM5`
+- `COM9`
 - transparent `USR`
 - `ChunkStrategy=whole`
 - `report_interval_s=5`
+- `PublishDelaySeconds=3`
+- `MaxAttempts=2` for the hardware live gate
 
 ## Rationale
 
@@ -71,8 +73,14 @@ Concrete example from `2026-04-07`:
 - the command remained `status=sent`
 - relay capture stayed at `0` bytes with no ack
 
+Latest refinement from `2026-04-07`:
+
+- the current hardware cadence is still `report_interval_s=5`
+- `run-hardware-stable-version-api-command-live.ps1` became stable again after moving `PublishDelaySeconds` from `10` to `3`
+- this avoids repeatedly landing the formal API live publish near the same transparent-uplink busy window
+
 ## Follow-up
 
 - keep `scripts/dev/check-command-entry-stable-route.ps1` as the unified route-health gate
 - before field-facing command changes, rerun the API live gate with `manual-collect`
-- if the fresh gate fails with `sent + relayCaptureBytes=0`, inspect the current `COM5` field state instead of inventing a new business entry route
+- if the fresh gate fails with `sent + relayCaptureBytes=0`, inspect the current `COM9` command-egress field state instead of inventing a new business entry route

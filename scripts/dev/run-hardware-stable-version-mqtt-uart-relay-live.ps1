@@ -5,13 +5,14 @@ param(
   [string]$PayloadLabel = "",
   [string]$MqttUrl = "mqtt://127.0.0.1:1883",
   [string]$Topic = "",
-  [string]$Port = "COM5",
+  [string]$Port = "COM9",
   [int]$BaudRate = 115200,
   [ValidateSet("suggested", "whole", "fixed")]
   [string]$ChunkStrategy = "whole",
   [int]$ChunkSize = 0,
   [int]$InterChunkDelayMs = 0,
   [int]$ReadAfterWriteSeconds = 20,
+  [switch]$PublishCapturedAck,
   [int]$TimeoutSeconds = 60,
   [int]$PublishDelaySeconds = 3,
   [string]$OutFile = ".tmp/hardware-stable-version-mqtt-uart-relay-live-once.json"
@@ -266,6 +267,7 @@ try {
     ChunkStrategy = $ChunkStrategy
     InterChunkDelayMs = $InterChunkDelayMs
     ReadAfterWriteSeconds = $ReadAfterWriteSeconds
+    PublishCapturedAck = [bool]$PublishCapturedAck
     TimeoutSeconds = $TimeoutSeconds
     OutFile = $OutFile
   }
@@ -285,6 +287,10 @@ try {
     "-TimeoutSeconds", $TimeoutSeconds,
     "-OutFile", $OutFile
   )
+
+  if ($PublishCapturedAck) {
+    $relayProcessArgs += @("-PublishCapturedAck")
+  }
 
   $relayRaw = & powershell.exe @relayProcessArgs | Out-String
   if ($LASTEXITCODE -ne 0) {
@@ -322,6 +328,7 @@ $result = [ordered]@{
   chunkSize = if ($ChunkStrategy -eq "fixed" -and $ChunkSize -gt 0) { $ChunkSize } else { $null }
   interChunkDelayMs = $InterChunkDelayMs
   readAfterWriteSeconds = $ReadAfterWriteSeconds
+  publishCapturedAck = [bool]$PublishCapturedAck
   timeoutSeconds = $TimeoutSeconds
   plan = $plan
   publish = [ordered]@{

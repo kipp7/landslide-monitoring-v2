@@ -18,7 +18,7 @@ permalink: landslide-monitoring-v2-mainline/docs/guides/testing/command-entry-st
 - `-> command-dispatcher`
 - `-> MQTT`
 - `-> relay`
-- `-> COM5`
+- `-> COM9`
 - `-> transparent XL01`
 - `-> RK2206`
 - `-> cmd_ack`
@@ -27,10 +27,12 @@ permalink: landslide-monitoring-v2-mainline/docs/guides/testing/command-entry-st
 
 当前冻结硬件基线：
 
-- `COM5`
+- `COM9`
 - transparent `USR`
 - `ChunkStrategy=whole`
 - `report_interval_s=5`
+- `run-hardware-stable-version-api-command-live.ps1` 默认 `PublishDelaySeconds=3`
+- `run-hardware-stable-version-api-command-live.ps1` 在 `uart-capture-without-standard-ack` 时默认做一次受控重试
 
 ## 2) 为什么这是当前唯一推荐线路
 
@@ -124,14 +126,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-command-
 - `relayPublishedCapturedAck = false`
 - `relayCaptureBytes = 0`
 
-优先判断为“本次 fresh hardware gate 没拿到 `COM5` 的现场回包”，而不是先回退去怀疑 `Desk` / `Web` 命令入口契约。
+优先判断为“本次 fresh hardware gate 没拿到 `COM9` 这条命令出口的现场回包”，而不是先回退去怀疑 `Desk` / `Web` 命令入口契约。
 
 如果还带有：
 
 - `failureClass = uart-no-capture-after-write`
 - `passiveSerialProbe.classification = silent`
 
-优先判断为“这次 `COM5` 在命令写入后就是静默的”。
+优先判断为“这次 `COM9` 在命令写入后没有形成可用命令回包”。
 
 如果改成：
 
@@ -151,7 +153,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-command-
 - `checks.hardwarePassiveProbe.anyTrafficObserved = false`
 - `checks.hardwarePassiveProbe.dominantClassification = silent`
 
-说明最新被动观察下，`COM5` 本身就没有可读流量。
+说明当前命令出口这侧没有拿到可用于本轮 gate 的可读流量。
 
 这时可以先执行：
 
@@ -177,5 +179,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\show-hardware-
 - UART route 重新排查
 - transparent 分段策略反复重试
 - COM 端口重新猜测
+
+补充说明：
+
+- `COM9` 是当前冻结的命令下发口
+- `COM5` 是当前板端日志观察口
 
 除非现场硬件事实发生变化。

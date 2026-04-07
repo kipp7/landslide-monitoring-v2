@@ -1,10 +1,10 @@
 ﻿{
-    "generatedAt":  "2026-04-07T12:59:14Z",
+    "generatedAt":  "2026-04-07T15:28:28Z",
     "officialRoute":  {
                           "sourceOfTruth":  "api-v1-device-commands",
                           "endpoint":  "/api/v1/devices/{deviceId}/commands",
                           "frozenHardwareBaseline":  {
-                                                         "port":  "COM5",
+                                                         "port":  "COM9",
                                                          "xl01Mode":  "transparent USR",
                                                          "chunkStrategy":  "whole",
                                                          "reportIntervalSeconds":  5
@@ -17,58 +17,49 @@
                                               "ok":  true,
                                               "baseUrl":  "http://127.0.0.1:8081",
                                               "deviceId":  "00000000-0000-0000-0000-000000000002",
-                                              "defaultCommandId":  "38e71920-c184-44a0-92cf-e7968667f466",
-                                              "optInCommandId":  "e0c55e9d-78bf-4520-bab2-22218fe7903c",
+                                              "defaultCommandId":  "994c8f08-2b3a-4bab-b3e9-e47fadc37128",
+                                              "optInCommandId":  "6c30d2a2-33bb-42a9-ba5d-318aad7a283b",
                                               "reportFile":  "docs/unified/reports/desk-command-notify-on-ack-proof-latest.json"
                                           },
                    "webClientContract":  {
                                              "ok":  true,
                                              "baseUrl":  "http://127.0.0.1:8081",
                                              "deviceId":  "b0f9382d-464a-4cce-a36c-3a890d1c63a8",
-                                             "defaultCommandId":  "776b11f9-1dfe-42a2-bf7b-e9d8775ec4df",
-                                             "optInCommandId":  "e705fa61-e671-42be-a770-a66737b38561",
+                                             "defaultCommandId":  "00a20423-f57a-47eb-b40e-8aa5e71259e9",
+                                             "optInCommandId":  "abb8ac64-0883-4f05-900d-bb497b0a953c",
                                              "reportFile":  "docs/unified/reports/web-command-notify-on-ack-proof-latest.json"
                                          },
                    "hardwareApiLive":  {
-                                           "ok":  false,
-                                           "generatedAt":  "2026-04-07T12:58:29Z",
+                                           "ok":  true,
+                                           "generatedAt":  "2026-04-07T15:28:12Z",
                                            "action":  "manual-collect",
                                            "apiBaseUrl":  "http://127.0.0.1:8081/api/v1",
-                                           "commandId":  null,
-                                           "commandStatus":  null,
-                                           "relayConclusion":  "",
+                                           "commandId":  "fa3a77b9-baf1-4fa2-9ea2-c5ca17a7326f",
+                                           "commandStatus":  "acked",
+                                           "relayConclusion":  "mqtt-command-received-and-forwarded-to-uart-com-with-live-capture",
                                            "relayPublishedCapturedAck":  false,
-                                           "relayCaptureBytes":  0,
-                                           "relayCaptureLines":  0,
-                                           "failureClass":  "serial-port-multiple-present-usb-serial-devices",
-                                           "portOwnershipClassification":  "multiple-present-usb-serial-devices",
-                                           "portOwnershipStable":  false,
+                                           "relayCaptureBytes":  2669,
+                                           "relayCaptureLines":  4,
+                                           "failureClass":  "",
+                                           "portOwnershipClassification":  "usb-serial-visible",
+                                           "portOwnershipStable":  true,
                                            "portOwnership":  {
-                                                                 "port":  "COM5",
-                                                                 "classification":  "multiple-present-usb-serial-devices",
-                                                                 "ownershipStable":  false,
+                                                                 "port":  "COM9",
+                                                                 "classification":  "usb-serial-visible",
+                                                                 "ownershipStable":  true,
                                                                  "visibleInSystemIoPorts":  false,
-                                                                 "presentDeviceCount":  2,
+                                                                 "presentDeviceCount":  1,
                                                                  "presentBluetoothCount":  0,
-                                                                 "presentUsbSerialCount":  2,
+                                                                 "presentUsbSerialCount":  1,
                                                                  "win32DeviceCount":  0,
-                                                                 "historicalCh340AssignmentCount":  8,
+                                                                 "historicalCh340AssignmentCount":  1,
                                                                  "presentDevices":  [
-                                                                                        {
-                                                                                            "Status":  "Error",
-                                                                                            "Class":  "Ports",
-                                                                                            "FriendlyName":  "USB-SERIAL CH340 (COM5)",
-                                                                                            "InstanceId":  "USB\\VID_1A86\u0026PID_7523\\5\u00267A08FDB\u00260\u00261",
-                                                                                            "PortName":  "COM5",
-                                                                                            "IsBluetooth":  false,
-                                                                                            "IsUsbSerial":  true
-                                                                                        },
                                                                                         {
                                                                                             "Status":  "OK",
                                                                                             "Class":  "Ports",
-                                                                                            "FriendlyName":  "USB-SERIAL CH340 (COM5)",
+                                                                                            "FriendlyName":  "USB-SERIAL CH340 (COM9)",
                                                                                             "InstanceId":  "USB\\VID_1A86\u0026PID_7523\\6\u002632422B62\u00260\u00262",
-                                                                                            "PortName":  "COM5",
+                                                                                            "PortName":  "COM9",
                                                                                             "IsBluetooth":  false,
                                                                                             "IsUsbSerial":  true
                                                                                         }
@@ -78,93 +69,30 @@
                                                                                   ],
                                                                  "historicalCh340Assignments":  [
                                                                                                     {
-                                                                                                        "InstanceId":  "USB\\VID_1A86\u0026PID_7523\\5\u00267A08FDB\u00260\u00261",
-                                                                                                        "FriendlyName":  "USB-SERIAL CH340 (COM5)",
-                                                                                                        "PortName":  "COM5",
-                                                                                                        "SymbolicName":  "\\??\\USB#VID_1A86\u0026PID_7523#5\u00267a08fdb\u00260\u00261#{a5dcbf10-6530-11d2-901f-00c04fb951ed}",
-                                                                                                        "Present":  true,
-                                                                                                        "PresentStatus":  "Error",
-                                                                                                        "ConfigManagerErrorCode":  31
-                                                                                                    },
-                                                                                                    {
-                                                                                                        "InstanceId":  "USB\\VID_1A86\u0026PID_7523\\6\u00261A39A4CD\u00260\u00261",
-                                                                                                        "FriendlyName":  "USB-SERIAL CH340 (COM5)",
-                                                                                                        "PortName":  "COM5",
-                                                                                                        "SymbolicName":  "\\??\\USB#VID_1A86\u0026PID_7523#6\u00261a39a4cd\u00260\u00261#{a5dcbf10-6530-11d2-901f-00c04fb951ed}",
-                                                                                                        "Present":  false,
-                                                                                                        "PresentStatus":  "",
-                                                                                                        "ConfigManagerErrorCode":  null
-                                                                                                    },
-                                                                                                    {
-                                                                                                        "InstanceId":  "USB\\VID_1A86\u0026PID_7523\\6\u00261A39A4CD\u00260\u00262",
-                                                                                                        "FriendlyName":  "USB-SERIAL CH340 (COM5)",
-                                                                                                        "PortName":  "COM5",
-                                                                                                        "SymbolicName":  "",
-                                                                                                        "Present":  false,
-                                                                                                        "PresentStatus":  "",
-                                                                                                        "ConfigManagerErrorCode":  null
-                                                                                                    },
-                                                                                                    {
-                                                                                                        "InstanceId":  "USB\\VID_1A86\u0026PID_7523\\6\u00261A39A4CD\u00260\u00263",
-                                                                                                        "FriendlyName":  "USB-SERIAL CH340 (COM5)",
-                                                                                                        "PortName":  "COM5",
-                                                                                                        "SymbolicName":  "\\??\\USB#VID_1A86\u0026PID_7523#6\u00261a39a4cd\u00260\u00263#{a5dcbf10-6530-11d2-901f-00c04fb951ed}",
-                                                                                                        "Present":  false,
-                                                                                                        "PresentStatus":  "",
-                                                                                                        "ConfigManagerErrorCode":  null
-                                                                                                    },
-                                                                                                    {
-                                                                                                        "InstanceId":  "USB\\VID_1A86\u0026PID_7523\\6\u00261A39A4CD\u00260\u00264",
-                                                                                                        "FriendlyName":  "USB-SERIAL CH340 (COM5)",
-                                                                                                        "PortName":  "COM5",
-                                                                                                        "SymbolicName":  "\\??\\USB#VID_1A86\u0026PID_7523#6\u00261a39a4cd\u00260\u00264#{a5dcbf10-6530-11d2-901f-00c04fb951ed}",
-                                                                                                        "Present":  false,
-                                                                                                        "PresentStatus":  "",
-                                                                                                        "ConfigManagerErrorCode":  null
-                                                                                                    },
-                                                                                                    {
                                                                                                         "InstanceId":  "USB\\VID_1A86\u0026PID_7523\\6\u002632422B62\u00260\u00262",
-                                                                                                        "FriendlyName":  "USB-SERIAL CH340 (COM5)",
-                                                                                                        "PortName":  "COM5",
+                                                                                                        "FriendlyName":  "USB-SERIAL CH340 (COM9)",
+                                                                                                        "PortName":  "COM9",
                                                                                                         "SymbolicName":  "\\??\\USB#VID_1A86\u0026PID_7523#6\u002632422b62\u00260\u00262#{a5dcbf10-6530-11d2-901f-00c04fb951ed}",
                                                                                                         "Present":  true,
                                                                                                         "PresentStatus":  "OK",
                                                                                                         "ConfigManagerErrorCode":  0
-                                                                                                    },
-                                                                                                    {
-                                                                                                        "InstanceId":  "USB\\VID_1A86\u0026PID_7523\\7\u002634C54D91\u00260\u00261",
-                                                                                                        "FriendlyName":  "USB-SERIAL CH340 (COM5)",
-                                                                                                        "PortName":  "COM5",
-                                                                                                        "SymbolicName":  "\\??\\USB#VID_1A86\u0026PID_7523#7\u002634c54d91\u00260\u00261#{a5dcbf10-6530-11d2-901f-00c04fb951ed}",
-                                                                                                        "Present":  false,
-                                                                                                        "PresentStatus":  "",
-                                                                                                        "ConfigManagerErrorCode":  null
-                                                                                                    },
-                                                                                                    {
-                                                                                                        "InstanceId":  "USB\\VID_1A86\u0026PID_7523\\7\u00265B0A3B5\u00260\u00262",
-                                                                                                        "FriendlyName":  "USB-SERIAL CH340 (COM5)",
-                                                                                                        "PortName":  "COM5",
-                                                                                                        "SymbolicName":  "",
-                                                                                                        "Present":  false,
-                                                                                                        "PresentStatus":  "",
-                                                                                                        "ConfigManagerErrorCode":  null
                                                                                                     }
                                                                                                 ],
                                                                  "recommendedNextSteps":  [
-                                                                                              "the same COM number appears to be claimed by more than one present USB serial device; clean up stale mappings before live testing",
-                                                                                              "replug the intended adapter and confirm only one Present=true USB serial owner remains"
+                                                                                              "this port has a single visible USB serial owner; proceed with passive probe or live gate validation on this port",
+                                                                                              "avoid opening this port from multiple tools at once"
                                                                                           ]
                                                              },
                                            "passiveSerialProbe":  null,
                                            "reportFile":  ".tmp/hardware-stable-version-api-command-live-latest.json",
-                                           "conclusion":  "api-command-live-proof-failed-before-final-report"
+                                           "conclusion":  "api-command-live-proof-succeeded-with-api-close-loop"
                                        },
                    "hardwareApiLiveLastSuccess":  {
                                                       "available":  true,
-                                                      "generatedAt":  "2026-04-07T06:04:11Z",
+                                                      "generatedAt":  "2026-04-07T15:28:12Z",
                                                       "action":  "manual-collect",
                                                       "apiBaseUrl":  "http://127.0.0.1:8081/api/v1",
-                                                      "commandId":  "502e939c-6ea2-493e-b333-8cf15cbb7695",
+                                                      "commandId":  "fa3a77b9-baf1-4fa2-9ea2-c5ca17a7326f",
                                                       "commandStatus":  "acked",
                                                       "reportFile":  ".tmp/hardware-stable-version-api-command-live-last-success.json",
                                                       "conclusion":  "api-command-live-proof-succeeded-with-api-close-loop"
@@ -180,11 +108,11 @@
                                                 "reportFile":  "docs/unified/reports/hardware-stable-version-passive-serial-probe-latest.json"
                                             }
                },
-    "allChecksOk":  false,
-    "conclusion":  "client-entry-contracts-verified-but-latest-hardware-api-live-regressed-from-last-known-good",
+    "allChecksOk":  true,
+    "conclusion":  "command-entry-stable-route-verified-across-desk-web-and-hardware-api-live",
     "nextUse":  [
                     "Use Desk/Web only through /api/v1/devices/{deviceId}/commands for formal command entry",
                     "Use run-hardware-stable-version-api-command-live.ps1 as the hardware gate before field changes",
-                    "Do not reopen UART route debugging while the frozen baseline remains COM5 + transparent USR + whole + 5s"
+                    "Do not reopen UART route debugging while the frozen baseline remains COM9 command egress + transparent USR + whole + 5s"
                 ]
 }

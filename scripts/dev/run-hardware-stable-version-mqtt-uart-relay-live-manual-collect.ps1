@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-  [string]$Port = "COM5",
+  [string]$Port = "COM9",
   [int]$BaudRate = 115200,
   [string]$MqttUrl = "mqtt://127.0.0.1:1883",
   [string]$DeviceId = "00000000-0000-0000-0000-000000000001",

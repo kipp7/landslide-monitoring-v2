@@ -190,7 +190,7 @@ try {
       sourceOfTruth = "api-v1-device-commands"
       endpoint = "/api/v1/devices/{deviceId}/commands"
       frozenHardwareBaseline = [ordered]@{
-        port = "COM5"
+        port = "COM9"
         xl01Mode = "transparent USR"
         chunkStrategy = "whole"
         reportIntervalSeconds = 5
@@ -282,7 +282,7 @@ try {
     nextUse = @(
       "Use Desk/Web only through /api/v1/devices/{deviceId}/commands for formal command entry",
       "Use run-hardware-stable-version-api-command-live.ps1 as the hardware gate before field changes",
-      "Do not reopen UART route debugging while the frozen baseline remains COM5 + transparent USR + whole + 5s"
+      "Do not reopen UART route debugging while the frozen baseline remains COM9 command egress + transparent USR + whole + 5s"
     )
   }
 

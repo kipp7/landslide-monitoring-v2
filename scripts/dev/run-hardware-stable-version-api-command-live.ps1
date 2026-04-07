@@ -6,16 +6,19 @@ param(
   [string]$ApiEnvFile = "services/api/.env",
   [string]$DeviceId = "",
   [string]$MqttUrl = "mqtt://127.0.0.1:1883",
-  [string]$Port = "COM5",
+  [string]$Port = "COM9",
   [int]$BaudRate = 115200,
   [ValidateSet("suggested", "whole", "fixed")]
   [string]$ChunkStrategy = "whole",
   [int]$InterChunkDelayMs = 0,
   [int]$ReadAfterWriteSeconds = 20,
   [int]$RelayTimeoutSeconds = 60,
-  [int]$PublishDelaySeconds = 10,
+  [int]$PublishDelaySeconds = 3,
   [int]$CommandPollTimeoutSeconds = 30,
   [int]$FailurePassiveProbeSeconds = 4,
+  [int]$MaxAttempts = 2,
+  [int]$RetryDelaySeconds = 2,
+  [int]$Attempt = 1,
   [string]$LatestSuccessOutFile = ".tmp/hardware-stable-version-api-command-live-last-success.json",
   [string]$OutFile = ".tmp/hardware-stable-version-api-command-live-latest.json"
 )
@@ -1188,6 +1191,77 @@ try {
     Write-LiveDebugStage -Path $debugLogFile -Stage "last-success-written" -Detail (Get-RepoRelativePath -BasePath $repoRoot -TargetPath $fullLatestSuccessOutFile)
   }
   Write-LiveDebugStage -Path $debugLogFile -Stage "report-written" -Detail (Get-RepoRelativePath -BasePath $repoRoot -TargetPath $fullOutFile)
+  $shouldRetry = (
+    -not $systemCloseLoop -and
+    $failureClass -eq "uart-capture-without-standard-ack" -and
+    $Attempt -lt $MaxAttempts
+  )
+
+  if ($shouldRetry) {
+    Write-LiveDebugStage -Path $debugLogFile -Stage "retry-scheduled" -Detail ("attempt={0}->{1} delay={2}s" -f $Attempt, ($Attempt + 1), $RetryDelaySeconds)
+    Start-Sleep -Seconds $RetryDelaySeconds
+
+    $retryStamp = Get-Date -Format "yyyyMMdd-HHmmss-fff"
+    $retryStdout = Join-Path $tmpDir ("hardware-stable-version-api-command-live-retry-{0}.stdout.log" -f $retryStamp)
+    $retryStderr = Join-Path $tmpDir ("hardware-stable-version-api-command-live-retry-{0}.stderr.log" -f $retryStamp)
+    $retryArgs = @(
+      "-NoProfile",
+      "-ExecutionPolicy", "Bypass",
+      "-File", $MyInvocation.MyCommand.Path,
+      "-Action", $Action,
+      "-ApiEnvFile", $ApiEnvFile,
+      "-MqttUrl", $MqttUrl,
+      "-Port", $Port,
+      "-BaudRate", $BaudRate,
+      "-ChunkStrategy", $ChunkStrategy,
+      "-InterChunkDelayMs", $InterChunkDelayMs,
+      "-ReadAfterWriteSeconds", $ReadAfterWriteSeconds,
+      "-RelayTimeoutSeconds", $RelayTimeoutSeconds,
+      "-PublishDelaySeconds", $PublishDelaySeconds,
+      "-CommandPollTimeoutSeconds", $CommandPollTimeoutSeconds,
+      "-FailurePassiveProbeSeconds", $FailurePassiveProbeSeconds,
+      "-MaxAttempts", $MaxAttempts,
+      "-RetryDelaySeconds", $RetryDelaySeconds,
+      "-Attempt", ($Attempt + 1),
+      "-LatestSuccessOutFile", $LatestSuccessOutFile,
+      "-OutFile", $OutFile
+    )
+
+    if ($ApiBaseUrl) {
+      $retryArgs += @("-ApiBaseUrl", $ApiBaseUrl)
+    }
+    if ($DeviceId) {
+      $retryArgs += @("-DeviceId", $DeviceId)
+    }
+
+    Write-LiveDebugStage -Path $debugLogFile -Stage "retry-start" -Detail ("stdout={0}" -f (Get-RepoRelativePath -BasePath $repoRoot -TargetPath $retryStdout))
+    $retryProcess = Start-Process -FilePath "powershell.exe" `
+      -ArgumentList $retryArgs `
+      -WorkingDirectory $repoRoot `
+      -PassThru `
+      -RedirectStandardOutput $retryStdout `
+      -RedirectStandardError $retryStderr
+
+    $retryTimeoutSeconds = $RelayTimeoutSeconds + $CommandPollTimeoutSeconds + $ReadAfterWriteSeconds + 120
+    $retryExited = $retryProcess.WaitForExit($retryTimeoutSeconds * 1000)
+    if (-not $retryExited) {
+      try { Stop-Process -Id $retryProcess.Id -Force -ErrorAction Stop } catch {}
+      throw "retry attempt timed out after ${retryTimeoutSeconds}s"
+    }
+    $retryProcess.WaitForExit()
+
+    $retryStdoutText = Read-TextIfExists -Path $retryStdout
+    $retryStderrText = Read-TextIfExists -Path $retryStderr
+    Write-LiveDebugStage -Path $debugLogFile -Stage "retry-finished" -Detail ("exit={0}" -f $retryProcess.ExitCode)
+    if ($retryProcess.ExitCode -ne 0) {
+      $retryDetail = if ($retryStderrText) { $retryStderrText } elseif ($retryStdoutText) { $retryStdoutText } else { "no stdout/stderr captured" }
+      throw "retry attempt failed (exit=$($retryProcess.ExitCode))`n$retryDetail"
+    }
+
+    $retryStdoutText
+    return
+  }
+
   $reportJson
 } catch {
   $failureMessage = $_.Exception.Message
