@@ -77,6 +77,18 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - `http://127.0.0.1:3000/api/v1/devices` includes the replayed device
     - `http://127.0.0.1:3000/api/v1/data/state/{deviceId}` returns the replayed real-hardware metrics
     - `apps/web/lib/api/*` can read the same device state through the Web-side client path
+- a single-command full-path proof line now also exists:
+  - script:
+    - `scripts/dev/run-field-hardware-uplink-full-proof.ps1`
+  - latest report:
+    - `docs/unified/reports/field-hardware-uplink-full-proof-latest.json`
+  - latest conclusion:
+    - `real-hardware-uplink-full-path-reached-platform-and-web`
+  - latest proof confirms one command can:
+    - ensure `api/web` runtime readiness
+    - run real-hardware replay proof
+    - run Web product visibility proof
+    - emit one summary report with the replayed `deviceId`
 - the decisive unfinished boundary is no longer command delivery; it is:
   - gateway-owned adaptation of field telemetry into a platform-acceptable uplink contract
   - and making the field-side ingress path repeatable without depending on ad hoc host-run steps
@@ -108,6 +120,8 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - `scripts/dev/run-field-hardware-uplink-replay-full-path.ps1`
   - replay path to Web product read visibility is now proven through:
     - `scripts/dev/run-field-hardware-uplink-product-visibility.ps1`
+  - unified full-path rerun entry is now:
+    - `scripts/dev/run-field-hardware-uplink-full-proof.ps1`
   - current next focus after visibility proof is:
     - make the gateway/uplink rehearsal path more repeatable and less host-manual
 
@@ -137,4 +151,6 @@ Freeze and execute the next major phase after command-route stabilization: prove
 - the same replayed telemetry is visible through the Web product read path via:
   - `http://127.0.0.1:3000/api/v1/*`
   - `apps/web/lib/api/*`
+- there is a single rerun command that reproduces the current proof boundary:
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\run-field-hardware-uplink-full-proof.ps1`
 - a later session can resume this phase directly from this note without re-deriving the current command-route baseline

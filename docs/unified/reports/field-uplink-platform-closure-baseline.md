@@ -287,6 +287,8 @@ permalink: landslide-monitoring-v2-mainline/docs/unified/reports/field-uplink-pl
 - API visibility
 - Desk/Web visibility
 - 当前这三段都已经至少成功留证一次
+- 当前可直接复跑的统一入口为：
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\run-field-hardware-uplink-full-proof.ps1`
 
 4. 生成一份单次 rehearsal 证据包
 - 原始样本
@@ -321,3 +323,4 @@ permalink: landslide-monitoring-v2-mainline/docs/unified/reports/field-uplink-pl
 - [command-entry-stable-route-summary-latest.json](/E:/学校/02 项目/99 山体滑坡优化完善/landslide-monitoring-v2-mainline/docs/unified/reports/command-entry-stable-route-summary-latest.json)
 - [field-hardware-uplink-replay-latest.json](/E:/学校/02 项目/99 山体滑坡优化完善/landslide-monitoring-v2-mainline/docs/unified/reports/field-hardware-uplink-replay-latest.json)
 - [field-hardware-uplink-product-visibility-latest.json](/E:/学校/02 项目/99 山体滑坡优化完善/landslide-monitoring-v2-mainline/docs/unified/reports/field-hardware-uplink-product-visibility-latest.json)
+- [field-hardware-uplink-full-proof-latest.json](/E:/学校/02 项目/99 山体滑坡优化完善/landslide-monitoring-v2-mainline/docs/unified/reports/field-hardware-uplink-full-proof-latest.json)

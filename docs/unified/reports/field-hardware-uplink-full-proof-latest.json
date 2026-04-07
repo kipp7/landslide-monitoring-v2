@@ -1,0 +1,53 @@
+﻿{
+    "generatedAt":  "2026-04-07T16:50:25.376Z",
+    "mode":  "field-hardware-uplink-full-proof",
+    "payloadFile":  "docs/tools/field-rehearsal/payload-samples/hf-hardware-real-20260406-seq21.json",
+    "runtimeBootstrap":  {
+                             "composeUpTriggered":  false,
+                             "apiReady":  true,
+                             "webReady":  true,
+                             "apiBaseUrl":  "http://127.0.0.1:8080",
+                             "webBaseUrl":  "http://127.0.0.1:3000"
+                         },
+    "replayProof":  {
+                        "report":  "docs/unified/reports/field-hardware-uplink-replay-latest.json",
+                        "conclusion":  "real-hardware-uplink-replay-reached-platform-api-state",
+                        "deviceId":  "e453cdcf-ab07-4493-bf3e-dfdd2d1cd07a",
+                        "installLabel":  "REPLAY-HW-20260408-005021",
+                        "publishTopic":  "telemetry/e453cdcf-ab07-4493-bf3e-dfdd2d1cd07a",
+                        "statePollSuccess":  true
+                    },
+    "productVisibilityProof":  {
+                                   "report":  "docs/unified/reports/field-hardware-uplink-product-visibility-latest.json",
+                                   "conclusion":  "real-hardware-uplink-visible-through-web-product-read-path",
+                                   "proxyStateUrl":  "http://127.0.0.1:3000/api/v1/data/state/e453cdcf-ab07-4493-bf3e-dfdd2d1cd07a",
+                                   "deviceFound":  true,
+                                   "metricsKeys":  [
+                                                       "accel_x_g",
+                                                       "accel_y_g",
+                                                       "accel_z_g",
+                                                       "gyro_x_dps",
+                                                       "gyro_y_dps",
+                                                       "gyro_z_dps",
+                                                       "tilt_x_deg",
+                                                       "tilt_y_deg",
+                                                       "battery_pct",
+                                                       "gps_latitude",
+                                                       "humidity_pct",
+                                                       "warning_flag",
+                                                       "gps_longitude",
+                                                       "temperature_c"
+                                                   ],
+                                   "metricsPreview":  {
+                                                          "temperature_c":  29.5,
+                                                          "humidity_pct":  50.1,
+                                                          "tilt_x_deg":  5.12,
+                                                          "gps_latitude":  22.5432
+                                                      }
+                               },
+    "nextUse":  [
+                    "primary rerun command: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\run-field-hardware-uplink-full-proof.ps1",
+                    "this proof line remains host-assisted for ingest-service and telemetry-writer until they are moved into a stable runtime topology"
+                ],
+    "conclusion":  "real-hardware-uplink-full-path-reached-platform-and-web"
+}
