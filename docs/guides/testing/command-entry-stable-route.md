@@ -133,6 +133,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-command-
 
 优先判断为“这次 `COM5` 在命令写入后就是静默的”。
 
+如果改成：
+
+- `failureClass = serial-port-ownership-collision`
+- `portOwnershipClassification = ownership-collision-bluetooth-and-usb-serial`
+
+优先判断为“当前 Windows 主机把同一个 COM 号同时分配给了蓝牙串口和 USB-UART”，这时不要先怀疑 API / MQTT / 固件逻辑，先清理端口归属。
+
 如果存在：
 
 - `checks.hardwareApiLiveLastSuccess.available = true`
@@ -145,6 +152,18 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-command-
 - `checks.hardwarePassiveProbe.dominantClassification = silent`
 
 说明最新被动观察下，`COM5` 本身就没有可读流量。
+
+这时可以先执行：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\show-hardware-stable-version-serial-ports.ps1
+```
+
+如果输出里的 `portOwnership` 显示：
+
+- `classification = ownership-collision-bluetooth-and-usb-serial`
+
+就先修 Windows 端口号归属，再重跑 live gate。
 
 如果是某个子检查脚本自身失败，再看：
 

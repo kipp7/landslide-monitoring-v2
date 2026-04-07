@@ -155,6 +155,21 @@ Carry the RK2206 + XL01 transparent serial work from stable uplink proof into th
     - `byteCount=0`
     - `classification=silent`
   - so the current blocker is not limited to missing command ack parsing; the frozen `COM5` path itself is presently silent
+- later on `2026-04-07`, host-side ownership diagnostics were added and validated on the same environment:
+  - `scripts/dev/show-hardware-stable-version-serial-ports.ps1`
+    now exposes `portOwnership`
+  - `scripts/dev/check-hardware-stable-version-serial-root-cause.ps1 -Port COM5`
+    now reports:
+    - `conclusion=hardware-stable-version-target-com-port-has-name-collision-between-bluetooth-and-usb-serial-owners`
+    - `targetPortClassification=ownership-collision-bluetooth-and-usb-serial`
+  - a fresh formal API live rerun also aligned to that diagnosis:
+    - `command_id=eab55ecf-b42a-4a9a-b8e9-7586a9934a88`
+    - `status=sent`
+    - `failureClass=serial-port-ownership-collision`
+    - `portOwnershipClassification=ownership-collision-bluetooth-and-usb-serial`
+    - `relayCaptureBytes=0`
+    - `passiveSerialProbe.classification=silent`
+  - this means the current next recovery step is to clean the Windows-side `COM5` ownership collision first, not to reopen Desk/Web/API route speculation
 
 ## In Progress
 
@@ -165,11 +180,17 @@ Carry the RK2206 + XL01 transparent serial work from stable uplink proof into th
   - `relayCaptureBytes=0`
 - a passive follow-up probe also confirms:
   - `COM5` is currently silent without writes
+- the latest summary now surfaces the host boundary explicitly:
+  - `hardwareFailureClass=serial-port-ownership-collision`
+  - `hardwarePortOwnershipClassification=ownership-collision-bluetooth-and-usb-serial`
 
 ## Next Actions
 
 - keep the current wiring and transparent-serial settings unchanged
 - treat center-node `COM5` + `ChunkStrategy=whole` as the current frozen-good baseline
+- repair or reassign the Windows-side `COM5` ownership conflict until the target port shows a single stable USB serial owner
+- only then re-run:
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\run-hardware-stable-version-api-command-live.ps1 -Action manual-collect`
 - after that, do not reopen UART-route debugging unless hardware facts change
 - if relay work is deferred, preserve the current baseline and stop changing ports, wiring, or serial mode
 - if no more relay coverage is needed, stop here and preserve this known-good baseline
@@ -192,6 +213,9 @@ Carry the RK2206 + XL01 transparent serial work from stable uplink proof into th
 - even when `Desk` / `Web` contract checks pass, a fresh API live rerun can still fail at the field boundary with:
   - `status=sent`
   - `relayCaptureBytes=0`
+- the current host now has a more specific failure mode that should be treated as first-class:
+  - `failureClass=serial-port-ownership-collision`
+  - `portOwnershipClassification=ownership-collision-bluetooth-and-usb-serial`
 - even outside the command window, `COM5` can currently present as a silent port rather than an active telemetry/log stream
 - `-RunInBackground` is not yet a trusted reproduction path for live MQTT relay proof in this shell environment
 - the new helper is trusted for runtime `set_config` proof, but `manual_collect` should still be sent with a fresh runtime payload rather than a reused static sample when board-side ack evidence matters

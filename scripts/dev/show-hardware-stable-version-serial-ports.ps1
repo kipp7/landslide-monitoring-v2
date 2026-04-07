@@ -4,48 +4,32 @@ param(
 
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+. (Join-Path $PSScriptRoot "hardware-stable-version-serial-port-common.ps1")
 
 function Get-SerialPortProbe {
-  $ports = @()
-  $method = $null
+  $inventory = Get-HardwareStableVersionSerialPortInventory
+  $portOwnership = Get-HardwareStableVersionSerialPortOwnershipSummary -Inventory $inventory
   $warning = $null
 
-  try {
-    $type = [System.Type]::GetType("System.IO.Ports.SerialPort, System.IO.Ports")
-    if (-not $type) {
-      $type = [System.Type]::GetType("System.IO.Ports.SerialPort")
-    }
-    if ($type -and $type.GetMethod("GetPortNames")) {
-      $ports = @($type.GetMethod("GetPortNames").Invoke($null, @()) | Sort-Object)
-      $method = "system.io.ports"
+  if (-not $inventory.sourceMethods.systemIoPortsAvailable) {
+    $warning = if ($inventory.sourceMethods.systemIoPortsWarning) {
+      "System.IO.Ports.SerialPort is unavailable; using Win32/PnP enumeration. $($inventory.sourceMethods.systemIoPortsWarning)"
     } else {
-      $cimPorts = @(Get-CimInstance Win32_SerialPort -ErrorAction SilentlyContinue | ForEach-Object { $_.DeviceID })
-      if ($cimPorts.Count -gt 0) {
-        $ports = @($cimPorts | Sort-Object)
-        $method = "win32_serialport"
-        $warning = "Fell back to Win32_SerialPort because System.IO.Ports.SerialPort is unavailable"
-      } else {
-        $pnpPorts = @(Get-PnpDevice -PresentOnly -ErrorAction SilentlyContinue | Where-Object { $_.FriendlyName -match '\(COM\d+\)' } | ForEach-Object {
-          if ($_.FriendlyName -match '\((COM\d+)\)') { $matches[1] }
-        } | Where-Object { $_ })
-        $ports = @($pnpPorts | Sort-Object)
-        $method = "pnpdevice"
-        if ($ports.Count -eq 0) {
-          $warning = "No COM ports were found via System.IO.Ports, Win32_SerialPort, or PnP enumeration"
-        } else {
-          $warning = "Fell back to PnP device enumeration because System.IO.Ports.SerialPort is unavailable"
-        }
-      }
+      "System.IO.Ports.SerialPort is unavailable; using Win32/PnP enumeration"
     }
-  } catch {
-    $warning = $_.Exception.Message
+  } elseif (@($portOwnership | Where-Object { $_.classification -eq "ownership-collision-bluetooth-and-usb-serial" }).Count -gt 0) {
+    $warning = "At least one COM number has both Bluetooth and USB serial owners; port names alone are not a stable hardware identifier on this host"
   }
 
   return [ordered]@{
-    generatedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
-    method = $method
+    generatedAt = $inventory.generatedAt
+    method = [string]$inventory.sourceMethods.primaryMethod
     warning = $warning
-    ports = $ports
+    ports = @($inventory.visiblePortNames)
+    systemIoPorts = @($inventory.sourceMethods.systemIoPortNames)
+    presentPorts = @($inventory.presentPorts)
+    win32Ports = @($inventory.win32Ports)
+    portOwnership = @($portOwnership)
   }
 }
 

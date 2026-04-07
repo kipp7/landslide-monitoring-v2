@@ -396,6 +396,25 @@ Push the current hardware-stable-version command proof from source-level and bro
   - this narrows the current blocker further:
     - it is not only "no ack after manual_collect"
     - it is "the frozen COM5 path is currently silent even without writing bytes"
+  - on `2026-04-07`, the host-side diagnosis was tightened again and fixed into the tooling:
+    - `scripts/dev/show-hardware-stable-version-serial-ports.ps1`
+      now emits `portOwnership`
+    - `scripts/dev/check-hardware-stable-version-serial-root-cause.ps1 -Port COM5`
+      now reports:
+      - `conclusion=hardware-stable-version-target-com-port-has-name-collision-between-bluetooth-and-usb-serial-owners`
+      - `targetPortClassification=ownership-collision-bluetooth-and-usb-serial`
+    - a fresh formal live rerun through:
+      - `scripts/dev/run-hardware-stable-version-api-command-live.ps1 -Action manual-collect`
+      produced:
+      - `command_id=eab55ecf-b42a-4a9a-b8e9-7586a9934a88`
+      - `status=sent`
+      - `failureClass=serial-port-ownership-collision`
+      - `portOwnershipClassification=ownership-collision-bluetooth-and-usb-serial`
+      - `relayCaptureBytes=0`
+      - `passiveSerialProbe.classification=silent`
+    - this reframes the current blocker from generic UART silence to a specific Windows-side `COM5` ownership collision between:
+      - multiple Bluetooth serial owners
+      - present and historical CH340 assignments
 
 ## Open Questions
 
@@ -404,6 +423,9 @@ Push the current hardware-stable-version command proof from source-level and bro
 - after direct peer injection succeeds, can the same peer port be kept for MQTT relay proof without changing wiring
 - after the new ack bridge is in place, does one real API-entry `manual_collect` run already satisfy the next milestone, or do we also want dedicated `Web` / `Desk` wrappers afterward
 - what changed in the field state between the successful API live proofs and the `2026-04-07` rerun where `COM5` returned `0` capture bytes
+- after the new `portOwnership` diagnostics, should the next host recovery step be:
+  - reassign Bluetooth serial devices away from `COM5`
+  - or move the active CH340 to a new clean COM number and update the frozen baseline only if the hardware facts really changed
 
 ## Done When
 
@@ -418,6 +440,9 @@ Push the current hardware-stable-version command proof from source-level and bro
 - at least one config-class command is proven through the same full MQTT relay path and restored safely
 - at least one mismatch command is proven ignored through the same full MQTT relay path
 - the unified reports and monthly journal reflect the real hardware boundary, not only software-side proof
+- the unified reports now also distinguish host-side Windows port collisions from transport/protocol regressions:
+  - `failureClass=serial-port-ownership-collision`
+  - `portOwnershipClassification=ownership-collision-bluetooth-and-usb-serial`
 - operator-side live usage no longer requires manually typing a runtime `manual_collect` payload block:
   - `scripts/dev/run-hardware-stable-version-mqtt-uart-relay-live-manual-collect.ps1`
   - this wrapper auto-generates a fresh runtime `manual_collect` JSON with:

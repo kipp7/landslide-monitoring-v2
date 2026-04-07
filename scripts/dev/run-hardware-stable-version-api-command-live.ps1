@@ -23,6 +23,7 @@ param(
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $ProgressPreference = "SilentlyContinue"
+. (Join-Path $PSScriptRoot "hardware-stable-version-serial-port-common.ps1")
 
 function New-Utf8NoBomEncoding {
   return New-Object System.Text.UTF8Encoding($false)
@@ -1039,6 +1040,7 @@ try {
   $hasAckEvent = [bool](@($eventList.data.list | Where-Object { $_.eventType -eq "COMMAND_ACKED" -and $_.commandId -eq $commandId }).Count -ge 1)
   $hasAckNotification = [bool](@($notificationList.data.list | Where-Object { $_.eventType -eq "COMMAND_ACKED" }).Count -ge 1)
   $systemCloseLoop = $commandAcked -and $hasAckEvent -and $hasAckNotification
+  $portOwnership = if ($Port) { Get-HardwareStableVersionSerialPortOwnership -PortName $Port } else { $null }
   $passiveProbe = if (-not $systemCloseLoop) {
     Invoke-PassiveSerialProbe -PortName $Port -PortBaudRate $BaudRate -Seconds $FailurePassiveProbeSeconds
   } else {
@@ -1046,6 +1048,10 @@ try {
   }
   $failureClass = if ($systemCloseLoop) {
     ""
+  } elseif ($portOwnership -and [string]$portOwnership.classification -eq "ownership-collision-bluetooth-and-usb-serial") {
+    "serial-port-ownership-collision"
+  } elseif ($portOwnership -and [string]$portOwnership.classification -eq "bluetooth-owned") {
+    "serial-port-owned-by-bluetooth"
   } elseif ($relayResult -and $relayCaptureBytes -eq 0) {
     "uart-no-capture-after-write"
   } elseif ($relayCaptureBytes -gt 0 -and -not $relayAckPublished) {
@@ -1112,6 +1118,7 @@ try {
       failureClass = $failureClass
       relayCaptureBytes = $relayCaptureBytes
       relayCaptureLines = $relayCaptureLines
+      portOwnership = $portOwnership
       passiveSerialProbe = $passiveProbe
     }
   }
@@ -1202,6 +1209,9 @@ try {
       notifications = [ordered]@{
         list = $notificationList
         stats = $notificationStats
+      }
+      diagnostics = [ordered]@{
+        portOwnership = if ($Port) { Get-HardwareStableVersionSerialPortOwnership -PortName $Port } else { $null }
       }
       serviceLogs = [ordered]@{
         commandDispatcher = [ordered]@{

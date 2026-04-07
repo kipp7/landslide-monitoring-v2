@@ -227,6 +227,9 @@ try {
         relayCaptureBytes = if ($hardware.relay -and $hardware.relay.sinkResult -and $hardware.relay.sinkResult.capture) { [int]$hardware.relay.sinkResult.capture.bytes } else { 0 }
         relayCaptureLines = if ($hardware.relay -and $hardware.relay.sinkResult -and $hardware.relay.sinkResult.capture) { [int]$hardware.relay.sinkResult.capture.lineCount } else { 0 }
         failureClass = if ($hardware.diagnostics) { [string]$hardware.diagnostics.failureClass } else { "" }
+        portOwnershipClassification = if ($hardware.diagnostics -and $hardware.diagnostics.portOwnership) { [string]$hardware.diagnostics.portOwnership.classification } else { "" }
+        portOwnershipStable = if ($hardware.diagnostics -and $hardware.diagnostics.portOwnership) { [bool]$hardware.diagnostics.portOwnership.ownershipStable } else { $false }
+        portOwnership = if ($hardware.diagnostics) { $hardware.diagnostics.portOwnership } else { $null }
         passiveSerialProbe = if ($hardware.diagnostics) { $hardware.diagnostics.passiveSerialProbe } else { $null }
         reportFile = $HardwareFile
         conclusion = $hardware.conclusion
