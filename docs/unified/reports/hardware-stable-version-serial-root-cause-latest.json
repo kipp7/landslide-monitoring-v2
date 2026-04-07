@@ -1,7 +1,7 @@
 ﻿{
-    "generatedAt":  "2026-04-07T12:28:02Z",
+    "generatedAt":  "2026-04-07T12:53:15Z",
     "targetPort":  "COM5",
-    "conclusion":  "hardware-stable-version-target-com-port-has-name-collision-between-bluetooth-and-usb-serial-owners",
+    "conclusion":  "hardware-stable-version-serial-port-state-needs-manual-review",
     "checks":  {
                    "anyPortsClassDevices":  true,
                    "anyPresentPortsClassDevices":  true,
@@ -11,74 +11,20 @@
                    "billboardSignalsPresent":  true,
                    "serialDriverPackagesInstalled":  true,
                    "targetPortOwnershipStable":  false,
-                   "targetPortCollision":  true
+                   "targetPortCollision":  false
                },
-    "likelyCause":  "target-com-port-number-is-colliding-between-bluetooth-serial-and-usb-uart-ownership",
+    "likelyCause":  "serial-port-state-needs-manual-review",
     "targetPortOwnership":  {
                                 "port":  "COM5",
-                                "classification":  "ownership-collision-bluetooth-and-usb-serial",
+                                "classification":  "multiple-present-usb-serial-devices",
                                 "ownershipStable":  false,
                                 "visibleInSystemIoPorts":  false,
-                                "presentDeviceCount":  11,
-                                "presentBluetoothCount":  9,
+                                "presentDeviceCount":  2,
+                                "presentBluetoothCount":  0,
                                 "presentUsbSerialCount":  2,
-                                "win32DeviceCount":  9,
+                                "win32DeviceCount":  0,
                                 "historicalCh340AssignmentCount":  8,
                                 "presentDevices":  [
-                                                       {
-                                                           "Status":  "OK",
-                                                           "Class":  "Ports",
-                                                           "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
-                                                           "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_00000000",
-                                                           "PortName":  "COM5",
-                                                           "IsBluetooth":  true,
-                                                           "IsUsbSerial":  false
-                                                       },
-                                                       {
-                                                           "Status":  "OK",
-                                                           "Class":  "Ports",
-                                                           "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
-                                                           "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_00000001",
-                                                           "PortName":  "COM5",
-                                                           "IsBluetooth":  true,
-                                                           "IsUsbSerial":  false
-                                                       },
-                                                       {
-                                                           "Status":  "OK",
-                                                           "Class":  "Ports",
-                                                           "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
-                                                           "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_00000002",
-                                                           "PortName":  "COM5",
-                                                           "IsBluetooth":  true,
-                                                           "IsUsbSerial":  false
-                                                       },
-                                                       {
-                                                           "Status":  "OK",
-                                                           "Class":  "Ports",
-                                                           "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
-                                                           "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_0000000A",
-                                                           "PortName":  "COM5",
-                                                           "IsBluetooth":  true,
-                                                           "IsUsbSerial":  false
-                                                       },
-                                                       {
-                                                           "Status":  "OK",
-                                                           "Class":  "Ports",
-                                                           "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
-                                                           "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_0000000C",
-                                                           "PortName":  "COM5",
-                                                           "IsBluetooth":  true,
-                                                           "IsUsbSerial":  false
-                                                       },
-                                                       {
-                                                           "Status":  "OK",
-                                                           "Class":  "Ports",
-                                                           "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
-                                                           "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_VID\u0026000105D6_PID\u0026000A\\7\u0026387A3EE1\u00260\u0026651C83C5A278_C00000000",
-                                                           "PortName":  "COM5",
-                                                           "IsBluetooth":  true,
-                                                           "IsUsbSerial":  false
-                                                       },
                                                        {
                                                            "Status":  "Error",
                                                            "Class":  "Ports",
@@ -91,131 +37,15 @@
                                                        {
                                                            "Status":  "OK",
                                                            "Class":  "Ports",
-                                                           "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
-                                                           "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_VID\u002600010075_PID\u0026A013\\7\u0026387A3EE1\u00260\u0026DCCCE6F558B3_C00000000",
-                                                           "PortName":  "COM5",
-                                                           "IsBluetooth":  true,
-                                                           "IsUsbSerial":  false
-                                                       },
-                                                       {
-                                                           "Status":  "OK",
-                                                           "Class":  "Ports",
-                                                           "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
-                                                           "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_VID\u002600010075_PID\u0026A013\\7\u0026387A3EE1\u00260\u002654104FF53E3D_C00000000",
-                                                           "PortName":  "COM5",
-                                                           "IsBluetooth":  true,
-                                                           "IsUsbSerial":  false
-                                                       },
-                                                       {
-                                                           "Status":  "OK",
-                                                           "Class":  "Ports",
                                                            "FriendlyName":  "USB-SERIAL CH340 (COM5)",
                                                            "InstanceId":  "USB\\VID_1A86\u0026PID_7523\\6\u002632422B62\u00260\u00262",
                                                            "PortName":  "COM5",
                                                            "IsBluetooth":  false,
                                                            "IsUsbSerial":  true
-                                                       },
-                                                       {
-                                                           "Status":  "OK",
-                                                           "Class":  "Ports",
-                                                           "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
-                                                           "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260002\\7\u0026387A3EE1\u00260\u00260135B4C7BFBD_C00000000",
-                                                           "PortName":  "COM5",
-                                                           "IsBluetooth":  true,
-                                                           "IsUsbSerial":  false
                                                        }
                                                    ],
                                 "win32Devices":  [
-                                                     {
-                                                         "DeviceID":  "COM5",
-                                                         "Name":  "蓝牙链接上的标准串行 (COM5)",
-                                                         "Description":  "蓝牙链接上的标准串行",
-                                                         "PNPDeviceID":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_VID\u002600010075_PID\u0026A013\\7\u0026387A3EE1\u00260\u002654104FF53E3D_C00000000",
-                                                         "ProviderType":  "RS232 Serial Port",
-                                                         "Status":  "OK",
-                                                         "IsBluetooth":  true,
-                                                         "IsUsbSerial":  false
-                                                     },
-                                                     {
-                                                         "DeviceID":  "COM5",
-                                                         "Name":  "蓝牙链接上的标准串行 (COM5)",
-                                                         "Description":  "蓝牙链接上的标准串行",
-                                                         "PNPDeviceID":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_VID\u002600010075_PID\u0026A013\\7\u0026387A3EE1\u00260\u0026DCCCE6F558B3_C00000000",
-                                                         "ProviderType":  "RS232 Serial Port",
-                                                         "Status":  "OK",
-                                                         "IsBluetooth":  true,
-                                                         "IsUsbSerial":  false
-                                                     },
-                                                     {
-                                                         "DeviceID":  "COM5",
-                                                         "Name":  "蓝牙链接上的标准串行 (COM5)",
-                                                         "Description":  "蓝牙链接上的标准串行",
-                                                         "PNPDeviceID":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_00000002",
-                                                         "ProviderType":  "",
-                                                         "Status":  "OK",
-                                                         "IsBluetooth":  true,
-                                                         "IsUsbSerial":  false
-                                                     },
-                                                     {
-                                                         "DeviceID":  "COM5",
-                                                         "Name":  "蓝牙链接上的标准串行 (COM5)",
-                                                         "Description":  "蓝牙链接上的标准串行",
-                                                         "PNPDeviceID":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_00000000",
-                                                         "ProviderType":  "",
-                                                         "Status":  "OK",
-                                                         "IsBluetooth":  true,
-                                                         "IsUsbSerial":  false
-                                                     },
-                                                     {
-                                                         "DeviceID":  "COM5",
-                                                         "Name":  "蓝牙链接上的标准串行 (COM5)",
-                                                         "Description":  "蓝牙链接上的标准串行",
-                                                         "PNPDeviceID":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_VID\u0026000105D6_PID\u0026000A\\7\u0026387A3EE1\u00260\u0026651C83C5A278_C00000000",
-                                                         "ProviderType":  "RS232 Serial Port",
-                                                         "Status":  "OK",
-                                                         "IsBluetooth":  true,
-                                                         "IsUsbSerial":  false
-                                                     },
-                                                     {
-                                                         "DeviceID":  "COM5",
-                                                         "Name":  "蓝牙链接上的标准串行 (COM5)",
-                                                         "Description":  "蓝牙链接上的标准串行",
-                                                         "PNPDeviceID":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_0000000A",
-                                                         "ProviderType":  "",
-                                                         "Status":  "OK",
-                                                         "IsBluetooth":  true,
-                                                         "IsUsbSerial":  false
-                                                     },
-                                                     {
-                                                         "DeviceID":  "COM5",
-                                                         "Name":  "蓝牙链接上的标准串行 (COM5)",
-                                                         "Description":  "蓝牙链接上的标准串行",
-                                                         "PNPDeviceID":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260002\\7\u0026387A3EE1\u00260\u00260135B4C7BFBD_C00000000",
-                                                         "ProviderType":  "",
-                                                         "Status":  "OK",
-                                                         "IsBluetooth":  true,
-                                                         "IsUsbSerial":  false
-                                                     },
-                                                     {
-                                                         "DeviceID":  "COM5",
-                                                         "Name":  "蓝牙链接上的标准串行 (COM5)",
-                                                         "Description":  "蓝牙链接上的标准串行",
-                                                         "PNPDeviceID":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_00000001",
-                                                         "ProviderType":  "RS232 Serial Port",
-                                                         "Status":  "OK",
-                                                         "IsBluetooth":  true,
-                                                         "IsUsbSerial":  false
-                                                     },
-                                                     {
-                                                         "DeviceID":  "COM5",
-                                                         "Name":  "蓝牙链接上的标准串行 (COM5)",
-                                                         "Description":  "蓝牙链接上的标准串行",
-                                                         "PNPDeviceID":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_0000000C",
-                                                         "ProviderType":  "",
-                                                         "Status":  "OK",
-                                                         "IsBluetooth":  true,
-                                                         "IsUsbSerial":  false
-                                                     }
+
                                                  ],
                                 "historicalCh340Assignments":  [
                                                                    {
@@ -292,9 +122,8 @@
                                                                    }
                                                                ],
                                 "recommendedNextSteps":  [
-                                                             "move Bluetooth serial devices or the CH340 adapter onto a unique COM number before treating this port as a stable hardware baseline",
-                                                             "prefer the CH340 instance that is Present=true and Status=OK, then re-run the live command gate against that port only",
-                                                             "re-run scripts/dev/show-hardware-stable-version-serial-ports.ps1 after any COM-number change and expect a single stable owner for this port"
+                                                             "the same COM number appears to be claimed by more than one present USB serial device; clean up stale mappings before live testing",
+                                                             "replug the intended adapter and confirm only one Present=true USB serial owner remains"
                                                          ]
                             },
     "portOwnership":  [
@@ -332,69 +161,15 @@
                           },
                           {
                               "port":  "COM5",
-                              "classification":  "ownership-collision-bluetooth-and-usb-serial",
+                              "classification":  "multiple-present-usb-serial-devices",
                               "ownershipStable":  false,
                               "visibleInSystemIoPorts":  false,
-                              "presentDeviceCount":  11,
-                              "presentBluetoothCount":  9,
+                              "presentDeviceCount":  2,
+                              "presentBluetoothCount":  0,
                               "presentUsbSerialCount":  2,
-                              "win32DeviceCount":  9,
+                              "win32DeviceCount":  0,
                               "historicalCh340AssignmentCount":  8,
                               "presentDevices":  [
-                                                     {
-                                                         "Status":  "OK",
-                                                         "Class":  "Ports",
-                                                         "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
-                                                         "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_00000000",
-                                                         "PortName":  "COM5",
-                                                         "IsBluetooth":  true,
-                                                         "IsUsbSerial":  false
-                                                     },
-                                                     {
-                                                         "Status":  "OK",
-                                                         "Class":  "Ports",
-                                                         "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
-                                                         "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_00000001",
-                                                         "PortName":  "COM5",
-                                                         "IsBluetooth":  true,
-                                                         "IsUsbSerial":  false
-                                                     },
-                                                     {
-                                                         "Status":  "OK",
-                                                         "Class":  "Ports",
-                                                         "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
-                                                         "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_00000002",
-                                                         "PortName":  "COM5",
-                                                         "IsBluetooth":  true,
-                                                         "IsUsbSerial":  false
-                                                     },
-                                                     {
-                                                         "Status":  "OK",
-                                                         "Class":  "Ports",
-                                                         "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
-                                                         "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_0000000A",
-                                                         "PortName":  "COM5",
-                                                         "IsBluetooth":  true,
-                                                         "IsUsbSerial":  false
-                                                     },
-                                                     {
-                                                         "Status":  "OK",
-                                                         "Class":  "Ports",
-                                                         "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
-                                                         "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_0000000C",
-                                                         "PortName":  "COM5",
-                                                         "IsBluetooth":  true,
-                                                         "IsUsbSerial":  false
-                                                     },
-                                                     {
-                                                         "Status":  "OK",
-                                                         "Class":  "Ports",
-                                                         "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
-                                                         "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_VID\u0026000105D6_PID\u0026000A\\7\u0026387A3EE1\u00260\u0026651C83C5A278_C00000000",
-                                                         "PortName":  "COM5",
-                                                         "IsBluetooth":  true,
-                                                         "IsUsbSerial":  false
-                                                     },
                                                      {
                                                          "Status":  "Error",
                                                          "Class":  "Ports",
@@ -407,131 +182,15 @@
                                                      {
                                                          "Status":  "OK",
                                                          "Class":  "Ports",
-                                                         "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
-                                                         "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_VID\u002600010075_PID\u0026A013\\7\u0026387A3EE1\u00260\u0026DCCCE6F558B3_C00000000",
-                                                         "PortName":  "COM5",
-                                                         "IsBluetooth":  true,
-                                                         "IsUsbSerial":  false
-                                                     },
-                                                     {
-                                                         "Status":  "OK",
-                                                         "Class":  "Ports",
-                                                         "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
-                                                         "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_VID\u002600010075_PID\u0026A013\\7\u0026387A3EE1\u00260\u002654104FF53E3D_C00000000",
-                                                         "PortName":  "COM5",
-                                                         "IsBluetooth":  true,
-                                                         "IsUsbSerial":  false
-                                                     },
-                                                     {
-                                                         "Status":  "OK",
-                                                         "Class":  "Ports",
                                                          "FriendlyName":  "USB-SERIAL CH340 (COM5)",
                                                          "InstanceId":  "USB\\VID_1A86\u0026PID_7523\\6\u002632422B62\u00260\u00262",
                                                          "PortName":  "COM5",
                                                          "IsBluetooth":  false,
                                                          "IsUsbSerial":  true
-                                                     },
-                                                     {
-                                                         "Status":  "OK",
-                                                         "Class":  "Ports",
-                                                         "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
-                                                         "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260002\\7\u0026387A3EE1\u00260\u00260135B4C7BFBD_C00000000",
-                                                         "PortName":  "COM5",
-                                                         "IsBluetooth":  true,
-                                                         "IsUsbSerial":  false
                                                      }
                                                  ],
                               "win32Devices":  [
-                                                   {
-                                                       "DeviceID":  "COM5",
-                                                       "Name":  "蓝牙链接上的标准串行 (COM5)",
-                                                       "Description":  "蓝牙链接上的标准串行",
-                                                       "PNPDeviceID":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_VID\u002600010075_PID\u0026A013\\7\u0026387A3EE1\u00260\u002654104FF53E3D_C00000000",
-                                                       "ProviderType":  "RS232 Serial Port",
-                                                       "Status":  "OK",
-                                                       "IsBluetooth":  true,
-                                                       "IsUsbSerial":  false
-                                                   },
-                                                   {
-                                                       "DeviceID":  "COM5",
-                                                       "Name":  "蓝牙链接上的标准串行 (COM5)",
-                                                       "Description":  "蓝牙链接上的标准串行",
-                                                       "PNPDeviceID":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_VID\u002600010075_PID\u0026A013\\7\u0026387A3EE1\u00260\u0026DCCCE6F558B3_C00000000",
-                                                       "ProviderType":  "RS232 Serial Port",
-                                                       "Status":  "OK",
-                                                       "IsBluetooth":  true,
-                                                       "IsUsbSerial":  false
-                                                   },
-                                                   {
-                                                       "DeviceID":  "COM5",
-                                                       "Name":  "蓝牙链接上的标准串行 (COM5)",
-                                                       "Description":  "蓝牙链接上的标准串行",
-                                                       "PNPDeviceID":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_00000002",
-                                                       "ProviderType":  "",
-                                                       "Status":  "OK",
-                                                       "IsBluetooth":  true,
-                                                       "IsUsbSerial":  false
-                                                   },
-                                                   {
-                                                       "DeviceID":  "COM5",
-                                                       "Name":  "蓝牙链接上的标准串行 (COM5)",
-                                                       "Description":  "蓝牙链接上的标准串行",
-                                                       "PNPDeviceID":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_00000000",
-                                                       "ProviderType":  "",
-                                                       "Status":  "OK",
-                                                       "IsBluetooth":  true,
-                                                       "IsUsbSerial":  false
-                                                   },
-                                                   {
-                                                       "DeviceID":  "COM5",
-                                                       "Name":  "蓝牙链接上的标准串行 (COM5)",
-                                                       "Description":  "蓝牙链接上的标准串行",
-                                                       "PNPDeviceID":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_VID\u0026000105D6_PID\u0026000A\\7\u0026387A3EE1\u00260\u0026651C83C5A278_C00000000",
-                                                       "ProviderType":  "RS232 Serial Port",
-                                                       "Status":  "OK",
-                                                       "IsBluetooth":  true,
-                                                       "IsUsbSerial":  false
-                                                   },
-                                                   {
-                                                       "DeviceID":  "COM5",
-                                                       "Name":  "蓝牙链接上的标准串行 (COM5)",
-                                                       "Description":  "蓝牙链接上的标准串行",
-                                                       "PNPDeviceID":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_0000000A",
-                                                       "ProviderType":  "",
-                                                       "Status":  "OK",
-                                                       "IsBluetooth":  true,
-                                                       "IsUsbSerial":  false
-                                                   },
-                                                   {
-                                                       "DeviceID":  "COM5",
-                                                       "Name":  "蓝牙链接上的标准串行 (COM5)",
-                                                       "Description":  "蓝牙链接上的标准串行",
-                                                       "PNPDeviceID":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260002\\7\u0026387A3EE1\u00260\u00260135B4C7BFBD_C00000000",
-                                                       "ProviderType":  "",
-                                                       "Status":  "OK",
-                                                       "IsBluetooth":  true,
-                                                       "IsUsbSerial":  false
-                                                   },
-                                                   {
-                                                       "DeviceID":  "COM5",
-                                                       "Name":  "蓝牙链接上的标准串行 (COM5)",
-                                                       "Description":  "蓝牙链接上的标准串行",
-                                                       "PNPDeviceID":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_00000001",
-                                                       "ProviderType":  "RS232 Serial Port",
-                                                       "Status":  "OK",
-                                                       "IsBluetooth":  true,
-                                                       "IsUsbSerial":  false
-                                                   },
-                                                   {
-                                                       "DeviceID":  "COM5",
-                                                       "Name":  "蓝牙链接上的标准串行 (COM5)",
-                                                       "Description":  "蓝牙链接上的标准串行",
-                                                       "PNPDeviceID":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_0000000C",
-                                                       "ProviderType":  "",
-                                                       "Status":  "OK",
-                                                       "IsBluetooth":  true,
-                                                       "IsUsbSerial":  false
-                                                   }
+
                                                ],
                               "historicalCh340Assignments":  [
                                                                  {
@@ -608,9 +267,8 @@
                                                                  }
                                                              ],
                               "recommendedNextSteps":  [
-                                                           "move Bluetooth serial devices or the CH340 adapter onto a unique COM number before treating this port as a stable hardware baseline",
-                                                           "prefer the CH340 instance that is Present=true and Status=OK, then re-run the live command gate against that port only",
-                                                           "re-run scripts/dev/show-hardware-stable-version-serial-ports.ps1 after any COM-number change and expect a single stable owner for this port"
+                                                           "the same COM number appears to be claimed by more than one present USB serial device; clean up stale mappings before live testing",
+                                                           "replug the intended adapter and confirm only one Present=true USB serial owner remains"
                                                        ]
                           },
                           {
@@ -649,7 +307,7 @@
     "currentPorts":  {
                          "all":  [
                                      {
-                                         "Status":  "OK",
+                                         "Status":  "Unknown",
                                          "Class":  "Ports",
                                          "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
                                          "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_00000000",
@@ -658,7 +316,7 @@
                                          "IsUsbSerial":  false
                                      },
                                      {
-                                         "Status":  "OK",
+                                         "Status":  "Unknown",
                                          "Class":  "Ports",
                                          "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
                                          "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_00000001",
@@ -667,7 +325,7 @@
                                          "IsUsbSerial":  false
                                      },
                                      {
-                                         "Status":  "OK",
+                                         "Status":  "Unknown",
                                          "Class":  "Ports",
                                          "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
                                          "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_00000002",
@@ -676,7 +334,7 @@
                                          "IsUsbSerial":  false
                                      },
                                      {
-                                         "Status":  "OK",
+                                         "Status":  "Unknown",
                                          "Class":  "Ports",
                                          "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
                                          "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_0000000A",
@@ -685,7 +343,7 @@
                                          "IsUsbSerial":  false
                                      },
                                      {
-                                         "Status":  "OK",
+                                         "Status":  "Unknown",
                                          "Class":  "Ports",
                                          "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
                                          "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_0000000C",
@@ -694,7 +352,7 @@
                                          "IsUsbSerial":  false
                                      },
                                      {
-                                         "Status":  "OK",
+                                         "Status":  "Unknown",
                                          "Class":  "Ports",
                                          "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
                                          "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_VID\u0026000105D6_PID\u0026000A\\7\u0026387A3EE1\u00260\u0026651C83C5A278_C00000000",
@@ -712,7 +370,7 @@
                                          "IsUsbSerial":  true
                                      },
                                      {
-                                         "Status":  "OK",
+                                         "Status":  "Unknown",
                                          "Class":  "Ports",
                                          "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
                                          "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_VID\u002600010075_PID\u0026A013\\7\u0026387A3EE1\u00260\u0026DCCCE6F558B3_C00000000",
@@ -757,7 +415,7 @@
                                          "IsUsbSerial":  true
                                      },
                                      {
-                                         "Status":  "OK",
+                                         "Status":  "Unknown",
                                          "Class":  "Ports",
                                          "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
                                          "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_VID\u002600010075_PID\u0026A013\\7\u0026387A3EE1\u00260\u002654104FF53E3D_C00000000",
@@ -793,7 +451,7 @@
                                          "IsUsbSerial":  true
                                      },
                                      {
-                                         "Status":  "OK",
+                                         "Status":  "Unknown",
                                          "Class":  "Ports",
                                          "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
                                          "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260002\\7\u0026387A3EE1\u00260\u00260135B4C7BFBD_C00000000",
@@ -822,60 +480,6 @@
                                  ],
                          "present":  [
                                          {
-                                             "Status":  "OK",
-                                             "Class":  "Ports",
-                                             "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
-                                             "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_00000000",
-                                             "PortName":  "COM5",
-                                             "IsBluetooth":  true,
-                                             "IsUsbSerial":  false
-                                         },
-                                         {
-                                             "Status":  "OK",
-                                             "Class":  "Ports",
-                                             "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
-                                             "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_00000001",
-                                             "PortName":  "COM5",
-                                             "IsBluetooth":  true,
-                                             "IsUsbSerial":  false
-                                         },
-                                         {
-                                             "Status":  "OK",
-                                             "Class":  "Ports",
-                                             "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
-                                             "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_00000002",
-                                             "PortName":  "COM5",
-                                             "IsBluetooth":  true,
-                                             "IsUsbSerial":  false
-                                         },
-                                         {
-                                             "Status":  "OK",
-                                             "Class":  "Ports",
-                                             "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
-                                             "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_0000000A",
-                                             "PortName":  "COM5",
-                                             "IsBluetooth":  true,
-                                             "IsUsbSerial":  false
-                                         },
-                                         {
-                                             "Status":  "OK",
-                                             "Class":  "Ports",
-                                             "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
-                                             "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_0000000C",
-                                             "PortName":  "COM5",
-                                             "IsBluetooth":  true,
-                                             "IsUsbSerial":  false
-                                         },
-                                         {
-                                             "Status":  "OK",
-                                             "Class":  "Ports",
-                                             "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
-                                             "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_VID\u0026000105D6_PID\u0026000A\\7\u0026387A3EE1\u00260\u0026651C83C5A278_C00000000",
-                                             "PortName":  "COM5",
-                                             "IsBluetooth":  true,
-                                             "IsUsbSerial":  false
-                                         },
-                                         {
                                              "Status":  "Error",
                                              "Class":  "Ports",
                                              "FriendlyName":  "USB-SERIAL CH340 (COM5)",
@@ -887,38 +491,11 @@
                                          {
                                              "Status":  "OK",
                                              "Class":  "Ports",
-                                             "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
-                                             "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_VID\u002600010075_PID\u0026A013\\7\u0026387A3EE1\u00260\u0026DCCCE6F558B3_C00000000",
-                                             "PortName":  "COM5",
-                                             "IsBluetooth":  true,
-                                             "IsUsbSerial":  false
-                                         },
-                                         {
-                                             "Status":  "OK",
-                                             "Class":  "Ports",
-                                             "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
-                                             "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_VID\u002600010075_PID\u0026A013\\7\u0026387A3EE1\u00260\u002654104FF53E3D_C00000000",
-                                             "PortName":  "COM5",
-                                             "IsBluetooth":  true,
-                                             "IsUsbSerial":  false
-                                         },
-                                         {
-                                             "Status":  "OK",
-                                             "Class":  "Ports",
                                              "FriendlyName":  "USB-SERIAL CH340 (COM5)",
                                              "InstanceId":  "USB\\VID_1A86\u0026PID_7523\\6\u002632422B62\u00260\u00262",
                                              "PortName":  "COM5",
                                              "IsBluetooth":  false,
                                              "IsUsbSerial":  true
-                                         },
-                                         {
-                                             "Status":  "OK",
-                                             "Class":  "Ports",
-                                             "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
-                                             "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260002\\7\u0026387A3EE1\u00260\u00260135B4C7BFBD_C00000000",
-                                             "PortName":  "COM5",
-                                             "IsBluetooth":  true,
-                                             "IsUsbSerial":  false
                                          }
                                      ],
                          "nonBluetooth":  [
@@ -942,179 +519,10 @@
                                               }
                                           ],
                          "bluetooth":  [
-                                           {
-                                               "Status":  "OK",
-                                               "Class":  "Ports",
-                                               "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
-                                               "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_00000000",
-                                               "PortName":  "COM5",
-                                               "IsBluetooth":  true,
-                                               "IsUsbSerial":  false
-                                           },
-                                           {
-                                               "Status":  "OK",
-                                               "Class":  "Ports",
-                                               "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
-                                               "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_00000001",
-                                               "PortName":  "COM5",
-                                               "IsBluetooth":  true,
-                                               "IsUsbSerial":  false
-                                           },
-                                           {
-                                               "Status":  "OK",
-                                               "Class":  "Ports",
-                                               "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
-                                               "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_00000002",
-                                               "PortName":  "COM5",
-                                               "IsBluetooth":  true,
-                                               "IsUsbSerial":  false
-                                           },
-                                           {
-                                               "Status":  "OK",
-                                               "Class":  "Ports",
-                                               "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
-                                               "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_0000000A",
-                                               "PortName":  "COM5",
-                                               "IsBluetooth":  true,
-                                               "IsUsbSerial":  false
-                                           },
-                                           {
-                                               "Status":  "OK",
-                                               "Class":  "Ports",
-                                               "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
-                                               "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_0000000C",
-                                               "PortName":  "COM5",
-                                               "IsBluetooth":  true,
-                                               "IsUsbSerial":  false
-                                           },
-                                           {
-                                               "Status":  "OK",
-                                               "Class":  "Ports",
-                                               "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
-                                               "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_VID\u0026000105D6_PID\u0026000A\\7\u0026387A3EE1\u00260\u0026651C83C5A278_C00000000",
-                                               "PortName":  "COM5",
-                                               "IsBluetooth":  true,
-                                               "IsUsbSerial":  false
-                                           },
-                                           {
-                                               "Status":  "OK",
-                                               "Class":  "Ports",
-                                               "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
-                                               "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_VID\u002600010075_PID\u0026A013\\7\u0026387A3EE1\u00260\u0026DCCCE6F558B3_C00000000",
-                                               "PortName":  "COM5",
-                                               "IsBluetooth":  true,
-                                               "IsUsbSerial":  false
-                                           },
-                                           {
-                                               "Status":  "OK",
-                                               "Class":  "Ports",
-                                               "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
-                                               "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_VID\u002600010075_PID\u0026A013\\7\u0026387A3EE1\u00260\u002654104FF53E3D_C00000000",
-                                               "PortName":  "COM5",
-                                               "IsBluetooth":  true,
-                                               "IsUsbSerial":  false
-                                           },
-                                           {
-                                               "Status":  "OK",
-                                               "Class":  "Ports",
-                                               "FriendlyName":  "蓝牙链接上的标准串行 (COM5)",
-                                               "InstanceId":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260002\\7\u0026387A3EE1\u00260\u00260135B4C7BFBD_C00000000",
-                                               "PortName":  "COM5",
-                                               "IsBluetooth":  true,
-                                               "IsUsbSerial":  false
-                                           }
+
                                        ],
                          "win32":  [
-                                       {
-                                           "DeviceID":  "COM5",
-                                           "Name":  "蓝牙链接上的标准串行 (COM5)",
-                                           "Description":  "蓝牙链接上的标准串行",
-                                           "PNPDeviceID":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_VID\u002600010075_PID\u0026A013\\7\u0026387A3EE1\u00260\u002654104FF53E3D_C00000000",
-                                           "ProviderType":  "RS232 Serial Port",
-                                           "Status":  "OK",
-                                           "IsBluetooth":  true,
-                                           "IsUsbSerial":  false
-                                       },
-                                       {
-                                           "DeviceID":  "COM5",
-                                           "Name":  "蓝牙链接上的标准串行 (COM5)",
-                                           "Description":  "蓝牙链接上的标准串行",
-                                           "PNPDeviceID":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_VID\u002600010075_PID\u0026A013\\7\u0026387A3EE1\u00260\u0026DCCCE6F558B3_C00000000",
-                                           "ProviderType":  "RS232 Serial Port",
-                                           "Status":  "OK",
-                                           "IsBluetooth":  true,
-                                           "IsUsbSerial":  false
-                                       },
-                                       {
-                                           "DeviceID":  "COM5",
-                                           "Name":  "蓝牙链接上的标准串行 (COM5)",
-                                           "Description":  "蓝牙链接上的标准串行",
-                                           "PNPDeviceID":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_00000002",
-                                           "ProviderType":  "",
-                                           "Status":  "OK",
-                                           "IsBluetooth":  true,
-                                           "IsUsbSerial":  false
-                                       },
-                                       {
-                                           "DeviceID":  "COM5",
-                                           "Name":  "蓝牙链接上的标准串行 (COM5)",
-                                           "Description":  "蓝牙链接上的标准串行",
-                                           "PNPDeviceID":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_00000000",
-                                           "ProviderType":  "",
-                                           "Status":  "OK",
-                                           "IsBluetooth":  true,
-                                           "IsUsbSerial":  false
-                                       },
-                                       {
-                                           "DeviceID":  "COM5",
-                                           "Name":  "蓝牙链接上的标准串行 (COM5)",
-                                           "Description":  "蓝牙链接上的标准串行",
-                                           "PNPDeviceID":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_VID\u0026000105D6_PID\u0026000A\\7\u0026387A3EE1\u00260\u0026651C83C5A278_C00000000",
-                                           "ProviderType":  "RS232 Serial Port",
-                                           "Status":  "OK",
-                                           "IsBluetooth":  true,
-                                           "IsUsbSerial":  false
-                                       },
-                                       {
-                                           "DeviceID":  "COM5",
-                                           "Name":  "蓝牙链接上的标准串行 (COM5)",
-                                           "Description":  "蓝牙链接上的标准串行",
-                                           "PNPDeviceID":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_0000000A",
-                                           "ProviderType":  "",
-                                           "Status":  "OK",
-                                           "IsBluetooth":  true,
-                                           "IsUsbSerial":  false
-                                       },
-                                       {
-                                           "DeviceID":  "COM5",
-                                           "Name":  "蓝牙链接上的标准串行 (COM5)",
-                                           "Description":  "蓝牙链接上的标准串行",
-                                           "PNPDeviceID":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260002\\7\u0026387A3EE1\u00260\u00260135B4C7BFBD_C00000000",
-                                           "ProviderType":  "",
-                                           "Status":  "OK",
-                                           "IsBluetooth":  true,
-                                           "IsUsbSerial":  false
-                                       },
-                                       {
-                                           "DeviceID":  "COM5",
-                                           "Name":  "蓝牙链接上的标准串行 (COM5)",
-                                           "Description":  "蓝牙链接上的标准串行",
-                                           "PNPDeviceID":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_00000001",
-                                           "ProviderType":  "RS232 Serial Port",
-                                           "Status":  "OK",
-                                           "IsBluetooth":  true,
-                                           "IsUsbSerial":  false
-                                       },
-                                       {
-                                           "DeviceID":  "COM5",
-                                           "Name":  "蓝牙链接上的标准串行 (COM5)",
-                                           "Description":  "蓝牙链接上的标准串行",
-                                           "PNPDeviceID":  "BTHENUM\\{00001101-0000-1000-8000-00805F9B34FB}_LOCALMFG\u00260000\\7\u0026387A3EE1\u00260\u0026000000000000_0000000C",
-                                           "ProviderType":  "",
-                                           "Status":  "OK",
-                                           "IsBluetooth":  true,
-                                           "IsUsbSerial":  false
-                                       }
+
                                    ]
                      },
     "suspiciousUsbDevices":  [
@@ -1381,6 +789,12 @@
                                ],
     "recentBillboardEvents":  [
                                   {
+                                      "TimeCreated":  "\/Date(1775566358489)\/",
+                                      "Id":  112,
+                                      "LevelDisplayName":  "信息",
+                                      "Message":  "已为设备“USB 2.0 BILLBOARD”({d850308c-15ab-530d-97cb-a20f75fb35bf})提供服务，处理了 4 个任务，写入了 0 个属性，活动工作时间为 2289 毫秒。"
+                                  },
+                                  {
                                       "TimeCreated":  "\/Date(1775564146805)\/",
                                       "Id":  112,
                                       "LevelDisplayName":  "信息",
@@ -1400,8 +814,9 @@
                                   }
                               ],
     "recommendedNextSteps":  [
-                                 "move Bluetooth serial devices or the CH340 adapter onto a unique COM number before treating this port as a stable hardware baseline",
-                                 "prefer the CH340 instance that is Present=true and Status=OK, then re-run the live command gate against that port only",
-                                 "re-run scripts/dev/show-hardware-stable-version-serial-ports.ps1 after any COM-number change and expect a single stable owner for this port"
+                                 "reconnect the board or adapter with a known data-capable USB cable, not a charge-only cable",
+                                 "prefer a direct USB-A/USB-C data connection or a known USB-UART dongle that should enumerate as CH340/CP210/FTDI instead of a Type-C alternate-mode adapter path",
+                                 "avoid the current USB Billboard path; per Microsoft, Billboard enumeration indicates alternate-mode negotiation or compatibility failure rather than a normal UART/COM function",
+                                 "after reconnecting, rerun scripts/dev/show-hardware-stable-version-serial-ports.ps1 and expect a non-Bluetooth Started COM device"
                              ]
 }

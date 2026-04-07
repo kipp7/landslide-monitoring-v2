@@ -281,6 +281,29 @@ function Invoke-PassiveSerialProbe {
   }
 }
 
+function Get-PortOwnershipFailureClass {
+  param($Ownership)
+
+  if (-not $Ownership) {
+    return ""
+  }
+
+  switch ([string]$Ownership.classification) {
+    "ownership-collision-bluetooth-and-usb-serial" {
+      return "serial-port-ownership-collision"
+    }
+    "bluetooth-owned" {
+      return "serial-port-owned-by-bluetooth"
+    }
+    "multiple-present-usb-serial-devices" {
+      return "serial-port-multiple-present-usb-serial-devices"
+    }
+    default {
+      return ""
+    }
+  }
+}
+
 function Wait-ForLogMatch {
   param(
     [string]$Path,
@@ -934,6 +957,10 @@ try {
   $relayRaw = & powershell.exe @relayArgs | Out-String
   Write-LiveDebugStage -Path $debugLogFile -Stage "relay-returned" -Detail ("exit={0}" -f [string]$LASTEXITCODE)
   if ($LASTEXITCODE -ne 0) {
+    $relayResult = Read-JsonIfExists -Path (Join-Path $repoRoot $relayOutFile)
+    if ($relayResult) {
+      Write-LiveDebugStage -Path $debugLogFile -Stage "relay-result-read-after-nonzero-exit" -Detail ("commandId={0}" -f [string]$relayResult.command.commandId)
+    }
     throw "start-hardware-stable-version-mqtt-uart-relay.ps1 failed (exit=$LASTEXITCODE)"
   }
 
@@ -1046,12 +1073,11 @@ try {
   } else {
     $null
   }
+  $portOwnershipFailureClass = Get-PortOwnershipFailureClass -Ownership $portOwnership
   $failureClass = if ($systemCloseLoop) {
     ""
-  } elseif ($portOwnership -and [string]$portOwnership.classification -eq "ownership-collision-bluetooth-and-usb-serial") {
-    "serial-port-ownership-collision"
-  } elseif ($portOwnership -and [string]$portOwnership.classification -eq "bluetooth-owned") {
-    "serial-port-owned-by-bluetooth"
+  } elseif ($portOwnershipFailureClass) {
+    $portOwnershipFailureClass
   } elseif ($relayResult -and $relayCaptureBytes -eq 0) {
     "uart-no-capture-after-write"
   } elseif ($relayCaptureBytes -gt 0 -and -not $relayAckPublished) {
@@ -1174,6 +1200,22 @@ try {
       Ensure-TempDirectory -Path $outDir
     }
 
+    $failurePortOwnership = if ($Port) { Get-HardwareStableVersionSerialPortOwnership -PortName $Port } else { $null }
+    $failureRelayCaptureBytes = if ($relayResult -and $relayResult.sinkResult -and $relayResult.sinkResult.capture) {
+      [int]$relayResult.sinkResult.capture.bytes
+    } else {
+      0
+    }
+    $failureRelayCaptureLines = if ($relayResult -and $relayResult.sinkResult -and $relayResult.sinkResult.capture) {
+      [int]$relayResult.sinkResult.capture.lineCount
+    } else {
+      0
+    }
+    $failureFailureClass = Get-PortOwnershipFailureClass -Ownership $failurePortOwnership
+    if (-not $failureFailureClass -and $relayResult -and $failureRelayCaptureBytes -eq 0) {
+      $failureFailureClass = "uart-no-capture-after-write"
+    }
+
     $failureReport = [ordered]@{
       generatedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
       mode = "api-command-live-through-dispatcher-relay-and-ack-bridge"
@@ -1211,7 +1253,10 @@ try {
         stats = $notificationStats
       }
       diagnostics = [ordered]@{
-        portOwnership = if ($Port) { Get-HardwareStableVersionSerialPortOwnership -PortName $Port } else { $null }
+        failureClass = $failureFailureClass
+        relayCaptureBytes = $failureRelayCaptureBytes
+        relayCaptureLines = $failureRelayCaptureLines
+        portOwnership = $failurePortOwnership
       }
       serviceLogs = [ordered]@{
         commandDispatcher = [ordered]@{
