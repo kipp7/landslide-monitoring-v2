@@ -1,7 +1,7 @@
 ## 1. Truth Consolidation
-- [ ] 1.1 Consolidate existing firmware/device identity/MQTT/IoT adapter truth into one architecture baseline
-- [ ] 1.2 Mark which decisions are already accepted vs still open
-- [ ] 1.3 Record the recommended boundary between field node, field gateway, and central platform
+- [x] 1.1 Consolidate existing firmware/device identity/MQTT/IoT adapter truth into one architecture baseline (`docs/unified/reports/field-uplink-platform-closure-baseline.md`)
+- [x] 1.2 Mark which decisions are already accepted vs still open (`docs/unified/reports/field-uplink-platform-closure-baseline.md`)
+- [x] 1.3 Record the recommended boundary between field node, field gateway, and central platform (`docs/unified/reports/field-uplink-platform-closure-baseline.md`, `design.md`)
 
 ## 2. Architecture Design
 - [ ] 2.1 Define the three-layer field architecture: node, gateway, platform
@@ -12,12 +12,12 @@
 
 ## 3. Interface & Data Strategy
 - [ ] 3.1 Define `field_node_id -> device_id(UUID)` mapping strategy
-- [ ] 3.2 Define telemetry field mapping from field packets to platform `TelemetryEnvelope`
+- [x] 3.2 Define telemetry field mapping from field packets to platform `TelemetryEnvelope` (`docs/unified/reports/field-uplink-platform-closure-baseline.md`)
 - [ ] 3.3 Define `install_label` naming, uniqueness scope, and non-identity usage rules
 - [ ] 3.4 Define the field telemetry profile: required fields, optional fields, and excluded high-frequency fields
 - [ ] 3.5 Define length budget and framing constraints for the field link profile
 - [ ] 3.6 Define high-frequency vs low-frequency telemetry layering strategy
-- [ ] 3.7 Define phase boundary: stage 1 uplink only, stage 2 commands/acks/config
+- [x] 3.7 Define phase boundary: stage 1 uplink only, stage 2 commands/acks/config (`design.md`, `docs/unified/reports/field-uplink-platform-closure-baseline.md`)
 - [ ] 3.8 Define observability boundaries for node health, gateway health, and platform ingest health
 
 ## 4. Rollout & Governance
@@ -28,10 +28,10 @@
 ## 5. Software-First Integration Plan
 - [ ] 5.1 Define node-to-gateway debugging interface and message reconstruction strategy
 - [ ] 5.2 Define a software-only node simulator profile for field telemetry profile validation
-- [ ] 5.3 Define gateway-to-platform adapter responsibilities for MQTT and optional HTTP uplink
+- [x] 5.3 Define gateway-to-platform adapter responsibilities for MQTT and optional HTTP uplink (`design.md`, `docs/unified/reports/field-uplink-platform-closure-baseline.md`)
 - [ ] 5.4 Define a software-only gateway simulator or adapter harness for platform-side integration
-- [ ] 5.5 Define phased validation order: node-gateway, gateway-platform, then end-to-end rehearsal
-- [ ] 5.6 Define what evidence each phase must produce before real hardware rollout
+- [x] 5.5 Define phased validation order: node-gateway, gateway-platform, then end-to-end rehearsal (`design.md`, `docs/unified/reports/field-uplink-platform-closure-baseline.md`)
+- [x] 5.6 Define what evidence each phase must produce before real hardware rollout (`design.md`, `docs/unified/reports/field-uplink-platform-closure-baseline.md`)
 
 ## 6. Concrete Software Debug Blueprint
 - [ ] 6.1 Define the minimal node simulator outputs: normal packet, low-frequency packet, duplicate packet, oversized packet, replay packet

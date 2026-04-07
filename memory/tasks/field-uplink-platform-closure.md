@@ -34,6 +34,22 @@ Freeze and execute the next major phase after command-route stabilization: prove
 - command closure has already been proven and should no longer be the main blocker
 - the active OpenSpec change that should govern this next phase already exists:
   - `openspec/changes/add-field-hardware-gateway-architecture`
+- the current authority baseline for this phase now exists:
+  - `docs/unified/reports/field-uplink-platform-closure-baseline.md`
+- the old interpretation that hardware still emits only legacy flat JSON is now partially obsolete:
+  - current real telemetry already contains:
+    - `schema_version`
+    - `device_id`
+    - `metrics`
+    - `meta`
+- the near-term gateway contract is now narrower than earlier March reports implied:
+  - primary job is:
+    - reconstruction
+    - validation
+    - light deterministic completion
+    - forwarding
+    - evidence
+  - not a thick legacy-to-envelope rewrite
 - the decisive unfinished boundary is no longer command delivery; it is:
   - gateway-owned adaptation of field telemetry into a platform-acceptable uplink contract
   - and proof that the data is visible through ingest/API/Desk-side read paths
@@ -49,11 +65,16 @@ Freeze and execute the next major phase after command-route stabilization: prove
 ## Plan
 
 - stage 1: truth consolidation
-  - consolidate the already-proven field telemetry facts from journals, unified reports, and hardware task notes
-  - mark what is already accepted vs what is still open in `add-field-hardware-gateway-architecture`
+  - completed via:
+    - `docs/unified/reports/field-uplink-platform-closure-baseline.md`
+  - March adaptation assumptions are now reconciled against April hardware evidence
 - stage 2: software-first uplink contract freeze
   - freeze the minimal field packet -> platform contract mapping
-  - decide whether the near-term gateway output is direct `TelemetryEnvelope` or a deterministic adapter layer
+  - keep the near-term gateway output as a thin adapter:
+    - reconstruction
+    - validation
+    - light deterministic completion
+    - forwarding
   - freeze the evidence set for node-to-gateway and gateway-to-platform rehearsals
 - stage 3: platform visibility rehearsal
   - push one real or replayed field telemetry sample through the chosen adapter path
@@ -63,7 +84,7 @@ Freeze and execute the next major phase after command-route stabilization: prove
 
 ## Open Questions
 
-- should the short-term gateway adapter emit platform-standard `TelemetryEnvelope` directly, or use a temporary HTTP/debug fallback during the earliest rehearsal slice
+- should the short-term gateway adapter publish MQTT as the primary rehearsal path immediately, or use HTTP fallback only as a temporary debug side path
 - what is the minimal acceptable gateway-side spool/cache record for replay and outage evidence
 - which read path should be treated as the primary product proof for phase 1:
   - raw ingest acceptance
@@ -74,6 +95,7 @@ Freeze and execute the next major phase after command-route stabilization: prove
 
 - the next phase has a single accepted execution line anchored to `add-field-hardware-gateway-architecture`
 - the field uplink contract and mapping boundary are frozen clearly enough to start implementation without reopening architecture debate
+- the current authority truth reflects April real-hardware telemetry rather than only March adaptation assumptions
 - at least one rehearsal path is defined end-to-end:
   - node/serial input
   - gateway adaptation
