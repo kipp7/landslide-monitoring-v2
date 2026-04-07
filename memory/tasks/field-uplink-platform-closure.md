@@ -106,9 +106,21 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - role boundaries
     - phase order
     - task-package split
+- the next implementation-layer tasklists for the three formal work packages now also exist:
+  - `docs/unified/reports/field-rk3568-gateway-implementation-tasklist-2026-04.md`
+  - `docs/unified/reports/field-rk2206-firmware-implementation-tasklist-2026-04.md`
+  - `docs/unified/reports/field-center-server-deployment-integration-tasklist-2026-04.md`
+  - together they convert the phased architecture baseline into:
+    - gateway implementation scope
+    - firmware implementation scope
+    - center deployment/integration scope
 - the decisive unfinished boundary is no longer command delivery; it is:
   - gateway-owned adaptation of field telemetry into a platform-acceptable uplink contract
   - and making the field-side ingress path repeatable without depending on ad hoc host-run steps
+  - with the current work now split into:
+    - RK3568 gateway implementation
+    - RK2206 firmware implementation
+    - center deployment/integration implementation
 
 ## Constraints
 
@@ -139,9 +151,16 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - `scripts/dev/run-field-hardware-uplink-product-visibility.ps1`
   - unified full-path rerun entry is now:
     - `scripts/dev/run-field-hardware-uplink-full-proof.ps1`
-  - current next focus after visibility proof is:
-    - freeze the formal `3 RK2206 + 1 RK3568 + center server` execution line
-    - then enter RK3568 / RK2206 / deployment implementation tracks without reopening small proof-level debates
+  - the formal `3 RK2206 + 1 RK3568 + center server` execution line is now frozen
+- stage 4: implementation-entry task split
+  - the next active work should follow:
+    - `docs/unified/reports/field-rk3568-gateway-implementation-tasklist-2026-04.md`
+    - `docs/unified/reports/field-rk2206-firmware-implementation-tasklist-2026-04.md`
+    - `docs/unified/reports/field-center-server-deployment-integration-tasklist-2026-04.md`
+  - the immediate program focus should now be:
+    - freeze the minimal RK3568 gateway code skeleton and runtime contract
+    - freeze RK2206 firmware module boundaries for sensors/sampling/reporting/power
+    - freeze the center-server deployment line so field full-path does not depend on hidden host-run steps
 
 ## Open Questions
 
@@ -151,6 +170,11 @@ Freeze and execute the next major phase after command-route stabilization: prove
   - API query visibility
   - Web-side proxy/client visibility
 - should `ingest-service` and `telemetry-writer` remain host-run rehearsal processes, or be added to the compose app stack for repeatable local full-path proof
+- what exact repository/module should own the first RK3568 gateway production skeleton
+- which parts of the current RK2206 firmware should be refactored first to separate:
+  - sensor drivers
+  - sampling/reporting scheduler
+  - power-management logic
 
 ## Done When
 
@@ -171,4 +195,8 @@ Freeze and execute the next major phase after command-route stabilization: prove
   - `apps/web/lib/api/*`
 - there is a single rerun command that reproduces the current proof boundary:
   - `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\run-field-hardware-uplink-full-proof.ps1`
+- the next phase is decomposed into three implementation authority documents for:
+  - RK3568 gateway
+  - RK2206 firmware
+  - center deployment/integration
 - a later session can resume this phase directly from this note without re-deriving the current command-route baseline
