@@ -22,6 +22,21 @@ function requireArg(name) {
   return value;
 }
 
+function resolvePayloadPath(repoRoot, sampleName, payloadFile) {
+  if (payloadFile) {
+    return path.resolve(repoRoot, payloadFile);
+  }
+
+  return path.join(
+    repoRoot,
+    "docs",
+    "tools",
+    "field-rehearsal",
+    "payload-samples",
+    sampleName.endsWith(".json") ? sampleName : `${sampleName}.json`
+  );
+}
+
 async function loadTelemetryValidator(repoRoot) {
   if (!loadAndCompileSchema) return null;
   const schemaPath = path.join(
@@ -95,16 +110,15 @@ async function publishHttp(httpUrl, payload, token) {
 
 async function main() {
   const repoRoot = process.cwd();
-  const sampleName = requireArg("sample");
+  const sampleName = getArg("sample", "");
+  const payloadFile = getArg("payloadFile", "");
   const mode = getArg("mode", "mqtt").toLowerCase();
-  const samplePath = path.join(
-    repoRoot,
-    "docs",
-    "tools",
-    "field-rehearsal",
-    "payload-samples",
-    sampleName.endsWith(".json") ? sampleName : `${sampleName}.json`
-  );
+  if (!sampleName && !payloadFile) {
+    console.error("Missing required arg: --sample or --payloadFile");
+    process.exit(2);
+  }
+
+  const samplePath = resolvePayloadPath(repoRoot, sampleName, payloadFile);
 
   if (!fs.existsSync(samplePath)) {
     console.error(`Sample not found: ${samplePath}`);
@@ -139,6 +153,7 @@ async function main() {
         {
           mode: "mqtt",
           sample: path.basename(samplePath),
+          payloadFile: path.relative(repoRoot, samplePath).replace(/\\/g, "/"),
           topic,
           mqttUrl,
           bytes: Buffer.byteLength(JSON.stringify(payload), "utf8")
@@ -159,6 +174,7 @@ async function main() {
         {
           mode: "http",
           sample: path.basename(samplePath),
+          payloadFile: path.relative(repoRoot, samplePath).replace(/\\/g, "/"),
           httpUrl,
           bytes: Buffer.byteLength(JSON.stringify(payload), "utf8"),
           response: responseText

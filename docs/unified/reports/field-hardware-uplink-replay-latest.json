@@ -1,0 +1,331 @@
+{
+  "generatedAt": "2026-04-07T16:07:22.686Z",
+  "mode": "field-hardware-uplink-replay",
+  "apiBaseUrl": "http://127.0.0.1:8080",
+  "mqttUrl": "mqtt://127.0.0.1:1883",
+  "sourcePayloadFile": "docs/tools/field-rehearsal/payload-samples/hf-hardware-real-20260406-seq21.json",
+  "sourcePayloadDeviceId": "00000000-0000-0000-0000-000000000001",
+  "replayDevice": {
+    "deviceId": "1e0358b7-eaee-4079-aef1-1fc3162dbbfe",
+    "installLabel": "REPLAY-HW-20260408-000720",
+    "schemaVersion": 1,
+    "credVersion": 1
+  },
+  "publish": {
+    "topic": "telemetry/1e0358b7-eaee-4079-aef1-1fc3162dbbfe",
+    "bytes": 742,
+    "seq": 21
+  },
+  "statePoll": {
+    "success": true,
+    "url": "http://127.0.0.1:8080/api/v1/data/state/1e0358b7-eaee-4079-aef1-1fc3162dbbfe",
+    "checks": [
+      {
+        "at": "2026-04-07T16:07:20.639Z",
+        "ok": false,
+        "status": 404,
+        "hasState": false,
+        "metricsKeys": [],
+        "bodyPreview": "{\"success\":false,\"code\":404,\"message\":\"资源不存在\",\"timestamp\":\"2026-04-07T16:07:20.637Z\",\"traceId\":\"b4bfee99-f23b-472b-ac6c-eaa9400bd3fa\",\"error\":{\"deviceId\":\"1e0358b7-eaee-4079-aef1-1fc3162dbbfe\"}}"
+      },
+      {
+        "at": "2026-04-07T16:07:22.652Z",
+        "ok": true,
+        "status": 200,
+        "hasState": true,
+        "metricsKeys": [
+          "accel_x_g",
+          "accel_y_g",
+          "accel_z_g",
+          "gyro_x_dps",
+          "gyro_y_dps",
+          "gyro_z_dps",
+          "tilt_x_deg",
+          "tilt_y_deg",
+          "battery_pct",
+          "gps_latitude",
+          "humidity_pct",
+          "warning_flag",
+          "gps_longitude",
+          "temperature_c"
+        ],
+        "bodyPreview": "{\"success\":true,\"code\":200,\"message\":\"ok\",\"data\":{\"deviceId\":\"1e0358b7-eaee-4079-aef1-1fc3162dbbfe\",\"updatedAt\":\"2026-04-07T16:07:20Z\",\"state\":{\"meta\":{\"_writer\":{\"last_seq\":21,\"last_received_ts\":\"2026-04-07T16:07:20.614Z\"},\"uptime_s\":109,\"legacy_node\":\"A\",\"replay_kind\":\"real_hardware_capture\",\"install_label\":\"FIELD-NODE-A\",\"replay_source\":\"hf-hardware-real-20260406-seq21.json\",\"upload_trigger\":\"p"
+      }
+    ],
+    "final": {
+      "success": true,
+      "code": 200,
+      "message": "ok",
+      "data": {
+        "deviceId": "1e0358b7-eaee-4079-aef1-1fc3162dbbfe",
+        "updatedAt": "2026-04-07T16:07:20Z",
+        "state": {
+          "meta": {
+            "_writer": {
+              "last_seq": 21,
+              "last_received_ts": "2026-04-07T16:07:20.614Z"
+            },
+            "uptime_s": 109,
+            "legacy_node": "A",
+            "replay_kind": "real_hardware_capture",
+            "install_label": "FIELD-NODE-A",
+            "replay_source": "hf-hardware-real-20260406-seq21.json",
+            "upload_trigger": "periodic",
+            "last_command_id": "",
+            "last_command_type": "",
+            "legacy_valid_flags": {
+              "gps_ok": 1,
+              "imu_ok": 1,
+              "temp_ok": 1
+            },
+            "replay_generated_at": "2026-04-07T16:07:20.503Z",
+            "last_command_uptime_s": 0
+          },
+          "metrics": {
+            "accel_x_g": 0.09,
+            "accel_y_g": 0.06,
+            "accel_z_g": 1,
+            "gyro_x_dps": 0.5,
+            "gyro_y_dps": -0.3,
+            "gyro_z_dps": 0.1,
+            "tilt_x_deg": 5.12,
+            "tilt_y_deg": 3.39,
+            "battery_pct": 80,
+            "gps_latitude": 22.5432,
+            "humidity_pct": 50.1,
+            "warning_flag": true,
+            "gps_longitude": 114.058098,
+            "temperature_c": 29.5
+          }
+        }
+      },
+      "timestamp": "2026-04-07T16:07:22.650Z",
+      "traceId": "8afc2655-9fcb-4d37-a690-904e4eafe43e"
+    }
+  },
+  "acceptance": [
+    {
+      "url": "http://127.0.0.1:8080/health",
+      "ok": true,
+      "status": 200,
+      "json": {
+        "ok": true,
+        "status": "OK",
+        "timestamp": "2026-04-07T16:07:22.653Z",
+        "service": "api-service",
+        "port": 8080
+      },
+      "bodyPreview": "{\"ok\":true,\"status\":\"OK\",\"timestamp\":\"2026-04-07T16:07:22.653Z\",\"service\":\"api-service\",\"port\":8080}"
+    },
+    {
+      "url": "http://127.0.0.1:8080/api/v1/system/status",
+      "ok": true,
+      "status": 200,
+      "json": {
+        "success": true,
+        "code": 200,
+        "message": "ok",
+        "data": {
+          "uptimeS": 6218,
+          "postgres": {
+            "status": "healthy"
+          },
+          "clickhouse": {
+            "status": "healthy"
+          },
+          "kafka": {
+            "status": "configured"
+          },
+          "emqx": {
+            "status": "unknown"
+          },
+          "source": "health_summary",
+          "note": "当前展示的是服务健康摘要，不表示真实 CPU/内存/磁盘占用。",
+          "items": [
+            {
+              "key": "postgres",
+              "label": "PostgreSQL",
+              "status": "healthy",
+              "detail": "healthy"
+            },
+            {
+              "key": "clickhouse",
+              "label": "ClickHouse",
+              "status": "healthy",
+              "detail": "healthy"
+            },
+            {
+              "key": "kafka",
+              "label": "Kafka",
+              "status": "healthy",
+              "detail": "configured"
+            }
+          ]
+        },
+        "timestamp": "2026-04-07T16:07:22.671Z",
+        "traceId": "2f0ecdda-1513-40ce-a910-ed45c1bcb6e2"
+      },
+      "bodyPreview": "{\"success\":true,\"code\":200,\"message\":\"ok\",\"data\":{\"uptimeS\":6218,\"postgres\":{\"status\":\"healthy\"},\"clickhouse\":{\"status\":\"healthy\"},\"kafka\":{\"status\":\"configured\"},\"emqx\":{\"status\":\"unknown\"},\"source\":\"health_summary\",\"note\":\"当前展示的是服务健康摘要，不表示真实 CPU/内存/磁盘占用。\",\"items\":[{\"key\":\"postgres\",\"label\":\"PostgreSQL\",\"status\":\"healthy\",\"detail\":\"healthy\"},{\"key\":\"clickhouse\",\"label\":\"ClickHouse\",\"status\":\"heal"
+    },
+    {
+      "url": "http://127.0.0.1:8080/api/v1/devices?page=1&pageSize=20",
+      "ok": true,
+      "status": 200,
+      "json": {
+        "success": true,
+        "code": 200,
+        "message": "ok",
+        "data": {
+          "list": [
+            {
+              "deviceId": "1e0358b7-eaee-4079-aef1-1fc3162dbbfe",
+              "deviceName": "field-hardware-replay-REPLAY-HW-20260408-000720",
+              "deviceType": "multi_sensor",
+              "status": "active",
+              "stationId": null,
+              "lastSeenAt": "2026-04-07T16:07:20.595Z"
+            },
+            {
+              "deviceId": "1e3496da-6ca9-4d1f-8310-04de30d51901",
+              "deviceName": "field-hardware-replay-REPLAY-HW-20260408-000504",
+              "deviceType": "multi_sensor",
+              "status": "active",
+              "stationId": null,
+              "lastSeenAt": "2026-04-07T16:05:05.119Z"
+            },
+            {
+              "deviceId": "e0626173-88a2-4aac-8c41-8cb4919b824e",
+              "deviceName": "field-hardware-replay-REPLAY-HW-20260408-000226",
+              "deviceType": "multi_sensor",
+              "status": "active",
+              "stationId": null,
+              "lastSeenAt": "2026-04-07T16:02:27.209Z"
+            },
+            {
+              "deviceId": "b0f9382d-464a-4cce-a36c-3a890d1c63a8",
+              "deviceName": "field-rehearsal-device",
+              "deviceType": "multi_sensor",
+              "status": "active",
+              "stationId": null,
+              "lastSeenAt": "2026-04-07T16:02:08.955Z"
+            },
+            {
+              "deviceId": "00000000-0000-0000-0000-000000000005",
+              "deviceName": "device_5",
+              "deviceType": "tilt",
+              "status": "active",
+              "stationId": "f829d79e-df13-4c5c-aadc-6d3341d7ada1",
+              "lastSeenAt": "2026-03-23T05:59:00.817Z"
+            },
+            {
+              "deviceId": "00000000-0000-0000-0000-000000000001",
+              "deviceName": "device_1",
+              "deviceType": "multi_sensor",
+              "status": "active",
+              "stationId": "2dc06788-cb7b-4054-bfec-6426cea8e4eb",
+              "lastSeenAt": "2026-03-25T05:59:00.817Z"
+            },
+            {
+              "deviceId": "00000000-0000-0000-0000-000000000006",
+              "deviceName": "device_6",
+              "deviceType": "gnss",
+              "status": "active",
+              "stationId": "f829d79e-df13-4c5c-aadc-6d3341d7ada1",
+              "lastSeenAt": "2026-03-23T05:59:00.817Z"
+            },
+            {
+              "deviceId": "00000000-0000-0000-0000-000000000002",
+              "deviceName": "device_2",
+              "deviceType": "multi_sensor",
+              "status": "active",
+              "stationId": "2dc06788-cb7b-4054-bfec-6426cea8e4eb",
+              "lastSeenAt": "2026-03-25T05:59:00.817Z"
+            },
+            {
+              "deviceId": "00000000-0000-0000-0000-000000000003",
+              "deviceName": "device_3",
+              "deviceType": "multi_sensor",
+              "status": "active",
+              "stationId": "2dc06788-cb7b-4054-bfec-6426cea8e4eb",
+              "lastSeenAt": "2026-03-25T05:59:00.817Z"
+            },
+            {
+              "deviceId": "00000000-0000-0000-0000-000000000004",
+              "deviceName": "device_4",
+              "deviceType": "rain",
+              "status": "inactive",
+              "stationId": "f829d79e-df13-4c5c-aadc-6d3341d7ada1",
+              "lastSeenAt": "2026-03-22T05:59:00.817Z"
+            }
+          ],
+          "pagination": {
+            "page": 1,
+            "pageSize": 20,
+            "total": 10,
+            "totalPages": 1
+          }
+        },
+        "timestamp": "2026-04-07T16:07:22.678Z",
+        "traceId": "b7ae5a83-8352-4b60-96e1-2dccffe045b2"
+      },
+      "bodyPreview": "{\"success\":true,\"code\":200,\"message\":\"ok\",\"data\":{\"list\":[{\"deviceId\":\"1e0358b7-eaee-4079-aef1-1fc3162dbbfe\",\"deviceName\":\"field-hardware-replay-REPLAY-HW-20260408-000720\",\"deviceType\":\"multi_sensor\",\"status\":\"active\",\"stationId\":null,\"lastSeenAt\":\"2026-04-07T16:07:20.595Z\"},{\"deviceId\":\"1e3496da-6ca9-4d1f-8310-04de30d51901\",\"deviceName\":\"field-hardware-replay-REPLAY-HW-20260408-000504\",\"deviceTyp"
+    },
+    {
+      "url": "http://127.0.0.1:8080/api/v1/data/state/1e0358b7-eaee-4079-aef1-1fc3162dbbfe",
+      "ok": true,
+      "status": 200,
+      "json": {
+        "success": true,
+        "code": 200,
+        "message": "ok",
+        "data": {
+          "deviceId": "1e0358b7-eaee-4079-aef1-1fc3162dbbfe",
+          "updatedAt": "2026-04-07T16:07:20Z",
+          "state": {
+            "meta": {
+              "_writer": {
+                "last_seq": 21,
+                "last_received_ts": "2026-04-07T16:07:20.614Z"
+              },
+              "uptime_s": 109,
+              "legacy_node": "A",
+              "replay_kind": "real_hardware_capture",
+              "install_label": "FIELD-NODE-A",
+              "replay_source": "hf-hardware-real-20260406-seq21.json",
+              "upload_trigger": "periodic",
+              "last_command_id": "",
+              "last_command_type": "",
+              "legacy_valid_flags": {
+                "gps_ok": 1,
+                "imu_ok": 1,
+                "temp_ok": 1
+              },
+              "replay_generated_at": "2026-04-07T16:07:20.503Z",
+              "last_command_uptime_s": 0
+            },
+            "metrics": {
+              "accel_x_g": 0.09,
+              "accel_y_g": 0.06,
+              "accel_z_g": 1,
+              "gyro_x_dps": 0.5,
+              "gyro_y_dps": -0.3,
+              "gyro_z_dps": 0.1,
+              "tilt_x_deg": 5.12,
+              "tilt_y_deg": 3.39,
+              "battery_pct": 80,
+              "gps_latitude": 22.5432,
+              "humidity_pct": 50.1,
+              "warning_flag": true,
+              "gps_longitude": 114.058098,
+              "temperature_c": 29.5
+            }
+          }
+        },
+        "timestamp": "2026-04-07T16:07:22.685Z",
+        "traceId": "5f74a418-43d1-46f0-9d38-e02567aee191"
+      },
+      "bodyPreview": "{\"success\":true,\"code\":200,\"message\":\"ok\",\"data\":{\"deviceId\":\"1e0358b7-eaee-4079-aef1-1fc3162dbbfe\",\"updatedAt\":\"2026-04-07T16:07:20Z\",\"state\":{\"meta\":{\"_writer\":{\"last_seq\":21,\"last_received_ts\":\"2026-04-07T16:07:20.614Z\"},\"uptime_s\":109,\"legacy_node\":\"A\",\"replay_kind\":\"real_hardware_capture\",\"install_label\":\"FIELD-NODE-A\",\"replay_source\":\"hf-hardware-real-20260406-seq21.json\",\"upload_trigger\":\"p"
+    }
+  ],
+  "conclusion": "real-hardware-uplink-replay-reached-platform-api-state"
+}

@@ -50,6 +50,20 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - forwarding
     - evidence
   - not a thick legacy-to-envelope rewrite
+- the first real-hardware uplink replay proof into platform API state now exists:
+  - script:
+    - `scripts/dev/run-field-hardware-uplink-replay-full-path.ps1`
+  - source sample:
+    - `docs/tools/field-rehearsal/payload-samples/hf-hardware-real-20260406-seq21.json`
+  - latest report:
+    - `docs/unified/reports/field-hardware-uplink-replay-latest.json`
+  - latest conclusion:
+    - `real-hardware-uplink-replay-reached-platform-api-state`
+  - latest proof confirms:
+    - replay payload entered `telemetry/{device_id}`
+    - host-run `ingest-service` consumed MQTT and wrote Kafka
+    - host-run `telemetry-writer` updated `device_state`
+    - `/api/v1/data/state/{deviceId}` returned replayed metrics and meta
 - the decisive unfinished boundary is no longer command delivery; it is:
   - gateway-owned adaptation of field telemetry into a platform-acceptable uplink contract
   - and proof that the data is visible through ingest/API/Desk-side read paths
@@ -77,10 +91,10 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - forwarding
   - freeze the evidence set for node-to-gateway and gateway-to-platform rehearsals
 - stage 3: platform visibility rehearsal
-  - push one real or replayed field telemetry sample through the chosen adapter path
-  - prove ingest acceptance
-  - prove downstream API visibility
-  - prove Desk/Web-visible read-path impact if available
+  - replay path to API state is now proven through:
+    - `scripts/dev/run-field-hardware-uplink-replay-full-path.ps1`
+  - keep the remaining visibility gap focused on:
+    - Desk/Web-visible read-path impact if available
 
 ## Open Questions
 
@@ -90,6 +104,7 @@ Freeze and execute the next major phase after command-route stabilization: prove
   - raw ingest acceptance
   - API query visibility
   - Desk/Web UI visibility
+- should `ingest-service` and `telemetry-writer` remain host-run rehearsal processes, or be added to the compose app stack for repeatable local full-path proof
 
 ## Done When
 
@@ -101,4 +116,8 @@ Freeze and execute the next major phase after command-route stabilization: prove
   - gateway adaptation
   - platform acceptance
   - API/Desk visibility probe
+- at least one real-hardware telemetry replay already reaches:
+  - MQTT topic
+  - `device_state`
+  - `/api/v1/data/state/{deviceId}`
 - a later session can resume this phase directly from this note without re-deriving the current command-route baseline
