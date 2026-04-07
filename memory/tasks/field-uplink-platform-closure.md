@@ -89,6 +89,13 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - run real-hardware replay proof
     - run Web product visibility proof
     - emit one summary report with the replayed `deviceId`
+- a broader execution-direction authority note now exists for the next stage:
+  - `docs/unified/reports/field-program-direction-and-task-split-2026-04.md`
+  - it freezes the current program into four workstreams:
+    - field link and gateway software mainline
+    - RK3568 gateway program
+    - RK2206 firmware
+    - center deployment/platform topology
 - the decisive unfinished boundary is no longer command delivery; it is:
   - gateway-owned adaptation of field telemetry into a platform-acceptable uplink contract
   - and making the field-side ingress path repeatable without depending on ad hoc host-run steps
@@ -123,7 +130,8 @@ Freeze and execute the next major phase after command-route stabilization: prove
   - unified full-path rerun entry is now:
     - `scripts/dev/run-field-hardware-uplink-full-proof.ps1`
   - current next focus after visibility proof is:
-    - make the gateway/uplink rehearsal path more repeatable and less host-manual
+    - freeze the formal `3 RK2206 + 1 RK3568 + center server` execution line
+    - then enter RK3568 / RK2206 / deployment implementation tracks without reopening small proof-level debates
 
 ## Open Questions
 
