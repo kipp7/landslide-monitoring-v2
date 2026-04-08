@@ -193,7 +193,8 @@ function createAssembler(): GatewayJsonAssembler {
 
       const out = lines
         .map((line) => line.trim())
-        .filter((line) => line.startsWith("{") && line.endsWith("}"));
+        .filter((line) => line.length > 0)
+        .filter((line) => line.includes("{") || line.includes("}"));
 
       if (buffer.length > 4096) {
         const start = buffer.lastIndexOf("{");
@@ -209,9 +210,156 @@ function payloadHash(payload: string): string {
   return createHash("sha256").update(payload).digest("hex");
 }
 
+function summarizePayloadSnippet(rawPayload: string, limit = 240): string {
+  const normalized = rawPayload.replace(/\s+/gu, " ").trim();
+  if (normalized.length <= limit) {
+    return normalized;
+  }
+  return `${normalized.slice(0, limit)}...(truncated)`;
+}
+
+function extractBalancedJsonObjectAt(input: string, start: number): string | null {
+  if (start < 0 || start >= input.length || input[start] !== "{") {
+    return null;
+  }
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = start; i < input.length; i += 1) {
+    const ch = input[i];
+
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+
+    if (ch === "\\") {
+      if (inString) escaped = true;
+      continue;
+    }
+
+    if (ch === "\"") {
+      inString = !inString;
+      continue;
+    }
+
+    if (inString) {
+      continue;
+    }
+
+    if (ch === "{") {
+      depth += 1;
+      continue;
+    }
+
+    if (ch === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return input.slice(start, i + 1);
+      }
+    }
+  }
+
+  return null;
+}
+
+function extractBalancedJsonObjects(input: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let start = -1;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = 0; i < input.length; i += 1) {
+    const ch = input[i];
+
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+
+    if (ch === "\\") {
+      if (inString) escaped = true;
+      continue;
+    }
+
+    if (ch === "\"") {
+      inString = !inString;
+      continue;
+    }
+
+    if (inString) {
+      continue;
+    }
+
+    if (ch === "{") {
+      if (depth === 0) {
+        start = i;
+      }
+      depth += 1;
+      continue;
+    }
+
+    if (ch === "}") {
+      if (depth === 0) {
+        continue;
+      }
+      depth -= 1;
+      if (depth === 0 && start >= 0) {
+        out.push(input.slice(start, i + 1));
+        start = -1;
+      }
+    }
+  }
+
+  return out;
+}
+
+function extractSchemaVersionJsonObjects(input: string): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  let searchIndex = 0;
+
+  while (searchIndex < input.length) {
+    const markerIndex = input.indexOf("\"schema_version\"", searchIndex);
+    if (markerIndex < 0) {
+      break;
+    }
+
+    const start = input.lastIndexOf("{", markerIndex);
+    const candidate = extractBalancedJsonObjectAt(input, start);
+    if (candidate && !seen.has(candidate)) {
+      seen.add(candidate);
+      out.push(candidate);
+      searchIndex = start + candidate.length;
+      continue;
+    }
+
+    searchIndex = markerIndex + "\"schema_version\"".length;
+  }
+
+  return out;
+}
+
 function recoverJsonCandidates(rawPayload: string): string[] {
   const normalized = rawPayload.trim();
   if (normalized.length === 0) return [];
+
+  const schemaAnchored = extractSchemaVersionJsonObjects(normalized)
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+  if (schemaAnchored.length > 0) {
+    return schemaAnchored;
+  }
+
+  const balanced = extractBalancedJsonObjects(normalized)
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+  if (balanced.length > 0) {
+    return balanced;
+  }
 
   const lines = normalized
     .split(/\r?\n/u)
@@ -519,7 +667,16 @@ class GatewayRuntime {
     } catch (err) {
       this.stats.schemaRejected += 1;
       this.stats.lastError = err instanceof Error ? err.message : String(err);
-      this.logger.warn({ traceId, err, sourcePort }, "field gateway json parse failed");
+      this.logger.warn(
+        {
+          traceId,
+          err,
+          sourcePort,
+          payloadBytes,
+          rawPayloadSnippet: summarizePayloadSnippet(rawPayload)
+        },
+        "field gateway json parse failed"
+      );
       return;
     }
 

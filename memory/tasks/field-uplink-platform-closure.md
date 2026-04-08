@@ -527,3 +527,25 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - `json parse failed`
     - `schemaRejected`
   - this should become the next southbound hardening pass after node `C` is online
+- the next live proof narrowed that robustness issue further:
+  - node `B` command routing over the shared port is still working
+    - `commandsReceived=1`
+    - `commandsForwarded=1`
+    - node `B.commandForwards=1`
+  - but `cmd_ack/{device_id}` still does not publish
+    - `ackMessagesPublished=0`
+    - node `B.ackPublishes=0`
+  - the latest instrumented RK3568 log now shows the dominant failure mode is not only “partial JSON”
+    - it is byte-level interleaving between ACK payloads and telemetry payloads on the same center-fed `/dev/ttyS3` stream
+  - captured live evidence includes one raw payload snippet where:
+    - `command_id`
+    - `device_id`
+    - `seq`
+    - telemetry metrics
+    are visibly torn and cross-mixed inside one broken string
+  - this changes the immediate engineering conclusion:
+    - parser hardening is still useful for garbage-prefix recovery
+    - but parser-only work will not close multi-node ACK reliably if the southbound stream itself can interleave bytes from two messages
+  - the next mainline blocker is therefore:
+    - enforce an industrial southbound framing/timing rule for ACK vs telemetry on the center XL01 path
+    - or introduce a stronger framed transport boundary before RK3568 parsing
