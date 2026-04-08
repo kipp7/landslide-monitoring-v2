@@ -437,6 +437,56 @@ RK3568 网关一期算完成，至少要满足：
   - `ackMessagesPublished`
 - 还要把 parse failure 的原始片段一起归档
 
+## 11.2 2026-04-08 烧录后共享串口 ACK 已恢复
+
+现场在真实 RK2206 固件树完成第一轮命令窗口整改并重新烧录后，`node B` 的共享串口命令 proof 已重新转绿。
+
+1. 最新实机复证
+- 执行入口：
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\run-rk3568-field-gateway-node-command-proof.ps1 -DeviceId 00000000-0000-0000-0000-000000000002 -Action manual-collect -Password linaro`
+- 最新命令证据：
+  - `commandId = 3a989480-a41e-4bb3-98bf-1db7bd45b664`
+- 最新结果：
+  - `passed = true`
+  - `diagnosis.summary = command-forward-and-ack-publish-succeeded`
+- proof 前后统计已同步推进：
+  - `commandsReceived: 4 -> 5`
+  - `commandsForwarded: 4 -> 5`
+  - `ackMessagesPublished: 1 -> 2`
+  - `node B.commandForwards: 4 -> 5`
+  - `node B.ackPublishes: 1 -> 2`
+
+2. 日志与 health 已与 proof 一致
+- RK3568 `journalctl` 已明确看到同一 `commandId` 的：
+  - `field gateway command forwarded to serial`
+  - `field gateway command ack published`
+- 独立读取 `runtime-health.json` 也已确认：
+  - `southbound.configuredNodes = 3`
+  - `southbound.configuredPorts = 1`
+  - `southbound.ports[0].ackMessages = 2`
+  - `stats.ackMessagesPublished = 2`
+  - `nodes[B].ackPublishes = 2`
+- 这说明当前不再是“proof 里成功但 health 统计没跟上”的旧状态
+
+3. 当前应如何解释剩余噪声
+- 共享 `/dev/ttyS3` 串流中仍然存在：
+  - `southbound-json-fragmentation`
+  - `shared-stream-byte-interleaving`
+  - `unclassified-parse-failure`
+- 当前这类问题仍体现在：
+  - `parseFailureCount = 47`
+  - `schemaRejected = 688`
+- 但这轮最新事实表明：
+  - 它们仍是运行噪声和稳健性缺口
+  - 已不再阻塞 `node B` 的 `manual_collect -> cmd_ack/{device_id}` 最小闭环
+
+4. 因此当前主线应更新为
+- 共享串口多节点命令闭环已经恢复到“可复证”状态
+- 下一阶段不再停留在“ACK 为什么回不来”
+- 而应转向两条更高价值的收口：
+  - 让节点 `C` 进入同一中心 XL01 串流
+  - 继续压低共享串口解析噪声，验证 `set_config` 与更长时间窗稳定性
+
 ## 12. 相关文档
 
 - [field-uplink-platform-closure-baseline.md](/E:/学校/02 项目/99 山体滑坡优化完善/landslide-monitoring-v2-mainline/docs/unified/reports/field-uplink-platform-closure-baseline.md)

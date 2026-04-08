@@ -304,3 +304,56 @@ RK2206 固件当前应按这一条主线推进：
 - [field-hardware-gateway-architecture-eval.md](/E:/学校/02 项目/99 山体滑坡优化完善/landslide-monitoring-v2-mainline/docs/unified/reports/field-hardware-gateway-architecture-eval.md)
 - [field-program-direction-and-task-split-2026-04.md](/E:/学校/02 项目/99 山体滑坡优化完善/landslide-monitoring-v2-mainline/docs/unified/reports/field-program-direction-and-task-split-2026-04.md)
 - [field-rk3568-rk2206-center-phased-architecture-2026-04.md](/E:/学校/02 项目/99 山体滑坡优化完善/landslide-monitoring-v2-mainline/docs/unified/reports/field-rk3568-rk2206-center-phased-architecture-2026-04.md)
+
+## 11. 2026-04-08 当前实施检查点
+
+截至 `2026-04-08`，RK2206 固件这条线已经从“源码级整改”推进到“真实烧录后的实机回归”：
+
+1. 已进入真实源码树并完成烧录的整改项
+- 真实工作区：
+  - `F:\2\openharmony\txsmartropenharmony\vendor\isoftstone\rk2206\samples\xl01_landslide_monitor_v1.0`
+- 第一轮已落地并烧录的命令窗口整改包括：
+  - `drivers/xl01/xl01_driver.c`
+    - UART TX mutex
+  - `config/app_config.h`
+    - `PLATFORM_POST_ACK_QUIET_MS = 1200`
+    - `PLATFORM_MANUAL_COLLECT_DELAY_MS = 1500`
+  - `main/landslide_main.c`
+    - ACK 统一走 guard send
+    - `manual_collect` 改为：
+      - ACK first
+      - quiet window
+      - deferred telemetry release
+
+2. 最新实机结果已经证明这轮整改有效
+- 在两块已重新烧录的 RK2206 板参与的共享串口场景下：
+  - `node B` fresh `manual_collect` proof 已恢复成功
+- 最新命令证据：
+  - `commandId = 3a989480-a41e-4bb3-98bf-1db7bd45b664`
+- RK3568 侧已确认：
+  - `diagnosis.summary = command-forward-and-ack-publish-succeeded`
+  - `stats.ackMessagesPublished = 2`
+  - `nodes[B].ackPublishes = 2`
+- 这意味着这轮固件整改已经不再只是“理论上应该改善”
+  - 而是已经实际恢复了共享链路上的 ACK 发布闭环
+
+3. 仍然存在但已降级的问题
+- 共享中心 XL01 串流里仍有解析噪声：
+  - `southbound-json-fragmentation`
+  - `shared-stream-byte-interleaving`
+  - `unclassified-parse-failure`
+- 所以这轮结论不是“串流已经完全干净”
+- 而是：
+  - ACK 保护窗口已经把主闭环从阻塞态拉回可运行态
+  - 下一轮仍要继续压缩串流坏包率
+
+4. 因此 RK2206 当前下一阶段应继续收敛为
+- 保持当前 ACK guard 方案作为固件主线
+- 继续验证：
+  - `set_config`
+  - 更长时间窗
+  - 节点 `C` 加入后的三节点共享串流
+- 然后再进入真正的一期固件结构化工作：
+  - 采样/上报解耦
+  - 最小缓存
+  - 低功耗

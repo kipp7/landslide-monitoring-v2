@@ -570,6 +570,41 @@ Freeze and execute the next major phase after command-route stabilization: prove
   - current guard constants:
     - `PLATFORM_POST_ACK_QUIET_MS = 1200`
     - `PLATFORM_MANUAL_COLLECT_DELAY_MS = 1500`
-  - this shell still could not run `hb build -f`
-    - because `hb` is not available in the current PATH
-  - so the source-level fix is landed, but local compile/burn proof for that tree is still pending
+  - the user has now completed real flashing for the updated boards
+- the latest live reproved shared-port node `B` command closure has now turned green after that firmware flash:
+  - proof entry:
+    - `scripts/dev/run-rk3568-field-gateway-node-command-proof.ps1`
+  - device:
+    - `00000000-0000-0000-0000-000000000002`
+  - action:
+    - `manual_collect`
+  - latest command evidence:
+    - `commandId = 3a989480-a41e-4bb3-98bf-1db7bd45b664`
+  - current result:
+    - `passed = true`
+    - `diagnosis.summary = command-forward-and-ack-publish-succeeded`
+  - proof counters moved together:
+    - `commandsReceived: 4 -> 5`
+    - `commandsForwarded: 4 -> 5`
+    - `ackMessagesPublished: 1 -> 2`
+    - `node B.commandForwards: 4 -> 5`
+    - `node B.ackPublishes: 1 -> 2`
+- the earlier “proof passed but health lagged” ambiguity is now gone for this closure window:
+  - independent RK3568 `runtime-health.json` now also shows:
+    - `stats.ackMessagesPublished = 2`
+    - `southbound.ports[0].ackMessages = 2`
+    - `nodes[B].ackPublishes = 2`
+  - and `journalctl` shows the same `commandId` through:
+    - `field gateway command forwarded to serial`
+    - `field gateway command ack published`
+- this updates the mainline engineering conclusion again:
+  - the ACK guard / quiet-window firmware fix is now the current successful closure line
+  - remaining parse failures are still real
+  - but they are no longer the primary blocker for:
+    - shared-port node `B` `manual_collect -> cmd_ack/{device_id}`
+- the next active blocker has therefore changed from:
+  - “restore ACK publish on the shared stream”
+- to:
+  - validate the same line for node `C`
+  - validate `set_config` on the repaired line
+  - reduce residual parse-failure noise so the shared stream is stable over longer windows
