@@ -357,3 +357,18 @@ RK2206 固件当前应按这一条主线推进：
   - 采样/上报解耦
   - 最小缓存
   - 低功耗
+
+5. 最新补充结论
+- 修复后的共享串口链路现在已同时实机复证：
+  - `manual_collect`
+  - `set_config`
+- `set_config` 最新两次命令证据分别为：
+  - `7acb0df9-5647-4551-a283-9d4b9ca0f78e` (`set-report-300`)
+  - `db328b8c-0874-4f35-81a1-ef576b8178f2` (`set-report-5`)
+- 两次都已在 RK3568 侧看到：
+  - `field gateway command forwarded to serial`
+  - `field gateway command ack published`
+- 因此当前固件线不再只是“先把 manual_collect 拉通”
+- 而是已经进入：
+  - 共享链路最小命令集已恢复
+  - 下一步转向三节点与更长时间窗稳定性

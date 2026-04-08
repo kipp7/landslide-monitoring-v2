@@ -338,7 +338,7 @@ if (-not $resolvedPassword) {
 $actionSpec = Get-ActionSpec -ActionName $Action
 $commandId = [guid]::NewGuid().ToString()
 $issuedTs = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
-$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss-fff"
 $deviceSuffix = $DeviceId.Substring($DeviceId.Length - 4)
 $payloadFile = Join-Path $tmpDir ("rk3568-node-command-{0}-{1}.json" -f $deviceSuffix, $stamp)
 

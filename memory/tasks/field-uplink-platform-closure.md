@@ -608,3 +608,16 @@ Freeze and execute the next major phase after command-route stabilization: prove
   - validate the same line for node `C`
   - validate `set_config` on the repaired line
   - reduce residual parse-failure noise so the shared stream is stable over longer windows
+- that `set_config` validation is now also complete on the repaired line:
+  - `set-report-300`
+    - `commandId = 7acb0df9-5647-4551-a283-9d4b9ca0f78e`
+    - `diagnosis.summary = command-forward-and-ack-publish-succeeded`
+  - `set-report-5`
+    - `commandId = db328b8c-0874-4f35-81a1-ef576b8178f2`
+    - `diagnosis.summary = command-forward-and-ack-publish-succeeded`
+- the live shared-port command line is therefore now reproved for the current minimum set:
+  - `manual_collect`
+  - `set_config`
+- the immediate next blocker narrows again to:
+  - bring node `C` online on the same center-fed `/dev/ttyS3`
+  - then re-run the same repaired command set against the three-node stream

@@ -487,6 +487,39 @@ RK3568 网关一期算完成，至少要满足：
   - 让节点 `C` 进入同一中心 XL01 串流
   - 继续压低共享串口解析噪声，验证 `set_config` 与更长时间窗稳定性
 
+## 11.3 2026-04-08 修复后 `set_config` 也已复证成功
+
+在同一条修复后的共享串口链路上，`set_config` 的最小配置命令闭环也已完成实机复证。
+
+1. 已完成的两次实机命令
+- 切到 `300s`：
+  - `commandId = 7acb0df9-5647-4551-a283-9d4b9ca0f78e`
+  - `action = set-report-300`
+  - `diagnosis.summary = command-forward-and-ack-publish-succeeded`
+- 切回 `5s`：
+  - `commandId = db328b8c-0874-4f35-81a1-ef576b8178f2`
+  - `action = set-report-5`
+  - `diagnosis.summary = command-forward-and-ack-publish-succeeded`
+
+2. 当前实机统计已确认
+- `commandsReceived = 7`
+- `commandsForwarded = 7`
+- `ackMessagesPublished = 4`
+- `southbound.ports[0].ackMessages = 4`
+- `nodes[B].commandForwards = 7`
+- `nodes[B].ackPublishes = 4`
+- 切回后 node `B` 已重新回到：
+  - `status = online`
+  - `lastTelemetryTs` 正常推进
+
+3. 附带收口的脚本问题
+- `run-rk3568-field-gateway-node-command-proof.ps1` 先前临时 payload 文件名只精确到秒
+- 同一秒内并行运行不同 action 时会撞到同一个 `.tmp` 文件
+- 已改为带毫秒时间戳：
+  - `yyyyMMdd-HHmmss-fff`
+- 这条修复不改变现场协议
+- 但能避免控制侧 proof 并行时的伪失败
+
 ## 12. 相关文档
 
 - [field-uplink-platform-closure-baseline.md](/E:/学校/02 项目/99 山体滑坡优化完善/landslide-monitoring-v2-mainline/docs/unified/reports/field-uplink-platform-closure-baseline.md)
