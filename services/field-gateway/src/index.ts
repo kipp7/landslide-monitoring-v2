@@ -105,74 +105,20 @@ function topicForDevice(config: AppConfig, deviceId: string): string {
 
 function createAssembler(): GatewayJsonAssembler {
   let buffer = "";
-  let start = -1;
-  let depth = 0;
-  let inString = false;
-  let escapeNext = false;
 
   return {
     push(chunk: Buffer): string[] {
-      const out: string[] = [];
       buffer += chunk.toString("utf8");
+      const lines = buffer.split(/\r?\n/u);
+      buffer = lines.pop() ?? "";
 
-      for (let index = 0; index < buffer.length; index += 1) {
-        const ch = buffer[index];
+      const out = lines
+        .map((line) => line.trim())
+        .filter((line) => line.startsWith("{") && line.endsWith("}"));
 
-        if (start === -1) {
-          if (ch === "{") {
-            start = index;
-            depth = 1;
-            inString = false;
-            escapeNext = false;
-          }
-          continue;
-        }
-
-        if (escapeNext) {
-          escapeNext = false;
-          continue;
-        }
-
-        if (inString) {
-          if (ch === "\\") {
-            escapeNext = true;
-          } else if (ch === "\"") {
-            inString = false;
-          }
-          continue;
-        }
-
-        if (ch === "\"") {
-          inString = true;
-          continue;
-        }
-
-        if (ch === "{") {
-          depth += 1;
-          continue;
-        }
-
-        if (ch === "}") {
-          depth -= 1;
-          if (depth === 0 && start >= 0) {
-            out.push(buffer.slice(start, index + 1));
-            buffer = buffer.slice(index + 1);
-            index = -1;
-            start = -1;
-            depth = 0;
-            inString = false;
-            escapeNext = false;
-          }
-        }
-      }
-
-      if (start === -1) {
-        if (buffer.length > 4096) {
-          buffer = buffer.slice(-1024);
-        }
-      } else if (start > 0) {
-        buffer = buffer.slice(start);
-        start = 0;
+      if (buffer.length > 4096) {
+        const start = buffer.lastIndexOf("{");
+        buffer = start >= 0 ? buffer.slice(start) : "";
       }
 
       return out;
@@ -182,6 +128,34 @@ function createAssembler(): GatewayJsonAssembler {
 
 function payloadHash(payload: string): string {
   return createHash("sha256").update(payload).digest("hex");
+}
+
+function recoverTelemetryCandidates(rawPayload: string): string[] {
+  const normalized = rawPayload.trim();
+  if (normalized.length === 0) return [];
+
+  const lines = normalized
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  if (lines.length <= 1) {
+    return [normalized];
+  }
+
+  const telemetryLines = lines.filter(
+    (line) =>
+      line.startsWith("{") &&
+      line.endsWith("}") &&
+      line.includes("\"schema_version\"") &&
+      line.includes("\"device_id\"")
+  );
+
+  if (telemetryLines.length > 0) {
+    return telemetryLines;
+  }
+
+  return [normalized];
 }
 
 async function loadRecord(filePath: string): Promise<SpoolRecord> {
@@ -318,6 +292,7 @@ class GatewayRuntime {
       this.stats.serialChunks += 1;
       this.stats.serialBytes += chunk.length;
       this.stats.lastSerialReadTs = isoNow();
+
       for (const payload of this.assembler.push(chunk)) {
         void this.handlePayload(payload);
       }
@@ -379,6 +354,13 @@ class GatewayRuntime {
   }
 
   private async handlePayload(rawPayload: string): Promise<void> {
+    const candidates = recoverTelemetryCandidates(rawPayload);
+    for (const candidate of candidates) {
+      await this.handlePayloadCandidate(candidate);
+    }
+  }
+
+  private async handlePayloadCandidate(rawPayload: string): Promise<void> {
     const traceId = newTraceId();
     const receivedTs = isoNow();
     const payloadBytes = Buffer.byteLength(rawPayload, "utf8");

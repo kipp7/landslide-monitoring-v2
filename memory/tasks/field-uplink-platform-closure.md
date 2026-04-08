@@ -183,6 +183,29 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - env file `/etc/lsmv2/field-gateway.env`
     - state root `/var/lib/lsmv2/field-gateway`
     - run user `linaro`
+- the first RK3568 on-device live gateway proof is now also complete:
+  - board:
+    - `rk3568-ubuntu`
+  - serial input:
+    - `/dev/ttyS3`
+    - `115200 8N1`
+  - MQTT target:
+    - `mqtt://192.168.124.17:1883`
+  - live service proof confirms:
+    - `systemd` service is active
+    - `serial.open = true`
+    - `mqtt.connected = true`
+    - `parsedMessages > 0`
+    - `publishedMessages > 0`
+  - observed publish sequence in journal:
+    - `seq=1092`
+    - `seq=1093`
+    - `seq=1094`
+    - `seq=1095`
+  - parser boundary truth is now narrower and better grounded:
+    - current real UART stream is newline-delimited JSON telemetry
+    - startup may still occasionally begin on a stale tail fragment
+    - the gateway should therefore prefer line framing and ignore non-`{...}` startup fragments
 
 ## Constraints
 
@@ -239,10 +262,18 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - systemd unit template
     - RK3568 env example
     - RK3568 installer shell entry
+  - completed live closure:
+    - actual RK3568 install/start was executed
+    - first on-device `systemctl` / `journalctl` / health evidence was captured
+    - first live parse-and-publish proof is complete
   - remaining closure inside this stage:
-    - prove install/start on the actual RK3568 board
-    - capture first on-device `systemctl` and health evidence
     - decide whether the repo path should later move from mutable clone path to fixed `/opt/lsmv2`
+    - decide whether the health/state writer needs a harder anti-ENOENT safeguard on low-end storage
+- stage 7: gateway expansion after live single-node proof
+  - next focus should move to:
+    - multi-node southbound configuration for `3 x RK2206`
+    - minimal downlink translation for `manual_collect` / `set_config`
+    - center-side deployment formalization so the field path does not depend on ad hoc host-run helpers
 
 ## Open Questions
 
@@ -270,11 +301,10 @@ Freeze and execute the next major phase after command-route stabilization: prove
   - local control plane
   - sidecars
 - after `services/field-gateway` exists and passes build/lint:
-  - what exact next closure should come first:
-    - RK3568 systemd packaging
+  - the next closure should now come from:
     - multi-node southbound abstraction
     - minimal downlink translation
-    - or compose-side formalization of the center proof runtime
+    - compose-side formalization of the center proof runtime
 
 ## Done When
 

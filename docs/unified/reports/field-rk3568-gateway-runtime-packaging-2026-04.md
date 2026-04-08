@@ -156,7 +156,58 @@ cat /var/lib/lsmv2/field-gateway/health/runtime-health.json
 
 - `可按 systemd 常驻的运行包装基线`
 
+## 10. 2026-04-08 实机运行证据
+
+本轮已经在真实 RK3568 板上完成第一份常驻证据：
+
+1. 板端运行真值
+- 主机：`rk3568-ubuntu`
+- 服务：`lsmv2-field-gateway.service`
+- 串口：`/dev/ttyS3`
+- 波特率：`115200 8N1`
+- MQTT：`mqtt://192.168.124.17:1883`
+
+2. 实机运行结果
+- `systemctl status` 显示服务处于 `active (running)`
+- `runtime-health.json` 已确认：
+  - `serial.open = true`
+  - `mqtt.connected = true`
+  - `parsedMessages > 0`
+  - `publishedMessages > 0`
+- `journalctl` 已确认连续发布 telemetry：
+  - `seq=1092`
+  - `seq=1093`
+  - `seq=1094`
+  - `seq=1095`
+
+3. 现场串口流形态结论
+- 当前 RK3568 实时抓样显示：
+  - 串口数据以完整 JSON 起始
+  - 每条 telemetry 以换行分隔
+  - 12 秒样本内共抓到 `2` 条完整 JSON 行
+- 更早的旧样本同时证明：
+  - 启动瞬间也可能先接到上一条消息的尾段残片
+
+4. 因此冻结的解析策略调整为
+- 主路径使用：
+  - `newline-delimited JSON framing`
+- 启动残片处理使用：
+  - 忽略不以 `{...}` 成形的行
+- 不再默认“启动先丢到首个换行后再开始计数大括号”
+- 这样才能同时覆盖：
+  - 首条就是完整 JSON
+  - 首条是上一报文尾段残片
+
+5. 这一步意味着
+- RK3568 第一版运行包装不仅已经存在
+- 而且已经完成：
+  - `实机串口接入`
+  - `实机常驻运行`
+  - `实机 MQTT 上行`
+  - `实机 health 留证`
+
 下一步应继续按主线推进：
 
-- 先把这套运行包装落到 RK3568 实机
-- 再进入多节点 southbound 抽象或最小下行能力
+- 进入多节点 southbound 抽象
+- 补最小下行命令转译
+- 继续收口中心部署路径，减少对临时 host-run 进程的依赖
