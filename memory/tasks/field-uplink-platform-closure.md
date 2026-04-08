@@ -986,3 +986,26 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - `commandId = 4a0735c2-5a77-4bc0-8135-04805a0bd0a0`
     - `ackStatus = acked`
     - `parseFailureCount = 0`
+- the RK3568 longer-window runtime observation line now also has a frozen entrypoint:
+  - `scripts/dev/run-rk3568-field-gateway-observation-window.ps1`
+- that entrypoint currently:
+  - reuses the RK3568 acceptance line
+  - captures repeated runtime snapshots
+  - summarizes:
+    - `statusContinuous`
+    - `counterDelta`
+    - `maxObserved`
+    - `reconnectObserved`
+- the first formal observation report now exists:
+  - `docs/unified/reports/field-rk3568-gateway-observation-latest.json`
+- the latest `30s` observation window result is:
+  - `passed = true`
+  - `conclusion = rk3568-runtime-observation-window-clean`
+  - `sampleCount = 5`
+  - `parsedMessages delta = 11`
+  - `publishedMessages delta = 11`
+  - `schemaRejected delta = 0`
+  - `publishFailures delta = 0`
+  - `spoolPending max = 0`
+  - `reconnectObserved = false`
+  - `node A/B` stayed online through the window

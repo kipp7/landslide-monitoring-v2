@@ -1,8 +1,8 @@
 ﻿{
-    "generatedAt":  "2026-04-08T18:33:28Z",
+    "generatedAt":  "2026-04-08T19:01:57Z",
     "accepted":  true,
     "mode":  "rk3568-field-gateway-acceptance",
-    "deployMode":  "install",
+    "deployMode":  "skip",
     "currentBoundary":  "board-runtime-and-command-proof-ready",
     "board":  {
                   "host":  "192.168.124.172",
@@ -18,17 +18,14 @@
                      "ackTopicPrefix":  "cmd_ack/"
                  },
     "warmup":  {
-                   "applied":  true,
-                   "satisfied":  true,
+                   "applied":  false,
+                   "satisfied":  false,
                    "timeoutSeconds":  60,
                    "pollSeconds":  5,
-                   "elapsedSeconds":  5
+                   "elapsedSeconds":  0
                },
     "deploy":  {
-                   "mode":  "install",
-                   "serviceActive":  "active",
-                   "serviceEnabled":  "enabled",
-                   "mainPid":  "MainPID=1265299\nExecMainStartTimestamp=Thu 2026-04-09 02:33:07 CST\nExecMainStatus=0\nActiveState=active\nSubState=running\nFragmentPath=/etc/systemd/system/lsmv2-field-gateway.service"
+                   "mode":  "not-run"
                },
     "runtime":  {
                     "report":  "docs/unified/reports/field-rk3568-gateway-runtime-latest.json",
@@ -40,7 +37,7 @@
                     "configuredNodes":  3,
                     "configuredPorts":  1,
                     "spoolPending":  0,
-                    "schemaRejected":  0,
+                    "schemaRejected":  11,
                     "port":  {
                                  "serialDevice":  "/dev/ttyS3",
                                  "open":  true,
@@ -52,18 +49,18 @@
                                                          "00000000-0000-0000-0000-000000000002",
                                                          "00000000-0000-0000-0000-000000000003"
                                                      ],
-                                 "telemetryMessages":  2,
-                                 "commandWrites":  0,
-                                 "ackMessages":  0,
+                                 "telemetryMessages":  25,
+                                 "commandWrites":  1,
+                                 "ackMessages":  1,
                                  "reconnectAttempts":  0,
                                  "consecutiveReconnectFailures":  0,
-                                 "serialChunks":  47,
-                                 "serialBytes":  1283,
-                                 "lastReadTs":  "2026-04-08T18:33:15.917Z",
-                                 "lastOpenTs":  "2026-04-08T18:33:10.207Z",
+                                 "serialChunks":  1166,
+                                 "serialBytes":  31097,
+                                 "lastReadTs":  "2026-04-08T19:01:46.658Z",
+                                 "lastOpenTs":  "2026-04-08T18:59:26.023Z",
                                  "lastCloseTs":  null,
-                                 "lastCommandTs":  null,
-                                 "lastAckTs":  null,
+                                 "lastCommandTs":  "2026-04-08T19:00:34.864Z",
+                                 "lastAckTs":  "2026-04-08T19:00:36.492Z",
                                  "lastReconnectTs":  null,
                                  "lastReconnectReason":  null,
                                  "lastError":  null,
@@ -76,10 +73,10 @@
                                       "installLabel":  "FIELD-NODE-A",
                                       "southboundPort":  "/dev/ttyS3",
                                       "enabled":  true,
-                                      "telemetryMessages":  1,
+                                      "telemetryMessages":  13,
                                       "commandForwards":  0,
                                       "ackPublishes":  0,
-                                      "lastTelemetryTs":  "2026-04-08T18:33:15.917Z",
+                                      "lastTelemetryTs":  "2026-04-08T19:01:46.658Z",
                                       "lastCommandTs":  null,
                                       "lastAckTs":  null,
                                       "status":  "online"
@@ -90,12 +87,12 @@
                                       "installLabel":  "FIELD-NODE-B",
                                       "southboundPort":  "/dev/ttyS3",
                                       "enabled":  true,
-                                      "telemetryMessages":  1,
-                                      "commandForwards":  0,
-                                      "ackPublishes":  0,
-                                      "lastTelemetryTs":  "2026-04-08T18:33:14.533Z",
-                                      "lastCommandTs":  null,
-                                      "lastAckTs":  null,
+                                      "telemetryMessages":  12,
+                                      "commandForwards":  1,
+                                      "ackPublishes":  1,
+                                      "lastTelemetryTs":  "2026-04-08T19:01:45.139Z",
+                                      "lastCommandTs":  "2026-04-08T19:00:34.864Z",
+                                      "lastAckTs":  "2026-04-08T19:00:36.492Z",
                                       "status":  "online"
                                   },
                                   {
@@ -119,14 +116,14 @@
                          "deviceId":  "00000000-0000-0000-0000-000000000002",
                          "action":  "manual-collect",
                          "passed":  true,
-                         "commandId":  "4a0735c2-5a77-4bc0-8135-04805a0bd0a0",
+                         "commandId":  "a0b75221-227e-4b11-a167-a4d2d392e100",
                          "ackStatus":  "acked",
                          "diagnosisSummary":  "command-forward-and-ack-publish-succeeded",
-                         "parseFailureCount":  0,
-                         "commandForwardsBefore":  0,
-                         "commandForwardsAfter":  1,
-                         "ackPublishesBefore":  0,
-                         "ackPublishesAfter":  1
+                         "parseFailureCount":  53,
+                         "commandForwardsBefore":  1,
+                         "commandForwardsAfter":  2,
+                         "ackPublishesBefore":  1,
+                         "ackPublishesAfter":  2
                      },
     "checks":  [
                    {

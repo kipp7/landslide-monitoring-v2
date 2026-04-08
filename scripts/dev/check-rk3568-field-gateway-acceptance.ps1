@@ -90,6 +90,19 @@ function Read-JsonFile {
   return (Get-Content -LiteralPath $Path -Raw -Encoding UTF8) | ConvertFrom-Json
 }
 
+function Resolve-OutputPath {
+  param(
+    [string]$RootPath,
+    [string]$CandidatePath
+  )
+
+  if ([System.IO.Path]::IsPathRooted($CandidatePath)) {
+    return [System.IO.Path]::GetFullPath($CandidatePath)
+  }
+
+  return Join-Path $RootPath $CandidatePath
+}
+
 function Invoke-RuntimeSnapshot {
   param(
     [string]$SnapshotOutFile
@@ -152,7 +165,7 @@ function Get-Check {
 }
 
 $repoRootLocal = Resolve-RepoRoot
-$resolvedOutFile = Join-Path $repoRootLocal $OutFile
+$resolvedOutFile = Resolve-OutputPath -RootPath $repoRootLocal -CandidatePath $OutFile
 $reportDir = Split-Path -Parent $resolvedOutFile
 if ($reportDir -and -not (Test-Path -LiteralPath $reportDir)) {
   New-Item -ItemType Directory -Path $reportDir -Force | Out-Null

@@ -727,6 +727,61 @@ RK3568 网关一期算完成，至少要满足：
 
 - “有一条可重复的 acceptance 入口”
 
+## 11.9 2026-04-09 长窗口 runtime observation 入口已落成
+
+在板端 acceptance 单入口固定后，当前又继续补上了正式的长窗口观测入口：
+
+- `scripts/dev/run-rk3568-field-gateway-observation-window.ps1`
+
+这条入口的作用不是替代 acceptance，而是补上当前阶段真正缺的第二层事实：
+
+- `A/B` 在一个连续时间窗里是否都保持在线
+- `schemaRejected` 是否继续增长
+- `publishFailures` 是否增长
+- `spoolPending` 是否抬升
+- southbound 串口是否出现重连
+
+它当前固定流程为：
+
+1. 先执行当前 RK3568 acceptance
+- 默认记录：
+  - `field-rk3568-gateway-acceptance-latest.json`
+
+2. 再按固定轮询窗口抓多次 runtime snapshot
+- 当前生成：
+  - `field-rk3568-gateway-observation-latest.json`
+
+3. 输出连续性结论
+- `statusContinuous`
+- `counterDelta`
+- `maxObserved`
+- `reconnectObserved`
+
+当前最新实机 `30s / 5 samples` 结果已经形成第一份正式窗口证据：
+
+- `acceptanceMode = skip`
+- `passed = true`
+- `conclusion = rk3568-runtime-observation-window-clean`
+- `sampleCount = 5`
+- `parsedMessages delta = 11`
+- `publishedMessages delta = 11`
+- `schemaRejected delta = 0`
+- `publishFailures delta = 0`
+- `spoolPending max = 0`
+- `reconnectObserved = false`
+- `node A online continuity = true`
+- `node B online continuity = true`
+- `node C prepared continuity = true`
+
+这条证据当前的重要含义是：
+
+- 共享串口仍可能出现噪声历史值
+- 但当前已经可以抓到一段明确的 clean observation window
+- 因此下一阶段不应只停留在单次 proof，而应开始积累：
+  - 更长窗口
+  - 更稳定窗口
+  - node `C` 到位后的同类窗口对比
+
 ## 12. 相关文档
 
 - [field-uplink-platform-closure-baseline.md](/E:/学校/02 项目/99 山体滑坡优化完善/landslide-monitoring-v2-mainline/docs/unified/reports/field-uplink-platform-closure-baseline.md)
