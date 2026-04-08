@@ -164,8 +164,15 @@ if [[ "${BUILD_FIRST}" -eq 1 ]]; then
 
   runuser -u "${RUN_USER}" -- env PATH="${PATH}" bash -lc "
     cd \"${REPO_ROOT}\"
+    rm -rf \
+      \"${REPO_ROOT}/services/field-gateway/dist\" \
+      \"${REPO_ROOT}/libs/observability/dist\" \
+      \"${REPO_ROOT}/libs/validation/dist\"
     npm install
-    npm run build --workspace @lsmv2/field-gateway
+    npm run build \
+      --workspace @lsmv2/observability \
+      --workspace @lsmv2/validation \
+      --workspace @lsmv2/field-gateway
   "
 fi
 

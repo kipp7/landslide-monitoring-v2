@@ -675,3 +675,98 @@ cat /var/lib/lsmv2/field-gateway/health/runtime-health.json
   - 第一轮 hardening 已经把共享流噪声从“起步就大量报错”压到“短窗口可清零、长一点窗口仍有少量残余”
   - 并且没有打断 node `B` 的命令闭环
   - 下一步仍需继续做更强的 shared-stream parser/framing hardening
+
+## 21. 2026-04-08 RK3568 正式源码同步部署线已落板并回归通过
+
+在上一轮确认 RK3568 上 `/home/linaro/landslide-monitoring-v2-mainline` 不是 git 仓库之后，本轮把“本地源码送板、远端重建、再安装重启”这条线正式补进了现有安装入口，而不再依赖临时一次性脚本。
+
+1. 当前新增并冻结的部署真值：
+- `scripts/dev/install-rk3568-field-gateway.ps1`
+  - 默认先执行受控源码同步
+  - 再远端执行：
+    - `services/field-gateway/deploy/install-rk3568.sh`
+- 同步边界不是整仓库复制
+  - 而是当前 `field-gateway` 运行所需最小集合：
+    - 根目录 `package.json`
+    - 根目录 `package-lock.json`
+    - 根目录 `tsconfig.base.json`
+    - `services/field-gateway` 的：
+      - `src/`
+      - `deploy/`
+      - `package.json`
+      - `tsconfig.json`
+      - `.env.example`
+      - `README.md`
+    - `libs/observability`
+    - `libs/validation`
+    - `docs/integrations/mqtt/schemas`
+
+2. 这一轮同时修掉的部署缺口：
+- 第一次把正式同步线跑到真实 RK3568 上时，暴露出：
+  - 远端旧 `dist` 已被清理
+  - 但只重建了 `@lsmv2/field-gateway`
+  - 没有重建：
+    - `@lsmv2/observability`
+    - `@lsmv2/validation`
+- 现场真实报错为：
+  - `Cannot find module '/home/linaro/landslide-monitoring-v2-mainline/node_modules/@lsmv2/observability/dist/index.js'`
+- 当前修复后，`install-rk3568.sh` 现已固定为：
+  - 先清理：
+    - `services/field-gateway/dist`
+    - `libs/observability/dist`
+    - `libs/validation/dist`
+  - 再按顺序重建：
+    - `@lsmv2/observability`
+    - `@lsmv2/validation`
+    - `@lsmv2/field-gateway`
+
+3. 当前安装入口的稳定性补强：
+- `install-rk3568-field-gateway.ps1`
+  - 现在会在安装后等待：
+    - `lsmv2-field-gateway.service`
+    进入 `active`
+  - 若最终未进入 `active`
+    - 直接报错
+    - 不再把“看起来有 JSON 输出”的失败安装当成功
+
+4. 2026-04-08 最新实机回归证据：
+- 最新复查快照：
+  - `.tmp/rk3568-field-gateway-runtime-after-sync.json`
+- 快照时间：
+  - `2026-04-08T15:39:52Z`
+- 当前服务真值：
+  - `isActive = active`
+  - `isEnabled = enabled`
+  - `MainPID = 1055431`
+  - `ExecMainStartTimestamp = Wed 2026-04-08 23:39:34 CST`
+- 当前运行 health 真值：
+  - `emitted_ts = 2026-04-08T15:39:53.285Z`
+  - `serial.open = true`
+  - `mqtt.connected = true`
+  - `routeMode = configured-node-routing`
+  - `node A = online`
+  - `node B = online`
+  - `node C = configured`
+  - `parsedMessages = 5`
+  - `publishedMessages = 5`
+  - `schemaRejected = 1`
+- 同轮 node `B` 命令回归也继续成立：
+  - `action = manual_collect`
+  - `commandId = a13b9273-fa8c-4a6e-a491-2c94702fde8c`
+  - `ackStatus = acked`
+  - `conclusion = single-shot-proof-succeeded`
+
+5. 当前应冻结的正式结论：
+- RK3568 的 Windows 侧安装入口现在已经不只是：
+  - “送一个 installer 到板子上执行”
+- 而是已经提升为：
+  - “定向同步运行所需源码 -> 远端清理/重建工作区 -> 安装并等待服务回到 active”
+- 这条线已经在真实 RK3568 上完成了一次：
+  - 失败暴露
+  - 缺口修复
+  - 再部署成功
+  的完整闭环
+- 当前仍不能夸大的点保持不变：
+  - 共享 `/dev/ttyS3` 解析噪声还在
+  - 这轮补的是正式部署线
+  - 不是宣布 shared-stream hardening 已完成

@@ -789,3 +789,48 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - keep the new parser baseline
     - formalize a source-sync deployment line for RK3568 instead of one-off file pushes
     - continue the next parser/framing hardening pass before scaling claims
+- that RK3568 source-sync deployment line is now also formally landed and reproved:
+  - `scripts/dev/install-rk3568-field-gateway.ps1`
+    now defaults to a curated local-to-remote source sync before remote install
+  - the synced boundary is intentionally narrow:
+    - root workspace files needed by `npm install`
+    - `services/field-gateway`
+      source and deploy assets
+    - `libs/observability`
+    - `libs/validation`
+    - MQTT schema files
+  - `services/field-gateway/deploy/install-rk3568.sh`
+    now also cleans and rebuilds:
+    - `@lsmv2/observability`
+    - `@lsmv2/validation`
+    - `@lsmv2/field-gateway`
+    after wiping the three relevant `dist` directories
+  - this closure was validated on the real board in two steps:
+    - first run exposed the missing-lib rebuild gap via:
+      - `Cannot find module '/home/linaro/landslide-monitoring-v2-mainline/node_modules/@lsmv2/observability/dist/index.js'`
+    - second run after the build-order fix returned the service to:
+      - `active`
+      - `enabled`
+      - `MainPID = 1055431`
+      - `ExecMainStartTimestamp = 2026-04-08 23:39:34 CST`
+  - fresh runtime proof after the formal sync now exists:
+    - snapshot:
+      - `.tmp/rk3568-field-gateway-runtime-after-sync.json`
+    - `emitted_ts = 2026-04-08T15:39:53.285Z`
+    - `node A = online`
+    - `node B = online`
+    - `node C = configured`
+    - `parsedMessages = 5`
+    - `publishedMessages = 5`
+    - `schemaRejected = 1`
+  - command-path regression after the same deploy also stayed green:
+    - node `B`
+    - `manual_collect`
+    - `commandId = a13b9273-fa8c-4a6e-a491-2c94702fde8c`
+    - `ackStatus = acked`
+    - `conclusion = single-shot-proof-succeeded`
+  - this changes the next blocker again:
+    - no longer formalize the RK3568 source-sync deployment line
+    - now keep that line frozen and continue:
+      - next parser/framing hardening pass
+      - node `C` preparation on the still-shared `/dev/ttyS3` stream
