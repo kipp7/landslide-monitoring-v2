@@ -478,3 +478,52 @@ Freeze and execute the next major phase after command-route stabilization: prove
   - RK2206 firmware
   - center deployment/integration
 - a later session can resume this phase directly from this note without re-deriving the current command-route baseline
+
+## Latest Closure Update
+
+- the single-port multi-node proof has now advanced from topology freeze to live dual-node uplink:
+  - node `A`
+    - `device_id=00000000-0000-0000-0000-000000000001`
+  - node `B`
+    - `device_id=00000000-0000-0000-0000-000000000002`
+  - both are now confirmed on the same center-fed RK3568 port:
+    - `/dev/ttyS3`
+- the first live check showed node `B` was already present on the serial stream
+  - but RK3568 still only mapped node `A`
+  - and the Windows host broker at `192.168.124.17:1883` was not listening
+- this closure therefore fixed both runtime blockers together:
+  - RK3568 `/etc/lsmv2/field-gateway.env` now maps:
+    - `A -> /dev/ttyS3`
+    - `B -> /dev/ttyS3`
+  - `lsmv2-field-gateway.service` was restarted after the mapping update
+  - the Windows host now has:
+    - `lsmv2_emqx`
+    - `lsmv2_api`
+    - `lsmv2_postgres`
+    - `lsmv2_clickhouse`
+    running again
+  - EMQX webhook authn/authz has been reconfigured back to API
+- verified live state after recovery:
+  - RK3568 health shows:
+    - `configuredNodes=2`
+    - `configuredPorts=1`
+    - both nodes `online`
+    - `mqtt.connected=true`
+    - `publishFailures=0`
+    - `spoolPending=0`
+  - journal logs show continuous publish events for:
+    - `telemetry/00000000-0000-0000-0000-000000000001`
+    - `telemetry/00000000-0000-0000-0000-000000000002`
+- current primary blocker has changed again:
+  - no longer:
+    - second-node ingress
+    - broker availability
+  - now:
+    - bring node `C` into the same center XL01 stream
+    - then validate multi-node command closure on the shared port
+- one visible robustness issue remains open:
+  - the center XL01 aggregate stream still occasionally produces partial/merged JSON
+  - resulting in:
+    - `json parse failed`
+    - `schemaRejected`
+  - this should become the next southbound hardening pass after node `C` is online
