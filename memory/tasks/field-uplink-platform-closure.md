@@ -114,6 +114,18 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - gateway implementation scope
     - firmware implementation scope
     - center deployment/integration scope
+- the first safe RK3568 LAN access baseline is now known:
+  - board role:
+    - `RK3568 field gateway candidate`
+  - IPv4:
+    - `192.168.124.172`
+  - SSH user:
+    - `linaro`
+  - current auth mode:
+    - password login
+  - durable safe reference:
+    - `memory/references/field-rk3568-access-baseline.md`
+  - plaintext password is intentionally not stored in repo memory or journal
 - the decisive unfinished boundary is no longer command delivery; it is:
   - gateway-owned adaptation of field telemetry into a platform-acceptable uplink contract
   - and making the field-side ingress path repeatable without depending on ad hoc host-run steps
@@ -175,6 +187,8 @@ Freeze and execute the next major phase after command-route stabilization: prove
   - sensor drivers
   - sampling/reporting scheduler
   - power-management logic
+- when the RK3568 SSH baseline is next touched:
+  - should we immediately rotate away from password auth and freeze SSH key login as the official gateway access line
 
 ## Done When
 
