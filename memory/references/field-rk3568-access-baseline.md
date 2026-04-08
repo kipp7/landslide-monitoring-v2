@@ -42,3 +42,16 @@ ping 192.168.124.172
   - rotate the default password and migrate to SSH key auth before long-running field use
 - operational implication:
   - the next gateway skeleton work can proceed over LAN SSH once `sshd` remains available on the board
+- confirmed UART ingress fact on the RK3568 host:
+  - active UART device: `/dev/ttyS3`
+  - required serial settings: `115200 8N1`
+  - current observed payload shape:
+    - standard JSON telemetry with:
+      - `schema_version`
+      - `device_id`
+      - `seq`
+      - `metrics`
+      - `meta`
+  - this means:
+    - `RK2206 -> XL01 -> center node XL01 -> RK3568 ttyS3`
+      is now observable directly from Ubuntu

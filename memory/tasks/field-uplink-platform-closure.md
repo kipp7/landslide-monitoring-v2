@@ -126,6 +126,15 @@ Freeze and execute the next major phase after command-route stabilization: prove
   - durable safe reference:
     - `memory/references/field-rk3568-access-baseline.md`
   - plaintext password is intentionally not stored in repo memory or journal
+- RK3568 has now also directly observed live field telemetry on-host:
+  - UART device:
+    - `/dev/ttyS3`
+  - serial settings:
+    - `115200 8N1`
+  - proof shape:
+    - standard JSON telemetry was captured over SSH from Ubuntu itself
+  - immediate implication:
+    - the next active task can move from serial discovery to gateway process skeletonization
 - the decisive unfinished boundary is no longer command delivery; it is:
   - gateway-owned adaptation of field telemetry into a platform-acceptable uplink contract
   - and making the field-side ingress path repeatable without depending on ad hoc host-run steps
@@ -189,6 +198,11 @@ Freeze and execute the next major phase after command-route stabilization: prove
   - power-management logic
 - when the RK3568 SSH baseline is next touched:
   - should we immediately rotate away from password auth and freeze SSH key login as the official gateway access line
+- what exact first gateway runtime should own:
+  - `ttyS3` reader
+  - JSON boundary recovery
+  - local evidence file emission
+  - MQTT forward path
 
 ## Done When
 
