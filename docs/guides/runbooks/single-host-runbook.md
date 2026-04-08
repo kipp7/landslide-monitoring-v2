@@ -1,3 +1,9 @@
+---
+title: single-host-runbook
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/runbooks/single-host-runbook
+---
+
 # 单机运维 Runbook（可恢复优先）
 
 单机无法做到真正高可用（机器宕机就全停）。本 Runbook 的目标是：可观测、可恢复、可控增长。
@@ -54,3 +60,60 @@
   - 检查 ClickHouse TTL 是否生效
   - 检查日志是否无限增长（日志必须轮转）
 
+## 7. 中心主链标准运行线
+
+当前单机中心主链的标准 compose 运行边界应固定为：
+
+- `emqx`
+- `kafka`
+- `postgres`
+- `clickhouse`
+- `api`
+- `web`
+- `ingest-service`
+- `telemetry-writer`
+
+不再把 `ingest-service` 或 `telemetry-writer` 视为默认 host-run 特例。
+
+## 8. 标准验收入口
+
+每次中心部署变更后，优先用同一条脚本复核：
+
+- 常规复核：
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/check-field-center-compose-acceptance.ps1 -DeployMode validate -AllowUnsafeSecrets`
+- 完整重部署并复核：
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/check-field-center-compose-acceptance.ps1 -DeployMode apply -AllowUnsafeSecrets`
+
+该脚本会统一执行：
+
+- `deploy-docker-oneclick.ps1` 的 `validate` 或 `apply`
+- `check-field-full-path-readiness.ps1`
+- `run-field-hardware-uplink-full-proof.ps1`
+
+标准报告输出：
+
+- `docs/unified/reports/docker-deploy-latest.json`
+- `docs/unified/reports/field-full-path-readiness-latest.json`
+- `docs/unified/reports/field-hardware-uplink-full-proof-latest.json`
+- `docs/unified/reports/field-center-compose-acceptance-latest.json`
+
+## 9. 恢复顺序
+
+中心主链异常时，优先按下面顺序恢复：
+
+1. 基础设施容器：
+- `emqx`
+- `kafka`
+- `postgres`
+- `clickhouse`
+
+2. 下游处理链：
+- `ingest-service`
+- `telemetry-writer`
+
+3. 产品读路径：
+- `api`
+- `web`
+
+4. 恢复后必须立即执行：
+- `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/check-field-center-compose-acceptance.ps1 -DeployMode validate -AllowUnsafeSecrets`

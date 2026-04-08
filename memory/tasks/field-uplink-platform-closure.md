@@ -939,3 +939,15 @@ Freeze and execute the next major phase after command-route stabilization: prove
   - "are ingest/writer running somewhere"
   - but:
   - "is the compose-managed full center chain actually up and semantically passing"
+- that center-side question now has a single acceptance entrypoint:
+  - `scripts/dev/check-field-center-compose-acceptance.ps1`
+- the acceptance line intentionally composes:
+  - `deploy-docker-oneclick.ps1`
+  - `check-field-full-path-readiness.ps1`
+  - `run-field-hardware-uplink-full-proof.ps1`
+- the acceptance truth file is now:
+  - `docs/unified/reports/field-center-compose-acceptance-latest.json`
+- the immediate center-side operating target is therefore narrower and more professional:
+  - one compose-managed runtime
+  - one acceptance gate
+  - one post-recovery verification command

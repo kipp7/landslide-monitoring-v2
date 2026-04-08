@@ -1,41 +1,51 @@
 ﻿{
-    "generatedAt":  "2026-03-24T14:53:16Z",
-    "currentBoundary":  "broker-and-api-selfcheck-only",
+    "generatedAt":  "2026-04-08T17:43:47Z",
+    "currentBoundary":  "full-path-ready",
     "compose":  {
-                    "appComposeIncludesIngest":  false,
-                    "appComposeIncludesTelemetryWriter":  false
+                    "appComposeIncludesIngest":  true,
+                    "appComposeIncludesTelemetryWriter":  true
                 },
     "runtime":  {
                     "containers":  [
                                        {
                                            "name":  "lsmv2_api",
                                            "running":  true,
-                                           "status":  "Up 5 hours"
+                                           "status":  "Up 12 hours"
                                        },
                                        {
                                            "name":  "lsmv2_web",
                                            "running":  true,
-                                           "status":  "Up 5 hours (healthy)"
+                                           "status":  "Up 22 minutes (healthy)"
                                        },
                                        {
                                            "name":  "lsmv2_emqx",
                                            "running":  true,
-                                           "status":  "Up 5 hours"
+                                           "status":  "Up 12 hours"
                                        },
                                        {
                                            "name":  "lsmv2_kafka",
                                            "running":  true,
-                                           "status":  "Up 5 hours (healthy)"
+                                           "status":  "Up 22 minutes (healthy)"
                                        },
                                        {
                                            "name":  "lsmv2_clickhouse",
                                            "running":  true,
-                                           "status":  "Up 5 hours (healthy)"
+                                           "status":  "Up 12 hours (healthy)"
                                        },
                                        {
                                            "name":  "lsmv2_postgres",
                                            "running":  true,
-                                           "status":  "Up 5 hours (healthy)"
+                                           "status":  "Up 12 hours (healthy)"
+                                       },
+                                       {
+                                           "name":  "lsmv2_ingest",
+                                           "running":  true,
+                                           "status":  "Up 21 minutes"
+                                       },
+                                       {
+                                           "name":  "lsmv2_telemetry_writer",
+                                           "running":  true,
+                                           "status":  "Up 21 minutes"
                                        }
                                    ],
                     "hostProcesses":  [
@@ -47,7 +57,13 @@
                                               "name":  "telemetry-writer",
                                               "running":  false
                                           }
-                                      ]
+                                      ],
+                    "downstreamRuntime":  {
+                                              "ingestAvailable":  true,
+                                              "ingestSource":  "compose",
+                                              "telemetryWriterAvailable":  true,
+                                              "telemetryWriterSource":  "compose"
+                                          }
                 },
     "code":  {
                  "apiDataRawTimeFilterFixPresent":  true
@@ -56,5 +72,5 @@
                   "Current Docker app stack only proves MQTT publish + API self-check unless ingest-service and telemetry-writer are also running.",
                   "A real downstream semantic proof requires telemetry to reach device_state or ClickHouse, not just successful publish output."
               ],
-    "nextAction":  "Start ingest-service and telemetry-writer (or add them to compose) before claiming full-path downstream proof."
+    "nextAction":  "Run a focused downstream semantic proof against device_state and /api/v1/data/raw."
 }

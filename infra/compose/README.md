@@ -54,6 +54,10 @@ permalink: landslide-monitoring-v2-mainline/infra/compose/readme
 
    - `powershell -ExecutionPolicy Bypass -File infra/compose/scripts/create-kafka-topics.ps1`
 
+7. 如需对当前中心主链做标准化验收留证：
+
+   - `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/check-field-center-compose-acceptance.ps1 -DeployMode validate -AllowUnsafeSecrets`
+
 ## 2.1 一键部署入口（推荐）
 
 如果你希望把上面的步骤收成一条命令，可以直接在仓库根目录执行：
@@ -74,8 +78,13 @@ permalink: landslide-monitoring-v2-mainline/infra/compose/readme
   - `web`
   - `ingest-service`
   - `telemetry-writer`
+- 当前推荐的中心主链复核入口：
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/check-field-center-compose-acceptance.ps1 -DeployMode validate -AllowUnsafeSecrets`
+- 如需重做完整部署并立即复核：
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/check-field-center-compose-acceptance.ps1 -DeployMode apply -AllowUnsafeSecrets`
 - 运行结果会写到：
   - `docs/unified/reports/docker-deploy-latest.json`
+  - `docs/unified/reports/field-center-compose-acceptance-latest.json`
 
 ## 3) 运维入口
 

@@ -1,5 +1,5 @@
 ﻿{
-    "generatedAt":  "2026-04-07T16:50:25.376Z",
+    "generatedAt":  "2026-04-08T17:44:08.347Z",
     "mode":  "field-hardware-uplink-full-proof",
     "payloadFile":  "docs/tools/field-rehearsal/payload-samples/hf-hardware-real-20260406-seq21.json",
     "runtimeBootstrap":  {
@@ -12,15 +12,15 @@
     "replayProof":  {
                         "report":  "docs/unified/reports/field-hardware-uplink-replay-latest.json",
                         "conclusion":  "real-hardware-uplink-replay-reached-platform-api-state",
-                        "deviceId":  "e453cdcf-ab07-4493-bf3e-dfdd2d1cd07a",
-                        "installLabel":  "REPLAY-HW-20260408-005021",
-                        "publishTopic":  "telemetry/e453cdcf-ab07-4493-bf3e-dfdd2d1cd07a",
+                        "deviceId":  "6c59de82-f58d-48c5-921e-c3b4c62a17bc",
+                        "installLabel":  "REPLAY-HW-20260409-014406",
+                        "publishTopic":  "telemetry/6c59de82-f58d-48c5-921e-c3b4c62a17bc",
                         "statePollSuccess":  true
                     },
     "productVisibilityProof":  {
                                    "report":  "docs/unified/reports/field-hardware-uplink-product-visibility-latest.json",
                                    "conclusion":  "real-hardware-uplink-visible-through-web-product-read-path",
-                                   "proxyStateUrl":  "http://127.0.0.1:3000/api/v1/data/state/e453cdcf-ab07-4493-bf3e-dfdd2d1cd07a",
+                                   "proxyStateUrl":  "http://127.0.0.1:3000/api/v1/data/state/6c59de82-f58d-48c5-921e-c3b4c62a17bc",
                                    "deviceFound":  true,
                                    "metricsKeys":  [
                                                        "accel_x_g",
@@ -47,7 +47,7 @@
                                },
     "nextUse":  [
                     "primary rerun command: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\run-field-hardware-uplink-full-proof.ps1",
-                    "this proof line remains host-assisted for ingest-service and telemetry-writer until they are moved into a stable runtime topology"
+                    "this proof line now expects ingest-service and telemetry-writer to be available through the compose-managed center runtime"
                 ],
     "conclusion":  "real-hardware-uplink-full-path-reached-platform-and-web"
 }

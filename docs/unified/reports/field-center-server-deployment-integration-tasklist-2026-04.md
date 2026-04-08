@@ -286,6 +286,46 @@ Center server 一期算完成，至少要满足：
   - 下游语义 proof
   - 运行恢复与证据包
 
+## 10.2 2026-04-09 中心主链 acceptance 已收成单入口
+
+为避免后续继续依赖“人工记忆里的命令顺序”，这轮继续把中心侧收成固定验收入口：
+
+- `scripts/dev/check-field-center-compose-acceptance.ps1`
+
+它统一串起三段事实：
+
+1. 部署入口
+- `deploy-docker-oneclick.ps1`
+  - `validate`
+  - 或 `apply`
+
+2. 运行边界检查
+- `check-field-full-path-readiness.ps1`
+  - 必须确认：
+    - `currentBoundary = full-path-ready`
+    - `ingestSource = compose`
+    - `telemetryWriterSource = compose`
+
+3. 语义与产品可见性 proof
+- `run-field-hardware-uplink-full-proof.ps1`
+  - 必须确认：
+    - replay 进入平台 API 状态
+    - Web 产品读路径可见
+    - full proof 结论通过
+
+当前价值不是“多一个脚本”，而是把中心部署线从：
+
+- compose 命令
+- readiness 命令
+- proof 命令
+- 人工判断
+
+收成：
+
+- 一个稳定入口
+- 一份统一 acceptance 报告
+- 一套可交接的恢复后复核动作
+
 ## 10. 相关文档
 
 - [field-uplink-platform-closure-baseline.md](/E:/学校/02 项目/99 山体滑坡优化完善/landslide-monitoring-v2-mainline/docs/unified/reports/field-uplink-platform-closure-baseline.md)

@@ -1,55 +1,47 @@
 {
-  "generatedAt": "2026-04-07T16:07:22.686Z",
+  "generatedAt": "2026-04-08T17:44:06.689Z",
   "mode": "field-hardware-uplink-replay",
   "apiBaseUrl": "http://127.0.0.1:8080",
   "mqttUrl": "mqtt://127.0.0.1:1883",
   "sourcePayloadFile": "docs/tools/field-rehearsal/payload-samples/hf-hardware-real-20260406-seq21.json",
   "sourcePayloadDeviceId": "00000000-0000-0000-0000-000000000001",
   "replayDevice": {
-    "deviceId": "1e0358b7-eaee-4079-aef1-1fc3162dbbfe",
-    "installLabel": "REPLAY-HW-20260408-000720",
+    "deviceId": "6c59de82-f58d-48c5-921e-c3b4c62a17bc",
+    "installLabel": "REPLAY-HW-20260409-014406",
     "schemaVersion": 1,
     "credVersion": 1
   },
   "publish": {
-    "topic": "telemetry/1e0358b7-eaee-4079-aef1-1fc3162dbbfe",
+    "topic": "telemetry/6c59de82-f58d-48c5-921e-c3b4c62a17bc",
     "bytes": 742,
     "seq": 21
   },
   "statePoll": {
     "success": true,
-    "url": "http://127.0.0.1:8080/api/v1/data/state/1e0358b7-eaee-4079-aef1-1fc3162dbbfe",
+    "url": "http://127.0.0.1:8080/api/v1/data/state/6c59de82-f58d-48c5-921e-c3b4c62a17bc",
     "checks": [
       {
-        "at": "2026-04-07T16:07:20.639Z",
-        "ok": false,
-        "status": 404,
-        "hasState": false,
-        "metricsKeys": [],
-        "bodyPreview": "{\"success\":false,\"code\":404,\"message\":\"资源不存在\",\"timestamp\":\"2026-04-07T16:07:20.637Z\",\"traceId\":\"b4bfee99-f23b-472b-ac6c-eaa9400bd3fa\",\"error\":{\"deviceId\":\"1e0358b7-eaee-4079-aef1-1fc3162dbbfe\"}}"
-      },
-      {
-        "at": "2026-04-07T16:07:22.652Z",
+        "at": "2026-04-08T17:44:06.646Z",
         "ok": true,
         "status": 200,
         "hasState": true,
         "metricsKeys": [
-          "accel_x_g",
-          "accel_y_g",
-          "accel_z_g",
-          "gyro_x_dps",
-          "gyro_y_dps",
-          "gyro_z_dps",
           "tilt_x_deg",
-          "tilt_y_deg",
+          "gyro_x_dps",
           "battery_pct",
-          "gps_latitude",
+          "gyro_z_dps",
           "humidity_pct",
+          "temperature_c",
           "warning_flag",
-          "gps_longitude",
-          "temperature_c"
+          "tilt_y_deg",
+          "accel_x_g",
+          "gyro_y_dps",
+          "accel_y_g",
+          "gps_latitude",
+          "accel_z_g",
+          "gps_longitude"
         ],
-        "bodyPreview": "{\"success\":true,\"code\":200,\"message\":\"ok\",\"data\":{\"deviceId\":\"1e0358b7-eaee-4079-aef1-1fc3162dbbfe\",\"updatedAt\":\"2026-04-07T16:07:20Z\",\"state\":{\"meta\":{\"_writer\":{\"last_seq\":21,\"last_received_ts\":\"2026-04-07T16:07:20.614Z\"},\"uptime_s\":109,\"legacy_node\":\"A\",\"replay_kind\":\"real_hardware_capture\",\"install_label\":\"FIELD-NODE-A\",\"replay_source\":\"hf-hardware-real-20260406-seq21.json\",\"upload_trigger\":\"p"
+        "bodyPreview": "{\"success\":true,\"code\":200,\"message\":\"ok\",\"data\":{\"deviceId\":\"6c59de82-f58d-48c5-921e-c3b4c62a17bc\",\"updatedAt\":\"2026-04-08 17:44:06.603\",\"state\":{\"metrics\":{\"tilt_x_deg\":5.12,\"gyro_x_dps\":0.5,\"battery_pct\":\"80\",\"gyro_z_dps\":0.1,\"humidity_pct\":50.1,\"temperature_c\":29.5,\"warning_flag\":true,\"tilt_y_deg\":3.39,\"accel_x_g\":0.09,\"gyro_y_dps\":-0.3,\"accel_y_g\":0.06,\"gps_latitude\":22.5432,\"accel_z_g\":\"1\",\""
       }
     ],
     "final": {
@@ -57,50 +49,30 @@
       "code": 200,
       "message": "ok",
       "data": {
-        "deviceId": "1e0358b7-eaee-4079-aef1-1fc3162dbbfe",
-        "updatedAt": "2026-04-07T16:07:20Z",
+        "deviceId": "6c59de82-f58d-48c5-921e-c3b4c62a17bc",
+        "updatedAt": "2026-04-08 17:44:06.603",
         "state": {
-          "meta": {
-            "_writer": {
-              "last_seq": 21,
-              "last_received_ts": "2026-04-07T16:07:20.614Z"
-            },
-            "uptime_s": 109,
-            "legacy_node": "A",
-            "replay_kind": "real_hardware_capture",
-            "install_label": "FIELD-NODE-A",
-            "replay_source": "hf-hardware-real-20260406-seq21.json",
-            "upload_trigger": "periodic",
-            "last_command_id": "",
-            "last_command_type": "",
-            "legacy_valid_flags": {
-              "gps_ok": 1,
-              "imu_ok": 1,
-              "temp_ok": 1
-            },
-            "replay_generated_at": "2026-04-07T16:07:20.503Z",
-            "last_command_uptime_s": 0
-          },
           "metrics": {
-            "accel_x_g": 0.09,
-            "accel_y_g": 0.06,
-            "accel_z_g": 1,
-            "gyro_x_dps": 0.5,
-            "gyro_y_dps": -0.3,
-            "gyro_z_dps": 0.1,
             "tilt_x_deg": 5.12,
-            "tilt_y_deg": 3.39,
-            "battery_pct": 80,
-            "gps_latitude": 22.5432,
+            "gyro_x_dps": 0.5,
+            "battery_pct": "80",
+            "gyro_z_dps": 0.1,
             "humidity_pct": 50.1,
+            "temperature_c": 29.5,
             "warning_flag": true,
-            "gps_longitude": 114.058098,
-            "temperature_c": 29.5
-          }
+            "tilt_y_deg": 3.39,
+            "accel_x_g": 0.09,
+            "gyro_y_dps": -0.3,
+            "accel_y_g": 0.06,
+            "gps_latitude": 22.5432,
+            "accel_z_g": "1",
+            "gps_longitude": 114.058098
+          },
+          "meta": {}
         }
       },
-      "timestamp": "2026-04-07T16:07:22.650Z",
-      "traceId": "8afc2655-9fcb-4d37-a690-904e4eafe43e"
+      "timestamp": "2026-04-08T17:44:06.645Z",
+      "traceId": "b537444d-3c12-42b0-816b-1adf920ca2b2"
     }
   },
   "acceptance": [
@@ -111,11 +83,11 @@
       "json": {
         "ok": true,
         "status": "OK",
-        "timestamp": "2026-04-07T16:07:22.653Z",
+        "timestamp": "2026-04-08T17:44:06.649Z",
         "service": "api-service",
         "port": 8080
       },
-      "bodyPreview": "{\"ok\":true,\"status\":\"OK\",\"timestamp\":\"2026-04-07T16:07:22.653Z\",\"service\":\"api-service\",\"port\":8080}"
+      "bodyPreview": "{\"ok\":true,\"status\":\"OK\",\"timestamp\":\"2026-04-08T17:44:06.649Z\",\"service\":\"api-service\",\"port\":8080}"
     },
     {
       "url": "http://127.0.0.1:8080/api/v1/system/status",
@@ -126,7 +98,7 @@
         "code": 200,
         "message": "ok",
         "data": {
-          "uptimeS": 6218,
+          "uptimeS": 41578,
           "postgres": {
             "status": "healthy"
           },
@@ -162,10 +134,10 @@
             }
           ]
         },
-        "timestamp": "2026-04-07T16:07:22.671Z",
-        "traceId": "2f0ecdda-1513-40ce-a910-ed45c1bcb6e2"
+        "timestamp": "2026-04-08T17:44:06.661Z",
+        "traceId": "fbee0454-57bc-473f-b247-1dcc2035f07a"
       },
-      "bodyPreview": "{\"success\":true,\"code\":200,\"message\":\"ok\",\"data\":{\"uptimeS\":6218,\"postgres\":{\"status\":\"healthy\"},\"clickhouse\":{\"status\":\"healthy\"},\"kafka\":{\"status\":\"configured\"},\"emqx\":{\"status\":\"unknown\"},\"source\":\"health_summary\",\"note\":\"当前展示的是服务健康摘要，不表示真实 CPU/内存/磁盘占用。\",\"items\":[{\"key\":\"postgres\",\"label\":\"PostgreSQL\",\"status\":\"healthy\",\"detail\":\"healthy\"},{\"key\":\"clickhouse\",\"label\":\"ClickHouse\",\"status\":\"heal"
+      "bodyPreview": "{\"success\":true,\"code\":200,\"message\":\"ok\",\"data\":{\"uptimeS\":41578,\"postgres\":{\"status\":\"healthy\"},\"clickhouse\":{\"status\":\"healthy\"},\"kafka\":{\"status\":\"configured\"},\"emqx\":{\"status\":\"unknown\"},\"source\":\"health_summary\",\"note\":\"当前展示的是服务健康摘要，不表示真实 CPU/内存/磁盘占用。\",\"items\":[{\"key\":\"postgres\",\"label\":\"PostgreSQL\",\"status\":\"healthy\",\"detail\":\"healthy\"},{\"key\":\"clickhouse\",\"label\":\"ClickHouse\",\"status\":\"hea"
     },
     {
       "url": "http://127.0.0.1:8080/api/v1/devices?page=1&pageSize=20",
@@ -177,6 +149,78 @@
         "message": "ok",
         "data": {
           "list": [
+            {
+              "deviceId": "6c59de82-f58d-48c5-921e-c3b4c62a17bc",
+              "deviceName": "field-hardware-replay-REPLAY-HW-20260409-014406",
+              "deviceType": "multi_sensor",
+              "status": "active",
+              "stationId": null,
+              "lastSeenAt": "2026-04-08T17:44:06.587Z"
+            },
+            {
+              "deviceId": "cef112e3-639c-42a7-aa02-27d46be29bbf",
+              "deviceName": "field-hardware-replay-REPLAY-HW-20260409-014234",
+              "deviceType": "multi_sensor",
+              "status": "active",
+              "stationId": null,
+              "lastSeenAt": "2026-04-08T17:42:34.794Z"
+            },
+            {
+              "deviceId": "d21015d7-67c0-4a21-91bb-0163a93f20b6",
+              "deviceName": "field-hardware-replay-REPLAY-HW-20260409-012340",
+              "deviceType": "multi_sensor",
+              "status": "active",
+              "stationId": null,
+              "lastSeenAt": "2026-04-08T17:23:40.961Z"
+            },
+            {
+              "deviceId": "c4a5974c-1386-4837-b8f1-d10999f621db",
+              "deviceName": "field-hardware-replay-REPLAY-HW-20260409-012215",
+              "deviceType": "multi_sensor",
+              "status": "active",
+              "stationId": null,
+              "lastSeenAt": "2026-04-08T17:22:16.312Z"
+            },
+            {
+              "deviceId": "e453cdcf-ab07-4493-bf3e-dfdd2d1cd07a",
+              "deviceName": "field-hardware-replay-REPLAY-HW-20260408-005021",
+              "deviceType": "multi_sensor",
+              "status": "active",
+              "stationId": null,
+              "lastSeenAt": "2026-04-07T16:50:22.174Z"
+            },
+            {
+              "deviceId": "c5a5bfd3-8c71-4340-8df2-4b7e9f03ae09",
+              "deviceName": "field-hardware-replay-REPLAY-HW-20260408-004940",
+              "deviceType": "multi_sensor",
+              "status": "active",
+              "stationId": null,
+              "lastSeenAt": "2026-04-07T16:49:41.143Z"
+            },
+            {
+              "deviceId": "e1690317-3273-43e5-9e4d-85eab6dfb9b3",
+              "deviceName": "field-hardware-replay-REPLAY-HW-20260408-004852",
+              "deviceType": "multi_sensor",
+              "status": "active",
+              "stationId": null,
+              "lastSeenAt": "2026-04-07T16:48:53.381Z"
+            },
+            {
+              "deviceId": "ec17ece1-8cb2-45bd-b365-789d6849b227",
+              "deviceName": "field-hardware-replay-REPLAY-HW-20260408-004809",
+              "deviceType": "multi_sensor",
+              "status": "active",
+              "stationId": null,
+              "lastSeenAt": "2026-04-07T16:48:10.018Z"
+            },
+            {
+              "deviceId": "f23634d4-ae4e-4d44-ab5c-c7d00b8c8ccf",
+              "deviceName": "field-hardware-replay-REPLAY-HW-20260408-004635",
+              "deviceType": "multi_sensor",
+              "status": "active",
+              "stationId": null,
+              "lastSeenAt": "2026-04-07T16:46:36.415Z"
+            },
             {
               "deviceId": "1e0358b7-eaee-4079-aef1-1fc3162dbbfe",
               "deviceName": "field-hardware-replay-REPLAY-HW-20260408-000720",
@@ -210,16 +254,32 @@
               "lastSeenAt": "2026-04-07T16:02:08.955Z"
             },
             {
-              "deviceId": "00000000-0000-0000-0000-000000000005",
-              "deviceName": "device_5",
-              "deviceType": "tilt",
-              "status": "active",
+              "deviceId": "00000000-0000-0000-0000-000000000004",
+              "deviceName": "device_4",
+              "deviceType": "rain",
+              "status": "inactive",
               "stationId": "f829d79e-df13-4c5c-aadc-6d3341d7ada1",
-              "lastSeenAt": "2026-03-23T05:59:00.817Z"
+              "lastSeenAt": "2026-03-22T05:59:00.817Z"
+            },
+            {
+              "deviceId": "00000000-0000-0000-0000-000000000003",
+              "deviceName": "device_3",
+              "deviceType": "multi_sensor",
+              "status": "active",
+              "stationId": "2dc06788-cb7b-4054-bfec-6426cea8e4eb",
+              "lastSeenAt": "2026-03-25T05:59:00.817Z"
             },
             {
               "deviceId": "00000000-0000-0000-0000-000000000001",
               "deviceName": "device_1",
+              "deviceType": "multi_sensor",
+              "status": "active",
+              "stationId": "2dc06788-cb7b-4054-bfec-6426cea8e4eb",
+              "lastSeenAt": "2026-03-25T05:59:00.817Z"
+            },
+            {
+              "deviceId": "00000000-0000-0000-0000-000000000002",
+              "deviceName": "device_2",
               "deviceType": "multi_sensor",
               "status": "active",
               "stationId": "2dc06788-cb7b-4054-bfec-6426cea8e4eb",
@@ -234,44 +294,28 @@
               "lastSeenAt": "2026-03-23T05:59:00.817Z"
             },
             {
-              "deviceId": "00000000-0000-0000-0000-000000000002",
-              "deviceName": "device_2",
-              "deviceType": "multi_sensor",
+              "deviceId": "00000000-0000-0000-0000-000000000005",
+              "deviceName": "device_5",
+              "deviceType": "tilt",
               "status": "active",
-              "stationId": "2dc06788-cb7b-4054-bfec-6426cea8e4eb",
-              "lastSeenAt": "2026-03-25T05:59:00.817Z"
-            },
-            {
-              "deviceId": "00000000-0000-0000-0000-000000000003",
-              "deviceName": "device_3",
-              "deviceType": "multi_sensor",
-              "status": "active",
-              "stationId": "2dc06788-cb7b-4054-bfec-6426cea8e4eb",
-              "lastSeenAt": "2026-03-25T05:59:00.817Z"
-            },
-            {
-              "deviceId": "00000000-0000-0000-0000-000000000004",
-              "deviceName": "device_4",
-              "deviceType": "rain",
-              "status": "inactive",
               "stationId": "f829d79e-df13-4c5c-aadc-6d3341d7ada1",
-              "lastSeenAt": "2026-03-22T05:59:00.817Z"
+              "lastSeenAt": "2026-03-23T05:59:00.817Z"
             }
           ],
           "pagination": {
             "page": 1,
             "pageSize": 20,
-            "total": 10,
+            "total": 19,
             "totalPages": 1
           }
         },
-        "timestamp": "2026-04-07T16:07:22.678Z",
-        "traceId": "b7ae5a83-8352-4b60-96e1-2dccffe045b2"
+        "timestamp": "2026-04-08T17:44:06.682Z",
+        "traceId": "f3d93505-bf6a-4251-9a81-8e75a67fe14e"
       },
-      "bodyPreview": "{\"success\":true,\"code\":200,\"message\":\"ok\",\"data\":{\"list\":[{\"deviceId\":\"1e0358b7-eaee-4079-aef1-1fc3162dbbfe\",\"deviceName\":\"field-hardware-replay-REPLAY-HW-20260408-000720\",\"deviceType\":\"multi_sensor\",\"status\":\"active\",\"stationId\":null,\"lastSeenAt\":\"2026-04-07T16:07:20.595Z\"},{\"deviceId\":\"1e3496da-6ca9-4d1f-8310-04de30d51901\",\"deviceName\":\"field-hardware-replay-REPLAY-HW-20260408-000504\",\"deviceTyp"
+      "bodyPreview": "{\"success\":true,\"code\":200,\"message\":\"ok\",\"data\":{\"list\":[{\"deviceId\":\"6c59de82-f58d-48c5-921e-c3b4c62a17bc\",\"deviceName\":\"field-hardware-replay-REPLAY-HW-20260409-014406\",\"deviceType\":\"multi_sensor\",\"status\":\"active\",\"stationId\":null,\"lastSeenAt\":\"2026-04-08T17:44:06.587Z\"},{\"deviceId\":\"cef112e3-639c-42a7-aa02-27d46be29bbf\",\"deviceName\":\"field-hardware-replay-REPLAY-HW-20260409-014234\",\"deviceTyp"
     },
     {
-      "url": "http://127.0.0.1:8080/api/v1/data/state/1e0358b7-eaee-4079-aef1-1fc3162dbbfe",
+      "url": "http://127.0.0.1:8080/api/v1/data/state/6c59de82-f58d-48c5-921e-c3b4c62a17bc",
       "ok": true,
       "status": 200,
       "json": {
@@ -279,13 +323,13 @@
         "code": 200,
         "message": "ok",
         "data": {
-          "deviceId": "1e0358b7-eaee-4079-aef1-1fc3162dbbfe",
-          "updatedAt": "2026-04-07T16:07:20Z",
+          "deviceId": "6c59de82-f58d-48c5-921e-c3b4c62a17bc",
+          "updatedAt": "2026-04-08T17:44:06Z",
           "state": {
             "meta": {
               "_writer": {
                 "last_seq": 21,
-                "last_received_ts": "2026-04-07T16:07:20.614Z"
+                "last_received_ts": "2026-04-08T17:44:06.603Z"
               },
               "uptime_s": 109,
               "legacy_node": "A",
@@ -300,7 +344,7 @@
                 "imu_ok": 1,
                 "temp_ok": 1
               },
-              "replay_generated_at": "2026-04-07T16:07:20.503Z",
+              "replay_generated_at": "2026-04-08T17:44:06.442Z",
               "last_command_uptime_s": 0
             },
             "metrics": {
@@ -321,10 +365,10 @@
             }
           }
         },
-        "timestamp": "2026-04-07T16:07:22.685Z",
-        "traceId": "5f74a418-43d1-46f0-9d38-e02567aee191"
+        "timestamp": "2026-04-08T17:44:06.688Z",
+        "traceId": "e7cbdb50-878a-4e8c-b118-873f68bb973f"
       },
-      "bodyPreview": "{\"success\":true,\"code\":200,\"message\":\"ok\",\"data\":{\"deviceId\":\"1e0358b7-eaee-4079-aef1-1fc3162dbbfe\",\"updatedAt\":\"2026-04-07T16:07:20Z\",\"state\":{\"meta\":{\"_writer\":{\"last_seq\":21,\"last_received_ts\":\"2026-04-07T16:07:20.614Z\"},\"uptime_s\":109,\"legacy_node\":\"A\",\"replay_kind\":\"real_hardware_capture\",\"install_label\":\"FIELD-NODE-A\",\"replay_source\":\"hf-hardware-real-20260406-seq21.json\",\"upload_trigger\":\"p"
+      "bodyPreview": "{\"success\":true,\"code\":200,\"message\":\"ok\",\"data\":{\"deviceId\":\"6c59de82-f58d-48c5-921e-c3b4c62a17bc\",\"updatedAt\":\"2026-04-08T17:44:06Z\",\"state\":{\"meta\":{\"_writer\":{\"last_seq\":21,\"last_received_ts\":\"2026-04-08T17:44:06.603Z\"},\"uptime_s\":109,\"legacy_node\":\"A\",\"replay_kind\":\"real_hardware_capture\",\"install_label\":\"FIELD-NODE-A\",\"replay_source\":\"hf-hardware-real-20260406-seq21.json\",\"upload_trigger\":\"p"
     }
   ],
   "conclusion": "real-hardware-uplink-replay-reached-platform-api-state"
