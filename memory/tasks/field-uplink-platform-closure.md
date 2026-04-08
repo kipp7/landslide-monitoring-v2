@@ -951,3 +951,15 @@ Freeze and execute the next major phase after command-route stabilization: prove
   - one compose-managed runtime
   - one acceptance gate
   - one post-recovery verification command
+- the next RK3568 gateway hardening slice is now also landed locally:
+  - `services/field-gateway/src/index.ts`
+  - `services/field-gateway/src/config.ts`
+  - `services/field-gateway/.env.example`
+- the scope of that slice is narrow and runtime-facing:
+  - serial open failure no longer needs to kill the gateway process immediately
+  - runtime `error/close` on southbound serial now schedules backoff reconnect
+  - reconnect state is now emitted into `southbound.ports[]` health facts
+- this is the current bridge from:
+  - `minimum viable gateway`
+  - to:
+  - `systemd-managed gateway that can survive transient UART loss`

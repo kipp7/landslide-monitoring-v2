@@ -42,6 +42,8 @@ permalink: landslide-monitoring-v2-mainline/services/field-gateway/readme
 - `MQTT_PUBLISH_TIMEOUT_MS`：单次 MQTT 发布超时
 - `REPLAY_INTERVAL_MS`：pending spool 重放周期
 - `HEALTH_EMIT_INTERVAL_MS`：health 文件刷新周期
+- `SERIAL_RECONNECT_BASE_DELAY_MS`：串口重连基准退避时间
+- `SERIAL_RECONNECT_MAX_DELAY_MS`：串口重连最大退避时间
 - `NODE_DEGRADED_AFTER_MS`：节点超过该时长未见 telemetry 时进入 `degraded`
 - `NODE_OFFLINE_AFTER_MS`：节点超过该时长未见 telemetry 时进入 `offline`
 - `PORT_DEGRADED_AFTER_MS`：端口超过该时长未见串口读入时进入 `degraded`
@@ -148,6 +150,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\set-rk3568-fie
 - 合法消息先写入 pending spool，再尝试 MQTT 发布
 - 发布成功后转入 published spool
 - 发布失败时保留在 pending，并记录失败信息以待重放
+- 串口打开失败或运行中断开时不会直接结束主进程
+  - 会按退避策略自动重连
+  - 当前重连状态会进入 health
 - 运行期持续输出 health 文件，供本地控制面或 sidecar 读取
 - northbound 遥测接口保持与软件端一致：
   - topic:
@@ -167,6 +172,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\set-rk3568-fie
 - health 当前已经补到两层：
   - `southbound.ports[]`
   - `southbound.nodes[]`
+- 端口 health 当前还会补最小重连事实：
+  - `reconnectScheduled`
+  - `reconnectAttempts`
+  - `consecutiveReconnectFailures`
+  - `lastReconnectTs`
+  - `lastCloseTs`
+  - `lastReconnectReason`
 - 当前状态层已补最小运行状态：
   - 节点：
     - `configured`

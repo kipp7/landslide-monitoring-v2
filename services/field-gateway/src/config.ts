@@ -41,6 +41,8 @@ const configSchema = z
     mqttPublishTimeoutMs: z.coerce.number().int().positive().default(8000),
     replayIntervalMs: z.coerce.number().int().positive().default(5000),
     healthEmitIntervalMs: z.coerce.number().int().positive().default(5000),
+    serialReconnectBaseDelayMs: z.coerce.number().int().positive().default(5000),
+    serialReconnectMaxDelayMs: z.coerce.number().int().positive().default(60000),
     nodeDegradedAfterMs: z.coerce.number().int().positive().default(15000),
     nodeOfflineAfterMs: z.coerce.number().int().positive().default(30000),
     portDegradedAfterMs: z.coerce.number().int().positive().default(15000),
@@ -74,6 +76,14 @@ const configSchema = z
         code: z.ZodIssueCode.custom,
         path: ["portOfflineAfterMs"],
         message: "PORT_OFFLINE_AFTER_MS must be greater than PORT_DEGRADED_AFTER_MS"
+      });
+    }
+
+    if (data.serialReconnectMaxDelayMs < data.serialReconnectBaseDelayMs) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["serialReconnectMaxDelayMs"],
+        message: "SERIAL_RECONNECT_MAX_DELAY_MS must be greater than or equal to SERIAL_RECONNECT_BASE_DELAY_MS"
       });
     }
 
@@ -118,6 +128,8 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
     mqttPublishTimeoutMs: env.MQTT_PUBLISH_TIMEOUT_MS,
     replayIntervalMs: env.REPLAY_INTERVAL_MS,
     healthEmitIntervalMs: env.HEALTH_EMIT_INTERVAL_MS,
+    serialReconnectBaseDelayMs: env.SERIAL_RECONNECT_BASE_DELAY_MS,
+    serialReconnectMaxDelayMs: env.SERIAL_RECONNECT_MAX_DELAY_MS,
     nodeDegradedAfterMs: env.NODE_DEGRADED_AFTER_MS,
     nodeOfflineAfterMs: env.NODE_OFFLINE_AFTER_MS,
     portDegradedAfterMs: env.PORT_DEGRADED_AFTER_MS,

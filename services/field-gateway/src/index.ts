@@ -56,18 +56,24 @@ type NodeRuntimeState = {
 type PortRuntimeState = {
   serialDevice: string;
   open: boolean;
+  reconnectScheduled: boolean;
   mappedNodeCount: number;
   enabledNodeCount: number;
   mappedDeviceIds: string[];
   telemetryMessages: number;
   commandWrites: number;
   ackMessages: number;
+  reconnectAttempts: number;
+  consecutiveReconnectFailures: number;
   serialChunks: number;
   serialBytes: number;
   lastReadTs: string | null;
   lastOpenTs: string | null;
+  lastCloseTs: string | null;
   lastCommandTs: string | null;
   lastAckTs: string | null;
+  lastReconnectTs: string | null;
+  lastReconnectReason: string | null;
   lastError: string | null;
   status: "configured" | "online" | "degraded" | "offline";
 };
@@ -533,6 +539,8 @@ class GatewayRuntime {
   private readonly portState = new Map<string, PortRuntimeState>();
   private readonly serialPorts = new Map<string, SerialPort>();
   private readonly assemblers = new Map<string, GatewayJsonAssembler>();
+  private readonly serialReconnectTimers = new Map<string, NodeJS.Timeout>();
+  private readonly serialOpenInFlight = new Set<string>();
   private readonly stats: RuntimeStats = {
     serialChunks: 0,
     serialBytes: 0,
@@ -561,6 +569,7 @@ class GatewayRuntime {
   private healthTimer: NodeJS.Timeout | null = null;
   private replayRunning = false;
   private mqttConnected = false;
+  private stopping = false;
 
   constructor(
     private readonly config: AppConfig,
@@ -579,6 +588,7 @@ class GatewayRuntime {
   }
 
   async start(): Promise<void> {
+    this.stopping = false;
     await this.spool.init();
     const mqttClient = mqtt.connect(this.config.mqttUrl, {
       ...(this.config.mqttUsername && this.config.mqttPassword
@@ -635,9 +645,14 @@ class GatewayRuntime {
   }
 
   async stop(signal: string): Promise<void> {
+    this.stopping = true;
     this.logger.info({ signal }, "field gateway shutting down");
     if (this.replayTimer) clearInterval(this.replayTimer);
     if (this.healthTimer) clearInterval(this.healthTimer);
+    for (const timer of this.serialReconnectTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.serialReconnectTimers.clear();
 
     await this.emitHealth();
 
@@ -666,7 +681,99 @@ class GatewayRuntime {
     await Promise.allSettled(shutdownTasks);
   }
 
+  private scheduleSerialReconnect(portPath: string, reason: string): void {
+    if (this.stopping) {
+      return;
+    }
+
+    if (this.serialReconnectTimers.has(portPath)) {
+      return;
+    }
+
+    const portState = this.ensurePortRuntimeState(portPath);
+    portState.reconnectAttempts += 1;
+    portState.consecutiveReconnectFailures += 1;
+    portState.reconnectScheduled = true;
+    portState.lastReconnectTs = isoNow();
+    portState.lastReconnectReason = reason;
+
+    const backoffFactor = Math.max(0, portState.consecutiveReconnectFailures - 1);
+    const delayMs = Math.min(
+      this.config.serialReconnectBaseDelayMs * 2 ** backoffFactor,
+      this.config.serialReconnectMaxDelayMs
+    );
+
+    this.logger.warn(
+      {
+        serialDevice: portPath,
+        reason,
+        delayMs,
+        reconnectAttempts: portState.reconnectAttempts,
+        consecutiveReconnectFailures: portState.consecutiveReconnectFailures
+      },
+      "field gateway serial reconnect scheduled"
+    );
+
+    const timer = setTimeout(() => {
+      this.serialReconnectTimers.delete(portPath);
+      void this.openSerialPort(portPath);
+    }, delayMs);
+    this.serialReconnectTimers.set(portPath, timer);
+  }
+
+  private clearSerialReconnectTimer(portPath: string): void {
+    const timer = this.serialReconnectTimers.get(portPath);
+    if (!timer) {
+      return;
+    }
+
+    clearTimeout(timer);
+    this.serialReconnectTimers.delete(portPath);
+  }
+
+  private async closeSerialPortReference(portPath: string): Promise<void> {
+    const serialPort = this.serialPorts.get(portPath);
+    if (!serialPort) {
+      this.assemblers.delete(portPath);
+      return;
+    }
+
+    serialPort.removeAllListeners();
+    if (serialPort.isOpen) {
+      await new Promise<void>((resolve) => {
+        serialPort.close(() => {
+          resolve();
+        });
+      });
+    }
+
+    this.serialPorts.delete(portPath);
+    this.assemblers.delete(portPath);
+  }
+
   private async openSerialPort(portPath: string): Promise<void> {
+    if (this.stopping) {
+      return;
+    }
+
+    if (this.serialOpenInFlight.has(portPath)) {
+      return;
+    }
+
+    const current = this.serialPorts.get(portPath);
+    if (current?.isOpen) {
+      return;
+    }
+
+    this.serialOpenInFlight.add(portPath);
+    this.clearSerialReconnectTimer(portPath);
+
+    const portState = this.ensurePortRuntimeState(portPath);
+    portState.reconnectScheduled = false;
+    portState.lastReconnectReason = null;
+
+    await this.closeSerialPortReference(portPath);
+
     const serialPort = new SerialPort({
       path: portPath,
       baudRate: this.config.serialBaudRate,
@@ -675,8 +782,6 @@ class GatewayRuntime {
       parity: "none",
       autoOpen: false
     });
-    const portState = this.ensurePortRuntimeState(portPath);
-
     this.serialPorts.set(portPath, serialPort);
     this.assemblers.set(portPath, createAssembler());
 
@@ -684,8 +789,19 @@ class GatewayRuntime {
       const message = err instanceof Error ? err.message : String(err);
       this.stats.lastError = message;
       portState.open = false;
+       portState.lastCloseTs = isoNow();
       portState.lastError = message;
       this.logger.error({ err, serialDevice: portPath }, "field gateway serial error");
+      this.scheduleSerialReconnect(portPath, message);
+    });
+
+    serialPort.on("close", () => {
+      portState.open = false;
+      portState.lastCloseTs = isoNow();
+      if (!this.stopping) {
+        this.logger.warn({ serialDevice: portPath }, "field gateway serial closed");
+        this.scheduleSerialReconnect(portPath, "serial-close");
+      }
     });
 
     serialPort.on("data", (chunk: Buffer) => {
@@ -706,27 +822,42 @@ class GatewayRuntime {
       }
     });
 
-    await new Promise<void>((resolve, reject) => {
-      serialPort.open((err) => {
-        if (err) reject(err);
-        else resolve();
+    try {
+      await new Promise<void>((resolve, reject) => {
+        serialPort.open((err) => {
+          if (err) reject(err);
+          else resolve();
+        });
       });
-    });
 
-    portState.open = true;
-    portState.lastOpenTs = isoNow();
-    portState.lastError = null;
-    portState.status = "configured";
+      portState.open = true;
+      portState.lastOpenTs = isoNow();
+      portState.lastError = null;
+      portState.lastReconnectReason = null;
+      portState.reconnectScheduled = false;
+      portState.consecutiveReconnectFailures = 0;
+      portState.status = "configured";
 
-    this.logger.info(
-      {
-        serialDevice: portPath,
-        serialBaudRate: this.config.serialBaudRate,
-        mappedNodeCount: portState.mappedNodeCount,
-        enabledNodeCount: portState.enabledNodeCount
-      },
-      "field gateway serial opened"
-    );
+      this.logger.info(
+        {
+          serialDevice: portPath,
+          serialBaudRate: this.config.serialBaudRate,
+          mappedNodeCount: portState.mappedNodeCount,
+          enabledNodeCount: portState.enabledNodeCount
+        },
+        "field gateway serial opened"
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.stats.lastError = message;
+      portState.open = false;
+      portState.lastCloseTs = isoNow();
+      portState.lastError = message;
+      this.logger.error({ err, serialDevice: portPath }, "field gateway serial open failed");
+      this.scheduleSerialReconnect(portPath, message);
+    } finally {
+      this.serialOpenInFlight.delete(portPath);
+    }
   }
 
   private async handlePayload(rawPayload: string, sourcePort: string): Promise<void> {
@@ -1116,18 +1247,24 @@ class GatewayRuntime {
     return {
       serialDevice: portPath,
       open: false,
+      reconnectScheduled: false,
       mappedNodeCount: mappedNodes.length,
       enabledNodeCount: mappedNodes.filter((node) => node.enabled).length,
       mappedDeviceIds: mappedNodes.map((node) => node.deviceId).sort((a, b) => a.localeCompare(b)),
       telemetryMessages: 0,
       commandWrites: 0,
       ackMessages: 0,
+      reconnectAttempts: 0,
+      consecutiveReconnectFailures: 0,
       serialChunks: 0,
       serialBytes: 0,
       lastReadTs: null,
       lastOpenTs: null,
+      lastCloseTs: null,
       lastCommandTs: null,
       lastAckTs: null,
+      lastReconnectTs: null,
+      lastReconnectReason: null,
       lastError: null,
       status: "configured"
     };
