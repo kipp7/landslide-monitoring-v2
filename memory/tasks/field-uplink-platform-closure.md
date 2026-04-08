@@ -557,3 +557,19 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - `ack-blocked-by-southbound-json-fragmentation`
     - `command-did-not-forward`
   - this means the live command proof no longer depends on manually reading long `journalctl` tails before deciding the next corrective action
+- the first firmware-side corrective action is now landed in the real RK2206 source tree:
+  - workspace path:
+    - `F:\2\openharmony\txsmartropenharmony\vendor\isoftstone\rk2206\samples\xl01_landslide_monitor_v1.0`
+  - current changes include:
+    - UART TX mutex in `drivers/xl01/xl01_driver.c`
+    - configurable post-ACK quiet window in `config/app_config.h`
+    - `manual_collect` changed to:
+      - ACK first
+      - then quiet window
+      - then deferred immediate telemetry release
+  - current guard constants:
+    - `PLATFORM_POST_ACK_QUIET_MS = 1200`
+    - `PLATFORM_MANUAL_COLLECT_DELAY_MS = 1500`
+  - this shell still could not run `hb build -f`
+    - because `hb` is not available in the current PATH
+  - so the source-level fix is landed, but local compile/burn proof for that tree is still pending
