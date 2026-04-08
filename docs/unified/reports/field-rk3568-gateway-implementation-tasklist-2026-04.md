@@ -36,6 +36,7 @@ permalink: landslide-monitoring-v2-mainline/docs/unified/reports/field-rk3568-ga
 - [field-hardware-gateway-architecture-eval.md](/E:/学校/02 项目/99 山体滑坡优化完善/landslide-monitoring-v2-mainline/docs/unified/reports/field-hardware-gateway-architecture-eval.md)
 - [field-program-direction-and-task-split-2026-04.md](/E:/学校/02 项目/99 山体滑坡优化完善/landslide-monitoring-v2-mainline/docs/unified/reports/field-program-direction-and-task-split-2026-04.md)
 - [field-rk3568-rk2206-center-phased-architecture-2026-04.md](/E:/学校/02 项目/99 山体滑坡优化完善/landslide-monitoring-v2-mainline/docs/unified/reports/field-rk3568-rk2206-center-phased-architecture-2026-04.md)
+- [field-rk3568-software-interface-alignment-2026-04.md](/E:/学校/02 项目/99 山体滑坡优化完善/landslide-monitoring-v2-mainline/docs/unified/reports/field-rk3568-software-interface-alignment-2026-04.md)
 
 因此，它只负责：
 
@@ -74,6 +75,8 @@ RK3568 当前必须输出：
 1. 平台可接受 telemetry
 - 保持 `device_id`
 - 保持 `schema_version + device_id + seq + metrics + meta`
+- topic 固定为：
+  - `telemetry/{device_id}`
 
 2. 留证结果
 - 原始输入
@@ -225,6 +228,10 @@ RK3568 第一阶段只追求一个最小闭环：
 
 1. 平台命令接收
 - 识别目标 `device_id`
+- MQTT topic 固定为：
+  - `cmd/{device_id}`
+- payload 固定兼容：
+  - `device-command.v1`
 
 2. 网关到节点命令转译
 - 转成节点可执行的现场格式
@@ -232,6 +239,12 @@ RK3568 第一阶段只追求一个最小闭环：
 3. 一期最小支持集
 - `manual_collect`
 - `set_config`
+
+4. 平台 ACK 回灌
+- MQTT topic 固定为：
+  - `cmd_ack/{device_id}`
+- payload 固定兼容：
+  - `device-command-ack.v1`
 
 这一层当前不是总主线，但必须保留最小闭环，不然部署态会断半条链。
 
@@ -310,6 +323,12 @@ RK3568 网关一期算完成，至少要满足：
 当前 RK3568 网关主线应被压成：
 
 - `多节点接入 + 薄适配 + 缓存补传 + MQTT 上行 + 最小下行翻译`
+
+并且 northbound 软件接口必须继续固定为：
+
+- `telemetry/{device_id} + TelemetryEnvelope v1`
+- `cmd/{device_id} + device-command.v1`
+- `cmd_ack/{device_id} + device-command-ack.v1`
 
 这份任务单冻结后，RK3568 的后续工作不再以“继续证明链路”为主，而应以“把最小可运行网关真正写出来”为主。
 

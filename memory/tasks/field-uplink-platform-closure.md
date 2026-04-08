@@ -206,6 +206,17 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - current real UART stream is newline-delimited JSON telemetry
     - startup may still occasionally begin on a stale tail fragment
     - the gateway should therefore prefer line framing and ignore non-`{...}` startup fragments
+- the first RK3568 northbound command-path code closure is now also landed locally:
+  - `services/field-gateway` now includes:
+    - MQTT subscription on `cmd/{device_id}`
+    - `device-command.v1` validation
+    - serial write-through of validated command JSON
+    - serial-side `device-command-ack.v1` recognition
+    - MQTT republish on `cmd_ack/{device_id}`
+  - current scope is intentionally narrow:
+    - single southbound serial line
+    - minimal command set alignment around `manual_collect` and `set_config`
+    - no multi-node routing policy yet
 
 ## Constraints
 
@@ -272,7 +283,7 @@ Freeze and execute the next major phase after command-route stabilization: prove
 - stage 7: gateway expansion after live single-node proof
   - next focus should move to:
     - multi-node southbound configuration for `3 x RK2206`
-    - minimal downlink translation for `manual_collect` / `set_config`
+    - tighten the just-landed minimal downlink path around `manual_collect` / `set_config`
     - center-side deployment formalization so the field path does not depend on ad hoc host-run helpers
 
 ## Open Questions

@@ -21,6 +21,7 @@ permalink: landslide-monitoring-v2-mainline/services/field-gateway/readme
 
 - `docs/unified/reports/field-rk3568-edge-runtime-network-architecture-2026-04.md`
 - `docs/unified/reports/field-rk3568-gateway-implementation-tasklist-2026-04.md`
+- `docs/unified/reports/field-rk3568-software-interface-alignment-2026-04.md`
 
 ## 环境变量
 
@@ -32,6 +33,8 @@ permalink: landslide-monitoring-v2-mainline/services/field-gateway/readme
 - `MQTT_URL`：例如 `mqtt://127.0.0.1:1883`
 - `MQTT_USERNAME` / `MQTT_PASSWORD`：可选，但必须成对设置
 - `MQTT_TOPIC_TELEMETRY_PREFIX`：默认 `telemetry/`
+- `MQTT_TOPIC_COMMAND_PREFIX`：默认 `cmd/`
+- `MQTT_TOPIC_ACK_PREFIX`：默认 `cmd_ack/`
 - `SPOOL_ROOT_DIR`：本地缓存根目录
 - `HEALTH_FILE_PATH`：health 文件输出路径
 - `MQTT_PUBLISH_TIMEOUT_MS`：单次 MQTT 发布超时
@@ -100,19 +103,31 @@ cat /var/lib/lsmv2/field-gateway/health/runtime-health.json
 
 ## 当前行为
 
-- 串口收到分片文本后，按 JSON 花括号边界做重组
+- 串口收到分片文本后，按换行分隔恢复完整 JSON 行，并忽略启动阶段不成形的残片行
 - 仅接受符合 `telemetry-envelope.v1.schema.json` 的标准消息
 - 合法消息先写入 pending spool，再尝试 MQTT 发布
 - 发布成功后转入 published spool
 - 发布失败时保留在 pending，并记录失败信息以待重放
 - 运行期持续输出 health 文件，供本地控制面或 sidecar 读取
+- northbound 遥测接口保持与软件端一致：
+  - topic:
+    - `telemetry/{device_id}`
+  - payload:
+    - `TelemetryEnvelope v1`
+- 当前已补最小命令闭环骨架：
+  - 订阅 `cmd/{device_id}`
+  - 校验 `device-command.v1`
+  - 原样写入 southbound 串口
+  - 识别串口返回的 `device-command-ack.v1`
+  - 回灌 `cmd_ack/{device_id}`
 
 ## 当前非目标
 
-这一版明确还不负责：
+这一版仍然还不负责：
 
 - 多节点并发接入
-- 平台下行命令翻译
+- 多节点级别的 southbound 路由选择
+- 超过 `manual_collect` / `set_config` 最小闭环之外的复杂命令编排
 - Wi-Fi / 热点管理
 - 本地 UI
 - OpenClaw sidecar

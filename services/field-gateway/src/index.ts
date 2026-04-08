@@ -18,6 +18,24 @@ type TelemetryEnvelopeV1 = {
   meta?: Record<string, unknown>;
 };
 
+type DeviceCommandV1 = {
+  schema_version: 1;
+  command_id: string;
+  device_id: string;
+  command_type: string;
+  payload: Record<string, unknown>;
+  issued_ts: string;
+};
+
+type DeviceCommandAckV1 = {
+  schema_version: 1;
+  command_id: string;
+  device_id: string;
+  ack_ts: string;
+  status: "acked" | "failed";
+  result?: Record<string, unknown>;
+};
+
 type SpoolState = "pending" | "published" | "rejected";
 
 type SpoolRecord = {
@@ -48,10 +66,18 @@ type RuntimeStats = {
   publishedMessages: number;
   replayPublishedMessages: number;
   publishFailures: number;
+  commandsReceived: number;
+  commandsForwarded: number;
+  commandRejects: number;
+  commandWriteFailures: number;
+  ackMessagesPublished: number;
+  ackPublishFailures: number;
   spoolPending: number;
   lastSerialReadTs: string | null;
   lastParsedMessageTs: string | null;
   lastPublishedTs: string | null;
+  lastCommandForwardedTs: string | null;
+  lastAckPublishedTs: string | null;
   lastError: string | null;
 };
 
@@ -103,6 +129,16 @@ function topicForDevice(config: AppConfig, deviceId: string): string {
   return `${config.mqttTopicTelemetryPrefix}${deviceId}`;
 }
 
+function ackTopicForDevice(config: AppConfig, deviceId: string): string {
+  return `${config.mqttTopicAckPrefix}${deviceId}`;
+}
+
+function topicDeviceId(prefix: string, topic: string): string | null {
+  if (!topic.startsWith(prefix)) return null;
+  const deviceId = topic.slice(prefix.length).trim();
+  return deviceId.length > 0 ? deviceId : null;
+}
+
 function createAssembler(): GatewayJsonAssembler {
   let buffer = "";
 
@@ -130,7 +166,7 @@ function payloadHash(payload: string): string {
   return createHash("sha256").update(payload).digest("hex");
 }
 
-function recoverTelemetryCandidates(rawPayload: string): string[] {
+function recoverJsonCandidates(rawPayload: string): string[] {
   const normalized = rawPayload.trim();
   if (normalized.length === 0) return [];
 
@@ -144,11 +180,7 @@ function recoverTelemetryCandidates(rawPayload: string): string[] {
   }
 
   const telemetryLines = lines.filter(
-    (line) =>
-      line.startsWith("{") &&
-      line.endsWith("}") &&
-      line.includes("\"schema_version\"") &&
-      line.includes("\"device_id\"")
+    (line) => line.startsWith("{") && line.endsWith("}") && line.includes("\"schema_version\"") && line.includes("\"device_id\"")
   );
 
   if (telemetryLines.length > 0) {
@@ -227,10 +259,18 @@ class GatewayRuntime {
     publishedMessages: 0,
     replayPublishedMessages: 0,
     publishFailures: 0,
+    commandsReceived: 0,
+    commandsForwarded: 0,
+    commandRejects: 0,
+    commandWriteFailures: 0,
+    ackMessagesPublished: 0,
+    ackPublishFailures: 0,
     spoolPending: 0,
     lastSerialReadTs: null,
     lastParsedMessageTs: null,
     lastPublishedTs: null,
+    lastCommandForwardedTs: null,
+    lastAckPublishedTs: null,
     lastError: null
   };
 
@@ -243,7 +283,9 @@ class GatewayRuntime {
 
   constructor(
     private readonly config: AppConfig,
-    private readonly validateEnvelope: Awaited<ReturnType<typeof loadAndCompileSchema<TelemetryEnvelopeV1>>>
+    private readonly validateEnvelope: Awaited<ReturnType<typeof loadAndCompileSchema<TelemetryEnvelopeV1>>>,
+    private readonly validateCommand: Awaited<ReturnType<typeof loadAndCompileSchema<DeviceCommandV1>>>,
+    private readonly validateCommandAck: Awaited<ReturnType<typeof loadAndCompileSchema<DeviceCommandAckV1>>>
   ) {
     this.logger = createLogger(config.serviceName);
     this.spool = new SpoolManager(config);
@@ -261,6 +303,18 @@ class GatewayRuntime {
     mqttClient.on("connect", () => {
       this.mqttConnected = true;
       this.logger.info({ mqttUrl: this.config.mqttUrl }, "field gateway mqtt connected");
+      mqttClient.subscribe(`${this.config.mqttTopicCommandPrefix}+`, { qos: 1 }, (err) => {
+        if (err) {
+          this.stats.lastError = err.message;
+          this.logger.error({ err }, "field gateway mqtt command subscribe failed");
+          return;
+        }
+
+        this.logger.info(
+          { topicFilter: `${this.config.mqttTopicCommandPrefix}+` },
+          "field gateway mqtt command subscription ready"
+        );
+      });
       void this.replayPending("mqtt-connect");
     });
     mqttClient.on("reconnect", () => {
@@ -271,6 +325,9 @@ class GatewayRuntime {
       this.mqttConnected = false;
       this.stats.lastError = err instanceof Error ? err.message : String(err);
       this.logger.error({ err }, "field gateway mqtt error");
+    });
+    mqttClient.on("message", (topic, payload) => {
+      void this.handleMqttMessage(topic, payload);
     });
 
     const serialPort = new SerialPort({
@@ -354,7 +411,7 @@ class GatewayRuntime {
   }
 
   private async handlePayload(rawPayload: string): Promise<void> {
-    const candidates = recoverTelemetryCandidates(rawPayload);
+    const candidates = recoverJsonCandidates(rawPayload);
     for (const candidate of candidates) {
       await this.handlePayloadCandidate(candidate);
     }
@@ -382,10 +439,18 @@ class GatewayRuntime {
       return;
     }
 
+    if (this.validateCommandAck.validate(parsed)) {
+      await this.publishCommandAck(parsed, rawPayload);
+      return;
+    }
+
     if (!this.validateEnvelope.validate(parsed)) {
       this.stats.schemaRejected += 1;
       this.stats.lastError = "schema validation failed";
-      this.logger.warn({ traceId, errors: this.validateEnvelope.errors }, "field gateway schema invalid");
+      this.logger.warn(
+        { traceId, telemetryErrors: this.validateEnvelope.errors, ackErrors: this.validateCommandAck.errors },
+        "field gateway schema invalid"
+      );
       return;
     }
 
@@ -418,6 +483,74 @@ class GatewayRuntime {
     } catch (err) {
       this.stats.lastError = err instanceof Error ? err.message : String(err);
       this.logger.error({ traceId, err }, "field gateway spool enqueue failed");
+    }
+  }
+
+  private async handleMqttMessage(topic: string, payload: Buffer): Promise<void> {
+    const topicDevice = topicDeviceId(this.config.mqttTopicCommandPrefix, topic);
+    if (!topicDevice) {
+      return;
+    }
+
+    this.stats.commandsReceived += 1;
+    const traceId = newTraceId();
+    const rawPayload = payload.toString("utf8").trim();
+    const payloadBytes = Buffer.byteLength(rawPayload, "utf8");
+
+    if (payloadBytes > this.config.maxMessageBytes) {
+      this.stats.commandRejects += 1;
+      this.stats.lastError = `command payload too large (${String(payloadBytes)})`;
+      this.logger.warn({ traceId, topic, payloadBytes }, "field gateway command payload too large");
+      return;
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(rawPayload);
+    } catch (err) {
+      this.stats.commandRejects += 1;
+      this.stats.lastError = err instanceof Error ? err.message : String(err);
+      this.logger.warn({ traceId, topic, err }, "field gateway command json parse failed");
+      return;
+    }
+
+    if (!this.validateCommand.validate(parsed)) {
+      this.stats.commandRejects += 1;
+      this.stats.lastError = "command schema validation failed";
+      this.logger.warn({ traceId, topic, errors: this.validateCommand.errors }, "field gateway command schema invalid");
+      return;
+    }
+
+    const command = parsed;
+    if (command.device_id !== topicDevice) {
+      this.stats.commandRejects += 1;
+      this.stats.lastError = "command topic device mismatch";
+      this.logger.warn(
+        { traceId, topic, topicDevice, payloadDevice: command.device_id, commandId: command.command_id },
+        "field gateway command topic device mismatch"
+      );
+      return;
+    }
+
+    try {
+      await this.writeCommandToSerial(rawPayload);
+      this.stats.commandsForwarded += 1;
+      this.stats.lastCommandForwardedTs = isoNow();
+      this.logger.info(
+        {
+          topic,
+          serialDevice: this.config.serialDevice,
+          commandId: command.command_id,
+          commandType: command.command_type,
+          deviceId: command.device_id,
+          payloadBytes
+        },
+        "field gateway command forwarded to serial"
+      );
+    } catch (err) {
+      this.stats.commandWriteFailures += 1;
+      this.stats.lastError = err instanceof Error ? err.message : String(err);
+      this.logger.error({ traceId, topic, err }, "field gateway command serial write failed");
     }
   }
 
@@ -489,6 +622,64 @@ class GatewayRuntime {
     );
   }
 
+  private async publishCommandAck(ack: DeviceCommandAckV1, rawPayload: string): Promise<void> {
+    const topic = ackTopicForDevice(this.config, ack.device_id);
+
+    try {
+      await this.publishMqtt(topic, rawPayload);
+      this.stats.ackMessagesPublished += 1;
+      this.stats.lastAckPublishedTs = isoNow();
+      this.logger.info(
+        {
+          topic,
+          commandId: ack.command_id,
+          deviceId: ack.device_id,
+          status: ack.status,
+          payloadBytes: Buffer.byteLength(rawPayload, "utf8")
+        },
+        "field gateway command ack published"
+      );
+    } catch (err) {
+      this.stats.ackPublishFailures += 1;
+      this.stats.lastError = err instanceof Error ? err.message : String(err);
+      this.logger.error({ err, topic, commandId: ack.command_id }, "field gateway command ack publish failed");
+    }
+  }
+
+  private async publishMqtt(topic: string, payload: string): Promise<void> {
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        reject(new Error("mqtt publish timeout"));
+      }, this.config.mqttPublishTimeoutMs);
+      this.mqttClient?.publish(topic, payload, { qos: 1 }, (err) => {
+        clearTimeout(timer);
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+  }
+
+  private async writeCommandToSerial(payload: string): Promise<void> {
+    if (!this.serialPort?.isOpen) {
+      throw new Error("serial port is not open");
+    }
+
+    const serialFrame = `${payload}\n`;
+    await new Promise<void>((resolve, reject) => {
+      this.serialPort?.write(serialFrame, "utf8", (err) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+
+        this.serialPort?.drain((drainErr) => {
+          if (drainErr) reject(drainErr);
+          else resolve();
+        });
+      });
+    });
+  }
+
   private async emitHealth(): Promise<void> {
     this.stats.spoolPending = await this.spool.pendingCount();
     await writeJsonAtomic(path.resolve(this.config.healthFilePath), {
@@ -522,9 +713,27 @@ async function main(): Promise<void> {
     "schemas",
     "telemetry-envelope.v1.schema.json"
   );
+  const schemaDeviceCommandPath = path.join(
+    repoRoot,
+    "docs",
+    "integrations",
+    "mqtt",
+    "schemas",
+    "device-command.v1.schema.json"
+  );
+  const schemaDeviceCommandAckPath = path.join(
+    repoRoot,
+    "docs",
+    "integrations",
+    "mqtt",
+    "schemas",
+    "device-command-ack.v1.schema.json"
+  );
 
   const validateEnvelope = await loadAndCompileSchema<TelemetryEnvelopeV1>(schemaTelemetryEnvelopePath);
-  const runtime = new GatewayRuntime(config, validateEnvelope);
+  const validateCommand = await loadAndCompileSchema<DeviceCommandV1>(schemaDeviceCommandPath);
+  const validateCommandAck = await loadAndCompileSchema<DeviceCommandAckV1>(schemaDeviceCommandAckPath);
+  const runtime = new GatewayRuntime(config, validateEnvelope, validateCommand, validateCommandAck);
   await runtime.start();
 
   const shutdown = async (signal: string) => {
