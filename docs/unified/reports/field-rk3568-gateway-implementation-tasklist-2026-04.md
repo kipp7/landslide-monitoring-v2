@@ -364,25 +364,33 @@ RK3568 网关一期算完成，至少要满足：
 - `runtime-health.json` 已证明：
   - `configuredNodes = 1`
   - 节点 `A -> device_id -> /dev/ttyS3` 映射已进入运行态
+- southbound 运行时已升级为：
+  - `single process, multi southbound ports`
+- 当前 health 已证明：
+  - `southbound.routeMode = configured-node-routing`
+  - `southbound.configuredPorts = 1`
+  - `southbound.ports[]` 已进入运行态
 - fresh runtime `manual_collect` 已再次跑通：
   - `cmd/{device_id} -> RK3568 -> /dev/ttyS3 -> cmd_ack/{device_id}`
 - 当前最新实机命令证据：
-  - `commandId = f8f46ff4-d514-4114-b2b4-8e8c2e5c4aee`
+  - `commandId = 19eef434-59ba-40df-9386-869d47421fed`
 
 3. 仍未完成的部分
 - `3 x RK2206` 多节点并发接入还没有真正上板
-- 多 southbound 端口路由选择还没有落地
+- 多 southbound 端口路由选择已经落地到运行时骨架
+- 但第二、第三个真实端口还没有接进来
 - 当前 southbound 配置层更多是在回答：
   - 哪个 `device_id` 属于这个网关实例
   - 哪个节点当前允许被这个串口实例接收/下发
 - 还没有进入：
-  - 多串口实例编排
+  - 多串口真实并发接入
+  - 多实例部署编排
   - 多无线链路调度
   - 节点离线/重连策略细化
 
 4. 因此当前主线应继续收敛为
-- 先把 `1 -> N` 的 southbound 配置/路由模型写透
-- 再把 `3 x RK2206` 的真实接入方式接进去
+- 先把第二、第三个 southbound 端口真正接入
+- 再在真实 `3 x RK2206` 条件下确认运行事实
 - 不再回头重做单节点 northbound 协议证明
 
 ## 12. 相关文档

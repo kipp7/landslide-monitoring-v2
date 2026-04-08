@@ -36,6 +36,7 @@ permalink: landslide-monitoring-v2-mainline/services/field-gateway/readme
 - `MQTT_TOPIC_COMMAND_PREFIX`：默认 `cmd/`
 - `MQTT_TOPIC_ACK_PREFIX`：默认 `cmd_ack/`
 - `SOUTHBOUND_NODES_JSON`：可选；用于冻结 `field_node_id -> device_id -> southbound_port` 映射
+  - 若配置里出现多个不同 `southboundPort`，运行时会自动打开这些端口
 - `SPOOL_ROOT_DIR`：本地缓存根目录
 - `HEALTH_FILE_PATH`：health 文件输出路径
 - `MQTT_PUBLISH_TIMEOUT_MS`：单次 MQTT 发布超时
@@ -121,6 +122,13 @@ cat /var/lib/lsmv2/field-gateway/health/runtime-health.json
   - `installLabel`
   - `southboundPort`
   - `enabled`
+- 当 `SOUTHBOUND_NODES_JSON` 中出现多个 `southboundPort` 时：
+  - 网关会自动持有多个 southbound 串口
+  - telemetry / ack 会按来源端口校验节点归属
+  - `cmd/{device_id}` 会按目标节点路由到对应端口
+- health 当前已经补到两层：
+  - `southbound.ports[]`
+  - `southbound.nodes[]`
 - 当前已补最小命令闭环骨架：
   - 订阅 `cmd/{device_id}`
   - 校验 `device-command.v1`
@@ -142,12 +150,40 @@ cat /var/lib/lsmv2/field-gateway/health/runtime-health.json
 ]
 ```
 
+多端口示例：
+
+```json
+[
+  {
+    "fieldNodeId": "A",
+    "deviceId": "00000000-0000-0000-0000-000000000001",
+    "installLabel": "FIELD-NODE-A",
+    "southboundPort": "/dev/ttyS3",
+    "enabled": true
+  },
+  {
+    "fieldNodeId": "B",
+    "deviceId": "00000000-0000-0000-0000-000000000002",
+    "installLabel": "FIELD-NODE-B",
+    "southboundPort": "/dev/ttyUSB0",
+    "enabled": true
+  },
+  {
+    "fieldNodeId": "C",
+    "deviceId": "00000000-0000-0000-0000-000000000003",
+    "installLabel": "FIELD-NODE-C",
+    "southboundPort": "/dev/ttyUSB1",
+    "enabled": true
+  }
+]
+```
+
 ## 当前非目标
 
 这一版仍然还不负责：
 
-- 多节点并发接入
-- 多节点级别的 southbound 路由选择
+- 多节点自动重连编排
+- 多实例部署编排
 - 超过 `manual_collect` / `set_config` 最小闭环之外的复杂命令编排
 - Wi-Fi / 热点管理
 - 本地 UI

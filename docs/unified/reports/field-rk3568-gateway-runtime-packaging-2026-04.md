@@ -290,6 +290,64 @@ cat /var/lib/lsmv2/field-gateway/health/runtime-health.json
   - 落进 health 可观测面
   - 并在实机上重新证明不会破坏既有 northbound 命令闭环
 
+## 14. 2026-04-08 多端口 southbound 运行时已落地并完成单节点回归
+
+在上一阶段只做到“节点映射进入配置和 health”之后，本轮继续把 southbound 运行时本身从：
+
+- 单 `SerialPort`
+
+抬升为：
+
+- 按 `SOUTHBOUND_NODES_JSON` 自动打开多个 southbound 端口
+
+1. 当前运行时能力新增：
+- 当 `SOUTHBOUND_NODES_JSON` 中出现多个不同 `southboundPort` 时：
+  - 网关会自动打开这些串口
+  - telemetry / ack 会按来源端口校验节点归属
+  - `cmd/{device_id}` 会按目标节点绑定端口下发
+- health 新增端口级可观测面：
+  - `serial.configuredPorts`
+  - `serial.openPortCount`
+  - `southbound.routeMode`
+  - `southbound.configuredPorts`
+  - `southbound.ports[]`
+
+2. 当前选择的实现线已明确为：
+- 网关核心先支持：
+  - `single process, multi southbound ports`
+- 后续部署层再决定是否拆成：
+  - 单端口单实例
+  - 或继续维持单实例多端口
+
+3. 实机回归结果
+- 在当前单节点现场配置下重新下发并重启：
+  - `lsmv2-field-gateway.service`
+- `runtime-health.json` 已确认：
+  - `routeMode = configured-node-routing`
+  - `configuredPorts = 1`
+  - `ports[0].serialDevice = /dev/ttyS3`
+  - `ports[0].mappedNodeCount = 1`
+- telemetry 继续正常上行
+- fresh runtime `manual_collect` 回归再次跑通：
+  - `commandId = 19eef434-59ba-40df-9386-869d47421fed`
+- 节点级与端口级统计同时更新：
+  - `nodes[0].commandForwards = 1`
+  - `nodes[0].ackPublishes = 1`
+  - `ports[0].commandWrites = 1`
+  - `ports[0].ackMessages = 1`
+
+4. 这一步的意义
+- 当前 RK3568 网关已经不是“只能跑单串口”
+- 而是已经具备：
+  - 面向 `3 x RK2206` 的多端口 southbound 运行时骨架
+  - 且已在真实单节点环境完成兼容性回归
+
+下一步不应再回头做单节点协议证明，而应直接进入：
+
+- 第二、第三个 southbound 端口的实际接入
+- 多节点并发输入下的运行事实采集
+- 多端口部署策略是否拆实例的最后收口
+
 下一步应继续按主线推进：
 
 - 进入多节点 southbound 抽象

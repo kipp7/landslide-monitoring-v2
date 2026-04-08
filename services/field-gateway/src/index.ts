@@ -53,6 +53,24 @@ type NodeRuntimeState = {
   status: "configured" | "online";
 };
 
+type PortRuntimeState = {
+  serialDevice: string;
+  open: boolean;
+  mappedNodeCount: number;
+  enabledNodeCount: number;
+  mappedDeviceIds: string[];
+  telemetryMessages: number;
+  commandWrites: number;
+  ackMessages: number;
+  serialChunks: number;
+  serialBytes: number;
+  lastReadTs: string | null;
+  lastOpenTs: string | null;
+  lastCommandTs: string | null;
+  lastAckTs: string | null;
+  lastError: string | null;
+};
+
 type SpoolState = "pending" | "published" | "rejected";
 
 type SpoolRecord = {
@@ -267,8 +285,10 @@ class SpoolManager {
 class GatewayRuntime {
   private readonly logger: ReturnType<typeof createLogger>;
   private readonly spool: SpoolManager;
-  private readonly assembler = createAssembler();
   private readonly nodeState = new Map<string, NodeRuntimeState>();
+  private readonly portState = new Map<string, PortRuntimeState>();
+  private readonly serialPorts = new Map<string, SerialPort>();
+  private readonly assemblers = new Map<string, GatewayJsonAssembler>();
   private readonly stats: RuntimeStats = {
     serialChunks: 0,
     serialBytes: 0,
@@ -293,7 +313,6 @@ class GatewayRuntime {
   };
 
   private mqttClient: mqtt.MqttClient | null = null;
-  private serialPort: SerialPort | null = null;
   private replayTimer: NodeJS.Timeout | null = null;
   private healthTimer: NodeJS.Timeout | null = null;
   private replayRunning = false;
@@ -309,6 +328,9 @@ class GatewayRuntime {
     this.spool = new SpoolManager(config);
     for (const node of config.southboundNodes) {
       this.nodeState.set(node.deviceId, this.createNodeRuntimeState(node));
+    }
+    for (const portPath of this.getConfiguredPortPaths()) {
+      this.portState.set(portPath, this.createPortRuntimeState(portPath));
     }
   }
 
@@ -331,13 +353,14 @@ class GatewayRuntime {
           return;
         }
 
-      this.logger.info(
-        {
-          topicFilter: `${this.config.mqttTopicCommandPrefix}+`,
-          configuredNodeCount: this.config.southboundNodes.length
-        },
-        "field gateway mqtt command subscription ready"
-      );
+        this.logger.info(
+          {
+            topicFilter: `${this.config.mqttTopicCommandPrefix}+`,
+            configuredNodeCount: this.config.southboundNodes.length,
+            configuredPortCount: this.portState.size
+          },
+          "field gateway mqtt command subscription ready"
+        );
       });
       void this.replayPending("mqtt-connect");
     });
@@ -354,42 +377,7 @@ class GatewayRuntime {
       void this.handleMqttMessage(topic, payload);
     });
 
-    const serialPort = new SerialPort({
-      path: this.config.serialDevice,
-      baudRate: this.config.serialBaudRate,
-      dataBits: 8,
-      stopBits: 1,
-      parity: "none",
-      autoOpen: false
-    });
-    this.serialPort = serialPort;
-
-    serialPort.on("error", (err) => {
-      this.stats.lastError = err instanceof Error ? err.message : String(err);
-      this.logger.error({ err, serialDevice: this.config.serialDevice }, "field gateway serial error");
-    });
-
-    serialPort.on("data", (chunk: Buffer) => {
-      this.stats.serialChunks += 1;
-      this.stats.serialBytes += chunk.length;
-      this.stats.lastSerialReadTs = isoNow();
-
-      for (const payload of this.assembler.push(chunk)) {
-        void this.handlePayload(payload);
-      }
-    });
-
-    await new Promise<void>((resolve, reject) => {
-      serialPort.open((err) => {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
-
-    this.logger.info(
-      { serialDevice: this.config.serialDevice, serialBaudRate: this.config.serialBaudRate },
-      "field gateway serial opened"
-    );
+    await Promise.all(this.getConfiguredPortPaths().map(async (portPath) => this.openSerialPort(portPath)));
 
     this.replayTimer = setInterval(() => {
       void this.replayPending("interval");
@@ -410,11 +398,11 @@ class GatewayRuntime {
     await this.emitHealth();
 
     const shutdownTasks: Promise<void>[] = [];
-
-    if (this.serialPort?.isOpen) {
+    for (const serialPort of this.serialPorts.values()) {
+      if (!serialPort.isOpen) continue;
       shutdownTasks.push(
         new Promise<void>((resolve) => {
-          this.serialPort?.close(() => {
+          serialPort.close(() => {
             resolve();
           });
         })
@@ -434,22 +422,85 @@ class GatewayRuntime {
     await Promise.allSettled(shutdownTasks);
   }
 
-  private async handlePayload(rawPayload: string): Promise<void> {
+  private async openSerialPort(portPath: string): Promise<void> {
+    const serialPort = new SerialPort({
+      path: portPath,
+      baudRate: this.config.serialBaudRate,
+      dataBits: 8,
+      stopBits: 1,
+      parity: "none",
+      autoOpen: false
+    });
+    const portState = this.ensurePortRuntimeState(portPath);
+
+    this.serialPorts.set(portPath, serialPort);
+    this.assemblers.set(portPath, createAssembler());
+
+    serialPort.on("error", (err) => {
+      const message = err instanceof Error ? err.message : String(err);
+      this.stats.lastError = message;
+      portState.open = false;
+      portState.lastError = message;
+      this.logger.error({ err, serialDevice: portPath }, "field gateway serial error");
+    });
+
+    serialPort.on("data", (chunk: Buffer) => {
+      const receivedTs = isoNow();
+      const assembler = this.assemblers.get(portPath);
+      if (!assembler) return;
+
+      this.stats.serialChunks += 1;
+      this.stats.serialBytes += chunk.length;
+      this.stats.lastSerialReadTs = receivedTs;
+
+      portState.serialChunks += 1;
+      portState.serialBytes += chunk.length;
+      portState.lastReadTs = receivedTs;
+
+      for (const payload of assembler.push(chunk)) {
+        void this.handlePayload(payload, portPath);
+      }
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      serialPort.open((err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+
+    portState.open = true;
+    portState.lastOpenTs = isoNow();
+    portState.lastError = null;
+
+    this.logger.info(
+      {
+        serialDevice: portPath,
+        serialBaudRate: this.config.serialBaudRate,
+        mappedNodeCount: portState.mappedNodeCount,
+        enabledNodeCount: portState.enabledNodeCount
+      },
+      "field gateway serial opened"
+    );
+  }
+
+  private async handlePayload(rawPayload: string, sourcePort: string): Promise<void> {
     const candidates = recoverJsonCandidates(rawPayload);
     for (const candidate of candidates) {
-      await this.handlePayloadCandidate(candidate);
+      await this.handlePayloadCandidate(candidate, sourcePort);
     }
   }
 
-  private async handlePayloadCandidate(rawPayload: string): Promise<void> {
+  private async handlePayloadCandidate(rawPayload: string, sourcePort: string): Promise<void> {
     const traceId = newTraceId();
     const receivedTs = isoNow();
     const payloadBytes = Buffer.byteLength(rawPayload, "utf8");
+    const portState = this.ensurePortRuntimeState(sourcePort);
 
     if (payloadBytes > this.config.maxMessageBytes) {
       this.stats.schemaRejected += 1;
       this.stats.lastError = `payload too large (${String(payloadBytes)})`;
-      this.logger.warn({ traceId, payloadBytes }, "field gateway payload too large");
+      this.logger.warn({ traceId, payloadBytes, sourcePort }, "field gateway payload too large");
       return;
     }
 
@@ -459,12 +510,12 @@ class GatewayRuntime {
     } catch (err) {
       this.stats.schemaRejected += 1;
       this.stats.lastError = err instanceof Error ? err.message : String(err);
-      this.logger.warn({ traceId, err }, "field gateway json parse failed");
+      this.logger.warn({ traceId, err, sourcePort }, "field gateway json parse failed");
       return;
     }
 
     if (this.validateCommandAck.validate(parsed)) {
-      await this.publishCommandAck(parsed, rawPayload);
+      await this.publishCommandAck(parsed, rawPayload, sourcePort);
       return;
     }
 
@@ -472,14 +523,19 @@ class GatewayRuntime {
       this.stats.schemaRejected += 1;
       this.stats.lastError = "schema validation failed";
       this.logger.warn(
-        { traceId, telemetryErrors: this.validateEnvelope.errors, ackErrors: this.validateCommandAck.errors },
+        {
+          traceId,
+          sourcePort,
+          telemetryErrors: this.validateEnvelope.errors,
+          ackErrors: this.validateCommandAck.errors
+        },
         "field gateway schema invalid"
       );
       return;
     }
 
     const envelope: TelemetryEnvelopeV1 = parsed;
-    const nodeState = this.resolveNodeForTelemetry(envelope.device_id, traceId);
+    const nodeState = this.resolveNodeForTelemetry(envelope.device_id, traceId, sourcePort);
     if (!nodeState) {
       return;
     }
@@ -489,6 +545,7 @@ class GatewayRuntime {
     nodeState.telemetryMessages += 1;
     nodeState.lastTelemetryTs = receivedTs;
     nodeState.status = "online";
+    portState.telemetryMessages += 1;
 
     const record: SpoolRecord = {
       schema_version: 1,
@@ -501,7 +558,7 @@ class GatewayRuntime {
       payload_bytes: payloadBytes,
       state: "pending",
       source: {
-        serial_device: this.config.serialDevice,
+        serial_device: sourcePort,
         serial_baud_rate: this.config.serialBaudRate
       },
       publish_attempts: 0,
@@ -514,7 +571,7 @@ class GatewayRuntime {
       await this.replayPending("ingest");
     } catch (err) {
       this.stats.lastError = err instanceof Error ? err.message : String(err);
-      this.logger.error({ traceId, err }, "field gateway spool enqueue failed");
+      this.logger.error({ traceId, err, sourcePort }, "field gateway spool enqueue failed");
     }
   }
 
@@ -568,17 +625,21 @@ class GatewayRuntime {
     if (!nodeState) {
       return;
     }
+    const targetPort = this.nodePort(nodeState);
+    const portState = this.ensurePortRuntimeState(targetPort);
 
     try {
-      await this.writeCommandToSerial(rawPayload);
+      await this.writeCommandToSerial(rawPayload, targetPort);
       this.stats.commandsForwarded += 1;
       this.stats.lastCommandForwardedTs = isoNow();
       nodeState.commandForwards += 1;
       nodeState.lastCommandTs = this.stats.lastCommandForwardedTs;
+      portState.commandWrites += 1;
+      portState.lastCommandTs = this.stats.lastCommandForwardedTs;
       this.logger.info(
         {
           topic,
-          serialDevice: this.config.serialDevice,
+          serialDevice: targetPort,
           commandId: command.command_id,
           commandType: command.command_type,
           deviceId: command.device_id,
@@ -589,7 +650,8 @@ class GatewayRuntime {
     } catch (err) {
       this.stats.commandWriteFailures += 1;
       this.stats.lastError = err instanceof Error ? err.message : String(err);
-      this.logger.error({ traceId, topic, err }, "field gateway command serial write failed");
+      portState.lastError = this.stats.lastError;
+      this.logger.error({ traceId, topic, serialDevice: targetPort, err }, "field gateway command serial write failed");
     }
   }
 
@@ -652,6 +714,7 @@ class GatewayRuntime {
     this.logger.info(
       {
         deviceId,
+        sourcePort: record.source.serial_device,
         seq: record.seq,
         topic,
         payloadBytes: record.payload_bytes,
@@ -661,13 +724,14 @@ class GatewayRuntime {
     );
   }
 
-  private async publishCommandAck(ack: DeviceCommandAckV1, rawPayload: string): Promise<void> {
-    const nodeState = this.resolveNodeForAck(ack.device_id, ack.command_id);
+  private async publishCommandAck(ack: DeviceCommandAckV1, rawPayload: string, sourcePort: string): Promise<void> {
+    const nodeState = this.resolveNodeForAck(ack.device_id, ack.command_id, sourcePort);
     if (!nodeState) {
       return;
     }
 
     const topic = ackTopicForDevice(this.config, ack.device_id);
+    const portState = this.ensurePortRuntimeState(sourcePort);
 
     try {
       await this.publishMqtt(topic, rawPayload);
@@ -675,9 +739,12 @@ class GatewayRuntime {
       this.stats.lastAckPublishedTs = isoNow();
       nodeState.ackPublishes += 1;
       nodeState.lastAckTs = this.stats.lastAckPublishedTs;
+      portState.ackMessages += 1;
+      portState.lastAckTs = this.stats.lastAckPublishedTs;
       this.logger.info(
         {
           topic,
+          serialDevice: sourcePort,
           commandId: ack.command_id,
           deviceId: ack.device_id,
           status: ack.status,
@@ -688,7 +755,11 @@ class GatewayRuntime {
     } catch (err) {
       this.stats.ackPublishFailures += 1;
       this.stats.lastError = err instanceof Error ? err.message : String(err);
-      this.logger.error({ err, topic, commandId: ack.command_id }, "field gateway command ack publish failed");
+      portState.lastError = this.stats.lastError;
+      this.logger.error(
+        { err, topic, serialDevice: sourcePort, commandId: ack.command_id },
+        "field gateway command ack publish failed"
+      );
     }
   }
 
@@ -705,20 +776,21 @@ class GatewayRuntime {
     });
   }
 
-  private async writeCommandToSerial(payload: string): Promise<void> {
-    if (!this.serialPort?.isOpen) {
-      throw new Error("serial port is not open");
+  private async writeCommandToSerial(payload: string, portPath: string): Promise<void> {
+    const serialPort = this.serialPorts.get(portPath);
+    if (!serialPort?.isOpen) {
+      throw new Error(`serial port is not open: ${portPath}`);
     }
 
     const serialFrame = `${payload}\n`;
     await new Promise<void>((resolve, reject) => {
-      this.serialPort?.write(serialFrame, "utf8", (err) => {
+      serialPort.write(serialFrame, "utf8", (err) => {
         if (err) {
           reject(err);
           return;
         }
 
-        this.serialPort?.drain((drainErr) => {
+        serialPort.drain((drainErr) => {
           if (drainErr) reject(drainErr);
           else resolve();
         });
@@ -735,15 +807,20 @@ class GatewayRuntime {
       serial: {
         device: this.config.serialDevice,
         baud_rate: this.config.serialBaudRate,
-        open: this.serialPort?.isOpen === true
+        open: this.serialPorts.get(this.config.serialDevice)?.isOpen === true,
+        configuredPorts: Array.from(this.portState.keys()),
+        openPortCount: Array.from(this.serialPorts.values()).filter((port) => port.isOpen).length
       },
       mqtt: {
         url: this.config.mqttUrl,
         connected: this.mqttConnected
       },
       southbound: {
+        routeMode: this.config.southboundNodes.length === 0 ? "legacy-single-port" : "configured-node-routing",
         configuredNodes: this.config.southboundNodes.length,
+        configuredPorts: this.portState.size,
         activeSerialDevice: this.config.serialDevice,
+        ports: Array.from(this.portState.values()),
         nodes: Array.from(this.nodeState.values())
       },
       stats: this.stats
@@ -755,7 +832,7 @@ class GatewayRuntime {
       fieldNodeId: node.fieldNodeId,
       deviceId: node.deviceId,
       installLabel: node.installLabel ?? null,
-      southboundPort: node.southboundPort ?? null,
+      southboundPort: this.normalizePortPath(node.southboundPort),
       enabled: node.enabled,
       telemetryMessages: 0,
       commandForwards: 0,
@@ -767,7 +844,60 @@ class GatewayRuntime {
     };
   }
 
-  private ensureEphemeralNode(deviceId: string): NodeRuntimeState {
+  private createPortRuntimeState(portPath: string): PortRuntimeState {
+    const mappedNodes = Array.from(this.nodeState.values()).filter((node) => this.nodePort(node) === portPath);
+    return {
+      serialDevice: portPath,
+      open: false,
+      mappedNodeCount: mappedNodes.length,
+      enabledNodeCount: mappedNodes.filter((node) => node.enabled).length,
+      mappedDeviceIds: mappedNodes.map((node) => node.deviceId).sort((a, b) => a.localeCompare(b)),
+      telemetryMessages: 0,
+      commandWrites: 0,
+      ackMessages: 0,
+      serialChunks: 0,
+      serialBytes: 0,
+      lastReadTs: null,
+      lastOpenTs: null,
+      lastCommandTs: null,
+      lastAckTs: null,
+      lastError: null
+    };
+  }
+
+  private ensurePortRuntimeState(portPath: string): PortRuntimeState {
+    const existing = this.portState.get(portPath);
+    if (existing) {
+      return existing;
+    }
+
+    const created = this.createPortRuntimeState(portPath);
+    this.portState.set(portPath, created);
+    return created;
+  }
+
+  private normalizePortPath(portPath: string | null | undefined): string {
+    const normalized = (portPath ?? this.config.serialDevice).trim();
+    return normalized.length > 0 ? normalized : this.config.serialDevice;
+  }
+
+  private getConfiguredPortPaths(): string[] {
+    if (this.config.southboundNodes.length === 0) {
+      return [this.config.serialDevice];
+    }
+
+    const ports = new Set<string>();
+    for (const node of this.config.southboundNodes) {
+      ports.add(this.normalizePortPath(node.southboundPort));
+    }
+    return Array.from(ports).sort((a, b) => a.localeCompare(b));
+  }
+
+  private nodePort(nodeState: NodeRuntimeState): string {
+    return this.normalizePortPath(nodeState.southboundPort);
+  }
+
+  private ensureEphemeralNode(deviceId: string, sourcePort: string): NodeRuntimeState {
     const existing = this.nodeState.get(deviceId);
     if (existing) {
       return existing;
@@ -777,7 +907,7 @@ class GatewayRuntime {
       fieldNodeId: `auto:${deviceId.slice(0, 8)}`,
       deviceId,
       installLabel: null,
-      southboundPort: this.config.serialDevice,
+      southboundPort: sourcePort,
       enabled: true,
       telemetryMessages: 0,
       commandForwards: 0,
@@ -788,34 +918,44 @@ class GatewayRuntime {
       status: "configured"
     };
     this.nodeState.set(deviceId, created);
+
+    const portState = this.ensurePortRuntimeState(sourcePort);
+    if (!portState.mappedDeviceIds.includes(deviceId)) {
+      portState.mappedDeviceIds.push(deviceId);
+      portState.mappedDeviceIds.sort((a, b) => a.localeCompare(b));
+      portState.mappedNodeCount += 1;
+      portState.enabledNodeCount += 1;
+    }
+
     return created;
   }
 
-  private resolveNodeForTelemetry(deviceId: string, traceId: string): NodeRuntimeState | null {
+  private resolveNodeForTelemetry(deviceId: string, traceId: string, sourcePort: string): NodeRuntimeState | null {
     if (this.config.southboundNodes.length === 0) {
-      return this.ensureEphemeralNode(deviceId);
+      return this.ensureEphemeralNode(deviceId, sourcePort);
     }
 
     const nodeState = this.nodeState.get(deviceId);
     if (!nodeState) {
       this.stats.schemaRejected += 1;
       this.stats.lastError = `unknown telemetry device ${deviceId}`;
-      this.logger.warn({ traceId, deviceId }, "field gateway telemetry device is not configured");
+      this.logger.warn({ traceId, deviceId, sourcePort }, "field gateway telemetry device is not configured");
       return null;
     }
 
     if (!nodeState.enabled) {
       this.stats.schemaRejected += 1;
       this.stats.lastError = `disabled telemetry device ${deviceId}`;
-      this.logger.warn({ traceId, deviceId }, "field gateway telemetry device is disabled");
+      this.logger.warn({ traceId, deviceId, sourcePort }, "field gateway telemetry device is disabled");
       return null;
     }
 
-    if (nodeState.southboundPort && nodeState.southboundPort !== this.config.serialDevice) {
+    const configuredPort = this.nodePort(nodeState);
+    if (configuredPort !== sourcePort) {
       this.stats.schemaRejected += 1;
-      this.stats.lastError = `telemetry device ${deviceId} belongs to ${nodeState.southboundPort}`;
+      this.stats.lastError = `telemetry device ${deviceId} belongs to ${configuredPort}`;
       this.logger.warn(
-        { traceId, deviceId, configuredPort: nodeState.southboundPort, activePort: this.config.serialDevice },
+        { traceId, deviceId, configuredPort, sourcePort },
         "field gateway telemetry device routed to different southbound port"
       );
       return null;
@@ -826,7 +966,7 @@ class GatewayRuntime {
 
   private resolveNodeForCommand(deviceId: string, traceId: string, topic: string): NodeRuntimeState | null {
     if (this.config.southboundNodes.length === 0) {
-      return this.ensureEphemeralNode(deviceId);
+      return this.ensureEphemeralNode(deviceId, this.config.serialDevice);
     }
 
     const nodeState = this.nodeState.get(deviceId);
@@ -857,31 +997,32 @@ class GatewayRuntime {
     return nodeState;
   }
 
-  private resolveNodeForAck(deviceId: string, commandId: string): NodeRuntimeState | null {
+  private resolveNodeForAck(deviceId: string, commandId: string, sourcePort: string): NodeRuntimeState | null {
     if (this.config.southboundNodes.length === 0) {
-      return this.ensureEphemeralNode(deviceId);
+      return this.ensureEphemeralNode(deviceId, sourcePort);
     }
 
     const nodeState = this.nodeState.get(deviceId);
     if (!nodeState) {
       this.stats.ackPublishFailures += 1;
       this.stats.lastError = `unknown ack device ${deviceId}`;
-      this.logger.warn({ deviceId, commandId }, "field gateway ack device is not configured");
+      this.logger.warn({ deviceId, commandId, sourcePort }, "field gateway ack device is not configured");
       return null;
     }
 
     if (!nodeState.enabled) {
       this.stats.ackPublishFailures += 1;
       this.stats.lastError = `disabled ack device ${deviceId}`;
-      this.logger.warn({ deviceId, commandId }, "field gateway ack device is disabled");
+      this.logger.warn({ deviceId, commandId, sourcePort }, "field gateway ack device is disabled");
       return null;
     }
 
-    if (nodeState.southboundPort && nodeState.southboundPort !== this.config.serialDevice) {
+    const configuredPort = this.nodePort(nodeState);
+    if (configuredPort !== sourcePort) {
       this.stats.ackPublishFailures += 1;
-      this.stats.lastError = `ack device ${deviceId} belongs to ${nodeState.southboundPort}`;
+      this.stats.lastError = `ack device ${deviceId} belongs to ${configuredPort}`;
       this.logger.warn(
-        { deviceId, commandId, configuredPort: nodeState.southboundPort, activePort: this.config.serialDevice },
+        { deviceId, commandId, configuredPort, sourcePort },
         "field gateway ack routed to different southbound port"
       );
       return null;

@@ -262,6 +262,27 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - node stats also advanced:
       - `commandForwards = 1`
       - `ackPublishes = 1`
+- the first multi-port-capable southbound runtime is now also landed:
+  - runtime can now open multiple serial ports derived from `SOUTHBOUND_NODES_JSON`
+  - telemetry and ack are checked against the source port
+  - commands are routed to the node-owned port
+  - health now exposes:
+    - `serial.configuredPorts`
+    - `serial.openPortCount`
+    - `southbound.routeMode`
+    - `southbound.configuredPorts`
+    - `southbound.ports[]`
+  - current implementation line is now explicitly:
+    - `single process, multi southbound ports`
+  - first on-device regression proof after this runtime change is complete:
+    - service remained active on RK3568
+    - telemetry continued to publish from `/dev/ttyS3`
+    - fresh runtime `manual_collect` still closed end-to-end
+    - latest reproved `commandId`:
+      - `19eef434-59ba-40df-9386-869d47421fed`
+    - port-level stats now also advanced:
+      - `commandWrites = 1`
+      - `ackMessages = 1`
 
 ## Constraints
 
@@ -330,12 +351,16 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - explicit southbound-node config model is landed
     - configured-node state is visible in on-device health
     - the configured-node model does not break live telemetry or command closure
+  - second entry inside this stage is now also complete:
+    - multi-port-capable southbound runtime is landed
+    - port-level health is visible on-device
+    - single-node regression stayed green after the runtime refactor
   - next focus should move to:
-    - multi-node southbound configuration for `3 x RK2206`
-    - lift the now-proven single-node downlink path into multi-node routing
-    - decide whether this becomes:
-      - one service instance per southbound port
-      - or one service instance owning multiple ports
+    - attach the second and third southbound ports for real hardware
+    - validate concurrent multi-node ingress on-device
+    - decide whether deployment stays:
+      - one service instance owning multiple ports
+      - or moves to one service instance per port
     - center-side deployment formalization so the field path does not depend on ad hoc host-run helpers
 
 ## Open Questions

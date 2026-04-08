@@ -56,6 +56,28 @@ const configSchema = z
         message: "MQTT_USERNAME and MQTT_PASSWORD must be both set or both empty"
       });
     }
+
+    const deviceIds = new Set<string>();
+    const fieldNodeIds = new Set<string>();
+    for (const [index, node] of data.southboundNodes.entries()) {
+      if (deviceIds.has(node.deviceId)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["southboundNodes", index, "deviceId"],
+          message: `duplicate southbound deviceId: ${node.deviceId}`
+        });
+      }
+      deviceIds.add(node.deviceId);
+
+      if (fieldNodeIds.has(node.fieldNodeId)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["southboundNodes", index, "fieldNodeId"],
+          message: `duplicate southbound fieldNodeId: ${node.fieldNodeId}`
+        });
+      }
+      fieldNodeIds.add(node.fieldNodeId);
+    }
   });
 
 export type AppConfig = z.infer<typeof configSchema>;
