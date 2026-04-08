@@ -549,3 +549,11 @@ Freeze and execute the next major phase after command-route stabilization: prove
   - the next mainline blocker is therefore:
     - enforce an industrial southbound framing/timing rule for ACK vs telemetry on the center XL01 path
     - or introduce a stronger framed transport boundary before RK3568 parsing
+- the RK3568 node proof entrypoint itself is now stronger:
+  - `scripts/dev/run-rk3568-field-gateway-node-command-proof.ps1`
+    now emits a structured `diagnosis` block
+  - it can distinguish:
+    - `ack-blocked-by-shared-stream-byte-interleaving`
+    - `ack-blocked-by-southbound-json-fragmentation`
+    - `command-did-not-forward`
+  - this means the live command proof no longer depends on manually reading long `journalctl` tails before deciding the next corrective action

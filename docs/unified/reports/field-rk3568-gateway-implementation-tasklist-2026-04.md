@@ -408,6 +408,35 @@ RK3568 网关一期算完成，至少要满足：
   - `scripts/dev/set-rk3568-field-gateway-southbound-nodes.ps1`
   - `scripts/dev/check-rk3568-field-gateway-multiport-health.ps1`
 
+## 11.1 2026-04-08 新发现的主阻塞
+
+最新实机 proof 已经进一步说明：
+
+- `cmd/{device_id}` 到共享 `/dev/ttyS3` 的命令转发仍然成立
+- 但在 `A/B` 双节点同口运行时：
+  - `cmd_ack/{device_id}` 仍可能丢失
+- 当前 dominant failure mode 已不再只是“chunk 边界不好”
+- 而是：
+  - ACK payload 与 telemetry payload 在中心 XL01 汇聚后的同一条 southbound 字节流上发生交织
+
+这意味着 RK3568 当前下一步不应继续只做 parser-only 补丁，而应补上：
+
+1. 失败模式自动判定
+- proof 脚本必须能直接标记：
+  - `shared-stream-byte-interleaving`
+  - `southbound-json-fragmentation`
+
+2. 协议层整改入口
+- 明确要求中心 XL01 / RK2206 southbound 链路至少满足其一：
+  - ACK 独占发送窗口
+  - 带边界帧封装的稳定传输
+
+3. 现场证据化
+- 后续命令 proof 不只看：
+  - `commandsForwarded`
+  - `ackMessagesPublished`
+- 还要把 parse failure 的原始片段一起归档
+
 ## 12. 相关文档
 
 - [field-uplink-platform-closure-baseline.md](/E:/学校/02 项目/99 山体滑坡优化完善/landslide-monitoring-v2-mainline/docs/unified/reports/field-uplink-platform-closure-baseline.md)
