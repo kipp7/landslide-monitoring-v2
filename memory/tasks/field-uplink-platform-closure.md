@@ -316,6 +316,16 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - apply node mapping
     - restart gateway
     - verify health
+- the current Windows control host has now also reproved password-mode access for the new helper line:
+  - `show-rk3568-field-gateway-serial-map.ps1 -Password linaro` returned valid JSON from RK3568
+  - current live discovery still shows only:
+    - `/dev/ttyS3` active in gateway runtime
+  - and does not yet show:
+    - `/dev/ttyUSB*`
+    - `/dev/ttyACM*`
+    - `/dev/serial/by-id`
+    - `/dev/serial/by-path`
+  - so the next blocker is now clearly hardware presence of the second and third southbound devices, not scriptability of the control host
 
 ## Constraints
 

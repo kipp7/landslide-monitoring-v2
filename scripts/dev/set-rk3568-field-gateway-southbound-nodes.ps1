@@ -2,8 +2,9 @@
 param(
   [Parameter(Mandatory = $true)]
   [string[]]$NodeSpec,
-  [string]$Host = "192.168.124.172",
+  [string]$BoardHost = "192.168.124.172",
   [string]$User = "linaro",
+  [string]$Password = "",
   [int]$SshPort = 22,
   [string]$EnvFile = "/etc/lsmv2/field-gateway.env",
   [string]$HealthFile = "/var/lib/lsmv2/field-gateway/health/runtime-health.json",
@@ -18,20 +19,59 @@ function Invoke-RemoteBash {
   param(
     [string]$TargetHost,
     [string]$TargetUser,
+    [string]$TargetPassword,
     [int]$TargetPort,
     [string]$ScriptText
   )
 
+  if ($TargetPassword) {
+    $scriptBase64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($ScriptText))
+    $pythonSnippet = @'
+import base64
+import sys
+import paramiko
+
+host = sys.argv[1]
+user = sys.argv[2]
+password = sys.argv[3]
+port = int(sys.argv[4])
+script = base64.b64decode(sys.argv[5]).decode("utf-8")
+
+client = paramiko.SSHClient()
+client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+client.connect(hostname=host, username=user, password=password, port=port, timeout=15, banner_timeout=15, auth_timeout=15)
+stdin, stdout, stderr = client.exec_command("bash -s --", timeout=120)
+stdin.write(script)
+stdin.flush()
+stdin.channel.shutdown_write()
+sys.stdout.write(stdout.read().decode("utf-8", errors="replace"))
+sys.stderr.write(stderr.read().decode("utf-8", errors="replace"))
+code = stdout.channel.recv_exit_status()
+client.close()
+raise SystemExit(code)
+'@
+
+    $pythonSnippet | & python - $TargetHost $TargetUser $TargetPassword ([string]$TargetPort) $scriptBase64
+    return
+  }
+
+  $sshExe = (Get-Command ssh.exe -ErrorAction Stop).Source
   $sshArgs = @(
-    "-p", [string]$TargetPort,
-    "-o", "StrictHostKeyChecking=accept-new",
-    "-o", "ServerAliveInterval=15",
-    "-o", "ServerAliveCountMax=3",
-    "{0}@{1}" -f $TargetUser, $TargetHost,
-    "bash -s --"
+    "-p"
+    ([string]$TargetPort)
+    "-o"
+    "StrictHostKeyChecking=accept-new"
+    "-o"
+    "ServerAliveInterval=15"
+    "-o"
+    "ServerAliveCountMax=3"
+    ("{0}@{1}" -f $TargetUser, $TargetHost)
+    "bash"
+    "-s"
+    "--"
   )
 
-  $ScriptText | & ssh @sshArgs
+  $ScriptText | & $sshExe @sshArgs
 }
 
 function Convert-NodeSpecToObject {
@@ -181,4 +221,4 @@ print(json.dumps(result, ensure_ascii=False, indent=2))
 PY
 "@
 
-Invoke-RemoteBash -TargetHost $Host -TargetUser $User -TargetPort $SshPort -ScriptText $remoteScript
+Invoke-RemoteBash -TargetHost $BoardHost -TargetUser $User -TargetPassword $Password -TargetPort $SshPort -ScriptText $remoteScript

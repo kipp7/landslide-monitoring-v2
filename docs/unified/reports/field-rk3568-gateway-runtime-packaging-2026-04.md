@@ -436,3 +436,33 @@ cat /var/lib/lsmv2/field-gateway/health/runtime-health.json
 - 最后跑 health 验收脚本
 
 这样可以减少临时手工操作，把 RK3568 多节点接入收口到一条更稳定的现场操作线。
+
+## 17. 2026-04-08 当前 Windows 主机已复证密码式 SSH 入口可用
+
+在本机未配置 RK3568 SSH 免密 key 的情况下，当前三条 Windows 侧脚本已经补上 `-Password` 支持。
+
+1. 当前已复证可直接使用：
+- `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\show-rk3568-field-gateway-serial-map.ps1 -Password linaro`
+
+2. 本次实机发现结论：
+- `show-rk3568-field-gateway-serial-map.ps1 -Password linaro` 已成功返回 JSON
+- RK3568 当前可见候选串口只有：
+  - `/dev/ttyS1`
+  - `/dev/ttyS3`
+  - `/dev/ttyS4`
+  - `/dev/ttyS7`
+  - `/dev/ttyS8`
+  - `/dev/ttyS9`
+- 当前没有发现：
+  - `/dev/ttyUSB*`
+  - `/dev/ttyACM*`
+  - `/dev/serial/by-id`
+  - `/dev/serial/by-path`
+- 当前运行态仍然只有：
+  - 节点 `A`
+  - `southboundPort = /dev/ttyS3`
+  - `configuredPorts = 1`
+
+3. 因此下一步的硬前提已经明确：
+- 第二、第三节点接入前，必须先让 RK3568 侧出现新的真实 southbound 设备
+- 否则当前还不能进入多节点落板和 health 验收
