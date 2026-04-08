@@ -663,6 +663,70 @@ RK3568 网关一期算完成，至少要满足：
 - 补双节点长窗口证据
 - 把 node `C` 接入验收包提前写死
 
+## 11.8 2026-04-09 板端单入口 acceptance 已固定
+
+为避免后续继续靠三条分散命令人工拼接 RK3568 板端复核，当前已经冻结一条统一入口：
+
+- `scripts/dev/check-rk3568-field-gateway-acceptance.ps1`
+
+这条入口当前固定串起：
+
+1. 可选重新部署
+- `install-rk3568-field-gateway.ps1`
+
+2. 板上 runtime 快照
+- `check-rk3568-field-gateway-runtime.ps1`
+
+3. 严格命令闭环 proof
+- `run-rk3568-field-gateway-node-command-proof.ps1`
+
+当前它的作用边界很明确：
+
+- 不引入新的 northbound 合同
+- 不替代 strict baseline / stable retry 双轨
+- 只负责把“当前板端是否达到可复核、可交接状态”压成一条命令
+
+它的最小接受条件固定为：
+
+- `lsmv2-field-gateway.service = active + enabled`
+- `mqtt.connected = true`
+- `serial.open = true`
+- `southbound.routeMode = configured-node-routing`
+- `configuredNodes = 3`
+- `node A = online`
+- `node B = online`
+- `node C = configured|online`
+- topic contract 仍为：
+  - `telemetry/{device_id}`
+  - `cmd/{device_id}`
+  - `cmd_ack/{device_id}`
+- 指定节点 strict command proof 必须拿到：
+  - `passed = true`
+  - `ack status = acked`
+
+当前最新实机结果已经证明这条入口可用：
+
+- `DeployMode = install`
+- `accepted = true`
+- `currentBoundary = board-runtime-and-command-proof-ready`
+- warmup:
+  - `satisfied = true`
+  - `elapsedSeconds = 5`
+- 最新 strict proof：
+  - `deviceId = 00000000-0000-0000-0000-000000000002`
+  - `action = manual_collect`
+  - `commandId = 4a0735c2-5a77-4bc0-8135-04805a0bd0a0`
+  - `ack status = acked`
+  - `parseFailureCount = 0`
+
+因此，当前 RK3568 这条线也和中心侧一样，已经开始从：
+
+- “有若干脚本能分别跑”
+
+进入：
+
+- “有一条可重复的 acceptance 入口”
+
 ## 12. 相关文档
 
 - [field-uplink-platform-closure-baseline.md](/E:/学校/02 项目/99 山体滑坡优化完善/landslide-monitoring-v2-mainline/docs/unified/reports/field-uplink-platform-closure-baseline.md)

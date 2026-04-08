@@ -963,3 +963,26 @@ Freeze and execute the next major phase after command-route stabilization: prove
   - `minimum viable gateway`
   - to:
   - `systemd-managed gateway that can survive transient UART loss`
+- the RK3568 board-side acceptance line now also has a frozen single entrypoint:
+  - `scripts/dev/check-rk3568-field-gateway-acceptance.ps1`
+- that entrypoint intentionally composes:
+  - `install-rk3568-field-gateway.ps1`
+  - `check-rk3568-field-gateway-runtime.ps1`
+  - `run-rk3568-field-gateway-node-command-proof.ps1`
+- the acceptance truth file is now:
+  - `docs/unified/reports/field-rk3568-gateway-acceptance-latest.json`
+- this narrows the current RK3568 operating target again:
+  - one frozen deploy/runtime/proof entry
+  - one strict report artifact
+  - one board-side handoff line that matches the already-frozen center acceptance style
+- the acceptance entry itself is now reproved in both modes:
+  - `DeployMode = skip`
+  - `DeployMode = install`
+- the latest install-backed acceptance result is:
+  - `accepted = true`
+  - `currentBoundary = board-runtime-and-command-proof-ready`
+  - warmup satisfied after `5s`
+  - strict node `B manual_collect` proof:
+    - `commandId = 4a0735c2-5a77-4bc0-8135-04805a0bd0a0`
+    - `ackStatus = acked`
+    - `parseFailureCount = 0`

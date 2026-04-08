@@ -1,0 +1,227 @@
+﻿{
+    "generatedAt":  "2026-04-08T18:33:28Z",
+    "accepted":  true,
+    "mode":  "rk3568-field-gateway-acceptance",
+    "deployMode":  "install",
+    "currentBoundary":  "board-runtime-and-command-proof-ready",
+    "board":  {
+                  "host":  "192.168.124.172",
+                  "sshPort":  22,
+                  "repoRoot":  "/home/linaro/landslide-monitoring-v2-mainline",
+                  "southboundSerialDevice":  "/dev/ttyS3",
+                  "southboundBaudRate":  "115200",
+                  "mqttUrl":  "mqtt://192.168.124.17:1883"
+              },
+    "contract":  {
+                     "telemetryTopicPrefix":  "telemetry/",
+                     "commandTopicPrefix":  "cmd/",
+                     "ackTopicPrefix":  "cmd_ack/"
+                 },
+    "warmup":  {
+                   "applied":  true,
+                   "satisfied":  true,
+                   "timeoutSeconds":  60,
+                   "pollSeconds":  5,
+                   "elapsedSeconds":  5
+               },
+    "deploy":  {
+                   "mode":  "install",
+                   "serviceActive":  "active",
+                   "serviceEnabled":  "enabled",
+                   "mainPid":  "MainPID=1265299\nExecMainStartTimestamp=Thu 2026-04-09 02:33:07 CST\nExecMainStatus=0\nActiveState=active\nSubState=running\nFragmentPath=/etc/systemd/system/lsmv2-field-gateway.service"
+               },
+    "runtime":  {
+                    "report":  "docs/unified/reports/field-rk3568-gateway-runtime-latest.json",
+                    "serviceActive":  "active",
+                    "serviceEnabled":  "enabled",
+                    "mqttConnected":  true,
+                    "serialOpen":  true,
+                    "routeMode":  "configured-node-routing",
+                    "configuredNodes":  3,
+                    "configuredPorts":  1,
+                    "spoolPending":  0,
+                    "schemaRejected":  0,
+                    "port":  {
+                                 "serialDevice":  "/dev/ttyS3",
+                                 "open":  true,
+                                 "reconnectScheduled":  false,
+                                 "mappedNodeCount":  3,
+                                 "enabledNodeCount":  2,
+                                 "mappedDeviceIds":  [
+                                                         "00000000-0000-0000-0000-000000000001",
+                                                         "00000000-0000-0000-0000-000000000002",
+                                                         "00000000-0000-0000-0000-000000000003"
+                                                     ],
+                                 "telemetryMessages":  2,
+                                 "commandWrites":  0,
+                                 "ackMessages":  0,
+                                 "reconnectAttempts":  0,
+                                 "consecutiveReconnectFailures":  0,
+                                 "serialChunks":  47,
+                                 "serialBytes":  1283,
+                                 "lastReadTs":  "2026-04-08T18:33:15.917Z",
+                                 "lastOpenTs":  "2026-04-08T18:33:10.207Z",
+                                 "lastCloseTs":  null,
+                                 "lastCommandTs":  null,
+                                 "lastAckTs":  null,
+                                 "lastReconnectTs":  null,
+                                 "lastReconnectReason":  null,
+                                 "lastError":  null,
+                                 "status":  "online"
+                             },
+                    "nodes":  [
+                                  {
+                                      "fieldNodeId":  "A",
+                                      "deviceId":  "00000000-0000-0000-0000-000000000001",
+                                      "installLabel":  "FIELD-NODE-A",
+                                      "southboundPort":  "/dev/ttyS3",
+                                      "enabled":  true,
+                                      "telemetryMessages":  1,
+                                      "commandForwards":  0,
+                                      "ackPublishes":  0,
+                                      "lastTelemetryTs":  "2026-04-08T18:33:15.917Z",
+                                      "lastCommandTs":  null,
+                                      "lastAckTs":  null,
+                                      "status":  "online"
+                                  },
+                                  {
+                                      "fieldNodeId":  "B",
+                                      "deviceId":  "00000000-0000-0000-0000-000000000002",
+                                      "installLabel":  "FIELD-NODE-B",
+                                      "southboundPort":  "/dev/ttyS3",
+                                      "enabled":  true,
+                                      "telemetryMessages":  1,
+                                      "commandForwards":  0,
+                                      "ackPublishes":  0,
+                                      "lastTelemetryTs":  "2026-04-08T18:33:14.533Z",
+                                      "lastCommandTs":  null,
+                                      "lastAckTs":  null,
+                                      "status":  "online"
+                                  },
+                                  {
+                                      "fieldNodeId":  "C",
+                                      "deviceId":  "00000000-0000-0000-0000-000000000003",
+                                      "installLabel":  "FIELD-NODE-C",
+                                      "southboundPort":  "/dev/ttyS3",
+                                      "enabled":  false,
+                                      "telemetryMessages":  0,
+                                      "commandForwards":  0,
+                                      "ackPublishes":  0,
+                                      "lastTelemetryTs":  null,
+                                      "lastCommandTs":  null,
+                                      "lastAckTs":  null,
+                                      "status":  "configured"
+                                  }
+                              ]
+                },
+    "commandProof":  {
+                         "report":  "docs/unified/reports/field-rk3568-gateway-node-command-proof-latest.json",
+                         "deviceId":  "00000000-0000-0000-0000-000000000002",
+                         "action":  "manual-collect",
+                         "passed":  true,
+                         "commandId":  "4a0735c2-5a77-4bc0-8135-04805a0bd0a0",
+                         "ackStatus":  "acked",
+                         "diagnosisSummary":  "command-forward-and-ack-publish-succeeded",
+                         "parseFailureCount":  0,
+                         "commandForwardsBefore":  0,
+                         "commandForwardsAfter":  1,
+                         "ackPublishesBefore":  0,
+                         "ackPublishesAfter":  1
+                     },
+    "checks":  [
+                   {
+                       "key":  "serviceActive",
+                       "ok":  true,
+                       "actual":  "active",
+                       "expected":  "active"
+                   },
+                   {
+                       "key":  "serviceEnabled",
+                       "ok":  true,
+                       "actual":  "enabled",
+                       "expected":  "enabled"
+                   },
+                   {
+                       "key":  "mqttConnected",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "serialOpen",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "southboundRouteMode",
+                       "ok":  true,
+                       "actual":  "configured-node-routing",
+                       "expected":  "configured-node-routing"
+                   },
+                   {
+                       "key":  "configuredNodes",
+                       "ok":  true,
+                       "actual":  3,
+                       "expected":  3
+                   },
+                   {
+                       "key":  "enabledNodeCount",
+                       "ok":  true,
+                       "actual":  2,
+                       "expected":  2
+                   },
+                   {
+                       "key":  "nodeAOnline",
+                       "ok":  true,
+                       "actual":  "online",
+                       "expected":  "online"
+                   },
+                   {
+                       "key":  "nodeBOnline",
+                       "ok":  true,
+                       "actual":  "online",
+                       "expected":  "online"
+                   },
+                   {
+                       "key":  "nodeCPrepared",
+                       "ok":  true,
+                       "actual":  "configured",
+                       "expected":  "configured|online"
+                   },
+                   {
+                       "key":  "telemetryTopicPrefix",
+                       "ok":  true,
+                       "actual":  "telemetry/",
+                       "expected":  "telemetry/"
+                   },
+                   {
+                       "key":  "commandTopicPrefix",
+                       "ok":  true,
+                       "actual":  "cmd/",
+                       "expected":  "cmd/"
+                   },
+                   {
+                       "key":  "ackTopicPrefix",
+                       "ok":  true,
+                       "actual":  "cmd_ack/",
+                       "expected":  "cmd_ack/"
+                   },
+                   {
+                       "key":  "commandProofPassed",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "commandProofAckStatus",
+                       "ok":  true,
+                       "actual":  "acked",
+                       "expected":  "acked"
+                   }
+               ],
+    "nextUse":  [
+                    "board runtime + strict command proof: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\check-rk3568-field-gateway-acceptance.ps1 -DeployMode skip -Password \u003cpassword\u003e",
+                    "board redeploy + runtime + strict command proof: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\check-rk3568-field-gateway-acceptance.ps1 -DeployMode install -Password \u003cpassword\u003e"
+                ]
+}
