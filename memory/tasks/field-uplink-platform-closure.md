@@ -643,3 +643,49 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - `manual_collect`
     - `set_config`
     both deterministically return `status=acked`
+- the latest strict baseline rerun has now shifted the failure point again:
+  - entry:
+    - `scripts/dev/run-rk3568-shared-port-two-node-baseline.ps1`
+  - latest result:
+    - `conclusion = baseline-failed-and-restore-state-unknown`
+  - `manual_collect`
+    - `commandId = 4e3d7a15-9908-434d-a88a-3dd3d8896934`
+    - `passed = true`
+    - `status = acked`
+  - `set-report-5`
+    - `commandId = e36b3829-3269-4f98-a50d-8b96ad5a5924`
+    - `passed = false`
+  - the most important new evidence is no longer only counters:
+    - `journalctl` now shows one broken payload snippet containing both:
+      - telemetry `event_ts`
+      - ACK `schema_version`
+      - the same `command_id`
+      - `ack_ts`
+    - this is direct proof that ACK JSON is still being torn by byte-level interleaving on the shared `/dev/ttyS3` stream
+- this means the immediate truth is now explicitly dual-track:
+  - strict baseline is still a quality gate and is not yet deterministic
+  - but the field line still needs an executable command entry while node `C` is unavailable
+- to avoid stalling on single-shot timing noise, a new operational wrapper is now landed:
+  - `scripts/dev/run-rk3568-field-gateway-node-command-stable.ps1`
+  - it preserves the existing strict proof script as the underlying verifier
+  - it adds bounded retries for shared-port field operation without redefining the strict success rule
+- latest stable-entry evidence already confirms the wrapper is viable:
+  - `manual_collect`
+    - `commandId = 00d008e2-5d69-475f-b8e4-c6f09ba7be72`
+    - `status = acked`
+    - `conclusion = single-shot-proof-succeeded`
+  - `set-report-5`
+    - `commandId = 2c53161c-bdc1-42a5-80cb-37f53abff8ab`
+    - `status = acked`
+    - `conclusion = single-shot-proof-succeeded`
+  - additional short-run evidence:
+    - three consecutive `manual_collect` stable-entry runs all returned:
+      - `conclusion = single-shot-proof-succeeded`
+      - `status = acked`
+- the current mainline should therefore stay disciplined:
+  - use `run-rk3568-shared-port-two-node-baseline.ps1`
+    as the strict acceptance gate
+  - use `run-rk3568-field-gateway-node-command-stable.ps1`
+    as the current field-operation command entry
+  - do not claim the shared-port line is fully deterministic yet
+  - do not block the rest of April work on waiting for every strict rerun to be green

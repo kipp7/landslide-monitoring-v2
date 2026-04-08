@@ -259,3 +259,114 @@ permalink: landslide-monitoring-v2-mainline/docs/unified/reports/field-rk3568-sh
 - 中心部署继续收口
 
 而不会因为第三块板延迟就让主线停住。
+
+## 10. 2026-04-08 最新收口
+
+### 10.1 严格基线仍未稳定
+
+最新一轮严格基线复跑：
+
+- 入口：
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\run-rk3568-shared-port-two-node-baseline.ps1 -Password linaro`
+- 结论：
+  - `baseline-failed-and-restore-state-unknown`
+- 失败点：
+  - `set-report-5`
+- 失败命令：
+  - `commandId = e36b3829-3269-4f98-a50d-8b96ad5a5924`
+
+这轮的价值不在于又一次“失败”，而在于失败形态已经更清楚：
+
+- `manual_collect`
+  - `commandId = 4e3d7a15-9908-434d-a88a-3dd3d8896934`
+  - `passed = true`
+  - `status = acked`
+- `set-report-300`
+  - 已执行
+- `set-report-5`
+  - `passed = false`
+  - `nodeStatus = offline`
+
+更关键的是，日志里已经直接出现 ACK 帧和 telemetry 帧交织的证据，原始片段包含：
+
+- 同一段损坏 payload 中同时出现：
+  - telemetry `event_ts`
+  - ACK `schema_version`
+  - `command_id = e36b3829-3269-4f98-a50d-8b96ad5a5924`
+  - `ack_ts`
+
+这说明当前 strict baseline 的主问题已经不是“没有 ACK 语义”，而是：
+
+- 同一条 `/dev/ttyS3` 聚合串流里
+- ACK JSON 在进入 RK3568 时仍然会和 telemetry 字节级交织
+- 单次 proof 仍然可能被这种交织击穿
+
+### 10.2 新增现场稳定入口
+
+为了不让现场操作继续被单次时序卡住，当前新增稳定入口：
+
+- `scripts/dev/run-rk3568-field-gateway-node-command-stable.ps1`
+
+设计原则：
+
+- 不替代严格基线
+- 不放宽严格 proof 的定义
+- 仅作为共享串口现场操作入口
+- 用有界重试把“间歇性单发失败”收敛为可执行命令线
+
+### 10.3 最新稳定入口实跑事实
+
+1. `manual_collect`
+
+- 入口：
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\run-rk3568-field-gateway-node-command-stable.ps1 -DeviceId 00000000-0000-0000-0000-000000000002 -Action manual-collect -Password linaro -MaxAttempts 3 -RetryDelaySeconds 2`
+- 最新成功样本：
+  - `commandId = 00d008e2-5d69-475f-b8e4-c6f09ba7be72`
+  - `status = acked`
+  - `conclusion = single-shot-proof-succeeded`
+
+2. `set-report-5`
+
+- 入口：
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\run-rk3568-field-gateway-node-command-stable.ps1 -DeviceId 00000000-0000-0000-0000-000000000002 -Action set-report-5 -Password linaro -MaxAttempts 3 -RetryDelaySeconds 2`
+- 最新成功样本：
+  - `commandId = 2c53161c-bdc1-42a5-80cb-37f53abff8ab`
+  - `status = acked`
+  - `conclusion = single-shot-proof-succeeded`
+
+3. `manual_collect` 连续短跑
+
+连续 `3` 次稳定入口短跑结果均为：
+
+- `conclusion = single-shot-proof-succeeded`
+- `status = acked`
+
+因此，到 2026-04-08 这一轮为止，当前主线应冻结为双轨：
+
+1. 严格验收轨
+- 入口：
+  - `run-rk3568-shared-port-two-node-baseline.ps1`
+- 作用：
+  - 判断共享口是否已经达到“单次 deterministic 闭环”
+
+2. 现场操作轨
+- 入口：
+  - `run-rk3568-field-gateway-node-command-stable.ps1`
+- 作用：
+  - 在第三块板未到位前，给当前两节点共享口提供可执行、可重复的命令入口
+
+### 10.4 下一阶段不再纠缠的点
+
+第三块板未到之前，当前不应再把主线耗在：
+
+- 追求每一轮 strict baseline 必须马上单发全绿
+
+下一阶段应该并行推进：
+
+1. 保留 strict baseline 作为质量门
+2. 现场命令统一走 stable 入口
+3. 为 `node C` 保留接入位
+4. 继续推进：
+  - RK3568 生产骨架
+  - RK2206 第三节点预留
+  - 中心部署与软件接口收口
