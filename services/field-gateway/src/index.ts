@@ -353,6 +353,10 @@ function extractSchemaVersionJsonObjects(input: string): string[] {
   return out;
 }
 
+function isSouthboundSchemaCandidate(candidate: string): boolean {
+  return candidate.includes("\"schema_version\"");
+}
+
 function recoverJsonCandidates(rawPayload: string): string[] {
   const normalized = rawPayload.trim();
   if (normalized.length === 0) return [];
@@ -366,7 +370,8 @@ function recoverJsonCandidates(rawPayload: string): string[] {
 
   const balanced = extractBalancedJsonObjects(normalized)
     .map((item) => item.trim())
-    .filter((item) => item.length > 0);
+    .filter((item) => item.length > 0)
+    .filter(isSouthboundSchemaCandidate);
   if (balanced.length > 0) {
     return balanced;
   }
@@ -381,18 +386,18 @@ function recoverJsonCandidates(rawPayload: string): string[] {
     .filter((line) => line.length > 0);
 
   if (lines.length <= 1) {
-    return [normalized];
+    return isSouthboundSchemaCandidate(normalized) ? [normalized] : [];
   }
 
   const telemetryLines = lines.filter(
-    (line) => line.startsWith("{") && line.endsWith("}") && line.includes("\"schema_version\"") && line.includes("\"device_id\"")
+    (line) => line.startsWith("{") && line.endsWith("}") && isSouthboundSchemaCandidate(line) && line.includes("\"device_id\"")
   );
 
   if (telemetryLines.length > 0) {
     return telemetryLines;
   }
 
-  return [normalized];
+  return isSouthboundSchemaCandidate(normalized) ? [normalized] : [];
 }
 
 function normalizeTelemetryEnvelopeCandidate(parsed: unknown): TelemetryEnvelopeV1 | null {

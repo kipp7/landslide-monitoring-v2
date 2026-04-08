@@ -10,7 +10,7 @@ permalink: landslide-monitoring-v2-mainline/docs/unified/reports/field-rk3568-ga
 
 - topic: `field-rk3568-gateway-runtime-packaging`
 - state: `runtime-packaging-frozen`
-- updated_at: `2026-04-08`
+- updated_at: `2026-04-09`
 - authority: `current`
 
 ## 1. 这份文档解决什么问题
@@ -770,3 +770,116 @@ cat /var/lib/lsmv2/field-gateway/health/runtime-health.json
   - 共享 `/dev/ttyS3` 解析噪声还在
   - 这轮补的是正式部署线
   - 不是宣布 shared-stream hardening 已完成
+
+## 22. 2026-04-09 第二轮 parser 候选过滤已落板并完成串行复查
+
+在第一轮 parser hardening 和正式源码同步部署线都已成立之后，本轮继续做了一个更窄、更保守的候选过滤补丁。
+
+1. 当前代码变更边界：
+- `services/field-gateway/src/index.ts`
+- 新增：
+  - `isSouthboundSchemaCandidate(candidate)`
+- `recoverJsonCandidates()` 现在会：
+  - 对 balanced JSON 候选先过滤掉不含 `"schema_version"` 的对象
+  - 对单行或整段 fallback 候选，若不含 `"schema_version"`，直接返回空候选
+- 这轮目标不是重写协议
+- 而是阻断：
+  - 纯 telemetry 尾段
+  - 纯 meta 残片
+  - 被拼出来但根本不是 southbound 标准包的 JSON 碎片
+
+2. 当前本地校验结果：
+- `npm run build --workspace @lsmv2/field-gateway`
+- `npm run lint --workspace @lsmv2/field-gateway`
+- 两条都已通过
+
+3. 当前实机串行复查证据：
+- 权威快照：
+  - `.tmp/rk3568-field-gateway-runtime-after-candidate-filter-recheck.json`
+- 快照时间：
+  - `2026-04-08T16:06:07Z`
+- 当前服务真值：
+  - `MainPID = 1087155`
+  - `ExecMainStartTimestamp = Thu 2026-04-09 00:05:42 CST`
+- 当前早期窗口运行真值：
+  - `node A = online`
+  - `node B = online`
+  - `node C = configured`
+  - `parsedMessages = 7`
+  - `publishedMessages = 7`
+  - `schemaRejected = 0`
+  - `lastError = null`
+
+4. 当前命令回归结果：
+- 权威 proof：
+  - `.tmp/rk3568-node-b-manual-collect-after-candidate-filter-recheck.json`
+- 目标节点：
+  - `node B`
+- 行为：
+  - `manual_collect`
+- 当前结果：
+  - `conclusion = shared-port-command-succeeded-after-retry`
+- 第 1 次尝试失败：
+  - `summary = ack-blocked-by-southbound-json-fragmentation`
+  - `parseFailureCount = 2`
+- 第 2 次尝试成功：
+  - `commandId = c5b847fc-adfe-403c-8726-773e0a16ece2`
+  - `ackStatus = acked`
+  - `summary = command-forward-and-ack-publish-succeeded`
+  - `parseFailureCount = 3`
+  - `failureModes = southbound-json-fragmentation`
+
+5. 当前应如何解释这轮收益：
+- 这轮新过滤已经真实压掉一类“非 schema JSON 候选”噪声
+- 所以新进程早期窗口重新出现了：
+  - `schemaRejected = 0`
+- 但它没有把共享口彻底做成 deterministic
+- 因为同一轮 node `B` 证明仍然需要：
+  - bounded retry
+- 当前剩余 dominant failure 仍然是：
+  - `southbound-json-fragmentation`
+
+## 23. 2026-04-09 三节点数据量预算已按实测 payload 冻结
+
+为了避免在 node `C` 到货前继续用猜测讨论容量，本轮直接按 RK3568 实机 journal 的 telemetry `payloadBytes` 做了第一版预算。
+
+1. 当前实测输入：
+- node `A` telemetry `payloadBytes`：
+  - 约 `604` 到 `614`
+  - 当前均值约 `611.16`
+- node `B` telemetry `payloadBytes`：
+  - 约 `646` 到 `661`
+  - 当前均值约 `653.53`
+- 当前双节点规划均值：
+  - 约 `632` bytes / message
+
+2. 按 `report_interval_s = 5` 的三节点 raw telemetry 预算：
+- 每节点每天上报：
+  - `17,280` 条
+- 三节点每天上报：
+  - `51,840` 条
+- 按 `632 bytes / message` 估算：
+  - `32,762,880 bytes / day`
+  - 约 `31.25 MiB / day`
+- 按更保守的 `650 bytes / message` 估算：
+  - 约 `32.14 MiB / day`
+- 按串口入口侧更保守的 `700 bytes / message` 有效预算：
+  - 约 `34.61 MiB / day`
+
+3. 当前月度预算：
+- 按 `632 bytes / message`：
+  - 约 `0.92 GiB / 30 days`
+- 这个量级说明：
+  - RK3568 本地 spool 和中心侧存储都不该按“消息很小可以忽略”来写
+  - 但它也没有大到需要现在就引入重型边缘消息系统
+
+4. 命令链额外流量预算：
+- 当前一次命令 publish 大约：
+  - `244 bytes`
+- 当前一次 ACK publish 大约：
+  - `234 bytes`
+- 一次最小命令往返：
+  - `478 bytes`
+- 即使按 `100 commands / day` 估算：
+  - 额外流量约 `46.68 KiB / day`
+- 相比 telemetry 主流量，可以视为次要量级

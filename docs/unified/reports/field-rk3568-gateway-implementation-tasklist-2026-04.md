@@ -10,7 +10,7 @@ permalink: landslide-monitoring-v2-mainline/docs/unified/reports/field-rk3568-ga
 
 - topic: `field-rk3568-gateway-implementation`
 - state: `implementation-tasklist-frozen`
-- updated_at: `2026-04-08`
+- updated_at: `2026-04-09`
 - authority: `current`
 
 ## 1. 这份任务单解决什么问题
@@ -556,6 +556,106 @@ RK3568 网关一期算完成，至少要满足：
   - `1 条 /dev/ttyS3`
   - `manual_collect + set_config`
   收到真正稳定的 `status=acked`
+
+## 11.5 2026-04-09 新 parser 候选过滤后的当前执行判断
+
+最新第二轮 parser 候选过滤已经把一类“非 schema JSON 候选”噪声从候选池里剔掉，并且完成了串行实机复查。
+
+1. 当前新事实：
+- RK3568 最新复查窗口：
+  - `node A = online`
+  - `node B = online`
+  - `node C = configured`
+  - `parsedMessages = 7`
+  - `publishedMessages = 7`
+  - `schemaRejected = 0`
+  - `lastError = null`
+- 这说明新过滤已经对早期窗口生效
+
+2. 但当前不应误判为“共享口稳定收口”：
+- 同轮 node `B manual_collect` proof 仍然是：
+  - 第 1 次失败
+  - 第 2 次成功
+- 当前最新结论仍然是：
+  - `shared-port-command-succeeded-after-retry`
+- 剩余 failure mode 仍然集中在：
+  - `southbound-json-fragmentation`
+
+3. 因此当前主线判断更新为：
+- parser hardening 已继续前进
+- 但 strict quality gate 还不能撤
+- 现场命令入口仍应保留：
+  - strict baseline
+  - stable bounded-retry entry
+
+## 11.6 2026-04-09 node C 到货前两天的冻结执行包
+
+考虑到 node `C` 预计约两天后接入，当前不再继续泛化讨论，而是冻结一个明确的 pre-node-`C` 执行包。
+
+1. 第一包：冻结已成立的入口，不再反复改部署线
+- 保持当前正式入口冻结：
+  - `scripts/dev/install-rk3568-field-gateway.ps1`
+  - `scripts/dev/check-rk3568-field-gateway-runtime.ps1`
+- 除非入口本身损坏，否则这两天不再重构安装/快照链
+
+2. 第二包：继续压共享口噪声，但只做窄补丁
+- 继续围绕：
+  - `services/field-gateway/src/index.ts`
+  做更窄的 parser / framing hardening
+- 约束保持：
+  - 不改 northbound contract
+  - 不改 southbound 设备协议定义
+  - 不把共享口问题写成“已根治”
+
+3. 第三包：把双节点长窗口事实先补齐
+- 在 node `C` 到货前，先拿到更长时间窗的：
+  - `A + B` telemetry 连续性
+  - `schemaRejected`
+  - `publishFailures`
+  - `spoolPending`
+  观测
+- 目标不是“单次 lucky green”
+- 而是确认：
+  - 共享口在较长窗口里的噪声量级
+  - 当前补丁是否真的在压低 reject rate
+
+4. 第四包：预定义 node `C` 的统一验收条件
+- node `C` 接入后第一批验收必须固定为：
+  - `/dev/ttyS3` 串流出现 `device_id = 00000000-0000-0000-0000-000000000003`
+  - RK3568 `runtime-health.json` 中：
+    - `node C = online`
+  - 三节点 `10` 到 `15` 分钟 telemetry 连续
+  - 先复跑 node `B manual_collect`
+  - 再跑 node `C manual_collect`
+  - 再做一次 `set_config` 回归
+
+5. 第五包：按当前实测先冻结三节点容量预算
+- 按 `5s` 上报频率：
+  - 三节点每天 telemetry 约 `31.25 MiB`
+  - 更保守预算约 `32.14` 到 `34.61 MiB / day`
+- 当前工程含义是：
+  - 本地 spool 上限
+  - 中心侧月度存储
+  - 证据文件保留策略
+  都应开始按这个量级来设
+
+## 11.7 2026-04-09 当前阶段结论
+
+在 node `C` 未到之前，当前阶段已经不是“卡死”，而是处于明确的收口窗口：
+
+1. 已冻结不再重开的部分
+- northbound 合同
+- RK3568 正式源码同步部署线
+- Windows 侧运行快照入口
+
+2. 当前仍是 blocker 的部分
+- 共享 `/dev/ttyS3` 的 strict deterministic command closure
+- `southbound-json-fragmentation` 噪声
+
+3. 这两天最应该做的事
+- 用窄补丁继续压 reject/noise
+- 补双节点长窗口证据
+- 把 node `C` 接入验收包提前写死
 
 ## 12. 相关文档
 

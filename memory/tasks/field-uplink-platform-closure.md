@@ -834,3 +834,74 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - now keep that line frozen and continue:
       - next parser/framing hardening pass
       - node `C` preparation on the still-shared `/dev/ttyS3` stream
+- the next parser hardening increment is now also landed and deployed:
+  - `services/field-gateway/src/index.ts`
+    now rejects balanced or fallback JSON candidates that do not contain:
+    - `"schema_version"`
+  - this narrows the candidate pool before schema validation instead of trying to parse every balanced fragment
+- the authoritative serial recheck after that deploy now exists:
+  - `.tmp/rk3568-field-gateway-runtime-after-candidate-filter-recheck.json`
+  - `generatedAt = 2026-04-08T16:06:07Z`
+  - new process truth:
+    - `MainPID = 1087155`
+    - `ExecMainStartTimestamp = Thu 2026-04-09 00:05:42 CST`
+  - early post-restart health truth:
+    - `node A = online`
+    - `node B = online`
+    - `node C = configured`
+    - `parsedMessages = 7`
+    - `publishedMessages = 7`
+    - `schemaRejected = 0`
+    - `lastError = null`
+- this does not close the shared-port problem completely:
+  - the authoritative node `B` proof after the same deploy is:
+    - `.tmp/rk3568-node-b-manual-collect-after-candidate-filter-recheck.json`
+    - `conclusion = shared-port-command-succeeded-after-retry`
+  - attempt 1 still failed with:
+    - `summary = ack-blocked-by-southbound-json-fragmentation`
+    - `parseFailureCount = 2`
+  - attempt 2 succeeded with:
+    - `commandId = c5b847fc-adfe-403c-8726-773e0a16ece2`
+    - `ackStatus = acked`
+    - `parseFailureCount = 3`
+    - `failureModes = southbound-json-fragmentation`
+- current engineering interpretation is therefore tighter:
+  - the new filter likely removed one whole noise class:
+    - non-schema balanced JSON fragments
+  - but the shared `/dev/ttyS3` line is still not deterministic under strict single-shot proof
+  - the remaining dominant issue is still:
+    - `southbound-json-fragmentation`
+- the current three-node traffic/storage estimate is now frozen from observed RK3568 payload sizes instead of guesswork:
+  - node `A` telemetry payloads are roughly:
+    - `604` to `614` bytes
+    - mean about `611.16`
+  - node `B` telemetry payloads are roughly:
+    - `646` to `661` bytes
+    - mean about `653.53`
+  - planning average:
+    - about `632` bytes per telemetry message
+  - at `5s` report interval:
+    - per node per day:
+      - `17,280` messages
+    - three nodes per day:
+      - `51,840` messages
+    - raw three-node telemetry:
+      - `32,762,880 bytes / day`
+      - about `31.25 MiB / day`
+    - conservative budget:
+      - about `32.14 MiB / day` at `650 bytes`
+      - about `34.61 MiB / day` at `700 bytes effective serial ingress`
+    - thirty-day telemetry budget:
+      - about `0.92 GiB / month`
+  - command traffic remains negligible relative to telemetry:
+    - one command publish about `244` bytes
+    - one ack publish about `234` bytes
+    - one roundtrip about `478` bytes
+    - even `100 commands / day` is only about `46.68 KiB / day`
+- the next pre-node-`C` execution package is now narrowed again:
+  - keep the source-sync deploy line frozen
+  - keep strict baseline plus stable retry entry both alive
+  - spend the next two days on:
+    - narrow parser/framing hardening only
+    - longer `A + B` shared-port observation windows
+    - fixed node `C` acceptance criteria when hardware arrives
