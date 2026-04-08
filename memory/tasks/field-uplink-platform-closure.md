@@ -171,6 +171,18 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - stabilize runtime contract
     - add deployment/systemd packaging
     - expand toward multi-node and minimal downlink in later increments
+- the first RK3568 runtime packaging baseline now also exists:
+  - authority report:
+    - `docs/unified/reports/field-rk3568-gateway-runtime-packaging-2026-04.md`
+  - deployment assets:
+    - `services/field-gateway/deploy/field-gateway.service.template`
+    - `services/field-gateway/deploy/field-gateway.env.rk3568.example`
+    - `services/field-gateway/deploy/install-rk3568.sh`
+  - current packaged runtime truth:
+    - service name `lsmv2-field-gateway.service`
+    - env file `/etc/lsmv2/field-gateway.env`
+    - state root `/var/lib/lsmv2/field-gateway`
+    - run user `linaro`
 
 ## Constraints
 
@@ -222,6 +234,15 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - add systemd/runtime deployment shape for RK3568
     - decide spool directory durability policy on device
     - decide first service boundary expansion after v1 core proves stable
+- stage 6: RK3568 runtime packaging
+  - completed first packaging set:
+    - systemd unit template
+    - RK3568 env example
+    - RK3568 installer shell entry
+  - remaining closure inside this stage:
+    - prove install/start on the actual RK3568 board
+    - capture first on-device `systemctl` and health evidence
+    - decide whether the repo path should later move from mutable clone path to fixed `/opt/lsmv2`
 
 ## Open Questions
 

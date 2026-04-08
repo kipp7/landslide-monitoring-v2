@@ -61,6 +61,43 @@ permalink: landslide-monitoring-v2-mainline/services/field-gateway/readme
 
 - `node dist/index.js`
 
+## RK3568 常驻部署
+
+第一版常驻部署件已经补到：
+
+- `services/field-gateway/deploy/field-gateway.service.template`
+- `services/field-gateway/deploy/field-gateway.env.rk3568.example`
+- `services/field-gateway/deploy/install-rk3568.sh`
+
+在 RK3568 仓库根目录执行：
+
+```bash
+sudo bash services/field-gateway/deploy/install-rk3568.sh \
+  --mqtt-url mqtt://<broker-host>:1883
+```
+
+注意：
+
+- 安装脚本默认保留已有 `/etc/lsmv2/field-gateway.env`
+- 只有显式加 `--overwrite-env` 才会重写现场配置
+
+默认安装结果：
+
+- systemd 服务：
+  - `lsmv2-field-gateway.service`
+- 环境文件：
+  - `/etc/lsmv2/field-gateway.env`
+- 状态目录：
+  - `/var/lib/lsmv2/field-gateway`
+
+常用检查命令：
+
+```bash
+sudo systemctl status lsmv2-field-gateway --no-pager
+sudo journalctl -u lsmv2-field-gateway -n 100 --no-pager
+cat /var/lib/lsmv2/field-gateway/health/runtime-health.json
+```
+
 ## 当前行为
 
 - 串口收到分片文本后，按 JSON 花括号边界做重组
