@@ -466,3 +466,34 @@ cat /var/lib/lsmv2/field-gateway/health/runtime-health.json
 3. 因此下一步的硬前提已经明确：
 - 第二、第三节点接入前，必须先让 RK3568 侧出现新的真实 southbound 设备
 - 否则当前还不能进入多节点落板和 health 验收
+
+## 18. 2026-04-08 现场拓扑修正为“单口多节点”
+
+结合最新现场说明，当前真实硬件拓扑不是：
+
+- `3 x RK2206 -> 3 个 southbound 串口 -> RK3568`
+
+而是：
+
+- `3 x RK2206 -> 1 个中心 XL01 -> RK3568 /dev/ttyS3`
+
+这意味着当前主线应立即修正为：
+
+1. RK3568 侧仍只持有一个 southbound 口：
+- `/dev/ttyS3`
+
+2. 真正需要扩展的是：
+- 同一条中心串流里承载多个不同 `device_id`
+- 而不是继续追第二、第三个 `/dev/ttyUSB*`
+
+3. 当前多端口能力并不作废：
+- 它保留为后续可选扩展能力
+- 但当前现场主线应优先按：
+  - `single southbound port`
+  - `multiple field nodes over one center XL01 stream`
+  继续推进
+
+4. 这一步之后的验收重点应改成：
+- 中心 XL01 转出的 `/dev/ttyS3` 串流里，是否能稳定看到多个不同 `device_id`
+- `SOUTHBOUND_NODES_JSON` 是否可以把多个节点同时映射到同一个 `/dev/ttyS3`
+- `field-gateway` 是否能继续按 `device_id` 正常上行、下行和 health 归档

@@ -325,7 +325,19 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - `/dev/ttyACM*`
     - `/dev/serial/by-id`
     - `/dev/serial/by-path`
-  - so the next blocker is now clearly hardware presence of the second and third southbound devices, not scriptability of the control host
+  - so the control-host scripting line is no longer a blocker
+- the current field topology has now also been corrected:
+  - not:
+    - `3 field nodes -> 3 southbound serial ports -> RK3568`
+  - but:
+    - `3 field nodes -> 1 center XL01 -> /dev/ttyS3 on RK3568`
+  - this changes the next blocker from:
+    - discovering extra RK3568 serial devices
+  - to:
+    - getting multiple distinct `device_id` payloads to appear on the same `/dev/ttyS3` stream
+  - the next active proof target is therefore:
+    - `single southbound port`
+    - `multiple field nodes over one center XL01 stream`
 
 ## Constraints
 
@@ -403,9 +415,9 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - node/port online-degraded-offline state is visible on-device
     - command resolution no longer retains the old single-port gate
   - next focus should move to:
-    - attach the second and third southbound ports for real hardware
-    - validate concurrent multi-node ingress on-device
-    - execute the new discovery/apply/acceptance helper line instead of ad hoc SSH command fragments
+    - bring the second and third field nodes into the same center XL01 stream
+    - validate concurrent multi-node ingress on `/dev/ttyS3`
+    - execute the new discovery/apply/acceptance helper line against a single-port multi-node mapping
     - decide whether deployment stays:
       - one service instance owning multiple ports
       - or moves to one service instance per port
