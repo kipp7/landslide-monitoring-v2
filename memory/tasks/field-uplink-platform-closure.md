@@ -304,6 +304,18 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - `southbound.nodes[0].status = online`
   - telemetry continued to publish after this change
   - the stale single-port command gate has also now been removed from runtime command resolution so later multi-port command routing will not be blocked by `SERIAL_DEVICE`
+- the first multi-node southbound onboarding helper set now also exists on the Windows control side:
+  - serial discovery:
+    - `scripts/dev/show-rk3568-field-gateway-serial-map.ps1`
+  - remote `SOUTHBOUND_NODES_JSON` apply:
+    - `scripts/dev/set-rk3568-field-gateway-southbound-nodes.ps1`
+  - remote multi-port health acceptance:
+    - `scripts/dev/check-rk3568-field-gateway-multiport-health.ps1`
+  - this means the next real-hardware bring-up line can now stay narrow:
+    - discover ports
+    - apply node mapping
+    - restart gateway
+    - verify health
 
 ## Constraints
 
@@ -383,6 +395,7 @@ Freeze and execute the next major phase after command-route stabilization: prove
   - next focus should move to:
     - attach the second and third southbound ports for real hardware
     - validate concurrent multi-node ingress on-device
+    - execute the new discovery/apply/acceptance helper line instead of ad hoc SSH command fragments
     - decide whether deployment stays:
       - one service instance owning multiple ports
       - or moves to one service instance per port

@@ -107,6 +107,15 @@ sudo journalctl -u lsmv2-field-gateway -n 100 --no-pager
 cat /var/lib/lsmv2/field-gateway/health/runtime-health.json
 ```
 
+Windows 侧给 RK3568 做多节点接入时，当前推荐直接用这三条脚本：
+
+- 发现远端串口映射：
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\show-rk3568-field-gateway-serial-map.ps1`
+- 一次性写入 `SOUTHBOUND_NODES_JSON` 并重启服务：
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\set-rk3568-field-gateway-southbound-nodes.ps1 -NodeSpec 'A|00000000-0000-0000-0000-000000000001|/dev/ttyS3|FIELD-NODE-A|true' -NodeSpec 'B|00000000-0000-0000-0000-000000000002|/dev/ttyUSB0|FIELD-NODE-B|true' -NodeSpec 'C|00000000-0000-0000-0000-000000000003|/dev/ttyUSB1|FIELD-NODE-C|true'`
+- 远端 health 验收：
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-rk3568-field-gateway-multiport-health.ps1 -NodeSpec 'A|00000000-0000-0000-0000-000000000001|/dev/ttyS3' -NodeSpec 'B|00000000-0000-0000-0000-000000000002|/dev/ttyUSB0' -NodeSpec 'C|00000000-0000-0000-0000-000000000003|/dev/ttyUSB1'`
+
 ## 当前行为
 
 - 串口收到分片文本后，按换行分隔恢复完整 JSON 行，并忽略启动阶段不成形的残片行

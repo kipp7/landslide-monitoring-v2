@@ -398,6 +398,10 @@ RK3568 网关一期算完成，至少要满足：
 - 先把第二、第三个 southbound 端口真正接入
 - 再在真实 `3 x RK2206` 条件下确认运行事实
 - 不再回头重做单节点 northbound 协议证明
+- 现场执行优先复用当前脚本入口：
+  - `scripts/dev/show-rk3568-field-gateway-serial-map.ps1`
+  - `scripts/dev/set-rk3568-field-gateway-southbound-nodes.ps1`
+  - `scripts/dev/check-rk3568-field-gateway-multiport-health.ps1`
 
 ## 12. 相关文档
 

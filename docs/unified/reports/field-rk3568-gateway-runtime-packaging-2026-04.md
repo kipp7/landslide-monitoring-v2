@@ -390,3 +390,49 @@ cat /var/lib/lsmv2/field-gateway/health/runtime-health.json
   - 哪个节点掉线
   - 哪个端口半掉线
   - 是否是串口层而不是 northbound 主链的问题
+
+## 16. 2026-04-08 多节点接线前的运维脚本入口已补齐
+
+为了避免第二、第三节点接入时继续靠手工敲 SSH 命令，本轮补了三条 Windows 侧入口脚本：
+
+1. 远端串口发现：
+- `scripts/dev/show-rk3568-field-gateway-serial-map.ps1`
+- 作用：
+  - 通过 SSH 抓取 RK3568 的：
+    - `/dev/serial/by-id`
+    - `/dev/serial/by-path`
+    - `/dev/ttyS*`
+    - `/dev/ttyUSB*`
+    - `/dev/ttyACM*`
+  - 同时带出当前：
+    - `/etc/lsmv2/field-gateway.env`
+    - `runtime-health.json`
+
+2. 远端 southbound 节点配置落板：
+- `scripts/dev/set-rk3568-field-gateway-southbound-nodes.ps1`
+- 作用：
+  - 按 `fieldNodeId|deviceId|southboundPort|installLabel|enabled` 规格生成标准 `SOUTHBOUND_NODES_JSON`
+  - 远端更新：
+    - `MQTT_TOPIC_COMMAND_PREFIX=cmd/`
+    - `MQTT_TOPIC_ACK_PREFIX=cmd_ack/`
+    - `SOUTHBOUND_NODES_JSON=...`
+  - 默认重启：
+    - `lsmv2-field-gateway.service`
+
+3. 远端多端口 health 验收：
+- `scripts/dev/check-rk3568-field-gateway-multiport-health.ps1`
+- 作用：
+  - 校验：
+    - `southbound.routeMode = configured-node-routing`
+    - `configuredNodes`
+    - `configuredPorts`
+    - 每个期望节点是否进入运行态
+    - 每个期望端口是否进入运行态
+
+这意味着下一轮真实接第二、第三节点时，现场主线已经收敛成：
+
+- 先跑串口发现脚本
+- 再跑配置落板脚本
+- 最后跑 health 验收脚本
+
+这样可以减少临时手工操作，把 RK3568 多节点接入收口到一条更稳定的现场操作线。
