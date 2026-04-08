@@ -152,6 +152,25 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - RK3568 gateway implementation
     - RK2206 firmware implementation
     - center deployment/integration implementation
+- the first RK3568 gateway core implementation entry now exists in-repo:
+  - `services/field-gateway/`
+  - current frozen v1 boundary:
+    - `/dev/ttyS3`
+    - `115200 8N1`
+    - JSON boundary recovery
+    - spool/cache persistence
+    - MQTT publish
+    - health file emission
+  - supporting runtime files now also exist:
+    - `services/field-gateway/.env.example`
+    - `services/field-gateway/README.md`
+  - current implementation quality gate result:
+    - `npm run build --workspace @lsmv2/field-gateway` passed
+    - `npm run lint --workspace @lsmv2/field-gateway` passed
+  - this means the task has moved from “decide where the first gateway lives” to:
+    - stabilize runtime contract
+    - add deployment/systemd packaging
+    - expand toward multi-node and minimal downlink in later increments
 
 ## Constraints
 
@@ -192,6 +211,17 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - freeze the minimal RK3568 gateway code skeleton and runtime contract
     - freeze RK2206 firmware module boundaries for sensors/sampling/reporting/power
     - freeze the center-server deployment line so field full-path does not depend on hidden host-run steps
+- stage 5: RK3568 gateway core v1 skeleton
+  - completed first entry point:
+    - `services/field-gateway/src/index.ts`
+    - `services/field-gateway/src/config.ts`
+  - completed first runtime packaging:
+    - `services/field-gateway/.env.example`
+    - `services/field-gateway/README.md`
+  - current next focus inside this stage:
+    - add systemd/runtime deployment shape for RK3568
+    - decide spool directory durability policy on device
+    - decide first service boundary expansion after v1 core proves stable
 
 ## Open Questions
 
@@ -218,6 +248,12 @@ Freeze and execute the next major phase after command-route stabilization: prove
   - network/device manager
   - local control plane
   - sidecars
+- after `services/field-gateway` exists and passes build/lint:
+  - what exact next closure should come first:
+    - RK3568 systemd packaging
+    - multi-node southbound abstraction
+    - minimal downlink translation
+    - or compose-side formalization of the center proof runtime
 
 ## Done When
 
