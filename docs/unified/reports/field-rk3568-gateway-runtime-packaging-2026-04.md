@@ -247,6 +247,49 @@ cat /var/lib/lsmv2/field-gateway/health/runtime-health.json
 
 修复后重新下发并观察的新窗口里，没有再出现新的 `ENOENT rename` 日志。
 
+## 13. 2026-04-08 多节点 southbound 配置层实机固化
+
+在前述单节点命令闭环已经跑通之后，本轮继续把 southbound 配置层真正固化到了 RK3568 常驻环境里。
+
+1. 板端环境文件新增并显式冻结：
+- `MQTT_TOPIC_COMMAND_PREFIX=cmd/`
+- `MQTT_TOPIC_ACK_PREFIX=cmd_ack/`
+- `SOUTHBOUND_NODES_JSON=[{"fieldNodeId":"A","deviceId":"00000000-0000-0000-0000-000000000001","installLabel":"FIELD-NODE-A","southboundPort":"/dev/ttyS3","enabled":true}]`
+
+2. 板端 health 真值新增：
+- `southbound.configuredNodes`
+- `southbound.activeSerialDevice`
+- `southbound.nodes[]`
+
+3. 本轮实机结果已确认：
+- `lsmv2-field-gateway.service` 带新配置重启成功
+- `runtime-health.json` 已出现：
+  - `configuredNodes = 1`
+  - `fieldNodeId = A`
+  - `deviceId = 00000000-0000-0000-0000-000000000001`
+  - `southboundPort = /dev/ttyS3`
+- 遥测继续正常上行
+- 重新发布 fresh runtime `manual_collect` 后，命令闭环继续成立
+
+4. 本轮新的命令闭环证据：
+- `commandId = f8f46ff4-d514-4114-b2b4-8e8c2e5c4aee`
+- MQTT 已收到同一 `command_id` 的：
+  - `cmd_ack/00000000-0000-0000-0000-000000000001`
+- 板端 health 已更新为：
+  - `commandsReceived = 1`
+  - `commandsForwarded = 1`
+  - `ackMessagesPublished = 1`
+- southbound 节点统计也已同步更新为：
+  - `commandForwards = 1`
+  - `ackPublishes = 1`
+
+5. 这一步意味着：
+- RK3568 现在不只是“有多节点配置代码”
+- 而是已经把第一版 southbound 节点映射层：
+  - 落进运行配置
+  - 落进 health 可观测面
+  - 并在实机上重新证明不会破坏既有 northbound 命令闭环
+
 下一步应继续按主线推进：
 
 - 进入多节点 southbound 抽象

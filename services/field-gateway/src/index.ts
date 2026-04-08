@@ -36,6 +36,23 @@ type DeviceCommandAckV1 = {
   result?: Record<string, unknown>;
 };
 
+type SouthboundNode = AppConfig["southboundNodes"][number];
+
+type NodeRuntimeState = {
+  fieldNodeId: string;
+  deviceId: string;
+  installLabel: string | null;
+  southboundPort: string | null;
+  enabled: boolean;
+  telemetryMessages: number;
+  commandForwards: number;
+  ackPublishes: number;
+  lastTelemetryTs: string | null;
+  lastCommandTs: string | null;
+  lastAckTs: string | null;
+  status: "configured" | "online";
+};
+
 type SpoolState = "pending" | "published" | "rejected";
 
 type SpoolRecord = {
@@ -251,6 +268,7 @@ class GatewayRuntime {
   private readonly logger: ReturnType<typeof createLogger>;
   private readonly spool: SpoolManager;
   private readonly assembler = createAssembler();
+  private readonly nodeState = new Map<string, NodeRuntimeState>();
   private readonly stats: RuntimeStats = {
     serialChunks: 0,
     serialBytes: 0,
@@ -289,6 +307,9 @@ class GatewayRuntime {
   ) {
     this.logger = createLogger(config.serviceName);
     this.spool = new SpoolManager(config);
+    for (const node of config.southboundNodes) {
+      this.nodeState.set(node.deviceId, this.createNodeRuntimeState(node));
+    }
   }
 
   async start(): Promise<void> {
@@ -310,10 +331,13 @@ class GatewayRuntime {
           return;
         }
 
-        this.logger.info(
-          { topicFilter: `${this.config.mqttTopicCommandPrefix}+` },
-          "field gateway mqtt command subscription ready"
-        );
+      this.logger.info(
+        {
+          topicFilter: `${this.config.mqttTopicCommandPrefix}+`,
+          configuredNodeCount: this.config.southboundNodes.length
+        },
+        "field gateway mqtt command subscription ready"
+      );
       });
       void this.replayPending("mqtt-connect");
     });
@@ -455,8 +479,16 @@ class GatewayRuntime {
     }
 
     const envelope: TelemetryEnvelopeV1 = parsed;
+    const nodeState = this.resolveNodeForTelemetry(envelope.device_id, traceId);
+    if (!nodeState) {
+      return;
+    }
+
     this.stats.parsedMessages += 1;
     this.stats.lastParsedMessageTs = receivedTs;
+    nodeState.telemetryMessages += 1;
+    nodeState.lastTelemetryTs = receivedTs;
+    nodeState.status = "online";
 
     const record: SpoolRecord = {
       schema_version: 1,
@@ -532,10 +564,17 @@ class GatewayRuntime {
       return;
     }
 
+    const nodeState = this.resolveNodeForCommand(command.device_id, traceId, topic);
+    if (!nodeState) {
+      return;
+    }
+
     try {
       await this.writeCommandToSerial(rawPayload);
       this.stats.commandsForwarded += 1;
       this.stats.lastCommandForwardedTs = isoNow();
+      nodeState.commandForwards += 1;
+      nodeState.lastCommandTs = this.stats.lastCommandForwardedTs;
       this.logger.info(
         {
           topic,
@@ -623,12 +662,19 @@ class GatewayRuntime {
   }
 
   private async publishCommandAck(ack: DeviceCommandAckV1, rawPayload: string): Promise<void> {
+    const nodeState = this.resolveNodeForAck(ack.device_id, ack.command_id);
+    if (!nodeState) {
+      return;
+    }
+
     const topic = ackTopicForDevice(this.config, ack.device_id);
 
     try {
       await this.publishMqtt(topic, rawPayload);
       this.stats.ackMessagesPublished += 1;
       this.stats.lastAckPublishedTs = isoNow();
+      nodeState.ackPublishes += 1;
+      nodeState.lastAckTs = this.stats.lastAckPublishedTs;
       this.logger.info(
         {
           topic,
@@ -695,8 +741,153 @@ class GatewayRuntime {
         url: this.config.mqttUrl,
         connected: this.mqttConnected
       },
+      southbound: {
+        configuredNodes: this.config.southboundNodes.length,
+        activeSerialDevice: this.config.serialDevice,
+        nodes: Array.from(this.nodeState.values())
+      },
       stats: this.stats
     });
+  }
+
+  private createNodeRuntimeState(node: SouthboundNode): NodeRuntimeState {
+    return {
+      fieldNodeId: node.fieldNodeId,
+      deviceId: node.deviceId,
+      installLabel: node.installLabel ?? null,
+      southboundPort: node.southboundPort ?? null,
+      enabled: node.enabled,
+      telemetryMessages: 0,
+      commandForwards: 0,
+      ackPublishes: 0,
+      lastTelemetryTs: null,
+      lastCommandTs: null,
+      lastAckTs: null,
+      status: "configured"
+    };
+  }
+
+  private ensureEphemeralNode(deviceId: string): NodeRuntimeState {
+    const existing = this.nodeState.get(deviceId);
+    if (existing) {
+      return existing;
+    }
+
+    const created: NodeRuntimeState = {
+      fieldNodeId: `auto:${deviceId.slice(0, 8)}`,
+      deviceId,
+      installLabel: null,
+      southboundPort: this.config.serialDevice,
+      enabled: true,
+      telemetryMessages: 0,
+      commandForwards: 0,
+      ackPublishes: 0,
+      lastTelemetryTs: null,
+      lastCommandTs: null,
+      lastAckTs: null,
+      status: "configured"
+    };
+    this.nodeState.set(deviceId, created);
+    return created;
+  }
+
+  private resolveNodeForTelemetry(deviceId: string, traceId: string): NodeRuntimeState | null {
+    if (this.config.southboundNodes.length === 0) {
+      return this.ensureEphemeralNode(deviceId);
+    }
+
+    const nodeState = this.nodeState.get(deviceId);
+    if (!nodeState) {
+      this.stats.schemaRejected += 1;
+      this.stats.lastError = `unknown telemetry device ${deviceId}`;
+      this.logger.warn({ traceId, deviceId }, "field gateway telemetry device is not configured");
+      return null;
+    }
+
+    if (!nodeState.enabled) {
+      this.stats.schemaRejected += 1;
+      this.stats.lastError = `disabled telemetry device ${deviceId}`;
+      this.logger.warn({ traceId, deviceId }, "field gateway telemetry device is disabled");
+      return null;
+    }
+
+    if (nodeState.southboundPort && nodeState.southboundPort !== this.config.serialDevice) {
+      this.stats.schemaRejected += 1;
+      this.stats.lastError = `telemetry device ${deviceId} belongs to ${nodeState.southboundPort}`;
+      this.logger.warn(
+        { traceId, deviceId, configuredPort: nodeState.southboundPort, activePort: this.config.serialDevice },
+        "field gateway telemetry device routed to different southbound port"
+      );
+      return null;
+    }
+
+    return nodeState;
+  }
+
+  private resolveNodeForCommand(deviceId: string, traceId: string, topic: string): NodeRuntimeState | null {
+    if (this.config.southboundNodes.length === 0) {
+      return this.ensureEphemeralNode(deviceId);
+    }
+
+    const nodeState = this.nodeState.get(deviceId);
+    if (!nodeState) {
+      this.stats.commandRejects += 1;
+      this.stats.lastError = `unknown command device ${deviceId}`;
+      this.logger.warn({ traceId, topic, deviceId }, "field gateway command device is not configured");
+      return null;
+    }
+
+    if (!nodeState.enabled) {
+      this.stats.commandRejects += 1;
+      this.stats.lastError = `disabled command device ${deviceId}`;
+      this.logger.warn({ traceId, topic, deviceId }, "field gateway command device is disabled");
+      return null;
+    }
+
+    if (nodeState.southboundPort && nodeState.southboundPort !== this.config.serialDevice) {
+      this.stats.commandRejects += 1;
+      this.stats.lastError = `command device ${deviceId} belongs to ${nodeState.southboundPort}`;
+      this.logger.warn(
+        { traceId, topic, deviceId, configuredPort: nodeState.southboundPort, activePort: this.config.serialDevice },
+        "field gateway command routed to different southbound port"
+      );
+      return null;
+    }
+
+    return nodeState;
+  }
+
+  private resolveNodeForAck(deviceId: string, commandId: string): NodeRuntimeState | null {
+    if (this.config.southboundNodes.length === 0) {
+      return this.ensureEphemeralNode(deviceId);
+    }
+
+    const nodeState = this.nodeState.get(deviceId);
+    if (!nodeState) {
+      this.stats.ackPublishFailures += 1;
+      this.stats.lastError = `unknown ack device ${deviceId}`;
+      this.logger.warn({ deviceId, commandId }, "field gateway ack device is not configured");
+      return null;
+    }
+
+    if (!nodeState.enabled) {
+      this.stats.ackPublishFailures += 1;
+      this.stats.lastError = `disabled ack device ${deviceId}`;
+      this.logger.warn({ deviceId, commandId }, "field gateway ack device is disabled");
+      return null;
+    }
+
+    if (nodeState.southboundPort && nodeState.southboundPort !== this.config.serialDevice) {
+      this.stats.ackPublishFailures += 1;
+      this.stats.lastError = `ack device ${deviceId} belongs to ${nodeState.southboundPort}`;
+      this.logger.warn(
+        { deviceId, commandId, configuredPort: nodeState.southboundPort, activePort: this.config.serialDevice },
+        "field gateway ack routed to different southbound port"
+      );
+      return null;
+    }
+
+    return nodeState;
   }
 }
 

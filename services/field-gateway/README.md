@@ -35,6 +35,7 @@ permalink: landslide-monitoring-v2-mainline/services/field-gateway/readme
 - `MQTT_TOPIC_TELEMETRY_PREFIX`：默认 `telemetry/`
 - `MQTT_TOPIC_COMMAND_PREFIX`：默认 `cmd/`
 - `MQTT_TOPIC_ACK_PREFIX`：默认 `cmd_ack/`
+- `SOUTHBOUND_NODES_JSON`：可选；用于冻结 `field_node_id -> device_id -> southbound_port` 映射
 - `SPOOL_ROOT_DIR`：本地缓存根目录
 - `HEALTH_FILE_PATH`：health 文件输出路径
 - `MQTT_PUBLISH_TIMEOUT_MS`：单次 MQTT 发布超时
@@ -114,12 +115,32 @@ cat /var/lib/lsmv2/field-gateway/health/runtime-health.json
     - `telemetry/{device_id}`
   - payload:
     - `TelemetryEnvelope v1`
+- southbound 节点配置现在支持显式冻结：
+  - `fieldNodeId`
+  - `deviceId`
+  - `installLabel`
+  - `southboundPort`
+  - `enabled`
 - 当前已补最小命令闭环骨架：
   - 订阅 `cmd/{device_id}`
   - 校验 `device-command.v1`
   - 原样写入 southbound 串口
   - 识别串口返回的 `device-command-ack.v1`
   - 回灌 `cmd_ack/{device_id}`
+
+`SOUTHBOUND_NODES_JSON` 示例：
+
+```json
+[
+  {
+    "fieldNodeId": "A",
+    "deviceId": "00000000-0000-0000-0000-000000000001",
+    "installLabel": "FIELD-NODE-A",
+    "southboundPort": "/dev/ttyS3",
+    "enabled": true
+  }
+]
+```
 
 ## 当前非目标
 

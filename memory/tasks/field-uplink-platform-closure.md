@@ -238,6 +238,30 @@ Freeze and execute the next major phase after command-route stabilization: prove
   - current fix:
     - atomic temp file naming now includes `randomUUID()`
   - latest post-fix proof window showed no new recurrence
+- the first explicit southbound-node config layer is now also landed and proven on-device:
+  - config entry:
+    - `SOUTHBOUND_NODES_JSON`
+  - current frozen single-node runtime mapping:
+    - `fieldNodeId = A`
+    - `deviceId = 00000000-0000-0000-0000-000000000001`
+    - `installLabel = FIELD-NODE-A`
+    - `southboundPort = /dev/ttyS3`
+    - `enabled = true`
+  - board env now also explicitly freezes:
+    - `MQTT_TOPIC_COMMAND_PREFIX=cmd/`
+    - `MQTT_TOPIC_ACK_PREFIX=cmd_ack/`
+  - board health now exposes:
+    - `southbound.configuredNodes`
+    - `southbound.activeSerialDevice`
+    - per-node runtime stats under `southbound.nodes[]`
+  - on-device reproved command-path evidence under the configured-node model:
+    - `commandId = f8f46ff4-d514-4114-b2b4-8e8c2e5c4aee`
+    - `commandsReceived = 1`
+    - `commandsForwarded = 1`
+    - `ackMessagesPublished = 1`
+    - node stats also advanced:
+      - `commandForwards = 1`
+      - `ackPublishes = 1`
 
 ## Constraints
 
@@ -302,9 +326,16 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - decide whether the repo path should later move from mutable clone path to fixed `/opt/lsmv2`
     - decide whether the health/state writer needs a harder anti-ENOENT safeguard on low-end storage
 - stage 7: gateway expansion after live single-node proof
+  - first entry inside this stage is now complete:
+    - explicit southbound-node config model is landed
+    - configured-node state is visible in on-device health
+    - the configured-node model does not break live telemetry or command closure
   - next focus should move to:
     - multi-node southbound configuration for `3 x RK2206`
     - lift the now-proven single-node downlink path into multi-node routing
+    - decide whether this becomes:
+      - one service instance per southbound port
+      - or one service instance owning multiple ports
     - center-side deployment formalization so the field path does not depend on ad hoc host-run helpers
 
 ## Open Questions
@@ -334,7 +365,7 @@ Freeze and execute the next major phase after command-route stabilization: prove
   - sidecars
 - after `services/field-gateway` exists and passes build/lint:
   - the next closure should now come from:
-    - multi-node southbound abstraction
+    - multi-node southbound abstraction beyond the now-landed config layer
     - minimal downlink translation
     - compose-side formalization of the center proof runtime
 

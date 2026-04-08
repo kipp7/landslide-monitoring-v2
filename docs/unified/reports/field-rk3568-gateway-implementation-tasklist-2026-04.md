@@ -332,7 +332,60 @@ RK3568 网关一期算完成，至少要满足：
 
 这份任务单冻结后，RK3568 的后续工作不再以“继续证明链路”为主，而应以“把最小可运行网关真正写出来”为主。
 
-## 11. 相关文档
+## 11. 2026-04-08 当前实施检查点
+
+截至 `2026-04-08`，这份任务单已有一部分正式落成：
+
+1. 已落成能力
+- 单 southbound 串口运行主线：
+  - `/dev/ttyS3`
+  - `115200 8N1`
+- northbound 正式接口：
+  - `telemetry/{device_id}`
+  - `cmd/{device_id}`
+  - `cmd_ack/{device_id}`
+- 最小命令闭环：
+  - `manual_collect`
+  - `set_config`
+- southbound 配置模型第一版：
+  - `SOUTHBOUND_NODES_JSON`
+  - `fieldNodeId`
+  - `deviceId`
+  - `installLabel`
+  - `southboundPort`
+  - `enabled`
+- health 可观测面第一版：
+  - `southbound.configuredNodes`
+  - `southbound.activeSerialDevice`
+  - `southbound.nodes[]`
+
+2. 已完成的实机证明
+- RK3568 实机已带显式 `SOUTHBOUND_NODES_JSON` 配置运行
+- `runtime-health.json` 已证明：
+  - `configuredNodes = 1`
+  - 节点 `A -> device_id -> /dev/ttyS3` 映射已进入运行态
+- fresh runtime `manual_collect` 已再次跑通：
+  - `cmd/{device_id} -> RK3568 -> /dev/ttyS3 -> cmd_ack/{device_id}`
+- 当前最新实机命令证据：
+  - `commandId = f8f46ff4-d514-4114-b2b4-8e8c2e5c4aee`
+
+3. 仍未完成的部分
+- `3 x RK2206` 多节点并发接入还没有真正上板
+- 多 southbound 端口路由选择还没有落地
+- 当前 southbound 配置层更多是在回答：
+  - 哪个 `device_id` 属于这个网关实例
+  - 哪个节点当前允许被这个串口实例接收/下发
+- 还没有进入：
+  - 多串口实例编排
+  - 多无线链路调度
+  - 节点离线/重连策略细化
+
+4. 因此当前主线应继续收敛为
+- 先把 `1 -> N` 的 southbound 配置/路由模型写透
+- 再把 `3 x RK2206` 的真实接入方式接进去
+- 不再回头重做单节点 northbound 协议证明
+
+## 12. 相关文档
 
 - [field-uplink-platform-closure-baseline.md](/E:/学校/02 项目/99 山体滑坡优化完善/landslide-monitoring-v2-mainline/docs/unified/reports/field-uplink-platform-closure-baseline.md)
 - [field-hardware-gateway-architecture-eval.md](/E:/学校/02 项目/99 山体滑坡优化完善/landslide-monitoring-v2-mainline/docs/unified/reports/field-hardware-gateway-architecture-eval.md)

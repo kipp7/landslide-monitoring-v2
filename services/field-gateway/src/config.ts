@@ -8,6 +8,23 @@ function optionalNonEmptyString() {
   }, z.string().min(1).optional());
 }
 
+const southboundNodeSchema = z.object({
+  fieldNodeId: z.string().min(1),
+  deviceId: z.string().uuid(),
+  installLabel: z.string().min(1).optional(),
+  southboundPort: z.string().min(1).optional(),
+  enabled: z.boolean().default(true)
+});
+
+function southboundNodesFromEnv() {
+  return z.preprocess((value) => {
+    if (typeof value !== "string") return value;
+    const trimmed = value.trim();
+    if (trimmed.length === 0) return [];
+    return JSON.parse(trimmed);
+  }, z.array(southboundNodeSchema).default([]));
+}
+
 const configSchema = z
   .object({
     serviceName: z.string().default("field-gateway"),
@@ -27,7 +44,8 @@ const configSchema = z
     maxMessageBytes: z.coerce.number().int().positive().default(256 * 1024),
     maxPendingRecords: z.coerce.number().int().positive().default(10000),
     spoolRetentionPublished: z.coerce.number().int().nonnegative().default(200),
-    spoolRetentionRejected: z.coerce.number().int().nonnegative().default(200)
+    spoolRetentionRejected: z.coerce.number().int().nonnegative().default(200),
+    southboundNodes: southboundNodesFromEnv()
   })
   .superRefine((data, ctx) => {
     const hasUser = Boolean(data.mqttUsername);
@@ -61,6 +79,7 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
     maxMessageBytes: env.MAX_MESSAGE_BYTES,
     maxPendingRecords: env.MAX_PENDING_RECORDS,
     spoolRetentionPublished: env.SPOOL_RETENTION_PUBLISHED,
-    spoolRetentionRejected: env.SPOOL_RETENTION_REJECTED
+    spoolRetentionRejected: env.SPOOL_RETENTION_REJECTED,
+    southboundNodes: env.SOUTHBOUND_NODES_JSON
   });
 }
