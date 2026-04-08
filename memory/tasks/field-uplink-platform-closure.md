@@ -905,3 +905,18 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - narrow parser/framing hardening only
     - longer `A + B` shared-port observation windows
     - fixed node `C` acceptance criteria when hardware arrives
+- the next-stage execution package is now also frozen into a dedicated authority note:
+  - `docs/unified/reports/field-next-stage-task-package-2026-04.md`
+- that package compresses the immediate program into two consecutive windows:
+  - pre-node-`C`:
+    - do not expand topology
+    - do not reopen deploy/runtime entrypoints
+    - continue only narrow parser/framing hardening plus longer `A + B` observation
+  - post-node-`C`:
+    - require `device_id ...0003` to appear on `/dev/ttyS3`
+    - require `node C = online` in runtime health
+    - require `10-15` minutes of three-node telemetry continuity
+    - then rerun:
+      - node `B manual_collect`
+      - node `C manual_collect`
+      - one `set_config` regression
