@@ -338,6 +338,18 @@ Freeze and execute the next major phase after command-route stabilization: prove
   - the next active proof target is therefore:
     - `single southbound port`
     - `multiple field nodes over one center XL01 stream`
+- the RK3568 deployment/runtime operation line is now also frozen into explicit Windows-host helpers:
+  - remote install/update:
+    - `scripts/dev/install-rk3568-field-gateway.ps1`
+  - remote runtime snapshot:
+    - `scripts/dev/check-rk3568-field-gateway-runtime.ps1`
+  - board-side runtime snapshot primitive:
+    - `services/field-gateway/deploy/check-rk3568-runtime.sh`
+  - the snapshot path now redacts env keys containing:
+    - `PASSWORD`
+    - `SECRET`
+    - `TOKEN`
+  - and no longer depends on the remote repo copy already containing the newest check script
 
 ## Constraints
 
@@ -689,3 +701,41 @@ Freeze and execute the next major phase after command-route stabilization: prove
     as the current field-operation command entry
   - do not claim the shared-port line is fully deterministic yet
   - do not block the rest of April work on waiting for every strict rerun to be green
+- the latest RK3568 runtime-packaging closure is now also evidenced by a fresh full snapshot:
+  - authority file:
+    - `.tmp/rk3568-field-gateway-runtime-latest.json`
+  - generatedAt:
+    - `2026-04-08T14:47:37Z`
+  - repoRoot:
+    - `/home/linaro/landslide-monitoring-v2-mainline`
+  - service:
+    - `lsmv2-field-gateway.service`
+    - `active`
+    - `enabled`
+  - current env truth includes:
+    - `SERIAL_DEVICE=/dev/ttyS3`
+    - `MQTT_URL=mqtt://192.168.124.17:1883`
+    - `MQTT_TOPIC_COMMAND_PREFIX=cmd/`
+    - `MQTT_TOPIC_ACK_PREFIX=cmd_ack/`
+    - `MQTT_PASSWORD=***REDACTED***`
+  - current southbound truth includes:
+    - `configuredNodes=3`
+    - `configuredPorts=1`
+    - `A=online`
+    - `B=online`
+    - `C=configured`
+  - current cumulative runtime stats include:
+    - `commandsReceived=32`
+    - `commandsForwarded=32`
+    - `ackMessagesPublished=23`
+    - `spoolPending=0`
+  - one hardening problem remains explicitly open even after this closure:
+    - shared `/dev/ttyS3` parse noise is still live
+    - latest snapshot still shows:
+      - `schemaRejected=1013`
+      - `field gateway json parse failed`
+      - `field gateway schema invalid`
+  - this updates the immediate next operational priority to:
+    - keep the deployment/runtime inspection path frozen
+    - continue node-`C` preparation
+    - then do parser/framing hardening without re-opening the already-frozen install/runtime tooling line

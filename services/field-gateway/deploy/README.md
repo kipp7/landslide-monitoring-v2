@@ -16,6 +16,8 @@ permalink: landslide-monitoring-v2-mainline/services/field-gateway/deploy/readme
   - RK3568 板端环境变量样例
 - `install-rk3568.sh`
   - 在 RK3568 Ubuntu 上安装/更新 systemd 服务的脚本
+- `check-rk3568-runtime.sh`
+  - 在 RK3568 上输出当前 `field-gateway` 运行态快照的脚本
 
 ## 当前运行约定
 
@@ -51,4 +53,12 @@ sudo bash services/field-gateway/deploy/install-rk3568.sh \
 sudo systemctl status lsmv2-field-gateway --no-pager
 sudo journalctl -u lsmv2-field-gateway -n 100 --no-pager
 cat /var/lib/lsmv2/field-gateway/health/runtime-health.json
+bash services/field-gateway/deploy/check-rk3568-runtime.sh
+```
+
+Windows 主机当前推荐入口：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\install-rk3568-field-gateway.ps1 -Password linaro
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-rk3568-field-gateway-runtime.ps1 -Password linaro
 ```

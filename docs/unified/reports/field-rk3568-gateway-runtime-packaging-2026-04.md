@@ -497,3 +497,92 @@ cat /var/lib/lsmv2/field-gateway/health/runtime-health.json
 - 中心 XL01 转出的 `/dev/ttyS3` 串流里，是否能稳定看到多个不同 `device_id`
 - `SOUTHBOUND_NODES_JSON` 是否可以把多个节点同时映射到同一个 `/dev/ttyS3`
 - `field-gateway` 是否能继续按 `device_id` 正常上行、下行和 health 归档
+
+## 19. 2026-04-08 RK3568 部署与运行态快照工具已补齐
+
+在共享口双轨冻结之后，这一轮继续把 RK3568 主网关的生产侧入口收成了可重复执行的安装和体检链，而不是继续依赖现场临时 SSH 命令。
+
+1. 当前新增或补强的仓库交付物：
+- `services/field-gateway/deploy/check-rk3568-runtime.sh`
+- `scripts/dev/check-rk3568-field-gateway-runtime.ps1`
+- `scripts/dev/install-rk3568-field-gateway.ps1`
+- `services/field-gateway/deploy/install-rk3568.sh`
+
+2. 这一轮冻结的操作职责：
+- `install-rk3568.sh`
+  - 继续作为板端正式安装入口
+  - 现在允许显式写入：
+    - `MQTT_TOPIC_TELEMETRY_PREFIX`
+    - `MQTT_TOPIC_COMMAND_PREFIX`
+    - `MQTT_TOPIC_ACK_PREFIX`
+- `install-rk3568-field-gateway.ps1`
+  - 作为 Windows 主机侧一键远程安装或更新入口
+  - 通过 SSH 把本地仓库中的安装脚本直接送到 RK3568 执行
+- `check-rk3568-runtime.sh`
+  - 作为板端当前运行态快照入口
+  - 输出：
+    - service active/enabled/show
+    - env 文件内容
+    - health 文件内容
+    - journal tail
+- `check-rk3568-field-gateway-runtime.ps1`
+  - 作为 Windows 主机侧远程快照入口
+  - 通过 SSH 把本地 `check-rk3568-runtime.sh` 内容直接送到 RK3568 执行
+  - 不依赖远端仓库当前是否已经同步到最新脚本版本
+
+3. 当前快照安全约束：
+- `check-rk3568-runtime.sh` 读取 env 时已默认对包含以下关键字的键做脱敏：
+  - `PASSWORD`
+  - `SECRET`
+  - `TOKEN`
+- 因此当前 runtime 快照可以进：
+  - authority 报告
+  - 月记
+  - 任务记忆
+- 但不应把明文 MQTT 凭据重新写回仓库文档
+
+4. 2026-04-08 最新权威快照事实
+- 快照文件：
+  - `.tmp/rk3568-field-gateway-runtime-latest.json`
+- 快照时间：
+  - `2026-04-08T14:47:37Z`
+- 代码根目录：
+  - `/home/linaro/landslide-monitoring-v2-mainline`
+- 服务：
+  - `lsmv2-field-gateway.service`
+  - `active`
+  - `enabled`
+- 当前 env 真值：
+  - `SERIAL_DEVICE=/dev/ttyS3`
+  - `MQTT_URL=mqtt://192.168.124.17:1883`
+  - `MQTT_TOPIC_COMMAND_PREFIX=cmd/`
+  - `MQTT_TOPIC_ACK_PREFIX=cmd_ack/`
+  - `MQTT_PASSWORD=***REDACTED***`
+- 当前 southbound 真值：
+  - `routeMode=configured-node-routing`
+  - `configuredNodes=3`
+  - `configuredPorts=1`
+  - `/dev/ttyS3.status=online`
+  - `node A.status=online`
+  - `node B.status=online`
+  - `node C.status=configured`
+- 当前累计运行统计：
+  - `commandsReceived=32`
+  - `commandsForwarded=32`
+  - `ackMessagesPublished=23`
+  - `spoolPending=0`
+
+5. 这一轮没有回避的风险事实
+- 当前不能把 RK3568 共享口链路表述成“已经完全工业级稳定”
+- 最新快照仍明确显示：
+  - `schemaRejected=1013`
+  - `lastError=Unexpected number in JSON at position 1`
+- `journalTail` 里仍持续出现：
+  - `field gateway json parse failed`
+  - `field gateway schema invalid`
+- 所以这批工具的意义是：
+  - 把部署和运行态取证入口固定下来
+  - 让下一轮可以直接面向：
+    - parser / framing hardening
+    - node C 接入准备
+  - 而不是再回到“如何远程看板子当前状态”这种基础问题

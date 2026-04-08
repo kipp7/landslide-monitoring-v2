@@ -77,6 +77,7 @@ permalink: landslide-monitoring-v2-mainline/services/field-gateway/readme
 - `services/field-gateway/deploy/field-gateway.service.template`
 - `services/field-gateway/deploy/field-gateway.env.rk3568.example`
 - `services/field-gateway/deploy/install-rk3568.sh`
+- `services/field-gateway/deploy/check-rk3568-runtime.sh`
 
 在 RK3568 仓库根目录执行：
 
@@ -105,7 +106,15 @@ sudo bash services/field-gateway/deploy/install-rk3568.sh \
 sudo systemctl status lsmv2-field-gateway --no-pager
 sudo journalctl -u lsmv2-field-gateway -n 100 --no-pager
 cat /var/lib/lsmv2/field-gateway/health/runtime-health.json
+bash services/field-gateway/deploy/check-rk3568-runtime.sh
 ```
+
+Windows 主机侧现在也有两条固定入口：
+
+- 远程安装或更新 RK3568 `field-gateway`：
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\install-rk3568-field-gateway.ps1 -Password linaro`
+- 远程抓取当前运行快照：
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-rk3568-field-gateway-runtime.ps1 -Password linaro`
 
 Windows 侧给 RK3568 做多节点接入时，当前推荐直接用这三条脚本：
 

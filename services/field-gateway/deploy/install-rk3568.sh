@@ -16,6 +16,9 @@ MQTT_USERNAME="${MQTT_USERNAME:-}"
 MQTT_PASSWORD="${MQTT_PASSWORD:-}"
 SERIAL_DEVICE="${SERIAL_DEVICE:-/dev/ttyS3}"
 SERIAL_BAUD_RATE="${SERIAL_BAUD_RATE:-115200}"
+MQTT_TOPIC_TELEMETRY_PREFIX="${MQTT_TOPIC_TELEMETRY_PREFIX:-telemetry/}"
+MQTT_TOPIC_COMMAND_PREFIX="${MQTT_TOPIC_COMMAND_PREFIX:-cmd/}"
+MQTT_TOPIC_ACK_PREFIX="${MQTT_TOPIC_ACK_PREFIX:-cmd_ack/}"
 BUILD_FIRST=1
 ENABLE_NOW=1
 OVERWRITE_ENV=0
@@ -37,6 +40,9 @@ Options:
   --mqtt-password <value>     MQTT password
   --serial-device <path>      Serial device path
   --serial-baud-rate <rate>   Serial baud rate
+  --mqtt-topic-telemetry-prefix <value>  Telemetry topic prefix
+  --mqtt-topic-command-prefix <value>    Command topic prefix
+  --mqtt-topic-ack-prefix <value>        Ack topic prefix
   --skip-build                Do not run npm install/build
   --no-enable                 Install only, do not enable/start service
   --overwrite-env             Replace existing environment file
@@ -87,6 +93,18 @@ while [[ $# -gt 0 ]]; do
       ;;
     --serial-baud-rate)
       SERIAL_BAUD_RATE="$2"
+      shift 2
+      ;;
+    --mqtt-topic-telemetry-prefix)
+      MQTT_TOPIC_TELEMETRY_PREFIX="$2"
+      shift 2
+      ;;
+    --mqtt-topic-command-prefix)
+      MQTT_TOPIC_COMMAND_PREFIX="$2"
+      shift 2
+      ;;
+    --mqtt-topic-ack-prefix)
+      MQTT_TOPIC_ACK_PREFIX="$2"
       shift 2
       ;;
     --skip-build)
@@ -164,7 +182,9 @@ SERIAL_BAUD_RATE=${SERIAL_BAUD_RATE}
 MQTT_URL=${MQTT_URL}
 MQTT_USERNAME=${MQTT_USERNAME}
 MQTT_PASSWORD=${MQTT_PASSWORD}
-MQTT_TOPIC_TELEMETRY_PREFIX=telemetry/
+MQTT_TOPIC_TELEMETRY_PREFIX=${MQTT_TOPIC_TELEMETRY_PREFIX}
+MQTT_TOPIC_COMMAND_PREFIX=${MQTT_TOPIC_COMMAND_PREFIX}
+MQTT_TOPIC_ACK_PREFIX=${MQTT_TOPIC_ACK_PREFIX}
 SPOOL_ROOT_DIR=${STATE_ROOT}/spool
 HEALTH_FILE_PATH=${STATE_ROOT}/health/runtime-health.json
 MQTT_PUBLISH_TIMEOUT_MS=8000
@@ -210,4 +230,5 @@ echo "Installed ${SYSTEMD_UNIT_NAME}.service"
 echo "Environment file: ${ENV_FILE_PATH}"
 echo "State root: ${STATE_ROOT}"
 echo "Working directory: ${REPO_ROOT}/services/field-gateway"
+echo "Active state: $(systemctl is-active "${SYSTEMD_UNIT_NAME}.service" 2>/dev/null || true)"
 echo "Check status with: systemctl status ${SYSTEMD_UNIT_NAME}.service --no-pager"
