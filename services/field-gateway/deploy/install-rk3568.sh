@@ -221,7 +221,12 @@ chmod 0644 "${SYSTEMD_UNIT_PATH}"
 systemctl daemon-reload
 
 if [[ "${ENABLE_NOW}" -eq 1 ]]; then
-  systemctl enable --now "${SYSTEMD_UNIT_NAME}.service"
+  systemctl enable "${SYSTEMD_UNIT_NAME}.service"
+  if systemctl is-active --quiet "${SYSTEMD_UNIT_NAME}.service"; then
+    systemctl restart "${SYSTEMD_UNIT_NAME}.service"
+  else
+    systemctl start "${SYSTEMD_UNIT_NAME}.service"
+  fi
 else
   systemctl enable "${SYSTEMD_UNIT_NAME}.service"
 fi

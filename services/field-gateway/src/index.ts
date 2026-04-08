@@ -121,6 +121,8 @@ type GatewayJsonAssembler = {
   push(chunk: Buffer): string[];
 };
 
+type JsonObject = Record<string, unknown>;
+
 function isoNow(): string {
   return new Date().toISOString();
 }
@@ -216,6 +218,14 @@ function summarizePayloadSnippet(rawPayload: string, limit = 240): string {
     return normalized;
   }
   return `${normalized.slice(0, limit)}...(truncated)`;
+}
+
+function isJsonObject(value: unknown): value is JsonObject {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isTelemetryScalar(value: unknown): value is number | string | boolean | null {
+  return value === null || typeof value === "number" || typeof value === "string" || typeof value === "boolean";
 }
 
 function extractBalancedJsonObjectAt(input: string, start: number): string | null {
@@ -361,6 +371,10 @@ function recoverJsonCandidates(rawPayload: string): string[] {
     return balanced;
   }
 
+  if (!normalized.startsWith("{")) {
+    return [];
+  }
+
   const lines = normalized
     .split(/\r?\n/u)
     .map((line) => line.trim())
@@ -379,6 +393,75 @@ function recoverJsonCandidates(rawPayload: string): string[] {
   }
 
   return [normalized];
+}
+
+function normalizeTelemetryEnvelopeCandidate(parsed: unknown): TelemetryEnvelopeV1 | null {
+  if (!isJsonObject(parsed)) {
+    return null;
+  }
+
+  if (parsed.schema_version !== 1 || typeof parsed.device_id !== "string" || !isJsonObject(parsed.metrics)) {
+    return null;
+  }
+
+  const metrics: Record<string, number | string | boolean | null> = {};
+  const migratedMetricObjects: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(parsed.metrics)) {
+    if (isTelemetryScalar(value)) {
+      metrics[key] = value;
+      continue;
+    }
+
+    migratedMetricObjects[key] = value;
+  }
+
+  const rawMeta = isJsonObject(parsed.meta) ? parsed.meta : undefined;
+  const nextMeta: Record<string, unknown> = rawMeta ? { ...rawMeta } : {};
+  let changed = Object.keys(metrics).length !== Object.keys(parsed.metrics).length;
+
+  if (Object.keys(migratedMetricObjects).length > 0) {
+    for (const [key, value] of Object.entries(migratedMetricObjects)) {
+      if (!(key in nextMeta)) {
+        nextMeta[key] = value;
+      }
+    }
+    changed = true;
+  }
+
+  if (isJsonObject(parsed.legacy_valid_flags) && !("legacy_valid_flags" in nextMeta)) {
+    nextMeta.legacy_valid_flags = parsed.legacy_valid_flags;
+    changed = true;
+  }
+
+  if (!changed) {
+    return parsed as TelemetryEnvelopeV1;
+  }
+
+  const normalized: TelemetryEnvelopeV1 = {
+    schema_version: 1,
+    device_id: parsed.device_id,
+    metrics
+  };
+
+  if ("event_ts" in parsed) {
+    const eventTs = parsed.event_ts;
+    if (eventTs === null || typeof eventTs === "string") {
+      normalized.event_ts = eventTs;
+    }
+  }
+
+  if ("seq" in parsed) {
+    const seq = parsed.seq;
+    if (seq === null || typeof seq === "number") {
+      normalized.seq = seq;
+    }
+  }
+
+  if (Object.keys(nextMeta).length > 0) {
+    normalized.meta = nextMeta;
+  }
+
+  return normalized;
 }
 
 async function loadRecord(filePath: string): Promise<SpoolRecord> {
@@ -685,7 +768,13 @@ class GatewayRuntime {
       return;
     }
 
-    if (!this.validateEnvelope.validate(parsed)) {
+    const normalizedTelemetry = normalizeTelemetryEnvelopeCandidate(parsed);
+    let envelopeCandidate: TelemetryEnvelopeV1 | null = null;
+    if (normalizedTelemetry && this.validateEnvelope.validate(normalizedTelemetry)) {
+      envelopeCandidate = normalizedTelemetry;
+    } else if (this.validateEnvelope.validate(parsed)) {
+      envelopeCandidate = parsed;
+    } else {
       this.stats.schemaRejected += 1;
       this.stats.lastError = "schema validation failed";
       this.logger.warn(
@@ -693,14 +782,17 @@ class GatewayRuntime {
           traceId,
           sourcePort,
           telemetryErrors: this.validateEnvelope.errors,
-          ackErrors: this.validateCommandAck.errors
+          ackErrors: this.validateCommandAck.errors,
+          rawPayloadSnippet: summarizePayloadSnippet(rawPayload)
         },
         "field gateway schema invalid"
       );
       return;
     }
 
-    const envelope: TelemetryEnvelopeV1 = parsed;
+    const envelope = envelopeCandidate;
+    const normalizedPayload = JSON.stringify(envelope);
+    const normalizedPayloadBytes = Buffer.byteLength(normalizedPayload, "utf8");
     const nodeState = this.resolveNodeForTelemetry(envelope.device_id, traceId, sourcePort);
     if (!nodeState) {
       return;
@@ -720,15 +812,15 @@ class GatewayRuntime {
       device_id: envelope.device_id,
       seq: envelope.seq ?? null,
       packet_class: "telemetry",
-      payload_hash: payloadHash(rawPayload),
-      payload_bytes: payloadBytes,
+      payload_hash: payloadHash(normalizedPayload),
+      payload_bytes: normalizedPayloadBytes,
       state: "pending",
       source: {
         serial_device: sourcePort,
         serial_baud_rate: this.config.serialBaudRate
       },
       publish_attempts: 0,
-      payload: rawPayload
+      payload: normalizedPayload
     };
 
     try {

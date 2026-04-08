@@ -88,8 +88,10 @@ raise SystemExit(code)
 $repoRootLocal = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $installScriptPath = Join-Path $repoRootLocal "services/field-gateway/deploy/install-rk3568.sh"
 $checkScriptPath = Join-Path $repoRootLocal "services/field-gateway/deploy/check-rk3568-runtime.sh"
+$serviceTemplatePath = Join-Path $repoRootLocal "services/field-gateway/deploy/field-gateway.service.template"
 $installScriptBase64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes((Get-Content -Path $installScriptPath -Raw -Encoding UTF8)))
 $checkScriptBase64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes((Get-Content -Path $checkScriptPath -Raw -Encoding UTF8)))
+$serviceTemplateBase64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes((Get-Content -Path $serviceTemplatePath -Raw -Encoding UTF8)))
 
 $argList = @(
   "--repo-root", $RepoRoot,
@@ -114,12 +116,15 @@ $passwordBase64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetByte
 $remoteScript = @'
 set -euo pipefail
 
-tmp_install="$(mktemp)"
-tmp_check="$(mktemp)"
-trap 'rm -f "$tmp_install" "$tmp_check"' EXIT
+tmp_dir="$(mktemp -d)"
+tmp_install="$tmp_dir/install-rk3568.sh"
+tmp_check="$tmp_dir/check-rk3568-runtime.sh"
+tmp_template="$tmp_dir/field-gateway.service.template"
+trap 'rm -rf "$tmp_dir"' EXIT
 
 printf '%s' '__INSTALL_SCRIPT_B64__' | base64 -d > "$tmp_install"
 printf '%s' '__CHECK_SCRIPT_B64__' | base64 -d > "$tmp_check"
+printf '%s' '__SERVICE_TEMPLATE_B64__' | base64 -d > "$tmp_template"
 chmod +x "$tmp_install" "$tmp_check"
 
 mapfile -t INSTALL_ARGS < <(
@@ -151,6 +156,7 @@ bash "$tmp_check"
 $remoteScript = $remoteScript.
   Replace("__INSTALL_SCRIPT_B64__", $installScriptBase64).
   Replace("__CHECK_SCRIPT_B64__", $checkScriptBase64).
+  Replace("__SERVICE_TEMPLATE_B64__", $serviceTemplateBase64).
   Replace("__ARG_JSON_B64__", $argJsonBase64).
   Replace("__PASSWORD_B64__", $passwordBase64).
   Replace("__REPO_ROOT_B64__", $repoRootBase64).
@@ -158,11 +164,12 @@ $remoteScript = $remoteScript.
   Replace("__HEALTH_FILE_B64__", $healthFileBase64)
 
 $raw = Invoke-RemoteBash -TargetHost $BoardHost -TargetUser $User -TargetPassword $Password -TargetPort $SshPort -ScriptText $remoteScript
-$jsonStart = $raw.IndexOf("{")
+$rawText = [string]::Join([Environment]::NewLine, @($raw))
+$jsonStart = $rawText.IndexOf("{")
 if ($jsonStart -lt 0) {
   throw "install-rk3568-field-gateway did not return JSON runtime snapshot"
 }
-$jsonText = $raw.Substring($jsonStart)
+$jsonText = $rawText.Substring($jsonStart)
 $result = $jsonText | ConvertFrom-Json
 $resultJson = $result | ConvertTo-Json -Depth 8
 $resultJson

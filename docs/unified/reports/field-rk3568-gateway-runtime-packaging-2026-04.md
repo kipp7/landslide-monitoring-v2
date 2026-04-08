@@ -586,3 +586,92 @@ cat /var/lib/lsmv2/field-gateway/health/runtime-health.json
     - parser / framing hardening
     - node C 接入准备
   - 而不是再回到“如何远程看板子当前状态”这种基础问题
+
+## 20. 2026-04-08 共享流第一轮 parser hardening 已实机落板
+
+在运行态入口收口之后，本轮没有回头继续争论架构，而是直接对 `services/field-gateway/src/index.ts` 做了最小共享流容错增强，并且把新代码真实部署到了 RK3568 上。
+
+1. 当前这轮 parser hardening 的代码边界：
+- 对明显不以 `{` 开头、且无法从中恢复出完整对象的中段碎片：
+  - 不再强行 `JSON.parse`
+  - 直接跳过
+- 对已能 `JSON.parse`、但 telemetry schema 仍卡在对象型遗留字段的 payload：
+  - 把 `metrics` 中非标量值迁移出 `metrics`
+  - 当前已显式覆盖：
+    - `legacy_valid_flags`
+  - 归位到 `meta`
+- gateway 对外发布的 telemetry payload 也改为：
+  - 发布归一化后的 envelope JSON
+  - 不再把原始坏形态直接带进 northbound
+
+2. 同轮补齐的部署侧修正：
+- `scripts/dev/install-rk3568-field-gateway.ps1`
+  - 现在会把以下文件一并送到板端临时目录：
+    - `install-rk3568.sh`
+    - `check-rk3568-runtime.sh`
+    - `field-gateway.service.template`
+  - 不再出现模板缺失导致的：
+    - `sed: ... field-gateway.service.template: No such file or directory`
+- `install-rk3568-field-gateway.ps1`
+  - 现在会先把远端多行输出收成单字符串再截取 JSON
+  - 避免因为 stdout 多行而误报：
+    - `Substring startIndex cannot be larger than length of string`
+- `install-rk3568.sh`
+  - 当前已修正为：
+    - 服务已在运行时，安装完成后要显式 `restart`
+    - 不再只做 `enable --now` 而把旧进程继续留在场上
+
+3. 当前板端代码同步事实
+- RK3568 上 `/home/linaro/landslide-monitoring-v2-mainline` 当前是代码目录
+- 但不是 git 仓库
+- 所以这一轮 parser hardening 的源码落板采用的是：
+  - 受控一轮的文件级同步
+  - 远端 `npm run build --workspace @lsmv2/field-gateway`
+  - 再执行修正后的安装脚本重启服务
+- 这也意味着：
+  - “把当前本地代码包直接同步到 RK3568”的正式部署器
+  - 仍是后续需要继续补齐的一层
+
+4. 2026-04-08 实机重启后的新窗口证据
+- 最新服务启动真值：
+  - `MainPID = 1013180`
+  - `ExecMainStartTimestamp = Wed 2026-04-08 23:04:34 CST`
+- 重启后约 25 秒窗口内：
+  - `parsedMessages = 20`
+  - `publishedMessages = 21`
+  - `schemaRejected = 0`
+  - `lastError = null`
+  - `node A = online`
+  - `node B = online`
+  - `node C = configured`
+- 这说明第一轮 hardening 至少已经把：
+  - 最显眼的启动窗口碎片噪声
+  - `legacy_valid_flags` 类对象型 schema 拒绝
+  在短窗口内明显压低
+
+5. 同轮命令线回归事实
+- node `B` 再次执行：
+  - `manual_collect`
+- fresh command 证据：
+  - `commandId = 06a0d5c1-0430-4ec8-aaa7-4c59f0bea305`
+  - `ackStatus = acked`
+  - `conclusion = single-shot-proof-succeeded`
+- 重启后最新 runtime-health 也已确认：
+  - `commandsReceived = 1`
+  - `commandsForwarded = 1`
+  - `ackMessagesPublished = 1`
+  - `node B.commandForwards = 1`
+  - `node B.ackPublishes = 1`
+
+6. 当前不能夸大的结论
+- 这轮不是宣布共享流已经干净
+- 在更长一点的同一进程窗口里，最新 health 仍然回升到了：
+  - `schemaRejected = 2`
+  - `lastError = Expected ',' or '}' after property value in JSON at position 572`
+- 而日志里仍能看到：
+  - ACK / telemetry 交织残片
+  - 被撕裂的 telemetry 片段
+- 所以当前正式结论应保持克制：
+  - 第一轮 hardening 已经把共享流噪声从“起步就大量报错”压到“短窗口可清零、长一点窗口仍有少量残余”
+  - 并且没有打断 node `B` 的命令闭环
+  - 下一步仍需继续做更强的 shared-stream parser/framing hardening

@@ -739,3 +739,53 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - keep the deployment/runtime inspection path frozen
     - continue node-`C` preparation
     - then do parser/framing hardening without re-opening the already-frozen install/runtime tooling line
+- the first post-packaging parser hardening pass is now also landed locally and reproved on-device:
+  - current code changes in `services/field-gateway/src/index.ts` now:
+    - drop obvious mid-payload fragments that do not begin with `{`
+    - normalize object-valued telemetry members out of `metrics`
+    - currently salvage `legacy_valid_flags` into `meta`
+    - publish normalized telemetry JSON northbound instead of replaying the raw malformed variant
+  - current deploy-tooling corrections now also exist:
+    - `scripts/dev/install-rk3568-field-gateway.ps1` now transfers:
+      - `install-rk3568.sh`
+      - `check-rk3568-runtime.sh`
+      - `field-gateway.service.template`
+    - the same wrapper now normalizes multi-line stdout before extracting the JSON runtime snapshot
+    - `install-rk3568.sh` now restarts an already-active `lsmv2-field-gateway.service` instead of relying on `enable --now`
+  - one important deployment truth was confirmed during this closure:
+    - `/home/linaro/landslide-monitoring-v2-mainline` on RK3568 is a plain code directory
+    - not a git worktree
+    - so this round used controlled file-level sync plus remote build/restart to get the new parser code onto the board
+  - fresh on-device evidence after the restart now includes:
+    - `MainPID = 1013180`
+    - `ExecMainStartTimestamp = 2026-04-08 23:04:34 CST`
+    - early post-restart snapshot:
+      - `parsedMessages = 20`
+      - `publishedMessages = 21`
+      - `schemaRejected = 0`
+      - `lastError = null`
+      - `A = online`
+      - `B = online`
+      - `C = configured`
+  - command-path regression after that restart also stayed green:
+    - node `B`
+    - `manual_collect`
+    - `commandId = 06a0d5c1-0430-4ec8-aaa7-4c59f0bea305`
+    - `ackStatus = acked`
+    - `conclusion = single-shot-proof-succeeded`
+    - latest health after the same proof:
+      - `commandsReceived = 1`
+      - `commandsForwarded = 1`
+      - `ackMessagesPublished = 1`
+      - `node B.commandForwards = 1`
+      - `node B.ackPublishes = 1`
+  - current remaining truth is still disciplined:
+    - the stream is not yet clean
+    - later in the same process window, `schemaRejected` rose again to `2`
+    - so the gain is:
+      - substantial noise reduction
+      - not final elimination
+  - this updates the next near-term blocker again:
+    - keep the new parser baseline
+    - formalize a source-sync deployment line for RK3568 instead of one-off file pushes
+    - continue the next parser/framing hardening pass before scaling claims
