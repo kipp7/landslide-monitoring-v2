@@ -621,3 +621,25 @@ Freeze and execute the next major phase after command-route stabilization: prove
 - the immediate next blocker narrows again to:
   - bring node `C` online on the same center-fed `/dev/ttyS3`
   - then re-run the same repaired command set against the three-node stream
+- after tightening the proof gate from:
+  - “ack publish observed”
+- to:
+  - “the same `command_id` must be observed with `status=acked`”
+- the current two-node shared-port line is no longer fully green:
+  - latest one-click baseline entry:
+    - `scripts/dev/run-rk3568-shared-port-two-node-baseline.ps1`
+  - latest result:
+    - `conclusion = baseline-failed-but-report-interval-restored-to-5s`
+  - latest strict evidence now says:
+    - telemetry remains healthy
+    - `set-report-5` restore succeeded with:
+      - `commandId = 879673c0-ffcd-4ec2-b01b-ffa29aff4cfa`
+      - `status = acked`
+    - but the same baseline run did not reprove:
+      - `manual_collect`
+      - under the stricter success criterion
+- this changes the immediate pre-node-`C` blocker again:
+  - before bringing node `C` online, tighten the current two-node shared-port line until:
+    - `manual_collect`
+    - `set_config`
+    both deterministically return `status=acked`

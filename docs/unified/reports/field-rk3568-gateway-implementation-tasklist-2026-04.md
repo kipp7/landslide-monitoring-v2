@@ -520,6 +520,43 @@ RK3568 网关一期算完成，至少要满足：
 - 这条修复不改变现场协议
 - 但能避免控制侧 proof 并行时的伪失败
 
+## 11.4 2026-04-08 严格 ACK 判定后，两节点共享串口仍未稳定收口
+
+在把 proof 的通过条件收紧为：
+
+- 不只要看到 `cmd_ack/{device_id}` 被发布
+- 还要看到同一 `command_id` 的：
+  - `status = acked`
+
+之后，最新两节点共享串口一键基线结果已经从“全绿”修正为“仍未稳定收口”。
+
+1. 当前固定入口
+- `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\run-rk3568-shared-port-two-node-baseline.ps1 -Password linaro`
+
+2. 最新结果
+- `conclusion = baseline-failed-but-report-interval-restored-to-5s`
+- 当前说明：
+  - 两节点仍可运行
+  - 但不能再把它表述为“稳定可交付”
+
+3. 最新严格证据
+- `manual_collect`
+  - 本轮未拿到新的 `status=acked`
+  - 因此判为未通过
+- `set-report-5`
+  - 恢复步骤成功
+  - 最新恢复命令：
+    - `commandId = 879673c0-ffcd-4ec2-b01b-ffa29aff4cfa`
+    - `status = acked`
+
+4. 因此当前主线应进一步收敛为
+- `node C` 未到之前，不应把重点放在扩拓扑
+- 而应先把当前：
+  - `2 节点`
+  - `1 条 /dev/ttyS3`
+  - `manual_collect + set_config`
+  收到真正稳定的 `status=acked`
+
 ## 12. 相关文档
 
 - [field-uplink-platform-closure-baseline.md](/E:/学校/02 项目/99 山体滑坡优化完善/landslide-monitoring-v2-mainline/docs/unified/reports/field-uplink-platform-closure-baseline.md)

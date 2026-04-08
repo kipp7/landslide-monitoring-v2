@@ -144,6 +144,25 @@ journalctl -u '$RemoteServiceName' -n $LineCount --no-pager
   return [string](Invoke-RemoteBash -TargetHost $TargetHost -TargetUser $TargetUser -TargetPassword $TargetPassword -TargetPort $TargetPort -ScriptText $script | Out-String)
 }
 
+function Get-RemoteJournalForCommand {
+  param(
+    [string]$TargetHost,
+    [string]$TargetUser,
+    [string]$TargetPassword,
+    [int]$TargetPort,
+    [string]$RemoteServiceName,
+    [string]$CommandId,
+    [int]$LineCount = 600
+  )
+
+  $script = @"
+set -euo pipefail
+journalctl -u '$RemoteServiceName' -n $LineCount --no-pager | grep -F '$CommandId' || true
+"@
+
+  return [string](Invoke-RemoteBash -TargetHost $TargetHost -TargetUser $TargetUser -TargetPassword $TargetPassword -TargetPort $TargetPort -ScriptText $script | Out-String)
+}
+
 function Get-ActionSpec {
   param([string]$ActionName)
 
@@ -286,12 +305,37 @@ function Get-ParseFailureEvidence {
   return @($evidence)
 }
 
+function Get-CommandEventEvidence {
+  param(
+    [string]$JournalText,
+    [string]$CommandId,
+    [string]$MessageText
+  )
+
+  if (-not $JournalText) { return $null }
+
+  $eventMatches = @()
+  foreach ($line in ($JournalText -split "`r?`n")) {
+    if ($line -notmatch [regex]::Escape($MessageText)) { continue }
+
+    $event = Convert-JournalLineToStructuredEvent -Line $line
+    if (-not $event) { continue }
+    if ($null -eq $event.PSObject.Properties["commandId"]) { continue }
+    if ([string]$event.commandId -ne $CommandId) { continue }
+    $eventMatches += $event
+  }
+
+  if (@($eventMatches).Count -le 0) { return $null }
+  return @($eventMatches | Select-Object -Last 1)[0]
+}
+
 function Get-ProofDiagnosis {
   param(
     [bool]$ProofPassed,
     $HealthAfter,
     [string]$JournalText,
-    [string]$CommandId
+    [string]$CommandId,
+    [string]$AckStatus = ""
   )
 
   $parseFailureEvidence = @(Get-ParseFailureEvidence -JournalText $JournalText -CommandId $CommandId)
@@ -301,6 +345,8 @@ function Get-ProofDiagnosis {
 
   $summary = if ($ProofPassed) {
     "command-forward-and-ack-publish-succeeded"
+  } elseif ($AckStatus -and $AckStatus -ne "acked") {
+    "command-forwarded-but-ack-status-not-acked"
   } elseif ($commandsForwarded -le 0) {
     "command-did-not-forward"
   } elseif ($ackMessagesPublished -gt 0) {
@@ -389,23 +435,34 @@ $deadline = (Get-Date).AddSeconds($WaitSeconds)
 $healthAfter = $healthBefore
 $journalTail = ""
 $proofPassed = $false
+$commandForwardEvidence = $null
+$ackEvidence = $null
+$ackStatus = ""
 
 while ((Get-Date) -lt $deadline) {
   Start-Sleep -Seconds ([Math]::Max(1, $PollSeconds))
   $healthAfter = Get-RemoteHealth -TargetHost $BoardHost -TargetUser $User -TargetPassword $Password -TargetPort $SshPort -RemoteHealthFile $HealthFile
   $journalTail = Get-RemoteJournalTail -TargetHost $BoardHost -TargetUser $User -TargetPassword $Password -TargetPort $SshPort -RemoteServiceName $ServiceName -LineCount 160
+  $commandJournal = Get-RemoteJournalForCommand -TargetHost $BoardHost -TargetUser $User -TargetPassword $Password -TargetPort $SshPort -RemoteServiceName $ServiceName -CommandId $commandId -LineCount 600
+  if ($commandJournal) {
+    $journalTail = ($journalTail.TrimEnd() + "`n" + $commandJournal.Trim()).Trim()
+  }
 
-  $commandForwarded = ([int]$healthAfter.stats.commandsForwarded -gt $baselineCommandsForwarded) -or ($journalTail -match [regex]::Escape($commandId) -and $journalTail -match "field gateway command forwarded to serial")
-  $ackPublished = ([int]$healthAfter.stats.ackMessagesPublished -gt $baselineAckMessagesPublished) -or ($journalTail -match [regex]::Escape($commandId) -and $journalTail -match "field gateway command ack published")
+  $commandForwardEvidence = Get-CommandEventEvidence -JournalText $journalTail -CommandId $commandId -MessageText "field gateway command forwarded to serial"
+  $ackEvidence = Get-CommandEventEvidence -JournalText $journalTail -CommandId $commandId -MessageText "field gateway command ack published"
+  $ackStatus = if ($ackEvidence -and $null -ne $ackEvidence.PSObject.Properties["status"]) { [string]$ackEvidence.status } else { "" }
 
-  if ($commandForwarded -and $ackPublished) {
+  $commandForwarded = ([int]$healthAfter.stats.commandsForwarded -gt $baselineCommandsForwarded) -or ($null -ne $commandForwardEvidence)
+  $ackSucceeded = $ackStatus -eq "acked"
+
+  if ($commandForwarded -and $ackSucceeded) {
     $proofPassed = $true
     break
   }
 }
 
 $afterNode = Get-NodeState -Health $healthAfter -TargetDeviceId $DeviceId
-$diagnosis = Get-ProofDiagnosis -ProofPassed:$proofPassed -HealthAfter $healthAfter -JournalText $journalTail -CommandId $commandId
+$diagnosis = Get-ProofDiagnosis -ProofPassed:$proofPassed -HealthAfter $healthAfter -JournalText $journalTail -CommandId $commandId -AckStatus $ackStatus
 $result = [ordered]@{
   generatedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
   passed = $proofPassed
@@ -430,6 +487,8 @@ $result = [ordered]@{
     lastCommandForwardedTs = $healthAfter.stats.lastCommandForwardedTs
     lastAckPublishedTs = $healthAfter.stats.lastAckPublishedTs
   }
+  commandEvidence = $commandForwardEvidence
+  ackEvidence = $ackEvidence
   diagnosis = $diagnosis
   runtimeHealth = $healthAfter
   journalTail = $journalTail
