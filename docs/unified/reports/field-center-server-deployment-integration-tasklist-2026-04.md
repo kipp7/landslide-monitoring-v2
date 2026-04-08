@@ -10,7 +10,7 @@ permalink: landslide-monitoring-v2-mainline/docs/unified/reports/field-center-se
 
 - topic: `field-center-server-deployment-integration`
 - state: `implementation-tasklist-frozen`
-- updated_at: `2026-04-08`
+- updated_at: `2026-04-09`
 - authority: `current`
 
 ## 1. 这份任务单解决什么问题
@@ -245,6 +245,46 @@ Center server 一期算完成，至少要满足：
 - `把平台主链部署线固定下来，让 RK3568 上来的标准 telemetry 可以稳定被 ingest、写入、读出和留证`
 
 只有这条线稳定，后面的 `3 x RK2206 -> 1 x RK3568 -> center server` 真实演练才不会反复卡在环境层。
+
+## 10.1 2026-04-09 中心主链已开始从 host-run 收回 compose 运行线
+
+这轮先选了当前影响最小、收益明确的一步：
+
+- 把 `ingest-service`
+- 把 `telemetry-writer`
+
+从“仍可能依赖 host-run”的状态，开始正式收回 `docker-compose.app.yml`。
+
+1. 当前已落地的仓库交付物：
+- `services/ingest/Dockerfile`
+- `services/telemetry-writer/Dockerfile`
+- `infra/compose/docker-compose.app.yml`
+  - 现已补入：
+    - `ingest`
+    - `telemetry-writer`
+
+2. 当前 compose 收口边界：
+- `api`
+- `web`
+- `ingest-service`
+- `telemetry-writer`
+
+3. 当前意义：
+- 中心主链不再默认要求：
+  - 手工启动 `node dist/index.js`
+  - 再额外记住哪个窗口跑了哪个服务
+- 后续 `deploy-docker-oneclick.ps1` 也不需要新入口
+  - 因为它本来就会同时使用：
+    - `docker-compose.yml`
+    - `docker-compose.app.yml`
+
+4. 当前仍未夸大的点：
+- 这轮是把运行线收回 compose
+- 不是宣布中心部署已经全部完成
+- 后面仍需继续验证：
+  - full-path readiness
+  - 下游语义 proof
+  - 运行恢复与证据包
 
 ## 10. 相关文档
 

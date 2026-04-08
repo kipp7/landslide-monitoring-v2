@@ -84,7 +84,7 @@ function Ensure-ComposeRuntime([string]$RepoRoot, [string]$ApiUrl, [string]$WebU
       -f infra/compose/docker-compose.yml `
       -f infra/compose/docker-compose.app.yml `
       --env-file infra/compose/.env `
-      up -d postgres clickhouse kafka emqx api web | Out-Null
+      up -d postgres clickhouse kafka emqx api web ingest telemetry-writer | Out-Null
     if ($LASTEXITCODE -ne 0) {
       throw "docker compose up failed (exit=$LASTEXITCODE)"
     }
@@ -241,7 +241,7 @@ process.stdout.write(JSON.stringify({
     }
     nextUse = @(
       "primary rerun command: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\run-field-hardware-uplink-full-proof.ps1",
-      "this proof line remains host-assisted for ingest-service and telemetry-writer until they are moved into a stable runtime topology"
+      "this proof line now expects ingest-service and telemetry-writer to be available through the compose-managed center runtime"
     )
     conclusion = if (
       [string]$replay.conclusion -eq "real-hardware-uplink-replay-reached-platform-api-state" -and

@@ -920,3 +920,22 @@ Freeze and execute the next major phase after command-route stabilization: prove
       - node `B manual_collect`
       - node `C manual_collect`
       - one `set_config` regression
+- the center deployment and software-adaptation line has now also started from the lowest-risk integration point:
+  - `services/ingest/Dockerfile`
+  - `services/telemetry-writer/Dockerfile`
+  - `infra/compose/docker-compose.app.yml`
+    now includes:
+    - `ingest`
+    - `telemetry-writer`
+- the immediate purpose is narrow:
+  - stop treating downstream ingest/writer as implicit host-run processes
+  - move them onto the same compose-managed center runtime line as:
+    - `api`
+    - `web`
+- `scripts/dev/check-field-full-path-readiness.ps1` now also recognizes compose-managed downstream runtime:
+  - `lsmv2_ingest`
+  - `lsmv2_telemetry_writer`
+- this means the next center-side proof should no longer ask only:
+  - "are ingest/writer running somewhere"
+  - but:
+  - "is the compose-managed full center chain actually up and semantically passing"

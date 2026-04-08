@@ -80,3 +80,73 @@ services:
     depends_on:
       api:
         condition: service_started
+
+  ingest:
+    image: lsmv2/ingest-service:latest
+    build:
+      context: ../..
+      dockerfile: services/ingest/Dockerfile
+    container_name: lsmv2_ingest
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: ingest-service
+      MQTT_URL: mqtt://emqx:1883
+      MQTT_USERNAME: ${MQTT_INTERNAL_USERNAME:-ingest-service}
+      MQTT_PASSWORD: ${MQTT_INTERNAL_PASSWORD:-}
+      MQTT_TOPIC_TELEMETRY: telemetry/+
+      MQTT_TOPIC_PRESENCE: presence/+
+      MESSAGE_MAX_BYTES: ${INGEST_MESSAGE_MAX_BYTES:-262144}
+      METRICS_MAX_KEYS: ${INGEST_METRICS_MAX_KEYS:-500}
+      DLQ_RAW_PAYLOAD_MAX_BYTES: ${INGEST_DLQ_RAW_PAYLOAD_MAX_BYTES:-65536}
+      KAFKA_BROKERS: ${KAFKA_BROKERS_INTERNAL:-kafka:9092}
+      KAFKA_CLIENT_ID: ingest-service
+      KAFKA_TOPIC_TELEMETRY_RAW: telemetry.raw.v1
+      KAFKA_TOPIC_TELEMETRY_DLQ: telemetry.dlq.v1
+      KAFKA_TOPIC_PRESENCE_EVENTS: presence.events.v1
+    depends_on:
+      emqx:
+        condition: service_started
+      kafka:
+        condition: service_healthy
+
+  telemetry-writer:
+    image: lsmv2/telemetry-writer:latest
+    build:
+      context: ../..
+      dockerfile: services/telemetry-writer/Dockerfile
+    container_name: lsmv2_telemetry_writer
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: telemetry-writer
+      KAFKA_BROKERS: ${KAFKA_BROKERS_INTERNAL:-kafka:9092}
+      KAFKA_CLIENT_ID: telemetry-writer
+      KAFKA_GROUP_ID: telemetry-writer.v1
+      KAFKA_TOPIC_TELEMETRY_RAW: telemetry.raw.v1
+      KAFKA_TOPIC_TELEMETRY_DLQ: telemetry.dlq.v1
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_USERNAME: ${CH_USER:-landslide}
+      CLICKHOUSE_PASSWORD: ${CH_PASSWORD:-change-me}
+      CLICKHOUSE_DATABASE: ${CH_DATABASE:-landslide}
+      CLICKHOUSE_TABLE: telemetry_raw
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: ${PG_PORT:-5432}
+      POSTGRES_USER: ${PG_USER:-landslide}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-change-me}
+      POSTGRES_DATABASE: ${PG_DATABASE:-landslide_monitor}
+      POSTGRES_POOL_MAX: ${WRITER_POSTGRES_POOL_MAX:-5}
+      BATCH_MAX_ROWS: ${WRITER_BATCH_MAX_ROWS:-2000}
+      BATCH_MAX_MESSAGES: ${WRITER_BATCH_MAX_MESSAGES:-500}
+      BATCH_FLUSH_INTERVAL_MS: ${WRITER_BATCH_FLUSH_INTERVAL_MS:-1000}
+      MESSAGE_MAX_BYTES: ${WRITER_MESSAGE_MAX_BYTES:-262144}
+      HIGH_FREQUENCY_BUDGET_BYTES: ${WRITER_HIGH_FREQUENCY_BUDGET_BYTES:-192}
+      DLQ_RAW_PAYLOAD_MAX_BYTES: ${WRITER_DLQ_RAW_PAYLOAD_MAX_BYTES:-65536}
+      STATS_LOG_INTERVAL_MS: ${WRITER_STATS_LOG_INTERVAL_MS:-30000}
+      CLICKHOUSE_UNAVAILABLE_COOLDOWN_MS: ${WRITER_CLICKHOUSE_UNAVAILABLE_COOLDOWN_MS:-15000}
+      CLICKHOUSE_UNAVAILABLE_COOLDOWN_MAX_MS: ${WRITER_CLICKHOUSE_UNAVAILABLE_COOLDOWN_MAX_MS:-300000}
+    depends_on:
+      kafka:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy

@@ -34,6 +34,8 @@ try {
     (Get-ContainerStatus "lsmv2_kafka")
     (Get-ContainerStatus "lsmv2_clickhouse")
     (Get-ContainerStatus "lsmv2_postgres")
+    (Get-ContainerStatus "lsmv2_ingest")
+    (Get-ContainerStatus "lsmv2_telemetry_writer")
   )
 
   $hostProcesses = @(
@@ -62,10 +64,14 @@ try {
 
   $ingestRunning = [bool]($hostProcesses | Where-Object { $_.name -eq "ingest-service" }).running
   $writerRunning = [bool]($hostProcesses | Where-Object { $_.name -eq "telemetry-writer" }).running
+  $ingestContainerRunning = [bool]($containers | Where-Object { $_.name -eq "lsmv2_ingest" }).running
+  $writerContainerRunning = [bool]($containers | Where-Object { $_.name -eq "lsmv2_telemetry_writer" }).running
+  $ingestAvailable = $ingestRunning -or $ingestContainerRunning
+  $writerAvailable = $writerRunning -or $writerContainerRunning
 
   $report = [ordered]@{
     generatedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
-    currentBoundary = if ($ingestRunning -and $writerRunning) { "full-path-ready" } else { "broker-and-api-selfcheck-only" }
+    currentBoundary = if ($ingestAvailable -and $writerAvailable) { "full-path-ready" } else { "broker-and-api-selfcheck-only" }
     compose = [ordered]@{
       appComposeIncludesIngest = $composeIncludesIngest
       appComposeIncludesTelemetryWriter = $composeIncludesWriter
@@ -73,6 +79,12 @@ try {
     runtime = [ordered]@{
       containers = $containers
       hostProcesses = $hostProcesses
+      downstreamRuntime = [ordered]@{
+        ingestAvailable = $ingestAvailable
+        ingestSource = if ($ingestContainerRunning) { "compose" } elseif ($ingestRunning) { "host-run" } else { "absent" }
+        telemetryWriterAvailable = $writerAvailable
+        telemetryWriterSource = if ($writerContainerRunning) { "compose" } elseif ($writerRunning) { "host-run" } else { "absent" }
+      }
     }
     code = [ordered]@{
       apiDataRawTimeFilterFixPresent = $apiCodeHasRawFix
@@ -81,10 +93,10 @@ try {
       "Current Docker app stack only proves MQTT publish + API self-check unless ingest-service and telemetry-writer are also running.",
       "A real downstream semantic proof requires telemetry to reach device_state or ClickHouse, not just successful publish output."
     )
-    nextAction = if ($ingestRunning -and $writerRunning) {
+    nextAction = if ($ingestAvailable -and $writerAvailable) {
       "Run a focused downstream semantic proof against device_state and /api/v1/data/raw."
     } else {
-      "Start ingest-service and telemetry-writer (or add them to compose) before claiming full-path downstream proof."
+      "Start ingest-service and telemetry-writer, preferably through docker-compose.app.yml, before claiming full-path downstream proof."
     }
   }
 

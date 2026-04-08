@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: landslide-monitoring-v2-mainline/infra/compose/readme
+---
+
 # 单机部署（Docker Compose，v2）
 
 本目录是单机部署的**权威物料**（实现阶段也会继续沿用），目标是：
@@ -9,6 +15,7 @@
 ## 1) 目录说明
 
 - `docker-compose.yml`：基础设施（EMQX/Kafka/ClickHouse/Postgres/Redis/Kafka UI）
+- `docker-compose.app.yml`：应用层服务（API/Web/ingest-service/telemetry-writer）
 - `env.example`：环境变量模板（复制为 `.env`）
 - `scripts/`：初始化与运维脚本（建 topic / 初始化 DDL / 离线备份）
 
@@ -32,14 +39,18 @@
 
    - `docker compose -f infra/compose/docker-compose.yml --env-file infra/compose/.env up -d`
 
+4. 如需启动完整中心主链（推荐现场联调使用）：
+
+   - `docker compose -f infra/compose/docker-compose.yml -f infra/compose/docker-compose.app.yml --env-file infra/compose/.env up -d`
+
 > 如果出现镜像拉取超时（Docker Hub 在国内经常不稳定），请先在 Docker Desktop 配置 Registry Mirror，再重试。
 
-4. 初始化数据库（首次启动后执行一次）：
+5. 初始化数据库（首次启动后执行一次）：
 
    - PostgreSQL：`powershell -ExecutionPolicy Bypass -File infra/compose/scripts/init-postgres.ps1`
    - ClickHouse：`powershell -ExecutionPolicy Bypass -File infra/compose/scripts/init-clickhouse.ps1`
 
-5. 创建 Kafka topics（首次启动后执行一次）：
+6. 创建 Kafka topics（首次启动后执行一次）：
 
    - `powershell -ExecutionPolicy Bypass -File infra/compose/scripts/create-kafka-topics.ps1`
 
@@ -58,6 +69,11 @@
 
 - 脚本会自动检查 `infra/compose/.env` 是否存在；不存在时会从 `env.example` 复制。
 - 默认会校验密码/密钥是否还是 `change-me`；如果只是本地演示，可以加 `-AllowUnsafeSecrets` 放行。
+- 当前一键部署会同时拉起：
+  - `api`
+  - `web`
+  - `ingest-service`
+  - `telemetry-writer`
 - 运行结果会写到：
   - `docs/unified/reports/docker-deploy-latest.json`
 
