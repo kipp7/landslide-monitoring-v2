@@ -41,6 +41,10 @@ const configSchema = z
     mqttPublishTimeoutMs: z.coerce.number().int().positive().default(8000),
     replayIntervalMs: z.coerce.number().int().positive().default(5000),
     healthEmitIntervalMs: z.coerce.number().int().positive().default(5000),
+    nodeDegradedAfterMs: z.coerce.number().int().positive().default(15000),
+    nodeOfflineAfterMs: z.coerce.number().int().positive().default(30000),
+    portDegradedAfterMs: z.coerce.number().int().positive().default(15000),
+    portOfflineAfterMs: z.coerce.number().int().positive().default(30000),
     maxMessageBytes: z.coerce.number().int().positive().default(256 * 1024),
     maxPendingRecords: z.coerce.number().int().positive().default(10000),
     spoolRetentionPublished: z.coerce.number().int().nonnegative().default(200),
@@ -54,6 +58,22 @@ const configSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "MQTT_USERNAME and MQTT_PASSWORD must be both set or both empty"
+      });
+    }
+
+    if (data.nodeOfflineAfterMs <= data.nodeDegradedAfterMs) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["nodeOfflineAfterMs"],
+        message: "NODE_OFFLINE_AFTER_MS must be greater than NODE_DEGRADED_AFTER_MS"
+      });
+    }
+
+    if (data.portOfflineAfterMs <= data.portDegradedAfterMs) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["portOfflineAfterMs"],
+        message: "PORT_OFFLINE_AFTER_MS must be greater than PORT_DEGRADED_AFTER_MS"
       });
     }
 
@@ -98,6 +118,10 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
     mqttPublishTimeoutMs: env.MQTT_PUBLISH_TIMEOUT_MS,
     replayIntervalMs: env.REPLAY_INTERVAL_MS,
     healthEmitIntervalMs: env.HEALTH_EMIT_INTERVAL_MS,
+    nodeDegradedAfterMs: env.NODE_DEGRADED_AFTER_MS,
+    nodeOfflineAfterMs: env.NODE_OFFLINE_AFTER_MS,
+    portDegradedAfterMs: env.PORT_DEGRADED_AFTER_MS,
+    portOfflineAfterMs: env.PORT_OFFLINE_AFTER_MS,
     maxMessageBytes: env.MAX_MESSAGE_BYTES,
     maxPendingRecords: env.MAX_PENDING_RECORDS,
     spoolRetentionPublished: env.SPOOL_RETENTION_PUBLISHED,

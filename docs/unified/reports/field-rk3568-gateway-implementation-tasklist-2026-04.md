@@ -358,6 +358,9 @@ RK3568 网关一期算完成，至少要满足：
   - `southbound.configuredNodes`
   - `southbound.activeSerialDevice`
   - `southbound.nodes[]`
+  - `southbound.ports[]`
+  - `nodes[].status`
+  - `ports[].status`
 
 2. 已完成的实机证明
 - RK3568 实机已带显式 `SOUTHBOUND_NODES_JSON` 配置运行
@@ -370,6 +373,8 @@ RK3568 网关一期算完成，至少要满足：
   - `southbound.routeMode = configured-node-routing`
   - `southbound.configuredPorts = 1`
   - `southbound.ports[]` 已进入运行态
+  - `southbound.ports[0].status = online`
+  - `southbound.nodes[0].status = online`
 - fresh runtime `manual_collect` 已再次跑通：
   - `cmd/{device_id} -> RK3568 -> /dev/ttyS3 -> cmd_ack/{device_id}`
 - 当前最新实机命令证据：
@@ -387,6 +392,7 @@ RK3568 网关一期算完成，至少要满足：
   - 多实例部署编排
   - 多无线链路调度
   - 节点离线/重连策略细化
+  - 状态阈值的现场调优
 
 4. 因此当前主线应继续收敛为
 - 先把第二、第三个 southbound 端口真正接入

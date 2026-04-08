@@ -42,6 +42,10 @@ permalink: landslide-monitoring-v2-mainline/services/field-gateway/readme
 - `MQTT_PUBLISH_TIMEOUT_MS`：单次 MQTT 发布超时
 - `REPLAY_INTERVAL_MS`：pending spool 重放周期
 - `HEALTH_EMIT_INTERVAL_MS`：health 文件刷新周期
+- `NODE_DEGRADED_AFTER_MS`：节点超过该时长未见 telemetry 时进入 `degraded`
+- `NODE_OFFLINE_AFTER_MS`：节点超过该时长未见 telemetry 时进入 `offline`
+- `PORT_DEGRADED_AFTER_MS`：端口超过该时长未见串口读入时进入 `degraded`
+- `PORT_OFFLINE_AFTER_MS`：端口超过该时长未见串口读入时进入 `offline`
 - `MAX_MESSAGE_BYTES`：单条串口重组消息最大字节数
 - `MAX_PENDING_RECORDS`：pending spool 上限
 - `SPOOL_RETENTION_PUBLISHED`：published 留存数
@@ -129,6 +133,17 @@ cat /var/lib/lsmv2/field-gateway/health/runtime-health.json
 - health 当前已经补到两层：
   - `southbound.ports[]`
   - `southbound.nodes[]`
+- 当前状态层已补最小运行状态：
+  - 节点：
+    - `configured`
+    - `online`
+    - `degraded`
+    - `offline`
+  - 端口：
+    - `configured`
+    - `online`
+    - `degraded`
+    - `offline`
 - 当前已补最小命令闭环骨架：
   - 订阅 `cmd/{device_id}`
   - 校验 `device-command.v1`

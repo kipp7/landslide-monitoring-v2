@@ -279,10 +279,31 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - telemetry continued to publish from `/dev/ttyS3`
     - fresh runtime `manual_collect` still closed end-to-end
     - latest reproved `commandId`:
-      - `19eef434-59ba-40df-9386-869d47421fed`
+    - `19eef434-59ba-40df-9386-869d47421fed`
     - port-level stats now also advanced:
       - `commandWrites = 1`
       - `ackMessages = 1`
+- the first minimum runtime status-layer thresholding is now also landed and revalidated on-device:
+  - new env controls now exist:
+    - `NODE_DEGRADED_AFTER_MS`
+    - `NODE_OFFLINE_AFTER_MS`
+    - `PORT_DEGRADED_AFTER_MS`
+    - `PORT_OFFLINE_AFTER_MS`
+  - node status is now derived from last telemetry age:
+    - `configured`
+    - `online`
+    - `degraded`
+    - `offline`
+  - port status is now derived from serial open state plus last serial-read age:
+    - `configured`
+    - `online`
+    - `degraded`
+    - `offline`
+  - current RK3568 post-deploy health proof confirms:
+    - `southbound.ports[0].status = online`
+    - `southbound.nodes[0].status = online`
+  - telemetry continued to publish after this change
+  - the stale single-port command gate has also now been removed from runtime command resolution so later multi-port command routing will not be blocked by `SERIAL_DEVICE`
 
 ## Constraints
 
@@ -355,6 +376,10 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - multi-port-capable southbound runtime is landed
     - port-level health is visible on-device
     - single-node regression stayed green after the runtime refactor
+  - third entry inside this stage is now also complete:
+    - minimum status-layer thresholds are landed
+    - node/port online-degraded-offline state is visible on-device
+    - command resolution no longer retains the old single-port gate
   - next focus should move to:
     - attach the second and third southbound ports for real hardware
     - validate concurrent multi-node ingress on-device

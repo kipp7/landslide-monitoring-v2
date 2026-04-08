@@ -50,7 +50,7 @@ type NodeRuntimeState = {
   lastTelemetryTs: string | null;
   lastCommandTs: string | null;
   lastAckTs: string | null;
-  status: "configured" | "online";
+  status: "configured" | "online" | "degraded" | "offline";
 };
 
 type PortRuntimeState = {
@@ -69,6 +69,7 @@ type PortRuntimeState = {
   lastCommandTs: string | null;
   lastAckTs: string | null;
   lastError: string | null;
+  status: "configured" | "online" | "degraded" | "offline";
 };
 
 type SpoolState = "pending" | "published" | "rejected";
@@ -122,6 +123,13 @@ type GatewayJsonAssembler = {
 
 function isoNow(): string {
   return new Date().toISOString();
+}
+
+function ageMsFrom(nowMs: number, isoTs: string | null): number | null {
+  if (!isoTs) return null;
+  const ts = Date.parse(isoTs);
+  if (Number.isNaN(ts)) return null;
+  return Math.max(0, nowMs - ts);
 }
 
 function repoRootFromHere(): string {
@@ -472,6 +480,7 @@ class GatewayRuntime {
     portState.open = true;
     portState.lastOpenTs = isoNow();
     portState.lastError = null;
+    portState.status = "configured";
 
     this.logger.info(
       {
@@ -800,6 +809,10 @@ class GatewayRuntime {
 
   private async emitHealth(): Promise<void> {
     this.stats.spoolPending = await this.spool.pendingCount();
+    const nowMs = Date.now();
+    const nodes = Array.from(this.nodeState.values()).map((nodeState) => this.snapshotNodeRuntimeState(nodeState, nowMs));
+    const ports = Array.from(this.portState.values()).map((portState) => this.snapshotPortRuntimeState(portState, nowMs));
+
     await writeJsonAtomic(path.resolve(this.config.healthFilePath), {
       schema_version: 1,
       service: this.config.serviceName,
@@ -820,8 +833,8 @@ class GatewayRuntime {
         configuredNodes: this.config.southboundNodes.length,
         configuredPorts: this.portState.size,
         activeSerialDevice: this.config.serialDevice,
-        ports: Array.from(this.portState.values()),
-        nodes: Array.from(this.nodeState.values())
+        ports,
+        nodes
       },
       stats: this.stats
     });
@@ -861,8 +874,41 @@ class GatewayRuntime {
       lastOpenTs: null,
       lastCommandTs: null,
       lastAckTs: null,
-      lastError: null
+      lastError: null,
+      status: "configured"
     };
+  }
+
+  private snapshotNodeRuntimeState(nodeState: NodeRuntimeState, nowMs: number): NodeRuntimeState {
+    const ageMs = ageMsFrom(nowMs, nodeState.lastTelemetryTs);
+    if (ageMs === null) {
+      nodeState.status = "configured";
+    } else if (ageMs >= this.config.nodeOfflineAfterMs) {
+      nodeState.status = "offline";
+    } else if (ageMs >= this.config.nodeDegradedAfterMs) {
+      nodeState.status = "degraded";
+    } else {
+      nodeState.status = "online";
+    }
+
+    return { ...nodeState };
+  }
+
+  private snapshotPortRuntimeState(portState: PortRuntimeState, nowMs: number): PortRuntimeState {
+    const ageMs = ageMsFrom(nowMs, portState.lastReadTs);
+    if (!portState.open) {
+      portState.status = "offline";
+    } else if (ageMs === null) {
+      portState.status = "configured";
+    } else if (ageMs >= this.config.portOfflineAfterMs) {
+      portState.status = "offline";
+    } else if (ageMs >= this.config.portDegradedAfterMs) {
+      portState.status = "degraded";
+    } else {
+      portState.status = "online";
+    }
+
+    return { ...portState };
   }
 
   private ensurePortRuntimeState(portPath: string): PortRuntimeState {
@@ -981,16 +1027,6 @@ class GatewayRuntime {
       this.stats.commandRejects += 1;
       this.stats.lastError = `disabled command device ${deviceId}`;
       this.logger.warn({ traceId, topic, deviceId }, "field gateway command device is disabled");
-      return null;
-    }
-
-    if (nodeState.southboundPort && nodeState.southboundPort !== this.config.serialDevice) {
-      this.stats.commandRejects += 1;
-      this.stats.lastError = `command device ${deviceId} belongs to ${nodeState.southboundPort}`;
-      this.logger.warn(
-        { traceId, topic, deviceId, configuredPort: nodeState.southboundPort, activePort: this.config.serialDevice },
-        "field gateway command routed to different southbound port"
-      );
       return null;
     }
 

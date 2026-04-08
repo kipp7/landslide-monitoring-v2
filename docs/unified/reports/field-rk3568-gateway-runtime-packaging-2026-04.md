@@ -353,3 +353,40 @@ cat /var/lib/lsmv2/field-gateway/health/runtime-health.json
 - 进入多节点 southbound 抽象
 - 补最小下行命令转译
 - 继续收口中心部署路径，减少对临时 host-run 进程的依赖
+
+## 15. 2026-04-08 状态层最小门槛已实机进入运行态
+
+在多端口 southbound 运行时落地之后，本轮继续把最小状态层补到了 RK3568 常驻主线里。
+
+1. 新增状态层配置项：
+- `NODE_DEGRADED_AFTER_MS`
+- `NODE_OFFLINE_AFTER_MS`
+- `PORT_DEGRADED_AFTER_MS`
+- `PORT_OFFLINE_AFTER_MS`
+
+2. 当前状态派生规则：
+- 节点基于最近一次 telemetry 时间派生：
+  - `configured`
+  - `online`
+  - `degraded`
+  - `offline`
+- 端口基于最近一次串口读入时间和端口打开状态派生：
+  - `configured`
+  - `online`
+  - `degraded`
+  - `offline`
+
+3. 当前实机结果已确认：
+- RK3568 重启后的 `runtime-health.json` 已出现：
+  - `southbound.ports[0].status = online`
+  - `southbound.nodes[0].status = online`
+- telemetry 继续正常上行
+- 当前状态层改动没有破坏多端口运行时，也没有破坏单节点主链
+
+4. 这一步意味着：
+- 网关现在不再只是“记录统计值”
+- 而是已经具备最小运行状态判断能力
+- 后面接第二、第三节点时，可以直接靠 health 观察：
+  - 哪个节点掉线
+  - 哪个端口半掉线
+  - 是否是串口层而不是 northbound 主链的问题
