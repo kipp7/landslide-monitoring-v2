@@ -206,6 +206,47 @@ cat /var/lib/lsmv2/field-gateway/health/runtime-health.json
   - `实机 MQTT 上行`
   - `实机 health 留证`
 
+## 11. 2026-04-08 实机命令闭环证据
+
+本轮在上述运行包装基线之上，又完成了第一份 RK3568 常驻命令闭环证据：
+
+1. northbound 命令入口
+- topic:
+  - `cmd/00000000-0000-0000-0000-000000000001`
+- command type:
+  - `manual_collect`
+
+2. 实机结果
+- RK3568 日志已确认：
+  - `field gateway command forwarded to serial`
+  - `field gateway command ack published`
+- 板端 health 已确认：
+  - `commandsReceived = 1`
+  - `commandsForwarded = 1`
+  - `ackMessagesPublished = 1`
+  - `commandRejects = 0`
+  - `commandWriteFailures = 0`
+  - `ackPublishFailures = 0`
+- 本机 MQTT 实测已确认：
+  - fresh runtime `manual_collect`
+  - 收到同一 `command_id` 的 `cmd_ack/{device_id}`
+
+3. 当前可冻结的闭环真值
+- `cmd/{device_id} -> RK3568 -> /dev/ttyS3 -> XL01/RK2206 -> cmd_ack/{device_id}`
+
+## 12. health 写盘稳定性修复
+
+本轮还修掉了一个已暴露的稳定性问题：
+
+- 历史故障：
+  - `runtime-health.json` 偶发 `ENOENT rename`
+- 根因判断：
+  - 同进程近同时写 health 时，旧临时文件名只含 `pid + Date.now()`，存在同毫秒碰撞风险
+- 当前修复：
+  - health 临时文件名已加入 `randomUUID()`
+
+修复后重新下发并观察的新窗口里，没有再出现新的 `ENOENT rename` 日志。
+
 下一步应继续按主线推进：
 
 - 进入多节点 southbound 抽象

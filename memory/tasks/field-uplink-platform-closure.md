@@ -217,6 +217,27 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - single southbound serial line
     - minimal command set alignment around `manual_collect` and `set_config`
     - no multi-node routing policy yet
+- the first RK3568 on-device northbound command-path proof is now also complete:
+  - fresh runtime `manual_collect` was published to:
+    - `cmd/00000000-0000-0000-0000-000000000001`
+  - the same `command_id` was observed through:
+    - RK3568 serial forward log
+    - RK3568 `cmd_ack/{device_id}` publish log
+    - host-side MQTT ack receipt
+  - board health now also proves:
+    - `commandsReceived = 1`
+    - `commandsForwarded = 1`
+    - `ackMessagesPublished = 1`
+  - this means the RK3568 single-node northbound closure is now proven for:
+    - `cmd/{device_id}`
+    - southbound serial write
+    - `cmd_ack/{device_id}`
+- the earlier RK3568 health writer instability is now narrowed and patched:
+  - observed issue:
+    - intermittent `ENOENT rename` on `runtime-health.json`
+  - current fix:
+    - atomic temp file naming now includes `randomUUID()`
+  - latest post-fix proof window showed no new recurrence
 
 ## Constraints
 
@@ -283,7 +304,7 @@ Freeze and execute the next major phase after command-route stabilization: prove
 - stage 7: gateway expansion after live single-node proof
   - next focus should move to:
     - multi-node southbound configuration for `3 x RK2206`
-    - tighten the just-landed minimal downlink path around `manual_collect` / `set_config`
+    - lift the now-proven single-node downlink path into multi-node routing
     - center-side deployment formalization so the field path does not depend on ad hoc host-run helpers
 
 ## Open Questions
