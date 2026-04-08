@@ -135,6 +135,16 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - standard JSON telemetry was captured over SSH from Ubuntu itself
   - immediate implication:
     - the next active task can move from serial discovery to gateway process skeletonization
+- the RK3568 runtime and network authority line is now also frozen:
+  - authority report:
+    - `docs/unified/reports/field-rk3568-edge-runtime-network-architecture-2026-04.md`
+  - durable memory:
+    - `memory/references/field-rk3568-runtime-network-baseline.md`
+  - current runtime principles:
+    - `STA first, AP fallback`
+    - fallback hotspot SSID = `rk3568-1`
+    - display/UI and OpenClaw must remain sidecars
+    - redundancy must be layered and selective
 - the decisive unfinished boundary is no longer command delivery; it is:
   - gateway-owned adaptation of field telemetry into a platform-acceptable uplink contract
   - and making the field-side ingress path repeatable without depending on ad hoc host-run steps
@@ -203,6 +213,11 @@ Freeze and execute the next major phase after command-route stabilization: prove
   - JSON boundary recovery
   - local evidence file emission
   - MQTT forward path
+- what exact service split should be used on RK3568 for:
+  - gateway core
+  - network/device manager
+  - local control plane
+  - sidecars
 
 ## Done When
 
