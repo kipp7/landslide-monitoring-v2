@@ -15,7 +15,6 @@ param(
   [string]$ApiEnvFile = "services/api/.env",
   [string]$IngestEnvFile = "services/ingest/.env",
   [string]$CenterRuntimeFreezeFile = "docs/unified/reports/field-center-runtime-freeze-latest.json",
-  [string]$PhaseReadinessFile = "docs/unified/reports/field-center-deployment-software-adaptation-readiness-latest.json",
   [string]$OutFile = "docs/unified/reports/field-rk3568-production-uplink-freeze-latest.json"
 )
 
@@ -265,7 +264,6 @@ $localRepoRoot = Resolve-RepoRoot
 $resolvedApiEnvFile = Resolve-RepoPath -RootPath $localRepoRoot -CandidatePath $ApiEnvFile
 $resolvedIngestEnvFile = Resolve-RepoPath -RootPath $localRepoRoot -CandidatePath $IngestEnvFile
 $resolvedCenterRuntimeFreezeFile = Resolve-RepoPath -RootPath $localRepoRoot -CandidatePath $CenterRuntimeFreezeFile
-$resolvedPhaseReadinessFile = Resolve-RepoPath -RootPath $localRepoRoot -CandidatePath $PhaseReadinessFile
 $resolvedOutFile = Resolve-RepoPath -RootPath $localRepoRoot -CandidatePath $OutFile
 
 if (-not (Test-Path -LiteralPath $resolvedApiEnvFile)) {
@@ -278,7 +276,6 @@ if (-not (Test-Path -LiteralPath $resolvedIngestEnvFile)) {
 $apiEnv = Read-DotEnvMap -Path $resolvedApiEnvFile
 $ingestEnv = Read-DotEnvMap -Path $resolvedIngestEnvFile
 $centerRuntimeFreeze = Read-JsonFile -Path $resolvedCenterRuntimeFreezeFile -Label "Center runtime freeze report"
-$phaseReadiness = Read-JsonFile -Path $resolvedPhaseReadinessFile -Label "Phase readiness report"
 
 $expectedMqttUsername = if ($apiEnv.Contains("MQTT_INTERNAL_USERNAME") -and -not [string]::IsNullOrWhiteSpace([string]$apiEnv["MQTT_INTERNAL_USERNAME"])) {
   [string]$apiEnv["MQTT_INTERNAL_USERNAME"]
@@ -347,8 +344,6 @@ $rejectedStatsPresent = (($runtimeStatsPropertyNames -contains "rejectedMessages
 $checks = @(
   (Get-Check -Key "centerRuntimeFreezeAccepted" -Ok:([bool]$centerRuntimeFreeze.accepted) -Actual ([bool]$centerRuntimeFreeze.accepted) -Expected $true),
   (Get-Check -Key "centerRuntimeFreezeBoundary" -Ok:([string]$centerRuntimeFreeze.currentBoundary -eq "center-runtime-freeze-ready") -Actual ([string]$centerRuntimeFreeze.currentBoundary) -Expected "center-runtime-freeze-ready"),
-  (Get-Check -Key "phaseReadinessAccepted" -Ok:([bool]$phaseReadiness.accepted) -Actual ([bool]$phaseReadiness.accepted) -Expected $true),
-  (Get-Check -Key "phaseReadinessBoundary" -Ok:([string]$phaseReadiness.currentBoundary -eq "center-deployment-software-adaptation-ready") -Actual ([string]$phaseReadiness.currentBoundary) -Expected "center-deployment-software-adaptation-ready"),
   (Get-Check -Key "serviceActive" -Ok:([string]$serviceState.isActive.stdout -eq "active") -Actual ([string]$serviceState.isActive.stdout) -Expected "active"),
   (Get-Check -Key "serviceEnabled" -Ok:([string]$serviceState.isEnabled.stdout -eq "enabled") -Actual ([string]$serviceState.isEnabled.stdout) -Expected "enabled"),
   (Get-Check -Key "runtimeMqttConnected" -Ok:([bool]$runtimeHealth.mqtt.connected) -Actual ([bool]$runtimeHealth.mqtt.connected) -Expected $true),
@@ -389,7 +384,6 @@ $report = [ordered]@{
   }
   center = [ordered]@{
     runtimeFreezeReport = $CenterRuntimeFreezeFile.Replace("\", "/")
-    phaseReadinessReport = $PhaseReadinessFile.Replace("\", "/")
     mqttUrl = $ExpectedMqttUrl
     mqttUsername = $expectedMqttUsername
     mqttPasswordMatched = ([string]$remoteEnv.MQTT_PASSWORD -eq $expectedMqttPassword)
@@ -424,6 +418,7 @@ $report = [ordered]@{
   nextUse = @(
     "refresh board runtime snapshot: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-rk3568-field-gateway-runtime.ps1 -Password <password>",
     "refresh production uplink freeze: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-field-rk3568-production-uplink-freeze.ps1 -Password <password>",
+    "refresh software read-path adaptation: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-field-software-read-path-adaptation.ps1",
     "rewrite southbound node map if needed: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\set-rk3568-field-gateway-southbound-nodes.ps1 -Password <password> -NodeSpec 'A|00000000-0000-0000-0000-000000000001|/dev/ttyS3|FIELD-NODE-A|true' -NodeSpec 'B|00000000-0000-0000-0000-000000000002|/dev/ttyS3|FIELD-NODE-B|true' -NodeSpec 'C|00000000-0000-0000-0000-000000000003|/dev/ttyS3|FIELD-NODE-C|false'"
   )
   checks = $checks

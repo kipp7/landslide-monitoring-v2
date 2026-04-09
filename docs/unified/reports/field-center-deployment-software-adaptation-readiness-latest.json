@@ -1,10 +1,10 @@
 ﻿{
-    "generatedAt":  "2026-04-09T11:47:18Z",
+    "generatedAt":  "2026-04-09T17:14:52Z",
     "accepted":  true,
     "mode":  "field-center-deployment-software-adaptation-readiness",
     "currentBoundary":  "center-deployment-software-adaptation-ready",
     "phaseGate":  {
-                      "previousPhase":  "field-proof-and-recovery",
+                      "previousPhase":  "runtime-freeze-and-production-uplink-freeze",
                       "currentPhase":  "center-deployment-and-software-adaptation",
                       "nodeCBlocking":  false,
                       "nodeCReservedDeviceId":  "00000000-0000-0000-0000-000000000003",
@@ -13,27 +13,30 @@
                                       ]
                   },
     "baselineReports":  {
-                            "centerComposeAcceptance":  {
-                                                            "file":  "docs/unified/reports/field-center-compose-acceptance-latest.json",
-                                                            "generatedAt":  "2026-04-09T11:08:18Z",
-                                                            "accepted":  true,
-                                                            "boundary":  "full-path-ready"
-                                                        },
-                            "operationalRecovery":  {
-                                                        "file":  "docs/unified/reports/field-rk3568-center-operational-recovery-latest.json",
-                                                        "generatedAt":  "2026-04-09T08:49:04Z",
+                            "centerRuntimeFreeze":  {
+                                                        "file":  "docs/unified/reports/field-center-runtime-freeze-latest.json",
+                                                        "generatedAt":  "2026-04-09T17:14:38Z",
                                                         "accepted":  true,
-                                                        "boundary":  "rk3568-center-operational-recovery-ready",
-                                                        "ackStatus":  "acked"
+                                                        "boundary":  "center-runtime-freeze-ready"
                                                     },
-                            "soak":  {
-                                         "file":  "docs/unified/reports/field-rk3568-center-soak-latest.json",
-                                         "generatedAt":  "2026-04-09T11:11:57Z",
-                                         "accepted":  true,
-                                         "boundary":  "rk3568-center-soak-ready",
-                                         "rounds":  3,
-                                         "acceptedRounds":  3
-                                     }
+                            "rk3568ProductionUplinkFreeze":  {
+                                                                 "file":  "docs/unified/reports/field-rk3568-production-uplink-freeze-latest.json",
+                                                                 "generatedAt":  "2026-04-09T17:14:42Z",
+                                                                 "accepted":  true,
+                                                                 "boundary":  "rk3568-production-uplink-freeze-ready",
+                                                                 "rejectedWriteFailures":  0
+                                                             },
+                            "softwareReadPathAdaptation":  {
+                                                               "file":  "docs/unified/reports/field-software-read-path-adaptation-latest.json",
+                                                               "generatedAt":  "2026-04-09T12:40:35Z",
+                                                               "accepted":  true,
+                                                               "boundary":  "software-read-path-adaptation-ready"
+                                                           },
+                            "liveClosure":  {
+                                                "file":  "docs/unified/reports/field-rk3568-center-live-closure-latest.json",
+                                                "accepted":  true,
+                                                "boundary":  "rk3568-live-center-closure-ready"
+                                            }
                         },
     "topology":  {
                      "activeFieldNodes":  [
@@ -68,140 +71,122 @@
     "workPackages":  [
                          {
                              "key":  "center-runtime-freeze",
-                             "status":  "next",
+                             "status":  "green",
                              "objective":  "freeze center compose topology, env sources, and restart/recovery procedure",
                              "evidence":  [
-                                              "ingest-service and telemetry-writer stay in compose",
-                                              "one command can validate or re-apply center acceptance"
+                                              "compose boundary and recovery order stay frozen",
+                                              "docker validate and env checklist stay green"
                                           ]
                          },
                          {
                              "key":  "gateway-to-center-production-uplink",
-                             "status":  "next",
+                             "status":  "green",
                              "objective":  "bind RK3568 runtime env to the formal center deployment line and preserve current MQTT/API/Web contract",
                              "evidence":  [
-                                              "real field telemetry lands in API/Web through the compose-backed chain",
-                                              "device A/B keep exact 14 canonical metrics"
+                                              "board env/runtime stay bound to the center deployment line",
+                                              "rejectedWriteFailures stays at zero under the frozen uplink path"
                                           ]
                          },
                          {
                              "key":  "product-software-adaptation",
-                             "status":  "next",
+                             "status":  "green",
                              "objective":  "finish software-side adaptation against the current A/B field contract without expanding the protocol",
                              "evidence":  [
-                                              "API/Web reads stay aligned with the field-gateway output",
+                                              "API/Web reads stay aligned with the field-gateway output and live closure proof",
                                               "node C remains a reserved capacity/config slot, not a blocker"
                                           ]
                          }
                      ],
     "checks":  [
                    {
-                       "key":  "centerComposeAccepted",
+                       "key":  "centerRuntimeFreezeAccepted",
                        "ok":  true,
                        "actual":  true,
                        "expected":  true
                    },
                    {
-                       "key":  "centerComposeBoundary",
+                       "key":  "centerRuntimeFreezeBoundary",
                        "ok":  true,
-                       "actual":  "full-path-ready",
-                       "expected":  "full-path-ready"
+                       "actual":  "center-runtime-freeze-ready",
+                       "expected":  "center-runtime-freeze-ready"
                    },
                    {
-                       "key":  "centerFullProofConclusion",
-                       "ok":  true,
-                       "actual":  "real-hardware-uplink-full-path-reached-platform-and-web",
-                       "expected":  "real-hardware-uplink-full-path-reached-platform-and-web"
-                   },
-                   {
-                       "key":  "operationalRecoveryAccepted",
+                       "key":  "rk3568ProductionFreezeAccepted",
                        "ok":  true,
                        "actual":  true,
                        "expected":  true
                    },
                    {
-                       "key":  "operationalRecoveryBoundary",
+                       "key":  "rk3568ProductionFreezeBoundary",
                        "ok":  true,
-                       "actual":  "rk3568-center-operational-recovery-ready",
-                       "expected":  "rk3568-center-operational-recovery-ready"
+                       "actual":  "rk3568-production-uplink-freeze-ready",
+                       "expected":  "rk3568-production-uplink-freeze-ready"
                    },
                    {
-                       "key":  "operationalClosureAccepted",
-                       "ok":  true,
-                       "actual":  true,
-                       "expected":  true
-                   },
-                   {
-                       "key":  "operationalAckStatus",
-                       "ok":  true,
-                       "actual":  "acked",
-                       "expected":  "acked"
-                   },
-                   {
-                       "key":  "operationalNodeAApiMetricsContract",
-                       "ok":  true,
-                       "actual":  14,
-                       "expected":  14
-                   },
-                   {
-                       "key":  "operationalNodeBApiMetricsContract",
-                       "ok":  true,
-                       "actual":  14,
-                       "expected":  14
-                   },
-                   {
-                       "key":  "soakAccepted",
-                       "ok":  true,
-                       "actual":  true,
-                       "expected":  true
-                   },
-                   {
-                       "key":  "soakBoundary",
-                       "ok":  true,
-                       "actual":  "rk3568-center-soak-ready",
-                       "expected":  "rk3568-center-soak-ready"
-                   },
-                   {
-                       "key":  "soakRoundsSufficient",
-                       "ok":  true,
-                       "actual":  3,
-                       "expected":  "\u003e=3"
-                   },
-                   {
-                       "key":  "soakAcceptedRoundsComplete",
-                       "ok":  true,
-                       "actual":  3,
-                       "expected":  3
-                   },
-                   {
-                       "key":  "soakCleanWindowComplete",
-                       "ok":  true,
-                       "actual":  3,
-                       "expected":  3
-                   },
-                   {
-                       "key":  "soakSchemaRejectedDeltaClean",
+                       "key":  "rk3568RejectedWriteFailuresZero",
                        "ok":  true,
                        "actual":  0,
                        "expected":  0
                    },
                    {
-                       "key":  "soakAllAcked",
+                       "key":  "rk3568NodeCReserved",
+                       "ok":  true,
+                       "actual":  "configured",
+                       "expected":  "configured"
+                   },
+                   {
+                       "key":  "softwareReadPathAccepted",
                        "ok":  true,
                        "actual":  true,
                        "expected":  true
                    },
                    {
-                       "key":  "soakAllMetricsContractStable",
+                       "key":  "softwareReadPathBoundary",
+                       "ok":  true,
+                       "actual":  "software-read-path-adaptation-ready",
+                       "expected":  "software-read-path-adaptation-ready"
+                   },
+                   {
+                       "key":  "liveClosureAccepted",
                        "ok":  true,
                        "actual":  true,
                        "expected":  true
+                   },
+                   {
+                       "key":  "liveClosureBoundary",
+                       "ok":  true,
+                       "actual":  "rk3568-live-center-closure-ready",
+                       "expected":  "rk3568-live-center-closure-ready"
+                   },
+                   {
+                       "key":  "nodeAApiMetricsContract",
+                       "ok":  true,
+                       "actual":  14,
+                       "expected":  14
+                   },
+                   {
+                       "key":  "nodeAWebMetricsContract",
+                       "ok":  true,
+                       "actual":  14,
+                       "expected":  14
+                   },
+                   {
+                       "key":  "nodeBApiMetricsContract",
+                       "ok":  true,
+                       "actual":  14,
+                       "expected":  14
+                   },
+                   {
+                       "key":  "nodeBWebMetricsContract",
+                       "ok":  true,
+                       "actual":  14,
+                       "expected":  14
                    }
                ],
     "nextUse":  [
-                    "refresh center compose baseline: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\check-field-center-compose-acceptance.ps1 -DeployMode validate -AllowUnsafeSecrets",
-                    "refresh operational recovery baseline: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\check-field-rk3568-center-operational-recovery.ps1 -BoardPassword \u003cpassword\u003e -AllowUnsafeSecrets",
-                    "refresh soak baseline: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\run-field-rk3568-center-soak.ps1 -Rounds 3 -IntervalSeconds 30 -BoardPassword \u003cpassword\u003e -AllowUnsafeSecrets",
+                    "refresh center runtime freeze: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\check-field-center-runtime-freeze.ps1 -AllowUnsafeSecrets",
+                    "refresh rk3568 production uplink freeze: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\check-field-rk3568-production-uplink-freeze.ps1 -Password \u003cpassword\u003e",
+                    "refresh software read-path adaptation: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\check-field-software-read-path-adaptation.ps1",
                     "recompute next-phase readiness: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\check-field-center-deployment-software-adaptation-readiness.ps1"
                 ]
 }

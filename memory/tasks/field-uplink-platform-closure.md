@@ -1636,3 +1636,38 @@ Freeze and execute the next major phase after command-route stabilization: prove
       - the observation delta stays clean
     - strict zero-noise remains an explicit opt-in mode only:
       - `-RequireZeroSchemaRejectedDelta`
+- the center deployment/software-adaptation readiness gate has now been realigned to the current frozen baseline and the earlier self-reference has been removed:
+  - script fixes:
+    - `scripts/dev/check-field-center-runtime-freeze.ps1`
+      no longer depends on downstream `phaseReadiness`
+    - `scripts/dev/check-field-rk3568-production-uplink-freeze.ps1`
+      no longer depends on downstream `phaseReadiness`
+    - `scripts/dev/check-field-center-deployment-software-adaptation-readiness.ps1`
+      now reads:
+      - `docs/unified/reports/field-center-runtime-freeze-latest.json`
+      - `docs/unified/reports/field-rk3568-production-uplink-freeze-latest.json`
+      - `docs/unified/reports/field-software-read-path-adaptation-latest.json`
+      - live closure boundary from the software-read-path report upstreams
+  - refreshed reports:
+    - `docs/unified/reports/field-center-runtime-freeze-latest.json`
+      - `generatedAt = 2026-04-09T17:14:38Z`
+      - `accepted = true`
+    - `docs/unified/reports/field-rk3568-production-uplink-freeze-latest.json`
+      - `generatedAt = 2026-04-09T17:14:42Z`
+      - `accepted = true`
+      - `rejectedWriteFailures = 0`
+    - `docs/unified/reports/field-center-deployment-software-adaptation-readiness-latest.json`
+      - `generatedAt = 2026-04-09T17:14:52Z`
+      - `accepted = true`
+      - `currentBoundary = center-deployment-software-adaptation-ready`
+    - `docs/unified/reports/field-center-production-handoff-latest.json`
+      - `generatedAt = 2026-04-09T17:14:53Z`
+      - `accepted = true`
+  - current gate meaning is now explicit and current:
+    - `center-runtime-freeze` is green
+    - `gateway-to-center-production-uplink` is green
+    - `product-software-adaptation` is green
+    - `node C` remains reserved and non-blocking
+  - operational value:
+    - upstream freeze scripts can now be rerun independently without chasing a downstream readiness artifact
+    - the downstream readiness/handoff artifacts now summarize the actual current phase instead of the older recovery+soak phase gate

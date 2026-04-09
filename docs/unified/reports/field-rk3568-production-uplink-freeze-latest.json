@@ -1,5 +1,5 @@
 ﻿{
-    "generatedAt":  "2026-04-09T12:27:26Z",
+    "generatedAt":  "2026-04-09T17:14:42Z",
     "accepted":  true,
     "mode":  "field-rk3568-production-uplink-freeze",
     "currentBoundary":  "rk3568-production-uplink-freeze-ready",
@@ -12,7 +12,6 @@
               },
     "center":  {
                    "runtimeFreezeReport":  "docs/unified/reports/field-center-runtime-freeze-latest.json",
-                   "phaseReadinessReport":  "docs/unified/reports/field-center-deployment-software-adaptation-readiness-latest.json",
                    "mqttUrl":  "mqtt://192.168.124.17:1883",
                    "mqttUsername":  "ingest-service",
                    "mqttPasswordMatched":  true
@@ -55,11 +54,13 @@
                     "serviceEnabled":  "enabled",
                     "mqttConnected":  true,
                     "serialOpen":  true,
-                    "publishedMessages":  1668,
+                    "publishedMessages":  851,
                     "publishFailures":  0,
+                    "rejectedMessages":  106,
+                    "rejectedWriteFailures":  0,
                     "spoolPending":  0,
-                    "commandsForwarded":  16,
-                    "ackMessagesPublished":  12,
+                    "commandsForwarded":  28,
+                    "ackMessagesPublished":  15,
                     "nodeStatuses":  {
                                          "nodeA":  "online",
                                          "nodeB":  "online",
@@ -69,6 +70,7 @@
     "nextUse":  [
                     "refresh board runtime snapshot: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\check-rk3568-field-gateway-runtime.ps1 -Password \u003cpassword\u003e",
                     "refresh production uplink freeze: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\check-field-rk3568-production-uplink-freeze.ps1 -Password \u003cpassword\u003e",
+                    "refresh software read-path adaptation: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\check-field-software-read-path-adaptation.ps1",
                     "rewrite southbound node map if needed: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\set-rk3568-field-gateway-southbound-nodes.ps1 -Password \u003cpassword\u003e -NodeSpec \u0027A|00000000-0000-0000-0000-000000000001|/dev/ttyS3|FIELD-NODE-A|true\u0027 -NodeSpec \u0027B|00000000-0000-0000-0000-000000000002|/dev/ttyS3|FIELD-NODE-B|true\u0027 -NodeSpec \u0027C|00000000-0000-0000-0000-000000000003|/dev/ttyS3|FIELD-NODE-C|false\u0027"
                 ],
     "checks":  [
@@ -83,18 +85,6 @@
                        "ok":  true,
                        "actual":  "center-runtime-freeze-ready",
                        "expected":  "center-runtime-freeze-ready"
-                   },
-                   {
-                       "key":  "phaseReadinessAccepted",
-                       "ok":  true,
-                       "actual":  true,
-                       "expected":  true
-                   },
-                   {
-                       "key":  "phaseReadinessBoundary",
-                       "ok":  true,
-                       "actual":  "center-deployment-software-adaptation-ready",
-                       "expected":  "center-deployment-software-adaptation-ready"
                    },
                    {
                        "key":  "serviceActive",
@@ -199,6 +189,18 @@
                        "expected":  0
                    },
                    {
+                       "key":  "rejectedStatsPresent",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "rejectedWriteFailuresZero",
+                       "ok":  true,
+                       "actual":  0,
+                       "expected":  0
+                   },
+                   {
                        "key":  "spoolPendingZero",
                        "ok":  true,
                        "actual":  0,
@@ -207,7 +209,7 @@
                    {
                        "key":  "commandPathObserved",
                        "ok":  true,
-                       "actual":  "forwarded=16,acked=12",
+                       "actual":  "forwarded=28,acked=15",
                        "expected":  "forwarded\u003e=1,acked\u003e=1"
                    }
                ]

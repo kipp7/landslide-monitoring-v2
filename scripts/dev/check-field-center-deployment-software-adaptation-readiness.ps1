@@ -1,10 +1,9 @@
 [CmdletBinding()]
 param(
-  [string]$CenterComposeAcceptanceFile = "docs/unified/reports/field-center-compose-acceptance-latest.json",
-  [string]$OperationalRecoveryFile = "docs/unified/reports/field-rk3568-center-operational-recovery-latest.json",
-  [string]$SoakFile = "docs/unified/reports/field-rk3568-center-soak-latest.json",
+  [string]$CenterRuntimeFreezeFile = "docs/unified/reports/field-center-runtime-freeze-latest.json",
+  [string]$Rk3568ProductionUplinkFreezeFile = "docs/unified/reports/field-rk3568-production-uplink-freeze-latest.json",
+  [string]$SoftwareReadPathAdaptationFile = "docs/unified/reports/field-software-read-path-adaptation-latest.json",
   [int]$ExpectedMetricsKeyCount = 14,
-  [int]$ExpectedMinimumSoakRounds = 3,
   [string]$OutFile = "docs/unified/reports/field-center-deployment-software-adaptation-readiness-latest.json"
 )
 
@@ -52,117 +51,99 @@ function Read-JsonFile {
 }
 
 $repoRoot = Resolve-RepoRoot
-$resolvedCenterComposeAcceptanceFile = Resolve-RepoPath -RootPath $repoRoot -CandidatePath $CenterComposeAcceptanceFile
-$resolvedOperationalRecoveryFile = Resolve-RepoPath -RootPath $repoRoot -CandidatePath $OperationalRecoveryFile
-$resolvedSoakFile = Resolve-RepoPath -RootPath $repoRoot -CandidatePath $SoakFile
+$resolvedCenterRuntimeFreezeFile = Resolve-RepoPath -RootPath $repoRoot -CandidatePath $CenterRuntimeFreezeFile
+$resolvedRk3568ProductionUplinkFreezeFile = Resolve-RepoPath -RootPath $repoRoot -CandidatePath $Rk3568ProductionUplinkFreezeFile
+$resolvedSoftwareReadPathAdaptationFile = Resolve-RepoPath -RootPath $repoRoot -CandidatePath $SoftwareReadPathAdaptationFile
 $resolvedOutFile = Resolve-RepoPath -RootPath $repoRoot -CandidatePath $OutFile
 
-$centerCompose = Read-JsonFile -Path $resolvedCenterComposeAcceptanceFile -Label "Center compose acceptance report"
-$recovery = Read-JsonFile -Path $resolvedOperationalRecoveryFile -Label "Operational recovery report"
-$soak = Read-JsonFile -Path $resolvedSoakFile -Label "Soak report"
+$centerRuntimeFreeze = Read-JsonFile -Path $resolvedCenterRuntimeFreezeFile -Label "Center runtime freeze report"
+$rk3568ProductionUplinkFreeze = Read-JsonFile -Path $resolvedRk3568ProductionUplinkFreezeFile -Label "RK3568 production uplink freeze report"
+$softwareReadPathAdaptation = Read-JsonFile -Path $resolvedSoftwareReadPathAdaptationFile -Label "Software read-path adaptation report"
 
 $checks = @(
   [pscustomobject]@{
-    key = "centerComposeAccepted"
-    ok = [bool]$centerCompose.accepted
-    actual = [bool]$centerCompose.accepted
+    key = "centerRuntimeFreezeAccepted"
+    ok = [bool]$centerRuntimeFreeze.accepted
+    actual = [bool]$centerRuntimeFreeze.accepted
     expected = $true
   },
   [pscustomobject]@{
-    key = "centerComposeBoundary"
-    ok = ([string]$centerCompose.readiness.currentBoundary -eq "full-path-ready")
-    actual = [string]$centerCompose.readiness.currentBoundary
-    expected = "full-path-ready"
+    key = "centerRuntimeFreezeBoundary"
+    ok = ([string]$centerRuntimeFreeze.currentBoundary -eq "center-runtime-freeze-ready")
+    actual = [string]$centerRuntimeFreeze.currentBoundary
+    expected = "center-runtime-freeze-ready"
   },
   [pscustomobject]@{
-    key = "centerFullProofConclusion"
-    ok = ([string]$centerCompose.fullProof.conclusion -eq "real-hardware-uplink-full-path-reached-platform-and-web")
-    actual = [string]$centerCompose.fullProof.conclusion
-    expected = "real-hardware-uplink-full-path-reached-platform-and-web"
-  },
-  [pscustomobject]@{
-    key = "operationalRecoveryAccepted"
-    ok = [bool]$recovery.accepted
-    actual = [bool]$recovery.accepted
+    key = "rk3568ProductionFreezeAccepted"
+    ok = [bool]$rk3568ProductionUplinkFreeze.accepted
+    actual = [bool]$rk3568ProductionUplinkFreeze.accepted
     expected = $true
   },
   [pscustomobject]@{
-    key = "operationalRecoveryBoundary"
-    ok = ([string]$recovery.currentBoundary -eq "rk3568-center-operational-recovery-ready")
-    actual = [string]$recovery.currentBoundary
-    expected = "rk3568-center-operational-recovery-ready"
+    key = "rk3568ProductionFreezeBoundary"
+    ok = ([string]$rk3568ProductionUplinkFreeze.currentBoundary -eq "rk3568-production-uplink-freeze-ready")
+    actual = [string]$rk3568ProductionUplinkFreeze.currentBoundary
+    expected = "rk3568-production-uplink-freeze-ready"
   },
   [pscustomobject]@{
-    key = "operationalClosureAccepted"
-    ok = [bool]$recovery.closure.accepted
-    actual = [bool]$recovery.closure.accepted
-    expected = $true
-  },
-  [pscustomobject]@{
-    key = "operationalAckStatus"
-    ok = ([string]$recovery.closure.ackStatus -eq "acked")
-    actual = [string]$recovery.closure.ackStatus
-    expected = "acked"
-  },
-  [pscustomobject]@{
-    key = "operationalNodeAApiMetricsContract"
-    ok = ([int]$recovery.closure.nodeAMetricsKeyCountApi -eq $ExpectedMetricsKeyCount)
-    actual = [int]$recovery.closure.nodeAMetricsKeyCountApi
-    expected = $ExpectedMetricsKeyCount
-  },
-  [pscustomobject]@{
-    key = "operationalNodeBApiMetricsContract"
-    ok = ([int]$recovery.closure.nodeBMetricsKeyCountApi -eq $ExpectedMetricsKeyCount)
-    actual = [int]$recovery.closure.nodeBMetricsKeyCountApi
-    expected = $ExpectedMetricsKeyCount
-  },
-  [pscustomobject]@{
-    key = "soakAccepted"
-    ok = [bool]$soak.accepted
-    actual = [bool]$soak.accepted
-    expected = $true
-  },
-  [pscustomobject]@{
-    key = "soakBoundary"
-    ok = ([string]$soak.currentBoundary -eq "rk3568-center-soak-ready")
-    actual = [string]$soak.currentBoundary
-    expected = "rk3568-center-soak-ready"
-  },
-  [pscustomobject]@{
-    key = "soakRoundsSufficient"
-    ok = ([int]$soak.rounds -ge $ExpectedMinimumSoakRounds)
-    actual = [int]$soak.rounds
-    expected = ">=$ExpectedMinimumSoakRounds"
-  },
-  [pscustomobject]@{
-    key = "soakAcceptedRoundsComplete"
-    ok = ([int]$soak.acceptedRounds -eq [int]$soak.rounds)
-    actual = [int]$soak.acceptedRounds
-    expected = [int]$soak.rounds
-  },
-  [pscustomobject]@{
-    key = "soakCleanWindowComplete"
-    ok = ([int]$soak.summary.cleanWindowRounds -eq [int]$soak.rounds)
-    actual = [int]$soak.summary.cleanWindowRounds
-    expected = [int]$soak.rounds
-  },
-  [pscustomobject]@{
-    key = "soakSchemaRejectedDeltaClean"
-    ok = ([int]$soak.summary.maxBoardObservationSchemaRejectedDelta -eq 0)
-    actual = [int]$soak.summary.maxBoardObservationSchemaRejectedDelta
+    key = "rk3568RejectedWriteFailuresZero"
+    ok = ([int]$rk3568ProductionUplinkFreeze.runtime.rejectedWriteFailures -eq 0)
+    actual = [int]$rk3568ProductionUplinkFreeze.runtime.rejectedWriteFailures
     expected = 0
   },
   [pscustomobject]@{
-    key = "soakAllAcked"
-    ok = [bool]$soak.summary.allAcked
-    actual = [bool]$soak.summary.allAcked
+    key = "rk3568NodeCReserved"
+    ok = ([string]$rk3568ProductionUplinkFreeze.runtime.nodeStatuses.nodeC -eq "configured")
+    actual = [string]$rk3568ProductionUplinkFreeze.runtime.nodeStatuses.nodeC
+    expected = "configured"
+  },
+  [pscustomobject]@{
+    key = "softwareReadPathAccepted"
+    ok = [bool]$softwareReadPathAdaptation.accepted
+    actual = [bool]$softwareReadPathAdaptation.accepted
     expected = $true
   },
   [pscustomobject]@{
-    key = "soakAllMetricsContractStable"
-    ok = [bool]$soak.summary.allMetricsContractStable
-    actual = [bool]$soak.summary.allMetricsContractStable
+    key = "softwareReadPathBoundary"
+    ok = ([string]$softwareReadPathAdaptation.currentBoundary -eq "software-read-path-adaptation-ready")
+    actual = [string]$softwareReadPathAdaptation.currentBoundary
+    expected = "software-read-path-adaptation-ready"
+  },
+  [pscustomobject]@{
+    key = "liveClosureAccepted"
+    ok = [bool]$softwareReadPathAdaptation.upstreamBaselines.liveClosure.accepted
+    actual = [bool]$softwareReadPathAdaptation.upstreamBaselines.liveClosure.accepted
     expected = $true
+  },
+  [pscustomobject]@{
+    key = "liveClosureBoundary"
+    ok = ([string]$softwareReadPathAdaptation.upstreamBaselines.liveClosure.boundary -eq "rk3568-live-center-closure-ready")
+    actual = [string]$softwareReadPathAdaptation.upstreamBaselines.liveClosure.boundary
+    expected = "rk3568-live-center-closure-ready"
+  },
+  [pscustomobject]@{
+    key = "nodeAApiMetricsContract"
+    ok = (@($softwareReadPathAdaptation.nodeReadPaths.nodeA.apiMetricsKeys).Count -eq $ExpectedMetricsKeyCount)
+    actual = @($softwareReadPathAdaptation.nodeReadPaths.nodeA.apiMetricsKeys).Count
+    expected = $ExpectedMetricsKeyCount
+  },
+  [pscustomobject]@{
+    key = "nodeAWebMetricsContract"
+    ok = (@($softwareReadPathAdaptation.nodeReadPaths.nodeA.webMetricsKeys).Count -eq $ExpectedMetricsKeyCount)
+    actual = @($softwareReadPathAdaptation.nodeReadPaths.nodeA.webMetricsKeys).Count
+    expected = $ExpectedMetricsKeyCount
+  },
+  [pscustomobject]@{
+    key = "nodeBApiMetricsContract"
+    ok = (@($softwareReadPathAdaptation.nodeReadPaths.nodeB.apiMetricsKeys).Count -eq $ExpectedMetricsKeyCount)
+    actual = @($softwareReadPathAdaptation.nodeReadPaths.nodeB.apiMetricsKeys).Count
+    expected = $ExpectedMetricsKeyCount
+  },
+  [pscustomobject]@{
+    key = "nodeBWebMetricsContract"
+    ok = (@($softwareReadPathAdaptation.nodeReadPaths.nodeB.webMetricsKeys).Count -eq $ExpectedMetricsKeyCount)
+    actual = @($softwareReadPathAdaptation.nodeReadPaths.nodeB.webMetricsKeys).Count
+    expected = $ExpectedMetricsKeyCount
   }
 )
 
@@ -175,33 +156,36 @@ $report = [ordered]@{
   mode = "field-center-deployment-software-adaptation-readiness"
   currentBoundary = if ($accepted) { "center-deployment-software-adaptation-ready" } else { "center-deployment-software-adaptation-needs-review" }
   phaseGate = [ordered]@{
-    previousPhase = "field-proof-and-recovery"
+    previousPhase = "runtime-freeze-and-production-uplink-freeze"
     currentPhase = "center-deployment-and-software-adaptation"
     nodeCBlocking = $false
     nodeCReservedDeviceId = "00000000-0000-0000-0000-000000000003"
     failureKeys = $failedKeys
   }
   baselineReports = [ordered]@{
-    centerComposeAcceptance = [ordered]@{
-      file = $CenterComposeAcceptanceFile.Replace("\", "/")
-      generatedAt = [string]$centerCompose.generatedAt
-      accepted = [bool]$centerCompose.accepted
-      boundary = [string]$centerCompose.readiness.currentBoundary
+    centerRuntimeFreeze = [ordered]@{
+      file = $CenterRuntimeFreezeFile.Replace("\", "/")
+      generatedAt = [string]$centerRuntimeFreeze.generatedAt
+      accepted = [bool]$centerRuntimeFreeze.accepted
+      boundary = [string]$centerRuntimeFreeze.currentBoundary
     }
-    operationalRecovery = [ordered]@{
-      file = $OperationalRecoveryFile.Replace("\", "/")
-      generatedAt = [string]$recovery.generatedAt
-      accepted = [bool]$recovery.accepted
-      boundary = [string]$recovery.currentBoundary
-      ackStatus = [string]$recovery.closure.ackStatus
+    rk3568ProductionUplinkFreeze = [ordered]@{
+      file = $Rk3568ProductionUplinkFreezeFile.Replace("\", "/")
+      generatedAt = [string]$rk3568ProductionUplinkFreeze.generatedAt
+      accepted = [bool]$rk3568ProductionUplinkFreeze.accepted
+      boundary = [string]$rk3568ProductionUplinkFreeze.currentBoundary
+      rejectedWriteFailures = [int]$rk3568ProductionUplinkFreeze.runtime.rejectedWriteFailures
     }
-    soak = [ordered]@{
-      file = $SoakFile.Replace("\", "/")
-      generatedAt = [string]$soak.generatedAt
-      accepted = [bool]$soak.accepted
-      boundary = [string]$soak.currentBoundary
-      rounds = [int]$soak.rounds
-      acceptedRounds = [int]$soak.acceptedRounds
+    softwareReadPathAdaptation = [ordered]@{
+      file = $SoftwareReadPathAdaptationFile.Replace("\", "/")
+      generatedAt = [string]$softwareReadPathAdaptation.generatedAt
+      accepted = [bool]$softwareReadPathAdaptation.accepted
+      boundary = [string]$softwareReadPathAdaptation.currentBoundary
+    }
+    liveClosure = [ordered]@{
+      file = [string]$softwareReadPathAdaptation.upstreamBaselines.liveClosure.file
+      accepted = [bool]$softwareReadPathAdaptation.upstreamBaselines.liveClosure.accepted
+      boundary = [string]$softwareReadPathAdaptation.upstreamBaselines.liveClosure.boundary
     }
   }
   topology = [ordered]@{
@@ -237,37 +221,37 @@ $report = [ordered]@{
   workPackages = @(
     [ordered]@{
       key = "center-runtime-freeze"
-      status = "next"
+      status = "green"
       objective = "freeze center compose topology, env sources, and restart/recovery procedure"
       evidence = @(
-        "ingest-service and telemetry-writer stay in compose",
-        "one command can validate or re-apply center acceptance"
+        "compose boundary and recovery order stay frozen",
+        "docker validate and env checklist stay green"
       )
     },
     [ordered]@{
       key = "gateway-to-center-production-uplink"
-      status = "next"
+      status = "green"
       objective = "bind RK3568 runtime env to the formal center deployment line and preserve current MQTT/API/Web contract"
       evidence = @(
-        "real field telemetry lands in API/Web through the compose-backed chain",
-        "device A/B keep exact 14 canonical metrics"
+        "board env/runtime stay bound to the center deployment line",
+        "rejectedWriteFailures stays at zero under the frozen uplink path"
       )
     },
     [ordered]@{
       key = "product-software-adaptation"
-      status = "next"
+      status = "green"
       objective = "finish software-side adaptation against the current A/B field contract without expanding the protocol"
       evidence = @(
-        "API/Web reads stay aligned with the field-gateway output",
+        "API/Web reads stay aligned with the field-gateway output and live closure proof",
         "node C remains a reserved capacity/config slot, not a blocker"
       )
     }
   )
   checks = $checks
   nextUse = @(
-    "refresh center compose baseline: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-field-center-compose-acceptance.ps1 -DeployMode validate -AllowUnsafeSecrets",
-    "refresh operational recovery baseline: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-field-rk3568-center-operational-recovery.ps1 -BoardPassword <password> -AllowUnsafeSecrets",
-    "refresh soak baseline: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\run-field-rk3568-center-soak.ps1 -Rounds 3 -IntervalSeconds 30 -BoardPassword <password> -AllowUnsafeSecrets",
+    "refresh center runtime freeze: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-field-center-runtime-freeze.ps1 -AllowUnsafeSecrets",
+    "refresh rk3568 production uplink freeze: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-field-rk3568-production-uplink-freeze.ps1 -Password <password>",
+    "refresh software read-path adaptation: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-field-software-read-path-adaptation.ps1",
     "recompute next-phase readiness: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-field-center-deployment-software-adaptation-readiness.ps1"
   )
 }

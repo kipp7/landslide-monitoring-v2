@@ -1,5 +1,5 @@
 ﻿{
-    "generatedAt":  "2026-04-09T12:04:55Z",
+    "generatedAt":  "2026-04-09T17:14:53Z",
     "accepted":  true,
     "mode":  "field-center-runtime-freeze",
     "currentBoundary":  "center-runtime-freeze-ready",
@@ -36,14 +36,14 @@
     "baselines":  {
                       "envChecklist":  {
                                            "report":  "docs/unified/reports/prod-env-checklist-latest.json",
-                                           "generatedAt":  "2026-04-09T12:04:55Z",
+                                           "generatedAt":  "2026-04-09T17:14:53Z",
                                            "missing":  0,
                                            "placeholder":  0,
                                            "configured":  18
                                        },
                       "dockerValidate":  {
                                              "report":  "docs/unified/reports/docker-deploy-latest.json",
-                                             "generatedAt":  "2026-04-09T12:04:55Z",
+                                             "generatedAt":  "2026-04-09T17:14:53Z",
                                              "validateOnly":  true,
                                              "errors":  [
 
@@ -54,21 +54,15 @@
                                          },
                       "centerComposeAcceptance":  {
                                                       "file":  "docs/unified/reports/field-center-compose-acceptance-latest.json",
-                                                      "generatedAt":  "2026-04-09T11:08:18Z",
+                                                      "generatedAt":  "2026-04-09T16:58:55Z",
                                                       "accepted":  true,
                                                       "boundary":  "full-path-ready"
-                                                  },
-                      "phaseReadiness":  {
-                                             "file":  "docs/unified/reports/field-center-deployment-software-adaptation-readiness-latest.json",
-                                             "generatedAt":  "2026-04-09T11:47:18Z",
-                                             "accepted":  true,
-                                             "boundary":  "center-deployment-software-adaptation-ready"
-                                         }
+                                                  }
                   },
     "nextUse":  [
                     "refresh runtime freeze baseline: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\check-field-center-runtime-freeze.ps1 -AllowUnsafeSecrets",
                     "refresh center acceptance: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\check-field-center-compose-acceptance.ps1 -DeployMode validate -AllowUnsafeSecrets",
-                    "refresh phase readiness: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\check-field-center-deployment-software-adaptation-readiness.ps1"
+                    "refresh center handoff packet: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\prepare-field-center-production-handoff.ps1 -AllowUnsafeSecrets"
                 ],
     "checks":  [
                    {
@@ -154,18 +148,6 @@
                        "ok":  true,
                        "actual":  "full-path-ready",
                        "expected":  "full-path-ready"
-                   },
-                   {
-                       "key":  "phaseReadinessAccepted",
-                       "ok":  true,
-                       "actual":  true,
-                       "expected":  true
-                   },
-                   {
-                       "key":  "phaseReadinessBoundary",
-                       "ok":  true,
-                       "actual":  "center-deployment-software-adaptation-ready",
-                       "expected":  "center-deployment-software-adaptation-ready"
                    },
                    {
                        "key":  "runbookMentionsCenterAcceptance",

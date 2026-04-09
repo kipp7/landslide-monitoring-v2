@@ -6,7 +6,6 @@ param(
   [string]$ComposeAppFile = "infra/compose/docker-compose.app.yml",
   [string]$RunbookFile = "docs/guides/runbooks/single-host-runbook.md",
   [string]$CenterComposeAcceptanceFile = "docs/unified/reports/field-center-compose-acceptance-latest.json",
-  [string]$PhaseReadinessFile = "docs/unified/reports/field-center-deployment-software-adaptation-readiness-latest.json",
   [switch]$AllowUnsafeSecrets,
   [string]$OutFile = "docs/unified/reports/field-center-runtime-freeze-latest.json"
 )
@@ -124,7 +123,6 @@ $resolvedComposeBaseFile = Resolve-RepoPath -RootPath $repoRoot -CandidatePath $
 $resolvedComposeAppFile = Resolve-RepoPath -RootPath $repoRoot -CandidatePath $ComposeAppFile
 $resolvedRunbookFile = Resolve-RepoPath -RootPath $repoRoot -CandidatePath $RunbookFile
 $resolvedCenterComposeAcceptanceFile = Resolve-RepoPath -RootPath $repoRoot -CandidatePath $CenterComposeAcceptanceFile
-$resolvedPhaseReadinessFile = Resolve-RepoPath -RootPath $repoRoot -CandidatePath $PhaseReadinessFile
 
 Push-Location $repoRoot
 try {
@@ -154,7 +152,6 @@ try {
   }
 
   $centerComposeAcceptance = Read-JsonFile -Path $resolvedCenterComposeAcceptanceFile -Label "Center compose acceptance report"
-  $phaseReadiness = Read-JsonFile -Path $resolvedPhaseReadinessFile -Label "Phase readiness report"
   $composeBaseText = Read-TextFile -Path $resolvedComposeBaseFile -Label "Compose base file"
   $composeAppText = Read-TextFile -Path $resolvedComposeAppFile -Label "Compose app file"
   $runbookText = Read-TextFile -Path $resolvedRunbookFile -Label "Runbook file"
@@ -245,18 +242,6 @@ try {
       expected = "full-path-ready"
     },
     [pscustomobject]@{
-      key = "phaseReadinessAccepted"
-      ok = [bool]$phaseReadiness.accepted
-      actual = [bool]$phaseReadiness.accepted
-      expected = $true
-    },
-    [pscustomobject]@{
-      key = "phaseReadinessBoundary"
-      ok = ([string]$phaseReadiness.currentBoundary -eq "center-deployment-software-adaptation-ready")
-      actual = [string]$phaseReadiness.currentBoundary
-      expected = "center-deployment-software-adaptation-ready"
-    },
-    [pscustomobject]@{
       key = "runbookMentionsCenterAcceptance"
       ok = (Test-TextContains -Text $runbookText -Pattern "check-field-center-compose-acceptance.ps1")
       actual = (Test-TextContains -Text $runbookText -Pattern "check-field-center-compose-acceptance.ps1")
@@ -318,17 +303,11 @@ try {
         accepted = [bool]$centerComposeAcceptance.accepted
         boundary = [string]$centerComposeAcceptance.readiness.currentBoundary
       }
-      phaseReadiness = [ordered]@{
-        file = $PhaseReadinessFile.Replace("\", "/")
-        generatedAt = [string]$phaseReadiness.generatedAt
-        accepted = [bool]$phaseReadiness.accepted
-        boundary = [string]$phaseReadiness.currentBoundary
-      }
     }
     nextUse = @(
       "refresh runtime freeze baseline: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-field-center-runtime-freeze.ps1 -AllowUnsafeSecrets",
       "refresh center acceptance: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-field-center-compose-acceptance.ps1 -DeployMode validate -AllowUnsafeSecrets",
-      "refresh phase readiness: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-field-center-deployment-software-adaptation-readiness.ps1"
+      "refresh center handoff packet: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\prepare-field-center-production-handoff.ps1 -AllowUnsafeSecrets"
     )
     checks = $checks
   }
