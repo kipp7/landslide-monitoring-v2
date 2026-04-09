@@ -1419,3 +1419,38 @@ Freeze and execute the next major phase after command-route stabilization: prove
   - next recommended slice:
     - continue removing direct `/api/device-management` reads from remaining mounted web consumers
     - separately harden the web workspace build/typecheck environment so default validation becomes repeatable without flags
+- the mounted web device tree slice has now also been moved off the legacy hierarchical endpoint:
+  - file:
+    - `apps/web/app/device-management/legacy/hooks/useHierarchicalDevices.ts`
+  - implementation facts:
+    - the hook no longer reads `/api/device-management/hierarchical`
+    - it now composes the left-side device hierarchy locally from:
+      - `/api/v1/devices`
+      - `/api/v1/data/state/{deviceId}`
+      - `/api/iot/devices/mappings`
+    - region/device statistics, online counts, and snapshot-backed device facts now follow the same frozen field read path as the rest of the mounted page
+- the web validation-hardening slice has also been pulled back into a reproducible state:
+  - files:
+    - `apps/web/tsconfig.json`
+  - environment facts:
+    - root `node_modules/next` had become an invalid empty package shell
+    - `npm ls next --all` initially reported:
+      - `next@ invalid`
+    - `npm install --workspace apps/web` repaired the workspace-to-root `next` package chain
+  - verification:
+    - `npm ls next --all`
+      now reports:
+      - `next@15.2.2`
+    - `npx tsc -p .\\apps\\web\\tsconfig.json --noEmit --pretty false`
+      passed twice on `2026-04-09`
+    - `npm --workspace apps/web run build`
+      passed on `2026-04-09`
+  - current hardening boundary:
+    - `incremental = false` remains frozen in `apps/web/tsconfig.json`
+    - Next.js still auto-maintains `.next_web/types/**/*.ts` inside `include` after a successful build
+    - the earlier `Cannot find module './impl'` failure is no longer the current blocker
+  - next recommended slice:
+    - continue clearing lower-priority orphan legacy readers:
+      - `apps/web/lib/useIotDataStore.ts`
+      - `apps/web/app/optimized-demo/legacy/hooks/useOptimizedDeviceData.ts`
+    - keep firmware/protocol scope frozen while software-side consumer convergence is still moving
