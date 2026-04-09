@@ -107,6 +107,7 @@ function Get-SampleSummary {
   param($RuntimeReport)
 
   $runtimeHealth = $RuntimeReport.runtimeHealth
+  $statsPropertyNames = @($runtimeHealth.stats.PSObject.Properties | ForEach-Object { $_.Name })
   $port = Get-PortState -RuntimeReport $RuntimeReport
   $nodeA = Get-NodeByDeviceId -RuntimeReport $RuntimeReport -DeviceId "00000000-0000-0000-0000-000000000001"
   $nodeB = Get-NodeByDeviceId -RuntimeReport $RuntimeReport -DeviceId "00000000-0000-0000-0000-000000000002"
@@ -125,6 +126,9 @@ function Get-SampleSummary {
     parsedMessages = [int]$runtimeHealth.stats.parsedMessages
     publishedMessages = [int]$runtimeHealth.stats.publishedMessages
     schemaRejected = [int]$runtimeHealth.stats.schemaRejected
+    rejectedStatsPresent = (($statsPropertyNames -contains "rejectedMessages") -and ($statsPropertyNames -contains "rejectedWriteFailures"))
+    rejectedMessages = [int]$runtimeHealth.stats.rejectedMessages
+    rejectedWriteFailures = [int]$runtimeHealth.stats.rejectedWriteFailures
     publishFailures = [int]$runtimeHealth.stats.publishFailures
     nodeAStatus = [string]$nodeA.status
     nodeATelemetryMessages = [int]$nodeA.telemetryMessages
@@ -224,6 +228,7 @@ try {
     mqttConnected = (@($sampleArray | Where-Object { -not $_.mqttConnected }).Count -eq 0)
     serialOpen = (@($sampleArray | Where-Object { -not $_.serialOpen }).Count -eq 0)
     portOnline = (@($sampleArray | Where-Object { $_.portStatus -ne "online" }).Count -eq 0)
+    rejectedStatsPresent = (@($sampleArray | Where-Object { -not $_.rejectedStatsPresent }).Count -eq 0)
     nodeAOnline = (@($sampleArray | Where-Object { $_.nodeAStatus -ne "online" }).Count -eq 0)
     nodeBOnline = (@($sampleArray | Where-Object { $_.nodeBStatus -ne "online" }).Count -eq 0)
     nodeAReachable = (@($sampleArray | Where-Object { $_.nodeAStatus -notin @("online", "degraded") }).Count -eq 0)
@@ -235,6 +240,8 @@ try {
     parsedMessages = [int]$lastSample.parsedMessages - [int]$firstSample.parsedMessages
     publishedMessages = [int]$lastSample.publishedMessages - [int]$firstSample.publishedMessages
     schemaRejected = [int]$lastSample.schemaRejected - [int]$firstSample.schemaRejected
+    rejectedMessages = [int]$lastSample.rejectedMessages - [int]$firstSample.rejectedMessages
+    rejectedWriteFailures = [int]$lastSample.rejectedWriteFailures - [int]$firstSample.rejectedWriteFailures
     publishFailures = [int]$lastSample.publishFailures - [int]$firstSample.publishFailures
     nodeATelemetryMessages = [int]$lastSample.nodeATelemetryMessages - [int]$firstSample.nodeATelemetryMessages
     nodeBTelemetryMessages = [int]$lastSample.nodeBTelemetryMessages - [int]$firstSample.nodeBTelemetryMessages
@@ -243,12 +250,15 @@ try {
   $maxObserved = [ordered]@{
     spoolPending = (@($sampleArray | Measure-Object -Property spoolPending -Maximum).Maximum)
     schemaRejected = (@($sampleArray | Measure-Object -Property schemaRejected -Maximum).Maximum)
+    rejectedMessages = (@($sampleArray | Measure-Object -Property rejectedMessages -Maximum).Maximum)
+    rejectedWriteFailures = (@($sampleArray | Measure-Object -Property rejectedWriteFailures -Maximum).Maximum)
     publishFailures = (@($sampleArray | Measure-Object -Property publishFailures -Maximum).Maximum)
     reconnectAttempts = (@($sampleArray | Measure-Object -Property reconnectAttempts -Maximum).Maximum)
     consecutiveReconnectFailures = (@($sampleArray | Measure-Object -Property consecutiveReconnectFailures -Maximum).Maximum)
   }
 
   $reconnectObserved = (@($sampleArray | Where-Object { $_.reconnectScheduled -or $_.reconnectAttempts -gt 0 -or $_.consecutiveReconnectFailures -gt 0 }).Count -gt 0)
+  $rejectedEvidenceAligned = ([int]$counterDelta.rejectedMessages -eq [int]$counterDelta.schemaRejected)
 
   $passed = (
     [bool]$acceptance.accepted -and
@@ -256,17 +266,20 @@ try {
     $statusContinuous.mqttConnected -and
     $statusContinuous.serialOpen -and
     $statusContinuous.portOnline -and
+    $statusContinuous.rejectedStatsPresent -and
     $statusContinuous.nodeAReachable -and
     $statusContinuous.nodeBReachable -and
     $statusContinuous.nodeCPrepared -and
     ([int]$counterDelta.nodeATelemetryMessages -gt 0) -and
     ([int]$counterDelta.nodeBTelemetryMessages -gt 0) -and
+    ([int]$counterDelta.rejectedWriteFailures -eq 0) -and
+    $rejectedEvidenceAligned -and
     ([int]$counterDelta.publishFailures -eq 0) -and
     ([int]$maxObserved.spoolPending -eq 0) -and
     (-not $reconnectObserved)
   )
 
-  $conclusion = if ($passed -and [int]$counterDelta.schemaRejected -eq 0) {
+  $conclusion = if ($passed -and [int]$counterDelta.schemaRejected -eq 0 -and [int]$counterDelta.rejectedMessages -eq 0) {
     "rk3568-runtime-observation-window-clean"
   } elseif ($passed) {
     "rk3568-runtime-observation-window-online-with-parser-noise"
@@ -304,6 +317,7 @@ try {
       lastSample = $lastSample
       counterDelta = $counterDelta
       maxObserved = $maxObserved
+      rejectedEvidenceAligned = $rejectedEvidenceAligned
       reconnectObserved = $reconnectObserved
       statusContinuous = $statusContinuous
     }

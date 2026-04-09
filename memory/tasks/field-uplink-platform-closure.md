@@ -1556,3 +1556,27 @@ Freeze and execute the next major phase after command-route stabilization: prove
   - next recommended slice:
     - harden board-side acceptance/recovery scripts around these new rejection counters
     - keep center/runtime and RK3568 work focused on repeatable operations, not protocol redesign
+- the RK3568 board-side operator scripts now also consume the new rejection counters as part of the stability contract:
+  - files:
+    - `scripts/dev/check-rk3568-field-gateway-acceptance.ps1`
+    - `scripts/dev/run-rk3568-field-gateway-observation-window.ps1`
+    - `scripts/dev/check-field-rk3568-center-operational-recovery.ps1`
+    - `scripts/dev/check-field-rk3568-production-uplink-freeze.ps1`
+  - current hardening change:
+    - acceptance now checks:
+      - rejection stats are present in runtime health
+      - `rejectedWriteFailures = 0`
+    - observation windows now track:
+      - `rejectedMessages`
+      - `rejectedWriteFailures`
+      - `rejectedEvidenceAligned`
+    - observation pass criteria now also require:
+      - rejection stats continuously present
+      - `rejectedWriteFailures delta = 0`
+      - rejected evidence count aligns with `schemaRejected` delta
+    - recovery / production-freeze reports now expose and validate the same rejection counters
+  - verification:
+    - PowerShell parser validation passed on `2026-04-10` for all four scripts
+    - live board execution is intentionally left to the next step so runtime evidence can be collected on the actual RK3568
+  - next recommended slice:
+    - run one real RK3568 acceptance / observation / recovery cycle and record the first live report using the new counters

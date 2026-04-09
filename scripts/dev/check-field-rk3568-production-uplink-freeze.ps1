@@ -341,6 +341,8 @@ $nodeA = @($runtimeHealth.southbound.nodes | Where-Object { $_.deviceId -eq "000
 $nodeB = @($runtimeHealth.southbound.nodes | Where-Object { $_.deviceId -eq "00000000-0000-0000-0000-000000000002" } | Select-Object -First 1)[0]
 $nodeC = @($runtimeHealth.southbound.nodes | Where-Object { $_.deviceId -eq "00000000-0000-0000-0000-000000000003" } | Select-Object -First 1)[0]
 $boardPasswordActual = if ([string]::IsNullOrWhiteSpace([string]$remoteEnv.MQTT_PASSWORD)) { "missing" } else { "***" }
+$runtimeStatsPropertyNames = @($runtimeHealth.stats.PSObject.Properties | ForEach-Object { $_.Name })
+$rejectedStatsPresent = (($runtimeStatsPropertyNames -contains "rejectedMessages") -and ($runtimeStatsPropertyNames -contains "rejectedWriteFailures"))
 
 $checks = @(
   (Get-Check -Key "centerRuntimeFreezeAccepted" -Ok:([bool]$centerRuntimeFreeze.accepted) -Actual ([bool]$centerRuntimeFreeze.accepted) -Expected $true),
@@ -364,6 +366,8 @@ $checks = @(
   (Get-Check -Key "runtimeNodeBOnline" -Ok:([string]$nodeB.status -eq "online") -Actual ([string]$nodeB.status) -Expected "online"),
   (Get-Check -Key "runtimeNodeCReserved" -Ok:([string]$nodeC.status -eq "configured") -Actual ([string]$nodeC.status) -Expected "configured"),
   (Get-Check -Key "publishFailuresZero" -Ok:([int]$runtimeHealth.stats.publishFailures -eq 0) -Actual ([int]$runtimeHealth.stats.publishFailures) -Expected 0),
+  (Get-Check -Key "rejectedStatsPresent" -Ok:$rejectedStatsPresent -Actual $rejectedStatsPresent -Expected $true),
+  (Get-Check -Key "rejectedWriteFailuresZero" -Ok:([int]$runtimeHealth.stats.rejectedWriteFailures -eq 0) -Actual ([int]$runtimeHealth.stats.rejectedWriteFailures) -Expected 0),
   (Get-Check -Key "spoolPendingZero" -Ok:([int]$runtimeHealth.stats.spoolPending -eq 0) -Actual ([int]$runtimeHealth.stats.spoolPending) -Expected 0),
   (Get-Check -Key "commandPathObserved" -Ok:([int]$runtimeHealth.stats.commandsForwarded -ge 1 -and [int]$runtimeHealth.stats.ackMessagesPublished -ge 1) -Actual ("forwarded={0},acked={1}" -f [int]$runtimeHealth.stats.commandsForwarded, [int]$runtimeHealth.stats.ackMessagesPublished) -Expected "forwarded>=1,acked>=1")
 )
@@ -406,6 +410,8 @@ $report = [ordered]@{
     serialOpen = [bool]$runtimeHealth.serial.open
     publishedMessages = [int]$runtimeHealth.stats.publishedMessages
     publishFailures = [int]$runtimeHealth.stats.publishFailures
+    rejectedMessages = [int]$runtimeHealth.stats.rejectedMessages
+    rejectedWriteFailures = [int]$runtimeHealth.stats.rejectedWriteFailures
     spoolPending = [int]$runtimeHealth.stats.spoolPending
     commandsForwarded = [int]$runtimeHealth.stats.commandsForwarded
     ackMessagesPublished = [int]$runtimeHealth.stats.ackMessagesPublished

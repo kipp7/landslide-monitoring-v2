@@ -415,11 +415,14 @@ try {
     (Get-Check -Key "runtimeServiceActive" -Ok:([string]$runtime.serviceState.isActive.stdout -eq "active") -Actual ([string]$runtime.serviceState.isActive.stdout) -Expected "active"),
     (Get-Check -Key "runtimeMqttConnected" -Ok:([bool]$runtime.runtimeHealth.mqtt.connected) -Actual ([bool]$runtime.runtimeHealth.mqtt.connected) -Expected $true),
     (Get-Check -Key "runtimeSerialOpen" -Ok:([bool]$runtime.runtimeHealth.serial.open) -Actual ([bool]$runtime.runtimeHealth.serial.open) -Expected $true),
+    (Get-Check -Key "runtimeRejectedWriteFailuresZero" -Ok:([int]$runtime.runtimeHealth.stats.rejectedWriteFailures -eq 0) -Actual ([int]$runtime.runtimeHealth.stats.rejectedWriteFailures) -Expected 0),
     (Get-Check -Key "closureAccepted" -Ok:([bool]$closure.accepted) -Actual ([bool]$closure.accepted) -Expected $true),
     (Get-Check -Key "closureBoundary" -Ok:([string]$closure.currentBoundary -eq "rk3568-live-center-closure-ready") -Actual ([string]$closure.currentBoundary) -Expected "rk3568-live-center-closure-ready"),
     (Get-Check -Key "boardWindowStable" -Ok:([bool]$closureBoardWindow.stable) -Actual ([bool]$closureBoardWindow.stable) -Expected $true),
     (Get-Check -Key "boardWindowStrictlyClean" -Ok:([bool]$closureBoardWindow.strictlyClean) -Actual ([bool]$closureBoardWindow.strictlyClean) -Expected $true),
     (Get-Check -Key "boardParserNoiseWithinBudget" -Ok:([bool]$closureBoardWindow.parserNoiseWithinBudget) -Actual ([bool]$closureBoardWindow.parserNoiseWithinBudget) -Expected $true),
+    (Get-Check -Key "boardRejectedEvidenceAligned" -Ok:([bool]$closureBoardWindow.rejectedEvidenceAligned) -Actual ([bool]$closureBoardWindow.rejectedEvidenceAligned) -Expected $true),
+    (Get-Check -Key "boardRejectedWriteFailuresDeltaZero" -Ok:([int]$closureBoardWindow.counterDelta.rejectedWriteFailures -eq 0) -Actual ([int]$closureBoardWindow.counterDelta.rejectedWriteFailures) -Expected 0),
     (Get-Check -Key "stableCommandAcked" -Ok:([string]$closureStableCommand.ackStatus -eq "acked") -Actual ([string]$closureStableCommand.ackStatus) -Expected "acked"),
     (Get-Check -Key "nodeAApiMetricsContract" -Ok:([bool]$closureNodeAApi.metricsContractOk) -Actual ([bool]$closureNodeAApi.metricsContractOk) -Expected $true),
     (Get-Check -Key "nodeAWebMetricsContract" -Ok:([bool]$closureNodeAWeb.metricsContractOk) -Actual ([bool]$closureNodeAWeb.metricsContractOk) -Expected $true),
@@ -459,6 +462,8 @@ try {
       parsedMessages = [int]$runtime.runtimeHealth.stats.parsedMessages
       publishedMessages = [int]$runtime.runtimeHealth.stats.publishedMessages
       schemaRejected = [int]$runtime.runtimeHealth.stats.schemaRejected
+      rejectedMessages = [int]$runtime.runtimeHealth.stats.rejectedMessages
+      rejectedWriteFailures = [int]$runtime.runtimeHealth.stats.rejectedWriteFailures
       nodeAStatus = [string]$runtimeNodeA.status
       nodeBStatus = [string]$runtimeNodeB.status
       nodeCStatus = [string]$runtimeNodeC.status
@@ -472,6 +477,9 @@ try {
       centerComposeBoundary = [string]$closure.centerAcceptance.currentBoundary
       boardObservationConclusion = [string]$closure.boardObservation.conclusion
       boardObservationSchemaRejectedDelta = [int]$closureBoardWindow.counterDelta.schemaRejected
+      boardObservationRejectedMessagesDelta = [int]$closureBoardWindow.counterDelta.rejectedMessages
+      boardObservationRejectedWriteFailuresDelta = [int]$closureBoardWindow.counterDelta.rejectedWriteFailures
+      boardObservationRejectedEvidenceAligned = [bool]$closureBoardWindow.rejectedEvidenceAligned
       boardObservationSampleCount = [int]$closure.boardObservation.sampleCount
       commandId = [string]$closureStableCommand.commandId
       ackStatus = [string]$closureStableCommand.ackStatus

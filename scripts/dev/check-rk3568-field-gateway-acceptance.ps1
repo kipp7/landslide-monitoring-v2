@@ -227,6 +227,8 @@ try {
   $nodeB = Get-NodeByDeviceId -RuntimeReport $runtimeReport -DeviceId "00000000-0000-0000-0000-000000000002"
   $nodeC = Get-NodeByDeviceId -RuntimeReport $runtimeReport -DeviceId "00000000-0000-0000-0000-000000000003"
   $proofAckStatus = if ($commandProof.ackEvidence) { [string]$commandProof.ackEvidence.status } else { "" }
+  $statsPropertyNames = @($runtimeHealth.stats.PSObject.Properties | ForEach-Object { $_.Name })
+  $rejectedStatsPresent = (($statsPropertyNames -contains "rejectedMessages") -and ($statsPropertyNames -contains "rejectedWriteFailures"))
 
   $checks = @(
     (Get-Check -Key "serviceActive" -Ok:($serviceState.isActive.stdout -eq "active") -Actual $serviceState.isActive.stdout -Expected "active"),
@@ -242,6 +244,8 @@ try {
     (Get-Check -Key "telemetryTopicPrefix" -Ok:([string]$runtimeReport.configuredEnv.MQTT_TOPIC_TELEMETRY_PREFIX -eq "telemetry/") -Actual ([string]$runtimeReport.configuredEnv.MQTT_TOPIC_TELEMETRY_PREFIX) -Expected "telemetry/"),
     (Get-Check -Key "commandTopicPrefix" -Ok:([string]$runtimeReport.configuredEnv.MQTT_TOPIC_COMMAND_PREFIX -eq "cmd/") -Actual ([string]$runtimeReport.configuredEnv.MQTT_TOPIC_COMMAND_PREFIX) -Expected "cmd/"),
     (Get-Check -Key "ackTopicPrefix" -Ok:([string]$runtimeReport.configuredEnv.MQTT_TOPIC_ACK_PREFIX -eq "cmd_ack/") -Actual ([string]$runtimeReport.configuredEnv.MQTT_TOPIC_ACK_PREFIX) -Expected "cmd_ack/"),
+    (Get-Check -Key "rejectedStatsPresent" -Ok:$rejectedStatsPresent -Actual $rejectedStatsPresent -Expected $true),
+    (Get-Check -Key "rejectedWriteFailuresZero" -Ok:([int]$runtimeHealth.stats.rejectedWriteFailures -eq 0) -Actual ([int]$runtimeHealth.stats.rejectedWriteFailures) -Expected 0),
     (Get-Check -Key "commandProofPassed" -Ok:([bool]$commandProof.passed) -Actual ([bool]$commandProof.passed) -Expected $true),
     (Get-Check -Key "commandProofAckStatus" -Ok:($proofAckStatus -eq "acked") -Actual $proofAckStatus -Expected "acked")
   )
@@ -301,6 +305,8 @@ try {
       configuredPorts = [int]$runtimeHealth.southbound.configuredPorts
       spoolPending = [int]$runtimeHealth.stats.spoolPending
       schemaRejected = [int]$runtimeHealth.stats.schemaRejected
+      rejectedMessages = [int]$runtimeHealth.stats.rejectedMessages
+      rejectedWriteFailures = [int]$runtimeHealth.stats.rejectedWriteFailures
       port = $portState
       nodes = @($runtimeHealth.southbound.nodes)
     }
