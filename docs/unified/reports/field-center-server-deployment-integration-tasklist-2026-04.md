@@ -585,6 +585,66 @@ Center server 一期算完成，至少要满足：
   - 可交接
 - 不再把时间消耗在反复解释这轮已经闭合的 `60s` 主线事实上
 
+## 10.7 2026-04-09 现场恢复主线已补成统一 runbook 入口
+
+前面虽然已经有：
+
+- `check-field-center-compose-acceptance.ps1`
+- `check-field-rk3568-center-live-closure.ps1`
+
+但现场恢复时仍然缺一条更贴近运维动作的正式入口，去回答：
+
+- RK3568 网关如果刚恢复或刚重启
+- 现在能不能用一条命令把：
+  - runtime 快照
+  - cross-boundary closure
+  - 当前恢复边界
+  一次性收口
+
+这一步现在已经补上。
+
+1. 新入口
+- 脚本：
+  - `scripts/dev/check-field-rk3568-center-operational-recovery.ps1`
+- 当前支持：
+  - 常规恢复复核
+  - `-RestartGatewayService` 受控重启后复核
+  - `-RequireZeroSchemaRejectedDelta` 严格 zero-noise 复核
+
+2. 当前它统一收的事实
+- RK3568 runtime 快照：
+  - `docs/unified/reports/field-rk3568-gateway-runtime-latest.json`
+- cross-boundary live closure：
+  - `docs/unified/reports/field-rk3568-center-live-closure-latest.json`
+- runbook 级恢复总结：
+  - `docs/unified/reports/field-rk3568-center-operational-recovery-latest.json`
+
+3. 已实跑通过的当前结果
+- 最新恢复总结报告：
+  - `generatedAt = 2026-04-09T08:39:50Z`
+  - `accepted = true`
+  - `currentBoundary = rk3568-center-operational-recovery-ready`
+  - `cleanWindowReopened = true`
+- 同轮 closure 继续保持：
+  - `accepted = true`
+  - `currentBoundary = rk3568-live-center-closure-ready`
+  - `boardObservationConclusion = rk3568-runtime-observation-window-clean`
+  - `boardObservationSchemaRejectedDelta = 0`
+  - `ackStatus = acked`
+  - `node A/B api/web metricsKeyCount = 14`
+
+4. 这一步的工程意义
+- 以后中心部署与软件适配阶段在做“恢复后复核”时
+  不需要再人工拼：
+  - runtime
+  - observation
+  - closure
+  - report 解读
+- 当前这条线已经正式具备：
+  - 一条命令
+  - 一份总结报告
+  - 一套明确边界
+
 ## 10. 相关文档
 
 - [field-uplink-platform-closure-baseline.md](/E:/学校/02 项目/99 山体滑坡优化完善/landslide-monitoring-v2-mainline/docs/unified/reports/field-uplink-platform-closure-baseline.md)

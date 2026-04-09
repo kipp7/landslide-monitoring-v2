@@ -1156,3 +1156,22 @@ Freeze and execute the next major phase after command-route stabilization: prove
   - a controlled RK3568 restart can reopen a clean `60s` board window and restore the cross-boundary closure line to green
   - longer or stricter windows may still drift back into bounded shared-port parser noise
   - parser hardening is therefore not finished, but it is no longer the blocker for the current center-deployment/software-adaptation phase gate
+- the center-deployment/software-adaptation line now also has a runbook-grade recovery entrypoint:
+  - script:
+    - `scripts/dev/check-field-rk3568-center-operational-recovery.ps1`
+  - report:
+    - `docs/unified/reports/field-rk3568-center-operational-recovery-latest.json`
+  - scope:
+    - optional controlled restart of the RK3568 field gateway service
+    - one runtime snapshot
+    - one cross-boundary closure execution with retry
+    - one summarized recovery boundary
+  - latest reproved report facts:
+    - `generatedAt = 2026-04-09T08:39:50Z`
+    - `accepted = true`
+    - `currentBoundary = rk3568-center-operational-recovery-ready`
+    - `cleanWindowReopened = true`
+  - this freezes the practical recovery line for the current phase into:
+    - one command
+    - one latest report
+    - one handoff-ready operational boundary

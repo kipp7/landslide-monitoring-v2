@@ -117,3 +117,44 @@ permalink: landslide-monitoring-v2-mainline/docs/guides/runbooks/single-host-run
 
 4. 恢复后必须立即执行：
 - `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/check-field-center-compose-acceptance.ps1 -DeployMode validate -AllowUnsafeSecrets`
+
+## 10. RK3568 现场恢复复核入口
+
+当中心 compose 主链已经正常，但需要确认：
+
+- RK3568 网关当前是否还在线
+- board observation 是否重新回到 clean window
+- `RK3568 -> center -> API/Web` cross-boundary closure 是否重新回绿
+
+不要再手工拼接多条命令，直接用统一入口：
+
+- 常规复核：
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/check-field-rk3568-center-operational-recovery.ps1 -BoardPassword <password> -AllowUnsafeSecrets`
+- 受控重启后复核：
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/check-field-rk3568-center-operational-recovery.ps1 -RestartGatewayService -BoardPassword <password> -AllowUnsafeSecrets`
+- 严格 zero-noise 复核：
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/check-field-rk3568-center-operational-recovery.ps1 -BoardPassword <password> -AllowUnsafeSecrets -RequireZeroSchemaRejectedDelta`
+
+这条入口会统一收口：
+
+- `check-rk3568-field-gateway-runtime.ps1`
+- `check-field-rk3568-center-live-closure.ps1`
+
+标准报告输出：
+
+- `docs/unified/reports/field-rk3568-gateway-runtime-latest.json`
+- `docs/unified/reports/field-rk3568-center-live-closure-latest.json`
+- `docs/unified/reports/field-rk3568-center-operational-recovery-latest.json`
+
+当前工程口径：
+
+- `accepted = true` 表示：
+  - 中心 compose 主链仍是 `full-path-ready`
+  - board observation 已重新回到 clean `60s` window
+  - stable command 仍能 `acked`
+  - API/Web 的 field metrics contract 仍保持 `14` 个 canonical keys
+- 即时 runtime snapshot 中的：
+  - `configured`
+  - `degraded`
+  - 历史累计 `schemaRejected`
+  只作为恢复现场观测，不再单独压翻当前这条已闭合的 recovery 主线

@@ -1,5 +1,5 @@
 ﻿{
-    "generatedAt":  "2026-04-09T07:58:35.513Z",
+    "generatedAt":  "2026-04-09T08:49:03.527Z",
     "mode":  "rk3568-node-command-stable",
     "boardHost":  "192.168.124.172",
     "mqttUrl":  "mqtt://127.0.0.1:1883",
@@ -12,33 +12,35 @@
     "successfulAttempt":  {
                               "attempt":  1,
                               "passed":  true,
-                              "commandId":  "e18f7563-8890-4404-917d-f27f0c67018a",
+                              "commandId":  "d1238b31-1e1a-4993-b6e4-5cb6fb4d4249",
                               "ackStatus":  "acked",
                               "summary":  "command-forward-and-ack-publish-succeeded",
-                              "parseFailureCount":  0,
+                              "parseFailureCount":  16,
                               "failureModes":  [
-
+                                                   "southbound-json-fragmentation",
+                                                   "shared-stream-byte-interleaving"
                                                ],
-                              "beforeAckPublishes":  1,
-                              "afterAckPublishes":  2,
-                              "beforeLastAckTs":  "2026-04-09T07:57:09.388Z",
-                              "afterLastAckTs":  "2026-04-09T07:58:29.338Z",
+                              "beforeAckPublishes":  4,
+                              "afterAckPublishes":  5,
+                              "beforeLastAckTs":  "2026-04-09T08:47:36.436Z",
+                              "afterLastAckTs":  "2026-04-09T08:48:57.054Z",
                               "proofFile":  ".tmp/rk3568-node-command-stable-0002-manual-collect-1.json"
                           },
     "finalAttempt":  {
                          "attempt":  1,
                          "passed":  true,
-                         "commandId":  "e18f7563-8890-4404-917d-f27f0c67018a",
+                         "commandId":  "d1238b31-1e1a-4993-b6e4-5cb6fb4d4249",
                          "ackStatus":  "acked",
                          "summary":  "command-forward-and-ack-publish-succeeded",
-                         "parseFailureCount":  0,
+                         "parseFailureCount":  16,
                          "failureModes":  [
-
+                                              "southbound-json-fragmentation",
+                                              "shared-stream-byte-interleaving"
                                           ],
-                         "beforeAckPublishes":  1,
-                         "afterAckPublishes":  2,
-                         "beforeLastAckTs":  "2026-04-09T07:57:09.388Z",
-                         "afterLastAckTs":  "2026-04-09T07:58:29.338Z",
+                         "beforeAckPublishes":  4,
+                         "afterAckPublishes":  5,
+                         "beforeLastAckTs":  "2026-04-09T08:47:36.436Z",
+                         "afterLastAckTs":  "2026-04-09T08:48:57.054Z",
                          "proofFile":  ".tmp/rk3568-node-command-stable-0002-manual-collect-1.json"
                      },
     "attemptCount":  1,
@@ -46,17 +48,18 @@
                      {
                          "attempt":  1,
                          "passed":  true,
-                         "commandId":  "e18f7563-8890-4404-917d-f27f0c67018a",
+                         "commandId":  "d1238b31-1e1a-4993-b6e4-5cb6fb4d4249",
                          "ackStatus":  "acked",
                          "summary":  "command-forward-and-ack-publish-succeeded",
-                         "parseFailureCount":  0,
+                         "parseFailureCount":  16,
                          "failureModes":  [
-
+                                              "southbound-json-fragmentation",
+                                              "shared-stream-byte-interleaving"
                                           ],
-                         "beforeAckPublishes":  1,
-                         "afterAckPublishes":  2,
-                         "beforeLastAckTs":  "2026-04-09T07:57:09.388Z",
-                         "afterLastAckTs":  "2026-04-09T07:58:29.338Z",
+                         "beforeAckPublishes":  4,
+                         "afterAckPublishes":  5,
+                         "beforeLastAckTs":  "2026-04-09T08:47:36.436Z",
+                         "afterLastAckTs":  "2026-04-09T08:48:57.054Z",
                          "proofFile":  ".tmp/rk3568-node-command-stable-0002-manual-collect-1.json"
                      }
                  ]
