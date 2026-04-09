@@ -855,6 +855,42 @@ Center server 一期算完成，至少要满足：
   - `node C` 继续保留在配置和预算里
   - 不阻塞当前交付推进
 
+## 10.13 2026-04-09 中心部署交接包已补成单独入口
+
+前三条阶段门已经转绿之后，当前中心侧不应继续停留在：
+
+- 知道 freeze 在哪里
+- 知道 acceptance 在哪里
+- 但交接时仍要人工解释应该看哪些文件、跑哪些命令
+
+所以这一步继续补成单独入口。
+
+1. 新入口
+- 脚本：
+  - `scripts/dev/prepare-field-center-production-handoff.ps1`
+- 标准报告：
+  - `docs/unified/reports/field-center-production-handoff-latest.json`
+  - `docs/unified/reports/field-center-production-handoff-latest.md`
+
+2. 它当前统一收口的事实
+- 上游冻结边界：
+  - `field-center-runtime-freeze-latest.json`
+  - `field-center-compose-acceptance-latest.json`
+  - `field-center-deployment-software-adaptation-readiness-latest.json`
+- 交接物料：
+  - `single-host-runbook.md`
+  - `prod-env-checklist-latest.json`
+  - `docker-deploy-latest.json`
+
+3. 这一步的工程意义
+- 当前中心部署第一包已经不再只是：
+  - “有 freeze 入口”
+- 而是进一步变成：
+  - 一条 handoff 刷新命令
+  - 一份交接 latest json
+  - 一份一页式 handoff markdown
+- 这样后续继续推进软件消费侧适配时，不需要再重新解释中心部署基线
+
 ## 10. 相关文档
 
 - [field-uplink-platform-closure-baseline.md](/E:/学校/02 项目/99 山体滑坡优化完善/landslide-monitoring-v2-mainline/docs/unified/reports/field-uplink-platform-closure-baseline.md)

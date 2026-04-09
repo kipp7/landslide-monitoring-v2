@@ -127,6 +127,50 @@ permalink: landslide-monitoring-v2-mainline/docs/guides/runbooks/single-host-run
   - 一键部署 validate 没有错误
   - 当前阶段 readiness 仍保持 green
 
+## 8.2 中心交接入口
+
+当当前目标不再只是确认中心侧冻结，而是要把这条部署线真正交给后续执行者复跑、恢复和交接，不要手工翻 runbook + latest 报告，直接用：
+
+- `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/prepare-field-center-production-handoff.ps1 -AllowUnsafeSecrets`
+
+这条入口会统一做两件事：
+
+- 先刷新：
+  - `check-field-center-runtime-freeze.ps1`
+- 再生成当前交接说明：
+  - `docs/unified/reports/field-center-production-handoff-latest.json`
+  - `docs/unified/reports/field-center-production-handoff-latest.md`
+
+当前 handoff 口径固定包含：
+
+- compose 边界：
+  - `emqx`
+  - `kafka`
+  - `postgres`
+  - `clickhouse`
+  - `api`
+  - `web`
+  - `ingest-service`
+  - `telemetry-writer`
+- 标准命令：
+  - `check-field-center-runtime-freeze.ps1`
+  - `check-field-center-compose-acceptance.ps1 -DeployMode validate`
+  - `check-field-center-compose-acceptance.ps1 -DeployMode apply`
+- 必带物料：
+  - `single-host-runbook.md`
+  - `field-center-runtime-freeze-latest.json`
+  - `field-center-compose-acceptance-latest.json`
+  - `field-center-deployment-software-adaptation-readiness-latest.json`
+  - `prod-env-checklist-latest.json`
+  - `docker-deploy-latest.json`
+
+当前工程口径：
+
+- `accepted = true` 表示：
+  - 中心部署交接包已经可复跑
+  - 当前 freeze / acceptance / readiness 三条边界仍然一致
+  - 后续执行者不需要重新推导当前中心部署主线
+
 ## 9. 恢复顺序
 
 中心主链异常时，优先按下面顺序恢复：

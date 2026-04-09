@@ -1274,3 +1274,19 @@ Freeze and execute the next major phase after command-route stabilization: prove
   - center deployment integration implementation
   - software-side consumer adaptation for the frozen field contract
   - `node C` remains reserved and budgeted, but not blocking
+- the first center-deployment implementation slice now also has a dedicated handoff entrypoint:
+  - script:
+    - `scripts/dev/prepare-field-center-production-handoff.ps1`
+  - reports:
+    - `docs/unified/reports/field-center-production-handoff-latest.json`
+    - `docs/unified/reports/field-center-production-handoff-latest.md`
+  - accepted facts:
+    - `generatedAt = 2026-04-09T12:58:21Z`
+    - `accepted = true`
+    - `currentBoundary = center-production-handoff-ready`
+    - compose boundary remains the frozen `8`-service set
+    - env checklist remains `missing = 0`, `placeholder = 0`
+    - docker validate remains `errors = 0`
+- this means the next center-side work no longer needs to prove that handoff material still has to be assembled:
+  - the handoff packet now exists
+  - the runbook, freeze boundary, acceptance boundary, and readiness boundary are already bound together

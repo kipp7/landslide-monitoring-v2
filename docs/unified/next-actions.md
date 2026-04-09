@@ -29,6 +29,7 @@ permalink: landslide-monitoring-v2-mainline/docs/unified/next-actions
 - 中心 compose 主链已经通过 acceptance，`ingest-service` 和 `telemetry-writer` 已回到正式运行线
 - RK3568 受控恢复入口和 soak 入口已经固定
 - 中心运行线冻结、RK3568 正式上行冻结、软件读路径适配都已经转绿
+- 中心部署交接包入口也已补齐并转绿
 - 双节点 `A/B` 当前 API/Web 指标合同保持精确 `14` 个 canonical metrics key
 - `node C` 已冻结到配置位和容量预算：
   - `device_id = 00000000-0000-0000-0000-000000000003`
@@ -119,6 +120,8 @@ permalink: landslide-monitoring-v2-mainline/docs/unified/next-actions
 - 输出：
   - runbook 化的单机部署/恢复执行线
   - 与当前 freeze/readiness 对齐的交付说明
+  - `docs/unified/reports/field-center-production-handoff-latest.json`
+  - `docs/unified/reports/field-center-production-handoff-latest.md`
 
 ### 任务 2：软件消费侧适配包
 
