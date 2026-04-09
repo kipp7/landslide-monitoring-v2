@@ -1177,3 +1177,21 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - one command
     - one latest report
     - one handoff-ready operational boundary
+- the longer-window evidence line now also has a formal soak entrypoint:
+  - script:
+    - `scripts/dev/run-field-rk3568-center-soak.ps1`
+  - report:
+    - `docs/unified/reports/field-rk3568-center-soak-latest.json`
+  - latest minimal reproved soak facts:
+    - `generatedAt = 2026-04-09T09:50:52Z`
+    - `accepted = true`
+    - `currentBoundary = rk3568-center-soak-ready`
+    - `rounds = 1`
+    - `acceptedRounds = 1`
+    - `cleanWindowRounds = 1`
+    - `maxBoardObservationSchemaRejectedDelta = 0`
+    - `allAcked = true`
+    - `allMetricsContractStable = true`
+  - the key engineering value is now explicit:
+    - transient first-attempt closure failures are preserved in `closureAttempts`
+    - the wrapper retry can still recover the same soak round back to `accepted = true`

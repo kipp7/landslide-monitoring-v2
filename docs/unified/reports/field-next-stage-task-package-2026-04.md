@@ -108,6 +108,10 @@ permalink: landslide-monitoring-v2-mainline/docs/unified/reports/field-next-stag
   - `spoolPending`
   - `node A/B status`
   - `A/B telemetry continuity`
+ - 当前正式入口现在补成：
+   - `scripts/dev/run-field-rk3568-center-soak.ps1`
+ - 对应总结报告：
+   - `docs/unified/reports/field-rk3568-center-soak-latest.json`
 
 3. 严格区分两条入口
 - 验收入口继续保留：
@@ -239,6 +243,38 @@ permalink: landslide-monitoring-v2-mainline/docs/unified/reports/field-next-stag
 - `RK3568 -> center` 软件适配与部署收口
 - 更长窗口持续留证
 - 三节点到位后的同入口回归验证
+
+## 10.2 2026-04-09 更长窗口持续留证已补成 soak 入口
+
+这轮把“继续积累更长窗口证据”从一句话任务，收成了正式脚本和报告线。
+
+1. 新入口
+- 脚本：
+  - `scripts/dev/run-field-rk3568-center-soak.ps1`
+- 当前用途：
+  - 按轮次重复执行 `check-field-rk3568-center-operational-recovery.ps1`
+  - 把每轮 recovery / closure / board clean-window 结果汇总成一份阶段报告
+
+2. 当前总结报告
+- `docs/unified/reports/field-rk3568-center-soak-latest.json`
+
+3. 已实跑通过的当前最小证据
+- `generatedAt = 2026-04-09T09:50:52Z`
+- `accepted = true`
+- `currentBoundary = rk3568-center-soak-ready`
+- `rounds = 1`
+- `acceptedRounds = 1`
+- `cleanWindowRounds = 1`
+- `maxBoardObservationSchemaRejectedDelta = 0`
+- `allAcked = true`
+- `allMetricsContractStable = true`
+
+4. 这条证据的真实工程意义
+- 当前不只是 recovery 单次通过
+- 而是 soak 包装层已经明确证明：
+  - 单轮中 closure 首次瞬时失败可以被记录下来
+  - 包装层 retry 可以把同一轮重新收回到 `accepted = true`
+- 这让后续两轮、三轮持续留证有了正式复跑入口，而不是继续手工抄命令
 
 一句话总结：
 

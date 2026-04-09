@@ -146,6 +146,19 @@ permalink: landslide-monitoring-v2-mainline/docs/guides/runbooks/single-host-run
 - `docs/unified/reports/field-rk3568-center-live-closure-latest.json`
 - `docs/unified/reports/field-rk3568-center-operational-recovery-latest.json`
 
+如果当前不只是做一次恢复复核，而是要持续积累更长窗口证据，直接用 soak 入口：
+
+- 单轮 soak 验证：
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/run-field-rk3568-center-soak.ps1 -Rounds 1 -IntervalSeconds 0 -BoardPassword <password> -AllowUnsafeSecrets`
+- 两轮 soak：
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/run-field-rk3568-center-soak.ps1 -Rounds 2 -IntervalSeconds 30 -BoardPassword <password> -AllowUnsafeSecrets`
+- 重启后 soak：
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/run-field-rk3568-center-soak.ps1 -Rounds 2 -IntervalSeconds 30 -RestartBeforeFirstRound -BoardPassword <password> -AllowUnsafeSecrets`
+
+对应阶段性总结报告：
+
+- `docs/unified/reports/field-rk3568-center-soak-latest.json`
+
 当前工程口径：
 
 - `accepted = true` 表示：
