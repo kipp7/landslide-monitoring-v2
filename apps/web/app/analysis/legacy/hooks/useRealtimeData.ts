@@ -66,8 +66,8 @@ export default function useRealtimeData(refreshInterval = 30_000): {
           const longitude =
             firstMetricNumber(safeMetrics, ['longitude', 'lon', 'lng', 'gps_longitude', 'gps_lon']) ?? (m.longitude ?? null)
 
-          const temperature = firstMetricNumber(safeMetrics, ['temperature', 'temp', 'temp_c'])
-          const humidity = firstMetricNumber(safeMetrics, ['humidity', 'hum'])
+          const temperature = firstMetricNumber(safeMetrics, ['temperature_c', 'temperature', 'temp', 'temp_c'])
+          const humidity = firstMetricNumber(safeMetrics, ['humidity_pct', 'humidity', 'hum'])
 
           const eventTime =
             typeof state.data.updatedAt === 'string' && state.data.updatedAt.trim()

@@ -1333,3 +1333,37 @@ Freeze and execute the next major phase after command-route stabilization: prove
   - next recommended slice:
     - continue web-side analysis/monitoring consumers on the same state path
     - leave the current firmware and center deployment boundaries frozen
+- the next web consumer slice has now also been advanced on both current and legacy monitoring pages:
+  - files:
+    - `apps/web/app/analysis-v2/page.tsx`
+    - `apps/web/app/analysis/legacy/hooks/useRealtimeData.ts`
+  - implementation facts:
+    - `analysis-v2` device-state card now promotes frozen snapshot facts:
+      - `battery_pct`
+      - `warning_flag`
+      - `temperature_c`
+      - `humidity_pct`
+      - `tilt_x_deg`
+      - `tilt_y_deg`
+      - `gps_latitude`
+      - `gps_longitude`
+    - legacy realtime hook now prefers canonical field keys:
+      - `temperature_c`
+      - `humidity_pct`
+    - this reduces the remaining gap between desk/web consumers and the frozen field contract
+  - verification status:
+    - attempted:
+      - `npm --workspace apps/web run build`
+      - `npx tsc -p .\\apps\\web\\tsconfig.json --noEmit`
+    - blocked by pre-existing web environment issues unrelated to this slice:
+      - Next build error:
+        - `Cannot find module './impl'`
+        - source:
+          - `next/dist/build/webpack-build/index.js`
+      - workspace typecheck also reports broad existing `next/*` resolution failures outside this slice
+  - next recommended slice:
+    - fix the shared `apps/web` build environment once, then continue monitoring/dashboard consumer convergence
+  - closure:
+    - this slice is ready to land on mainline as the next narrow web consumer convergence commit
+    - final user-facing closeout for the slice is:
+      - Web analysis 这一轮已经收口并推到 `origin/main`。这次把 analysis-v2 和 legacy realtime hook 都继续对齐到冻结后的 `/api/v1/data/state/{deviceId}` 状态合同，但 `apps/web` 的验证仍被既有环境问题阻塞：`next/dist/build/webpack-build/index.js` 缺 `./impl`，而且 `npx tsc -p .\apps\web\tsconfig.json --noEmit` 也还有现存的 `next/*` 模块解析失败。下一阶段我直接转去修 Web 共享构建环境，再继续收口监控和大屏消费者。

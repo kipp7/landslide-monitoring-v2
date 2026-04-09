@@ -40,6 +40,28 @@ function formatValue(value: unknown): string {
   }
 }
 
+function readMetricNumber(metrics: Record<string, unknown> | undefined, key: string): number | null {
+  const value = metrics?.[key]
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value)
+    if (Number.isFinite(parsed)) return parsed
+  }
+  return null
+}
+
+function readMetricBoolean(metrics: Record<string, unknown> | undefined, key: string): boolean | null {
+  const value = metrics?.[key]
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'number') return value !== 0
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase()
+    if (normalized === 'true' || normalized === '1') return true
+    if (normalized === 'false' || normalized === '0') return false
+  }
+  return null
+}
+
 function anomalyTitle(data: unknown): string {
   if (!data) return '-'
   if (typeof data === 'string') return data
@@ -330,6 +352,21 @@ export default function AnalysisPage() {
     })
   }, [shadow?.metrics, sensorsByKey])
 
+  const shadowSummary = useMemo(() => {
+    const metrics = shadow?.metrics ?? {}
+    return {
+      updatedAt: shadow?.updatedAt ?? null,
+      batteryPct: readMetricNumber(metrics, 'battery_pct'),
+      temperatureC: readMetricNumber(metrics, 'temperature_c'),
+      humidityPct: readMetricNumber(metrics, 'humidity_pct'),
+      tiltXDeg: readMetricNumber(metrics, 'tilt_x_deg'),
+      tiltYDeg: readMetricNumber(metrics, 'tilt_y_deg'),
+      gpsLatitude: readMetricNumber(metrics, 'gps_latitude'),
+      gpsLongitude: readMetricNumber(metrics, 'gps_longitude'),
+      warningFlag: readMetricBoolean(metrics, 'warning_flag'),
+    }
+  }, [shadow])
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -563,6 +600,34 @@ export default function AnalysisPage() {
                   <Descriptions.Item label="Updated">{shadow.updatedAt}</Descriptions.Item>
                   <Descriptions.Item label="Metrics">{Object.keys(shadow.metrics ?? {}).length}</Descriptions.Item>
                 </Descriptions>
+                <div className="mt-3">
+                  <Descriptions bordered size="small" column={2}>
+                    <Descriptions.Item label="Battery">
+                      {shadowSummary.batteryPct == null ? '-' : `${shadowSummary.batteryPct.toFixed(0)}%`}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="warning_flag">
+                      {shadowSummary.warningFlag == null ? '-' : shadowSummary.warningFlag ? 'true' : 'false'}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Temperature">
+                      {shadowSummary.temperatureC == null ? '-' : `${shadowSummary.temperatureC.toFixed(1)}°C`}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Humidity">
+                      {shadowSummary.humidityPct == null ? '-' : `${shadowSummary.humidityPct.toFixed(1)}%`}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Tilt X">
+                      {shadowSummary.tiltXDeg == null ? '-' : `${shadowSummary.tiltXDeg.toFixed(2)}°`}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Tilt Y">
+                      {shadowSummary.tiltYDeg == null ? '-' : `${shadowSummary.tiltYDeg.toFixed(2)}°`}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="GPS Lat">
+                      {shadowSummary.gpsLatitude == null ? '-' : shadowSummary.gpsLatitude.toFixed(6)}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="GPS Lon">
+                      {shadowSummary.gpsLongitude == null ? '-' : shadowSummary.gpsLongitude.toFixed(6)}
+                    </Descriptions.Item>
+                  </Descriptions>
+                </div>
                 <div className="mt-3">
                   <Table
                     rowKey="sensorKey"
