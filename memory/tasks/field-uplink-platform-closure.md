@@ -1454,3 +1454,33 @@ Freeze and execute the next major phase after command-route stabilization: prove
       - `apps/web/lib/useIotDataStore.ts`
       - `apps/web/app/optimized-demo/legacy/hooks/useOptimizedDeviceData.ts`
     - keep firmware/protocol scope frozen while software-side consumer convergence is still moving
+- the remaining source-level web legacy readers have now also been reduced to backup-only residue:
+  - files:
+    - `apps/web/lib/useIotDataStore.ts`
+    - `apps/web/app/optimized-demo/legacy/hooks/useOptimizedDeviceData.ts`
+  - implementation facts:
+    - `useIotDataStore` no longer reads `/api/device-management?...data_only=true...`
+    - it now resolves the default mapped device and projects the current unified snapshot into a one-row store payload
+    - the `optimized-demo` legacy hook no longer reads `/api/device-management`
+    - it now uses:
+      - `loadDeviceSnapshotView()`
+      - `loadDeviceSnapshotPoint()`
+    - `performHealthCheck()` inside that hook now also evaluates the frozen snapshot path instead of legacy endpoint reads
+  - verification:
+    - source search:
+      - `rg -n "/api/device-management" apps/web -S`
+      now returns only:
+      - `apps/web/app/device-management/page.tsx.backup`
+    - `npm --workspace apps/web run build`
+      passed on `2026-04-09`
+    - `npx tsc -p .\\apps\\web\\tsconfig.json --noEmit --pretty false`
+      passed after the successful build on `2026-04-09`
+  - current interpretation:
+    - current live source readers in `apps/web` are now off `/api/device-management`
+    - remaining endpoint mentions inside `apps/web` are backup/demo residue, not active mounted consumer code
+  - next recommended slice:
+    - either delete/archive obvious backup residue like:
+      - `apps/web/app/device-management/page.tsx.backup`
+    - or pivot to the next work package outside web consumer convergence:
+      - center deployment/runtime hardening follow-up
+      - RK3568 integration implementation

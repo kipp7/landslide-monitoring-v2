@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import { apiGetJson } from './v2Api'
+import { loadDeviceSnapshotView } from './api/deviceStateView'
+import { listLegacyDeviceMappings, type LegacyDeviceMappingRow, type LegacyOkResponse, type LegacyErrorResponse } from './api/legacyDeviceMappings'
 
 interface IotData {
   id: number
@@ -30,12 +31,6 @@ interface IotData {
   [key: string]: string | number | boolean | undefined
 }
 
-type LegacyOk<T> = { success: true; data: T; message?: string; timestamp?: string }
-type LegacyError = { success: false; message?: string; error?: unknown; timestamp?: string }
-type LegacyResponse<T> = LegacyOk<T> | LegacyError
-
-type LegacyMappingRow = { simple_id?: string }
-
 interface IotDataStore {
   data: IotData[]
   loading: boolean
@@ -45,7 +40,9 @@ interface IotDataStore {
 }
 
 async function resolveDefaultLegacyDeviceId(): Promise<string | null> {
-  const resp = await apiGetJson<LegacyResponse<LegacyMappingRow[]>>('/api/iot/devices/mappings')
+  const resp = (await listLegacyDeviceMappings()) as
+    | LegacyOkResponse<LegacyDeviceMappingRow[]>
+    | LegacyErrorResponse
   if (!resp || typeof resp !== 'object' || !('success' in resp) || resp.success !== true) return null
   const first = resp.data?.find((r) => r && typeof r.simple_id === 'string' && r.simple_id.trim())
   return first?.simple_id?.trim() ?? null
@@ -60,12 +57,19 @@ export const useIotDataStore = create<IotDataStore>((set, get) => ({
     set({ loading: true, error: null })
     try {
       const deviceId = (await resolveDefaultLegacyDeviceId()) ?? 'device_1'
-      const resp = await apiGetJson<LegacyResponse<IotData[]>>(
-        `/api/device-management?device_id=${encodeURIComponent(deviceId)}&data_only=true&limit=500`,
-      )
-      if (!resp || typeof resp !== 'object' || !('success' in resp)) throw new Error('Unexpected API response')
-      if (!resp.success) throw new Error(typeof resp.message === 'string' ? resp.message : '获取数据失败')
-      set({ data: resp.data ?? [], loading: false })
+      const snapshot = await loadDeviceSnapshotView(deviceId)
+      const row: IotData = {
+        id: 1,
+        event_time: snapshot.last_data_time,
+        temperature: snapshot.temperature ?? 0,
+        humidity: snapshot.humidity ?? 0,
+        illumination: 0,
+        device_id: snapshot.device_id,
+        latitude: snapshot.coordinates.lat ?? undefined,
+        longitude: snapshot.coordinates.lng ?? undefined,
+        baseline_established: snapshot.baseline_established,
+      }
+      set({ data: [row], loading: false })
     } catch (caught) {
       const msg = caught instanceof Error ? caught.message : '获取传感器数据失败'
       set({ error: msg, loading: false })
@@ -100,4 +104,3 @@ export const useIotDataStore = create<IotDataStore>((set, get) => ({
     }
   },
 }))
-

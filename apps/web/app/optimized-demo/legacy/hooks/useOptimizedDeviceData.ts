@@ -2,48 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { message } from 'antd'
-import { apiGetJson } from '../../../../lib/v2Api'
+import { loadDeviceSnapshotPoint, loadDeviceSnapshotView, type DeviceSnapshotView } from '../../../../lib/api/deviceStateView'
 
-export type OptimizedDeviceData = {
-  device_id: string
-  display_name: string
-  location: string
-  coordinates: { lat: number | null; lng: number | null }
-  status: 'online' | 'offline'
-  health_score: number
-  temperature: number | null
-  humidity: number | null
-  battery_level: number
-  signal_strength: number
-  data_count_today: number
-  last_data_time: string
-  baseline_established?: boolean
-}
-
-type LegacyDeviceManagementOk = {
-  success: true
-  data: OptimizedDeviceData
-  timestamp?: string
-}
-
-type LegacyDeviceManagementError = {
-  success: false
-  message: string
-  error?: unknown
-  timestamp?: string
-}
-
-type LegacyDeviceManagementResponse = LegacyDeviceManagementOk | LegacyDeviceManagementError
-
-type LegacyDeviceGpsOk = {
-  success: true
-  data: any[]
-  count: number
-  deviceId: string
-  hasBaseline?: boolean
-  calculationMode?: string
-  timestamp?: string
-}
+export type OptimizedDeviceData = DeviceSnapshotView
 
 export type UseOptimizedDeviceDataOptions = {
   deviceId: string
@@ -83,20 +44,13 @@ export function useOptimizedDeviceData({ deviceId, autoRefresh = false, refreshI
         setError(null)
         if (showMessage) message.loading('正在刷新设备数据...', 0.5)
 
-        const json = await apiGetJson<LegacyDeviceManagementResponse>(`/api/device-management?device_id=${encodeURIComponent(deviceId)}`, {
-          signal: abortRef.current.signal,
-        })
-
-        if (!json || typeof json !== 'object') throw new Error('Unexpected API response')
-        if ('success' in json && json.success === true) {
-          setData(json.data)
+        const snapshot = await loadDeviceSnapshotView(deviceId)
+        if (!abortRef.current.signal.aborted) {
+          setData(snapshot)
           setLastUpdateTime(new Date().toLocaleTimeString('zh-CN'))
-          if (showMessage) message.success(`${json.data.display_name || deviceId} 数据刷新成功`)
+          if (showMessage) message.success(`${snapshot.display_name || deviceId} 数据刷新成功`)
           return
         }
-
-        const msg = 'message' in json && typeof json.message === 'string' ? json.message : '获取数据失败'
-        throw new Error(msg)
       } catch (caught) {
         const err = caught as any
         if (err?.name === 'AbortError') return
@@ -119,11 +73,8 @@ export function useOptimizedDeviceData({ deviceId, autoRefresh = false, refreshI
 
   const fetchGPSData = useCallback(
     async (limit = 50) => {
-      const json = await apiGetJson<LegacyDeviceGpsOk>(
-        `/api/device-management?device_id=${encodeURIComponent(deviceId)}&data_only=true&limit=${encodeURIComponent(String(limit))}`,
-      )
-      if (!json?.success) throw new Error('获取 GPS 数据失败')
-      return json.data ?? []
+      const latestPoint = await loadDeviceSnapshotPoint(deviceId)
+      return [latestPoint].slice(0, Math.max(1, limit))
     },
     [deviceId],
   )
@@ -133,14 +84,14 @@ export function useOptimizedDeviceData({ deviceId, autoRefresh = false, refreshI
       const out: Array<{ device_id: string; status: string; health_score: number; battery_level?: number; signal_strength?: number }> = []
       for (const id of devices) {
         try {
-          const json = await apiGetJson<LegacyDeviceManagementResponse>(`/api/device-management?device_id=${encodeURIComponent(id)}`)
-          if (json && typeof json === 'object' && 'success' in json && json.success === true) {
+          const snapshot = await loadDeviceSnapshotView(id)
+          if (snapshot) {
             out.push({
               device_id: id,
-              status: json.data.status,
-              health_score: json.data.health_score,
-              battery_level: json.data.battery_level,
-              signal_strength: json.data.signal_strength,
+              status: snapshot.status,
+              health_score: snapshot.health_score,
+              battery_level: snapshot.battery_level,
+              signal_strength: snapshot.signal_strength,
             })
           } else {
             out.push({ device_id: id, status: 'unknown', health_score: 0 })
