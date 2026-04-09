@@ -4,7 +4,7 @@ import ReactECharts from "echarts-for-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import type { Device, Station } from "../api/client";
+import type { Device, DeviceStateSnapshot, Station } from "../api/client";
 import { useApi } from "../api/ApiProvider";
 import { BaseCard } from "../components/BaseCard";
 import { MapSwitchPanel, type MapType } from "../components/MapSwitchPanel";
@@ -41,6 +41,27 @@ function darkTooltip() {
   };
 }
 
+function readMetricNumber(metrics: Record<string, unknown> | undefined, key: string): number | null {
+  const value = metrics?.[key];
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function readMetricBoolean(metrics: Record<string, unknown> | undefined, key: string): boolean {
+  const value = metrics?.[key];
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    return normalized === "true" || normalized === "1";
+  }
+  return false;
+}
+
 export function AnalysisPage() {
   const api = useApi();
   const navigate = useNavigate();
@@ -55,6 +76,7 @@ export function AnalysisPage() {
   const [lastUpdate, setLastUpdate] = useState<string>("");
   const [stations, setStations] = useState<Station[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
+  const [deviceStates, setDeviceStates] = useState<Record<string, DeviceStateSnapshot>>({});
   const [alertOn, setAlertOn] = useState(false);
   const [now, setNow] = useState<Date>(() => new Date());
   const [online, setOnline] = useState<boolean>(() => (typeof navigator !== "undefined" ? navigator.onLine : true));
@@ -98,8 +120,19 @@ export function AnalysisPage() {
       try {
         const [s, d] = await Promise.all([api.stations.list(), api.devices.list()]);
         if (abort.signal.aborted) return;
+        const stateSettled = await Promise.allSettled(
+          d.map(async (device) => [device.id, await api.devices.getState({ deviceId: device.id })] as const)
+        );
+        if (abort.signal.aborted) return;
+        const nextStates: Record<string, DeviceStateSnapshot> = {};
+        for (const entry of stateSettled) {
+          if (entry.status !== "fulfilled") continue;
+          const [deviceId, snapshot] = entry.value;
+          nextStates[deviceId] = snapshot;
+        }
         setStations(s);
         setDevices(d);
+        setDeviceStates(nextStates);
         setLastUpdate(new Date().toLocaleString("zh-CN"));
       } finally {
         if (!abort.signal.aborted) {
@@ -167,8 +200,36 @@ export function AnalysisPage() {
     };
   }, []);
 
+  const liveSnapshotRows = useMemo(() => {
+    return devices
+      .map((device) => {
+        const snapshot = deviceStates[device.id] ?? null;
+        const metrics = snapshot?.metrics ?? {};
+        return {
+          device,
+          updatedAt: snapshot?.updatedAt ?? device.lastSeenAt,
+          temperatureC: readMetricNumber(metrics, "temperature_c"),
+          humidityPct: readMetricNumber(metrics, "humidity_pct"),
+          batteryPct: readMetricNumber(metrics, "battery_pct"),
+          tiltXDeg: readMetricNumber(metrics, "tilt_x_deg"),
+          tiltYDeg: readMetricNumber(metrics, "tilt_y_deg"),
+          accelX: readMetricNumber(metrics, "accel_x_g"),
+          accelY: readMetricNumber(metrics, "accel_y_g"),
+          accelZ: readMetricNumber(metrics, "accel_z_g"),
+          warningFlag: readMetricBoolean(metrics, "warning_flag")
+        };
+      })
+      .sort((a, b) => {
+        const aw = a.warningFlag ? 1 : 0;
+        const bw = b.warningFlag ? 1 : 0;
+        if (aw !== bw) return bw - aw;
+        return a.device.name.localeCompare(b.device.name);
+      });
+  }, [deviceStates, devices]);
+
   const tempHumOption = useMemo(() => {
     const { axisLabel: _unusedAxisLabel, ...baseXAxis } = chartBase.xAxis as Record<string, unknown>;
+    const rows = liveSnapshotRows.filter((row) => row.temperatureC != null || row.humidityPct != null).slice(0, 6);
     return {
       ...chartBase,
       grid: { left: "0%", right: "0%", top: 30, bottom: 0, containLabel: true },
@@ -181,7 +242,7 @@ export function AnalysisPage() {
       },
       xAxis: {
         ...baseXAxis,
-        data: Array.from({ length: 12 }, (_, i) => `${String(i + 1)}时`),
+        data: rows.map((row) => row.device.name),
         axisLabel: { ...darkAxis().axisLabel, hideOverlap: true }
       },
       yAxis: [
@@ -191,12 +252,10 @@ export function AnalysisPage() {
       series: [
         {
           name: "温度",
-          type: "line",
-          smooth: true,
-          showSymbol: false,
-          data: [14, 14.3, 14.1, 14.8, 15.2, 15.9, 16.1, 16.2, 16.5, 16.8, 16.4, 16.0],
+          type: "bar",
+          data: rows.map((row) => Number((row.temperatureC ?? 0).toFixed(1))),
           lineStyle: { width: 2, color: "#22d3ee" },
-          areaStyle: { color: "rgba(34, 211, 238, 0.18)" }
+          itemStyle: { color: "rgba(34, 211, 238, 0.85)" }
         },
         {
           name: "湿度",
@@ -204,16 +263,17 @@ export function AnalysisPage() {
           yAxisIndex: 1,
           smooth: true,
           showSymbol: false,
-          data: [82, 83, 84, 85, 86, 87, 86, 85, 84, 83, 83, 82],
+          data: rows.map((row) => Number((row.humidityPct ?? 0).toFixed(1))),
           lineStyle: { width: 2, color: "#60a5fa" },
           areaStyle: { color: "rgba(96, 165, 250, 0.14)" }
         }
       ]
     };
-  }, [chartBase]);
+  }, [chartBase, liveSnapshotRows]);
 
   const vibrationOption = useMemo(() => {
     const { axisLabel: _unusedAxisLabel, ...baseXAxis } = chartBase.xAxis as Record<string, unknown>;
+    const rows = liveSnapshotRows.filter((row) => row.tiltXDeg != null || row.tiltYDeg != null).slice(0, 6);
     return {
       ...chartBase,
       grid: { left: "0%", right: "0%", top: 30, bottom: 0, containLabel: true },
@@ -226,7 +286,7 @@ export function AnalysisPage() {
       },
       xAxis: {
         ...baseXAxis,
-        data: Array.from({ length: 12 }, (_, i) => `${String(i + 1)}时`),
+        data: rows.map((row) => row.device.name),
         axisLabel: { ...darkAxis().axisLabel, hideOverlap: true }
       },
       yAxis: [
@@ -235,27 +295,25 @@ export function AnalysisPage() {
       ],
       series: [
         {
-          name: "加速度",
-          type: "line",
-          smooth: true,
-          showSymbol: false,
-          data: [2, 3, 2, 4, 5, 6, 5, 7, 6, 8, 6, 5],
+          name: "倾角 X",
+          type: "bar",
+          data: rows.map((row) => Number((row.tiltXDeg ?? 0).toFixed(2))),
           lineStyle: { width: 2, color: "#34d399" },
-          areaStyle: { color: "rgba(52, 211, 153, 0.12)" }
+          itemStyle: { color: "rgba(52, 211, 153, 0.85)" }
         },
         {
-          name: "陀螺仪",
+          name: "倾角 Y",
           type: "line",
           yAxisIndex: 1,
           smooth: true,
           showSymbol: false,
-          data: [0.2, 0.4, 0.3, 0.6, 0.8, 1.1, 0.9, 1.3, 1.1, 1.6, 1.2, 1.0],
+          data: rows.map((row) => Number((row.tiltYDeg ?? 0).toFixed(2))),
           lineStyle: { width: 2, color: "#fbbf24" },
           areaStyle: { color: "rgba(251, 191, 36, 0.10)" }
         }
       ]
     };
-  }, [chartBase]);
+  }, [chartBase, liveSnapshotRows]);
 
   const rainfallOption = useMemo(() => {
     const is24h = rainRange === "24h";
@@ -380,21 +438,37 @@ export function AnalysisPage() {
   }, [devices.length, stations.length, stats.offline, stats.warn]);
 
   const anomalies: AnomalyRow[] = useMemo(() => {
-    const sample = devices.slice(0, 6);
-    return sample.map((d, idx) => ({
-      id: `${d.id}-${String(idx)}`,
-      deviceName: d.name,
-      stationName: d.stationName,
-      level: d.status === "warning" ? "warn" : d.status === "offline" ? "critical" : "info",
-      message:
-        d.status === "warning"
-          ? "阈值触发：位移/雨量异常"
-          : d.status === "offline"
-            ? "离线：无数据上报"
-            : "运行正常",
-      time: new Date(Date.now() - idx * 6 * 60 * 1000).toLocaleTimeString("zh-CN")
-    }));
-  }, [devices]);
+    return liveSnapshotRows.slice(0, 8).map((row) => {
+      const batteryPct = row.batteryPct;
+      const tiltX = row.tiltXDeg;
+      const tiltY = row.tiltYDeg;
+      let level: AnomalyRow["level"] = "info";
+      let message = "状态快照正常";
+
+      if (row.device.status === "offline") {
+        level = "critical";
+        message = "离线：无数据上报";
+      } else if (row.warningFlag) {
+        level = "warn";
+        message = `warning_flag=true，倾角 ${tiltX?.toFixed(2) ?? "--"}/${tiltY?.toFixed(2) ?? "--"}°`;
+      } else if (batteryPct != null && batteryPct <= 20) {
+        level = "warn";
+        message = `低电量：battery_pct=${batteryPct.toFixed(0)}%`;
+      } else if ((tiltX != null && Math.abs(tiltX) >= 120) || (tiltY != null && Math.abs(tiltY) >= 90)) {
+        level = "warn";
+        message = `姿态异常：tilt_x/tilt_y=${tiltX?.toFixed(2) ?? "--"}/${tiltY?.toFixed(2) ?? "--"}°`;
+      }
+
+      return {
+        id: row.device.id,
+        deviceName: row.device.name,
+        stationName: row.device.stationName,
+        level,
+        message,
+        time: new Date(row.updatedAt).toLocaleTimeString("zh-CN")
+      };
+    });
+  }, [liveSnapshotRows]);
 
   const hasCritical = stats.offline > 0;
   const hasWarn = stats.warn > 0;
@@ -448,11 +522,12 @@ export function AnalysisPage() {
       else slot.deviceOffline += 1;
 
       slot.types[d.type] = (slot.types[d.type] ?? 0) + 1;
-      if (!slot.lastSeenAt || d.lastSeenAt > slot.lastSeenAt) slot.lastSeenAt = d.lastSeenAt;
+      const stateUpdatedAt = deviceStates[d.id]?.updatedAt ?? d.lastSeenAt;
+      if (!slot.lastSeenAt || stateUpdatedAt > slot.lastSeenAt) slot.lastSeenAt = stateUpdatedAt;
     }
 
     return map;
-  }, [devices]);
+  }, [deviceStates, devices]);
 
   return (
     <div className="desk-analysis-screen">
@@ -547,10 +622,10 @@ export function AnalysisPage() {
             <BaseCard title="告警趋势（近 12 小时）">
               <ReactECharts option={alertTrendOption} style={{ height: "100%" }} />
             </BaseCard>
-            <BaseCard title="环境趋势（温度 °C / 湿度 %）">
+            <BaseCard title="环境快照（温度 °C / 湿度 %）">
               <ReactECharts option={tempHumOption} style={{ height: "100%" }} />
             </BaseCard>
-            <BaseCard title="振动趋势（加速度 mg / 陀螺仪 °/s）">
+            <BaseCard title="姿态快照（倾角 X / 倾角 Y）">
               <ReactECharts option={vibrationOption} style={{ height: "100%" }} />
             </BaseCard>
           </div>

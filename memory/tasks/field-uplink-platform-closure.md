@@ -1312,3 +1312,24 @@ Freeze and execute the next major phase after command-route stabilization: prove
   - this narrows the next software slice further:
     - continue aligning remaining desk/web consumers to the same frozen device-state path
     - avoid reopening firmware/protocol scope while consumer work is still moving
+- the next desk consumer slice has now also landed on the monitoring screen:
+  - file:
+    - `apps/desk/src/views/AnalysisPage.tsx`
+  - implementation facts:
+    - `AnalysisPage` now bulk-reads device snapshots through `api.devices.getState({ deviceId })`
+    - environment and posture cards now render live snapshot values instead of fixed demo arrays
+    - realtime anomaly rows now derive from:
+      - device offline status
+      - `warning_flag`
+      - low `battery_pct`
+      - high `tilt_x_deg` / `tilt_y_deg`
+    - station panel update time now prefers snapshot `updatedAt` instead of device-list fallback only
+  - verification:
+    - command:
+      - `npm --workspace apps/desk run build`
+    - result:
+      - `tsc -p tsconfig.json && vite build`
+      - build completed successfully on `2026-04-09`
+  - next recommended slice:
+    - continue web-side analysis/monitoring consumers on the same state path
+    - leave the current firmware and center deployment boundaries frozen
