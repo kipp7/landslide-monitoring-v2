@@ -621,10 +621,11 @@ Center server 一期算完成，至少要满足：
 
 3. 已实跑通过的当前结果
 - 最新恢复总结报告：
-  - `generatedAt = 2026-04-09T08:39:50Z`
+  - `generatedAt = 2026-04-09T08:49:04Z`
   - `accepted = true`
   - `currentBoundary = rk3568-center-operational-recovery-ready`
   - `cleanWindowReopened = true`
+  - `restart.requested = true`
 - 同轮 closure 继续保持：
   - `accepted = true`
   - `currentBoundary = rk3568-live-center-closure-ready`
@@ -632,6 +633,10 @@ Center server 一期算完成，至少要满足：
   - `boardObservationSchemaRejectedDelta = 0`
   - `ackStatus = acked`
   - `node A/B api/web metricsKeyCount = 14`
+  - 且当前已把一次重启后的瞬时抖动正式收口为：
+    - attempt 1 failed
+    - wrapper retry recovered
+    - final closure accepted
 
 4. 这一步的工程意义
 - 以后中心部署与软件适配阶段在做“恢复后复核”时

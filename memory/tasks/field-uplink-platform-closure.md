@@ -1167,10 +1167,12 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - one cross-boundary closure execution with retry
     - one summarized recovery boundary
   - latest reproved report facts:
-    - `generatedAt = 2026-04-09T08:39:50Z`
+    - `generatedAt = 2026-04-09T08:49:04Z`
     - `accepted = true`
     - `currentBoundary = rk3568-center-operational-recovery-ready`
     - `cleanWindowReopened = true`
+    - `restart.requested = true`
+    - one transient closure failure is now explicitly absorbed by wrapper retry and the final closure still returns `accepted = true`
   - this freezes the practical recovery line for the current phase into:
     - one command
     - one latest report
