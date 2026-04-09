@@ -258,30 +258,48 @@ permalink: landslide-monitoring-v2-mainline/docs/unified/reports/field-next-stag
 2. 当前总结报告
 - `docs/unified/reports/field-rk3568-center-soak-latest.json`
 
-3. 已实跑通过的当前更强证据
-- `generatedAt = 2026-04-09T10:54:55Z`
+3. 已实跑通过的当前阶段通行证据
+- `generatedAt = 2026-04-09T11:11:57Z`
 - `accepted = true`
 - `currentBoundary = rk3568-center-soak-ready`
-- `rounds = 2`
-- `acceptedRounds = 2`
-- `restartRounds = 1`
-- `cleanWindowRounds = 2`
+- `rounds = 3`
+- `acceptedRounds = 3`
+- `restartRounds = 0`
+- `cleanWindowRounds = 3`
 - `maxBoardObservationSchemaRejectedDelta = 0`
-- `maxParseFailureCount = 25`
+- `maxParseFailureCount = 12`
 - `allAcked = true`
 - `allMetricsContractStable = true`
 
 4. 这条证据的真实工程意义
 - 当前不只是 recovery 单次通过
-- 而是已经拿到一份更强的“受控重启 + 2 轮 soak”证据：
-  - 两轮都 `accepted = true`
-  - 两轮都保持 `board clean window`
-  - 两轮都 `acked`
-  - 两轮都保持 `node A/B metricsKeyCount = 14`
-  - 第 `1` 轮明确发生了受控重启
+- 而是已经拿到一份可以直接放行下一阶段的 `3` 轮 routine soak 证据：
+  - 三轮都 `accepted = true`
+  - 三轮都保持 `board clean window`
+  - 三轮都 `acked`
+  - 三轮都保持 `node A/B metricsKeyCount = 14`
   - 本轮 `maxClosureRetryCount = 0`
 - 这意味着当前主线已经不只是“包装层可以救回瞬时抖动”
-- 而是已经拿到了一段在受控重启前提下也能连续通过的更强 operational evidence
+- 而是已经拿到了一段无需等待 `node C`、足以切换到下一阶段的 routine operational evidence
+
+5. 因此当前阶段的正式切换判断
+- 现在可以正式切换到：
+  - `中心部署与软件适配主线继续推进`
+- 不再把：
+  - `node C` 未到位
+  视为当前阶段 blocker
+- `node C` 只继续保留在：
+  - `SOUTHBOUND_NODES_JSON`
+  - 三节点回归入口
+  - 三节点容量预算
+
+6. 三节点容量预算继续按当前冻结口径执行
+- 按 `3 x node`、`5s` 上报预算：
+  - telemetry 原始量约 `31.25 MiB/day`
+  - 保守预算约 `32.14-34.61 MiB/day`
+  - `30` 天约 `0.92 GiB`
+- 所以当前即使 `node C` 还没接入
+  - 中心部署与软件适配阶段也可以直接按三节点容量上界继续推进
 
 一句话总结：
 

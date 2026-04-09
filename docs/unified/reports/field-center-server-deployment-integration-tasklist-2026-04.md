@@ -585,6 +585,41 @@ Center server 一期算完成，至少要满足：
   - 可交接
 - 不再把时间消耗在反复解释这轮已经闭合的 `60s` 主线事实上
 
+## 10.8 2026-04-09 三轮 soak 已通过，中心部署阶段不再等待 node C
+
+这轮已经把“继续跑一段看看”推进成了正式阶段判断，而不是临时观察。
+
+1. 最新阶段证据
+- 最新 soak 报告：
+  - `docs/unified/reports/field-rk3568-center-soak-latest.json`
+- 当前结果：
+  - `generatedAt = 2026-04-09T11:11:57Z`
+  - `accepted = true`
+  - `currentBoundary = rk3568-center-soak-ready`
+  - `rounds = 3`
+  - `acceptedRounds = 3`
+  - `cleanWindowRounds = 3`
+  - `maxBoardObservationSchemaRejectedDelta = 0`
+  - `maxParseFailureCount = 12`
+  - `allAcked = true`
+  - `allMetricsContractStable = true`
+
+2. 这对当前阶段的含义
+- 现在不再需要把：
+  - `node C` 未接入
+  当作当前阶段 blocker
+- 当前阶段已经有足够证据切换到：
+  - 中心部署与软件适配继续推进
+  - 三节点只保留容量与配置位
+
+3. 三节点预算保持按当前上界执行
+- 按 `3 x node`、`5s` 上报冻结预算：
+  - telemetry 原始量约 `31.25 MiB/day`
+  - 保守预算约 `32.14-34.61 MiB/day`
+  - `30` 天约 `0.92 GiB`
+- 这意味着当前中心部署与数据留存边界可以直接按三节点容量继续推进
+  - 不需要等 `node C` 真实上线后再回头重算
+
 ## 10.7 2026-04-09 现场恢复主线已补成统一 runbook 入口
 
 前面虽然已经有：

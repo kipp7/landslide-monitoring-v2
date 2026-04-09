@@ -1182,22 +1182,28 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - `scripts/dev/run-field-rk3568-center-soak.ps1`
   - report:
     - `docs/unified/reports/field-rk3568-center-soak-latest.json`
-  - latest stronger reproved soak facts:
-    - `generatedAt = 2026-04-09T10:54:55Z`
+  - latest phase-gate soak facts:
+    - `generatedAt = 2026-04-09T11:11:57Z`
     - `accepted = true`
     - `currentBoundary = rk3568-center-soak-ready`
-    - `rounds = 2`
-    - `acceptedRounds = 2`
-    - `restartRounds = 1`
-    - `cleanWindowRounds = 2`
+    - `rounds = 3`
+    - `acceptedRounds = 3`
+    - `restartRounds = 0`
+    - `cleanWindowRounds = 3`
     - `maxBoardObservationSchemaRejectedDelta = 0`
-    - `maxParseFailureCount = 25`
+    - `maxParseFailureCount = 12`
     - `allAcked = true`
     - `allMetricsContractStable = true`
   - the key engineering value is now explicit:
-    - the soak line now has a stronger operational proof where:
-      - both rounds passed
-      - both rounds stayed on clean board windows
-      - both rounds preserved the `14`-key metrics contract
-      - the first round already included a controlled restart
+    - the soak line now has a phase-gate proof where:
+      - all three rounds passed
+      - all three rounds stayed on clean board windows
+      - all three rounds preserved the `14`-key metrics contract
       - current `maxClosureRetryCount = 0`
+  - this now authorizes the task boundary to move forward without waiting for `node C`:
+    - `node C` remains reserved in config and capacity budgeting
+    - center-deployment/software-adaptation work can proceed immediately
+  - three-node capacity budgeting remains frozen at:
+    - `31.25 MiB/day` raw telemetry
+    - `32.14-34.61 MiB/day` conservative budget
+    - `0.92 GiB / 30 days`
