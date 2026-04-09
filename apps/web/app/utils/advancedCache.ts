@@ -1,6 +1,6 @@
 'use client'
 
-import { buildApiUrl, getApiAuthHeaders } from '../../lib/v2Api'
+import { loadDeviceSnapshotView } from '../../lib/api/deviceStateView'
 
 export type CacheOptions = {
   ttl?: number
@@ -357,18 +357,10 @@ export const CacheUtils = {
   },
 
   async warmupDeviceCache(deviceIds: string[]): Promise<void> {
-    const headers = { ...getApiAuthHeaders(), Accept: 'application/json' }
     await deviceDataCache.preloadBatch(
       deviceIds.map((deviceId) => ({
         key: this.deviceKey(deviceId),
-        loader: async () => {
-          const url = new URL(buildApiUrl('/api/device-management'), window.location.origin)
-          url.searchParams.set('device_id', deviceId)
-          const resp = await fetch(url.toString(), { headers, cache: 'no-store' })
-          if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-          const json = (await resp.json()) as any
-          return json?.data ?? json
-        },
+        loader: async () => loadDeviceSnapshotView(deviceId),
         options: { priority: 2 },
       })),
     )
@@ -390,4 +382,3 @@ export const CacheUtils = {
 }
 
 export default AdvancedCache
-

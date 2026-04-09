@@ -1367,3 +1367,27 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - this slice is ready to land on mainline as the next narrow web consumer convergence commit
     - final user-facing closeout for the slice is:
       - Web analysis 这一轮已经收口并推到 `origin/main`。这次把 analysis-v2 和 legacy realtime hook 都继续对齐到冻结后的 `/api/v1/data/state/{deviceId}` 状态合同，但 `apps/web` 的验证仍被既有环境问题阻塞：`next/dist/build/webpack-build/index.js` 缺 `./impl`，而且 `npx tsc -p .\apps\web\tsconfig.json --noEmit` 也还有现存的 `next/*` 模块解析失败。下一阶段我直接转去修 Web 共享构建环境，再继续收口监控和大屏消费者。
+- the next web runtime-facing consumer slice has also been advanced:
+  - files:
+    - `apps/web/lib/api/deviceStateView.ts`
+    - `apps/web/app/hooks/useOptimizedDeviceData.ts`
+    - `apps/web/app/utils/advancedCache.ts`
+  - implementation facts:
+    - web now has a shared snapshot adapter that:
+      - resolves `simple_id` into canonical `actual_device_id`
+      - loads `/api/v1/data/state/{deviceId}`
+      - normalizes battery / temperature / humidity / coordinates / online status / health score for runtime consumers
+    - `useOptimizedDeviceData` no longer reads `/api/device-management` directly on the mainline `system-monitor` path
+    - device cache warmup now preloads the unified snapshot read path
+  - verification status:
+    - one successful round completed:
+      - `npm --workspace apps/web run build`
+      - `npx tsc -p .\\apps\\web\\tsconfig.json --noEmit`
+    - separately observed environment issue:
+      - repeated runs can still hit a host-level incomplete Next.js package state
+      - signature:
+        - `next/dist/build/webpack-build/index.js`
+        - missing `./impl`
+  - next recommended slice:
+    - keep landing web consumer convergence on the frozen state path
+    - isolate and permanently fix the recurring `apps/web` Next installation instability as a separate environment-hardening task
