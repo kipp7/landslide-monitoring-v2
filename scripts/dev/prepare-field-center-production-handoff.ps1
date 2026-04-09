@@ -12,6 +12,19 @@ param(
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
+function New-Utf8NoBomEncoding {
+  return New-Object System.Text.UTF8Encoding($false)
+}
+
+function Write-Utf8NoBomFile {
+  param(
+    [string]$Path,
+    [string]$Value
+  )
+
+  [System.IO.File]::WriteAllText($Path, $Value, (New-Utf8NoBomEncoding))
+}
+
 function Resolve-RepoRoot() {
   $here = Get-Location
   $dir = $here.Path
@@ -249,21 +262,21 @@ try {
   }
 
   $json = $result | ConvertTo-Json -Depth 8
-  Set-Content -LiteralPath $resolvedOutJsonFile -Value $json -Encoding UTF8
+  Write-Utf8NoBomFile -Path $resolvedOutJsonFile -Value $json
 
   $mdLines = @(
     "# Field Center Production Handoff",
     "",
-    "> 目标：把当前中心部署线收敛成可交接、可复跑、可恢复的一页式说明。",
+    "> Goal: condense the current center deployment line into a one-page handoff that is reproducible and recoverable.",
     "",
-    "## 当前边界",
+    "## Current Boundary",
     "",
     "- generatedAt: ``$($result.generatedAt)``",
     "- accepted: ``$($result.accepted.ToString().ToLower())``",
     "- currentBoundary: ``$($result.currentBoundary)``",
     "- primaryRunbook: ``$($result.handoff.primaryRunbook)``",
     "",
-    "## 固定 compose 边界",
+    "## Frozen Compose Boundary",
     ""
   )
 
@@ -273,14 +286,14 @@ try {
 
   $mdLines += @(
     "",
-    "## 标准命令",
+    "## Standard Commands",
     "",
     "- refresh handoff packet: ``$($result.handoff.handoffRefreshCommand)``",
     "- refresh freeze baseline: ``$($result.handoff.freezeRefreshCommand)``",
     "- routine acceptance: ``$($result.handoff.validateCommand)``",
     "- full redeploy + acceptance: ``$($result.handoff.applyCommand)``",
     "",
-    "## 恢复顺序",
+    "## Recovery Order",
     ""
   )
 
@@ -290,7 +303,7 @@ try {
 
   $mdLines += @(
     "",
-    "## 必带物料",
+    "## Mandatory Artifacts",
     ""
   )
 
@@ -317,7 +330,7 @@ try {
   if ($mdDir -and -not (Test-Path -LiteralPath $mdDir)) {
     New-Item -ItemType Directory -Path $mdDir -Force | Out-Null
   }
-  Set-Content -LiteralPath $resolvedOutMdFile -Value ($mdLines -join [Environment]::NewLine) -Encoding UTF8
+  Write-Utf8NoBomFile -Path $resolvedOutMdFile -Value ($mdLines -join [Environment]::NewLine)
 
   $json
 }

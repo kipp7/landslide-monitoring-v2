@@ -1506,3 +1506,28 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - pivot execution back to:
       - center deployment/runtime hardening
       - RK3568 integration implementation
+- the center handoff generator encoding defect has now also been closed:
+  - file:
+    - `scripts/dev/prepare-field-center-production-handoff.ps1`
+  - root cause:
+    - Windows PowerShell 5.1 was executing a UTF-8 no-BOM script that still contained Chinese literals
+    - generated markdown therefore picked up corrupted bytes during script execution, not during later markdown display
+  - current fix:
+    - output writes now use explicit UTF-8 no-BOM through `System.IO.File.WriteAllText(...)`
+    - the generated markdown heading/body literals were reduced to ASCII-only text on this path
+  - regenerated artifacts:
+    - `docs/unified/reports/field-center-production-handoff-latest.json`
+    - `docs/unified/reports/field-center-production-handoff-latest.md`
+  - verification:
+    - `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\prepare-field-center-production-handoff.ps1 -AllowUnsafeSecrets`
+    - latest result:
+      - `generatedAt = 2026-04-09T15:53:54Z`
+      - `accepted = true`
+      - `currentBoundary = center-production-handoff-ready`
+    - the regenerated markdown now renders clean ASCII text and the file no longer starts with a UTF-8 BOM
+  - current interpretation:
+    - center deployment handoff packaging is stable enough to freeze as a reusable operator entrypoint
+    - no firmware/protocol scope needs to be reopened for this slice
+  - next recommended slice:
+    - keep the center line frozen except for runtime hardening or deployment automation changes
+    - move primary execution pressure toward RK3568 integration and center-side production deployment
