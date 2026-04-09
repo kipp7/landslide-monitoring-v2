@@ -1182,20 +1182,22 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - `scripts/dev/run-field-rk3568-center-soak.ps1`
   - report:
     - `docs/unified/reports/field-rk3568-center-soak-latest.json`
-  - latest minimal reproved soak facts:
-    - `generatedAt = 2026-04-09T10:03:23Z`
+  - latest stronger reproved soak facts:
+    - `generatedAt = 2026-04-09T10:54:55Z`
     - `accepted = true`
     - `currentBoundary = rk3568-center-soak-ready`
     - `rounds = 2`
     - `acceptedRounds = 2`
+    - `restartRounds = 1`
     - `cleanWindowRounds = 2`
     - `maxBoardObservationSchemaRejectedDelta = 0`
-    - `maxParseFailureCount = 1`
+    - `maxParseFailureCount = 25`
     - `allAcked = true`
     - `allMetricsContractStable = true`
   - the key engineering value is now explicit:
-    - the soak line now has a stronger routine proof where:
+    - the soak line now has a stronger operational proof where:
       - both rounds passed
       - both rounds stayed on clean board windows
       - both rounds preserved the `14`-key metrics contract
+      - the first round already included a controlled restart
       - current `maxClosureRetryCount = 0`

@@ -258,28 +258,30 @@ permalink: landslide-monitoring-v2-mainline/docs/unified/reports/field-next-stag
 2. 当前总结报告
 - `docs/unified/reports/field-rk3568-center-soak-latest.json`
 
-3. 已实跑通过的当前最小证据
-- `generatedAt = 2026-04-09T10:03:23Z`
+3. 已实跑通过的当前更强证据
+- `generatedAt = 2026-04-09T10:54:55Z`
 - `accepted = true`
 - `currentBoundary = rk3568-center-soak-ready`
 - `rounds = 2`
 - `acceptedRounds = 2`
+- `restartRounds = 1`
 - `cleanWindowRounds = 2`
 - `maxBoardObservationSchemaRejectedDelta = 0`
-- `maxParseFailureCount = 1`
+- `maxParseFailureCount = 25`
 - `allAcked = true`
 - `allMetricsContractStable = true`
 
 4. 这条证据的真实工程意义
 - 当前不只是 recovery 单次通过
-- 而是已经拿到一份真正有阶段意义的 `2` 轮 soak 证据：
+- 而是已经拿到一份更强的“受控重启 + 2 轮 soak”证据：
   - 两轮都 `accepted = true`
   - 两轮都保持 `board clean window`
   - 两轮都 `acked`
   - 两轮都保持 `node A/B metricsKeyCount = 14`
+  - 第 `1` 轮明确发生了受控重启
   - 本轮 `maxClosureRetryCount = 0`
 - 这意味着当前主线已经不只是“包装层可以救回瞬时抖动”
-- 而是已经拿到了一段无需 wrapper retry 也能连续通过的更强 routine evidence
+- 而是已经拿到了一段在受控重启前提下也能连续通过的更强 operational evidence
 
 一句话总结：
 
