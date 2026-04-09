@@ -1531,3 +1531,28 @@ Freeze and execute the next major phase after command-route stabilization: prove
   - next recommended slice:
     - keep the center line frozen except for runtime hardening or deployment automation changes
     - move primary execution pressure toward RK3568 integration and center-side production deployment
+- the RK3568 gateway runtime now also preserves rejected telemetry as durable evidence instead of leaving it in logs only:
+  - files:
+    - `services/field-gateway/src/index.ts`
+    - `services/field-gateway/README.md`
+  - current hardening change:
+    - telemetry rejected by:
+      - payload too large
+      - JSON parse failure
+      - schema validation failure
+      - southbound node routing rejection
+      - pending spool enqueue failure
+    - is now written into `rejected/` spool evidence with `last_error`
+    - runtime health stats now also expose:
+      - `rejectedMessages`
+      - `rejectedWriteFailures`
+  - operational meaning:
+    - the gateway no longer drops these rejected telemetry cases with logs only
+    - field-side investigation now has a durable rejected packet trail even during spool pressure or malformed serial input
+  - verification:
+    - `npm run build --workspace @lsmv2/field-gateway`
+    - `npm run lint --workspace @lsmv2/field-gateway`
+    - both passed on `2026-04-10`
+  - next recommended slice:
+    - harden board-side acceptance/recovery scripts around these new rejection counters
+    - keep center/runtime and RK3568 work focused on repeatable operations, not protocol redesign

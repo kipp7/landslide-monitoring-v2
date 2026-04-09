@@ -105,6 +105,8 @@ type RuntimeStats = {
   serialBytes: number;
   parsedMessages: number;
   schemaRejected: number;
+  rejectedMessages: number;
+  rejectedWriteFailures: number;
   publishedMessages: number;
   replayPublishedMessages: number;
   publishFailures: number;
@@ -596,6 +598,17 @@ class SpoolManager {
     await trimDirJsonFiles(this.rejectedDir, this.config.spoolRetentionRejected);
   }
 
+  async rejectIncoming(record: SpoolRecord, reason: string): Promise<string> {
+    const target = path.join(this.rejectedDir, `${record.received_ts.replaceAll(":", "-")}-${record.spool_id}.json`);
+    await writeJsonAtomic(target, {
+      ...record,
+      state: "rejected" satisfies SpoolState,
+      last_error: reason
+    });
+    await trimDirJsonFiles(this.rejectedDir, this.config.spoolRetentionRejected);
+    return target;
+  }
+
   async pendingFiles(): Promise<string[]> {
     return listJsonFiles(this.pendingDir);
   }
@@ -615,6 +628,8 @@ class GatewayRuntime {
     serialBytes: 0,
     parsedMessages: 0,
     schemaRejected: 0,
+    rejectedMessages: 0,
+    rejectedWriteFailures: 0,
     publishedMessages: 0,
     replayPublishedMessages: 0,
     publishFailures: 0,
@@ -945,6 +960,15 @@ class GatewayRuntime {
     if (payloadBytes > this.config.maxMessageBytes) {
       this.stats.schemaRejected += 1;
       this.stats.lastError = `payload too large (${String(payloadBytes)})`;
+      await this.rejectIncomingTelemetry({
+        traceId,
+        sourcePort,
+        receivedTs,
+        rawPayload,
+        deviceId: null,
+        seq: null,
+        reason: this.stats.lastError
+      });
       this.logger.warn({ traceId, payloadBytes, sourcePort }, "field gateway payload too large");
       return;
     }
@@ -955,6 +979,15 @@ class GatewayRuntime {
     } catch (err) {
       this.stats.schemaRejected += 1;
       this.stats.lastError = err instanceof Error ? err.message : String(err);
+      await this.rejectIncomingTelemetry({
+        traceId,
+        sourcePort,
+        receivedTs,
+        rawPayload,
+        deviceId: null,
+        seq: null,
+        reason: `json parse failed: ${this.stats.lastError}`
+      });
       this.logger.warn(
         {
           traceId,
@@ -982,6 +1015,15 @@ class GatewayRuntime {
     } else {
       this.stats.schemaRejected += 1;
       this.stats.lastError = "schema validation failed";
+      await this.rejectIncomingTelemetry({
+        traceId,
+        sourcePort,
+        receivedTs,
+        rawPayload,
+        deviceId: isJsonObject(parsed) && typeof parsed.device_id === "string" ? parsed.device_id : null,
+        seq: isJsonObject(parsed) && typeof parsed.seq === "number" ? parsed.seq : null,
+        reason: this.stats.lastError
+      });
       this.logger.warn(
         {
           traceId,
@@ -1000,6 +1042,15 @@ class GatewayRuntime {
     const normalizedPayloadBytes = Buffer.byteLength(normalizedPayload, "utf8");
     const nodeState = this.resolveNodeForTelemetry(envelope.device_id, traceId, sourcePort);
     if (!nodeState) {
+      await this.rejectIncomingTelemetry({
+        traceId,
+        sourcePort,
+        receivedTs,
+        rawPayload: normalizedPayload,
+        deviceId: envelope.device_id,
+        seq: envelope.seq ?? null,
+        reason: this.stats.lastError ?? "telemetry routing rejected"
+      });
       return;
     }
 
@@ -1034,7 +1085,75 @@ class GatewayRuntime {
       await this.replayPending("ingest");
     } catch (err) {
       this.stats.lastError = err instanceof Error ? err.message : String(err);
+      await this.rejectIncomingTelemetry({
+        traceId,
+        sourcePort,
+        receivedTs,
+        rawPayload: normalizedPayload,
+        deviceId: envelope.device_id,
+        seq: envelope.seq ?? null,
+        reason: `pending enqueue failed: ${this.stats.lastError}`
+      });
       this.logger.error({ traceId, err, sourcePort }, "field gateway spool enqueue failed");
+    }
+  }
+
+  private async rejectIncomingTelemetry(params: {
+    traceId: string;
+    sourcePort: string;
+    receivedTs: string;
+    rawPayload: string;
+    deviceId: string | null;
+    seq: number | null;
+    reason: string;
+  }): Promise<void> {
+    const { traceId, sourcePort, receivedTs, rawPayload, deviceId, seq, reason } = params;
+    const record: SpoolRecord = {
+      schema_version: 1,
+      spool_id: randomUUID(),
+      received_ts: receivedTs,
+      device_id: deviceId,
+      seq,
+      packet_class: "telemetry",
+      payload_hash: payloadHash(rawPayload),
+      payload_bytes: Buffer.byteLength(rawPayload, "utf8"),
+      state: "rejected",
+      source: {
+        serial_device: sourcePort,
+        serial_baud_rate: this.config.serialBaudRate
+      },
+      publish_attempts: 0,
+      last_error: reason,
+      payload: rawPayload
+    };
+
+    try {
+      const rejectedPath = await this.spool.rejectIncoming(record, reason);
+      this.stats.rejectedMessages += 1;
+      this.logger.warn(
+        {
+          traceId,
+          sourcePort,
+          deviceId,
+          seq,
+          reason,
+          rejectedPath
+        },
+        "field gateway telemetry written to rejected evidence"
+      );
+    } catch (err) {
+      this.stats.rejectedWriteFailures += 1;
+      this.logger.error(
+        {
+          traceId,
+          sourcePort,
+          deviceId,
+          seq,
+          reason,
+          err
+        },
+        "field gateway rejected evidence write failed"
+      );
     }
   }
 

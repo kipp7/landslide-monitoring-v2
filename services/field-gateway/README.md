@@ -150,10 +150,16 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\set-rk3568-fie
 - 合法消息先写入 pending spool，再尝试 MQTT 发布
 - 发布成功后转入 published spool
 - 发布失败时保留在 pending，并记录失败信息以待重放
+- telemetry 若因 JSON 解析失败、schema 无效、节点路由不匹配或 pending spool 满而被拒：
+  - 会写入 `rejected/` 证据目录
+  - 不再只留日志后静默丢弃
 - 串口打开失败或运行中断开时不会直接结束主进程
   - 会按退避策略自动重连
   - 当前重连状态会进入 health
 - 运行期持续输出 health 文件，供本地控制面或 sidecar 读取
+- health `stats` 当前也显式包含：
+  - `rejectedMessages`
+  - `rejectedWriteFailures`
 - northbound 遥测接口保持与软件端一致：
   - topic:
     - `telemetry/{device_id}`
