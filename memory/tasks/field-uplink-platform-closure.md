@@ -1243,3 +1243,34 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - assert broker URL, topic prefixes, and southbound A/B/C mapping stay frozen
     - assert current RK3568 runtime is still publishable and non-backlogged
   - this now converts the second work package from a loose deployment intention into one command plus one latest report
+- the third active work package now also has a dedicated software-side read-path entrypoint:
+  - script:
+    - `scripts/dev/check-field-software-read-path-adaptation.ps1`
+  - report:
+    - `docs/unified/reports/field-software-read-path-adaptation-latest.json`
+  - scope:
+    - assert node A/B API and Web snapshots still preserve the exact 14 canonical metrics
+    - assert API and Web snapshots stay in parity for each node
+    - assert the current web/api code paths still point to `/api/v1/devices`, `/api/v1/data/state/{deviceId}`, and `device_state`
+  - this now converts the software-adaptation slice into one command plus one report instead of keeping it implicit under the larger live-closure proof
+- that software-side read-path entrypoint has now also been executed successfully:
+  - latest report:
+    - `docs/unified/reports/field-software-read-path-adaptation-latest.json`
+  - accepted facts:
+    - `generatedAt = 2026-04-09T12:40:35Z`
+    - `accepted = true`
+    - `currentBoundary = software-read-path-adaptation-ready`
+    - `node A/B api metricsKeyCount = 14`
+    - `node A/B web metricsKeyCount = 14`
+    - current static bindings still close on:
+      - `apps/web/lib/api/devices.ts`
+      - `services/api/src/routes/data.ts`
+      - `services/api/README.md`
+- this closes the three current pre-implementation work packages into green phase boundaries:
+  - `center-runtime-freeze-ready`
+  - `rk3568-production-uplink-freeze-ready`
+  - `software-read-path-adaptation-ready`
+- the next active execution slice should therefore move forward without reopening proof scope:
+  - center deployment integration implementation
+  - software-side consumer adaptation for the frozen field contract
+  - `node C` remains reserved and budgeted, but not blocking

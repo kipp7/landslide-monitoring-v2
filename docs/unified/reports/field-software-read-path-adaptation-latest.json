@@ -1,0 +1,258 @@
+﻿{
+    "generatedAt":  "2026-04-09T12:40:35Z",
+    "accepted":  true,
+    "mode":  "field-software-read-path-adaptation",
+    "currentBoundary":  "software-read-path-adaptation-ready",
+    "upstreamBaselines":  {
+                              "centerRuntimeFreeze":  {
+                                                          "file":  "docs/unified/reports/field-center-runtime-freeze-latest.json",
+                                                          "accepted":  true,
+                                                          "boundary":  "center-runtime-freeze-ready"
+                                                      },
+                              "rk3568ProductionUplinkFreeze":  {
+                                                                   "file":  "docs/unified/reports/field-rk3568-production-uplink-freeze-latest.json",
+                                                                   "accepted":  true,
+                                                                   "boundary":  "rk3568-production-uplink-freeze-ready"
+                                                               },
+                              "liveClosure":  {
+                                                  "file":  "docs/unified/reports/field-rk3568-center-live-closure-latest.json",
+                                                  "accepted":  true,
+                                                  "boundary":  "rk3568-live-center-closure-ready"
+                                              }
+                          },
+    "expectedFieldMetrics":  [
+                                 "accel_x_g",
+                                 "accel_y_g",
+                                 "accel_z_g",
+                                 "battery_pct",
+                                 "gps_latitude",
+                                 "gps_longitude",
+                                 "gyro_x_dps",
+                                 "gyro_y_dps",
+                                 "gyro_z_dps",
+                                 "humidity_pct",
+                                 "temperature_c",
+                                 "tilt_x_deg",
+                                 "tilt_y_deg",
+                                 "warning_flag"
+                             ],
+    "nodeReadPaths":  {
+                          "nodeA":  {
+                                        "deviceId":  "00000000-0000-0000-0000-000000000001",
+                                        "installLabel":  "FIELD-NODE-A",
+                                        "apiMetricsKeys":  [
+                                                               "accel_x_g",
+                                                               "accel_y_g",
+                                                               "accel_z_g",
+                                                               "battery_pct",
+                                                               "gps_latitude",
+                                                               "gps_longitude",
+                                                               "gyro_x_dps",
+                                                               "gyro_y_dps",
+                                                               "gyro_z_dps",
+                                                               "humidity_pct",
+                                                               "temperature_c",
+                                                               "tilt_x_deg",
+                                                               "tilt_y_deg",
+                                                               "warning_flag"
+                                                           ],
+                                        "webMetricsKeys":  [
+                                                               "accel_x_g",
+                                                               "accel_y_g",
+                                                               "accel_z_g",
+                                                               "battery_pct",
+                                                               "gps_latitude",
+                                                               "gps_longitude",
+                                                               "gyro_x_dps",
+                                                               "gyro_y_dps",
+                                                               "gyro_z_dps",
+                                                               "humidity_pct",
+                                                               "temperature_c",
+                                                               "tilt_x_deg",
+                                                               "tilt_y_deg",
+                                                               "warning_flag"
+                                                           ],
+                                        "apiUpdatedAt":  "2026-04-09T11:11:56Z",
+                                        "webUpdatedAt":  "2026-04-09T11:11:56Z"
+                                    },
+                          "nodeB":  {
+                                        "deviceId":  "00000000-0000-0000-0000-000000000002",
+                                        "installLabel":  "FIELD-NODE-B",
+                                        "apiMetricsKeys":  [
+                                                               "accel_x_g",
+                                                               "accel_y_g",
+                                                               "accel_z_g",
+                                                               "battery_pct",
+                                                               "gps_latitude",
+                                                               "gps_longitude",
+                                                               "gyro_x_dps",
+                                                               "gyro_y_dps",
+                                                               "gyro_z_dps",
+                                                               "humidity_pct",
+                                                               "temperature_c",
+                                                               "tilt_x_deg",
+                                                               "tilt_y_deg",
+                                                               "warning_flag"
+                                                           ],
+                                        "webMetricsKeys":  [
+                                                               "accel_x_g",
+                                                               "accel_y_g",
+                                                               "accel_z_g",
+                                                               "battery_pct",
+                                                               "gps_latitude",
+                                                               "gps_longitude",
+                                                               "gyro_x_dps",
+                                                               "gyro_y_dps",
+                                                               "gyro_z_dps",
+                                                               "humidity_pct",
+                                                               "temperature_c",
+                                                               "tilt_x_deg",
+                                                               "tilt_y_deg",
+                                                               "warning_flag"
+                                                           ],
+                                        "apiUpdatedAt":  "2026-04-09T11:11:54Z",
+                                        "webUpdatedAt":  "2026-04-09T11:11:54Z"
+                                    }
+                      },
+    "staticBindings":  {
+                           "webDevicesApiFile":  "apps/web/lib/api/devices.ts",
+                           "apiDataRouteFile":  "services/api/src/routes/data.ts",
+                           "apiReadmeFile":  "services/api/README.md"
+                       },
+    "failureKeys":  [
+
+                    ],
+    "nextUse":  [
+                    "refresh software read-path adaptation: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\check-field-software-read-path-adaptation.ps1",
+                    "refresh live closure baseline: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\check-field-rk3568-center-live-closure.ps1 -BoardPassword \u003cpassword\u003e -AllowUnsafeSecrets",
+                    "refresh rk3568 uplink freeze: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\check-field-rk3568-production-uplink-freeze.ps1 -Password \u003cpassword\u003e"
+                ],
+    "checks":  [
+                   {
+                       "key":  "centerRuntimeFreezeAccepted",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "centerRuntimeFreezeBoundary",
+                       "ok":  true,
+                       "actual":  "center-runtime-freeze-ready",
+                       "expected":  "center-runtime-freeze-ready"
+                   },
+                   {
+                       "key":  "rk3568ProductionFreezeAccepted",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "rk3568ProductionFreezeBoundary",
+                       "ok":  true,
+                       "actual":  "rk3568-production-uplink-freeze-ready",
+                       "expected":  "rk3568-production-uplink-freeze-ready"
+                   },
+                   {
+                       "key":  "liveClosureAccepted",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "liveClosureBoundary",
+                       "ok":  true,
+                       "actual":  "rk3568-live-center-closure-ready",
+                       "expected":  "rk3568-live-center-closure-ready"
+                   },
+                   {
+                       "key":  "nodeAApiPassed",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "nodeAApiMetricsContract",
+                       "ok":  true,
+                       "actual":  14,
+                       "expected":  14
+                   },
+                   {
+                       "key":  "nodeAWebPassed",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "nodeAWebMetricsContract",
+                       "ok":  true,
+                       "actual":  14,
+                       "expected":  14
+                   },
+                   {
+                       "key":  "nodeAApiWebParity",
+                       "ok":  true,
+                       "actual":  14,
+                       "expected":  14
+                   },
+                   {
+                       "key":  "nodeBApiPassed",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "nodeBApiMetricsContract",
+                       "ok":  true,
+                       "actual":  14,
+                       "expected":  14
+                   },
+                   {
+                       "key":  "nodeBWebPassed",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "nodeBWebMetricsContract",
+                       "ok":  true,
+                       "actual":  14,
+                       "expected":  14
+                   },
+                   {
+                       "key":  "nodeBApiWebParity",
+                       "ok":  true,
+                       "actual":  14,
+                       "expected":  14
+                   },
+                   {
+                       "key":  "webDevicesApiUsesDevicesEndpoint",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "webDevicesApiUsesStateEndpoint",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "apiRouteExposesStateEndpoint",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "apiRouteUsesDeviceState",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "apiReadmeMentionsStateEndpoint",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   }
+               ]
+}

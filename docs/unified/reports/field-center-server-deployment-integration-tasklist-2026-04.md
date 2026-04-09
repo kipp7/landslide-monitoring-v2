@@ -705,6 +705,46 @@ Center server 一期算完成，至少要满足：
   - 一份板端与中心侧一致性的 latest 报告
   - 一个可继续推进软件适配的明确边界
 
+## 10.11 2026-04-09 软件侧读路径适配已补成单独入口
+
+第三工作包不应继续隐含在更大的 live closure 报告里，而要单独回答：
+
+- `node A/B` 当前 API 读路径是否仍保持 `14` 个 canonical metrics key
+- `node A/B` 当前 Web 读路径是否仍保持同样的 `14` 个 canonical metrics key
+- Web 侧代码当前是否仍指向：
+  - `/api/v1/devices`
+  - `/api/v1/data/state/{deviceId}`
+- API 侧代码当前是否仍由：
+  - `/data/state/:deviceId`
+  - `device_state`
+  承担主读路径
+
+这一步现在已经补成正式入口。
+
+1. 新入口
+- 脚本：
+  - `scripts/dev/check-field-software-read-path-adaptation.ps1`
+- 标准报告：
+  - `docs/unified/reports/field-software-read-path-adaptation-latest.json`
+
+2. 它当前统一收口的事实
+- 上游基线：
+  - `field-center-runtime-freeze-latest.json`
+  - `field-rk3568-production-uplink-freeze-latest.json`
+  - `field-rk3568-center-live-closure-latest.json`
+- 软件侧静态落点：
+  - `apps/web/lib/api/devices.ts`
+  - `services/api/src/routes/data.ts`
+  - `services/api/README.md`
+
+3. 这一步的工程意义
+- 当前第三工作包已经从：
+  - “软件侧应该没问题”
+  变成：
+  - 一条单独检查命令
+  - 一份单独 latest 报告
+  - 一个不依赖大闭环报告人工解读的适配边界
+
 ## 10.7 2026-04-09 现场恢复主线已补成统一 runbook 入口
 
 前面虽然已经有：
@@ -769,6 +809,51 @@ Center server 一期算完成，至少要满足：
   - 一条命令
   - 一份总结报告
   - 一套明确边界
+
+## 10.12 2026-04-09 三个当前工作包已全部收口为绿色边界
+
+截至这一步，前面拆出来的三个当前工作包都已经不再停留在“建议动作”层，而是全部转成了：
+
+- 一条正式入口
+- 一份 latest 报告
+- 一个可复用的阶段边界
+
+1. 当前三条绿色边界
+- 中心运行线冻结：
+  - `docs/unified/reports/field-center-runtime-freeze-latest.json`
+  - `generatedAt = 2026-04-09T12:04:55Z`
+  - `accepted = true`
+  - `currentBoundary = center-runtime-freeze-ready`
+- RK3568 正式上行冻结：
+  - `docs/unified/reports/field-rk3568-production-uplink-freeze-latest.json`
+  - `generatedAt = 2026-04-09T12:27:26Z`
+  - `accepted = true`
+  - `currentBoundary = rk3568-production-uplink-freeze-ready`
+- 软件侧读路径适配：
+  - `docs/unified/reports/field-software-read-path-adaptation-latest.json`
+  - `generatedAt = 2026-04-09T12:40:35Z`
+  - `accepted = true`
+  - `currentBoundary = software-read-path-adaptation-ready`
+
+2. 这对当前主线的含义
+- 当前主线不需要再继续围绕：
+  - “这三步到底有没有过”
+  反复做大闭环复证
+- 当前真正该推进的是：
+  - 中心部署集成落地
+  - 软件消费侧按冻结合同继续适配
+  - 为 `node C` 保留配置和容量位
+
+3. 当前下一阶段的最小执行面
+- 中心侧：
+  - 继续沿 `single-host-runbook`
+  - 收敛部署、恢复、交接动作
+- 软件侧：
+  - 继续以 `/api/v1/devices` 和 `/api/v1/data/state/{deviceId}` 为主读路径
+  - 让后续 Web/Desk/其它消费侧都绑定这份现场合同
+- 节点侧：
+  - `node C` 继续保留在配置和预算里
+  - 不阻塞当前交付推进
 
 ## 10. 相关文档
 

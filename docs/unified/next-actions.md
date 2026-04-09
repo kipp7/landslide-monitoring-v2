@@ -8,10 +8,10 @@ permalink: landslide-monitoring-v2-mainline/docs/unified/next-actions
 
 ## 1. 当前阶段总策略
 
-当前不再停留在“链路还能不能通”的证明阶段，而是正式切到：
+当前不再停留在“链路还能不能通”的证明阶段，而是已经完成三条阶段门，正式切到：
 
 - `RK2206 A/B -> center XL01 -> RK3568 -> center server -> API/Web`
-- 中心部署与软件适配收口
+- 中心部署集成与软件消费侧适配
 - `node C` 继续预留，但不是当前 blocker
 
 当前阶段的准入基线已经冻结为：
@@ -20,11 +20,15 @@ permalink: landslide-monitoring-v2-mainline/docs/unified/next-actions
 - `field-rk3568-center-operational-recovery-latest.json`
 - `field-rk3568-center-soak-latest.json`
 - `field-center-deployment-software-adaptation-readiness-latest.json`
+- `field-center-runtime-freeze-latest.json`
+- `field-rk3568-production-uplink-freeze-latest.json`
+- `field-software-read-path-adaptation-latest.json`
 
 ## 2. 当前真值
 
 - 中心 compose 主链已经通过 acceptance，`ingest-service` 和 `telemetry-writer` 已回到正式运行线
 - RK3568 受控恢复入口和 soak 入口已经固定
+- 中心运行线冻结、RK3568 正式上行冻结、软件读路径适配都已经转绿
 - 双节点 `A/B` 当前 API/Web 指标合同保持精确 `14` 个 canonical metrics key
 - `node C` 已冻结到配置位和容量预算：
   - `device_id = 00000000-0000-0000-0000-000000000003`
@@ -36,44 +40,44 @@ permalink: landslide-monitoring-v2-mainline/docs/unified/next-actions
 
 ## 3. 推荐执行顺序
 
-### 阶段 A：冻结中心部署运行线
+### 阶段 A：落实中心部署交接线
 
 目标：
 
-- 把中心侧从“能跑”收成“能稳定恢复、能重复交付”
+- 把中心侧从“已冻结”继续推进到“可交接、可复跑、可部署”
 
 建议动作：
 
-- 固定 compose 常驻组件、环境变量来源、恢复顺序
+- 继续沿单机部署 runbook 收口部署和恢复动作
 - 统一使用：
-  - `check-field-center-compose-acceptance.ps1`
+  - `check-field-center-runtime-freeze.ps1`
   - `check-field-center-deployment-software-adaptation-readiness.ps1`
 - 以 `docs/guides/runbooks/single-host-runbook.md` 作为现场恢复手册
 
-### 阶段 B：推进 RK3568 到中心服务器的软件适配
+### 阶段 B：维持 RK3568 正式上行冻结线
 
 目标：
 
-- 把 RK3568 的正式上行环境和中心部署线绑定死
-- 保持现有 northbound contract，不引入厚适配层
+- 保持板端 env/runtime 持续绑定中心部署线
+- 不为当前阶段引入新的协议层或中间转换层
 
 建议动作：
 
-- 固定 RK3568 上行 broker/env/config
+- 复用 `check-field-rk3568-production-uplink-freeze.ps1`
 - 复用现有 `telemetry/{device_id}`、`cmd/{device_id}`、`cmd_ack/{device_id}`
-- 继续用 recovery/soak 入口做现场边界复核
+- 仅在板端配置或现场链路变化时做复核
 
-### 阶段 C：推进软件侧接口对接
+### 阶段 C：推进软件消费侧适配
 
 目标：
 
-- 让 API/Web/后续桌面端都以当前现场合同为准
+- 让 API/Web/后续 Desk 都消费同一份冻结现场合同
 
 建议动作：
 
-- 对齐 A/B 双节点当前字段合同
+- 以 `check-field-software-read-path-adaptation.ps1` 作为读路径边界
 - 保持 `14` 个 canonical metrics key 不漂移
-- 以中心部署 readiness 报告作为软件适配入口，而不是再回头争论串口细节
+- 继续围绕 `/api/v1/devices` 与 `/api/v1/data/state/{deviceId}` 做消费端适配
 
 ### 阶段 D：为 node C 预留回归位
 
@@ -89,17 +93,17 @@ permalink: landslide-monitoring-v2-mainline/docs/unified/next-actions
 
 ## 4. 当前最优先的三件事
 
-### 第一优先级：中心部署运行线冻结
+### 第一优先级：中心部署交接与复跑
 
-- 把 compose、env、恢复顺序、证据入口固定下来
+- 把部署、恢复、交接动作继续固化到 runbook 和验证入口
 
-### 第二优先级：RK3568 到中心服务器的软件适配
+### 第二优先级：软件消费侧按冻结合同继续接入
 
-- 把板端正式配置和平台部署线绑到一起
+- 让 Web/Desk/后续界面都稳定依赖当前主读路径与字段合同
 
-### 第三优先级：软件端合同对接
+### 第三优先级：保留 node C 回归位
 
-- 确保 API/Web/Desk 后续都消费同一份现场合同
+- 保持三节点容量、配置、接入顺序不漂移，等待硬件到位直接复用现有入口
 
 ## 5. 当前不建议继续纠缠的点
 
@@ -110,22 +114,23 @@ permalink: landslide-monitoring-v2-mainline/docs/unified/next-actions
 
 ## 6. 当前推荐的下一轮任务拆分
 
-### 任务 1：中心部署 readiness
+### 任务 1：中心部署交接包
 
 - 输出：
-  - `docs/unified/reports/field-center-deployment-software-adaptation-readiness-latest.json`
+  - runbook 化的单机部署/恢复执行线
+  - 与当前 freeze/readiness 对齐的交付说明
 
-### 任务 2：RK3568 正式上行适配
-
-- 输出：
-  - 板端 env/runtime 固化结果
-  - 与中心侧对接的复跑证据
-
-### 任务 3：软件侧接口与产品读路径对齐
+### 任务 2：软件消费侧适配包
 
 - 输出：
-  - 当前 A/B 节点字段合同对齐结论
-  - 后续 Desk/前端适配切入点
+  - API/Web/Desk 统一消费当前设备状态主读路径
+  - 双节点 A/B 现场合同不漂移的持续验证点
+
+### 任务 3：RK3568 运行线守护包
+
+- 输出：
+  - 板端正式 env/runtime 的守护复核
+  - southbound A/B/C 配置位不漂移
 
 ### 任务 4：node C 预留回归包
 
