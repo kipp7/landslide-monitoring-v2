@@ -1391,3 +1391,31 @@ Freeze and execute the next major phase after command-route stabilization: prove
   - next recommended slice:
     - keep landing web consumer convergence on the frozen state path
     - isolate and permanently fix the recurring `apps/web` Next installation instability as a separate environment-hardening task
+- the device-management legacy entry slice has also been advanced:
+  - file:
+    - `apps/web/app/device-management/legacy/DeviceManagementLegacyPage.tsx`
+  - implementation facts:
+    - `/device-management` still mounted the legacy page, so that page remained a real production-facing consumer
+    - its refresh path now loads `loadDeviceSnapshotView(selectedDevice)` instead of directly hitting `/api/device-management`
+    - device overview metrics now prefer unified snapshot facts:
+      - online status
+      - health score
+      - battery level
+      - signal strength
+      - temperature
+      - humidity
+      - coordinates
+      - last data time
+      - baseline established state
+    - snapshot source tracking was added to prevent showing the previous device's snapshot after a fast device switch
+  - verification status:
+    - passed:
+      - `npm --workspace apps/web run build`
+      - `npx tsc -p .\\apps\\web\\tsconfig.json --noEmit --pretty false --incremental false`
+    - shared environment note:
+      - default incremental typecheck can still be polluted by the existing `apps/web/tsconfig.tsbuildinfo`
+      - symptom:
+        - false missing-file errors under `.next_web/types`
+  - next recommended slice:
+    - continue removing direct `/api/device-management` reads from remaining mounted web consumers
+    - separately harden the web workspace build/typecheck environment so default validation becomes repeatable without flags

@@ -13,6 +13,7 @@ import HoverSidebar from '../../analysis/legacy/components/HoverSidebar';
 import MonitoringStationManagement from './components/MonitoringStationManagement';
 import BaselineManagementV2 from '../../baseline-management/legacy/components/BaselineManagementV2';
 import { apiGetJson } from '../../../lib/v2Api';
+import { loadDeviceSnapshotView, type DeviceSnapshotView } from '../../../lib/api/deviceStateView';
 import { useHierarchicalDevices } from './hooks/useHierarchicalDevices';
 // import RealTimeMapComponent from '../map/RealTimeMapComponent';
 
@@ -37,6 +38,8 @@ export default function DeviceManagementPage() {
   
   // 实时数据状态
   const [realTimeData, setRealTimeData] = useState<any>(null);
+  const [deviceSnapshot, setDeviceSnapshot] = useState<DeviceSnapshotView | null>(null);
+  const [deviceSnapshotSource, setDeviceSnapshotSource] = useState<string>('');
   
   // 当前选择的设备和区域
   const [selectedDevice, setSelectedDevice] = useState('device_1');
@@ -48,6 +51,7 @@ export default function DeviceManagementPage() {
   // 设备信息状态 - 基于选中的设备动态更新
   const getCurrentDeviceInfo = () => {
     const device = getDeviceBySimpleId(selectedDevice);
+    const activeSnapshot = deviceSnapshotSource === selectedDevice ? deviceSnapshot : null;
     if (device) {
       return {
         device_id: device.simple_id,
@@ -56,19 +60,19 @@ export default function DeviceManagementPage() {
         firmware_version: 'v2.1.3',
         location: device.location_name,
         install_date: device.install_date,
-        status: device.online_status,
-        health_score: (device as any).health_score || 0,
-        battery_level: (device as any).battery_level || 0,
-        signal_strength: (device as any).signal_strength || 0,
-        data_count_today: (device as any).today_data_count || 0,
-        last_data_time: device.last_data_time,
-        temperature: 15.99,
-        humidity: 84.70,
+        status: activeSnapshot?.status || device.online_status,
+        health_score: activeSnapshot?.health_score ?? ((device as any).health_score || 0),
+        battery_level: activeSnapshot?.battery_level ?? ((device as any).battery_level || 0),
+        signal_strength: activeSnapshot?.signal_strength ?? ((device as any).signal_strength || 0),
+        data_count_today: activeSnapshot?.data_count_today ?? ((device as any).today_data_count || 0),
+        last_data_time: activeSnapshot?.last_data_time || device.last_data_time,
+        temperature: activeSnapshot?.temperature ?? 15.99,
+        humidity: activeSnapshot?.humidity ?? 84.70,
         coordinates: {
-          lat: device.latitude,
-          lng: device.longitude
+          lat: activeSnapshot?.coordinates.lat ?? device.latitude,
+          lng: activeSnapshot?.coordinates.lng ?? device.longitude
         },
-        baseline_established: (device as any).baseline_established || false
+        baseline_established: activeSnapshot?.baseline_established ?? ((device as any).baseline_established || false)
       };
     }
     
@@ -106,24 +110,22 @@ export default function DeviceManagementPage() {
       if (showMessage) setLoading(true);
       setSensorLoading(true);
 
-      // 使用 v2 legacy compat API 获取特定设备数据
-      const result = await apiGetJson<any>(`/api/device-management?device_id=${encodeURIComponent(selectedDevice)}`);
+      const snapshot = await loadDeviceSnapshotView(selectedDevice);
+      setDeviceSnapshot(snapshot);
+      setDeviceSnapshotSource(selectedDevice);
+      setRealTimeData((prev: any) => ({
+        ...(prev || {}),
+        mapCenter:
+          snapshot.coordinates.lat != null && snapshot.coordinates.lng != null
+            ? [snapshot.coordinates.lng, snapshot.coordinates.lat]
+            : prev?.mapCenter || [110.189371, 22.684674],
+        lastUpdate: snapshot.last_data_time,
+      }));
+      setLastUpdateTime(new Date().toLocaleTimeString('zh-CN'));
 
-      if (result.success) {
-        console.log(`✅ ${selectedDevice} 数据刷新成功:`, result.data);
-        
-        // 更新最后更新时间
-        setLastUpdateTime(new Date().toLocaleTimeString('zh-CN'));
-        
-        if (showMessage) {
-          const device = getDeviceBySimpleId(selectedDevice);
-          message.success(`${device?.device_name || selectedDevice} 数据刷新成功`);
-        }
-      } else {
-        console.error('❌ 数据刷新失败:', result.error);
-        if (showMessage) {
-          message.error(`数据刷新失败: ${result.error || '未知错误'}`);
-        }
+      if (showMessage) {
+        const device = getDeviceBySimpleId(selectedDevice);
+        message.success(`${snapshot.display_name || device?.device_name || selectedDevice} 数据刷新成功`);
       }
     } catch (error) {
       console.error('获取实时数据错误:', error);
