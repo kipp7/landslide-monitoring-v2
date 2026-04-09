@@ -1,0 +1,183 @@
+﻿{
+    "generatedAt":  "2026-04-09T12:04:55Z",
+    "accepted":  true,
+    "mode":  "field-center-runtime-freeze",
+    "currentBoundary":  "center-runtime-freeze-ready",
+    "freezeScope":  {
+                        "composeBoundary":  [
+                                                "emqx",
+                                                "kafka",
+                                                "postgres",
+                                                "clickhouse",
+                                                "api",
+                                                "web",
+                                                "ingest-service",
+                                                "telemetry-writer"
+                                            ],
+                        "composeFiles":  [
+                                             "infra/compose/docker-compose.yml",
+                                             "infra/compose/docker-compose.app.yml"
+                                         ],
+                        "envSources":  [
+                                           "infra/compose/env.prod.example",
+                                           "infra/compose/.env"
+                                       ],
+                        "recoveryOrder":  [
+                                              "emqx -\u003e kafka -\u003e postgres -\u003e clickhouse",
+                                              "ingest-service -\u003e telemetry-writer",
+                                              "api -\u003e web",
+                                              "check-field-center-compose-acceptance.ps1",
+                                              "check-field-rk3568-center-operational-recovery.ps1"
+                                          ],
+                        "failureKeys":  [
+
+                                        ]
+                    },
+    "baselines":  {
+                      "envChecklist":  {
+                                           "report":  "docs/unified/reports/prod-env-checklist-latest.json",
+                                           "generatedAt":  "2026-04-09T12:04:55Z",
+                                           "missing":  0,
+                                           "placeholder":  0,
+                                           "configured":  18
+                                       },
+                      "dockerValidate":  {
+                                             "report":  "docs/unified/reports/docker-deploy-latest.json",
+                                             "generatedAt":  "2026-04-09T12:04:55Z",
+                                             "validateOnly":  true,
+                                             "errors":  [
+
+                                                        ],
+                                             "warnings":  [
+
+                                                          ]
+                                         },
+                      "centerComposeAcceptance":  {
+                                                      "file":  "docs/unified/reports/field-center-compose-acceptance-latest.json",
+                                                      "generatedAt":  "2026-04-09T11:08:18Z",
+                                                      "accepted":  true,
+                                                      "boundary":  "full-path-ready"
+                                                  },
+                      "phaseReadiness":  {
+                                             "file":  "docs/unified/reports/field-center-deployment-software-adaptation-readiness-latest.json",
+                                             "generatedAt":  "2026-04-09T11:47:18Z",
+                                             "accepted":  true,
+                                             "boundary":  "center-deployment-software-adaptation-ready"
+                                         }
+                  },
+    "nextUse":  [
+                    "refresh runtime freeze baseline: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\check-field-center-runtime-freeze.ps1 -AllowUnsafeSecrets",
+                    "refresh center acceptance: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\check-field-center-compose-acceptance.ps1 -DeployMode validate -AllowUnsafeSecrets",
+                    "refresh phase readiness: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\check-field-center-deployment-software-adaptation-readiness.ps1"
+                ],
+    "checks":  [
+                   {
+                       "key":  "envChecklistMissingZero",
+                       "ok":  true,
+                       "actual":  0,
+                       "expected":  0
+                   },
+                   {
+                       "key":  "envChecklistPlaceholderZero",
+                       "ok":  true,
+                       "actual":  0,
+                       "expected":  0
+                   },
+                   {
+                       "key":  "deployValidateNoErrors",
+                       "ok":  true,
+                       "actual":  0,
+                       "expected":  0
+                   },
+                   {
+                       "key":  "deployValidateDockerFound",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "baseComposeIncludesEmqx",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "baseComposeIncludesKafka",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "baseComposeIncludesPostgres",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "baseComposeIncludesClickhouse",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "appComposeIncludesApi",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "appComposeIncludesWeb",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "appComposeIncludesIngest",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "appComposeIncludesTelemetryWriter",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "centerComposeAcceptanceAccepted",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "centerComposeAcceptanceBoundary",
+                       "ok":  true,
+                       "actual":  "full-path-ready",
+                       "expected":  "full-path-ready"
+                   },
+                   {
+                       "key":  "phaseReadinessAccepted",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "phaseReadinessBoundary",
+                       "ok":  true,
+                       "actual":  "center-deployment-software-adaptation-ready",
+                       "expected":  "center-deployment-software-adaptation-ready"
+                   },
+                   {
+                       "key":  "runbookMentionsCenterAcceptance",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "runbookMentionsOperationalRecovery",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   }
+               ]
+}

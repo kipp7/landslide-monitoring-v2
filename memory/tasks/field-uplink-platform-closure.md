@@ -1222,3 +1222,14 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - freeze center deployment runtime/env/recovery
     - bind RK3568 formal uplink config to the center deployment line
     - continue software-side contract adaptation without reopening protocol scope
+- the first center-runtime freeze entrypoint now also exists for the current next slice:
+  - script:
+    - `scripts/dev/check-field-center-runtime-freeze.ps1`
+  - report:
+    - `docs/unified/reports/field-center-runtime-freeze-latest.json`
+  - scope:
+    - re-render prod env checklist
+    - re-run docker one-click validate
+    - assert compose base/app service boundary is still frozen
+    - assert current center acceptance and next-phase readiness are still green
+  - this now turns the first active work package into one command plus one report instead of scattered deployment notes

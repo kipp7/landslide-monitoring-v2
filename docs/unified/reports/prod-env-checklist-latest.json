@@ -1,6 +1,6 @@
 ﻿{
     "summary":  {
-                    "generatedAt":  "2026-03-22T13:10:30Z",
+                    "generatedAt":  "2026-04-09T12:04:55Z",
                     "envFile":  "infra/compose/.env",
                     "templateFile":  "infra/compose/env.prod.example",
                     "total":  20,

@@ -620,6 +620,53 @@ Center server 一期算完成，至少要满足：
 - 这意味着当前中心部署与数据留存边界可以直接按三节点容量继续推进
   - 不需要等 `node C` 真实上线后再回头重算
 
+## 10.9 2026-04-09 中心部署运行线已补成冻结入口
+
+前面虽然已经有：
+
+- `deploy-docker-oneclick.ps1`
+- `check-field-center-compose-acceptance.ps1`
+- `render-prod-env-checklist.ps1`
+
+但这三者还分散在：
+
+- 部署动作
+- 环境检查
+- full-path acceptance
+
+中间缺一条更适合当前阶段的正式入口，去回答：
+
+- 当前中心 compose 边界是否真的已经冻结
+- env 来源是否还能支持交接
+- 运行和恢复顺序是否已经具备单一权威入口
+
+这一步现在已经补上。
+
+1. 新入口
+- 脚本：
+  - `scripts/dev/check-field-center-runtime-freeze.ps1`
+- 标准报告：
+  - `docs/unified/reports/field-center-runtime-freeze-latest.json`
+
+2. 这条入口当前统一收口的事实
+- 生产 env 检查：
+  - `docs/unified/reports/prod-env-checklist-latest.json`
+- 一键部署 validate：
+  - `docs/unified/reports/docker-deploy-latest.json`
+- 中心 compose acceptance：
+  - `docs/unified/reports/field-center-compose-acceptance-latest.json`
+- 当前阶段 readiness：
+  - `docs/unified/reports/field-center-deployment-software-adaptation-readiness-latest.json`
+
+3. 这一步的工程意义
+- 中心部署阶段现在不再只依赖：
+  - 一条 acceptance 结果
+  - 若干零散脚本
+- 而是新增了一条更贴近运维和交接的冻结入口，专门回答：
+  - compose 边界有没有漂移
+  - env 基线有没有缺口
+  - 当前阶段是否仍可继续推进软件适配
+
 ## 10.7 2026-04-09 现场恢复主线已补成统一 runbook 入口
 
 前面虽然已经有：

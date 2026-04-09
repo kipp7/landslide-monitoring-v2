@@ -97,6 +97,36 @@ permalink: landslide-monitoring-v2-mainline/docs/guides/runbooks/single-host-run
 - `docs/unified/reports/field-hardware-uplink-full-proof-latest.json`
 - `docs/unified/reports/field-center-compose-acceptance-latest.json`
 
+## 8.1 中心运行线冻结入口
+
+当当前阶段已经切到“中心部署与软件适配”，不要再靠人工翻 compose/env/runbook 判断中心侧是否进入可交接边界，直接用：
+
+- `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/check-field-center-runtime-freeze.ps1 -AllowUnsafeSecrets`
+
+这条入口会统一核对：
+
+- `infra/compose/env.prod.example`
+- `infra/compose/.env`
+- `infra/compose/docker-compose.yml`
+- `infra/compose/docker-compose.app.yml`
+- `deploy-docker-oneclick.ps1 -ValidateOnly`
+- `field-center-compose-acceptance-latest.json`
+- `field-center-deployment-software-adaptation-readiness-latest.json`
+
+标准报告输出：
+
+- `docs/unified/reports/prod-env-checklist-latest.json`
+- `docs/unified/reports/docker-deploy-latest.json`
+- `docs/unified/reports/field-center-runtime-freeze-latest.json`
+
+当前工程口径：
+
+- `accepted = true` 表示：
+  - 中心 compose 边界已经固定
+  - 生产 env 检查没有缺失/占位符
+  - 一键部署 validate 没有错误
+  - 当前阶段 readiness 仍保持 green
+
 ## 9. 恢复顺序
 
 中心主链异常时，优先按下面顺序恢复：
