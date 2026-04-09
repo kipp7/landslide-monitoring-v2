@@ -439,6 +439,21 @@ Center server 一期算完成，至少要满足：
 - compose 运行中的中心服务真实生效
 - API/Web 读模型真实回收到了软件端契约边界
 
+6. closure 入口现已把字段合同显式固化为验收项
+- 文件：
+  - `scripts/dev/check-field-rk3568-center-live-closure.ps1`
+- 当前不再只是报告里展示：
+  - `metricsKeyCount = 14`
+  - canonical field metrics
+- 而是已经直接写成正式校验：
+  - `nodeAApiMetricsContract`
+  - `nodeAWebMetricsContract`
+  - `nodeBApiMetricsContract`
+  - `nodeBWebMetricsContract`
+- 最新实跑结果继续通过：
+  - `accepted = true`
+  - 上述 4 个 contract checks 全部 `ok = true`
+
 ## 10. 相关文档
 
 - [field-uplink-platform-closure-baseline.md](/E:/学校/02 项目/99 山体滑坡优化完善/landslide-monitoring-v2-mainline/docs/unified/reports/field-uplink-platform-closure-baseline.md)

@@ -33,6 +33,23 @@ param(
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
+$ExpectedFieldMetrics = @(
+  "accel_x_g",
+  "accel_y_g",
+  "accel_z_g",
+  "battery_pct",
+  "gps_latitude",
+  "gps_longitude",
+  "gyro_x_dps",
+  "gyro_y_dps",
+  "gyro_z_dps",
+  "humidity_pct",
+  "temperature_c",
+  "tilt_x_deg",
+  "tilt_y_deg",
+  "warning_flag"
+) | Sort-Object -Unique
+
 function Resolve-RepoRoot() {
   $here = Get-Location
   $dir = $here.Path
@@ -224,7 +241,8 @@ function Test-ReadPathState {
     $Snapshot,
     [string]$ExpectedInstallLabel,
     [string]$ExpectedCommandId = "",
-    [int]$FreshnessMaxSeconds = 180
+    [int]$FreshnessMaxSeconds = 180,
+    [string[]]$ExpectedMetricsKeys = @()
   )
 
   $installLabel = [string]$Snapshot.metaPreview.install_label
@@ -234,6 +252,15 @@ function Test-ReadPathState {
   $installLabelOk = ($installLabel -eq $ExpectedInstallLabel)
   $freshEnough = ($null -ne $Snapshot.updatedAtAgeSeconds -and [double]$Snapshot.updatedAtAgeSeconds -le $FreshnessMaxSeconds)
   $metricsPresent = ([int]$Snapshot.metricsKeyCount -gt 0)
+  $actualMetricsKeys = @($Snapshot.metricsKeys | Sort-Object -Unique)
+  $expectedMetricsKeysSorted = @($ExpectedMetricsKeys | Sort-Object -Unique)
+  $metricsContractOk = $true
+  if ($expectedMetricsKeysSorted.Count -gt 0) {
+    $metricsContractOk = (
+      $actualMetricsKeys.Count -eq $expectedMetricsKeysSorted.Count -and
+      -not (Compare-Object -ReferenceObject $expectedMetricsKeysSorted -DifferenceObject $actualMetricsKeys)
+    )
+  }
   $commandIdMatch = $true
   $commandTypeMatch = $true
 
@@ -243,9 +270,12 @@ function Test-ReadPathState {
   }
 
   return [pscustomobject][ordered]@{
-    passed = ([bool]$Snapshot.deviceFound -and $metricsPresent -and $freshEnough -and $installLabelOk -and $commandIdMatch -and $commandTypeMatch)
+    passed = ([bool]$Snapshot.deviceFound -and $metricsPresent -and $freshEnough -and $installLabelOk -and $metricsContractOk -and $commandIdMatch -and $commandTypeMatch)
     deviceFound = [bool]$Snapshot.deviceFound
     metricsPresent = $metricsPresent
+    metricsContractOk = $metricsContractOk
+    actualMetricsKeys = $actualMetricsKeys
+    expectedMetricsKeys = if ($expectedMetricsKeysSorted.Count -gt 0) { $expectedMetricsKeysSorted } else { @() }
     freshEnough = $freshEnough
     installLabelOk = $installLabelOk
     commandIdMatch = $commandIdMatch
@@ -265,7 +295,8 @@ function Wait-ForDualReadPathProof {
     $WebSession,
     [int]$TimeoutSeconds = 90,
     [int]$PollSeconds = 5,
-    [int]$FreshnessMaxSeconds = 180
+    [int]$FreshnessMaxSeconds = 180,
+    [string[]]$ExpectedMetricsKeys = @()
   )
 
   $deadline = (Get-Date).AddSeconds([Math]::Max(1, $TimeoutSeconds))
@@ -274,8 +305,8 @@ function Wait-ForDualReadPathProof {
   while ($true) {
     $apiSnapshot = Get-ReadPathSnapshot -Label "api-direct" -Session $ApiSession -DeviceId $DeviceId
     $webSnapshot = Get-ReadPathSnapshot -Label "web-proxy" -Session $WebSession -DeviceId $DeviceId
-    $apiCheck = Test-ReadPathState -Snapshot $apiSnapshot -ExpectedInstallLabel $ExpectedInstallLabel -ExpectedCommandId $ExpectedCommandId -FreshnessMaxSeconds $FreshnessMaxSeconds
-    $webCheck = Test-ReadPathState -Snapshot $webSnapshot -ExpectedInstallLabel $ExpectedInstallLabel -ExpectedCommandId $ExpectedCommandId -FreshnessMaxSeconds $FreshnessMaxSeconds
+    $apiCheck = Test-ReadPathState -Snapshot $apiSnapshot -ExpectedInstallLabel $ExpectedInstallLabel -ExpectedCommandId $ExpectedCommandId -FreshnessMaxSeconds $FreshnessMaxSeconds -ExpectedMetricsKeys $ExpectedMetricsKeys
+    $webCheck = Test-ReadPathState -Snapshot $webSnapshot -ExpectedInstallLabel $ExpectedInstallLabel -ExpectedCommandId $ExpectedCommandId -FreshnessMaxSeconds $FreshnessMaxSeconds -ExpectedMetricsKeys $ExpectedMetricsKeys
 
     $attempts.Add([pscustomobject][ordered]@{
       polledAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
@@ -284,6 +315,7 @@ function Wait-ForDualReadPathProof {
         updatedAt = $apiSnapshot.updatedAt
         updatedAtAgeSeconds = $apiSnapshot.updatedAtAgeSeconds
         metricsKeyCount = $apiSnapshot.metricsKeyCount
+        metricsContractOk = [bool]$apiCheck.metricsContractOk
         install_label = $apiSnapshot.metaPreview.install_label
         last_command_id = $apiSnapshot.metaPreview.last_command_id
         last_command_type = $apiSnapshot.metaPreview.last_command_type
@@ -293,6 +325,7 @@ function Wait-ForDualReadPathProof {
         updatedAt = $webSnapshot.updatedAt
         updatedAtAgeSeconds = $webSnapshot.updatedAtAgeSeconds
         metricsKeyCount = $webSnapshot.metricsKeyCount
+        metricsContractOk = [bool]$webCheck.metricsContractOk
         install_label = $webSnapshot.metaPreview.install_label
         last_command_id = $webSnapshot.metaPreview.last_command_id
         last_command_type = $webSnapshot.metaPreview.last_command_type
@@ -460,7 +493,8 @@ try {
     -WebSession $webSession `
     -TimeoutSeconds $StatePollTimeoutSeconds `
     -PollSeconds $StatePollSeconds `
-    -FreshnessMaxSeconds $FreshnessSeconds
+    -FreshnessMaxSeconds $FreshnessSeconds `
+    -ExpectedMetricsKeys $ExpectedFieldMetrics
 
   $nodeBProof = Wait-ForDualReadPathProof `
     -DeviceId $NodeBDeviceId `
@@ -470,7 +504,8 @@ try {
     -WebSession $webSession `
     -TimeoutSeconds $StatePollTimeoutSeconds `
     -PollSeconds $StatePollSeconds `
-    -FreshnessMaxSeconds $FreshnessSeconds
+    -FreshnessMaxSeconds $FreshnessSeconds `
+    -ExpectedMetricsKeys $ExpectedFieldMetrics
 
   $centerCurrentBoundary = [string]$centerAcceptance.readiness.currentBoundary
   $boardConclusion = [string]$boardObservation.conclusion
@@ -501,8 +536,12 @@ try {
     (Get-Check -Key "boardStableCommandAcked" -Ok:($commandProofAckStatus -eq "acked") -Actual $commandProofAckStatus -Expected "acked"),
     (Get-Check -Key "nodeAApiDirectVisible" -Ok:([bool]$nodeAProof.api.check.passed) -Actual ([bool]$nodeAProof.api.check.passed) -Expected $true),
     (Get-Check -Key "nodeAWebProxyVisible" -Ok:([bool]$nodeAProof.web.check.passed) -Actual ([bool]$nodeAProof.web.check.passed) -Expected $true),
+    (Get-Check -Key "nodeAApiMetricsContract" -Ok:([bool]$nodeAProof.api.check.metricsContractOk) -Actual ([int]$nodeAProof.api.snapshot.metricsKeyCount) -Expected ($ExpectedFieldMetrics.Count)),
+    (Get-Check -Key "nodeAWebMetricsContract" -Ok:([bool]$nodeAProof.web.check.metricsContractOk) -Actual ([int]$nodeAProof.web.snapshot.metricsKeyCount) -Expected ($ExpectedFieldMetrics.Count)),
     (Get-Check -Key "nodeBApiDirectVisible" -Ok:([bool]$nodeBProof.api.check.passed) -Actual ([bool]$nodeBProof.api.check.passed) -Expected $true),
     (Get-Check -Key "nodeBWebProxyVisible" -Ok:([bool]$nodeBProof.web.check.passed) -Actual ([bool]$nodeBProof.web.check.passed) -Expected $true),
+    (Get-Check -Key "nodeBApiMetricsContract" -Ok:([bool]$nodeBProof.api.check.metricsContractOk) -Actual ([int]$nodeBProof.api.snapshot.metricsKeyCount) -Expected ($ExpectedFieldMetrics.Count)),
+    (Get-Check -Key "nodeBWebMetricsContract" -Ok:([bool]$nodeBProof.web.check.metricsContractOk) -Actual ([int]$nodeBProof.web.snapshot.metricsKeyCount) -Expected ($ExpectedFieldMetrics.Count)),
     (Get-Check -Key "nodeBCommandIdInApiState" -Ok:([bool]$nodeBProof.api.check.commandIdMatch) -Actual ([string]$nodeBProof.api.snapshot.metaPreview.last_command_id) -Expected $commandProofCommandId),
     (Get-Check -Key "nodeBCommandIdInWebState" -Ok:([bool]$nodeBProof.web.check.commandIdMatch) -Actual ([string]$nodeBProof.web.snapshot.metaPreview.last_command_id) -Expected $commandProofCommandId),
     (Get-Check -Key "nodeBManualCollectTypeInApiState" -Ok:([bool]$nodeBProof.api.check.commandTypeMatch) -Actual ([string]$nodeBProof.api.snapshot.metaPreview.last_command_type) -Expected "manual_collect"),
@@ -580,6 +619,7 @@ try {
       finalAttempt = $stableCommand.finalAttempt
     }
     livePlatform = [ordered]@{
+      expectedFieldMetrics = $ExpectedFieldMetrics
       nodeA = $nodeAProof
       nodeB = $nodeBProof
       nodeC = [ordered]@{

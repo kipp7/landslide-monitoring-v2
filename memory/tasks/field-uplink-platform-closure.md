@@ -1079,3 +1079,11 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - `node A api/web metricsKeyCount = 14`
     - `node B api/web metricsKeyCount = 14`
     - preserved field metrics are now the canonical XL01 set instead of polluted concatenated keys
+- the closure entry itself now enforces that contract explicitly:
+  - `scripts/dev/check-field-rk3568-center-live-closure.ps1`
+    now checks exact expected metric keys for:
+    - `node A api`
+    - `node A web`
+    - `node B api`
+    - `node B web`
+  - latest live run still passed with all four metrics-contract checks green

@@ -1,5 +1,5 @@
 ﻿{
-    "generatedAt":  "2026-04-09T06:45:05Z",
+    "generatedAt":  "2026-04-09T06:55:59Z",
     "accepted":  true,
     "mode":  "field-center-compose-acceptance",
     "deployMode":  "validate",
@@ -32,7 +32,7 @@
                       "conclusion":  "real-hardware-uplink-full-path-reached-platform-and-web",
                       "replayConclusion":  "real-hardware-uplink-replay-reached-platform-api-state",
                       "productVisibilityConclusion":  "real-hardware-uplink-visible-through-web-product-read-path",
-                      "deviceId":  "b08bb370-d7cc-498c-9243-3c95b0495c26"
+                      "deviceId":  "54feaa6e-22dd-41b5-81e7-6d0b05a59a89"
                   },
     "checks":  [
                    {

@@ -1,5 +1,5 @@
 ﻿{
-    "generatedAt":  "2026-04-09T06:46:51Z",
+    "generatedAt":  "2026-04-09T06:57:32Z",
     "accepted":  true,
     "mode":  "field-rk3568-center-live-closure",
     "currentBoundary":  "rk3568-live-center-closure-ready",
@@ -38,22 +38,22 @@
                                                 "strictAccepted":  true,
                                                 "strictError":  "",
                                                 "strictCommandProofDeviceId":  "00000000-0000-0000-0000-000000000002",
-                                                "strictCommandProofCommandId":  "f3e2feb5-0433-4dab-838f-554bd529e16b",
+                                                "strictCommandProofCommandId":  "ac5a366d-3424-45bf-8b58-ca64a1c1c603",
                                                 "strictCommandProofAckStatus":  "acked"
                                             },
                              "window":  {
                                             "clean":  true,
                                             "counterDelta":  {
-                                                                 "parsedMessages":  23,
-                                                                 "publishedMessages":  23,
+                                                                 "parsedMessages":  22,
+                                                                 "publishedMessages":  22,
                                                                  "schemaRejected":  0,
                                                                  "publishFailures":  0,
-                                                                 "nodeATelemetryMessages":  12,
+                                                                 "nodeATelemetryMessages":  11,
                                                                  "nodeBTelemetryMessages":  11
                                                              },
                                             "maxObserved":  {
                                                                 "spoolPending":  0,
-                                                                "schemaRejected":  1396,
+                                                                "schemaRejected":  1405,
                                                                 "publishFailures":  0,
                                                                 "reconnectAttempts":  0,
                                                                 "consecutiveReconnectFailures":  0
@@ -69,7 +69,7 @@
                                                                      "nodeCPrepared":  true
                                                                  },
                                             "lastSample":  {
-                                                               "emittedTs":  "2026-04-09T06:46:33.084Z",
+                                                               "emittedTs":  "2026-04-09T06:57:20.479Z",
                                                                "serviceActive":  "active",
                                                                "mqttConnected":  true,
                                                                "serialOpen":  true,
@@ -78,16 +78,16 @@
                                                                "reconnectAttempts":  0,
                                                                "consecutiveReconnectFailures":  0,
                                                                "spoolPending":  0,
-                                                               "parsedMessages":  11291,
-                                                               "publishedMessages":  11291,
-                                                               "schemaRejected":  1396,
+                                                               "parsedMessages":  11487,
+                                                               "publishedMessages":  11487,
+                                                               "schemaRejected":  1405,
                                                                "publishFailures":  0,
                                                                "nodeAStatus":  "online",
-                                                               "nodeATelemetryMessages":  5685,
-                                                               "nodeALastTelemetryTs":  "2026-04-09T06:46:33.062Z",
+                                                               "nodeATelemetryMessages":  5785,
+                                                               "nodeALastTelemetryTs":  "2026-04-09T06:57:20.444Z",
                                                                "nodeBStatus":  "online",
-                                                               "nodeBTelemetryMessages":  5606,
-                                                               "nodeBLastTelemetryTs":  "2026-04-09T06:46:29.776Z",
+                                                               "nodeBTelemetryMessages":  5702,
+                                                               "nodeBLastTelemetryTs":  "2026-04-09T06:57:16.934Z",
                                                                "nodeCStatus":  "configured"
                                                            }
                                         }
@@ -101,46 +101,60 @@
                           "retryDelaySeconds":  3,
                           "deviceId":  "00000000-0000-0000-0000-000000000002",
                           "action":  "manual-collect",
-                          "commandId":  "5d0529df-1939-4087-9dd2-1c441d63b4f4",
+                          "commandId":  "2057d44f-326d-410d-a6a9-684a6eca8c71",
                           "ackStatus":  "acked",
                           "successfulAttempt":  {
                                                     "attempt":  1,
                                                     "passed":  true,
-                                                    "commandId":  "5d0529df-1939-4087-9dd2-1c441d63b4f4",
+                                                    "commandId":  "2057d44f-326d-410d-a6a9-684a6eca8c71",
                                                     "ackStatus":  "acked",
                                                     "summary":  "command-forward-and-ack-publish-succeeded",
-                                                    "parseFailureCount":  31,
+                                                    "parseFailureCount":  9,
                                                     "failureModes":  [
                                                                          "southbound-json-fragmentation",
-                                                                         "unclassified-parse-failure",
-                                                                         "shared-stream-byte-interleaving"
+                                                                         "unclassified-parse-failure"
                                                                      ],
-                                                    "beforeAckPublishes":  13,
-                                                    "afterAckPublishes":  14,
-                                                    "beforeLastAckTs":  "2026-04-09T06:45:14.545Z",
-                                                    "afterLastAckTs":  "2026-04-09T06:46:37.882Z",
+                                                    "beforeAckPublishes":  15,
+                                                    "afterAckPublishes":  16,
+                                                    "beforeLastAckTs":  "2026-04-09T06:56:07.501Z",
+                                                    "afterLastAckTs":  "2026-04-09T06:57:25.541Z",
                                                     "proofFile":  ".tmp/rk3568-node-command-stable-0002-manual-collect-1.json"
                                                 },
                           "finalAttempt":  {
                                                "attempt":  1,
                                                "passed":  true,
-                                               "commandId":  "5d0529df-1939-4087-9dd2-1c441d63b4f4",
+                                               "commandId":  "2057d44f-326d-410d-a6a9-684a6eca8c71",
                                                "ackStatus":  "acked",
                                                "summary":  "command-forward-and-ack-publish-succeeded",
-                                               "parseFailureCount":  31,
+                                               "parseFailureCount":  9,
                                                "failureModes":  [
                                                                     "southbound-json-fragmentation",
-                                                                    "unclassified-parse-failure",
-                                                                    "shared-stream-byte-interleaving"
+                                                                    "unclassified-parse-failure"
                                                                 ],
-                                               "beforeAckPublishes":  13,
-                                               "afterAckPublishes":  14,
-                                               "beforeLastAckTs":  "2026-04-09T06:45:14.545Z",
-                                               "afterLastAckTs":  "2026-04-09T06:46:37.882Z",
+                                               "beforeAckPublishes":  15,
+                                               "afterAckPublishes":  16,
+                                               "beforeLastAckTs":  "2026-04-09T06:56:07.501Z",
+                                               "afterLastAckTs":  "2026-04-09T06:57:25.541Z",
                                                "proofFile":  ".tmp/rk3568-node-command-stable-0002-manual-collect-1.json"
                                            }
                       },
     "livePlatform":  {
+                         "expectedFieldMetrics":  [
+                                                      "accel_x_g",
+                                                      "accel_y_g",
+                                                      "accel_z_g",
+                                                      "battery_pct",
+                                                      "gps_latitude",
+                                                      "gps_longitude",
+                                                      "gyro_x_dps",
+                                                      "gyro_y_dps",
+                                                      "gyro_z_dps",
+                                                      "humidity_pct",
+                                                      "temperature_c",
+                                                      "tilt_x_deg",
+                                                      "tilt_y_deg",
+                                                      "warning_flag"
+                                                  ],
                          "nodeA":  {
                                        "passed":  true,
                                        "deviceId":  "00000000-0000-0000-0000-000000000001",
@@ -151,11 +165,44 @@
                                                                  "passed":  true,
                                                                  "deviceFound":  true,
                                                                  "metricsPresent":  true,
+                                                                 "metricsContractOk":  true,
+                                                                 "actualMetricsKeys":  [
+                                                                                           "accel_x_g",
+                                                                                           "accel_y_g",
+                                                                                           "accel_z_g",
+                                                                                           "battery_pct",
+                                                                                           "gps_latitude",
+                                                                                           "gps_longitude",
+                                                                                           "gyro_x_dps",
+                                                                                           "gyro_y_dps",
+                                                                                           "gyro_z_dps",
+                                                                                           "humidity_pct",
+                                                                                           "temperature_c",
+                                                                                           "tilt_x_deg",
+                                                                                           "tilt_y_deg",
+                                                                                           "warning_flag"
+                                                                                       ],
+                                                                 "expectedMetricsKeys":  [
+                                                                                             "accel_x_g",
+                                                                                             "accel_y_g",
+                                                                                             "accel_z_g",
+                                                                                             "battery_pct",
+                                                                                             "gps_latitude",
+                                                                                             "gps_longitude",
+                                                                                             "gyro_x_dps",
+                                                                                             "gyro_y_dps",
+                                                                                             "gyro_z_dps",
+                                                                                             "humidity_pct",
+                                                                                             "temperature_c",
+                                                                                             "tilt_x_deg",
+                                                                                             "tilt_y_deg",
+                                                                                             "warning_flag"
+                                                                                         ],
                                                                  "freshEnough":  true,
                                                                  "installLabelOk":  true,
                                                                  "commandIdMatch":  true,
                                                                  "commandTypeMatch":  true,
-                                                                 "updatedAtAgeSeconds":  1.858,
+                                                                 "updatedAtAgeSeconds":  1.744,
                                                                  "expectedInstallLabel":  "FIELD-NODE-A",
                                                                  "expectedCommandId":  null
                                                              },
@@ -165,10 +212,10 @@
                                                                     "authUserId":  "20000000-0000-0000-0000-000000000001",
                                                                     "authUsername":  "admin",
                                                                     "deviceFound":  true,
-                                                                    "listCount":  26,
+                                                                    "listCount":  27,
                                                                     "matchedDeviceLastSeenAt":  "2026-03-25T05:59:00.817Z",
-                                                                    "updatedAt":  "2026-04-09T06:46:49Z",
-                                                                    "updatedAtAgeSeconds":  1.858,
+                                                                    "updatedAt":  "2026-04-09T06:57:31Z",
+                                                                    "updatedAtAgeSeconds":  1.744,
                                                                     "metricsKeyCount":  14,
                                                                     "metricsKeys":  [
                                                                                         "accel_x_g",
@@ -187,10 +234,10 @@
                                                                                         "temperature_c"
                                                                                     ],
                                                                     "metricsPreview":  {
-                                                                                           "temperature_c":  20.6,
-                                                                                           "humidity_pct":  50,
-                                                                                           "tilt_x_deg":  3116.59,
-                                                                                           "gps_latitude":  22.64835
+                                                                                           "temperature_c":  28.2,
+                                                                                           "humidity_pct":  68.7,
+                                                                                           "tilt_x_deg":  3147.65,
+                                                                                           "gps_latitude":  22.649429
                                                                                        },
                                                                     "metaPreview":  {
                                                                                         "install_label":  "FIELD-NODE-A",
@@ -207,11 +254,44 @@
                                                                  "passed":  true,
                                                                  "deviceFound":  true,
                                                                  "metricsPresent":  true,
+                                                                 "metricsContractOk":  true,
+                                                                 "actualMetricsKeys":  [
+                                                                                           "accel_x_g",
+                                                                                           "accel_y_g",
+                                                                                           "accel_z_g",
+                                                                                           "battery_pct",
+                                                                                           "gps_latitude",
+                                                                                           "gps_longitude",
+                                                                                           "gyro_x_dps",
+                                                                                           "gyro_y_dps",
+                                                                                           "gyro_z_dps",
+                                                                                           "humidity_pct",
+                                                                                           "temperature_c",
+                                                                                           "tilt_x_deg",
+                                                                                           "tilt_y_deg",
+                                                                                           "warning_flag"
+                                                                                       ],
+                                                                 "expectedMetricsKeys":  [
+                                                                                             "accel_x_g",
+                                                                                             "accel_y_g",
+                                                                                             "accel_z_g",
+                                                                                             "battery_pct",
+                                                                                             "gps_latitude",
+                                                                                             "gps_longitude",
+                                                                                             "gyro_x_dps",
+                                                                                             "gyro_y_dps",
+                                                                                             "gyro_z_dps",
+                                                                                             "humidity_pct",
+                                                                                             "temperature_c",
+                                                                                             "tilt_x_deg",
+                                                                                             "tilt_y_deg",
+                                                                                             "warning_flag"
+                                                                                         ],
                                                                  "freshEnough":  true,
                                                                  "installLabelOk":  true,
                                                                  "commandIdMatch":  true,
                                                                  "commandTypeMatch":  true,
-                                                                 "updatedAtAgeSeconds":  1.929,
+                                                                 "updatedAtAgeSeconds":  1.802,
                                                                  "expectedInstallLabel":  "FIELD-NODE-A",
                                                                  "expectedCommandId":  null
                                                              },
@@ -221,10 +301,10 @@
                                                                     "authUserId":  "20000000-0000-0000-0000-000000000001",
                                                                     "authUsername":  "admin",
                                                                     "deviceFound":  true,
-                                                                    "listCount":  26,
+                                                                    "listCount":  27,
                                                                     "matchedDeviceLastSeenAt":  "2026-03-25T05:59:00.817Z",
-                                                                    "updatedAt":  "2026-04-09T06:46:49Z",
-                                                                    "updatedAtAgeSeconds":  1.929,
+                                                                    "updatedAt":  "2026-04-09T06:57:31Z",
+                                                                    "updatedAtAgeSeconds":  1.802,
                                                                     "metricsKeyCount":  14,
                                                                     "metricsKeys":  [
                                                                                         "accel_x_g",
@@ -243,10 +323,10 @@
                                                                                         "temperature_c"
                                                                                     ],
                                                                     "metricsPreview":  {
-                                                                                           "temperature_c":  20.6,
-                                                                                           "humidity_pct":  50,
-                                                                                           "tilt_x_deg":  3116.59,
-                                                                                           "gps_latitude":  22.64835
+                                                                                           "temperature_c":  28.2,
+                                                                                           "humidity_pct":  68.7,
+                                                                                           "tilt_x_deg":  3147.65,
+                                                                                           "gps_latitude":  22.649429
                                                                                        },
                                                                     "metaPreview":  {
                                                                                         "install_label":  "FIELD-NODE-A",
@@ -260,21 +340,23 @@
                                                },
                                        "attempts":  [
                                                         {
-                                                            "polledAt":  "2026-04-09T06:46:50Z",
+                                                            "polledAt":  "2026-04-09T06:57:32Z",
                                                             "api":  {
                                                                         "passed":  true,
-                                                                        "updatedAt":  "2026-04-09T06:46:49Z",
-                                                                        "updatedAtAgeSeconds":  1.858,
+                                                                        "updatedAt":  "2026-04-09T06:57:31Z",
+                                                                        "updatedAtAgeSeconds":  1.744,
                                                                         "metricsKeyCount":  14,
+                                                                        "metricsContractOk":  true,
                                                                         "install_label":  "FIELD-NODE-A",
                                                                         "last_command_id":  "",
                                                                         "last_command_type":  ""
                                                                     },
                                                             "web":  {
                                                                         "passed":  true,
-                                                                        "updatedAt":  "2026-04-09T06:46:49Z",
-                                                                        "updatedAtAgeSeconds":  1.929,
+                                                                        "updatedAt":  "2026-04-09T06:57:31Z",
+                                                                        "updatedAtAgeSeconds":  1.802,
                                                                         "metricsKeyCount":  14,
+                                                                        "metricsContractOk":  true,
                                                                         "install_label":  "FIELD-NODE-A",
                                                                         "last_command_id":  "",
                                                                         "last_command_type":  ""
@@ -286,19 +368,52 @@
                                        "passed":  true,
                                        "deviceId":  "00000000-0000-0000-0000-000000000002",
                                        "expectedInstallLabel":  "FIELD-NODE-B",
-                                       "expectedCommandId":  "5d0529df-1939-4087-9dd2-1c441d63b4f4",
+                                       "expectedCommandId":  "2057d44f-326d-410d-a6a9-684a6eca8c71",
                                        "api":  {
                                                    "check":  {
                                                                  "passed":  true,
                                                                  "deviceFound":  true,
                                                                  "metricsPresent":  true,
+                                                                 "metricsContractOk":  true,
+                                                                 "actualMetricsKeys":  [
+                                                                                           "accel_x_g",
+                                                                                           "accel_y_g",
+                                                                                           "accel_z_g",
+                                                                                           "battery_pct",
+                                                                                           "gps_latitude",
+                                                                                           "gps_longitude",
+                                                                                           "gyro_x_dps",
+                                                                                           "gyro_y_dps",
+                                                                                           "gyro_z_dps",
+                                                                                           "humidity_pct",
+                                                                                           "temperature_c",
+                                                                                           "tilt_x_deg",
+                                                                                           "tilt_y_deg",
+                                                                                           "warning_flag"
+                                                                                       ],
+                                                                 "expectedMetricsKeys":  [
+                                                                                             "accel_x_g",
+                                                                                             "accel_y_g",
+                                                                                             "accel_z_g",
+                                                                                             "battery_pct",
+                                                                                             "gps_latitude",
+                                                                                             "gps_longitude",
+                                                                                             "gyro_x_dps",
+                                                                                             "gyro_y_dps",
+                                                                                             "gyro_z_dps",
+                                                                                             "humidity_pct",
+                                                                                             "temperature_c",
+                                                                                             "tilt_x_deg",
+                                                                                             "tilt_y_deg",
+                                                                                             "warning_flag"
+                                                                                         ],
                                                                  "freshEnough":  true,
                                                                  "installLabelOk":  true,
                                                                  "commandIdMatch":  true,
                                                                  "commandTypeMatch":  true,
-                                                                 "updatedAtAgeSeconds":  5.004,
+                                                                 "updatedAtAgeSeconds":  4.86,
                                                                  "expectedInstallLabel":  "FIELD-NODE-B",
-                                                                 "expectedCommandId":  "5d0529df-1939-4087-9dd2-1c441d63b4f4"
+                                                                 "expectedCommandId":  "2057d44f-326d-410d-a6a9-684a6eca8c71"
                                                              },
                                                    "snapshot":  {
                                                                     "label":  "api-direct",
@@ -306,10 +421,10 @@
                                                                     "authUserId":  "20000000-0000-0000-0000-000000000001",
                                                                     "authUsername":  "admin",
                                                                     "deviceFound":  true,
-                                                                    "listCount":  26,
+                                                                    "listCount":  27,
                                                                     "matchedDeviceLastSeenAt":  "2026-03-25T05:59:00.817Z",
-                                                                    "updatedAt":  "2026-04-09T06:46:46Z",
-                                                                    "updatedAtAgeSeconds":  5.004,
+                                                                    "updatedAt":  "2026-04-09T06:57:28Z",
+                                                                    "updatedAtAgeSeconds":  4.86,
                                                                     "metricsKeyCount":  14,
                                                                     "metricsKeys":  [
                                                                                         "accel_x_g",
@@ -328,18 +443,18 @@
                                                                                         "temperature_c"
                                                                                     ],
                                                                     "metricsPreview":  {
-                                                                                           "temperature_c":  24.4,
-                                                                                           "humidity_pct":  61.9,
-                                                                                           "tilt_x_deg":  420.5,
-                                                                                           "gps_latitude":  22.55715
+                                                                                           "temperature_c":  29.9,
+                                                                                           "humidity_pct":  54.9,
+                                                                                           "tilt_x_deg":  452.48,
+                                                                                           "gps_latitude":  22.55822
                                                                                        },
                                                                     "metaPreview":  {
                                                                                         "install_label":  "FIELD-NODE-B",
                                                                                         "legacy_node":  "B",
-                                                                                        "upload_trigger":  "periodic",
+                                                                                        "upload_trigger":  "manual_collect",
                                                                                         "last_command_type":  "manual_collect",
-                                                                                        "last_command_id":  "5d0529df-1939-4087-9dd2-1c441d63b4f4",
-                                                                                        "last_command_uptime_s":  8398
+                                                                                        "last_command_id":  "2057d44f-326d-410d-a6a9-684a6eca8c71",
+                                                                                        "last_command_uptime_s":  9043
                                                                                     }
                                                                 }
                                                },
@@ -348,13 +463,46 @@
                                                                  "passed":  true,
                                                                  "deviceFound":  true,
                                                                  "metricsPresent":  true,
+                                                                 "metricsContractOk":  true,
+                                                                 "actualMetricsKeys":  [
+                                                                                           "accel_x_g",
+                                                                                           "accel_y_g",
+                                                                                           "accel_z_g",
+                                                                                           "battery_pct",
+                                                                                           "gps_latitude",
+                                                                                           "gps_longitude",
+                                                                                           "gyro_x_dps",
+                                                                                           "gyro_y_dps",
+                                                                                           "gyro_z_dps",
+                                                                                           "humidity_pct",
+                                                                                           "temperature_c",
+                                                                                           "tilt_x_deg",
+                                                                                           "tilt_y_deg",
+                                                                                           "warning_flag"
+                                                                                       ],
+                                                                 "expectedMetricsKeys":  [
+                                                                                             "accel_x_g",
+                                                                                             "accel_y_g",
+                                                                                             "accel_z_g",
+                                                                                             "battery_pct",
+                                                                                             "gps_latitude",
+                                                                                             "gps_longitude",
+                                                                                             "gyro_x_dps",
+                                                                                             "gyro_y_dps",
+                                                                                             "gyro_z_dps",
+                                                                                             "humidity_pct",
+                                                                                             "temperature_c",
+                                                                                             "tilt_x_deg",
+                                                                                             "tilt_y_deg",
+                                                                                             "warning_flag"
+                                                                                         ],
                                                                  "freshEnough":  true,
                                                                  "installLabelOk":  true,
                                                                  "commandIdMatch":  true,
                                                                  "commandTypeMatch":  true,
-                                                                 "updatedAtAgeSeconds":  5.043,
+                                                                 "updatedAtAgeSeconds":  4.902,
                                                                  "expectedInstallLabel":  "FIELD-NODE-B",
-                                                                 "expectedCommandId":  "5d0529df-1939-4087-9dd2-1c441d63b4f4"
+                                                                 "expectedCommandId":  "2057d44f-326d-410d-a6a9-684a6eca8c71"
                                                              },
                                                    "snapshot":  {
                                                                     "label":  "web-proxy",
@@ -362,10 +510,10 @@
                                                                     "authUserId":  "20000000-0000-0000-0000-000000000001",
                                                                     "authUsername":  "admin",
                                                                     "deviceFound":  true,
-                                                                    "listCount":  26,
+                                                                    "listCount":  27,
                                                                     "matchedDeviceLastSeenAt":  "2026-03-25T05:59:00.817Z",
-                                                                    "updatedAt":  "2026-04-09T06:46:46Z",
-                                                                    "updatedAtAgeSeconds":  5.043,
+                                                                    "updatedAt":  "2026-04-09T06:57:28Z",
+                                                                    "updatedAtAgeSeconds":  4.902,
                                                                     "metricsKeyCount":  14,
                                                                     "metricsKeys":  [
                                                                                         "accel_x_g",
@@ -384,40 +532,42 @@
                                                                                         "temperature_c"
                                                                                     ],
                                                                     "metricsPreview":  {
-                                                                                           "temperature_c":  24.4,
-                                                                                           "humidity_pct":  61.9,
-                                                                                           "tilt_x_deg":  420.5,
-                                                                                           "gps_latitude":  22.55715
+                                                                                           "temperature_c":  29.9,
+                                                                                           "humidity_pct":  54.9,
+                                                                                           "tilt_x_deg":  452.48,
+                                                                                           "gps_latitude":  22.55822
                                                                                        },
                                                                     "metaPreview":  {
                                                                                         "install_label":  "FIELD-NODE-B",
                                                                                         "legacy_node":  "B",
-                                                                                        "upload_trigger":  "periodic",
+                                                                                        "upload_trigger":  "manual_collect",
                                                                                         "last_command_type":  "manual_collect",
-                                                                                        "last_command_id":  "5d0529df-1939-4087-9dd2-1c441d63b4f4",
-                                                                                        "last_command_uptime_s":  8398
+                                                                                        "last_command_id":  "2057d44f-326d-410d-a6a9-684a6eca8c71",
+                                                                                        "last_command_uptime_s":  9043
                                                                                     }
                                                                 }
                                                },
                                        "attempts":  [
                                                         {
-                                                            "polledAt":  "2026-04-09T06:46:51Z",
+                                                            "polledAt":  "2026-04-09T06:57:32Z",
                                                             "api":  {
                                                                         "passed":  true,
-                                                                        "updatedAt":  "2026-04-09T06:46:46Z",
-                                                                        "updatedAtAgeSeconds":  5.004,
+                                                                        "updatedAt":  "2026-04-09T06:57:28Z",
+                                                                        "updatedAtAgeSeconds":  4.86,
                                                                         "metricsKeyCount":  14,
+                                                                        "metricsContractOk":  true,
                                                                         "install_label":  "FIELD-NODE-B",
-                                                                        "last_command_id":  "5d0529df-1939-4087-9dd2-1c441d63b4f4",
+                                                                        "last_command_id":  "2057d44f-326d-410d-a6a9-684a6eca8c71",
                                                                         "last_command_type":  "manual_collect"
                                                                     },
                                                             "web":  {
                                                                         "passed":  true,
-                                                                        "updatedAt":  "2026-04-09T06:46:46Z",
-                                                                        "updatedAtAgeSeconds":  5.043,
+                                                                        "updatedAt":  "2026-04-09T06:57:28Z",
+                                                                        "updatedAtAgeSeconds":  4.902,
                                                                         "metricsKeyCount":  14,
+                                                                        "metricsContractOk":  true,
                                                                         "install_label":  "FIELD-NODE-B",
-                                                                        "last_command_id":  "5d0529df-1939-4087-9dd2-1c441d63b4f4",
+                                                                        "last_command_id":  "2057d44f-326d-410d-a6a9-684a6eca8c71",
                                                                         "last_command_type":  "manual_collect"
                                                                     }
                                                         }
@@ -479,6 +629,18 @@
                        "expected":  true
                    },
                    {
+                       "key":  "nodeAApiMetricsContract",
+                       "ok":  true,
+                       "actual":  14,
+                       "expected":  14
+                   },
+                   {
+                       "key":  "nodeAWebMetricsContract",
+                       "ok":  true,
+                       "actual":  14,
+                       "expected":  14
+                   },
+                   {
                        "key":  "nodeBApiDirectVisible",
                        "ok":  true,
                        "actual":  true,
@@ -491,16 +653,28 @@
                        "expected":  true
                    },
                    {
+                       "key":  "nodeBApiMetricsContract",
+                       "ok":  true,
+                       "actual":  14,
+                       "expected":  14
+                   },
+                   {
+                       "key":  "nodeBWebMetricsContract",
+                       "ok":  true,
+                       "actual":  14,
+                       "expected":  14
+                   },
+                   {
                        "key":  "nodeBCommandIdInApiState",
                        "ok":  true,
-                       "actual":  "5d0529df-1939-4087-9dd2-1c441d63b4f4",
-                       "expected":  "5d0529df-1939-4087-9dd2-1c441d63b4f4"
+                       "actual":  "2057d44f-326d-410d-a6a9-684a6eca8c71",
+                       "expected":  "2057d44f-326d-410d-a6a9-684a6eca8c71"
                    },
                    {
                        "key":  "nodeBCommandIdInWebState",
                        "ok":  true,
-                       "actual":  "5d0529df-1939-4087-9dd2-1c441d63b4f4",
-                       "expected":  "5d0529df-1939-4087-9dd2-1c441d63b4f4"
+                       "actual":  "2057d44f-326d-410d-a6a9-684a6eca8c71",
+                       "expected":  "2057d44f-326d-410d-a6a9-684a6eca8c71"
                    },
                    {
                        "key":  "nodeBManualCollectTypeInApiState",
