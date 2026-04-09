@@ -667,6 +667,44 @@ Center server 一期算完成，至少要满足：
   - env 基线有没有缺口
   - 当前阶段是否仍可继续推进软件适配
 
+## 10.10 2026-04-09 RK3568 正式上行绑定已补成单独冻结入口
+
+中心运行线冻结之后，第二工作包不应再停留在“板子大概连着中心”这种口头状态，而要回答：
+
+- RK3568 当前用的 broker 地址是不是正式中心地址
+- 板端 MQTT 内部账号是否与中心当前部署线一致
+- southbound `A/B/C` 映射是否仍保持当前冻结口径
+- 板端 runtime 是否仍满足：
+  - `publishFailures = 0`
+  - `spoolPending = 0`
+  - `A/B online`
+  - `C reserved`
+
+这一步现在已经补成正式入口。
+
+1. 新入口
+- 脚本：
+  - `scripts/dev/check-field-rk3568-production-uplink-freeze.ps1`
+- 标准报告：
+  - `docs/unified/reports/field-rk3568-production-uplink-freeze-latest.json`
+
+2. 它当前统一收口的事实
+- 本机中心侧：
+  - `services/api/.env`
+  - `services/ingest/.env`
+  - `field-center-runtime-freeze-latest.json`
+  - `field-center-deployment-software-adaptation-readiness-latest.json`
+- 板端当前事实：
+  - `/etc/lsmv2/field-gateway.env`
+  - `check-rk3568-field-gateway-runtime.ps1` 当前 runtime 快照
+
+3. 这一步的工程意义
+- 当前第二工作包已经不再只是“准备去做”
+- 而是拥有了：
+  - 一条板端正式上行冻结检查命令
+  - 一份板端与中心侧一致性的 latest 报告
+  - 一个可继续推进软件适配的明确边界
+
 ## 10.7 2026-04-09 现场恢复主线已补成统一 runbook 入口
 
 前面虽然已经有：

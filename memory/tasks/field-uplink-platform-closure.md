@@ -1233,3 +1233,13 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - assert compose base/app service boundary is still frozen
     - assert current center acceptance and next-phase readiness are still green
   - this now turns the first active work package into one command plus one report instead of scattered deployment notes
+- the second active work package now also has a board-to-center freeze entrypoint:
+  - script:
+    - `scripts/dev/check-field-rk3568-production-uplink-freeze.ps1`
+  - report:
+    - `docs/unified/reports/field-rk3568-production-uplink-freeze-latest.json`
+  - scope:
+    - compare local center MQTT internal settings against the RK3568 board env
+    - assert broker URL, topic prefixes, and southbound A/B/C mapping stay frozen
+    - assert current RK3568 runtime is still publishable and non-backlogged
+  - this now converts the second work package from a loose deployment intention into one command plus one latest report
