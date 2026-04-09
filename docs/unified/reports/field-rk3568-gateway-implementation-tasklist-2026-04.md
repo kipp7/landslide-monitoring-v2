@@ -782,6 +782,47 @@ RK3568 网关一期算完成，至少要满足：
   - 更稳定窗口
   - node `C` 到位后的同类窗口对比
 
+## 11.10 2026-04-09 `120s` clean window 已通过，主线不再阻塞于 node `C`
+
+在第一份 `30s` clean window 之后，当前又继续完成了更长的实机窗口复核：
+
+- `DurationSeconds = 120`
+- `PollSeconds = 10`
+- `sampleCount = 10`
+- `passed = true`
+- `conclusion = rk3568-runtime-observation-window-clean`
+
+当前这轮更长窗口的关键事实已经固定为：
+
+- `parsedMessages delta = 39`
+- `publishedMessages delta = 39`
+- `schemaRejected delta = 0`
+- `publishFailures delta = 0`
+- `spoolPending max = 0`
+- `reconnectObserved = false`
+- `node A telemetry delta = 19`
+- `node B telemetry delta = 20`
+- `node A online continuity = true`
+- `node B online continuity = true`
+- `node C prepared continuity = true`
+
+这轮结果的工程含义已经足够明确：
+
+1. 当前双节点共享串流不再只是“偶尔能跑”
+- 它已经通过一段正式的 `120s` clean window
+
+2. `node C` 现在应被视为：
+- 已预留的第三节点位
+- 已进入三节点预算和 southbound 配置模型
+- 但不再作为当前下一阶段启动的 blocker
+
+3. 因此当前主线应正式切换为：
+- 不等待 `node C` 再启动后续工程包
+- 直接进入：
+  - `RK3568 -> center` 软件适配与部署收口
+  - 更长时间窗持续留证
+  - 三节点到位后的同入口回归验证
+
 ## 12. 相关文档
 
 - [field-uplink-platform-closure-baseline.md](/E:/学校/02 项目/99 山体滑坡优化完善/landslide-monitoring-v2-mainline/docs/unified/reports/field-uplink-platform-closure-baseline.md)

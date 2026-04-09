@@ -214,14 +214,32 @@ permalink: landslide-monitoring-v2-mainline/docs/unified/reports/field-next-stag
 
 ## 10. 当前结论
 
-当前下一阶段不是“卡住等待硬件”，而是明确分成两段：
+当前下一阶段已经不应再表述为“先等 `node C` 再推进”，而应明确切换为：
 
-1. `node C` 到货前两天：
-- 只收双节点共享流稳健性
+1. 当前已成立的启动条件
+- RK3568 板端 acceptance 单入口已经固定
+- RK3568 长窗口观测单入口已经固定
+- 双节点共享串流已经完成：
+  - `120s`
+  - `10 samples`
+  - clean window
+  - `schemaRejected delta = 0`
+  - `publishFailures delta = 0`
+  - `spoolPending max = 0`
 
-2. `node C` 到货后：
-- 按固定验收包切到三节点共享流
+2. `node C` 的当前定位
+- 保留在：
+  - `SOUTHBOUND_NODES_JSON`
+  - 三节点容量预算
+  - 后续同入口回归包
+- 但不再作为：
+  - 当前下一阶段启动 blocker
+
+3. 当前应直接启动的工程包
+- `RK3568 -> center` 软件适配与部署收口
+- 更长窗口持续留证
+- 三节点到位后的同入口回归验证
 
 一句话总结：
 
-- 不再散点试错，先用两天把双节点共享流证据补齐，再按固定顺序接入 `node C`，随后直接进入三节点网关/固件/中心部署收口
+- 当前主线已经从“等 node C 再推进”切到“node C 预留但不阻塞，先把 RK3568 到 center 的下一阶段收口继续做下去”

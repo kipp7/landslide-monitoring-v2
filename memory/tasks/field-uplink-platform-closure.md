@@ -1009,3 +1009,23 @@ Freeze and execute the next major phase after command-route stabilization: prove
   - `spoolPending max = 0`
   - `reconnectObserved = false`
   - `node A/B` stayed online through the window
+- the longer formal observation gate is now also passed:
+  - `DurationSeconds = 120`
+  - `PollSeconds = 10`
+  - `sampleCount = 10`
+  - `passed = true`
+  - `conclusion = rk3568-runtime-observation-window-clean`
+  - `parsedMessages delta = 39`
+  - `publishedMessages delta = 39`
+  - `schemaRejected delta = 0`
+  - `publishFailures delta = 0`
+  - `spoolPending max = 0`
+  - `reconnectObserved = false`
+  - `node A telemetry delta = 19`
+  - `node B telemetry delta = 20`
+- this changes the phase gate again:
+  - `node C` remains preallocated in config and capacity budgeting
+  - but is no longer the blocker for starting the next phase
+  - immediate next phase should proceed on:
+    - `RK3568 -> center` software/deployment closure
+    - longer-window evidence accumulation
