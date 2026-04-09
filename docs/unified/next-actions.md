@@ -1,127 +1,150 @@
+---
+title: next-actions
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/unified/next-actions
+---
+
 # 后续动作统一建议
 
-## 1. 当前阶段的总策略
+## 1. 当前阶段总策略
 
-先恢复基线，再验证闭环，再补硬件与算法，最后进入稳定并发开发。
+当前不再停留在“链路还能不能通”的证明阶段，而是正式切到：
 
-## 2. 推荐执行顺序
+- `RK2206 A/B -> center XL01 -> RK3568 -> center server -> API/Web`
+- 中心部署与软件适配收口
+- `node C` 继续预留，但不是当前 blocker
 
-### 阶段 A：恢复基线
+当前阶段的准入基线已经冻结为：
 
-目标：
+- `field-center-compose-acceptance-latest.json`
+- `field-rk3568-center-operational-recovery-latest.json`
+- `field-rk3568-center-soak-latest.json`
+- `field-center-deployment-software-adaptation-readiness-latest.json`
 
-- 确认当前主仓中的平台链路还能否恢复
-- 确认桌面端当前联调状态
+## 2. 当前真值
 
-建议动作：
+- 中心 compose 主链已经通过 acceptance，`ingest-service` 和 `telemetry-writer` 已回到正式运行线
+- RK3568 受控恢复入口和 soak 入口已经固定
+- 双节点 `A/B` 当前 API/Web 指标合同保持精确 `14` 个 canonical metrics key
+- `node C` 已冻结到配置位和容量预算：
+  - `device_id = 00000000-0000-0000-0000-000000000003`
+  - 当前不阻塞中心部署与软件适配推进
+- 三节点预算继续按冻结口径执行：
+  - `31.25 MiB/day` 原始量
+  - `32.14-34.61 MiB/day` 保守预算
+  - `30` 天约 `0.92 GiB`
 
-- 核查 `infra/compose`
-- 核查 `services/api`
-- 核查 `services/ingest`
-- 核查 `services/telemetry-writer`
-- 核查 Desk 当前 HTTP 接口落点
+## 3. 推荐执行顺序
 
-### 阶段 B：打通最小闭环
-
-目标：
-
-- 让一条最小数据链从上报到展示完整跑通
-
-建议动作：
-
-- 用脚本或模拟设备发送一条标准遥测
-- 核查 MQTT → Kafka → ClickHouse
-- 核查 API 查询
-- 核查 Desk HTTP 模式展示
-
-### 阶段 C：接口统一
+### 阶段 A：冻结中心部署运行线
 
 目标：
 
-- 把 Desk 需要的接口与平台 API 做一致化
+- 把中心侧从“能跑”收成“能稳定恢复、能重复交付”
 
 建议动作：
 
-- 建一份 Desk ↔ 平台 API 对齐表
-- 标出已实现、缺失、字段不一致、待迁移项
-- 优先统一：设备、监测站、GNSS 基线、GPS 形变、系统状态
+- 固定 compose 常驻组件、环境变量来源、恢复顺序
+- 统一使用：
+  - `check-field-center-compose-acceptance.ps1`
+  - `check-field-center-deployment-software-adaptation-readiness.ps1`
+- 以 `docs/guides/runbooks/single-host-runbook.md` 作为现场恢复手册
 
-### 阶段 D：GNSS / 硬件 / 算法收口
+### 阶段 B：推进 RK3568 到中心服务器的软件适配
 
 目标：
 
-- 把历史资料提炼成当前执行版规范
+- 把 RK3568 的正式上行环境和中心部署线绑定死
+- 保持现有 northbound contract，不引入厚适配层
 
 建议动作：
 
-- 整理 GNSS 协议与模块说明
-- 整理设备身份、Topic、命令回执
-- 整理基线、位移、趋势、风险算法卡片
-- 建立固件正式入口
+- 固定 RK3568 上行 broker/env/config
+- 复用现有 `telemetry/{device_id}`、`cmd/{device_id}`、`cmd_ack/{device_id}`
+- 继续用 recovery/soak 入口做现场边界复核
 
-### 阶段 E：进入受控并发开发
+### 阶段 C：推进软件侧接口对接
 
 目标：
 
-- 让后续每条 Codex 线都有明确边界
+- 让 API/Web/后续桌面端都以当前现场合同为准
 
 建议动作：
 
-- 硬件线
-- 平台链路线
-- Desk 联调线
-- 算法线
+- 对齐 A/B 双节点当前字段合同
+- 保持 `14` 个 canonical metrics key 不漂移
+- 以中心部署 readiness 报告作为软件适配入口，而不是再回头争论串口细节
 
-每条线都先建任务单再开工。
+### 阶段 D：为 node C 预留回归位
 
-## 3. 当前最优先的三件事
+目标：
 
-### 第一优先级：服务与基础设施核查
+- 不等待硬件到位，但提前把容量、配置、验收顺序冻结
 
-这是后续一切的前提。
+建议动作：
 
-### 第二优先级：Desk ↔ API 对齐
+- 保留 `node C` 在 `SOUTHBOUND_NODES_JSON`
+- 保留三节点预算
+- 到货后复用现有 recovery/soak/readiness 入口回归
 
-这是当前桌面端从“演示可用”走向“真实联调可用”的关键。
+## 4. 当前最优先的三件事
 
-### 第三优先级：GNSS / 基线 / 形变资料收口
+### 第一优先级：中心部署运行线冻结
 
-这是当前核心业务能力的知识中心。
+- 把 compose、env、恢复顺序、证据入口固定下来
 
-## 4. 不建议现在做的事
+### 第二优先级：RK3568 到中心服务器的软件适配
 
-- 不建议继续大范围新增 UI 页面
-- 不建议先深挖所有单片机细节
-- 不建议同时改协议、服务、客户端、算法且不留任务单
-- 不建议继续让多个仓库都成为开发入口
+- 把板端正式配置和平台部署线绑到一起
 
-## 5. 推荐的下一轮任务拆分
+### 第三优先级：软件端合同对接
 
-### 任务 1：平台恢复核查
+- 确保 API/Web/Desk 后续都消费同一份现场合同
 
-- 输出：服务现状清单、可运行性结论、缺口清单
+## 5. 当前不建议继续纠缠的点
 
-### 任务 2：Desk API 对齐清单
+- 不继续把时间耗在 Windows 串口命名变化上
+- 不继续追求当前阶段 strict zero-noise 的终局证明
+- 不等待 `node C` 才启动中心部署与软件适配
+- 不在这一阶段引入新的协议层或边缘 AI 厚能力
 
-- 输出：接口对齐表、优先修复顺序
+## 6. 当前推荐的下一轮任务拆分
 
-### 任务 3：GNSS 与基线资料收口
+### 任务 1：中心部署 readiness
 
-- 输出：当前执行版 GNSS / 基线 / 形变资料清单
+- 输出：
+  - `docs/unified/reports/field-center-deployment-software-adaptation-readiness-latest.json`
 
-### 任务 4：固件与设备协议收口
+### 任务 2：RK3568 正式上行适配
 
-- 输出：设备协议摘要、固件入口建议
+- 输出：
+  - 板端 env/runtime 固化结果
+  - 与中心侧对接的复跑证据
 
-## 6. 当前建议的协作方式
+### 任务 3：软件侧接口与产品读路径对齐
+
+- 输出：
+  - 当前 A/B 节点字段合同对齐结论
+  - 后续 Desk/前端适配切入点
+
+### 任务 4：node C 预留回归包
+
+- 输出：
+  - 配置保留
+  - 容量保留
+  - 接入后的同入口回归顺序
+
+## 7. 当前建议的协作方式
 
 - 主开发仓继续作为唯一写入主线
-- 参考仓只读
-- 每次开始任务先看 `docs/unified/`
-- 每次完成阶段性工作后补 `docs/journal/`
+- 只对 scoped 文件提交，不碰无关脏改
+- 每次阶段切换先更新 `docs/unified/next-actions.md`
+- 每次完成任务补：
+  - `memory/tasks/`
+  - `docs/journal/`
 
-## 7. 本文件的作用
+## 8. 本文件的作用
 
-本文件不是长期路线图，而是当前阶段的执行顺序确认。
+本文件是当前阶段的执行顺序确认，不是长期路线图。
 
-后续若主线变化，应新建下一版统一动作文档，而不是直接覆盖本文件。
+如果阶段边界再次发生变化，应继续按当前写法刷新为新阶段入口，而不是回退到通用建议。

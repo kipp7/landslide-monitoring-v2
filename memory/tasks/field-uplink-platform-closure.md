@@ -1207,3 +1207,18 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - `31.25 MiB/day` raw telemetry
     - `32.14-34.61 MiB/day` conservative budget
     - `0.92 GiB / 30 days`
+- the center-deployment/software-adaptation phase gate now also has a single readiness summary entrypoint:
+  - script:
+    - `scripts/dev/check-field-center-deployment-software-adaptation-readiness.ps1`
+  - report:
+    - `docs/unified/reports/field-center-deployment-software-adaptation-readiness-latest.json`
+  - frozen gate meaning:
+    - current center compose acceptance is green
+    - RK3568 operational recovery is green
+    - three-round soak is green
+    - `node A/B` still preserve exact `14` canonical metrics keys on the software side
+    - `node C` remains reserved but not blocking
+  - this now narrows the next active execution slice to:
+    - freeze center deployment runtime/env/recovery
+    - bind RK3568 formal uplink config to the center deployment line
+    - continue software-side contract adaptation without reopening protocol scope

@@ -1,0 +1,207 @@
+﻿{
+    "generatedAt":  "2026-04-09T11:47:18Z",
+    "accepted":  true,
+    "mode":  "field-center-deployment-software-adaptation-readiness",
+    "currentBoundary":  "center-deployment-software-adaptation-ready",
+    "phaseGate":  {
+                      "previousPhase":  "field-proof-and-recovery",
+                      "currentPhase":  "center-deployment-and-software-adaptation",
+                      "nodeCBlocking":  false,
+                      "nodeCReservedDeviceId":  "00000000-0000-0000-0000-000000000003",
+                      "failureKeys":  [
+
+                                      ]
+                  },
+    "baselineReports":  {
+                            "centerComposeAcceptance":  {
+                                                            "file":  "docs/unified/reports/field-center-compose-acceptance-latest.json",
+                                                            "generatedAt":  "2026-04-09T11:08:18Z",
+                                                            "accepted":  true,
+                                                            "boundary":  "full-path-ready"
+                                                        },
+                            "operationalRecovery":  {
+                                                        "file":  "docs/unified/reports/field-rk3568-center-operational-recovery-latest.json",
+                                                        "generatedAt":  "2026-04-09T08:49:04Z",
+                                                        "accepted":  true,
+                                                        "boundary":  "rk3568-center-operational-recovery-ready",
+                                                        "ackStatus":  "acked"
+                                                    },
+                            "soak":  {
+                                         "file":  "docs/unified/reports/field-rk3568-center-soak-latest.json",
+                                         "generatedAt":  "2026-04-09T11:11:57Z",
+                                         "accepted":  true,
+                                         "boundary":  "rk3568-center-soak-ready",
+                                         "rounds":  3,
+                                         "acceptedRounds":  3
+                                     }
+                        },
+    "topology":  {
+                     "activeFieldNodes":  [
+                                              {
+                                                  "nodeId":  "A",
+                                                  "deviceId":  "00000000-0000-0000-0000-000000000001"
+                                              },
+                                              {
+                                                  "nodeId":  "B",
+                                                  "deviceId":  "00000000-0000-0000-0000-000000000002"
+                                              }
+                                          ],
+                     "reservedFieldNode":  {
+                                               "nodeId":  "C",
+                                               "deviceId":  "00000000-0000-0000-0000-000000000003",
+                                               "status":  "reserved-not-blocking"
+                                           },
+                     "gateway":  {
+                                     "board":  "rk3568",
+                                     "southboundSerialDevice":  "/dev/ttyS3",
+                                     "northboundContract":  "telemetry/{device_id} + cmd/{device_id} + cmd_ack/{device_id}"
+                                 }
+                 },
+    "capacityBudget":  {
+                           "nodeCountPlanned":  3,
+                           "reportIntervalSeconds":  5,
+                           "rawTelemetryPerDayMiB":  31.25,
+                           "conservativePerDayMiBMin":  32.14,
+                           "conservativePerDayMiBMax":  34.61,
+                           "conservativeThirtyDayGiB":  0.92
+                       },
+    "workPackages":  [
+                         {
+                             "key":  "center-runtime-freeze",
+                             "status":  "next",
+                             "objective":  "freeze center compose topology, env sources, and restart/recovery procedure",
+                             "evidence":  [
+                                              "ingest-service and telemetry-writer stay in compose",
+                                              "one command can validate or re-apply center acceptance"
+                                          ]
+                         },
+                         {
+                             "key":  "gateway-to-center-production-uplink",
+                             "status":  "next",
+                             "objective":  "bind RK3568 runtime env to the formal center deployment line and preserve current MQTT/API/Web contract",
+                             "evidence":  [
+                                              "real field telemetry lands in API/Web through the compose-backed chain",
+                                              "device A/B keep exact 14 canonical metrics"
+                                          ]
+                         },
+                         {
+                             "key":  "product-software-adaptation",
+                             "status":  "next",
+                             "objective":  "finish software-side adaptation against the current A/B field contract without expanding the protocol",
+                             "evidence":  [
+                                              "API/Web reads stay aligned with the field-gateway output",
+                                              "node C remains a reserved capacity/config slot, not a blocker"
+                                          ]
+                         }
+                     ],
+    "checks":  [
+                   {
+                       "key":  "centerComposeAccepted",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "centerComposeBoundary",
+                       "ok":  true,
+                       "actual":  "full-path-ready",
+                       "expected":  "full-path-ready"
+                   },
+                   {
+                       "key":  "centerFullProofConclusion",
+                       "ok":  true,
+                       "actual":  "real-hardware-uplink-full-path-reached-platform-and-web",
+                       "expected":  "real-hardware-uplink-full-path-reached-platform-and-web"
+                   },
+                   {
+                       "key":  "operationalRecoveryAccepted",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "operationalRecoveryBoundary",
+                       "ok":  true,
+                       "actual":  "rk3568-center-operational-recovery-ready",
+                       "expected":  "rk3568-center-operational-recovery-ready"
+                   },
+                   {
+                       "key":  "operationalClosureAccepted",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "operationalAckStatus",
+                       "ok":  true,
+                       "actual":  "acked",
+                       "expected":  "acked"
+                   },
+                   {
+                       "key":  "operationalNodeAApiMetricsContract",
+                       "ok":  true,
+                       "actual":  14,
+                       "expected":  14
+                   },
+                   {
+                       "key":  "operationalNodeBApiMetricsContract",
+                       "ok":  true,
+                       "actual":  14,
+                       "expected":  14
+                   },
+                   {
+                       "key":  "soakAccepted",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "soakBoundary",
+                       "ok":  true,
+                       "actual":  "rk3568-center-soak-ready",
+                       "expected":  "rk3568-center-soak-ready"
+                   },
+                   {
+                       "key":  "soakRoundsSufficient",
+                       "ok":  true,
+                       "actual":  3,
+                       "expected":  "\u003e=3"
+                   },
+                   {
+                       "key":  "soakAcceptedRoundsComplete",
+                       "ok":  true,
+                       "actual":  3,
+                       "expected":  3
+                   },
+                   {
+                       "key":  "soakCleanWindowComplete",
+                       "ok":  true,
+                       "actual":  3,
+                       "expected":  3
+                   },
+                   {
+                       "key":  "soakSchemaRejectedDeltaClean",
+                       "ok":  true,
+                       "actual":  0,
+                       "expected":  0
+                   },
+                   {
+                       "key":  "soakAllAcked",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "soakAllMetricsContractStable",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   }
+               ],
+    "nextUse":  [
+                    "refresh center compose baseline: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\check-field-center-compose-acceptance.ps1 -DeployMode validate -AllowUnsafeSecrets",
+                    "refresh operational recovery baseline: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\check-field-rk3568-center-operational-recovery.ps1 -BoardPassword \u003cpassword\u003e -AllowUnsafeSecrets",
+                    "refresh soak baseline: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\run-field-rk3568-center-soak.ps1 -Rounds 3 -IntervalSeconds 30 -BoardPassword \u003cpassword\u003e -AllowUnsafeSecrets",
+                    "recompute next-phase readiness: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\check-field-center-deployment-software-adaptation-readiness.ps1"
+                ]
+}
