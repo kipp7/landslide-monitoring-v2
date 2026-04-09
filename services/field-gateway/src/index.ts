@@ -129,6 +129,23 @@ type GatewayJsonAssembler = {
 
 type JsonObject = Record<string, unknown>;
 
+const FIELD_METRIC_KEYS = new Set([
+  "accel_x_g",
+  "accel_y_g",
+  "accel_z_g",
+  "battery_pct",
+  "gps_latitude",
+  "gps_longitude",
+  "gyro_x_dps",
+  "gyro_y_dps",
+  "gyro_z_dps",
+  "humidity_pct",
+  "temperature_c",
+  "tilt_x_deg",
+  "tilt_y_deg",
+  "warning_flag"
+]);
+
 function isoNow(): string {
   return new Date().toISOString();
 }
@@ -337,19 +354,33 @@ function extractSchemaVersionJsonObjects(input: string): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
   let searchIndex = 0;
+  const objectStartMarker = "{\"schema_version\"";
 
   while (searchIndex < input.length) {
-    const markerIndex = input.indexOf("\"schema_version\"", searchIndex);
-    if (markerIndex < 0) {
+    const start = input.indexOf(objectStartMarker, searchIndex);
+    if (start < 0) {
       break;
     }
 
-    const start = input.lastIndexOf("{", markerIndex);
     const candidate = extractBalancedJsonObjectAt(input, start);
     if (candidate && !seen.has(candidate)) {
       seen.add(candidate);
       out.push(candidate);
       searchIndex = start + candidate.length;
+      continue;
+    }
+
+    const markerIndex = input.indexOf("\"schema_version\"", start + objectStartMarker.length);
+    if (markerIndex < 0) {
+      break;
+    }
+
+    const fallbackStart = input.lastIndexOf("{", markerIndex);
+    const fallbackCandidate = extractBalancedJsonObjectAt(input, fallbackStart);
+    if (fallbackCandidate && !seen.has(fallbackCandidate)) {
+      seen.add(fallbackCandidate);
+      out.push(fallbackCandidate);
+      searchIndex = fallbackStart + fallbackCandidate.length;
       continue;
     }
 
@@ -411,24 +442,58 @@ function normalizeTelemetryEnvelopeCandidate(parsed: unknown): TelemetryEnvelope
     return null;
   }
 
-  if (parsed.schema_version !== 1 || typeof parsed.device_id !== "string" || !isJsonObject(parsed.metrics)) {
+  if (parsed.schema_version !== 1 || typeof parsed.device_id !== "string") {
     return null;
   }
 
   const metrics: Record<string, number | string | boolean | null> = {};
-  const migratedMetricObjects: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(parsed.metrics)) {
-    if (isTelemetryScalar(value)) {
-      metrics[key] = value;
+  let changed = false;
+
+  if (isJsonObject(parsed.metrics)) {
+    for (const [key, value] of Object.entries(parsed.metrics)) {
+      if (isTelemetryScalar(value)) {
+        metrics[key] = value;
+        continue;
+      }
+
+      changed = true;
+    }
+  } else if ("metrics" in parsed) {
+    changed = true;
+  }
+
+  for (const metricKey of FIELD_METRIC_KEYS) {
+    if (metricKey in metrics) {
       continue;
     }
 
-    migratedMetricObjects[key] = value;
+    const candidateValue = parsed[metricKey];
+    if (!isTelemetryScalar(candidateValue)) {
+      continue;
+    }
+
+    metrics[metricKey] = candidateValue;
+    changed = true;
+  }
+
+  if (Object.keys(metrics).length === 0) {
+    return null;
+  }
+
+  const migratedMetricObjects: Record<string, unknown> = {};
+  if (isJsonObject(parsed.metrics)) {
+    for (const [key, value] of Object.entries(parsed.metrics)) {
+      if (isTelemetryScalar(value)) {
+        metrics[key] = value;
+        continue;
+      }
+
+      migratedMetricObjects[key] = value;
+    }
   }
 
   const rawMeta = isJsonObject(parsed.meta) ? parsed.meta : undefined;
   const nextMeta: Record<string, unknown> = rawMeta ? { ...rawMeta } : {};
-  let changed = Object.keys(metrics).length !== Object.keys(parsed.metrics).length;
 
   if (Object.keys(migratedMetricObjects).length > 0) {
     for (const [key, value] of Object.entries(migratedMetricObjects)) {
@@ -441,6 +506,10 @@ function normalizeTelemetryEnvelopeCandidate(parsed: unknown): TelemetryEnvelope
 
   if (isJsonObject(parsed.legacy_valid_flags) && !("legacy_valid_flags" in nextMeta)) {
     nextMeta.legacy_valid_flags = parsed.legacy_valid_flags;
+    changed = true;
+  }
+
+  if (!isJsonObject(parsed.metrics)) {
     changed = true;
   }
 

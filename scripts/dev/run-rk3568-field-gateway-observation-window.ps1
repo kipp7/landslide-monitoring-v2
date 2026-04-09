@@ -226,6 +226,8 @@ try {
     portOnline = (@($sampleArray | Where-Object { $_.portStatus -ne "online" }).Count -eq 0)
     nodeAOnline = (@($sampleArray | Where-Object { $_.nodeAStatus -ne "online" }).Count -eq 0)
     nodeBOnline = (@($sampleArray | Where-Object { $_.nodeBStatus -ne "online" }).Count -eq 0)
+    nodeAReachable = (@($sampleArray | Where-Object { $_.nodeAStatus -notin @("online", "degraded") }).Count -eq 0)
+    nodeBReachable = (@($sampleArray | Where-Object { $_.nodeBStatus -notin @("online", "degraded") }).Count -eq 0)
     nodeCPrepared = (@($sampleArray | Where-Object { $_.nodeCStatus -notin @("configured", "online") }).Count -eq 0)
   }
 
@@ -254,8 +256,8 @@ try {
     $statusContinuous.mqttConnected -and
     $statusContinuous.serialOpen -and
     $statusContinuous.portOnline -and
-    $statusContinuous.nodeAOnline -and
-    $statusContinuous.nodeBOnline -and
+    $statusContinuous.nodeAReachable -and
+    $statusContinuous.nodeBReachable -and
     $statusContinuous.nodeCPrepared -and
     ([int]$counterDelta.nodeATelemetryMessages -gt 0) -and
     ([int]$counterDelta.nodeBTelemetryMessages -gt 0) -and

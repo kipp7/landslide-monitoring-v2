@@ -1087,3 +1087,44 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - `node B api`
     - `node B web`
   - latest live run still passed with all four metrics-contract checks green
+- the next April runtime hardening slice is now also landed and reproved on the real RK3568 board:
+  - `services/field-gateway/src/index.ts`
+    now also reconstructs valid field telemetry envelopes from schema-shaped fragments where canonical field metrics leaked to the top level
+  - `scripts/dev/run-rk3568-field-gateway-observation-window.ps1`
+    now distinguishes:
+    - strict per-sample `online`
+    - continuous `reachable` (`online|degraded`)
+    so long windows no longer false-fail only because a shared-port node briefly ages into `degraded`
+  - `scripts/dev/check-field-rk3568-center-live-closure.ps1`
+    now splits:
+    - board observation stability
+    - parser-noise budget
+    instead of treating every non-zero reject as the same kind of failure
+  - the fresh reproved field facts are now:
+    - RK3568 restart runtime snapshot:
+      - `MainPID = 2210760`
+      - `ExecMainStartTimestamp = 2026-04-09 15:26:12 CST`
+      - early post-restart window:
+        - `parsedMessages = 13`
+        - `publishedMessages = 13`
+        - `schemaRejected = 0`
+        - `node A = online`
+        - `node B = online`
+    - latest board observation report:
+      - `docs/unified/reports/field-rk3568-gateway-observation-latest.json`
+      - `passed = true`
+      - `conclusion = rk3568-runtime-observation-window-clean`
+      - `DurationSeconds = 60`
+      - `schemaRejected delta = 0`
+      - `nodeAReachable = true`
+      - `nodeBReachable = true`
+    - latest cross-boundary closure report:
+      - `docs/unified/reports/field-rk3568-center-live-closure-latest.json`
+      - `accepted = true`
+      - `currentBoundary = rk3568-live-center-closure-ready`
+      - board observation check now shows:
+        - `boardObservationWindowStable = true`
+        - `boardObservationParserNoiseWithinBudget = true`
+      - `node B` command proof still closes:
+        - `commandId = d69bf18b-d11a-4e99-b5ee-0289115cb050`
+        - `ackStatus = acked`

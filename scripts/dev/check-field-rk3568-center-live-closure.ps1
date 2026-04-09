@@ -16,6 +16,8 @@ param(
   [int]$ObservationPollSeconds = 10,
   [int]$BoardObservationMaxAttempts = 3,
   [int]$BoardObservationRetryDelaySeconds = 5,
+  [int]$BoardObservationAllowedSchemaRejectedDelta = 1,
+  [switch]$RequireZeroSchemaRejectedDelta,
   [int]$CommandMaxAttempts = 3,
   [int]$CommandRetryDelaySeconds = 3,
   [int]$StatePollTimeoutSeconds = 90,
@@ -395,6 +397,10 @@ if ($reportDir -and -not (Test-Path -LiteralPath $reportDir)) {
   New-Item -ItemType Directory -Path $reportDir -Force | Out-Null
 }
 
+if ($BoardObservationAllowedSchemaRejectedDelta -lt 0) {
+  throw "BoardObservationAllowedSchemaRejectedDelta must be >= 0"
+}
+
 $centerAcceptanceReportPath = "docs/unified/reports/field-center-compose-acceptance-latest.json"
 $boardObservationReportPath = "docs/unified/reports/field-rk3568-gateway-observation-latest.json"
 $stableCommandReportPath = "docs/unified/reports/field-rk3568-gateway-node-command-stable-latest.json"
@@ -511,26 +517,22 @@ try {
   $boardConclusion = [string]$boardObservation.conclusion
   $nodeCStatus = [string]$boardObservation.window.lastSample.nodeCStatus
   $boardWindow = $boardObservation.window
-  $boardWindowClean = (
-    [bool]$boardWindow.statusContinuous.serviceActive -and
-    [bool]$boardWindow.statusContinuous.mqttConnected -and
-    [bool]$boardWindow.statusContinuous.serialOpen -and
-    [bool]$boardWindow.statusContinuous.portOnline -and
-    [bool]$boardWindow.statusContinuous.nodeAOnline -and
-    [bool]$boardWindow.statusContinuous.nodeBOnline -and
-    [bool]$boardWindow.statusContinuous.nodeCPrepared -and
-    ([int]$boardWindow.counterDelta.nodeATelemetryMessages -gt 0) -and
-    ([int]$boardWindow.counterDelta.nodeBTelemetryMessages -gt 0) -and
-    ([int]$boardWindow.counterDelta.publishFailures -eq 0) -and
-    ([int]$boardWindow.counterDelta.schemaRejected -eq 0) -and
-    ([int]$boardWindow.maxObserved.spoolPending -eq 0) -and
-    (-not [bool]$boardWindow.reconnectObserved)
-  )
+  $boardObservationStable = [bool]$boardObservation.passed
+  $boardObservationSchemaRejectedDelta = [int]$boardWindow.counterDelta.schemaRejected
+  $boardObservationSchemaRejectedBudget = if ($RequireZeroSchemaRejectedDelta.IsPresent) {
+    0
+  } else {
+    $BoardObservationAllowedSchemaRejectedDelta
+  }
+  $boardObservationNoiseWithinBudget = ($boardObservationSchemaRejectedDelta -le $boardObservationSchemaRejectedBudget)
+  $boardObservationStrictlyClean = ($boardObservationSchemaRejectedDelta -eq 0)
+  $boardObservationWindowAccepted = ($boardObservationStable -and $boardObservationNoiseWithinBudget)
 
   $checks = @(
     (Get-Check -Key "centerComposeAccepted" -Ok:([bool]$centerAcceptance.accepted) -Actual ([bool]$centerAcceptance.accepted) -Expected $true),
     (Get-Check -Key "centerComposeBoundary" -Ok:($centerCurrentBoundary -eq "full-path-ready") -Actual $centerCurrentBoundary -Expected "full-path-ready"),
-    (Get-Check -Key "boardObservationWindowClean" -Ok:($boardWindowClean) -Actual $boardConclusion -Expected "continuous-online-window-with-zero-new-rejects-and-no-publish-failures"),
+    (Get-Check -Key "boardObservationWindowStable" -Ok:($boardObservationStable) -Actual $boardConclusion -Expected "rk3568-runtime-observation-window-clean|rk3568-runtime-observation-window-online-with-parser-noise"),
+    (Get-Check -Key "boardObservationParserNoiseWithinBudget" -Ok:($boardObservationNoiseWithinBudget) -Actual $boardObservationSchemaRejectedDelta -Expected ("<= {0}" -f $boardObservationSchemaRejectedBudget)),
     (Get-Check -Key "boardNodeCPrepared" -Ok:($nodeCStatus -in @("configured", "online")) -Actual $nodeCStatus -Expected "configured|online"),
     (Get-Check -Key "boardStableCommandPassed" -Ok:([bool]$stableCommand.passed) -Actual ([bool]$stableCommand.passed) -Expected $true),
     (Get-Check -Key "boardStableCommandAcked" -Ok:($commandProofAckStatus -eq "acked") -Actual $commandProofAckStatus -Expected "acked"),
@@ -596,7 +598,11 @@ try {
         strictCommandProofAckStatus = [string]$boardObservation.acceptance.commandProofAckStatus
       }
       window = [ordered]@{
-        clean = $boardWindowClean
+        accepted = $boardObservationWindowAccepted
+        stable = $boardObservationStable
+        strictlyClean = $boardObservationStrictlyClean
+        parserNoiseWithinBudget = $boardObservationNoiseWithinBudget
+        schemaRejectedBudget = $boardObservationSchemaRejectedBudget
         counterDelta = $boardObservation.window.counterDelta
         maxObserved = $boardObservation.window.maxObserved
         reconnectObserved = [bool]$boardObservation.window.reconnectObserved
@@ -631,6 +637,7 @@ try {
     checks = $checks
     nextUse = @(
       "cross-boundary live closure: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-field-rk3568-center-live-closure.ps1 -BoardPassword <password> -AllowUnsafeSecrets",
+      "strict zero-noise closure: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-field-rk3568-center-live-closure.ps1 -BoardPassword <password> -AllowUnsafeSecrets -RequireZeroSchemaRejectedDelta",
       "board-only acceptance: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-rk3568-field-gateway-acceptance.ps1 -DeployMode skip -Password <password>",
       "board-only observation: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\run-rk3568-field-gateway-observation-window.ps1 -AcceptanceMode skip -DurationSeconds 120 -PollSeconds 10 -Password <password>",
       "board stable command entry: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\run-rk3568-field-gateway-node-command-stable.ps1 -DeviceId 00000000-0000-0000-0000-000000000002 -Action manual-collect -Password <password>"

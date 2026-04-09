@@ -439,6 +439,80 @@ Center server 一期算完成，至少要满足：
 - compose 运行中的中心服务真实生效
 - API/Web 读模型真实回收到了软件端契约边界
 
+## 10.5 2026-04-09 cross-boundary closure 与 board observation 口径已重新对齐
+
+这轮继续往前推时，真正暴露出来的不是中心主链坏了，而是两个验收入口的判定口径有分叉：
+
+1. 现场表现
+- `run-rk3568-field-gateway-observation-window.ps1`
+  已经能表达：
+  - `passed = true`
+  - `conclusion = rk3568-runtime-observation-window-online-with-parser-noise`
+- 但 `check-field-rk3568-center-live-closure.ps1`
+  仍把：
+  - 任意 `schemaRejected delta > 0`
+  直接压成硬失败
+- 同时，board observation 原来还把：
+  - 节点短暂进入 `degraded`
+  也视为窗口失败
+  这会把共享口双节点的正常抖动误判成断链
+
+2. 已落地修正
+- 文件：
+  - `scripts/dev/run-rk3568-field-gateway-observation-window.ps1`
+  - `scripts/dev/check-field-rk3568-center-live-closure.ps1`
+- 当前新口径：
+  - board observation 区分：
+    - `nodeAOnline / nodeBOnline`
+    - `nodeAReachable / nodeBReachable`
+  - 窗口通过现在要求：
+    - 节点不中断到 `offline`
+    - 而不是每个采样点都必须严格 `online`
+  - cross-boundary closure 区分：
+    - `boardObservationWindowStable`
+    - `boardObservationParserNoiseWithinBudget`
+  - 这样现在可以清楚地区分：
+    - 板端连续运行是否稳定
+    - parser noise 是否还在预算内
+
+3. 同轮 parser hardening 也已同步落板
+- 文件：
+  - `services/field-gateway/src/index.ts`
+- 新行为：
+  - 对 schema 形状仍然成立、但 canonical field metrics 被污染到顶层的片段
+  - 重新归位成合法 telemetry envelope 再 northbound publish
+
+4. 最新现场复核结果
+- RK3568 restart 后早期窗口：
+  - `schemaRejected = 0`
+  - `node A = online`
+  - `node B = online`
+- 最新 board observation：
+  - `passed = true`
+  - `conclusion = rk3568-runtime-observation-window-clean`
+  - `DurationSeconds = 60`
+  - `schemaRejected delta = 0`
+- 最新 cross-boundary closure：
+  - `accepted = true`
+  - `currentBoundary = rk3568-live-center-closure-ready`
+  - `boardObservationWindowStable = true`
+  - `boardObservationParserNoiseWithinBudget = true`
+  - `node B manual_collect`
+    - `commandId = d69bf18b-d11a-4e99-b5ee-0289115cb050`
+    - `ackStatus = acked`
+
+这一步的工程意义是：
+
+- 以后现场不再把：
+  - “shared-port 节点短暂 `degraded`”
+  - “bounded parser noise”
+  和：
+  - “主链真正失效”
+  混成一类问题
+- 中心部署收口线现在能更专业地表达：
+  - 主链是否闭合
+  - parser hardening 还剩多少工作量
+
 6. closure 入口现已把字段合同显式固化为验收项
 - 文件：
   - `scripts/dev/check-field-rk3568-center-live-closure.ps1`
