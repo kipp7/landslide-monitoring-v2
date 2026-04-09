@@ -1,39 +1,33 @@
 ﻿{
-    "generatedAt":  "2026-04-09T08:49:04Z",
+    "generatedAt":  "2026-04-09T17:00:42Z",
     "accepted":  true,
     "mode":  "field-rk3568-center-operational-recovery",
     "currentBoundary":  "rk3568-center-operational-recovery-ready",
     "cleanWindowReopened":  true,
     "centerDeployMode":  "validate",
     "restart":  {
-                    "requested":  true,
-                    "serviceName":  "lsmv2-field-gateway",
-                    "restartedAt":  "2026-04-09T08:40:22Z",
-                    "mainPid":  "2341706",
-                    "execMainStartTimestamp":  "Thu 2026-04-09 16:40:23 CST",
-                    "execMainStatus":  "0",
-                    "activeState":  "active",
-                    "subState":  "running",
-                    "fragmentPath":  "/etc/systemd/system/lsmv2-field-gateway.service",
-                    "raw":  "MainPID=2341706\r\nExecMainStartTimestamp=Thu 2026-04-09 16:40:23 CST\r\nExecMainStatus=0\r\nActiveState=active\r\nSubState=running\r\nFragmentPath=/etc/systemd/system/lsmv2-field-gateway.service"
+                    "requested":  false,
+                    "serviceName":  "lsmv2-field-gateway"
                 },
     "runtime":  {
                     "report":  "docs/unified/reports/field-rk3568-gateway-runtime-latest.json",
-                    "mainPid":  "2341706",
-                    "execMainStartTimestamp":  "Thu 2026-04-09 16:40:23 CST",
+                    "mainPid":  "2953325",
+                    "execMainStartTimestamp":  "Fri 2026-04-10 00:20:59 CST",
                     "serviceActive":  "active",
                     "mqttConnected":  true,
                     "serialOpen":  true,
-                    "parsedMessages":  2,
-                    "publishedMessages":  2,
-                    "schemaRejected":  0,
+                    "parsedMessages":  476,
+                    "publishedMessages":  476,
+                    "schemaRejected":  65,
+                    "rejectedMessages":  65,
+                    "rejectedWriteFailures":  0,
                     "nodeAStatus":  "online",
                     "nodeBStatus":  "online",
                     "nodeCStatus":  "configured"
                 },
     "closure":  {
                     "report":  "docs/unified/reports/field-rk3568-center-live-closure-latest.json",
-                    "generatedAt":  "2026-04-09T08:49:04Z",
+                    "generatedAt":  "2026-04-09T17:00:42Z",
                     "accepted":  true,
                     "currentBoundary":  "rk3568-live-center-closure-ready",
                     "attempts":  [
@@ -42,16 +36,19 @@
                                          "exitCode":  1,
                                          "currentBoundary":  "rk3568-live-center-closure-not-yet-accepted",
                                          "accepted":  false,
-                                         "failure":  "==\u003e Center compose acceptance ==\u003e RK3568 board observation window attempt #1 rk3568 field gateway observation window did not pass At E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\scripts\\dev\\run-rk3568-field-gateway-observation-window.ps1:321 char:5 + throw \"rk3568 field gateway observation window did not pass\" + ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ + CategoryInfo : OperationStopped: (rk3568 field ga...ow did not pass:String) [], RuntimeException + FullyQualifiedErrorId : rk3568 field gateway observation window did not pass ==\u003e RK3568 board observation retry after transient strict failure (1/3) ==\u003e RK3568 board observation window attempt #2 rk3568 field gateway acceptance failed: nodeAOnline, nodeBOnline At E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\scripts\\dev\\check-rk3568-field-gateway-acceptance.ps1:333 char:5 + throw \"rk3568 field gateway acceptance failed: $failedKeys\" + ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ + CategoryInfo : OperationStopped: (rk3568 field ga...ne, nodeBOnline:String) [], RuntimeException + FullyQualifiedErrorId : rk3568 field gateway acceptance failed: nodeAOnline, nodeBOnline rk3568 field gateway observation window did not pass At E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\scripts\\dev\\run-rk3568-field-gateway-observation-window.ps1:321 char:5 + throw \"rk3568 field gateway observation window did not pass\" + ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ + CategoryInfo : OperationStopped: (rk3568 field ga...ow did not pass:String) [], RuntimeException + FullyQualifiedErrorId : rk3568 field gateway observation window did not pass ==\u003e RK3568 board observation retry after transient strict failure (2/3) ==\u003e RK3568 board observation window attempt #3 rk3568 field gateway acceptance failed: commandProofPassed, commandProofAckStatus At E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\scripts\\dev\\check-rk3568-field-gateway-acceptance.ps1:333 char:5 + throw \"rk3568 field gateway acceptance failed: $failedKeys\" + ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ + CategoryInfo : OperationStopped: (rk3568 field ga...dProofAckStatus:String) [], RuntimeException + FullyQualifiedErrorId : rk3568 field gateway acceptance failed: commandProofPassed, commandProofAckStatus rk3568 field gateway observation window did not pass At E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\scripts\\dev\\run-rk3568-field-gateway-observation-window.ps1:321 char:5 + throw \"rk3568 field gateway observation window did not pass\" + ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ + CategoryInfo : OperationStopped: (rk3568 field ga...ow did not pass:String) [], RuntimeException + FullyQualifiedErrorId : rk3568 field gateway observation window did not pass ==\u003e RK3568 stable node command proof field rk3568 center live closure failed: boardObservationWindowStable At E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\scripts\\dev\\check-field-rk3568-center-live-closure.ps1:657 char: 5 + throw \"field rk3568 center live closure failed: $failedKeys\" + ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ + CategoryInfo : OperationStopped: (field rk3568 ce...ionWindowStable:String) [], RuntimeException + FullyQualifiedErrorId : field rk3568 center live closure failed: boardObservationWindowStable"
+                                         "failure":  "==\u003e Center compose acceptance ==\u003e RK3568 board observation window attempt #1 ==\u003e RK3568 stable node command proof field rk3568 center live closure failed: boardStableCommandPassed, boardStableCommandAcked, nodeBApiDirectVisible, nodeBWebP roxyVisible, nodeBCommandIdInApiState, nodeBCommandIdInWebState At E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\scripts\\dev\\check-field-rk3568-center-live-closure.ps1:658 char: 5 + throw \"field rk3568 center live closure failed: $failedKeys\" + ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ + CategoryInfo : OperationStopped: (field rk3568 ce...andIdInWebState:String) [], RuntimeException + FullyQualifiedErrorId : field rk3568 center live closure failed: boardStableCommandPassed, boardStableCommandAcked, n odeBApiDirectVisible, nodeBWebProxyVisible, nodeBCommandIdInApiState, nodeBCommandIdInWebState"
                                      }
                                  ],
                     "centerComposeBoundary":  "full-path-ready",
                     "boardObservationConclusion":  "rk3568-runtime-observation-window-clean",
                     "boardObservationSchemaRejectedDelta":  0,
+                    "boardObservationRejectedMessagesDelta":  0,
+                    "boardObservationRejectedWriteFailuresDelta":  0,
+                    "boardObservationRejectedEvidenceAligned":  true,
                     "boardObservationSampleCount":  6,
-                    "commandId":  "d1238b31-1e1a-4993-b6e4-5cb6fb4d4249",
+                    "commandId":  "888a1ccb-7b44-4f5f-b9f2-43933a595e19",
                     "ackStatus":  "acked",
-                    "parseFailureCount":  16,
+                    "parseFailureCount":  1,
                     "nodeAMetricsKeyCountApi":  14,
                     "nodeAMetricsKeyCountWeb":  14,
                     "nodeBMetricsKeyCountApi":  14,
@@ -77,6 +74,12 @@
                        "expected":  true
                    },
                    {
+                       "key":  "runtimeRejectedWriteFailuresZero",
+                       "ok":  true,
+                       "actual":  0,
+                       "expected":  0
+                   },
+                   {
                        "key":  "closureAccepted",
                        "ok":  true,
                        "actual":  true,
@@ -98,13 +101,25 @@
                        "key":  "boardWindowStrictlyClean",
                        "ok":  true,
                        "actual":  true,
-                       "expected":  true
+                       "expected":  "diagnostic-only"
                    },
                    {
                        "key":  "boardParserNoiseWithinBudget",
                        "ok":  true,
                        "actual":  true,
                        "expected":  true
+                   },
+                   {
+                       "key":  "boardRejectedEvidenceAligned",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "boardRejectedWriteFailuresDeltaZero",
+                       "ok":  true,
+                       "actual":  0,
+                       "expected":  0
                    },
                    {
                        "key":  "stableCommandAcked",
@@ -135,12 +150,6 @@
                        "ok":  true,
                        "actual":  true,
                        "expected":  true
-                   },
-                   {
-                       "key":  "restartResultVisibleInRuntime",
-                       "ok":  true,
-                       "actual":  "2341706 @ Thu 2026-04-09 16:40:23 CST",
-                       "expected":  "2341706 @ Thu 2026-04-09 16:40:23 CST"
                    }
                ],
     "nextUse":  [

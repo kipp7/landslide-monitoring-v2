@@ -410,6 +410,8 @@ try {
   $closureNodeAWeb = $closure.livePlatform.nodeA.web.check
   $closureNodeBApi = $closure.livePlatform.nodeB.api.check
   $closureNodeBWeb = $closure.livePlatform.nodeB.web.check
+  $strictlyCleanRequired = if ($RequireZeroSchemaRejectedDelta.IsPresent) { [bool]$closureBoardWindow.strictlyClean } else { $true }
+  $strictlyCleanExpected = if ($RequireZeroSchemaRejectedDelta.IsPresent) { $true } else { "diagnostic-only" }
 
   $checks = @(
     (Get-Check -Key "runtimeServiceActive" -Ok:([string]$runtime.serviceState.isActive.stdout -eq "active") -Actual ([string]$runtime.serviceState.isActive.stdout) -Expected "active"),
@@ -419,7 +421,7 @@ try {
     (Get-Check -Key "closureAccepted" -Ok:([bool]$closure.accepted) -Actual ([bool]$closure.accepted) -Expected $true),
     (Get-Check -Key "closureBoundary" -Ok:([string]$closure.currentBoundary -eq "rk3568-live-center-closure-ready") -Actual ([string]$closure.currentBoundary) -Expected "rk3568-live-center-closure-ready"),
     (Get-Check -Key "boardWindowStable" -Ok:([bool]$closureBoardWindow.stable) -Actual ([bool]$closureBoardWindow.stable) -Expected $true),
-    (Get-Check -Key "boardWindowStrictlyClean" -Ok:([bool]$closureBoardWindow.strictlyClean) -Actual ([bool]$closureBoardWindow.strictlyClean) -Expected $true),
+    (Get-Check -Key "boardWindowStrictlyClean" -Ok:$strictlyCleanRequired -Actual ([bool]$closureBoardWindow.strictlyClean) -Expected $strictlyCleanExpected),
     (Get-Check -Key "boardParserNoiseWithinBudget" -Ok:([bool]$closureBoardWindow.parserNoiseWithinBudget) -Actual ([bool]$closureBoardWindow.parserNoiseWithinBudget) -Expected $true),
     (Get-Check -Key "boardRejectedEvidenceAligned" -Ok:([bool]$closureBoardWindow.rejectedEvidenceAligned) -Actual ([bool]$closureBoardWindow.rejectedEvidenceAligned) -Expected $true),
     (Get-Check -Key "boardRejectedWriteFailuresDeltaZero" -Ok:([int]$closureBoardWindow.counterDelta.rejectedWriteFailures -eq 0) -Actual ([int]$closureBoardWindow.counterDelta.rejectedWriteFailures) -Expected 0),

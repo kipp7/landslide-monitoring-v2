@@ -605,6 +605,7 @@ try {
         schemaRejectedBudget = $boardObservationSchemaRejectedBudget
         counterDelta = $boardObservation.window.counterDelta
         maxObserved = $boardObservation.window.maxObserved
+        rejectedEvidenceAligned = [bool]$boardObservation.window.rejectedEvidenceAligned
         reconnectObserved = [bool]$boardObservation.window.reconnectObserved
         statusContinuous = $boardObservation.window.statusContinuous
         lastSample = $boardObservation.window.lastSample

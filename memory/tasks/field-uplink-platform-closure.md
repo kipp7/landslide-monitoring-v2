@@ -1580,3 +1580,59 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - live board execution is intentionally left to the next step so runtime evidence can be collected on the actual RK3568
   - next recommended slice:
     - run one real RK3568 acceptance / observation / recovery cycle and record the first live report using the new counters
+- the first real RK3568 acceptance / observation / recovery cycle with rejection counters is now complete on `2026-04-10`:
+  - reports:
+    - `docs/unified/reports/field-rk3568-gateway-acceptance-latest.json`
+    - `docs/unified/reports/field-rk3568-gateway-observation-latest.json`
+    - `docs/unified/reports/field-rk3568-center-live-closure-latest.json`
+    - `docs/unified/reports/field-rk3568-center-operational-recovery-latest.json`
+  - script fixes landed to keep the recovery line aligned with the new observation fields:
+    - `scripts/dev/check-field-rk3568-center-live-closure.ps1`
+      now propagates `boardObservation.window.rejectedEvidenceAligned`
+    - `scripts/dev/check-field-rk3568-center-operational-recovery.ps1`
+      now treats `boardWindowStrictlyClean` as diagnostic-only unless `-RequireZeroSchemaRejectedDelta` is used
+  - live acceptance facts:
+    - `generatedAt = 2026-04-09T16:59:11Z`
+    - `accepted = true`
+    - `currentBoundary = board-runtime-and-command-proof-ready`
+    - `commandId = 056081ac-9997-4b5e-9f7f-8c76209a778c`
+    - `ackStatus = acked`
+    - runtime counters present:
+      - `schemaRejected = 66`
+      - `rejectedMessages = 66`
+      - `rejectedWriteFailures = 0`
+  - live observation facts:
+    - `generatedAt = 2026-04-09T17:00:25Z`
+    - `passed = true`
+    - `conclusion = rk3568-runtime-observation-window-clean`
+    - `counterDelta.schemaRejected = 0`
+    - `counterDelta.rejectedMessages = 0`
+    - `counterDelta.rejectedWriteFailures = 0`
+    - `rejectedEvidenceAligned = true`
+  - live closure facts:
+    - `generatedAt = 2026-04-09T17:00:42Z`
+    - `accepted = true`
+    - `currentBoundary = rk3568-live-center-closure-ready`
+    - `commandId = 888a1ccb-7b44-4f5f-b9f2-43933a595e19`
+    - API/Web both still show `14` canonical metrics for nodes `A` and `B`
+  - live recovery facts:
+    - `generatedAt = 2026-04-09T17:00:42Z`
+    - `accepted = true`
+    - `currentBoundary = rk3568-center-operational-recovery-ready`
+    - `cleanWindowReopened = true`
+    - runtime still showed budgeted parser noise:
+      - `schemaRejected = 65`
+      - `rejectedMessages = 65`
+      - `rejectedWriteFailures = 0`
+    - closure still proved:
+      - `boardObservationRejectedMessagesDelta = 0`
+      - `boardObservationRejectedWriteFailuresDelta = 0`
+      - `boardObservationRejectedEvidenceAligned = true`
+  - current frozen interpretation:
+    - the RK3568 line is now operationally proven under the standard budgeted-noise path
+    - parser noise on the shared `/dev/ttyS3` stream is real but no longer treated as a blocker if:
+      - evidence alignment stays true
+      - `rejectedWriteFailures = 0`
+      - the observation delta stays clean
+    - strict zero-noise remains an explicit opt-in mode only:
+      - `-RequireZeroSchemaRejectedDelta`
