@@ -36,6 +36,95 @@ permalink: landslide-monitoring-v2-mainline/docs/unified/reports/field-rk3568-ga
 - [field-hardware-gateway-architecture-eval.md](/E:/学校/02 项目/99 山体滑坡优化完善/landslide-monitoring-v2-mainline/docs/unified/reports/field-hardware-gateway-architecture-eval.md)
 - [field-program-direction-and-task-split-2026-04.md](/E:/学校/02 项目/99 山体滑坡优化完善/landslide-monitoring-v2-mainline/docs/unified/reports/field-program-direction-and-task-split-2026-04.md)
 - [field-rk3568-rk2206-center-phased-architecture-2026-04.md](/E:/学校/02 项目/99 山体滑坡优化完善/landslide-monitoring-v2-mainline/docs/unified/reports/field-rk3568-rk2206-center-phased-architecture-2026-04.md)
+
+## 12.1 2026-04-09 RK3568 到中心 live closure 已通过
+
+这轮已经不再停留在：
+
+- board telemetry 可见
+- center replay 可见
+
+而是完成了真正跨边界的 live closure：
+
+- 新入口：
+  - `scripts/dev/check-field-rk3568-center-live-closure.ps1`
+- 新证据：
+  - `docs/unified/reports/field-rk3568-center-live-closure-latest.json`
+
+最新通过结果已经固定为：
+
+- `accepted = true`
+- `currentBoundary = rk3568-live-center-closure-ready`
+- 中心侧：
+  - `field-center-compose-acceptance = accepted`
+  - `readiness.currentBoundary = full-path-ready`
+- 板端：
+  - `60s` 观测窗口 `clean`
+  - `node A/B` 连续 `online`
+  - `schemaRejected delta = 0`
+  - `publishFailures delta = 0`
+- 稳定命令入口：
+  - `node B manual_collect`
+  - `commandId = 4ff5adb8-6beb-43fb-bae0-9555cc20c966`
+  - `ackStatus = acked`
+- 中心读路径：
+  - API `/api/v1/data/state/{deviceId}` 可见 `node A`
+  - API `/api/v1/data/state/{deviceId}` 可见 `node B`
+  - Web 代理读路径可见同一批状态
+  - `node B last_command_id` 已与本轮 `manual_collect commandId` 对齐
+
+这意味着当前 RK3568 这条线已经正式从：
+
+- “板上能 publish”
+
+进入：
+
+- “真实现场链路可以从 RK3568 活数据穿透到中心 API/Web 读路径”
+
+## 12.2 2026-04-09 共享流之后的中心软件真实 blocker 已定位并修复
+
+这轮最重要的新事实不是串口，而是中心语义门禁：
+
+- `node B` 现场 `seq` 因设备重启回到低位
+- `telemetry-writer` 仍拿历史 `latestSeq = 8682` 做严格比较
+- 结果是新的 `node B` telemetry 持续被打成：
+  - `stale_seq`
+  - DLQ
+- 直接后果：
+  - `device_state`
+  - API
+  - Web
+  都看不到最新 `node B` live state
+
+当前已落地修复：
+
+- 文件：
+  - `services/telemetry-writer/src/index.ts`
+- 行为：
+  - 当 `seq` 回退且 `meta.uptime_s` 也回退时
+  - 将其识别为“设备重启后的新序列”
+  - 不再继续按单一 lifetime monotonic `seq` 直接拒绝
+
+修复后已经有现场级证据：
+
+- `telemetry-writer` 日志出现：
+  - `telemetry seq rollback accepted after uptime rollback`
+- PostgreSQL `device_state` 已更新为：
+  - `device_id = ...0002`
+  - `last_command_id = 4ff5adb8-6beb-43fb-bae0-9555cc20c966`
+  - `writer_last_seq = 714`
+- `node B` 重新进入：
+  - ClickHouse
+  - `device_state`
+  - API/Web 读路径
+
+当前工程含义已经很明确：
+
+- 下一阶段不再是“为什么 node B 平台看不到”
+- 而是：
+  - 保持这条中心适配线冻结
+  - 继续做更长窗口
+  - 保持 `node C` 预留但不阻塞
 - [field-rk3568-software-interface-alignment-2026-04.md](/E:/学校/02 项目/99 山体滑坡优化完善/landslide-monitoring-v2-mainline/docs/unified/reports/field-rk3568-software-interface-alignment-2026-04.md)
 
 因此，它只负责：

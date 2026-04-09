@@ -326,6 +326,53 @@ Center server 一期算完成，至少要满足：
 - 一份统一 acceptance 报告
 - 一套可交接的恢复后复核动作
 
+## 10.3 2026-04-09 中心侧已补上设备重启后的 seq 回退适配
+
+这轮在真正跑 `RK3568 -> center` live closure 时，首次把中心侧的真实 blocker 打到了代码级：
+
+1. 现场表现
+- `node A` 可持续进入平台
+- `node B` 能被 `ingest-service` 收到
+- 但 `node B` 长时间停在旧 `device_state`
+
+2. 根因
+- `telemetry-writer` 只按历史 `latestSeq` 判定：
+  - `duplicate_seq`
+  - `stale_seq`
+- 当前 `node B` 因设备重启：
+  - `seq` 从低位重新开始
+  - `meta.uptime_s` 也明显回退
+- 但 writer 没有把这个场景识别为 reboot 后的新序列
+
+3. 已落地修复
+- 文件：
+  - `services/telemetry-writer/src/index.ts`
+- 新行为：
+  - 当 `payload.seq <= latestSeq`
+  - 且 `meta.uptime_s` 相比 shadow state 中旧值回退
+  - 允许该消息继续进入：
+    - ClickHouse
+    - PostgreSQL `device_state`
+
+4. 修复后现场证据
+- writer 日志出现：
+  - `telemetry seq rollback accepted after uptime rollback`
+- PostgreSQL `device_state` 中：
+  - `device_id = ...0002`
+  - `writer_last_seq` 已从旧高位切回当前现场低位
+  - `last_command_id` 已跟随最新 `manual_collect`
+- 之后跨边界 live closure 报告通过：
+  - `docs/unified/reports/field-rk3568-center-live-closure-latest.json`
+
+这条修复的重要性在于：
+
+- 它不是 demo 级 workaround
+- 而是把中心部署线真正补齐到可以承接：
+  - 设备断电
+  - 重启
+  - `seq` 重新起步
+  这种现场真实行为
+
 ## 10. 相关文档
 
 - [field-uplink-platform-closure-baseline.md](/E:/学校/02 项目/99 山体滑坡优化完善/landslide-monitoring-v2-mainline/docs/unified/reports/field-uplink-platform-closure-baseline.md)

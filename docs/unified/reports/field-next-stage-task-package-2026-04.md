@@ -243,3 +243,39 @@ permalink: landslide-monitoring-v2-mainline/docs/unified/reports/field-next-stag
 一句话总结：
 
 - 当前主线已经从“等 node C 再推进”切到“node C 预留但不阻塞，先把 RK3568 到 center 的下一阶段收口继续做下去”
+
+## 10.1 2026-04-09 下一阶段起点已从“待验证”进入“live closure 已通过”
+
+这轮已经把前面定义的下一阶段真正跑穿，而不是停留在任务包层：
+
+1. 新跨边界入口已落地
+- `scripts/dev/check-field-rk3568-center-live-closure.ps1`
+
+2. 新正式证据已生成
+- `docs/unified/reports/field-rk3568-center-live-closure-latest.json`
+
+3. 当前通过结论已固定
+- `accepted = true`
+- `currentBoundary = rk3568-live-center-closure-ready`
+- `node A/B` live telemetry 可见于：
+  - 直接 API 读路径
+  - Web 代理读路径
+- `node B manual_collect`
+  - `commandId = 4ff5adb8-6beb-43fb-bae0-9555cc20c966`
+  - 已在平台状态中对齐为：
+    - `last_command_id`
+    - `last_command_type = manual_collect`
+
+4. 同时，这轮也把下一阶段真正的软件 blocker 定位并消掉了
+- 不是串口路由问题
+- 而是中心 `telemetry-writer` 对设备重启后的 `seq` 回退过于严格
+- 当前已补成：
+  - `seq` 回退
+  - 且 `meta.uptime_s` 回退
+  => 允许视为 reboot 后的新序列继续落库
+
+因此，从这轮之后，下一阶段主线应进一步收窄为：
+
+- 保持 `RK3568 -> center` live closure 入口冻结
+- 继续累积更长现场窗口
+- `node C` 到位后复用同一入口做三节点回归

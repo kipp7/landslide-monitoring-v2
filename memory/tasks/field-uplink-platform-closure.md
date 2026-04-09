@@ -1029,3 +1029,34 @@ Freeze and execute the next major phase after command-route stabilization: prove
   - immediate next phase should proceed on:
     - `RK3568 -> center` software/deployment closure
     - longer-window evidence accumulation
+- the first formal live cross-boundary closure line for real RK3568 telemetry now also exists:
+  - entry:
+    - `scripts/dev/check-field-rk3568-center-live-closure.ps1`
+  - latest report:
+    - `docs/unified/reports/field-rk3568-center-live-closure-latest.json`
+  - latest conclusion:
+    - `rk3568-live-telemetry-visible-through-center-api-and-web`
+  - latest proof confirms:
+    - current compose-managed center runtime stayed at `full-path-ready`
+    - current RK3568 board window stayed clean over `60s`
+    - stable `node B manual_collect` produced:
+      - `commandId = 4ff5adb8-6beb-43fb-bae0-9555cc20c966`
+      - `ackStatus = acked`
+    - the same `commandId` is now visible through:
+      - direct API `/api/v1/data/state/{deviceId}`
+      - Web proxy `/api/v1/data/state/{deviceId}`
+    - `node A` and `node B` are both now visible as fresh platform state
+- the decisive center-side blocker for this closure was also identified and fixed:
+  - not:
+    - MQTT reachability
+    - ingest-service subscription
+  - but:
+    - `telemetry-writer` rejected rebooted `node B` telemetry as `stale_seq`
+    - because shadow `latestSeq` stayed at `8682` while live field `seq` restarted in the low hundreds
+  - current fix:
+    - `services/telemetry-writer/src/index.ts` now accepts `seq` rollback when `meta.uptime_s` also rolls back
+  - fresh evidence after the fix now confirms:
+    - writer log:
+      - `telemetry seq rollback accepted after uptime rollback`
+    - PostgreSQL `device_state` for `...0002` now advances again
+    - ClickHouse latest `received_ts` for `...0002` is current again

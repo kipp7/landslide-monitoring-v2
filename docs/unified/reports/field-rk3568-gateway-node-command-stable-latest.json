@@ -1,0 +1,69 @@
+﻿{
+    "generatedAt":  "2026-04-09T05:41:02.141Z",
+    "mode":  "rk3568-node-command-stable",
+    "boardHost":  "192.168.124.172",
+    "mqttUrl":  "mqtt://127.0.0.1:1883",
+    "deviceId":  "00000000-0000-0000-0000-000000000002",
+    "action":  "manual-collect",
+    "maxAttempts":  3,
+    "retryDelaySeconds":  3,
+    "passed":  true,
+    "conclusion":  "single-shot-proof-succeeded",
+    "successfulAttempt":  {
+                              "attempt":  1,
+                              "passed":  true,
+                              "commandId":  "4ff5adb8-6beb-43fb-bae0-9555cc20c966",
+                              "ackStatus":  "acked",
+                              "summary":  "command-forward-and-ack-publish-succeeded",
+                              "parseFailureCount":  14,
+                              "failureModes":  [
+                                                   "southbound-json-fragmentation",
+                                                   "shared-stream-byte-interleaving",
+                                                   "unclassified-parse-failure"
+                                               ],
+                              "beforeAckPublishes":  11,
+                              "afterAckPublishes":  11,
+                              "beforeLastAckTs":  "2026-04-09T05:39:37.567Z",
+                              "afterLastAckTs":  "2026-04-09T05:39:37.567Z",
+                              "proofFile":  ".tmp/rk3568-node-command-stable-0002-manual-collect-1.json"
+                          },
+    "finalAttempt":  {
+                         "attempt":  1,
+                         "passed":  true,
+                         "commandId":  "4ff5adb8-6beb-43fb-bae0-9555cc20c966",
+                         "ackStatus":  "acked",
+                         "summary":  "command-forward-and-ack-publish-succeeded",
+                         "parseFailureCount":  14,
+                         "failureModes":  [
+                                              "southbound-json-fragmentation",
+                                              "shared-stream-byte-interleaving",
+                                              "unclassified-parse-failure"
+                                          ],
+                         "beforeAckPublishes":  11,
+                         "afterAckPublishes":  11,
+                         "beforeLastAckTs":  "2026-04-09T05:39:37.567Z",
+                         "afterLastAckTs":  "2026-04-09T05:39:37.567Z",
+                         "proofFile":  ".tmp/rk3568-node-command-stable-0002-manual-collect-1.json"
+                     },
+    "attemptCount":  1,
+    "attempts":  [
+                     {
+                         "attempt":  1,
+                         "passed":  true,
+                         "commandId":  "4ff5adb8-6beb-43fb-bae0-9555cc20c966",
+                         "ackStatus":  "acked",
+                         "summary":  "command-forward-and-ack-publish-succeeded",
+                         "parseFailureCount":  14,
+                         "failureModes":  [
+                                              "southbound-json-fragmentation",
+                                              "shared-stream-byte-interleaving",
+                                              "unclassified-parse-failure"
+                                          ],
+                         "beforeAckPublishes":  11,
+                         "afterAckPublishes":  11,
+                         "beforeLastAckTs":  "2026-04-09T05:39:37.567Z",
+                         "afterLastAckTs":  "2026-04-09T05:39:37.567Z",
+                         "proofFile":  ".tmp/rk3568-node-command-stable-0002-manual-collect-1.json"
+                     }
+                 ]
+}

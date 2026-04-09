@@ -156,7 +156,7 @@ function getSemanticPayloadBytes(payload: TelemetryRawV1): number {
 function getPacketClass(payload: TelemetryRawV1): string | null {
   const meta = payload.meta;
   if (!meta || typeof meta !== "object") return null;
-  const packetClass = (meta as Record<string, unknown>).packet_class;
+  const packetClass = meta.packet_class;
   if (typeof packetClass !== "string") return null;
   const trimmed = packetClass.trim();
   return trimmed.length > 0 ? trimmed : null;
@@ -164,7 +164,7 @@ function getPacketClass(payload: TelemetryRawV1): string | null {
 
 function isHighFrequencyPacket(payload: TelemetryRawV1): boolean {
   const packetClass = getPacketClass(payload);
-  return Boolean(packetClass && packetClass.toLowerCase().startsWith("hf_"));
+  return packetClass?.toLowerCase().startsWith("hf_") ?? false;
 }
 
 function normalizeShadowState(state: unknown): ShadowState {
@@ -181,11 +181,51 @@ function normalizeShadowState(state: unknown): ShadowState {
   return { metrics, meta };
 }
 
+function toFiniteNumberOrNull(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function getShadowMetaNumber(state: ShadowState | null | undefined, key: string): number | null {
+  if (!state) return null;
+  return toFiniteNumberOrNull(state.meta[key]);
+}
+
+function getPayloadMetaNumber(payload: TelemetryRawV1, key: string): number | null {
+  if (!payload.meta || typeof payload.meta !== "object") return null;
+  return toFiniteNumberOrNull(payload.meta[key]);
+}
+
+function shouldAcceptSeqAfterUptimeRollback(
+  payload: TelemetryRawV1,
+  latestSeq: number,
+  previousShadowState: ShadowState | null | undefined
+): { accept: boolean; previousUptimeS: number | null; nextUptimeS: number | null } {
+  const previousUptimeS = getShadowMetaNumber(previousShadowState, "uptime_s");
+  const nextUptimeS = getPayloadMetaNumber(payload, "uptime_s");
+  return {
+    accept:
+      previousUptimeS != null &&
+      nextUptimeS != null &&
+      payload.seq != null &&
+      payload.seq <= latestSeq &&
+      nextUptimeS < previousUptimeS,
+    previousUptimeS,
+    nextUptimeS
+  };
+}
+
 function buildShadowState(payload: TelemetryRawV1, previousState: unknown): ShadowState {
   const previous = normalizeShadowState(previousState);
   const meta: Record<string, unknown> = {
     ...previous.meta,
-    ...(payload.meta && typeof payload.meta === "object" ? (payload.meta as Record<string, unknown>) : {})
+    ...(payload.meta && typeof payload.meta === "object" ? payload.meta : {})
   };
 
   const writerMeta: Record<string, unknown> =
@@ -639,6 +679,10 @@ async function main(): Promise<void> {
           }
 
           const payload: TelemetryRawV1 = parsed;
+          if (pg && !latestShadowStateByDeviceId.has(payload.device_id)) {
+            latestShadowStateByDeviceId.set(payload.device_id, await getLatestShadowState(pg, payload.device_id));
+          }
+
           if (payload.seq != null) {
             let latestSeq: number | null = null;
             if (latestSeqByDeviceId.has(payload.device_id)) {
@@ -649,42 +693,60 @@ async function main(): Promise<void> {
             }
 
             if (latestSeq != null && payload.seq <= latestSeq) {
-              const reasonCode = payload.seq === latestSeq ? "duplicate_seq" : "stale_seq";
-              await publishDlq({
-                schema_version: 1,
-                reason_code: reasonCode,
-                reason_detail:
-                  "device_id=" +
-                  payload.device_id +
-                  " seq=" +
-                  String(payload.seq) +
-                  " is not newer than latest_seq=" +
-                  String(latestSeq),
-                received_ts: payload.received_ts,
-                device_id: payload.device_id,
-                raw_payload: raw
-              });
-              logger.warn(
-                {
-                  traceId,
-                  topic: batch.topic,
-                  partition: batch.partition,
-                  deviceId: payload.device_id,
-                  seq: payload.seq,
-                  latestSeq,
-                  reasonCode
-                },
-                "telemetry seq rejected before persistence (dlq)"
+              const seqResetDecision = shouldAcceptSeqAfterUptimeRollback(
+                payload,
+                latestSeq,
+                latestShadowStateByDeviceId.get(payload.device_id)
               );
-              ctx.resolveOffset(message.offset);
-              stats.kafkaMessagesSkipped += 1;
-              continue;
+              if (seqResetDecision.accept) {
+                logger.info(
+                  {
+                    traceId,
+                    topic: batch.topic,
+                    partition: batch.partition,
+                    deviceId: payload.device_id,
+                    seq: payload.seq,
+                    latestSeq,
+                    previousUptimeS: seqResetDecision.previousUptimeS,
+                    nextUptimeS: seqResetDecision.nextUptimeS
+                  },
+                  "telemetry seq rollback accepted after uptime rollback"
+                );
+              } else {
+                const reasonCode = payload.seq === latestSeq ? "duplicate_seq" : "stale_seq";
+                await publishDlq({
+                  schema_version: 1,
+                  reason_code: reasonCode,
+                  reason_detail:
+                    "device_id=" +
+                    payload.device_id +
+                    " seq=" +
+                    String(payload.seq) +
+                    " is not newer than latest_seq=" +
+                    String(latestSeq),
+                  received_ts: payload.received_ts,
+                  device_id: payload.device_id,
+                  raw_payload: raw
+                });
+                logger.warn(
+                  {
+                    traceId,
+                    topic: batch.topic,
+                    partition: batch.partition,
+                    deviceId: payload.device_id,
+                    seq: payload.seq,
+                    latestSeq,
+                    reasonCode
+                  },
+                  "telemetry seq rejected before persistence (dlq)"
+                );
+                ctx.resolveOffset(message.offset);
+                stats.kafkaMessagesSkipped += 1;
+                continue;
+              }
             }
 
             latestSeqByDeviceId.set(payload.device_id, payload.seq);
-          }
-          if (pg && !latestShadowStateByDeviceId.has(payload.device_id)) {
-            latestShadowStateByDeviceId.set(payload.device_id, await getLatestShadowState(pg, payload.device_id));
           }
           const semanticBytes = getSemanticPayloadBytes(payload);
           const packetClass = getPacketClass(payload);
