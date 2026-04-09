@@ -528,6 +528,63 @@ Center server 一期算完成，至少要满足：
   - `accepted = true`
   - 上述 4 个 contract checks 全部 `ok = true`
 
+## 10.6 2026-04-09 受控重启已被证实可以重新打开 clean 60s 收口窗口
+
+这轮继续沿冻结入口拉证据后，当前中心部署线已经可以更专业地表述边界，而不是继续把所有 shared-port 噪声混成同一个问题。
+
+1. 最新复核事实
+- RK3568 gateway 受控重启后，最新 runtime 报告确认：
+  - `MainPID = 2264558`
+  - `ExecMainStartTimestamp = Thu 2026-04-09 15:55:16 CST`
+- 随后的 board observation 再次干净通过：
+  - 报告：
+    - `docs/unified/reports/field-rk3568-gateway-observation-latest.json`
+  - 结果：
+    - `passed = true`
+    - `conclusion = rk3568-runtime-observation-window-clean`
+    - `DurationSeconds = 60`
+    - `schemaRejected delta = 0`
+- 同轮 cross-boundary closure 也重新回绿：
+  - 报告：
+    - `docs/unified/reports/field-rk3568-center-live-closure-latest.json`
+  - 结果：
+    - `generatedAt = 2026-04-09T07:58:36Z`
+    - `accepted = true`
+    - `currentBoundary = rk3568-live-center-closure-ready`
+    - `boardObservationWindowStable = true`
+    - `boardObservationParserNoiseWithinBudget = true`
+- `node B manual_collect` 继续闭合：
+  - `commandId = e18f7563-8890-4404-917d-f27f0c67018a`
+  - `ackStatus = acked`
+  - `parseFailureCount = 0`
+- API / Web 读路径仍保持当前软件端 field contract：
+  - `node A api/web metricsKeyCount = 14`
+  - `node B api/web metricsKeyCount = 14`
+
+2. 这对中心部署阶段意味着什么
+- 当前中心部署与软件适配阶段已经不再卡在：
+  - telemetry 是否能进入中心
+  - API/Web 是否能读到同一份 field state
+  - command proof 是否还能闭合
+- 当前真正剩余的不是主链闭环缺失，而是：
+  - shared-port parser 在更长窗口上的持续硬化
+  - `node C` 到位后的三节点回归
+
+3. 当前应冻结的工程口径
+- 可以正式承认：
+  - 受控重启可以重新打开 clean `60s` board window
+  - 并恢复 `RK3568 -> center` cross-boundary closure 到 green
+- 也必须同时保留：
+  - 更长或更严格窗口下，bounded parser noise 仍可能回出现
+  - 这属于后续 runtime hardening 范围，不再阻塞当前中心部署/软件适配主线推进
+
+4. 因此这份任务单的下一优先级保持不变
+- 继续把中心部署线收成：
+  - 可复跑
+  - 可恢复
+  - 可交接
+- 不再把时间消耗在反复解释这轮已经闭合的 `60s` 主线事实上
+
 ## 10. 相关文档
 
 - [field-uplink-platform-closure-baseline.md](/E:/学校/02 项目/99 山体滑坡优化完善/landslide-monitoring-v2-mainline/docs/unified/reports/field-uplink-platform-closure-baseline.md)

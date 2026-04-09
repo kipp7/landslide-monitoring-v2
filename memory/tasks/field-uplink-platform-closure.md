@@ -1128,3 +1128,31 @@ Freeze and execute the next major phase after command-route stabilization: prove
       - `node B` command proof still closes:
         - `commandId = d69bf18b-d11a-4e99-b5ee-0289115cb050`
         - `ackStatus = acked`
+- the current closure boundary is now reproved again after a controlled RK3568 gateway restart:
+  - latest runtime report:
+    - `docs/unified/reports/field-rk3568-gateway-runtime-latest.json`
+  - latest board observation report:
+    - `docs/unified/reports/field-rk3568-gateway-observation-latest.json`
+  - latest cross-boundary closure report:
+    - `docs/unified/reports/field-rk3568-center-live-closure-latest.json`
+  - reproved facts:
+    - `MainPID = 2264558`
+    - `ExecMainStartTimestamp = Thu 2026-04-09 15:55:16 CST`
+    - closure `generatedAt = 2026-04-09T07:58:36Z`
+    - `accepted = true`
+    - `currentBoundary = rk3568-live-center-closure-ready`
+    - board observation:
+      - `passed = true`
+      - `conclusion = rk3568-runtime-observation-window-clean`
+      - `schemaRejected delta = 0`
+    - stable `node B manual_collect` proof:
+      - `commandId = e18f7563-8890-4404-917d-f27f0c67018a`
+      - `ackStatus = acked`
+      - `parseFailureCount = 0`
+    - API/Web field metrics contract remained exact:
+      - `node A api/web metricsKeyCount = 14`
+      - `node B api/web metricsKeyCount = 14`
+- the disciplined operational interpretation is now frozen more narrowly:
+  - a controlled RK3568 restart can reopen a clean `60s` board window and restore the cross-boundary closure line to green
+  - longer or stricter windows may still drift back into bounded shared-port parser noise
+  - parser hardening is therefore not finished, but it is no longer the blocker for the current center-deployment/software-adaptation phase gate
