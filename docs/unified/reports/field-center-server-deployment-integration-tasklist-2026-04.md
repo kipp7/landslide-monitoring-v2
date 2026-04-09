@@ -373,6 +373,45 @@ Center server 一期算完成，至少要满足：
   - `seq` 重新起步
   这种现场真实行为
 
+## 10.4 2026-04-09 中心侧已开始自动修剪 field profile 的脏状态键
+
+跨边界 live closure 跑通之后，又暴露出另一个更偏读模型的问题：
+
+1. 现场表现
+- `device_state` 虽然已能跟上最新 live telemetry
+- 但部分历史脏键仍残留在平台状态里
+- 典型表现是：
+  - `metricsKeyCount` 异常偏大
+  - 出现明显拼接/截断污染 key
+
+2. 根因
+- `telemetry-writer` 的 shadow state 采用：
+  - `previous.metrics + payload.metrics`
+  - `previous.meta + payload.meta`
+- 这对稀疏遥测是对的
+- 但对历史已经混入的脏键，没有自动修剪能力
+
+3. 已落地修复
+- 文件：
+  - `services/telemetry-writer/src/index.ts`
+- 新行为：
+  - 对当前这条 XL01 field profile 设备
+  - 在写 `device_state` 时按冻结的 field contract 做键级过滤
+  - 仅保留当前阶段允许的：
+    - canonical `metrics`
+    - canonical `meta`
+    - `_writer`
+- 这样下一次正常 telemetry 到来时：
+  - 旧的污染 key 会从 shadow state 中自然被刷掉
+  - 不需要人工清库或手工改 `device_state`
+
+4. 当前工程意义
+- 这一步没有去动 ClickHouse 原始事实表
+- 只收紧平台面向 API/Web 的 `device_state` 读模型
+- 目标很明确：
+  - 软件端看到的是对齐 contract 的稳定状态
+  - 历史异常碎片不再长期污染平台读路径
+
 ## 10. 相关文档
 
 - [field-uplink-platform-closure-baseline.md](/E:/学校/02 项目/99 山体滑坡优化完善/landslide-monitoring-v2-mainline/docs/unified/reports/field-uplink-platform-closure-baseline.md)

@@ -54,6 +54,57 @@ type ShadowState = {
   meta: Record<string, unknown>;
 };
 
+const FIELD_PROFILE_METRIC_KEYS = new Set<string>([
+  "temperature_c",
+  "humidity_pct",
+  "accel_x_g",
+  "accel_y_g",
+  "accel_z_g",
+  "gyro_x_dps",
+  "gyro_y_dps",
+  "gyro_z_dps",
+  "tilt_x_deg",
+  "tilt_y_deg",
+  "gps_latitude",
+  "gps_longitude",
+  "gps_altitude",
+  "battery_pct",
+  "battery_v",
+  "warning_flag",
+  "rainfall_mm",
+  "rainfall_intensity_mm_h",
+  "soil_moisture_pct",
+  "illumination",
+  "rssi_dbm",
+  "snr_db",
+  "packet_loss_pct",
+  "displacement_mm",
+  "vibration_g"
+]);
+
+const FIELD_PROFILE_META_KEYS = new Set<string>([
+  "_writer",
+  "install_label",
+  "legacy_node",
+  "uptime_s",
+  "upload_trigger",
+  "legacy_valid_flags",
+  "last_command_type",
+  "last_command_id",
+  "last_command_uptime_s",
+  "sampling_s",
+  "report_interval_s",
+  "fw",
+  "power_mode",
+  "packet_class",
+  "gateway_received_ts",
+  "replay_kind",
+  "replay_source",
+  "time_jump_ms"
+]);
+
+const FIELD_PROFILE_IDENTITY_META_KEYS = ["install_label", "legacy_node", "upload_trigger", "last_command_id", "last_command_type"];
+
 function repoRootFromHere(): string {
   return path.resolve(__dirname, "..", "..", "..");
 }
@@ -181,6 +232,31 @@ function normalizeShadowState(state: unknown): ShadowState {
   return { metrics, meta };
 }
 
+function sanitizeRecordByAllowedKeys<TValue>(
+  input: Record<string, TValue>,
+  allowedKeys: ReadonlySet<string>
+): Record<string, TValue> {
+  const output: Record<string, TValue> = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (allowedKeys.has(key)) {
+      output[key] = value;
+    }
+  }
+  return output;
+}
+
+function isFieldProfileMetaRecord(meta: Record<string, unknown> | null | undefined): boolean {
+  if (!meta) return false;
+  return FIELD_PROFILE_IDENTITY_META_KEYS.some((key) => key in meta);
+}
+
+function sanitizeFieldProfileShadowState(state: ShadowState): ShadowState {
+  return {
+    metrics: sanitizeRecordByAllowedKeys(state.metrics, FIELD_PROFILE_METRIC_KEYS),
+    meta: sanitizeRecordByAllowedKeys(state.meta, FIELD_PROFILE_META_KEYS)
+  };
+}
+
 function toFiniteNumberOrNull(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string") {
@@ -222,10 +298,20 @@ function shouldAcceptSeqAfterUptimeRollback(
 }
 
 function buildShadowState(payload: TelemetryRawV1, previousState: unknown): ShadowState {
-  const previous = normalizeShadowState(previousState);
+  const previousRaw = normalizeShadowState(previousState);
+  const payloadMeta = payload.meta && typeof payload.meta === "object" ? payload.meta : {};
+  const useFieldProfileSanitizer =
+    isFieldProfileMetaRecord(payloadMeta) || isFieldProfileMetaRecord(previousRaw.meta);
+  const previous = useFieldProfileSanitizer ? sanitizeFieldProfileShadowState(previousRaw) : previousRaw;
+  const nextMetrics = useFieldProfileSanitizer
+    ? sanitizeRecordByAllowedKeys(payload.metrics, FIELD_PROFILE_METRIC_KEYS)
+    : payload.metrics;
+  const nextPayloadMeta = useFieldProfileSanitizer
+    ? sanitizeRecordByAllowedKeys(payloadMeta, FIELD_PROFILE_META_KEYS)
+    : payloadMeta;
   const meta: Record<string, unknown> = {
     ...previous.meta,
-    ...(payload.meta && typeof payload.meta === "object" ? payload.meta : {})
+    ...nextPayloadMeta
   };
 
   const writerMeta: Record<string, unknown> =
@@ -238,7 +324,7 @@ function buildShadowState(payload: TelemetryRawV1, previousState: unknown): Shad
   return {
     metrics: {
       ...previous.metrics,
-      ...payload.metrics
+      ...nextMetrics
     },
     meta
   };

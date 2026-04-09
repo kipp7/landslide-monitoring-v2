@@ -1060,3 +1060,15 @@ Freeze and execute the next major phase after command-route stabilization: prove
       - `telemetry seq rollback accepted after uptime rollback`
     - PostgreSQL `device_state` for `...0002` now advances again
     - ClickHouse latest `received_ts` for `...0002` is current again
+- the next center-side cleanup after closure is now also frozen:
+  - `services/telemetry-writer/src/index.ts`
+    now trims field-profile `device_state` keys during shadow-state writes
+  - purpose:
+    - keep API/Web platform state aligned to the current field contract
+    - let the next normal telemetry naturally evict historical malformed keys
+  - scope:
+    - applies to the current XL01 field-profile state projection
+    - does not rewrite ClickHouse raw facts
+  - expected effect:
+    - `metricsKeyCount` on field nodes should shrink back toward canonical values
+    - polluted concatenated/truncated keys should disappear from `device_state`
