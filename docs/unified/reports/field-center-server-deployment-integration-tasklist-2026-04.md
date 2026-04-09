@@ -412,6 +412,33 @@ Center server 一期算完成，至少要满足：
   - 软件端看到的是对齐 contract 的稳定状态
   - 历史异常碎片不再长期污染平台读路径
 
+5. 修复后的现场复核已通过
+- 重新 build / recreate compose 内 `telemetry-writer`
+- 重新实跑：
+  - `scripts/dev/check-field-rk3568-center-live-closure.ps1`
+- 最新现场结果已经证明：
+  - closure 继续保持：
+    - `accepted = true`
+    - `currentBoundary = rk3568-live-center-closure-ready`
+  - `node A` API/Web:
+    - `metricsKeyCount = 14`
+  - `node B` API/Web:
+    - `metricsKeyCount = 14`
+  - 当前保留下来的 metrics key 已回到现场 contract 集合：
+    - `temperature_c`
+    - `humidity_pct`
+    - `accel_x_g / accel_y_g / accel_z_g`
+    - `gyro_x_dps / gyro_y_dps / gyro_z_dps`
+    - `tilt_x_deg / tilt_y_deg`
+    - `gps_latitude / gps_longitude`
+    - `battery_pct`
+    - `warning_flag`
+
+这意味着这条修复已经不再只是代码结论，而是已经变成：
+
+- compose 运行中的中心服务真实生效
+- API/Web 读模型真实回收到了软件端契约边界
+
 ## 10. 相关文档
 
 - [field-uplink-platform-closure-baseline.md](/E:/学校/02 项目/99 山体滑坡优化完善/landslide-monitoring-v2-mainline/docs/unified/reports/field-uplink-platform-closure-baseline.md)

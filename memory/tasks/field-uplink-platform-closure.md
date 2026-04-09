@@ -1072,3 +1072,10 @@ Freeze and execute the next major phase after command-route stabilization: prove
   - expected effect:
     - `metricsKeyCount` on field nodes should shrink back toward canonical values
     - polluted concatenated/truncated keys should disappear from `device_state`
+- that cleanup has now also been reproved against live field traffic:
+  - compose `telemetry-writer` was rebuilt/recreated
+  - `check-field-rk3568-center-live-closure.ps1` passed again
+  - current fresh read-path evidence now shows:
+    - `node A api/web metricsKeyCount = 14`
+    - `node B api/web metricsKeyCount = 14`
+    - preserved field metrics are now the canonical XL01 set instead of polluted concatenated keys
