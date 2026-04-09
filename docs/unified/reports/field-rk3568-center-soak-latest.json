@@ -1,18 +1,18 @@
 ﻿{
-    "generatedAt":  "2026-04-09T09:50:52Z",
+    "generatedAt":  "2026-04-09T10:03:23Z",
     "mode":  "field-rk3568-center-soak",
     "accepted":  true,
     "currentBoundary":  "rk3568-center-soak-ready",
-    "rounds":  1,
-    "acceptedRounds":  1,
+    "rounds":  2,
+    "acceptedRounds":  2,
     "restartRounds":  0,
-    "intervalSeconds":  0,
+    "intervalSeconds":  30,
     "centerDeployMode":  "validate",
     "summary":  {
-                    "cleanWindowRounds":  1,
+                    "cleanWindowRounds":  2,
                     "maxBoardObservationSchemaRejectedDelta":  0,
-                    "maxParseFailureCount":  9,
-                    "maxClosureRetryCount":  1,
+                    "maxParseFailureCount":  1,
+                    "maxClosureRetryCount":  0,
                     "allAcked":  true,
                     "allMetricsContractStable":  true
                 },
@@ -24,27 +24,44 @@
                              "cleanWindowReopened":  true,
                              "restartRequested":  false,
                              "restartPid":  null,
-                             "closureGeneratedAt":  "2026-04-09T09:50:51Z",
+                             "closureGeneratedAt":  "2026-04-09T09:56:18Z",
                              "closureAccepted":  true,
                              "closureBoundary":  "rk3568-live-center-closure-ready",
                              "boardObservationConclusion":  "rk3568-runtime-observation-window-clean",
                              "boardObservationSchemaRejectedDelta":  0,
-                             "commandId":  "c890778e-d9a5-4ece-8c5e-72b8124f40ec",
+                             "commandId":  "7535d92c-e88d-4730-8ee9-5e3845d38023",
                              "ackStatus":  "acked",
-                             "parseFailureCount":  9,
+                             "parseFailureCount":  0,
                              "nodeAMetricsKeyCountApi":  14,
                              "nodeBMetricsKeyCountApi":  14,
-                             "closureRetryCount":  1,
+                             "closureRetryCount":  0,
                              "closureAttempts":  [
-                                                     {
-                                                         "attempt":  1,
-                                                         "exitCode":  1,
-                                                         "currentBoundary":  "rk3568-live-center-closure-not-yet-accepted",
-                                                         "accepted":  false,
-                                                         "failure":  "==\u003e Center compose acceptance ==\u003e RK3568 board observation window attempt #1 rk3568 field gateway acceptance failed: nodeBOnline At E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\scripts\\dev\\check-rk3568-field-gateway-acceptance.ps1:333 char:5 + throw \"rk3568 field gateway acceptance failed: $failedKeys\" + ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ + CategoryInfo : OperationStopped: (rk3568 field ga...ed: nodeBOnline:String) [], RuntimeException + FullyQualifiedErrorId : rk3568 field gateway acceptance failed: nodeBOnline rk3568 field gateway observation window did not pass At E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\scripts\\dev\\run-rk3568-field-gateway-observation-window.ps1:321 char:5 + throw \"rk3568 field gateway observation window did not pass\" + ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ + CategoryInfo : OperationStopped: (rk3568 field ga...ow did not pass:String) [], RuntimeException + FullyQualifiedErrorId : rk3568 field gateway observation window did not pass ==\u003e RK3568 board observation retry after transient strict failure (1/3) ==\u003e RK3568 board observation window attempt #2 rk3568 field gateway observation window did not pass At E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\scripts\\dev\\run-rk3568-field-gateway-observation-window.ps1:321 char:5 + throw \"rk3568 field gateway observation window did not pass\" + ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ + CategoryInfo : OperationStopped: (rk3568 field ga...ow did not pass:String) [], RuntimeException + FullyQualifiedErrorId : rk3568 field gateway observation window did not pass ==\u003e RK3568 board observation retry after transient strict failure (2/3) ==\u003e RK3568 board observation window attempt #3 rk3568 field gateway acceptance failed: nodeBOnline At E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\scripts\\dev\\check-rk3568-field-gateway-acceptance.ps1:333 char:5 + throw \"rk3568 field gateway acceptance failed: $failedKeys\" + ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ + CategoryInfo : OperationStopped: (rk3568 field ga...ed: nodeBOnline:String) [], RuntimeException + FullyQualifiedErrorId : rk3568 field gateway acceptance failed: nodeBOnline rk3568 field gateway observation window did not pass At E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\scripts\\dev\\run-rk3568-field-gateway-observation-window.ps1:321 char:5 + throw \"rk3568 field gateway observation window did not pass\" + ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ + CategoryInfo : OperationStopped: (rk3568 field ga...ow did not pass:String) [], RuntimeException + FullyQualifiedErrorId : rk3568 field gateway observation window did not pass ==\u003e RK3568 stable node command proof field rk3568 center live closure failed: boardObservationWindowStable At E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\scripts\\dev\\check-field-rk3568-center-live-closure.ps1:657 char: 5 + throw \"field rk3568 center live closure failed: $failedKeys\" + ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ + CategoryInfo : OperationStopped: (field rk3568 ce...ionWindowStable:String) [], RuntimeException + FullyQualifiedErrorId : field rk3568 center live closure failed: boardObservationWindowStable"
-                                                     }
+
                                                  ],
                              "reportFile":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\.tmp\\field-rk3568-center-soak-round-001.json"
+                         },
+                         {
+                             "round":  2,
+                             "accepted":  true,
+                             "recoveryBoundary":  "rk3568-center-operational-recovery-ready",
+                             "cleanWindowReopened":  true,
+                             "restartRequested":  false,
+                             "restartPid":  null,
+                             "closureGeneratedAt":  "2026-04-09T10:03:23Z",
+                             "closureAccepted":  true,
+                             "closureBoundary":  "rk3568-live-center-closure-ready",
+                             "boardObservationConclusion":  "rk3568-runtime-observation-window-clean",
+                             "boardObservationSchemaRejectedDelta":  0,
+                             "commandId":  "dc7bf2c1-58e7-48b4-a503-a228e2f81c8b",
+                             "ackStatus":  "acked",
+                             "parseFailureCount":  1,
+                             "nodeAMetricsKeyCountApi":  14,
+                             "nodeBMetricsKeyCountApi":  14,
+                             "closureRetryCount":  0,
+                             "closureAttempts":  [
+
+                                                 ],
+                             "reportFile":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\.tmp\\field-rk3568-center-soak-round-002.json"
                          }
                      ],
     "nextUse":  [

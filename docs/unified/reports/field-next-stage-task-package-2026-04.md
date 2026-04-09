@@ -259,22 +259,27 @@ permalink: landslide-monitoring-v2-mainline/docs/unified/reports/field-next-stag
 - `docs/unified/reports/field-rk3568-center-soak-latest.json`
 
 3. 已实跑通过的当前最小证据
-- `generatedAt = 2026-04-09T09:50:52Z`
+- `generatedAt = 2026-04-09T10:03:23Z`
 - `accepted = true`
 - `currentBoundary = rk3568-center-soak-ready`
-- `rounds = 1`
-- `acceptedRounds = 1`
-- `cleanWindowRounds = 1`
+- `rounds = 2`
+- `acceptedRounds = 2`
+- `cleanWindowRounds = 2`
 - `maxBoardObservationSchemaRejectedDelta = 0`
+- `maxParseFailureCount = 1`
 - `allAcked = true`
 - `allMetricsContractStable = true`
 
 4. 这条证据的真实工程意义
 - 当前不只是 recovery 单次通过
-- 而是 soak 包装层已经明确证明：
-  - 单轮中 closure 首次瞬时失败可以被记录下来
-  - 包装层 retry 可以把同一轮重新收回到 `accepted = true`
-- 这让后续两轮、三轮持续留证有了正式复跑入口，而不是继续手工抄命令
+- 而是已经拿到一份真正有阶段意义的 `2` 轮 soak 证据：
+  - 两轮都 `accepted = true`
+  - 两轮都保持 `board clean window`
+  - 两轮都 `acked`
+  - 两轮都保持 `node A/B metricsKeyCount = 14`
+  - 本轮 `maxClosureRetryCount = 0`
+- 这意味着当前主线已经不只是“包装层可以救回瞬时抖动”
+- 而是已经拿到了一段无需 wrapper retry 也能连续通过的更强 routine evidence
 
 一句话总结：
 

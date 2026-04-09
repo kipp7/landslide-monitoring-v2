@@ -1183,15 +1183,19 @@ Freeze and execute the next major phase after command-route stabilization: prove
   - report:
     - `docs/unified/reports/field-rk3568-center-soak-latest.json`
   - latest minimal reproved soak facts:
-    - `generatedAt = 2026-04-09T09:50:52Z`
+    - `generatedAt = 2026-04-09T10:03:23Z`
     - `accepted = true`
     - `currentBoundary = rk3568-center-soak-ready`
-    - `rounds = 1`
-    - `acceptedRounds = 1`
-    - `cleanWindowRounds = 1`
+    - `rounds = 2`
+    - `acceptedRounds = 2`
+    - `cleanWindowRounds = 2`
     - `maxBoardObservationSchemaRejectedDelta = 0`
+    - `maxParseFailureCount = 1`
     - `allAcked = true`
     - `allMetricsContractStable = true`
   - the key engineering value is now explicit:
-    - transient first-attempt closure failures are preserved in `closureAttempts`
-    - the wrapper retry can still recover the same soak round back to `accepted = true`
+    - the soak line now has a stronger routine proof where:
+      - both rounds passed
+      - both rounds stayed on clean board windows
+      - both rounds preserved the `14`-key metrics contract
+      - current `maxClosureRetryCount = 0`
