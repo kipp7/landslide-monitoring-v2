@@ -65,6 +65,13 @@ export type Device = {
   lastSeenAt: string;
 };
 
+export type DeviceStateSnapshot = {
+  deviceId: string;
+  updatedAt: string;
+  metrics: Record<string, unknown>;
+  meta: Record<string, unknown>;
+};
+
 export type DeviceCommandStatus = "queued" | "sent" | "acked" | "failed" | "timeout" | "canceled";
 export type SuccessNotificationPolicy = "inherit" | "silent" | "always_notify";
 export type EffectiveSuccessNotificationPolicy = Exclude<SuccessNotificationPolicy, "inherit">;
@@ -290,6 +297,7 @@ export type ApiClient = {
   };
   devices: {
     list: (input?: { stationId?: string }) => Promise<Device[]>;
+    getState: (input: { deviceId: string }) => Promise<DeviceStateSnapshot>;
     issueCommand: (input: {
       deviceId: string;
       commandType: string;

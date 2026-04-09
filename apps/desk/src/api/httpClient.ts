@@ -405,6 +405,23 @@ export function createHttpClient(options: HttpClientOptions): ApiClient {
         const stationModels = mapStationsFromV1(stations, devices);
         return mapDevicesFromV1(devices, stationModels);
       },
+      async getState(input) {
+        const response = await transport.requestV1<{
+          deviceId: string;
+          updatedAt: string;
+          state?: {
+            metrics?: Record<string, unknown>;
+            meta?: Record<string, unknown>;
+          };
+        }>(`/api/v1/data/state/${encodeURIComponent(input.deviceId)}`);
+        const state = response.state && typeof response.state === "object" ? response.state : {};
+        return {
+          deviceId: response.deviceId,
+          updatedAt: response.updatedAt,
+          metrics: state.metrics && typeof state.metrics === "object" ? state.metrics : {},
+          meta: state.meta && typeof state.meta === "object" ? state.meta : {}
+        };
+      },
       async issueCommand(input) {
         const response = await transport.requestV1<{
           commandId: string;

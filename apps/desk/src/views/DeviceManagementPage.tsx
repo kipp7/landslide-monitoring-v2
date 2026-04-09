@@ -2,7 +2,7 @@ import type { MenuProps } from "antd";
 import { ExportOutlined, ReloadOutlined, SettingOutlined, ToolOutlined } from "@ant-design/icons";
 import { App as AntApp, Alert, Button, Dropdown, Modal, Progress, Select, Space, Switch, Tag, Typography } from "antd";
 import ReactECharts from "echarts-for-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import type {
@@ -10,6 +10,7 @@ import type {
   Device,
   DeviceCommand,
   DeviceHealthExpertResult,
+  DeviceStateSnapshot,
   OnlineStatus,
   Station,
   SuccessNotificationPolicy
@@ -82,6 +83,33 @@ function deviceTypeLabel(device: Device) {
   return "摄像头";
 }
 
+function readMetricNumber(metrics: Record<string, unknown> | undefined, key: string): number | null {
+  const value = metrics?.[key];
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function readMetricBoolean(metrics: Record<string, unknown> | undefined, key: string): boolean | null {
+  const value = metrics?.[key];
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true" || normalized === "1") return true;
+    if (normalized === "false" || normalized === "0") return false;
+  }
+  return null;
+}
+
+function formatMetricNumber(value: number | null, digits = 1): string {
+  if (value == null || Number.isNaN(value)) return "--";
+  return value.toFixed(digits);
+}
+
 export function DeviceManagementPage() {
   const api = useApi();
   const navigate = useNavigate();
@@ -105,6 +133,7 @@ export function DeviceManagementPage() {
   const [controlLogs, setControlLogs] = useState<ControlLogRow[]>([]);
   const [sensorRows, setSensorRows] = useState<SensorRow[]>([]);
   const [deviceExpert, setDeviceExpert] = useState<DeviceHealthExpertResult | null>(null);
+  const [deviceState, setDeviceState] = useState<DeviceStateSnapshot | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -188,6 +217,47 @@ export function DeviceManagementPage() {
     [selectedDevice, stationsById]
   );
 
+  const refreshSelectedDeviceState = useCallback(
+    async (deviceId: string) => {
+      const snapshot = await api.devices.getState({ deviceId });
+      setDeviceState(snapshot);
+    },
+    [api]
+  );
+
+  useEffect(() => {
+    if (!selectedDevice) {
+      setDeviceState(null);
+      return;
+    }
+    const abort = new AbortController();
+    const run = async () => {
+      try {
+        const snapshot = await api.devices.getState({ deviceId: selectedDevice.id });
+        if (!abort.signal.aborted) setDeviceState(snapshot);
+      } catch {
+        if (!abort.signal.aborted) setDeviceState(null);
+      }
+    };
+    void run();
+    return () => abort.abort();
+  }, [api, selectedDevice]);
+
+  const deviceStateSummary = useMemo(() => {
+    const metrics = deviceState?.metrics ?? {};
+    return {
+      updatedAt: deviceState?.updatedAt ?? null,
+      temperatureC: readMetricNumber(metrics, "temperature_c"),
+      humidityPct: readMetricNumber(metrics, "humidity_pct"),
+      batteryPct: readMetricNumber(metrics, "battery_pct"),
+      tiltXDeg: readMetricNumber(metrics, "tilt_x_deg"),
+      tiltYDeg: readMetricNumber(metrics, "tilt_y_deg"),
+      gpsLatitude: readMetricNumber(metrics, "gps_latitude"),
+      gpsLongitude: readMetricNumber(metrics, "gps_longitude"),
+      warningFlag: readMetricBoolean(metrics, "warning_flag")
+    };
+  }, [deviceState]);
+
   const deviceMetrics = useMemo(() => {
     if (!selectedDevice) {
       return {
@@ -195,18 +265,36 @@ export function DeviceManagementPage() {
         battery: 0,
         signal: 0,
         todayCount: 0,
-        baselineEstablished: false
+        baselineEstablished: false,
+        stateUpdatedAt: null as string | null,
+        warningFlag: null as boolean | null,
+        temperatureC: null as number | null,
+        humidityPct: null as number | null,
+        tiltXDeg: null as number | null,
+        tiltYDeg: null as number | null
       };
     }
     const seed = selectedDevice.id;
     const fallbackTodayCount = stablePercent(`${seed}-count`, 120, 520);
     const health = deviceExpert?.result.health?.score ?? 0;
-    const battery = deviceExpert?.result.battery?.soc ?? 0;
+    const battery = deviceStateSummary.batteryPct ?? deviceExpert?.result.battery?.soc ?? 0;
     const signal = deviceExpert?.result.signal?.strength ?? 0;
     const todayCount = sensorRows.length > 0 ? sensorRows.length : fallbackTodayCount;
     const baselineEstablished = !!baselineByDeviceId.get(selectedDevice.id);
-    return { health, battery, signal, todayCount, baselineEstablished };
-  }, [baselineByDeviceId, deviceExpert, selectedDevice, sensorRows.length]);
+    return {
+      health,
+      battery,
+      signal,
+      todayCount,
+      baselineEstablished,
+      stateUpdatedAt: deviceStateSummary.updatedAt,
+      warningFlag: deviceStateSummary.warningFlag,
+      temperatureC: deviceStateSummary.temperatureC,
+      humidityPct: deviceStateSummary.humidityPct,
+      tiltXDeg: deviceStateSummary.tiltXDeg,
+      tiltYDeg: deviceStateSummary.tiltYDeg
+    };
+  }, [baselineByDeviceId, deviceExpert, deviceStateSummary, selectedDevice, sensorRows.length]);
 
   const mapOption = useMemo(() => {
     const riskColor = (risk: Station["risk"]) => {
@@ -261,6 +349,13 @@ export function DeviceManagementPage() {
       const [d, b] = await Promise.all([api.devices.list(), api.baselines.list()]);
       setDevices(d);
       setBaselines(b);
+      if (selectedDeviceId) {
+        try {
+          await refreshSelectedDeviceState(selectedDeviceId);
+        } catch {
+          setDeviceState(null);
+        }
+      }
       setLastUpdateTime(new Date().toLocaleTimeString("zh-CN"));
       message.success("已刷新");
     } catch (err) {
@@ -694,7 +789,7 @@ export function DeviceManagementPage() {
                     <div className="desk-dm-metric">
                       <div className="desk-dm-metric-label">最后上报</div>
                       <div className="desk-dm-metric-value" style={{ fontSize: 12, fontWeight: 600 }}>
-                        {new Date(selectedDevice.lastSeenAt).toLocaleString("zh-CN")}
+                        {new Date(deviceMetrics.stateUpdatedAt ?? selectedDevice.lastSeenAt).toLocaleString("zh-CN")}
                       </div>
                     </div>
                   </div>
@@ -720,6 +815,18 @@ export function DeviceManagementPage() {
                   <div className="desk-dm-muted" style={{ marginTop: 8 }}>
                     站点风险: {selectedStation ? <Tag color={selectedStation.risk === "high" ? "red" : selectedStation.risk === "mid" ? "orange" : "green"}>{selectedStation.risk}</Tag> : "--"}
                   </div>
+                  <div className="desk-dm-muted" style={{ marginTop: 8 }}>
+                    状态快照: 温度 {formatMetricNumber(deviceMetrics.temperatureC)}°C · 湿度 {formatMetricNumber(deviceMetrics.humidityPct, 0)}% · 倾角 X/Y{" "}
+                    {formatMetricNumber(deviceMetrics.tiltXDeg, 2)}/{formatMetricNumber(deviceMetrics.tiltYDeg, 2)}°
+                  </div>
+                  {deviceMetrics.warningFlag ? (
+                    <Alert
+                      type="warning"
+                      showIcon
+                      message="设备状态快照显示 warning_flag=true，请结合现场姿态与电量继续观察。"
+                      style={{ marginTop: 12 }}
+                    />
+                  ) : null}
                 </>
               ) : (
                 <div className="desk-dm-empty">请选择设备</div>
@@ -924,6 +1031,12 @@ export function DeviceManagementPage() {
 
               <div className="desk-dm-stack-item">
                 <BaseCard title="实时传感器数据">
+                  <div className="desk-dm-muted" style={{ marginBottom: 10 }}>
+                    主读路径 <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}>/api/v1/data/state/{`{deviceId}`}</span> 当前快照：
+                    电池 {formatMetricNumber(deviceStateSummary.batteryPct, 0)}% · GPS{" "}
+                    {formatMetricNumber(deviceStateSummary.gpsLatitude, 6)}, {formatMetricNumber(deviceStateSummary.gpsLongitude, 6)} · 更新时间{" "}
+                    {deviceStateSummary.updatedAt ? new Date(deviceStateSummary.updatedAt).toLocaleString("zh-CN") : "--"}
+                  </div>
                   <div className="desk-dark-table" style={{ height: "100%", overflow: "auto" }}>
                     <table className="desk-table">
                       <thead>
@@ -936,15 +1049,23 @@ export function DeviceManagementPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {sensorRows.map((r) => (
-                          <tr key={r.id}>
-                            <td>{r.time}</td>
-                            <td>{r.temperature}</td>
-                            <td>{r.humidity}</td>
-                            <td>{r.dispMm}</td>
-                            <td>{r.rainMm}</td>
+                        {sensorRows.length ? (
+                          sensorRows.map((r) => (
+                            <tr key={r.id}>
+                              <td>{r.time}</td>
+                              <td>{r.temperature}</td>
+                              <td>{r.humidity}</td>
+                              <td>{r.dispMm}</td>
+                              <td>{r.rainMm}</td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan={5} style={{ color: "rgba(148,163,184,0.9)" }}>
+                              暂无趋势数据，当前页面已切到状态快照主读路径。
+                            </td>
                           </tr>
-                        ))}
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -1036,7 +1157,7 @@ export function DeviceManagementPage() {
                 </div>
                 <div className="desk-dm-detail-item">
                   <span className="desk-dm-detail-k">最后上报</span>
-                  <span className="desk-dm-detail-v">{new Date(selectedDevice.lastSeenAt).toLocaleString("zh-CN")}</span>
+                  <span className="desk-dm-detail-v">{new Date(deviceMetrics.stateUpdatedAt ?? selectedDevice.lastSeenAt).toLocaleString("zh-CN")}</span>
                 </div>
               </div>
 
@@ -1057,6 +1178,34 @@ export function DeviceManagementPage() {
                 <div className="desk-dm-detail-item">
                   <span className="desk-dm-detail-k">基线状态</span>
                   <span className="desk-dm-detail-v">{deviceMetrics.baselineEstablished ? "已建立" : "待建立"}</span>
+                </div>
+                <div className="desk-dm-detail-item">
+                  <span className="desk-dm-detail-k">warning_flag</span>
+                  <span className="desk-dm-detail-v">
+                    {deviceMetrics.warningFlag == null ? "-" : deviceMetrics.warningFlag ? "true" : "false"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="desk-dm-detail-card" style={{ marginTop: 12 }}>
+              <div className="desk-dm-detail-title">状态快照</div>
+              <div className="desk-dm-detail-grid" style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))" }}>
+                <div className="desk-dm-detail-item">
+                  <span className="desk-dm-detail-k">温度</span>
+                  <span className="desk-dm-detail-v">{formatMetricNumber(deviceMetrics.temperatureC)}°C</span>
+                </div>
+                <div className="desk-dm-detail-item">
+                  <span className="desk-dm-detail-k">湿度</span>
+                  <span className="desk-dm-detail-v">{formatMetricNumber(deviceMetrics.humidityPct, 0)}%</span>
+                </div>
+                <div className="desk-dm-detail-item">
+                  <span className="desk-dm-detail-k">倾角 X</span>
+                  <span className="desk-dm-detail-v">{formatMetricNumber(deviceMetrics.tiltXDeg, 2)}°</span>
+                </div>
+                <div className="desk-dm-detail-item">
+                  <span className="desk-dm-detail-k">倾角 Y</span>
+                  <span className="desk-dm-detail-v">{formatMetricNumber(deviceMetrics.tiltYDeg, 2)}°</span>
                 </div>
               </div>
             </div>

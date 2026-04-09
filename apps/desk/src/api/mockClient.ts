@@ -465,6 +465,42 @@ export function createMockClient(options: MockOptions = {}): ApiClient {
         if (!input?.stationId) return devices;
         return devices.filter((d) => d.stationId === input.stationId);
       },
+      async getState(input) {
+        await afterDelay("devices.getState");
+        const device = devices.find((item) => item.id === input.deviceId);
+        const station = stations.find((item) => item.id === device?.stationId);
+        const batteryPct = stablePercent(`${input.deviceId}-battery`, 18, 100);
+        const humidityPct = stablePercent(`${input.deviceId}-humidity`, 40, 88);
+        const temperatureC = stablePercent(`${input.deviceId}-temperature`, 160, 340) / 10;
+        const tiltXDeg = stablePercent(`${input.deviceId}-tilt-x`, 12, 178);
+        const tiltYDeg = stablePercent(`${input.deviceId}-tilt-y`, 8, 132);
+        const warningFlag = device?.status === "warning";
+        return {
+          deviceId: input.deviceId,
+          updatedAt: device?.lastSeenAt ?? nowIso(),
+          metrics: {
+            temperature_c: Number(temperatureC.toFixed(1)),
+            humidity_pct: Number(humidityPct.toFixed(1)),
+            accel_x_g: Number((stablePercent(`${input.deviceId}-accel-x`, -100, 100) / 100).toFixed(2)),
+            accel_y_g: Number((stablePercent(`${input.deviceId}-accel-y`, -100, 100) / 100).toFixed(2)),
+            accel_z_g: 1,
+            gyro_x_dps: Number((stablePercent(`${input.deviceId}-gyro-x`, -50, 50) / 10).toFixed(1)),
+            gyro_y_dps: Number((stablePercent(`${input.deviceId}-gyro-y`, -50, 50) / 10).toFixed(1)),
+            gyro_z_dps: Number((stablePercent(`${input.deviceId}-gyro-z`, -50, 50) / 10).toFixed(1)),
+            tilt_x_deg: tiltXDeg,
+            tilt_y_deg: tiltYDeg,
+            gps_latitude: Number(((station?.lat ?? 30.6) + 0.000123).toFixed(6)),
+            gps_longitude: Number(((station?.lng ?? 104.06) + 0.000156).toFixed(6)),
+            battery_pct: batteryPct,
+            warning_flag: warningFlag
+          },
+          meta: {
+            install_label: device?.name ?? input.deviceId,
+            legacy_node: station?.name ?? "",
+            upload_trigger: "periodic"
+          }
+        };
+      },
       async issueCommand(input) {
         await afterDelay("devices.issueCommand");
         const createdAt = nowIso();

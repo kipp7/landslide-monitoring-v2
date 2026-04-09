@@ -1290,3 +1290,25 @@ Freeze and execute the next major phase after command-route stabilization: prove
 - this means the next center-side work no longer needs to prove that handoff material still has to be assembled:
   - the handoff packet now exists
   - the runbook, freeze boundary, acceptance boundary, and readiness boundary are already bound together
+- the software-side consumer-adaptation slice has now advanced from proof-only into desk implementation:
+  - desk files:
+    - `apps/desk/src/api/client.ts`
+    - `apps/desk/src/api/httpClient.ts`
+    - `apps/desk/src/api/mockClient.ts`
+    - `apps/desk/src/views/DeviceManagementPage.tsx`
+    - `apps/desk/src/views/deviceManagementExport.ts`
+  - implementation facts:
+    - desk `ApiClient.devices` now exposes `getState({ deviceId })`
+    - the HTTP client now reads `/api/v1/data/state/{deviceId}` directly
+    - the mock client now mirrors the frozen field metrics contract for local desk rehearsal
+    - `DeviceManagementPage` now renders current snapshot facts from the frozen state path instead of staying purely on derived/fallback UI data
+    - copied device detail text now includes snapshot update time, temperature, humidity, tilt, and `warning_flag`
+  - verification:
+    - command:
+      - `npm --workspace apps/desk run build`
+    - result:
+      - `tsc -p tsconfig.json && vite build`
+      - build completed successfully on `2026-04-09`
+  - this narrows the next software slice further:
+    - continue aligning remaining desk/web consumers to the same frozen device-state path
+    - avoid reopening firmware/protocol scope while consumer work is still moving

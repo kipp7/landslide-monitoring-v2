@@ -24,6 +24,12 @@ export type DeviceDetailCopyInput = {
     signal: number;
     todayCount: number;
     baselineEstablished: boolean;
+    stateUpdatedAt?: string | null;
+    warningFlag?: boolean | null;
+    temperatureC?: number | null;
+    humidityPct?: number | null;
+    tiltXDeg?: number | null;
+    tiltYDeg?: number | null;
   };
 };
 
@@ -106,7 +112,12 @@ export function buildDeviceDetailText(input: DeviceDetailCopyInput): string {
     `电池电量: ${metrics.battery}%`,
     `信号强度: ${metrics.signal}%`,
     `今日数据: ${metrics.todayCount} 条`,
-    `基线状态: ${metrics.baselineEstablished ? "已建立" : "待建立"}`
+    `基线状态: ${metrics.baselineEstablished ? "已建立" : "待建立"}`,
+    `状态更新时间: ${metrics.stateUpdatedAt ? new Date(metrics.stateUpdatedAt).toLocaleString("zh-CN") : "-"}`,
+    `温度: ${metrics.temperatureC == null ? "-" : `${metrics.temperatureC.toFixed(1)}°C`}`,
+    `湿度: ${metrics.humidityPct == null ? "-" : `${metrics.humidityPct.toFixed(0)}%`}`,
+    `倾角 X/Y: ${metrics.tiltXDeg == null || metrics.tiltYDeg == null ? "-" : `${metrics.tiltXDeg.toFixed(2)} / ${metrics.tiltYDeg.toFixed(2)}°`}`,
+    `warning_flag: ${metrics.warningFlag == null ? "-" : metrics.warningFlag ? "true" : "false"}`
   ].join("\r\n");
 }
 
