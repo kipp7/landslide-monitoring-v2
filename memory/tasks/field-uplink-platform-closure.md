@@ -1484,3 +1484,25 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - or pivot to the next work package outside web consumer convergence:
       - center deployment/runtime hardening follow-up
       - RK3568 integration implementation
+- the final obvious web backup residue has now also been removed:
+  - file:
+    - `apps/web/app/device-management/page.tsx.backup`
+  - facts:
+    - the file had no runtime/source references
+    - only journal/roadmap history notes still mentioned it as a past compatibility artifact
+  - verification:
+    - `rg -n "/api/device-management" apps/web -S`
+      now returns:
+      - `NO_MATCH`
+    - `npm --workspace apps/web run build`
+      passed on `2026-04-09`
+    - `npx tsc -p .\\apps\\web\\tsconfig.json --noEmit --pretty false`
+      passed after the successful build on `2026-04-09`
+  - current interpretation:
+    - source-level web consumer convergence away from `/api/device-management` is now effectively complete
+    - any remaining `/api/device-management` presence is now outside active web source search scope
+  - next recommended slice:
+    - leave web consumer cleanup closed
+    - pivot execution back to:
+      - center deployment/runtime hardening
+      - RK3568 integration implementation
