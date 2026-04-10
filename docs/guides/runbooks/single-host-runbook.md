@@ -284,3 +284,42 @@ permalink: landslide-monitoring-v2-mainline/docs/guides/runbooks/single-host-run
 - `field-rk3568-production-uplink-freeze` 中的：
   - 历史累计 `publishFailures`
   不再单独代表当前上行失败；只有在最近发布已停止、`spoolPending > 0` 或 `rejectedWriteFailures > 0` 时，才视为当前正式上行冻结失效
+
+## 10.2 RK3568 开机联网与热点回退入口
+
+当当前目标是固化 RK3568 的开机联网行为，而不是单独看 gateway uplink 或 center handoff 时，直接走 `network bootstrap` 入口，不要手工 SSH 上板后临时敲 `nmcli`。
+
+当前正式口径：
+
+- `STA first, AP fallback`
+- AP fallback 维护热点固定名：
+  - `rk3568-1`
+- `network bootstrap` 只负责：
+  - STA 自动连接
+  - AP fallback
+  - gateway 启动顺序协同
+  - 状态文件与运维证据
+- 它不负责：
+  - MQTT 协议
+  - southbound 串口接入
+  - OpenClaw 推理或业务 UI
+
+Windows 主机当前推荐入口：
+
+- 安装/更新 bootstrap：
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\install-rk3568-network-bootstrap.ps1 -Password <password>`
+- 检查 bootstrap 运行态：
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-rk3568-network-bootstrap.ps1 -Password <password>`
+
+标准报告输出：
+
+- `docs/unified/reports/field-rk3568-network-bootstrap-latest.json`
+
+当前工程口径：
+
+- `accepted = true` 还不能仅靠 bootstrap 本身宣布，需要与：
+  - `lsmv2-field-gateway.service`
+  - `field-rk3568-production-uplink-freeze`
+  - `field-center-rk3568-routine-guard`
+  一起看
+- 未来若接入 `OpenClaw` 数据链质量监控，只允许先以只读 sidecar 方式挂在这条线之上，不能反向侵入 gateway 主链

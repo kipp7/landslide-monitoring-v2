@@ -1,0 +1,153 @@
+﻿{
+    "generatedAt":  "2026-04-10T08:09:53Z",
+    "mode":  "rk3568-network-bootstrap-runtime-check",
+    "envFile":  "/etc/lsmv2/network-bootstrap.env",
+    "statusFile":  "/var/lib/lsmv2/network-bootstrap/status/runtime-status.json",
+    "configuredEnv":  {
+                          "WIFI_DEVICE":  "wlan0",
+                          "STA_CONNECTION_NAME":  "JRSPR_5G",
+                          "STA_SSID":  "",
+                          "STA_PSK":  "",
+                          "AP_CONNECTION_NAME":  "lsmv2-ap-fallback",
+                          "AP_SSID":  "rk3568-1",
+                          "AP_PSK":  "***REDACTED***",
+                          "BOOTSTRAP_LOOP_INTERVAL_SECONDS":  "20",
+                          "STA_CONNECT_TIMEOUT_SECONDS":  "45",
+                          "STA_RETRY_INTERVAL_SECONDS":  "60",
+                          "GATEWAY_SERVICE_NAME":  "lsmv2-field-gateway.service",
+                          "STATUS_FILE_PATH":  "/var/lib/lsmv2/network-bootstrap/status/runtime-status.json"
+                      },
+    "bootstrapService":  {
+                             "name":  "lsmv2-rk3568-network-bootstrap.service",
+                             "isActive":  {
+                                              "command":  [
+                                                              "systemctl",
+                                                              "is-active",
+                                                              "lsmv2-rk3568-network-bootstrap.service"
+                                                          ],
+                                              "returncode":  0,
+                                              "stdout":  "active",
+                                              "stderr":  ""
+                                          },
+                             "isEnabled":  {
+                                               "command":  [
+                                                               "systemctl",
+                                                               "is-enabled",
+                                                               "lsmv2-rk3568-network-bootstrap.service"
+                                                           ],
+                                               "returncode":  0,
+                                               "stdout":  "enabled",
+                                               "stderr":  ""
+                                           }
+                         },
+    "gatewayService":  {
+                           "name":  "lsmv2-field-gateway.service",
+                           "isActive":  {
+                                            "command":  [
+                                                            "systemctl",
+                                                            "is-active",
+                                                            "lsmv2-field-gateway.service"
+                                                        ],
+                                            "returncode":  0,
+                                            "stdout":  "active",
+                                            "stderr":  ""
+                                        },
+                           "isEnabled":  {
+                                             "command":  [
+                                                             "systemctl",
+                                                             "is-enabled",
+                                                             "lsmv2-field-gateway.service"
+                                                         ],
+                                             "returncode":  0,
+                                             "stdout":  "enabled",
+                                             "stderr":  ""
+                                         }
+                       },
+    "nmcliGeneral":  {
+                         "command":  [
+                                         "nmcli",
+                                         "-t",
+                                         "-f",
+                                         "STATE,CONNECTIVITY",
+                                         "general"
+                                     ],
+                         "returncode":  0,
+                         "stdout":  "connected:full",
+                         "stderr":  ""
+                     },
+    "nmcliDeviceStatus":  {
+                              "command":  [
+                                              "nmcli",
+                                              "-t",
+                                              "-f",
+                                              "DEVICE,TYPE,STATE,CONNECTION",
+                                              "device",
+                                              "status"
+                                          ],
+                              "returncode":  0,
+                              "stdout":  "wlan0:wifi:connected:JRSPR_5G\neth0:ethernet:unavailable:\ncan0:can:unmanaged:\ndummy0:dummy:unmanaged:\nlo:loopback:unmanaged:\np2p-dev-wlan0:wifi-p2p:unmanaged:",
+                              "stderr":  ""
+                          },
+    "nmcliActiveConnections":  {
+                                   "command":  [
+                                                   "nmcli",
+                                                   "-t",
+                                                   "-f",
+                                                   "NAME,TYPE,DEVICE",
+                                                   "connection",
+                                                   "show",
+                                                   "--active"
+                                               ],
+                                   "returncode":  0,
+                                   "stdout":  "JRSPR_5G:802-11-wireless:wlan0",
+                                   "stderr":  ""
+                               },
+    "ipv4Addresses":  {
+                          "command":  [
+                                          "bash",
+                                          "-lc",
+                                          "ip -o -4 addr show | awk \u0027{print $2\":\"$4}\u0027"
+                                      ],
+                          "returncode":  0,
+                          "stdout":  "lo:127.0.0.1/8\nwlan0:192.168.124.172/24",
+                          "stderr":  ""
+                      },
+    "runtimeStatus":  {
+                          "generatedAt":  "2026-04-10T08:09:38Z",
+                          "service":  "rk3568-network-bootstrap",
+                          "mode":  "sta_connected",
+                          "wifiDevice":  "wlan0",
+                          "staConnectionName":  "JRSPR_5G",
+                          "apConnectionName":  "lsmv2-ap-fallback",
+                          "apSsid":  "rk3568-1",
+                          "loopIntervalSeconds":  20,
+                          "staConnectTimeoutSeconds":  45,
+                          "staRetryIntervalSeconds":  60,
+                          "lastAction":  "sta-healthy",
+                          "lastError":  null,
+                          "lastMode":  "sta_connected",
+                          "lastModeChangeTs":  "2026-04-10T08:08:56Z",
+                          "lastStaAttemptTs":  null,
+                          "lastStaSuccessTs":  "2026-04-10T08:09:38Z",
+                          "nmcliGeneral":  {
+                                               "state":  "connected",
+                                               "connectivity":  "full"
+                                           },
+                          "activeConnections":  [
+                                                    {
+                                                        "name":  "JRSPR_5G",
+                                                        "type":  "802-11-wireless",
+                                                        "device":  "wlan0"
+                                                    }
+                                                ],
+                          "ipAddresses":  [
+                                              "lo:127.0.0.1/8",
+                                              "wlan0:192.168.124.172/24"
+                                          ],
+                          "gatewayService":  {
+                                                 "name":  "lsmv2-field-gateway.service",
+                                                 "active":  "active",
+                                                 "enabled":  "enabled"
+                                             }
+                      }
+}

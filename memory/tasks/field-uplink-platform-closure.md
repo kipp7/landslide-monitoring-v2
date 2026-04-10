@@ -1705,3 +1705,30 @@ Freeze and execute the next major phase after command-route stabilization: prove
   - operational value:
     - upstream freeze scripts can now be rerun independently without chasing a downstream readiness artifact
     - the downstream readiness/handoff artifacts now summarize the actual current phase instead of the older recovery+soak phase gate
+- the RK3568 edge network bootstrap line is now recovered and verified on hardware on `2026-04-10`:
+  - local recovery facts:
+    - the earlier failed bootstrap attempt had left multiple AP profiles on the board side
+    - after the local cleanup, the board returned to `JRSPR_5G` with `192.168.124.172`
+  - Windows wrapper hardening:
+    - `scripts/dev/install-rk3568-network-bootstrap.ps1`
+    - `scripts/dev/check-rk3568-network-bootstrap.ps1`
+    - both now force password-only Paramiko auth and retry SSH connect up to 5 times
+    - this closes the transient `No existing session` failure that was interrupting runtime deploys from the Windows host
+  - live install / verification facts:
+    - install completed at `2026-04-10T08:08:56Z`
+    - verification completed at `2026-04-10T08:09:53Z`
+    - report:
+      - `docs/unified/reports/field-rk3568-network-bootstrap-latest.json`
+    - accepted runtime facts:
+      - `bootstrapService.active = true`
+      - `bootstrapService.enabled = true`
+      - `gatewayService.active = true`
+      - `nmcliActiveConnections = JRSPR_5G:802-11-wireless:wlan0`
+      - `runtimeStatus.mode = sta_connected`
+      - `runtimeStatus.lastAction = sta-healthy`
+      - `runtimeStatus.lastError = null`
+      - `ipv4Addresses = wlan0:192.168.124.172/24`
+  - frozen interpretation:
+    - the network bootstrap line is now safe enough to keep on the main RK3568 productionization track
+    - `STA first, AP fallback` remains the correct contract, but AP fallback must remain a recovery path rather than the default steady-state outcome
+    - next work should stay on center deployment/runtime hardening and not reopen firmware or protocol scope

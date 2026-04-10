@@ -6,7 +6,7 @@ permalink: landslide-monitoring-v2-mainline/services/field-gateway/deploy/readme
 
 # field-gateway 部署件
 
-本目录只负责 RK3568 第一版 `field-gateway` 的运行固化，不负责多节点、下行命令或网络管理进程。
+本目录负责 RK3568 第一版 `field-gateway` 的运行固化，以及与之配套的 `network bootstrap` 守护固化。
 
 ## 文件
 
@@ -18,6 +18,16 @@ permalink: landslide-monitoring-v2-mainline/services/field-gateway/deploy/readme
   - 在 RK3568 Ubuntu 上安装/更新 systemd 服务的脚本
 - `check-rk3568-runtime.sh`
   - 在 RK3568 上输出当前 `field-gateway` 运行态快照的脚本
+- `rk3568-network-bootstrap.py`
+  - RK3568 `STA first, AP fallback` 守护主程序
+- `rk3568-network-bootstrap.service.template`
+  - `network bootstrap` systemd unit 模板
+- `rk3568-network-bootstrap.env.example`
+  - `network bootstrap` 环境变量样例
+- `install-rk3568-network-bootstrap.sh`
+  - 在 RK3568 Ubuntu 上安装/更新 `network bootstrap` 服务的脚本
+- `check-rk3568-network-bootstrap.sh`
+  - 在 RK3568 上输出当前 `network bootstrap` 运行态快照的脚本
 
 ## 当前运行约定
 
@@ -32,6 +42,14 @@ permalink: landslide-monitoring-v2-mainline/services/field-gateway/deploy/readme
   - `/var/lib/lsmv2/field-gateway`
 - 服务名默认：
   - `lsmv2-field-gateway.service`
+- `network bootstrap` 环境文件默认：
+  - `/etc/lsmv2/network-bootstrap.env`
+- `network bootstrap` 状态目录默认：
+  - `/var/lib/lsmv2/network-bootstrap`
+- `network bootstrap` 服务名默认：
+  - `lsmv2-rk3568-network-bootstrap.service`
+- AP fallback 热点名默认：
+  - `rk3568-1`
 
 ## 最小部署方式
 
@@ -61,4 +79,6 @@ Windows 主机当前推荐入口：
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\install-rk3568-field-gateway.ps1 -Password linaro
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-rk3568-field-gateway-runtime.ps1 -Password linaro
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\install-rk3568-network-bootstrap.ps1 -Password linaro
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-rk3568-network-bootstrap.ps1 -Password linaro
 ```
