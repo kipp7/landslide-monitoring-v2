@@ -251,6 +251,7 @@ permalink: landslide-monitoring-v2-mainline/docs/guides/runbooks/single-host-run
 当当前目标不是单独看中心或单独看板端，而是要确认：
 
 - center runtime freeze 仍然成立
+- RK3568 network bootstrap 仍稳定停在 `sta_connected`
 - RK3568 正式上行冻结仍然成立
 - RK3568 operational recovery 仍然成立
 - 当前 readiness / handoff 仍与上述基线一致
@@ -265,6 +266,7 @@ permalink: landslide-monitoring-v2-mainline/docs/guides/runbooks/single-host-run
 这条入口会顺序收口：
 
 - `check-field-center-runtime-freeze.ps1`
+- `check-rk3568-network-bootstrap.ps1`
 - `check-field-rk3568-production-uplink-freeze.ps1`
 - `check-field-rk3568-center-operational-recovery.ps1`
 - `check-field-center-deployment-software-adaptation-readiness.ps1`
@@ -278,6 +280,7 @@ permalink: landslide-monitoring-v2-mainline/docs/guides/runbooks/single-host-run
 
 - `accepted = true` 表示：
   - center runtime / env / compose 边界仍冻结
+  - RK3568 开机联网仍稳定维持 `STA first`
   - RK3568 uplink env/runtime 仍冻结
   - RK3568 recovery 仍闭合
   - readiness / handoff 仍与当前正式主线一致

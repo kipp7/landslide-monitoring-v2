@@ -1,8 +1,8 @@
 ﻿{
-    "generatedAt":  "2026-04-10T06:35:30Z",
-    "accepted":  true,
+    "generatedAt":  "2026-04-10T10:14:47Z",
+    "accepted":  false,
     "mode":  "field-rk3568-production-uplink-freeze",
-    "currentBoundary":  "rk3568-production-uplink-freeze-ready",
+    "currentBoundary":  "rk3568-production-uplink-freeze-needs-review",
     "board":  {
                   "host":  "192.168.124.172",
                   "sshPort":  22,
@@ -46,7 +46,8 @@
                                                  }
                                              ],
                          "failureKeys":  [
-
+                                             "runtimeNodeBOnline",
+                                             "commandPathObserved"
                                          ]
                      },
     "runtime":  {
@@ -54,18 +55,18 @@
                     "serviceEnabled":  "enabled",
                     "mqttConnected":  true,
                     "serialOpen":  true,
-                    "publishedMessages":  13390,
-                    "publishFailures":  5,
+                    "publishedMessages":  1070,
+                    "publishFailures":  4,
                     "publishPathRecoveredOrClean":  true,
-                    "lastPublishedAgeSeconds":  0,
-                    "rejectedMessages":  1801,
+                    "lastPublishedAgeSeconds":  8,
+                    "rejectedMessages":  114,
                     "rejectedWriteFailures":  0,
                     "spoolPending":  0,
-                    "commandsForwarded":  38,
-                    "ackMessagesPublished":  20,
+                    "commandsForwarded":  1,
+                    "ackMessagesPublished":  0,
                     "nodeStatuses":  {
                                          "nodeA":  "online",
-                                         "nodeB":  "online",
+                                         "nodeB":  "offline",
                                          "nodeC":  "configured"
                                      }
                 },
@@ -178,8 +179,8 @@
                    },
                    {
                        "key":  "runtimeNodeBOnline",
-                       "ok":  true,
-                       "actual":  "online",
+                       "ok":  false,
+                       "actual":  "offline",
                        "expected":  "online"
                    },
                    {
@@ -191,7 +192,7 @@
                    {
                        "key":  "publishPathRecoveredOrClean",
                        "ok":  true,
-                       "actual":  "publishFailures=5,lastPublishedAgeSeconds=0,spoolPending=0,rejectedWriteFailures=0",
+                       "actual":  "publishFailures=4,lastPublishedAgeSeconds=8,spoolPending=0,rejectedWriteFailures=0",
                        "expected":  "published\u003e=1,lastPublishedAgeSeconds\u003c=120,spoolPending=0,rejectedWriteFailures=0"
                    },
                    {
@@ -214,8 +215,8 @@
                    },
                    {
                        "key":  "commandPathObserved",
-                       "ok":  true,
-                       "actual":  "forwarded=38,acked=20",
+                       "ok":  false,
+                       "actual":  "forwarded=1,acked=0",
                        "expected":  "forwarded\u003e=1,acked\u003e=1"
                    }
                ]

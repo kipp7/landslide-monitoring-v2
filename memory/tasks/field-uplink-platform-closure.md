@@ -1732,3 +1732,39 @@ Freeze and execute the next major phase after command-route stabilization: prove
     - the network bootstrap line is now safe enough to keep on the main RK3568 productionization track
     - `STA first, AP fallback` remains the correct contract, but AP fallback must remain a recovery path rather than the default steady-state outcome
     - next work should stay on center deployment/runtime hardening and not reopen firmware or protocol scope
+- the next hardening round on `2026-04-10` extended the runtime contract and exposed a real current-field gap:
+  - code changes:
+    - `scripts/dev/check-rk3568-network-bootstrap.ps1`
+      now emits formal `accepted/currentBoundary/checks`
+    - `scripts/dev/check-field-center-rk3568-routine-guard.ps1`
+      now treats `field-rk3568-network-bootstrap-latest.json` as part of the routine baseline
+    - `services/field-gateway/src/index.ts`
+      now handles corrupt pending spool records by moving them into rejected evidence instead of crashing the whole process during replay
+  - verified runtime facts:
+    - after redeploy, `lsmv2-field-gateway.service` returned to `active/running`
+    - `field-rk3568-network-bootstrap-latest.json`
+      reached:
+      - `generatedAt = 2026-04-10T10:14:29Z`
+      - `accepted = true`
+      - `currentBoundary = rk3568-network-bootstrap-ready`
+    - the recovered gateway process now:
+      - publishes telemetry again
+      - preserves malformed payloads as rejected evidence
+      - no longer exits on corrupt pending spool JSON
+  - current blocking fact:
+    - `field-rk3568-production-uplink-freeze-latest.json` at `2026-04-10T10:14:47Z` is still `accepted = false`
+    - concrete failure keys are:
+      - `runtimeNodeBOnline`
+      - `commandPathObserved`
+    - later runtime snapshot at `2026-04-10T10:15:28Z` confirms:
+      - `nodeA = online`
+      - `nodeB = offline`
+      - `nodeC = configured`
+      - `ackMessagesPublished = 0`
+      - `spoolPending = 0`
+      - `publishedMessages = 1078`
+      - `rejectedWriteFailures = 0`
+  - frozen interpretation:
+    - the gateway/bootstrap process layer is now hardened enough for the mainline
+    - the remaining blocker is no longer process stability but real field-state recovery for node B / ack path
+    - routine guard must stay non-green until node B telemetry and ack observation come back

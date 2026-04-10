@@ -1,6 +1,14 @@
 ﻿{
-    "generatedAt":  "2026-04-10T08:09:53Z",
+    "generatedAt":  "2026-04-10T10:14:29Z",
+    "accepted":  true,
     "mode":  "rk3568-network-bootstrap-runtime-check",
+    "currentBoundary":  "rk3568-network-bootstrap-ready",
+    "scope":  {
+                  "target":  "rk3568-network-bootstrap-runtime",
+                  "failureKeys":  [
+
+                                  ]
+              },
     "envFile":  "/etc/lsmv2/network-bootstrap.env",
     "statusFile":  "/var/lib/lsmv2/network-bootstrap/status/runtime-status.json",
     "configuredEnv":  {
@@ -113,7 +121,7 @@
                           "stderr":  ""
                       },
     "runtimeStatus":  {
-                          "generatedAt":  "2026-04-10T08:09:38Z",
+                          "generatedAt":  "2026-04-10T10:14:11Z",
                           "service":  "rk3568-network-bootstrap",
                           "mode":  "sta_connected",
                           "wifiDevice":  "wlan0",
@@ -128,7 +136,7 @@
                           "lastMode":  "sta_connected",
                           "lastModeChangeTs":  "2026-04-10T08:08:56Z",
                           "lastStaAttemptTs":  null,
-                          "lastStaSuccessTs":  "2026-04-10T08:09:38Z",
+                          "lastStaSuccessTs":  "2026-04-10T10:14:10Z",
                           "nmcliGeneral":  {
                                                "state":  "connected",
                                                "connectivity":  "full"
@@ -149,5 +157,66 @@
                                                  "active":  "active",
                                                  "enabled":  "enabled"
                                              }
-                      }
+                      },
+    "nextUse":  [
+                    "bootstrap check: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\check-rk3568-network-bootstrap.ps1 -Password \u003cpassword\u003e",
+                    "bootstrap install/update: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\install-rk3568-network-bootstrap.ps1 -Password \u003cpassword\u003e -WifiDevice wlan0 -StaConnectionName JRSPR_5G",
+                    "routine guard: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\check-field-center-rk3568-routine-guard.ps1 -BoardPassword \u003cpassword\u003e -AllowUnsafeSecrets"
+                ],
+    "checks":  [
+                   {
+                       "key":  "bootstrapServiceActive",
+                       "ok":  true,
+                       "actual":  "active",
+                       "expected":  "active"
+                   },
+                   {
+                       "key":  "bootstrapServiceEnabled",
+                       "ok":  true,
+                       "actual":  "enabled",
+                       "expected":  "enabled"
+                   },
+                   {
+                       "key":  "gatewayServiceActive",
+                       "ok":  true,
+                       "actual":  "active",
+                       "expected":  "active"
+                   },
+                   {
+                       "key":  "gatewayServiceEnabled",
+                       "ok":  true,
+                       "actual":  "enabled",
+                       "expected":  "enabled"
+                   },
+                   {
+                       "key":  "nmcliConnectedFull",
+                       "ok":  true,
+                       "actual":  "connected:full",
+                       "expected":  "connected:full"
+                   },
+                   {
+                       "key":  "staConnectionActive",
+                       "ok":  true,
+                       "actual":  "JRSPR_5G:802-11-wireless:wlan0",
+                       "expected":  "JRSPR_5G:802-11-wireless:wlan0"
+                   },
+                   {
+                       "key":  "runtimeModeStaConnected",
+                       "ok":  true,
+                       "actual":  "sta_connected",
+                       "expected":  "sta_connected"
+                   },
+                   {
+                       "key":  "runtimeLastErrorClear",
+                       "ok":  true,
+                       "actual":  null,
+                       "expected":  null
+                   },
+                   {
+                       "key":  "ipv4PresentOnWifiDevice",
+                       "ok":  true,
+                       "actual":  "lo:127.0.0.1/8\nwlan0:192.168.124.172/24",
+                       "expected":  "wlan0:\u003cipv4\u003e"
+                   }
+               ]
 }

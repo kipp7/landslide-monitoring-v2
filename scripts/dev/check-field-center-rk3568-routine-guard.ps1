@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
   [string]$CenterRuntimeFreezeScript = "scripts/dev/check-field-center-runtime-freeze.ps1",
+  [string]$Rk3568NetworkBootstrapScript = "scripts/dev/check-rk3568-network-bootstrap.ps1",
   [string]$Rk3568ProductionUplinkFreezeScript = "scripts/dev/check-field-rk3568-production-uplink-freeze.ps1",
   [string]$OperationalRecoveryScript = "scripts/dev/check-field-rk3568-center-operational-recovery.ps1",
   [string]$PhaseReadinessScript = "scripts/dev/check-field-center-deployment-software-adaptation-readiness.ps1",
@@ -101,6 +102,7 @@ function Get-Check {
 
 $repoRoot = Resolve-RepoRoot
 $resolvedCenterRuntimeFreezeScript = Resolve-RepoPath -RootPath $repoRoot -CandidatePath $CenterRuntimeFreezeScript
+$resolvedRk3568NetworkBootstrapScript = Resolve-RepoPath -RootPath $repoRoot -CandidatePath $Rk3568NetworkBootstrapScript
 $resolvedRk3568ProductionUplinkFreezeScript = Resolve-RepoPath -RootPath $repoRoot -CandidatePath $Rk3568ProductionUplinkFreezeScript
 $resolvedOperationalRecoveryScript = Resolve-RepoPath -RootPath $repoRoot -CandidatePath $OperationalRecoveryScript
 $resolvedPhaseReadinessScript = Resolve-RepoPath -RootPath $repoRoot -CandidatePath $PhaseReadinessScript
@@ -126,6 +128,10 @@ Push-Location $repoRoot
 try {
   $centerRuntimeFreeze = Invoke-JsonScript "Center runtime freeze" {
     powershell -NoProfile -ExecutionPolicy Bypass -File $resolvedCenterRuntimeFreezeScript @commonUnsafeArgs
+  }
+
+  $rk3568NetworkBootstrap = Invoke-JsonScript "RK3568 network bootstrap" {
+    powershell -NoProfile -ExecutionPolicy Bypass -File $resolvedRk3568NetworkBootstrapScript @boardPasswordArgs
   }
 
   $rk3568ProductionUplinkFreeze = Invoke-JsonScript "RK3568 production uplink freeze" {
@@ -157,6 +163,9 @@ try {
   $checks = @(
     (Get-Check -Key "centerRuntimeFreezeAccepted" -Ok:([bool]$centerRuntimeFreeze.accepted) -Actual ([bool]$centerRuntimeFreeze.accepted) -Expected $true),
     (Get-Check -Key "centerRuntimeFreezeBoundary" -Ok:([string]$centerRuntimeFreeze.currentBoundary -eq "center-runtime-freeze-ready") -Actual ([string]$centerRuntimeFreeze.currentBoundary) -Expected "center-runtime-freeze-ready"),
+    (Get-Check -Key "rk3568NetworkBootstrapAccepted" -Ok:([bool]$rk3568NetworkBootstrap.accepted) -Actual ([bool]$rk3568NetworkBootstrap.accepted) -Expected $true),
+    (Get-Check -Key "rk3568NetworkBootstrapBoundary" -Ok:([string]$rk3568NetworkBootstrap.currentBoundary -eq "rk3568-network-bootstrap-ready") -Actual ([string]$rk3568NetworkBootstrap.currentBoundary) -Expected "rk3568-network-bootstrap-ready"),
+    (Get-Check -Key "rk3568NetworkBootstrapMode" -Ok:([string]$rk3568NetworkBootstrap.runtimeStatus.mode -eq "sta_connected") -Actual ([string]$rk3568NetworkBootstrap.runtimeStatus.mode) -Expected "sta_connected"),
     (Get-Check -Key "rk3568ProductionUplinkFreezeAccepted" -Ok:([bool]$rk3568ProductionUplinkFreeze.accepted) -Actual ([bool]$rk3568ProductionUplinkFreeze.accepted) -Expected $true),
     (Get-Check -Key "rk3568ProductionUplinkFreezeBoundary" -Ok:([string]$rk3568ProductionUplinkFreeze.currentBoundary -eq "rk3568-production-uplink-freeze-ready") -Actual ([string]$rk3568ProductionUplinkFreeze.currentBoundary) -Expected "rk3568-production-uplink-freeze-ready"),
     (Get-Check -Key "rk3568ProductionRejectedWriteFailuresZero" -Ok:([int]$rk3568ProductionUplinkFreeze.runtime.rejectedWriteFailures -eq 0) -Actual ([int]$rk3568ProductionUplinkFreeze.runtime.rejectedWriteFailures) -Expected 0),
@@ -189,6 +198,14 @@ try {
         accepted = [bool]$centerRuntimeFreeze.accepted
         boundary = [string]$centerRuntimeFreeze.currentBoundary
       }
+      rk3568NetworkBootstrap = [ordered]@{
+        file = "docs/unified/reports/field-rk3568-network-bootstrap-latest.json"
+        generatedAt = [string]$rk3568NetworkBootstrap.generatedAt
+        accepted = [bool]$rk3568NetworkBootstrap.accepted
+        boundary = [string]$rk3568NetworkBootstrap.currentBoundary
+        runtimeMode = [string]$rk3568NetworkBootstrap.runtimeStatus.mode
+        lastAction = [string]$rk3568NetworkBootstrap.runtimeStatus.lastAction
+      }
       rk3568ProductionUplinkFreeze = [ordered]@{
         file = "docs/unified/reports/field-rk3568-production-uplink-freeze-latest.json"
         generatedAt = [string]$rk3568ProductionUplinkFreeze.generatedAt
@@ -220,6 +237,7 @@ try {
     nextUse = @(
       "routine guard: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-field-center-rk3568-routine-guard.ps1 -BoardPassword <password> -AllowUnsafeSecrets",
       "strict routine guard: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-field-center-rk3568-routine-guard.ps1 -BoardPassword <password> -AllowUnsafeSecrets -RequireZeroSchemaRejectedDelta",
+      "board bootstrap: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-rk3568-network-bootstrap.ps1 -Password <password>",
       "board-only recovery: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-field-rk3568-center-operational-recovery.ps1 -BoardPassword <password> -AllowUnsafeSecrets",
       "center-only handoff refresh: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\prepare-field-center-production-handoff.ps1 -AllowUnsafeSecrets"
     )

@@ -107,6 +107,22 @@ raise SystemExit(code)
   $ScriptText | & $sshExe @sshArgs
 }
 
+function Get-Check {
+  param(
+    [string]$Key,
+    [bool]$Ok,
+    $Actual,
+    $Expected
+  )
+
+  [pscustomobject]@{
+    key = $Key
+    ok = $Ok
+    actual = $Actual
+    expected = $Expected
+  }
+}
+
 $repoRootLocal = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $shellScriptPath = Join-Path $repoRootLocal "services/field-gateway/deploy/check-rk3568-network-bootstrap.sh"
 $shellScriptBase64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes((Get-Content -Path $shellScriptPath -Raw -Encoding UTF8)))
@@ -152,7 +168,59 @@ if ($jsonStart -lt 0) {
   throw "check-rk3568-network-bootstrap did not return JSON output"
 }
 $result = ($rawText.Substring($jsonStart) | ConvertFrom-Json)
-$resultJson = $result | ConvertTo-Json -Depth 8
+
+$expectedWifiDevice = [string]$result.configuredEnv.WIFI_DEVICE
+$expectedStaConnectionName = [string]$result.configuredEnv.STA_CONNECTION_NAME
+$nmcliGeneral = [string]$result.nmcliGeneral.stdout
+$activeConnections = [string]$result.nmcliActiveConnections.stdout
+$ipv4Addresses = [string]$result.ipv4Addresses.stdout
+$runtimeMode = [string]$result.runtimeStatus.mode
+$runtimeLastError = [string]$result.runtimeStatus.lastError
+$expectedActiveConnection = "${expectedStaConnectionName}:802-11-wireless:${expectedWifiDevice}"
+
+$checks = @(
+  (Get-Check -Key "bootstrapServiceActive" -Ok:([string]$result.bootstrapService.isActive.stdout -eq "active") -Actual ([string]$result.bootstrapService.isActive.stdout) -Expected "active"),
+  (Get-Check -Key "bootstrapServiceEnabled" -Ok:([string]$result.bootstrapService.isEnabled.stdout -eq "enabled") -Actual ([string]$result.bootstrapService.isEnabled.stdout) -Expected "enabled"),
+  (Get-Check -Key "gatewayServiceActive" -Ok:([string]$result.gatewayService.isActive.stdout -eq "active") -Actual ([string]$result.gatewayService.isActive.stdout) -Expected "active"),
+  (Get-Check -Key "gatewayServiceEnabled" -Ok:([string]$result.gatewayService.isEnabled.stdout -eq "enabled") -Actual ([string]$result.gatewayService.isEnabled.stdout) -Expected "enabled"),
+  (Get-Check -Key "nmcliConnectedFull" -Ok:($nmcliGeneral -eq "connected:full") -Actual $nmcliGeneral -Expected "connected:full"),
+  (Get-Check -Key "staConnectionActive" -Ok:($activeConnections -like "*$expectedActiveConnection*") -Actual $activeConnections -Expected $expectedActiveConnection),
+  (Get-Check -Key "runtimeModeStaConnected" -Ok:($runtimeMode -eq "sta_connected") -Actual $runtimeMode -Expected "sta_connected"),
+  (Get-Check -Key "runtimeLastErrorClear" -Ok:([string]::IsNullOrWhiteSpace($runtimeLastError)) -Actual $(if ([string]::IsNullOrWhiteSpace($runtimeLastError)) { $null } else { $runtimeLastError }) -Expected $null),
+  (Get-Check -Key "ipv4PresentOnWifiDevice" -Ok:($ipv4Addresses -like "*${expectedWifiDevice}:*") -Actual $ipv4Addresses -Expected "${expectedWifiDevice}:<ipv4>")
+)
+
+$accepted = (@($checks | Where-Object { -not $_.ok }).Count -eq 0)
+$failureKeys = @($checks | Where-Object { -not $_.ok } | ForEach-Object { $_.key })
+
+$report = [ordered]@{
+  generatedAt = [string]$result.generatedAt
+  accepted = $accepted
+  mode = [string]$result.mode
+  currentBoundary = if ($accepted) { "rk3568-network-bootstrap-ready" } else { "rk3568-network-bootstrap-needs-review" }
+  scope = [ordered]@{
+    target = "rk3568-network-bootstrap-runtime"
+    failureKeys = $failureKeys
+  }
+  envFile = [string]$result.envFile
+  statusFile = [string]$result.statusFile
+  configuredEnv = $result.configuredEnv
+  bootstrapService = $result.bootstrapService
+  gatewayService = $result.gatewayService
+  nmcliGeneral = $result.nmcliGeneral
+  nmcliDeviceStatus = $result.nmcliDeviceStatus
+  nmcliActiveConnections = $result.nmcliActiveConnections
+  ipv4Addresses = $result.ipv4Addresses
+  runtimeStatus = $result.runtimeStatus
+  nextUse = @(
+    "bootstrap check: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-rk3568-network-bootstrap.ps1 -Password <password>",
+    "bootstrap install/update: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\install-rk3568-network-bootstrap.ps1 -Password <password> -WifiDevice wlan0 -StaConnectionName JRSPR_5G",
+    "routine guard: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-field-center-rk3568-routine-guard.ps1 -BoardPassword <password> -AllowUnsafeSecrets"
+  )
+  checks = $checks
+}
+
+$resultJson = $report | ConvertTo-Json -Depth 8
 
 if ($OutFile) {
   Set-Content -Path $OutFile -Value $resultJson -Encoding UTF8

@@ -598,6 +598,32 @@ class SpoolManager {
     await trimDirJsonFiles(this.rejectedDir, this.config.spoolRetentionRejected);
   }
 
+  async rejectCorruptPending(filePath: string, reason: string): Promise<string> {
+    const payload = await fs.readFile(filePath, "utf8").catch(() => "");
+    const target = path.join(this.rejectedDir, path.basename(filePath));
+    await writeJsonAtomic(target, {
+      schema_version: 1,
+      spool_id: randomUUID(),
+      received_ts: isoNow(),
+      device_id: null,
+      seq: null,
+      packet_class: "telemetry",
+      payload_hash: payloadHash(payload),
+      payload_bytes: Buffer.byteLength(payload, "utf8"),
+      state: "rejected" satisfies SpoolState,
+      source: {
+        serial_device: this.config.serialDevice,
+        serial_baud_rate: this.config.serialBaudRate
+      },
+      publish_attempts: 0,
+      last_error: reason,
+      payload
+    } satisfies SpoolRecord);
+    await fs.rm(filePath, { force: true });
+    await trimDirJsonFiles(this.rejectedDir, this.config.spoolRetentionRejected);
+    return target;
+  }
+
   async rejectIncoming(record: SpoolRecord, reason: string): Promise<string> {
     const target = path.join(this.rejectedDir, `${record.received_ts.replaceAll(":", "-")}-${record.spool_id}.json`);
     await writeJsonAtomic(target, {
@@ -1244,7 +1270,40 @@ class GatewayRuntime {
     try {
       const files = await this.spool.pendingFiles();
       for (const filePath of files) {
-        const record = await loadRecord(filePath);
+        let record: SpoolRecord;
+        try {
+          record = await loadRecord(filePath);
+        } catch (err) {
+          const reason = `pending spool decode failed: ${err instanceof Error ? err.message : String(err)}`;
+          this.stats.schemaRejected += 1;
+          this.stats.lastError = reason;
+
+          try {
+            const rejectedPath = await this.spool.rejectCorruptPending(filePath, reason);
+            this.stats.rejectedMessages += 1;
+            this.logger.warn(
+              {
+                err,
+                filePath,
+                rejectedPath
+              },
+              "field gateway corrupt pending record moved to rejected evidence"
+            );
+            continue;
+          } catch (rejectErr) {
+            this.stats.rejectedWriteFailures += 1;
+            this.logger.error(
+              {
+                err,
+                rejectErr,
+                filePath
+              },
+              "field gateway corrupt pending record reject failed"
+            );
+            break;
+          }
+        }
+
         const nextRecord: SpoolRecord = {
           ...record,
           publish_attempts: record.publish_attempts + 1,
