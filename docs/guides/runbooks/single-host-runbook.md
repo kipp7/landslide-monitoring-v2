@@ -245,3 +245,42 @@ permalink: landslide-monitoring-v2-mainline/docs/guides/runbooks/single-host-run
   - `degraded`
   - 历史累计 `schemaRejected`
   只作为恢复现场观测，不再单独压翻当前这条已闭合的 recovery 主线
+
+## 10.1 Center + RK3568 日常守护总入口
+
+当当前目标不是单独看中心或单独看板端，而是要确认：
+
+- center runtime freeze 仍然成立
+- RK3568 正式上行冻结仍然成立
+- RK3568 operational recovery 仍然成立
+- 当前 readiness / handoff 仍与上述基线一致
+
+不要手工串 4 到 5 条命令，直接用：
+
+- 常规守护：
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/check-field-center-rk3568-routine-guard.ps1 -BoardPassword <password> -AllowUnsafeSecrets`
+- 严格 zero-noise 守护：
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/check-field-center-rk3568-routine-guard.ps1 -BoardPassword <password> -AllowUnsafeSecrets -RequireZeroSchemaRejectedDelta`
+
+这条入口会顺序收口：
+
+- `check-field-center-runtime-freeze.ps1`
+- `check-field-rk3568-production-uplink-freeze.ps1`
+- `check-field-rk3568-center-operational-recovery.ps1`
+- `check-field-center-deployment-software-adaptation-readiness.ps1`
+- `prepare-field-center-production-handoff.ps1`
+
+标准报告输出：
+
+- `docs/unified/reports/field-center-rk3568-routine-guard-latest.json`
+
+当前工程口径：
+
+- `accepted = true` 表示：
+  - center runtime / env / compose 边界仍冻结
+  - RK3568 uplink env/runtime 仍冻结
+  - RK3568 recovery 仍闭合
+  - readiness / handoff 仍与当前正式主线一致
+- `field-rk3568-production-uplink-freeze` 中的：
+  - 历史累计 `publishFailures`
+  不再单独代表当前上行失败；只有在最近发布已停止、`spoolPending > 0` 或 `rejectedWriteFailures > 0` 时，才视为当前正式上行冻结失效

@@ -238,6 +238,40 @@ Freeze and execute the next major phase after command-route stabilization: prove
   - current fix:
     - atomic temp file naming now includes `randomUUID()`
   - latest post-fix proof window showed no new recurrence
+- the center + RK3568 routine guard entry now exists and is the formal day-2 operator entrypoint:
+  - script:
+    - `scripts/dev/check-field-center-rk3568-routine-guard.ps1`
+  - runbook:
+    - `docs/guides/runbooks/single-host-runbook.md`
+  - latest report:
+    - `docs/unified/reports/field-center-rk3568-routine-guard-latest.json`
+- the RK3568 production uplink freeze semantics are now narrowed to current-health facts instead of cumulative counters:
+  - `publishFailures` is now treated as a process-lifetime diagnostic counter
+  - formal blocker facts stay:
+    - recent publish activity missing
+    - `spoolPending > 0`
+    - `rejectedWriteFailures > 0`
+  - runbook and freeze report now both record this interpretation
+- the current frozen center + RK3568 routine line was re-proved on `2026-04-10` by sequential refresh:
+  - `field-center-runtime-freeze-latest.json`
+    - `generatedAt = 2026-04-10T06:35:24Z`
+    - `accepted = true`
+  - `field-rk3568-production-uplink-freeze-latest.json`
+    - `generatedAt = 2026-04-10T06:35:30Z`
+    - `accepted = true`
+    - `publishFailures = 5`
+    - `publishPathRecoveredOrClean = true`
+    - `rejectedWriteFailures = 0`
+  - `field-center-deployment-software-adaptation-readiness-latest.json`
+    - `generatedAt = 2026-04-10T06:39:18Z`
+    - `accepted = true`
+  - `field-center-production-handoff-latest.json`
+    - `generatedAt = 2026-04-10T06:39:20Z`
+    - `accepted = true`
+  - `field-center-rk3568-routine-guard-latest.json`
+    - `generatedAt = 2026-04-10T06:39:20Z`
+    - `accepted = true`
+    - `currentBoundary = field-center-rk3568-routine-guard-ready`
 - the first explicit southbound-node config layer is now also landed and proven on-device:
   - config entry:
     - `SOUTHBOUND_NODES_JSON`

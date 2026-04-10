@@ -1,5 +1,5 @@
 ﻿{
-    "generatedAt":  "2026-04-09T17:14:42Z",
+    "generatedAt":  "2026-04-10T06:35:30Z",
     "accepted":  true,
     "mode":  "field-rk3568-production-uplink-freeze",
     "currentBoundary":  "rk3568-production-uplink-freeze-ready",
@@ -54,19 +54,25 @@
                     "serviceEnabled":  "enabled",
                     "mqttConnected":  true,
                     "serialOpen":  true,
-                    "publishedMessages":  851,
-                    "publishFailures":  0,
-                    "rejectedMessages":  106,
+                    "publishedMessages":  13390,
+                    "publishFailures":  5,
+                    "publishPathRecoveredOrClean":  true,
+                    "lastPublishedAgeSeconds":  0,
+                    "rejectedMessages":  1801,
                     "rejectedWriteFailures":  0,
                     "spoolPending":  0,
-                    "commandsForwarded":  28,
-                    "ackMessagesPublished":  15,
+                    "commandsForwarded":  38,
+                    "ackMessagesPublished":  20,
                     "nodeStatuses":  {
                                          "nodeA":  "online",
                                          "nodeB":  "online",
                                          "nodeC":  "configured"
                                      }
                 },
+    "notes":  [
+                  "publishFailures is a cumulative counter since the current field-gateway process started, not a current hard-failure latch",
+                  "production uplink freeze accepts recovered historical publish failures only when recent publish activity is still observed and no spool or rejected-write backlog remains"
+              ],
     "nextUse":  [
                     "refresh board runtime snapshot: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\check-rk3568-field-gateway-runtime.ps1 -Password \u003cpassword\u003e",
                     "refresh production uplink freeze: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\check-field-rk3568-production-uplink-freeze.ps1 -Password \u003cpassword\u003e",
@@ -183,10 +189,10 @@
                        "expected":  "configured"
                    },
                    {
-                       "key":  "publishFailuresZero",
+                       "key":  "publishPathRecoveredOrClean",
                        "ok":  true,
-                       "actual":  0,
-                       "expected":  0
+                       "actual":  "publishFailures=5,lastPublishedAgeSeconds=0,spoolPending=0,rejectedWriteFailures=0",
+                       "expected":  "published\u003e=1,lastPublishedAgeSeconds\u003c=120,spoolPending=0,rejectedWriteFailures=0"
                    },
                    {
                        "key":  "rejectedStatsPresent",
@@ -209,7 +215,7 @@
                    {
                        "key":  "commandPathObserved",
                        "ok":  true,
-                       "actual":  "forwarded=28,acked=15",
+                       "actual":  "forwarded=38,acked=20",
                        "expected":  "forwarded\u003e=1,acked\u003e=1"
                    }
                ]

@@ -1,5 +1,5 @@
 ﻿{
-    "generatedAt":  "2026-04-09T17:00:42Z",
+    "generatedAt":  "2026-04-10T06:39:18Z",
     "accepted":  true,
     "mode":  "field-rk3568-center-operational-recovery",
     "currentBoundary":  "rk3568-center-operational-recovery-ready",
@@ -16,10 +16,10 @@
                     "serviceActive":  "active",
                     "mqttConnected":  true,
                     "serialOpen":  true,
-                    "parsedMessages":  476,
-                    "publishedMessages":  476,
-                    "schemaRejected":  65,
-                    "rejectedMessages":  65,
+                    "parsedMessages":  13391,
+                    "publishedMessages":  13391,
+                    "schemaRejected":  1801,
+                    "rejectedMessages":  1801,
                     "rejectedWriteFailures":  0,
                     "nodeAStatus":  "online",
                     "nodeBStatus":  "online",
@@ -27,17 +27,11 @@
                 },
     "closure":  {
                     "report":  "docs/unified/reports/field-rk3568-center-live-closure-latest.json",
-                    "generatedAt":  "2026-04-09T17:00:42Z",
+                    "generatedAt":  "2026-04-10T06:39:17Z",
                     "accepted":  true,
                     "currentBoundary":  "rk3568-live-center-closure-ready",
                     "attempts":  [
-                                     {
-                                         "attempt":  1,
-                                         "exitCode":  1,
-                                         "currentBoundary":  "rk3568-live-center-closure-not-yet-accepted",
-                                         "accepted":  false,
-                                         "failure":  "==\u003e Center compose acceptance ==\u003e RK3568 board observation window attempt #1 ==\u003e RK3568 stable node command proof field rk3568 center live closure failed: boardStableCommandPassed, boardStableCommandAcked, nodeBApiDirectVisible, nodeBWebP roxyVisible, nodeBCommandIdInApiState, nodeBCommandIdInWebState At E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\scripts\\dev\\check-field-rk3568-center-live-closure.ps1:658 char: 5 + throw \"field rk3568 center live closure failed: $failedKeys\" + ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ + CategoryInfo : OperationStopped: (field rk3568 ce...andIdInWebState:String) [], RuntimeException + FullyQualifiedErrorId : field rk3568 center live closure failed: boardStableCommandPassed, boardStableCommandAcked, n odeBApiDirectVisible, nodeBWebProxyVisible, nodeBCommandIdInApiState, nodeBCommandIdInWebState"
-                                     }
+
                                  ],
                     "centerComposeBoundary":  "full-path-ready",
                     "boardObservationConclusion":  "rk3568-runtime-observation-window-clean",
@@ -46,9 +40,9 @@
                     "boardObservationRejectedWriteFailuresDelta":  0,
                     "boardObservationRejectedEvidenceAligned":  true,
                     "boardObservationSampleCount":  6,
-                    "commandId":  "888a1ccb-7b44-4f5f-b9f2-43933a595e19",
+                    "commandId":  "f3691d30-804e-45cc-8852-fd91c84ea824",
                     "ackStatus":  "acked",
-                    "parseFailureCount":  1,
+                    "parseFailureCount":  13,
                     "nodeAMetricsKeyCountApi":  14,
                     "nodeAMetricsKeyCountWeb":  14,
                     "nodeBMetricsKeyCountApi":  14,

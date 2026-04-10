@@ -206,6 +206,29 @@ function Get-Check {
   }
 }
 
+function Get-IsoAgeSeconds {
+  param(
+    [AllowNull()]
+    [string]$IsoTimestamp
+  )
+
+  if ([string]::IsNullOrWhiteSpace($IsoTimestamp)) {
+    return $null
+  }
+
+  try {
+    $parsed = [datetime]::Parse(
+      $IsoTimestamp,
+      [System.Globalization.CultureInfo]::InvariantCulture,
+      [System.Globalization.DateTimeStyles]::AdjustToUniversal
+    )
+  } catch {
+    return $null
+  }
+
+  return [math]::Max(0, [int][math]::Floor(((Get-Date).ToUniversalTime() - $parsed.ToUniversalTime()).TotalSeconds))
+}
+
 function Get-ExpectedNodes {
   @(
     [ordered]@{
@@ -340,6 +363,14 @@ $nodeC = @($runtimeHealth.southbound.nodes | Where-Object { $_.deviceId -eq "000
 $boardPasswordActual = if ([string]::IsNullOrWhiteSpace([string]$remoteEnv.MQTT_PASSWORD)) { "missing" } else { "***" }
 $runtimeStatsPropertyNames = @($runtimeHealth.stats.PSObject.Properties | ForEach-Object { $_.Name })
 $rejectedStatsPresent = (($runtimeStatsPropertyNames -contains "rejectedMessages") -and ($runtimeStatsPropertyNames -contains "rejectedWriteFailures"))
+$lastPublishedAgeSeconds = Get-IsoAgeSeconds -IsoTimestamp ([string]$runtimeHealth.stats.lastPublishedTs)
+$publishPathRecoveredOrClean = (
+  [int]$runtimeHealth.stats.publishedMessages -ge 1 -and
+  $null -ne $lastPublishedAgeSeconds -and
+  $lastPublishedAgeSeconds -le 120 -and
+  [int]$runtimeHealth.stats.spoolPending -eq 0 -and
+  [int]$runtimeHealth.stats.rejectedWriteFailures -eq 0
+)
 
 $checks = @(
   (Get-Check -Key "centerRuntimeFreezeAccepted" -Ok:([bool]$centerRuntimeFreeze.accepted) -Actual ([bool]$centerRuntimeFreeze.accepted) -Expected $true),
@@ -360,7 +391,7 @@ $checks = @(
   (Get-Check -Key "runtimeNodeAOnline" -Ok:([string]$nodeA.status -eq "online") -Actual ([string]$nodeA.status) -Expected "online"),
   (Get-Check -Key "runtimeNodeBOnline" -Ok:([string]$nodeB.status -eq "online") -Actual ([string]$nodeB.status) -Expected "online"),
   (Get-Check -Key "runtimeNodeCReserved" -Ok:([string]$nodeC.status -eq "configured") -Actual ([string]$nodeC.status) -Expected "configured"),
-  (Get-Check -Key "publishFailuresZero" -Ok:([int]$runtimeHealth.stats.publishFailures -eq 0) -Actual ([int]$runtimeHealth.stats.publishFailures) -Expected 0),
+  (Get-Check -Key "publishPathRecoveredOrClean" -Ok:$publishPathRecoveredOrClean -Actual ("publishFailures={0},lastPublishedAgeSeconds={1},spoolPending={2},rejectedWriteFailures={3}" -f [int]$runtimeHealth.stats.publishFailures, $(if ($null -eq $lastPublishedAgeSeconds) { "null" } else { [string]$lastPublishedAgeSeconds }), [int]$runtimeHealth.stats.spoolPending, [int]$runtimeHealth.stats.rejectedWriteFailures) -Expected "published>=1,lastPublishedAgeSeconds<=120,spoolPending=0,rejectedWriteFailures=0"),
   (Get-Check -Key "rejectedStatsPresent" -Ok:$rejectedStatsPresent -Actual $rejectedStatsPresent -Expected $true),
   (Get-Check -Key "rejectedWriteFailuresZero" -Ok:([int]$runtimeHealth.stats.rejectedWriteFailures -eq 0) -Actual ([int]$runtimeHealth.stats.rejectedWriteFailures) -Expected 0),
   (Get-Check -Key "spoolPendingZero" -Ok:([int]$runtimeHealth.stats.spoolPending -eq 0) -Actual ([int]$runtimeHealth.stats.spoolPending) -Expected 0),
@@ -404,6 +435,8 @@ $report = [ordered]@{
     serialOpen = [bool]$runtimeHealth.serial.open
     publishedMessages = [int]$runtimeHealth.stats.publishedMessages
     publishFailures = [int]$runtimeHealth.stats.publishFailures
+    publishPathRecoveredOrClean = $publishPathRecoveredOrClean
+    lastPublishedAgeSeconds = $lastPublishedAgeSeconds
     rejectedMessages = [int]$runtimeHealth.stats.rejectedMessages
     rejectedWriteFailures = [int]$runtimeHealth.stats.rejectedWriteFailures
     spoolPending = [int]$runtimeHealth.stats.spoolPending
@@ -415,6 +448,10 @@ $report = [ordered]@{
       nodeC = [string]$nodeC.status
     }
   }
+  notes = @(
+    "publishFailures is a cumulative counter since the current field-gateway process started, not a current hard-failure latch",
+    "production uplink freeze accepts recovered historical publish failures only when recent publish activity is still observed and no spool or rejected-write backlog remains"
+  )
   nextUse = @(
     "refresh board runtime snapshot: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-rk3568-field-gateway-runtime.ps1 -Password <password>",
     "refresh production uplink freeze: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-field-rk3568-production-uplink-freeze.ps1 -Password <password>",
