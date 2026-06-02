@@ -246,3 +246,29 @@ git diff --cached --name-only | ForEach-Object {
 ## 9. 一句话原则
 
 桌面端是当前主力版本，Git 仓库保存“源码、文档、脚本、可复现清单和少量最终交付物”；本地大数据和历史构建产物通过归档/加密/LFS 管理，不把整个工作目录塞进普通 Git。
+
+## 10. 2026-06-02 Source Data Cleanup Decision
+
+User decision: model source data, raw regional datasets, and large intermediate training/replay outputs are not required for Git backup and do not need to stay on the local disk after manifests and scripts are retained.
+
+Cleanup scope applied:
+
+- `.tmp/regional-model-library/raw`
+- `.tmp/regional-model-library/raw-xlsx-tests`
+- `.tmp/regional-model-library/out`
+- `.tmp/regional-model-library/out-baijiabao-smoke`
+- `.tmp/regional-model-library/out-baijiabao-generic-infer`
+- `.tmp/regional-model-library/out-xlsx-tests`
+- `.tmp/regional-model-library/out-verify-20260421`
+- `.tmp/regional-model-library/test-output`
+
+Kept by design:
+
+- source code and scripts
+- repository docs and memory notes
+- lightweight manifests and smoke files
+- `artifacts/models`
+- `artifacts/desk-win/latest*`
+- plaintext local `key/` directory, ignored by Git
+
+The cleanup script is `scripts/dev/cleanup-regional-model-source-data.ps1`.
