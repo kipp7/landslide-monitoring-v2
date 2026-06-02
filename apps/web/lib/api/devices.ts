@@ -3,11 +3,24 @@ import { apiGetJson, apiJson, apiPut, apiPutJson, type ApiSuccessResponse } from
 export type DeviceRow = {
   deviceId: string
   deviceName?: string
+  legacyDeviceId?: string | null
   deviceType?: string
   stationId?: string | null
+  stationCode?: string | null
+  stationName?: string | null
   status: 'inactive' | 'active' | 'revoked'
   lastSeenAt?: string | null
-  createdAt: string
+  createdAt?: string
+  updatedAt?: string
+  identityClass?: string | null
+  deviceRole?: string | null
+  lifecycleStatus?: string | null
+  regionCode?: string | null
+  slopeCode?: string | null
+  nodeCode?: string | null
+  gatewayCode?: string | null
+  displayName?: string | null
+  installLabel?: string | null
   metadata?: Record<string, unknown>
 }
 

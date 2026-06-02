@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/ai/readme
+---
+
 ﻿# AI 工作流（AIAgents & Hooks）
 
 目标：让 AI “不靠全局搜索”也能高质量地实现功能/修复 Bug，并能遵守项目规范。

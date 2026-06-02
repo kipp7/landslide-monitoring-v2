@@ -1,3 +1,9 @@
+---
+title: ADR-0001-mqtt-kafka-clickhouse-postgres
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/architecture/adr/adr-0001-mqtt-kafka-clickhouse-postgres
+---
+
 ﻿# ADR-0001: MQTT + Kafka + ClickHouse + PostgreSQL（单机可扩展主链路）
 
 ## Status
@@ -62,4 +68,3 @@
 - Negative / Risks
   - 运维复杂度增加：需要单机 runbook、日志与容量治理
   - 需要纪律：契约优先（`integrations/`）与版本化（规则/事件）必须严格执行
-

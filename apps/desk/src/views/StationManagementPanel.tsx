@@ -25,11 +25,13 @@ import {
 import dayjs from "dayjs";
 import { useEffect, useMemo, useState } from "react";
 
-import type { DeviceType, OnlineStatus, RiskLevel, StationManagementStation } from "../api/client";
+import type { Device, DeviceType, OnlineStatus, RiskLevel, StationManagementStation } from "../api/client";
 import { useApi } from "../api/ApiProvider";
 import { BaseCard } from "../components/BaseCard";
 import { RiskTag } from "../components/RiskTag";
 import { StatusTag } from "../components/StatusTag";
+import { formatBeijingDateTime, formatBeijingTime } from "../utils/beijingTime";
+import { formatLifecycleStatusDisplay, lifecycleStatusTagColor } from "../utils/fieldIdentityDisplay";
 import "./stationManagement.css";
 
 type ViewMode = "list" | "hierarchy";
@@ -42,6 +44,26 @@ type LegendState =
   | { open: false }
   | { open: true; draft: Record<string, string> };
 
+type HierarchyNetwork = {
+  network_name: string;
+  network_code: string;
+  network_type: string;
+  configured_station_count: number;
+  actual_station_count: number;
+  online_stations: number;
+  stations: StationManagementStation[];
+};
+
+type HierarchyRegion = {
+  region_name: string;
+  region_code: string;
+  network_count: number;
+  station_count: number;
+  online_stations: number;
+  coverage_hint: string;
+  networks: HierarchyNetwork[];
+};
+
 function deviceTypeLabel(type: DeviceType) {
   if (type === "gnss") return "GNSS";
   if (type === "rain") return "雨量";
@@ -50,46 +72,104 @@ function deviceTypeLabel(type: DeviceType) {
   return "摄像头";
 }
 
-function hierarchyData(stations: StationManagementStation[]) {
-  const onlineCount = stations.filter((s) => s.status === "online").length;
-  const mainRegion = {
-    region_name: "挂傍山监测区域",
-    region_code: "GBS",
-    network_count: 1,
-    station_count: stations.length,
-    online_stations: onlineCount,
-    region_coverage_area: 0.785
-  };
+function canonicalText(value?: string | null): string {
+  return value?.trim() ? value.trim() : "—";
+}
 
-  const mainNetwork = {
-    network_name: "挂傍山立体监测网络",
-    network_code: "GBS-N001",
-    network_type: "立体监测网络",
-    configured_station_count: 3,
-    actual_station_count: stations.length,
-    online_stations: onlineCount
-  };
+function normalizeIdentityClass(value?: string | null): string {
+  return value?.trim().toLowerCase() ?? "";
+}
 
-  const additionalRegions = [
+function isFormalIdentityClass(value?: string | null): boolean {
+  return normalizeIdentityClass(value) === "formal";
+}
+
+function centeredCell(content: React.ReactNode, className?: string) {
+  return <div className={["desk-sm-center-cell", className].filter(Boolean).join(" ")}>{content}</div>;
+}
+
+function lifecycleTag(value?: string | null) {
+  const display = formatLifecycleStatusDisplay(value, "未设置");
+  const color = lifecycleStatusTagColor(value);
+  return color ? <Tag color={color}>{display}</Tag> : <Tag>{display}</Tag>;
+}
+
+function buildHierarchyData(stations: StationManagementStation[]): HierarchyRegion[] {
+  const regionBuckets = new Map<
+    string,
     {
-      region_name: "玉林师范学院东校区",
-      region_code: "YLNU",
-      network_count: 1,
-      station_count: 2,
-      online_stations: 1,
-      region_coverage_area: 0.45
-    },
-    {
-      region_name: "南流江流域监测区",
-      region_code: "NLJ",
-      network_count: 2,
-      station_count: 6,
-      online_stations: 5,
-      region_coverage_area: 2.15
+      region_name: string;
+      region_code: string;
+      coverage_hint: string;
+      stations: StationManagementStation[];
+      networks: Map<string, HierarchyNetwork>;
     }
-  ];
+  >();
 
-  return { mainRegion, mainNetwork, additionalRegions, allRegions: [mainRegion, ...additionalRegions] };
+  for (const station of stations) {
+    const regionCode = station.regionCode?.trim() || "UNASSIGNED";
+    const regionEntry =
+      regionBuckets.get(regionCode) ??
+      (() => {
+        const created = {
+          region_name: station.locationName?.trim() || station.regionCode?.trim() || "未命名部署区域",
+          region_code: regionCode,
+          coverage_hint: station.slopeCode?.trim() ? `${station.slopeCode.trim()} 点位组` : "现场点位组",
+          stations: [] as StationManagementStation[],
+          networks: new Map<string, HierarchyNetwork>()
+        };
+        regionBuckets.set(regionCode, created);
+        return created;
+      })();
+
+    regionEntry.stations.push(station);
+
+    const networkCode = station.slopeCode?.trim() || station.stationCode || station.stationId;
+    const networkEntry =
+      regionEntry.networks.get(networkCode) ??
+      (() => {
+        const created: HierarchyNetwork = {
+          network_name: station.slopeCode?.trim() ? `${station.slopeCode.trim()} 监测网络` : `${station.displayName ?? station.stationName} 监测网络`,
+          network_code: networkCode,
+          network_type: "现场监测网络",
+          configured_station_count: 0,
+          actual_station_count: 0,
+          online_stations: 0,
+          stations: []
+        };
+        regionEntry.networks.set(networkCode, created);
+        return created;
+      })();
+
+    networkEntry.stations.push(station);
+  }
+
+  return Array.from(regionBuckets.values())
+    .map((region) => {
+      const networks = Array.from(region.networks.values())
+        .map((network) => {
+          const onlineStations = network.stations.filter((station) => station.status === "online").length;
+          return {
+            ...network,
+            configured_station_count: network.stations.length,
+            actual_station_count: network.stations.length,
+            online_stations: onlineStations,
+            stations: network.stations.slice().sort((a, b) => (a.displayName ?? a.stationName).localeCompare(b.displayName ?? b.stationName))
+          };
+        })
+        .sort((a, b) => a.network_code.localeCompare(b.network_code));
+
+      return {
+        region_name: region.region_name,
+        region_code: region.region_code,
+        network_count: networks.length,
+        station_count: region.stations.length,
+        online_stations: region.stations.filter((station) => station.status === "online").length,
+        coverage_hint: region.coverage_hint,
+        networks
+      };
+    })
+    .sort((a, b) => a.region_code.localeCompare(b.region_code));
 }
 
 export function StationManagementPanel(props: { className?: string; style?: React.CSSProperties; initialStationId?: string | null }) {
@@ -101,6 +181,7 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
   const [error, setError] = useState<string | null>(null);
   const [lastUpdateTime, setLastUpdateTime] = useState<string>("");
   const [stations, setStations] = useState<StationManagementStation[]>([]);
+  const [devices, setDevices] = useState<Device[]>([]);
 
   const [edit, setEdit] = useState<EditState>({ open: false });
   const [legend, setLegend] = useState<LegendState>({ open: false });
@@ -113,8 +194,13 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
 
   const [form] = Form.useForm<{
     stationId: string;
+    stationCode: string;
+    displayName: string;
     stationName: string;
     chartLegendName: string;
+    regionCode: string;
+    slopeCode: string;
+    lifecycleStatus: string;
     locationName: string;
     description: string;
     riskLevel: RiskLevel;
@@ -126,9 +212,10 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
     setLoading(true);
     setError(null);
     try {
-      const next = await api.stations.listManagement();
-      setStations(next);
-      const t = new Date().toLocaleTimeString("zh-CN");
+      const [nextStations, nextDevices] = await Promise.all([api.stations.listManagement(), api.devices.list()]);
+      setStations(nextStations);
+      setDevices(nextDevices);
+      const t = formatBeijingTime(new Date());
       setLastUpdateTime(t);
       if (showToast) message.success("已刷新");
     } catch (err) {
@@ -151,17 +238,44 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
     return () => clearInterval(t);
   }, [autoRefresh]);
 
-  const counts = useMemo(() => {
-    const total = stations.length;
-    const online = stations.filter((s) => s.status === "online").length;
-    const offline = stations.filter((s) => s.status === "offline").length;
-    const highRisk = stations.filter((s) => s.riskLevel === "high").length;
-    return { total, online, offline, highRisk };
-  }, [stations]);
+  const formalStationIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const device of devices) {
+      if (isFormalIdentityClass(device.identityClass)) {
+        ids.add(device.stationId);
+      }
+    }
+    return ids;
+  }, [devices]);
 
-  const { allRegions, mainNetwork } = useMemo(() => hierarchyData(stations), [stations]);
-  const [expandedRegions, setExpandedRegions] = useState<Set<string>>(new Set(["GBS"]));
-  const [expandedNetworks, setExpandedNetworks] = useState<Set<string>>(new Set(["GBS-N001"]));
+  const visibleStations = useMemo(
+    () => stations.filter((station) => formalStationIds.has(station.stationId)),
+    [formalStationIds, stations]
+  );
+
+  const counts = useMemo(() => {
+    const total = visibleStations.length;
+    const online = visibleStations.filter((s) => s.status === "online").length;
+    const offline = visibleStations.filter((s) => s.status === "offline").length;
+    const highRisk = visibleStations.filter((s) => s.riskLevel === "high").length;
+    return { total, online, offline, highRisk };
+  }, [visibleStations]);
+
+  const regions = useMemo(() => buildHierarchyData(visibleStations), [visibleStations]);
+  const [expandedRegions, setExpandedRegions] = useState<Set<string>>(new Set());
+  const [expandedNetworks, setExpandedNetworks] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!regions.length) {
+      setExpandedRegions(new Set());
+      setExpandedNetworks(new Set());
+      return;
+    }
+    setExpandedRegions((prev) => (prev.size ? prev : new Set(regions.map((region) => region.region_code))));
+    setExpandedNetworks((prev) =>
+      prev.size ? prev : new Set(regions.flatMap((region) => region.networks.map((network) => network.network_code)))
+    );
+  }, [regions]);
 
   const toggleRegionExpanded = (regionCode: string) => {
     setExpandedRegions((prev) => {
@@ -182,26 +296,32 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
   };
 
   const toggleAllExpanded = () => {
-    const allRegionCodes = allRegions.map((r) => r.region_code);
-    const isAllExpanded = allRegionCodes.every((c) => expandedRegions.has(c)) && expandedNetworks.has("GBS-N001");
+    const allRegionCodes = regions.map((region) => region.region_code);
+    const allNetworkCodes = regions.flatMap((region) => region.networks.map((network) => network.network_code));
+    const isAllExpanded = allRegionCodes.every((code) => expandedRegions.has(code)) && allNetworkCodes.every((code) => expandedNetworks.has(code));
     if (isAllExpanded) {
       setExpandedRegions(new Set());
       setExpandedNetworks(new Set());
       return;
     }
     setExpandedRegions(new Set(allRegionCodes));
-    setExpandedNetworks(new Set(["GBS-N001"]));
+    setExpandedNetworks(new Set(allNetworkCodes));
   };
 
   const openEdit = (stationId: string) => {
-    const st = stations.find((s) => s.stationId === stationId);
+    const st = visibleStations.find((s) => s.stationId === stationId);
     if (!st) return;
     setEdit({ open: true, stationId });
     form.resetFields();
     form.setFieldsValue({
       stationId: st.stationId,
+      stationCode: st.stationCode,
+      displayName: st.displayName ?? "",
       stationName: st.stationName,
       chartLegendName: st.chartLegendName,
+      regionCode: st.regionCode ?? "",
+      slopeCode: st.slopeCode ?? "",
+      lifecycleStatus: st.lifecycleStatus ?? "",
       locationName: st.locationName,
       description: st.description,
       riskLevel: st.riskLevel,
@@ -215,6 +335,10 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
     await api.stations.updateManagement({
       stationId: values.stationId,
       stationName: values.stationName,
+      displayName: values.displayName,
+      regionCode: values.regionCode,
+      slopeCode: values.slopeCode,
+      lifecycleStatus: values.lifecycleStatus,
       chartLegendName: values.chartLegendName,
       locationName: values.locationName,
       description: values.description,
@@ -229,7 +353,7 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
 
   const openLegendConfig = () => {
     const draft: Record<string, string> = {};
-    for (const st of stations) draft[st.stationId] = st.chartLegendName;
+    for (const st of visibleStations) draft[st.stationId] = st.chartLegendName;
     setLegend({ open: true, draft });
   };
 
@@ -248,75 +372,146 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
   };
 
   const detailStation = useMemo(
-    () => (detailStationId ? stations.find((s) => s.stationId === detailStationId) ?? null : null),
-    [detailStationId, stations]
+    () => (detailStationId ? visibleStations.find((s) => s.stationId === detailStationId) ?? null : null),
+    [detailStationId, visibleStations]
   );
 
   const columns: Parameters<typeof Table<StationManagementStation>>[0]["columns"] = [
     {
       title: "监测站",
       key: "station",
+      width: 340,
+      align: "center",
       render: (_: unknown, row) => (
-        <div style={{ minWidth: 220 }}>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <div style={{ fontWeight: 900, color: "rgba(226,232,240,0.96)" }}>{row.stationName}</div>
+        <div className="desk-sm-station-cell">
+          <div className="desk-sm-station-cell-head">
+            <div className="desk-sm-station-cell-title">{row.displayName ?? row.stationName}</div>
             <StatusTag value={row.status} />
             <RiskTag value={row.riskLevel} />
           </div>
-          <div style={{ fontSize: 12, color: "rgba(148,163,184,0.9)" }}>{row.stationId}</div>
+          <div className="desk-sm-station-cell-sub">{row.stationName}</div>
+          <div className="desk-sm-station-cell-sub">
+            {row.stationCode} · {row.stationId}
+          </div>
         </div>
       )
     },
-    { title: "位置", dataIndex: "locationName", key: "locationName", ellipsis: true },
+    {
+      title: "业务编码",
+      key: "canonical",
+      width: 420,
+      align: "center",
+      render: (_: unknown, row) => (
+        <div className="desk-sm-canonical-cell">
+          <div className="desk-sm-canonical-row">
+            <span className="desk-sm-canonical-k">区域编码</span>
+            <span className="desk-sm-canonical-v">{canonicalText(row.regionCode)}</span>
+          </div>
+          <div className="desk-sm-canonical-row">
+            <span className="desk-sm-canonical-k">边坡编码</span>
+            <span className="desk-sm-canonical-v">{canonicalText(row.slopeCode)}</span>
+          </div>
+        </div>
+      )
+    },
+    {
+      title: "位置",
+      dataIndex: "locationName",
+      key: "locationName",
+      width: 260,
+      align: "center",
+      render: (value: string) => <div className="desk-sm-location-cell">{value || "—"}</div>
+    },
     {
       title: "传感器",
       key: "sensors",
+      align: "center",
       render: (_: unknown, row) => (
-        <Space size={6} wrap>
-          {row.sensorTypes.length ? (
-            row.sensorTypes.map((t) => (
-              <Tag key={t} className="desk-pill-tag">
-                {deviceTypeLabel(t)}
-              </Tag>
-            ))
-          ) : (
-            <span style={{ color: "rgba(148,163,184,0.9)" }}>-</span>
-          )}
-        </Space>
+        centeredCell(
+          <Space size={6} wrap>
+            {row.sensorTypes.length ? (
+              row.sensorTypes.map((t) => (
+                <Tag key={t} className="desk-pill-tag">
+                  {deviceTypeLabel(t)}
+                </Tag>
+              ))
+            ) : (
+              <span style={{ color: "rgba(148,163,184,0.9)" }}>-</span>
+            )}
+          </Space>,
+          "desk-sm-sensor-cell"
+        )
       )
     },
-    { title: "设备数", dataIndex: "deviceCount", key: "deviceCount", width: 90 },
+    {
+      title: "设备数",
+      dataIndex: "deviceCount",
+      key: "deviceCount",
+      width: 90,
+      align: "center",
+      render: (value: number) => centeredCell(value, "desk-sm-number-cell")
+    },
+    {
+      title: "生命周期",
+      dataIndex: "lifecycleStatus",
+      key: "lifecycleStatus",
+      width: 150,
+      align: "center",
+      render: (value: string | null | undefined) => centeredCell(lifecycleTag(value), "desk-sm-lifecycle-cell")
+    },
     {
       title: "坐标",
       key: "coord",
       width: 180,
+      align: "center",
       render: (_: unknown, row) => (
-        <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}>
-          {row.lat.toFixed(5)}, {row.lng.toFixed(5)}
-        </span>
+        centeredCell(
+          <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}>
+            {row.lat.toFixed(5)}, {row.lng.toFixed(5)}
+          </span>,
+          "desk-sm-coord-cell"
+        )
       )
     },
-    { title: "最后数据", dataIndex: "lastDataTime", key: "lastDataTime", width: 170, render: (v: string) => dayjs(v).format("YYYY-MM-DD HH:mm") },
-    { title: "图例名称", dataIndex: "chartLegendName", key: "chartLegendName", ellipsis: true },
+    {
+      title: "最后数据",
+      dataIndex: "lastDataTime",
+      key: "lastDataTime",
+      width: 188,
+      align: "center",
+      render: (v: string) => centeredCell(formatBeijingDateTime(v, { includeSeconds: false }), "desk-sm-last-data-cell")
+    },
+    {
+      title: "图例名称",
+      dataIndex: "chartLegendName",
+      key: "chartLegendName",
+      align: "center",
+      ellipsis: true,
+      render: (value: string) => centeredCell(value || "—", "desk-sm-legend-cell")
+    },
     {
       title: "操作",
       key: "actions",
       width: 120,
+      align: "center",
       render: (_: unknown, row) => (
-        <Space>
-          <Tooltip title="编辑监测站">
-            <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(row.stationId)} />
-          </Tooltip>
-          <Tooltip title="查看详情">
-            <Button
-              size="small"
-              icon={<EyeOutlined />}
-              onClick={() => {
-                setDetailStationId(row.stationId);
-              }}
-            />
-          </Tooltip>
-        </Space>
+        centeredCell(
+          <Space>
+            <Tooltip title="编辑监测站">
+              <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(row.stationId)} />
+            </Tooltip>
+            <Tooltip title="查看详情">
+              <Button
+                size="small"
+                icon={<EyeOutlined />}
+                onClick={() => {
+                  setDetailStationId(row.stationId);
+                }}
+              />
+            </Tooltip>
+          </Space>,
+          "desk-sm-action-cell"
+        )
       )
     }
   ];
@@ -365,7 +560,7 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
       }
     >
       <div className="desk-sm-body">
-        <div className="desk-sm-subtitle">统一管理监测站配置、图表图例和传感器设置</div>
+        <div className="desk-sm-subtitle">统一管理监测站配置、业务编码、图表图例和传感器设置</div>
 
         <div className="desk-sm-stats">
           <div className="desk-sm-stat">
@@ -416,22 +611,26 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
           </div>
         </div>
 
-        {viewMode === "list" ? (
+        {!loading && !error && !visibleStations.length ? (
+          <div className="desk-sm-placeholder">
+            <Typography.Text type="secondary">当前没有监测站接入，未归档数据不会显示在当前视图。</Typography.Text>
+          </div>
+        ) : viewMode === "list" ? (
           <div className="desk-dark-table">
             <Table<StationManagementStation>
               rowKey="stationId"
               size="small"
-              dataSource={stations}
+              dataSource={visibleStations}
               loading={loading}
               pagination={false}
-              scroll={{ x: 1200, y: 420 }}
+              scroll={{ x: 1620, y: 420 }}
               columns={columns}
             />
           </div>
         ) : (
           <div className="desk-sm-hierarchy">
             {loading ? <div className="desk-sm-loading">加载分层数据…</div> : null}
-            {allRegions.map((region, idx) => (
+            {regions.map((region) => (
               <div key={region.region_code} className="desk-sm-region">
                 <div className="desk-sm-region-head" onClick={() => toggleRegionExpanded(region.region_code)}>
                   <div className="desk-sm-region-left">
@@ -439,7 +638,7 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
                     <div>
                       <div className="desk-sm-region-title">{region.region_name}</div>
                       <div className="desk-sm-region-sub">
-                        {region.region_code} · 覆盖面积 {region.region_coverage_area} km²
+                        {region.region_code} · {region.coverage_hint}
                       </div>
                     </div>
                   </div>
@@ -463,45 +662,51 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
 
                 {expandedRegions.has(region.region_code) ? (
                   <div className="desk-sm-region-body">
-                    {idx === 0 ? (
-                      <div className="desk-sm-network">
-                        <div className="desk-sm-network-head" onClick={() => toggleNetworkExpanded(mainNetwork.network_code)}>
+                    {region.networks.map((network) => (
+                      <div key={network.network_code} className="desk-sm-network">
+                        <div className="desk-sm-network-head" onClick={() => toggleNetworkExpanded(network.network_code)}>
                           <div className="desk-sm-region-left">
                             <span className="desk-sm-caret">
-                              {expandedNetworks.has(mainNetwork.network_code) ? <CaretDownOutlined /> : <CaretRightOutlined />}
+                              {expandedNetworks.has(network.network_code) ? <CaretDownOutlined /> : <CaretRightOutlined />}
                             </span>
                             <div>
-                              <div className="desk-sm-network-title">{mainNetwork.network_name}</div>
+                              <div className="desk-sm-network-title">{network.network_name}</div>
                               <div className="desk-sm-region-sub">
-                                {mainNetwork.network_code} · {mainNetwork.network_type}
+                                {network.network_code} · {network.network_type}
                               </div>
                             </div>
                           </div>
                           <div className="desk-sm-network-metrics">
                             <span>
-                              配置 <span className="v blue">{mainNetwork.configured_station_count}</span>
+                              配置 <span className="v blue">{network.configured_station_count}</span>
                             </span>
                             <span>
-                              实际 <span className="v green">{mainNetwork.actual_station_count}</span>
+                              实际 <span className="v green">{network.actual_station_count}</span>
                             </span>
                             <span>
-                              在线 <span className="v green">{mainNetwork.online_stations}</span>
+                              在线 <span className="v green">{network.online_stations}</span>
                             </span>
                           </div>
                         </div>
 
-                        {expandedNetworks.has(mainNetwork.network_code) ? (
+                        {expandedNetworks.has(network.network_code) ? (
                           <div className="desk-sm-station-grid">
-                            {stations.map((st) => (
+                            {network.stations.map((st) => (
                               <div key={st.stationId} className="desk-sm-station-card">
                                 <div className="desk-sm-station-top">
-                                  <div className="desk-sm-station-name">{st.stationName}</div>
+                                  <div className="desk-sm-station-name">{st.displayName ?? st.stationName}</div>
                                   <div className="desk-sm-station-tags">
                                     <StatusTag value={st.status} />
                                     <RiskTag value={st.riskLevel} />
                                   </div>
                                 </div>
-                                <div className="desk-sm-station-sub">{st.stationId}</div>
+                                <div className="desk-sm-station-sub">{st.displayName ?? st.stationName}</div>
+                                <div className="desk-sm-station-sub">
+                                  {st.stationCode} · {st.stationId}
+                                </div>
+                                <div className="desk-sm-station-sub">
+                                  {canonicalText(st.regionCode)} · {canonicalText(st.slopeCode)}
+                                </div>
                                 <div className="desk-sm-station-sub">{st.locationName}</div>
                                 <div className="desk-sm-station-actions">
                                   <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(st.stationId)}>
@@ -522,14 +727,7 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
                           </div>
                         ) : null}
                       </div>
-                    ) : (
-                      <div className="desk-sm-placeholder">
-                        <Typography.Text type="secondary">{region.region_name} 详细数据开发中…</Typography.Text>
-                        <div className="desk-sm-placeholder-sub">
-                          此区域包含 {region.network_count} 个网络，{region.station_count} 个站点
-                        </div>
-                      </div>
-                    )}
+                    ))}
                   </div>
                 ) : null}
               </div>
@@ -555,7 +753,7 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
       </div>
 
       <Modal
-        title={edit.open ? `编辑监测站 - ${stations.find((s) => s.stationId === edit.stationId)?.stationName ?? ""}` : "编辑监测站"}
+        title={edit.open ? `编辑监测站 - ${visibleStations.find((s) => s.stationId === edit.stationId)?.stationName ?? ""}` : "编辑监测站"}
         open={edit.open}
         onCancel={() => {
           setEdit({ open: false });
@@ -565,16 +763,49 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
         }}
         okText="保存"
         cancelText="取消"
-        width={640}
+        width={760}
       >
         <Form form={form} layout="vertical" preserve={false}>
-          <Form.Item name="stationId" label="站点 ID">
-            <Input disabled />
-          </Form.Item>
           <Row gutter={12}>
+            <Col span={12}>
+              <Form.Item name="stationId" label="站点 ID">
+                <Input disabled />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="stationCode" label="站点编码">
+                <Input disabled />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={12}>
+            <Col span={12}>
+              <Form.Item name="displayName" label="展示名称">
+                <Input placeholder="例如：挂傍山 01 号监测点" />
+              </Form.Item>
+            </Col>
             <Col span={12}>
               <Form.Item name="stationName" label="监测站名称" rules={[{ required: true }]}>
                 <Input placeholder="例如：挂傍山中心监测站" />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={12}>
+            <Col span={12}>
+              <Form.Item name="regionCode" label="区域编码">
+                <Input placeholder="例如：CN-GX-YL-GBS" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="slopeCode" label="边坡编码">
+                <Input placeholder="例如：LS-CN-GX-YL-GBS-001" />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={12}>
+            <Col span={12}>
+              <Form.Item name="lifecycleStatus" label="生命周期状态">
+                <Input placeholder="例如：已投运（commissioned）/ 维护中（maintenance）" />
               </Form.Item>
             </Col>
             <Col span={12}>
@@ -584,7 +815,7 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
             </Col>
           </Row>
           <Form.Item name="locationName" label="位置描述" rules={[{ required: true }]}>
-            <Input placeholder="例如：玉林师范学院东校区挂傍山中心点" />
+            <Input placeholder="例如：挂傍山中心点" />
           </Form.Item>
           <Form.Item name="description" label="详细描述">
             <Input.TextArea rows={3} placeholder="监测站的详细描述信息" />
@@ -641,7 +872,7 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
       >
         {legend.open ? (
           <div className="desk-sm-legend-list">
-            {stations.map((st) => (
+            {visibleStations.map((st) => (
               <div key={st.stationId} className="desk-sm-legend-row">
                 <div className="desk-sm-legend-left">
                   <div className="desk-sm-legend-title">{st.stationName}</div>
@@ -661,7 +892,7 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
               </div>
             ))}
             <div style={{ color: "rgba(148,163,184,0.9)", fontSize: 12, marginTop: 10 }}>
-              提示：图例名称用于 GPS/分析页曲线图的 legend 显示（后续可统一从后端配置中心下发）。
+              提示：图例名称用于形变监测/分析页曲线图的 legend 显示（后续可统一从后端配置中心下发）。
             </div>
           </div>
         ) : null}
@@ -693,8 +924,16 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
                   <span className="v">{detailStation.stationName}</span>
                 </div>
                 <div className="desk-sm-detail-item">
+                  <span className="k">展示名称</span>
+                  <span className="v">{detailStation.displayName ?? "-"}</span>
+                </div>
+                <div className="desk-sm-detail-item">
                   <span className="k">站点 ID</span>
                   <span className="v">{detailStation.stationId}</span>
+                </div>
+                <div className="desk-sm-detail-item">
+                  <span className="k">站点编码</span>
+                  <span className="v">{detailStation.stationCode}</span>
                 </div>
                 <div className="desk-sm-detail-item">
                   <span className="k">位置</span>
@@ -703,7 +942,7 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
               </div>
 
               <div className="desk-sm-detail-card">
-                <div className="desk-sm-detail-title">状态与风险</div>
+                <div className="desk-sm-detail-title">状态与命名</div>
                 <div className="desk-sm-detail-item">
                   <span className="k">状态</span>
                   <span className="v">
@@ -717,12 +956,24 @@ export function StationManagementPanel(props: { className?: string; style?: Reac
                   </span>
                 </div>
                 <div className="desk-sm-detail-item">
+                  <span className="k">区域编码</span>
+                  <span className="v">{canonicalText(detailStation.regionCode)}</span>
+                </div>
+                <div className="desk-sm-detail-item">
+                  <span className="k">边坡编码</span>
+                  <span className="v">{canonicalText(detailStation.slopeCode)}</span>
+                </div>
+                <div className="desk-sm-detail-item">
+                  <span className="k">生命周期状态</span>
+                  <span className="v">{lifecycleTag(detailStation.lifecycleStatus)}</span>
+                </div>
+                <div className="desk-sm-detail-item">
                   <span className="k">设备数</span>
                   <span className="v">{detailStation.deviceCount}</span>
                 </div>
                 <div className="desk-sm-detail-item">
                   <span className="k">最后数据</span>
-                  <span className="v">{dayjs(detailStation.lastDataTime).format("YYYY-MM-DD HH:mm:ss")}</span>
+                  <span className="v">{formatBeijingDateTime(detailStation.lastDataTime)}</span>
                 </div>
               </div>
             </div>

@@ -1,8 +1,16 @@
 ﻿{
-    "generatedAt":  "2026-04-10T06:39:18Z",
+    "generatedAt":  "2026-04-14T06:12:42Z",
     "accepted":  true,
     "mode":  "field-rk3568-center-operational-recovery",
     "currentBoundary":  "rk3568-center-operational-recovery-ready",
+    "strictAcceptance":  {
+                             "accepted":  false,
+                             "currentBoundary":  "rk3568-center-operational-recovery-strict-needs-review",
+                             "failureKeys":  [
+                                                 "closureStrictAccepted"
+                                             ],
+                             "summary":  "operationally-recovered-but-strict-command-proof-still-needs-review"
+                         },
     "cleanWindowReopened":  true,
     "centerDeployMode":  "validate",
     "restart":  {
@@ -11,15 +19,15 @@
                 },
     "runtime":  {
                     "report":  "docs/unified/reports/field-rk3568-gateway-runtime-latest.json",
-                    "mainPid":  "2953325",
-                    "execMainStartTimestamp":  "Fri 2026-04-10 00:20:59 CST",
+                    "mainPid":  "1296534",
+                    "execMainStartTimestamp":  "Mon 2026-04-13 20:17:14 CST",
                     "serviceActive":  "active",
                     "mqttConnected":  true,
                     "serialOpen":  true,
-                    "parsedMessages":  13391,
-                    "publishedMessages":  13391,
-                    "schemaRejected":  1801,
-                    "rejectedMessages":  1801,
+                    "parsedMessages":  5878,
+                    "publishedMessages":  5909,
+                    "schemaRejected":  0,
+                    "rejectedMessages":  0,
                     "rejectedWriteFailures":  0,
                     "nodeAStatus":  "online",
                     "nodeBStatus":  "online",
@@ -27,7 +35,7 @@
                 },
     "closure":  {
                     "report":  "docs/unified/reports/field-rk3568-center-live-closure-latest.json",
-                    "generatedAt":  "2026-04-10T06:39:17Z",
+                    "generatedAt":  "2026-04-14T06:12:42Z",
                     "accepted":  true,
                     "currentBoundary":  "rk3568-live-center-closure-ready",
                     "attempts":  [
@@ -39,10 +47,25 @@
                     "boardObservationRejectedMessagesDelta":  0,
                     "boardObservationRejectedWriteFailuresDelta":  0,
                     "boardObservationRejectedEvidenceAligned":  true,
-                    "boardObservationSampleCount":  6,
-                    "commandId":  "f3691d30-804e-45cc-8852-fd91c84ea824",
+                    "boardObservationSampleCount":  1,
+                    "strictAcceptance":  {
+                                             "accepted":  false,
+                                             "currentBoundary":  "rk3568-live-center-closure-strict-needs-review",
+                                             "failureKeys":  [
+                                                                 "boardNodeCHealthy",
+                                                                 "nodeCApiDirectVisible",
+                                                                 "nodeCWebProxyVisible",
+                                                                 "productionUplinkStrictAccepted",
+                                                                 "productionUplinkStrictBoundary"
+                                                             ],
+                                             "productionFreezeStrictFailureKeys":  [
+                                                                                       "runtimeNodeCExpectedState"
+                                                                                   ],
+                                             "summary":  "operationally-live-but-strict-command-proof-still-needs-review"
+                                         },
+                    "commandId":  "3b6a976a-1959-4a16-9846-210ddce83c7e",
                     "ackStatus":  "acked",
-                    "parseFailureCount":  13,
+                    "parseFailureCount":  32,
                     "nodeAMetricsKeyCountApi":  14,
                     "nodeAMetricsKeyCountWeb":  14,
                     "nodeBMetricsKeyCountApi":  14,
@@ -116,12 +139,6 @@
                        "expected":  0
                    },
                    {
-                       "key":  "stableCommandAcked",
-                       "ok":  true,
-                       "actual":  "acked",
-                       "expected":  "acked"
-                   },
-                   {
                        "key":  "nodeAApiMetricsContract",
                        "ok":  true,
                        "actual":  true,
@@ -144,6 +161,18 @@
                        "ok":  true,
                        "actual":  true,
                        "expected":  true
+                   },
+                   {
+                       "key":  "closureStrictAccepted",
+                       "ok":  false,
+                       "actual":  false,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "stableCommandAcked",
+                       "ok":  true,
+                       "actual":  "acked",
+                       "expected":  "acked"
                    }
                ],
     "nextUse":  [

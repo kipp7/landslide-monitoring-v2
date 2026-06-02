@@ -1,3 +1,9 @@
+---
+title: language-policy
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/standards/language-policy
+---
+
 # 语言政策（全仓统一，必须遵守）
 
 目标：仓库内容对团队学习友好（中文为主），同时保持工程“可复用/可迁移/可对外展示”的专业性（关键标识与接口保持国际化约束）。
@@ -69,4 +75,3 @@
 - “为了学习/方便”把接口字段写成中文：后续所有 SDK/数据库/可视化都会痛苦。
 - 把“文档中文”误解为“全部中文命名”：本仓库明确禁止。
 - 用翻译替代契约：契约以 OpenAPI/Schema 为准，文档只是解释与示例。
-

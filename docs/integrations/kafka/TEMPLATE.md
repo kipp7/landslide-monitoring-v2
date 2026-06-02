@@ -1,3 +1,9 @@
+---
+title: TEMPLATE
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/kafka/template
+---
+
 # Kafka 契约模板：<Topic>
 
 ## Topic
@@ -17,4 +23,3 @@
 - Consumer group:
 - Processing:
 - DLQ behavior:
-

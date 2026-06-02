@@ -145,6 +145,9 @@ $summary = [ordered]@{
     windowsDesktopRuntime = [bool](($prereq.checks | Where-Object { $_.key -eq "windowsDesktopRuntime8" } | Select-Object -First 1).ok)
     webView2 = [bool](($prereq.checks | Where-Object { $_.key -eq "webView2Runtime" } | Select-Object -First 1).ok)
   }
+  boundary = [ordered]@{
+    apiOnlyReady = [bool]$delivery.summary.boundaryReady
+  }
   bundle = [ordered]@{
     bundleDir = $bundle.bundleDir
     bundleZip = $bundle.bundleZip

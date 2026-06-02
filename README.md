@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: landslide-monitoring-v2-mainline/readme
+---
+
 # Landslide Monitoring System (v2)
 
 本仓库采用 **Monorepo** 结构，目标是把“契约优先 + 可扩展 + 不写死”落地为可复用工程模板。

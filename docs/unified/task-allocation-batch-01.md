@@ -1,3 +1,9 @@
+---
+title: task-allocation-batch-01
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/unified/task-allocation-batch-01
+---
+
 # 第一批并发任务建议
 
 ## 目标

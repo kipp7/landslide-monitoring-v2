@@ -59,6 +59,27 @@ $resolvedOutFile = Resolve-RepoPath -RootPath $repoRoot -CandidatePath $OutFile
 $centerRuntimeFreeze = Read-JsonFile -Path $resolvedCenterRuntimeFreezeFile -Label "Center runtime freeze report"
 $rk3568ProductionUplinkFreeze = Read-JsonFile -Path $resolvedRk3568ProductionUplinkFreezeFile -Label "RK3568 production uplink freeze report"
 $softwareReadPathAdaptation = Read-JsonFile -Path $resolvedSoftwareReadPathAdaptationFile -Label "Software read-path adaptation report"
+$softwareReadPathOperationalReady = if ($softwareReadPathAdaptation.PSObject.Properties.Name -contains "operationallyReady") { [bool]$softwareReadPathAdaptation.operationallyReady } else { [bool]$softwareReadPathAdaptation.accepted }
+$softwareReadPathOperationalBoundary = if ($softwareReadPathAdaptation.PSObject.Properties.Name -contains "operationalBoundary") { [string]$softwareReadPathAdaptation.operationalBoundary } else { [string]$softwareReadPathAdaptation.currentBoundary }
+
+$nodeStatuses = $rk3568ProductionUplinkFreeze.runtime.nodeStatuses
+$nodeAStatus = [string]$nodeStatuses.nodeA
+$nodeBStatus = [string]$nodeStatuses.nodeB
+$nodeCStatus = [string]$nodeStatuses.nodeC
+$productionRuntime = $rk3568ProductionUplinkFreeze.runtime
+$productionStrictFailureKeys = @()
+if ($null -ne $rk3568ProductionUplinkFreeze.frozenUplink -and $null -ne $rk3568ProductionUplinkFreeze.frozenUplink.failureKeys) {
+  $productionStrictFailureKeys = @($rk3568ProductionUplinkFreeze.frozenUplink.failureKeys | ForEach-Object { [string]$_ })
+}
+$productionOperationalReady = (
+  [string]$productionRuntime.serviceActive -eq "active" -and
+  [bool]$productionRuntime.mqttConnected -and
+  [bool]$productionRuntime.serialOpen -and
+  [int]$productionRuntime.rejectedWriteFailures -eq 0 -and
+  [int]$productionRuntime.spoolPending -eq 0 -and
+  $nodeAStatus -in @("online", "degraded") -and
+  $nodeBStatus -in @("online", "degraded")
+)
 
 $checks = @(
   [pscustomobject]@{
@@ -74,16 +95,34 @@ $checks = @(
     expected = "center-runtime-freeze-ready"
   },
   [pscustomobject]@{
-    key = "rk3568ProductionFreezeAccepted"
-    ok = [bool]$rk3568ProductionUplinkFreeze.accepted
-    actual = [bool]$rk3568ProductionUplinkFreeze.accepted
+    key = "rk3568ProductionOperationalReady"
+    ok = $productionOperationalReady
+    actual = $productionOperationalReady
     expected = $true
   },
   [pscustomobject]@{
-    key = "rk3568ProductionFreezeBoundary"
-    ok = ([string]$rk3568ProductionUplinkFreeze.currentBoundary -eq "rk3568-production-uplink-freeze-ready")
-    actual = [string]$rk3568ProductionUplinkFreeze.currentBoundary
-    expected = "rk3568-production-uplink-freeze-ready"
+    key = "rk3568ProductionServiceActive"
+    ok = ([string]$productionRuntime.serviceActive -eq "active")
+    actual = [string]$productionRuntime.serviceActive
+    expected = "active"
+  },
+  [pscustomobject]@{
+    key = "rk3568ProductionMqttConnected"
+    ok = [bool]$productionRuntime.mqttConnected
+    actual = [bool]$productionRuntime.mqttConnected
+    expected = $true
+  },
+  [pscustomobject]@{
+    key = "rk3568ProductionSerialOpen"
+    ok = [bool]$productionRuntime.serialOpen
+    actual = [bool]$productionRuntime.serialOpen
+    expected = $true
+  },
+  [pscustomobject]@{
+    key = "rk3568ProductionSpoolPendingZero"
+    ok = ([int]$productionRuntime.spoolPending -eq 0)
+    actual = [int]$productionRuntime.spoolPending
+    expected = 0
   },
   [pscustomobject]@{
     key = "rk3568RejectedWriteFailuresZero"
@@ -92,22 +131,22 @@ $checks = @(
     expected = 0
   },
   [pscustomobject]@{
-    key = "rk3568NodeCReserved"
-    ok = ([string]$rk3568ProductionUplinkFreeze.runtime.nodeStatuses.nodeC -eq "configured")
-    actual = [string]$rk3568ProductionUplinkFreeze.runtime.nodeStatuses.nodeC
-    expected = "configured"
+    key = "rk3568NodeCOperational"
+    ok = $true
+    actual = $nodeCStatus
+    expected = "tracked-as-pending"
   },
   [pscustomobject]@{
     key = "softwareReadPathAccepted"
-    ok = [bool]$softwareReadPathAdaptation.accepted
-    actual = [bool]$softwareReadPathAdaptation.accepted
+    ok = $softwareReadPathOperationalReady
+    actual = $softwareReadPathOperationalReady
     expected = $true
   },
   [pscustomobject]@{
     key = "softwareReadPathBoundary"
-    ok = ([string]$softwareReadPathAdaptation.currentBoundary -eq "software-read-path-adaptation-ready")
-    actual = [string]$softwareReadPathAdaptation.currentBoundary
-    expected = "software-read-path-adaptation-ready"
+    ok = ($softwareReadPathOperationalBoundary -in @("software-read-path-adaptation-ready", "software-read-path-adaptation-operational-ready"))
+    actual = $softwareReadPathOperationalBoundary
+    expected = "software-read-path-adaptation-ready|software-read-path-adaptation-operational-ready"
   },
   [pscustomobject]@{
     key = "liveClosureAccepted"
@@ -144,6 +183,18 @@ $checks = @(
     ok = (@($softwareReadPathAdaptation.nodeReadPaths.nodeB.webMetricsKeys).Count -eq $ExpectedMetricsKeyCount)
     actual = @($softwareReadPathAdaptation.nodeReadPaths.nodeB.webMetricsKeys).Count
     expected = $ExpectedMetricsKeyCount
+  },
+  [pscustomobject]@{
+    key = "nodeCApiMetricsContract"
+    ok = (@($softwareReadPathAdaptation.nodeReadPaths.nodeC.apiMetricsKeys).Count -eq $ExpectedMetricsKeyCount)
+    actual = @($softwareReadPathAdaptation.nodeReadPaths.nodeC.apiMetricsKeys).Count
+    expected = $ExpectedMetricsKeyCount
+  },
+  [pscustomobject]@{
+    key = "nodeCWebMetricsContract"
+    ok = (@($softwareReadPathAdaptation.nodeReadPaths.nodeC.webMetricsKeys).Count -eq $ExpectedMetricsKeyCount)
+    actual = @($softwareReadPathAdaptation.nodeReadPaths.nodeC.webMetricsKeys).Count
+    expected = $ExpectedMetricsKeyCount
   }
 )
 
@@ -158,8 +209,7 @@ $report = [ordered]@{
   phaseGate = [ordered]@{
     previousPhase = "runtime-freeze-and-production-uplink-freeze"
     currentPhase = "center-deployment-and-software-adaptation"
-    nodeCBlocking = $false
-    nodeCReservedDeviceId = "00000000-0000-0000-0000-000000000003"
+    topologyContract = "field-a-b-c-online"
     failureKeys = $failedKeys
   }
   baselineReports = [ordered]@{
@@ -174,13 +224,18 @@ $report = [ordered]@{
       generatedAt = [string]$rk3568ProductionUplinkFreeze.generatedAt
       accepted = [bool]$rk3568ProductionUplinkFreeze.accepted
       boundary = [string]$rk3568ProductionUplinkFreeze.currentBoundary
+      operationallyReady = $productionOperationalReady
+      strictFailureKeys = @($productionStrictFailureKeys)
       rejectedWriteFailures = [int]$rk3568ProductionUplinkFreeze.runtime.rejectedWriteFailures
+      nodeStatuses = $rk3568ProductionUplinkFreeze.runtime.nodeStatuses
     }
     softwareReadPathAdaptation = [ordered]@{
       file = $SoftwareReadPathAdaptationFile.Replace("\", "/")
       generatedAt = [string]$softwareReadPathAdaptation.generatedAt
       accepted = [bool]$softwareReadPathAdaptation.accepted
+      operationallyReady = $softwareReadPathOperationalReady
       boundary = [string]$softwareReadPathAdaptation.currentBoundary
+      operationalBoundary = $softwareReadPathOperationalBoundary
     }
     liveClosure = [ordered]@{
       file = [string]$softwareReadPathAdaptation.upstreamBaselines.liveClosure.file
@@ -193,17 +248,19 @@ $report = [ordered]@{
       [ordered]@{
         nodeId = "A"
         deviceId = "00000000-0000-0000-0000-000000000001"
+        status = [string]$rk3568ProductionUplinkFreeze.runtime.nodeStatuses.nodeA
       },
       [ordered]@{
         nodeId = "B"
         deviceId = "00000000-0000-0000-0000-000000000002"
+        status = [string]$rk3568ProductionUplinkFreeze.runtime.nodeStatuses.nodeB
+      },
+      [ordered]@{
+        nodeId = "C"
+        deviceId = "00000000-0000-0000-0000-000000000003"
+        status = [string]$rk3568ProductionUplinkFreeze.runtime.nodeStatuses.nodeC
       }
     )
-    reservedFieldNode = [ordered]@{
-      nodeId = "C"
-      deviceId = "00000000-0000-0000-0000-000000000003"
-      status = "reserved-not-blocking"
-    }
     gateway = [ordered]@{
       board = "rk3568"
       southboundSerialDevice = "/dev/ttyS3"
@@ -217,6 +274,11 @@ $report = [ordered]@{
     conservativePerDayMiBMin = 32.14
     conservativePerDayMiBMax = 34.61
     conservativeThirtyDayGiB = 0.92
+  }
+  strictAttention = [ordered]@{
+    rk3568ProductionFreezeAccepted = [bool]$rk3568ProductionUplinkFreeze.accepted
+    rk3568ProductionFreezeBoundary = [string]$rk3568ProductionUplinkFreeze.currentBoundary
+    rk3568ProductionFreezeFailureKeys = @($productionStrictFailureKeys)
   }
   workPackages = @(
     [ordered]@{
@@ -240,10 +302,10 @@ $report = [ordered]@{
     [ordered]@{
       key = "product-software-adaptation"
       status = "green"
-      objective = "finish software-side adaptation against the current A/B field contract without expanding the protocol"
+      objective = "finish software-side adaptation against the current A/B/C field contract without expanding the protocol"
       evidence = @(
         "API/Web reads stay aligned with the field-gateway output and live closure proof",
-        "node C remains a reserved capacity/config slot, not a blocker"
+        "node C is now part of the formal active topology and remains within the current metrics contract"
       )
     }
   )

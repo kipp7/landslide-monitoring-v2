@@ -8,6 +8,12 @@ import { SerialPort } from "serialport";
 import { createLogger, newTraceId } from "@lsmv2/observability";
 import { loadAndCompileSchema } from "@lsmv2/validation";
 import { loadConfigFromEnv, type AppConfig } from "./config";
+import {
+  createCobsCrcFieldLinkAssembler,
+  encodeFieldLinkFrame,
+  type FieldLinkFrameType,
+  type FieldLinkInboundPayload
+} from "./field-link";
 
 type TelemetryEnvelopeV1 = {
   schema_version: 1;
@@ -25,6 +31,13 @@ type DeviceCommandV1 = {
   command_type: string;
   payload: Record<string, unknown>;
   issued_ts: string;
+  sent_ts?: string;
+  gateway_sent_ts?: string;
+  time_sync?: {
+    source: "rk3568_gateway";
+    sent_ts: string;
+    issued_ts: string;
+  };
 };
 
 type DeviceCommandAckV1 = {
@@ -48,8 +61,15 @@ type NodeRuntimeState = {
   commandForwards: number;
   ackPublishes: number;
   lastTelemetryTs: string | null;
+  lastSeenTs: string | null;
+  lastSeenKind: "telemetry" | "ack" | "rejected" | null;
   lastCommandTs: string | null;
   lastAckTs: string | null;
+  lastTelemetryAgeMs: number | null;
+  lastSeenAgeMs: number | null;
+  effectiveDegradedAfterMs: number | null;
+  effectiveOfflineAfterMs: number | null;
+  statusReason: string | null;
   status: "configured" | "online" | "degraded" | "offline";
 };
 
@@ -57,12 +77,27 @@ type PortRuntimeState = {
   serialDevice: string;
   open: boolean;
   reconnectScheduled: boolean;
+  sendOwnerState: "idle" | "writing-command" | "waiting-for-ack" | "waiting-for-poll-telemetry";
   mappedNodeCount: number;
   enabledNodeCount: number;
   mappedDeviceIds: string[];
   telemetryMessages: number;
   commandWrites: number;
+  queuedCommands: number;
   ackMessages: number;
+  pendingCommandId: string | null;
+  pendingCommandType: string | null;
+  pendingCommandDeviceId: string | null;
+  quietWindowUntilTs: string | null;
+  lastQuietWindowStartTs: string | null;
+  lastQuietWindowCloseTs: string | null;
+  lastQuietWindowCloseReason: "acked" | "failed" | "timeout" | "shutdown" | null;
+  quietWindowTimeouts: number;
+  lastPrewriteQuietSatisfiedTs: string | null;
+  lastPrewriteQuietWaitMs: number;
+  prewriteQuietTimeouts: number;
+  lastPrewriteFlushTs: string | null;
+  prewriteFlushFailures: number;
   reconnectAttempts: number;
   consecutiveReconnectFailures: number;
   serialChunks: number;
@@ -72,6 +107,16 @@ type PortRuntimeState = {
   lastCloseTs: string | null;
   lastCommandTs: string | null;
   lastAckTs: string | null;
+  lastPollCommandTs: string | null;
+  lastPollTelemetryTs: string | null;
+  lastPollSessionCloseTs: string | null;
+  lastPollSessionCloseReason: "telemetry" | "failed" | "timeout" | "shutdown" | null;
+  activePollCommandId: string | null;
+  activePollDeviceId: string | null;
+  pollCommandsIssued: number;
+  pollTelemetryMatches: number;
+  pollAckSuppressions: number;
+  pollSessionTimeouts: number;
   lastReconnectTs: string | null;
   lastReconnectReason: string | null;
   lastError: string | null;
@@ -107,6 +152,9 @@ type RuntimeStats = {
   schemaRejected: number;
   rejectedMessages: number;
   rejectedWriteFailures: number;
+  interleavingSuspected: number;
+  interleavingWithMultipleSchemas: number;
+  interleavingWithMultipleDeviceIds: number;
   publishedMessages: number;
   replayPublishedMessages: number;
   publishFailures: number;
@@ -116,17 +164,68 @@ type RuntimeStats = {
   commandWriteFailures: number;
   ackMessagesPublished: number;
   ackPublishFailures: number;
+  internalPollCommandsIssued: number;
+  internalPollTelemetryMatches: number;
+  internalPollAckSuppressions: number;
+  internalPollSessionTimeouts: number;
   spoolPending: number;
   lastSerialReadTs: string | null;
   lastParsedMessageTs: string | null;
   lastPublishedTs: string | null;
   lastCommandForwardedTs: string | null;
   lastAckPublishedTs: string | null;
+  lastInternalPollCommandTs: string | null;
+  lastInternalPollTelemetryTs: string | null;
+  lastInterleavingTs: string | null;
+  lastInterleavingSummary: string | null;
   lastError: string | null;
 };
 
-type GatewayJsonAssembler = {
-  push(chunk: Buffer): string[];
+type RejectedPayloadDiagnostics = {
+  suspectedInterleaving: boolean;
+  schemaVersionCount: number;
+  distinctDeviceIds: string[];
+  summary: string | null;
+};
+
+type PendingCommandWindow = {
+  commandId: string;
+  commandType: string;
+  deviceId: string;
+  quietUntilTs: string;
+  close: (reason: "acked" | "failed" | "timeout" | "shutdown") => void;
+};
+
+type SouthboundCommandOrigin = "mqtt" | "internal-poll";
+
+type InternalPollCommandRecord = {
+  commandId: string;
+  commandType: string;
+  deviceId: string;
+  portPath: string;
+  issuedTs: string;
+  suppressAckPublish: boolean;
+};
+
+type ActivePollTelemetryWindow = {
+  commandId: string;
+  commandType: string;
+  deviceId: string;
+  portPath: string;
+  startedTs: string;
+  timeoutAtMs: number;
+  timer: NodeJS.Timeout;
+};
+
+type GatewayPayloadAssembler = {
+  push(chunk: Buffer): {
+    payloads: FieldLinkInboundPayload[];
+    errors: {
+      reason: string;
+      frameBytes: number;
+      rawSnippet: string;
+    }[];
+  };
 };
 
 type JsonObject = Record<string, unknown>;
@@ -150,6 +249,41 @@ const FIELD_METRIC_KEYS = new Set([
 
 function isoNow(): string {
   return new Date().toISOString();
+}
+
+function buildInternalPollCommandId(): string {
+  // RK2206 echoes command_id in ACK; keep it schema-compatible so the gateway can close ACK windows.
+  return randomUUID();
+}
+
+function buildSouthboundCommandPayload(
+  command: DeviceCommandV1,
+  sentTs: string,
+  origin: SouthboundCommandOrigin
+): string {
+  if (origin === "internal-poll") {
+    return JSON.stringify({
+      schema_version: command.schema_version,
+      command_id: command.command_id,
+      device_id: command.device_id,
+      command_type: command.command_type,
+      payload: {},
+      issued_ts: command.issued_ts,
+      sent_ts: sentTs,
+      gateway_sent_ts: sentTs
+    } satisfies DeviceCommandV1);
+  }
+
+  return JSON.stringify({
+    ...command,
+    sent_ts: sentTs,
+    gateway_sent_ts: sentTs,
+    time_sync: {
+      source: "rk3568_gateway",
+      sent_ts: sentTs,
+      issued_ts: command.issued_ts
+    }
+  } satisfies DeviceCommandV1);
 }
 
 function ageMsFrom(nowMs: number, isoTs: string | null): number | null {
@@ -209,26 +343,41 @@ function topicDeviceId(prefix: string, topic: string): string | null {
   return deviceId.length > 0 ? deviceId : null;
 }
 
-function createAssembler(): GatewayJsonAssembler {
+function createRawJsonAssembler(): GatewayPayloadAssembler {
   let buffer = "";
 
   return {
-    push(chunk: Buffer): string[] {
+    push(chunk: Buffer) {
       buffer += chunk.toString("utf8");
-      const lines = buffer.split(/\r?\n/u);
-      buffer = lines.pop() ?? "";
-
-      const out = lines
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0)
-        .filter((line) => line.includes("{") || line.includes("}"));
+      const extracted = extractBalancedJsonMessagesFromBuffer(buffer);
+      buffer = extracted.remaining;
 
       if (buffer.length > 4096) {
-        const start = buffer.lastIndexOf("{");
-        buffer = start >= 0 ? buffer.slice(start) : "";
+        const schemaStart = buffer.lastIndexOf("{\"schema_version\"");
+        if (schemaStart >= 0) {
+          buffer = buffer.slice(schemaStart);
+        } else {
+          const start = buffer.lastIndexOf("{");
+          buffer = start >= 0 ? buffer.slice(start) : "";
+        }
       }
 
-      return out;
+      const payloads = extracted.messages
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0)
+        .filter(isSouthboundSchemaCandidate)
+        .map((rawPayload) => ({
+          rawPayload,
+          frameType: null,
+          sequence: null,
+          integrity: "not_applicable" as const,
+          frameBytes: Buffer.byteLength(rawPayload, "utf8")
+        }));
+
+      return {
+        payloads,
+        errors: []
+      };
     }
   };
 }
@@ -251,6 +400,24 @@ function isJsonObject(value: unknown): value is JsonObject {
 
 function isTelemetryScalar(value: unknown): value is number | string | boolean | null {
   return value === null || typeof value === "number" || typeof value === "string" || typeof value === "boolean";
+}
+
+function analyzeRejectedPayload(rawPayload: string): RejectedPayloadDiagnostics {
+  const schemaVersionCount = (rawPayload.match(/"schema_version"/gu) ?? []).length;
+  const deviceIdMatches = Array.from(rawPayload.matchAll(/"device_id"\s*:\s*"([^"]+)"/gu), (match) => match[1] ?? "");
+  const distinctDeviceIds = Array.from(new Set(deviceIdMatches.filter((value) => value.length > 0))).sort((a, b) =>
+    a.localeCompare(b)
+  );
+  const suspectedInterleaving = schemaVersionCount > 1 || distinctDeviceIds.length > 1;
+
+  return {
+    suspectedInterleaving,
+    schemaVersionCount,
+    distinctDeviceIds,
+    summary: suspectedInterleaving
+      ? `schema_version_markers=${String(schemaVersionCount)};device_ids=${distinctDeviceIds.length > 0 ? distinctDeviceIds.join(",") : "none"}`
+      : null
+  };
 }
 
 function extractBalancedJsonObjectAt(input: string, start: number): string | null {
@@ -352,41 +519,100 @@ function extractBalancedJsonObjects(input: string): string[] {
   return out;
 }
 
+function extractBalancedJsonMessagesFromBuffer(input: string): { messages: string[]; remaining: string } {
+  const messages: string[] = [];
+  let depth = 0;
+  let start = -1;
+  let inString = false;
+  let escaped = false;
+  let lastConsumed = 0;
+
+  for (let i = 0; i < input.length; i += 1) {
+    const ch = input[i];
+
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+
+    if (ch === "\\") {
+      if (inString) escaped = true;
+      continue;
+    }
+
+    if (ch === "\"") {
+      inString = !inString;
+      continue;
+    }
+
+    if (inString) {
+      continue;
+    }
+
+    if (ch === "{") {
+      if (depth === 0) {
+        start = i;
+      }
+      depth += 1;
+      continue;
+    }
+
+    if (ch === "}" && depth > 0) {
+      depth -= 1;
+      if (depth === 0 && start >= 0) {
+        messages.push(input.slice(start, i + 1));
+        lastConsumed = i + 1;
+        start = -1;
+      }
+    }
+  }
+
+  if (depth > 0 && start >= 0) {
+    return {
+      messages,
+      remaining: input.slice(start)
+    };
+  }
+
+  if (lastConsumed < input.length) {
+    const trailing = input.slice(lastConsumed);
+    const fallbackStart = trailing.lastIndexOf("{");
+    return {
+      messages,
+      remaining: fallbackStart >= 0 ? trailing.slice(fallbackStart) : ""
+    };
+  }
+
+  return {
+    messages,
+    remaining: ""
+  };
+}
+
 function extractSchemaVersionJsonObjects(input: string): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
-  let searchIndex = 0;
-  const objectStartMarker = "{\"schema_version\"";
+  let markerIndex = 0;
 
-  while (searchIndex < input.length) {
-    const start = input.indexOf(objectStartMarker, searchIndex);
-    if (start < 0) {
+  while (markerIndex < input.length) {
+    markerIndex = input.indexOf("\"schema_version\"", markerIndex);
+    if (markerIndex < 0) {
       break;
+    }
+
+    const start = input.lastIndexOf("{", markerIndex);
+    if (start < 0) {
+      markerIndex += "\"schema_version\"".length;
+      continue;
     }
 
     const candidate = extractBalancedJsonObjectAt(input, start);
     if (candidate && !seen.has(candidate)) {
       seen.add(candidate);
       out.push(candidate);
-      searchIndex = start + candidate.length;
-      continue;
     }
 
-    const markerIndex = input.indexOf("\"schema_version\"", start + objectStartMarker.length);
-    if (markerIndex < 0) {
-      break;
-    }
-
-    const fallbackStart = input.lastIndexOf("{", markerIndex);
-    const fallbackCandidate = extractBalancedJsonObjectAt(input, fallbackStart);
-    if (fallbackCandidate && !seen.has(fallbackCandidate)) {
-      seen.add(fallbackCandidate);
-      out.push(fallbackCandidate);
-      searchIndex = fallbackStart + fallbackCandidate.length;
-      continue;
-    }
-
-    searchIndex = markerIndex + "\"schema_version\"".length;
+    markerIndex += "\"schema_version\"".length;
   }
 
   return out;
@@ -396,27 +622,48 @@ function isSouthboundSchemaCandidate(candidate: string): boolean {
   return candidate.includes("\"schema_version\"");
 }
 
-function recoverJsonCandidates(rawPayload: string): string[] {
-  const normalized = rawPayload.trim();
-  if (normalized.length === 0) return [];
+function isParsableJsonCandidate(candidate: string): boolean {
+  try {
+    JSON.parse(candidate);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function recoverParsableSchemaCandidates(input: string): string[] {
+  const normalized = input.trim();
+  if (normalized.length === 0) {
+    return [];
+  }
 
   const schemaAnchored = extractSchemaVersionJsonObjects(normalized)
     .map((item) => item.trim())
     .filter((item) => item.length > 0);
-  if (schemaAnchored.length > 0) {
-    return schemaAnchored;
+  const parsableSchemaAnchored = schemaAnchored.filter(isParsableJsonCandidate);
+  if (parsableSchemaAnchored.length > 0) {
+    return parsableSchemaAnchored;
   }
 
   const balanced = extractBalancedJsonObjects(normalized)
     .map((item) => item.trim())
     .filter((item) => item.length > 0)
-    .filter(isSouthboundSchemaCandidate);
+    .filter(isSouthboundSchemaCandidate)
+    .filter(isParsableJsonCandidate);
   if (balanced.length > 0) {
     return balanced;
   }
 
-  if (!normalized.startsWith("{")) {
-    return [];
+  return [];
+}
+
+function recoverJsonCandidates(rawPayload: string): string[] {
+  const normalized = rawPayload.trim();
+  if (normalized.length === 0) return [];
+
+  const topLevelRecovered = recoverParsableSchemaCandidates(normalized);
+  if (topLevelRecovered.length > 0) {
+    return topLevelRecovered;
   }
 
   const lines = normalized
@@ -424,19 +671,86 @@ function recoverJsonCandidates(rawPayload: string): string[] {
     .map((line) => line.trim())
     .filter((line) => line.length > 0);
 
-  if (lines.length <= 1) {
-    return isSouthboundSchemaCandidate(normalized) ? [normalized] : [];
-  }
+  if (lines.length > 0) {
+    const recoveredFromLines = Array.from(
+      new Set(
+        lines.flatMap((line) => {
+          const directLine = line.startsWith("{") && line.endsWith("}") ? [line] : [];
+          return [...directLine, ...recoverParsableSchemaCandidates(line)];
+        })
+      )
+    ).filter((line) => isSouthboundSchemaCandidate(line) && isParsableJsonCandidate(line));
 
-  const telemetryLines = lines.filter(
-    (line) => line.startsWith("{") && line.endsWith("}") && isSouthboundSchemaCandidate(line) && line.includes("\"device_id\"")
-  );
-
-  if (telemetryLines.length > 0) {
-    return telemetryLines;
+    if (recoveredFromLines.length > 0) {
+      return recoveredFromLines;
+    }
   }
 
   return isSouthboundSchemaCandidate(normalized) ? [normalized] : [];
+}
+
+function recoverCommandAckCandidate(
+  rawPayload: string,
+  pendingWindow?: Pick<PendingCommandWindow, "commandId" | "deviceId"> | null
+): DeviceCommandAckV1 | null {
+  const normalized = rawPayload.trim();
+  if (!normalized.includes("\"ack_ts\"") || !normalized.includes("\"command_id\"") || !normalized.includes("\"status\"")) {
+    if (!pendingWindow) {
+      return null;
+    }
+
+    const containsPendingCommandId = normalized.includes(`"command_id":"${pendingWindow.commandId}"`);
+    const containsPendingDeviceId = normalized.includes(`"device_id":"${pendingWindow.deviceId}"`);
+    const containsAckLikeMarker =
+      normalized.includes("\"ack_") ||
+      normalized.includes("\"ackTs\"") ||
+      normalized.includes("\"status\"") ||
+      normalized.includes("\"result\"");
+
+    if (!containsPendingCommandId || !containsPendingDeviceId || !containsAckLikeMarker) {
+      return null;
+    }
+
+    const status =
+      normalized.includes("\"failed\"") || normalized.includes("\"status\":\"failed\"") ? "failed" : "acked";
+    const ackTsMatch = /"ack_ts"\s*:\s*"([^"]+)"/u.exec(normalized);
+
+    return {
+      schema_version: 1,
+      command_id: pendingWindow.commandId,
+      device_id: pendingWindow.deviceId,
+      ack_ts: ackTsMatch?.[1] ?? isoNow(),
+      status,
+      result: {
+        recovered_from: "pending-command-fragment"
+      }
+    };
+  }
+
+  const schemaVersionMatch = /"schema_version"\s*:\s*(\d+)/u.exec(normalized);
+  const commandIdMatch = /"command_id"\s*:\s*"([^"]+)"/u.exec(normalized);
+  const deviceIdMatch = /"device_id"\s*:\s*"([^"]+)"/u.exec(normalized);
+  const ackTsMatch = /"ack_ts"\s*:\s*"([^"]+)"/u.exec(normalized);
+  const statusMatch = /"status"\s*:\s*"(acked|failed)"/u.exec(normalized);
+  const ackStatus = statusMatch?.[1];
+
+  if (
+    schemaVersionMatch?.[1] !== "1" ||
+    !commandIdMatch?.[1] ||
+    !deviceIdMatch?.[1] ||
+    !ackTsMatch?.[1] ||
+    (ackStatus !== "acked" && ackStatus !== "failed")
+  ) {
+    return null;
+  }
+
+  return {
+    schema_version: 1,
+    command_id: commandIdMatch[1],
+    device_id: deviceIdMatch[1],
+    ack_ts: ackTsMatch[1],
+    status: ackStatus
+  };
 }
 
 function normalizeTelemetryEnvelopeCandidate(parsed: unknown): TelemetryEnvelopeV1 | null {
@@ -646,9 +960,17 @@ class GatewayRuntime {
   private readonly nodeState = new Map<string, NodeRuntimeState>();
   private readonly portState = new Map<string, PortRuntimeState>();
   private readonly serialPorts = new Map<string, SerialPort>();
-  private readonly assemblers = new Map<string, GatewayJsonAssembler>();
+  private readonly assemblers = new Map<string, GatewayPayloadAssembler>();
   private readonly serialReconnectTimers = new Map<string, NodeJS.Timeout>();
   private readonly serialOpenInFlight = new Set<string>();
+  private readonly portCommandChains = new Map<string, Promise<void>>();
+  private readonly portQuietWindowTimers = new Map<string, NodeJS.Timeout>();
+  private readonly pendingCommandWindows = new Map<string, PendingCommandWindow>();
+  private readonly internalPollCommands = new Map<string, InternalPollCommandRecord>();
+  private readonly activePollTelemetryWindows = new Map<string, ActivePollTelemetryWindow>();
+  private readonly portPollNodeCursor = new Map<string, number>();
+  private readonly portLastReadAtMs = new Map<string, number>();
+  private fieldLinkTxSequence = 0;
   private readonly stats: RuntimeStats = {
     serialChunks: 0,
     serialBytes: 0,
@@ -656,6 +978,9 @@ class GatewayRuntime {
     schemaRejected: 0,
     rejectedMessages: 0,
     rejectedWriteFailures: 0,
+    interleavingSuspected: 0,
+    interleavingWithMultipleSchemas: 0,
+    interleavingWithMultipleDeviceIds: 0,
     publishedMessages: 0,
     replayPublishedMessages: 0,
     publishFailures: 0,
@@ -665,18 +990,27 @@ class GatewayRuntime {
     commandWriteFailures: 0,
     ackMessagesPublished: 0,
     ackPublishFailures: 0,
+    internalPollCommandsIssued: 0,
+    internalPollTelemetryMatches: 0,
+    internalPollAckSuppressions: 0,
+    internalPollSessionTimeouts: 0,
     spoolPending: 0,
     lastSerialReadTs: null,
     lastParsedMessageTs: null,
     lastPublishedTs: null,
     lastCommandForwardedTs: null,
     lastAckPublishedTs: null,
+    lastInternalPollCommandTs: null,
+    lastInternalPollTelemetryTs: null,
+    lastInterleavingTs: null,
+    lastInterleavingSummary: null,
     lastError: null
   };
 
   private mqttClient: mqtt.MqttClient | null = null;
   private replayTimer: NodeJS.Timeout | null = null;
   private healthTimer: NodeJS.Timeout | null = null;
+  private pollerTimer: NodeJS.Timeout | null = null;
   private replayRunning = false;
   private mqttConnected = false;
   private stopping = false;
@@ -751,6 +1085,12 @@ class GatewayRuntime {
       void this.emitHealth();
     }, this.config.healthEmitIntervalMs);
 
+    if (this.config.southboundPollingEnabled) {
+      this.pollerTimer = setInterval(() => {
+        this.tickSouthboundPolling();
+      }, this.config.southboundPollingIntervalMs);
+    }
+
     await this.emitHealth();
   }
 
@@ -759,10 +1099,21 @@ class GatewayRuntime {
     this.logger.info({ signal }, "field gateway shutting down");
     if (this.replayTimer) clearInterval(this.replayTimer);
     if (this.healthTimer) clearInterval(this.healthTimer);
+    if (this.pollerTimer) clearInterval(this.pollerTimer);
     for (const timer of this.serialReconnectTimers.values()) {
       clearTimeout(timer);
     }
     this.serialReconnectTimers.clear();
+    for (const timer of this.portQuietWindowTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.portQuietWindowTimers.clear();
+    for (const portPath of Array.from(this.pendingCommandWindows.keys())) {
+      this.closePendingCommandWindow(portPath, "shutdown");
+    }
+    for (const portPath of Array.from(this.activePollTelemetryWindows.keys())) {
+      this.closeActivePollTelemetryWindow(portPath, "shutdown");
+    }
 
     await this.emitHealth();
 
@@ -893,7 +1244,10 @@ class GatewayRuntime {
       autoOpen: false
     });
     this.serialPorts.set(portPath, serialPort);
-    this.assemblers.set(portPath, createAssembler());
+    this.assemblers.set(
+      portPath,
+      this.config.fieldLinkMode === "cobs-crc-v1" ? createCobsCrcFieldLinkAssembler() : createRawJsonAssembler()
+    );
 
     serialPort.on("error", (err) => {
       const message = err instanceof Error ? err.message : String(err);
@@ -922,12 +1276,29 @@ class GatewayRuntime {
       this.stats.serialChunks += 1;
       this.stats.serialBytes += chunk.length;
       this.stats.lastSerialReadTs = receivedTs;
+      this.portLastReadAtMs.set(portPath, Date.now());
 
       portState.serialChunks += 1;
       portState.serialBytes += chunk.length;
       portState.lastReadTs = receivedTs;
 
-      for (const payload of assembler.push(chunk)) {
+      const batch = assembler.push(chunk);
+      for (const error of batch.errors) {
+        this.stats.lastError = error.reason;
+        portState.lastError = error.reason;
+        this.logger.warn(
+          {
+            serialDevice: portPath,
+            fieldLinkMode: this.config.fieldLinkMode,
+            frameBytes: error.frameBytes,
+            rawSnippet: error.rawSnippet,
+            reason: error.reason
+          },
+          "field gateway field-link decode failed"
+        );
+      }
+
+      for (const payload of batch.payloads) {
         void this.handlePayload(payload, portPath);
       }
     });
@@ -970,18 +1341,41 @@ class GatewayRuntime {
     }
   }
 
-  private async handlePayload(rawPayload: string, sourcePort: string): Promise<void> {
-    const candidates = recoverJsonCandidates(rawPayload);
+  private async handlePayload(input: FieldLinkInboundPayload, sourcePort: string): Promise<void> {
+    const candidates = this.orderedPayloadCandidates(input.rawPayload, sourcePort);
     for (const candidate of candidates) {
-      await this.handlePayloadCandidate(candidate, sourcePort);
+      await this.handlePayloadCandidate(candidate, sourcePort, input.frameType, input.sequence);
     }
   }
 
-  private async handlePayloadCandidate(rawPayload: string, sourcePort: string): Promise<void> {
+  private orderedPayloadCandidates(rawPayload: string, sourcePort: string): string[] {
+    const normalized = rawPayload.trim();
+    if (normalized.length === 0) {
+      return [];
+    }
+
+    const recovered = recoverJsonCandidates(rawPayload);
+    const pendingWindow = this.pendingCommandWindows.get(sourcePort);
+    const inspectRawFirst = pendingWindow
+      ? normalized.includes(`"command_id":"${pendingWindow.commandId}"`) ||
+        normalized.includes("\"ack_") ||
+        normalized.includes("\"status\"")
+      : false;
+
+    return inspectRawFirst ? Array.from(new Set([normalized, ...recovered])) : recovered;
+  }
+
+  private async handlePayloadCandidate(
+    rawPayload: string,
+    sourcePort: string,
+    frameType: FieldLinkFrameType | null,
+    frameSequence: number | null
+  ): Promise<void> {
     const traceId = newTraceId();
     const receivedTs = isoNow();
     const payloadBytes = Buffer.byteLength(rawPayload, "utf8");
     const portState = this.ensurePortRuntimeState(sourcePort);
+    const pendingWindow = this.pendingCommandWindows.get(sourcePort);
 
     if (payloadBytes > this.config.maxMessageBytes) {
       this.stats.schemaRejected += 1;
@@ -1003,6 +1397,26 @@ class GatewayRuntime {
     try {
       parsed = JSON.parse(rawPayload);
     } catch (err) {
+      const recoveredAck = recoverCommandAckCandidate(rawPayload, pendingWindow);
+      if (recoveredAck && this.validateCommandAck.validate(recoveredAck)) {
+        const recoveredPayload = JSON.stringify(recoveredAck);
+        this.logger.warn(
+          {
+            traceId,
+            sourcePort,
+            payloadBytes,
+            recoveredPayloadBytes: Buffer.byteLength(recoveredPayload, "utf8"),
+            commandId: recoveredAck.command_id,
+            deviceId: recoveredAck.device_id,
+            status: recoveredAck.status,
+            rawPayloadSnippet: summarizePayloadSnippet(rawPayload)
+          },
+          "field gateway command ack recovered from corrupt serial payload"
+        );
+        await this.publishCommandAck(recoveredAck, recoveredPayload, sourcePort);
+        return;
+      }
+
       this.stats.schemaRejected += 1;
       this.stats.lastError = err instanceof Error ? err.message : String(err);
       await this.rejectIncomingTelemetry({
@@ -1028,7 +1442,34 @@ class GatewayRuntime {
     }
 
     if (this.validateCommandAck.validate(parsed)) {
+      if (frameType && frameType !== "ack" && frameType !== "control") {
+        this.logger.warn(
+          { traceId, sourcePort, frameType, frameSequence, commandId: parsed.command_id },
+          "field gateway frame type mismatch for command ack"
+        );
+        return;
+      }
       await this.publishCommandAck(parsed, rawPayload, sourcePort);
+      return;
+    }
+
+    const recoveredAck = recoverCommandAckCandidate(rawPayload, pendingWindow);
+    if (recoveredAck && this.validateCommandAck.validate(recoveredAck)) {
+      const recoveredPayload = JSON.stringify(recoveredAck);
+      this.logger.warn(
+        {
+          traceId,
+          sourcePort,
+          payloadBytes,
+          recoveredPayloadBytes: Buffer.byteLength(recoveredPayload, "utf8"),
+          commandId: recoveredAck.command_id,
+          deviceId: recoveredAck.device_id,
+          status: recoveredAck.status,
+          rawPayloadSnippet: summarizePayloadSnippet(rawPayload)
+        },
+        "field gateway command ack recovered from schema-invalid serial payload"
+      );
+      await this.publishCommandAck(recoveredAck, recoveredPayload, sourcePort);
       return;
     }
 
@@ -1064,6 +1505,13 @@ class GatewayRuntime {
     }
 
     const envelope = envelopeCandidate;
+    if (frameType && frameType !== "telemetry" && frameType !== "control") {
+      this.logger.warn(
+        { traceId, sourcePort, frameType, frameSequence, deviceId: envelope.device_id, seq: envelope.seq ?? null },
+        "field gateway frame type mismatch for telemetry"
+      );
+      return;
+    }
     const normalizedPayload = JSON.stringify(envelope);
     const normalizedPayloadBytes = Buffer.byteLength(normalizedPayload, "utf8");
     const nodeState = this.resolveNodeForTelemetry(envelope.device_id, traceId, sourcePort);
@@ -1080,10 +1528,22 @@ class GatewayRuntime {
       return;
     }
 
+    const activePollWindow = this.activePollTelemetryWindows.get(sourcePort);
+    const matchedActivePollWindow = activePollWindow?.deviceId === envelope.device_id;
+    if (matchedActivePollWindow) {
+      this.closeActivePollTelemetryWindow(sourcePort, "telemetry");
+      this.stats.internalPollTelemetryMatches += 1;
+      this.stats.lastInternalPollTelemetryTs = receivedTs;
+      portState.pollTelemetryMatches += 1;
+      portState.lastPollTelemetryTs = receivedTs;
+    }
+
     this.stats.parsedMessages += 1;
     this.stats.lastParsedMessageTs = receivedTs;
     nodeState.telemetryMessages += 1;
     nodeState.lastTelemetryTs = receivedTs;
+    nodeState.lastSeenTs = receivedTs;
+    nodeState.lastSeenKind = "telemetry";
     nodeState.status = "online";
     portState.telemetryMessages += 1;
 
@@ -1134,6 +1594,20 @@ class GatewayRuntime {
     reason: string;
   }): Promise<void> {
     const { traceId, sourcePort, receivedTs, rawPayload, deviceId, seq, reason } = params;
+    const diagnostics = analyzeRejectedPayload(rawPayload);
+    this.markNodeActivityFromRejected(deviceId, diagnostics.distinctDeviceIds, receivedTs, sourcePort);
+    if (diagnostics.suspectedInterleaving) {
+      this.stats.interleavingSuspected += 1;
+      if (diagnostics.schemaVersionCount > 1) {
+        this.stats.interleavingWithMultipleSchemas += 1;
+      }
+      if (diagnostics.distinctDeviceIds.length > 1) {
+        this.stats.interleavingWithMultipleDeviceIds += 1;
+      }
+      this.stats.lastInterleavingTs = receivedTs;
+      this.stats.lastInterleavingSummary = diagnostics.summary;
+    }
+
     const record: SpoolRecord = {
       schema_version: 1,
       spool_id: randomUUID(),
@@ -1163,7 +1637,10 @@ class GatewayRuntime {
           deviceId,
           seq,
           reason,
-          rejectedPath
+          rejectedPath,
+          interleavingSuspected: diagnostics.suspectedInterleaving,
+          schemaVersionCount: diagnostics.schemaVersionCount,
+          distinctDeviceIds: diagnostics.distinctDeviceIds
         },
         "field gateway telemetry written to rejected evidence"
       );
@@ -1180,6 +1657,114 @@ class GatewayRuntime {
         },
         "field gateway rejected evidence write failed"
       );
+    }
+  }
+
+  private tickSouthboundPolling(): void {
+    if (!this.config.southboundPollingEnabled || this.stopping) {
+      return;
+    }
+
+    for (const portPath of this.getConfiguredPortPaths()) {
+      if (this.pendingCommandWindows.has(portPath)) {
+        continue;
+      }
+      if (this.activePollTelemetryWindows.has(portPath)) {
+        continue;
+      }
+      if (this.portCommandChains.has(portPath)) {
+        continue;
+      }
+
+      const serialPort = this.serialPorts.get(portPath);
+      if (!serialPort?.isOpen) {
+        continue;
+      }
+
+      const nextNode = this.nextPollingNodeForPort(portPath);
+      if (!nextNode) {
+        continue;
+      }
+
+      void this.issueInternalPollForNode(nextNode, portPath);
+    }
+  }
+
+  private nextPollingNodeForPort(portPath: string): NodeRuntimeState | null {
+    const nodes = Array.from(this.nodeState.values())
+      .filter((node) => node.enabled && this.nodePort(node) === portPath)
+      .sort((left, right) => {
+        const fieldNodeCompare = left.fieldNodeId.localeCompare(right.fieldNodeId);
+        return fieldNodeCompare !== 0 ? fieldNodeCompare : left.deviceId.localeCompare(right.deviceId);
+      });
+
+    if (nodes.length === 0) {
+      return null;
+    }
+
+    const currentIndex = this.portPollNodeCursor.get(portPath) ?? -1;
+    const nextIndex = (currentIndex + 1) % nodes.length;
+    this.portPollNodeCursor.set(portPath, nextIndex);
+    return nodes[nextIndex] ?? null;
+  }
+
+  private async issueInternalPollForNode(nodeState: NodeRuntimeState, targetPort: string): Promise<void> {
+    const traceId = newTraceId();
+    const issuedTs = isoNow();
+    const command: DeviceCommandV1 = {
+      schema_version: 1,
+      command_id: buildInternalPollCommandId(),
+      device_id: nodeState.deviceId,
+      command_type: this.config.southboundPollingCommandType,
+      payload: {
+        source: "field-gateway-internal-poller",
+        scheduler: true
+      },
+      issued_ts: issuedTs
+    };
+    const rawPayload = JSON.stringify(command);
+    const payloadBytes = Buffer.byteLength(rawPayload, "utf8");
+
+    this.internalPollCommands.set(command.command_id, {
+      commandId: command.command_id,
+      commandType: command.command_type,
+      deviceId: command.device_id,
+      portPath: targetPort,
+      issuedTs,
+      suppressAckPublish: this.config.southboundPollingSuppressAckPublish
+    });
+
+    try {
+      await this.enqueueCommandForward({
+        origin: "internal-poll",
+        traceId,
+        topic: `internal-poll/${nodeState.deviceId}`,
+        rawPayload,
+        payloadBytes,
+        command,
+        nodeState,
+        targetPort
+      });
+    } finally {
+      const stillPending = this.internalPollCommands.get(command.command_id);
+      if (stillPending) {
+        this.internalPollCommands.delete(command.command_id);
+        const portState = this.ensurePortRuntimeState(targetPort);
+        portState.pollSessionTimeouts += 1;
+        portState.lastPollSessionCloseTs = isoNow();
+        portState.lastPollSessionCloseReason = "timeout";
+        this.stats.internalPollSessionTimeouts += 1;
+        this.logger.warn(
+          {
+            traceId,
+            serialDevice: targetPort,
+            commandId: command.command_id,
+            commandType: command.command_type,
+            deviceId: command.device_id
+          },
+          "field gateway internal poll did not observe ack before command window closed"
+        );
+      }
     }
   }
 
@@ -1234,24 +1819,124 @@ class GatewayRuntime {
       return;
     }
     const targetPort = this.nodePort(nodeState);
+
+    await this.enqueueCommandForward({
+      origin: "mqtt",
+      traceId,
+      topic,
+      rawPayload,
+      payloadBytes,
+      command,
+      nodeState,
+      targetPort
+    });
+  }
+
+  private async enqueueCommandForward(params: {
+    origin: SouthboundCommandOrigin;
+    traceId: string;
+    topic: string;
+    rawPayload: string;
+    payloadBytes: number;
+    command: DeviceCommandV1;
+    nodeState: NodeRuntimeState;
+    targetPort: string;
+  }): Promise<void> {
+    const { origin, traceId, topic, rawPayload, payloadBytes, command, nodeState, targetPort } = params;
     const portState = this.ensurePortRuntimeState(targetPort);
+    const previousChain = this.portCommandChains.get(targetPort) ?? Promise.resolve();
+
+    portState.queuedCommands += 1;
+
+    const nextChain = previousChain
+      .catch(() => undefined)
+      .then(async () =>
+        this.forwardCommandWithQuietWindow({
+          origin,
+          traceId,
+          topic,
+          rawPayload,
+          payloadBytes,
+          command,
+          nodeState,
+          targetPort
+        })
+      )
+      .finally(() => {
+        portState.queuedCommands = Math.max(0, portState.queuedCommands - 1);
+        if (this.portCommandChains.get(targetPort) === nextChain) {
+          this.portCommandChains.delete(targetPort);
+        }
+      });
+
+    this.portCommandChains.set(targetPort, nextChain);
+    await nextChain;
+  }
+
+  private async forwardCommandWithQuietWindow(params: {
+    origin: SouthboundCommandOrigin;
+    traceId: string;
+    topic: string;
+    rawPayload: string;
+    payloadBytes: number;
+    command: DeviceCommandV1;
+    nodeState: NodeRuntimeState;
+    targetPort: string;
+  }): Promise<void> {
+    const { origin, traceId, topic, rawPayload, payloadBytes, command, nodeState, targetPort } = params;
+    const portState = this.ensurePortRuntimeState(targetPort);
+    await this.waitForPortQuietBeforeWrite(targetPort, command);
+    try {
+      await this.flushPortBeforeCommandWrite(targetPort);
+      portState.lastPrewriteFlushTs = isoNow();
+    } catch (err) {
+      portState.prewriteFlushFailures += 1;
+      this.stats.lastError = err instanceof Error ? err.message : String(err);
+      portState.lastError = this.stats.lastError;
+      this.logger.warn(
+        {
+          traceId,
+          serialDevice: targetPort,
+          commandId: command.command_id,
+          commandType: command.command_type,
+          deviceId: command.device_id,
+          err
+        },
+        "field gateway command prewrite flush failed; continuing with write"
+      );
+    }
+    const quietWindow = this.beginPendingCommandWindow(targetPort, command);
+    portState.sendOwnerState = "writing-command";
 
     try {
-      await this.writeCommandToSerial(rawPayload, targetPort);
+      const gatewaySentTs = isoNow();
+      const southboundPayload = buildSouthboundCommandPayload(command, gatewaySentTs, origin);
+      const southboundPayloadBytes = Buffer.byteLength(southboundPayload, "utf8");
+      await this.writeCommandToSerial(southboundPayload, targetPort);
       this.stats.commandsForwarded += 1;
-      this.stats.lastCommandForwardedTs = isoNow();
+      this.stats.lastCommandForwardedTs = gatewaySentTs;
       nodeState.commandForwards += 1;
       nodeState.lastCommandTs = this.stats.lastCommandForwardedTs;
       portState.commandWrites += 1;
       portState.lastCommandTs = this.stats.lastCommandForwardedTs;
+      if (origin === "internal-poll") {
+        portState.pollCommandsIssued += 1;
+        portState.lastPollCommandTs = this.stats.lastCommandForwardedTs;
+        this.stats.internalPollCommandsIssued += 1;
+        this.stats.lastInternalPollCommandTs = this.stats.lastCommandForwardedTs;
+      }
       this.logger.info(
         {
+          origin,
           topic,
           serialDevice: targetPort,
           commandId: command.command_id,
           commandType: command.command_type,
           deviceId: command.device_id,
-          payloadBytes
+          payloadBytes,
+          southboundPayloadBytes,
+          gatewaySentTs,
+          queuedCommands: portState.queuedCommands
         },
         "field gateway command forwarded to serial"
       );
@@ -1259,8 +1944,195 @@ class GatewayRuntime {
       this.stats.commandWriteFailures += 1;
       this.stats.lastError = err instanceof Error ? err.message : String(err);
       portState.lastError = this.stats.lastError;
+      this.closePendingCommandWindow(targetPort, "shutdown");
       this.logger.error({ traceId, topic, serialDevice: targetPort, err }, "field gateway command serial write failed");
+      return;
     }
+
+    portState.sendOwnerState = "waiting-for-ack";
+    await quietWindow;
+  }
+
+  private async waitForPortQuietBeforeWrite(portPath: string, command: DeviceCommandV1): Promise<void> {
+    const quietMs = this.config.commandPrewriteQuietMs;
+    const maxWaitMs = this.config.commandPrewriteMaxWaitMs;
+    const portState = this.ensurePortRuntimeState(portPath);
+
+    while (this.activePollTelemetryWindows.has(portPath)) {
+      await delay(100);
+    }
+
+    if (quietMs <= 0 || maxWaitMs <= 0) {
+      portState.lastPrewriteQuietSatisfiedTs = isoNow();
+      portState.lastPrewriteQuietWaitMs = 0;
+      return;
+    }
+
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < maxWaitMs) {
+      const lastReadAt = this.portLastReadAtMs.get(portPath);
+      const quietForMs = lastReadAt ? Date.now() - lastReadAt : Number.POSITIVE_INFINITY;
+      if (quietForMs >= quietMs) {
+        portState.lastPrewriteQuietSatisfiedTs = isoNow();
+        portState.lastPrewriteQuietWaitMs = Date.now() - startedAt;
+        return;
+      }
+
+      await delay(Math.min(quietMs, 100));
+    }
+
+    portState.prewriteQuietTimeouts += 1;
+    portState.lastPrewriteQuietWaitMs = Date.now() - startedAt;
+    this.logger.warn(
+      {
+        serialDevice: portPath,
+        commandId: command.command_id,
+        commandType: command.command_type,
+        deviceId: command.device_id,
+        prewriteQuietMs: quietMs,
+        prewriteMaxWaitMs: maxWaitMs
+      },
+      "field gateway command prewrite quiet wait timed out"
+    );
+  }
+
+  private beginPendingCommandWindow(portPath: string, command: DeviceCommandV1): Promise<void> {
+    const existingWindow = this.pendingCommandWindows.get(portPath);
+    if (existingWindow) {
+      this.closePendingCommandWindow(portPath, "timeout");
+    }
+
+    const portState = this.ensurePortRuntimeState(portPath);
+    const startedTs = isoNow();
+    const quietUntilMs = Date.now() + this.config.commandAckQuietWindowMs;
+    const quietUntilTs = new Date(quietUntilMs).toISOString();
+    portState.sendOwnerState = "waiting-for-ack";
+    portState.pendingCommandId = command.command_id;
+    portState.pendingCommandType = command.command_type;
+    portState.pendingCommandDeviceId = command.device_id;
+    portState.lastQuietWindowStartTs = startedTs;
+    portState.quietWindowUntilTs = quietUntilTs;
+
+    return new Promise<void>((resolve) => {
+      const timer = setTimeout(() => {
+        portState.quietWindowTimeouts += 1;
+        this.logger.warn(
+          {
+            serialDevice: portPath,
+            commandId: command.command_id,
+            commandType: command.command_type,
+            deviceId: command.device_id,
+            quietWindowMs: this.config.commandAckQuietWindowMs
+          },
+          "field gateway command quiet window timed out"
+        );
+        this.closePendingCommandWindow(portPath, "timeout");
+      }, this.config.commandAckQuietWindowMs);
+
+      this.portQuietWindowTimers.set(portPath, timer);
+      this.pendingCommandWindows.set(portPath, {
+        commandId: command.command_id,
+        commandType: command.command_type,
+        deviceId: command.device_id,
+        quietUntilTs,
+        close: (reason) => {
+          this.clearPendingCommandWindowState(portPath, reason);
+          resolve();
+        }
+      });
+    });
+  }
+
+  private closePendingCommandWindow(portPath: string, reason: "acked" | "failed" | "timeout" | "shutdown"): void {
+    const pendingWindow = this.pendingCommandWindows.get(portPath);
+    if (!pendingWindow) {
+      this.clearPendingCommandWindowState(portPath, reason);
+      return;
+    }
+
+    this.pendingCommandWindows.delete(portPath);
+    pendingWindow.close(reason);
+  }
+
+  private beginActivePollTelemetryWindow(record: InternalPollCommandRecord): void {
+    const existing = this.activePollTelemetryWindows.get(record.portPath);
+    if (existing) {
+      this.closeActivePollTelemetryWindow(record.portPath, "shutdown");
+    }
+
+    const portState = this.ensurePortRuntimeState(record.portPath);
+    const startedTs = isoNow();
+    const timeoutAtMs = Date.now() + this.config.southboundPollingSessionTimeoutMs;
+    portState.sendOwnerState = "waiting-for-poll-telemetry";
+    portState.activePollCommandId = record.commandId;
+    portState.activePollDeviceId = record.deviceId;
+
+    const timer = setTimeout(() => {
+      portState.pollSessionTimeouts += 1;
+      this.stats.internalPollSessionTimeouts += 1;
+      this.logger.warn(
+        {
+          serialDevice: record.portPath,
+          commandId: record.commandId,
+          commandType: record.commandType,
+          deviceId: record.deviceId,
+          pollSessionTimeoutMs: this.config.southboundPollingSessionTimeoutMs
+        },
+        "field gateway internal poll telemetry window timed out"
+      );
+      this.closeActivePollTelemetryWindow(record.portPath, "timeout");
+    }, this.config.southboundPollingSessionTimeoutMs);
+
+    this.activePollTelemetryWindows.set(record.portPath, {
+      commandId: record.commandId,
+      commandType: record.commandType,
+      deviceId: record.deviceId,
+      portPath: record.portPath,
+      startedTs,
+      timeoutAtMs,
+      timer
+    });
+  }
+
+  private closeActivePollTelemetryWindow(
+    portPath: string,
+    reason: "telemetry" | "failed" | "timeout" | "shutdown"
+  ): void {
+    const activeWindow = this.activePollTelemetryWindows.get(portPath);
+    const portState = this.ensurePortRuntimeState(portPath);
+
+    if (activeWindow) {
+      clearTimeout(activeWindow.timer);
+      this.activePollTelemetryWindows.delete(portPath);
+    }
+
+    portState.activePollCommandId = null;
+    portState.activePollDeviceId = null;
+    portState.lastPollSessionCloseTs = isoNow();
+    portState.lastPollSessionCloseReason = reason;
+    if (!this.pendingCommandWindows.has(portPath)) {
+      portState.sendOwnerState = "idle";
+    }
+  }
+
+  private clearPendingCommandWindowState(
+    portPath: string,
+    reason: "acked" | "failed" | "timeout" | "shutdown"
+  ): void {
+    const timer = this.portQuietWindowTimers.get(portPath);
+    if (timer) {
+      clearTimeout(timer);
+      this.portQuietWindowTimers.delete(portPath);
+    }
+
+    const portState = this.ensurePortRuntimeState(portPath);
+    portState.lastQuietWindowCloseTs = isoNow();
+    portState.lastQuietWindowCloseReason = reason;
+    portState.quietWindowUntilTs = null;
+    portState.pendingCommandId = null;
+    portState.pendingCommandType = null;
+    portState.pendingCommandDeviceId = null;
+    portState.sendOwnerState = this.activePollTelemetryWindows.has(portPath) ? "waiting-for-poll-telemetry" : "idle";
   }
 
   private async replayPending(reason: "ingest" | "interval" | "mqtt-connect"): Promise<void> {
@@ -1373,12 +2245,52 @@ class GatewayRuntime {
 
     const topic = ackTopicForDevice(this.config, ack.device_id);
     const portState = this.ensurePortRuntimeState(sourcePort);
+    const pendingWindow = this.pendingCommandWindows.get(sourcePort);
+    const internalPollCommand = this.internalPollCommands.get(ack.command_id);
+    const matchedPendingCommand =
+      pendingWindow?.commandId === ack.command_id && pendingWindow.deviceId === ack.device_id;
+
+    if (matchedPendingCommand) {
+      this.closePendingCommandWindow(sourcePort, ack.status === "failed" ? "failed" : "acked");
+    }
+
+    if (internalPollCommand) {
+      this.internalPollCommands.delete(ack.command_id);
+      if (ack.status === "acked") {
+        this.beginActivePollTelemetryWindow(internalPollCommand);
+      } else {
+        this.closeActivePollTelemetryWindow(sourcePort, "failed");
+      }
+
+      if (internalPollCommand.suppressAckPublish) {
+        const seenTs = isoNow();
+        this.stats.internalPollAckSuppressions += 1;
+        nodeState.lastSeenTs = seenTs;
+        nodeState.lastSeenKind = "ack";
+        nodeState.lastAckTs = seenTs;
+        portState.lastAckTs = seenTs;
+        portState.pollAckSuppressions += 1;
+        this.logger.info(
+          {
+            serialDevice: sourcePort,
+            commandId: ack.command_id,
+            commandType: internalPollCommand.commandType,
+            deviceId: ack.device_id,
+            status: ack.status
+          },
+          "field gateway internal poll ack suppressed from northbound publish"
+        );
+        return;
+      }
+    }
 
     try {
       await this.publishMqtt(topic, rawPayload);
       this.stats.ackMessagesPublished += 1;
       this.stats.lastAckPublishedTs = isoNow();
       nodeState.ackPublishes += 1;
+      nodeState.lastSeenTs = this.stats.lastAckPublishedTs;
+      nodeState.lastSeenKind = "ack";
       nodeState.lastAckTs = this.stats.lastAckPublishedTs;
       portState.ackMessages += 1;
       portState.lastAckTs = this.stats.lastAckPublishedTs;
@@ -1389,7 +2301,8 @@ class GatewayRuntime {
           commandId: ack.command_id,
           deviceId: ack.device_id,
           status: ack.status,
-          payloadBytes: Buffer.byteLength(rawPayload, "utf8")
+          payloadBytes: Buffer.byteLength(rawPayload, "utf8"),
+          matchedPendingCommand
         },
         "field gateway command ack published"
       );
@@ -1423,9 +2336,37 @@ class GatewayRuntime {
       throw new Error(`serial port is not open: ${portPath}`);
     }
 
-    const serialFrame = `${payload}\n`;
+    const serialFrame =
+      this.config.fieldLinkMode === "cobs-crc-v1"
+        ? encodeFieldLinkFrame({
+            frameType: "command",
+            sequence: this.nextFieldLinkTxSequence(),
+            payloadText: payload
+          })
+        : Buffer.from(`${payload}\n`, "utf8");
+
+    await this.writeSerialFrame(serialPort, serialFrame);
+  }
+
+  private async writeSerialFrame(serialPort: SerialPort, serialFrame: Buffer): Promise<void> {
+    const chunkBytes = this.config.commandSerialChunkBytes;
+    if (chunkBytes <= 0 || serialFrame.length <= chunkBytes) {
+      await this.writeSerialChunk(serialPort, serialFrame);
+      return;
+    }
+
+    for (let offset = 0; offset < serialFrame.length; offset += chunkBytes) {
+      const nextOffset = Math.min(offset + chunkBytes, serialFrame.length);
+      await this.writeSerialChunk(serialPort, serialFrame.subarray(offset, nextOffset));
+      if (nextOffset < serialFrame.length && this.config.commandSerialChunkDelayMs > 0) {
+        await delay(this.config.commandSerialChunkDelayMs);
+      }
+    }
+  }
+
+  private async writeSerialChunk(serialPort: SerialPort, chunk: Buffer): Promise<void> {
     await new Promise<void>((resolve, reject) => {
-      serialPort.write(serialFrame, "utf8", (err) => {
+      serialPort.write(chunk, (err) => {
         if (err) {
           reject(err);
           return;
@@ -1437,6 +2378,25 @@ class GatewayRuntime {
         });
       });
     });
+  }
+
+  private async flushPortBeforeCommandWrite(portPath: string): Promise<void> {
+    const serialPort = this.serialPorts.get(portPath);
+    if (!serialPort?.isOpen) {
+      throw new Error(`serial port is not open: ${portPath}`);
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      serialPort.flush((err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+  }
+
+  private nextFieldLinkTxSequence(): number {
+    this.fieldLinkTxSequence = (this.fieldLinkTxSequence + 1) >>> 0;
+    return this.fieldLinkTxSequence;
   }
 
   private async emitHealth(): Promise<void> {
@@ -1452,6 +2412,7 @@ class GatewayRuntime {
       serial: {
         device: this.config.serialDevice,
         baud_rate: this.config.serialBaudRate,
+        field_link_mode: this.config.fieldLinkMode,
         open: this.serialPorts.get(this.config.serialDevice)?.isOpen === true,
         configuredPorts: Array.from(this.portState.keys()),
         openPortCount: Array.from(this.serialPorts.values()).filter((port) => port.isOpen).length
@@ -1462,6 +2423,8 @@ class GatewayRuntime {
       },
       southbound: {
         routeMode: this.config.southboundNodes.length === 0 ? "legacy-single-port" : "configured-node-routing",
+        pollingEnabled: this.config.southboundPollingEnabled,
+        pollingCommandType: this.config.southboundPollingCommandType,
         configuredNodes: this.config.southboundNodes.length,
         configuredPorts: this.portState.size,
         activeSerialDevice: this.config.serialDevice,
@@ -1483,8 +2446,15 @@ class GatewayRuntime {
       commandForwards: 0,
       ackPublishes: 0,
       lastTelemetryTs: null,
+      lastSeenTs: null,
+      lastSeenKind: null,
       lastCommandTs: null,
       lastAckTs: null,
+      lastTelemetryAgeMs: null,
+      lastSeenAgeMs: null,
+      effectiveDegradedAfterMs: null,
+      effectiveOfflineAfterMs: null,
+      statusReason: null,
       status: "configured"
     };
   }
@@ -1495,12 +2465,27 @@ class GatewayRuntime {
       serialDevice: portPath,
       open: false,
       reconnectScheduled: false,
+      sendOwnerState: "idle",
       mappedNodeCount: mappedNodes.length,
       enabledNodeCount: mappedNodes.filter((node) => node.enabled).length,
       mappedDeviceIds: mappedNodes.map((node) => node.deviceId).sort((a, b) => a.localeCompare(b)),
       telemetryMessages: 0,
       commandWrites: 0,
+      queuedCommands: 0,
       ackMessages: 0,
+      pendingCommandId: null,
+      pendingCommandType: null,
+      pendingCommandDeviceId: null,
+      quietWindowUntilTs: null,
+      lastQuietWindowStartTs: null,
+      lastQuietWindowCloseTs: null,
+      lastQuietWindowCloseReason: null,
+      quietWindowTimeouts: 0,
+      lastPrewriteQuietSatisfiedTs: null,
+      lastPrewriteQuietWaitMs: 0,
+      prewriteQuietTimeouts: 0,
+      lastPrewriteFlushTs: null,
+      prewriteFlushFailures: 0,
       reconnectAttempts: 0,
       consecutiveReconnectFailures: 0,
       serialChunks: 0,
@@ -1510,6 +2495,16 @@ class GatewayRuntime {
       lastCloseTs: null,
       lastCommandTs: null,
       lastAckTs: null,
+      lastPollCommandTs: null,
+      lastPollTelemetryTs: null,
+      lastPollSessionCloseTs: null,
+      lastPollSessionCloseReason: null,
+      activePollCommandId: null,
+      activePollDeviceId: null,
+      pollCommandsIssued: 0,
+      pollTelemetryMatches: 0,
+      pollAckSuppressions: 0,
+      pollSessionTimeouts: 0,
       lastReconnectTs: null,
       lastReconnectReason: null,
       lastError: null,
@@ -1518,15 +2513,33 @@ class GatewayRuntime {
   }
 
   private snapshotNodeRuntimeState(nodeState: NodeRuntimeState, nowMs: number): NodeRuntimeState {
-    const ageMs = ageMsFrom(nowMs, nodeState.lastTelemetryTs);
-    if (ageMs === null) {
+    const portState = this.portState.get(this.nodePort(nodeState));
+    const mappedNodeCount = Math.max(1, portState?.enabledNodeCount ?? portState?.mappedNodeCount ?? 1);
+    const effectiveDegradedAfterMs = this.config.nodeDegradedAfterMs * mappedNodeCount;
+    const effectiveOfflineAfterMs = this.config.nodeOfflineAfterMs * mappedNodeCount;
+    const telemetryAgeMs = ageMsFrom(nowMs, nodeState.lastTelemetryTs);
+    const activityAgeMs = ageMsFrom(nowMs, nodeState.lastSeenTs ?? nodeState.lastTelemetryTs);
+
+    nodeState.lastTelemetryAgeMs = telemetryAgeMs;
+    nodeState.lastSeenAgeMs = activityAgeMs;
+    nodeState.effectiveDegradedAfterMs = effectiveDegradedAfterMs;
+    nodeState.effectiveOfflineAfterMs = effectiveOfflineAfterMs;
+
+    if (activityAgeMs === null) {
       nodeState.status = "configured";
-    } else if (ageMs >= this.config.nodeOfflineAfterMs) {
-      nodeState.status = "offline";
-    } else if (ageMs >= this.config.nodeDegradedAfterMs) {
-      nodeState.status = "degraded";
-    } else {
+      nodeState.statusReason = "no-node-activity-yet";
+    } else if (telemetryAgeMs !== null && telemetryAgeMs < effectiveDegradedAfterMs) {
       nodeState.status = "online";
+      nodeState.statusReason = "recent-telemetry";
+    } else if (activityAgeMs >= effectiveOfflineAfterMs) {
+      nodeState.status = "offline";
+      nodeState.statusReason = "node-activity-stale";
+    } else {
+      nodeState.status = "degraded";
+      nodeState.statusReason =
+        nodeState.lastSeenKind === "rejected"
+          ? "recent-rejected-node-activity-without-fresh-telemetry"
+          : "node-telemetry-stale-within-grace-window";
     }
 
     return { ...nodeState };
@@ -1597,8 +2610,15 @@ class GatewayRuntime {
       commandForwards: 0,
       ackPublishes: 0,
       lastTelemetryTs: null,
+      lastSeenTs: null,
+      lastSeenKind: null,
       lastCommandTs: null,
       lastAckTs: null,
+      lastTelemetryAgeMs: null,
+      lastSeenAgeMs: null,
+      effectiveDegradedAfterMs: null,
+      effectiveOfflineAfterMs: null,
+      statusReason: null,
       status: "configured"
     };
     this.nodeState.set(deviceId, created);
@@ -1703,6 +2723,41 @@ class GatewayRuntime {
     }
 
     return nodeState;
+  }
+
+  private markNodeActivity(deviceId: string, seenTs: string, kind: "telemetry" | "ack" | "rejected", sourcePort: string): void {
+    const nodeState = this.nodeState.get(deviceId);
+    if (!nodeState?.enabled) {
+      return;
+    }
+
+    if (this.nodePort(nodeState) !== sourcePort) {
+      return;
+    }
+
+    nodeState.lastSeenTs = seenTs;
+    nodeState.lastSeenKind = kind;
+  }
+
+  private markNodeActivityFromRejected(
+    explicitDeviceId: string | null,
+    distinctDeviceIds: string[],
+    seenTs: string,
+    sourcePort: string
+  ): void {
+    const seenDeviceIds = new Set<string>();
+    if (explicitDeviceId) {
+      seenDeviceIds.add(explicitDeviceId);
+    }
+    for (const deviceId of distinctDeviceIds) {
+      if (deviceId) {
+        seenDeviceIds.add(deviceId);
+      }
+    }
+
+    for (const deviceId of seenDeviceIds) {
+      this.markNodeActivity(deviceId, seenTs, "rejected", sourcePort);
+    }
   }
 }
 

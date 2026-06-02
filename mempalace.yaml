@@ -1,0 +1,75 @@
+wing: landslide_monitoring_v2_mainline
+rooms:
+- name: apps
+  description: Files from apps/
+  keywords:
+  - apps
+  - apps
+- name: artifacts
+  description: Files from artifacts/
+  keywords:
+  - artifacts
+  - artifacts
+- name: backups
+  description: Files from backups/
+  keywords:
+  - backups
+  - backups
+- name: data
+  description: Files from data/
+  keywords:
+  - data
+  - data
+- name: documentation
+  description: Files from docs/
+  keywords:
+  - documentation
+  - docs
+- name: configuration
+  description: Files from infra/
+  keywords:
+  - configuration
+  - infra
+- name: libs
+  description: Files from libs/
+  keywords:
+  - libs
+  - libs
+- name: memory
+  description: Files from memory/
+  keywords:
+  - memory
+  - memory
+- name: openspec
+  description: Files from openspec/
+  keywords:
+  - openspec
+  - openspec
+- name: scripts
+  description: Files from scripts/
+  keywords:
+  - scripts
+  - scripts
+- name: backend
+  description: Files from services/
+  keywords:
+  - backend
+  - services
+- name: txsmartropenharmony
+  description: Files from txsmartropenharmony/
+  keywords:
+  - txsmartropenharmony
+  - txsmartropenharmony
+- name: research
+  description: Files from references/
+  keywords:
+  - research
+  - references
+- name: planning
+  description: Files from specs/
+  keywords:
+  - planning
+  - specs
+- name: general
+  description: Files that don't fit other rooms
+  keywords: []

@@ -69,6 +69,12 @@ function legacyKeyFromMetadata(deviceName: string, metadata: unknown): string {
   return deviceName;
 }
 
+function formalDevicePredicate(alias = "devices"): string {
+  return `COALESCE(${alias}.device_name, '') NOT LIKE 'field-hardware-replay-%'
+    AND COALESCE(${alias}.metadata->>'note', '') NOT IN ('field_hardware_uplink_replay', 'field_rehearsal', 'smoke_test', 'seed demo')
+    AND COALESCE(${alias}.metadata->>'identityClass', COALESCE(${alias}.metadata->>'identity_class', '')) NOT IN ('seed', 'replay', 'rehearsal', 'smoke_test', 'lab')`;
+}
+
 function coerceOptionalNumber() {
   return z.preprocess((v) => {
     if (v === "" || v === null || v === undefined) return undefined;
@@ -277,6 +283,7 @@ async function resolveLegacyOrUuidDeviceId(pg: PgPool, input: string): Promise<s
         SELECT device_id
         FROM devices
         WHERE status != 'revoked'
+          AND ${formalDevicePredicate("devices")}
           AND (
             device_id::text = $1
             OR device_name = $1
@@ -424,7 +431,7 @@ async function handleAvailableDevices(
 
   const activeDeviceIds = await withPgClient(pg, async (client) => {
     const r = await client.query<{ device_id: string }>(
-      `SELECT device_id FROM devices WHERE status != 'revoked' AND device_id = ANY($1::uuid[])`,
+      `SELECT device_id FROM devices WHERE status != 'revoked' AND ${formalDevicePredicate("devices")} AND device_id = ANY($1::uuid[])`,
       [gpsDeviceIds]
     );
     return r.rows.map((x) => x.device_id);
@@ -518,7 +525,11 @@ async function handleAutoEstablish(
   const body = parseBody.data;
 
   const exists = await withPgClient(pg, async (client) =>
-    queryOne<{ device_id: string }>(client, `SELECT device_id FROM devices WHERE device_id = $1 AND status != 'revoked'`, [deviceId])
+    queryOne<{ device_id: string }>(
+      client,
+      `SELECT device_id FROM devices WHERE device_id = $1 AND status != 'revoked' AND ${formalDevicePredicate("devices")}`,
+      [deviceId]
+    )
   );
   if (!exists) {
     respondError(reply, 404, "资源不存在", traceId, opts);
@@ -751,7 +762,7 @@ export function registerGpsBaselineLegacyCompatRoutes(
 
     const { keyword, limit } = parsed.data;
 
-    const where: string[] = ["d.status != 'revoked'"];
+    const where: string[] = ["d.status != 'revoked'", formalDevicePredicate("d")];
     const params: unknown[] = [];
     const add = (sql: string, val: unknown) => {
       params.push(val);
@@ -820,6 +831,7 @@ export function registerGpsBaselineLegacyCompatRoutes(
           SELECT device_id, device_name, metadata
           FROM devices
           WHERE status != 'revoked'
+            AND ${formalDevicePredicate("devices")}
             AND (
               device_id::text = $1
               OR device_name = $1
@@ -854,6 +866,7 @@ export function registerGpsBaselineLegacyCompatRoutes(
           JOIN devices d ON d.device_id = gb.device_id
           WHERE gb.device_id = $1
             AND d.status != 'revoked'
+            AND ${formalDevicePredicate("d")}
         `,
         [deviceRow.device_id]
       )
@@ -905,6 +918,7 @@ export function registerGpsBaselineLegacyCompatRoutes(
           SELECT device_id, device_name, metadata
           FROM devices
           WHERE status != 'revoked'
+            AND ${formalDevicePredicate("devices")}
             AND (
               device_id::text = $1
               OR device_name = $1
@@ -991,6 +1005,7 @@ export function registerGpsBaselineLegacyCompatRoutes(
           SELECT device_id
           FROM devices
           WHERE status != 'revoked'
+            AND ${formalDevicePredicate("devices")}
             AND (
               device_id::text = $1
               OR device_name = $1

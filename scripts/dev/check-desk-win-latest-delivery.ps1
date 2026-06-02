@@ -43,6 +43,7 @@ $requiredFiles = @(
   (Join-Path $latestDir "reports\desk-win-package-latest.json"),
   (Join-Path $latestDir "reports\desk-win-package-verify-latest.json"),
   (Join-Path $latestDir "reports\desk-win-prerequisites-latest.json"),
+  (Join-Path $latestDir "reports\desk-api-boundary-latest.json"),
   (Join-Path $latestDir "reports\desk-win-delivery-latest.json"),
   (Join-Path $latestDir "reports\desk-win-delivery-hash-latest.json"),
   (Join-Path $latestDir "reports\desk-win-build-info-latest.json"),

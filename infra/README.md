@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: landslide-monitoring-v2-mainline/infra/readme
+---
+
 # infra/
 
 单机部署与运维（Docker Compose 优先）。
@@ -11,4 +17,3 @@
 参考：
 
 - `docs/guides/deployment/README.md`
-

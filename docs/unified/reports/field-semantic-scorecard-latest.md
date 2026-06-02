@@ -1,3 +1,9 @@
+---
+title: field-semantic-scorecard-latest
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/unified/reports/field-semantic-scorecard-latest
+---
+
 ﻿# Field Semantic Scorecard
 
 - UpdatedAt: 2026-03-25T10:58:39Z

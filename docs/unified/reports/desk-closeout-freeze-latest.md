@@ -1,3 +1,9 @@
+---
+title: desk-closeout-freeze-latest
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/unified/reports/desk-closeout-freeze-latest
+---
+
 ﻿# Desk Closeout Freeze
 
 - FrozenAt: 2026-03-20T14:46:38Z

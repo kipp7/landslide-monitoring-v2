@@ -1,3 +1,9 @@
+---
+title: alerting-and-rules
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/features/prd/alerting-and-rules
+---
+
 ﻿# PRD：告警与规则（版本化规则 + 事件化告警）
 
 ## 1. 背景
@@ -33,4 +39,3 @@
 - 落库映射：`docs/integrations/rules/rule-dsl-storage-mapping.md`
 - 告警 API：`docs/integrations/api/06-alerts.md`
 - DB：`docs/integrations/storage/postgres/tables/08-alerts.sql`
-

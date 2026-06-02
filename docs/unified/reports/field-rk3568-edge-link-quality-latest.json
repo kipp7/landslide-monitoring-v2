@@ -1,0 +1,171 @@
+﻿{
+    "generatedAt":  "2026-05-08T12:03:37Z",
+    "accepted":  true,
+    "mode":  "rk3568-edge-link-quality",
+    "currentBoundary":  "rk3568-edge-link-quality-visible",
+    "summary":  {
+                    "overallLevel":  "healthy",
+                    "score":  99,
+                    "deferredNodeIds":  [
+
+                                        ],
+                    "operatorAccepted":  true,
+                    "networkMode":  "ethernet_uplink",
+                    "portStatus":  "online",
+                    "spoolPending":  0,
+                    "rejectedWriteFailures":  0,
+                    "rejectedMessages":  0,
+                    "interleavingSuspected":  0,
+                    "lastPublishedAgeSeconds":  1.401
+                },
+    "dimensions":  [
+                       {
+                           "key":  "operator_mainline",
+                           "level":  "healthy",
+                           "summary":  "center-side operator mainline entry is green",
+                           "evidence":  {
+                                            "accepted":  true,
+                                            "boundary":  "field-center-rk3568-operator-entry-ready"
+                                        }
+                       },
+                       {
+                           "key":  "network_bootstrap",
+                           "level":  "healthy",
+                           "summary":  "rk3568 bootstrap remains in a steady uplink mode",
+                           "evidence":  {
+                                            "accepted":  true,
+                                            "boundary":  "rk3568-network-bootstrap-ready",
+                                            "runtimeMode":  "ethernet_uplink",
+                                            "ipv4":  "lo:127.0.0.1/8\neth0:192.168.124.179/24"
+                                        }
+                       },
+                       {
+                           "key":  "southbound_serial",
+                           "level":  "healthy",
+                           "summary":  "serial and mqtt uplink are currently online",
+                           "evidence":  {
+                                            "serialOpen":  true,
+                                            "mqttConnected":  true,
+                                            "portStatus":  "online",
+                                            "lastSerialReadAgeSeconds":  0.166
+                                        }
+                       },
+                       {
+                           "key":  "northbound_publish",
+                           "level":  "healthy",
+                           "summary":  "publish path is fresh with no pending spool backlog",
+                           "evidence":  {
+                                            "lastPublishedAgeSeconds":  1.401,
+                                            "spoolPending":  0,
+                                            "publishFailures":  0,
+                                            "lastError":  ""
+                                        }
+                       },
+                       {
+                           "key":  "parser_noise",
+                           "level":  "healthy",
+                           "summary":  "no parser rejection signal is currently recorded",
+                           "evidence":  {
+                                            "schemaRejected":  0,
+                                            "rejectedMessages":  0,
+                                            "rejectedWriteFailures":  0
+                                        }
+                       },
+                       {
+                           "key":  "source_interleaving",
+                           "level":  "healthy",
+                           "summary":  "no source-side interleaving signature is currently recorded",
+                           "evidence":  {
+                                            "interleavingSuspected":  0,
+                                            "interleavingWithMultipleSchemas":  0,
+                                            "interleavingWithMultipleDeviceIds":  0,
+                                            "lastInterleavingAgeSeconds":  null,
+                                            "lastInterleavingSummary":  ""
+                                        }
+                       },
+                       {
+                           "key":  "internal_poll_closure",
+                           "level":  "healthy",
+                           "summary":  "internal poll telemetry closure is 99.327%",
+                           "evidence":  {
+                                            "pollCommandsIssued":  297,
+                                            "pollTelemetryMatches":  295,
+                                            "pollSessionTimeouts":  1,
+                                            "pollClosurePercent":  99.327
+                                        }
+                       },
+                       {
+                           "key":  "node_a",
+                           "level":  "healthy",
+                           "summary":  "node A status=online",
+                           "evidence":  {
+                                            "deviceId":  "00000000-0000-0000-0000-000000000001",
+                                            "enabled":  true,
+                                            "deferred":  false,
+                                            "status":  "online",
+                                            "telemetryMessages":  295,
+                                            "commandForwards":  298,
+                                            "ackPublishes":  1,
+                                            "lastTelemetryAgeSeconds":  1.505,
+                                            "lastAckAgeSeconds":  5.084
+                                        }
+                       },
+                       {
+                           "key":  "node_b",
+                           "level":  "not_applicable",
+                           "summary":  "node B status=configured (disabled in current southbound runtime)",
+                           "evidence":  {
+                                            "deviceId":  "00000000-0000-0000-0000-000000000002",
+                                            "enabled":  false,
+                                            "deferred":  true,
+                                            "status":  "configured",
+                                            "telemetryMessages":  0,
+                                            "commandForwards":  0,
+                                            "ackPublishes":  0,
+                                            "lastTelemetryAgeSeconds":  null,
+                                            "lastAckAgeSeconds":  null
+                                        }
+                       },
+                       {
+                           "key":  "node_c",
+                           "level":  "not_applicable",
+                           "summary":  "node C status=configured (disabled in current southbound runtime)",
+                           "evidence":  {
+                                            "deviceId":  "00000000-0000-0000-0000-000000000003",
+                                            "enabled":  false,
+                                            "deferred":  true,
+                                            "status":  "configured",
+                                            "telemetryMessages":  0,
+                                            "commandForwards":  0,
+                                            "ackPublishes":  0,
+                                            "lastTelemetryAgeSeconds":  null,
+                                            "lastAckAgeSeconds":  null
+                                        }
+                       }
+                   ],
+    "sources":  {
+                    "runtime":  {
+                                    "file":  "docs/unified/reports/field-rk3568-gateway-runtime-latest.json",
+                                    "generatedAt":  "2026-05-08T12:03:37Z"
+                                },
+                    "networkBootstrap":  {
+                                             "file":  "docs/unified/reports/field-rk3568-network-bootstrap-latest.json",
+                                             "generatedAt":  "2026-04-14T06:03:00Z"
+                                         },
+                    "operatorEntry":  {
+                                          "file":  "docs/unified/reports/field-center-rk3568-operator-entry-latest.json",
+                                          "generatedAt":  "2026-04-14T06:15:25Z"
+                                      }
+                },
+    "recommendations":  [
+                            "feed this summary into the future rk3568 local monitoring/OpenClaw sidecar as a read-only input",
+                            "treat parser_noise=attention as a shared-port quality issue to monitor, not a reason to reopen protocol scope",
+                            "treat source_interleaving as direct evidence of upstream shared-port byte collision and use it to verify source-side fixes",
+                            "escalate only when northbound_publish leaves the freshness budget or rejectedWriteFailures becomes non-zero"
+                        ],
+    "nextUse":  [
+                    "refresh edge link quality summary: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\check-rk3568-edge-link-quality.ps1 -DeferredNodeIds B,C",
+                    "refresh operator entry first: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\check-field-center-rk3568-operator-entry.ps1 -BoardPassword \u003cpassword\u003e -AllowUnsafeSecrets",
+                    "refresh board runtime first: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\check-rk3568-field-gateway-runtime.ps1 -Password \u003cpassword\u003e"
+                ]
+}

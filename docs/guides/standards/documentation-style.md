@@ -1,3 +1,9 @@
+---
+title: documentation-style
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/standards/documentation-style
+---
+
 # 文档写作规范（必须遵守）
 
 目标：让文档可长期维护、可复用、可被 AI 直接消费；避免“只写一半/写完就过期/多人写法不一致”。
@@ -97,4 +103,3 @@
 - `python docs/tools/run-quality-gates.py`
 
 新增/修改契约时，必须保证示例与 schema 一致，否则会在 CI 中失败。
-

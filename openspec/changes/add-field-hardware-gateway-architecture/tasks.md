@@ -1,3 +1,9 @@
+---
+title: tasks
+type: note
+permalink: landslide-monitoring-v2-mainline/openspec/changes/add-field-hardware-gateway-architecture/tasks
+---
+
 ## 1. Truth Consolidation
 - [x] 1.1 Consolidate existing firmware/device identity/MQTT/IoT adapter truth into one architecture baseline (`docs/unified/reports/field-uplink-platform-closure-baseline.md`)
 - [x] 1.2 Mark which decisions are already accepted vs still open (`docs/unified/reports/field-uplink-platform-closure-baseline.md`)

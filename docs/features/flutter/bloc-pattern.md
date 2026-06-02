@@ -1,3 +1,9 @@
+---
+title: bloc-pattern
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/features/flutter/bloc-pattern
+---
+
 # Bloc 模式说明
 
 ## Bloc 架构

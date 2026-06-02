@@ -2,7 +2,7 @@
 param(
   [Parameter(Mandatory = $true)]
   [string[]]$NodeSpec,
-  [string]$BoardHost = "192.168.124.172",
+  [string]$BoardHost = "192.168.124.179",
   [string]$User = "linaro",
   [string]$Password = "",
   [int]$SshPort = 22,
@@ -25,17 +25,17 @@ function Invoke-RemoteBash {
   )
 
   if ($TargetPassword) {
-    $scriptBase64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($ScriptText))
+    $tempScriptFile = [System.IO.Path]::GetTempFileName()
     $pythonSnippet = @'
-import base64
 import sys
 import paramiko
+from pathlib import Path
 
 host = sys.argv[1]
 user = sys.argv[2]
 password = sys.argv[3]
 port = int(sys.argv[4])
-script = base64.b64decode(sys.argv[5]).decode("utf-8")
+script = Path(sys.argv[5]).read_text(encoding="utf-8")
 
 client = paramiko.SSHClient()
 client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -51,7 +51,13 @@ client.close()
 raise SystemExit(code)
 '@
 
-    $pythonSnippet | & python - $TargetHost $TargetUser $TargetPassword ([string]$TargetPort) $scriptBase64
+    try {
+      $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+      [System.IO.File]::WriteAllText($tempScriptFile, $ScriptText, $utf8NoBom)
+      $pythonSnippet | & python - $TargetHost $TargetUser $TargetPassword ([string]$TargetPort) $tempScriptFile
+    } finally {
+      Remove-Item $tempScriptFile -Force -ErrorAction SilentlyContinue
+    }
     return
   }
 
@@ -114,19 +120,19 @@ $nodesJson = $nodes | ConvertTo-Json -Depth 6 -Compress
 $nodesJsonBase64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($nodesJson))
 $restartValue = if ($NoRestart) { "0" } else { "1" }
 
-$remoteScript = @"
+$remoteScript = @'
 set -euo pipefail
 
-env_file='$EnvFile'
-health_file='$HealthFile'
-service_name='$ServiceName'
-restart_service='$restartValue'
-nodes_b64='$nodesJsonBase64'
+env_file='__ENV_FILE__'
+health_file='__HEALTH_FILE__'
+service_name='__SERVICE_NAME__'
+restart_service='__RESTART_VALUE__'
+nodes_b64='__NODES_B64__'
 
-work_file="\$(mktemp)"
+work_file="$(mktemp)"
 backup_file=""
 
-python3 - "\$env_file" "\$work_file" "\$nodes_b64" <<'PY'
+python3 - "$env_file" "$work_file" "$nodes_b64" <<'PY'
 import base64
 import pathlib
 import sys
@@ -165,20 +171,20 @@ for key in ("MQTT_TOPIC_COMMAND_PREFIX", "MQTT_TOPIC_ACK_PREFIX", "SOUTHBOUND_NO
 out_path.write_text("\n".join(output) + "\n", encoding="utf-8")
 PY
 
-if [ -f "\$env_file" ]; then
-  backup_file="\${env_file}.bak.\$(date +%Y%m%d-%H%M%S)"
-  sudo cp "\$env_file" "\$backup_file"
+if [ -f "$env_file" ]; then
+  backup_file="${env_file}.bak.$(date +%Y%m%d-%H%M%S)"
+  sudo cp "$env_file" "$backup_file"
 fi
 
-sudo install -m 0640 "\$work_file" "\$env_file"
-sudo chown root:$(id -gn) "\$env_file" || true
-rm -f "\$work_file"
+sudo install -m 0640 "$work_file" "$env_file"
+sudo chown root:"$(id -gn)" "$env_file" || true
+rm -f "$work_file"
 
-if [ "\$restart_service" = "1" ]; then
-  sudo systemctl restart "\$service_name"
+if [ "$restart_service" = "1" ]; then
+  sudo systemctl restart "$service_name"
 fi
 
-python3 - "\$env_file" "\$health_file" "\$service_name" "\$backup_file" "\$nodes_b64" "\$restart_service" <<'PY'
+python3 - "$env_file" "$health_file" "$service_name" "$backup_file" "$nodes_b64" "$restart_service" <<'PY'
 import base64
 import json
 import pathlib
@@ -219,6 +225,13 @@ result = {
 
 print(json.dumps(result, ensure_ascii=False, indent=2))
 PY
-"@
+'@
+
+$remoteScript = $remoteScript.
+  Replace("__ENV_FILE__", $EnvFile).
+  Replace("__HEALTH_FILE__", $HealthFile).
+  Replace("__SERVICE_NAME__", $ServiceName).
+  Replace("__RESTART_VALUE__", $restartValue).
+  Replace("__NODES_B64__", $nodesJsonBase64)
 
 Invoke-RemoteBash -TargetHost $BoardHost -TargetUser $User -TargetPassword $Password -TargetPort $SshPort -ScriptText $remoteScript

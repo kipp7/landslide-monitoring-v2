@@ -1,10 +1,10 @@
 ﻿{
-    "generatedAt":  "2026-04-10T10:14:47Z",
+    "generatedAt":  "2026-04-14T06:02:57Z",
     "accepted":  false,
     "mode":  "field-rk3568-production-uplink-freeze",
     "currentBoundary":  "rk3568-production-uplink-freeze-needs-review",
     "board":  {
-                  "host":  "192.168.124.172",
+                  "host":  "192.168.124.179",
                   "sshPort":  22,
                   "repoRoot":  "/home/linaro/landslide-monitoring-v2-mainline",
                   "envFile":  "/etc/lsmv2/field-gateway.env",
@@ -42,12 +42,11 @@
                                                      "deviceId":  "00000000-0000-0000-0000-000000000003",
                                                      "installLabel":  "FIELD-NODE-C",
                                                      "southboundPort":  "/dev/ttyS3",
-                                                     "enabled":  false
+                                                     "enabled":  true
                                                  }
                                              ],
                          "failureKeys":  [
-                                             "runtimeNodeBOnline",
-                                             "commandPathObserved"
+                                             "runtimeNodeCExpectedState"
                                          ]
                      },
     "runtime":  {
@@ -55,18 +54,18 @@
                     "serviceEnabled":  "enabled",
                     "mqttConnected":  true,
                     "serialOpen":  true,
-                    "publishedMessages":  1070,
-                    "publishFailures":  4,
+                    "publishedMessages":  5853,
+                    "publishFailures":  14,
                     "publishPathRecoveredOrClean":  true,
-                    "lastPublishedAgeSeconds":  8,
-                    "rejectedMessages":  114,
+                    "lastPublishedAgeSeconds":  6,
+                    "rejectedMessages":  0,
                     "rejectedWriteFailures":  0,
                     "spoolPending":  0,
-                    "commandsForwarded":  1,
-                    "ackMessagesPublished":  0,
+                    "commandsForwarded":  9190,
+                    "ackMessagesPublished":  5,
                     "nodeStatuses":  {
                                          "nodeA":  "online",
-                                         "nodeB":  "offline",
+                                         "nodeB":  "online",
                                          "nodeC":  "configured"
                                      }
                 },
@@ -78,7 +77,7 @@
                     "refresh board runtime snapshot: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\check-rk3568-field-gateway-runtime.ps1 -Password \u003cpassword\u003e",
                     "refresh production uplink freeze: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\check-field-rk3568-production-uplink-freeze.ps1 -Password \u003cpassword\u003e",
                     "refresh software read-path adaptation: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\check-field-software-read-path-adaptation.ps1",
-                    "rewrite southbound node map if needed: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\set-rk3568-field-gateway-southbound-nodes.ps1 -Password \u003cpassword\u003e -NodeSpec \u0027A|00000000-0000-0000-0000-000000000001|/dev/ttyS3|FIELD-NODE-A|true\u0027 -NodeSpec \u0027B|00000000-0000-0000-0000-000000000002|/dev/ttyS3|FIELD-NODE-B|true\u0027 -NodeSpec \u0027C|00000000-0000-0000-0000-000000000003|/dev/ttyS3|FIELD-NODE-C|false\u0027"
+                    "rewrite southbound node map if needed: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\set-rk3568-field-gateway-southbound-nodes.ps1 -Password \u003cpassword\u003e -NodeSpec \u0027A|00000000-0000-0000-0000-000000000001|/dev/ttyS3|FIELD-NODE-A|true\u0027 -NodeSpec \u0027B|00000000-0000-0000-0000-000000000002|/dev/ttyS3|FIELD-NODE-B|true\u0027 -NodeSpec \u0027C|00000000-0000-0000-0000-000000000003|/dev/ttyS3|FIELD-NODE-C|true\u0027"
                 ],
     "checks":  [
                    {
@@ -172,27 +171,27 @@
                        "expected":  3
                    },
                    {
-                       "key":  "runtimeNodeAOnline",
+                       "key":  "runtimeNodeAExpectedState",
                        "ok":  true,
                        "actual":  "online",
-                       "expected":  "online"
+                       "expected":  "online|degraded"
                    },
                    {
-                       "key":  "runtimeNodeBOnline",
-                       "ok":  false,
-                       "actual":  "offline",
-                       "expected":  "online"
-                   },
-                   {
-                       "key":  "runtimeNodeCReserved",
+                       "key":  "runtimeNodeBExpectedState",
                        "ok":  true,
+                       "actual":  "online",
+                       "expected":  "online|degraded"
+                   },
+                   {
+                       "key":  "runtimeNodeCExpectedState",
+                       "ok":  false,
                        "actual":  "configured",
-                       "expected":  "configured"
+                       "expected":  "online|degraded"
                    },
                    {
                        "key":  "publishPathRecoveredOrClean",
                        "ok":  true,
-                       "actual":  "publishFailures=4,lastPublishedAgeSeconds=8,spoolPending=0,rejectedWriteFailures=0",
+                       "actual":  "publishFailures=14,lastPublishedAgeSeconds=6,spoolPending=0,rejectedWriteFailures=0",
                        "expected":  "published\u003e=1,lastPublishedAgeSeconds\u003c=120,spoolPending=0,rejectedWriteFailures=0"
                    },
                    {
@@ -215,8 +214,8 @@
                    },
                    {
                        "key":  "commandPathObserved",
-                       "ok":  false,
-                       "actual":  "forwarded=1,acked=0",
+                       "ok":  true,
+                       "actual":  "forwarded=9190,acked=5",
                        "expected":  "forwarded\u003e=1,acked\u003e=1"
                    }
                ]

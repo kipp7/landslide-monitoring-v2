@@ -1,3 +1,9 @@
+---
+title: quality-gates
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/standards/quality-gates
+---
+
 ﻿# 质量门禁（Quality Gates，必须通过）
 
 本文件把“高质量、高规范”落地为**可执行检查项**。任何代码/契约变更必须满足以下门禁，避免后期数据量变大、功能增多后出现不可收拾的返工。
@@ -33,6 +39,16 @@
 - 禁止提交真实密钥/凭据/Token（见 `incidents/INC-0002-secrets-and-credentials-leak.md`）
 - 禁止前端直连数据库（见 `incidents/INC-0003-frontend-direct-db-access.md`）
 - 所有敏感操作必须写审计日志（操作人、目标、时间、结果）
+
+执行：
+
+- `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/check-desk-api-boundary.ps1`
+
+当前阶段补充约束：
+
+- `apps/desk` 与 `apps/desk-win` 只能通过 API 合同访问业务数据
+- 禁止在 `apps/desk` / `apps/desk-win` 中引入 PostgreSQL / ClickHouse / ORM / Supabase 直连依赖
+- 禁止在 `apps/desk` / `apps/desk-win` 中提交数据库连接串、驱动符号或 SQL 直连逻辑
 
 ## 5) 格式化门禁（必过）
 

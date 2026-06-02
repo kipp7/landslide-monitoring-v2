@@ -1,3 +1,9 @@
+---
+title: Group7-Project-Name-Shortlist
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/archive/2026-01-05-web-dev-artifacts/apps-web/docs/group7-project-name-shortlist
+---
+
 # 项目命名候选（第七组）
 
 ## 推荐名（首选）
@@ -21,8 +27,3 @@
 - 简洁可记、两到四个字为佳；可附英文副标题
 - 避免过于学术或过度工程化，突出设计与体验价值
 - 标题用于：报名信息、作品题图、视频片头与PDF封面
-
-
-
-
-

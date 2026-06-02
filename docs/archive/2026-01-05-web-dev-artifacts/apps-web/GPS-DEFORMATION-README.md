@@ -1,3 +1,9 @@
+---
+title: GPS-DEFORMATION-README
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/archive/2026-01-05-web-dev-artifacts/apps-web/gps-deformation-readme
+---
+
 # GPS形变监测系统使用指南
 
 ## 🎯 功能概述

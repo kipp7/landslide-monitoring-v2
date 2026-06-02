@@ -1,0 +1,711 @@
+﻿{
+    "generatedAt":  "2026-05-08T11:35:50Z",
+    "accepted":  true,
+    "mode":  "rk3568-field-link-monitor-runtime-check",
+    "currentBoundary":  "rk3568-field-link-monitor-ready",
+    "scope":  {
+                  "target":  "rk3568-field-link-monitor-runtime",
+                  "failureKeys":  [
+
+                                  ]
+              },
+    "unitName":  "lsmv2-field-link-monitor.service",
+    "envFile":  "/etc/lsmv2/field-link-monitor.env",
+    "summaryFile":  "/var/lib/lsmv2/field-link-monitor/status/summary.json",
+    "httpUrl":  "http://127.0.0.1:18081/v1/summary",
+    "automationUrl":  "http://127.0.0.1:18081/v1/automation",
+    "serviceState":  {
+                         "isActive":  {
+                                          "command":  [
+                                                          "systemctl",
+                                                          "is-active",
+                                                          "lsmv2-field-link-monitor.service"
+                                                      ],
+                                          "returncode":  0,
+                                          "stdout":  "active",
+                                          "stderr":  ""
+                                      },
+                         "isEnabled":  {
+                                           "command":  [
+                                                           "systemctl",
+                                                           "is-enabled",
+                                                           "lsmv2-field-link-monitor.service"
+                                                       ],
+                                           "returncode":  0,
+                                           "stdout":  "enabled",
+                                           "stderr":  ""
+                                       },
+                         "show":  {
+                                      "command":  [
+                                                      "systemctl",
+                                                      "show",
+                                                      "lsmv2-field-link-monitor.service",
+                                                      "--property=ActiveState,SubState,MainPID,ExecMainStartTimestamp,FragmentPath"
+                                                  ],
+                                      "returncode":  0,
+                                      "stdout":  "MainPID=106838\nExecMainStartTimestamp=Fri 2026-05-08 18:16:33 CST\nActiveState=active\nSubState=running\nFragmentPath=/etc/systemd/system/lsmv2-field-link-monitor.service",
+                                      "stderr":  ""
+                                  }
+                     },
+    "configuredEnv":  {
+                          "SERVICE_NAME":  "field-link-monitor",
+                          "GATEWAY_HEALTH_FILE_PATH":  "/var/lib/lsmv2/field-gateway/health/runtime-health.json",
+                          "NETWORK_STATUS_FILE_PATH":  "/var/lib/lsmv2/network-bootstrap/status/runtime-status.json",
+                          "SUMMARY_FILE_PATH":  "/var/lib/lsmv2/field-link-monitor/status/summary.json",
+                          "HTTP_HOST":  "127.0.0.1",
+                          "HTTP_PORT":  "18081",
+                          "POLL_INTERVAL_MS":  "5000",
+                          "PUBLISH_FRESHNESS_MS":  "30000",
+                          "SOURCE_STALE_AFTER_MS":  "120000"
+                      },
+    "summaryFileJson":  {
+                            "schema_version":  1,
+                            "generatedAt":  "2026-05-08T11:35:50.035Z",
+                            "service":  "field-link-monitor",
+                            "mode":  "rk3568-edge-link-monitor",
+                            "accepted":  true,
+                            "currentBoundary":  "rk3568-edge-link-monitor-ready",
+                            "summary":  {
+                                            "overallLevel":  "critical",
+                                            "score":  0,
+                                            "networkMode":  "ethernet_uplink",
+                                            "serialOpen":  true,
+                                            "mqttConnected":  true,
+                                            "portStatus":  "online",
+                                            "spoolPending":  0,
+                                            "rejectedWriteFailures":  0,
+                                            "rejectedMessages":  0,
+                                            "interleavingSuspected":  0,
+                                            "lastPublishedAgeSeconds":  15,
+                                            "httpHost":  "127.0.0.1",
+                                            "httpPort":  18081
+                                        },
+                            "dimensions":  [
+                                               {
+                                                   "key":  "gateway_health_source",
+                                                   "level":  "healthy",
+                                                   "summary":  "field gateway runtime health source is readable",
+                                                   "evidence":  {
+                                                                    "path":  "/var/lib/lsmv2/field-gateway/health/runtime-health.json",
+                                                                    "exists":  true,
+                                                                    "generatedAt":  "2026-05-08T11:35:46.687Z",
+                                                                    "ageSeconds":  3,
+                                                                    "error":  null
+                                                                }
+                                               },
+                                               {
+                                                   "key":  "network_status_source",
+                                                   "level":  "healthy",
+                                                   "summary":  "network bootstrap status source is readable",
+                                                   "evidence":  {
+                                                                    "path":  "/var/lib/lsmv2/network-bootstrap/status/runtime-status.json",
+                                                                    "exists":  true,
+                                                                    "generatedAt":  "2026-05-08T11:35:39Z",
+                                                                    "ageSeconds":  11,
+                                                                    "error":  null
+                                                                }
+                                               },
+                                               {
+                                                   "key":  "network_bootstrap",
+                                                   "level":  "critical",
+                                                   "summary":  "rk3568 network bootstrap is not in a steady-state mode",
+                                                   "evidence":  {
+                                                                    "mode":  "ethernet_uplink",
+                                                                    "lastError":  null,
+                                                                    "wifiDevice":  "wlan0",
+                                                                    "lastAction":  "ethernet-healthy"
+                                                                }
+                                               },
+                                               {
+                                                   "key":  "southbound_serial",
+                                                   "level":  "healthy",
+                                                   "summary":  "serial input and mqtt uplink are both online",
+                                                   "evidence":  {
+                                                                    "serialOpen":  true,
+                                                                    "mqttConnected":  true,
+                                                                    "portStatus":  "online",
+                                                                    "lastSerialReadAgeSeconds":  15
+                                                                }
+                                               },
+                                               {
+                                                   "key":  "northbound_publish",
+                                                   "level":  "attention",
+                                                   "summary":  "publish path is fresh but showing backlog or retry pressure",
+                                                   "evidence":  {
+                                                                    "lastPublishedAgeSeconds":  15,
+                                                                    "spoolPending":  0,
+                                                                    "publishFailures":  0,
+                                                                    "lastError":  "cobs code exceeded input length"
+                                                                }
+                                               },
+                                               {
+                                                   "key":  "parser_noise",
+                                                   "level":  "healthy",
+                                                   "summary":  "parser rejection counters are currently clear",
+                                                   "evidence":  {
+                                                                    "schemaRejected":  0,
+                                                                    "rejectedMessages":  0,
+                                                                    "rejectedWriteFailures":  0
+                                                                }
+                                               },
+                                               {
+                                                   "key":  "source_interleaving",
+                                                   "level":  "healthy",
+                                                   "summary":  "no source-side interleaving signature is currently recorded",
+                                                   "evidence":  {
+                                                                    "interleavingSuspected":  0,
+                                                                    "interleavingWithMultipleSchemas":  0,
+                                                                    "interleavingWithMultipleDeviceIds":  0,
+                                                                    "lastInterleavingAgeSeconds":  null,
+                                                                    "lastInterleavingSummary":  null
+                                                                }
+                                               },
+                                               {
+                                                   "key":  "node_a",
+                                                   "level":  "healthy",
+                                                   "summary":  "node A status=online",
+                                                   "evidence":  {
+                                                                    "deviceId":  "00000000-0000-0000-0000-000000000001",
+                                                                    "status":  "online",
+                                                                    "telemetryMessages":  79,
+                                                                    "commandForwards":  35,
+                                                                    "ackPublishes":  2,
+                                                                    "lastTelemetryAgeSeconds":  15,
+                                                                    "lastAckAgeSeconds":  18
+                                                                }
+                                               },
+                                               {
+                                                   "key":  "node_b",
+                                                   "level":  "critical",
+                                                   "summary":  "node B status=configured",
+                                                   "evidence":  {
+                                                                    "deviceId":  "00000000-0000-0000-0000-000000000002",
+                                                                    "status":  "configured",
+                                                                    "telemetryMessages":  0,
+                                                                    "commandForwards":  33,
+                                                                    "ackPublishes":  0,
+                                                                    "lastTelemetryAgeSeconds":  null,
+                                                                    "lastAckAgeSeconds":  null
+                                                                }
+                                               },
+                                               {
+                                                   "key":  "node_c",
+                                                   "level":  "critical",
+                                                   "summary":  "node C status=configured",
+                                                   "evidence":  {
+                                                                    "deviceId":  "00000000-0000-0000-0000-000000000003",
+                                                                    "status":  "configured",
+                                                                    "telemetryMessages":  0,
+                                                                    "commandForwards":  33,
+                                                                    "ackPublishes":  0,
+                                                                    "lastTelemetryAgeSeconds":  null,
+                                                                    "lastAckAgeSeconds":  null
+                                                                }
+                                               }
+                                           ],
+                            "sources":  {
+                                            "gatewayHealth":  {
+                                                                  "path":  "/var/lib/lsmv2/field-gateway/health/runtime-health.json",
+                                                                  "exists":  true,
+                                                                  "generatedAt":  "2026-05-08T11:35:46.687Z",
+                                                                  "ageSeconds":  3,
+                                                                  "error":  null
+                                                              },
+                                            "networkStatus":  {
+                                                                  "path":  "/var/lib/lsmv2/network-bootstrap/status/runtime-status.json",
+                                                                  "exists":  true,
+                                                                  "generatedAt":  "2026-05-08T11:35:39Z",
+                                                                  "ageSeconds":  11,
+                                                                  "error":  null
+                                                              }
+                                        },
+                            "recommendations":  [
+                                                    "consume this summary from local UI or OpenClaw only in read-only mode",
+                                                    "treat parser_noise as a quality signal for shared-port governance, not as a reason to reopen the gateway core boundary",
+                                                    "escalate when source files disappear, southbound_serial leaves healthy, or rejectedWriteFailures becomes non-zero"
+                                                ],
+                            "automation":  {
+                                               "schema_version":  1,
+                                               "generatedAt":  "2026-05-08T11:35:50.035Z",
+                                               "mode":  "rk3568-edge-supervision-plan",
+                                               "sourceSummaryGeneratedAt":  "2026-05-08T11:35:50.035Z",
+                                               "accepted":  true,
+                                               "currentBoundary":  "rk3568-edge-supervision-ready",
+                                               "overallLevel":  "critical",
+                                               "tasks":  [
+                                                             {
+                                                                 "key":  "network_bootstrap_review",
+                                                                 "title":  "���� RK3568 �ش�����ģʽ",
+                                                                 "severity":  "critical",
+                                                                 "status":  "recommended",
+                                                                 "trigger":  "rk3568 network bootstrap is not in a steady-state mode",
+                                                                 "evidence":  {
+                                                                                  "mode":  "ethernet_uplink",
+                                                                                  "lastError":  null,
+                                                                                  "wifiDevice":  "wlan0",
+                                                                                  "lastAction":  "ethernet-healthy"
+                                                                              },
+                                                                 "operatorAction":  "����� AP fallback�������ֳ�ȷ�� STA �ش���·�����͹��磻��Ҫ�� OpenClaw/Hermes �Զ��� Wi-Fi��",
+                                                                 "safeToAutomate":  false,
+                                                                 "automationScope":  "operator_required"
+                                                             },
+                                                             {
+                                                                 "key":  "northbound_publish_drain",
+                                                                 "title":  "����������ʶ��뻺��ѹ��",
+                                                                 "severity":  "attention",
+                                                                 "status":  "recommended",
+                                                                 "trigger":  "publish path is fresh but showing backlog or retry pressure",
+                                                                 "evidence":  {
+                                                                                  "lastPublishedAgeSeconds":  15,
+                                                                                  "spoolPending":  0,
+                                                                                  "publishFailures":  0,
+                                                                                  "lastError":  "cobs code exceeded input length"
+                                                                              },
+                                                                 "operatorAction":  "�Ȳɼ�ժҪ��spool �� MQTT ״̬֤�ݣ��Ƿ����������ر������˹�ȷ�ϡ�",
+                                                                 "safeToAutomate":  false,
+                                                                 "automationScope":  "operator_required"
+                                                             },
+                                                             {
+                                                                 "key":  "node_b_field_check",
+                                                                 "title":  "�����ֳ��ڵ�״̬",
+                                                                 "severity":  "critical",
+                                                                 "status":  "recommended",
+                                                                 "trigger":  "node B status=configured",
+                                                                 "evidence":  {
+                                                                                  "deviceId":  "00000000-0000-0000-0000-000000000002",
+                                                                                  "status":  "configured",
+                                                                                  "telemetryMessages":  0,
+                                                                                  "commandForwards":  33,
+                                                                                  "ackPublishes":  0,
+                                                                                  "lastTelemetryAgeSeconds":  null,
+                                                                                  "lastAckAgeSeconds":  null
+                                                                              },
+                                                                 "operatorAction":  "���ڵ㹩�硢��װ�㡢ͨ��·�������ң��ʱ�䣻�Զ�����ֻ�����ɹ�������",
+                                                                 "safeToAutomate":  false,
+                                                                 "automationScope":  "operator_required"
+                                                             },
+                                                             {
+                                                                 "key":  "node_c_field_check",
+                                                                 "title":  "�����ֳ��ڵ�״̬",
+                                                                 "severity":  "critical",
+                                                                 "status":  "recommended",
+                                                                 "trigger":  "node C status=configured",
+                                                                 "evidence":  {
+                                                                                  "deviceId":  "00000000-0000-0000-0000-000000000003",
+                                                                                  "status":  "configured",
+                                                                                  "telemetryMessages":  0,
+                                                                                  "commandForwards":  33,
+                                                                                  "ackPublishes":  0,
+                                                                                  "lastTelemetryAgeSeconds":  null,
+                                                                                  "lastAckAgeSeconds":  null
+                                                                              },
+                                                                 "operatorAction":  "���ڵ㹩�硢��װ�㡢ͨ��·�������ң��ʱ�䣻�Զ�����ֻ�����ɹ�������",
+                                                                 "safeToAutomate":  false,
+                                                                 "automationScope":  "operator_required"
+                                                             }
+                                                         ],
+                                               "governance":  {
+                                                                  "openClawHermesBoundary":  "consume-read-only-plan",
+                                                                  "gatewayCoreProtected":  true,
+                                                                  "serialIngestProtected":  true,
+                                                                  "mqttUplinkProtected":  true,
+                                                                  "safeActionPolicy":  "advisory-first-no-gateway-restart"
+                                                              }
+                                           }
+                        },
+    "httpSummary":  {
+                        "schema_version":  1,
+                        "generatedAt":  "2026-05-08T11:35:50.035Z",
+                        "service":  "field-link-monitor",
+                        "mode":  "rk3568-edge-link-monitor",
+                        "accepted":  true,
+                        "currentBoundary":  "rk3568-edge-link-monitor-ready",
+                        "summary":  {
+                                        "overallLevel":  "critical",
+                                        "score":  0,
+                                        "networkMode":  "ethernet_uplink",
+                                        "serialOpen":  true,
+                                        "mqttConnected":  true,
+                                        "portStatus":  "online",
+                                        "spoolPending":  0,
+                                        "rejectedWriteFailures":  0,
+                                        "rejectedMessages":  0,
+                                        "interleavingSuspected":  0,
+                                        "lastPublishedAgeSeconds":  15,
+                                        "httpHost":  "127.0.0.1",
+                                        "httpPort":  18081
+                                    },
+                        "dimensions":  [
+                                           {
+                                               "key":  "gateway_health_source",
+                                               "level":  "healthy",
+                                               "summary":  "field gateway runtime health source is readable",
+                                               "evidence":  {
+                                                                "path":  "/var/lib/lsmv2/field-gateway/health/runtime-health.json",
+                                                                "exists":  true,
+                                                                "generatedAt":  "2026-05-08T11:35:46.687Z",
+                                                                "ageSeconds":  3,
+                                                                "error":  null
+                                                            }
+                                           },
+                                           {
+                                               "key":  "network_status_source",
+                                               "level":  "healthy",
+                                               "summary":  "network bootstrap status source is readable",
+                                               "evidence":  {
+                                                                "path":  "/var/lib/lsmv2/network-bootstrap/status/runtime-status.json",
+                                                                "exists":  true,
+                                                                "generatedAt":  "2026-05-08T11:35:39Z",
+                                                                "ageSeconds":  11,
+                                                                "error":  null
+                                                            }
+                                           },
+                                           {
+                                               "key":  "network_bootstrap",
+                                               "level":  "critical",
+                                               "summary":  "rk3568 network bootstrap is not in a steady-state mode",
+                                               "evidence":  {
+                                                                "mode":  "ethernet_uplink",
+                                                                "lastError":  null,
+                                                                "wifiDevice":  "wlan0",
+                                                                "lastAction":  "ethernet-healthy"
+                                                            }
+                                           },
+                                           {
+                                               "key":  "southbound_serial",
+                                               "level":  "healthy",
+                                               "summary":  "serial input and mqtt uplink are both online",
+                                               "evidence":  {
+                                                                "serialOpen":  true,
+                                                                "mqttConnected":  true,
+                                                                "portStatus":  "online",
+                                                                "lastSerialReadAgeSeconds":  15
+                                                            }
+                                           },
+                                           {
+                                               "key":  "northbound_publish",
+                                               "level":  "attention",
+                                               "summary":  "publish path is fresh but showing backlog or retry pressure",
+                                               "evidence":  {
+                                                                "lastPublishedAgeSeconds":  15,
+                                                                "spoolPending":  0,
+                                                                "publishFailures":  0,
+                                                                "lastError":  "cobs code exceeded input length"
+                                                            }
+                                           },
+                                           {
+                                               "key":  "parser_noise",
+                                               "level":  "healthy",
+                                               "summary":  "parser rejection counters are currently clear",
+                                               "evidence":  {
+                                                                "schemaRejected":  0,
+                                                                "rejectedMessages":  0,
+                                                                "rejectedWriteFailures":  0
+                                                            }
+                                           },
+                                           {
+                                               "key":  "source_interleaving",
+                                               "level":  "healthy",
+                                               "summary":  "no source-side interleaving signature is currently recorded",
+                                               "evidence":  {
+                                                                "interleavingSuspected":  0,
+                                                                "interleavingWithMultipleSchemas":  0,
+                                                                "interleavingWithMultipleDeviceIds":  0,
+                                                                "lastInterleavingAgeSeconds":  null,
+                                                                "lastInterleavingSummary":  null
+                                                            }
+                                           },
+                                           {
+                                               "key":  "node_a",
+                                               "level":  "healthy",
+                                               "summary":  "node A status=online",
+                                               "evidence":  {
+                                                                "deviceId":  "00000000-0000-0000-0000-000000000001",
+                                                                "status":  "online",
+                                                                "telemetryMessages":  79,
+                                                                "commandForwards":  35,
+                                                                "ackPublishes":  2,
+                                                                "lastTelemetryAgeSeconds":  15,
+                                                                "lastAckAgeSeconds":  18
+                                                            }
+                                           },
+                                           {
+                                               "key":  "node_b",
+                                               "level":  "critical",
+                                               "summary":  "node B status=configured",
+                                               "evidence":  {
+                                                                "deviceId":  "00000000-0000-0000-0000-000000000002",
+                                                                "status":  "configured",
+                                                                "telemetryMessages":  0,
+                                                                "commandForwards":  33,
+                                                                "ackPublishes":  0,
+                                                                "lastTelemetryAgeSeconds":  null,
+                                                                "lastAckAgeSeconds":  null
+                                                            }
+                                           },
+                                           {
+                                               "key":  "node_c",
+                                               "level":  "critical",
+                                               "summary":  "node C status=configured",
+                                               "evidence":  {
+                                                                "deviceId":  "00000000-0000-0000-0000-000000000003",
+                                                                "status":  "configured",
+                                                                "telemetryMessages":  0,
+                                                                "commandForwards":  33,
+                                                                "ackPublishes":  0,
+                                                                "lastTelemetryAgeSeconds":  null,
+                                                                "lastAckAgeSeconds":  null
+                                                            }
+                                           }
+                                       ],
+                        "sources":  {
+                                        "gatewayHealth":  {
+                                                              "path":  "/var/lib/lsmv2/field-gateway/health/runtime-health.json",
+                                                              "exists":  true,
+                                                              "generatedAt":  "2026-05-08T11:35:46.687Z",
+                                                              "ageSeconds":  3,
+                                                              "error":  null
+                                                          },
+                                        "networkStatus":  {
+                                                              "path":  "/var/lib/lsmv2/network-bootstrap/status/runtime-status.json",
+                                                              "exists":  true,
+                                                              "generatedAt":  "2026-05-08T11:35:39Z",
+                                                              "ageSeconds":  11,
+                                                              "error":  null
+                                                          }
+                                    },
+                        "recommendations":  [
+                                                "consume this summary from local UI or OpenClaw only in read-only mode",
+                                                "treat parser_noise as a quality signal for shared-port governance, not as a reason to reopen the gateway core boundary",
+                                                "escalate when source files disappear, southbound_serial leaves healthy, or rejectedWriteFailures becomes non-zero"
+                                            ],
+                        "automation":  {
+                                           "schema_version":  1,
+                                           "generatedAt":  "2026-05-08T11:35:50.035Z",
+                                           "mode":  "rk3568-edge-supervision-plan",
+                                           "sourceSummaryGeneratedAt":  "2026-05-08T11:35:50.035Z",
+                                           "accepted":  true,
+                                           "currentBoundary":  "rk3568-edge-supervision-ready",
+                                           "overallLevel":  "critical",
+                                           "tasks":  [
+                                                         {
+                                                             "key":  "network_bootstrap_review",
+                                                             "title":  "���� RK3568 �ش�����ģʽ",
+                                                             "severity":  "critical",
+                                                             "status":  "recommended",
+                                                             "trigger":  "rk3568 network bootstrap is not in a steady-state mode",
+                                                             "evidence":  {
+                                                                              "mode":  "ethernet_uplink",
+                                                                              "lastError":  null,
+                                                                              "wifiDevice":  "wlan0",
+                                                                              "lastAction":  "ethernet-healthy"
+                                                                          },
+                                                             "operatorAction":  "����� AP fallback�������ֳ�ȷ�� STA �ش���·�����͹��磻��Ҫ�� OpenClaw/Hermes �Զ��� Wi-Fi��",
+                                                             "safeToAutomate":  false,
+                                                             "automationScope":  "operator_required"
+                                                         },
+                                                         {
+                                                             "key":  "northbound_publish_drain",
+                                                             "title":  "����������ʶ��뻺��ѹ��",
+                                                             "severity":  "attention",
+                                                             "status":  "recommended",
+                                                             "trigger":  "publish path is fresh but showing backlog or retry pressure",
+                                                             "evidence":  {
+                                                                              "lastPublishedAgeSeconds":  15,
+                                                                              "spoolPending":  0,
+                                                                              "publishFailures":  0,
+                                                                              "lastError":  "cobs code exceeded input length"
+                                                                          },
+                                                             "operatorAction":  "�Ȳɼ�ժҪ��spool �� MQTT ״̬֤�ݣ��Ƿ����������ر������˹�ȷ�ϡ�",
+                                                             "safeToAutomate":  false,
+                                                             "automationScope":  "operator_required"
+                                                         },
+                                                         {
+                                                             "key":  "node_b_field_check",
+                                                             "title":  "�����ֳ��ڵ�״̬",
+                                                             "severity":  "critical",
+                                                             "status":  "recommended",
+                                                             "trigger":  "node B status=configured",
+                                                             "evidence":  {
+                                                                              "deviceId":  "00000000-0000-0000-0000-000000000002",
+                                                                              "status":  "configured",
+                                                                              "telemetryMessages":  0,
+                                                                              "commandForwards":  33,
+                                                                              "ackPublishes":  0,
+                                                                              "lastTelemetryAgeSeconds":  null,
+                                                                              "lastAckAgeSeconds":  null
+                                                                          },
+                                                             "operatorAction":  "���ڵ㹩�硢��װ�㡢ͨ��·�������ң��ʱ�䣻�Զ�����ֻ�����ɹ�������",
+                                                             "safeToAutomate":  false,
+                                                             "automationScope":  "operator_required"
+                                                         },
+                                                         {
+                                                             "key":  "node_c_field_check",
+                                                             "title":  "�����ֳ��ڵ�״̬",
+                                                             "severity":  "critical",
+                                                             "status":  "recommended",
+                                                             "trigger":  "node C status=configured",
+                                                             "evidence":  {
+                                                                              "deviceId":  "00000000-0000-0000-0000-000000000003",
+                                                                              "status":  "configured",
+                                                                              "telemetryMessages":  0,
+                                                                              "commandForwards":  33,
+                                                                              "ackPublishes":  0,
+                                                                              "lastTelemetryAgeSeconds":  null,
+                                                                              "lastAckAgeSeconds":  null
+                                                                          },
+                                                             "operatorAction":  "���ڵ㹩�硢��װ�㡢ͨ��·�������ң��ʱ�䣻�Զ�����ֻ�����ɹ�������",
+                                                             "safeToAutomate":  false,
+                                                             "automationScope":  "operator_required"
+                                                         }
+                                                     ],
+                                           "governance":  {
+                                                              "openClawHermesBoundary":  "consume-read-only-plan",
+                                                              "gatewayCoreProtected":  true,
+                                                              "serialIngestProtected":  true,
+                                                              "mqttUplinkProtected":  true,
+                                                              "safeActionPolicy":  "advisory-first-no-gateway-restart"
+                                                          }
+                                       }
+                    },
+    "httpAutomation":  {
+                           "schema_version":  1,
+                           "generatedAt":  "2026-05-08T11:35:50.035Z",
+                           "mode":  "rk3568-edge-supervision-plan",
+                           "sourceSummaryGeneratedAt":  "2026-05-08T11:35:50.035Z",
+                           "accepted":  true,
+                           "currentBoundary":  "rk3568-edge-supervision-ready",
+                           "overallLevel":  "critical",
+                           "tasks":  [
+                                         {
+                                             "key":  "network_bootstrap_review",
+                                             "title":  "���� RK3568 �ش�����ģʽ",
+                                             "severity":  "critical",
+                                             "status":  "recommended",
+                                             "trigger":  "rk3568 network bootstrap is not in a steady-state mode",
+                                             "evidence":  {
+                                                              "mode":  "ethernet_uplink",
+                                                              "lastError":  null,
+                                                              "wifiDevice":  "wlan0",
+                                                              "lastAction":  "ethernet-healthy"
+                                                          },
+                                             "operatorAction":  "����� AP fallback�������ֳ�ȷ�� STA �ش���·�����͹��磻��Ҫ�� OpenClaw/Hermes �Զ��� Wi-Fi��",
+                                             "safeToAutomate":  false,
+                                             "automationScope":  "operator_required"
+                                         },
+                                         {
+                                             "key":  "northbound_publish_drain",
+                                             "title":  "����������ʶ��뻺��ѹ��",
+                                             "severity":  "attention",
+                                             "status":  "recommended",
+                                             "trigger":  "publish path is fresh but showing backlog or retry pressure",
+                                             "evidence":  {
+                                                              "lastPublishedAgeSeconds":  15,
+                                                              "spoolPending":  0,
+                                                              "publishFailures":  0,
+                                                              "lastError":  "cobs code exceeded input length"
+                                                          },
+                                             "operatorAction":  "�Ȳɼ�ժҪ��spool �� MQTT ״̬֤�ݣ��Ƿ����������ر������˹�ȷ�ϡ�",
+                                             "safeToAutomate":  false,
+                                             "automationScope":  "operator_required"
+                                         },
+                                         {
+                                             "key":  "node_b_field_check",
+                                             "title":  "�����ֳ��ڵ�״̬",
+                                             "severity":  "critical",
+                                             "status":  "recommended",
+                                             "trigger":  "node B status=configured",
+                                             "evidence":  {
+                                                              "deviceId":  "00000000-0000-0000-0000-000000000002",
+                                                              "status":  "configured",
+                                                              "telemetryMessages":  0,
+                                                              "commandForwards":  33,
+                                                              "ackPublishes":  0,
+                                                              "lastTelemetryAgeSeconds":  null,
+                                                              "lastAckAgeSeconds":  null
+                                                          },
+                                             "operatorAction":  "���ڵ㹩�硢��װ�㡢ͨ��·�������ң��ʱ�䣻�Զ�����ֻ�����ɹ�������",
+                                             "safeToAutomate":  false,
+                                             "automationScope":  "operator_required"
+                                         },
+                                         {
+                                             "key":  "node_c_field_check",
+                                             "title":  "�����ֳ��ڵ�״̬",
+                                             "severity":  "critical",
+                                             "status":  "recommended",
+                                             "trigger":  "node C status=configured",
+                                             "evidence":  {
+                                                              "deviceId":  "00000000-0000-0000-0000-000000000003",
+                                                              "status":  "configured",
+                                                              "telemetryMessages":  0,
+                                                              "commandForwards":  33,
+                                                              "ackPublishes":  0,
+                                                              "lastTelemetryAgeSeconds":  null,
+                                                              "lastAckAgeSeconds":  null
+                                                          },
+                                             "operatorAction":  "���ڵ㹩�硢��װ�㡢ͨ��·�������ң��ʱ�䣻�Զ�����ֻ�����ɹ�������",
+                                             "safeToAutomate":  false,
+                                             "automationScope":  "operator_required"
+                                         }
+                                     ],
+                           "governance":  {
+                                              "openClawHermesBoundary":  "consume-read-only-plan",
+                                              "gatewayCoreProtected":  true,
+                                              "serialIngestProtected":  true,
+                                              "mqttUplinkProtected":  true,
+                                              "safeActionPolicy":  "advisory-first-no-gateway-restart"
+                                          }
+                       },
+    "nextUse":  [
+                    "field-link-monitor check: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\check-rk3568-field-link-monitor.ps1 -Password \u003cpassword\u003e",
+                    "edge-link quality aggregation: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\check-rk3568-edge-link-quality.ps1",
+                    "gateway runtime refresh: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\check-rk3568-field-gateway-runtime.ps1 -Password \u003cpassword\u003e"
+                ],
+    "checks":  [
+                   {
+                       "key":  "serviceActive",
+                       "ok":  true,
+                       "actual":  "active",
+                       "expected":  "active"
+                   },
+                   {
+                       "key":  "serviceEnabled",
+                       "ok":  true,
+                       "actual":  "enabled",
+                       "expected":  "enabled"
+                   },
+                   {
+                       "key":  "summaryFileAccepted",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "httpSummaryAccepted",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "httpAutomationReady",
+                       "ok":  true,
+                       "actual":  {
+                                      "mode":  "rk3568-edge-supervision-plan",
+                                      "taskCount":  4,
+                                      "boundary":  "rk3568-edge-supervision-ready"
+                                  },
+                       "expected":  "rk3568-edge-supervision-plan with at least one task"
+                   },
+                   {
+                       "key":  "summaryAndHttpAligned",
+                       "ok":  true,
+                       "actual":  {
+                                      "summaryGeneratedAt":  "2026-05-08T11:35:50.035Z",
+                                      "httpGeneratedAt":  "2026-05-08T11:35:50.035Z",
+                                      "summaryOverallLevel":  "critical",
+                                      "httpOverallLevel":  "critical"
+                                  },
+                       "expected":  "same generatedAt/overallLevel/score across summary file and localhost http"
+                   }
+               ]
+}

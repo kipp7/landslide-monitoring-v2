@@ -1,6 +1,6 @@
 import { Col, Row, Select, Skeleton, Statistic, Typography } from "antd";
-import dayjs from "dayjs";
 import ReactECharts from "echarts-for-react";
+import dayjs from "dayjs";
 import { useEffect, useMemo, useState } from "react";
 
 import type { Baseline, Device, GpsSeries } from "../api/client";
@@ -100,7 +100,7 @@ export function GpsPage() {
       <div className="desk-page-head">
         <div>
           <Typography.Title level={3} style={{ margin: 0, color: "rgba(226,232,240,0.96)" }}>
-            地质形变监测 · GPS
+            地质形变监测
           </Typography.Title>
           <Typography.Text type="secondary">GNSS 形变曲线</Typography.Text>
         </div>

@@ -4,6 +4,7 @@ param(
   [string]$BundleFile = "docs/unified/reports/desk-win-delivery-bundle-latest.json",
   [string]$HashFile = "docs/unified/reports/desk-win-delivery-hash-latest.json",
   [string]$BuildChunkFile = "docs/unified/reports/desk-build-chunks-latest.json",
+  [string]$BoundaryReportFile = "docs/unified/reports/desk-api-boundary-latest.json",
   [string]$InstallerReportFile = "docs/unified/reports/desk-win-installer-latest.json",
   [string]$InstallerVerifyFile = "docs/unified/reports/desk-win-installer-verify-latest.json",
   [string]$CustomInstallerReportFile = "docs/unified/reports/desk-win-customba-installer-latest.json",
@@ -36,6 +37,7 @@ $fullDeliveryFile = Join-Path $repoRoot $DeliveryFile
 $fullBundleFile = Join-Path $repoRoot $BundleFile
 $fullHashFile = Join-Path $repoRoot $HashFile
 $fullBuildChunkFile = Join-Path $repoRoot $BuildChunkFile
+$fullBoundaryReportFile = Join-Path $repoRoot $BoundaryReportFile
 $fullInstallerReportFile = Join-Path $repoRoot $InstallerReportFile
 $fullInstallerVerifyFile = Join-Path $repoRoot $InstallerVerifyFile
 $fullCustomInstallerReportFile = Join-Path $repoRoot $CustomInstallerReportFile
@@ -43,7 +45,7 @@ $fullCustomInstallerVerifyFile = Join-Path $repoRoot $CustomInstallerVerifyFile
 $fullDeliveryIndexFile = Join-Path $repoRoot $DeliveryIndexFile
 $fullOutFile = Join-Path $repoRoot $OutFile
 
-foreach ($path in @($fullDeliveryFile, $fullBundleFile, $fullHashFile, $fullBuildChunkFile, $fullInstallerReportFile, $fullInstallerVerifyFile, $fullCustomInstallerReportFile, $fullCustomInstallerVerifyFile, $fullDeliveryIndexFile)) {
+foreach ($path in @($fullDeliveryFile, $fullBundleFile, $fullHashFile, $fullBuildChunkFile, $fullBoundaryReportFile, $fullInstallerReportFile, $fullInstallerVerifyFile, $fullCustomInstallerReportFile, $fullCustomInstallerVerifyFile, $fullDeliveryIndexFile)) {
   if (-not (Test-Path $path)) {
     throw "required report not found: $path"
   }
@@ -53,11 +55,33 @@ $delivery = Get-Content -Path $fullDeliveryFile -Raw -Encoding UTF8 | ConvertFro
 $bundle = Get-Content -Path $fullBundleFile -Raw -Encoding UTF8 | ConvertFrom-Json
 $hash = Get-Content -Path $fullHashFile -Raw -Encoding UTF8 | ConvertFrom-Json
 $chunk = Get-Content -Path $fullBuildChunkFile -Raw -Encoding UTF8 | ConvertFrom-Json
+$boundary = Get-Content -Path $fullBoundaryReportFile -Raw -Encoding UTF8 | ConvertFrom-Json
 $installer = Get-Content -Path $fullInstallerReportFile -Raw -Encoding UTF8 | ConvertFrom-Json
 $installerVerify = Get-Content -Path $fullInstallerVerifyFile -Raw -Encoding UTF8 | ConvertFrom-Json
 $customInstaller = Get-Content -Path $fullCustomInstallerReportFile -Raw -Encoding UTF8 | ConvertFrom-Json
 $customInstallerVerify = Get-Content -Path $fullCustomInstallerVerifyFile -Raw -Encoding UTF8 | ConvertFrom-Json
 $deliveryIndex = Get-Content -Path $fullDeliveryIndexFile -Raw -Encoding UTF8 | ConvertFrom-Json
+
+$innoVerifyCn = if ([bool]$installerVerify.ready) {
+  "Inno 安装器自动验证通过，关键结论为 ``ready=true``。  "
+} else {
+  "Inno 安装器自动验证未通过，关键结论为 ``ready=false``。  "
+}
+$innoVerifyEn = if ([bool]$installerVerify.ready) {
+  "The Inno installer passed automated verification with ``ready=true``."
+} else {
+  "The Inno installer did not pass automated verification and currently reports ``ready=false``."
+}
+$customVerifyCn = if ([bool]$customInstallerVerify.ready) {
+  "custom BA 安装器自动验证通过，关键结论为 ``ready=true``。  "
+} else {
+  "custom BA 安装器自动验证未通过，当前报告为 ``ready=false``。  "
+}
+$customVerifyEn = if ([bool]$customInstallerVerify.ready) {
+  "The custom BA installer passed automated verification with ``ready=true``."
+} else {
+  "The custom BA installer did not pass automated verification and currently reports ``ready=false``."
+}
 
 $dateLabel = (Get-Date).ToString("yyyy-MM-dd")
 $lines = @(
@@ -72,8 +96,12 @@ $lines = @(
   "  Delivery status: ready for handoff. The fixed outputs are ``$($deliveryIndex.latest.packageDir)/`` and ``$($deliveryIndex.latest.packageZip)``.",
   "- 桌面端形态：WPF + WebView2 桌面壳，内含 ``apps/desk`` 的静态前端资源。  ",
   "  Desktop form: WPF + WebView2 shell with bundled static assets from ``apps/desk``.",
+  "- 当前正式客户端：``$($boundary.boundary.currentFormalClient)``。客户端业务数据入口固定为 ``$($boundary.boundary.allowedDataEntry)``，不得直连 ``$($boundary.boundary.disallowedDirectStores -join ', ')``。  ",
+  "  Current formal client: ``$($boundary.boundary.currentFormalClient)``. Business data entry is fixed to ``$($boundary.boundary.allowedDataEntry)`` and must not connect directly to ``$($boundary.boundary.disallowedDirectStores -join ', ')``.",
   "- 安装分发：同时提供 Inno 安装器与 custom BA 安装器。  ",
   "  Installation distribution: both the Inno installer and the custom BA installer are included.",
+  "- 后续页面能力：未来 Web 或其他客户端能力只能复用同一 API contract / client 边界，不得绕过 API。  ",
+  "  Future page capabilities: any future Web or other client capability must reuse the same API contract/client boundary and must not bypass the API.",
   "",
   "## 固定交付件 / Fixed Deliverables",
   "",
@@ -90,10 +118,10 @@ $lines = @(
   "",
   "- ``latest.zip`` 自动验证通过，关键结论为 ``readyAfterLaunch=$((Get-CheckOk -Checks $delivery.checks -Key 'verifyReadyAfterLaunch').ToString().ToLower())``。  ",
   "  ``latest.zip`` passed automated verification, with ``readyAfterLaunch=$((Get-CheckOk -Checks $delivery.checks -Key 'verifyReadyAfterLaunch').ToString().ToLower())``.",
-  "- Inno 安装器自动验证通过，关键结论为 ``ready=$([bool]$installerVerify.ready)``。  ",
-  "  The Inno installer passed automated verification, with ``ready=$([bool]$installerVerify.ready)``.",
-  "- custom BA 安装器自动验证通过，关键结论为 ``ready=$([bool]$customInstallerVerify.ready)``。  ",
-  "  The custom BA installer passed automated verification, with ``ready=$([bool]$customInstallerVerify.ready)``.",
+  "- $innoVerifyCn",
+  "  $innoVerifyEn",
+  "- $customVerifyCn",
+  "  $customVerifyEn",
   "- 运行与环境前置检查已完成，``.NET 8 WindowsDesktop Runtime`` 与 ``WebView2 Runtime`` 均有留证。  ",
   "  Runtime and prerequisite checks are recorded, including ``.NET 8 WindowsDesktop Runtime`` and ``WebView2 Runtime``.",
   "",
@@ -105,6 +133,8 @@ $lines = @(
   "  Integrity report: ``$HashFile``",
   "- latest 包验证：``docs/unified/reports/desk-win-latest-package-verify-latest.json``  ",
   "  Latest package verification: ``docs/unified/reports/desk-win-latest-package-verify-latest.json``",
+  "- API-only 边界留证：``$BoundaryReportFile``  ",
+  "  API-only boundary proof: ``$BoundaryReportFile``",
   "- Inno 安装器验证：``$InstallerVerifyFile``  ",
   "  Inno installer verification: ``$InstallerVerifyFile``",
   "- custom BA 安装器验证：``$CustomInstallerVerifyFile``  ",

@@ -1,3 +1,9 @@
+---
+title: WORKSPACE
+type: note
+permalink: landslide-monitoring-v2-mainline/workspace
+---
+
 # Workspace Setup
 
 This workspace is configured for Codex with:

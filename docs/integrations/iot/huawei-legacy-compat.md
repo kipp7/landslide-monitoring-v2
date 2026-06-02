@@ -1,3 +1,9 @@
+---
+title: huawei-legacy-compat
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/iot/huawei-legacy-compat
+---
+
 # 华为/硬件 legacy 端点兼容层（WS-K.6）
 
 目标：让参考区遗留的 `/huawei/*` 与 `/iot/huawei` **不缺失**，同时把能力落到 v2 的“设备命令队列 + Telemetry 主链路”。
@@ -43,4 +49,3 @@
 - `services/api` 已配置 Kafka（用于发布 `device.commands.v1`）
 
 缺少依赖时，会返回 `503` 且 `disabled=true`（行为与参考区“禁用端点”一致）。
-

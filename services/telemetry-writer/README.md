@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: landslide-monitoring-v2-mainline/services/telemetry-writer/readme
+---
+
 # telemetry-writer（Kafka → ClickHouse）
 
 本服务负责消费 Kafka `telemetry.raw.v1`，将“稀疏指标”拆分为多行写入 ClickHouse `landslide.telemetry_raw`，为曲线查询/聚合分析/告警回放提供可靠的时序存储。

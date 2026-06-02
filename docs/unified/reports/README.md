@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/unified/reports/readme
+---
+
 # 共享汇报区
 
 ## 目标

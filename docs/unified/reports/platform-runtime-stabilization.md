@@ -1,3 +1,9 @@
+---
+title: platform-runtime-stabilization
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/unified/reports/platform-runtime-stabilization
+---
+
 # platform-runtime-stabilization
 
 ## Status

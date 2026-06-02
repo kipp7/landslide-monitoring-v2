@@ -131,6 +131,116 @@
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
+.desk-sm-station-cell {
+  min-width: 280px;
+  display: grid;
+  gap: 6px;
+  text-align: center;
+  justify-items: center;
+}
+
+.desk-sm-station-cell-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.desk-sm-station-cell-title {
+  font-weight: 900;
+  color: rgba(226, 232, 240, 0.96);
+}
+
+.desk-sm-station-cell-sub {
+  font-size: 12px;
+  color: rgba(148, 163, 184, 0.9);
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.desk-sm-canonical-cell {
+  min-width: 340px;
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  text-align: center;
+}
+
+.desk-sm-canonical-row {
+  display: grid;
+  gap: 4px;
+  align-items: start;
+  justify-items: center;
+  width: min(100%, 320px);
+}
+
+.desk-sm-canonical-k {
+  font-size: 11px;
+  color: rgba(148, 163, 184, 0.9);
+  text-align: center;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+
+.desk-sm-canonical-v {
+  width: 100%;
+  font-size: 12px;
+  color: rgba(226, 232, 240, 0.92);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  text-align: center;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  padding: 7px 10px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.42);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.desk-sm-location-cell {
+  display: grid;
+  place-items: center;
+  color: rgba(226, 232, 240, 0.92);
+  text-align: center;
+  line-height: 1.6;
+  white-space: normal;
+  min-height: 100%;
+}
+
+.desk-sm-center-cell {
+  width: 100%;
+  display: grid;
+  justify-items: center;
+  align-items: center;
+  text-align: center;
+}
+
+.desk-sm-sensor-cell {
+  min-height: 44px;
+}
+
+.desk-sm-number-cell {
+  font-weight: 900;
+  color: rgba(226, 232, 240, 0.96);
+}
+
+.desk-sm-lifecycle-cell .ant-tag {
+  margin-inline-end: 0;
+}
+
+.desk-sm-coord-cell,
+.desk-sm-last-data-cell,
+.desk-sm-legend-cell,
+.desk-sm-action-cell {
+  min-height: 44px;
+}
+
+.desk-sm-legend-cell {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .desk-sm-hierarchy {
   border: 1px solid rgba(148, 163, 184, 0.18);
   background: rgba(2, 6, 23, 0.12);
@@ -452,5 +562,19 @@
 
   .desk-sm-detail-grid {
     grid-template-columns: 1fr;
+  }
+
+  .desk-sm-canonical-cell {
+    padding-left: 0;
+  }
+
+  .desk-sm-canonical-row {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .desk-sm-canonical-k,
+  .desk-sm-canonical-v {
+    text-align: center;
   }
 }

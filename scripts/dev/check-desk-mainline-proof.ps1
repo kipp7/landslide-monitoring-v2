@@ -7,6 +7,8 @@ param(
   [string]$DiffOutFile = "docs/unified/reports/desk-mainline-proof-diff-latest.json",
   [string]$ManifestOutFile = "docs/unified/reports/desk-mainline-proof-manifest-latest.json",
   [int]$MaxHistorySnapshots = 20,
+  [switch]$IncludeSeedDemo,
+  [switch]$ForceGpsProfileStress,
   [switch]$IncludeCommandPaginationStress,
   [switch]$IncludePaginationStress,
   [switch]$SkipBuild
@@ -44,8 +46,10 @@ function Invoke-JsonStep([string]$label, [scriptblock]$action) {
   return $trimmed | ConvertFrom-Json
 }
 
-Invoke-Step "Seed demo truth" {
-  powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "infra/compose/scripts/seed-demo.ps1")
+if ($IncludeSeedDemo) {
+  Invoke-Step "Seed demo truth" {
+    powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "infra/compose/scripts/seed-demo.ps1")
+  }
 }
 
 Invoke-Step "Restart local api service" {
@@ -64,6 +68,25 @@ if (-not $SkipBuild) {
 
 $v1Core = Invoke-JsonStep "Desk v1 core proof" {
   powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "scripts/dev/check-desk-http-v1-core.ps1")
+}
+
+$gpsProfileStressDeviceCount = [int]$v1Core.baselines.count
+$includeGpsProfileStress = $ForceGpsProfileStress.IsPresent -or $gpsProfileStressDeviceCount -ge 3
+$gpsProfileStressReason =
+  "gps profile stress proofs require 3 baseline-backed devices; current runtime has $gpsProfileStressDeviceCount"
+
+function New-SkippedGpsProfileProof([string]$rootProperty, [string]$reason) {
+  $inner = [pscustomobject]@{
+    skipped = $true
+    reason = $reason
+    profileCount = 0
+    boardExecutionAlignmentStable = $null
+    responseOrderingStable = $null
+    escalationCoverageStable = $null
+  }
+  $wrapper = [pscustomobject]@{}
+  $wrapper | Add-Member -NotePropertyName $rootProperty -NotePropertyValue $inner
+  return $wrapper
 }
 
 $clientProof = Invoke-JsonStep "Desk client proof" {
@@ -118,76 +141,97 @@ $gpsV1AnalysisContract = Invoke-JsonStep "Desk GPS v1 analysis contract proof" {
   powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "scripts/dev/check-desk-gps-v1-analysis-contract.ps1")
 }
 
-$gpsSampleLibrary = Invoke-JsonStep "Desk GPS sample library proof" {
-  powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "scripts/dev/check-desk-gps-sample-library.ps1")
-}
+if ($includeGpsProfileStress) {
+  $gpsSampleLibrary = Invoke-JsonStep "Desk GPS sample library proof" {
+    powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "scripts/dev/check-desk-gps-sample-library.ps1")
+  }
 
-$gpsProfileEvaluation = Invoke-JsonStep "Desk GPS profile evaluation proof" {
-  powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "scripts/dev/check-desk-gps-profile-evaluation.ps1")
-}
+  $gpsProfileEvaluation = Invoke-JsonStep "Desk GPS profile evaluation proof" {
+    powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "scripts/dev/check-desk-gps-profile-evaluation.ps1")
+  }
 
-$gpsProfileBacktest = Invoke-JsonStep "Desk GPS profile backtest proof" {
-  powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "scripts/dev/check-desk-gps-profile-backtest.ps1")
-}
+  $gpsProfileBacktest = Invoke-JsonStep "Desk GPS profile backtest proof" {
+    powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "scripts/dev/check-desk-gps-profile-backtest.ps1")
+  }
 
-$gpsProfileErrorDecomposition = Invoke-JsonStep "Desk GPS profile error decomposition proof" {
-  powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "scripts/dev/check-desk-gps-profile-error-decomposition.ps1")
-}
+  $gpsProfileErrorDecomposition = Invoke-JsonStep "Desk GPS profile error decomposition proof" {
+    powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "scripts/dev/check-desk-gps-profile-error-decomposition.ps1")
+  }
 
-$gpsProfileAlertSensitivity = Invoke-JsonStep "Desk GPS profile alert sensitivity proof" {
-  powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "scripts/dev/check-desk-gps-profile-alert-sensitivity.ps1")
-}
+  $gpsProfileAlertSensitivity = Invoke-JsonStep "Desk GPS profile alert sensitivity proof" {
+    powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "scripts/dev/check-desk-gps-profile-alert-sensitivity.ps1")
+  }
 
-$gpsThresholdPrecision = Invoke-JsonStep "Desk GPS threshold precision proof" {
-  powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "scripts/dev/check-desk-gps-threshold-precision.ps1")
-}
+  $gpsThresholdPrecision = Invoke-JsonStep "Desk GPS threshold precision proof" {
+    powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "scripts/dev/check-desk-gps-threshold-precision.ps1")
+  }
 
-$gpsThresholdErrorRates = Invoke-JsonStep "Desk GPS threshold error rates proof" {
-  powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "scripts/dev/check-desk-gps-threshold-error-rates.ps1")
-}
+  $gpsThresholdErrorRates = Invoke-JsonStep "Desk GPS threshold error rates proof" {
+    powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "scripts/dev/check-desk-gps-threshold-error-rates.ps1")
+  }
 
-$gpsThresholdHorizonMatrix = Invoke-JsonStep "Desk GPS threshold horizon matrix proof" {
-  powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "scripts/dev/check-desk-gps-threshold-horizon-matrix.ps1")
-}
+  $gpsThresholdHorizonMatrix = Invoke-JsonStep "Desk GPS threshold horizon matrix proof" {
+    powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "scripts/dev/check-desk-gps-threshold-horizon-matrix.ps1")
+  }
 
-$gpsThresholdHorizonErrorMatrix = Invoke-JsonStep "Desk GPS threshold horizon error matrix proof" {
-  powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "scripts/dev/check-desk-gps-threshold-horizon-error-matrix.ps1")
-}
+  $gpsThresholdHorizonErrorMatrix = Invoke-JsonStep "Desk GPS threshold horizon error matrix proof" {
+    powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "scripts/dev/check-desk-gps-threshold-horizon-error-matrix.ps1")
+  }
 
-$gpsThresholdGovernanceMatrix = Invoke-JsonStep "Desk GPS threshold governance matrix proof" {
-  powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "scripts/dev/check-desk-gps-threshold-governance-matrix.ps1")
-}
+  $gpsThresholdGovernanceMatrix = Invoke-JsonStep "Desk GPS threshold governance matrix proof" {
+    powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "scripts/dev/check-desk-gps-threshold-governance-matrix.ps1")
+  }
 
-$gpsThresholdFullMatrix = Invoke-JsonStep "Desk GPS threshold full matrix proof" {
-  powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "scripts/dev/check-desk-gps-threshold-full-matrix.ps1")
-}
+  $gpsThresholdFullMatrix = Invoke-JsonStep "Desk GPS threshold full matrix proof" {
+    powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "scripts/dev/check-desk-gps-threshold-full-matrix.ps1")
+  }
 
-$gpsThresholdScorecard = Invoke-JsonStep "Desk GPS threshold scorecard proof" {
-  powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "scripts/dev/check-desk-gps-threshold-scorecard.ps1")
-}
+  $gpsThresholdScorecard = Invoke-JsonStep "Desk GPS threshold scorecard proof" {
+    powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "scripts/dev/check-desk-gps-threshold-scorecard.ps1")
+  }
 
-$gpsThresholdRanking = Invoke-JsonStep "Desk GPS threshold ranking proof" {
-  powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "scripts/dev/check-desk-gps-threshold-ranking.ps1")
-}
+  $gpsThresholdRanking = Invoke-JsonStep "Desk GPS threshold ranking proof" {
+    powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "scripts/dev/check-desk-gps-threshold-ranking.ps1")
+  }
 
-$gpsThresholdPolicyBoard = Invoke-JsonStep "Desk GPS threshold policy board proof" {
-  powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "scripts/dev/check-desk-gps-threshold-policy-board.ps1")
-}
+  $gpsThresholdPolicyBoard = Invoke-JsonStep "Desk GPS threshold policy board proof" {
+    powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "scripts/dev/check-desk-gps-threshold-policy-board.ps1")
+  }
 
-$gpsThresholdExecutionMatrix = Invoke-JsonStep "Desk GPS threshold execution matrix proof" {
-  powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "scripts/dev/check-desk-gps-threshold-execution-matrix.ps1")
-}
+  $gpsThresholdExecutionMatrix = Invoke-JsonStep "Desk GPS threshold execution matrix proof" {
+    powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "scripts/dev/check-desk-gps-threshold-execution-matrix.ps1")
+  }
 
-$gpsThresholdRunbook = Invoke-JsonStep "Desk GPS threshold runbook proof" {
-  powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "scripts/dev/check-desk-gps-threshold-runbook.ps1")
-}
+  $gpsThresholdRunbook = Invoke-JsonStep "Desk GPS threshold runbook proof" {
+    powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "scripts/dev/check-desk-gps-threshold-runbook.ps1")
+  }
 
-$gpsThresholdSlaMatrix = Invoke-JsonStep "Desk GPS threshold SLA matrix proof" {
-  powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "scripts/dev/check-desk-gps-threshold-sla-matrix.ps1")
-}
+  $gpsThresholdSlaMatrix = Invoke-JsonStep "Desk GPS threshold SLA matrix proof" {
+    powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "scripts/dev/check-desk-gps-threshold-sla-matrix.ps1")
+  }
 
-$gpsThresholdOperatingModel = Invoke-JsonStep "Desk GPS threshold operating model proof" {
-  powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "scripts/dev/check-desk-gps-threshold-operating-model.ps1")
+  $gpsThresholdOperatingModel = Invoke-JsonStep "Desk GPS threshold operating model proof" {
+    powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "scripts/dev/check-desk-gps-threshold-operating-model.ps1")
+  }
+} else {
+  $gpsSampleLibrary = New-SkippedGpsProfileProof "gpsSampleLibrary" $gpsProfileStressReason
+  $gpsProfileEvaluation = New-SkippedGpsProfileProof "gpsProfileEvaluation" $gpsProfileStressReason
+  $gpsProfileBacktest = New-SkippedGpsProfileProof "gpsProfileBacktest" $gpsProfileStressReason
+  $gpsProfileErrorDecomposition = New-SkippedGpsProfileProof "gpsProfileErrorDecomposition" $gpsProfileStressReason
+  $gpsProfileAlertSensitivity = New-SkippedGpsProfileProof "gpsProfileAlertSensitivity" $gpsProfileStressReason
+  $gpsThresholdPrecision = New-SkippedGpsProfileProof "gpsThresholdPrecision" $gpsProfileStressReason
+  $gpsThresholdErrorRates = New-SkippedGpsProfileProof "gpsThresholdErrorRates" $gpsProfileStressReason
+  $gpsThresholdHorizonMatrix = New-SkippedGpsProfileProof "gpsThresholdHorizonMatrix" $gpsProfileStressReason
+  $gpsThresholdHorizonErrorMatrix = New-SkippedGpsProfileProof "gpsThresholdHorizonErrorMatrix" $gpsProfileStressReason
+  $gpsThresholdGovernanceMatrix = New-SkippedGpsProfileProof "gpsThresholdGovernanceMatrix" $gpsProfileStressReason
+  $gpsThresholdFullMatrix = New-SkippedGpsProfileProof "gpsThresholdFullMatrix" $gpsProfileStressReason
+  $gpsThresholdScorecard = New-SkippedGpsProfileProof "gpsThresholdScorecard" $gpsProfileStressReason
+  $gpsThresholdRanking = New-SkippedGpsProfileProof "gpsThresholdRanking" $gpsProfileStressReason
+  $gpsThresholdPolicyBoard = New-SkippedGpsProfileProof "gpsThresholdPolicyBoard" $gpsProfileStressReason
+  $gpsThresholdExecutionMatrix = New-SkippedGpsProfileProof "gpsThresholdExecutionMatrix" $gpsProfileStressReason
+  $gpsThresholdRunbook = New-SkippedGpsProfileProof "gpsThresholdRunbook" $gpsProfileStressReason
+  $gpsThresholdSlaMatrix = New-SkippedGpsProfileProof "gpsThresholdSlaMatrix" $gpsProfileStressReason
+  $gpsThresholdOperatingModel = New-SkippedGpsProfileProof "gpsThresholdOperatingModel" $gpsProfileStressReason
 }
 
 $gpsPageActions = Invoke-JsonStep "Desk GPS page actions proof" {
@@ -246,7 +290,7 @@ if ($IncludeCommandPaginationStress) {
 
 $viewerDeniedKeys = @($viewerBoundary.denied.PSObject.Properties | ForEach-Object { $_.Name })
 $completedChecks = @(
-  "seed-demo.ps1",
+  $(if ($IncludeSeedDemo) { "seed-demo.ps1" } else { "formal-runtime" }),
   "restart-local-api-service.ps1",
   "health",
   "check-desk-http-v1-core.ps1",
@@ -263,6 +307,17 @@ $completedChecks = @(
   "check-desk-gps-threshold-config.ps1",
   "check-desk-gps-data-limit-config.ps1",
   "check-desk-gps-v1-analysis-contract.ps1",
+  "check-desk-gps-page-actions.ps1",
+  "check-desk-user-journey.ps1",
+  "check-desk-baselines-actions.ps1",
+  "check-desk-device-actions.ps1",
+  "check-desk-command-notify-on-ack.ps1",
+  "check-desk-device-management-page.ps1",
+  "check-desk-device-management-export.ps1",
+  "check-desk-device-diagnostics.ps1",
+  "check-desk-viewer-boundary.ps1",
+  "check-desk-viewer-journey.ps1"
+) + $(if ($includeGpsProfileStress) { @(
   "check-desk-gps-sample-library.ps1",
   "check-desk-gps-profile-evaluation.ps1",
   "check-desk-gps-profile-backtest.ps1",
@@ -280,18 +335,8 @@ $completedChecks = @(
   "check-desk-gps-threshold-execution-matrix.ps1",
   "check-desk-gps-threshold-runbook.ps1",
   "check-desk-gps-threshold-sla-matrix.ps1",
-  "check-desk-gps-threshold-operating-model.ps1",
-  "check-desk-gps-page-actions.ps1",
-  "check-desk-user-journey.ps1",
-  "check-desk-baselines-actions.ps1",
-  "check-desk-device-actions.ps1",
-  "check-desk-command-notify-on-ack.ps1",
-  "check-desk-device-management-page.ps1",
-  "check-desk-device-management-export.ps1",
-  "check-desk-device-diagnostics.ps1",
-  "check-desk-viewer-boundary.ps1",
-  "check-desk-viewer-journey.ps1"
-) + $(if ($IncludePaginationStress) { @("check-desk-pagination-proof.ps1") } else { @() }) + $(if ($IncludeCommandPaginationStress) { @("check-desk-command-pagination.ps1") } else { @() })
+  "check-desk-gps-threshold-operating-model.ps1"
+) } else { @() }) + $(if ($IncludePaginationStress) { @("check-desk-pagination-proof.ps1") } else { @() }) + $(if ($IncludeCommandPaginationStress) { @("check-desk-command-pagination.ps1") } else { @() })
 
 $summarySnapshot = [ordered]@{
   generatedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
@@ -364,6 +409,8 @@ $summarySnapshot = [ordered]@{
     deniedKeys = $viewerDeniedKeys
   }
   stress = [ordered]@{
+    gpsProfileStressIncluded = [bool]$includeGpsProfileStress
+    gpsProfileStressDeviceCount = [int]$gpsProfileStressDeviceCount
     paginationIncluded = [bool]($null -ne $pagination)
     commandPaginationIncluded = [bool]($null -ne $commandPagination)
   }
@@ -443,7 +490,7 @@ $summaryLines = @(
   "- CompletedChecks: $($summarySnapshot.completedChecks)",
   "- HealthOk: $($summarySnapshot.healthOk)",
   "",
-  "## Demo Truth",
+  "## Runtime Truth",
   "",
   "- Stations: $($summarySnapshot.demoTruth.stationCount)",
   "- TotalDevices: $($summarySnapshot.demoTruth.totalDevices)",
@@ -514,6 +561,8 @@ $summaryLines = @(
   "",
   "## Stress",
   "",
+  "- GpsProfileStressIncluded: $($summarySnapshot.stress.gpsProfileStressIncluded)",
+  "- GpsProfileStressDeviceCount: $($summarySnapshot.stress.gpsProfileStressDeviceCount)",
   "- PaginationIncluded: $($summarySnapshot.stress.paginationIncluded)",
   "- CommandPaginationIncluded: $($summarySnapshot.stress.commandPaginationIncluded)"
 )

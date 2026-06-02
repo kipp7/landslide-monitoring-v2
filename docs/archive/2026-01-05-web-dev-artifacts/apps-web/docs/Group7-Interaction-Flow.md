@@ -1,3 +1,9 @@
+---
+title: Group7-Interaction-Flow
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/archive/2026-01-05-web-dev-artifacts/apps-web/docs/group7-interaction-flow
+---
+
 # Group 7 交互流程（Mermaid，可直接打印为 PDF）
 
 > 用于第七组“数字媒体设计”提交。建议浏览器打印为 PDF：A4、窄边距、纵向；需要可选“背景图形”。

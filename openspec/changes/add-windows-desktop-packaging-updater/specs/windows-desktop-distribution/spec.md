@@ -1,3 +1,9 @@
+---
+title: spec
+type: note
+permalink: landslide-monitoring-v2-mainline/openspec/changes/add-windows-desktop-packaging-updater/specs/windows-desktop-distribution/spec
+---
+
 # Delta for Windows Desktop Distribution
 
 ## ADDED Requirements

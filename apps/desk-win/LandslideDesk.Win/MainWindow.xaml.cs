@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Interop;
@@ -17,8 +18,12 @@ namespace LandslideDesk.Win;
 
 public partial class MainWindow : Window
 {
+    private const string DefaultDeskApiBaseUrl = "http://127.0.0.1:8080";
     private const string VirtualHostName = "appassets.local";
     private const string DevServerEnv = "DESK_DEV_SERVER_URL";
+    private const string DeskApiBaseUrlEnv = "DESK_API_BASE_URL";
+    private const string DeskApiModeEnv = "DESK_API_MODE";
+    private const string RuntimeConfigFileName = "desk-runtime.json";
     private const string WebView2ArgsEnv = "DESK_WEBVIEW2_ARGS";
     private const string WebView2DisableGpuEnv = "DESK_WEBVIEW2_DISABLE_GPU";
     private static readonly string AppDataRoot = Path.Combine(
@@ -500,7 +505,7 @@ public partial class MainWindow : Window
                 _localWebRoot,
                 CoreWebView2HostResourceAccessKind.Allow
             );
-            NavigateToUrl(core, _localIndexUrl ?? $"https://{VirtualHostName}/index.html");
+            NavigateToUrl(core, _localIndexUrl ?? $"http://{VirtualHostName}/index.html");
             return;
         }
 
@@ -698,8 +703,71 @@ dotnet publish .\LandslideDesk.Win\LandslideDesk.Win.csproj -c Release -r win-x6
         return value.Trim().ToLowerInvariant() is "1" or "true" or "yes" or "y" or "on";
     }
 
+    private static string ResolveDeskApiBaseUrl()
+    {
+        var value = System.Environment.GetEnvironmentVariable(DeskApiBaseUrlEnv)?.Trim();
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            return value.TrimEnd('/');
+        }
+
+        value = LoadRuntimeConfig()?.Api?.BaseUrl?.Trim();
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            return value.TrimEnd('/');
+        }
+
+        return DefaultDeskApiBaseUrl;
+    }
+
+    private static string ResolveDeskApiMode()
+    {
+        var value = System.Environment.GetEnvironmentVariable(DeskApiModeEnv)?.Trim().ToLowerInvariant();
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            return value is "mock" ? "mock" : "http";
+        }
+
+        value = LoadRuntimeConfig()?.Api?.Mode?.Trim().ToLowerInvariant();
+        return value is "mock" ? "mock" : "http";
+    }
+
+    private static bool ResolveDeskApiForce()
+    {
+        return LoadRuntimeConfig()?.Api?.Force == true;
+    }
+
+    private static DeskRuntimeConfig? LoadRuntimeConfig()
+    {
+        var configPath = Path.Combine(System.AppContext.BaseDirectory, RuntimeConfigFileName);
+        if (!File.Exists(configPath))
+        {
+            return null;
+        }
+
+        try
+        {
+            var json = File.ReadAllText(configPath);
+            return JsonSerializer.Deserialize<DeskRuntimeConfig>(
+                json,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+            );
+        }
+        catch (System.Exception ex)
+        {
+            LogRuntime($"Failed to load {RuntimeConfigFileName}: {ex.Message}");
+            return null;
+        }
+    }
+
     private static Task InjectHostInfoAsync(CoreWebView2 core, string userDataFolder, string additionalArgs)
     {
+        var runtimeConfig = LoadRuntimeConfig();
+        var apiMode = ResolveDeskApiMode();
+        var apiBaseUrl = ResolveDeskApiBaseUrl();
+        var apiForce = ResolveDeskApiForce();
+        LogRuntime($"Host API mode={apiMode} baseUrl={apiBaseUrl} force={apiForce} profile={runtimeConfig?.Profile ?? "default"}");
+
         var info = new
         {
             app = new
@@ -716,12 +784,19 @@ dotnet publish .\LandslideDesk.Win\LandslideDesk.Win.csproj -c Release -r win-x6
             os = new
             {
                 version = System.Environment.OSVersion.VersionString
+            },
+            api = new
+            {
+                mode = apiMode,
+                baseUrl = apiBaseUrl,
+                force = apiForce,
+                profile = runtimeConfig?.Profile ?? "default"
             }
         };
 
         var json = JsonSerializer.Serialize(info);
-        var bootstrapScript = $$"""
-window.__DESK_HOST_INFO = {{json}};
+        var bootstrapScript = $$$"""
+window.__DESK_HOST_INFO = {{{json}}};
 (function() {
   function postRuntimeError(payload) {
     try {
@@ -760,6 +835,27 @@ window.__DESK_HOST_INFO = {{json}};
 })();
 """;
         return core.AddScriptToExecuteOnDocumentCreatedAsync(bootstrapScript);
+    }
+
+    private sealed class DeskRuntimeConfig
+    {
+        [JsonPropertyName("profile")]
+        public string? Profile { get; set; }
+
+        [JsonPropertyName("api")]
+        public DeskRuntimeApiConfig? Api { get; set; }
+    }
+
+    private sealed class DeskRuntimeApiConfig
+    {
+        [JsonPropertyName("mode")]
+        public string? Mode { get; set; }
+
+        [JsonPropertyName("baseUrl")]
+        public string? BaseUrl { get; set; }
+
+        [JsonPropertyName("force")]
+        public bool Force { get; set; }
     }
 
     private static void TryOpenExternal(string uri)
@@ -1100,7 +1196,7 @@ window.__DESK_HOST_INFO = {{json}};
             _localWebRoot,
             CoreWebView2HostResourceAccessKind.Allow
         );
-        NavigateToUrl(DeskWebView.CoreWebView2, _localIndexUrl ?? $"https://{VirtualHostName}/index.html");
+        NavigateToUrl(DeskWebView.CoreWebView2, _localIndexUrl ?? $"http://{VirtualHostName}/index.html");
     }
 
     private static string BuildLocalIndexUrl(string indexPath)
@@ -1108,11 +1204,11 @@ window.__DESK_HOST_INFO = {{json}};
         try
         {
             var stamp = File.GetLastWriteTimeUtc(indexPath).Ticks.ToString();
-            return $"https://{VirtualHostName}/index.html?v={stamp}";
+            return $"http://{VirtualHostName}/index.html?v={stamp}";
         }
         catch
         {
-            return $"https://{VirtualHostName}/index.html";
+            return $"http://{VirtualHostName}/index.html";
         }
     }
 

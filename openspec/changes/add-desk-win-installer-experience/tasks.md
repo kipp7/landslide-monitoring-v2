@@ -1,3 +1,9 @@
+---
+title: tasks
+type: note
+permalink: landslide-monitoring-v2-mainline/openspec/changes/add-desk-win-installer-experience/tasks
+---
+
 ## 1. Contract
 
 - [x] 1.1 定义安装器分发形态：EXE 安装器 + latest 便携包并存

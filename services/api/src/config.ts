@@ -65,6 +65,11 @@ const configSchema = z.object({
   kafkaBrokers: optionalCsvList(),
   kafkaTopicDeviceCommands: z.string().default("device.commands.v1"),
 
+  rk3568AlarmActuatorUrl: optionalNonEmptyString(),
+  rk3568FieldLinkMonitorUrl: optionalNonEmptyString(),
+  rk3568HermesEdgeSupervisorUrl: optionalNonEmptyString(),
+  rk3568StatusHttpTimeoutMs: z.coerce.number().int().positive().max(60_000).default(6000),
+
   apiMaxSeriesRangeHours: z.coerce.number().int().positive().default(168),
   apiMaxPoints: z.coerce.number().int().positive().default(100000),
   apiReplayMaxRangeHours: z.coerce.number().int().positive().default(168),
@@ -116,6 +121,11 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
     jwtRefreshExpiresInSeconds: env.JWT_REFRESH_EXPIRES_IN_SECONDS,
 
     kafkaBrokers: env.KAFKA_BROKERS,
-    kafkaTopicDeviceCommands: env.KAFKA_TOPIC_DEVICE_COMMANDS
+    kafkaTopicDeviceCommands: env.KAFKA_TOPIC_DEVICE_COMMANDS,
+
+    rk3568AlarmActuatorUrl: env.RK3568_ALARM_ACTUATOR_URL,
+    rk3568FieldLinkMonitorUrl: env.RK3568_FIELD_LINK_MONITOR_URL,
+    rk3568HermesEdgeSupervisorUrl: env.RK3568_HERMES_EDGE_SUPERVISOR_URL,
+    rk3568StatusHttpTimeoutMs: env.RK3568_STATUS_HTTP_TIMEOUT_MS
   });
 }

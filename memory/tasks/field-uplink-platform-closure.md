@@ -118,7 +118,7 @@ Freeze and execute the next major phase after command-route stabilization: prove
   - board role:
     - `RK3568 field gateway candidate`
   - IPv4:
-    - `192.168.124.172`
+    - `192.168.124.179`
   - SSH user:
     - `linaro`
   - current auth mode:
@@ -1708,7 +1708,7 @@ Freeze and execute the next major phase after command-route stabilization: prove
 - the RK3568 edge network bootstrap line is now recovered and verified on hardware on `2026-04-10`:
   - local recovery facts:
     - the earlier failed bootstrap attempt had left multiple AP profiles on the board side
-    - after the local cleanup, the board returned to `JRSPR_5G` with `192.168.124.172`
+    - after the local cleanup, the board returned to `JRSPR_5G` with `192.168.124.179`
   - Windows wrapper hardening:
     - `scripts/dev/install-rk3568-network-bootstrap.ps1`
     - `scripts/dev/check-rk3568-network-bootstrap.ps1`
@@ -1727,7 +1727,7 @@ Freeze and execute the next major phase after command-route stabilization: prove
       - `runtimeStatus.mode = sta_connected`
       - `runtimeStatus.lastAction = sta-healthy`
       - `runtimeStatus.lastError = null`
-      - `ipv4Addresses = wlan0:192.168.124.172/24`
+      - `ipv4Addresses = wlan0:192.168.124.179/24`
   - frozen interpretation:
     - the network bootstrap line is now safe enough to keep on the main RK3568 productionization track
     - `STA first, AP fallback` remains the correct contract, but AP fallback must remain a recovery path rather than the default steady-state outcome
@@ -1766,5 +1766,1373 @@ Freeze and execute the next major phase after command-route stabilization: prove
       - `rejectedWriteFailures = 0`
   - frozen interpretation:
     - the gateway/bootstrap process layer is now hardened enough for the mainline
+- the RK3568 network bootstrap line was further clarified and reverified on hardware on `2026-04-10` after a misleading field symptom:
+  - clarified symptom boundary:
+    - the observed `wlan0 = unavailable` and `rfkill soft blocked` state was caused by a deliberate operator action to turn Wi-Fi off while working around the earlier AP interference
+    - this was not a random board-side radio failure
+    - the real product bug remained:
+      - when `eth0` was already healthy, bootstrap still needed to avoid drifting into the STA/AP recovery path
+  - code changes:
+    - `services/field-gateway/deploy/rk3568-network-bootstrap.py`
+      now actively restores the Wi-Fi radio/managed state each loop so the board can keep a warm standby path after wired bring-up
+    - `services/field-gateway/deploy/check-rk3568-network-bootstrap.sh`
+      now exports `nmcliRadio`
+    - `scripts/dev/check-rk3568-network-bootstrap.ps1`
+      now fails readiness if Wi-Fi radio is disabled or `wlan0` is still unreachable
+  - live redeploy / verification facts on board `192.168.124.179`:
+    - install/update completed at `2026-04-10T14:47:28Z`
+    - formal check completed at `2026-04-10T14:48:24Z`
+    - runtime report:
+      - `docs/unified/reports/field-rk3568-network-bootstrap-latest.json`
+    - accepted runtime facts:
+      - `accepted = true`
+      - `currentBoundary = rk3568-network-bootstrap-ready`
+      - `runtimeStatus.mode = ethernet_uplink`
+      - `runtimeStatus.lastAction = ethernet-healthy`
+      - `runtimeStatus.lastError = null`
+      - `nmcliRadio = enabled:enabled:enabled:enabled`
+      - active links are:
+        - `eth0 = 有线连接 1`
+        - `wlan0 = JRSPR_5G`
+      - there is no active `lsmv2-ap-fallback`
+      - IPv4 addresses are:
+        - `eth0 = 192.168.124.179/24`
+        - `wlan0 = 192.168.124.179/24`
+  - frozen interpretation:
+    - the correct steady-state rule is now explicit:
+      - wired healthy means `ethernet_uplink`
+      - AP fallback is forbidden in that state
+      - Wi-Fi stays available as the hot standby path for later unplug/failover
+    - the next field check should be a physical Ethernet unplug verification to confirm a clean transition from `ethernet_uplink` back to `sta_connected`
     - the remaining blocker is no longer process stability but real field-state recovery for node B / ack path
     - routine guard must stay non-green until node B telemetry and ack observation come back
+- the latest live recheck on `2026-04-10` moved the blocker again, from `node C disabled` to `no fresh southbound serial flow after gateway restart`:
+  - the RK3568 Wi-Fi standby plus AP fallback contract is now concretely proven on hardware on `2026-04-10`:
+    - code hardening:
+      - `services/field-gateway/deploy/rk3568-network-bootstrap.py`
+        now:
+        - maintains Wi-Fi radio availability
+        - treats wired healthy as the steady-state winner
+        - cleans all legacy AP-related profiles and rebuilds exactly one canonical `lsmv2-ap-fallback`
+      - `scripts/dev/check-rk3568-network-bootstrap.ps1`
+        now enforces:
+        - `apProfileCanonicalSingle`
+        - `apSuppressedWhileHealthy`
+    - final verified runtime facts:
+      - `docs/unified/reports/field-rk3568-network-bootstrap-latest.json`
+      - `generatedAt = 2026-04-10T15:05:15Z`
+      - `accepted = true`
+      - `currentBoundary = rk3568-network-bootstrap-ready`
+      - `runtimeStatus.mode = ethernet_uplink`
+      - `nmcliConnections` now contains exactly one:
+        - `lsmv2-ap-fallback`
+      - active steady-state links remain:
+        - `eth0 = 有线连接 1`
+        - `wlan0 = JRSPR_5G`
+        - no active `lsmv2-ap-fallback`
+    - controlled AP proof on the same board:
+      - manually raising `lsmv2-ap-fallback` succeeded
+      - `GENERAL.CONNECTION = lsmv2-ap-fallback`
+      - `IP4.ADDRESS = 10.42.0.1/24`
+      - SSID was visible as:
+        - `rk3568-1`
+      - after bringing the AP down, `wlan0` returned to:
+        - `JRSPR_5G`
+    - frozen interpretation:
+      - the board now matches the intended contract:
+        - Wi-Fi remains the warm standby path
+        - healthy Wi-Fi / wired operation does not randomly launch AP
+        - when AP is explicitly needed, it is now a valid and reusable fallback hotspot rather than a corrupted leftover NetworkManager state
+  - final transition proof on the same day:
+    - latest report:
+      - `docs/unified/reports/field-rk3568-network-bootstrap-latest.json`
+      - `generatedAt = 2026-04-10T15:12:13Z`
+      - `accepted = true`
+      - `currentBoundary = rk3568-network-bootstrap-ready`
+    - current runtime has now settled to pure Wi-Fi standby as expected:
+      - `runtimeStatus.mode = sta_connected`
+      - active link:
+        - `JRSPR_5G:802-11-wireless:wlan0`
+      - `eth0 = unavailable`
+      - `apProfileCanonicalSingle = true`
+      - `apSuppressedWhileHealthy = true`
+    - frozen interpretation:
+      - the intended transition contract is now proven in both directions:
+        - wired-healthy steady state does not auto-launch AP
+        - Wi-Fi-only steady state returns to `sta_connected`
+  - board-side configuration is now corrected:
+    - `/etc/lsmv2/field-gateway.env`
+    - `SOUTHBOUND_NODES_JSON`
+    - now has:
+      - `A enabled=true`
+      - `B enabled=true`
+      - `C enabled=true`
+  - the prior `node C disabled` rejection is no longer the active blocker
+  - after the gateway restart at about `2026-04-10 18:38:55 CST`:
+    - `lsmv2-field-gateway.service = active/running`
+    - `mqtt.connected = true`
+    - `serial.open = true`
+    - but runtime still shows:
+      - `serialChunks = 0`
+      - `serialBytes = 0`
+      - `lastReadTs = null`
+      - `publishedMessages = 0`
+      - `nodeA = configured`
+      - `nodeB = configured`
+      - `nodeC = configured`
+  - `journalctl -u lsmv2-field-gateway.service` only shows:
+    - serial opened
+    - mqtt connected
+    - mqtt command subscription ready
+    - no fresh telemetry after restart
+  - current field interpretation:
+    - do not re-open `node C` software configuration
+    - the immediate live blocker is the center XL01 to RK3568 `/dev/ttyS3` TTL stream not currently producing fresh frames
+    - next check should start only after the center node / TTL link is confirmed live again
+- the follow-up closure pass on `2026-04-10` confirmed that three-node uplink is restored and reduced the residual blocker to shared-port ack fragmentation:
+  - script baseline was updated:
+    - `scripts/dev/check-field-rk3568-production-uplink-freeze.ps1`
+    - now treats `node C` as:
+      - `enabled=true`
+      - expected runtime state derived from enabled/disabled instead of hard-coded `reserved`
+  - latest live runtime facts:
+    - `field-rk3568-gateway-runtime-latest.json`
+      - `generatedAt = 2026-04-10T11:11:23Z`
+      - `/dev/ttyS3.status = online`
+      - `commandsReceived = 3`
+      - `commandsForwarded = 3`
+      - `ackMessagesPublished = 0`
+      - `nodeA = online`
+      - `nodeB = online`
+      - `nodeC = online` in live runtime snapshot before the final freeze window
+  - latest freeze facts:
+    - `field-rk3568-production-uplink-freeze-latest.json`
+      - `generatedAt = 2026-04-10T11:11:36Z`
+      - remaining failure keys are only:
+        - `runtimeNodeCExpectedState`
+        - `commandPathObserved`
+      - `nodeA = online`
+      - `nodeB = online`
+      - `nodeC = degraded`
+      - `commandsForwarded = 3`
+      - `ackMessagesPublished = 0`
+  - node C command proof now isolates the real blocker:
+    - `scripts/dev/run-rk3568-field-gateway-node-command-stable.ps1`
+      against:
+      - `deviceId = 00000000-0000-0000-0000-000000000003`
+      - `action = manual_collect`
+    - final proof:
+      - `.tmp/rk3568-node-command-stable-0003-manual-collect-3.json`
+      - `commandId = 3b30d1dd-8ad9-4c37-b8b5-7a81d588c32b`
+      - command forwarding succeeded:
+        - `commandsReceived: 2 -> 3`
+        - `commandsForwarded: 2 -> 3`
+        - `field gateway command forwarded to serial`
+      - ack still did not publish:
+        - `ackMessagesPublished: 0 -> 0`
+        - `ackEvidence = null`
+      - diagnosis:
+        - `ack-blocked-by-shared-stream-byte-interleaving`
+  - current frozen interpretation:
+    - do not reopen node mapping, node C enablement, MQTT routing, or RK3568 service survivability
+    - those are now proven enough
+    - the remaining blocker is the shared center XL01 -> RK3568 `/dev/ttyS3` command/ack window where telemetry and ack fragments collide and produce:
+      - `json parse failed`
+      - `schema invalid`
+      - degraded node C command window quality
+  - next phase should target:
+    - shared-port command window governance
+    - quiescing/reducing telemetry during command windows
+    - or upstream center-node arbitration rather than more board-side mapping checks
+- the latest stabilization pass on `2026-04-10` moved the mainline back to a green handoff boundary for board uplink plus software read-path adaptation:
+  - board-side closure is now green again:
+    - `docs/unified/reports/field-rk3568-production-uplink-freeze-latest.json`
+    - `generatedAt = 2026-04-10T11:29:07Z`
+    - `accepted = true`
+    - `currentBoundary = rk3568-production-uplink-freeze-ready`
+    - runtime facts at freeze:
+      - `nodeA = online`
+      - `nodeB = online`
+      - `nodeC = online`
+      - `commandsForwarded = 7`
+      - `ackMessagesPublished = 3`
+  - the board acceptance/observation tooling was aligned to the real three-node production baseline:
+    - `scripts/dev/check-rk3568-field-gateway-acceptance.ps1`
+      now:
+      - expects `enabledNodeCount = 3`
+      - warms up in `skip` mode as well
+      - accepts enabled nodes in `online|degraded`
+    - `scripts/dev/run-rk3568-field-gateway-observation-window.ps1`
+      now:
+      - treats `node C` as `online|degraded`
+      - can prove a telemetry observation window without requiring strict acceptance unless `-RequireAcceptance` is set
+    - latest observation proof:
+      - `docs/unified/reports/field-rk3568-gateway-observation-latest.json`
+      - `generatedAt = 2026-04-10T11:28:50Z`
+      - `passed = true`
+      - `conclusion = rk3568-runtime-observation-window-clean`
+  - software-side live read-path adaptation is now also green on current data instead of stale report inheritance:
+    - `scripts/dev/check-field-software-read-path-adaptation.ps1`
+      now authenticates to current:
+      - `http://127.0.0.1:8080`
+      - `http://127.0.0.1:3000`
+      and reads:
+      - `/api/v1/devices`
+      - `/api/v1/data/state/{deviceId}`
+      directly for nodes `A/B`
+    - latest proof:
+      - `docs/unified/reports/field-software-read-path-adaptation-latest.json`
+      - `generatedAt = 2026-04-10T11:45:26Z`
+      - `accepted = true`
+      - `currentBoundary = software-read-path-adaptation-ready`
+      - `nodeA apiUpdatedAt = 2026-04-10T11:45:25Z`
+      - `nodeB apiUpdatedAt = 2026-04-10T11:45:25Z`
+      - both API/Web paths expose all 14 expected field metrics
+  - direct center-service diagnostics behind this closure are now explicit:
+    - `lsmv2_ingest` is actively ingesting:
+      - `telemetry/000...001`
+      - `telemetry/000...002`
+      - `telemetry/000...003`
+    - `lsmv2_telemetry_writer` is actively writing single-message batches into ClickHouse
+    - direct API state reads now return fresh current timestamps for:
+      - node A
+      - node B
+      - node C
+- the center-side closure path has now also been slimmed into a formal aggregation gate on `2026-04-10`:
+  - script:
+    - `scripts/dev/check-field-rk3568-center-live-closure.ps1`
+  - current rule:
+    - aggregate the already-green baselines instead of re-running heavy board-side proof loops
+  - latest report:
+    - `docs/unified/reports/field-rk3568-center-live-closure-latest.json`
+  - latest facts:
+    - `generatedAt = 2026-04-10T12:54:45Z`
+    - `accepted = true`
+    - `currentBoundary = rk3568-live-center-closure-ready`
+  - compatibility output remains present for downstream scripts:
+    - `boardObservation`
+    - `stableCommand`
+    - `livePlatform`
+- the center deployment/software adaptation readiness gate has now been updated to the formal three-node contract:
+  - script:
+    - `scripts/dev/check-field-center-deployment-software-adaptation-readiness.ps1`
+  - topology meaning is now:
+    - `A/B/C activeFieldNodes`
+    - no more `node C reserved-not-blocking`
+  - latest report:
+    - `docs/unified/reports/field-center-deployment-software-adaptation-readiness-latest.json`
+  - latest facts:
+    - `generatedAt = 2026-04-10T12:53:12Z`
+    - `accepted = true`
+    - `currentBoundary = center-deployment-software-adaptation-ready`
+    - `topologyContract = field-a-b-c-online`
+- the RK3568 center operational recovery line is now also green again after a parser hardening fix:
+  - script:
+    - `scripts/dev/check-field-rk3568-center-operational-recovery.ps1`
+  - fix:
+    - runtime snapshot now prefers `field-rk3568-gateway-runtime-latest.json` over stdout-only JSON parsing
+    - this avoids breakage from Paramiko/Cryptography warning text on the Windows control host
+  - latest report:
+    - `docs/unified/reports/field-rk3568-center-operational-recovery-latest.json`
+  - latest facts:
+    - `generatedAt = 2026-04-10T12:54:45Z`
+    - `accepted = true`
+    - `currentBoundary = rk3568-center-operational-recovery-ready`
+- the center-side operator entry has now also been frozen as the formal single-command day-2 entry on `2026-04-10`:
+  - script:
+    - `scripts/dev/check-field-center-rk3568-operator-entry.ps1`
+  - runbook:
+    - `docs/guides/runbooks/single-host-runbook.md`
+  - latest report:
+    - `docs/unified/reports/field-center-rk3568-operator-entry-latest.json`
+  - latest facts:
+    - `generatedAt = 2026-04-10T13:03:45Z`
+    - `accepted = true`
+    - `currentBoundary = field-center-rk3568-operator-entry-ready`
+  - current operational meaning:
+    - one command now summarizes:
+      - center compose acceptance
+      - RK3568 routine guard
+      - RK3568 live closure
+- the first read-only RK3568 edge quality summary scaffold now also exists on `2026-04-10`:
+  - script:
+    - `scripts/dev/check-rk3568-edge-link-quality.ps1`
+  - latest report:
+    - `docs/unified/reports/field-rk3568-edge-link-quality-latest.json`
+  - latest facts:
+    - `generatedAt = 2026-04-10T13:08:08Z`
+    - `accepted = true`
+    - `currentBoundary = rk3568-edge-link-quality-visible`
+    - `overallLevel = critical`
+    - `score = 50`
+    - `nodeA = healthy`
+    - `nodeB = healthy`
+    - `nodeC = healthy`
+  - current interpretation:
+    - this script is intentionally:
+      - read-only
+      - latest-report based
+      - suitable as a future RK3568 local monitor / `OpenClaw` sidecar input
+    - the current `overallLevel = critical` does not mean the formal mainline has reopened
+    - it is currently driven by:
+      - stale source freshness against `lastPublishedAgeSeconds`
+      - `spoolPending = 1`
+      - `lastError = mqtt publish timeout`
+      - cumulative shared-port parser noise exposure
+    - the formal mainline remains green while:
+      - `operator_mainline = healthy`
+      - `network_bootstrap = healthy`
+      - `southbound_serial = healthy`
+      - `rejectedWriteFailures = 0`
+    - operator use should therefore be:
+      - refresh runtime/operator baselines first
+      - then treat the edge-quality summary as a visibility layer, not a phase-gate replacement
+- the first RK3568 local edge-link-monitor sidecar implementation now also exists on `2026-04-10`:
+  - service:
+    - `services/field-link-monitor`
+  - local inputs:
+    - `/var/lib/lsmv2/field-gateway/health/runtime-health.json`
+    - `/var/lib/lsmv2/network-bootstrap/status/runtime-status.json`
+  - local outputs:
+    - `/var/lib/lsmv2/field-link-monitor/status/summary.json`
+    - `http://127.0.0.1:18081/healthz`
+    - `http://127.0.0.1:18081/v1/summary`
+  - deployment assets:
+    - `services/field-link-monitor/deploy/field-link-monitor.service.template`
+    - `services/field-link-monitor/deploy/field-link-monitor.env.rk3568.example`
+    - `services/field-link-monitor/deploy/install-rk3568-field-link-monitor.sh`
+    - `services/field-link-monitor/deploy/check-rk3568-field-link-monitor.sh`
+  - current implementation meaning:
+    - the sidecar is now a board-local read-only observer
+    - it no longer depends on a Windows host to transform the local runtime into a quality summary
+    - it is explicitly suitable as the stable input layer for:
+      - future display surfaces
+      - `OpenClaw`
+      - local RK3568 operations UI
+  - current verification:
+    - `npm run build --workspace @lsmv2/field-link-monitor`
+    - `npm run lint --workspace @lsmv2/field-link-monitor`
+    - local sample-backed HTTP proof returned:
+      - `/healthz`
+      - `/v1/summary`
+      - and summary file output together
+  - frozen boundary:
+    - `accepted = true` means:
+      - the sidecar itself can read local source files and emit summary
+    - it does not replace:
+      - `check-field-center-rk3568-operator-entry.ps1`
+      - `check-rk3568-edge-link-quality.ps1`
+    - instead it becomes the board-local read-only quality layer under those wider operator/report lines
+- the first real RK3568 deployment verification for the local edge-link-monitor sidecar is now also complete on `2026-04-10`:
+  - board:
+    - `192.168.124.179`
+  - service state:
+    - `lsmv2-field-link-monitor.service = active/running`
+    - enabled at boot
+  - live outputs now confirmed on-board:
+    - `/var/lib/lsmv2/field-link-monitor/status/summary.json`
+    - `http://127.0.0.1:18081/healthz`
+    - `http://127.0.0.1:18081/v1/summary`
+  - current live sidecar facts:
+    - `accepted = true`
+    - `currentBoundary = rk3568-edge-link-monitor-ready`
+    - `overallLevel = critical`
+    - `networkMode = disconnected`
+    - `serialOpen = true`
+    - `mqttConnected = true`
+    - `portStatus = online`
+    - `spoolPending = 0`
+    - `rejectedWriteFailures = 0`
+  - current interpretation:
+    - the sidecar deployment itself is now complete and proven on hardware
+    - the current red/critical signal is not a sidecar failure
+    - it correctly exposes the new live field gap:
+      - network bootstrap currently reports `disconnected`
+      - `lastError = STA connection profile missing and STA_SSID/STA_PSK not configured`
+      - publish path still shows retry pressure against:
+        - `connect ENETUNREACH 192.168.124.17:1883`
+    - this means the next blocker has moved to:
+      - restoring RK3568 northbound network reachability / broker path
+    - not:
+      - sidecar implementation
+      - sidecar deployment
+
+## Next Focus
+
+- the current phase boundary is now past center-side closure repair and can move into:
+  - center deployment/operator entry stabilization and reuse
+  - RK3568 service engineering and edge quality monitoring
+  - RK2206 firmware interface and low-power planning
+- next concrete work package should prioritize:
+  - keeping the formal operator entry stable as the default center-side day-2 command
+  - promoting RK3568 link-quality / node-health monitoring from report scaffold into deployed local sidecar consumption without reopening protocol scope
+  - continuing RK2206 firmware planning for low power, extra sensors, and future node expansion
+
+## 2026-04-10 operational-gate refactor update
+
+- scope completed in code:
+  - refactored upper-layer RK3568 center gates to separate:
+    - operational acceptance
+    - strict ACK / strict proof attention
+- scripts changed:
+  - `scripts/dev/check-field-software-read-path-adaptation.ps1`
+  - `scripts/dev/check-field-rk3568-center-live-closure.ps1`
+  - `scripts/dev/check-field-rk3568-center-operational-recovery.ps1`
+  - `scripts/dev/check-field-center-deployment-software-adaptation-readiness.ps1`
+  - `scripts/dev/check-field-center-rk3568-routine-guard.ps1`
+  - `scripts/dev/check-field-center-rk3568-operator-entry.ps1`
+- new gating rule:
+  - keep `field-rk3568-production-uplink-freeze-latest.json` strict and truthful
+  - allow upper routine/operator gates to pass based on:
+    - service active
+    - mqtt connected
+    - serial open
+    - `spoolPending = 0`
+    - `rejectedWriteFailures = 0`
+    - node A/B/C operational state
+    - live API/Web freshness + metrics contract
+  - surface strict proof drift through:
+    - `strictAcceptance`
+    - `strictAttention`
+- static validation:
+  - all 6 changed PowerShell scripts passed syntax creation checks
+- current runtime blocker after code change:
+  - `check-field-software-read-path-adaptation.ps1` refreshed at `2026-04-10T15:28:37Z`
+  - report facts:
+    - `accepted = false`
+    - `failureKeys = nodeBApiPassed,nodeBWebPassed`
+    - `nodeB apiUpdatedAt = 2026-04-10T15:24:17Z`
+    - `nodeB webUpdatedAt = 2026-04-10T15:24:17Z`
+  - subsequent board reachability checks failed:
+    - `192.168.124.179:22` timed out
+    - `ssh linaro@192.168.124.179` timed out
+    - runtime probe saw:
+      - `Socket exception: 远程主机强迫关闭了一个现有的连接。 (10054)`
+- current interpretation:
+  - code-side gate refactor is ready
+  - real verification is blocked by RK3568 being unreachable / unstable, not by the new gate logic
+- next resume order once RK3568 is reachable again:
+  - `check-field-software-read-path-adaptation.ps1`
+  - `check-field-rk3568-center-live-closure.ps1`
+  - `check-field-center-deployment-software-adaptation-readiness.ps1`
+  - `check-field-rk3568-center-operational-recovery.ps1`
+  - `check-field-center-rk3568-routine-guard.ps1`
+  - `check-field-center-rk3568-operator-entry.ps1`
+
+## 2026-04-10 operator-mainline resumed on live board
+
+- board reachability recovered:
+  - `192.168.124.179`
+  - ssh succeeded again
+  - `lsmv2-field-gateway = active`
+- live runtime refresh:
+  - `field-rk3568-gateway-runtime-latest.json`
+  - `generatedAt = 2026-04-10T15:45:28Z`
+  - current runtime facts:
+    - node A = `online`
+    - node B = `online`
+    - node C = `online`
+    - `spoolPending = 0`
+    - `rejectedWriteFailures = 0`
+- read path resumed:
+  - `field-software-read-path-adaptation-latest.json`
+  - `generatedAt = 2026-04-10T15:50:32Z`
+  - `accepted = true`
+  - `currentBoundary = software-read-path-adaptation-ready`
+- one additional code fix was required in:
+  - `scripts/dev/check-field-rk3568-center-live-closure.ps1`
+- reason:
+  - the fallback board-observation path was still binding `derivedBoardStable` to strict `productionUplink.accepted`
+  - this was inconsistent with the new operational-gate contract
+- fix:
+  - fallback stability now depends on current runtime health only:
+    - service active
+    - mqtt connected
+    - serial open
+    - `spoolPending = 0`
+    - `rejectedWriteFailures = 0`
+    - node A/B/C operational
+- after this fix, the chain re-closed:
+  - `field-rk3568-center-live-closure-latest.json`
+    - `generatedAt = 2026-04-10T15:51:34Z`
+    - `accepted = true`
+    - `currentBoundary = rk3568-live-center-closure-ready`
+  - `field-center-deployment-software-adaptation-readiness-latest.json`
+    - `generatedAt = 2026-04-10T15:51:34Z`
+    - `accepted = true`
+    - `currentBoundary = center-deployment-software-adaptation-ready`
+  - `field-rk3568-center-operational-recovery-latest.json`
+    - `generatedAt = 2026-04-10T15:51:34Z`
+    - `accepted = true`
+    - `currentBoundary = rk3568-center-operational-recovery-ready`
+  - `field-center-rk3568-routine-guard-latest.json`
+    - `generatedAt = 2026-04-10T15:51:36Z`
+    - `accepted = true`
+    - `currentBoundary = field-center-rk3568-routine-guard-ready`
+  - `field-center-rk3568-operator-entry-latest.json`
+    - `generatedAt = 2026-04-10T15:51:55Z`
+    - `accepted = true`
+    - `currentBoundary = field-center-rk3568-operator-entry-ready`
+- strict state remains intentionally visible:
+  - `field-rk3568-production-uplink-freeze-latest.json`
+    - `accepted = false`
+    - `currentBoundary = rk3568-production-uplink-freeze-needs-review`
+    - `failureKeys = commandPathObserved`
+  - this no longer blocks operator/routine mainline
+  - it remains a separate southbound strict-proof risk item
+- current working conclusion:
+  - center-side operator mainline is usable again
+  - software adaptation and operational recovery are closed for now
+  - next phase can proceed without waiting for strict ACK proof closure
+
+## 2026-04-10 RK3568 edge-link sidecar live verification closed
+
+- board revalidated:
+  - `192.168.124.179`
+- board-local sidecar check succeeded on live board:
+  - `lsmv2-field-link-monitor.service = active`
+  - `is-enabled = enabled`
+  - `/var/lib/lsmv2/field-link-monitor/status/summary.json` readable
+  - `http://127.0.0.1:18081/v1/summary` readable
+- board-local sidecar live summary at verification time:
+  - `accepted = true`
+  - `currentBoundary = rk3568-edge-link-monitor-ready`
+  - `overallLevel = attention`
+  - `score = 80`
+  - `networkMode = sta_connected`
+  - `serialOpen = true`
+  - `mqttConnected = true`
+  - `portStatus = online`
+  - `spoolPending = 0`
+  - `rejectedWriteFailures = 0`
+  - `rejectedMessages = 411`
+- refreshed Windows-side aggregation now converges with board-local truth:
+  - `docs/unified/reports/field-rk3568-edge-link-quality-latest.json`
+  - `generatedAt = 2026-04-10T15:59:55Z`
+  - `accepted = true`
+  - `currentBoundary = rk3568-edge-link-quality-visible`
+  - `overallLevel = attention`
+  - `score = 80`
+  - `lastPublishedAgeSeconds = 6.165`
+  - `spoolPending = 0`
+  - `rejectedWriteFailures = 0`
+- interpretation frozen for next phase:
+  - RK3568 local `field-link-monitor` is now a valid board-local read-only quality layer
+  - it is suitable as the future input surface for:
+    - local status page
+    - display integration
+    - `OpenClaw` read-only consumption
+  - current `attention` is due to:
+    - cumulative `publishFailures`
+    - `lastError = mqtt publish timeout`
+    - shared-port parser noise
+  - this does not reopen operator mainline
+- next execution priority:
+  - keep operator/routine mainline as day-2 entry path
+  - advance RK3568 center deployment/software adaptation and local status consumption
+  - treat northbound publish timeout hardening and parser-noise治理 as parallel risk streams
+
+## 2026-04-10 Windows-side field-link-monitor entry added
+
+- added:
+  - `scripts/dev/check-rk3568-field-link-monitor.ps1`
+- purpose:
+  - replace ad-hoc SSH snippets with a standard Windows-side RK3568 sidecar runtime check
+- docs entrypoints updated:
+  - `services/field-gateway/deploy/README.md`
+  - `services/field-link-monitor/README.md`
+- live verification completed on:
+  - `192.168.124.179`
+- generated report:
+  - `docs/unified/reports/field-rk3568-field-link-monitor-latest.json`
+  - `generatedAt = 2026-04-10T16:04:03Z`
+  - `accepted = true`
+  - `currentBoundary = rk3568-field-link-monitor-ready`
+- standardized operator checks now cover:
+  - service active
+  - service enabled
+  - summary file accepted
+  - localhost http summary accepted
+  - summary/http aligned
+- latest live signal now exposed more clearly:
+  - `publishFailures = 92`
+  - `rejectedMessages = 446`
+  - `lastError = Unexpected token 'l' ... is not valid JSON`
+- frozen interpretation:
+  - operator mainline remains green
+  - sidecar observability is now standardized
+  - next hardening should jointly treat:
+    - northbound publish stability
+    - shared-port broken JSON / parser noise
+    as one linked quality stream
+
+## 2026-04-10 shared-port parser second narrowing patch verified
+
+- updated:
+  - `services/field-gateway/src/index.ts`
+- patch intent:
+  - assembler no longer depends on newline slicing only
+  - parser recovery now scans every `schema_version` anchor and keeps only candidates that actually `JSON.parse`
+- local verification passed:
+  - `npm run build --workspace @lsmv2/field-gateway`
+  - `npm run lint --workspace @lsmv2/field-gateway`
+- because full Windows -> RK3568 source sync remained flaky over Wi-Fi, field deployment was completed by minimum file sync:
+  - uploaded:
+    - `services/field-gateway/src/index.ts`
+    - `services/field-gateway/dist/index.js`
+  - restarted:
+    - `lsmv2-field-gateway.service`
+- post-restart live board facts:
+  - `ExecMainStartTimestamp = Sat 2026-04-11 00:41:08 CST`
+  - short-window runtime reached:
+    - `schemaRejected = 2`
+    - `rejectedMessages = 2`
+    - `publishFailures = 0`
+    - `node A/B/C = online`
+- formal soak re-verified after patch:
+  - `docs/unified/reports/field-rk3568-center-soak-latest.json`
+  - `generatedAt = 2026-04-10T16:46:16Z`
+  - `accepted = true`
+  - `currentBoundary = rk3568-center-soak-ready`
+  - `acceptedRounds = 2/2`
+  - `cleanWindowRounds = 2`
+  - `maxBoardObservationSchemaRejectedDelta = 0`
+  - `allAcked = true`
+  - `allMetricsContractStable = true`
+- current interpretation:
+  - shared-port noise is no longer a mainline blocker
+  - remaining parser corruption is now a low-volume tail risk
+  - next phase can move to software consumption / local status consumption while keeping this as a bounded hardening stream
+
+## 2026-04-11 software-side RK3568 status proposal drafted
+
+- current software-side real insertion points were re-checked:
+  - backend:
+    - `services/api/src/routes/system.ts`
+  - web ops page:
+    - `apps/web/app/ops/system-monitor/page.tsx`
+  - current desk compatibility layer:
+    - `apps/desk/src/api/httpMappers.ts`
+- current conclusion:
+  - `apps/web /ops/system-monitor` is the real near-term software consumption surface
+  - `apps/desk` still carries a historical fake mapping from health summary into `cpuPercent / memPercent / diskPercent`
+  - the correct next step is not to reopen resource semantics
+  - the correct next step is to extend the existing health-summary line with a read-only RK3568 edge block
+- the new OpenSpec change is now drafted:
+  - `openspec/changes/add-rk3568-edge-status-to-system-monitor/`
+  - includes:
+    - `proposal.md`
+    - `tasks.md`
+    - `design.md`
+    - `specs/system-monitoring-api/spec.md`
+    - `specs/ops-system-monitoring/spec.md`
+- frozen proposal boundary:
+  - extend `/api/v1/system/status` with optional read-only `fieldEdge`
+  - keep top-level center summary unchanged
+  - render RK3568 edge summary on `/ops/system-monitor`
+  - forbid live SSH / serial / board probing in API request handling
+  - consume only stable latest evidence artifacts such as:
+    - `field-rk3568-field-link-monitor-latest.json`
+    - `field-rk3568-gateway-runtime-latest.json`
+    - `field-rk3568-center-soak-latest.json`
+- current implementation state:
+  - specification is drafted
+  - implementation intentionally has not started yet because this crosses into feature/capability extension under the repo OpenSpec rules
+- tooling note:
+  - `openspec` CLI is not installed on the current Windows host
+  - formal `openspec validate ... --strict` still needs either tool availability or later CI-side validation
+- next concrete step after approval:
+  - add a thin artifact reader under `services/api`
+  - extend `/api/v1/system/status`
+  - update `apps/web/app/ops/system-monitor/page.tsx`
+
+## 2026-04-11 software-side RK3568 status read path implemented
+
+- implemented backend read-only aggregation in:
+  - `services/api/src/routes/system.ts`
+- implemented web consumption in:
+  - `apps/web/lib/api/dashboard.ts`
+  - `apps/web/app/ops/system-monitor/page.tsx`
+- implemented contract/doc sync in:
+  - `docs/integrations/api/07-system.md`
+  - `openspec/changes/add-rk3568-edge-status-to-system-monitor/tasks.md`
+- current runtime contract:
+  - `/api/v1/system/status` now keeps the old center-side health summary
+  - and adds read-only `fieldEdge`
+  - `fieldEdge` reads only local latest evidence artifacts:
+    - `field-rk3568-field-link-monitor-latest.json`
+    - `field-rk3568-gateway-runtime-latest.json`
+    - `field-rk3568-center-soak-latest.json`
+  - no SSH / serial / board probing occurs in the API request path
+- current web behavior:
+  - `/ops/system-monitor` now shows:
+    - RK3568 availability / stale state
+    - edge runtime summary
+    - node A/B/C runtime status
+    - soak acceptance summary
+  - and keeps the original center-side summary on the same page
+- verification completed:
+  - `npm run build --workspace @lsmv2/api-service`
+  - `npx eslint services/api/src/routes/system.ts --max-warnings=0`
+  - `npx eslint apps/web/app/ops/system-monitor/page.tsx apps/web/lib/api/dashboard.ts --max-warnings=0`
+  - `npm run build --workspace apps/web`
+- build-environment fix completed during verification:
+  - root `node_modules/next` was an empty broken directory
+  - `npm install --workspace apps/web` restored the package
+  - after that, the web production build succeeded again
+- remaining note:
+  - `apps/web` production build still emits many pre-existing warnings in unrelated legacy pages
+  - but this RK3568 status read-path change is now build-valid and not blocked by those warnings
+
+## 2026-04-11 desk-win real delivery surface re-anchored
+
+- user corrected the actual software delivery surface:
+  - not:
+    - `apps/web` as the primary acceptance target
+  - but:
+    - `apps/desk`
+    - `apps/desk-win`
+    - `artifacts/desk-win`
+- current desk packaging closure is now re-proved on the real delivery line:
+  - rebuilt:
+    - `apps/desk`
+  - republished:
+    - `artifacts/desk-win/win-x64`
+  - latest package verify:
+    - `docs/unified/reports/desk-win-package-verify-latest.json`
+    - `aliveAfterLaunch = true`
+    - `readyAfterLaunch = true`
+  - new delivery bundle:
+    - `artifacts/desk-win/delivery/desk-win-delivery-20260411-180430`
+  - promoted fixed latest output:
+    - `artifacts/desk-win/latest`
+    - `artifacts/desk-win/latest.zip`
+  - latest promoted package verify:
+    - `docs/unified/reports/desk-win-latest-package-verify-latest.json`
+    - `aliveAfterLaunch = true`
+    - `readyAfterLaunch = true`
+- the first `latest` verify false-negative was not a package defect:
+  - root cause:
+    - an installed tray instance was already running at:
+      - `C:\Users\Administrator\AppData\Local\Programs\山体滑坡监测桌面端\LandslideDesk.Win.exe`
+    - single-instance mutex caused the promoted `latest/package` verify to exit early
+  - after stopping the installed instance:
+    - promoted latest verify passed
+- frozen execution rule for subsequent UI acceptance:
+  - desk / desktop acceptance must now be judged primarily against:
+    - `artifacts/desk-win/win-x64`
+    - `artifacts/desk-win/latest`
+  - not against `apps/web` unless the task explicitly targets the web line
+
+## 2026-04-11 desk fake resource mapping removed
+
+- implemented desk-side semantic cleanup in:
+  - `apps/desk/src/api/client.ts`
+  - `apps/desk/src/api/httpMappers.ts`
+  - `apps/desk/src/views/SystemPage.tsx`
+- current change boundary:
+  - keep the same Desk route and page
+  - keep the same top-row three-card layout rhythm
+  - remove the fake `cpuPercent / memPercent / diskPercent` mapping from `/system/status`
+  - replace it with real service-health cards for:
+    - PostgreSQL
+    - ClickHouse
+    - Kafka
+- current verification:
+  - `npm run build --workspace apps/desk` passed
+- current lint note:
+  - targeted eslint against the three touched Desk files still reports many pre-existing rule violations already present in those files
+  - this cleanup was validated by successful TypeScript + Vite production build rather than by a clean file-level lint baseline
+
+## 2026-04-11 RK3568 shared-port observation tightened
+
+- fresh live observation now proves the current blocker is structural, not cosmetic:
+  - `docs/unified/reports/field-rk3568-gateway-observation-latest.json`
+    - `passed = false`
+    - within a 60s window:
+      - `nodeA: degraded -> offline`
+      - `nodeB: degraded -> offline`
+      - `nodeC: online/degraded and then online`
+      - `schemaRejected += 4`
+      - `rejectedMessages += 4`
+- fresh strict freeze has now also been refreshed:
+  - `docs/unified/reports/field-rk3568-production-uplink-freeze-latest.json`
+    - `generatedAt = 2026-04-11T11:17:32Z`
+    - `accepted = false`
+    - `currentBoundary = rk3568-production-uplink-freeze-needs-review`
+    - `failureKeys = runtimeNodeAExpectedState,runtimeNodeBExpectedState`
+- direct rejected evidence from RK3568 spool now shows byte-level interleaving between node A and node B payloads on the same `/dev/ttyS3` stream:
+  - not only:
+    - multiple JSON objects back-to-back
+  - but:
+    - one payload mid-field contains another payload's `{"schema_version":1,...}` start marker
+    - later bytes from both payloads continue to alternate inside the same broken record
+- practical meaning:
+  - this is not a receiver-only parser cleanup problem anymore
+  - the current receive-side runtime can keep:
+    - service active
+    - mqtt connected
+    - serial open
+    - `spoolPending = 0`
+    - `rejectedWriteFailures = 0`
+    - command forward / ack path alive
+  - but it cannot deterministically reconstruct all multi-node telemetry if the upstream center XL01 serial stream interleaves bytes from A/B frames
+- frozen engineering interpretation for next phase:
+  - do not spend the next cycle on more ad hoc JSON recovery heuristics in `services/field-gateway/src/index.ts`
+  - instead treat the next hard blocker as:
+    - source-side serial serialization
+    - report cadence staggering between nodes
+    - or explicit framing/queue guarantees at the center-node forward path
+
+## Immediate Resume Order
+
+- keep center/operator mainline and Desk delivery line as already-usable
+- keep RK3568 command path as operationally green
+- shift the next hardening package to shared-port source-stream control:
+  - verify whether center XL01 is forwarding multiple node packets into one UART write window
+  - verify whether node A/B report cadence should be offset instead of synchronized
+  - decide whether the southbound contract now requires explicit message framing beyond bare JSON
+
+## 2026-04-11 shared-port interleaving telemetry added
+
+- local code hardening for the next phase now exists without reopening parser heuristics:
+  - `services/field-gateway/src/index.ts`
+  - `services/field-link-monitor/src/index.ts`
+- current runtime-health additions:
+  - `interleavingSuspected`
+  - `interleavingWithMultipleSchemas`
+  - `interleavingWithMultipleDeviceIds`
+  - `lastInterleavingTs`
+  - `lastInterleavingSummary`
+- current classification rule:
+  - when rejected raw payload contains:
+    - more than one `"schema_version"`
+    - or more than one distinct `"device_id"`
+  - treat it as a source-side interleaving signature
+- current sidecar summary additions:
+  - `summary.interleavingSuspected`
+  - `dimensions.source_interleaving`
+- current Windows-side quality summary additions:
+  - `scripts/dev/check-rk3568-edge-link-quality.ps1`
+  - now also emits:
+    - `summary.interleavingSuspected`
+    - `dimensions.source_interleaving`
+- practical meaning:
+  - future source-side fixes can now be judged by:
+    - whether interleaving counters stop increasing
+    - not only by human inspection of rejected payload snippets
+- local verification completed:
+  - `npm run build --workspace @lsmv2/field-gateway`
+  - `npm run lint --workspace @lsmv2/field-gateway`
+  - `npm run build --workspace @lsmv2/field-link-monitor`
+  - `npm run lint --workspace @lsmv2/field-link-monitor`
+- frozen next step:
+  - deploy this instrumentation onto RK3568 so runtime health begins producing the new counters live
+  - then continue source-stream control on the center XL01 / node cadence side
+- RK3568 local quality sidecar deployment is now operationally closed:
+  - Windows deployment entry now exists:
+    - `scripts/dev/install-rk3568-field-link-monitor.ps1`
+  - board service now runs as:
+    - `lsmv2-field-link-monitor.service`
+    - `active`
+    - `enabled`
+  - board-local summary and localhost HTTP are now aligned:
+    - `docs/unified/reports/field-rk3568-field-link-monitor-latest.json`
+    - `http://127.0.0.1:18081/v1/summary`
+- RK3568 latest refresh chain is now also tightened:
+  - `scripts/dev/check-rk3568-field-gateway-runtime.ps1`
+  - now writes by default to:
+    - `docs/unified/reports/field-rk3568-gateway-runtime-latest.json`
+  - which means:
+    - `runtime -> edge-link-quality` can be refreshed without manual ad hoc output routing
+- current live board status after sidecar deployment:
+  - `node A/B/C = online`
+  - `docs/unified/reports/field-rk3568-edge-link-quality-latest.json`
+    - `overallLevel = attention`
+    - `score = 70`
+    - `source_interleaving = attention`
+    - `interleavingSuspected = 18`
+- frozen interpretation stays unchanged:
+  - the main blocker is still shared-port source-stream control on `/dev/ttyS3`
+  - not:
+    - sidecar visibility
+    - parser recovery heuristics
+    - board deployment mechanics
+- next concrete execution package:
+  - inspect center XL01 forward/write-window behavior
+  - define node A/B/C cadence staggering and ACK-after quiet window policy
+  - rerun long-window observation and judge by:
+    - `interleavingSuspected`
+    - `interleavingWithMultipleSchemas`
+    - `interleavingWithMultipleDeviceIds`
+
+## 2026-04-11 shared-port stagger experiment closed
+
+- `scripts/dev/run-rk3568-shared-port-stagger-experiment.ps1` is now locally stable:
+  - report-construction failure fixed by converting summaries/report blocks to `PSCustomObject`
+  - list fields now use `ToArray()` before JSON serialization
+  - fast experiment knobs added:
+    - `-NodeCommandWaitSeconds`
+    - `-NodeCommandPollSeconds`
+- latest stagger evidence is now fixed at:
+  - `docs/unified/reports/field-rk3568-shared-port-stagger-experiment-latest.json`
+  - `conclusion = stagger-profile-did-not-stabilize-shared-port`
+  - `passed = false`
+- measured result for `5/7/11` with a 30s observation window:
+  - `schemaRejected += 5`
+  - `rejectedMessages += 5`
+  - `interleavingSuspected += 4`
+  - `nodeA = degraded`
+  - `nodeB = degraded`
+  - `nodeC = online`
+- frozen interpretation:
+  - cadence staggering alone is not an acceptable closure path for the shared `/dev/ttyS3` stream
+  - keep command proof as supporting evidence only:
+    - commands still forward to serial
+    - ACK evidence remains unreliable because ACK payloads themselves are being polluted by the shared stream
+- next mainline move should be source-side control, not more interval-only experiments:
+  - center XL01 / RK3568 southbound serialization
+  - ACK-after quiet window
+  - explicit southbound framing / queue discipline
+
+## 2026-04-11 source-stream-control spec proposal opened
+
+- a new OpenSpec change now freezes the next hardening package:
+  - `openspec/changes/add-shared-port-source-stream-control/`
+- current proposal boundary:
+  - shared southbound single-writer serialization
+  - command ACK quiet window
+  - cadence staggering as secondary mitigation only
+  - shared-port readiness judged by interleaving counters plus node status
+- current delta spec:
+  - `openspec/changes/add-shared-port-source-stream-control/specs/field-edge-stream-control/spec.md`
+- important operating rule for the next session:
+  - do not jump straight into implementation before this change is reviewed as the authority baseline
+- frozen next move after approval:
+  - update authority docs/runbooks to align with `field-edge-stream-control`
+  - then implement source-side control proof or control point changes at the center XL01 / RK3568 boundary
+
+## 2026-04-12 authority docs aligned to source-stream-control baseline
+
+- authority-side follow-up is now complete for the new change:
+  - `docs/unified/reports/field-rk3568-shared-port-interleaving-diagnosis-2026-04.md`
+  - `docs/guides/testing/field-host-path-troubleshooting.md`
+  - `openspec/changes/add-shared-port-source-stream-control/tasks.md`
+- frozen authority updates:
+  - diagnosis doc now explicitly points to `add-shared-port-source-stream-control`
+  - source-side baseline now states:
+    - single-writer serialization
+    - command ACK quiet window
+    - cadence staggering is secondary only
+  - the minimum future closure evidence is now explicitly recorded in the diagnosis doc
+  - host-path troubleshooting now explicitly says this class of failure is not Docker/WSL host-path and not parser-first
+- current task status inside the change:
+  - section `1. Specification` completed
+  - section `2. Documentation and Authority` completed
+- next practical implementation entry:
+  - move into `3. Implementation`
+  - start by defining the concrete control point for serialization / quiet-window ownership between center XL01 and RK3568
+
+## 2026-04-12 first-cut control contract fixed
+
+- the first concrete implementation-ready contract now exists at:
+  - `docs/unified/reports/field-rk3568-source-stream-control-first-cut-2026-04.md`
+- the OpenSpec design now also carries the same first-version control decisions:
+  - `openspec/changes/add-shared-port-source-stream-control/design.md`
+- frozen first-version implementation facts:
+  - ownership:
+    - center XL01 is the primary source-side control point
+    - RK3568 remains observation / proof / uplink adapter
+  - queue policy:
+    - per-node `normal telemetry latest-value slot = 1`
+    - global `command lane = 1`
+    - global `ack/result lane = 1`
+  - traffic policy:
+    - `command` and `ack_or_result` must not be dropped by normal telemetry
+    - `normal_telemetry` may use latest-value-wins overwrite per node
+  - quiet-window baseline:
+    - applies to `manual_collect` and `set_config`
+    - ordinary telemetry is held during the quiet window
+    - first-cut hard timeout is `10s`
+- important closure:
+  - this line no longer depends on “XL01 stores everything”
+  - XL01 is now explicitly defined as a small arbitration layer, not a long-term storage layer
+- next move:
+  - choose the actual implementation artifact for the center XL01 side
+  - encode the single-writer scheduler and quiet-window state machine there
+- the implementation-boundary reality check is now also written down:
+  - `docs/unified/reports/field-shared-port-source-control-implementation-boundary-2026-04.md`
+- newly frozen implementation facts:
+  - no separate center-XL01 dedicated firmware tree was found in the current repo-visible code
+  - the only confirmed programmable artifacts on this line remain:
+    - `F:\2\openharmony\txsmartropenharmony\vendor\isoftstone\rk2206\samples\xl01_landslide_monitor_v1.0`
+    - `services/field-gateway`
+  - `XL01` itself must not be treated as a storage layer
+  - first-version queueing must live in a programmable controller adjacent to the center XL01 path
+  - if the live center path is only a bare transparent XL01 module, then the closure path is not “improve RK3568 parser more”
+  - instead the closure path becomes:
+    - add a programmable center controller
+    - or switch to multiple independent southbound ports
+- practical data-loss policy is now explicitly frozen:
+  - `command` and `ack_or_result` are not allowed to be displaced by normal telemetry
+  - `normal_telemetry` may use per-node latest-value overwrite under congestion
+
+## 2026-04-12 mistaken RK3568 direct-southbound pivot withdrawn
+
+- the earlier same-day attempt to treat `RK3568` direct multi-port ownership as the current mainline was corrected and withdrawn
+- the corrected real hardware topology remains:
+  - `field nodes RK2206`
+  - `-> center node`
+  - `-> RK3568 /dev/ttyS3`
+  - `-> platform`
+- current engineering meaning:
+  - `RK3568` is not the direct southbound controller for three independent field-node serial links in the present hardware setup
+  - `RK3568` remains the downstream gateway, uploader, observer, and proof point for the center-node aggregated stream
+- the real current blocker is unchanged:
+  - shared-port interleaving and command/ack closure quality on the center-node aggregated `/dev/ttyS3` stream
+- the next active execution line must therefore stay on the real topology:
+  - verify `device_id` separation for `node A / B / C`
+  - verify command/ack behavior through the center-node path
+  - continue source-side control work at the center-node boundary rather than pretending the board is already wired as direct multi-port southbound
+## 2026-04-12 shared_port_scheduler experiment is now explicitly deprecated
+
+- the external RK2206 firmware line `app/shared_port_scheduler.c/.h` is now explicitly marked as a deprecated experiment
+- reason:
+  - current hardware mainline is still:
+    - `field nodes RK2206 -> center node -> RK3568 /dev/ttyS3 -> platform`
+  - continuing to invest in that center-side scheduler prototype has low current feasibility compared with RK3568-side closure and evidence work
+- important scope boundary:
+  - this deprecates only the scheduler experiment line
+  - it does not deprecate the active RK2206 baseline features already used by the project:
+    - `device_id`
+    - telemetry envelope
+    - command parsing
+    - ack generation
+- a new current-task authority note now exists for the real RK3568 line:
+  - `docs/unified/reports/field-rk3568-current-mainline-tasklist-2026-04.md`
+- the next active execution line is therefore:
+  - keep shared-port scheduler disabled
+  - keep current field topology as the truth
+  - continue RK3568-side runtime, evidence, `device_id`, and command-closure collection
+
+## 2026-04-12 node C active topology correction applied
+
+- this note supersedes the earlier same-day wording that still described `node C` as reserved / not-blocking
+- later journal and report evidence is now the authority baseline for the current field topology:
+  - `docs/unified/reports/field-rk3568-production-uplink-freeze-latest.json`
+    - `accepted = true`
+    - southbound nodes `A/B/C` all `enabled = true`
+    - all mapped to shared `/dev/ttyS3`
+    - runtime status shows `nodeA = online`, `nodeB = online`, `nodeC = online`
+  - `docs/unified/reports/field-rk3568-center-live-closure-latest.json`
+    - `nodeCApiDirectVisible = true`
+    - `nodeCWebProxyVisible = true`
+    - node `C` metrics contract remains visible through API/Web
+  - `docs/unified/reports/field-rk3568-gateway-observation-latest.json`
+    - `nodeCStatus = online`
+- current real mainline must therefore be read as:
+  - `field nodes RK2206 -> center node -> RK3568 /dev/ttyS3 -> platform`
+  - active three-node topology, not `A/B live + node C reserved`
+- current blocker is correspondingly narrowed to:
+  - shared `/dev/ttyS3` byte-level interleaving / parser noise
+  - command / ack closure quality on the shared aggregated stream
+- current execution rule:
+  - do not reopen `node C` onboarding as a blocker
+  - do not reopen `RK3568 direct multi-port southbound` as the present topology
+  - continue only along three-node evidence, `device_id`, and shared-stream quality closure
+
+## 2026-04-12 current phase and next-stage package frozen
+
+- a new authority summary now freezes the current phase gate and the next-stage execution line:
+  - `docs/unified/reports/field-program-status-and-next-stage-2026-04.md`
+- frozen phase reading:
+  - three-node onboarding is complete
+  - `device_id` separation is complete
+  - API / Web visibility is complete
+  - RK3568 evidence chain is complete
+  - the only remaining primary blocker is shared `/dev/ttyS3` industrial-grade closure
+- the next-stage execution line is now explicitly split into three packages:
+  - report refresh package
+  - source-stream control landing package
+  - closure acceptance package
+- execution rule:
+  - do not reopen already-closed visibility / onboarding questions as the main workstream
+  - use the new phase summary as the compact authority entry before starting the next implementation slice
+
+## 2026-04-12 refresh package completed and node C ack closure isolated
+
+- the first next-stage package has now been executed and frozen into:
+  - `docs/unified/reports/field-shared-port-refresh-package-2026-04.md`
+- refreshed live evidence now confirms a split reality:
+  - global chain is healthy enough to keep:
+    - `field-rk3568-production-uplink-freeze-latest.json = accepted true`
+    - `field-rk3568-center-live-closure-latest.json = accepted true`
+    - `strictAcceptance.accepted = true`
+  - but direct `node C` strict proofs still fail for both:
+    - `manual_collect`
+    - `set_config`
+- refreshed weak-point reading:
+  - `node C` remains online and telemetry continues
+  - commands for `node C` are still forwarded to `/dev/ttyS3`
+  - `node C ackPublishes` remains `0`
+  - `ackEvidence = null` remains the active failure shape on direct proof
+- this means the second package should now narrow further from generic shared-port quality work to:
+  - `node C southbound ack closure hardening`
+- important execution rule from this point:
+  - do not let global green aggregation hide the still-open `node C` command/ack weakness
+
+## 2026-04-12 node C ack diagnosis refined and proof misclassification removed
+
+- a new authority note now freezes the current narrow diagnosis:
+  - `docs/unified/reports/field-node-c-ack-hardening-diagnosis-2026-04.md`
+- `scripts/dev/run-rk3568-field-gateway-node-command-proof.ps1` no longer classifies failure using cumulative `ackMessagesPublished`
+- current proof output now records per-window facts:
+  - `commandsForwardedDelta`
+  - `ackMessagesPublishedDelta`
+  - `nodeAckPublishesDelta`
+  - `nodeTelemetryDelta`
+  - `nodeStatusBefore`
+  - `nodeStatusAfter`
+- refreshed sequential `node C` proofs now show:
+  - `manual_collect`
+    - `commandId = e1364e60-dc4e-40a1-b3b9-8c2a2e34686f`
+    - `commandsForwardedDelta = 1`
+    - `ackMessagesPublishedDelta = 0`
+    - `nodeAckPublishesDelta = 0`
+    - `nodeTelemetryDelta = 3`
+    - `ackEvidence = null`
+    - `diagnosis.summary = ack-blocked-by-southbound-json-fragmentation`
+  - `set_config`
+    - `commandId = d95223cd-a1db-4504-8114-1006d32a7f0b`
+    - `commandsForwardedDelta = 1`
+    - `ackMessagesPublishedDelta = 0`
+    - `nodeAckPublishesDelta = 0`
+    - `nodeTelemetryDelta = 0`
+    - `ackEvidence = null`
+    - `diagnosis.summary = command-forwarded-while-node-offline`
+- engineering reading is now narrower and more reliable:
+  - `node C` command ingress still works
+  - `node C` direct ack return path is still unstable
+  - the remaining weak point is no longer hidden by proof-script false positives
+
+## 2026-04-12 raw serial split proves node C ACK is absent before field-gateway publish
+
+- `scripts/dev/run-rk3568-raw-serial-command-capture.ps1` 已修正并可作为当前切分入口：
+  - 远端脚本统一 `LF`
+  - `paramiko` 噪声被静默
+  - 可以通过 `sudo systemctl stop/start lsmv2-field-gateway.service` 暂时释放 `/dev/ttyS3`
+- 新增 raw-capture 事实：
+  - `manual_collect`
+    - `commandId = a9edafd7-6895-479a-a36b-ed2a33fed4eb`
+    - `ackLikeLineCount = 0`
+  - `set-report-5`
+    - `commandId = 55438c43-acb1-4057-8c6f-b55303e942b2`
+    - `ackLikeLineCount = 0`
+- 两次在停掉 `field-gateway` 后直接抓 `/dev/ttyS3` 的结果都只看到：
+  - `node A / B / C` 周期 telemetry
+  - 没有任何 `node C` ACK / result JSON
+  - `node C` telemetry 里的：
+    - `last_command_type = ""`
+    - `last_command_id = ""`
+    - `last_command_uptime_s = 0`
+- 工程结论进一步收窄：
+  - 当前不是 RK3568 侧单纯“漏发布 ACK”
+  - 当前更像是中心节点共享流以上游没有形成可见 `node C` ACK 回流
+- 当前第二包继续保持为：
+  - `node C southbound ack closure hardening`
+  - 但控制点判断应更偏向中心节点共享流路径，而不是继续扩写 `field-gateway` ACK 解析
+
+## 2026-04-12 center-node command return gap is now frozen as the next real control point
+
+- 一键 raw-boundary 入口现已存在：
+  - `scripts/dev/run-rk3568-node-command-upstream-boundary-proof.ps1`
+- 最新 latest report：
+  - `docs/unified/reports/field-rk3568-node-c-raw-serial-split-latest.json`
+  - `generatedAt = 2026-04-12T09:40:57Z`
+  - `conclusion = node-command-not-observed-at-target-before-rk3568-publish`
+- 最新 summary 事实：
+  - `manualCollectAckForCommandCount = 0`
+  - `manualCollectTelemetryAdvancedToCommand = false`
+  - `setReport5AckForCommandCount = 0`
+  - `setReport5TelemetryAdvancedToCommand = false`
+  - `targetLastCommandTypesRemainEmpty = true`
+  - `targetUploadTriggersAllPeriodic = true`
+- 当前新的 authority note：
+  - `docs/unified/reports/field-center-node-command-return-gap-2026-04.md`
+- frozen engineering reading:
+  - `node C` 在目标侧没有表现出已消费命令
+  - 主缺口现在应表述为：
+    - `center node command/result return capability gap`
+  - 而不是：
+    - `RK3568 field-gateway publish gap`
+
+## 2026-04-12 center-node artifact inventory completed
+
+- 这轮又对当前现场的中心节点相关工件做了定向盘点
+- 已确认可见的命令消费 / ACK 生成代码仍只落在外部 RK2206 固件树：
+  - `E:\学校\02 项目\99 山体滑坡优化完善\硬件稳定版\xl01_landslide_monitor_v1.0\app\device_command_parser.c`
+  - `E:\学校\02 项目\99 山体滑坡优化完善\硬件稳定版\xl01_landslide_monitor_v1.0\app\command_ack_builder.c`
+- 旧 README 引用过的中心节点工件：
+  - `E:\中心节点_ACK回复示例.py`
+  - `E:\ACK机制说明.md`
+  当前现场未找到实体文件
+- current frozen reading:
+- 节点侧 ACK 能力不是主缺口
+- 中心节点 command/result 回流工件当前不在 repo-visible 治理内
+- 下一步不该继续扩大 RK3568 parser 补丁面
+- 而应优先：
+  - 找回旧中心节点工件
+  - 或补中心节点最小可控程序
+- 标准复跑入口保持为：
+  - `scripts/dev/run-rk3568-node-command-upstream-boundary-proof.ps1`
+
+## 2026-04-12 source-controller candidate found in current RK2206 worktree
+
+- 这轮继续核查后，又找到一层比“工件缺失”更准确的事实：
+  - 当前 `F:` 外部 RK2206 固件树本身已经带有角色切换入口：
+    - `FIELD_NODE_ROLE_EDGE`
+    - `FIELD_NODE_ROLE_SOURCE_CONTROLLER`
+  - 位于：
+    - `config/app_config.h`
+- 当切到 `FIELD_NODE_ROLE_SOURCE_CONTROLLER` 时，会启用：
+  - `ENABLE_SHARED_PORT_SOURCE_CONTROL = 1`
+  - `app/shared_port_scheduler.c/.h`
+  - `SharedPortWriterTask`
+  - `command lane`
+  - `ack/result lane`
+  - per-node `normal telemetry latest-value slot`
+  - `10s` quiet window
+- 同时，RK3568 现场当前再次确认：
+  - only:
+    - `lsmv2-field-gateway.service`
+    - `lsmv2-field-link-monitor.service`
+    - `lsmv2-rk3568-network-bootstrap.service`
+  - no extra center-control process found on board
+- current frozen reading is now narrower:
+  - 不是完全没有中心侧候选实现
+  - 而是当前项目已有一版中心源侧控制器候选实现
+  - 只是它还停留在外部 RK2206 工作树里，且默认角色仍是 `EDGE`
+- immediate next move should therefore be:
+  - first verify whether the physical center node is this reflashable RK2206 control board
+  - if yes, reuse the existing role-switch firmware line before inventing a new center program
+
+## 2026-04-22 external RK2206 firmware stabilization line is now frozen again
+
+- the active external firmware tree for the current board work is:
+  - `F:\2\openharmony\txsmartropenharmony\vendor\isoftstone\rk2206\samples\xl01_landslide_monitor_v1.0`
+- the current board identity was revalidated from the latest serial logs in Beijing time:
+  - local board:
+    - `device_id=00000000-0000-0000-0000-000000000002`
+  - `poll_latest_telemetry` for `...0002` is applied
+  - `...0001` and `...0003` commands are ignored as mismatch traffic
+- the earlier runtime crash line was real and is now hotfixed in source:
+  - observed failure:
+    - `ProcessTask stack overflow`
+    - `UartRxTask` exception
+    - heap corruption signatures after stack smash
+  - current mitigation landed in:
+    - `main/landslide_main.c`
+    - `drivers/xl01/xl01_driver.c`
+  - concrete fixes now in tree:
+    - raised worker stack sizes for upload/process/shared-port tasks
+    - moved platform command staging buffer off `ProcessTask` stack into:
+      - `g_process_command_json`
+    - moved decoded field-link RX message buffer off the UART hot path stack into:
+      - `g_field_link_rx_message`
+- sparse-telemetry visibility is also better than before:
+  - `PrintSparseMetricsDiagnostic()` now emits readiness and valid-flag facts when:
+    - `TELEMETRY_ENVELOPE_ERR_EMPTY_METRICS`
+  - this preserves the distinction between:
+    - transport healthy but no valid metrics
+    - transport/path broken
+- the current board-side telemetry proof is now materially broader than the old April-06 baseline:
+  - `SHT30` is working
+  - `MPU6050` is working
+  - `GPS` is now also working on the same active image
+  - latest user-provided serial evidence includes:
+    - `2026-04-22 00:08:10` `poll_latest_telemetry` applied for `...0002`
+    - `2026-04-22 00:08:14` telemetry send succeeded with:
+      - `Temp:26.4C`
+      - `Humi:58.6%`
+      - `Tilt:-0.20/49.46`
+      - `GPS:(22.681765,110.195442)`
+- the engineering reading is therefore narrower and more defensible now:
+  - current board-side uplink and command-triggered telemetry path is healthy enough for bring-up
+  - current remaining work is no longer:
+    - whether SHT30 / MPU6050 / GPS can produce valid data on the current board
+    - whether `poll_latest_telemetry` can trigger a valid send on the current board
+  - the remaining work is now mainly:
+    - protocol-truthfulness cleanup
+    - command mailbox robustness
+    - stale GPS invalidation
+    - later build-chain-backed revalidation
+- the current rollback baseline is now frozen inside the mainline repo:
+  - zip:
+    - `backups/openharmony-snapshots/xl01_landslide_monitor_v1.0-20260422-001339.zip`
+  - status snapshot:
+    - `backups/openharmony-snapshots/xl01_landslide_monitor_v1.0-20260422-001339.status.txt`
+  - sha file:
+    - `backups/openharmony-snapshots/xl01_landslide_monitor_v1.0-20260422-001339.sha256.txt`
+  - `SHA256 = 8AB23907D30C8C18AB2FD0FBA1EF2F5D9DCAF9E9BEADC2D0F7B18F82C36EE2BD`
+- current frozen next-step reading:
+  - preserve this image as the rollback line
+  - if protocol cleanup resumes, start from truthful ACK semantics and command buffering
+  - do not reopen “is the current board basically alive” unless fresh serial evidence contradicts this 2026-04-22 proof set
+
+## 2026-04-22 external RK2206 protocol cleanup second-pass audit is now narrowed
+
+- this round continued static review and patching directly inside:
+  - `F:\2\openharmony\txsmartropenharmony\vendor\isoftstone\rk2206\samples\xl01_landslide_monitor_v1.0`
+- newly landed source fixes now include:
+  - `main/landslide_main.c`
+    - `DataProcessTask` now drains all queued platform commands every loop instead of only one command when fresh RX bytes were seen
+  - `drivers/sensors/gps_driver.c`
+    - GPS stale-fix timeout now converts milliseconds through `LOS_MS2Tick(...)`
+    - GPS FIFO debug interval no longer assumes a hard-coded tick rate
+  - `drivers/xl01/xl01_driver.c`
+    - platform-command prefilter now also requires `issued_ts`
+    - ACK send path now holds a short local flush delay after UART write success
+  - `app/device_command_parser.c`
+    - parser now rejects command envelopes missing `issued_ts`
+- current engineering reading after this second pass:
+  - the earlier queue-consumer bug is no longer present
+  - the earlier GPS stale-timeout unit bug is no longer present
+  - the external firmware command parser is now closer to mainline `device-command.v1`
+- current remaining static risks are narrower:
+  - queue-full / invalid-json / command-assembly-overflow cases in `xl01_driver.c` still drop at ingress without a `failed` ACK
+  - `restart_device` and `set_sampling_interval` still remain as compatibility commands outside the narrower public command catalog
+  - the dormant `FIELD_NODE_ROLE_SOURCE_CONTROLLER` path still has staged-lane initialization risk if that role is re-enabled later
+  - reboot/restart ACK delivery is safer than before but still not proven on hardware in this session
+- current next-step reading after this second pass:
+  - do not reopen sensor bring-up
+  - the next real checkpoint is a rebuild/reflash plus serial proof on board `...0002`
+  - runtime verification should focus on:
+    - back-to-back command dequeue
+    - GPS stale invalidation after link loss
+    - reboot/restart ACK-before-reset behavior
+    - whether ingress overload still causes silent command drops
+
+## 2026-05-08 RK2206 v1.1 post-burn timesync closure passed for node A
+
+- User burned the RK2206 v1.1 image with RK3568 gateway time-sync parsing.
+- Node A / `00000000-0000-0000-0000-000000000001` is confirmed online after burn.
+- Evidence:
+  - pre-burn telemetry had `seq=667..670` and `event_ts=NULL`
+  - post-burn telemetry restarted at `seq=1..`
+  - post-burn telemetry now carries non-null `event_ts` from RK3568 gateway sent time
+  - latest observed telemetry after B/C were disabled reached `seq=71` with approximately 5s cadence
+- API command closure passed twice:
+  - `b4d0f7e1-445e-450e-912c-c787d0e46d23`
+  - `69826bc6-deab-4f7f-8d2d-50c8bd4201b1`
+  - both `manual_collect`
+  - both ended `status=acked`
+  - both returned `result.time_source=rk3568_gateway_sent_ts`
+  - ACK receiver logged `normalized=false` and `applied=updated`
+- RK3568 southbound runtime was corrected for the current physical setup:
+  - A enabled
+  - B/C retained but `enabled=false`
+  - this removed absent-node poll timeouts and made A polling deterministic
+- Current next step:
+  - keep A as the active live hardware proof path
+  - only re-enable B/C when the physical nodes are present and powered
+  - do not treat B/C `configured` as a failure while `enabled=false`

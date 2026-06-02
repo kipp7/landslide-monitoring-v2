@@ -1,3 +1,9 @@
+---
+title: 015-legacy-disabled-endpoints
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/api/015-legacy-disabled-endpoints
+---
+
 # Legacy disabled endpoints (v2)
 
 参考区 `frontend/app/api` 中包含若干 **调试/管理** 类 Next.js API routes（如 inspect/db-admin/test-db）。这些端点在 v2 中**明确不提供**，并在 v2 api-service 的 legacy compat 层做了显式禁用响应，避免误用与安全风险。
@@ -21,4 +27,3 @@
 
 - 生产调试请使用 v2 的受控运维入口（`/ops/*` 页面 + 对应的 v2 API），并通过 RBAC/审计收敛能力。
 - 不允许通过前端/Next route 直接执行 SQL 或枚举表结构。
-

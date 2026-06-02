@@ -1,3 +1,9 @@
+---
+title: ota-and-config
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/firmware/ota-and-config
+---
+
 ﻿# 配置与命令集合（Command Catalog，v2）
 
 本文件定义“固件可接受的标准命令集合”，用于约束：
@@ -100,4 +106,3 @@ payload（示例）：
 
 - 真实实现需考虑断点续传、签名验证、A/B 分区切换与回滚
 - 在单机形态下也要避免“远程误刷导致全站离线”
-

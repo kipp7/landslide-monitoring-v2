@@ -45,6 +45,7 @@ COPY --from=builder /repo/libs/validation/dist /repo/libs/validation/dist
 COPY --from=builder /repo/services/api/package.json /repo/services/api/package.json
 COPY --from=builder /repo/services/api/dist /repo/services/api/dist
 COPY docs/integrations/rules /repo/docs/integrations/rules
+COPY docs/unified/reports /repo/docs/unified/reports
 
 EXPOSE 8080
 CMD ["node", "services/api/dist/index.js"]

@@ -1,9 +1,26 @@
+---
+title: 03-devices
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/api/03-devices
+---
+
 # 设备管理接口（v2：UUID + 设备身份包）
 
 核心变化：
 - `deviceId` 使用 UUID 字符串（与设备端一致，烧录写入）
 - 设备鉴权采用 `deviceId + deviceSecret`（服务端只存 hash）
 - 设备上报指标不写死：通过 `sensors` 字典表与 `sensorKey` 体系扩展
+- 设备读路径允许额外暴露 canonical identity fields，用于现场正式命名分层：
+  - `identityClass`
+  - `deviceRole`
+  - `regionCode`
+  - `slopeCode`
+  - `stationCode`
+  - `nodeCode`
+  - `gatewayCode`
+  - `displayName`
+  - `installLabel`
+  - `legacyDeviceId`
 
 ## 1. 获取设备列表
 
@@ -32,6 +49,15 @@
         "deviceType": "multi_sensor",
         "status": "active",
         "stationId": "7b0f2d41-0b25-4d16-9a38-7283a4dcdb4e",
+        "stationCode": "ST-LS-CN-GX-YL-DC-001-01",
+        "identityClass": "formal",
+        "deviceRole": "field_node",
+        "regionCode": "CN-GX-YL-DC",
+        "slopeCode": "LS-CN-GX-YL-DC-001",
+        "nodeCode": "ND-ST-LS-CN-GX-YL-DC-001-01-A",
+        "gatewayCode": "GW-CN-GX-YL-DC-01",
+        "displayName": "玉林东川滑坡体 01 点 A 节点",
+        "installLabel": "FIELD-NODE-A",
         "lastSeenAt": "2025-12-15T10:00:00Z"
       }
     ],
@@ -60,6 +86,15 @@
     "deviceType": "multi_sensor",
     "status": "active",
     "stationId": "7b0f2d41-0b25-4d16-9a38-7283a4dcdb4e",
+    "stationCode": "ST-LS-CN-GX-YL-DC-001-01",
+    "identityClass": "formal",
+    "deviceRole": "field_node",
+    "regionCode": "CN-GX-YL-DC",
+    "slopeCode": "LS-CN-GX-YL-DC-001",
+    "nodeCode": "ND-ST-LS-CN-GX-YL-DC-001-01-A",
+    "gatewayCode": "GW-CN-GX-YL-DC-01",
+    "displayName": "玉林东川滑坡体 01 点 A 节点",
+    "installLabel": "FIELD-NODE-A",
     "metadata": { },
     "lastSeenAt": "2025-12-15T10:00:00Z"
   },
@@ -67,6 +102,11 @@
   "traceId": "req_01J..."
 }
 ```
+
+说明：
+- 以上 canonical fields 允许为空，表示当前设备尚未完成正式现场命名落地
+- `deviceName` 继续保留为兼容字段，不替代 `deviceId`
+- `stationCode` / `nodeCode` / `gatewayCode` 属于业务身份层，不替代机器身份层
 
 ## 3. 创建设备（生成身份包，用于烧录）
 
@@ -101,7 +141,23 @@
 }
 ```
 
-建议：后端同时提供“下载烧录配置文件/二维码内容”的能力（实现阶段）。
+当前实际流程：
+- 管理端先调用该接口生成身份包
+- 将返回的 `deviceId + deviceSecret` 烧录到设备
+- 设备首次使用 MQTT 成功鉴权后，后端会把 `devices.status` 从 `inactive` 自动切到 `active`
+- 若设备被吊销为 `revoked`，后续 MQTT 鉴权与上报会被拒绝
+
+补充说明：
+- 对“RK3568 代管现场节点”这条主线，`POST /devices` 仍然是正式 registry 入口，但节点本身并不直接拿 `deviceSecret` 去连 MQTT。
+- 这类节点的首次注册应理解为：
+  - 先把固定 `deviceId` 建档到 `devices`
+  - 再把同一组 `deviceId` 写进 RK3568 的 `SOUTHBOUND_NODES_JSON`
+  - 随后由 RK3568 代节点统一与平台通信
+- 当前推荐入口：
+  - `scripts/dev/register-field-formal-devices.ps1`
+  - `scripts/dev/set-rk3568-field-gateway-southbound-nodes.ps1`
+
+建议：后端后续补充“下载烧录配置文件/二维码内容”的能力，但这不是当前主线接入的前置条件。
 
 ## 4. 更新设备
 
@@ -162,6 +218,41 @@
     "revokedAt": "2025-12-15T10:00:00Z"
   },
   "timestamp": "2025-12-15T10:00:00Z",
+  "traceId": "req_01J..."
+}
+```
+
+## 5.1 恢复已停用设备
+
+**PUT** `/devices/{deviceId}/reactivate`
+
+权限：`device:update`
+
+请求（可选）：
+```json
+{
+  "reason": "现场演练结束，恢复正式投运"
+}
+```
+
+说明：
+- 仅允许恢复当前 `status = revoked` 的设备
+- 将 `devices.status` 恢复为停用前的原始运行状态（例如 `inactive` 或 `active`）
+- 保留既有正式身份字段、站点绑定和投运元数据
+- 写入 `reactivate_device` 审计记录，便于和 `revoke_device` 成对留痕
+
+响应：
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "ok",
+  "data": {
+    "deviceId": "2c1f2d8e-2bb7-4f58-bb6a-6c2a0f4a7a4c",
+    "status": "inactive",
+    "reactivatedAt": "2025-12-15T10:05:00Z"
+  },
+  "timestamp": "2025-12-15T10:05:00Z",
   "traceId": "req_01J..."
 }
 ```

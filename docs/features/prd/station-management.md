@@ -1,3 +1,9 @@
+---
+title: station-management
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/features/prd/station-management
+---
+
 ﻿# PRD：站点管理（Stations）
 
 ## 1. 背景
@@ -28,4 +34,3 @@
 
 - API：`docs/integrations/api/04-stations.md`
 - Storage：`docs/integrations/storage/postgres/tables/03-devices.sql`
-

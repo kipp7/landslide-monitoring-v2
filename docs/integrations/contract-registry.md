@@ -1,3 +1,9 @@
+---
+title: contract-registry
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/contract-registry
+---
+
 ﻿# 契约注册表（Contract Registry，v2）
 
 目标：提供“机器可读契约”的固定入口，避免全局搜索与多处散落导致遗漏。

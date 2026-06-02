@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/readme
+---
+
 ﻿# guides/
 
 本目录存放实践指南（How-to）：最佳实践、部署方式、单机运维 runbook，以及 AI Agent 的工作流约束。

@@ -1,3 +1,9 @@
+---
+title: hooks-workflow
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/ai/hooks-workflow
+---
+
 ﻿# Hooks 工作流建议（实现阶段启用）
 
 本项目目前处于“完善计划”阶段，因此这里给出**未来实现阶段**建议启用的 hooks/workflow，用于保障质量与一致性。

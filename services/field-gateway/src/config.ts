@@ -8,6 +8,17 @@ function optionalNonEmptyString() {
   }, z.string().min(1).optional());
 }
 
+function envBoolean(defaultValue: boolean) {
+  return z.preprocess((value) => {
+    if (typeof value === "boolean") return value;
+    if (typeof value !== "string") return defaultValue;
+    const normalized = value.trim().toLowerCase();
+    if (["1", "true", "yes", "on"].includes(normalized)) return true;
+    if (["0", "false", "no", "off"].includes(normalized)) return false;
+    return value;
+  }, z.boolean().default(defaultValue));
+}
+
 const southboundNodeSchema = z.object({
   fieldNodeId: z.string().min(1),
   deviceId: z.string().uuid(),
@@ -30,6 +41,7 @@ const configSchema = z
     serviceName: z.string().default("field-gateway"),
     serialDevice: z.string().default("/dev/ttyS3"),
     serialBaudRate: z.coerce.number().int().positive().default(115200),
+    fieldLinkMode: z.enum(["raw-json", "cobs-crc-v1"]).default("raw-json"),
     mqttUrl: z.string().url(),
     mqttUsername: optionalNonEmptyString(),
     mqttPassword: optionalNonEmptyString(),
@@ -39,6 +51,16 @@ const configSchema = z
     spoolRootDir: z.string().default("./data/field-gateway-spool"),
     healthFilePath: z.string().default("./data/field-gateway-spool/health/runtime-health.json"),
     mqttPublishTimeoutMs: z.coerce.number().int().positive().default(8000),
+    commandAckQuietWindowMs: z.coerce.number().int().positive().default(10000),
+    commandPrewriteQuietMs: z.coerce.number().int().nonnegative().default(400),
+    commandPrewriteMaxWaitMs: z.coerce.number().int().nonnegative().default(4000),
+    commandSerialChunkBytes: z.coerce.number().int().nonnegative().default(0),
+    commandSerialChunkDelayMs: z.coerce.number().int().nonnegative().default(0),
+    southboundPollingEnabled: envBoolean(false),
+    southboundPollingCommandType: z.string().min(1).default("poll_latest_telemetry"),
+    southboundPollingIntervalMs: z.coerce.number().int().positive().default(500),
+    southboundPollingSessionTimeoutMs: z.coerce.number().int().positive().default(6000),
+    southboundPollingSuppressAckPublish: envBoolean(true),
     replayIntervalMs: z.coerce.number().int().positive().default(5000),
     healthEmitIntervalMs: z.coerce.number().int().positive().default(5000),
     serialReconnectBaseDelayMs: z.coerce.number().int().positive().default(5000),
@@ -117,6 +139,7 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
     serviceName: env.SERVICE_NAME,
     serialDevice: env.SERIAL_DEVICE,
     serialBaudRate: env.SERIAL_BAUD_RATE,
+    fieldLinkMode: env.FIELD_LINK_MODE,
     mqttUrl: env.MQTT_URL,
     mqttUsername: env.MQTT_USERNAME,
     mqttPassword: env.MQTT_PASSWORD,
@@ -126,6 +149,16 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
     spoolRootDir: env.SPOOL_ROOT_DIR,
     healthFilePath: env.HEALTH_FILE_PATH,
     mqttPublishTimeoutMs: env.MQTT_PUBLISH_TIMEOUT_MS,
+    commandAckQuietWindowMs: env.COMMAND_ACK_QUIET_WINDOW_MS,
+    commandPrewriteQuietMs: env.COMMAND_PREWRITE_QUIET_MS,
+    commandPrewriteMaxWaitMs: env.COMMAND_PREWRITE_MAX_WAIT_MS,
+    commandSerialChunkBytes: env.COMMAND_SERIAL_CHUNK_BYTES,
+    commandSerialChunkDelayMs: env.COMMAND_SERIAL_CHUNK_DELAY_MS,
+    southboundPollingEnabled: env.SOUTHBOUND_POLLING_ENABLED,
+    southboundPollingCommandType: env.SOUTHBOUND_POLLING_COMMAND_TYPE,
+    southboundPollingIntervalMs: env.SOUTHBOUND_POLLING_INTERVAL_MS,
+    southboundPollingSessionTimeoutMs: env.SOUTHBOUND_POLLING_SESSION_TIMEOUT_MS,
+    southboundPollingSuppressAckPublish: env.SOUTHBOUND_POLLING_SUPPRESS_ACK_PUBLISH,
     replayIntervalMs: env.REPLAY_INTERVAL_MS,
     healthEmitIntervalMs: env.HEALTH_EMIT_INTERVAL_MS,
     serialReconnectBaseDelayMs: env.SERIAL_RECONNECT_BASE_DELAY_MS,

@@ -1,3 +1,9 @@
+---
+title: definition-of-done
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/standards/definition-of-done
+---
+
 # Definition of Done（DoD，交付闭环标准）
 
 目标：把“做完了”从主观感觉变成可验证标准，避免后续重构时返工、丢契约、丢验收。

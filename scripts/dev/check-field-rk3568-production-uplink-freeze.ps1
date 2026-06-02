@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-  [string]$BoardHost = "192.168.124.172",
+  [string]$BoardHost = "192.168.124.179",
   [string]$User = "linaro",
   [string]$Password = "",
   [int]$SshPort = 22,
@@ -250,9 +250,34 @@ function Get-ExpectedNodes {
       deviceId = "00000000-0000-0000-0000-000000000003"
       installLabel = "FIELD-NODE-C"
       southboundPort = "/dev/ttyS3"
-      enabled = $false
+      enabled = $true
     }
   )
+}
+
+function Get-ExpectedRuntimeState {
+  param(
+    [bool]$Enabled
+  )
+
+  if ($Enabled) {
+    return "online|degraded"
+  }
+
+  return "configured"
+}
+
+function Test-ExpectedRuntimeState {
+  param(
+    [string]$ActualState,
+    [bool]$Enabled
+  )
+
+  if ($Enabled) {
+    return @("online", "degraded") -contains $ActualState
+  }
+
+  return $ActualState -eq "configured"
 }
 
 function Compare-Nodes {
@@ -317,6 +342,9 @@ $expectedMqttPassword = if ($apiEnv.Contains("MQTT_INTERNAL_PASSWORD") -and -not
 }
 
 $expectedNodes = @(Get-ExpectedNodes)
+$expectedNodeAState = Get-ExpectedRuntimeState -Enabled ([bool]$expectedNodes[0].enabled)
+$expectedNodeBState = Get-ExpectedRuntimeState -Enabled ([bool]$expectedNodes[1].enabled)
+$expectedNodeCState = Get-ExpectedRuntimeState -Enabled ([bool]$expectedNodes[2].enabled)
 
 $remoteEnv = Invoke-JsonScript "Read RK3568 field gateway env" {
   Invoke-RemoteBash -TargetHost $BoardHost -TargetUser $User -TargetPassword $Password -TargetPort $SshPort -ScriptText @"
@@ -388,9 +416,9 @@ $checks = @(
   (Get-Check -Key "commandTopicPrefixMatchesExpected" -Ok:([string]$remoteEnv.MQTT_TOPIC_COMMAND_PREFIX -eq $ExpectedCommandTopicPrefix) -Actual ([string]$remoteEnv.MQTT_TOPIC_COMMAND_PREFIX) -Expected $ExpectedCommandTopicPrefix),
   (Get-Check -Key "ackTopicPrefixMatchesExpected" -Ok:([string]$remoteEnv.MQTT_TOPIC_ACK_PREFIX -eq $ExpectedAckTopicPrefix) -Actual ([string]$remoteEnv.MQTT_TOPIC_ACK_PREFIX) -Expected $ExpectedAckTopicPrefix),
   (Get-Check -Key "southboundNodesFrozen" -Ok:(Compare-Nodes -ExpectedNodes $expectedNodes -ActualNodes $actualNodes) -Actual (@($actualNodes).Count) -Expected (@($expectedNodes).Count)),
-  (Get-Check -Key "runtimeNodeAOnline" -Ok:([string]$nodeA.status -eq "online") -Actual ([string]$nodeA.status) -Expected "online"),
-  (Get-Check -Key "runtimeNodeBOnline" -Ok:([string]$nodeB.status -eq "online") -Actual ([string]$nodeB.status) -Expected "online"),
-  (Get-Check -Key "runtimeNodeCReserved" -Ok:([string]$nodeC.status -eq "configured") -Actual ([string]$nodeC.status) -Expected "configured"),
+  (Get-Check -Key "runtimeNodeAExpectedState" -Ok:(Test-ExpectedRuntimeState -ActualState ([string]$nodeA.status) -Enabled ([bool]$expectedNodes[0].enabled)) -Actual ([string]$nodeA.status) -Expected $expectedNodeAState),
+  (Get-Check -Key "runtimeNodeBExpectedState" -Ok:(Test-ExpectedRuntimeState -ActualState ([string]$nodeB.status) -Enabled ([bool]$expectedNodes[1].enabled)) -Actual ([string]$nodeB.status) -Expected $expectedNodeBState),
+  (Get-Check -Key "runtimeNodeCExpectedState" -Ok:(Test-ExpectedRuntimeState -ActualState ([string]$nodeC.status) -Enabled ([bool]$expectedNodes[2].enabled)) -Actual ([string]$nodeC.status) -Expected $expectedNodeCState),
   (Get-Check -Key "publishPathRecoveredOrClean" -Ok:$publishPathRecoveredOrClean -Actual ("publishFailures={0},lastPublishedAgeSeconds={1},spoolPending={2},rejectedWriteFailures={3}" -f [int]$runtimeHealth.stats.publishFailures, $(if ($null -eq $lastPublishedAgeSeconds) { "null" } else { [string]$lastPublishedAgeSeconds }), [int]$runtimeHealth.stats.spoolPending, [int]$runtimeHealth.stats.rejectedWriteFailures) -Expected "published>=1,lastPublishedAgeSeconds<=120,spoolPending=0,rejectedWriteFailures=0"),
   (Get-Check -Key "rejectedStatsPresent" -Ok:$rejectedStatsPresent -Actual $rejectedStatsPresent -Expected $true),
   (Get-Check -Key "rejectedWriteFailuresZero" -Ok:([int]$runtimeHealth.stats.rejectedWriteFailures -eq 0) -Actual ([int]$runtimeHealth.stats.rejectedWriteFailures) -Expected 0),
@@ -456,7 +484,7 @@ $report = [ordered]@{
     "refresh board runtime snapshot: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-rk3568-field-gateway-runtime.ps1 -Password <password>",
     "refresh production uplink freeze: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-field-rk3568-production-uplink-freeze.ps1 -Password <password>",
     "refresh software read-path adaptation: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-field-software-read-path-adaptation.ps1",
-    "rewrite southbound node map if needed: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\set-rk3568-field-gateway-southbound-nodes.ps1 -Password <password> -NodeSpec 'A|00000000-0000-0000-0000-000000000001|/dev/ttyS3|FIELD-NODE-A|true' -NodeSpec 'B|00000000-0000-0000-0000-000000000002|/dev/ttyS3|FIELD-NODE-B|true' -NodeSpec 'C|00000000-0000-0000-0000-000000000003|/dev/ttyS3|FIELD-NODE-C|false'"
+    "rewrite southbound node map if needed: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\set-rk3568-field-gateway-southbound-nodes.ps1 -Password <password> -NodeSpec 'A|00000000-0000-0000-0000-000000000001|/dev/ttyS3|FIELD-NODE-A|true' -NodeSpec 'B|00000000-0000-0000-0000-000000000002|/dev/ttyS3|FIELD-NODE-B|true' -NodeSpec 'C|00000000-0000-0000-0000-000000000003|/dev/ttyS3|FIELD-NODE-C|true'"
   )
   checks = $checks
 }

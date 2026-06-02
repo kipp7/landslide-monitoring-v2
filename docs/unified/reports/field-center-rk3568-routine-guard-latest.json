@@ -1,5 +1,5 @@
 ﻿{
-    "generatedAt":  "2026-04-10T06:39:20Z",
+    "generatedAt":  "2026-04-14T06:03:02Z",
     "accepted":  true,
     "mode":  "field-center-rk3568-routine-guard",
     "currentBoundary":  "field-center-rk3568-routine-guard-ready",
@@ -13,20 +13,32 @@
     "baselines":  {
                       "centerRuntimeFreeze":  {
                                                   "file":  "docs/unified/reports/field-center-runtime-freeze-latest.json",
-                                                  "generatedAt":  "2026-04-10T06:35:24Z",
+                                                  "generatedAt":  "2026-04-14T06:02:49Z",
                                                   "accepted":  true,
                                                   "boundary":  "center-runtime-freeze-ready"
                                               },
+                      "rk3568NetworkBootstrap":  {
+                                                     "file":  "docs/unified/reports/field-rk3568-network-bootstrap-latest.json",
+                                                     "generatedAt":  "2026-04-14T06:03:00Z",
+                                                     "accepted":  true,
+                                                     "boundary":  "rk3568-network-bootstrap-ready",
+                                                     "runtimeMode":  "ethernet_uplink",
+                                                     "lastAction":  "ethernet-healthy"
+                                                 },
                       "rk3568ProductionUplinkFreeze":  {
                                                            "file":  "docs/unified/reports/field-rk3568-production-uplink-freeze-latest.json",
-                                                           "generatedAt":  "2026-04-10T06:35:30Z",
-                                                           "accepted":  true,
-                                                           "boundary":  "rk3568-production-uplink-freeze-ready",
+                                                           "generatedAt":  "2026-04-14T06:02:57Z",
+                                                           "accepted":  false,
+                                                           "boundary":  "rk3568-production-uplink-freeze-needs-review",
+                                                           "operationallyReady":  true,
+                                                           "strictFailureKeys":  [
+                                                                                     "runtimeNodeCExpectedState"
+                                                                                 ],
                                                            "rejectedWriteFailures":  0
                                                        },
                       "operationalRecovery":  {
                                                   "file":  "docs/unified/reports/field-rk3568-center-operational-recovery-latest.json",
-                                                  "generatedAt":  "2026-04-10T06:39:18Z",
+                                                  "generatedAt":  "2026-04-14T06:03:00Z",
                                                   "accepted":  true,
                                                   "boundary":  "rk3568-center-operational-recovery-ready",
                                                   "cleanWindowReopened":  true,
@@ -34,20 +46,29 @@
                                               },
                       "phaseReadiness":  {
                                              "file":  "docs/unified/reports/field-center-deployment-software-adaptation-readiness-latest.json",
-                                             "generatedAt":  "2026-04-10T06:39:18Z",
+                                             "generatedAt":  "2026-04-14T06:03:00Z",
                                              "accepted":  true,
                                              "boundary":  "center-deployment-software-adaptation-ready"
                                          },
                       "centerProductionHandoff":  {
                                                       "file":  "docs/unified/reports/field-center-production-handoff-latest.json",
-                                                      "generatedAt":  "2026-04-10T06:39:20Z",
+                                                      "generatedAt":  "2026-04-14T06:03:02Z",
                                                       "accepted":  true,
                                                       "boundary":  "center-production-handoff-ready"
                                                   }
                   },
+    "strictAttention":  {
+                            "rk3568ProductionFreezeAccepted":  false,
+                            "rk3568ProductionFreezeBoundary":  "rk3568-production-uplink-freeze-needs-review",
+                            "rk3568ProductionFreezeFailureKeys":  [
+                                                                      "runtimeNodeCExpectedState"
+                                                                  ],
+                            "operationalRecoveryStrictAccepted":  false
+                        },
     "nextUse":  [
                     "routine guard: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\check-field-center-rk3568-routine-guard.ps1 -BoardPassword \u003cpassword\u003e -AllowUnsafeSecrets",
                     "strict routine guard: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\check-field-center-rk3568-routine-guard.ps1 -BoardPassword \u003cpassword\u003e -AllowUnsafeSecrets -RequireZeroSchemaRejectedDelta",
+                    "board bootstrap: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\check-rk3568-network-bootstrap.ps1 -Password \u003cpassword\u003e",
                     "board-only recovery: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\check-field-rk3568-center-operational-recovery.ps1 -BoardPassword \u003cpassword\u003e -AllowUnsafeSecrets",
                     "center-only handoff refresh: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\prepare-field-center-production-handoff.ps1 -AllowUnsafeSecrets"
                 ],
@@ -65,19 +86,37 @@
                        "expected":  "center-runtime-freeze-ready"
                    },
                    {
-                       "key":  "rk3568ProductionUplinkFreezeAccepted",
+                       "key":  "rk3568NetworkBootstrapAccepted",
                        "ok":  true,
                        "actual":  true,
                        "expected":  true
                    },
                    {
-                       "key":  "rk3568ProductionUplinkFreezeBoundary",
+                       "key":  "rk3568NetworkBootstrapBoundary",
                        "ok":  true,
-                       "actual":  "rk3568-production-uplink-freeze-ready",
-                       "expected":  "rk3568-production-uplink-freeze-ready"
+                       "actual":  "rk3568-network-bootstrap-ready",
+                       "expected":  "rk3568-network-bootstrap-ready"
+                   },
+                   {
+                       "key":  "rk3568NetworkBootstrapMode",
+                       "ok":  true,
+                       "actual":  "ethernet_uplink",
+                       "expected":  "sta_connected|ethernet_uplink"
+                   },
+                   {
+                       "key":  "rk3568ProductionUplinkOperationalReady",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
                    },
                    {
                        "key":  "rk3568ProductionRejectedWriteFailuresZero",
+                       "ok":  true,
+                       "actual":  0,
+                       "expected":  0
+                   },
+                   {
+                       "key":  "rk3568ProductionSpoolPendingZero",
                        "ok":  true,
                        "actual":  0,
                        "expected":  0

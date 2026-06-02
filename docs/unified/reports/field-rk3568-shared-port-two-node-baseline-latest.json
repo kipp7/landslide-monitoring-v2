@@ -1,10 +1,10 @@
-﻿{
+{
     "generatedAt":  "2026-04-08T14:25:07.031Z",
     "mode":  "rk3568-shared-port-two-node-baseline",
     "conclusion":  "baseline-failed-and-restore-state-unknown",
     "passed":  false,
     "deviceId":  "00000000-0000-0000-0000-000000000002",
-    "boardHost":  "192.168.124.172",
+    "boardHost":  "192.168.124.179",
     "mqttUrl":  "mqtt://127.0.0.1:1883",
     "fixedActionOrder":  [
                              "manual-collect",
@@ -26,7 +26,7 @@
                    "manualCollect":  {
                                          "generatedAt":  "2026-04-08T14:24:14Z",
                                          "passed":  true,
-                                         "boardHost":  "192.168.124.172",
+                                         "boardHost":  "192.168.124.179",
                                          "serviceName":  "lsmv2-field-gateway.service",
                                          "mqttUrl":  "mqtt://127.0.0.1:1883",
                                          "action":  "manual-collect",
@@ -307,7 +307,7 @@
                    "setReport300":  {
                                         "generatedAt":  "2026-04-08T14:24:24Z",
                                         "passed":  true,
-                                        "boardHost":  "192.168.124.172",
+                                        "boardHost":  "192.168.124.179",
                                         "serviceName":  "lsmv2-field-gateway.service",
                                         "mqttUrl":  "mqtt://127.0.0.1:1883",
                                         "action":  "set-report-300",
@@ -588,7 +588,7 @@
                    "setReport5":  {
                                       "generatedAt":  "2026-04-08T14:25:06Z",
                                       "passed":  false,
-                                      "boardHost":  "192.168.124.172",
+                                      "boardHost":  "192.168.124.179",
                                       "serviceName":  "lsmv2-field-gateway.service",
                                       "mqttUrl":  "mqtt://127.0.0.1:1883",
                                       "action":  "set-report-5",

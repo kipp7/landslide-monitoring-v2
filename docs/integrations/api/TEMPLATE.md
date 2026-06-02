@@ -1,3 +1,9 @@
+---
+title: TEMPLATE
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/api/template
+---
+
 # API 契约模板：<资源名>
 
 > 该模板用于新增 API 文档，保证一致性与可测试性。
@@ -30,4 +36,3 @@
 ## Notes
 
 - 与数据库/规则/消息的映射（引用 integrations/storage 或 integrations/rules）
-

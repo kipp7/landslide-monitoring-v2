@@ -1,3 +1,9 @@
+---
+title: 012-device-health-expert
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/api/012-device-health-expert
+---
+
 # 12) 设备健康专家（Device Health Expert）
 
 权限：

@@ -1,3 +1,9 @@
+---
+title: issue-and-incident-process
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/standards/issue-and-incident-process
+---
+
 # Issue 与 Incident 流程（必须遵守）
 
 目标：保证问题与需求的管理闭环，做到“可追溯、可复盘、可防再发”。
@@ -52,4 +58,3 @@
 
 - 修改契约后必须跑门禁：`python docs/tools/run-quality-gates.py`
 - OpenAPI 变更必须更新 stamp：`python docs/tools/update-openapi-stamp.py`
-

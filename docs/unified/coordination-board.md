@@ -1,3 +1,9 @@
+---
+title: coordination-board
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/unified/coordination-board
+---
+
 # 协调看板
 
 ## 目标

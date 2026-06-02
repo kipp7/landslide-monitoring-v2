@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/iot/readme
+---
+
 # integrations/iot/
 
 该目录描述“非 MQTT 直连”的 IoT 接入方式（适配器/网关），以便在不破坏主链路（MQTT → Kafka → ClickHouse/Postgres）的前提下兼容旧系统或第三方平台。

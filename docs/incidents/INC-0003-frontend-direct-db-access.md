@@ -1,3 +1,9 @@
+---
+title: INC-0003-frontend-direct-db-access
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/incidents/inc-0003-frontend-direct-db-access
+---
+
 ﻿# INC-0003: 前端/Next API 直连数据库（绕过契约导致 Schema Drift）
 
 ## Summary
@@ -35,4 +41,3 @@ v2 根本修复：
 
 - 后端规则：`docs/guides/standards/backend-rules.md`
 - 存储契约：`docs/integrations/storage/README.md`
-

@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: landslide-monitoring-v2-mainline/apps/readme
+---
+
 # apps/
 
 可交付应用层（User-facing artifacts）。
@@ -9,6 +15,9 @@
 
 子目录：
 
+- 当前默认正式客户端：
+  - `apps/desk/`：桌面端业务 UI
+  - `apps/desk-win/`：Windows 原生壳
+- `apps/web/` 和 `apps/mobile/` 当前不是默认开发目标，除非用户明确要求对应端的工作。
 - `apps/web/`：Web 管理端（Next.js + TypeScript）
 - `apps/mobile/`：移动端（Flutter，用 Android Studio 开发也放这里）
-

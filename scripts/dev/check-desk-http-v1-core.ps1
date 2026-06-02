@@ -107,7 +107,6 @@ foreach ($baseline in $baselineList) {
   $baselineByDeviceId[[string]$baseline.deviceId] = $baseline
 }
 $missingBaselineDevices = @($deviceList | Where-Object { -not $baselineByDeviceId.Contains([string]$_.deviceId) })
-Assert-True ($missingBaselineDevices.Count -ge 1) "expected at least one device without baseline in demo seed"
 
 $targetDevice = $deviceList | Where-Object { $baselineByDeviceId.Contains([string]$_.deviceId) } | Select-Object -First 1
 Assert-True ($null -ne $targetDevice) "no device with baseline available for v1 proof"
@@ -205,6 +204,7 @@ $report = [ordered]@{
     count = $deviceList.Count
     first = $deviceList[0]
     stationCoverage = $true
+    baselineBackedDeviceCount = $baselineByDeviceId.Count
     missingBaselineCount = $missingBaselineDevices.Count
   }
   baselines = [ordered]@{

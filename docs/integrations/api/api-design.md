@@ -1,3 +1,9 @@
+---
+title: api-design
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/api/api-design
+---
+
 ﻿# API 接口设计（v2）
 
 本版本与后端 v2 架构一致：`MQTT + Kafka + ClickHouse(遥测) + PostgreSQL(元数据/规则/告警) + Redis`，并以“稀疏指标、不写死、可扩展”为前提。

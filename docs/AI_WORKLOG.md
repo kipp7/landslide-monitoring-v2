@@ -1,3 +1,9 @@
+---
+title: AI_WORKLOG
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/ai-worklog
+---
+
 # AI 工作记录（Desk 桌面端）
 
 目的：把桌面端（`apps/desk` + `apps/desk-win`）相关的实现、对接点、已知问题集中记录，便于联调、测试、生产对接与后续任务拆解。
@@ -27,4 +33,3 @@
 - 确认 desk 生产对接路线：全面切到 `/api/v1`（推荐）或继续使用 `/api/*` 兼容层
 - 登录：接入真实登录与权限（RBAC）并打通退出登录/退出软件的行为一致性
 - Windows 原生体验：窗口状态记忆、托盘交互细节（点击外部自动收起、定位更贴合任务栏区域）、启动性能与 WebView2 GPU 配置策略
-

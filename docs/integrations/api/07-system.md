@@ -1,3 +1,9 @@
+---
+title: 07-system
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/api/07-system
+---
+
 # 系统接口（v2）
 
 系统接口用于读取系统配置、查看日志与健康状态。单机部署下重点是“可观测 + 可恢复”。
@@ -205,6 +211,11 @@
 
 权限：`system:log`
 
+说明：
+- `/system/status` 仍然是中心侧健康摘要模型
+- `fieldEdge` 为可选的 RK3568 边缘状态只读扩展区块
+- `fieldEdge` 只消费已有 latest evidence artifacts，不在请求路径内执行 SSH / 串口 / 板端探测
+
 响应（示例）：
 ```json
 {
@@ -223,7 +234,48 @@
       { "key": "postgres", "label": "PostgreSQL", "status": "healthy", "detail": "healthy" },
       { "key": "clickhouse", "label": "ClickHouse", "status": "healthy", "detail": "healthy" },
       { "key": "kafka", "label": "Kafka", "status": "healthy", "detail": "configured" }
-    ]
+    ],
+    "fieldEdge": {
+      "available": true,
+      "stale": false,
+      "detail": "RK3568 latest evidence loaded from local report artifacts",
+      "source": "rk3568_field_link_monitor",
+      "generatedAt": "2026-04-10T16:43:28.403Z",
+      "currentBoundary": "rk3568-edge-link-monitor-ready",
+      "accepted": true,
+      "summary": {
+        "overallLevel": "attention",
+        "score": 80,
+        "networkMode": "sta_connected",
+        "serialOpen": true,
+        "mqttConnected": true,
+        "portStatus": "online",
+        "spoolPending": 0,
+        "rejectedMessages": 2,
+        "lastPublishedAgeSeconds": 0
+      },
+      "nodes": [
+        {
+          "fieldNodeId": "A",
+          "deviceId": "00000000-0000-0000-0000-000000000001",
+          "installLabel": "FIELD-NODE-A",
+          "status": "online",
+          "telemetryMessages": 16,
+          "commandForwards": 0,
+          "ackPublishes": 0,
+          "lastTelemetryAgeSeconds": 1,
+          "lastAckAgeSeconds": null
+        }
+      ],
+      "soak": {
+        "generatedAt": "2026-04-10T16:46:16Z",
+        "accepted": true,
+        "currentBoundary": "rk3568-center-soak-ready",
+        "cleanWindowRounds": 2,
+        "allAcked": true,
+        "maxBoardObservationSchemaRejectedDelta": 0
+      }
+    }
   },
   "timestamp": "2025-12-15T10:00:00Z",
   "traceId": "req_01J..."

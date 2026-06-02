@@ -16,7 +16,10 @@ yarn-error.log*
 # Archives / large artifacts
 *.rar
 *.zip
-artifacts/
+artifacts/*
+!artifacts/desk-win/
+artifacts/desk-win/*
+!artifacts/desk-win/CURRENT-BASELINE.md
 
 # Env files (never commit real secrets)
 .env
@@ -27,6 +30,7 @@ artifacts/
 # Node / Next.js
 node_modules/
 .next/
+.next_web/
 .next_v2_dev/
 .next_v2_build/
 dist/
@@ -85,3 +89,22 @@ ctx-*.log
 *.sqlite3
 # /memory-context-workspace
 
+
+# Secrets / credentials (keep encrypted backups only)
+key/
+keys/
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+secrets/*
+!secrets/README.md
+!secrets/*.age
+!secrets/*.gpg
+!secrets/*.7z
+!secrets/*.zip.enc
+
+# Frontend generated backup directories
+**/dist.backup-*/
+**/dist.backup*/

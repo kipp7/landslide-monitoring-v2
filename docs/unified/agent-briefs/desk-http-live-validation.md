@@ -1,3 +1,9 @@
+---
+title: desk-http-live-validation
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/unified/agent-briefs/desk-http-live-validation
+---
+
 # 任务简报：desk-http-live-validation
 
 ## 当前状态

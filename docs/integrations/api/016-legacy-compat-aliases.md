@@ -1,3 +1,9 @@
+---
+title: 016-legacy-compat-aliases
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/api/016-legacy-compat-aliases
+---
+
 # Legacy compat aliases (v2)
 
 参考区 `frontend/app/api` 中存在若干“优化/真实数据”版本的 API route（例如 `device-management-optimized`、`device-management-real`、`monitoring-stations-optimized`）。
@@ -16,4 +22,3 @@ v2 不复刻参考区的 Supabase 直连实现，而是在 v2 api-service 的 le
 同时也适用于 legacy nginx 前缀别名：
 
 - `/iot/api/<same-paths>`
-

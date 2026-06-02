@@ -1,3 +1,9 @@
+---
+title: INC-0001-telemetry-schema-drift
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/incidents/inc-0001-telemetry-schema-drift
+---
+
 ﻿# INC-0001: 遥测字段硬编码导致的“Schema Drift”
 
 ## Summary
@@ -49,4 +55,3 @@
 - ADR：`docs/architecture/adr/ADR-0003-sparse-telemetry-model.md`
 - Storage：`docs/integrations/storage/overview.md`
 - MQTT：`docs/integrations/mqtt/mqtt-topics-and-envelope.md`
-

@@ -1,3 +1,9 @@
+---
+title: proposal
+type: note
+permalink: landslide-monitoring-v2-mainline/openspec/changes/add-windows-desktop-packaging-updater/proposal
+---
+
 ## Why
 
 桌面端要“可落地交付”，必须具备清晰、可复现的打包与分发方式：包含图标/版本号、签名、安装卸载、自动更新与回滚策略。否则只能停留在开发机运行，无法交付给现场或客户机器。
@@ -18,4 +24,3 @@
 
 - 需要在 CI/发布流程中增加打包步骤
 - 需要明确产物目录、升级策略与证书管理方式
-

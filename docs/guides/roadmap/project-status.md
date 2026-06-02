@@ -1,3 +1,9 @@
+---
+title: project-status
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/roadmap/project-status
+---
+
 # 项目状态（Project Status，AI/人类交接入口）
 
 目的：解决“对话窗口终止/换模型/换 AI 后不知道做到哪一步”的问题。任何 AI/人类接手本项目，**先读本页**，不需要全局搜索。

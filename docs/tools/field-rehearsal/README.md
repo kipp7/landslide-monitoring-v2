@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/tools/field-rehearsal/readme
+---
+
 # field-rehearsal tools
 
 本目录提供 A 路线“软件优先联调”的第一批可执行物料：
@@ -416,3 +422,180 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/check-field-http
 - `setSamplingExecuted`
 - `setConfigExecuted`
 - `mismatchRejected`
+
+若要把同一批样本直接拿去做 gateway / UART 注入：
+
+- `scripts/dev/inject-hardware-stable-version-command.ps1`
+- `scripts/dev/inject-hardware-stable-version-command.js`
+- `scripts/dev/check-hardware-stable-version-gateway-uart-injection-readiness.ps1`
+- `scripts/dev/check-hardware-stable-version-mqtt-command-publish-proof.ps1`
+- `scripts/dev/relay-hardware-stable-version-command-to-uart.js`
+- `scripts/dev/check-hardware-stable-version-mqtt-to-uart-relay-proof.ps1`
+- `scripts/dev/check-hardware-stable-version-mqtt-to-uart-relay-matrix.ps1`
+- `scripts/dev/start-hardware-stable-version-mqtt-uart-relay.ps1`
+- `scripts/dev/stop-hardware-stable-version-mqtt-uart-relay.ps1`
+- `scripts/dev/check-hardware-stable-version-live-relay-wrapper-proof.ps1`
+- `scripts/dev/show-hardware-stable-version-serial-ports.ps1`
+- `scripts/dev/check-hardware-stable-version-serial-root-cause.ps1`
+- `scripts/dev/check-hardware-stable-version-passive-serial-probe.ps1`
+
+先输出 UART 注入计划：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/inject-hardware-stable-version-command.ps1 -Sample manual_collect -Mode uart-plan
+```
+
+直接发布到 `cmd/{device_id}`：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/inject-hardware-stable-version-command.ps1 -Sample reboot -Mode mqtt -MqttUrl mqtt://127.0.0.1:1883
+```
+
+直接写到 Windows 串口：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/inject-hardware-stable-version-command.ps1 -Sample set_config -Mode uart-com -Port COM5 -ChunkStrategy suggested -InterChunkDelayMs 50
+```
+
+说明：
+
+- `-Sample` 可直接用命令名，例如：
+  - `set_config`
+  - `manual_collect`
+  - `reboot`
+  - `motor_start`
+  - `buzzer_off`
+- mismatch 守卫样本可用：
+  - `mismatch`
+  - `manual_collect.mismatched-device`
+- `-ChunkStrategy suggested` 会优先使用当前 proof 已验证过的 `suggestedChunks80`
+- `-ChunkStrategy whole` 则更接近“gateway 侧一次串口写完整 JSON，再由链路自行分段”的注入方式
+
+若要同时检查：
+
+- 样本是否都能生成 UART 注入计划
+- 本机 `mqtt://127.0.0.1:1883` 是否在监听
+- 当前 Windows 会话是否可见 `COM` 串口
+
+可执行：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/check-hardware-stable-version-gateway-uart-injection-readiness.ps1
+```
+
+当前报告会写到：
+
+- `docs/unified/reports/hardware-stable-version-gateway-uart-injection-readiness-latest.json`
+
+若要验证“样本已真发到本机 EMQX，并且 `cmd/{device_id}` 上确实能收到”：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/check-hardware-stable-version-mqtt-command-publish-proof.ps1 -Sample manual_collect
+```
+
+当前报告会写到：
+
+- `docs/unified/reports/hardware-stable-version-mqtt-command-publish-proof-latest.json`
+
+若要验证“命令已从本机 EMQX 进入 gateway-style relay，并被转换成 UART-ready chunk 计划”：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/check-hardware-stable-version-mqtt-to-uart-relay-proof.ps1 -Sample manual_collect
+```
+
+当前报告会写到：
+
+- `docs/unified/reports/hardware-stable-version-mqtt-to-uart-relay-proof-latest.json`
+
+说明：
+
+- 当前这条 relay proof 默认使用：
+  - `ingest-service` 内部 MQTT 账号
+  - `file` sink
+- 也就是说，它当前证明的是：
+  - `MQTT broker -> gateway relay -> UART-ready chunk plan`
+- 一旦有真实 `COM` 口，可把 relay sink 切到：
+  - `uart-com`
+
+若要把 10 条 aligned 样本加 1 条 mismatch 样本整组回跑成 relay 矩阵：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/check-hardware-stable-version-mqtt-to-uart-relay-matrix.ps1
+```
+
+当前报告会写到：
+
+- `docs/unified/reports/hardware-stable-version-mqtt-to-uart-relay-matrix-latest.json`
+
+若要把 relay 常驻挂起来，等待 `cmd/{device_id}` 实时下沉到 `file/stdout/uart-com`：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/start-hardware-stable-version-mqtt-uart-relay.ps1 -RunInBackground -TimeoutSeconds 60
+```
+
+若已接好真实串口，可直接切到：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/start-hardware-stable-version-mqtt-uart-relay.ps1 -Sink uart-com -Port COM5
+```
+
+若希望“串口一出现就自动选第一个 COM 口”：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/start-hardware-stable-version-mqtt-uart-relay.ps1 -Sink uart-com -Port auto -WaitForPortSeconds 300
+```
+
+停止最近一次后台 relay：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/stop-hardware-stable-version-mqtt-uart-relay.ps1
+```
+
+若要验证这对后台 wrapper 本身已经具备：
+
+- 后台拉起
+- 订阅成功
+- metadata 落盘
+- 停止/已退出判定
+
+可执行：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/check-hardware-stable-version-live-relay-wrapper-proof.ps1
+```
+
+当前报告会写到：
+
+- `docs/unified/reports/hardware-stable-version-live-relay-wrapper-proof-latest.json`
+
+若只想观察当前机器是否已经识别到串口，可执行：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/show-hardware-stable-version-serial-ports.ps1
+```
+
+若要连续观察 60 秒：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/show-hardware-stable-version-serial-ports.ps1 -WatchSeconds 60
+```
+
+若要生成“为什么当前没有物理 `COM` 口”的诊断报告：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/check-hardware-stable-version-serial-root-cause.ps1
+```
+
+当前报告会写到：
+
+- `docs/unified/reports/hardware-stable-version-serial-root-cause-latest.json`
+
+若要对当前 `COM` 口做只读被动探针，不发送任何字节：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/check-hardware-stable-version-passive-serial-probe.ps1 -Port COM5
+```
+
+当前报告会写到：
+
+- `docs/unified/reports/hardware-stable-version-passive-serial-probe-latest.json`

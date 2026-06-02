@@ -1,3 +1,9 @@
+---
+title: telemetry-load-test
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/testing/telemetry-load-test
+---
+
 # Telemetry 负载测试（单机）
 
 目标：提供一个“可重复、可执行”的最小容量验证入口，用于评估单机链路在不同 payload/metrics 规模下的吞吐与稳定性（并为后续容量压测与降载策略验证打基础）。
@@ -66,4 +72,3 @@ node scripts/dev/telemetry-load-test.js `
 - `payload_too_large`：单条 payload 超过 ingest 保护阈值（可调 `MESSAGE_MAX_BYTES`）
 - `metrics_too_many`：metrics key 数量超过 ingest 保护阈值（可调 `METRICS_MAX_KEYS`）
 - ClickHouse 不可用：writer 会进入冷却窗口（`CLICKHOUSE_UNAVAILABLE_COOLDOWN_MS`），恢复后自动重放
-

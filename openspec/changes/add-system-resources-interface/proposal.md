@@ -1,3 +1,9 @@
+---
+title: proposal
+type: note
+permalink: landslide-monitoring-v2-mainline/openspec/changes/add-system-resources-interface/proposal
+---
+
 ## Why
 
 当前 `/api/system/status` 已明确是“健康摘要模型”，它适合 Desk 当前主链，但不等价于 CPU / 内存 / 磁盘资源占用。

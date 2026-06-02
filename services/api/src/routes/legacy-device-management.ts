@@ -140,14 +140,48 @@ const LEGACY_MONITORING_STATIONS_CHART_PRESETS: Record<
 
 function getLegacyStationLegendName(row: DeviceListRow): string {
   const meta = row.metadata;
+  const stationMeta =
+    row.station_metadata && typeof row.station_metadata === "object"
+      ? (row.station_metadata as Record<string, unknown>)
+      : null;
   const chartLegend =
     meta && typeof meta === "object" && "chart_legend_name" in meta
       ? (meta as { chart_legend_name?: unknown }).chart_legend_name
       : undefined;
   if (typeof chartLegend === "string" && chartLegend.trim()) return chartLegend.trim();
+  const stationChartLegend = typeof stationMeta?.chart_legend_name === "string" ? stationMeta.chart_legend_name.trim() : "";
+  if (stationChartLegend) return stationChartLegend;
   if (typeof row.station_name === "string" && row.station_name.trim()) return row.station_name.trim();
   if (typeof row.device_name === "string" && row.device_name.trim()) return row.device_name.trim();
   return row.device_id;
+}
+
+function hasLegacyMonitoringStationBinding(row: DeviceListRow): boolean {
+  if (typeof row.station_id === "string" && row.station_id.trim()) return true;
+  if (typeof row.station_name === "string" && row.station_name.trim()) return true;
+  if (typeof row.latitude === "number" && Number.isFinite(row.latitude)) return true;
+  if (typeof row.longitude === "number" && Number.isFinite(row.longitude)) return true;
+
+  const meta = row.metadata && typeof row.metadata === "object" ? (row.metadata as Record<string, unknown>) : null;
+  const stationMeta =
+    row.station_metadata && typeof row.station_metadata === "object"
+      ? (row.station_metadata as Record<string, unknown>)
+      : null;
+  const metaStationName = typeof meta?.station_name === "string" ? meta.station_name.trim() : "";
+  if (metaStationName) return true;
+
+  const metaLocationName = typeof meta?.location_name === "string" ? meta.location_name.trim() : "";
+  if (metaLocationName) return true;
+
+  const stationLocationName =
+    typeof stationMeta?.locationName === "string"
+      ? stationMeta.locationName.trim()
+      : typeof stationMeta?.location_name === "string"
+        ? stationMeta.location_name.trim()
+        : "";
+  if (stationLocationName) return true;
+
+  return false;
 }
 
 async function buildLegacyMonitoringStationsChartConfig(
@@ -161,7 +195,8 @@ async function buildLegacyMonitoringStationsChartConfig(
   };
 
   const devices = await listDevicesWithStations(pg);
-  const deviceLegends = devices.reduce<Record<string, string>>((acc, d) => {
+  const monitoringStationDevices = devices.filter(hasLegacyMonitoringStationBinding);
+  const deviceLegends = monitoringStationDevices.reduce<Record<string, string>>((acc, d) => {
     const key = legacyKeyFromMetadata(d.device_name, d.metadata);
     acc[key] = getLegacyStationLegendName(d);
     return acc;
@@ -317,6 +352,7 @@ type DeviceListRow = {
   metadata: unknown;
   station_id: string | null;
   station_name: string | null;
+  station_metadata: unknown;
   latitude: number | null;
   longitude: number | null;
   created_at: string;
@@ -339,6 +375,12 @@ function legacyKeyFromMetadata(deviceName: string, metadata: unknown): string {
   return deviceName;
 }
 
+function formalDevicePredicate(alias = "devices"): string {
+  return `COALESCE(${alias}.device_name, '') NOT LIKE 'field-hardware-replay-%'
+    AND COALESCE(${alias}.metadata->>'note', '') NOT IN ('field_hardware_uplink_replay', 'field_rehearsal', 'smoke_test', 'seed demo')
+    AND COALESCE(${alias}.metadata->>'identityClass', COALESCE(${alias}.metadata->>'identity_class', '')) NOT IN ('seed', 'replay', 'rehearsal', 'smoke_test', 'lab')`;
+}
+
 async function resolveDeviceId(pg: PgPool, input: string): Promise<string | null> {
   return withPgClient(pg, async (client) => resolveDeviceIdWithClient(client, input));
 }
@@ -349,15 +391,52 @@ async function resolveDeviceIdWithClient(client: PoolClient, input: string): Pro
     `
       SELECT device_id
       FROM devices
-      WHERE device_id::text = $1
+      WHERE (
+            device_id::text = $1
          OR device_name = $1
          OR metadata->>'legacy_device_id' = $1
          OR metadata#>>'{externalIds,legacy}' = $1
+      )
+        AND status != 'revoked'
+        AND ${formalDevicePredicate("devices")}
       LIMIT 1
     `,
     [input]
   );
   return row?.device_id ?? null;
+}
+
+async function resolveDefaultFormalDeviceId(pg: PgPool): Promise<string | null> {
+  return withPgClient(pg, async (client) => {
+    const row = await queryOne<{ device_id: string }>(
+      client,
+      `
+        SELECT device_id
+        FROM devices
+        WHERE status != 'revoked' AND ${formalDevicePredicate("devices")}
+        ORDER BY device_name ASC, created_at ASC
+        LIMIT 1
+      `,
+      []
+    );
+    return row?.device_id ?? null;
+  });
+}
+
+async function resolveLegacyTargetDevice(
+  pg: PgPool,
+  input: string | null | undefined
+): Promise<{ inputDeviceId: string; resolvedDeviceId: string } | null> {
+  const normalized = typeof input === "string" ? input.trim() : "";
+  if (normalized) {
+    const resolved = await resolveDeviceId(pg, normalized);
+    if (!resolved) return null;
+    return { inputDeviceId: normalized, resolvedDeviceId: resolved };
+  }
+
+  const fallback = await resolveDefaultFormalDeviceId(pg);
+  if (!fallback) return null;
+  return { inputDeviceId: fallback, resolvedDeviceId: fallback };
 }
 
 async function listDevicesWithStations(pg: PgPool): Promise<DeviceListRow[]> {
@@ -373,12 +452,13 @@ async function listDevicesWithStations(pg: PgPool): Promise<DeviceListRow[]> {
           d.metadata,
           d.station_id,
           s.station_name,
+          s.metadata AS station_metadata,
           s.latitude,
           s.longitude,
           to_char(d.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at
         FROM devices d
         LEFT JOIN stations s ON s.station_id = d.station_id
-        WHERE d.status != 'revoked'
+        WHERE d.status != 'revoked' AND ${formalDevicePredicate("d")}
         ORDER BY d.device_name
       `
     );
@@ -1148,15 +1228,15 @@ export function registerLegacyDeviceManagementCompatRoutes(
       return;
     }
 
-    const inputDeviceId = (parsed.data.device_id ?? parsed.data.deviceId ?? "").trim() || "device_1";
-    const limit = parsed.data.limit ?? 50;
-    const dataOnly = parsed.data.data_only ?? parsed.data.dataOnly ?? false;
-
-    const resolved = await resolveDeviceId(pg, inputDeviceId);
-    if (!resolved) {
+    const target = await resolveLegacyTargetDevice(pg, parsed.data.device_id ?? parsed.data.deviceId);
+    if (!target) {
       legacyFail(reply, 404, "device not found");
       return;
     }
+    const inputDeviceId = target.inputDeviceId;
+    const limit = parsed.data.limit ?? 50;
+    const dataOnly = parsed.data.data_only ?? parsed.data.dataOnly ?? false;
+    const resolved = target.resolvedDeviceId;
 
     if (dataOnly) {
       let points: { eventTime: string; latitude: number; longitude: number }[];
@@ -1327,12 +1407,13 @@ export function registerLegacyDeviceManagementCompatRoutes(
       return;
     }
 
-    const inputDeviceId = parsed.data.device_id ?? parsed.data.deviceId ?? "device_1";
-    const resolved = await resolveDeviceId(pg, inputDeviceId);
-    if (!resolved) {
-      legacyFail(reply, 404, "device not found", inputDeviceId);
+    const target = await resolveLegacyTargetDevice(pg, parsed.data.device_id ?? parsed.data.deviceId);
+    if (!target) {
+      legacyFail(reply, 404, "device not found");
       return;
     }
+    const inputDeviceId = target.inputDeviceId;
+    const resolved = target.resolvedDeviceId;
 
     const now = new Date();
     const today = utcStartOfDay(now);
@@ -1401,15 +1482,15 @@ export function registerLegacyDeviceManagementCompatRoutes(
       return;
     }
 
-    const inputDeviceId = parsed.data.device_id ?? "device_1";
-    const exportType = parsed.data.export_type ?? "today";
-    const format = parsed.data.format ?? "json";
-
-    const resolved = await resolveDeviceId(pg, inputDeviceId);
-    if (!resolved) {
-      legacyFail(reply, 404, "device not found", inputDeviceId);
+    const target = await resolveLegacyTargetDevice(pg, parsed.data.device_id);
+    if (!target) {
+      legacyFail(reply, 404, "device not found");
       return;
     }
+    const inputDeviceId = target.inputDeviceId;
+    const exportType = parsed.data.export_type ?? "today";
+    const format = parsed.data.format ?? "json";
+    const resolved = target.resolvedDeviceId;
 
     const now = new Date();
     let start: Date;
@@ -1492,12 +1573,13 @@ export function registerLegacyDeviceManagementCompatRoutes(
       return;
     }
 
-    const inputDeviceId = parsed.data.device_id ?? "device_1";
-    const resolved = await resolveDeviceId(pg, inputDeviceId);
-    if (!resolved) {
-      legacyFail(reply, 404, "device not found", inputDeviceId);
+    const target = await resolveLegacyTargetDevice(pg, parsed.data.device_id);
+    if (!target) {
+      legacyFail(reply, 404, "device not found");
       return;
     }
+    const inputDeviceId = target.inputDeviceId;
+    const resolved = target.resolvedDeviceId;
 
     const res = await ch.query({
       query: `
@@ -1541,13 +1623,14 @@ export function registerLegacyDeviceManagementCompatRoutes(
       return;
     }
 
-    const inputDeviceId = parsed.data.device_id ?? "device_1";
-    const reportType = parsed.data.report_type ?? "daily";
-    const resolved = await resolveDeviceId(pg, inputDeviceId);
-    if (!resolved) {
-      legacyFail(reply, 404, "device not found", inputDeviceId);
+    const target = await resolveLegacyTargetDevice(pg, parsed.data.device_id);
+    if (!target) {
+      legacyFail(reply, 404, "device not found");
       return;
     }
+    const inputDeviceId = target.inputDeviceId;
+    const reportType = parsed.data.report_type ?? "daily";
+    const resolved = target.resolvedDeviceId;
 
     const now = new Date();
     let start: Date;
@@ -2002,16 +2085,34 @@ export function registerLegacyDeviceManagementCompatRoutes(
       return;
     }
 
-    const devices = await listDevicesWithStations(pg);
+    const devices = (await listDevicesWithStations(pg)).filter(hasLegacyMonitoringStationBinding);
     const list = devices.map((d) => {
       const meta = d.metadata && typeof d.metadata === "object" ? (d.metadata as Record<string, unknown>) : null;
+      const stationMeta =
+        d.station_metadata && typeof d.station_metadata === "object"
+          ? (d.station_metadata as Record<string, unknown>)
+          : null;
 
       const metaStationNameRaw = typeof meta?.station_name === "string" ? meta.station_name.trim() : "";
       const metaLocationNameRaw = typeof meta?.location_name === "string" ? meta.location_name.trim() : "";
+      const stationDisplayNameRaw =
+        typeof stationMeta?.displayName === "string"
+          ? stationMeta.displayName.trim()
+          : typeof stationMeta?.display_name === "string"
+            ? stationMeta.display_name.trim()
+            : "";
+      const stationLocationNameRaw =
+        typeof stationMeta?.locationName === "string"
+          ? stationMeta.locationName.trim()
+          : typeof stationMeta?.location_name === "string"
+            ? stationMeta.location_name.trim()
+            : "";
       const metaStationName = metaStationNameRaw ? metaStationNameRaw : undefined;
       const metaLocationName = metaLocationNameRaw ? metaLocationNameRaw : undefined;
-      const stationName = metaStationName ?? metaLocationName ?? d.station_name ?? d.device_name;
-      const locationName = metaLocationName ?? d.station_name ?? "";
+      const stationDisplayName = stationDisplayNameRaw ? stationDisplayNameRaw : undefined;
+      const stationLocationName = stationLocationNameRaw ? stationLocationNameRaw : undefined;
+      const stationName = metaStationName ?? stationDisplayName ?? metaLocationName ?? d.station_name ?? d.device_name;
+      const locationName = metaLocationName ?? stationLocationName ?? d.station_name ?? "";
 
       const chartLegendNameRaw = typeof meta?.chart_legend_name === "string" ? meta.chart_legend_name.trim() : "";
       const chartLegendName = chartLegendNameRaw || stationName;
@@ -2316,6 +2417,7 @@ export function registerLegacyDeviceManagementCompatRoutes(
             d.metadata,
             d.station_id,
             s.station_name,
+            s.metadata AS station_metadata,
             s.latitude,
             s.longitude,
             to_char(d.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at
@@ -2333,12 +2435,30 @@ export function registerLegacyDeviceManagementCompatRoutes(
     }
 
     const meta = row.metadata && typeof row.metadata === "object" ? (row.metadata as Record<string, unknown>) : null;
+    const stationMeta =
+      row.station_metadata && typeof row.station_metadata === "object"
+        ? (row.station_metadata as Record<string, unknown>)
+        : null;
     const metaStationNameRaw = typeof meta?.station_name === "string" ? meta.station_name.trim() : "";
     const metaLocationNameRaw = typeof meta?.location_name === "string" ? meta.location_name.trim() : "";
+    const stationDisplayNameRaw =
+      typeof stationMeta?.displayName === "string"
+        ? stationMeta.displayName.trim()
+        : typeof stationMeta?.display_name === "string"
+          ? stationMeta.display_name.trim()
+          : "";
+    const stationLocationNameRaw =
+      typeof stationMeta?.locationName === "string"
+        ? stationMeta.locationName.trim()
+        : typeof stationMeta?.location_name === "string"
+          ? stationMeta.location_name.trim()
+          : "";
     const metaStationName = metaStationNameRaw ? metaStationNameRaw : undefined;
     const metaLocationName = metaLocationNameRaw ? metaLocationNameRaw : undefined;
-    const stationName = metaStationName ?? metaLocationName ?? row.station_name ?? row.device_name;
-    const locationName = metaLocationName ?? row.station_name ?? "";
+    const stationDisplayName = stationDisplayNameRaw ? stationDisplayNameRaw : undefined;
+    const stationLocationName = stationLocationNameRaw ? stationLocationNameRaw : undefined;
+    const stationName = metaStationName ?? stationDisplayName ?? metaLocationName ?? row.station_name ?? row.device_name;
+    const locationName = metaLocationName ?? stationLocationName ?? row.station_name ?? "";
 
     const chartLegendNameRaw = typeof meta?.chart_legend_name === "string" ? meta.chart_legend_name.trim() : "";
     const chartLegendName = chartLegendNameRaw || stationName;

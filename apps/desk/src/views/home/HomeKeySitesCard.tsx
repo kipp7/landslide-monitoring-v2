@@ -171,7 +171,7 @@ export function HomeKeySitesCard(props: { loading: boolean; stations: Station[];
                 <div className="desk-home-site-actions">
                   <Button size="small" icon={pinned ? <PushpinFilled /> : <PushpinOutlined />} onClick={() => togglePin(st.id)} />
                   <Button size="small" type="primary" disabled={!gnss} onClick={() => goToStationGps(st.id)}>
-                    GPS
+                    形变
                   </Button>
                   <Button size="small" onClick={() => goToStationManagement(st.id)}>
                     管理

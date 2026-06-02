@@ -1,4 +1,5 @@
 import { createHttpClient } from "../../apps/desk/src/api/httpClient";
+import { selectGpsProfileTargets } from "./gps-proof-profile-targets";
 
 type SessionState = {
   token: string | null;
@@ -26,16 +27,16 @@ async function main(): Promise<void> {
   state.token = login.token;
   state.refreshToken = login.refreshToken ?? null;
 
-  const [devices, baselines] = await Promise.all([client.devices.list(), client.baselines.list()]);
-  const baselineIds = new Set(baselines.map((item) => item.deviceId));
-  const targets = devices
-    .filter((device) => device.type === "gnss" && baselineIds.has(device.id))
-    .sort((left, right) => left.name.localeCompare(right.name))
-    .slice(0, 3);
-
-  if (targets.length < 3) {
-    throw new Error("gps profile evaluation requires 3 baseline-backed gnss devices");
-  }
+  const baselines = await client.baselines.list();
+  const targets = selectGpsProfileTargets(
+    baselines.map((baseline) => ({
+      id: baseline.deviceId,
+      name: baseline.deviceName,
+      deviceId: baseline.deviceId,
+      deviceName: baseline.deviceName
+    })),
+    "gps profile evaluation"
+  );
 
   const evaluations = [];
   for (const device of targets) {

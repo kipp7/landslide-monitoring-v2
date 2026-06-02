@@ -1,3 +1,9 @@
+---
+title: security-and-access-control
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/features/prd/security-and-access-control
+---
+
 ﻿# PRD：安全与访问控制（v2 基线）
 
 ## 1. 背景
@@ -56,4 +62,3 @@
 - ADR：`docs/architecture/adr/ADR-0002-device-identity-device-id-secret.md`
 - MQTT 契约：`docs/integrations/mqtt/README.md`
 - API 契约：`docs/integrations/api/README.md`
-

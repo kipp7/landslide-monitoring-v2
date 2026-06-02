@@ -1,3 +1,9 @@
+---
+title: unified-baseline-2026-03
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/unified/unified-baseline-2026-03
+---
+
 # 统一基线（2026-03）
 
 ## 1. 本次统一确认的目标

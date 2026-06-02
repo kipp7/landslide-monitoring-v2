@@ -1,3 +1,9 @@
+---
+title: TEMPLATE
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/architecture/adr/template
+---
+
 # ADR-XXXX: <Title>
 
 ## Status
@@ -31,4 +37,3 @@
 - Positive
 - Negative / Risks
 - Follow-ups（可选：需要补充的 PRD/契约/指南）
-

@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/features/spec/readme
+---
+
 # features/spec/
 
 规格（Spec）目录：在 PRD 的基础上补充“可实现的、可验证的规格”，但不要与 `integrations/` 的契约重复。
@@ -7,4 +13,3 @@
 - 算法/规则实现细节（例如窗口计算方式、缺失策略的精确定义）
 - 性能与容量指标（吞吐、延迟、保留期）
 - 数据质量规则（去重、乱序处理、DLQ 处理）
-

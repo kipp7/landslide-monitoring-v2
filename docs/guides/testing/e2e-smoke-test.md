@@ -1,3 +1,9 @@
+---
+title: e2e-smoke-test
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/testing/e2e-smoke-test
+---
+
 # 端到端冒烟测试（MQTT → Kafka → ClickHouse → API）
 
 目标：在单机环境验证“设备上报 → 写入时序库 → API 可查询”的最小闭环，确保我们后续重构只是在这个闭环上迭代，而不是边写边猜。

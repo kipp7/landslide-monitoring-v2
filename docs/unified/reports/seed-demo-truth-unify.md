@@ -1,3 +1,9 @@
+---
+title: seed-demo-truth-unify
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/unified/reports/seed-demo-truth-unify
+---
+
 # seed-demo-truth-unify
 
 ## Status

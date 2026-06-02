@@ -1,3 +1,5 @@
+import { GPS_PROFILE_BY_DEVICE_NAME, selectGpsProfileTargets } from "./gps-proof-profile-targets";
+
 type LoginEnvelope = {
   data: {
     token: string;
@@ -68,21 +70,12 @@ async function main(): Promise<void> {
   const headers = { Authorization: `Bearer ${login.data.token}` };
 
   const baselines = await requestJson<BaselinesEnvelope>(`${baseUrl}/api/v1/gps/baselines?page=1&pageSize=200`, { headers });
-  const targets = baselines.data.list.sort((left, right) => left.deviceName.localeCompare(right.deviceName)).slice(0, 3);
-  if (targets.length < 3) {
-    throw new Error("gps threshold horizon matrix requires 3 baseline-backed devices");
-  }
-
-  const profileByName: Record<string, "creep_rise" | "event_acceleration" | "cyclic_oscillation"> = {
-    device_1: "creep_rise",
-    device_2: "event_acceleration",
-    device_3: "cyclic_oscillation"
-  };
+  const targets = selectGpsProfileTargets(baselines.data.list, "gps threshold horizon matrix");
 
   const horizons = [6, 24, 72] as const;
   const entries = [];
   for (const target of targets) {
-    const profile = profileByName[target.deviceName];
+    const profile = GPS_PROFILE_BY_DEVICE_NAME[target.deviceName];
     const series = await requestJson<SeriesEnvelope>(
       `${baseUrl}/api/v1/gps/deformations/${encodeURIComponent(target.deviceId)}/series?startTime=${encodeURIComponent(
         new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()

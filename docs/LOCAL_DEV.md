@@ -1,3 +1,9 @@
+---
+title: LOCAL_DEV
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/local-dev
+---
+
 # 本地启动（Windows / PowerShell）
 
 ## 端口约定

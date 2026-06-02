@@ -1,3 +1,9 @@
+---
+title: 018-desk-ui
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/api/018-desk-ui
+---
+
 # 18) Desk 桌面端（apps/desk）API 对接与映射
 
 说明：

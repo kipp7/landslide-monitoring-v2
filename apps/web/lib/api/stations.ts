@@ -4,12 +4,16 @@ export type StationRow = {
   stationId: string
   stationCode: string
   stationName: string
+  displayName?: string | null
   status: 'active' | 'inactive' | 'maintenance'
   latitude: number | null
   longitude: number | null
   altitude: number | null
   createdAt: string
   updatedAt: string
+  regionCode?: string | null
+  slopeCode?: string | null
+  lifecycleStatus?: string | null
   metadata?: Record<string, unknown>
 }
 
@@ -55,4 +59,3 @@ export async function updateStation(stationId: string, body: UpdateStationReques
 export async function deleteStation(stationId: string): Promise<ApiSuccessResponse<unknown>> {
   return apiDeleteJson<ApiSuccessResponse<unknown>>(`/api/v1/stations/${encodeURIComponent(stationId)}`)
 }
-

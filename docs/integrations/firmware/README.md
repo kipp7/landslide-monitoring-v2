@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/firmware/readme
+---
+
 ﻿# integrations/firmware/
 
 本目录描述“单片机端固件/设备代理（Device Agent）”的对接约束，聚焦：
@@ -18,4 +24,3 @@
 
 - MQTT：`docs/integrations/mqtt/README.md`
 - MQTT 示例：`docs/integrations/mqtt/examples/README.md`
-

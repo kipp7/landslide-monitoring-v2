@@ -39,6 +39,7 @@ export type DeskHostInfo = {
   app?: { name?: string; version?: string };
   webview2?: { browserVersion?: string; userDataFolder?: string; additionalArgs?: string };
   os?: { version?: string };
+  api?: { mode?: "http" | "mock"; baseUrl?: string; force?: boolean; profile?: string };
 };
 
 function getBridge(): WebView2Bridge | null {

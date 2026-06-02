@@ -1,3 +1,9 @@
+---
+title: reference-web-route-inventory
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/roadmap/reference-web-route-inventory
+---
+
 # 参考区 Web 路由清单（Route Inventory）
 
 用途：用于“参考区 vs v2”的走查验收，避免漏页面入口。
@@ -21,4 +27,3 @@
 | `/login` | `openharmony/landslide-monitor/frontend/app/login/page.tsx` |
 | `/optimized-demo` | `openharmony/landslide-monitor/frontend/app/optimized-demo/page.tsx` |
 | `/system-monitor` | `openharmony/landslide-monitor/frontend/app/system-monitor/page.tsx` |
-

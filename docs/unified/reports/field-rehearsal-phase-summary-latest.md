@@ -1,3 +1,9 @@
+---
+title: field-rehearsal-phase-summary-latest
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/unified/reports/field-rehearsal-phase-summary-latest
+---
+
 # Field Rehearsal Phase Summary
 
 ## Current State

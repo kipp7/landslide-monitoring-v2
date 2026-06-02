@@ -1,3 +1,9 @@
+---
+title: tasks
+type: note
+permalink: landslide-monitoring-v2-mainline/openspec/changes/add-windows-desktop-native-features/tasks
+---
+
 ## 0. 窗口与体验（基础壳能力）
 - [x] 0.1 真全屏覆盖任务栏（使用 `rcMonitor`）
 - [x] 0.2 热键仅在窗口激活时生效（F11/ESC）

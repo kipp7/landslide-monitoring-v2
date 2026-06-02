@@ -1,3 +1,9 @@
+---
+title: checklists
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/ai/checklists
+---
+
 ﻿# AI/PR 文档一致性检查清单（文档阶段）
 
 本清单用于减少遗漏：当你修改任意一个领域（功能/契约/决策/运维），应同步更新对应入口。

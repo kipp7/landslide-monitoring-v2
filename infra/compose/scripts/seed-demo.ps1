@@ -103,6 +103,50 @@ WHERE COALESCE(metadata->>'note','') = 'smoke_test';
 DELETE FROM users
 WHERE username LIKE 'smoke_user_%';
 
+CREATE TEMP TABLE seed_demo_device_ids (device_id UUID PRIMARY KEY);
+
+INSERT INTO seed_demo_device_ids (device_id)
+SELECT d.device_id
+FROM devices d
+LEFT JOIN stations s ON s.station_id = d.station_id
+WHERE d.device_id IN (
+    '30000000-0000-0000-0000-000000000001',
+    '30000000-0000-0000-0000-000000000002',
+    '30000000-0000-0000-0000-000000000003',
+    '30000000-0000-0000-0000-000000000004',
+    '30000000-0000-0000-0000-000000000005',
+    '30000000-0000-0000-0000-000000000006'
+  )
+   OR (
+    d.device_name IN ('device_1', 'device_2', 'device_3', 'device_4', 'device_5', 'device_6')
+    AND COALESCE(s.station_code, '') IN ('DEMO001', 'DEMO002')
+   )
+   OR COALESCE(d.metadata->>'note', '') = 'seed demo';
+
+DELETE FROM alert_events
+WHERE device_id IN (SELECT device_id FROM seed_demo_device_ids);
+
+DELETE FROM ai_predictions
+WHERE device_id IN (SELECT device_id FROM seed_demo_device_ids);
+
+DELETE FROM device_command_events
+WHERE device_id IN (SELECT device_id FROM seed_demo_device_ids);
+
+DELETE FROM device_commands
+WHERE device_id IN (SELECT device_id FROM seed_demo_device_ids);
+
+DELETE FROM device_presence
+WHERE device_id IN (SELECT device_id FROM seed_demo_device_ids);
+
+DELETE FROM device_state
+WHERE device_id IN (SELECT device_id FROM seed_demo_device_ids);
+
+DELETE FROM gps_baselines
+WHERE device_id IN (SELECT device_id FROM seed_demo_device_ids);
+
+DELETE FROM devices
+WHERE device_id IN (SELECT device_id FROM seed_demo_device_ids);
+
 INSERT INTO stations (station_code, station_name, latitude, longitude, metadata)
 VALUES
   (
@@ -139,13 +183,15 @@ SET station_name = EXCLUDED.station_name,
 INSERT INTO devices (device_id, device_name, device_type, station_id, status, device_secret_hash, metadata, last_seen_at)
 VALUES
   (
-    '00000000-0000-0000-0000-000000000001',
+    '30000000-0000-0000-0000-000000000001',
     'device_1',
     'multi_sensor',
     (SELECT station_id FROM stations WHERE station_code='DEMO001'),
     'active',
     'dev-seed',
     jsonb_build_object(
+      'note', 'seed demo',
+      'identityClass', 'seed',
       'legacy_device_id', 'device_1',
       'chart_legend_name', convert_from(decode('31e58fb7e79b91e6b58be782b9', 'hex'), 'UTF8'),
       'station_name', convert_from(decode('e7a4bae4be8be79b91e6b58be782b941', 'hex'), 'UTF8'),
@@ -156,13 +202,15 @@ VALUES
     NOW()
   ),
   (
-    '00000000-0000-0000-0000-000000000002',
+    '30000000-0000-0000-0000-000000000002',
     'device_2',
     'multi_sensor',
     (SELECT station_id FROM stations WHERE station_code='DEMO001'),
     'active',
     'dev-seed',
     jsonb_build_object(
+      'note', 'seed demo',
+      'identityClass', 'seed',
       'legacy_device_id', 'device_2',
       'chart_legend_name', convert_from(decode('32e58fb7e79b91e6b58be782b9', 'hex'), 'UTF8'),
       'station_name', convert_from(decode('e7a4bae4be8be79b91e6b58be782b941', 'hex'), 'UTF8'),
@@ -173,13 +221,15 @@ VALUES
     NOW()
   ),
   (
-    '00000000-0000-0000-0000-000000000003',
+    '30000000-0000-0000-0000-000000000003',
     'device_3',
     'multi_sensor',
     (SELECT station_id FROM stations WHERE station_code='DEMO001'),
     'active',
     'dev-seed',
     jsonb_build_object(
+      'note', 'seed demo',
+      'identityClass', 'seed',
       'legacy_device_id', 'device_3',
       'chart_legend_name', convert_from(decode('33e58fb7e79b91e6b58be782b9', 'hex'), 'UTF8'),
       'station_name', convert_from(decode('e7a4bae4be8be79b91e6b58be782b941', 'hex'), 'UTF8'),
@@ -190,13 +240,15 @@ VALUES
     NOW()
   ),
   (
-    '00000000-0000-0000-0000-000000000004',
+    '30000000-0000-0000-0000-000000000004',
     'device_4',
     'rain',
     (SELECT station_id FROM stations WHERE station_code='DEMO002'),
     'inactive',
     'dev-seed',
     jsonb_build_object(
+      'note', 'seed demo',
+      'identityClass', 'seed',
       'legacy_device_id', 'device_4',
       'chart_legend_name', convert_from(decode('34e58fb7e79b91e6b58be782b9', 'hex'), 'UTF8'),
       'station_name', convert_from(decode('e7a4bae4be8be79b91e6b58be782b942', 'hex'), 'UTF8'),
@@ -207,13 +259,15 @@ VALUES
     NOW() - INTERVAL '3 days'
   ),
   (
-    '00000000-0000-0000-0000-000000000005',
+    '30000000-0000-0000-0000-000000000005',
     'device_5',
     'tilt',
     (SELECT station_id FROM stations WHERE station_code='DEMO002'),
     'active',
     'dev-seed',
     jsonb_build_object(
+      'note', 'seed demo',
+      'identityClass', 'seed',
       'legacy_device_id', 'device_5',
       'chart_legend_name', convert_from(decode('35e58fb7e79b91e6b58be782b9', 'hex'), 'UTF8'),
       'station_name', convert_from(decode('e7a4bae4be8be79b91e6b58be782b942', 'hex'), 'UTF8'),
@@ -224,13 +278,15 @@ VALUES
     NOW() - INTERVAL '2 days'
   ),
   (
-    '00000000-0000-0000-0000-000000000006',
+    '30000000-0000-0000-0000-000000000006',
     'device_6',
     'gnss',
     (SELECT station_id FROM stations WHERE station_code='DEMO002'),
     'active',
     'dev-seed',
     jsonb_build_object(
+      'note', 'seed demo',
+      'identityClass', 'seed',
       'legacy_device_id', 'device_6',
       'chart_legend_name', convert_from(decode('36e58fb7e79b91e6b58be782b9', 'hex'), 'UTF8'),
       'station_name', convert_from(decode('e7a4bae4be8be79b91e6b58be782b942', 'hex'), 'UTF8'),
@@ -252,7 +308,7 @@ SET device_name = EXCLUDED.device_name,
 INSERT INTO gps_baselines (device_id, method, points_count, baseline, computed_at, updated_at)
 VALUES
   (
-    '00000000-0000-0000-0000-000000000001',
+    '30000000-0000-0000-0000-000000000001',
     'manual',
     240,
     '{"latitude":22.684700,"longitude":108.351600,"altitude":12.3,"positionAccuracyMeters":1.2,"satelliteCount":12,"establishedBy":"seed","notes":"demo baseline"}'::jsonb,
@@ -260,7 +316,7 @@ VALUES
     NOW()
   ),
   (
-    '00000000-0000-0000-0000-000000000002',
+    '30000000-0000-0000-0000-000000000002',
     'manual',
     240,
     '{"latitude":22.684950,"longitude":108.351900,"altitude":12.4,"positionAccuracyMeters":1.3,"satelliteCount":11,"establishedBy":"seed","notes":"demo baseline"}'::jsonb,
@@ -268,7 +324,7 @@ VALUES
     NOW()
   ),
   (
-    '00000000-0000-0000-0000-000000000003',
+    '30000000-0000-0000-0000-000000000003',
     'manual',
     240,
     '{"latitude":22.684450,"longitude":108.351300,"altitude":12.2,"positionAccuracyMeters":1.1,"satelliteCount":13,"establishedBy":"seed","notes":"demo baseline"}'::jsonb,
@@ -439,7 +495,7 @@ VALUES
   (
     '10000000-0000-0000-0000-000000000001',
     'ALERT_TRIGGER',
-    '00000000-0000-0000-0000-000000000001',
+    '30000000-0000-0000-0000-000000000001',
     (SELECT station_id FROM stations WHERE station_code='DEMO001'),
     'medium',
     convert_from(decode('e6bc94e7a4bae5918ae8ada62d31', 'hex'), 'UTF8'),
@@ -461,7 +517,7 @@ VALUES
   (
     '10000000-0000-0000-0000-000000000002',
     'ALERT_TRIGGER',
-    '00000000-0000-0000-0000-000000000002',
+    '30000000-0000-0000-0000-000000000002',
     (SELECT station_id FROM stations WHERE station_code='DEMO001'),
     'high',
     convert_from(decode('e6bc94e7a4bae5918ae8ada62d32', 'hex'), 'UTF8'),
@@ -483,7 +539,7 @@ VALUES
   (
     '10000000-0000-0000-0000-000000000003',
     'ALERT_TRIGGER',
-    '00000000-0000-0000-0000-000000000003',
+    '30000000-0000-0000-0000-000000000003',
     (SELECT station_id FROM stations WHERE station_code='DEMO001'),
     'low',
     convert_from(decode('e6bc94e7a4bae5918ae8ada62d33', 'hex'), 'UTF8'),
@@ -519,7 +575,16 @@ $chDatabase = $env:CH_DATABASE
 if (-not $chDatabase) { $chDatabase = "landslide" }
 
 $chCleanupSql = @"
-TRUNCATE TABLE landslide.telemetry_raw;
+SET mutations_sync = 2;
+ALTER TABLE landslide.telemetry_raw DELETE
+WHERE device_id IN (
+  '30000000-0000-0000-0000-000000000001',
+  '30000000-0000-0000-0000-000000000002',
+  '30000000-0000-0000-0000-000000000003',
+  '30000000-0000-0000-0000-000000000004',
+  '30000000-0000-0000-0000-000000000005',
+  '30000000-0000-0000-0000-000000000006'
+);
 "@
 
 $chCleanupSql | docker compose -f $ComposeFile --env-file $EnvFile exec -T clickhouse clickhouse-client --user $chUser --password $chPassword --database $chDatabase --multiquery 1>$null
@@ -629,9 +694,9 @@ function Seed-ClickhouseDevice(
   Assert-LastExitCode "clickhouse-client failed: seed $deviceId"
 }
 
-Seed-ClickhouseDevice "00000000-0000-0000-0000-000000000001" 22.684700 108.351600 1.9e-10 1.5e-10 1.4e-8 1.0e-8 1.8e-8 1.4e-8 12.30 0 540
-Seed-ClickhouseDevice "00000000-0000-0000-0000-000000000002" 22.684950 108.351900 -2.6e-10 -2.0e-10 0.6e-8 0.5e-8 5.4e-8 4.7e-8 12.40 6 690
-Seed-ClickhouseDevice "00000000-0000-0000-0000-000000000003" 22.684450 108.351300 0.1e-10 -0.1e-10 2.6e-8 2.2e-8 0.4e-8 0.3e-8 12.20 14 360
+Seed-ClickhouseDevice "30000000-0000-0000-0000-000000000001" 22.684700 108.351600 1.9e-10 1.5e-10 1.4e-8 1.0e-8 1.8e-8 1.4e-8 12.30 0 540
+Seed-ClickhouseDevice "30000000-0000-0000-0000-000000000002" 22.684950 108.351900 -2.6e-10 -2.0e-10 0.6e-8 0.5e-8 5.4e-8 4.7e-8 12.40 6 690
+Seed-ClickhouseDevice "30000000-0000-0000-0000-000000000003" 22.684450 108.351300 0.1e-10 -0.1e-10 2.6e-8 2.2e-8 0.4e-8 0.3e-8 12.20 14 360
 
 $rainSql = @"
 INSERT INTO landslide.telemetry_raw
@@ -639,7 +704,7 @@ INSERT INTO landslide.telemetry_raw
 SELECT
   toStartOfDay(now64(3, 'UTC')) - toIntervalDay(6 - number) + toIntervalHour(8) AS received_ts,
   NULL AS event_ts,
-  '00000000-0000-0000-0000-000000000001' AS device_id,
+  '30000000-0000-0000-0000-000000000001' AS device_id,
   'rainfall_mm' AS sensor_key,
   toUInt64(number) AS seq,
   arrayElement([12.0, 8.0, 15.0, 6.0, 9.0, 18.0, 11.0], number + 1) AS value_f64,

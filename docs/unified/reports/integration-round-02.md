@@ -1,3 +1,9 @@
+---
+title: integration-round-02
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/unified/reports/integration-round-02
+---
+
 # 第二轮集成报告
 
 ## 基本信息

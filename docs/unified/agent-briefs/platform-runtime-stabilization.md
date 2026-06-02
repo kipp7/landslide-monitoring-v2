@@ -1,3 +1,9 @@
+---
+title: platform-runtime-stabilization
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/unified/agent-briefs/platform-runtime-stabilization
+---
+
 # 任务简报：platform-runtime-stabilization
 
 ## 当前状态

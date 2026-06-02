@@ -1,3 +1,9 @@
+---
+title: Group7-Video-Script
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/archive/2026-01-05-web-dev-artifacts/apps-web/docs/group7-video-script
+---
+
 # Group 7 演示视频脚本（按“现状→问题→方案→架构→模块”结构）
 
 建议1080p，30fps；两套时长：120s 与 150s。结构统一：山体滑坡现状→传统系统问题→我们设计的系统→整体架构→逐模块介绍→收尾。

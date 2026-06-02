@@ -1,3 +1,9 @@
+---
+title: firmware-simulator
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/mqtt/examples/firmware-simulator
+---
+
 # Firmware Simulator (single-host dev/e2e)
 
 目的：提供一个“可运行”的固件侧 MQTT 行为参考，实现：
@@ -46,4 +52,3 @@ powershell -NoProfile -ExecutionPolicy Bypass -File infra/compose/scripts/e2e-sm
 
 - `firmware-sim.stdout.log` / `firmware-sim.stderr.log`
 - `firmware-sim.state.json`
-

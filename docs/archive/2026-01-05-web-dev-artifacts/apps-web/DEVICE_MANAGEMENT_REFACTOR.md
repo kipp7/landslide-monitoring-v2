@@ -1,3 +1,9 @@
+---
+title: DEVICE_MANAGEMENT_REFACTOR
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/archive/2026-01-05-web-dev-artifacts/apps-web/device-management-refactor
+---
+
 # 设备管理页面重构总结
 
 ## 🔧 重构完成的工作

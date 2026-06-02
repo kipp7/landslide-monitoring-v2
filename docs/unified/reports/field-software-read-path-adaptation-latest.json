@@ -1,8 +1,10 @@
 ﻿{
-    "generatedAt":  "2026-04-09T12:40:35Z",
+    "generatedAt":  "2026-04-14T05:47:37Z",
     "accepted":  true,
+    "operationallyReady":  true,
     "mode":  "field-software-read-path-adaptation",
     "currentBoundary":  "software-read-path-adaptation-ready",
+    "operationalBoundary":  "software-read-path-adaptation-operational-ready",
     "upstreamBaselines":  {
                               "centerRuntimeFreeze":  {
                                                           "file":  "docs/unified/reports/field-center-runtime-freeze-latest.json",
@@ -11,8 +13,24 @@
                                                       },
                               "rk3568ProductionUplinkFreeze":  {
                                                                    "file":  "docs/unified/reports/field-rk3568-production-uplink-freeze-latest.json",
-                                                                   "accepted":  true,
-                                                                   "boundary":  "rk3568-production-uplink-freeze-ready"
+                                                                   "accepted":  false,
+                                                                   "boundary":  "rk3568-production-uplink-freeze-needs-review",
+                                                                   "operationallyReady":  false,
+                                                                   "strictFailureKeys":  [
+                                                                                             "runtimeNodeCExpectedState"
+                                                                                         ],
+                                                                   "runtime":  {
+                                                                                   "serviceActive":  "active",
+                                                                                   "mqttConnected":  true,
+                                                                                   "serialOpen":  true,
+                                                                                   "spoolPending":  0,
+                                                                                   "rejectedWriteFailures":  0,
+                                                                                   "nodeStatuses":  {
+                                                                                                        "nodeA":  "online",
+                                                                                                        "nodeB":  "online",
+                                                                                                        "nodeC":  "configured"
+                                                                                                    }
+                                                                               }
                                                                },
                               "liveClosure":  {
                                                   "file":  "docs/unified/reports/field-rk3568-center-live-closure-latest.json",
@@ -20,6 +38,11 @@
                                                   "boundary":  "rk3568-live-center-closure-ready"
                                               }
                           },
+    "liveReadPath":  {
+                         "apiBaseUrl":  "http://127.0.0.1:8080",
+                         "webBaseUrl":  "http://127.0.0.1:3000",
+                         "freshnessSeconds":  180
+                     },
     "expectedFieldMetrics":  [
                                  "accel_x_g",
                                  "accel_y_g",
@@ -72,8 +95,8 @@
                                                                "tilt_y_deg",
                                                                "warning_flag"
                                                            ],
-                                        "apiUpdatedAt":  "2026-04-09T11:11:56Z",
-                                        "webUpdatedAt":  "2026-04-09T11:11:56Z"
+                                        "apiUpdatedAt":  "2026-04-14T05:47:34Z",
+                                        "webUpdatedAt":  "2026-04-14T05:47:34Z"
                                     },
                           "nodeB":  {
                                         "deviceId":  "00000000-0000-0000-0000-000000000002",
@@ -110,8 +133,46 @@
                                                                "tilt_y_deg",
                                                                "warning_flag"
                                                            ],
-                                        "apiUpdatedAt":  "2026-04-09T11:11:54Z",
-                                        "webUpdatedAt":  "2026-04-09T11:11:54Z"
+                                        "apiUpdatedAt":  "2026-04-14T05:47:19Z",
+                                        "webUpdatedAt":  "2026-04-14T05:47:19Z"
+                                    },
+                          "nodeC":  {
+                                        "deviceId":  "00000000-0000-0000-0000-000000000003",
+                                        "installLabel":  "FIELD-NODE-C",
+                                        "apiMetricsKeys":  [
+                                                               "accel_x_g",
+                                                               "accel_y_g",
+                                                               "accel_z_g",
+                                                               "battery_pct",
+                                                               "gps_latitude",
+                                                               "gps_longitude",
+                                                               "gyro_x_dps",
+                                                               "gyro_y_dps",
+                                                               "gyro_z_dps",
+                                                               "humidity_pct",
+                                                               "temperature_c",
+                                                               "tilt_x_deg",
+                                                               "tilt_y_deg",
+                                                               "warning_flag"
+                                                           ],
+                                        "webMetricsKeys":  [
+                                                               "accel_x_g",
+                                                               "accel_y_g",
+                                                               "accel_z_g",
+                                                               "battery_pct",
+                                                               "gps_latitude",
+                                                               "gps_longitude",
+                                                               "gyro_x_dps",
+                                                               "gyro_y_dps",
+                                                               "gyro_z_dps",
+                                                               "humidity_pct",
+                                                               "temperature_c",
+                                                               "tilt_x_deg",
+                                                               "tilt_y_deg",
+                                                               "warning_flag"
+                                                           ],
+                                        "apiUpdatedAt":  "2026-04-13T11:59:47Z",
+                                        "webUpdatedAt":  "2026-04-13T11:59:47Z"
                                     }
                       },
     "staticBindings":  {
@@ -119,9 +180,45 @@
                            "apiDataRouteFile":  "services/api/src/routes/data.ts",
                            "apiReadmeFile":  "services/api/README.md"
                        },
+    "strictAttention":  {
+                            "strictAccepted":  false,
+                            "strictBoundary":  "software-read-path-adaptation-strict-needs-review",
+                            "rk3568ProductionFreezeAccepted":  false,
+                            "rk3568ProductionFreezeBoundary":  "rk3568-production-uplink-freeze-needs-review",
+                            "failureKeys":  [
+                                                "rk3568ProductionOperationalReady",
+                                                "nodeCApiPassed",
+                                                "nodeCWebPassed"
+                                            ],
+                            "productionFreezeFailureKeys":  [
+                                                                "runtimeNodeCExpectedState"
+                                                            ],
+                            "summary":  "operational-read-path-ready-but-strict-node-coverage-still-needs-review"
+                        },
+    "operationalSummary":  {
+                               "requiredNodeKeys":  [
+                                                        "nodeA",
+                                                        "nodeB"
+                                                    ],
+                               "pendingNodeKeys":  [
+                                                       "nodeC"
+                                                   ],
+                               "requiredNodeFailures":  [
+
+                                                        ],
+                               "pendingNodeOutstanding":  [
+                                                              "nodeC"
+                                                          ],
+                               "note":  "top-level acceptance follows the AB mainline; node C remains explicitly tracked as pending"
+                           },
     "failureKeys":  [
 
                     ],
+    "strictFailureKeys":  [
+                              "rk3568ProductionOperationalReady",
+                              "nodeCApiPassed",
+                              "nodeCWebPassed"
+                          ],
     "nextUse":  [
                     "refresh software read-path adaptation: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\check-field-software-read-path-adaptation.ps1",
                     "refresh live closure baseline: powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev\\check-field-rk3568-center-live-closure.ps1 -BoardPassword \u003cpassword\u003e -AllowUnsafeSecrets",
@@ -141,88 +238,28 @@
                        "expected":  "center-runtime-freeze-ready"
                    },
                    {
-                       "key":  "rk3568ProductionFreezeAccepted",
+                       "key":  "rk3568ProductionOperationalReady",
                        "ok":  true,
                        "actual":  true,
                        "expected":  true
                    },
                    {
-                       "key":  "rk3568ProductionFreezeBoundary",
+                       "key":  "requiredNodesLive",
                        "ok":  true,
-                       "actual":  "rk3568-production-uplink-freeze-ready",
-                       "expected":  "rk3568-production-uplink-freeze-ready"
+                       "actual":  [
+
+                                  ],
+                       "expected":  [
+
+                                    ]
                    },
                    {
-                       "key":  "liveClosureAccepted",
+                       "key":  "pendingNodesTracked",
                        "ok":  true,
-                       "actual":  true,
-                       "expected":  true
-                   },
-                   {
-                       "key":  "liveClosureBoundary",
-                       "ok":  true,
-                       "actual":  "rk3568-live-center-closure-ready",
-                       "expected":  "rk3568-live-center-closure-ready"
-                   },
-                   {
-                       "key":  "nodeAApiPassed",
-                       "ok":  true,
-                       "actual":  true,
-                       "expected":  true
-                   },
-                   {
-                       "key":  "nodeAApiMetricsContract",
-                       "ok":  true,
-                       "actual":  14,
-                       "expected":  14
-                   },
-                   {
-                       "key":  "nodeAWebPassed",
-                       "ok":  true,
-                       "actual":  true,
-                       "expected":  true
-                   },
-                   {
-                       "key":  "nodeAWebMetricsContract",
-                       "ok":  true,
-                       "actual":  14,
-                       "expected":  14
-                   },
-                   {
-                       "key":  "nodeAApiWebParity",
-                       "ok":  true,
-                       "actual":  14,
-                       "expected":  14
-                   },
-                   {
-                       "key":  "nodeBApiPassed",
-                       "ok":  true,
-                       "actual":  true,
-                       "expected":  true
-                   },
-                   {
-                       "key":  "nodeBApiMetricsContract",
-                       "ok":  true,
-                       "actual":  14,
-                       "expected":  14
-                   },
-                   {
-                       "key":  "nodeBWebPassed",
-                       "ok":  true,
-                       "actual":  true,
-                       "expected":  true
-                   },
-                   {
-                       "key":  "nodeBWebMetricsContract",
-                       "ok":  true,
-                       "actual":  14,
-                       "expected":  14
-                   },
-                   {
-                       "key":  "nodeBApiWebParity",
-                       "ok":  true,
-                       "actual":  14,
-                       "expected":  14
+                       "actual":  [
+                                      "nodeC"
+                                  ],
+                       "expected":  "tracked-as-pending"
                    },
                    {
                        "key":  "webDevicesApiUsesDevicesEndpoint",
@@ -254,5 +291,169 @@
                        "actual":  true,
                        "expected":  true
                    }
-               ]
+               ],
+    "strictChecks":  [
+                         {
+                             "key":  "centerRuntimeFreezeAccepted",
+                             "ok":  true,
+                             "actual":  true,
+                             "expected":  true
+                         },
+                         {
+                             "key":  "centerRuntimeFreezeBoundary",
+                             "ok":  true,
+                             "actual":  "center-runtime-freeze-ready",
+                             "expected":  "center-runtime-freeze-ready"
+                         },
+                         {
+                             "key":  "rk3568ProductionOperationalReady",
+                             "ok":  false,
+                             "actual":  false,
+                             "expected":  true
+                         },
+                         {
+                             "key":  "rk3568ProductionServiceActive",
+                             "ok":  true,
+                             "actual":  "active",
+                             "expected":  "active"
+                         },
+                         {
+                             "key":  "rk3568ProductionMqttConnected",
+                             "ok":  true,
+                             "actual":  true,
+                             "expected":  true
+                         },
+                         {
+                             "key":  "rk3568ProductionSerialOpen",
+                             "ok":  true,
+                             "actual":  true,
+                             "expected":  true
+                         },
+                         {
+                             "key":  "rk3568ProductionSpoolPendingZero",
+                             "ok":  true,
+                             "actual":  0,
+                             "expected":  0
+                         },
+                         {
+                             "key":  "nodeAApiPassed",
+                             "ok":  true,
+                             "actual":  true,
+                             "expected":  true
+                         },
+                         {
+                             "key":  "nodeAApiMetricsContract",
+                             "ok":  true,
+                             "actual":  14,
+                             "expected":  14
+                         },
+                         {
+                             "key":  "nodeAWebPassed",
+                             "ok":  true,
+                             "actual":  true,
+                             "expected":  true
+                         },
+                         {
+                             "key":  "nodeAWebMetricsContract",
+                             "ok":  true,
+                             "actual":  14,
+                             "expected":  14
+                         },
+                         {
+                             "key":  "nodeAApiWebParity",
+                             "ok":  true,
+                             "actual":  14,
+                             "expected":  14
+                         },
+                         {
+                             "key":  "nodeBApiPassed",
+                             "ok":  true,
+                             "actual":  true,
+                             "expected":  true
+                         },
+                         {
+                             "key":  "nodeBApiMetricsContract",
+                             "ok":  true,
+                             "actual":  14,
+                             "expected":  14
+                         },
+                         {
+                             "key":  "nodeBWebPassed",
+                             "ok":  true,
+                             "actual":  true,
+                             "expected":  true
+                         },
+                         {
+                             "key":  "nodeBWebMetricsContract",
+                             "ok":  true,
+                             "actual":  14,
+                             "expected":  14
+                         },
+                         {
+                             "key":  "nodeBApiWebParity",
+                             "ok":  true,
+                             "actual":  14,
+                             "expected":  14
+                         },
+                         {
+                             "key":  "nodeCApiPassed",
+                             "ok":  false,
+                             "actual":  false,
+                             "expected":  true
+                         },
+                         {
+                             "key":  "nodeCApiMetricsContract",
+                             "ok":  true,
+                             "actual":  14,
+                             "expected":  14
+                         },
+                         {
+                             "key":  "nodeCWebPassed",
+                             "ok":  false,
+                             "actual":  false,
+                             "expected":  true
+                         },
+                         {
+                             "key":  "nodeCWebMetricsContract",
+                             "ok":  true,
+                             "actual":  14,
+                             "expected":  14
+                         },
+                         {
+                             "key":  "nodeCApiWebParity",
+                             "ok":  true,
+                             "actual":  14,
+                             "expected":  14
+                         },
+                         {
+                             "key":  "webDevicesApiUsesDevicesEndpoint",
+                             "ok":  true,
+                             "actual":  true,
+                             "expected":  true
+                         },
+                         {
+                             "key":  "webDevicesApiUsesStateEndpoint",
+                             "ok":  true,
+                             "actual":  true,
+                             "expected":  true
+                         },
+                         {
+                             "key":  "apiRouteExposesStateEndpoint",
+                             "ok":  true,
+                             "actual":  true,
+                             "expected":  true
+                         },
+                         {
+                             "key":  "apiRouteUsesDeviceState",
+                             "ok":  true,
+                             "actual":  true,
+                             "expected":  true
+                         },
+                         {
+                             "key":  "apiReadmeMentionsStateEndpoint",
+                             "ok":  true,
+                             "actual":  true,
+                             "expected":  true
+                         }
+                     ]
 }

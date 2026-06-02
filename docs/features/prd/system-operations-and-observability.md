@@ -1,3 +1,9 @@
+---
+title: system-operations-and-observability
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/features/prd/system-operations-and-observability
+---
+
 ﻿# PRD：系统运维与可观测性（单机可恢复）
 
 ## 1. 背景
@@ -26,4 +32,3 @@ v2 采用多组件链路（MQTT/Kafka/PostgreSQL/ClickHouse/Redis），单机部
 
 - API：`docs/integrations/api/07-system.md`
 - Runbook：`docs/guides/runbooks/single-host-runbook.md`
-

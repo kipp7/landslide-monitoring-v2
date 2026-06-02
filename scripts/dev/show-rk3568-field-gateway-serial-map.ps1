@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-  [string]$BoardHost = "192.168.124.172",
+  [string]$BoardHost = "192.168.124.179",
   [string]$User = "linaro",
   [string]$Password = "",
   [int]$SshPort = 22,

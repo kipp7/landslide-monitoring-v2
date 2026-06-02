@@ -2,8 +2,9 @@
 title: history-and-journals
 type: note
 tags:
-  - reference
+- reference
 status: active
+permalink: landslide-monitoring-v2-mainline/memory/references/history-and-journals
 ---
 
 # Reference: history-and-journals

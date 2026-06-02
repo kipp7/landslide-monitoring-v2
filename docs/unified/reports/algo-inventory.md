@@ -1,3 +1,9 @@
+---
+title: algo-inventory
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/unified/reports/algo-inventory
+---
+
 # 算法清点报告
 
 ## 基本信息

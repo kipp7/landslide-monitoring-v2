@@ -1,3 +1,9 @@
+---
+title: 01-auth
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/api/01-auth
+---
+
 # 认证接口（v2：UUID 用户）
 
 后端采用 JWT（Access Token + Refresh Token）。所有用户 ID 使用 UUID 字符串。

@@ -1,3 +1,9 @@
+---
+title: overview
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/architecture/overview
+---
+
 ﻿# Architecture Overview（单机 v2）
 
 本文件提供“系统架构的长期事实”（偏 Why/What），实现细节请参考 `guides/` 与 `integrations/`。

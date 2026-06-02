@@ -1,4 +1,10 @@
 import type { Baseline, Device, Station } from "../api/client";
+import {
+  formatInstallLabelDisplay,
+  formatLifecycleStatusDisplay,
+  formatRegistryStatusDisplay,
+  formatWarningFlagDisplay,
+} from "../utils/fieldIdentityDisplay";
 
 export type DeviceManagementSensorRow = {
   id: string;
@@ -45,12 +51,32 @@ function toCsv(lines: Array<Array<string | number>>): string {
 
 export function buildDevicesExport(devices: Device[]): PreparedExport {
   const rows = [
-    ["deviceId", "name", "stationId", "stationName", "type", "status", "lastSeenAt"],
+    [
+      "设备ID",
+      "原始设备名",
+      "展示名称",
+      "站点ID",
+      "站点编码",
+      "站点名称",
+      "区域编码",
+      "边坡编码",
+      "节点编码",
+      "网关编码",
+      "设备类型",
+      "设备状态",
+      "最后上报时间"
+    ],
     ...devices.map((device) => [
       device.id,
+      device.deviceName ?? device.id,
       device.name,
       device.stationId,
+      device.stationCode ?? "",
       device.stationName,
+      device.regionCode ?? "",
+      device.slopeCode ?? "",
+      device.nodeCode ?? "",
+      device.gatewayCode ?? "",
       device.type,
       device.status,
       device.lastSeenAt
@@ -65,7 +91,7 @@ export function buildDevicesExport(devices: Device[]): PreparedExport {
 
 export function buildBaselinesExport(baselines: Baseline[]): PreparedExport {
   const rows = [
-    ["deviceId", "deviceName", "baselineLat", "baselineLng", "baselineAlt", "establishedBy", "establishedTime", "status", "notes"],
+    ["设备ID", "设备名称", "基线纬度", "基线经度", "基线高程", "建立人", "建立时间", "状态", "备注"],
     ...baselines.map((baseline) => [
       baseline.deviceId,
       baseline.deviceName,
@@ -87,7 +113,7 @@ export function buildBaselinesExport(baselines: Baseline[]): PreparedExport {
 
 export function buildSensorExport(rows: DeviceManagementSensorRow[]): PreparedExport {
   const csvRows = [
-    ["time", "temperature", "humidity", "dispMm", "rainMm"],
+    ["时间", "温度", "湿度", "位移(mm)", "雨量(mm)"],
     ...rows.map((row) => [row.time, row.temperature, row.humidity, row.dispMm, row.rainMm])
   ];
   return {
@@ -102,9 +128,19 @@ export function buildDeviceDetailText(input: DeviceDetailCopyInput): string {
   return [
     `设备名称: ${device.name}`,
     `设备ID: ${device.id}`,
+    `原始设备名: ${device.deviceName ?? "-"}`,
+    `历史设备ID: ${device.legacyDeviceId ?? "-"}`,
     `设备类型: ${device.type}`,
-    `设备状态: ${device.status}`,
+    `在线状态: ${device.status}`,
+    `接入控制: ${formatRegistryStatusDisplay(device.registryStatus, "-")}`,
     `所属站点: ${device.stationName}`,
+    `站点编码: ${device.stationCode ?? "-"}`,
+    `区域编码: ${device.regionCode ?? "-"}`,
+    `边坡编码: ${device.slopeCode ?? "-"}`,
+    `节点编码: ${device.nodeCode ?? "-"}`,
+    `网关编码: ${device.gatewayCode ?? "-"}`,
+    `安装标识: ${formatInstallLabelDisplay(device.installLabel, "-")}`,
+    `生命周期状态: ${formatLifecycleStatusDisplay(device.lifecycleStatus, "-")}`,
     `站点区域: ${station?.area ?? "-"}`,
     `站点风险: ${station?.risk ?? "-"}`,
     `最后上报: ${new Date(device.lastSeenAt).toLocaleString("zh-CN")}`,
@@ -117,7 +153,7 @@ export function buildDeviceDetailText(input: DeviceDetailCopyInput): string {
     `温度: ${metrics.temperatureC == null ? "-" : `${metrics.temperatureC.toFixed(1)}°C`}`,
     `湿度: ${metrics.humidityPct == null ? "-" : `${metrics.humidityPct.toFixed(0)}%`}`,
     `倾角 X/Y: ${metrics.tiltXDeg == null || metrics.tiltYDeg == null ? "-" : `${metrics.tiltXDeg.toFixed(2)} / ${metrics.tiltYDeg.toFixed(2)}°`}`,
-    `warning_flag: ${metrics.warningFlag == null ? "-" : metrics.warningFlag ? "true" : "false"}`
+    `预警状态: ${formatWarningFlagDisplay(metrics.warningFlag, "-")}`
   ].join("\r\n");
 }
 

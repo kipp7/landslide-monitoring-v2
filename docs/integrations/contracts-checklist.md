@@ -1,3 +1,9 @@
+---
+title: contracts-checklist
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/contracts-checklist
+---
+
 ﻿# 契约完整性清单（v2：必须 100% 对齐）
 
 本清单的目标是把“契约优先”落地为**可检查项**。当你认为“契约已完成”时，应逐项对照确认，避免遗漏导致前后端/设备/存储不一致。

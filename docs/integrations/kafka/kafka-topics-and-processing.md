@@ -1,3 +1,9 @@
+---
+title: kafka-topics-and-processing
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/kafka/kafka-topics-and-processing
+---
+
 ﻿# Kafka 主题规划与处理链路（单机也按大规模标准写）
 
 目标：削峰、可回放、可并行消费、坏数据隔离（DLQ），保证后续数据量增长时主要靠“扩容/调参”而不是改业务代码。

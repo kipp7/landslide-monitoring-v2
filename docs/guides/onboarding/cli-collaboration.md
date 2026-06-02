@@ -1,3 +1,9 @@
+---
+title: cli-collaboration
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/onboarding/cli-collaboration
+---
+
 # CLI 协作指南
 
 ## 1. 目标

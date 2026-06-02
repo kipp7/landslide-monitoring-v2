@@ -1,3 +1,9 @@
+---
+title: report-template
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/unified/reports/report-template
+---
+
 # 任务报告模板
 
 ## 基本信息
@@ -33,4 +39,4 @@
 
 ## 下一步建议
 
-- 
+-

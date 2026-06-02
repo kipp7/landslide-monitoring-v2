@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/mqtt/readme
+---
+
 ﻿# integrations/mqtt/
 
 该目录描述设备接入的对接契约（MQTT Broker、Topic、Payload、鉴权/ACL）。

@@ -1,3 +1,9 @@
+---
+title: v2-module-workstreams
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/roadmap/v2-module-workstreams
+---
+
 # v2 模块化并行推进（Workstreams）
 
 目的：把“旧项目（参考区 `E:\学校\06 工作区\2\openharmony\landslide-monitor`）里已有的前端/后端能力”按模块拆分，在 v2 仓库 `E:\学校\02 项目\99 山体滑坡优化完善\landslide-monitoring-v2` 中**并发推进**，最终做到**功能不缺失**，且符合 v2 的契约/架构/门禁/合并规范。

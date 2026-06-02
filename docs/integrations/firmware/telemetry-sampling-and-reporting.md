@@ -1,3 +1,9 @@
+---
+title: telemetry-sampling-and-reporting
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/firmware/telemetry-sampling-and-reporting
+---
+
 # 采样与上报策略（固件必须遵守）
 
 目标：按“最坏情况”设计设备行为，但实现不写死，能通过命令动态调整；同时保证后端能长期承载。
@@ -61,4 +67,3 @@
 
 - 单机链路压力主要来自 report_interval，而不是 sampling
 - 采样频率提升时，建议上报做窗口聚合（min/max/avg/last）
-

@@ -1,3 +1,9 @@
+---
+title: 09-gps-deformations
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/api/09-gps-deformations
+---
+
 # GPS 形变（Deformations）
 
 本模块对应参考区的“GPS 形变/趋势分析”的 **API-only** 闭环：基于 PostgreSQL 的基准点（baseline）与 ClickHouse 的 GPS 遥测，计算位移时间序列。

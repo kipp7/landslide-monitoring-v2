@@ -16,9 +16,19 @@ MQTT_USERNAME="${MQTT_USERNAME:-}"
 MQTT_PASSWORD="${MQTT_PASSWORD:-}"
 SERIAL_DEVICE="${SERIAL_DEVICE:-/dev/ttyS3}"
 SERIAL_BAUD_RATE="${SERIAL_BAUD_RATE:-115200}"
+FIELD_LINK_MODE="${FIELD_LINK_MODE:-cobs-crc-v1}"
 MQTT_TOPIC_TELEMETRY_PREFIX="${MQTT_TOPIC_TELEMETRY_PREFIX:-telemetry/}"
 MQTT_TOPIC_COMMAND_PREFIX="${MQTT_TOPIC_COMMAND_PREFIX:-cmd/}"
 MQTT_TOPIC_ACK_PREFIX="${MQTT_TOPIC_ACK_PREFIX:-cmd_ack/}"
+SOUTHBOUND_NODES_JSON="${SOUTHBOUND_NODES_JSON:-[{\"fieldNodeId\":\"A\",\"deviceId\":\"00000000-0000-0000-0000-000000000001\",\"installLabel\":\"FIELD-NODE-A\",\"southboundPort\":\"/dev/ttyS3\",\"enabled\":true},{\"fieldNodeId\":\"B\",\"deviceId\":\"00000000-0000-0000-0000-000000000002\",\"installLabel\":\"FIELD-NODE-B\",\"southboundPort\":\"/dev/ttyS3\",\"enabled\":true},{\"fieldNodeId\":\"C\",\"deviceId\":\"00000000-0000-0000-0000-000000000003\",\"installLabel\":\"FIELD-NODE-C\",\"southboundPort\":\"/dev/ttyS3\",\"enabled\":true}]}"
+COMMAND_ACK_QUIET_WINDOW_MS="${COMMAND_ACK_QUIET_WINDOW_MS:-10000}"
+COMMAND_PREWRITE_QUIET_MS="${COMMAND_PREWRITE_QUIET_MS:-400}"
+COMMAND_PREWRITE_MAX_WAIT_MS="${COMMAND_PREWRITE_MAX_WAIT_MS:-4000}"
+SOUTHBOUND_POLLING_ENABLED="${SOUTHBOUND_POLLING_ENABLED:-true}"
+SOUTHBOUND_POLLING_COMMAND_TYPE="${SOUTHBOUND_POLLING_COMMAND_TYPE:-poll_latest_telemetry}"
+SOUTHBOUND_POLLING_INTERVAL_MS="${SOUTHBOUND_POLLING_INTERVAL_MS:-500}"
+SOUTHBOUND_POLLING_SESSION_TIMEOUT_MS="${SOUTHBOUND_POLLING_SESSION_TIMEOUT_MS:-6000}"
+SOUTHBOUND_POLLING_SUPPRESS_ACK_PUBLISH="${SOUTHBOUND_POLLING_SUPPRESS_ACK_PUBLISH:-true}"
 BUILD_FIRST=1
 ENABLE_NOW=1
 OVERWRITE_ENV=0
@@ -40,9 +50,19 @@ Options:
   --mqtt-password <value>     MQTT password
   --serial-device <path>      Serial device path
   --serial-baud-rate <rate>   Serial baud rate
+  --field-link-mode <mode>    Southbound wire mode (raw-json|cobs-crc-v1)
   --mqtt-topic-telemetry-prefix <value>  Telemetry topic prefix
   --mqtt-topic-command-prefix <value>    Command topic prefix
   --mqtt-topic-ack-prefix <value>        Ack topic prefix
+  --southbound-nodes-json <json>         Shared-port node map JSON
+  --command-ack-quiet-window-ms <ms>     ACK quiet window on shared port
+  --command-prewrite-quiet-ms <ms>       Required quiet time before command write
+  --command-prewrite-max-wait-ms <ms>    Max wait for quiet time before write
+  --southbound-polling-enabled <bool>    Enable RK3568 internal polling
+  --southbound-polling-command-type <value> Internal poll command type
+  --southbound-polling-interval-ms <ms>  Internal polling scheduler tick
+  --southbound-polling-session-timeout-ms <ms> Poll ACK-to-telemetry session timeout
+  --southbound-polling-suppress-ack-publish <bool> Suppress internal poll ACK northbound publish
   --skip-build                Do not run npm install/build
   --no-enable                 Install only, do not enable/start service
   --overwrite-env             Replace existing environment file
@@ -95,6 +115,10 @@ while [[ $# -gt 0 ]]; do
       SERIAL_BAUD_RATE="$2"
       shift 2
       ;;
+    --field-link-mode)
+      FIELD_LINK_MODE="$2"
+      shift 2
+      ;;
     --mqtt-topic-telemetry-prefix)
       MQTT_TOPIC_TELEMETRY_PREFIX="$2"
       shift 2
@@ -105,6 +129,42 @@ while [[ $# -gt 0 ]]; do
       ;;
     --mqtt-topic-ack-prefix)
       MQTT_TOPIC_ACK_PREFIX="$2"
+      shift 2
+      ;;
+    --southbound-nodes-json)
+      SOUTHBOUND_NODES_JSON="$2"
+      shift 2
+      ;;
+    --command-ack-quiet-window-ms)
+      COMMAND_ACK_QUIET_WINDOW_MS="$2"
+      shift 2
+      ;;
+    --command-prewrite-quiet-ms)
+      COMMAND_PREWRITE_QUIET_MS="$2"
+      shift 2
+      ;;
+    --command-prewrite-max-wait-ms)
+      COMMAND_PREWRITE_MAX_WAIT_MS="$2"
+      shift 2
+      ;;
+    --southbound-polling-enabled)
+      SOUTHBOUND_POLLING_ENABLED="$2"
+      shift 2
+      ;;
+    --southbound-polling-command-type)
+      SOUTHBOUND_POLLING_COMMAND_TYPE="$2"
+      shift 2
+      ;;
+    --southbound-polling-interval-ms)
+      SOUTHBOUND_POLLING_INTERVAL_MS="$2"
+      shift 2
+      ;;
+    --southbound-polling-session-timeout-ms)
+      SOUTHBOUND_POLLING_SESSION_TIMEOUT_MS="$2"
+      shift 2
+      ;;
+    --southbound-polling-suppress-ack-publish)
+      SOUTHBOUND_POLLING_SUPPRESS_ACK_PUBLISH="$2"
       shift 2
       ;;
     --skip-build)
@@ -186,15 +246,25 @@ cat > "${ENV_FILE_PATH}" <<EOF
 SERVICE_NAME=field-gateway
 SERIAL_DEVICE=${SERIAL_DEVICE}
 SERIAL_BAUD_RATE=${SERIAL_BAUD_RATE}
+FIELD_LINK_MODE=${FIELD_LINK_MODE}
 MQTT_URL=${MQTT_URL}
 MQTT_USERNAME=${MQTT_USERNAME}
 MQTT_PASSWORD=${MQTT_PASSWORD}
 MQTT_TOPIC_TELEMETRY_PREFIX=${MQTT_TOPIC_TELEMETRY_PREFIX}
 MQTT_TOPIC_COMMAND_PREFIX=${MQTT_TOPIC_COMMAND_PREFIX}
 MQTT_TOPIC_ACK_PREFIX=${MQTT_TOPIC_ACK_PREFIX}
+SOUTHBOUND_NODES_JSON=${SOUTHBOUND_NODES_JSON}
 SPOOL_ROOT_DIR=${STATE_ROOT}/spool
 HEALTH_FILE_PATH=${STATE_ROOT}/health/runtime-health.json
 MQTT_PUBLISH_TIMEOUT_MS=8000
+COMMAND_ACK_QUIET_WINDOW_MS=${COMMAND_ACK_QUIET_WINDOW_MS}
+COMMAND_PREWRITE_QUIET_MS=${COMMAND_PREWRITE_QUIET_MS}
+COMMAND_PREWRITE_MAX_WAIT_MS=${COMMAND_PREWRITE_MAX_WAIT_MS}
+SOUTHBOUND_POLLING_ENABLED=${SOUTHBOUND_POLLING_ENABLED}
+SOUTHBOUND_POLLING_COMMAND_TYPE=${SOUTHBOUND_POLLING_COMMAND_TYPE}
+SOUTHBOUND_POLLING_INTERVAL_MS=${SOUTHBOUND_POLLING_INTERVAL_MS}
+SOUTHBOUND_POLLING_SESSION_TIMEOUT_MS=${SOUTHBOUND_POLLING_SESSION_TIMEOUT_MS}
+SOUTHBOUND_POLLING_SUPPRESS_ACK_PUBLISH=${SOUTHBOUND_POLLING_SUPPRESS_ACK_PUBLISH}
 REPLAY_INTERVAL_MS=5000
 HEALTH_EMIT_INTERVAL_MS=5000
 NODE_DEGRADED_AFTER_MS=15000

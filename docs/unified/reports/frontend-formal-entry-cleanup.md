@@ -1,3 +1,9 @@
+---
+title: frontend-formal-entry-cleanup
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/unified/reports/frontend-formal-entry-cleanup
+---
+
 # frontend-formal-entry-cleanup
 
 ## Status

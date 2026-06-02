@@ -1,21 +1,21 @@
 ﻿{
-    "generatedAt":  "2026-03-24T01:41:55Z",
+    "generatedAt":  "2026-04-16T01:53:23Z",
     "deliveryDir":  "artifacts/desk-win/delivery",
     "keep":  3,
     "keptDirectories":  [
-                            "desk-win-delivery-20260324-094122",
-                            "desk-win-delivery-20260324-093559",
-                            "desk-win-delivery-20260324-015337"
+                            "desk-win-delivery-20260416-095157",
+                            "desk-win-delivery-20260414-154356",
+                            "desk-win-delivery-20260414-131905"
                         ],
     "deletedDirectories":  [
-                               "desk-win-delivery-20260324-014304"
+                               "desk-win-delivery-20260414-125125"
                            ],
     "keptZips":  [
-                     "desk-win-delivery-20260324-094122.zip",
-                     "desk-win-delivery-20260324-093559.zip",
-                     "desk-win-delivery-20260324-015337.zip"
+                     "desk-win-delivery-20260416-095157.zip",
+                     "desk-win-delivery-20260414-154356.zip",
+                     "desk-win-delivery-20260414-131905.zip"
                  ],
     "deletedZips":  [
-                        "desk-win-delivery-20260324-014304.zip"
+                        "desk-win-delivery-20260414-125125.zip"
                     ]
 }

@@ -5,6 +5,7 @@ param(
   [string]$DeliveryHashFile = "docs/unified/reports/desk-win-delivery-hash-latest.json",
   [string]$DeliveryIndexFile = "docs/unified/reports/desk-win-delivery-index-latest.json",
   [string]$BuildChunkFile = "docs/unified/reports/desk-build-chunks-latest.json",
+  [string]$BoundaryReportFile = "docs/unified/reports/desk-api-boundary-latest.json",
   [string]$InstallerReportFile = "docs/unified/reports/desk-win-installer-latest.json",
   [string]$InstallerVerifyFile = "docs/unified/reports/desk-win-installer-verify-latest.json",
   [string]$CustomInstallerReportFile = "docs/unified/reports/desk-win-customba-installer-latest.json",
@@ -37,13 +38,14 @@ $fullBundleFile = Join-Path $repoRoot $DeliveryBundleFile
 $fullHashFile = Join-Path $repoRoot $DeliveryHashFile
 $fullDeliveryIndexFile = Join-Path $repoRoot $DeliveryIndexFile
 $fullBuildChunkFile = Join-Path $repoRoot $BuildChunkFile
+$fullBoundaryReportFile = Join-Path $repoRoot $BoundaryReportFile
 $fullInstallerReportFile = Join-Path $repoRoot $InstallerReportFile
 $fullInstallerVerifyFile = Join-Path $repoRoot $InstallerVerifyFile
 $fullCustomInstallerReportFile = Join-Path $repoRoot $CustomInstallerReportFile
 $fullCustomInstallerVerifyFile = Join-Path $repoRoot $CustomInstallerVerifyFile
 $fullOutFile = Join-Path $repoRoot $OutFile
 
-foreach ($path in @($fullDeliveryCheckFile, $fullBundleFile, $fullHashFile, $fullDeliveryIndexFile, $fullBuildChunkFile, $fullInstallerReportFile, $fullInstallerVerifyFile, $fullCustomInstallerReportFile, $fullCustomInstallerVerifyFile)) {
+foreach ($path in @($fullDeliveryCheckFile, $fullBundleFile, $fullHashFile, $fullDeliveryIndexFile, $fullBuildChunkFile, $fullBoundaryReportFile, $fullInstallerReportFile, $fullInstallerVerifyFile, $fullCustomInstallerReportFile, $fullCustomInstallerVerifyFile)) {
   if (-not (Test-Path $path)) {
     throw "required report not found: $path"
   }
@@ -54,10 +56,32 @@ $bundle = Get-Content -Path $fullBundleFile -Raw -Encoding UTF8 | ConvertFrom-Js
 $hash = Get-Content -Path $fullHashFile -Raw -Encoding UTF8 | ConvertFrom-Json
 $deliveryIndex = Get-Content -Path $fullDeliveryIndexFile -Raw -Encoding UTF8 | ConvertFrom-Json
 $chunk = Get-Content -Path $fullBuildChunkFile -Raw -Encoding UTF8 | ConvertFrom-Json
+$boundary = Get-Content -Path $fullBoundaryReportFile -Raw -Encoding UTF8 | ConvertFrom-Json
 $installer = Get-Content -Path $fullInstallerReportFile -Raw -Encoding UTF8 | ConvertFrom-Json
 $installerVerify = Get-Content -Path $fullInstallerVerifyFile -Raw -Encoding UTF8 | ConvertFrom-Json
 $customInstaller = Get-Content -Path $fullCustomInstallerReportFile -Raw -Encoding UTF8 | ConvertFrom-Json
 $customInstallerVerify = Get-Content -Path $fullCustomInstallerVerifyFile -Raw -Encoding UTF8 | ConvertFrom-Json
+
+$innoVerifyCn = if ([bool]$installerVerify.ready) {
+  "Inno 安装器验证通过：``ready=true``。  "
+} else {
+  "Inno 安装器验证未通过：``ready=false``。  "
+}
+$innoVerifyEn = if ([bool]$installerVerify.ready) {
+  "The Inno installer verification passed with ``ready=true``."
+} else {
+  "The Inno installer verification did not pass and currently reports ``ready=false``."
+}
+$customVerifyCn = if ([bool]$customInstallerVerify.ready) {
+  "custom BA 安装器验证通过：``ready=true``。  "
+} else {
+  "custom BA 安装器验证未通过：``ready=false``。  "
+}
+$customVerifyEn = if ([bool]$customInstallerVerify.ready) {
+  "The custom BA installer verification passed with ``ready=true``."
+} else {
+  "The custom BA installer verification did not pass and currently reports ``ready=false``."
+}
 
 $lines = @(
   "# Desk-win 发布说明 / Release Notes",
@@ -71,6 +95,8 @@ $lines = @(
   "  A WPF + WebView2 desktop shell.",
   "- 已打入包内的 ``apps/desk`` 静态前端资源。  ",
   "  Bundled static frontend assets from ``apps/desk``.",
+  "- API-only 客户端边界留证，当前正式客户端固定为 ``$($boundary.boundary.currentFormalClient)``。  ",
+  "  API-only client boundary proof with the current formal client fixed to ``$($boundary.boundary.currentFormalClient)``.",
   "- 固定 latest 出口、delivery bundle、Inno 安装器、custom BA 安装器。  ",
   "  Fixed latest outputs, a delivery bundle, an Inno installer, and a custom BA installer.",
   "- 交付摘要、交接说明、人工验收清单与验证报告。  ",
@@ -80,10 +106,12 @@ $lines = @(
   "",
   "- 解压包启动验证通过：``readyAfterLaunch=$((Get-CheckOk -Checks $delivery.checks -Key 'verifyReadyAfterLaunch').ToString().ToLower())``。  ",
   "  The unpacked package launch verification passed with ``readyAfterLaunch=$((Get-CheckOk -Checks $delivery.checks -Key 'verifyReadyAfterLaunch').ToString().ToLower())``.",
-  "- Inno 安装器验证通过：``ready=$([bool]$installerVerify.ready)``。  ",
-  "  The Inno installer verification passed with ``ready=$([bool]$installerVerify.ready)``.",
-  "- custom BA 安装器验证通过：``ready=$([bool]$customInstallerVerify.ready)``。  ",
-  "  The custom BA installer verification passed with ``ready=$([bool]$customInstallerVerify.ready)``.",
+  "- $innoVerifyCn",
+  "  $innoVerifyEn",
+  "- $customVerifyCn",
+  "  $customVerifyEn",
+  "- API-only 边界验证通过：``ready=$($boundary.ready.ToString().ToLower())``，``allowedDataEntry=$($boundary.boundary.allowedDataEntry)``。  ",
+  "  The API-only boundary validation passed with ``ready=$($boundary.ready.ToString().ToLower())`` and ``allowedDataEntry=$($boundary.boundary.allowedDataEntry)``.",
   "- 前置环境检查与交付总验收报告已生成。  ",
   "  Prerequisite checks and delivery acceptance reports have been generated.",
   "",
@@ -117,6 +145,8 @@ $lines = @(
   "  The current chunk report still contains ``$($chunk.summary.oversizeJsCount)`` oversized JS bundles. This remains a follow-up optimization item and does not block this release.",
   "- Docker 单机部署路径仍保留，但不替代本轮常规 desk-win 交付路径。  ",
   "  The Docker single-machine deployment path remains available, but it does not replace the standard desk-win delivery path for this release.",
+  "- 未来 Web 只作为后续适配方向，不是当前正式交付端；后续页面能力必须复用同一 API-only 边界。  ",
+  "  Future Web remains a later adaptation path rather than the current formal delivery client; future page capabilities must reuse the same API-only boundary.",
   "",
   "## 接收方建议 / Guidance for Receivers",
   "",
@@ -126,11 +156,15 @@ $lines = @(
   "  Use the Inno installer when a standard install and uninstall flow is required.",
   "- 需要更完整品牌化安装体验时，使用 custom BA 安装器。  ",
   "  Use the custom BA installer when a more branded installation experience is required.",
+  "- 不向客户端侧分发数据库连接串、数据库账号或直连数据库 SDK。  ",
+  "  Do not distribute database connection strings, database credentials, or direct database SDKs to the client side.",
   "",
   "## 真值快照 / Source-of-Truth Snapshot",
   "",
   "- 当前 delivery bundle：``$($bundle.bundleZip)``  ",
   "  Current delivery bundle: ``$($bundle.bundleZip)``",
+  "- API-only 边界留证：``$BoundaryReportFile``  ",
+  "  API-only boundary proof: ``$BoundaryReportFile``",
   "- Exe SHA256：``$($hash.targets.exe.sha256)``  ",
   "  Exe SHA256: ``$($hash.targets.exe.sha256)``",
   "- WebIndex SHA256：``$($hash.targets.webIndex.sha256)``  ",

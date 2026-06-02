@@ -1,3 +1,9 @@
+---
+title: proposal
+type: note
+permalink: landslide-monitoring-v2-mainline/openspec/changes/add-desk-frontend-product-polish/proposal
+---
+
 ## Why
 
 目前 `apps/desk` 已具备主要页面与 Mock 数据能力，但要达到“可以交付演示/内测”的产品级体验，还需要补齐 UI 细节、可读性、交互一致性与可用性边界（空状态、加载状态、错误状态、键盘快捷键等）。
@@ -17,4 +23,3 @@
 
 - 不对齐所有后端接口，不做真实数据联调
 - 不引入重型 UI 框架替换
-

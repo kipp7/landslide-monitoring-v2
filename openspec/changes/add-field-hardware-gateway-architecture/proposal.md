@@ -1,3 +1,9 @@
+---
+title: proposal
+type: note
+permalink: landslide-monitoring-v2-mainline/openspec/changes/add-field-hardware-gateway-architecture/proposal
+---
+
 ## Why
 
 当前主线已经明确了平台主链路、设备身份、MQTT 契约、固件行为约束，但“现场硬件节点 + 网关 + 中心平台”的总体架构仍分散在多份文档里，没有形成统一的权威方案。

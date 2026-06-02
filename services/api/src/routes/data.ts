@@ -97,6 +97,12 @@ function intervalSeconds(interval: "1m" | "5m" | "1h" | "1d"): number {
   return 86400;
 }
 
+function utcStartOfDay(d: Date): Date {
+  const x = new Date(d.getTime());
+  x.setUTCHours(0, 0, 0, 0);
+  return x;
+}
+
 function toClickhouseDateTime64Utc(d: Date): string {
   // ClickHouse DateTime64 text format: "YYYY-MM-DD HH:MM:SS.mmm" (no trailing "Z", no "T")
   return d.toISOString().replace("T", " ").replace("Z", "");
@@ -112,6 +118,34 @@ function clickhouseStringToIsoZ(ts: string): string {
 
 function toClickhouseDateTime64Expr(paramName: string): string {
   return `toDateTime64({${paramName}:String}, 3, 'UTC')`;
+}
+
+async function queryTodayTelemetryCountForDevice(
+  config: AppConfig,
+  ch: ClickHouseClient,
+  deviceId: string,
+  start: Date
+): Promise<number> {
+  try {
+    const result = await ch.query({
+      query: `
+        SELECT count()::UInt64 AS c
+        FROM ${config.clickhouseDatabase}.${config.clickhouseTable}
+        WHERE device_id = {deviceId:String}
+          AND received_ts >= {start:DateTime64(3, 'UTC')}
+      `,
+      query_params: {
+        deviceId,
+        start: toClickhouseDateTime64Utc(start)
+      },
+      format: "JSONEachRow"
+    });
+    const rows: { c: number | string }[] = await result.json();
+    const value = rows[0]?.c;
+    return typeof value === "string" ? Number(value) : value ?? 0;
+  } catch {
+    return 0;
+  }
 }
 
 export function registerDataRoutes(
@@ -131,6 +165,7 @@ export function registerDataRoutes(
       return;
     }
     const deviceId = parseId.data;
+    const todayDataCount = await queryTodayTelemetryCountForDevice(config, ch, deviceId, utcStartOfDay(new Date()));
 
     if (pg) {
       const row = await withPgClient(pg, async (client) =>
@@ -147,7 +182,17 @@ export function registerDataRoutes(
         )
       );
       if (row) {
-        ok(reply, { deviceId, updatedAt: row.updated_at, state: row.state }, traceId);
+        const stateRecord = typeof row.state === "object" && row.state !== null ? (row.state as Record<string, unknown>) : {};
+        const metrics =
+          typeof stateRecord.metrics === "object" && stateRecord.metrics !== null
+            ? (stateRecord.metrics as Record<string, unknown>)
+            : {};
+        const meta =
+          typeof stateRecord.meta === "object" && stateRecord.meta !== null
+            ? { ...(stateRecord.meta as Record<string, unknown>) }
+            : {};
+        meta.todayDataCount = todayDataCount;
+        ok(reply, { deviceId, updatedAt: row.updated_at, state: { ...stateRecord, metrics, meta } }, traceId);
         return;
       }
     }
@@ -187,7 +232,7 @@ export function registerDataRoutes(
 
     ok(
       reply,
-      { deviceId, updatedAt: updatedAt ?? new Date().toISOString(), state: { metrics, meta: {} } },
+      { deviceId, updatedAt: updatedAt ?? new Date().toISOString(), state: { metrics, meta: { todayDataCount } } },
       traceId
     );
   });
@@ -623,7 +668,7 @@ function buildSeriesResponse(
   for (const row of rows) {
     const entry = seriesMap.get(row.sensor_key);
     if (!entry) continue;
-    entry.points.push({ ts: row.ts, value: normalizeMetricValue(row) });
+    entry.points.push({ ts: clickhouseStringToIsoZ(row.ts), value: normalizeMetricValue(row) });
   }
 
   const series = Array.from(seriesMap.values()).filter((s) => s.points.length > 0);

@@ -1,17 +1,33 @@
 [CmdletBinding()]
 param(
-  [string]$BoardHost = "192.168.124.172",
+  [string]$BoardHost = "192.168.124.179",
   [string]$User = "linaro",
   [string]$Password = "",
   [int]$SshPort = 22,
   [string]$RepoRoot = "/home/linaro/landslide-monitoring-v2-mainline",
   [string]$MqttUrl = "mqtt://192.168.124.17:1883",
+  [string]$MqttUsername = "",
+  [string]$MqttPassword = "",
+  [string]$MqttEnvFile = "services/api/.env",
   [string]$RunUser = "linaro",
   [string]$RunGroup = "linaro",
   [string]$EnvFile = "/etc/lsmv2/field-gateway.env",
   [string]$StateRoot = "/var/lib/lsmv2/field-gateway",
   [string]$SerialDevice = "/dev/ttyS3",
   [int]$SerialBaudRate = 115200,
+  [ValidateSet("raw-json", "cobs-crc-v1")]
+  [string]$FieldLinkMode = "cobs-crc-v1",
+  [string]$SouthboundNodesJson = '[{"fieldNodeId":"A","deviceId":"00000000-0000-0000-0000-000000000001","installLabel":"FIELD-NODE-A","southboundPort":"/dev/ttyS3","enabled":true},{"fieldNodeId":"B","deviceId":"00000000-0000-0000-0000-000000000002","installLabel":"FIELD-NODE-B","southboundPort":"/dev/ttyS3","enabled":true},{"fieldNodeId":"C","deviceId":"00000000-0000-0000-0000-000000000003","installLabel":"FIELD-NODE-C","southboundPort":"/dev/ttyS3","enabled":true}]',
+  [int]$CommandAckQuietWindowMs = 10000,
+  [int]$CommandPrewriteQuietMs = 400,
+  [int]$CommandPrewriteMaxWaitMs = 4000,
+  [ValidateSet("true", "false")]
+  [string]$SouthboundPollingEnabled = "true",
+  [string]$SouthboundPollingCommandType = "poll_latest_telemetry",
+  [int]$SouthboundPollingIntervalMs = 500,
+  [int]$SouthboundPollingSessionTimeoutMs = 6000,
+  [ValidateSet("true", "false")]
+  [string]$SouthboundPollingSuppressAckPublish = "true",
   [switch]$SkipSourceSync,
   [switch]$SkipBuild,
   [switch]$OverwriteEnv,
@@ -20,6 +36,56 @@ param(
 
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
+function Read-EnvValue {
+  param(
+    [string]$Path,
+    [string]$Key,
+    [string]$Fallback = ""
+  )
+
+  if (-not (Test-Path -LiteralPath $Path)) { return $Fallback }
+
+  $last = $null
+  foreach ($line in Get-Content -LiteralPath $Path -Encoding UTF8) {
+    $trimmed = $line.Trim()
+    if ($trimmed.StartsWith("#")) { continue }
+    if ($trimmed.StartsWith("$Key=")) {
+      $value = $trimmed.Substring($Key.Length + 1).Trim()
+      if ($value.Length -gt 0) {
+        $last = $value
+      }
+    }
+  }
+
+  if ($last) { return $last }
+  return $Fallback
+}
+
+$pythonConnectHelper = @'
+
+import time
+
+def connect_with_retry(client, **kwargs):
+    last_error = None
+    for attempt in range(1, 6):
+        try:
+            client.connect(
+                timeout=15,
+                banner_timeout=15,
+                auth_timeout=15,
+                look_for_keys=False,
+                allow_agent=False,
+                **kwargs,
+            )
+            return
+        except Exception as exc:
+            last_error = exc
+            if attempt >= 5:
+                raise
+            time.sleep(3)
+    raise last_error
+'@
 
 function Invoke-RemoteBash {
   param(
@@ -36,6 +102,7 @@ function Invoke-RemoteBash {
 import sys
 import paramiko
 from pathlib import Path
+'@ + $pythonConnectHelper + @'
 
 host = sys.argv[1]
 user = sys.argv[2]
@@ -45,7 +112,7 @@ script = Path(sys.argv[5]).read_text(encoding="utf-8")
 
 client = paramiko.SSHClient()
 client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-client.connect(hostname=host, username=user, password=password, port=port, timeout=15, banner_timeout=15, auth_timeout=15)
+connect_with_retry(client, hostname=host, username=user, password=password, port=port)
 stdin, stdout, stderr = client.exec_command("bash -s --", timeout=900)
 stdin.write(script)
 stdin.flush()
@@ -185,6 +252,7 @@ import sys
 from pathlib import Path
 
 import paramiko
+'@ + $pythonConnectHelper + @'
 
 
 def ensure_remote_dir(sftp, remote_path):
@@ -229,17 +297,7 @@ remote_root = manifest["remoteRepoRoot"]
 
 client = paramiko.SSHClient()
 client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-client.connect(
-    hostname=host,
-    username=user,
-    password=password,
-    port=port,
-    timeout=15,
-    banner_timeout=15,
-    auth_timeout=15,
-    allow_agent=password is None,
-    look_for_keys=password is None,
-)
+connect_with_retry(client, hostname=host, username=user, password=password, port=port)
 sftp = client.open_sftp()
 
 ensure_remote_dir(sftp, remote_root)
@@ -292,6 +350,9 @@ print(json.dumps({
 }
 
 $repoRootLocal = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$mqttEnvPath = Join-Path $repoRootLocal $MqttEnvFile
+$resolvedMqttUsername = if ($MqttUsername) { $MqttUsername } else { Read-EnvValue -Path $mqttEnvPath -Key "MQTT_INTERNAL_USERNAME" -Fallback "ingest-service" }
+$resolvedMqttPassword = if ($MqttPassword) { $MqttPassword } else { Read-EnvValue -Path $mqttEnvPath -Key "MQTT_INTERNAL_PASSWORD" -Fallback "" }
 if (-not $SkipSourceSync) {
   $null = Sync-FieldGatewaySourceToRemote `
     -LocalRepoRoot $repoRootLocal `
@@ -316,8 +377,20 @@ $argList = @(
   "--env-file", $EnvFile,
   "--state-root", $StateRoot,
   "--mqtt-url", $MqttUrl,
+  "--mqtt-username", $resolvedMqttUsername,
+  "--mqtt-password", $resolvedMqttPassword,
   "--serial-device", $SerialDevice,
-  "--serial-baud-rate", ([string]$SerialBaudRate)
+  "--serial-baud-rate", ([string]$SerialBaudRate),
+  "--field-link-mode", $FieldLinkMode,
+  "--southbound-nodes-json", $SouthboundNodesJson,
+  "--command-ack-quiet-window-ms", ([string]$CommandAckQuietWindowMs),
+  "--command-prewrite-quiet-ms", ([string]$CommandPrewriteQuietMs),
+  "--command-prewrite-max-wait-ms", ([string]$CommandPrewriteMaxWaitMs),
+  "--southbound-polling-enabled", $SouthboundPollingEnabled,
+  "--southbound-polling-command-type", $SouthboundPollingCommandType,
+  "--southbound-polling-interval-ms", ([string]$SouthboundPollingIntervalMs),
+  "--southbound-polling-session-timeout-ms", ([string]$SouthboundPollingSessionTimeoutMs),
+  "--southbound-polling-suppress-ack-publish", $SouthboundPollingSuppressAckPublish
 )
 if ($SkipBuild) { $argList += "--skip-build" }
 if ($OverwriteEnv) { $argList += "--overwrite-env" }

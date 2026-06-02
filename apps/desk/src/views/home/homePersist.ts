@@ -99,10 +99,10 @@ export function defaultAnnouncements(): HomeAnnouncement[] {
   const now = new Date().toISOString();
   return [
     {
-      id: "sys:mock-mode",
+      id: "sys:delivery-check",
       level: "info",
-      title: "当前为演示模式",
-      body: "当前页面数据来自本地演示数据。你可以在「系统设置」里切换到在线接口模式，但 v2 后端仍在修复阶段，建议先把 UI 与交互做精致。",
+      title: "上线前检查",
+      body: "请在交付前确认接口地址、告警通道、值守通知和设备身份信息均已完成配置，并校验桌面端与后端时间同步。",
       createdAt: now,
       route: "/app/settings"
     },

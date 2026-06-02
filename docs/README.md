@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/readme
+---
+
 ﻿# 滑坡监测系统重构计划（Docs Hub）
 
 本目录作为“可复用工程化模板”的文档中心。设计目标是：**AI 与人类都不需要全局搜索**，只需从固定入口进入相应目录即可找到权威信息。

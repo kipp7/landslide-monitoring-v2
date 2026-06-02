@@ -8,6 +8,7 @@ param(
   [string]$InstallerVerifyFile = "docs/unified/reports/desk-win-installer-verify-latest.json",
   [string]$CustomInstallerReportFile = "docs/unified/reports/desk-win-customba-installer-latest.json",
   [string]$CustomInstallerVerifyFile = "docs/unified/reports/desk-win-customba-installer-verify-latest.json",
+  [string]$BoundaryReportFile = "docs/unified/reports/desk-api-boundary-latest.json",
   [string]$HashFile = "docs/unified/reports/desk-win-delivery-hash-latest.json",
   [string]$BuildChunkFile = "docs/unified/reports/desk-build-chunks-latest.json",
   [string]$OutJsonFile = "docs/unified/reports/desk-win-delivery-index-latest.json",
@@ -26,12 +27,13 @@ $fullInstallerReportFile = Join-Path $repoRoot $InstallerReportFile
 $fullInstallerVerifyFile = Join-Path $repoRoot $InstallerVerifyFile
 $fullCustomInstallerReportFile = Join-Path $repoRoot $CustomInstallerReportFile
 $fullCustomInstallerVerifyFile = Join-Path $repoRoot $CustomInstallerVerifyFile
+$fullBoundaryReportFile = Join-Path $repoRoot $BoundaryReportFile
 $fullHashFile = Join-Path $repoRoot $HashFile
 $fullBuildChunkFile = Join-Path $repoRoot $BuildChunkFile
 $fullOutJsonFile = Join-Path $repoRoot $OutJsonFile
 $fullOutMdFile = Join-Path $repoRoot $OutMdFile
 
-foreach ($path in @($fullPipelineFile, $fullSummaryFile, $fullReleaseNotesFile, $fullProductionHandoffFile, $fullInstallerReportFile, $fullInstallerVerifyFile, $fullCustomInstallerReportFile, $fullCustomInstallerVerifyFile, $fullHashFile, $fullBuildChunkFile)) {
+foreach ($path in @($fullPipelineFile, $fullSummaryFile, $fullReleaseNotesFile, $fullProductionHandoffFile, $fullInstallerReportFile, $fullInstallerVerifyFile, $fullCustomInstallerReportFile, $fullCustomInstallerVerifyFile, $fullBoundaryReportFile, $fullHashFile, $fullBuildChunkFile)) {
   if (-not (Test-Path $path)) {
     throw "required file not found: $path"
   }
@@ -65,6 +67,7 @@ $index = [ordered]@{
     installerVerify = $InstallerVerifyFile
     customInstaller = $CustomInstallerReportFile
     customInstallerVerify = $CustomInstallerVerifyFile
+    boundary = $BoundaryReportFile
     hashes = $HashFile
     buildChunks = $BuildChunkFile
   }
@@ -122,6 +125,7 @@ $md = @(
   "- InstallerVerify: $($index.reports.installerVerify)",
   "- CustomInstaller: $($index.reports.customInstaller)",
   "- CustomInstallerVerify: $($index.reports.customInstallerVerify)",
+  "- Boundary: $($index.reports.boundary)",
   "- Hashes: $($index.reports.hashes)",
   "- BuildChunks: $($index.reports.buildChunks)",
   "",

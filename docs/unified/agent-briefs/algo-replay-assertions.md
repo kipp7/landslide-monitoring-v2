@@ -1,3 +1,9 @@
+---
+title: algo-replay-assertions
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/unified/agent-briefs/algo-replay-assertions
+---
+
 # 任务简报：algo-replay-assertions
 
 ## 当前状态

@@ -1,0 +1,63 @@
+﻿{
+    "generatedAt":  "2026-05-30T07:31:27Z",
+    "cloudApiBaseUrl":  "http://134.175.187.208:8080",
+    "cloudMqttUrl":  "mqtt://134.175.187.208:1883",
+    "configuration":  "Release",
+    "runtime":  "win-x64",
+    "package":  {
+                    "outputDir":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\win-x64-cloud-selfcontained",
+                    "runtimeConfig":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\win-x64-cloud-selfcontained\\desk-runtime.json",
+                    "selfContained":  true,
+                    "dotnetRuntimeHandledBy":  "self-contained publish",
+                    "webView2RuntimeHandledBy":  "start-cloud.ps1 and installer bootstrapper"
+                },
+    "delivery":  {
+                     "dir":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\latest-cloud",
+                     "zip":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\latest-cloud.zip",
+                     "fileCount":  489,
+                     "totalBytes":  184557734
+                 },
+    "installer":  {
+                      "skipped":  true,
+                      "built":  false,
+                      "path":  null,
+                      "sha256":  null,
+                      "message":  null
+                  },
+    "healthCheck":  {
+                        "skipped":  false,
+                        "ok":  true,
+                        "url":  "http://134.175.187.208:8080/health",
+                        "status":  "OK",
+                        "message":  null
+                    },
+    "launchVerify":  {
+                         "skipped":  true,
+                         "readyAfterLaunch":  false,
+                         "stoppedAfterVerify":  false,
+                         "runtimeLog":  "C:\\Users\\Administrator\\AppData\\Local\\LandslideDesk.Win\\runtime.log",
+                         "hostApiMatched":  false,
+                         "runtimeErrorCount":  0
+                     },
+    "prerequisites":  {
+                          "webView2VersionOnBuildMachine":  "148.0.3967.83",
+                          "webView2Bootstrapper":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\prerequisites\\MicrosoftEdgeWebView2Setup.exe"
+                      },
+    "hashes":  {
+                   "packageExe":  {
+                                      "path":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\win-x64-cloud-selfcontained\\LandslideDesk.Win.exe",
+                                      "sha256":  "3596580a69f3befbd34f37dad6fee2b96076797c4de4c6da2ab850c30c12a41c",
+                                      "sizeBytes":  226816
+                                  },
+                   "runtimeConfig":  {
+                                         "path":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\win-x64-cloud-selfcontained\\desk-runtime.json",
+                                         "sha256":  "0e3a09ce8435c49b2ef95e933b28ff5da3fbcc9c4fb145c67b735c027474f7bb",
+                                         "sizeBytes":  461
+                                     },
+                   "zip":  {
+                               "path":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\latest-cloud.zip",
+                               "sha256":  "6da45fe2448132cc44145803705a1bac5e6cb8c1a4913a7a30f11299efea64b4",
+                               "sizeBytes":  77918843
+                           }
+               }
+}

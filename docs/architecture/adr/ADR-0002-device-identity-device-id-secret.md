@@ -1,3 +1,9 @@
+---
+title: ADR-0002-device-identity-device-id-secret
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/architecture/adr/adr-0002-device-identity-device-id-secret
+---
+
 # ADR-0002: 设备身份采用 device_id + device_secret（无硬件唯一 ID）
 
 ## Status
@@ -53,4 +59,3 @@
 - Follow-ups
   - 在 `integrations/mqtt` 固化身份包格式与 ACL
   - 在 `features/` 增加“设备注册与身份发放”PRD
-

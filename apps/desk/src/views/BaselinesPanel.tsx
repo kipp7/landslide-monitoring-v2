@@ -10,6 +10,14 @@ type EditState =
   | { open: false }
   | { open: true; mode: "create" | "edit"; deviceId?: string; baseline?: Baseline };
 
+function normalizeIdentityClass(value?: string | null): string {
+  return value?.trim().toLowerCase() ?? "";
+}
+
+function isFormalIdentityClass(value?: string | null): boolean {
+  return normalizeIdentityClass(value) === "formal";
+}
+
 function baselineStatusTag(status: BaselineStatus) {
   if (status === "active") return <Tag color="green">已建立</Tag>;
   if (status === "draft") return <Tag color="blue">草稿</Tag>;
@@ -36,7 +44,7 @@ export function BaselinesPanel(props: { className?: string; style?: React.CSSPro
     setLoading(true);
     try {
       const [devicesList, baselineList] = await Promise.all([api.devices.list(), api.baselines.list()]);
-      setDevices(devicesList.filter((x) => x.type === "gnss"));
+      setDevices(devicesList.filter((x) => x.type === "gnss" && isFormalIdentityClass(x.identityClass)));
       setBaselines(baselineList);
     } finally {
       setLoading(false);
@@ -84,7 +92,7 @@ export function BaselinesPanel(props: { className?: string; style?: React.CSSPro
         deviceId: values.deviceId,
         baselineLat: values.baselineLat,
         baselineLng: values.baselineLng,
-        establishedBy: "manual(mock)",
+        establishedBy: "desk_manual",
         status: values.status,
         ...(values.baselineAlt !== undefined ? { baselineAlt: values.baselineAlt } : {}),
         ...(values.notes !== undefined ? { notes: values.notes } : {})
@@ -117,6 +125,7 @@ export function BaselinesPanel(props: { className?: string; style?: React.CSSPro
           </Button>
           <Button
             type="primary"
+            disabled={!devices.length}
             onClick={() => {
               openCreate();
             }}
@@ -128,6 +137,8 @@ export function BaselinesPanel(props: { className?: string; style?: React.CSSPro
     >
       {loading ? (
         <Skeleton active />
+      ) : !rows.length ? (
+        <div style={{ color: "rgba(148,163,184,0.9)", padding: "20px 4px" }}>当前没有 GNSS 设备接入，未归档数据不会显示在当前视图。</div>
       ) : (
         <div className="desk-dark-table">
           <Table<(typeof rows)[number]>

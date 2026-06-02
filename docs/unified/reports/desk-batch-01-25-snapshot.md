@@ -1,3 +1,9 @@
+---
+title: desk-batch-01-25-snapshot
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/unified/reports/desk-batch-01-25-snapshot
+---
+
 # desk-batch-01-25-snapshot
 
 ## Status

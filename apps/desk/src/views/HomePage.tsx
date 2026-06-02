@@ -175,7 +175,7 @@ export function HomePage() {
               </div>
 
               <div className="desk-home-shortcut">
-                <div className="desk-home-shortcut-title">GPS 形变监测</div>
+                <div className="desk-home-shortcut-title">形变监测</div>
                 <div className="desk-home-shortcut-desc">位移曲线、阈值配置、预测趋势与导出入口。</div>
                 <div style={{ marginTop: "auto" }}>
                   <Button

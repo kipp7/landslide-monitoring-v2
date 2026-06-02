@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/architecture/readme
+---
+
 ﻿# architecture/
 
 本目录描述“架构的长期事实”（Why），并以 ADR 记录关键决策理由（为什么选这个方案，而不是别的）。
@@ -13,4 +19,3 @@
 
 - 与外部交互的“契约”只写在 `docs/integrations/`（API/MQTT/Kafka/Storage/Rules）。
 - 与落地操作相关的“怎么做”只写在 `docs/guides/`（部署、runbook、最佳实践）。
-

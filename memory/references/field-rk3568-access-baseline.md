@@ -16,8 +16,8 @@ Store the current safe-to-share access baseline for the field RK3568 gateway boa
 ## Commands
 
 ```text
-ssh linaro@192.168.124.172
-ping 192.168.124.172
+ssh linaro@192.168.124.179
+ping 192.168.124.179
 ```
 
 ## Files
@@ -33,7 +33,7 @@ ping 192.168.124.172
   - `RK3568 field gateway candidate`
 - current network fact:
   - same WLAN as the operator workstation
-  - IPv4 address: `192.168.124.172`
+  - IPv4 address: `192.168.124.179`
 - current login fact:
   - SSH user: `linaro`
   - auth mode in use right now: `password`

@@ -1,3 +1,9 @@
+---
+title: station-management-api
+type: note
+permalink: landslide-monitoring-v2-mainline/apps/web/app/api/monitoring-stations/station-management-api
+---
+
 # 🏠 监测站名字管理API设计
 
 ## 📋 业务需求

@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/architecture/adr/readme
+---
+
 ﻿# ADR（Architecture Decision Record）
 
 本目录保存架构决策记录：**记录“为什么做这个选择”**，而不是写“怎么实现”。
@@ -16,4 +22,3 @@
 模板：
 
 - `docs/architecture/adr/TEMPLATE.md`
-

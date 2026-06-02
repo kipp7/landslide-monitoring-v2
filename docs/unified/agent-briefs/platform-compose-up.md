@@ -1,3 +1,9 @@
+---
+title: platform-compose-up
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/unified/agent-briefs/platform-compose-up
+---
+
 # 任务简报：platform-compose-up
 
 ## 当前状态

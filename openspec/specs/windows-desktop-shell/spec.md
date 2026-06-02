@@ -1,3 +1,9 @@
+---
+title: spec
+type: note
+permalink: landslide-monitoring-v2-mainline/openspec/specs/windows-desktop-shell/spec
+---
+
 # Windows Desktop Shell Specification (WPF + WebView2)
 
 ## Purpose
@@ -119,4 +125,3 @@
 #### Scenario: Unhandled exception
 - **WHEN** 发生未处理异常
 - **THEN** MUST 写入崩溃日志到本地目录（LocalAppData）
-

@@ -1,3 +1,9 @@
+---
+title: desk-backend-data-closure
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/unified/reports/desk-backend-data-closure
+---
+
 # desk-backend-data-closure
 
 ## Status

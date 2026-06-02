@@ -1,5 +1,5 @@
 ﻿{
-    "generatedAt":  "2026-03-24T10:13:26Z",
+    "generatedAt":  "2026-04-07T16:14:32Z",
     "login":  {
                   "ok":  true,
                   "hasToken":  true,
@@ -29,7 +29,7 @@
                      "url":  "http://127.0.0.1:8080/health",
                      "ok":  true,
                      "statusCode":  200,
-                     "body":  "{\"ok\":true,\"status\":\"OK\",\"timestamp\":\"2026-03-24T10:13:50.356Z\",\"service\":\"api-service\",\"port\":8080}"
+                     "body":  "{\"ok\":true,\"status\":\"OK\",\"timestamp\":\"2026-04-07T16:14:55.286Z\",\"service\":\"api-service\",\"port\":8080}"
                  },
                  {
                      "url":  "http://127.0.0.1:3000",
@@ -41,7 +41,7 @@
                      "url":  "http://127.0.0.1:8080/api/v1/system/status",
                      "ok":  true,
                      "statusCode":  200,
-                     "body":  "{\"success\":true,\"code\":200,\"message\":\"ok\",\"data\":{\"uptimeS\":530,\"postgres\":{\"status\":\"healthy\"},\"clickhouse\":{\"status\":\"healthy\"},\"kafka\":{\"status\":\"configured\"},\"emqx\":{\"status\":\"unknown\"},\"source\":\"health_summary\",\"note\":\"当前展示的是服务健康摘要，不表示真实 CPU/内存/磁盘占用。\",\"items\":[{\"key\":\"postgres\",\"label\":\"PostgreSQL\",\"status\":\"healthy\",\"detail\":\"healthy\"},{\"key\":\"clickhouse\",\"label\":\"ClickHouse\",\"status\":\"healthy\",\"detail\":\"healthy\"},{\"key\":\"kafka\",\"label\":\"Kafka\",\"status\":\"healthy\",\"detail\":\"configured\"}]},\"timestamp\":\"2026-03-24T10:13:50.486Z\",\"traceId\":\"7756cbe8-0c88-4f42-bef9-2d96c94b9661\"}"
+                     "body":  "{\"success\":true,\"code\":200,\"message\":\"ok\",\"data\":{\"uptimeS\":6670,\"postgres\":{\"status\":\"healthy\"},\"clickhouse\":{\"status\":\"healthy\"},\"kafka\":{\"status\":\"configured\"},\"emqx\":{\"status\":\"unknown\"},\"source\":\"health_summary\",\"note\":\"当前展示的是服务健康摘要，不表示真实 CPU/内存/磁盘占用。\",\"items\":[{\"key\":\"postgres\",\"label\":\"PostgreSQL\",\"status\":\"healthy\",\"detail\":\"healthy\"},{\"key\":\"clickhouse\",\"label\":\"ClickHouse\",\"status\":\"healthy\",\"detail\":\"healthy\"},{\"key\":\"kafka\",\"label\":\"Kafka\",\"status\":\"healthy\",\"detail\":\"configured\"}]},\"timestamp\":\"2026-04-07T16:14:55.369Z\",\"traceId\":\"6c8ad7ec-3454-4289-9fd3-eb4c0c3d753e\"}"
                  }
              ]
 }

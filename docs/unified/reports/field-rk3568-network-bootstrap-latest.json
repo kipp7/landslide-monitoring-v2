@@ -1,5 +1,5 @@
 ﻿{
-    "generatedAt":  "2026-04-10T10:14:29Z",
+    "generatedAt":  "2026-04-14T06:03:00Z",
     "accepted":  true,
     "mode":  "rk3568-network-bootstrap-runtime-check",
     "currentBoundary":  "rk3568-network-bootstrap-ready",
@@ -83,6 +83,19 @@
                          "stdout":  "connected:full",
                          "stderr":  ""
                      },
+    "nmcliRadio":  {
+                       "command":  [
+                                       "nmcli",
+                                       "-t",
+                                       "-f",
+                                       "WIFI-HW,WIFI,WWAN-HW,WWAN",
+                                       "radio",
+                                       "all"
+                                   ],
+                       "returncode":  0,
+                       "stdout":  "enabled:enabled:enabled:enabled",
+                       "stderr":  ""
+                   },
     "nmcliDeviceStatus":  {
                               "command":  [
                                               "nmcli",
@@ -93,9 +106,22 @@
                                               "status"
                                           ],
                               "returncode":  0,
-                              "stdout":  "wlan0:wifi:connected:JRSPR_5G\neth0:ethernet:unavailable:\ncan0:can:unmanaged:\ndummy0:dummy:unmanaged:\nlo:loopback:unmanaged:\np2p-dev-wlan0:wifi-p2p:unmanaged:",
+                              "stdout":  "eth0:ethernet:connected:�������� 1\nwlan0:wifi:disconnected:\ncan0:can:unmanaged:\ndummy0:dummy:unmanaged:\nlo:loopback:unmanaged:\np2p-dev-wlan0:wifi-p2p:unmanaged:",
                               "stderr":  ""
                           },
+    "nmcliConnections":  {
+                             "command":  [
+                                             "nmcli",
+                                             "-t",
+                                             "-f",
+                                             "NAME,UUID,TYPE,AUTOCONNECT,DEVICE",
+                                             "connection",
+                                             "show"
+                                         ],
+                             "returncode":  0,
+                             "stdout":  "�������� 1:467800ac-1486-36e0-a549-7d10dd93ebfc:802-3-ethernet:yes:eth0\n1888:831b7176-c5a6-46df-813b-6cff2b6aa6a7:802-11-wireless:yes:\n1888 1:554358f4-37b5-460f-864e-8be1ecc81f96:802-11-wireless:yes:\n�й���������:115049de-9190-44d4-b66a-bfacab622fbd:802-11-wireless:yes:\nJRSPR:328d4a9e-3bcd-40da-b96b-8a2a5cf14cf2:802-11-wireless:yes:\nJRSPR_5G:b32c1c41-3c0c-451a-95d5-cb0b90427942:802-11-wireless:yes:\nlsmv2-ap-fallback:79108501-ca5b-48bf-ae5a-31a632a01eca:802-11-wireless:no:",
+                             "stderr":  ""
+                         },
     "nmcliActiveConnections":  {
                                    "command":  [
                                                    "nmcli",
@@ -107,7 +133,7 @@
                                                    "--active"
                                                ],
                                    "returncode":  0,
-                                   "stdout":  "JRSPR_5G:802-11-wireless:wlan0",
+                                   "stdout":  "�������� 1:802-3-ethernet:eth0",
                                    "stderr":  ""
                                },
     "ipv4Addresses":  {
@@ -117,13 +143,13 @@
                                           "ip -o -4 addr show | awk \u0027{print $2\":\"$4}\u0027"
                                       ],
                           "returncode":  0,
-                          "stdout":  "lo:127.0.0.1/8\nwlan0:192.168.124.172/24",
+                          "stdout":  "lo:127.0.0.1/8\neth0:192.168.124.179/24",
                           "stderr":  ""
                       },
     "runtimeStatus":  {
-                          "generatedAt":  "2026-04-10T10:14:11Z",
+                          "generatedAt":  "2026-04-14T06:02:53Z",
                           "service":  "rk3568-network-bootstrap",
-                          "mode":  "sta_connected",
+                          "mode":  "ethernet_uplink",
                           "wifiDevice":  "wlan0",
                           "staConnectionName":  "JRSPR_5G",
                           "apConnectionName":  "lsmv2-ap-fallback",
@@ -131,26 +157,26 @@
                           "loopIntervalSeconds":  20,
                           "staConnectTimeoutSeconds":  45,
                           "staRetryIntervalSeconds":  60,
-                          "lastAction":  "sta-healthy",
+                          "lastAction":  "ethernet-healthy",
                           "lastError":  null,
-                          "lastMode":  "sta_connected",
-                          "lastModeChangeTs":  "2026-04-10T08:08:56Z",
-                          "lastStaAttemptTs":  null,
-                          "lastStaSuccessTs":  "2026-04-10T10:14:10Z",
+                          "lastMode":  "ethernet_uplink",
+                          "lastModeChangeTs":  "2026-04-12T20:33:19Z",
+                          "lastStaAttemptTs":  "2026-04-12T20:31:33Z",
+                          "lastStaSuccessTs":  "2026-04-12T20:32:58Z",
                           "nmcliGeneral":  {
                                                "state":  "connected",
                                                "connectivity":  "full"
                                            },
                           "activeConnections":  [
                                                     {
-                                                        "name":  "JRSPR_5G",
-                                                        "type":  "802-11-wireless",
-                                                        "device":  "wlan0"
+                                                        "name":  "�������� 1",
+                                                        "type":  "802-3-ethernet",
+                                                        "device":  "eth0"
                                                     }
                                                 ],
                           "ipAddresses":  [
                                               "lo:127.0.0.1/8",
-                                              "wlan0:192.168.124.172/24"
+                                              "eth0:192.168.124.179/24"
                                           ],
                           "gatewayService":  {
                                                  "name":  "lsmv2-field-gateway.service",
@@ -195,16 +221,40 @@
                        "expected":  "connected:full"
                    },
                    {
-                       "key":  "staConnectionActive",
+                       "key":  "wifiRadioEnabled",
                        "ok":  true,
-                       "actual":  "JRSPR_5G:802-11-wireless:wlan0",
-                       "expected":  "JRSPR_5G:802-11-wireless:wlan0"
+                       "actual":  "enabled:enabled:enabled:enabled",
+                       "expected":  "enabled:enabled:\u003cwwan-hw\u003e:\u003cwwan\u003e"
                    },
                    {
-                       "key":  "runtimeModeStaConnected",
+                       "key":  "wifiDeviceReachable",
                        "ok":  true,
-                       "actual":  "sta_connected",
-                       "expected":  "sta_connected"
+                       "actual":  "eth0:ethernet:connected:�������� 1\nwlan0:wifi:disconnected:\ncan0:can:unmanaged:\ndummy0:dummy:unmanaged:\nlo:loopback:unmanaged:\np2p-dev-wlan0:wifi-p2p:unmanaged:",
+                       "expected":  "wlan0:wifi:connected|disconnected:\u003cconnection\u003e"
+                   },
+                   {
+                       "key":  "apProfileCanonicalSingle",
+                       "ok":  true,
+                       "actual":  1,
+                       "expected":  1
+                   },
+                   {
+                       "key":  "apSuppressedWhileHealthy",
+                       "ok":  true,
+                       "actual":  "�������� 1:802-3-ethernet:eth0",
+                       "expected":  "lsmv2-ap-fallback inactive while mode=sta_connected|ethernet_uplink"
+                   },
+                   {
+                       "key":  "uplinkConnectionActive",
+                       "ok":  true,
+                       "actual":  "�������� 1:802-3-ethernet:eth0",
+                       "expected":  "JRSPR_5G:802-11-wireless:wlan0 or \u003cethernet-uplink\u003e"
+                   },
+                   {
+                       "key":  "runtimeModeHealthyUplink",
+                       "ok":  true,
+                       "actual":  "ethernet_uplink",
+                       "expected":  "sta_connected|ethernet_uplink"
                    },
                    {
                        "key":  "runtimeLastErrorClear",
@@ -213,10 +263,10 @@
                        "expected":  null
                    },
                    {
-                       "key":  "ipv4PresentOnWifiDevice",
+                       "key":  "ipv4PresentOnUplink",
                        "ok":  true,
-                       "actual":  "lo:127.0.0.1/8\nwlan0:192.168.124.172/24",
-                       "expected":  "wlan0:\u003cipv4\u003e"
+                       "actual":  "lo:127.0.0.1/8\neth0:192.168.124.179/24",
+                       "expected":  "wlan0:\u003cipv4\u003e or eth0:\u003cipv4\u003e"
                    }
                ]
 }

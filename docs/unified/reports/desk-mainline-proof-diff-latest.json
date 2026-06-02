@@ -1,22 +1,22 @@
 ﻿{
-    "generatedAt":  "2026-03-25T06:00:48Z",
+    "generatedAt":  "2026-04-15T07:51:29Z",
     "hasPrevious":  true,
     "current":  {
-                    "stamp":  "20260325-140047",
-                    "generatedAt":  "2026-03-25T06:00:47Z",
-                    "checks":  45,
-                    "stations":  2,
-                    "devices":  6,
-                    "online":  3,
-                    "alerts":  1,
-                    "rainfall":  79,
-                    "missingBaselines":  3,
+                    "stamp":  "20260415-155128",
+                    "generatedAt":  "2026-04-15T07:51:28Z",
+                    "checks":  27,
+                    "stations":  1,
+                    "devices":  3,
+                    "online":  1,
+                    "alerts":  0,
+                    "rainfall":  0,
+                    "missingBaselines":  2,
                     "denied":  5
                 },
     "previous":  {
-                     "stamp":  "20260325-135827",
-                     "generatedAt":  "2026-03-25T05:58:27Z",
-                     "checks":  45,
+                     "stamp":  "20260414-181338",
+                     "generatedAt":  "2026-04-14T10:13:37Z",
+                     "checks":  47,
                      "stations":  2,
                      "devices":  6,
                      "online":  3,
@@ -26,36 +26,16 @@
                      "denied":  5
                  },
     "delta":  {
-                  "checks":  0,
-                  "stations":  0,
-                  "devices":  0,
-                  "online":  0,
-                  "alerts":  0,
-                  "rainfall":  0,
-                  "missingBaselines":  0,
+                  "checks":  -20,
+                  "stations":  -1,
+                  "devices":  -3,
+                  "online":  -2,
+                  "alerts":  -1,
+                  "rainfall":  -79,
+                  "missingBaselines":  -1,
                   "viewerDenied":  0
               },
-    "hasLastMatching":  true,
-    "lastMatching":  {
-                         "stamp":  "20260325-135827",
-                         "generatedAt":  "2026-03-25T05:58:27Z",
-                         "checks":  45,
-                         "stations":  2,
-                         "devices":  6,
-                         "online":  3,
-                         "alerts":  1,
-                         "rainfall":  79,
-                         "missingBaselines":  3,
-                         "denied":  5
-                     },
-    "deltaFromLastMatching":  {
-                                  "checks":  0,
-                                  "stations":  0,
-                                  "devices":  0,
-                                  "online":  0,
-                                  "alerts":  0,
-                                  "rainfall":  0,
-                                  "missingBaselines":  0,
-                                  "viewerDenied":  0
-                              }
+    "hasLastMatching":  false,
+    "lastMatching":  null,
+    "deltaFromLastMatching":  null
 }

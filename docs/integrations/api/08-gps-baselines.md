@@ -1,4 +1,16 @@
+---
+title: 08-gps-baselines
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/api/08-gps-baselines
+---
+
 # GPS 基准点（Baselines）
+
+对当前山体滑坡现场正式接入主线，不要把 baseline 单独理解为一个孤立 API 动作。
+
+现场“正式设备注册 / 正式命名 / baseline 确立”的执行顺序统一见：
+
+- `docs/guides/runbooks/field-formal-device-commissioning-runbook.md`
 
 本模块对应参考区的“基准点管理 / GPS 形变”的一部分能力（参考区：`frontend/app/baseline-management`、`frontend/app/api/baselines/*`）。
 

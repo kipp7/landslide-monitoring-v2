@@ -1,3 +1,9 @@
+---
+title: risk-register
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/architecture/risk-register
+---
+
 ﻿# 风险清单与应对（单机按最坏情况设计）
 
 本文件用于提前暴露“最坏情况下会出什么问题”，并给出工程化应对策略。目标不是一次把系统做成“完美”，而是把**不可控的坑**提前收敛为**可操作的策略**（参数、容量、降级、流程）。
@@ -88,4 +94,3 @@
 - `docs/integrations/` 作为唯一契约来源
 - 变更按清单同步（`docs/guides/ai/checklists.md`）
 - 关键决策必须写 ADR（`docs/architecture/adr/`）
-

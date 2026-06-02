@@ -1,5 +1,5 @@
 ﻿{
-    "generatedAt":  "2026-04-08T17:43:47Z",
+    "generatedAt":  "2026-04-14T07:32:38Z",
     "currentBoundary":  "full-path-ready",
     "compose":  {
                     "appComposeIncludesIngest":  true,
@@ -10,42 +10,42 @@
                                        {
                                            "name":  "lsmv2_api",
                                            "running":  true,
-                                           "status":  "Up 12 hours"
+                                           "status":  "Up 5 hours"
                                        },
                                        {
                                            "name":  "lsmv2_web",
                                            "running":  true,
-                                           "status":  "Up 22 minutes (healthy)"
+                                           "status":  "Up 6 hours (healthy)"
                                        },
                                        {
                                            "name":  "lsmv2_emqx",
                                            "running":  true,
-                                           "status":  "Up 12 hours"
+                                           "status":  "Up 6 hours"
                                        },
                                        {
                                            "name":  "lsmv2_kafka",
                                            "running":  true,
-                                           "status":  "Up 22 minutes (healthy)"
+                                           "status":  "Up 6 hours (healthy)"
                                        },
                                        {
                                            "name":  "lsmv2_clickhouse",
                                            "running":  true,
-                                           "status":  "Up 12 hours (healthy)"
+                                           "status":  "Up 6 hours (healthy)"
                                        },
                                        {
                                            "name":  "lsmv2_postgres",
                                            "running":  true,
-                                           "status":  "Up 12 hours (healthy)"
+                                           "status":  "Up 6 hours (healthy)"
                                        },
                                        {
                                            "name":  "lsmv2_ingest",
                                            "running":  true,
-                                           "status":  "Up 21 minutes"
+                                           "status":  "Up 6 hours"
                                        },
                                        {
                                            "name":  "lsmv2_telemetry_writer",
                                            "running":  true,
-                                           "status":  "Up 21 minutes"
+                                           "status":  "Up 5 hours"
                                        }
                                    ],
                     "hostProcesses":  [

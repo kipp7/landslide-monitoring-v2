@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/ai/readme
+---
+
 # integrations/ai/
 
 该目录描述 “AI 预测/专家系统” 的对接契约与可插拔实现约束。
@@ -26,3 +32,7 @@
 
 本模块先保证 “数据链路 + 落库 + 可回放” 的基础设施具备；对外查询 API 与前端展示页可在后续 WS-H 子任务中补齐。
 
+## 4) Regional Runtime
+
+- 运行时边界、历史窗口、payload 证据链与环境变量：
+  - `docs/integrations/ai/regional-model-runtime.md`

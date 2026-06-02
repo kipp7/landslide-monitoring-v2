@@ -52,6 +52,36 @@ function RecenterOnReset(props: { resetKey: number | undefined; bounds: L.LatLng
   return null;
 }
 
+function ResizeAndFitBounds(props: { bounds: L.LatLngBoundsExpression }) {
+  const map = useMap();
+
+  useEffect(() => {
+    const container = map.getContainer();
+    let frame = 0;
+
+    const refresh = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        map.invalidateSize({ animate: false });
+        map.fitBounds(props.bounds, { padding: [28, 28], animate: false });
+      });
+    };
+
+    refresh();
+    const observer = new ResizeObserver(refresh);
+    observer.observe(container);
+    window.addEventListener("resize", refresh);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+      window.removeEventListener("resize", refresh);
+    };
+  }, [map, props.bounds]);
+
+  return null;
+}
+
 function RemoveLeafletAttributionPrefix() {
   const map = useMap();
   useEffect(() => {
@@ -114,7 +144,20 @@ export function RealMapView(props: RealMapViewProps) {
       .filter((s) => Number.isFinite(s.lat) && Number.isFinite(s.lng))
       .map((s) => [s.lat, s.lng] as [number, number]);
     if (!pts.length) return [[defaultLat - 0.05, defaultLng - 0.06], [defaultLat + 0.05, defaultLng + 0.06]];
-    return pts as unknown as L.LatLngBoundsExpression;
+    const lats = pts.map((point) => point[0]);
+    const lngs = pts.map((point) => point[1]);
+    const minLat = Math.min(...lats);
+    const maxLat = Math.max(...lats);
+    const minLng = Math.min(...lngs);
+    const maxLng = Math.max(...lngs);
+    const centerLat = (minLat + maxLat) / 2;
+    const centerLng = (minLng + maxLng) / 2;
+    const latSpan = Math.max(maxLat - minLat, 0.018);
+    const lngSpan = Math.max(maxLng - minLng, 0.024);
+    return [
+      [centerLat - latSpan / 2, centerLng - lngSpan / 2],
+      [centerLat + latSpan / 2, centerLng + lngSpan / 2],
+    ];
   }, [props.stations]);
 
   const osmAttribution = `&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors`;
@@ -174,6 +217,7 @@ export function RealMapView(props: RealMapViewProps) {
         <TileLayer url={fallbackTile.url} attribution={fallbackTile.attribution} maxZoom={18} maxNativeZoom={18} detectRetina updateWhenIdle />
       )}
       <RemoveLeafletAttributionPrefix />
+      <ResizeAndFitBounds bounds={bounds} />
       <RecenterOnReset resetKey={props.resetKey} bounds={bounds} />
       <ClearSelectionOnMapClick
         onClear={() => {

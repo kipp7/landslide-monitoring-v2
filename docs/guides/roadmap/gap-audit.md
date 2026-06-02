@@ -1,3 +1,9 @@
+---
+title: gap-audit
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/roadmap/gap-audit
+---
+
 # v2 功能缺口对照（参考区 vs v2）
 
 目的：把参考区（`E:\学校\06 工作区\2\openharmony\landslide-monitor`）已有的页面/能力，逐项对照到 v2 的落地点（Web 路由 / API / Worker / 存储 / 契约文档），用于最终“功能不缺失”的验收与收尾收口。

@@ -1,3 +1,9 @@
+---
+title: 06-alerts
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/api/06-alerts
+---
+
 ﻿# 告警接口（v2：事件化告警 + 版本化规则 + DSL）
 
 本模块与 v2 存储一致：

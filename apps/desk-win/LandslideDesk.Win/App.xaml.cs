@@ -31,7 +31,7 @@ public partial class App : System.Windows.Application
     {
         base.OnStartup(e);
 
-        ShutdownMode = ShutdownMode.OnExplicitShutdown;
+        ShutdownMode = ShutdownMode.OnMainWindowClose;
 
         _singleInstanceMutex = new Mutex(true, "LandslideDesk.Win.SingleInstance", out var createdNew);
         if (!createdNew)

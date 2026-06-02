@@ -1,3 +1,9 @@
+---
+title: field-hardware-gateway-architecture-eval
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/unified/reports/field-hardware-gateway-architecture-eval
+---
+
 # field-hardware-gateway-architecture-eval
 
 ## Status

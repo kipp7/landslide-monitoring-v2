@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/api/readme
+---
+
 ﻿# integrations/api/
 
 该目录是**唯一的 API 契约来源**（Web/Flutter 都只引用这里）。

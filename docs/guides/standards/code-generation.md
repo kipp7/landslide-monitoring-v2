@@ -1,3 +1,9 @@
+---
+title: code-generation
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/standards/code-generation
+---
+
 # 代码生成（Codegen）规范（必须遵守）
 
 目标：让“契约优先”可落地、可复用、可长期维护——通过代码生成把 DTO/Client 的一致性变成工具保证，而不是靠人肉同步。

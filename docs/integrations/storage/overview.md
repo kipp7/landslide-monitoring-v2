@@ -1,3 +1,9 @@
+---
+title: overview
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/storage/overview
+---
+
 ﻿# 存储设计概览（v2：PostgreSQL + ClickHouse）
 
 本文件是存储层的对接契约入口（What/Why），DDL 见本目录下的 `postgres/` 与 `clickhouse/`。

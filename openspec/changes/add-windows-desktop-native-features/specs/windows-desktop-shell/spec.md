@@ -1,3 +1,9 @@
+---
+title: spec
+type: note
+permalink: landslide-monitoring-v2-mainline/openspec/changes/add-windows-desktop-native-features/specs/windows-desktop-shell/spec
+---
+
 # Delta for Windows Desktop Shell
 
 ## ADDED Requirements

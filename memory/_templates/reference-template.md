@@ -1,9 +1,10 @@
-﻿---
+---
 title: reference-title
 type: note
 tags:
-  - reference
+- reference
 status: active
+permalink: landslide-monitoring-v2-mainline/memory/templates/reference-template
 ---
 
 # Reference: reference-title

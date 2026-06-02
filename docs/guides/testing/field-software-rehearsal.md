@@ -1,3 +1,9 @@
+---
+title: field-software-rehearsal
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/testing/field-software-rehearsal
+---
+
 # 现场链路软件优先联调（A 路线）
 
 适用范围：当前硬件方案收口阶段，先不依赖真实硬件大规模接入，优先用成熟工具和轻量脚本把“节点 -> 网关 -> 平台”边界打顺。

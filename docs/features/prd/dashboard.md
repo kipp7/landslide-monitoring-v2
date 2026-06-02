@@ -1,3 +1,9 @@
+---
+title: dashboard
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/features/prd/dashboard
+---
+
 ﻿# PRD：仪表盘与实时展示（单机）
 
 ## 1. 背景
@@ -20,4 +26,3 @@
 - API：`docs/integrations/api/05-data.md`、`docs/integrations/api/07-system.md`
 - DB：`docs/integrations/storage/postgres/tables/05-iot-data.sql`（device_state）
 - ClickHouse：`docs/integrations/storage/clickhouse/01-telemetry.sql`
-

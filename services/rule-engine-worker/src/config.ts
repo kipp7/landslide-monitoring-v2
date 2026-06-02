@@ -17,7 +17,10 @@ const configSchema = z.object({
   postgresPoolMax: z.coerce.number().int().positive().max(50).default(5),
 
   rulesRefreshMs: z.coerce.number().int().positive().max(5 * 60 * 1000).default(10_000),
-  maxPointsPerRule: z.coerce.number().int().positive().max(50_000).default(600)
+  maxPointsPerRule: z.coerce.number().int().positive().max(50_000).default(600),
+
+  rk3568AlarmActuatorUrl: z.string().optional(),
+  actuatorTimeoutMs: z.coerce.number().int().positive().max(30_000).default(5_000)
 });
 
 export function loadConfigFromEnv(env: NodeJS.ProcessEnv) {
@@ -38,7 +41,10 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv) {
     postgresPoolMax: env.POSTGRES_POOL_MAX,
 
     rulesRefreshMs: env.RULES_REFRESH_MS,
-    maxPointsPerRule: env.MAX_POINTS_PER_RULE
+    maxPointsPerRule: env.MAX_POINTS_PER_RULE,
+
+    rk3568AlarmActuatorUrl: env.RK3568_ALARM_ACTUATOR_URL,
+    actuatorTimeoutMs: env.ACTUATOR_TIMEOUT_MS
   });
 
   if (!parsed.success) {

@@ -1,3 +1,9 @@
+---
+title: repo-structure-and-naming
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/standards/repo-structure-and-naming
+---
+
 # 仓库结构与命名规范（Monorepo，必须遵守）
 
 目标：让仓库在长期迭代中保持清晰边界，避免“写着写着又变乱”。
@@ -78,4 +84,3 @@
 - 禁止提交真实 `.env` 文件（仅允许 `.env.example` / `.env.template`）
 - 禁止在前端/移动端硬编码传感器 key、阈值、站点坐标、设备映射
 - 禁止绕开契约直接“先写代码再补文档”
-

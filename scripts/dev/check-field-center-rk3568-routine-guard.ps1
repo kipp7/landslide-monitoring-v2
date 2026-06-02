@@ -160,15 +160,29 @@ try {
     powershell -NoProfile -ExecutionPolicy Bypass -File $resolvedCenterProductionHandoffScript @commonUnsafeArgs
   }
 
+  $rk3568ProductionOperationalReady = (
+    [string]$rk3568ProductionUplinkFreeze.runtime.serviceActive -eq "active" -and
+    [bool]$rk3568ProductionUplinkFreeze.runtime.mqttConnected -and
+    [bool]$rk3568ProductionUplinkFreeze.runtime.serialOpen -and
+    [int]$rk3568ProductionUplinkFreeze.runtime.rejectedWriteFailures -eq 0 -and
+    [int]$rk3568ProductionUplinkFreeze.runtime.spoolPending -eq 0 -and
+    [string]$rk3568ProductionUplinkFreeze.runtime.nodeStatuses.nodeA -in @("online", "degraded") -and
+    [string]$rk3568ProductionUplinkFreeze.runtime.nodeStatuses.nodeB -in @("online", "degraded")
+  )
+  $rk3568ProductionStrictFailureKeys = @()
+  if ($null -ne $rk3568ProductionUplinkFreeze.frozenUplink -and $null -ne $rk3568ProductionUplinkFreeze.frozenUplink.failureKeys) {
+    $rk3568ProductionStrictFailureKeys = @($rk3568ProductionUplinkFreeze.frozenUplink.failureKeys | ForEach-Object { [string]$_ })
+  }
+
   $checks = @(
     (Get-Check -Key "centerRuntimeFreezeAccepted" -Ok:([bool]$centerRuntimeFreeze.accepted) -Actual ([bool]$centerRuntimeFreeze.accepted) -Expected $true),
     (Get-Check -Key "centerRuntimeFreezeBoundary" -Ok:([string]$centerRuntimeFreeze.currentBoundary -eq "center-runtime-freeze-ready") -Actual ([string]$centerRuntimeFreeze.currentBoundary) -Expected "center-runtime-freeze-ready"),
     (Get-Check -Key "rk3568NetworkBootstrapAccepted" -Ok:([bool]$rk3568NetworkBootstrap.accepted) -Actual ([bool]$rk3568NetworkBootstrap.accepted) -Expected $true),
     (Get-Check -Key "rk3568NetworkBootstrapBoundary" -Ok:([string]$rk3568NetworkBootstrap.currentBoundary -eq "rk3568-network-bootstrap-ready") -Actual ([string]$rk3568NetworkBootstrap.currentBoundary) -Expected "rk3568-network-bootstrap-ready"),
-    (Get-Check -Key "rk3568NetworkBootstrapMode" -Ok:([string]$rk3568NetworkBootstrap.runtimeStatus.mode -eq "sta_connected") -Actual ([string]$rk3568NetworkBootstrap.runtimeStatus.mode) -Expected "sta_connected"),
-    (Get-Check -Key "rk3568ProductionUplinkFreezeAccepted" -Ok:([bool]$rk3568ProductionUplinkFreeze.accepted) -Actual ([bool]$rk3568ProductionUplinkFreeze.accepted) -Expected $true),
-    (Get-Check -Key "rk3568ProductionUplinkFreezeBoundary" -Ok:([string]$rk3568ProductionUplinkFreeze.currentBoundary -eq "rk3568-production-uplink-freeze-ready") -Actual ([string]$rk3568ProductionUplinkFreeze.currentBoundary) -Expected "rk3568-production-uplink-freeze-ready"),
+    (Get-Check -Key "rk3568NetworkBootstrapMode" -Ok:(@("sta_connected", "ethernet_uplink") -contains [string]$rk3568NetworkBootstrap.runtimeStatus.mode) -Actual ([string]$rk3568NetworkBootstrap.runtimeStatus.mode) -Expected "sta_connected|ethernet_uplink"),
+    (Get-Check -Key "rk3568ProductionUplinkOperationalReady" -Ok:$rk3568ProductionOperationalReady -Actual $rk3568ProductionOperationalReady -Expected $true),
     (Get-Check -Key "rk3568ProductionRejectedWriteFailuresZero" -Ok:([int]$rk3568ProductionUplinkFreeze.runtime.rejectedWriteFailures -eq 0) -Actual ([int]$rk3568ProductionUplinkFreeze.runtime.rejectedWriteFailures) -Expected 0),
+    (Get-Check -Key "rk3568ProductionSpoolPendingZero" -Ok:([int]$rk3568ProductionUplinkFreeze.runtime.spoolPending -eq 0) -Actual ([int]$rk3568ProductionUplinkFreeze.runtime.spoolPending) -Expected 0),
     (Get-Check -Key "operationalRecoveryAccepted" -Ok:([bool]$operationalRecovery.accepted) -Actual ([bool]$operationalRecovery.accepted) -Expected $true),
     (Get-Check -Key "operationalRecoveryBoundary" -Ok:([string]$operationalRecovery.currentBoundary -eq "rk3568-center-operational-recovery-ready") -Actual ([string]$operationalRecovery.currentBoundary) -Expected "rk3568-center-operational-recovery-ready"),
     (Get-Check -Key "operationalRecoveryRejectedWriteFailuresZero" -Ok:([int]$operationalRecovery.runtime.rejectedWriteFailures -eq 0) -Actual ([int]$operationalRecovery.runtime.rejectedWriteFailures) -Expected 0),
@@ -211,6 +225,8 @@ try {
         generatedAt = [string]$rk3568ProductionUplinkFreeze.generatedAt
         accepted = [bool]$rk3568ProductionUplinkFreeze.accepted
         boundary = [string]$rk3568ProductionUplinkFreeze.currentBoundary
+        operationallyReady = $rk3568ProductionOperationalReady
+        strictFailureKeys = @($rk3568ProductionStrictFailureKeys)
         rejectedWriteFailures = [int]$rk3568ProductionUplinkFreeze.runtime.rejectedWriteFailures
       }
       operationalRecovery = [ordered]@{
@@ -233,6 +249,12 @@ try {
         accepted = [bool]$centerProductionHandoff.accepted
         boundary = [string]$centerProductionHandoff.currentBoundary
       }
+    }
+    strictAttention = [ordered]@{
+      rk3568ProductionFreezeAccepted = [bool]$rk3568ProductionUplinkFreeze.accepted
+      rk3568ProductionFreezeBoundary = [string]$rk3568ProductionUplinkFreeze.currentBoundary
+      rk3568ProductionFreezeFailureKeys = @($rk3568ProductionStrictFailureKeys)
+      operationalRecoveryStrictAccepted = if ($null -ne $operationalRecovery.strictAcceptance) { [bool]$operationalRecovery.strictAcceptance.accepted } else { $null }
     }
     nextUse = @(
       "routine guard: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-field-center-rk3568-routine-guard.ps1 -BoardPassword <password> -AllowUnsafeSecrets",

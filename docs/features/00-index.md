@@ -1,3 +1,9 @@
+---
+title: 00-index
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/features/00-index
+---
+
 ﻿# Features Index
 
 该目录存放 PRD 与规格（Spec）。AI 需要实现/修 Bug 时，优先从这里找“要做什么与验收标准”。

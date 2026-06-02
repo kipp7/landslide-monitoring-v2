@@ -1,3 +1,9 @@
+---
+title: roadmap
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/features/roadmap
+---
+
 ﻿# 重构技术栈与路线图（v2）
 
 本项目决定不保留旧数据库/旧数据，后端从 0 重新设计，优先解决“硬编码、耦合、不可扩展、不可回放”的系统性问题。

@@ -1,3 +1,9 @@
+---
+title: PRODUCTION
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/production
+---
+
 # 生产部署（推荐：Docker Compose）
 
 生产环境建议用 Docker Compose 一次性拉起：数据库 + 后端 + 前端。

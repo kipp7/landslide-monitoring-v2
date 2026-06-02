@@ -1,3 +1,9 @@
+---
+title: AGENTS
+type: note
+permalink: landslide-monitoring-v2-mainline/openspec/agents
+---
+
 # OpenSpec Instructions
 
 Instructions for AI coding assistants using OpenSpec for spec-driven development.

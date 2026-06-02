@@ -1,3 +1,9 @@
+---
+title: v2-web-route-inventory
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/roadmap/v2-web-route-inventory
+---
+
 # v2 Web 路由清单（Route Inventory）
 
 用途：用于“参考区 vs v2”的走查验收，避免漏页面入口。

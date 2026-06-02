@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/standards/readme
+---
+
 ﻿# guides/standards/
 
 代码与数据的统一规范（How-to + 约束集合）：

@@ -1,3 +1,9 @@
+---
+title: huawei-iot-http-push
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/iot/huawei-iot-http-push
+---
+
 # 华为云 IoT HTTP Push（适配器契约）
 
 目标：兼容参考区的 `/iot/huawei` 思路，但在 v2 中以“独立适配器服务”的方式接入，并将上报写入 `telemetry.raw.v1`（进入主链路）。

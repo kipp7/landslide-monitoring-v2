@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/rules/examples/readme
+---
+
 # Rules DSL 示例（与 JSON Schema 对齐）
 
 本目录存放 Rule DSL 的**机器可验证**示例。目标是：
@@ -11,4 +17,3 @@
 - `rule-multi-sensor-combo.v1.json`
 - `rule-metric-window.v1.json`
 - `rule-algo-predict.v1.json`
-

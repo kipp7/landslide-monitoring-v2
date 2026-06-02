@@ -1,3 +1,9 @@
+---
+title: ADR-0003-sparse-telemetry-model
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/architecture/adr/adr-0003-sparse-telemetry-model
+---
+
 # ADR-0003: 遥测采用稀疏点位模型（sensorKey + value），避免宽表频繁改结构
 
 ## Status
@@ -43,4 +49,3 @@
 - Follow-ups
   - 保持 `sensors` 字典与指标命名规范一致
   - 在 API 里统一曲线返回结构（series）
-

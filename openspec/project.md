@@ -1,3 +1,9 @@
+---
+title: project
+type: note
+permalink: landslide-monitoring-v2-mainline/openspec/project
+---
+
 # Project Context
 
 ## Purpose

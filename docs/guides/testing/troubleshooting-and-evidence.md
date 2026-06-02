@@ -1,3 +1,9 @@
+---
+title: troubleshooting-and-evidence
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/testing/troubleshooting-and-evidence
+---
+
 # 排查与证据收集（Troubleshooting & Evidence）
 
 目标：当基础设施或链路出问题时，能在 10 分钟内收集到足够证据定位问题，并能写出可复盘的 incident。

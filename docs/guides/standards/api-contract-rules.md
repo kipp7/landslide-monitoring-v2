@@ -1,3 +1,9 @@
+---
+title: api-contract-rules
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/standards/api-contract-rules
+---
+
 ﻿# API 契约规则（必须遵守）
 
 目标：让 API 成为“唯一真相”，前端/Flutter/运维工具都只依赖 API，而不是依赖数据库表或某个页面的实现细节。
@@ -40,4 +46,3 @@
 - 命令下发必须返回 `commandId`，并可查询状态（queued/sent/acked/failed/timeout）。
 - 规则发布必须是版本化（ruleVersion 递增），不覆盖旧版本。
 - 告警以事件为事实来源（trigger/update/resolve/ack），API 只读聚合状态。
-

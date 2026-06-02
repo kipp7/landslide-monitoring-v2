@@ -1,8 +1,8 @@
 ﻿{
     "summary":  {
-                    "generatedAt":  "2026-03-24T01:38:36Z",
+                    "generatedAt":  "2026-05-21T11:40:06Z",
                     "distDir":  "apps/desk/dist",
-                    "latestWriteTime":  "2026-03-24 09:38:27",
+                    "latestWriteTime":  "2026-05-21 19:39:46",
                     "currentBuildWindowSeconds":  120,
                     "warningThresholdKb":  500,
                     "assetCount":  2,
@@ -11,44 +11,44 @@
                     "vendorJsCount":  0,
                     "oversizeJsCount":  1,
                     "largestJs":  {
-                                      "name":  "index-B1qoZq4t.js",
+                                      "name":  "index-DrCtWXdh.js",
                                       "kind":  "js",
                                       "isVendor":  false,
-                                      "sizeBytes":  3108943,
-                                      "sizeKb":  3036.08,
+                                      "sizeBytes":  3403899,
+                                      "sizeKb":  3324.12,
                                       "exceedsWarning":  true,
-                                      "lastWriteTime":  "2026-03-24 09:38:27"
+                                      "lastWriteTime":  "2026-05-21 19:39:46"
                                   },
                     "largestCss":  {
-                                       "name":  "style-DLWur-HO.css",
+                                       "name":  "style-D5bxIC1w.css",
                                        "kind":  "css",
                                        "isVendor":  false,
-                                       "sizeBytes":  66803,
-                                       "sizeKb":  65.24,
+                                       "sizeBytes":  108465,
+                                       "sizeKb":  105.92,
                                        "exceedsWarning":  false,
-                                       "lastWriteTime":  "2026-03-24 09:38:27"
+                                       "lastWriteTime":  "2026-05-21 19:39:46"
                                    }
                 },
     "oversizeJs":  [
                        {
-                           "name":  "index-B1qoZq4t.js",
+                           "name":  "index-DrCtWXdh.js",
                            "kind":  "js",
                            "isVendor":  false,
-                           "sizeBytes":  3108943,
-                           "sizeKb":  3036.08,
+                           "sizeBytes":  3403899,
+                           "sizeKb":  3324.12,
                            "exceedsWarning":  true,
-                           "lastWriteTime":  "2026-03-24 09:38:27"
+                           "lastWriteTime":  "2026-05-21 19:39:46"
                        }
                    ],
     "topJs":  [
                   {
-                      "name":  "index-B1qoZq4t.js",
+                      "name":  "index-DrCtWXdh.js",
                       "kind":  "js",
                       "isVendor":  false,
-                      "sizeBytes":  3108943,
-                      "sizeKb":  3036.08,
+                      "sizeBytes":  3403899,
+                      "sizeKb":  3324.12,
                       "exceedsWarning":  true,
-                      "lastWriteTime":  "2026-03-24 09:38:27"
+                      "lastWriteTime":  "2026-05-21 19:39:46"
                   }
               ],
     "topVendorJs":  [
@@ -56,33 +56,33 @@
                     ],
     "topCss":  [
                    {
-                       "name":  "style-DLWur-HO.css",
+                       "name":  "style-D5bxIC1w.css",
                        "kind":  "css",
                        "isVendor":  false,
-                       "sizeBytes":  66803,
-                       "sizeKb":  65.24,
+                       "sizeBytes":  108465,
+                       "sizeKb":  105.92,
                        "exceedsWarning":  false,
-                       "lastWriteTime":  "2026-03-24 09:38:27"
+                       "lastWriteTime":  "2026-05-21 19:39:46"
                    }
                ],
     "assets":  [
                    {
-                       "name":  "index-B1qoZq4t.js",
+                       "name":  "index-DrCtWXdh.js",
                        "kind":  "js",
                        "isVendor":  false,
-                       "sizeBytes":  3108943,
-                       "sizeKb":  3036.08,
+                       "sizeBytes":  3403899,
+                       "sizeKb":  3324.12,
                        "exceedsWarning":  true,
-                       "lastWriteTime":  "2026-03-24 09:38:27"
+                       "lastWriteTime":  "2026-05-21 19:39:46"
                    },
                    {
-                       "name":  "style-DLWur-HO.css",
+                       "name":  "style-D5bxIC1w.css",
                        "kind":  "css",
                        "isVendor":  false,
-                       "sizeBytes":  66803,
-                       "sizeKb":  65.24,
+                       "sizeBytes":  108465,
+                       "sizeKb":  105.92,
                        "exceedsWarning":  false,
-                       "lastWriteTime":  "2026-03-24 09:38:27"
+                       "lastWriteTime":  "2026-05-21 19:39:46"
                    }
                ]
 }

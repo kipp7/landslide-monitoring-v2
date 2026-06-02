@@ -1,3 +1,9 @@
+---
+title: spec
+type: note
+permalink: landslide-monitoring-v2-mainline/openspec/changes/add-desk-mock-api-contract/specs/desk-api-contract/spec
+---
+
 # Delta for Desk API Contract
 
 ## ADDED Requirements

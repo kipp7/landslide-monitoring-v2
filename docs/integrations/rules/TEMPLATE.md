@@ -1,3 +1,9 @@
+---
+title: TEMPLATE
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/rules/template
+---
+
 # integrations/rules/ Template
 
 用途：当规则系统演进（新增算子/窗口类型/缺失策略/AI 条件）时，优先在这里记录契约变化，避免多处文档各写一份导致不一致。
@@ -29,4 +35,3 @@
 
 - 是否影响回放幂等：
 - 是否需要重算历史数据：
-

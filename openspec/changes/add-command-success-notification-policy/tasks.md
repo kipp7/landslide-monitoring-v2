@@ -1,3 +1,9 @@
+---
+title: tasks
+type: note
+permalink: landslide-monitoring-v2-mainline/openspec/changes/add-command-success-notification-policy/tasks
+---
+
 ## 1. Policy Design
 - [x] 1.1 定义 success-notification policy 的最小枚举与优先级
 - [x] 1.2 明确 system default / command-type default / per-command override 三层关系

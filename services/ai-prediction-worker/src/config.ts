@@ -28,9 +28,17 @@ const configSchema = z.object({
   postgresDatabase: z.string().default("landslide_monitor"),
   postgresPoolMax: z.coerce.number().int().positive().default(5),
 
+  clickhouseUrl: z.string().url().optional(),
+  clickhouseUsername: z.string().default("default"),
+  clickhousePassword: optionalNonEmptyString(),
+  clickhouseDatabase: z.string().default("landslide"),
+  clickhouseTable: z.string().default("telemetry_raw"),
+
   modelKey: z.string().min(1).max(64).default("heuristic.v1"),
   modelVersion: z.string().min(1).max(64).default("1"),
-  predictHorizonSeconds: z.coerce.number().int().min(0).max(31_536_000).default(3600)
+  predictHorizonSeconds: z.coerce.number().int().min(0).max(31_536_000).default(3600),
+  artifactRootDir: z.string().min(1).default("artifacts/models"),
+  featureHistoryLookbackHours: z.coerce.number().int().min(72).max(720).default(192)
 });
 
 export type AppConfig = z.infer<typeof configSchema>;
@@ -53,9 +61,16 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
     postgresDatabase: env.POSTGRES_DATABASE,
     postgresPoolMax: env.POSTGRES_POOL_MAX,
 
+    clickhouseUrl: env.CLICKHOUSE_URL,
+    clickhouseUsername: env.CLICKHOUSE_USERNAME,
+    clickhousePassword: env.CLICKHOUSE_PASSWORD,
+    clickhouseDatabase: env.CLICKHOUSE_DATABASE,
+    clickhouseTable: env.CLICKHOUSE_TABLE,
+
     modelKey: env.MODEL_KEY,
     modelVersion: env.MODEL_VERSION,
-    predictHorizonSeconds: env.PREDICT_HORIZON_SECONDS
+    predictHorizonSeconds: env.PREDICT_HORIZON_SECONDS,
+    artifactRootDir: env.ARTIFACT_ROOT_DIR,
+    featureHistoryLookbackHours: env.FEATURE_HISTORY_LOOKBACK_HOURS
   });
 }
-

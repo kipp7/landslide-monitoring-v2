@@ -88,6 +88,30 @@ function safePgIdent(id: string): string | null {
   return `"${id}"`;
 }
 
+function formalDevicePredicate(alias = "devices"): string {
+  return `COALESCE(${alias}.device_name, '') NOT LIKE 'field-hardware-replay-%'
+    AND COALESCE(${alias}.metadata->>'note', '') NOT IN ('field_hardware_uplink_replay', 'field_rehearsal', 'smoke_test', 'seed demo')
+    AND COALESCE(${alias}.metadata->>'identityClass', COALESCE(${alias}.metadata->>'identity_class', '')) NOT IN ('seed', 'replay', 'rehearsal', 'smoke_test', 'lab')`;
+}
+
+async function resolveDefaultFormalDeviceId(pg: PgPool | null): Promise<string | null> {
+  if (!pg) return null;
+  return withPgClient(pg, async (client) => {
+    const row = await queryOne<{ device_id: string }>(
+      client,
+      `
+        SELECT device_id
+        FROM devices
+        WHERE status != 'revoked' AND ${formalDevicePredicate("devices")}
+        ORDER BY device_name ASC, created_at ASC
+        LIMIT 1
+      `,
+      []
+    );
+    return row?.device_id ?? null;
+  });
+}
+
 async function pgSampleRows(pg: PgPool, schema: string, tableName: string, limit: number): Promise<unknown[] | null> {
   const safeSchema = safePgIdent(schema);
   const safeTable = safePgIdent(tableName);
@@ -381,10 +405,15 @@ export function registerLegacyDebugToolRoutes(
     }
     const injectApp = injector;
 
-    const deviceId =
+    const requestedDeviceId =
       typeof (request.query as Record<string, unknown> | undefined)?.device_id === "string"
-        ? String((request.query as Record<string, unknown>).device_id)
-        : "device_1";
+        ? String((request.query as Record<string, unknown>).device_id).trim()
+        : "";
+    const deviceId = requestedDeviceId || (await resolveDefaultFormalDeviceId(pg));
+    if (!deviceId) {
+      legacyFail(reply, 404, "device not found");
+      return;
+    }
 
     const fullPath = request.raw.url ?? request.url;
     const prefix = fullPath.startsWith("/iot/api/") ? "/iot/api" : "/api";

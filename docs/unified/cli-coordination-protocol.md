@@ -1,3 +1,9 @@
+---
+title: cli-coordination-protocol
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/unified/cli-coordination-protocol
+---
+
 # CLI Coordination Protocol
 
 本文件是其他 CLI 窗口读取主线真值、领取协作信息、回报状态的稳定协议。

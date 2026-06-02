@@ -1,3 +1,9 @@
+---
+title: backend-rules
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/standards/backend-rules
+---
+
 # 后端规则（必须遵守）
 
 目标：保证“可扩展、不写死、可回放、可运维”。这些规则是架构底线，不随实现阶段妥协。

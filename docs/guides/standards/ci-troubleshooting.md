@@ -1,5 +1,6 @@
 ---
 title: CI 常见问题排查（Troubleshooting）
+permalink: landslide-monitoring-v2-mainline/docs/guides/standards/ci-troubleshooting
 ---
 
 # CI 常见问题排查（Troubleshooting）
@@ -144,4 +145,3 @@ title: CI 常见问题排查（Troubleshooting）
 
 - 一次性坑：写到 `docs/incidents/INC-xxxx-*.md`
 - 长期规范：补到 `docs/guides/standards/` 的对应规范文档
-

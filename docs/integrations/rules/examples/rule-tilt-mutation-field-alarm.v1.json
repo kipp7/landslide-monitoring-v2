@@ -1,0 +1,78 @@
+{
+  "dslVersion": 1,
+  "name": "现场倾角突变声光联动（演示秒触发版，仅用于实机演示）",
+  "scope": {
+    "type": "global"
+  },
+  "enabled": true,
+  "severity": "high",
+  "cooldown": { "minutes": 0 },
+  "timeField": "received",
+  "missing": { "policy": "ignore" },
+  "when": {
+    "op": "OR",
+    "items": [
+      {
+        "metric": {
+          "sensorKey": "tilt_x_deg",
+          "agg": "delta",
+          "window": { "type": "points", "points": 2 }
+        },
+        "operator": ">=",
+        "value": 0.08
+      },
+      {
+        "metric": {
+          "sensorKey": "tilt_x_deg",
+          "agg": "delta",
+          "window": { "type": "points", "points": 2 }
+        },
+        "operator": "<=",
+        "value": -0.08
+      },
+      {
+        "metric": {
+          "sensorKey": "tilt_y_deg",
+          "agg": "delta",
+          "window": { "type": "points", "points": 2 }
+        },
+        "operator": ">=",
+        "value": 0.08
+      },
+      {
+        "metric": {
+          "sensorKey": "tilt_y_deg",
+          "agg": "delta",
+          "window": { "type": "points", "points": 2 }
+        },
+        "operator": "<=",
+        "value": -0.08
+      },
+      {
+        "metric": {
+          "sensorKey": "tilt_z_deg",
+          "agg": "delta",
+          "window": { "type": "points", "points": 2 }
+        },
+        "operator": ">=",
+        "value": 0.08
+      },
+      {
+        "metric": {
+          "sensorKey": "tilt_z_deg",
+          "agg": "delta",
+          "window": { "type": "points", "points": 2 }
+        },
+        "operator": "<=",
+        "value": -0.08
+      }
+    ]
+  },
+  "actions": [
+    {
+      "type": "emit_alert",
+      "titleTemplate": "倾角突变触发现场声光联动",
+      "messageTemplate": "节点 {{deviceId}} 倾角 X/Y/Z 任一轴相邻两次上报变化超过 0.08°，演示秒触发规则已触发 RK3568 声光报警并进入人工复核。"
+    }
+  ]
+}

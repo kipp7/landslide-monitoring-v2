@@ -1,3 +1,9 @@
+---
+title: pull-request-howto
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/standards/pull-request-howto
+---
+
 # Pull Request 操作指南（新手友好，必须按此执行）
 
 目标：确保每次合并都“闭环”：有说明、有验证、有回滚、有证据，不再出现“点一下就红了/不知道怎么修”的情况。

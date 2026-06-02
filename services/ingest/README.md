@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: landslide-monitoring-v2-mainline/services/ingest/readme
+---
+
 # ingest-service（MQTT → Kafka）
 
 本服务负责把设备端 MQTT 上报的 `TelemetryEnvelope` 校验后写入 Kafka（并把异常消息写入 DLQ），为后续 ClickHouse 落库、规则引擎回放提供统一事件源。

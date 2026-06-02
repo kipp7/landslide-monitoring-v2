@@ -1,3 +1,9 @@
+---
+title: 011-camera
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/api/011-camera
+---
+
 # 11) Camera（ESP32-CAM）
 
 权限：

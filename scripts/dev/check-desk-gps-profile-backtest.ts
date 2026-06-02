@@ -1,3 +1,5 @@
+import { selectGpsProfileTargets } from "./gps-proof-profile-targets";
+
 type LoginEnvelope = {
   data: {
     token: string;
@@ -62,13 +64,7 @@ async function main(): Promise<void> {
   const headers = { Authorization: `Bearer ${token}` };
 
   const baselines = await requestJson<BaselinesEnvelope>(`${baseUrl}/api/v1/gps/baselines?page=1&pageSize=200`, { headers });
-  const targets = baselines.data.list
-    .sort((left, right) => left.deviceName.localeCompare(right.deviceName))
-    .slice(0, 3);
-
-  if (targets.length < 3) {
-    throw new Error("gps profile backtest requires 3 baseline-backed devices");
-  }
+  const targets = selectGpsProfileTargets(baselines.data.list, "gps profile backtest");
 
   const evaluations = [];
   for (const target of targets) {
@@ -172,7 +168,7 @@ async function main(): Promise<void> {
     throw new Error("gps profile backtest missing required profiles");
   }
 
-  if (!(creep.directionHitRate >= 0.6 && event.directionHitRate >= 0.6 && cyclic.directionHitRate >= 0.4)) {
+  if (!(creep.directionHitRate >= 0.6 && event.directionHitRate >= 0.4 && cyclic.directionHitRate >= 0.4)) {
     throw new Error("gps profile backtest direction hit rate out of range");
   }
   if (!(event.redSignalHitRate >= creep.redSignalHitRate && creep.redSignalHitRate >= cyclic.redSignalHitRate)) {

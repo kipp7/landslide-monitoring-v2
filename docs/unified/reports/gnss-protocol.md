@@ -1,3 +1,9 @@
+---
+title: gnss-protocol
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/unified/reports/gnss-protocol
+---
+
 # GNSS / 协议 / 基线报告
 
 ## 基本信息

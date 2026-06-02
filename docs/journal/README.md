@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/journal/readme
+---
+
 # 开发日记
 
 ## 目标
@@ -40,7 +46,7 @@
 
 ## 当前日志文件
 
-- `docs/journal/2026-03.md`
+- `docs/journal/2026-04.md`
 
 ## 使用方式
 

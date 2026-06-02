@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/kafka/examples/readme
+---
+
 ﻿# Kafka 示例（与 JSON Schema 对齐）
 
 本目录存放 Kafka topic payload 的**机器可验证**示例，用于：

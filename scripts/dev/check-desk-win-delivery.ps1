@@ -3,6 +3,8 @@ param(
   [string]$PackageManifestFile = "docs/unified/reports/desk-win-package-latest.json",
   [string]$PackageVerifyFile = "docs/unified/reports/desk-win-package-verify-latest.json",
   [string]$PrerequisitesFile = "docs/unified/reports/desk-win-prerequisites-latest.json",
+  [string]$BoundaryCheckScript = "scripts/dev/check-desk-api-boundary.ps1",
+  [string]$BoundaryReportFile = "docs/unified/reports/desk-api-boundary-latest.json",
   [string]$OutFile = "docs/unified/reports/desk-win-delivery-latest.json"
 )
 
@@ -13,7 +15,13 @@ $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $fullPackageManifestFile = Join-Path $repoRoot $PackageManifestFile
 $fullPackageVerifyFile = Join-Path $repoRoot $PackageVerifyFile
 $fullPrerequisitesFile = Join-Path $repoRoot $PrerequisitesFile
+$fullBoundaryCheckScript = Join-Path $repoRoot $BoundaryCheckScript
+$fullBoundaryReportFile = Join-Path $repoRoot $BoundaryReportFile
 $fullOutFile = Join-Path $repoRoot $OutFile
+
+if (-not (Test-Path $fullBoundaryCheckScript)) {
+  throw "required script not found: $fullBoundaryCheckScript"
+}
 
 foreach ($path in @($fullPackageManifestFile, $fullPackageVerifyFile, $fullPrerequisitesFile)) {
   if (-not (Test-Path $path)) {
@@ -21,9 +29,15 @@ foreach ($path in @($fullPackageManifestFile, $fullPackageVerifyFile, $fullPrere
   }
 }
 
+powershell -NoProfile -ExecutionPolicy Bypass -File $fullBoundaryCheckScript -OutFile $BoundaryReportFile
+if ($LASTEXITCODE -ne 0) {
+  throw "desk API boundary check execution failed (exit=$LASTEXITCODE)"
+}
+
 $package = Get-Content -Path $fullPackageManifestFile -Raw -Encoding UTF8 | ConvertFrom-Json
 $verify = Get-Content -Path $fullPackageVerifyFile -Raw -Encoding UTF8 | ConvertFrom-Json
 $prereq = Get-Content -Path $fullPrerequisitesFile -Raw -Encoding UTF8 | ConvertFrom-Json
+$boundary = Get-Content -Path $fullBoundaryReportFile -Raw -Encoding UTF8 | ConvertFrom-Json
 
 $checks = @(
   [pscustomobject]@{
@@ -73,6 +87,12 @@ $checks = @(
     ok = [bool](($prereq.checks | Where-Object { $_.key -eq "webView2Runtime" } | Select-Object -First 1).ok)
     actual = ($prereq.checks | Where-Object { $_.key -eq "webView2Runtime" } | Select-Object -First 1).actual
     expected = "installed"
+  },
+  [pscustomobject]@{
+    key = "apiOnlyBoundary"
+    ok = [bool]$boundary.ready
+    actual = [bool]$boundary.ready
+    expected = $true
   }
 )
 
@@ -85,6 +105,7 @@ $result = [ordered]@{
     packageManifestFile = $PackageManifestFile
     packageVerifyFile = $PackageVerifyFile
     prerequisitesFile = $PrerequisitesFile
+    boundaryReportFile = $BoundaryReportFile
   }
   summary = [ordered]@{
     outputDir = $package.outputDir
@@ -92,6 +113,7 @@ $result = [ordered]@{
     webIndex = $package.web.indexPath
     packageFileCount = $package.package.fileCount
     packageTotalBytes = $package.package.totalBytes
+    boundaryReady = [bool]$boundary.ready
   }
   checks = $checks
   failedKeys = @($failed | ForEach-Object { $_.key })

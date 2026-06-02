@@ -1,3 +1,9 @@
+---
+title: spec
+type: note
+permalink: landslide-monitoring-v2-mainline/openspec/changes/add-desk-frontend-product-polish/specs/desk-frontend/spec
+---
+
 # Delta for Desk Frontend
 
 ## ADDED Requirements
@@ -37,3 +43,14 @@
 #### Scenario: Desktop host detected
 - **WHEN** 前端检测到桌面壳环境
 - **THEN** 设置页 SHOULD 展示“退出软件”等原生入口
+
+### Requirement: Monitoring Dashboard Historical Trends
+数据监测大屏 MUST 在当前区域/站点/分节点上下文内提供历史趋势查看能力，复用已有遥测时序接口，不另起割裂的孤立页面。
+
+#### Scenario: Scoped historical trend
+- **WHEN** 用户在数据监测大屏选择区域或地图分节点
+- **THEN** 历史趋势模块 MUST 跟随该范围展示对应传感器指标的历史曲线
+
+#### Scenario: Metric and range switching
+- **WHEN** 用户切换历史指标或时间范围
+- **THEN** 图表 MUST 使用相同筛选上下文刷新，并展示清晰单位、图例和统计摘要

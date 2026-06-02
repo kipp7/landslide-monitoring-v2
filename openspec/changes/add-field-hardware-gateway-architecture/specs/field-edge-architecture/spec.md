@@ -1,3 +1,9 @@
+---
+title: spec
+type: note
+permalink: landslide-monitoring-v2-mainline/openspec/changes/add-field-hardware-gateway-architecture/specs/field-edge-architecture/spec
+---
+
 ## ADDED Requirements
 
 ### Requirement: Three-Layer Field Architecture

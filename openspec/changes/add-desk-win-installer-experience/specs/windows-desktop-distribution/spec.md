@@ -1,3 +1,9 @@
+---
+title: spec
+type: note
+permalink: landslide-monitoring-v2-mainline/openspec/changes/add-desk-win-installer-experience/specs/windows-desktop-distribution/spec
+---
+
 ## ADDED Requirements
 
 ### Requirement: EXE Installer Distribution

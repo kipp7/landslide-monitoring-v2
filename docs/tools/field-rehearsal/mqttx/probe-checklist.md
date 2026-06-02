@@ -1,3 +1,9 @@
+---
+title: probe-checklist
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/tools/field-rehearsal/mqttx/probe-checklist
+---
+
 # MQTTX Probe Checklist
 
 适用范围：A 路线联调中，使用 MQTTX 作为 MQTT 探针和人工验收工具。

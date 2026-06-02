@@ -9,6 +9,7 @@ param(
   [string]$ChunkStrategy = "suggested",
   [int]$InterChunkDelayMs = 50,
   [int]$ReadAfterWriteSeconds = 0,
+  [switch]$PublishCapturedAck,
   [int]$BaudRate = 115200,
   [string]$Port = "",
   [int]$WaitForPortSeconds = 0,
@@ -163,6 +164,9 @@ try {
     if ($ReadAfterWriteSeconds -gt 0) {
       $nodeArgs += @("--readAfterWriteSeconds", $ReadAfterWriteSeconds)
     }
+    if ($PublishCapturedAck) {
+      $nodeArgs += @("--publishCapturedAck")
+    }
   }
 
   $plan = [ordered]@{
@@ -175,6 +179,7 @@ try {
     chunkStrategy = $ChunkStrategy
     interChunkDelayMs = $InterChunkDelayMs
     readAfterWriteSeconds = if ($Sink -eq "uart-com" -and $ReadAfterWriteSeconds -gt 0) { $ReadAfterWriteSeconds } else { $null }
+    publishCapturedAck = if ($Sink -eq "uart-com") { [bool]$PublishCapturedAck } else { $false }
     baudRate = if ($Sink -eq "uart-com") { $BaudRate } else { $null }
     port = if ($Sink -eq "uart-com") { $resolvedPort } else { $null }
     autoPort = if ($Sink -eq "uart-com" -and $portResolution) { $portResolution.autoSelected } else { $null }

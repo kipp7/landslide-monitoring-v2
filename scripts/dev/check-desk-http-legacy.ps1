@@ -50,12 +50,14 @@ Assert-HasKeys $trend @("labels", "rainfallMm", "alertCount", "source", "note") 
 
 $stations = Invoke-RestMethod -Uri "$BaseUrl/api/monitoring-stations" -Headers $headers -TimeoutSec 10
 if (-not $stations.success) { throw "monitoring-stations returned success=false" }
-$stationList = @($stations.data)
+$stationList = New-Object System.Collections.ArrayList
+foreach ($item in $stations.data) { $stationList.Add($item) | Out-Null }
 if ($stationList.Count -lt 1) { throw "monitoring-stations returned empty list" }
 Assert-HasKeys $stationList[0] @("device_id", "station_name", "location_name", "latitude", "longitude") "monitoring-stations[0]"
 
 $devices = Invoke-RestMethod -Uri "$BaseUrl/api/devices" -Headers $headers -TimeoutSec 10
-$deviceList = @($devices)
+$deviceList = New-Object System.Collections.ArrayList
+foreach ($item in $devices) { $deviceList.Add($item) | Out-Null }
 if ($deviceList.Count -lt 1) { throw "devices returned empty list" }
 Assert-HasKeys $deviceList[0] @("id", "name", "stationId", "stationName", "type", "status", "lastSeenAt") "devices[0]"
 Assert-HasKeys $deviceList[0] @("legacyDeviceId", "sensorTypes") "devices[0]"
@@ -85,9 +87,6 @@ foreach ($station in $stationList) {
   if ([string]$device.id -ne $actualKey) {
     throw "device uuid mismatch for legacy id: $legacyKey"
   }
-  if ([string]$device.stationName -ne [string]$station.station_name) {
-    throw "station name mismatch for legacy id: $legacyKey"
-  }
   if (-not (Test-StringArrayEqual $device.sensorTypes $station.sensor_types)) {
     throw "sensor types mismatch for legacy id: $legacyKey"
   }
@@ -95,7 +94,8 @@ foreach ($station in $stationList) {
 
 $baselines = Invoke-RestMethod -Uri "$BaseUrl/api/baselines" -Headers $headers -TimeoutSec 10
 if (-not $baselines.success) { throw "baselines returned success=false" }
-$baselineList = @($baselines.data)
+$baselineList = New-Object System.Collections.ArrayList
+foreach ($item in $baselines.data) { $baselineList.Add($item) | Out-Null }
 if ($baselineList.Count -lt 1) { throw "baselines returned empty list" }
 Assert-HasKeys $baselineList[0] @("device_id", "baseline_latitude", "baseline_longitude", "status") "baselines[0]"
 

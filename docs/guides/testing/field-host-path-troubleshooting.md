@@ -1,3 +1,9 @@
+---
+title: field-host-path-troubleshooting
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/testing/field-host-path-troubleshooting
+---
+
 # 现场链路联调：宿主机路径异常排查
 
 适用范围：当前 A 路线联调中，Docker 容器内服务健康，但 Windows 宿主机访问映射端口时出现：
@@ -254,3 +260,31 @@ Docker 官方文档说明：
 - Docker Desktop Networking / published ports
 - Docker Desktop Host Networking（4.34+）
 - Microsoft WSL networking / mirrored mode / hostAddressLoopback
+
+## 11) 不要误用在 RK3568 共享口问题上
+
+本页只适用于：
+
+- Windows 宿主机到 Docker/WSL 的 host path / relay / localhost forwarding 问题
+
+本页不适用于：
+
+- RK3568 多节点共享 `/dev/ttyS3` 的 southbound 交叠问题
+
+如果你看到的是：
+
+- `interleavingSuspected` 持续增长
+- `interleavingWithMultipleSchemas` 或 `interleavingWithMultipleDeviceIds` 持续增长
+- `node A/B` 在共享口窗口里降为 `degraded/offline`
+- command forwarded 仍在，但 ACK 经常不闭合或被污染
+
+那就不要再按“宿主机路径”或“parser-first”思路处理，而应直接切换到：
+
+- [field-rk3568-shared-port-interleaving-diagnosis-2026-04.md](/E:/学校/02 项目/99 山体滑坡优化完善/landslide-monitoring-v2-mainline/docs/unified/reports/field-rk3568-shared-port-interleaving-diagnosis-2026-04.md)
+- [add-shared-port-source-stream-control](/E:/学校/02 项目/99 山体滑坡优化完善/landslide-monitoring-v2-mainline/openspec/changes/add-shared-port-source-stream-control/proposal.md)
+
+当前正式口径是：
+
+- 这类故障属于 `shared-port source-stream control`
+- 不属于 Docker Desktop / WSL host path
+- 也不应继续被包装成“再补一点 parser heuristic”

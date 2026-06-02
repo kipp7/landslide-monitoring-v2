@@ -1,13 +1,12 @@
 ﻿{
-    "generatedAt":  "2026-04-10T06:39:18Z",
+    "generatedAt":  "2026-04-14T06:03:00Z",
     "accepted":  true,
     "mode":  "field-center-deployment-software-adaptation-readiness",
     "currentBoundary":  "center-deployment-software-adaptation-ready",
     "phaseGate":  {
                       "previousPhase":  "runtime-freeze-and-production-uplink-freeze",
                       "currentPhase":  "center-deployment-and-software-adaptation",
-                      "nodeCBlocking":  false,
-                      "nodeCReservedDeviceId":  "00000000-0000-0000-0000-000000000003",
+                      "topologyContract":  "field-a-b-c-online",
                       "failureKeys":  [
 
                                       ]
@@ -15,22 +14,33 @@
     "baselineReports":  {
                             "centerRuntimeFreeze":  {
                                                         "file":  "docs/unified/reports/field-center-runtime-freeze-latest.json",
-                                                        "generatedAt":  "2026-04-10T06:35:24Z",
+                                                        "generatedAt":  "2026-04-14T06:02:49Z",
                                                         "accepted":  true,
                                                         "boundary":  "center-runtime-freeze-ready"
                                                     },
                             "rk3568ProductionUplinkFreeze":  {
                                                                  "file":  "docs/unified/reports/field-rk3568-production-uplink-freeze-latest.json",
-                                                                 "generatedAt":  "2026-04-10T06:35:30Z",
-                                                                 "accepted":  true,
-                                                                 "boundary":  "rk3568-production-uplink-freeze-ready",
-                                                                 "rejectedWriteFailures":  0
+                                                                 "generatedAt":  "2026-04-14T06:02:57Z",
+                                                                 "accepted":  false,
+                                                                 "boundary":  "rk3568-production-uplink-freeze-needs-review",
+                                                                 "operationallyReady":  true,
+                                                                 "strictFailureKeys":  [
+                                                                                           "runtimeNodeCExpectedState"
+                                                                                       ],
+                                                                 "rejectedWriteFailures":  0,
+                                                                 "nodeStatuses":  {
+                                                                                      "nodeA":  "online",
+                                                                                      "nodeB":  "online",
+                                                                                      "nodeC":  "configured"
+                                                                                  }
                                                              },
                             "softwareReadPathAdaptation":  {
                                                                "file":  "docs/unified/reports/field-software-read-path-adaptation-latest.json",
-                                                               "generatedAt":  "2026-04-09T12:40:35Z",
+                                                               "generatedAt":  "2026-04-14T05:47:37Z",
                                                                "accepted":  true,
-                                                               "boundary":  "software-read-path-adaptation-ready"
+                                                               "operationallyReady":  true,
+                                                               "boundary":  "software-read-path-adaptation-ready",
+                                                               "operationalBoundary":  "software-read-path-adaptation-operational-ready"
                                                            },
                             "liveClosure":  {
                                                 "file":  "docs/unified/reports/field-rk3568-center-live-closure-latest.json",
@@ -42,18 +52,20 @@
                      "activeFieldNodes":  [
                                               {
                                                   "nodeId":  "A",
-                                                  "deviceId":  "00000000-0000-0000-0000-000000000001"
+                                                  "deviceId":  "00000000-0000-0000-0000-000000000001",
+                                                  "status":  "online"
                                               },
                                               {
                                                   "nodeId":  "B",
-                                                  "deviceId":  "00000000-0000-0000-0000-000000000002"
+                                                  "deviceId":  "00000000-0000-0000-0000-000000000002",
+                                                  "status":  "online"
+                                              },
+                                              {
+                                                  "nodeId":  "C",
+                                                  "deviceId":  "00000000-0000-0000-0000-000000000003",
+                                                  "status":  "configured"
                                               }
                                           ],
-                     "reservedFieldNode":  {
-                                               "nodeId":  "C",
-                                               "deviceId":  "00000000-0000-0000-0000-000000000003",
-                                               "status":  "reserved-not-blocking"
-                                           },
                      "gateway":  {
                                      "board":  "rk3568",
                                      "southboundSerialDevice":  "/dev/ttyS3",
@@ -68,6 +80,13 @@
                            "conservativePerDayMiBMax":  34.61,
                            "conservativeThirtyDayGiB":  0.92
                        },
+    "strictAttention":  {
+                            "rk3568ProductionFreezeAccepted":  false,
+                            "rk3568ProductionFreezeBoundary":  "rk3568-production-uplink-freeze-needs-review",
+                            "rk3568ProductionFreezeFailureKeys":  [
+                                                                      "runtimeNodeCExpectedState"
+                                                                  ]
+                        },
     "workPackages":  [
                          {
                              "key":  "center-runtime-freeze",
@@ -90,10 +109,10 @@
                          {
                              "key":  "product-software-adaptation",
                              "status":  "green",
-                             "objective":  "finish software-side adaptation against the current A/B field contract without expanding the protocol",
+                             "objective":  "finish software-side adaptation against the current A/B/C field contract without expanding the protocol",
                              "evidence":  [
                                               "API/Web reads stay aligned with the field-gateway output and live closure proof",
-                                              "node C remains a reserved capacity/config slot, not a blocker"
+                                              "node C is now part of the formal active topology and remains within the current metrics contract"
                                           ]
                          }
                      ],
@@ -111,16 +130,34 @@
                        "expected":  "center-runtime-freeze-ready"
                    },
                    {
-                       "key":  "rk3568ProductionFreezeAccepted",
+                       "key":  "rk3568ProductionOperationalReady",
                        "ok":  true,
                        "actual":  true,
                        "expected":  true
                    },
                    {
-                       "key":  "rk3568ProductionFreezeBoundary",
+                       "key":  "rk3568ProductionServiceActive",
                        "ok":  true,
-                       "actual":  "rk3568-production-uplink-freeze-ready",
-                       "expected":  "rk3568-production-uplink-freeze-ready"
+                       "actual":  "active",
+                       "expected":  "active"
+                   },
+                   {
+                       "key":  "rk3568ProductionMqttConnected",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "rk3568ProductionSerialOpen",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
+                   },
+                   {
+                       "key":  "rk3568ProductionSpoolPendingZero",
+                       "ok":  true,
+                       "actual":  0,
+                       "expected":  0
                    },
                    {
                        "key":  "rk3568RejectedWriteFailuresZero",
@@ -129,10 +166,10 @@
                        "expected":  0
                    },
                    {
-                       "key":  "rk3568NodeCReserved",
+                       "key":  "rk3568NodeCOperational",
                        "ok":  true,
                        "actual":  "configured",
-                       "expected":  "configured"
+                       "expected":  "tracked-as-pending"
                    },
                    {
                        "key":  "softwareReadPathAccepted",
@@ -143,8 +180,8 @@
                    {
                        "key":  "softwareReadPathBoundary",
                        "ok":  true,
-                       "actual":  "software-read-path-adaptation-ready",
-                       "expected":  "software-read-path-adaptation-ready"
+                       "actual":  "software-read-path-adaptation-operational-ready",
+                       "expected":  "software-read-path-adaptation-ready|software-read-path-adaptation-operational-ready"
                    },
                    {
                        "key":  "liveClosureAccepted",
@@ -178,6 +215,18 @@
                    },
                    {
                        "key":  "nodeBWebMetricsContract",
+                       "ok":  true,
+                       "actual":  14,
+                       "expected":  14
+                   },
+                   {
+                       "key":  "nodeCApiMetricsContract",
+                       "ok":  true,
+                       "actual":  14,
+                       "expected":  14
+                   },
+                   {
+                       "key":  "nodeCWebMetricsContract",
                        "ok":  true,
                        "actual":  14,
                        "expected":  14

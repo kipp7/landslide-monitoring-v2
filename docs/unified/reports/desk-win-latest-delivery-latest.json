@@ -1,5 +1,5 @@
 ﻿{
-    "generatedAt":  "2026-03-24T01:41:51Z",
+    "generatedAt":  "2026-05-21T11:40:27Z",
     "ready":  true,
     "latest":  {
                    "directory":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\latest",
@@ -7,7 +7,7 @@
                    "indexReady":  true
                },
     "counts":  {
-                   "fileCount":  435,
+                   "fileCount":  185,
                    "missingRequiredFiles":  0
                },
     "missingRequiredFiles":  [

@@ -22,19 +22,41 @@ type StationPayload = {
   stationId: string;
   stationCode: string;
   stationName: string;
+  displayName?: string | null;
+  regionCode?: string | null;
+  slopeCode?: string | null;
+  lifecycleStatus?: string | null;
   status: "active" | "inactive" | "maintenance";
   latitude: number | null;
   longitude: number | null;
+  altitude?: number | null;
+  createdAt?: string;
+  updatedAt?: string;
   metadata?: Record<string, unknown>;
 };
 
 type DevicePayload = {
   deviceId: string;
   deviceName?: string;
+  legacyDeviceId?: string | null;
   deviceType?: string;
   stationId?: string | null;
+  stationCode?: string | null;
+  stationName?: string | null;
   status: "inactive" | "active" | "revoked";
   lastSeenAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  identityClass?: string | null;
+  deviceRole?: string | null;
+  lifecycleStatus?: string | null;
+  regionCode?: string | null;
+  slopeCode?: string | null;
+  nodeCode?: string | null;
+  gatewayCode?: string | null;
+  displayName?: string | null;
+  installLabel?: string | null;
+  metadata?: Record<string, unknown>;
 };
 
 type BaselinePayload = {
@@ -76,6 +98,31 @@ function readString(value: unknown, fallback = ""): string {
   return typeof value === "string" && value.trim() ? value.trim() : fallback;
 }
 
+function readNullableString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function normalizeIdentityClass(value: unknown): string {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
+function isFormalStationMetadata(metadata: Record<string, unknown> | null): boolean {
+  const note = normalizeIdentityClass(metadata?.note);
+  if (note === "seed demo") return false;
+  return normalizeIdentityClass(metadata?.identityClass) === "formal" || normalizeIdentityClass(metadata?.identity_class) === "formal";
+}
+
+function readBoolean(value: unknown): boolean | null {
+  return typeof value === "boolean" ? value : null;
+}
+
+function readStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => readNullableString(item))
+    .filter((item): item is string => item !== null);
+}
+
 function normalizeRisk(value: unknown): Station["risk"] {
   const raw = readString(value).toLowerCase();
   if (raw === "high") return "high";
@@ -95,16 +142,53 @@ function normalizeDeviceType(value: unknown): DeviceType {
   if (raw === "rain" || raw === "rainfall") return "rain";
   if (raw === "tilt" || raw === "inclinometer") return "tilt";
   if (raw === "camera" || raw === "video") return "camera";
+  if (raw === "field_gateway" || raw === "gateway" || raw === "center_node" || raw === "rk3568") return "field_gateway";
   return "temp_hum";
 }
 
-function normalizeDeviceStatus(value: DevicePayload["status"], lastSeenAt?: string | null): Device["status"] {
+const DEFAULT_DEVICE_ONLINE_WINDOW_MS = 24 * 60 * 60 * 1000;
+const FIELD_NODE_ONLINE_WINDOW_MS = 3 * 60 * 1000;
+
+function isFormalFieldNodeDevice(device?: DevicePayload): boolean {
+  if (!device) return false;
+  const metadata = asRecord(device.metadata);
+  const identityClass =
+    normalizeIdentityClass(device.identityClass) ||
+    normalizeIdentityClass(metadata?.identityClass) ||
+    normalizeIdentityClass(metadata?.identity_class);
+  const deviceType = readString(device.deviceType).toLowerCase();
+  const deviceRole =
+    readString(device.deviceRole).toLowerCase() ||
+    readString(metadata?.deviceRole).toLowerCase() ||
+    readString(metadata?.device_role).toLowerCase();
+  const nodeCode = readString(device.nodeCode) || readString(metadata?.nodeCode) || readString(metadata?.node_code);
+  const deviceName = readString(device.deviceName, device.deviceId).toLowerCase();
+
+  return (
+    identityClass === "formal" &&
+    (
+      deviceType === "multi_sensor" ||
+      deviceType === "multisensor" ||
+      deviceRole.includes("field") ||
+      deviceRole.includes("node") ||
+      Boolean(nodeCode) ||
+      deviceName.includes("field-node")
+    )
+  );
+}
+
+function normalizeDeviceStatus(
+  value: DevicePayload["status"],
+  lastSeenAt?: string | null,
+  device?: DevicePayload
+): Device["status"] {
   if (value === "revoked") return "offline";
   const lastSeen = readString(lastSeenAt);
   if (lastSeen) {
     const ts = new Date(lastSeen);
     if (!Number.isNaN(ts.getTime())) {
-      const threshold = Date.now() - 24 * 60 * 60 * 1000;
+      const freshnessWindow = isFormalFieldNodeDevice(device) ? FIELD_NODE_ONLINE_WINDOW_MS : DEFAULT_DEVICE_ONLINE_WINDOW_MS;
+      const threshold = Date.now() - freshnessWindow;
       if (ts.getTime() >= threshold) return "online";
     }
   }
@@ -117,15 +201,6 @@ function normalizeHealthState(value: unknown): SystemStatus["items"][number]["st
   if (raw === "not_configured") return "not_configured";
   if (raw === "unhealthy") return "degraded";
   return "unknown";
-}
-
-function buildHealthPercentFromItems(
-  items: Array<{
-    status: SystemStatus["items"][number]["status"];
-  }>
-): number {
-  const healthyCount = items.filter((item) => item.status === "healthy").length;
-  return Math.round((healthyCount / Math.max(1, items.length)) * 100);
 }
 
 export function mapAuthUser(input: AuthUserPayload): User {
@@ -184,7 +259,7 @@ export function mapStationsFromV1(input: StationPayload[], devices: DevicePayloa
     const stationId = readString(device.stationId);
     if (!stationId) continue;
     deviceCountByStationId.set(stationId, (deviceCountByStationId.get(stationId) ?? 0) + 1);
-    const nextStatus = normalizeDeviceStatus(device.status, device.lastSeenAt);
+    const nextStatus = normalizeDeviceStatus(device.status, device.lastSeenAt, device);
     const current = stationStatusById.get(stationId);
     if (current === "online") continue;
     if (nextStatus === "online") {
@@ -198,19 +273,48 @@ export function mapStationsFromV1(input: StationPayload[], devices: DevicePayloa
     if (!current) stationStatusById.set(stationId, nextStatus);
   }
 
-  return input.map((station) => {
-    const metadata = asRecord(station.metadata);
-    return {
-      id: station.stationId,
-      name: readString(station.stationName, station.stationCode),
-      area: readString(metadata?.locationName, readString(metadata?.location_name, readString(metadata?.area, station.stationName))),
-      risk: normalizeRisk(metadata?.riskLevel ?? metadata?.risk_level),
-      status: stationStatusById.get(station.stationId) ?? normalizeStationStatus(station.status),
-      lat: asFiniteNumber(station.latitude) ?? 0,
-      lng: asFiniteNumber(station.longitude) ?? 0,
-      deviceCount: deviceCountByStationId.get(station.stationId) ?? 0
-    };
-  });
+  return input
+    .map((station) => {
+      const metadata = asRecord(station.metadata);
+      const stationName = readString(station.stationName, station.stationCode);
+      const displayName =
+        readNullableString(station.displayName) ??
+        readNullableString(metadata?.displayName) ??
+        readNullableString(metadata?.display_name) ??
+        stationName;
+      const regionCode =
+        readNullableString(station.regionCode) ??
+        readNullableString(metadata?.regionCode) ??
+        readNullableString(metadata?.region_code);
+      const slopeCode =
+        readNullableString(station.slopeCode) ??
+        readNullableString(metadata?.slopeCode) ??
+        readNullableString(metadata?.slope_code);
+      const lifecycleStatus =
+        readNullableString(station.lifecycleStatus) ??
+        readNullableString(metadata?.lifecycleStatus) ??
+        readNullableString(metadata?.lifecycle_status);
+      return {
+        id: station.stationId,
+        name: displayName,
+        stationCode: readString(station.stationCode),
+        stationName,
+        displayName: displayName ?? null,
+        regionCode: regionCode ?? null,
+        slopeCode: slopeCode ?? null,
+        lifecycleStatus: lifecycleStatus ?? null,
+        area: readString(
+          readString(metadata?.locationName, readString(metadata?.location_name, readString(metadata?.area, regionCode ?? displayName)))
+        ),
+        risk: normalizeRisk(metadata?.riskLevel ?? metadata?.risk_level),
+        status: stationStatusById.get(station.stationId) ?? normalizeStationStatus(station.status),
+        lat: asFiniteNumber(station.latitude) ?? 0,
+        lng: asFiniteNumber(station.longitude) ?? 0,
+        deviceCount: deviceCountByStationId.get(station.stationId) ?? 0,
+        ...(metadata ? { metadata } : {})
+      };
+    })
+    .filter((station) => station.deviceCount > 0 || isFormalStationMetadata(asRecord(station.metadata)));
 }
 
 export function mapMonitoringStationsLegacy(input: unknown): Station[] {
@@ -255,18 +359,99 @@ export function mapMonitoringStationsLegacy(input: unknown): Station[] {
 }
 
 export function mapDevicesFromV1(input: DevicePayload[], stations: Station[]): Device[] {
-  const stationNameById = new Map(stations.map((station) => [station.id, station.name] as const));
+  const stationDetailsById = new Map(
+    stations.map((station) => [
+      station.id,
+      {
+        name: station.name,
+        stationCode: station.stationCode ?? null,
+        regionCode: station.regionCode ?? null,
+        slopeCode: station.slopeCode ?? null
+      }
+    ] as const)
+  );
   return input.map((device) => {
     const stationId = readString(device.stationId);
-    const stationName = stationNameById.get(stationId) ?? (stationId || "Unassigned");
+    const metadata = asRecord(device.metadata);
+    const linkedStation = stationDetailsById.get(stationId);
+    const displayName =
+      readNullableString(device.displayName) ??
+      readNullableString(metadata?.displayName) ??
+      readNullableString(metadata?.display_name);
+    const stationName = readString(device.stationName, linkedStation?.name ?? (stationId || "Unassigned"));
+    const stationCode =
+      readNullableString(device.stationCode) ??
+      readNullableString(metadata?.stationCode) ??
+      readNullableString(metadata?.station_code) ??
+      linkedStation?.stationCode ??
+      null;
+    const identityClass =
+      readNullableString(device.identityClass) ??
+      readNullableString(metadata?.identityClass) ??
+      readNullableString(metadata?.identity_class);
+    const deviceRole =
+      readNullableString(device.deviceRole) ??
+      readNullableString(metadata?.deviceRole) ??
+      readNullableString(metadata?.device_role);
+    const lifecycleStatus =
+      readNullableString(device.lifecycleStatus) ??
+      readNullableString(metadata?.lifecycleStatus) ??
+      readNullableString(metadata?.lifecycle_status);
+    const regionCode =
+      readNullableString(device.regionCode) ??
+      readNullableString(metadata?.regionCode) ??
+      readNullableString(metadata?.region_code) ??
+      linkedStation?.regionCode ??
+      null;
+    const slopeCode =
+      readNullableString(device.slopeCode) ??
+      readNullableString(metadata?.slopeCode) ??
+      readNullableString(metadata?.slope_code) ??
+      linkedStation?.slopeCode ??
+      null;
+    const nodeCode =
+      readNullableString(device.nodeCode) ??
+      readNullableString(metadata?.nodeCode) ??
+      readNullableString(metadata?.node_code);
+    const gatewayCode =
+      readNullableString(device.gatewayCode) ??
+      readNullableString(metadata?.gatewayCode) ??
+      readNullableString(metadata?.gateway_code);
+    const installLabel =
+      readNullableString(device.installLabel) ??
+      readNullableString(metadata?.installLabel) ??
+      readNullableString(metadata?.install_label);
+    const rawDeviceName = readString(device.deviceName, device.deviceId);
+    const createdAt = readNullableString(device.createdAt);
+    const updatedAt = readNullableString(device.updatedAt);
     return {
       id: device.deviceId,
-      name: readString(device.deviceName, device.deviceId),
+      name: displayName ?? rawDeviceName,
+      deviceName: rawDeviceName,
+      legacyDeviceId:
+        readNullableString(device.legacyDeviceId) ??
+        readNullableString(metadata?.legacyDeviceId) ??
+        readNullableString(metadata?.legacy_device_id) ??
+        rawDeviceName,
       stationId,
       stationName,
+      stationCode,
+      displayName: displayName ?? null,
+      installLabel: installLabel ?? null,
+      identityClass: identityClass ?? null,
+      deviceRole: deviceRole ?? null,
+      lifecycleStatus: lifecycleStatus ?? null,
+      regionCode,
+      slopeCode,
+      nodeCode: nodeCode ?? null,
+      gatewayCode: gatewayCode ?? null,
+      registryStatus: device.status ?? null,
       type: normalizeDeviceType(device.deviceType),
-      status: normalizeDeviceStatus(device.status, device.lastSeenAt),
-      lastSeenAt: readString(device.lastSeenAt, new Date(0).toISOString())
+      status: normalizeDeviceStatus(device.status, device.lastSeenAt, device),
+      lastSeenAt: readString(device.lastSeenAt, new Date(0).toISOString()),
+      ...(createdAt ? { createdAt } : {}),
+      ...(updatedAt ? { updatedAt } : {}),
+      ...(metadata ? { metadata } : {})
     };
   });
 }
@@ -376,14 +561,167 @@ export function mapSystemStatusFromLegacy(input: unknown): SystemStatus {
       detail: readString(row.detail, readString(row.status, "unknown"))
     };
   });
-  const healthPercent = buildHealthPercentFromItems(items);
+  const fieldEdgeRecord = asRecord(record.fieldEdge);
+  const fieldEdgeSummary = asRecord(fieldEdgeRecord?.summary);
+  const fieldEdgeSoak = asRecord(fieldEdgeRecord?.soak);
+  const fieldEdgeNodes = Array.isArray(fieldEdgeRecord?.nodes) ? fieldEdgeRecord.nodes : [];
+  const hermesEdgeRecord = asRecord(record.hermesEdge);
+  const hermesStress = asRecord(hermesEdgeRecord?.stress);
+  const hermesSurface = asRecord(hermesEdgeRecord?.volatilitySurface);
+  const hermesSurfaceDimensions = Array.isArray(hermesSurface?.dimensions) ? hermesSurface.dimensions : [];
+  const hermesSurfacePoints = Array.isArray(hermesSurface?.points) ? hermesSurface.points : [];
   return {
     source: readString(record.source, "health_summary") as SystemStatus["source"],
     note: readString(record.note, "当前页面展示的是健康摘要。"),
-    cpuPercent: healthPercent,
-    memPercent: healthPercent,
-    diskPercent: healthPercent,
-    items
+    items,
+    ...(fieldEdgeRecord
+      ? {
+          fieldEdge: {
+            available: Boolean(fieldEdgeRecord.available),
+            stale: Boolean(fieldEdgeRecord.stale),
+            detail: readString(fieldEdgeRecord.detail, "RK3568 edge summary unavailable"),
+            source: "rk3568_field_link_monitor" as const,
+            generatedAt: readNullableString(fieldEdgeRecord.generatedAt),
+            currentBoundary: readNullableString(fieldEdgeRecord.currentBoundary),
+            accepted: readBoolean(fieldEdgeRecord.accepted),
+            summary: fieldEdgeSummary
+                ? {
+                  overallLevel: readNullableString(fieldEdgeSummary.overallLevel),
+                  score: asFiniteNumber(fieldEdgeSummary.score),
+                  deferredNodeIds: readStringArray(fieldEdgeSummary.deferredNodeIds),
+                  networkMode: readNullableString(fieldEdgeSummary.networkMode),
+                  serialOpen: readBoolean(fieldEdgeSummary.serialOpen),
+                  mqttConnected: readBoolean(fieldEdgeSummary.mqttConnected),
+                  portStatus: readNullableString(fieldEdgeSummary.portStatus),
+                  spoolPending: asFiniteNumber(fieldEdgeSummary.spoolPending),
+                  rejectedMessages: asFiniteNumber(fieldEdgeSummary.rejectedMessages),
+                  lastPublishedAgeSeconds: asFiniteNumber(fieldEdgeSummary.lastPublishedAgeSeconds)
+                }
+              : null,
+            nodes: fieldEdgeNodes
+              .map((item) => {
+                const row = asRecord(item);
+                if (!row) return null;
+                const fieldNodeId = readString(row.fieldNodeId);
+                const deviceId = readString(row.deviceId);
+                if (!fieldNodeId || !deviceId) return null;
+                return {
+                  fieldNodeId,
+                  deviceId,
+                  installLabel: readString(row.installLabel, fieldNodeId),
+                  enabled: readBoolean(row.enabled),
+                  deferred: Boolean(row.deferred),
+                  status: readString(row.status, "unknown"),
+                  telemetryMessages: asFiniteNumber(row.telemetryMessages),
+                  commandForwards: asFiniteNumber(row.commandForwards),
+                  ackPublishes: asFiniteNumber(row.ackPublishes),
+                  lastTelemetryAgeSeconds: asFiniteNumber(row.lastTelemetryAgeSeconds),
+                  lastAckAgeSeconds: asFiniteNumber(row.lastAckAgeSeconds)
+                };
+              })
+              .filter((item): item is NonNullable<typeof item> => item !== null),
+            soak: fieldEdgeSoak
+              ? {
+                  generatedAt: readNullableString(fieldEdgeSoak.generatedAt),
+                  accepted: readBoolean(fieldEdgeSoak.accepted),
+                  currentBoundary: readNullableString(fieldEdgeSoak.currentBoundary),
+                  cleanWindowRounds: asFiniteNumber(fieldEdgeSoak.cleanWindowRounds),
+                  allAcked: readBoolean(fieldEdgeSoak.allAcked),
+                  maxBoardObservationSchemaRejectedDelta: asFiniteNumber(fieldEdgeSoak.maxBoardObservationSchemaRejectedDelta)
+                }
+              : null
+          }
+        }
+      : {}),
+    ...(hermesEdgeRecord
+      ? {
+          hermesEdge: {
+            available: Boolean(hermesEdgeRecord.available),
+            stale: Boolean(hermesEdgeRecord.stale),
+            detail: readString(hermesEdgeRecord.detail, "RK3568 Hermes supervisor unavailable"),
+            source: "rk3568_hermes_edge_supervisor" as const,
+            generatedAt: readNullableString(hermesEdgeRecord.generatedAt),
+            boardHost: readNullableString(hermesEdgeRecord.boardHost),
+            serviceActive: readBoolean(hermesEdgeRecord.serviceActive),
+            serviceEnabled: readBoolean(hermesEdgeRecord.serviceEnabled),
+            accepted: readBoolean(hermesEdgeRecord.accepted),
+            currentBoundary: readNullableString(hermesEdgeRecord.currentBoundary),
+            modelLoaded: readBoolean(hermesEdgeRecord.modelLoaded),
+            modelKey: readNullableString(hermesEdgeRecord.modelKey),
+            modelVersion: readNullableString(hermesEdgeRecord.modelVersion),
+            modelType: readNullableString(hermesEdgeRecord.modelType),
+            modelTask: readNullableString(hermesEdgeRecord.modelTask),
+            featureCount: asFiniteNumber(hermesEdgeRecord.featureCount),
+            aiModelCount: asFiniteNumber(hermesEdgeRecord.aiModelCount),
+            diagnosisType: readNullableString(hermesEdgeRecord.diagnosisType),
+            confidence: asFiniteNumber(hermesEdgeRecord.confidence),
+            confidenceLevel: readNullableString(hermesEdgeRecord.confidenceLevel),
+            naturalLanguageReady: readBoolean(hermesEdgeRecord.naturalLanguageReady),
+            intentCount: asFiniteNumber(hermesEdgeRecord.intentCount),
+            actionRecheckAccepted: readBoolean(hermesEdgeRecord.actionRecheckAccepted),
+            actionRecheckStatus: readNullableString(hermesEdgeRecord.actionRecheckStatus),
+            safetyGatewayCoreTouched: readBoolean(hermesEdgeRecord.safetyGatewayCoreTouched),
+            safetySerialTouched: readBoolean(hermesEdgeRecord.safetySerialTouched),
+            safetyMqttTouched: readBoolean(hermesEdgeRecord.safetyMqttTouched),
+            stress: hermesStress
+              ? {
+                  totalRequests: asFiniteNumber(hermesStress.totalRequests),
+                  errorRate: asFiniteNumber(hermesStress.errorRate),
+                  throughputRps: asFiniteNumber(hermesStress.throughputRps),
+                  p95Ms: asFiniteNumber(hermesStress.p95Ms),
+                  p99Ms: asFiniteNumber(hermesStress.p99Ms),
+                  recheckOk: asFiniteNumber(hermesStress.recheckOk)
+                }
+              : null,
+            volatilitySurface: hermesSurface
+              ? {
+                  generatedAt: readNullableString(hermesSurface.generatedAt),
+                  surfaceType: "edge_health_volatility_surface" as const,
+                  method: readString(hermesSurface.method, "derived"),
+                  horizonsMinutes: (Array.isArray(hermesSurface.horizonsMinutes) ? hermesSurface.horizonsMinutes : [])
+                    .map((item) => asFiniteNumber(item))
+                    .filter((item): item is number => item !== null),
+                  dimensions: hermesSurfaceDimensions
+                    .map((item) => {
+                      const row = asRecord(item);
+                      if (!row) return null;
+                      const key = readString(row.key);
+                      if (!key) return null;
+                      return {
+                        key,
+                        label: readString(row.label, key),
+                        unit: readString(row.unit, "vol-score")
+                      };
+                    })
+                    .filter((item): item is NonNullable<typeof item> => item !== null),
+                  points: hermesSurfacePoints
+                    .map((item) => {
+                      const row = asRecord(item);
+                      if (!row) return null;
+                      const horizonMinutes = asFiniteNumber(row.horizonMinutes);
+                      const volatilityScore = asFiniteNumber(row.volatilityScore);
+                      const dimensionKey = readString(row.dimensionKey);
+                      if (horizonMinutes == null || volatilityScore == null || !dimensionKey) return null;
+                      return {
+                        horizonMinutes,
+                        dimensionKey,
+                        volatilityScore,
+                        confidence: asFiniteNumber(row.confidence),
+                        diagnosisType: readNullableString(row.diagnosisType),
+                        driver: readString(row.driver, "derived")
+                      };
+                    })
+                    .filter((item): item is NonNullable<typeof item> => item !== null),
+                  peakScore: asFiniteNumber(hermesSurface.peakScore),
+                  peakDimensionKey: readNullableString(hermesSurface.peakDimensionKey),
+                  peakHorizonMinutes: asFiniteNumber(hermesSurface.peakHorizonMinutes),
+                  modelConfidence: asFiniteNumber(hermesSurface.modelConfidence),
+                  note: readString(hermesSurface.note)
+                }
+              : null
+          }
+        }
+      : {})
   };
 }
 

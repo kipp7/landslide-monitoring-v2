@@ -1,3 +1,9 @@
+---
+title: stage4-acceptance
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/roadmap/stage4-acceptance
+---
+
 # 阶段 4 验收清单：Web/App 去硬编码（v2）
 
 目标：让 Web/Flutter 能“只依赖 API/字典表渲染”，新增传感器/站点/规则无需改前端代码即可正确展示与处理。

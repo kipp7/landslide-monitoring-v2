@@ -1,3 +1,9 @@
+---
+title: spec
+type: note
+permalink: landslide-monitoring-v2-mainline/openspec/specs/desk-frontend/spec
+---
+
 # Desk Frontend Specification (apps/desk)
 
 ## Purpose
@@ -38,6 +44,7 @@
 - 数据分析大屏（分析页）
 - 设备管理中心（含监测站管理/设备状态等关键区域）
 - GPS 监测（含地图、表格、趋势/对比等主要区域）
+- 账号管理（含账号注册/建档、角色分配、启停用与密码重置）
 - 系统设置（含退出登录）
 
 #### Scenario: Navigation works
@@ -57,4 +64,3 @@
 #### Scenario: UI copy review
 - **WHEN** 新增或调整任何 UI 文案
 - **THEN** MUST 不包含 emoji 表情字符
-

@@ -422,19 +422,39 @@ async function upsertDeviceStateShadow(
   updatedAtIso: string,
   state: unknown
 ): Promise<void> {
-  await pool.query(
-    `
-      INSERT INTO device_state (device_id, version, state, updated_at)
-      VALUES ($1, 1, $2::jsonb, $3::timestamptz)
-      ON CONFLICT (device_id) DO UPDATE
-      SET
-        version = device_state.version + 1,
-        state = EXCLUDED.state,
-        updated_at = EXCLUDED.updated_at
-      WHERE EXCLUDED.updated_at >= device_state.updated_at
-    `,
-    [deviceId, JSON.stringify(state), updatedAtIso]
-  );
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      `
+        INSERT INTO device_state (device_id, version, state, updated_at)
+        VALUES ($1, 1, $2::jsonb, $3::timestamptz)
+        ON CONFLICT (device_id) DO UPDATE
+        SET
+          version = device_state.version + 1,
+          state = EXCLUDED.state,
+          updated_at = EXCLUDED.updated_at
+        WHERE EXCLUDED.updated_at >= device_state.updated_at
+      `,
+      [deviceId, JSON.stringify(state), updatedAtIso]
+    );
+    await client.query(
+      `
+        UPDATE devices
+        SET
+          last_seen_at = GREATEST(COALESCE(last_seen_at, '-infinity'::timestamptz), $2::timestamptz),
+          updated_at = GREATEST(COALESCE(updated_at, '-infinity'::timestamptz), $2::timestamptz)
+        WHERE device_id = $1
+      `,
+      [deviceId, updatedAtIso]
+    );
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 async function insertRows(

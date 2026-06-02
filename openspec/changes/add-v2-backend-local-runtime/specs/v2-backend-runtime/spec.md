@@ -1,3 +1,9 @@
+---
+title: spec
+type: note
+permalink: landslide-monitoring-v2-mainline/openspec/changes/add-v2-backend-local-runtime/specs/v2-backend-runtime/spec
+---
+
 # Delta for v2 Backend Runtime
 
 ## ADDED Requirements

@@ -1,3 +1,9 @@
+---
+title: conflict-resolution-playbook
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/unified/conflict-resolution-playbook
+---
+
 # 冲突处理手册
 
 ## 1. 目标

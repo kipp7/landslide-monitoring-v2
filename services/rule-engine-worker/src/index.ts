@@ -65,6 +65,18 @@ function makeActiveKey(ruleId: string, deviceId: string): ActiveKey {
   return `${ruleId}|${deviceId}`;
 }
 
+function normalizeBaseUrl(value?: string | null): string | null {
+  const raw = value?.trim();
+  return raw ? raw.replace(/\/+$/, "") : null;
+}
+
+function isInsideCooldown(latestCreatedAt: string | undefined, cooldownMinutes: number | undefined): boolean {
+  if (!latestCreatedAt || cooldownMinutes === undefined || cooldownMinutes <= 0) return false;
+  const latestMs = Date.parse(latestCreatedAt);
+  if (!Number.isFinite(latestMs)) return false;
+  return Date.now() - latestMs < cooldownMinutes * 60_000;
+}
+
 type DeviceInfo = { stationId: string | null; expiresAtMs: number };
 type SeriesState = Map<string, MetricPoint[]>; // sensorKey -> points
 type DeviceSensorInfo = { declared: Map<string, "enabled" | "disabled" | "missing">; expiresAtMs: number };
@@ -83,6 +95,11 @@ type AlertEventV1 = {
   evidence?: Record<string, unknown>;
   explain?: string;
 };
+
+const ACTUATOR_RECONCILE_COOLDOWN_MS = Math.max(
+  0,
+  Number.parseInt(process.env.ACTUATOR_RECONCILE_COOLDOWN_MS ?? "30000", 10) || 0
+);
 
 async function main(): Promise<void> {
   dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
@@ -174,6 +191,8 @@ async function main(): Promise<void> {
   const deviceInfoById = new Map<string, DeviceInfo>();
   const deviceSensorsById = new Map<string, DeviceSensorInfo>();
   const seriesByKey = new Map<ActiveKey, SeriesState>();
+  const lastActuationByKey = new Map<ActiveKey, number>();
+  const lastManualResetByKey = new Map<ActiveKey, string>();
 
   const getDeviceInfo = async (deviceId: string): Promise<DeviceInfo> => {
     const now = Date.now();
@@ -261,6 +280,7 @@ async function main(): Promise<void> {
       alert_id: string;
       event_type: string;
       evidence_kind: string;
+      evidence_source: string;
       created_at: string;
       severity: string;
     }>(
@@ -269,6 +289,7 @@ async function main(): Promise<void> {
           alert_id,
           event_type,
           coalesce(evidence->>'kind', '') AS evidence_kind,
+          coalesce(evidence->>'source', '') AS evidence_source,
           to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at,
           severity
         FROM alert_events
@@ -289,6 +310,69 @@ async function main(): Promise<void> {
     await producer.send({
       topic: config.kafkaTopicAlertsEvents,
       messages: [{ key: ev.device_id ?? ev.alert_id, value: JSON.stringify(ev) }]
+    });
+  };
+
+  const actuateFieldAlarm = async (path: "/alarm_on" | "/silence", context?: Record<string, unknown>) => {
+    const baseUrl = normalizeBaseUrl(config.rk3568AlarmActuatorUrl);
+    if (!baseUrl) return;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), config.actuatorTimeoutMs);
+    try {
+      const res = await fetch(`${baseUrl}${path}`, { method: "POST", signal: controller.signal });
+      const body = await res.text().catch(() => "");
+      if (!res.ok) {
+        logger.warn({ status: res.status, path, body: body.slice(0, 500), ...context }, "rk3568 alarm actuator returned non-2xx");
+      } else {
+        logger.info({ status: res.status, path, body: body.slice(0, 500), ...context }, "rk3568 alarm actuator called");
+      }
+    } catch (err) {
+      logger.warn({ err, path, ...context }, "rk3568 alarm actuator call failed");
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
+  const maybeActuateFieldAlarm = async (args: {
+    ruleId: string;
+    deviceId: string;
+    severity: Severity;
+    evidenceKind: unknown;
+    reason: "new-alert-trigger" | "active-alert-reconcile" | "rule-alert-resolve";
+  }) => {
+    if (args.evidenceKind !== "rule") return;
+    if (args.severity !== "high" && args.severity !== "critical") return;
+    if (args.reason === "rule-alert-resolve") {
+      await actuateFieldAlarm("/silence", {
+        ruleId: args.ruleId,
+        deviceId: args.deviceId,
+        reason: args.reason
+      });
+      return;
+    }
+
+    const key = makeActiveKey(args.ruleId, args.deviceId);
+    const now = Date.now();
+    const last = lastActuationByKey.get(key) ?? 0;
+    if (ACTUATOR_RECONCILE_COOLDOWN_MS > 0 && now - last < ACTUATOR_RECONCILE_COOLDOWN_MS) {
+      logger.info(
+        {
+          ruleId: args.ruleId,
+          deviceId: args.deviceId,
+          reason: args.reason,
+          cooldownMs: ACTUATOR_RECONCILE_COOLDOWN_MS
+        },
+        "rk3568 alarm actuator skipped by local reconcile cooldown"
+      );
+      return;
+    }
+
+    lastActuationByKey.set(key, now);
+    await actuateFieldAlarm("/alarm_on", {
+      ruleId: args.ruleId,
+      deviceId: args.deviceId,
+      reason: args.reason
     });
   };
 
@@ -348,6 +432,24 @@ async function main(): Promise<void> {
       explain: args.explain
     });
 
+    if (args.eventType === "ALERT_TRIGGER") {
+      await maybeActuateFieldAlarm({
+        ruleId: args.ruleId,
+        deviceId: args.deviceId,
+        severity: args.severity,
+        evidenceKind: args.evidence.kind,
+        reason: "new-alert-trigger"
+      });
+    } else if (args.eventType === "ALERT_RESOLVE") {
+      await maybeActuateFieldAlarm({
+        ruleId: args.ruleId,
+        deviceId: args.deviceId,
+        severity: args.severity,
+        evidenceKind: args.evidence.kind,
+        reason: "rule-alert-resolve"
+      });
+    }
+
     return row;
   };
 
@@ -393,6 +495,22 @@ async function main(): Promise<void> {
 
         const key = makeActiveKey(r.row.rule_id, deviceId);
         const dsl = r.dsl;
+
+        const latest = await loadLatestAlertForRuleDevice(r.row.rule_id, deviceId);
+        if (
+          latest?.event_type === "ALERT_RESOLVE" &&
+          latest.evidence_source === "field_alarm_review" &&
+          lastManualResetByKey.get(key) !== latest.created_at
+        ) {
+          seriesByKey.delete(key);
+          windowByKey.delete(key);
+          lastActuationByKey.delete(key);
+          lastManualResetByKey.set(key, latest.created_at);
+          logger.info(
+            { ruleId: r.row.rule_id, deviceId, alertId: latest.alert_id, resetAt: latest.created_at },
+            "rule series reset after manual field alarm resolve"
+          );
+        }
 
         const seriesState = getOrCreateSeries(key);
         updateSeries(seriesState, tsMs, metrics);
@@ -464,7 +582,6 @@ async function main(): Promise<void> {
         }
 
         const triggered = win.points.every((p) => p.ok);
-        const latest = await loadLatestAlertForRuleDevice(r.row.rule_id, deviceId);
         const lastEventType = latest?.event_type ?? "";
         const lastAlertId = latest?.alert_id ?? "";
         const lastKind = latest?.evidence_kind ?? "";
@@ -567,6 +684,22 @@ async function main(): Promise<void> {
 
         if (triggered) {
           if (isActive || isAcked) {
+            if (isActive && lastKind === "rule") {
+              await maybeActuateFieldAlarm({
+                ruleId: r.row.rule_id,
+                deviceId,
+                severity: dsl.severity,
+                evidenceKind: lastKind,
+                reason: "active-alert-reconcile"
+              });
+            }
+            continue;
+          }
+          if (isInsideCooldown(latest?.created_at, dsl.cooldown?.minutes)) {
+            logger.info(
+              { ruleId: r.row.rule_id, deviceId, cooldownMinutes: dsl.cooldown?.minutes },
+              "alert trigger skipped by cooldown"
+            );
             continue;
           }
           const alertId = crypto.randomUUID();

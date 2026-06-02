@@ -1,3 +1,9 @@
+---
+title: proposal
+type: note
+permalink: landslide-monitoring-v2-mainline/openspec/changes/add-modern-desktop-installer-shell/proposal
+---
+
 # Change: Modern Desktop Installer Shell
 
 ## Why

@@ -1,10 +1,10 @@
-import { App as AntApp, Button, Form, Input, InputNumber, Modal, Radio, Space, Switch, Typography } from "antd";
+import { App as AntApp, Button, Form, Input, InputNumber, Modal, Radio, Space, Switch, Tag, Typography } from "antd";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { useApi } from "../api/ApiProvider";
 import { useAuthStore } from "../stores/authStore";
-import { useSettingsStore } from "../stores/settingsStore";
+import { DEFAULT_HTTP_API_BASE_URL, normalizeApiBaseUrl, useSettingsStore } from "../stores/settingsStore";
 import { BaseCard } from "../components/BaseCard";
 import {
   getDeskHostInfo,
@@ -25,6 +25,7 @@ export function SettingsPage() {
   const apiBaseUrl = useSettingsStore((s) => s.apiBaseUrl);
   const mockDelayMs = useSettingsStore((s) => s.mockDelayMs);
   const mockFailureRate = useSettingsStore((s) => s.mockFailureRate);
+  const sessionApiModeOverride = useSettingsStore((s) => s.sessionApiModeOverride);
   const terrainQuality = useSettingsStore((s) => s.terrainQuality);
   const reducedMotion = useSettingsStore((s) => s.reducedMotion);
   const trayEnabled = useSettingsStore((s) => s.trayEnabled);
@@ -35,14 +36,18 @@ export function SettingsPage() {
   const setTerrainQuality = useSettingsStore((s) => s.setTerrainQuality);
   const setReducedMotion = useSettingsStore((s) => s.setReducedMotion);
   const setTrayEnabled = useSettingsStore((s) => s.setTrayEnabled);
+  const setSessionApiModeOverride = useSettingsStore((s) => s.setSessionApiModeOverride);
   const reset = useSettingsStore((s) => s.reset);
   const clearAuth = useAuthStore((s) => s.clear);
   const user = useAuthStore((s) => s.user);
   const runningInDeskHost = isDeskHost();
   const hostInfo = getDeskHostInfo();
+  const hostApiLocked = runningInDeskHost && hostInfo?.api?.force === true && normalizeApiBaseUrl(hostInfo.api.baseUrl).length > 0;
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [logoutSubmitting, setLogoutSubmitting] = useState(false);
   const [quitOpen, setQuitOpen] = useState(false);
+  const mockApiEnabled = apiMode === "mock";
+  const effectiveMockApiEnabled = hostApiLocked ? sessionApiModeOverride === "mock" : mockApiEnabled;
 
   const runtimeInfo = useMemo(() => {
     const ua = typeof navigator !== "undefined" ? navigator.userAgent : "-";
@@ -100,6 +105,18 @@ export function SettingsPage() {
     if (!ok) {
       message.error("当前运行环境不支持托盘设置");
     }
+  };
+
+  const applyMockApiEnabled = (enabled: boolean) => {
+    if (hostApiLocked) {
+      setSessionApiModeOverride(enabled ? "mock" : null);
+      clearAuth();
+      message.success(enabled ? "已开启本次会话模拟数据模式，重启后自动恢复云端接口" : "已切回云端真实平台接口，请重新登录真实账号");
+      return;
+    }
+    setApiMode(enabled ? "mock" : "http");
+    clearAuth();
+    message.success(enabled ? "已开启模拟数据模式，请使用模拟账号重新登录" : "已切回真实平台接口，请重新登录真实账号");
   };
 
   const sendTestNotification = () => {
@@ -177,57 +194,78 @@ export function SettingsPage() {
 
       <BaseCard title="数据源" style={{ maxWidth: 820 }}>
         <Form layout="vertical">
-          <Form.Item label="API 模式">
-            <Radio.Group
-              value={apiMode}
-              onChange={(e) => {
-                const v: unknown = e.target.value;
-                if (v === "mock" || v === "http") setApiMode(v);
-              }}
-              options={[
-                { label: "演示数据（推荐）", value: "mock" },
-                { label: "在线接口（联调）", value: "http" }
-              ]}
-            />
+          <Form.Item label="接口接入方式">
+            <Space wrap>
+              <Typography.Text>{effectiveMockApiEnabled ? "模拟数据模式" : "统一平台接口"}</Typography.Text>
+              <Tag color={effectiveMockApiEnabled ? "gold" : "green"}>{effectiveMockApiEnabled ? "Mock 已开启" : "Mock 已关闭"}</Tag>
+              {hostApiLocked ? <Tag color="cyan">云端接口默认锁定</Tag> : null}
+            </Space>
+            <Typography.Paragraph type="secondary" style={{ marginBottom: 0, marginTop: 8 }}>
+              默认使用真实后端 API，不直接访问数据库；模拟数据只用于离线演示或 UI 调试。云端交付包的 Mock 只在本次运行期间生效，重启后自动恢复真实接口。
+            </Typography.Paragraph>
           </Form.Item>
-          <Form.Item label="HTTP Base URL（仅 HTTP 模式）">
+          <Form.Item label="模拟数据模式">
+            <Space wrap>
+              <Switch
+                checked={effectiveMockApiEnabled}
+                checkedChildren="已开启"
+                unCheckedChildren="已关闭"
+                onChange={(checked) => {
+                  applyMockApiEnabled(checked);
+                }}
+              />
+              <Typography.Text type="secondary">
+                关闭时所有页面走真实平台接口；打开后不会向 RK3568、数据库或现场设备下发真实命令。
+                {hostApiLocked ? " 云端包中该开关为本次会话临时生效。" : ""}
+              </Typography.Text>
+            </Space>
+          </Form.Item>
+          {effectiveMockApiEnabled ? (
+            <Form.Item label="模拟数据参数">
+              <Space wrap>
+                <Typography.Text type="secondary">响应延迟</Typography.Text>
+                <InputNumber
+                  min={0}
+                  max={3000}
+                  step={50}
+                  value={mockDelayMs}
+                  addonAfter="ms"
+                  onChange={(value) => {
+                    setMockDelayMs(typeof value === "number" ? value : 0);
+                  }}
+                />
+                <Typography.Text type="secondary">失败率</Typography.Text>
+                <InputNumber
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={Math.round(mockFailureRate * 100)}
+                  addonAfter="%"
+                  onChange={(value) => {
+                    const next = typeof value === "number" ? value : 0;
+                    setMockFailureRate(Math.max(0, Math.min(100, next)) / 100);
+                  }}
+                />
+              </Space>
+            </Form.Item>
+          ) : null}
+          <Form.Item label="平台接口地址">
             <Input
               value={apiBaseUrl}
-              disabled={apiMode !== "http"}
-              placeholder="http://127.0.0.1:3000"
+              disabled={effectiveMockApiEnabled || hostApiLocked}
+              placeholder={DEFAULT_HTTP_API_BASE_URL}
               onChange={(e) => {
                 setApiBaseUrl(e.target.value);
               }}
             />
-          </Form.Item>
-          <Form.Item label="演示延迟（ms）">
-            <InputNumber
-              min={0}
-              max={5000}
-              step={50}
-              value={mockDelayMs}
-              onChange={(v) => {
-                setMockDelayMs(typeof v === "number" ? v : 0);
-              }}
-            />
-          </Form.Item>
-          <Form.Item label="演示故障注入（%）">
-            <InputNumber
-              min={0}
-              max={100}
-              step={5}
-              value={Math.round(mockFailureRate * 100)}
-              onChange={(v) => {
-                const n = typeof v === "number" ? v : 0;
-                setMockFailureRate(Math.max(0, Math.min(1, n / 100)));
-              }}
-            />
-            <Typography.Paragraph type="secondary" style={{ marginBottom: 0, marginTop: 8 }}>
-              说明：用于演示“加载失败/重试”等交互；默认 0%，建议不要长期开启。
-            </Typography.Paragraph>
+            {runningInDeskHost && hostInfo?.api?.baseUrl ? (
+              <Typography.Paragraph type="secondary" style={{ marginBottom: 0, marginTop: 8 }}>
+                当前桌面宿主默认接口：{hostInfo.api.baseUrl}
+              </Typography.Paragraph>
+            ) : null}
           </Form.Item>
           <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-            说明：当前以演示数据完善 UI；后续再逐步把在线接口对接到 v2 后端（不阻塞前端进度）。
+            说明：正式交付、现场联调和声光报警下发均以真实平台接口为准；Mock 开关只从这里手动启用。
           </Typography.Paragraph>
         </Form>
       </BaseCard>

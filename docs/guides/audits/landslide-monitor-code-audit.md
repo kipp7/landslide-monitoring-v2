@@ -1,3 +1,9 @@
+---
+title: landslide-monitor-code-audit
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/audits/landslide-monitor-code-audit
+---
+
 ﻿# 现状审查：landslide-monitor（对齐 v2 标准）
 
 ## 0. 目标与范围
@@ -158,4 +164,3 @@
 - 安全与访问控制：`docs/features/prd/security-and-access-control.md`
 - 站点管理（站点/设备绑定/状态）：`docs/features/prd/station-management.md`
 - 系统运维与可观测性：`docs/features/prd/system-operations-and-observability.md`
-

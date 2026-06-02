@@ -1,3 +1,9 @@
+---
+title: spec
+type: note
+permalink: landslide-monitoring-v2-mainline/openspec/changes/add-command-success-notification-policy/specs/command-notification-policy/spec
+---
+
 # Delta for Command Notification Policy
 
 ## ADDED Requirements

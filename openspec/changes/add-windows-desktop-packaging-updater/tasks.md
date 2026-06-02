@@ -1,3 +1,9 @@
+---
+title: tasks
+type: note
+permalink: landslide-monitoring-v2-mainline/openspec/changes/add-windows-desktop-packaging-updater/tasks
+---
+
 ## 1. 版本与构建信息
 - [ ] 1.1 统一版本号来源（csproj/AssemblyInfo/Git tag）
 - [ ] 1.2 桌面端“关于/诊断”展示：版本号、commit、构建时间

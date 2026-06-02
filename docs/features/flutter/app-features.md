@@ -1,3 +1,9 @@
+---
+title: app-features
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/features/flutter/app-features
+---
+
 # App 功能模块
 
 ## 功能列表

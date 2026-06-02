@@ -1,3 +1,9 @@
+---
+title: TEMPLATE-SPEC
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/features/templates/template-spec
+---
+
 # SPEC 模板：<模块/协议/算法名称>
 
 > SPEC 用于精确定义“怎么做（How）”里的可测试行为与约束（但不写实现代码）。
@@ -25,4 +31,3 @@
 ## 5. 测试用例（必须）
 
 - Case 1:
-

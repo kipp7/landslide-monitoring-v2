@@ -1,20 +1,20 @@
 ﻿{
-    "generatedAt":  "2026-03-24T01:38:41Z",
+    "generatedAt":  "2026-05-30T07:31:18Z",
     "configuration":  "Release",
     "runtime":  "win-x64",
-    "outputDir":  "artifacts/desk-win/win-x64-selfcontained",
+    "outputDir":  "artifacts/desk-win/win-x64-cloud-selfcontained",
     "selfContained":  true,
     "exe":  {
-                "path":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\win-x64-selfcontained\\LandslideDesk.Win.exe",
+                "path":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\win-x64-cloud-selfcontained\\LandslideDesk.Win.exe",
                 "sizeBytes":  226816
             },
     "web":  {
-                "indexPath":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\win-x64-selfcontained\\web\\index.html",
+                "indexPath":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\win-x64-cloud-selfcontained\\web\\index.html",
                 "indexPresent":  true,
-                "fileCount":  388
+                "fileCount":  8
             },
     "package":  {
-                    "fileCount":  860,
-                    "totalBytes":  335084758
+                    "fileCount":  480,
+                    "totalBytes":  182849512
                 }
 }

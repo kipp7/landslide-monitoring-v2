@@ -29,9 +29,11 @@ async function main(): Promise<void> {
   state.refreshToken = login.refreshToken ?? null;
 
   const stations = await client.stations.list();
-  const demo2 = stations.find((station) => station.name === "示例监测点B");
+  const demo2 =
+    stations.find((station) => station.stationCode === "ST-LS-CN-GX-YL-DC-001-02") ??
+    stations.slice().sort((a, b) => b.deviceCount - a.deviceCount)[0];
   if (!demo2) {
-    throw new Error("DEMO002 station not found in desk client");
+    throw new Error("target station not found in desk client");
   }
 
   const devices = await client.devices.list();

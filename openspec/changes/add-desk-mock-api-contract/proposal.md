@@ -1,3 +1,9 @@
+---
+title: proposal
+type: note
+permalink: landslide-monitoring-v2-mainline/openspec/changes/add-desk-mock-api-contract/proposal
+---
+
 ## Why
 
 当前 `apps/desk` 虽然能用 Mock 数据跑 UI，但 Mock 数据与未来 v2 后端 API 的契约尚未收敛：容易出现页面之间字段不一致、错误处理不统一、后续切换到 HTTP 成本高的问题。
@@ -15,4 +21,3 @@
 
 - 不要求一次性覆盖所有 v2 API
 - 不引入代码生成（OpenAPI -> client）作为前置条件（后续可加）
-

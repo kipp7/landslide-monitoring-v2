@@ -1,3 +1,9 @@
+---
+title: device-identity-and-auth
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/mqtt/device-identity-and-auth
+---
+
 # 设备身份与鉴权（无硬件唯一 ID 场景）
 
 前提：设备端无法可靠读取芯片唯一 ID / MAC，因此身份完全由“烧录/出厂写入”提供。

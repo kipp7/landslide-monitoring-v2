@@ -1,9 +1,10 @@
-﻿---
+---
 title: checkpoint-title
 type: note
 tags:
-  - checkpoint
+- checkpoint
 status: active
+permalink: landslide-monitoring-v2-mainline/memory/templates/checkpoint-template
 ---
 
 # Checkpoint: checkpoint-title

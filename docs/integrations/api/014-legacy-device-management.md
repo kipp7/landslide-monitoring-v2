@@ -1,3 +1,9 @@
+---
+title: 014-legacy-device-management
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/api/014-legacy-device-management
+---
+
 # 14) Legacy 设备管理 API 兼容（`/api/*`）
 
 说明：

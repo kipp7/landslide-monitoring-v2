@@ -1,6 +1,6 @@
 import type { MenuProps } from "antd";
 import { ExportOutlined, ReloadOutlined, SettingOutlined, ToolOutlined } from "@ant-design/icons";
-import { App as AntApp, Alert, Button, Dropdown, Modal, Progress, Select, Space, Switch, Tag, Typography } from "antd";
+import { App as AntApp, Alert, Button, Dropdown, Modal, Progress, Select, Space, Table, Tag, Typography } from "antd";
 import ReactECharts from "echarts-for-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -11,19 +11,33 @@ import type {
   DeviceCommand,
   DeviceHealthExpertResult,
   DeviceStateSnapshot,
+  FieldAlarmStatus,
   OnlineStatus,
   Station,
   SuccessNotificationPolicy
 } from "../api/client";
 import { useApi } from "../api/ApiProvider";
 import { BaseCard } from "../components/BaseCard";
+import { RiskTag } from "../components/RiskTag";
 import { StatusTag } from "../components/StatusTag";
+import {
+  formatDeviceRoleDisplay,
+  formatInstallLabelDisplay,
+  formatLifecycleStatusDisplay,
+  formatRegistryStatusDisplay,
+  formatRegistryStatusHint,
+  formatWarningFlagDisplay,
+} from "../utils/fieldIdentityDisplay";
 import { buildBaselinesExport, buildDeviceDetailText, buildDevicesExport, buildSensorExport, copyTextContent, triggerPreparedExport } from "./deviceManagementExport";
+import { DeviceManagementSectionNav } from "./DeviceManagementSectionNav";
+import { DeviceManagementWorkspaceHeader } from "./DeviceManagementWorkspaceHeader";
 import { BaselinesPanel } from "./BaselinesPanel";
 import { StationManagementPanel } from "./StationManagementPanel";
 import "./deviceManagement.css";
 
 type TabKey = "status" | "management" | "baselines";
+type IdentityFilter = "all" | "formal" | "non_formal";
+const CENTER_NODE_SELECTION_ID = "__rk3568_center_node__";
 
 type SensorRow = {
   id: string;
@@ -41,15 +55,17 @@ type ControlLogRow = {
   result: "success" | "pending" | "failed";
 };
 
-function stablePercent(seed: string, min: number, max: number) {
-  let h = 2166136261;
-  for (let i = 0; i < seed.length; i += 1) {
-    h ^= seed.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  const t = (h >>> 0) / 4294967295;
-  return Math.round(min + t * (max - min));
-}
+type CenterNodeSummary = {
+  displayName: string;
+  gatewayCode: string | null;
+  regionCode: string | null;
+  role: string;
+  status: OnlineStatus;
+  available: boolean;
+  dryRun: boolean;
+  detail: string;
+  lastActionAt: string | null;
+};
 
 function statusDotColor(status: OnlineStatus) {
   if (status === "online") return "#4ade80";
@@ -61,6 +77,74 @@ function progressColor(value: number) {
   if (value >= 70) return "#22c55e";
   if (value >= 40) return "#f59e0b";
   return "#ef4444";
+}
+
+function normalizeIdentityClass(value?: string | null): string {
+  return value?.trim().toLowerCase() ?? "";
+}
+
+function isFormalIdentityClass(value?: string | null): boolean {
+  return normalizeIdentityClass(value) === "formal";
+}
+
+function canonicalText(value?: string | null): string {
+  return value?.trim() ? value.trim() : "—";
+}
+
+function readMetadataString(metadata: Record<string, unknown> | undefined, keys: string[]): string | null {
+  for (const key of keys) {
+    const value = metadata?.[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
+}
+
+function buildCenterNodeSummary(devices: Device[], fieldAlarmStatus: FieldAlarmStatus | null): CenterNodeSummary | null {
+  const gatewayDevice =
+    devices.find((device) => device.gatewayCode || readMetadataString(device.metadata, ["gatewayDisplayName", "gateway_display_name"])) ??
+    devices[0];
+  const gatewayCode =
+    gatewayDevice?.gatewayCode ??
+    readMetadataString(gatewayDevice?.metadata, ["gatewayCode", "gateway_code"]) ??
+    null;
+  const regionCode =
+    gatewayDevice?.regionCode ??
+    readMetadataString(gatewayDevice?.metadata, ["regionCode", "region_code"]) ??
+    null;
+  const gatewayDisplayName =
+    readMetadataString(gatewayDevice?.metadata, ["gatewayDisplayName", "gateway_display_name"]) ??
+    readMetadataString(gatewayDevice?.metadata, ["centerDisplayName", "center_display_name"]);
+  const available = Boolean(fieldAlarmStatus?.actuator.available);
+  const dryRun = Boolean(fieldAlarmStatus?.actuator.dryRun);
+
+  if (!gatewayDevice && !fieldAlarmStatus) return null;
+
+  return {
+    displayName: gatewayDisplayName ? `${gatewayDisplayName} 中心节点` : "RK3568 中心节点",
+    gatewayCode,
+    regionCode,
+    role: "center_node",
+    status: available ? "online" : fieldAlarmStatus ? "warning" : "offline",
+    available,
+    dryRun,
+    detail: fieldAlarmStatus?.actuator.detail ?? "中心 API -> RK3568 actuator -> YX75R 声光报警器",
+    lastActionAt: fieldAlarmStatus?.actuator.lastActionAt ?? null
+  };
+}
+
+function buildCenterNodeDetailText(summary: CenterNodeSummary, alarmStatus: FieldAlarmStatus | null): string {
+  return [
+    `中心节点：${summary.displayName}`,
+    `网关编码：${summary.gatewayCode ?? "-"}`,
+    `区域编码：${summary.regionCode ?? "-"}`,
+    `设备角色：${formatDeviceRoleDisplay(summary.role)}`,
+    `在线状态：${summary.status === "online" ? "在线" : summary.status === "warning" ? "待确认" : "离线"}`,
+    `执行器：${summary.available ? "已连接" : "待确认"}`,
+    `执行模式：${summary.dryRun ? "Mock 演示" : "真实执行"}`,
+    `声光状态：${alarmStatus?.active ? "报警中" : alarmStatus?.silenced ? "已停止" : "待命"}`,
+    `最近动作：${summary.lastActionAt ? new Date(summary.lastActionAt).toLocaleString("zh-CN") : "-"}`,
+    `执行链路：${summary.detail}`
+  ].join("\n");
 }
 
 function mapCommandStatus(status: DeviceCommand["status"]): ControlLogRow["result"] {
@@ -80,6 +164,7 @@ function deviceTypeLabel(device: Device) {
   if (device.type === "rain") return "雨量";
   if (device.type === "tilt") return "倾角";
   if (device.type === "temp_hum") return "温湿度";
+  if (device.type === "field_gateway") return "中心网关";
   return "摄像头";
 }
 
@@ -122,18 +207,20 @@ export function DeviceManagementPage() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [baselines, setBaselines] = useState<Baseline[]>([]);
   const [selectedRegion, setSelectedRegion] = useState<string>("all");
+  const [identityFilter, setIdentityFilter] = useState<IdentityFilter>("formal");
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>("");
   const [lastUpdateTime, setLastUpdateTime] = useState<string>("");
   const [nowTime, setNowTime] = useState<string>(new Date().toLocaleTimeString("zh-CN"));
   const [detailOpen, setDetailOpen] = useState(false);
   const [motorRunning, setMotorRunning] = useState(false);
-  const [buzzerOn, setBuzzerOn] = useState(false);
+  const [fieldAlarmOn, setFieldAlarmOn] = useState(false);
   const [successNotificationPolicy, setSuccessNotificationPolicy] = useState<SuccessNotificationPolicy>("inherit");
   const [samplingInterval, setSamplingInterval] = useState<number>(10);
   const [controlLogs, setControlLogs] = useState<ControlLogRow[]>([]);
   const [sensorRows, setSensorRows] = useState<SensorRow[]>([]);
   const [deviceExpert, setDeviceExpert] = useState<DeviceHealthExpertResult | null>(null);
   const [deviceState, setDeviceState] = useState<DeviceStateSnapshot | null>(null);
+  const [fieldAlarmStatus, setFieldAlarmStatus] = useState<FieldAlarmStatus | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -166,12 +253,20 @@ export function DeviceManagementPage() {
     setLoadError(null);
     const run = async () => {
       try {
-        const [s, d, b] = await Promise.all([api.stations.list(), api.devices.list(), api.baselines.list()]);
+        const [s, d, b, alarm] = await Promise.all([
+          api.stations.list(),
+          api.devices.list(),
+          api.baselines.list(),
+          api.fieldAlarm.getStatus().catch(() => null)
+        ]);
         if (abort.signal.aborted) return;
         setStations(s);
         setDevices(d);
         setBaselines(b);
+        setFieldAlarmStatus(alarm);
+        setFieldAlarmOn(Boolean(alarm?.active));
         setSelectedDeviceId((prev) => {
+          if (prev === CENTER_NODE_SELECTION_ID) return prev;
           if (prev && d.some((x) => x.id === prev)) return prev;
           const preferred = d.find((x) => x.status === "online") ?? d.find((x) => x.status === "warning") ?? d[0];
           return preferred?.id || "";
@@ -181,7 +276,7 @@ export function DeviceManagementPage() {
         if (abort.signal.aborted) return;
         const msg = (err as Error).message;
         setLoadError(msg);
-        message.error(`设备管理加载失败：${msg}（可在系统设置切换数据源）`);
+        message.error(`设备管理加载失败：${msg}（可在系统设置检查数据源与接口地址）`);
       } finally {
         if (!abort.signal.aborted) setLoading(false);
       }
@@ -197,15 +292,35 @@ export function DeviceManagementPage() {
 
   const stationsById = useMemo(() => new Map(stations.map((s) => [s.id, s] as const)), [stations]);
   const baselineByDeviceId = useMemo(() => new Map(baselines.map((b) => [b.deviceId, b] as const)), [baselines]);
+  const deviceIdentityStats = useMemo(() => {
+    const formal = devices.filter((device) => isFormalIdentityClass(device.identityClass)).length;
+    return {
+      total: devices.length,
+      formal,
+      nonFormal: Math.max(0, devices.length - formal)
+    };
+  }, [devices]);
 
   const filteredDevices = useMemo(() => {
-    if (selectedRegion === "all") return devices;
-    const stationIdsInRegion = new Set(stations.filter((s) => s.area === selectedRegion).map((s) => s.id));
-    return devices.filter((d) => stationIdsInRegion.has(d.stationId));
-  }, [devices, selectedRegion, stations]);
+    const regionFiltered =
+      selectedRegion === "all"
+        ? devices
+        : devices.filter((device) => {
+            const station = stationsById.get(device.stationId);
+            return station?.area === selectedRegion;
+          });
+    if (identityFilter === "formal") {
+      return regionFiltered.filter((device) => isFormalIdentityClass(device.identityClass));
+    }
+    if (identityFilter === "non_formal") {
+      return regionFiltered.filter((device) => !isFormalIdentityClass(device.identityClass));
+    }
+    return regionFiltered;
+  }, [devices, identityFilter, selectedRegion, stationsById]);
 
   useEffect(() => {
     if (!selectedDeviceId) return;
+    if (selectedDeviceId === CENTER_NODE_SELECTION_ID) return;
     if (filteredDevices.some((d) => d.id === selectedDeviceId)) return;
     const preferred = filteredDevices.find((d) => d.status === "online") ?? filteredDevices.find((d) => d.status === "warning") ?? filteredDevices[0];
     setSelectedDeviceId(preferred?.id ?? "");
@@ -216,6 +331,19 @@ export function DeviceManagementPage() {
     () => (selectedDevice ? stationsById.get(selectedDevice.stationId) ?? null : null),
     [selectedDevice, stationsById]
   );
+  const latestSeenDevice = useMemo(() => {
+    return [...filteredDevices]
+      .filter((device) => {
+        const ts = new Date(device.lastSeenAt).getTime();
+        return !Number.isNaN(ts);
+      })
+      .sort((a, b) => new Date(b.lastSeenAt).getTime() - new Date(a.lastSeenAt).getTime())[0] ?? null;
+  }, [filteredDevices]);
+  const centerNodeSummary = useMemo(
+    () => buildCenterNodeSummary(devices.filter((device) => isFormalIdentityClass(device.identityClass)), fieldAlarmStatus),
+    [devices, fieldAlarmStatus]
+  );
+  const centerNodeSelected = selectedDeviceId === CENTER_NODE_SELECTION_ID;
 
   const refreshSelectedDeviceState = useCallback(
     async (deviceId: string) => {
@@ -245,8 +373,10 @@ export function DeviceManagementPage() {
 
   const deviceStateSummary = useMemo(() => {
     const metrics = deviceState?.metrics ?? {};
+    const meta = deviceState?.meta ?? {};
     return {
       updatedAt: deviceState?.updatedAt ?? null,
+      todayDataCount: readMetricNumber(meta, "todayDataCount") ?? readMetricNumber(meta, "today_data_count"),
       temperatureC: readMetricNumber(metrics, "temperature_c"),
       humidityPct: readMetricNumber(metrics, "humidity_pct"),
       batteryPct: readMetricNumber(metrics, "battery_pct"),
@@ -274,12 +404,10 @@ export function DeviceManagementPage() {
         tiltYDeg: null as number | null
       };
     }
-    const seed = selectedDevice.id;
-    const fallbackTodayCount = stablePercent(`${seed}-count`, 120, 520);
     const health = deviceExpert?.result.health?.score ?? 0;
     const battery = deviceStateSummary.batteryPct ?? deviceExpert?.result.battery?.soc ?? 0;
     const signal = deviceExpert?.result.signal?.strength ?? 0;
-    const todayCount = sensorRows.length > 0 ? sensorRows.length : fallbackTodayCount;
+    const todayCount = deviceStateSummary.todayDataCount ?? 0;
     const baselineEstablished = !!baselineByDeviceId.get(selectedDevice.id);
     return {
       health,
@@ -294,7 +422,7 @@ export function DeviceManagementPage() {
       tiltXDeg: deviceStateSummary.tiltXDeg,
       tiltYDeg: deviceStateSummary.tiltYDeg
     };
-  }, [baselineByDeviceId, deviceExpert, deviceStateSummary, selectedDevice, sensorRows.length]);
+  }, [baselineByDeviceId, deviceExpert, deviceStateSummary, selectedDevice]);
 
   const mapOption = useMemo(() => {
     const riskColor = (risk: Station["risk"]) => {
@@ -346,10 +474,16 @@ export function DeviceManagementPage() {
     setLoading(true);
     setLoadError(null);
     try {
-      const [d, b] = await Promise.all([api.devices.list(), api.baselines.list()]);
+      const [d, b, alarm] = await Promise.all([
+        api.devices.list(),
+        api.baselines.list(),
+        api.fieldAlarm.getStatus().catch(() => null)
+      ]);
       setDevices(d);
       setBaselines(b);
-      if (selectedDeviceId) {
+      setFieldAlarmStatus(alarm);
+      setFieldAlarmOn(Boolean(alarm?.active));
+      if (selectedDeviceId && selectedDeviceId !== CENTER_NODE_SELECTION_ID) {
         try {
           await refreshSelectedDeviceState(selectedDeviceId);
         } catch {
@@ -412,7 +546,10 @@ export function DeviceManagementPage() {
         successNotificationPolicy: overrideSuccessNotificationPolicy ?? successNotificationPolicy
       });
       message.success(`${action} 已下发（${successNotificationPolicyLabel(issued.effectiveSuccessNotificationPolicy)}）`);
-      pushControlLog(`${action}（${issued.commandId.slice(0, 8)}）`, issued.status === "queued" ? "pending" : "success");
+      pushControlLog(
+        `${action} -> ${selectedDevice.name}（${selectedDevice.id.slice(-4)} / ${issued.commandId.slice(0, 8)}）`,
+        issued.status === "queued" ? "pending" : "success"
+      );
       await refreshCommandLogs(selectedDevice.id);
     } catch (err) {
       message.error((err as Error).message);
@@ -420,13 +557,72 @@ export function DeviceManagementPage() {
     }
   };
 
+  const issueFieldAlarmAction = async (actionName: string, action: "alarm_on" | "alarm_off" | "silence") => {
+    try {
+      const result = await api.fieldAlarm.sendAction({
+        action,
+        reason: `${actionName}：${centerNodeSummary?.displayName ?? "RK3568 中心节点"}${
+          centerNodeSummary?.gatewayCode ? ` / ${centerNodeSummary.gatewayCode}` : ""
+        }`
+      });
+      const stateText = result.actuator.dryRun ? "演示模式" : result.actuator.available ? "已转发至 RK3568" : "执行器未连接";
+      if (result.accepted) {
+        message.success(`${actionName} 已下发（${stateText}）`);
+      } else {
+        message.error(`${actionName} 未被现场执行器确认（${result.actuator.lastError ?? stateText}）`);
+      }
+      setFieldAlarmOn(action === "alarm_on" && result.accepted);
+      setFieldAlarmStatus((prev) => ({
+        active: action === "alarm_on" && result.accepted,
+        silenced: action !== "alarm_on" && result.accepted,
+        state: action === "alarm_on" && result.accepted ? "active" : action !== "alarm_on" && result.accepted ? "under_review" : "normal",
+        activeCount: action === "alarm_on" && result.accepted ? 1 : 0,
+        ackedCount: action !== "alarm_on" && result.accepted ? 1 : 0,
+        latestAlert: prev?.latestAlert ?? null,
+        alerts: prev?.alerts ?? [],
+        actuator: result.actuator
+      }));
+      pushControlLog(
+        `${actionName} -> ${centerNodeSummary?.displayName ?? "RK3568 中心节点声光报警器"}`,
+        result.accepted ? "success" : "failed"
+      );
+    } catch (err) {
+      message.error((err as Error).message);
+      pushControlLog(actionName, "failed");
+    }
+  };
+
   useEffect(() => {
-    if (!selectedDeviceId) {
+    if (!selectedDeviceId || selectedDeviceId === CENTER_NODE_SELECTION_ID) {
       setControlLogs([]);
       return;
     }
     void refreshCommandLogs(selectedDeviceId);
   }, [selectedDeviceId]);
+
+  useEffect(() => {
+    if (!selectedDeviceId || selectedDeviceId === CENTER_NODE_SELECTION_ID) return;
+
+    const timer = window.setInterval(() => {
+      void api.devices
+        .listCommands({ deviceId: selectedDeviceId })
+        .then((commands) => {
+          setControlLogs(
+            commands.slice(0, 12).map((command) => ({
+              id: command.commandId,
+              time: new Date(command.createdAt).toLocaleTimeString("zh-CN"),
+              action: command.commandType,
+              result: mapCommandStatus(command.status)
+            }))
+          );
+        })
+        .catch(() => {
+          // Keep the last known command history if the network briefly drops.
+        });
+    }, 5000);
+
+    return () => window.clearInterval(timer);
+  }, [api, selectedDeviceId]);
 
   useEffect(() => {
     if (!selectedDevice) {
@@ -612,33 +808,13 @@ export function DeviceManagementPage() {
 
   return (
     <div className="desk-page desk-dm-page">
-      <div className="desk-dm-head">
-        <div className="desk-dm-head-left">
-          <div className="desk-dm-titleblock">
-            <div className="desk-dm-title">设备管理中心</div>
-            <div className="desk-dm-subtitle">Device Management Center</div>
-          </div>
-
-          <div className="desk-dm-nav">
-            <button type="button" className="desk-dm-navbtn" onClick={() => navigate("/app/analysis")}>
-              数据分析
-            </button>
-            <button type="button" className="desk-dm-navbtn active">
-              设备管理
-            </button>
-            <button type="button" className="desk-dm-navbtn" onClick={() => navigate("/app/gps-monitoring")}>
-              地质形变监测
-            </button>
-            <button type="button" className="desk-dm-navbtn" onClick={() => navigate("/app/settings")}>
-              系统设置
-            </button>
-          </div>
-        </div>
-
-        <div className="desk-dm-head-right">
-          <div className="desk-dm-time">{nowTime}</div>
-          {lastUpdateTime ? <div className="desk-dm-updated">数据更新: {lastUpdateTime}</div> : null}
-          <div className="desk-dm-actions">
+      <DeviceManagementWorkspaceHeader
+        title="设备管理中心"
+        subtitle="Device Management Center"
+        nowTime={nowTime}
+        lastUpdateTime={lastUpdateTime}
+        actions={
+          <>
             <Button
               size="small"
               icon={<ReloadOutlined />}
@@ -663,33 +839,11 @@ export function DeviceManagementPage() {
             >
               设置
             </Button>
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
 
-      <div className="desk-dm-tabs">
-        <button
-          type="button"
-          className={`desk-dm-tabbtn ${activeTab === "status" ? "active" : ""}`}
-          onClick={() => setTab("status")}
-        >
-          设备状态监控
-        </button>
-        <button
-          type="button"
-          className={`desk-dm-tabbtn ${activeTab === "management" ? "active" : ""}`}
-          onClick={() => setTab("management")}
-        >
-          监测站管理
-        </button>
-        <button
-          type="button"
-          className={`desk-dm-tabbtn ${activeTab === "baselines" ? "active" : ""}`}
-          onClick={() => setTab("baselines")}
-        >
-          基线管理
-        </button>
-      </div>
+      <DeviceManagementSectionNav active={activeTab} />
 
       {loadError ? (
         <div style={{ marginBottom: 12 }}>
@@ -700,7 +854,7 @@ export function DeviceManagementPage() {
             description={
               <div style={{ color: "rgba(226,232,240,0.9)" }}>
                 <div style={{ marginBottom: 6 }}>{loadError}</div>
-                <div style={{ color: "rgba(148,163,184,0.9)" }}>可在「系统设置」切换数据源（演示/在线接口）。</div>
+                <div style={{ color: "rgba(148,163,184,0.9)" }}>可在「系统设置」检查当前数据源与接口地址。</div>
               </div>
             }
           />
@@ -712,7 +866,12 @@ export function DeviceManagementPage() {
           <div className="desk-dm-grid-top">
             <BaseCard title="设备选择" className="desk-dm-panel">
               <div className="desk-dm-muted">
-                总计: {devices.length} 台 | 在线: {devices.filter((d) => d.status === "online").length} 台
+                总计: {deviceIdentityStats.total + (centerNodeSummary ? 1 : 0)} 台 | 中心节点:{" "}
+                {centerNodeSummary?.status === "online" ? 1 : 0}/{centerNodeSummary ? 1 : 0} 台 | 分节点设备: {deviceIdentityStats.formal} 台 | 未归档:{" "}
+                {deviceIdentityStats.nonFormal} 台
+              </div>
+              <div className="desk-dm-muted" style={{ marginTop: 4 }}>
+                当前筛选结果: {filteredDevices.length} 台
               </div>
               <div style={{ height: 10 }} />
               <div className="desk-dm-field">
@@ -730,43 +889,186 @@ export function DeviceManagementPage() {
               </div>
 
               <div className="desk-dm-field">
+                <div className="desk-dm-label">数据范围</div>
+                <Select
+                  size="small"
+                  value={identityFilter}
+                  style={{ width: "100%" }}
+                  onChange={(value) => setIdentityFilter(value)}
+                  options={[
+                    { label: `全部设备（${deviceIdentityStats.total}）`, value: "all" },
+                    { label: `当前设备（${deviceIdentityStats.formal}）`, value: "formal" },
+                    { label: `未归档（${deviceIdentityStats.nonFormal}）`, value: "non_formal" }
+                  ]}
+                />
+              </div>
+
+              <div className="desk-dm-field">
                 <div className="desk-dm-label">监测设备</div>
+                {centerNodeSummary ? (
+                  <button
+                    type="button"
+                    className={`desk-dm-center-node ${centerNodeSelected ? "active" : ""}`}
+                    aria-label="RK3568 中心节点运行态"
+                    onClick={() => {
+                      setSelectedDeviceId(CENTER_NODE_SELECTION_ID);
+                    }}
+                  >
+                    <span className="desk-dm-dot" style={{ backgroundColor: statusDotColor(centerNodeSummary.status) }} />
+                    <span className="desk-dm-devmeta">
+                      <span className="desk-dm-devname">{centerNodeSummary.displayName}</span>
+                      <span className="desk-dm-devsub">
+                        {[
+                          centerNodeSummary.gatewayCode,
+                          centerNodeSummary.regionCode,
+                          formatDeviceRoleDisplay(centerNodeSummary.role)
+                        ]
+                          .filter((value): value is string => Boolean(value))
+                          .join(" · ")}
+                      </span>
+                      <span className="desk-dm-devsub">{centerNodeSummary.detail}</span>
+                    </span>
+                    <span className="desk-dm-devstatus">
+                      <StatusTag value={centerNodeSummary.status} />
+                      {centerNodeSummary.dryRun ? <Tag color="gold">Mock</Tag> : <Tag color="cyan">中心节点</Tag>}
+                    </span>
+                  </button>
+                ) : null}
                 <div className="desk-dm-devlist">
-                  {filteredDevices.map((d) => (
-                    <button
-                      key={d.id}
-                      type="button"
-                      className={`desk-dm-devitem ${d.id === selectedDeviceId ? "active" : ""}`}
-                      onClick={() => setSelectedDeviceId(d.id)}
-                    >
-                      <span className="desk-dm-dot" style={{ backgroundColor: statusDotColor(d.status) }} />
-                      <span className="desk-dm-devmeta">
-                        <span className="desk-dm-devname">{d.name}</span>
-                        <span className="desk-dm-devsub">
-                          {deviceTypeLabel(d)} · {d.stationName}
+                  {filteredDevices.length ? (
+                    filteredDevices.map((d) => (
+                      <button
+                        key={d.id}
+                        type="button"
+                        className={`desk-dm-devitem ${d.id === selectedDeviceId ? "active" : ""}`}
+                        onClick={() => setSelectedDeviceId(d.id)}
+                      >
+                        <span className="desk-dm-dot" style={{ backgroundColor: statusDotColor(d.status) }} />
+                          <span className="desk-dm-devmeta">
+                          <span className="desk-dm-devname">{d.name}</span>
+                          <span className="desk-dm-devsub">
+                            {d.installLabel ? formatInstallLabelDisplay(d.installLabel) : d.stationCode ?? d.stationName}
+                          </span>
                         </span>
-                      </span>
-                      <span className="desk-dm-devstatus">
-                        <StatusTag value={d.status} />
-                      </span>
-                    </button>
-                  ))}
+                        <span className="desk-dm-devstatus">
+                          <StatusTag value={d.status} />
+                        </span>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="desk-dm-empty">
+                      {identityFilter === "formal"
+                        ? "当前没有设备接入，未归档数据不会进入当前视图。"
+                        : "当前筛选条件下没有设备"}
+                    </div>
+                  )}
                 </div>
               </div>
             </BaseCard>
 
             <BaseCard title="设备状态概览" className="desk-dm-panel desk-dm-panel-overview">
-              {selectedDevice ? (
+              {centerNodeSelected && centerNodeSummary ? (
+                <>
+                  <div className="desk-dm-overview-head">
+                    <div>
+                      <div className="desk-dm-overview-title">{centerNodeSummary.displayName}</div>
+                      <div className="desk-dm-muted">
+                        {[
+                          centerNodeSummary.gatewayCode,
+                          centerNodeSummary.regionCode,
+                          "中心节点 / RK3568"
+                        ]
+                          .filter((value): value is string => Boolean(value))
+                          .join(" · ")}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                      <Tag className="desk-pill-tag">中心网关</Tag>
+                      <Tag color={centerNodeSummary.available ? "green" : "orange"}>
+                        {centerNodeSummary.available ? "执行器已连接" : "执行器待确认"}
+                      </Tag>
+                      <StatusTag value={centerNodeSummary.status} />
+                    </div>
+                  </div>
+
+                  <div className="desk-dm-overview-grid">
+                    <div className="desk-dm-metric">
+                      <div className="desk-dm-metric-label">在线状态</div>
+                      <div className="desk-dm-metric-value">{centerNodeSummary.status === "online" ? "在线" : centerNodeSummary.status === "warning" ? "待确认" : "离线"}</div>
+                    </div>
+                    <div className="desk-dm-metric">
+                      <div className="desk-dm-metric-label">执行器</div>
+                      <div className="desk-dm-metric-value" style={{ color: centerNodeSummary.available ? "#22c55e" : "#f59e0b" }}>
+                        {centerNodeSummary.available ? "已连接" : "待确认"}
+                      </div>
+                    </div>
+                    <div className="desk-dm-metric">
+                      <div className="desk-dm-metric-label">声光状态</div>
+                      <div className="desk-dm-metric-value" style={{ color: fieldAlarmStatus?.active ? "#ef4444" : "#22c55e" }}>
+                        {fieldAlarmStatus?.active ? "报警中" : fieldAlarmStatus?.silenced ? "已停止" : "待命"}
+                      </div>
+                    </div>
+                    <div className="desk-dm-metric">
+                      <div className="desk-dm-metric-label">最近动作</div>
+                      <div className="desk-dm-metric-value" style={{ fontSize: 12, fontWeight: 600 }}>
+                        {centerNodeSummary.lastActionAt ? new Date(centerNodeSummary.lastActionAt).toLocaleString("zh-CN") : "—"}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="desk-dm-canonical-grid">
+                    <div className="desk-dm-canonical-item">
+                      <div className="desk-dm-canonical-k">网关编码</div>
+                      <div className="desk-dm-canonical-v">{canonicalText(centerNodeSummary.gatewayCode)}</div>
+                    </div>
+                    <div className="desk-dm-canonical-item">
+                      <div className="desk-dm-canonical-k">区域编码</div>
+                      <div className="desk-dm-canonical-v">{canonicalText(centerNodeSummary.regionCode)}</div>
+                    </div>
+                    <div className="desk-dm-canonical-item">
+                      <div className="desk-dm-canonical-k">设备角色</div>
+                      <div className="desk-dm-canonical-v">{formatDeviceRoleDisplay(centerNodeSummary.role)}</div>
+                    </div>
+                    <div className="desk-dm-canonical-item">
+                      <div className="desk-dm-canonical-k">执行模式</div>
+                      <div className="desk-dm-canonical-v">{centerNodeSummary.dryRun ? "Mock 演示" : "真实执行"}</div>
+                    </div>
+                  </div>
+
+                  <div className="desk-dm-muted" style={{ marginTop: 8 }}>
+                    中心节点展示 RK3568 网关和 YX75R 声光报警执行链；A/B/C 分节点仍然用于传感器遥测、采样和设备命令。
+                  </div>
+                  <div className="desk-dm-muted" style={{ marginTop: 8 }}>
+                    执行链路: {centerNodeSummary.detail}
+                  </div>
+                  {fieldAlarmStatus?.active ? (
+                    <Alert
+                      type="error"
+                      showIcon
+                      message="中心节点声光报警正在动作，请结合现场情况人工复核。"
+                      style={{ marginTop: 12 }}
+                    />
+                  ) : null}
+                </>
+              ) : selectedDevice ? (
                 <>
                   <div className="desk-dm-overview-head">
                     <div>
                       <div className="desk-dm-overview-title">{selectedDevice.name}</div>
                       <div className="desk-dm-muted">
-                        {deviceTypeLabel(selectedDevice)} · {selectedDevice.stationName}
+                        {[
+                          selectedDevice.stationName,
+                          selectedStation?.area ?? null,
+                          selectedDevice.installLabel ? formatInstallLabelDisplay(selectedDevice.installLabel) : selectedDevice.id
+                        ]
+                          .filter((value): value is string => Boolean(value))
+                          .join(" · ")}
                       </div>
                     </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
                       <Tag className="desk-pill-tag">{deviceTypeLabel(selectedDevice)}</Tag>
+                      {selectedStation?.area ? <Tag color="blue">{selectedStation.area}</Tag> : null}
+                      {selectedDevice.stationCode ? <Tag color="cyan">站点编码 {selectedDevice.stationCode}</Tag> : null}
                       <StatusTag value={selectedDevice.status} />
                     </div>
                   </div>
@@ -812,8 +1114,51 @@ export function DeviceManagementPage() {
                     </div>
                   </div>
 
+                  <div className="desk-dm-canonical-grid">
+                    <div className="desk-dm-canonical-item">
+                      <div className="desk-dm-canonical-k">站点编码</div>
+                      <div className="desk-dm-canonical-v">{canonicalText(selectedDevice.stationCode)}</div>
+                    </div>
+                    <div className="desk-dm-canonical-item">
+                      <div className="desk-dm-canonical-k">区域编码</div>
+                      <div className="desk-dm-canonical-v">{canonicalText(selectedDevice.regionCode)}</div>
+                    </div>
+                    <div className="desk-dm-canonical-item">
+                      <div className="desk-dm-canonical-k">边坡编码</div>
+                      <div className="desk-dm-canonical-v">{canonicalText(selectedDevice.slopeCode)}</div>
+                    </div>
+                    <div className="desk-dm-canonical-item">
+                      <div className="desk-dm-canonical-k">节点编码</div>
+                      <div className="desk-dm-canonical-v">{canonicalText(selectedDevice.nodeCode)}</div>
+                    </div>
+                    <div className="desk-dm-canonical-item">
+                      <div className="desk-dm-canonical-k">网关编码</div>
+                      <div className="desk-dm-canonical-v">{canonicalText(selectedDevice.gatewayCode)}</div>
+                    </div>
+                    <div className="desk-dm-canonical-item">
+                      <div className="desk-dm-canonical-k">安装标识</div>
+                      <div className="desk-dm-canonical-v">{formatInstallLabelDisplay(selectedDevice.installLabel)}</div>
+                    </div>
+                    <div className="desk-dm-canonical-item">
+                      <div className="desk-dm-canonical-k">生命周期状态</div>
+                      <div className="desk-dm-canonical-v">{formatLifecycleStatusDisplay(selectedDevice.lifecycleStatus)}</div>
+                    </div>
+                    <div className="desk-dm-canonical-item">
+                      <div className="desk-dm-canonical-k">接入控制</div>
+                      <div className="desk-dm-canonical-v">
+                        {formatRegistryStatusDisplay(selectedDevice.registryStatus)}
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="desk-dm-muted" style={{ marginTop: 8 }}>
-                    站点风险: {selectedStation ? <Tag color={selectedStation.risk === "high" ? "red" : selectedStation.risk === "mid" ? "orange" : "green"}>{selectedStation.risk}</Tag> : "--"}
+                    站点风险: {selectedStation ? <RiskTag value={selectedStation.risk} /> : "--"}
+                  </div>
+                  <div className="desk-dm-muted" style={{ marginTop: 8 }}>
+                    状态语义: 在线状态看最近上报，生命周期看业务投运阶段，接入控制看是否允许直连或已停用。
+                    {selectedDevice.registryStatus
+                      ? ` 当前设备${formatRegistryStatusHint(selectedDevice.registryStatus)}`
+                      : ""}
                   </div>
                   <div className="desk-dm-muted" style={{ marginTop: 8 }}>
                     状态快照: 温度 {formatMetricNumber(deviceMetrics.temperatureC)}°C · 湿度 {formatMetricNumber(deviceMetrics.humidityPct, 0)}% · 倾角 X/Y{" "}
@@ -823,7 +1168,7 @@ export function DeviceManagementPage() {
                     <Alert
                       type="warning"
                       showIcon
-                      message="设备状态快照显示 warning_flag=true，请结合现场姿态与电量继续观察。"
+                      message="设备已触发预警，请结合现场姿态与电量继续观察。"
                       style={{ marginTop: 12 }}
                     />
                   ) : null}
@@ -861,6 +1206,59 @@ export function DeviceManagementPage() {
                 >
                   详细信息
                 </Button>
+                <div className="desk-dm-quick-alarm">
+                  <div className="desk-dm-ctrl-title">RK3568 声光报警测试</div>
+                  <div className="desk-dm-quick-target">
+                    <span>目标：</span>
+                    <strong>{centerNodeSummary?.displayName ?? "RK3568 中心节点声光报警器"}</strong>
+                    <span>
+                      {[
+                        centerNodeSummary?.gatewayCode,
+                        centerNodeSummary ? formatDeviceRoleDisplay(centerNodeSummary.role) : null,
+                        centerNodeSummary?.available ? "执行器已连接" : "执行器待确认"
+                      ]
+                        .filter((value): value is string => Boolean(value))
+                        .join(" · ")}
+                    </span>
+                    {centerNodeSummary?.lastActionAt ? (
+                      <span>最近动作 {new Date(centerNodeSummary.lastActionAt).toLocaleString("zh-CN")}</span>
+                    ) : null}
+                  </div>
+                  <div className="desk-dm-quick-alarm-row">
+                    <Button
+                      size="small"
+                      danger
+                      type="primary"
+                      onClick={() => {
+                        void issueFieldAlarmAction("启动声光报警", "alarm_on");
+                      }}
+                    >
+                      启动声光
+                    </Button>
+                    <Button
+                      size="small"
+                      onClick={() => {
+                        void issueFieldAlarmAction("停止声光报警", "alarm_off");
+                      }}
+                    >
+                      停止声光
+                    </Button>
+                    <Tag color={fieldAlarmOn ? "red" : "default"}>{fieldAlarmOn ? "已下发启动" : "待测试"}</Tag>
+                  </div>
+                  <Button
+                    size="small"
+                    block
+                    disabled={!latestSeenDevice || latestSeenDevice.id === selectedDevice?.id}
+                    onClick={() => {
+                      if (!latestSeenDevice) return;
+                      setSelectedDeviceId(latestSeenDevice.id);
+                      void refreshCommandLogs(latestSeenDevice.id);
+                      message.info(`已切到最近上报节点：${latestSeenDevice.name} / ${latestSeenDevice.id.slice(-4)}`);
+                    }}
+                  >
+                    切到最近上报节点
+                  </Button>
+                </div>
                 <Button
                   block
                   onClick={() => {
@@ -878,15 +1276,101 @@ export function DeviceManagementPage() {
                 >
                   下线设备
                 </Button>
-                <div className="desk-dm-muted">提示：先做 UI/交互，后续切换到 HTTP 模式对接 v2 后端。</div>
               </Space>
+            </BaseCard>
+          </div>
+
+          <div className="desk-dm-grid-mid">
+            <BaseCard title="设备总览">
+              <div className="desk-dm-muted" style={{ marginBottom: 10 }}>
+                当前页面优先展示当前设备的业务编码字段；未归档数据只在专门筛选时显示。
+              </div>
+              <div className="desk-dark-table desk-dm-table-wrap">
+                <Table<Device>
+                  rowKey="id"
+                  size="small"
+                  pagination={{ pageSize: 6, showSizeChanger: false }}
+                  scroll={{ x: 1480 }}
+                  dataSource={filteredDevices}
+                  rowClassName={(row) => (row.id === selectedDeviceId ? "desk-dm-selected-row" : "")}
+                  onRow={(row) => ({
+                    onClick: () => setSelectedDeviceId(row.id)
+                  })}
+                  columns={[
+                    {
+                      title: "设备",
+                      key: "device",
+                      width: 280,
+                      render: (_value: unknown, row) => (
+                        <div>
+                          <div style={{ fontWeight: 900, color: "rgba(226,232,240,0.96)" }}>{row.name}</div>
+                          <div className="desk-dm-muted" style={{ marginTop: 2 }}>
+                            {row.deviceName ?? row.id}
+                          </div>
+                          <div className="desk-dm-muted" style={{ marginTop: 2 }}>
+                            {row.installLabel ? formatInstallLabelDisplay(row.installLabel) : row.id}
+                          </div>
+                        </div>
+                      )
+                    },
+                    {
+                      title: "站点编码",
+                      dataIndex: "stationCode",
+                      width: 170,
+                      render: (value: string | null | undefined) => canonicalText(value)
+                    },
+                    {
+                      title: "区域编码",
+                      dataIndex: "regionCode",
+                      width: 150,
+                      render: (value: string | null | undefined) => canonicalText(value)
+                    },
+                    {
+                      title: "边坡编码",
+                      dataIndex: "slopeCode",
+                      width: 180,
+                      render: (value: string | null | undefined) => canonicalText(value)
+                    },
+                    {
+                      title: "节点编码",
+                      dataIndex: "nodeCode",
+                      width: 210,
+                      render: (value: string | null | undefined) => canonicalText(value)
+                    },
+                    {
+                      title: "网关编码",
+                      dataIndex: "gatewayCode",
+                      width: 190,
+                      render: (value: string | null | undefined) => canonicalText(value)
+                    },
+                    {
+                      title: "状态",
+                      dataIndex: "status",
+                      width: 90,
+                      render: (value: Device["status"]) => <StatusTag value={value} />
+                    }
+                  ]}
+                />
+              </div>
             </BaseCard>
           </div>
 
           <div className="desk-dm-grid-bottom">
             <div className="desk-dm-stack">
               <div className="desk-dm-stack-item">
-                <BaseCard title={`设备控制 - ${selectedDevice ? selectedDevice.id : "--"}`}>
+                <BaseCard
+                  className="desk-dm-stack-card"
+                  title={
+                    <div className="desk-dm-card-titleblock">
+                      <div className="desk-dm-card-title">设备控制</div>
+                      <div className="desk-dm-card-subtitle">
+                        {selectedDevice
+                          ? `${selectedDevice.name}${selectedDevice.installLabel ? ` · ${formatInstallLabelDisplay(selectedDevice.installLabel)}` : ""}`
+                          : "未选择设备"}
+                      </div>
+                    </div>
+                  }
+                >
                   <div className="desk-dm-ctrl">
                     <div className="desk-dm-ctrl-section">
                       <div className="desk-dm-ctrl-title">电机控制</div>
@@ -917,20 +1401,29 @@ export function DeviceManagementPage() {
                       </div>
                     </div>
 
-                    <div className="desk-dm-ctrl-section">
-                      <div className="desk-dm-ctrl-title">蜂鸣器</div>
+                    <div className="desk-dm-ctrl-section desk-dm-alarm-section">
+                      <div className="desk-dm-ctrl-title">RK3568 声光报警器</div>
                       <div className="desk-dm-ctrl-row">
-                        <Switch
-                          checked={buzzerOn}
-                          disabled={!selectedDevice}
-                          onChange={(v) => {
-                            setBuzzerOn(v);
-                            void issueSelectedCommand(v ? "开启蜂鸣器" : "关闭蜂鸣器", v ? "buzzer_on" : "buzzer_off", {
-                              source: "desk-device-management"
-                            });
+                        <Button
+                          size="small"
+                          danger
+                          type="primary"
+                          disabled={fieldAlarmOn}
+                          onClick={() => {
+                            void issueFieldAlarmAction("启动声光报警", "alarm_on");
                           }}
-                        />
-                        <span className="desk-dm-muted">{buzzerOn ? "已开启" : "已关闭"}</span>
+                        >
+                          启动报警
+                        </Button>
+                        <Button
+                          size="small"
+                          onClick={() => {
+                            void issueFieldAlarmAction("停止声光报警", "alarm_off");
+                          }}
+                        >
+                          停止报警
+                        </Button>
+                        <Tag color={fieldAlarmOn ? "red" : "default"}>{fieldAlarmOn ? "报警已启动" : "报警未启动"}</Tag>
                       </div>
                     </div>
 
@@ -987,9 +1480,9 @@ export function DeviceManagementPage() {
                       </div>
                     </div>
 
-                    <div className="desk-dm-ctrl-section" style={{ minHeight: 0 }}>
+                    <div className="desk-dm-ctrl-section desk-dm-ctrl-section-history">
                       <div className="desk-dm-ctrl-title">控制历史</div>
-                      <div className="desk-dark-table" style={{ maxHeight: 160, overflow: "auto" }}>
+                      <div className="desk-dark-table desk-dm-history-table">
                         <table className="desk-table">
                           <thead>
                             <tr>
@@ -1030,10 +1523,9 @@ export function DeviceManagementPage() {
               </div>
 
               <div className="desk-dm-stack-item">
-                <BaseCard title="实时传感器数据">
+                <BaseCard title="实时传感器数据" className="desk-dm-stack-card">
                   <div className="desk-dm-muted" style={{ marginBottom: 10 }}>
-                    主读路径 <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}>/api/v1/data/state/{`{deviceId}`}</span> 当前快照：
-                    电池 {formatMetricNumber(deviceStateSummary.batteryPct, 0)}% · GPS{" "}
+                    当前快照：电池 {formatMetricNumber(deviceStateSummary.batteryPct, 0)}% · 定位{" "}
                     {formatMetricNumber(deviceStateSummary.gpsLatitude, 6)}, {formatMetricNumber(deviceStateSummary.gpsLongitude, 6)} · 更新时间{" "}
                     {deviceStateSummary.updatedAt ? new Date(deviceStateSummary.updatedAt).toLocaleString("zh-CN") : "--"}
                   </div>
@@ -1116,14 +1608,18 @@ export function DeviceManagementPage() {
             <Button
               type="primary"
               onClick={() => {
-                if (!selectedDevice) return;
-                void copyTextContent(
-                  buildDeviceDetailText({
-                    device: selectedDevice,
-                    station: selectedStation,
-                    metrics: deviceMetrics
-                  })
-                )
+                const text =
+                  centerNodeSelected && centerNodeSummary
+                    ? buildCenterNodeDetailText(centerNodeSummary, fieldAlarmStatus)
+                    : selectedDevice
+                      ? buildDeviceDetailText({
+                          device: selectedDevice,
+                          station: selectedStation,
+                          metrics: deviceMetrics
+                        })
+                      : "";
+                if (!text) return;
+                void copyTextContent(text)
                   .then(() => {
                     message.success("已复制设备信息");
                   })
@@ -1138,7 +1634,68 @@ export function DeviceManagementPage() {
         }
         width={860}
       >
-        {selectedDevice ? (
+        {centerNodeSelected && centerNodeSummary ? (
+          <div className="desk-dm-detail">
+            <div className="desk-dm-detail-grid">
+              <div className="desk-dm-detail-card">
+                <div className="desk-dm-detail-title">中心节点信息</div>
+                <div className="desk-dm-detail-item">
+                  <span className="desk-dm-detail-k">节点名称</span>
+                  <span className="desk-dm-detail-v">{centerNodeSummary.displayName}</span>
+                </div>
+                <div className="desk-dm-detail-item">
+                  <span className="desk-dm-detail-k">设备角色</span>
+                  <span className="desk-dm-detail-v">{formatDeviceRoleDisplay(centerNodeSummary.role)}</span>
+                </div>
+                <div className="desk-dm-detail-item">
+                  <span className="desk-dm-detail-k">网关编码</span>
+                  <span className="desk-dm-detail-v">{canonicalText(centerNodeSummary.gatewayCode)}</span>
+                </div>
+                <div className="desk-dm-detail-item">
+                  <span className="desk-dm-detail-k">区域编码</span>
+                  <span className="desk-dm-detail-v">{canonicalText(centerNodeSummary.regionCode)}</span>
+                </div>
+              </div>
+
+              <div className="desk-dm-detail-card">
+                <div className="desk-dm-detail-title">执行链路</div>
+                <div className="desk-dm-detail-item">
+                  <span className="desk-dm-detail-k">在线状态</span>
+                  <span className="desk-dm-detail-v">{centerNodeSummary.status === "online" ? "在线" : centerNodeSummary.status === "warning" ? "待确认" : "离线"}</span>
+                </div>
+                <div className="desk-dm-detail-item">
+                  <span className="desk-dm-detail-k">执行器</span>
+                  <span className="desk-dm-detail-v">{centerNodeSummary.available ? "已连接" : "待确认"}</span>
+                </div>
+                <div className="desk-dm-detail-item">
+                  <span className="desk-dm-detail-k">执行模式</span>
+                  <span className="desk-dm-detail-v">{centerNodeSummary.dryRun ? "Mock 演示" : "真实执行"}</span>
+                </div>
+                <div className="desk-dm-detail-item">
+                  <span className="desk-dm-detail-k">声光状态</span>
+                  <span className="desk-dm-detail-v">{fieldAlarmStatus?.active ? "报警中" : fieldAlarmStatus?.silenced ? "已停止" : "待命"}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="desk-dm-detail-card" style={{ marginTop: 12 }}>
+              <div className="desk-dm-detail-title">链路说明</div>
+              <div className="desk-dm-detail-item">
+                <span className="desk-dm-detail-k">最近动作</span>
+                <span className="desk-dm-detail-v">
+                  {centerNodeSummary.lastActionAt ? new Date(centerNodeSummary.lastActionAt).toLocaleString("zh-CN") : "-"}
+                </span>
+              </div>
+              <div className="desk-dm-detail-item">
+                <span className="desk-dm-detail-k">链路详情</span>
+                <span className="desk-dm-detail-v">{centerNodeSummary.detail}</span>
+              </div>
+              <div className="desk-dm-muted" style={{ marginTop: 8 }}>
+                该视图表示 RK3568 中心节点和 YX75R 声光报警执行链，不参与分节点采样、电机、重启等 RK2206 指令。
+              </div>
+            </div>
+          </div>
+        ) : selectedDevice ? (
           <div className="desk-dm-detail">
             <div className="desk-dm-detail-grid">
               <div className="desk-dm-detail-card">
@@ -1148,12 +1705,20 @@ export function DeviceManagementPage() {
                   <span className="desk-dm-detail-v">{selectedDevice.name}</span>
                 </div>
                 <div className="desk-dm-detail-item">
+                  <span className="desk-dm-detail-k">原始设备名</span>
+                  <span className="desk-dm-detail-v">{selectedDevice.deviceName ?? "-"}</span>
+                </div>
+                <div className="desk-dm-detail-item">
                   <span className="desk-dm-detail-k">设备类型</span>
                   <span className="desk-dm-detail-v">{deviceTypeLabel(selectedDevice)}</span>
                 </div>
                 <div className="desk-dm-detail-item">
                   <span className="desk-dm-detail-k">所属站点</span>
                   <span className="desk-dm-detail-v">{selectedDevice.stationName}</span>
+                </div>
+                <div className="desk-dm-detail-item">
+                  <span className="desk-dm-detail-k">安装标识</span>
+                  <span className="desk-dm-detail-v">{formatInstallLabelDisplay(selectedDevice.installLabel)}</span>
                 </div>
                 <div className="desk-dm-detail-item">
                   <span className="desk-dm-detail-k">最后上报</span>
@@ -1180,11 +1745,54 @@ export function DeviceManagementPage() {
                   <span className="desk-dm-detail-v">{deviceMetrics.baselineEstablished ? "已建立" : "待建立"}</span>
                 </div>
                 <div className="desk-dm-detail-item">
-                  <span className="desk-dm-detail-k">warning_flag</span>
+                  <span className="desk-dm-detail-k">预警状态</span>
+                  <span className="desk-dm-detail-v">{formatWarningFlagDisplay(deviceMetrics.warningFlag, "-")}</span>
+                </div>
+              </div>
+
+              <div className="desk-dm-detail-card">
+                <div className="desk-dm-detail-title">编码与标识</div>
+                <div className="desk-dm-detail-item">
+                  <span className="desk-dm-detail-k">历史设备 ID</span>
+                  <span className="desk-dm-detail-v">{canonicalText(selectedDevice.legacyDeviceId)}</span>
+                </div>
+                <div className="desk-dm-detail-item">
+                  <span className="desk-dm-detail-k">站点编码</span>
+                  <span className="desk-dm-detail-v">{canonicalText(selectedDevice.stationCode)}</span>
+                </div>
+                <div className="desk-dm-detail-item">
+                  <span className="desk-dm-detail-k">区域编码</span>
+                  <span className="desk-dm-detail-v">{canonicalText(selectedDevice.regionCode)}</span>
+                </div>
+                <div className="desk-dm-detail-item">
+                  <span className="desk-dm-detail-k">边坡编码</span>
+                  <span className="desk-dm-detail-v">{canonicalText(selectedDevice.slopeCode)}</span>
+                </div>
+                <div className="desk-dm-detail-item">
+                  <span className="desk-dm-detail-k">节点编码</span>
+                  <span className="desk-dm-detail-v">{canonicalText(selectedDevice.nodeCode)}</span>
+                </div>
+                <div className="desk-dm-detail-item">
+                  <span className="desk-dm-detail-k">网关编码</span>
+                  <span className="desk-dm-detail-v">{canonicalText(selectedDevice.gatewayCode)}</span>
+                </div>
+                <div className="desk-dm-detail-item">
+                  <span className="desk-dm-detail-k">设备角色</span>
+                  <span className="desk-dm-detail-v">{formatDeviceRoleDisplay(selectedDevice.deviceRole)}</span>
+                </div>
+                <div className="desk-dm-detail-item">
+                  <span className="desk-dm-detail-k">生命周期状态</span>
+                  <span className="desk-dm-detail-v">{formatLifecycleStatusDisplay(selectedDevice.lifecycleStatus)}</span>
+                </div>
+                <div className="desk-dm-detail-item">
+                  <span className="desk-dm-detail-k">接入控制</span>
                   <span className="desk-dm-detail-v">
-                    {deviceMetrics.warningFlag == null ? "-" : deviceMetrics.warningFlag ? "true" : "false"}
+                    {formatRegistryStatusDisplay(selectedDevice.registryStatus)}
                   </span>
                 </div>
+              </div>
+              <div className="desk-dm-muted" style={{ marginTop: 8 }}>
+                在线状态只反映最近上报；生命周期反映投运阶段；接入控制反映是否允许设备直连或已停用。
               </div>
             </div>
 
@@ -1212,14 +1820,34 @@ export function DeviceManagementPage() {
 
             <div className="desk-dm-detail-card" style={{ marginTop: 12 }}>
               <div className="desk-dm-detail-title">站点信息</div>
-              <div className="desk-dm-detail-grid" style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}>
+              <div className="desk-dm-detail-grid" style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))" }}>
+                <div className="desk-dm-detail-item">
+                  <span className="desk-dm-detail-k">监测点展示名</span>
+                  <span className="desk-dm-detail-v">{selectedStation?.displayName ?? selectedStation?.name ?? "-"}</span>
+                </div>
+                <div className="desk-dm-detail-item">
+                  <span className="desk-dm-detail-k">站点编码</span>
+                  <span className="desk-dm-detail-v">{selectedStation?.stationCode ?? "-"}</span>
+                </div>
                 <div className="desk-dm-detail-item">
                   <span className="desk-dm-detail-k">区域</span>
                   <span className="desk-dm-detail-v">{selectedStation?.area ?? "-"}</span>
                 </div>
                 <div className="desk-dm-detail-item">
+                  <span className="desk-dm-detail-k">区域编码</span>
+                  <span className="desk-dm-detail-v">{selectedStation?.regionCode ?? "-"}</span>
+                </div>
+                <div className="desk-dm-detail-item">
+                  <span className="desk-dm-detail-k">边坡编码</span>
+                  <span className="desk-dm-detail-v">{selectedStation?.slopeCode ?? "-"}</span>
+                </div>
+                <div className="desk-dm-detail-item">
+                  <span className="desk-dm-detail-k">生命周期状态</span>
+                  <span className="desk-dm-detail-v">{formatLifecycleStatusDisplay(selectedStation?.lifecycleStatus, "-")}</span>
+                </div>
+                <div className="desk-dm-detail-item">
                   <span className="desk-dm-detail-k">风险</span>
-                  <span className="desk-dm-detail-v">{selectedStation ? <Tag color={selectedStation.risk === "high" ? "red" : selectedStation.risk === "mid" ? "orange" : "green"}>{selectedStation.risk}</Tag> : "-"}</span>
+                  <span className="desk-dm-detail-v">{selectedStation ? <RiskTag value={selectedStation.risk} /> : "-"}</span>
                 </div>
                 <div className="desk-dm-detail-item">
                   <span className="desk-dm-detail-k">坐标</span>

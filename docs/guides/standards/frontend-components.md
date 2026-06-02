@@ -1,3 +1,9 @@
+---
+title: frontend-components
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/standards/frontend-components
+---
+
 # 前端公共组件与通用组件规范（必须遵守）
 
 目标：组件可复用、可测试、可替换；避免“页面里写死业务规则/字段映射”导致后续重构成本爆炸。

@@ -1,3 +1,9 @@
+---
+title: tasks
+type: note
+permalink: landslide-monitoring-v2-mainline/openspec/changes/add-v2-backend-local-runtime/tasks
+---
+
 ## 1. 本地运行基线（Local Runtime Baseline）
 - [ ] 1.1 盘点当前 `infra/compose` 与本地脚本现状（能否一键起 DB）
 - [x] 1.2 明确端口分配与冲突策略（3000/5174/8080 等）

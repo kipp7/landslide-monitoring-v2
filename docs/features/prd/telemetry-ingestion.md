@@ -1,3 +1,9 @@
+---
+title: telemetry-ingestion
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/features/prd/telemetry-ingestion
+---
+
 ﻿# PRD：遥测上报链路（MQTT → Kafka → ClickHouse）
 
 ## 1. 背景
@@ -35,4 +41,3 @@
 - MQTT：`docs/integrations/mqtt/mqtt-topics-and-envelope.md`
 - Kafka：`docs/integrations/kafka/kafka-topics-and-processing.md`
 - ClickHouse：`docs/integrations/storage/clickhouse/01-telemetry.sql`
-

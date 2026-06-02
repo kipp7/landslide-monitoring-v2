@@ -1,3 +1,9 @@
+---
+title: handoff
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/ai/handoff
+---
+
 # AI 交接指南（换窗口/换模型/换 AI 的“自解释”入口）
 
 目标：避免依赖聊天记录；任何新 AI/新同事只读仓库就能定位“做到哪一步、下一步做什么、有哪些强约束”。
@@ -60,4 +66,3 @@
 - 未经 ADR 改技术路线/数据模型/事件模型
 - 在 `apps/` 里硬编码传感器字典/阈值/单位（应通过 v2 API/字典表渲染）
 - 把调试产物提交进仓库（`backups/**` 仅证据留存，必须被忽略）
-

@@ -1,3 +1,9 @@
+---
+title: tasks
+type: note
+permalink: landslide-monitoring-v2-mainline/openspec/changes/add-command-acked-notification-policy/tasks
+---
+
 ## 1. Spec And Contract
 - [x] 1.1 明确 `COMMAND_ACKED` 通知策略为“默认静默、按命令显式开启”
 - [x] 1.2 定义命令创建/查询契约中的 `notifyOnAck` 字段与默认值

@@ -1,3 +1,9 @@
+---
+title: AGENTS
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/ai/agents
+---
+
 # AI Agent 工作约定（适用范围：docs/ 文档与重构阶段）
 
 本文件约束 AI 在本项目“文档与重构阶段”的工作方式，降低遗漏与不一致，并避免 GitHub 上出现不规范的推送/分支管理。
@@ -30,4 +36,3 @@
 - 推送前必须通过：`python docs/tools/run-quality-gates.py`
 - 若修改了 `docs/integrations/api/openapi.yaml`，必须同步更新 `docs/integrations/api/openapi.sha256`：
   - `python docs/tools/update-openapi-stamp.py`
-

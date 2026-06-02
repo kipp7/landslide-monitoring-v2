@@ -1,9 +1,10 @@
-﻿---
+---
 title: task-title
 type: note
 tags:
-  - task
+- task
 status: active
+permalink: landslide-monitoring-v2-mainline/memory/templates/task-template
 ---
 
 # Task: task-title

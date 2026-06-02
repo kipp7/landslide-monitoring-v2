@@ -1,5 +1,5 @@
 ﻿{
-    "generatedAt":  "2026-03-24T01:41:55Z",
+    "generatedAt":  "2026-04-16T01:53:23Z",
     "configuration":  "Release",
     "runtime":  "win-x64",
     "publishOutputDir":  "artifacts/desk-win/win-x64",
@@ -7,11 +7,11 @@
     "package":  {
                     "exePath":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\win-x64\\LandslideDesk.Win.exe",
                     "webIndex":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\win-x64\\web\\index.html",
-                    "fileCount":  401
+                    "fileCount":  576
                 },
     "build":  {
-                  "generatedAt":  "2026-03-24T01:38:31Z",
-                  "gitShortSha":  "938f86e"
+                  "generatedAt":  "2026-04-16T01:46:57Z",
+                  "gitShortSha":  "628c350"
               },
     "verify":  {
                    "aliveAfterLaunch":  true,
@@ -22,30 +22,33 @@
                           "windowsDesktopRuntime":  true,
                           "webView2":  true
                       },
+    "boundary":  {
+                     "apiOnlyReady":  true
+                 },
     "bundle":  {
-                   "bundleDir":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\delivery\\desk-win-delivery-20260324-094122",
-                   "bundleZip":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\delivery\\desk-win-delivery-20260324-094122.zip",
-                   "fileCount":  435
+                   "bundleDir":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\delivery\\desk-win-delivery-20260416-095157",
+                   "bundleZip":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\delivery\\desk-win-delivery-20260416-095157.zip",
+                   "fileCount":  611
                },
     "latest":  {
                    "promotedDir":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\latest",
                    "promotedZip":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\latest.zip",
                    "ready":  true,
-                   "fileCount":  435,
+                   "fileCount":  611,
                    "verifyAliveAfterLaunch":  true,
                    "verifyStoppedAfterVerify":  true
                },
     "retention":  {
                       "keep":  3,
                       "keptDirectories":  [
-                                              "desk-win-delivery-20260324-094122",
-                                              "desk-win-delivery-20260324-093559",
-                                              "desk-win-delivery-20260324-015337"
+                                              "desk-win-delivery-20260416-095157",
+                                              "desk-win-delivery-20260414-154356",
+                                              "desk-win-delivery-20260414-131905"
                                           ],
                       "keptZips":  [
-                                       "desk-win-delivery-20260324-094122.zip",
-                                       "desk-win-delivery-20260324-093559.zip",
-                                       "desk-win-delivery-20260324-015337.zip"
+                                       "desk-win-delivery-20260416-095157.zip",
+                                       "desk-win-delivery-20260414-154356.zip",
+                                       "desk-win-delivery-20260414-131905.zip"
                                    ]
                   },
     "index":  {
@@ -54,24 +57,24 @@
                   "packageZip":  "artifacts/desk-win/latest.zip"
               },
     "hashes":  {
-                   "exe":  "e6f33723dd96abaf2dfc6bc4a7302bd77d55a4e826204c62551940af9b0dcc43",
-                   "webIndex":  "116953072022e8e84f1423def3f4430355d9d4abcab9a83279854243059dc4b4",
-                   "bundleZip":  "09db30cb9c1488cacaf69294b156294b394b8d1ad95d31699c8115fc5044b0f2"
+                   "exe":  "3596580a69f3befbd34f37dad6fee2b96076797c4de4c6da2ab850c30c12a41c",
+                   "webIndex":  "269716c95f67179cfe8b3a4cd8e0d201e4eda2a5f95cbe956901938a9626f8b7",
+                   "bundleZip":  "71953412c1534433cbaad6a9787c02343c7274e38b8fe2adf2b737433adc89d0"
                },
     "installer":  {
-                      "path":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\installer\\LandslideDesk-Setup-win-x64-938f86e.exe",
-                      "sha256":  "6b2cdb9e78620ed48fa59af2f94409b340442a2f944136a5298d009a5fa8cb12",
+                      "path":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\installer\\LandslideDesk-Setup-win-x64-628c350.exe",
+                      "sha256":  "fd1ecb42f59cc66efe7d7ebfe0c37d571227c66e76aa12303a3e1105b807510c",
                       "verified":  true
                   },
     "customInstaller":  {
-                            "path":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\customba-installer\\LandslideDesk-CustomBA-Setup-938f86e-20260324-094034.exe",
-                            "sha256":  "43257051d1ad98ba0b00c0fa1110b553b26a9195570c67113901655a41823c2c",
+                            "path":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\customba-installer\\LandslideDesk-CustomBA-Setup-628c350-20260416-095110.exe",
+                            "sha256":  "012643fb6f7b162382727eeb6d442ce020b0efe2b828cd2cc02210878102c233",
                             "verified":  true
                         },
     "buildChunks":  {
                         "report":  "docs/unified/reports/desk-build-chunks-latest.json",
                         "oversizeJsCount":  1,
-                        "largestJs":  "index-B1qoZq4t.js",
-                        "largestJsKb":  3036.08
+                        "largestJs":  "index-1RHwzS1I.js",
+                        "largestJsKb":  3162.19
                     }
 }

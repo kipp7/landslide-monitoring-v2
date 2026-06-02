@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/unified/agent-briefs/readme
+---
+
 # 任务简报区
 
 ## 目标

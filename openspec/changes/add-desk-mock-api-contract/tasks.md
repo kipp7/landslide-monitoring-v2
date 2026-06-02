@@ -1,3 +1,9 @@
+---
+title: tasks
+type: note
+permalink: landslide-monitoring-v2-mainline/openspec/changes/add-desk-mock-api-contract/tasks
+---
+
 ## 1. 设计 API Contract 与 DTO
 - [ ] 1.1 盘点 `apps/desk` 当前页面所需数据模型（设备、站点、GNSS、告警等）
 - [ ] 1.2 定义通用类型：`Id`、`Timestamp`、`PageRequest`、`PageResponse`

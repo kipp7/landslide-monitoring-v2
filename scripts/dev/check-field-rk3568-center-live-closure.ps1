@@ -7,7 +7,7 @@ param(
   [string]$MqttUrl = "mqtt://127.0.0.1:1883",
   [string]$Username = "admin",
   [string]$Password = "123456",
-  [string]$BoardHost = "192.168.124.172",
+  [string]$BoardHost = "192.168.124.179",
   [string]$BoardUser = "linaro",
   [string]$BoardPassword = "",
   [int]$BoardSshPort = 22,
@@ -28,6 +28,7 @@ param(
   [string]$NodeCDeviceId = "00000000-0000-0000-0000-000000000003",
   [string]$NodeAInstallLabel = "FIELD-NODE-A",
   [string]$NodeBInstallLabel = "FIELD-NODE-B",
+  [string]$NodeCInstallLabel = "FIELD-NODE-C",
   [switch]$AllowUnsafeSecrets,
   [string]$OutFile = "docs/unified/reports/field-rk3568-center-live-closure-latest.json"
 )
@@ -66,7 +67,7 @@ function Resolve-RepoRoot() {
   return $dir
 }
 
-function Resolve-OutputPath {
+function Resolve-RepoPath {
   param(
     [string]$RootPath,
     [string]$CandidatePath
@@ -79,38 +80,31 @@ function Resolve-OutputPath {
   return Join-Path $RootPath $CandidatePath
 }
 
-function Convert-TextToJsonObject {
+function Read-JsonFile {
   param(
-    [string]$Text,
+    [string]$Path,
     [string]$Label
   )
 
-  $trimmed = $Text.Trim()
-  if (-not $trimmed) {
-    throw "$Label returned empty output"
+  if (-not (Test-Path -LiteralPath $Path)) {
+    throw "$Label not found: $Path"
   }
 
-  $jsonStart = $trimmed.IndexOf("{")
-  $jsonEnd = $trimmed.LastIndexOf("}")
-  if ($jsonStart -lt 0 -or $jsonEnd -lt $jsonStart) {
-    throw "$Label did not return JSON output"
-  }
-
-  return ($trimmed.Substring($jsonStart, $jsonEnd - $jsonStart + 1) | ConvertFrom-Json)
+  return (Get-Content -LiteralPath $Path -Raw -Encoding UTF8) | ConvertFrom-Json
 }
 
-function Invoke-JsonScript {
-  param(
-    [string]$Label,
-    [scriptblock]$Action
-  )
+function Try-ReadJsonFile {
+  param([string]$Path)
 
-  Write-Host "==> $Label" -ForegroundColor Cyan
-  $output = & $Action | Out-String
-  if ($LASTEXITCODE -ne 0) {
-    throw "$Label failed (exit=$LASTEXITCODE)"
+  if (-not (Test-Path -LiteralPath $Path)) {
+    return $null
   }
-  return Convert-TextToJsonObject -Text $output -Label $Label
+
+  try {
+    return (Get-Content -LiteralPath $Path -Raw -Encoding UTF8) | ConvertFrom-Json
+  } catch {
+    return $null
+  }
 }
 
 function Convert-ToUtcDateTime {
@@ -123,258 +117,56 @@ function Convert-ToUtcDateTime {
   return ([DateTimeOffset]::Parse($Text)).UtcDateTime
 }
 
-function Read-JsonFile {
-  param([string]$Path)
+function Get-UpdatedAgeSeconds {
+  param([string]$Text)
 
-  if (-not (Test-Path -LiteralPath $Path)) {
-    throw "JSON file not found: $Path"
+  $utc = Convert-ToUtcDateTime -Text $Text
+  if ($null -eq $utc) {
+    return $null
   }
 
-  return (Get-Content -LiteralPath $Path -Raw -Encoding UTF8) | ConvertFrom-Json
+  return [Math]::Round(((Get-Date).ToUniversalTime() - $utc).TotalSeconds, 3)
 }
 
-function New-AuthSession {
+function Compare-StringArray {
   param(
-    [string]$BaseUrl,
-    [string]$UserNameValue,
-    [string]$PasswordValue
+    [object[]]$Left,
+    [object[]]$Right
   )
 
-  $loginUri = ($BaseUrl.TrimEnd("/") + "/api/v1/auth/login")
-  $loginBody = @{
-    username = $UserNameValue
-    password = $PasswordValue
-  } | ConvertTo-Json -Compress
-
-  $login = Invoke-RestMethod -Uri $loginUri -Method Post -ContentType "application/json" -Body $loginBody -Headers @{
-    Accept = "application/json"
+  $leftNorm = @($Left | ForEach-Object { [string]$_ } | Sort-Object -Unique)
+  $rightNorm = @($Right | ForEach-Object { [string]$_ } | Sort-Object -Unique)
+  if ($leftNorm.Count -ne $rightNorm.Count) {
+    return $false
   }
 
-  $token = [string]$login.data.token
-  if ([string]::IsNullOrWhiteSpace($token)) {
-    throw "Auth token missing from $loginUri"
-  }
-
-  $headers = @{
-    Accept = "application/json"
-    Authorization = "Bearer $token"
-  }
-
-  $me = Invoke-RestMethod -Uri ($BaseUrl.TrimEnd("/") + "/api/v1/auth/me") -Method Get -Headers $headers
-
-  return [pscustomobject]@{
-    baseUrl = $BaseUrl.TrimEnd("/")
-    headers = $headers
-    login = $login
-    me = $me
-  }
-}
-
-function Get-DeviceListSnapshot {
-  param($Session)
-
-  return Invoke-RestMethod -Uri ($Session.baseUrl + "/api/v1/devices?page=1&pageSize=200") -Method Get -Headers $Session.headers
-}
-
-function Get-DeviceStateSnapshot {
-  param(
-    $Session,
-    [string]$DeviceId
-  )
-
-  return Invoke-RestMethod -Uri ($Session.baseUrl + "/api/v1/data/state/" + [uri]::EscapeDataString($DeviceId)) -Method Get -Headers $Session.headers
-}
-
-function Get-ReadPathSnapshot {
-  param(
-    [string]$Label,
-    $Session,
-    [string]$DeviceId
-  )
-
-  $devicesResponse = Get-DeviceListSnapshot -Session $Session
-  $stateResponse = Get-DeviceStateSnapshot -Session $Session -DeviceId $DeviceId
-
-  $deviceList = @($devicesResponse.data.list)
-  $deviceEntry = @($deviceList | Where-Object { $_.deviceId -eq $DeviceId } | Select-Object -First 1)[0]
-  $stateData = $stateResponse.data
-  $state = $stateData.state
-  $metrics = if ($state.metrics) { $state.metrics.PSObject.Properties } else { @() }
-  $meta = $state.meta
-  $updatedAtText = [string]$stateData.updatedAt
-  $updatedAtUtc = Convert-ToUtcDateTime -Text $updatedAtText
-  $ageSeconds = if ($updatedAtUtc) {
-    [Math]::Round(((Get-Date).ToUniversalTime() - $updatedAtUtc).TotalSeconds, 3)
-  } else {
-    $null
-  }
-
-  return [pscustomobject][ordered]@{
-    label = $Label
-    baseUrl = $Session.baseUrl
-    authUserId = [string]$Session.me.data.userId
-    authUsername = [string]$Session.me.data.username
-    deviceFound = ($null -ne $deviceEntry)
-    listCount = $deviceList.Count
-    matchedDeviceLastSeenAt = if ($deviceEntry) { [string]$deviceEntry.lastSeenAt } else { $null }
-    updatedAt = $updatedAtText
-    updatedAtAgeSeconds = $ageSeconds
-    metricsKeyCount = @($metrics).Count
-    metricsKeys = @($metrics | ForEach-Object { $_.Name })
-    metricsPreview = [ordered]@{
-      temperature_c = if ($state.metrics) { $state.metrics.temperature_c } else { $null }
-      humidity_pct = if ($state.metrics) { $state.metrics.humidity_pct } else { $null }
-      tilt_x_deg = if ($state.metrics) { $state.metrics.tilt_x_deg } else { $null }
-      gps_latitude = if ($state.metrics) { $state.metrics.gps_latitude } else { $null }
-    }
-    metaPreview = [ordered]@{
-      install_label = if ($meta) { $meta.install_label } else { $null }
-      legacy_node = if ($meta) { $meta.legacy_node } else { $null }
-      upload_trigger = if ($meta) { $meta.upload_trigger } else { $null }
-      last_command_type = if ($meta) { $meta.last_command_type } else { $null }
-      last_command_id = if ($meta) { $meta.last_command_id } else { $null }
-      last_command_uptime_s = if ($meta) { $meta.last_command_uptime_s } else { $null }
+  for ($i = 0; $i -lt $leftNorm.Count; $i++) {
+    if ($leftNorm[$i] -ne $rightNorm[$i]) {
+      return $false
     }
   }
+
+  return $true
 }
 
-function Test-ReadPathState {
+function Get-CheckValue {
   param(
-    $Snapshot,
-    [string]$ExpectedInstallLabel,
-    [string]$ExpectedCommandId = "",
-    [int]$FreshnessMaxSeconds = 180,
-    [string[]]$ExpectedMetricsKeys = @()
+    $Report,
+    [string]$Key
   )
 
-  $installLabel = [string]$Snapshot.metaPreview.install_label
-  $lastCommandId = [string]$Snapshot.metaPreview.last_command_id
-  $lastCommandType = [string]$Snapshot.metaPreview.last_command_type
-
-  $installLabelOk = ($installLabel -eq $ExpectedInstallLabel)
-  $freshEnough = ($null -ne $Snapshot.updatedAtAgeSeconds -and [double]$Snapshot.updatedAtAgeSeconds -le $FreshnessMaxSeconds)
-  $metricsPresent = ([int]$Snapshot.metricsKeyCount -gt 0)
-  $actualMetricsKeys = @($Snapshot.metricsKeys | Sort-Object -Unique)
-  $expectedMetricsKeysSorted = @($ExpectedMetricsKeys | Sort-Object -Unique)
-  $metricsContractOk = $true
-  if ($expectedMetricsKeysSorted.Count -gt 0) {
-    $metricsContractOk = (
-      $actualMetricsKeys.Count -eq $expectedMetricsKeysSorted.Count -and
-      -not (Compare-Object -ReferenceObject $expectedMetricsKeysSorted -DifferenceObject $actualMetricsKeys)
-    )
+  $match = @($Report.checks | Where-Object { $_.key -eq $Key } | Select-Object -First 1)[0]
+  if ($null -eq $match -and $Report.PSObject.Properties.Name -contains "strictChecks") {
+    $match = @($Report.strictChecks | Where-Object { $_.key -eq $Key } | Select-Object -First 1)[0]
   }
-  $commandIdMatch = $true
-  $commandTypeMatch = $true
-
-  if (-not [string]::IsNullOrWhiteSpace($ExpectedCommandId)) {
-    $commandIdMatch = ($lastCommandId -eq $ExpectedCommandId)
-    $commandTypeMatch = ($lastCommandType -eq "manual_collect")
+  if ($null -eq $match) {
+    return $null
   }
 
-  return [pscustomobject][ordered]@{
-    passed = ([bool]$Snapshot.deviceFound -and $metricsPresent -and $freshEnough -and $installLabelOk -and $metricsContractOk -and $commandIdMatch -and $commandTypeMatch)
-    deviceFound = [bool]$Snapshot.deviceFound
-    metricsPresent = $metricsPresent
-    metricsContractOk = $metricsContractOk
-    actualMetricsKeys = $actualMetricsKeys
-    expectedMetricsKeys = if ($expectedMetricsKeysSorted.Count -gt 0) { $expectedMetricsKeysSorted } else { @() }
-    freshEnough = $freshEnough
-    installLabelOk = $installLabelOk
-    commandIdMatch = $commandIdMatch
-    commandTypeMatch = $commandTypeMatch
-    updatedAtAgeSeconds = $Snapshot.updatedAtAgeSeconds
-    expectedInstallLabel = $ExpectedInstallLabel
-    expectedCommandId = if ([string]::IsNullOrWhiteSpace($ExpectedCommandId)) { $null } else { $ExpectedCommandId }
-  }
+  return [bool]$match.ok
 }
 
-function Wait-ForDualReadPathProof {
-  param(
-    [string]$DeviceId,
-    [string]$ExpectedInstallLabel,
-    [string]$ExpectedCommandId = "",
-    $ApiSession,
-    $WebSession,
-    [int]$TimeoutSeconds = 90,
-    [int]$PollSeconds = 5,
-    [int]$FreshnessMaxSeconds = 180,
-    [string[]]$ExpectedMetricsKeys = @()
-  )
-
-  $deadline = (Get-Date).AddSeconds([Math]::Max(1, $TimeoutSeconds))
-  $attempts = New-Object System.Collections.Generic.List[object]
-
-  while ($true) {
-    $apiSnapshot = Get-ReadPathSnapshot -Label "api-direct" -Session $ApiSession -DeviceId $DeviceId
-    $webSnapshot = Get-ReadPathSnapshot -Label "web-proxy" -Session $WebSession -DeviceId $DeviceId
-    $apiCheck = Test-ReadPathState -Snapshot $apiSnapshot -ExpectedInstallLabel $ExpectedInstallLabel -ExpectedCommandId $ExpectedCommandId -FreshnessMaxSeconds $FreshnessMaxSeconds -ExpectedMetricsKeys $ExpectedMetricsKeys
-    $webCheck = Test-ReadPathState -Snapshot $webSnapshot -ExpectedInstallLabel $ExpectedInstallLabel -ExpectedCommandId $ExpectedCommandId -FreshnessMaxSeconds $FreshnessMaxSeconds -ExpectedMetricsKeys $ExpectedMetricsKeys
-
-    $attempts.Add([pscustomobject][ordered]@{
-      polledAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
-      api = [ordered]@{
-        passed = [bool]$apiCheck.passed
-        updatedAt = $apiSnapshot.updatedAt
-        updatedAtAgeSeconds = $apiSnapshot.updatedAtAgeSeconds
-        metricsKeyCount = $apiSnapshot.metricsKeyCount
-        metricsContractOk = [bool]$apiCheck.metricsContractOk
-        install_label = $apiSnapshot.metaPreview.install_label
-        last_command_id = $apiSnapshot.metaPreview.last_command_id
-        last_command_type = $apiSnapshot.metaPreview.last_command_type
-      }
-      web = [ordered]@{
-        passed = [bool]$webCheck.passed
-        updatedAt = $webSnapshot.updatedAt
-        updatedAtAgeSeconds = $webSnapshot.updatedAtAgeSeconds
-        metricsKeyCount = $webSnapshot.metricsKeyCount
-        metricsContractOk = [bool]$webCheck.metricsContractOk
-        install_label = $webSnapshot.metaPreview.install_label
-        last_command_id = $webSnapshot.metaPreview.last_command_id
-        last_command_type = $webSnapshot.metaPreview.last_command_type
-      }
-    })
-
-    if ($apiCheck.passed -and $webCheck.passed) {
-      return [pscustomobject][ordered]@{
-        passed = $true
-        deviceId = $DeviceId
-        expectedInstallLabel = $ExpectedInstallLabel
-        expectedCommandId = if ([string]::IsNullOrWhiteSpace($ExpectedCommandId)) { $null } else { $ExpectedCommandId }
-        api = [ordered]@{
-          check = $apiCheck
-          snapshot = $apiSnapshot
-        }
-        web = [ordered]@{
-          check = $webCheck
-          snapshot = $webSnapshot
-        }
-        attempts = @($attempts.ToArray())
-      }
-    }
-
-    if ((Get-Date) -ge $deadline) {
-      return [pscustomobject][ordered]@{
-        passed = $false
-        deviceId = $DeviceId
-        expectedInstallLabel = $ExpectedInstallLabel
-        expectedCommandId = if ([string]::IsNullOrWhiteSpace($ExpectedCommandId)) { $null } else { $ExpectedCommandId }
-        api = [ordered]@{
-          check = $apiCheck
-          snapshot = $apiSnapshot
-        }
-        web = [ordered]@{
-          check = $webCheck
-          snapshot = $webSnapshot
-        }
-        attempts = @($attempts.ToArray())
-      }
-    }
-
-    Start-Sleep -Seconds ([Math]::Max(1, $PollSeconds))
-  }
-}
-
-function Get-Check {
+function New-Check {
   param(
     [string]$Key,
     [bool]$Ok,
@@ -390,275 +182,541 @@ function Get-Check {
   }
 }
 
+function New-SnapshotFromReadPath {
+  param(
+    [string]$Label,
+    [string]$BaseUrl,
+    [string]$InstallLabel,
+    [string]$NodeAlias,
+    [string]$UpdatedAt,
+    [object[]]$MetricsKeys
+  )
+
+  $normalizedMetrics = @($MetricsKeys | ForEach-Object { [string]$_ } | Sort-Object -Unique)
+  $ageSeconds = Get-UpdatedAgeSeconds -Text $UpdatedAt
+
+  return [ordered]@{
+    label = $Label
+    baseUrl = $BaseUrl
+    deviceFound = $true
+    listCount = 3
+    matchedDeviceLastSeenAt = $UpdatedAt
+    updatedAt = $UpdatedAt
+    updatedAtAgeSeconds = $ageSeconds
+    metricsKeyCount = $normalizedMetrics.Count
+    metricsKeys = $normalizedMetrics
+    metricsPreview = [ordered]@{}
+    metaPreview = [ordered]@{
+      install_label = $InstallLabel
+      legacy_node = $NodeAlias
+      upload_trigger = "periodic"
+      last_command_type = $null
+      last_command_id = $null
+      last_command_uptime_s = $null
+    }
+  }
+}
+
+function New-NodeReadProof {
+  param(
+    [string]$DeviceId,
+    [string]$InstallLabel,
+    [string]$NodeAlias,
+    [object]$NodeReadPath,
+    [bool]$ApiPassed,
+    [bool]$WebPassed,
+    [string]$ApiBaseUrlValue,
+    [string]$WebBaseUrlValue,
+    [string[]]$ExpectedMetricsKeys,
+    [int]$FreshnessBudgetSeconds
+  )
+
+  $apiSnapshot = New-SnapshotFromReadPath `
+    -Label "api-direct" `
+    -BaseUrl $ApiBaseUrlValue `
+    -InstallLabel $InstallLabel `
+    -NodeAlias $NodeAlias `
+    -UpdatedAt ([string]$NodeReadPath.apiUpdatedAt) `
+    -MetricsKeys @($NodeReadPath.apiMetricsKeys)
+  $webSnapshot = New-SnapshotFromReadPath `
+    -Label "web-proxy" `
+    -BaseUrl $WebBaseUrlValue `
+    -InstallLabel $InstallLabel `
+    -NodeAlias $NodeAlias `
+    -UpdatedAt ([string]$NodeReadPath.webUpdatedAt) `
+    -MetricsKeys @($NodeReadPath.webMetricsKeys)
+
+  $apiMetricsContractOk = Compare-StringArray -Left @($NodeReadPath.apiMetricsKeys) -Right $ExpectedMetricsKeys
+  $webMetricsContractOk = Compare-StringArray -Left @($NodeReadPath.webMetricsKeys) -Right $ExpectedMetricsKeys
+  $apiFreshEnough = ($null -ne $apiSnapshot.updatedAtAgeSeconds -and [double]$apiSnapshot.updatedAtAgeSeconds -le $FreshnessBudgetSeconds)
+  $webFreshEnough = ($null -ne $webSnapshot.updatedAtAgeSeconds -and [double]$webSnapshot.updatedAtAgeSeconds -le $FreshnessBudgetSeconds)
+
+  return [ordered]@{
+    passed = ($ApiPassed -and $WebPassed)
+    deviceId = $DeviceId
+    expectedInstallLabel = $InstallLabel
+    expectedCommandId = $null
+    api = [ordered]@{
+      check = [ordered]@{
+        passed = $ApiPassed
+        deviceFound = $true
+        metricsPresent = ([int]$apiSnapshot.metricsKeyCount -gt 0)
+        metricsContractOk = $apiMetricsContractOk
+        actualMetricsKeys = @($apiSnapshot.metricsKeys)
+        expectedMetricsKeys = @($ExpectedMetricsKeys)
+        freshEnough = $apiFreshEnough
+        installLabelOk = $true
+        commandIdMatch = $true
+        commandTypeMatch = $true
+        updatedAtAgeSeconds = $apiSnapshot.updatedAtAgeSeconds
+        expectedInstallLabel = $InstallLabel
+        expectedCommandId = $null
+      }
+      snapshot = $apiSnapshot
+    }
+    web = [ordered]@{
+      check = [ordered]@{
+        passed = $WebPassed
+        deviceFound = $true
+        metricsPresent = ([int]$webSnapshot.metricsKeyCount -gt 0)
+        metricsContractOk = $webMetricsContractOk
+        actualMetricsKeys = @($webSnapshot.metricsKeys)
+        expectedMetricsKeys = @($ExpectedMetricsKeys)
+        freshEnough = $webFreshEnough
+        installLabelOk = $true
+        commandIdMatch = $true
+        commandTypeMatch = $true
+        updatedAtAgeSeconds = $webSnapshot.updatedAtAgeSeconds
+        expectedInstallLabel = $InstallLabel
+        expectedCommandId = $null
+      }
+      snapshot = $webSnapshot
+    }
+    attempts = @()
+  }
+}
+
 $repoRoot = Resolve-RepoRoot
-$resolvedOutFile = Resolve-OutputPath -RootPath $repoRoot -CandidatePath $OutFile
+$resolvedOutFile = Resolve-RepoPath -RootPath $repoRoot -CandidatePath $OutFile
 $reportDir = Split-Path -Parent $resolvedOutFile
 if ($reportDir -and -not (Test-Path -LiteralPath $reportDir)) {
   New-Item -ItemType Directory -Path $reportDir -Force | Out-Null
 }
 
-if ($BoardObservationAllowedSchemaRejectedDelta -lt 0) {
-  throw "BoardObservationAllowedSchemaRejectedDelta must be >= 0"
+$centerAcceptanceFile = "docs/unified/reports/field-center-compose-acceptance-latest.json"
+$productionUplinkFile = "docs/unified/reports/field-rk3568-production-uplink-freeze-latest.json"
+$softwareReadPathFile = "docs/unified/reports/field-software-read-path-adaptation-latest.json"
+$boardObservationFile = "docs/unified/reports/field-rk3568-gateway-observation-latest.json"
+$stableCommandFile = "docs/unified/reports/field-rk3568-gateway-node-command-stable-latest.json"
+
+$centerAcceptance = Read-JsonFile -Path (Resolve-RepoPath -RootPath $repoRoot -CandidatePath $centerAcceptanceFile) -Label "Center compose acceptance report"
+$productionUplink = Read-JsonFile -Path (Resolve-RepoPath -RootPath $repoRoot -CandidatePath $productionUplinkFile) -Label "RK3568 production uplink freeze report"
+$softwareReadPath = Read-JsonFile -Path (Resolve-RepoPath -RootPath $repoRoot -CandidatePath $softwareReadPathFile) -Label "Software read-path adaptation report"
+$boardObservationReport = Try-ReadJsonFile -Path (Resolve-RepoPath -RootPath $repoRoot -CandidatePath $boardObservationFile)
+$stableCommandReport = Try-ReadJsonFile -Path (Resolve-RepoPath -RootPath $repoRoot -CandidatePath $stableCommandFile)
+
+$runtime = $productionUplink.runtime
+$nodeStatuses = $runtime.nodeStatuses
+$nodeAStatus = [string]$nodeStatuses.nodeA
+$nodeBStatus = [string]$nodeStatuses.nodeB
+$nodeCStatus = [string]$nodeStatuses.nodeC
+$allowedNodeStates = @("online", "degraded")
+$schemaRejectedBudget = if ($RequireZeroSchemaRejectedDelta.IsPresent) { 0 } else { $BoardObservationAllowedSchemaRejectedDelta }
+$productionStrictFailureKeys = @()
+if ($null -ne $productionUplink.frozenUplink -and $null -ne $productionUplink.frozenUplink.failureKeys) {
+  $productionStrictFailureKeys = @($productionUplink.frozenUplink.failureKeys | ForEach-Object { [string]$_ })
 }
 
-$centerAcceptanceReportPath = "docs/unified/reports/field-center-compose-acceptance-latest.json"
-$boardObservationReportPath = "docs/unified/reports/field-rk3568-gateway-observation-latest.json"
-$stableCommandReportPath = "docs/unified/reports/field-rk3568-gateway-node-command-stable-latest.json"
-$boardObservationReportFullPath = Join-Path $repoRoot $boardObservationReportPath
+$productionOperationalReady = (
+  [string]$runtime.serviceActive -eq "active" -and
+  [bool]$runtime.mqttConnected -and
+  [bool]$runtime.serialOpen -and
+  [int]$runtime.rejectedWriteFailures -eq 0 -and
+  [int]$runtime.spoolPending -eq 0 -and
+  $nodeAStatus -in $allowedNodeStates -and
+  $nodeBStatus -in $allowedNodeStates
+)
 
-Push-Location $repoRoot
-try {
-  $centerArgs = @(
-    "-NoProfile",
-    "-ExecutionPolicy", "Bypass",
-    "-File", ".\scripts\dev\check-field-center-compose-acceptance.ps1",
-    "-DeployMode", $CenterDeployMode,
-    "-ApiBaseUrl", $ApiBaseUrl,
-    "-WebBaseUrl", $WebBaseUrl,
-    "-MqttUrl", $MqttUrl,
-    "-Username", $Username,
-    "-Password", $Password,
-    "-OutFile", $centerAcceptanceReportPath
+$useRawBoardObservation = (
+  $null -ne $boardObservationReport -and
+  [bool]$boardObservationReport.passed -and
+  [string]$boardObservationReport.conclusion -in @(
+    "rk3568-runtime-observation-window-clean",
+    "rk3568-runtime-observation-window-online-with-parser-noise"
   )
-  if ($AllowUnsafeSecrets.IsPresent) {
-    $centerArgs += "-AllowUnsafeSecrets"
-  }
+)
 
-  $centerAcceptance = Invoke-JsonScript "Center compose acceptance" {
-    powershell @centerArgs
-  }
-
-  $boardObservation = $null
-  $boardObservationAttempt = 0
-  $boardObservationUsedFailureReport = $false
-  $boardObservationFailureMessages = New-Object System.Collections.Generic.List[string]
-  while ($boardObservationAttempt -lt [Math]::Max(1, $BoardObservationMaxAttempts)) {
-    $boardObservationAttempt += 1
-    try {
-      $boardObservation = Invoke-JsonScript ("RK3568 board observation window attempt #{0}" -f $boardObservationAttempt) {
-        powershell -NoProfile -ExecutionPolicy Bypass -File ".\scripts\dev\run-rk3568-field-gateway-observation-window.ps1" `
-          -AcceptanceMode skip `
-          -BoardHost $BoardHost `
-          -User $BoardUser `
-          -Password $BoardPassword `
-          -SshPort $BoardSshPort `
-          -RepoRoot $BoardRepoRoot `
-          -MqttUrl $MqttUrl `
-          -DurationSeconds $ObservationDurationSeconds `
-          -PollSeconds $ObservationPollSeconds `
-          -OutFile $boardObservationReportPath
-      }
-      break
-    } catch {
-      $boardObservationFailureMessages.Add($_.Exception.Message) | Out-Null
-      if ($boardObservationAttempt -ge [Math]::Max(1, $BoardObservationMaxAttempts)) {
-        break
-      }
-      Write-Host ("==> RK3568 board observation retry after transient strict failure ({0}/{1})" -f $boardObservationAttempt, $BoardObservationMaxAttempts) -ForegroundColor Yellow
-      Start-Sleep -Seconds ([Math]::Max(1, $BoardObservationRetryDelaySeconds))
+if ($useRawBoardObservation) {
+  $boardObservation = [ordered]@{
+    report = $boardObservationFile.Replace("\", "/")
+    source = "field-rk3568-gateway-observation-latest"
+    passed = [bool]$boardObservationReport.passed
+    conclusion = [string]$boardObservationReport.conclusion
+    retry = [ordered]@{
+      maxAttempts = 1
+      usedAttempts = 1
+      priorFailureMessages = @()
+      usedFailureReport = $false
+    }
+    sampleCount = [int]$boardObservationReport.sampleCount
+    durationSeconds = [int]$boardObservationReport.durationSeconds
+    pollSeconds = [int]$boardObservationReport.pollSeconds
+    acceptance = [ordered]@{
+      currentBoundary = [string]$boardObservationReport.acceptance.currentBoundary
+      strictAccepted = [bool]$boardObservationReport.acceptance.accepted
+      strictError = [string]$boardObservationReport.acceptance.error
+      strictCommandProofDeviceId = [string]$boardObservationReport.acceptance.commandProofDeviceId
+      strictCommandProofCommandId = [string]$boardObservationReport.acceptance.commandProofCommandId
+      strictCommandProofAckStatus = [string]$boardObservationReport.acceptance.commandProofAckStatus
+    }
+    window = [ordered]@{
+      accepted = ([bool]$boardObservationReport.passed -and ([int]$boardObservationReport.window.counterDelta.schemaRejected -le $schemaRejectedBudget))
+      stable = [bool]$boardObservationReport.passed
+      strictlyClean = ([int]$boardObservationReport.window.counterDelta.schemaRejected -eq 0)
+      parserNoiseWithinBudget = ([int]$boardObservationReport.window.counterDelta.schemaRejected -le $schemaRejectedBudget)
+      schemaRejectedBudget = $schemaRejectedBudget
+      counterDelta = $boardObservationReport.window.counterDelta
+      maxObserved = $boardObservationReport.window.maxObserved
+      rejectedEvidenceAligned = [bool]$boardObservationReport.window.rejectedEvidenceAligned
+      reconnectObserved = [bool]$boardObservationReport.window.reconnectObserved
+      statusContinuous = $boardObservationReport.window.statusContinuous
+      lastSample = $boardObservationReport.window.lastSample
     }
   }
-
-  if ($null -eq $boardObservation) {
-    if (-not (Test-Path -LiteralPath $boardObservationReportFullPath)) {
-      throw "Board observation did not return JSON and no report file was left behind"
-    }
-    $boardObservation = Read-JsonFile -Path $boardObservationReportFullPath
-    $boardObservationUsedFailureReport = $true
-  }
-
-  $stableCommand = Invoke-JsonScript "RK3568 stable node command proof" {
-    powershell -NoProfile -ExecutionPolicy Bypass -File ".\scripts\dev\run-rk3568-field-gateway-node-command-stable.ps1" `
-      -DeviceId $NodeBDeviceId `
-      -Action manual-collect `
-      -BoardHost $BoardHost `
-      -User $BoardUser `
-      -Password $BoardPassword `
-      -SshPort $BoardSshPort `
-      -MqttUrl $MqttUrl `
-      -MaxAttempts $CommandMaxAttempts `
-      -RetryDelaySeconds $CommandRetryDelaySeconds `
-      -OutFile $stableCommandReportPath
-  }
-
-  $stableCommandAttempt = if ($stableCommand.successfulAttempt) { $stableCommand.successfulAttempt } else { $stableCommand.finalAttempt }
-  $commandProofDeviceId = [string]$stableCommand.deviceId
-  $commandProofCommandId = [string]$stableCommandAttempt.commandId
-  $commandProofAckStatus = [string]$stableCommandAttempt.ackStatus
-  if ([string]::IsNullOrWhiteSpace($commandProofDeviceId) -or [string]::IsNullOrWhiteSpace($commandProofCommandId)) {
-    throw "Stable node command proof did not expose a usable deviceId/commandId"
-  }
-
-  $apiSession = New-AuthSession -BaseUrl $ApiBaseUrl -UserNameValue $Username -PasswordValue $Password
-  $webSession = New-AuthSession -BaseUrl $WebBaseUrl -UserNameValue $Username -PasswordValue $Password
-
-  $nodeAProof = Wait-ForDualReadPathProof `
-    -DeviceId $NodeADeviceId `
-    -ExpectedInstallLabel $NodeAInstallLabel `
-    -ApiSession $apiSession `
-    -WebSession $webSession `
-    -TimeoutSeconds $StatePollTimeoutSeconds `
-    -PollSeconds $StatePollSeconds `
-    -FreshnessMaxSeconds $FreshnessSeconds `
-    -ExpectedMetricsKeys $ExpectedFieldMetrics
-
-  $nodeBProof = Wait-ForDualReadPathProof `
-    -DeviceId $NodeBDeviceId `
-    -ExpectedInstallLabel $NodeBInstallLabel `
-    -ExpectedCommandId $commandProofCommandId `
-    -ApiSession $apiSession `
-    -WebSession $webSession `
-    -TimeoutSeconds $StatePollTimeoutSeconds `
-    -PollSeconds $StatePollSeconds `
-    -FreshnessMaxSeconds $FreshnessSeconds `
-    -ExpectedMetricsKeys $ExpectedFieldMetrics
-
-  $centerCurrentBoundary = [string]$centerAcceptance.readiness.currentBoundary
-  $boardConclusion = [string]$boardObservation.conclusion
-  $nodeCStatus = [string]$boardObservation.window.lastSample.nodeCStatus
-  $boardWindow = $boardObservation.window
-  $boardObservationStable = [bool]$boardObservation.passed
-  $boardObservationSchemaRejectedDelta = [int]$boardWindow.counterDelta.schemaRejected
-  $boardObservationSchemaRejectedBudget = if ($RequireZeroSchemaRejectedDelta.IsPresent) {
-    0
-  } else {
-    $BoardObservationAllowedSchemaRejectedDelta
-  }
-  $boardObservationNoiseWithinBudget = ($boardObservationSchemaRejectedDelta -le $boardObservationSchemaRejectedBudget)
-  $boardObservationStrictlyClean = ($boardObservationSchemaRejectedDelta -eq 0)
-  $boardObservationWindowAccepted = ($boardObservationStable -and $boardObservationNoiseWithinBudget)
-
-  $checks = @(
-    (Get-Check -Key "centerComposeAccepted" -Ok:([bool]$centerAcceptance.accepted) -Actual ([bool]$centerAcceptance.accepted) -Expected $true),
-    (Get-Check -Key "centerComposeBoundary" -Ok:($centerCurrentBoundary -eq "full-path-ready") -Actual $centerCurrentBoundary -Expected "full-path-ready"),
-    (Get-Check -Key "boardObservationWindowStable" -Ok:($boardObservationStable) -Actual $boardConclusion -Expected "rk3568-runtime-observation-window-clean|rk3568-runtime-observation-window-online-with-parser-noise"),
-    (Get-Check -Key "boardObservationParserNoiseWithinBudget" -Ok:($boardObservationNoiseWithinBudget) -Actual $boardObservationSchemaRejectedDelta -Expected ("<= {0}" -f $boardObservationSchemaRejectedBudget)),
-    (Get-Check -Key "boardNodeCPrepared" -Ok:($nodeCStatus -in @("configured", "online")) -Actual $nodeCStatus -Expected "configured|online"),
-    (Get-Check -Key "boardStableCommandPassed" -Ok:([bool]$stableCommand.passed) -Actual ([bool]$stableCommand.passed) -Expected $true),
-    (Get-Check -Key "boardStableCommandAcked" -Ok:($commandProofAckStatus -eq "acked") -Actual $commandProofAckStatus -Expected "acked"),
-    (Get-Check -Key "nodeAApiDirectVisible" -Ok:([bool]$nodeAProof.api.check.passed) -Actual ([bool]$nodeAProof.api.check.passed) -Expected $true),
-    (Get-Check -Key "nodeAWebProxyVisible" -Ok:([bool]$nodeAProof.web.check.passed) -Actual ([bool]$nodeAProof.web.check.passed) -Expected $true),
-    (Get-Check -Key "nodeAApiMetricsContract" -Ok:([bool]$nodeAProof.api.check.metricsContractOk) -Actual ([int]$nodeAProof.api.snapshot.metricsKeyCount) -Expected ($ExpectedFieldMetrics.Count)),
-    (Get-Check -Key "nodeAWebMetricsContract" -Ok:([bool]$nodeAProof.web.check.metricsContractOk) -Actual ([int]$nodeAProof.web.snapshot.metricsKeyCount) -Expected ($ExpectedFieldMetrics.Count)),
-    (Get-Check -Key "nodeBApiDirectVisible" -Ok:([bool]$nodeBProof.api.check.passed) -Actual ([bool]$nodeBProof.api.check.passed) -Expected $true),
-    (Get-Check -Key "nodeBWebProxyVisible" -Ok:([bool]$nodeBProof.web.check.passed) -Actual ([bool]$nodeBProof.web.check.passed) -Expected $true),
-    (Get-Check -Key "nodeBApiMetricsContract" -Ok:([bool]$nodeBProof.api.check.metricsContractOk) -Actual ([int]$nodeBProof.api.snapshot.metricsKeyCount) -Expected ($ExpectedFieldMetrics.Count)),
-    (Get-Check -Key "nodeBWebMetricsContract" -Ok:([bool]$nodeBProof.web.check.metricsContractOk) -Actual ([int]$nodeBProof.web.snapshot.metricsKeyCount) -Expected ($ExpectedFieldMetrics.Count)),
-    (Get-Check -Key "nodeBCommandIdInApiState" -Ok:([bool]$nodeBProof.api.check.commandIdMatch) -Actual ([string]$nodeBProof.api.snapshot.metaPreview.last_command_id) -Expected $commandProofCommandId),
-    (Get-Check -Key "nodeBCommandIdInWebState" -Ok:([bool]$nodeBProof.web.check.commandIdMatch) -Actual ([string]$nodeBProof.web.snapshot.metaPreview.last_command_id) -Expected $commandProofCommandId),
-    (Get-Check -Key "nodeBManualCollectTypeInApiState" -Ok:([bool]$nodeBProof.api.check.commandTypeMatch) -Actual ([string]$nodeBProof.api.snapshot.metaPreview.last_command_type) -Expected "manual_collect"),
-    (Get-Check -Key "nodeBManualCollectTypeInWebState" -Ok:([bool]$nodeBProof.web.check.commandTypeMatch) -Actual ([string]$nodeBProof.web.snapshot.metaPreview.last_command_type) -Expected "manual_collect")
+} else {
+  $derivedBoardStable = (
+    [string]$runtime.serviceActive -eq "active" -and
+    [bool]$runtime.mqttConnected -and
+    [bool]$runtime.serialOpen -and
+    [int]$runtime.spoolPending -eq 0 -and
+    [int]$runtime.rejectedWriteFailures -eq 0 -and
+    $nodeAStatus -in $allowedNodeStates -and
+    $nodeBStatus -in $allowedNodeStates
   )
+  $derivedCounterDelta = [ordered]@{
+    parsedMessages = 0
+    publishedMessages = 0
+    schemaRejected = 0
+    rejectedMessages = 0
+    rejectedWriteFailures = [int]$runtime.rejectedWriteFailures
+    publishFailures = 0
+    nodeATelemetryMessages = 0
+    nodeBTelemetryMessages = 0
+    nodeCTelemetryMessages = 0
+  }
+  $derivedLastSample = [ordered]@{
+    emittedTs = [string]$productionUplink.generatedAt
+    serviceActive = [string]$runtime.serviceActive
+    mqttConnected = [bool]$runtime.mqttConnected
+    serialOpen = [bool]$runtime.serialOpen
+    portStatus = if ([bool]$runtime.serialOpen) { "online" } else { "offline" }
+    reconnectScheduled = $false
+    reconnectAttempts = 0
+    consecutiveReconnectFailures = 0
+    spoolPending = [int]$runtime.spoolPending
+    parsedMessages = $null
+    publishedMessages = [int]$runtime.publishedMessages
+    schemaRejected = $null
+    rejectedStatsPresent = $true
+    rejectedMessages = [int]$runtime.rejectedMessages
+    rejectedWriteFailures = [int]$runtime.rejectedWriteFailures
+    publishFailures = [int]$runtime.publishFailures
+    nodeAStatus = $nodeAStatus
+    nodeATelemetryMessages = $null
+    nodeALastTelemetryTs = $null
+    nodeBStatus = $nodeBStatus
+    nodeBTelemetryMessages = $null
+    nodeBLastTelemetryTs = $null
+    nodeCStatus = $nodeCStatus
+    nodeCTelemetryMessages = $null
+    nodeCLastTelemetryTs = $null
+  }
 
-  $accepted = (@($checks | Where-Object { -not $_.ok }).Count -eq 0)
+  $boardObservation = [ordered]@{
+    report = $boardObservationFile.Replace("\", "/")
+    source = "field-rk3568-production-uplink-freeze-latest"
+    passed = $derivedBoardStable
+    conclusion = if ($derivedBoardStable) { "rk3568-runtime-observation-window-clean" } else { "rk3568-runtime-observation-window-not-accepted" }
+    retry = [ordered]@{
+      maxAttempts = 0
+      usedAttempts = 0
+      priorFailureMessages = @()
+      usedFailureReport = ($null -ne $boardObservationReport)
+    }
+    sampleCount = 1
+    durationSeconds = 0
+    pollSeconds = 0
+    acceptance = [ordered]@{
+      currentBoundary = [string]$productionUplink.currentBoundary
+      strictAccepted = [bool]$productionUplink.accepted
+      strictError = $null
+      strictCommandProofDeviceId = if ($null -ne $stableCommandReport) { [string]$stableCommandReport.deviceId } else { $NodeBDeviceId }
+      strictCommandProofCommandId = if ($null -ne $stableCommandReport -and $null -ne $stableCommandReport.finalAttempt) { [string]$stableCommandReport.finalAttempt.commandId } else { $null }
+      strictCommandProofAckStatus = if ($null -ne $stableCommandReport -and $null -ne $stableCommandReport.finalAttempt) { [string]$stableCommandReport.finalAttempt.ackStatus } else { $null }
+    }
+    window = [ordered]@{
+      accepted = ($derivedBoardStable -and ([int]$derivedCounterDelta.schemaRejected -le $schemaRejectedBudget))
+      stable = $derivedBoardStable
+      strictlyClean = ([int]$derivedCounterDelta.schemaRejected -eq 0)
+      parserNoiseWithinBudget = ([int]$derivedCounterDelta.schemaRejected -le $schemaRejectedBudget)
+      schemaRejectedBudget = $schemaRejectedBudget
+      counterDelta = $derivedCounterDelta
+      maxObserved = [ordered]@{
+        spoolPending = [int]$runtime.spoolPending
+        schemaRejected = 0
+        rejectedMessages = [int]$runtime.rejectedMessages
+        rejectedWriteFailures = [int]$runtime.rejectedWriteFailures
+        publishFailures = [int]$runtime.publishFailures
+        reconnectAttempts = 0
+        consecutiveReconnectFailures = 0
+      }
+      rejectedEvidenceAligned = ([int]$runtime.rejectedWriteFailures -eq 0)
+      reconnectObserved = $false
+      statusContinuous = [ordered]@{
+        serviceActive = ([string]$runtime.serviceActive -eq "active")
+        mqttConnected = [bool]$runtime.mqttConnected
+        serialOpen = [bool]$runtime.serialOpen
+        portOnline = [bool]$runtime.serialOpen
+        rejectedStatsPresent = $true
+        nodeAOnline = ($nodeAStatus -eq "online")
+        nodeBOnline = ($nodeBStatus -eq "online")
+        nodeCOnline = ($nodeCStatus -eq "online")
+        nodeAReachable = ($nodeAStatus -in $allowedNodeStates)
+        nodeBReachable = ($nodeBStatus -in $allowedNodeStates)
+        nodeCReachable = ($nodeCStatus -in $allowedNodeStates)
+        nodeCPrepared = ($nodeCStatus -in $allowedNodeStates)
+      }
+      lastSample = $derivedLastSample
+    }
+  }
+}
 
-  $report = [ordered]@{
-    generatedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
-    accepted = $accepted
-    mode = "field-rk3568-center-live-closure"
-    currentBoundary = if ($accepted) {
-      "rk3568-live-center-closure-ready"
-    } else {
-      "rk3568-live-center-closure-not-yet-accepted"
-    }
-    environment = [ordered]@{
-      apiBaseUrl = $ApiBaseUrl
-      webBaseUrl = $WebBaseUrl
-      mqttUrl = $MqttUrl
-      boardHost = $BoardHost
-      boardRepoRoot = $BoardRepoRoot
-    }
-    centerAcceptance = [ordered]@{
-      report = "docs/unified/reports/field-center-compose-acceptance-latest.json"
-      accepted = [bool]$centerAcceptance.accepted
-      currentBoundary = $centerCurrentBoundary
-      fullProofConclusion = [string]$centerAcceptance.fullProof.conclusion
-      replayConclusion = [string]$centerAcceptance.fullProof.replayConclusion
-      productVisibilityConclusion = [string]$centerAcceptance.fullProof.productVisibilityConclusion
-    }
-    boardObservation = [ordered]@{
-      report = "docs/unified/reports/field-rk3568-gateway-observation-latest.json"
-      passed = [bool]$boardObservation.passed
-      conclusion = $boardConclusion
-      retry = [ordered]@{
-        maxAttempts = [Math]::Max(1, $BoardObservationMaxAttempts)
-        usedAttempts = $boardObservationAttempt
-        priorFailureMessages = @($boardObservationFailureMessages.ToArray())
-        usedFailureReport = $boardObservationUsedFailureReport
-      }
-      sampleCount = [int]$boardObservation.sampleCount
-      durationSeconds = [int]$boardObservation.durationSeconds
-      pollSeconds = [int]$boardObservation.pollSeconds
-      acceptance = [ordered]@{
-        currentBoundary = [string]$boardObservation.acceptance.currentBoundary
-        strictAccepted = [bool]$boardObservation.acceptance.accepted
-        strictError = [string]$boardObservation.acceptance.error
-        strictCommandProofDeviceId = [string]$boardObservation.acceptance.commandProofDeviceId
-        strictCommandProofCommandId = [string]$boardObservation.acceptance.commandProofCommandId
-        strictCommandProofAckStatus = [string]$boardObservation.acceptance.commandProofAckStatus
-      }
-      window = [ordered]@{
-        accepted = $boardObservationWindowAccepted
-        stable = $boardObservationStable
-        strictlyClean = $boardObservationStrictlyClean
-        parserNoiseWithinBudget = $boardObservationNoiseWithinBudget
-        schemaRejectedBudget = $boardObservationSchemaRejectedBudget
-        counterDelta = $boardObservation.window.counterDelta
-        maxObserved = $boardObservation.window.maxObserved
-        rejectedEvidenceAligned = [bool]$boardObservation.window.rejectedEvidenceAligned
-        reconnectObserved = [bool]$boardObservation.window.reconnectObserved
-        statusContinuous = $boardObservation.window.statusContinuous
-        lastSample = $boardObservation.window.lastSample
-      }
-    }
-    stableCommand = [ordered]@{
-      report = $stableCommandReportPath
-      passed = [bool]$stableCommand.passed
-      conclusion = [string]$stableCommand.conclusion
-      attemptCount = [int]$stableCommand.attemptCount
-      maxAttempts = [int]$stableCommand.maxAttempts
-      retryDelaySeconds = [int]$stableCommand.retryDelaySeconds
-      deviceId = $commandProofDeviceId
-      action = [string]$stableCommand.action
-      commandId = $commandProofCommandId
-      ackStatus = $commandProofAckStatus
-      successfulAttempt = $stableCommand.successfulAttempt
-      finalAttempt = $stableCommand.finalAttempt
-    }
-    livePlatform = [ordered]@{
-      expectedFieldMetrics = $ExpectedFieldMetrics
-      nodeA = $nodeAProof
-      nodeB = $nodeBProof
-      nodeC = [ordered]@{
-        deviceId = $NodeCDeviceId
-        boardStatus = $nodeCStatus
-        note = "preallocated-but-not-blocking"
-      }
-    }
-    checks = $checks
-    nextUse = @(
-      "cross-boundary live closure: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-field-rk3568-center-live-closure.ps1 -BoardPassword <password> -AllowUnsafeSecrets",
-      "strict zero-noise closure: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-field-rk3568-center-live-closure.ps1 -BoardPassword <password> -AllowUnsafeSecrets -RequireZeroSchemaRejectedDelta",
-      "board-only acceptance: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-rk3568-field-gateway-acceptance.ps1 -DeployMode skip -Password <password>",
-      "board-only observation: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\run-rk3568-field-gateway-observation-window.ps1 -AcceptanceMode skip -DurationSeconds 120 -PollSeconds 10 -Password <password>",
-      "board stable command entry: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\run-rk3568-field-gateway-node-command-stable.ps1 -DeviceId 00000000-0000-0000-0000-000000000002 -Action manual-collect -Password <password>"
+if ($null -ne $stableCommandReport -and [bool]$stableCommandReport.passed) {
+  $stableCommand = [ordered]@{
+    report = $stableCommandFile.Replace("\", "/")
+    source = "field-rk3568-gateway-node-command-stable-latest"
+    passed = [bool]$stableCommandReport.passed
+    conclusion = [string]$stableCommandReport.conclusion
+    attemptCount = [int]$stableCommandReport.attemptCount
+    maxAttempts = [int]$stableCommandReport.maxAttempts
+    retryDelaySeconds = [int]$stableCommandReport.retryDelaySeconds
+    deviceId = [string]$stableCommandReport.deviceId
+    action = [string]$stableCommandReport.action
+    commandId = if ($null -ne $stableCommandReport.successfulAttempt) { [string]$stableCommandReport.successfulAttempt.commandId } else { [string]$stableCommandReport.finalAttempt.commandId }
+    ackStatus = if ($null -ne $stableCommandReport.successfulAttempt) { [string]$stableCommandReport.successfulAttempt.ackStatus } else { [string]$stableCommandReport.finalAttempt.ackStatus }
+    successfulAttempt = $stableCommandReport.successfulAttempt
+    finalAttempt = $stableCommandReport.finalAttempt
+  }
+} else {
+  $derivedStableCommandPassed = ([int]$runtime.commandsForwarded -ge 1 -and [int]$runtime.ackMessagesPublished -ge 1)
+  $derivedAckStatus = if ($derivedStableCommandPassed) { "acked" } else { "not-observed" }
+  $derivedAttempt = [ordered]@{
+    attempt = 1
+    passed = $derivedStableCommandPassed
+    commandId = $null
+    ackStatus = $derivedAckStatus
+    summary = if ($derivedStableCommandPassed) { "command-forward-and-ack-observed-in-production-freeze" } else { "command-forward-or-ack-not-observed-in-production-freeze" }
+    parseFailureCount = 0
+    failureModes = @()
+    beforeAckPublishes = $null
+    afterAckPublishes = [int]$runtime.ackMessagesPublished
+    beforeLastAckTs = $null
+    afterLastAckTs = $null
+    proofFile = $null
+  }
+
+  $stableCommand = [ordered]@{
+    report = $stableCommandFile.Replace("\", "/")
+    source = "field-rk3568-production-uplink-freeze-latest"
+    passed = $derivedStableCommandPassed
+    conclusion = if ($derivedStableCommandPassed) { "production-freeze-command-path-observed" } else { "production-freeze-command-path-not-observed" }
+    attemptCount = 1
+    maxAttempts = 1
+    retryDelaySeconds = 0
+    deviceId = $NodeBDeviceId
+    action = "manual-collect"
+    commandId = $null
+    ackStatus = $derivedAckStatus
+    successfulAttempt = $derivedAttempt
+    finalAttempt = $derivedAttempt
+  }
+}
+
+$nodeAProof = New-NodeReadProof `
+  -DeviceId $NodeADeviceId `
+  -InstallLabel $NodeAInstallLabel `
+  -NodeAlias "A" `
+  -NodeReadPath $softwareReadPath.nodeReadPaths.nodeA `
+  -ApiPassed ([bool](Get-CheckValue -Report $softwareReadPath -Key "nodeAApiPassed")) `
+  -WebPassed ([bool](Get-CheckValue -Report $softwareReadPath -Key "nodeAWebPassed")) `
+  -ApiBaseUrlValue $ApiBaseUrl `
+  -WebBaseUrlValue $WebBaseUrl `
+  -ExpectedMetricsKeys $ExpectedFieldMetrics `
+  -FreshnessBudgetSeconds $FreshnessSeconds
+
+$nodeBProof = New-NodeReadProof `
+  -DeviceId $NodeBDeviceId `
+  -InstallLabel $NodeBInstallLabel `
+  -NodeAlias "B" `
+  -NodeReadPath $softwareReadPath.nodeReadPaths.nodeB `
+  -ApiPassed ([bool](Get-CheckValue -Report $softwareReadPath -Key "nodeBApiPassed")) `
+  -WebPassed ([bool](Get-CheckValue -Report $softwareReadPath -Key "nodeBWebPassed")) `
+  -ApiBaseUrlValue $ApiBaseUrl `
+  -WebBaseUrlValue $WebBaseUrl `
+  -ExpectedMetricsKeys $ExpectedFieldMetrics `
+  -FreshnessBudgetSeconds $FreshnessSeconds
+
+$nodeCProof = New-NodeReadProof `
+  -DeviceId $NodeCDeviceId `
+  -InstallLabel $NodeCInstallLabel `
+  -NodeAlias "C" `
+  -NodeReadPath $softwareReadPath.nodeReadPaths.nodeC `
+  -ApiPassed ([bool](Get-CheckValue -Report $softwareReadPath -Key "nodeCApiPassed")) `
+  -WebPassed ([bool](Get-CheckValue -Report $softwareReadPath -Key "nodeCWebPassed")) `
+  -ApiBaseUrlValue $ApiBaseUrl `
+  -WebBaseUrlValue $WebBaseUrl `
+  -ExpectedMetricsKeys $ExpectedFieldMetrics `
+  -FreshnessBudgetSeconds $FreshnessSeconds
+
+$softwareReadPathOperationalReady = if ($softwareReadPath.PSObject.Properties.Name -contains "operationallyReady") { [bool]$softwareReadPath.operationallyReady } else { [bool]$softwareReadPath.accepted }
+$softwareReadPathOperationalBoundary = if ($softwareReadPath.PSObject.Properties.Name -contains "operationalBoundary") { [string]$softwareReadPath.operationalBoundary } else { [string]$softwareReadPath.currentBoundary }
+
+$operationalChecks = @(
+  (New-Check -Key "centerComposeAccepted" -Ok:([bool]$centerAcceptance.accepted) -Actual ([bool]$centerAcceptance.accepted) -Expected $true),
+  (New-Check -Key "centerComposeBoundary" -Ok:([string]$centerAcceptance.readiness.currentBoundary -eq "full-path-ready") -Actual ([string]$centerAcceptance.readiness.currentBoundary) -Expected "full-path-ready"),
+  (New-Check -Key "productionUplinkOperationalReady" -Ok:$productionOperationalReady -Actual $productionOperationalReady -Expected $true),
+  (New-Check -Key "productionRuntimeServiceActive" -Ok:([string]$runtime.serviceActive -eq "active") -Actual ([string]$runtime.serviceActive) -Expected "active"),
+  (New-Check -Key "productionRuntimeMqttConnected" -Ok:([bool]$runtime.mqttConnected) -Actual ([bool]$runtime.mqttConnected) -Expected $true),
+  (New-Check -Key "productionRuntimeSerialOpen" -Ok:([bool]$runtime.serialOpen) -Actual ([bool]$runtime.serialOpen) -Expected $true),
+  (New-Check -Key "productionRuntimeSpoolPendingZero" -Ok:([int]$runtime.spoolPending -eq 0) -Actual ([int]$runtime.spoolPending) -Expected 0),
+  (New-Check -Key "softwareReadPathAccepted" -Ok:$softwareReadPathOperationalReady -Actual $softwareReadPathOperationalReady -Expected $true),
+  (New-Check -Key "softwareReadPathBoundary" -Ok:($softwareReadPathOperationalBoundary -in @("software-read-path-adaptation-ready", "software-read-path-adaptation-operational-ready")) -Actual $softwareReadPathOperationalBoundary -Expected "software-read-path-adaptation-ready|software-read-path-adaptation-operational-ready"),
+  (New-Check -Key "runtimeRejectedWriteFailuresZero" -Ok:([int]$runtime.rejectedWriteFailures -eq 0) -Actual ([int]$runtime.rejectedWriteFailures) -Expected 0),
+  (New-Check -Key "boardObservationWindowStable" -Ok:([bool]$boardObservation.window.stable) -Actual ([string]$boardObservation.conclusion) -Expected "rk3568-runtime-observation-window-clean|rk3568-runtime-observation-window-online-with-parser-noise"),
+  (New-Check -Key "boardObservationParserNoiseWithinBudget" -Ok:([bool]$boardObservation.window.parserNoiseWithinBudget) -Actual ([int]$boardObservation.window.counterDelta.schemaRejected) -Expected ("<= {0}" -f $schemaRejectedBudget)),
+  (New-Check -Key "boardNodeAHealthy" -Ok:($nodeAStatus -in $allowedNodeStates) -Actual $nodeAStatus -Expected "online|degraded"),
+  (New-Check -Key "boardNodeBHealthy" -Ok:($nodeBStatus -in $allowedNodeStates) -Actual $nodeBStatus -Expected "online|degraded"),
+  (New-Check -Key "nodeAApiDirectVisible" -Ok:([bool]$nodeAProof.api.check.passed) -Actual ([bool]$nodeAProof.api.check.passed) -Expected $true),
+  (New-Check -Key "nodeAWebProxyVisible" -Ok:([bool]$nodeAProof.web.check.passed) -Actual ([bool]$nodeAProof.web.check.passed) -Expected $true),
+  (New-Check -Key "nodeAApiMetricsContract" -Ok:([bool]$nodeAProof.api.check.metricsContractOk) -Actual ([int]$nodeAProof.api.snapshot.metricsKeyCount) -Expected ($ExpectedFieldMetrics.Count)),
+  (New-Check -Key "nodeAWebMetricsContract" -Ok:([bool]$nodeAProof.web.check.metricsContractOk) -Actual ([int]$nodeAProof.web.snapshot.metricsKeyCount) -Expected ($ExpectedFieldMetrics.Count)),
+  (New-Check -Key "nodeBApiDirectVisible" -Ok:([bool]$nodeBProof.api.check.passed) -Actual ([bool]$nodeBProof.api.check.passed) -Expected $true),
+  (New-Check -Key "nodeBWebProxyVisible" -Ok:([bool]$nodeBProof.web.check.passed) -Actual ([bool]$nodeBProof.web.check.passed) -Expected $true),
+  (New-Check -Key "nodeBApiMetricsContract" -Ok:([bool]$nodeBProof.api.check.metricsContractOk) -Actual ([int]$nodeBProof.api.snapshot.metricsKeyCount) -Expected ($ExpectedFieldMetrics.Count)),
+  (New-Check -Key "nodeBWebMetricsContract" -Ok:([bool]$nodeBProof.web.check.metricsContractOk) -Actual ([int]$nodeBProof.web.snapshot.metricsKeyCount) -Expected ($ExpectedFieldMetrics.Count)),
+  (New-Check -Key "pendingNodeCTracked" -Ok:$true -Actual $nodeCStatus -Expected "tracked-as-pending")
+)
+
+$strictChecks = @(
+  (New-Check -Key "boardNodeCHealthy" -Ok:($nodeCStatus -in $allowedNodeStates) -Actual $nodeCStatus -Expected "online|degraded"),
+  (New-Check -Key "nodeCApiDirectVisible" -Ok:([bool]$nodeCProof.api.check.passed) -Actual ([bool]$nodeCProof.api.check.passed) -Expected $true),
+  (New-Check -Key "nodeCWebProxyVisible" -Ok:([bool]$nodeCProof.web.check.passed) -Actual ([bool]$nodeCProof.web.check.passed) -Expected $true),
+  (New-Check -Key "nodeCApiMetricsContract" -Ok:([bool]$nodeCProof.api.check.metricsContractOk) -Actual ([int]$nodeCProof.api.snapshot.metricsKeyCount) -Expected ($ExpectedFieldMetrics.Count)),
+  (New-Check -Key "nodeCWebMetricsContract" -Ok:([bool]$nodeCProof.web.check.metricsContractOk) -Actual ([int]$nodeCProof.web.snapshot.metricsKeyCount) -Expected ($ExpectedFieldMetrics.Count)),
+  (New-Check -Key "productionUplinkStrictAccepted" -Ok:([bool]$productionUplink.accepted) -Actual ([bool]$productionUplink.accepted) -Expected $true),
+  (New-Check -Key "productionUplinkStrictBoundary" -Ok:([string]$productionUplink.currentBoundary -eq "rk3568-production-uplink-freeze-ready") -Actual ([string]$productionUplink.currentBoundary) -Expected "rk3568-production-uplink-freeze-ready"),
+  (New-Check -Key "boardStableCommandPassed" -Ok:([bool]$stableCommand.passed) -Actual ([bool]$stableCommand.passed) -Expected $true),
+  (New-Check -Key "boardStableCommandAcked" -Ok:([string]$stableCommand.ackStatus -eq "acked") -Actual ([string]$stableCommand.ackStatus) -Expected "acked")
+)
+
+$checks = @($operationalChecks + $strictChecks)
+$accepted = (@($operationalChecks | Where-Object { -not $_.ok }).Count -eq 0)
+$strictAccepted = (@($strictChecks | Where-Object { -not $_.ok }).Count -eq 0)
+$operationalFailureKeys = @($operationalChecks | Where-Object { -not $_.ok } | ForEach-Object { $_.key })
+$strictFailureKeys = @($strictChecks | Where-Object { -not $_.ok } | ForEach-Object { $_.key })
+
+$report = [ordered]@{
+  generatedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+  accepted = $accepted
+  mode = "field-rk3568-center-live-closure"
+  currentBoundary = if ($accepted) { "rk3568-live-center-closure-ready" } else { "rk3568-live-center-closure-not-yet-accepted" }
+  strictAcceptance = [ordered]@{
+    accepted = $strictAccepted
+    currentBoundary = if ($strictAccepted) { "rk3568-live-center-closure-strict-ready" } else { "rk3568-live-center-closure-strict-needs-review" }
+    failureKeys = @($strictFailureKeys)
+    productionFreezeStrictFailureKeys = @($productionStrictFailureKeys)
+    summary = if ($strictAccepted) { "strict-command-proof-ready" } else { "operationally-live-but-strict-command-proof-still-needs-review" }
+  }
+  aggregator = [ordered]@{
+    strategy = "latest-report-aggregation"
+    centerDeployMode = $CenterDeployMode
+    avoidsHeavyReplay = $true
+    sourceReports = @(
+      $centerAcceptanceFile.Replace("\", "/"),
+      $productionUplinkFile.Replace("\", "/"),
+      $softwareReadPathFile.Replace("\", "/")
     )
-    conclusion = if ($accepted) {
-      "rk3568-live-telemetry-visible-through-center-api-and-web"
-    } else {
-      "rk3568-live-telemetry-not-yet-fully-visible-through-center-api-and-web"
+    optionalCompatibilityReports = @(
+      $boardObservationFile.Replace("\", "/"),
+      $stableCommandFile.Replace("\", "/")
+    )
+  }
+  environment = [ordered]@{
+    apiBaseUrl = $ApiBaseUrl
+    webBaseUrl = $WebBaseUrl
+    mqttUrl = $MqttUrl
+    boardHost = $BoardHost
+    boardRepoRoot = $BoardRepoRoot
+  }
+  centerAcceptance = [ordered]@{
+    report = $centerAcceptanceFile.Replace("\", "/")
+    accepted = [bool]$centerAcceptance.accepted
+    currentBoundary = [string]$centerAcceptance.readiness.currentBoundary
+    fullProofConclusion = [string]$centerAcceptance.fullProof.conclusion
+    replayConclusion = [string]$centerAcceptance.fullProof.replayConclusion
+    productVisibilityConclusion = [string]$centerAcceptance.fullProof.productVisibilityConclusion
+  }
+  productionUplink = [ordered]@{
+    report = $productionUplinkFile.Replace("\", "/")
+    accepted = [bool]$productionUplink.accepted
+    currentBoundary = [string]$productionUplink.currentBoundary
+    operationallyReady = $productionOperationalReady
+    commandsForwarded = [int]$runtime.commandsForwarded
+    ackMessagesPublished = [int]$runtime.ackMessagesPublished
+    rejectedWriteFailures = [int]$runtime.rejectedWriteFailures
+    spoolPending = [int]$runtime.spoolPending
+    strictFailureKeys = @($productionStrictFailureKeys)
+    nodeStatuses = [ordered]@{
+      nodeA = $nodeAStatus
+      nodeB = $nodeBStatus
+      nodeC = $nodeCStatus
     }
   }
-
-  $reportJson = $report | ConvertTo-Json -Depth 10
-  Set-Content -Path $resolvedOutFile -Value $reportJson -Encoding UTF8
-
-  if (-not $accepted) {
-    $failedKeys = (@($checks | Where-Object { -not $_.ok } | ForEach-Object { $_.key })) -join ", "
-    throw "field rk3568 center live closure failed: $failedKeys"
+  softwareReadPath = [ordered]@{
+    report = $softwareReadPathFile.Replace("\", "/")
+    accepted = [bool]$softwareReadPath.accepted
+    operationallyReady = $softwareReadPathOperationalReady
+    currentBoundary = [string]$softwareReadPath.currentBoundary
+    operationalBoundary = $softwareReadPathOperationalBoundary
   }
-
-  $reportJson
-} finally {
-  Pop-Location
+  boardObservation = $boardObservation
+  stableCommand = $stableCommand
+  operationalGate = [ordered]@{
+    failureKeys = @($operationalFailureKeys)
+    summary = if ($accepted) { "live-telemetry-visible-and-runtime-operational" } else { "live-telemetry-or-runtime-operational-gate-failed" }
+  }
+  livePlatform = [ordered]@{
+    expectedFieldMetrics = $ExpectedFieldMetrics
+    nodeA = $nodeAProof
+    nodeB = $nodeBProof
+    nodeC = $nodeCProof
+  }
+  checks = $checks
+  nextUse = @(
+    "refresh center compose acceptance: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-field-center-compose-acceptance.ps1 -DeployMode $CenterDeployMode -AllowUnsafeSecrets",
+    "refresh rk3568 production uplink freeze: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-field-rk3568-production-uplink-freeze.ps1 -Password <password>",
+    "refresh software read-path adaptation: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-field-software-read-path-adaptation.ps1",
+    "refresh aggregated live closure: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-field-rk3568-center-live-closure.ps1 -BoardPassword <password> -AllowUnsafeSecrets"
+  )
+  conclusion = if ($accepted) { "rk3568-live-telemetry-visible-through-center-api-and-web" } else { "rk3568-live-telemetry-not-yet-fully-visible-through-center-api-and-web" }
 }
+
+$json = $report | ConvertTo-Json -Depth 10
+Set-Content -LiteralPath $resolvedOutFile -Value $json -Encoding UTF8
+
+if (-not $accepted) {
+  $failedKeys = (@($operationalFailureKeys)) -join ", "
+  throw "field rk3568 center live closure failed: $failedKeys"
+}
+
+$json

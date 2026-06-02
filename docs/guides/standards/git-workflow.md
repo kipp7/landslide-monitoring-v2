@@ -1,3 +1,9 @@
+---
+title: git-workflow
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/standards/git-workflow
+---
+
 # Git 工作流与推送规则（必须遵守）
 
 目标：让仓库在 GitHub 上长期可维护，避免“乱推分支、误改主分支、提交不可追溯”。
@@ -105,4 +111,3 @@ PR 必须包含：
 当前阶段不强制发布版本号，但必须保证：
 - 契约变更可追溯（通过 PR + commit）
 - schema 必须版本化（`v1/v2`），优先向后兼容
-

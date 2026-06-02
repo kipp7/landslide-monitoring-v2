@@ -1,3 +1,9 @@
+---
+title: stage5-acceptance
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/roadmap/stage5-acceptance
+---
+
 # Stage 5 — Acceptance (单片机端适配 / 固件侧对齐)
 
 目标：在保持 Stage2 回归基线可复现的前提下，引入“固件侧行为参考（模拟器）”，实现 MQTT 对齐、断电安全与最小命令集，并接入单机 e2e evidence bundle。

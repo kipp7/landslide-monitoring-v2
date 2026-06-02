@@ -1,3 +1,9 @@
+---
+title: 010-realtime
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/api/010-realtime
+---
+
 # 10) Realtime（SSE）
 
 权限：

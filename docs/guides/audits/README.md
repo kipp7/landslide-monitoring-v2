@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/audits/readme
+---
+
 ﻿# guides/audits/
 
 本目录存放“现状审查/差距分析”报告：把旧项目的缺点、风险与整改任务用结构化方式记录下来，并映射到 v2 的 PRD/契约/ADR。
@@ -11,4 +17,3 @@
 入口：
 
 - `docs/guides/audits/landslide-monitor-code-audit.md`
-

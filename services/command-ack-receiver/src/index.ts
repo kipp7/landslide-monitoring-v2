@@ -28,6 +28,9 @@ type DeviceCommandEventV1 = {
   result?: Record<string, unknown>;
 };
 
+const MIN_TRUSTED_ACK_TS_MS = Date.UTC(2024, 0, 1);
+const MAX_ACK_CLOCK_SKEW_MS = 5 * 60 * 1000;
+
 function repoRootFromHere(): string {
   return path.resolve(__dirname, "..", "..", "..");
 }
@@ -62,6 +65,27 @@ function pickErrorMessage(result: Record<string, unknown> | undefined): string |
   const v2 = (result as { message?: unknown }).message;
   if (typeof v2 === "string" && v2.trim().length > 0) return v2.trim();
   return null;
+}
+
+function normalizeAckTimestamp(ack: DeviceCommandAckV1, receivedAt: Date): DeviceCommandAckV1 {
+  const ackTsMs = Date.parse(ack.ack_ts);
+  const trusted =
+    Number.isFinite(ackTsMs) &&
+    ackTsMs >= MIN_TRUSTED_ACK_TS_MS &&
+    ackTsMs <= receivedAt.getTime() + MAX_ACK_CLOCK_SKEW_MS;
+
+  if (trusted) return ack;
+
+  return {
+    ...ack,
+    ack_ts: receivedAt.toISOString(),
+    result: {
+      ...(ack.result ?? {}),
+      device_ack_ts: ack.ack_ts,
+      ack_ts_normalized_by: "command-ack-receiver",
+      ack_ts_normalized_reason: "untrusted_device_clock"
+    }
+  };
 }
 
 async function applyAckToPostgres(pg: Pool, ack: DeviceCommandAckV1): Promise<"updated" | "noop" | "missing"> {
@@ -203,6 +227,7 @@ async function main(): Promise<void> {
 
   mqttClient.on("message", async (topic, payload) => {
     const traceId = newTraceId();
+    const receivedAt = new Date();
     const raw = payload.toString("utf-8");
     const deviceIdFromTopic = topicToDeviceId(topic, config.mqttTopicAckPrefix);
     if (!deviceIdFromTopic) {
@@ -217,7 +242,7 @@ async function main(): Promise<void> {
         return;
       }
 
-      const ack: DeviceCommandAckV1 = parsed;
+      const ack: DeviceCommandAckV1 = normalizeAckTimestamp(parsed, receivedAt);
       if (ack.device_id !== deviceIdFromTopic) {
         logger.warn(
           { traceId, topic, payloadDeviceId: ack.device_id, topicDeviceId: deviceIdFromTopic },
@@ -235,7 +260,33 @@ async function main(): Promise<void> {
         topic: config.kafkaTopicDeviceCommandAcks,
         messages: [{ key: ack.device_id, value: JSON.stringify(ack) }]
       });
-      logger.info({ traceId, commandId: ack.command_id, deviceId: ack.device_id, status: ack.status }, "ack published to kafka");
+      const applied = await applyAckToPostgres(pg, ack);
+      if (applied === "updated") {
+        const errorMessage = ack.status === "failed" ? pickErrorMessage(ack.result) : null;
+        await publishCommandEvent({
+          schema_version: 1,
+          event_id: crypto.randomUUID(),
+          event_type: ack.status === "acked" ? "COMMAND_ACKED" : "COMMAND_FAILED",
+          created_ts: new Date().toISOString(),
+          command_id: ack.command_id,
+          device_id: ack.device_id,
+          status: ack.status,
+          ...(errorMessage ? { detail: errorMessage } : {}),
+          ...(ack.result ? { result: ack.result } : {})
+        });
+      }
+      logger.info(
+        {
+          traceId,
+          commandId: ack.command_id,
+          deviceId: ack.device_id,
+          status: ack.status,
+          ackTs: ack.ack_ts,
+          normalized: ack.result?.ack_ts_normalized_by === "command-ack-receiver",
+          applied
+        },
+        "ack published to kafka"
+      );
     } catch (err) {
       logger.warn({ traceId, err }, "mqtt ack parse failed (skipped)");
     }

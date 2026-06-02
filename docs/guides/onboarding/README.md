@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/onboarding/readme
+---
+
 # 协作接入
 
 本目录用于让新的 CLI / Codex / 协作者快速加入项目开发。

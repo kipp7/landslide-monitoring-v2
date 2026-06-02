@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-04-08T17:44:08.162Z",
+  "generatedAt": "2026-04-14T07:32:58.088Z",
   "mode": "field-hardware-uplink-product-visibility",
   "replayReport": "docs/unified/reports/field-hardware-uplink-replay-latest.json",
   "webBaseUrl": "http://127.0.0.1:3000",
-  "deviceId": "6c59de82-f58d-48c5-921e-c3b4c62a17bc",
+  "deviceId": "1879f199-5551-4dfb-95f4-130fa8eb064d",
   "pageChecks": [
     {
       "url": "http://127.0.0.1:3000/login",
@@ -27,11 +27,12 @@
   },
   "proxyReadPath": {
     "devicesUrl": "http://127.0.0.1:3000/api/v1/devices?page=1&pageSize=100",
-    "stateUrl": "http://127.0.0.1:3000/api/v1/data/state/6c59de82-f58d-48c5-921e-c3b4c62a17bc",
-    "deviceFound": true,
-    "listCount": 19,
-    "matchedDeviceLastSeenAt": "2026-04-08T17:44:06.587Z",
-    "updatedAt": "2026-04-08T17:44:06Z",
+    "stateUrl": "http://127.0.0.1:3000/api/v1/data/state/1879f199-5551-4dfb-95f4-130fa8eb064d",
+    "deviceFoundInFormalList": false,
+    "formalListExcludesReplayLikeDevices": true,
+    "listCount": 6,
+    "matchedDeviceLastSeenAt": null,
+    "updatedAt": "2026-04-14T07:32:55Z",
     "metricsKeys": [
       "accel_x_g",
       "accel_y_g",
@@ -63,9 +64,9 @@
   "webClientReadPath": {
     "meUserId": "20000000-0000-0000-0000-000000000001",
     "meUsername": "admin",
-    "deviceFound": true,
-    "listCount": 19,
-    "updatedAt": "2026-04-08T17:44:06Z",
+    "deviceFoundInFormalList": false,
+    "listCount": 6,
+    "updatedAt": "2026-04-14T07:32:55Z",
     "metricsKeys": [
       "accel_x_g",
       "accel_y_g",

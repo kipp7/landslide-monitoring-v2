@@ -1,3 +1,9 @@
+---
+title: INC-0007-compose-kafka-image-manifest-unknown
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/incidents/inc-0007-compose-kafka-image-manifest-unknown
+---
+
 # INC-0007：Docker Compose 中 Kafka 镜像 tag 不存在（manifest unknown）
 
 状态：已修复（通过 PR 替换镜像并增强脚本兼容性）

@@ -1,6 +1,17 @@
+---
+title: naming-conventions
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/standards/naming-conventions
+---
+
 # 命名与约定（v2，全局规范）
 
 目的：减少“硬编码/歧义/命名混乱”，让后端、数据库、MQTT/Kafka、前端在同一套语言体系下协作。
+
+补充：
+
+- 面向山体滑坡现场部署、分区扩容、固定点位与节点角色分层的详细标准，见
+  [field-device-identity-and-naming.md](/E:/学校/02 项目/99 山体滑坡优化完善/landslide-monitoring-v2-mainline/docs/guides/standards/field-device-identity-and-naming.md)
 
 ## 1. ID 与时间
 

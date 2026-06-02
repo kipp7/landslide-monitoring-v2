@@ -1,3 +1,9 @@
+---
+title: 02-users
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/api/02-users
+---
+
 # 用户管理接口
 
 > 约定：用户/角色/权限均使用 UUID 字符串（与 v2 全局规范一致），避免历史“自增 id”与新系统混用。
@@ -175,7 +181,7 @@
 }
 ```
 
-响应（不返回真实密码，避免泄露；用户下次登录需改密）：
+响应：
 ```json
 {
   "success": true,
@@ -183,6 +189,7 @@
   "message": "ok",
   "data": {
     "userId": "b7f9a8a1-0d21-4f31-a4c2-9f7c1b2b3c4d",
+    "temporaryPassword": "Lsm@temporary1",
     "mustChangeOnNextLogin": true,
     "resetAt": "2025-12-15T10:00:00Z"
   },
@@ -190,6 +197,8 @@
   "traceId": "req_01J..."
 }
 ```
+
+说明：`temporaryPassword` 只在本次重置响应中返回，用于管理员线下交付给用户；操作日志不得记录该明文值。
 
 ## 7. 获取角色列表
 

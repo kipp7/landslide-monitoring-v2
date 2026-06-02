@@ -2,6 +2,7 @@
 param(
   [string]$DeliveryIndexFile = "docs/unified/reports/desk-win-delivery-index-latest.json",
   [string]$LatestVerifyFile = "docs/unified/reports/desk-win-latest-package-verify-latest.json",
+  [string]$BoundaryReportFile = "docs/unified/reports/desk-api-boundary-latest.json",
   [string]$InstallerReportFile = "docs/unified/reports/desk-win-installer-latest.json",
   [string]$InstallerVerifyFile = "docs/unified/reports/desk-win-installer-verify-latest.json",
   [string]$CustomInstallerReportFile = "docs/unified/reports/desk-win-customba-installer-latest.json",
@@ -16,6 +17,7 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $fullDeliveryIndexFile = Join-Path $repoRoot $DeliveryIndexFile
 $fullLatestVerifyFile = Join-Path $repoRoot $LatestVerifyFile
+$fullBoundaryReportFile = Join-Path $repoRoot $BoundaryReportFile
 $fullInstallerReportFile = Join-Path $repoRoot $InstallerReportFile
 $fullInstallerVerifyFile = Join-Path $repoRoot $InstallerVerifyFile
 $fullCustomInstallerReportFile = Join-Path $repoRoot $CustomInstallerReportFile
@@ -23,7 +25,7 @@ $fullCustomInstallerVerifyFile = Join-Path $repoRoot $CustomInstallerVerifyFile
 $fullOutMdFile = Join-Path $repoRoot $OutMdFile
 $fullOutJsonFile = Join-Path $repoRoot $OutJsonFile
 
-foreach ($path in @($fullDeliveryIndexFile, $fullLatestVerifyFile, $fullInstallerReportFile, $fullInstallerVerifyFile, $fullCustomInstallerReportFile, $fullCustomInstallerVerifyFile)) {
+foreach ($path in @($fullDeliveryIndexFile, $fullLatestVerifyFile, $fullBoundaryReportFile, $fullInstallerReportFile, $fullInstallerVerifyFile, $fullCustomInstallerReportFile, $fullCustomInstallerVerifyFile)) {
   if (-not (Test-Path $path)) {
     throw "required file not found: $path"
   }
@@ -31,6 +33,7 @@ foreach ($path in @($fullDeliveryIndexFile, $fullLatestVerifyFile, $fullInstalle
 
 $deliveryIndex = Get-Content -Path $fullDeliveryIndexFile -Raw -Encoding UTF8 | ConvertFrom-Json
 $latestVerify = Get-Content -Path $fullLatestVerifyFile -Raw -Encoding UTF8 | ConvertFrom-Json
+$boundary = Get-Content -Path $fullBoundaryReportFile -Raw -Encoding UTF8 | ConvertFrom-Json
 $installer = Get-Content -Path $fullInstallerReportFile -Raw -Encoding UTF8 | ConvertFrom-Json
 $installerVerify = Get-Content -Path $fullInstallerVerifyFile -Raw -Encoding UTF8 | ConvertFrom-Json
 $customInstaller = Get-Content -Path $fullCustomInstallerReportFile -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -39,9 +42,28 @@ $customInstallerVerify = Get-Content -Path $fullCustomInstallerVerifyFile -Raw -
 $result = [ordered]@{
   generatedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
   latestZip = $deliveryIndex.latest.packageZip
+  boundaryReport = $BoundaryReportFile
   installerExe = $installer.installer.path
   customInstallerExe = $customInstaller.installer.path
   checks = @(
+    [ordered]@{
+      id = "api-boundary"
+      title = "API-only boundary proof"
+      target = $BoundaryReportFile
+      expected = @(
+        "Boundary report ready=true",
+        "currentFormalClient=desk-win",
+        "allowedDataEntry=API-only",
+        "No direct PostgreSQL or ClickHouse access on the client"
+      )
+      automatedReference = [ordered]@{
+        report = $BoundaryReportFile
+        ready = [bool]$boundary.ready
+        currentFormalClient = [string]$boundary.boundary.currentFormalClient
+        allowedDataEntry = [string]$boundary.boundary.allowedDataEntry
+        disallowedDirectStores = @($boundary.boundary.disallowedDirectStores)
+      }
+    }
     [ordered]@{
       id = "zip-open"
       title = "latest.zip unpack and launch"
@@ -113,10 +135,25 @@ $mdLines = @(
   "",
   "- ``latest.zip``: ``$($result.latestZip)``  ",
   "  ``latest.zip``: ``$($result.latestZip)``",
+  "- API-only 边界留证：``$($result.boundaryReport)``  ",
+  "  API-only boundary proof: ``$($result.boundaryReport)``",
   "- Inno 安装器：``$($result.installerExe)``  ",
   "  Inno installer: ``$($result.installerExe)``",
   "- custom BA 安装器：``$($result.customInstallerExe)``  ",
   "  Custom BA installer: ``$($result.customInstallerExe)``",
+  "",
+  "## 验收项 0 / Check 0",
+  "",
+  "### API-only 边界 / API-only boundary",
+  "",
+  "- 操作：打开 ``$($result.boundaryReport)``，确认 ``ready=true``。  ",
+  "  Action: open ``$($result.boundaryReport)`` and confirm that ``ready=true``.",
+  "- 期望：``currentFormalClient`` 固定为 ``$($boundary.boundary.currentFormalClient)``。  ",
+  "  Expected: ``currentFormalClient`` is fixed to ``$($boundary.boundary.currentFormalClient)``.",
+  "- 期望：``allowedDataEntry`` 固定为 ``$($boundary.boundary.allowedDataEntry)``。  ",
+  "  Expected: ``allowedDataEntry`` is fixed to ``$($boundary.boundary.allowedDataEntry)``.",
+  "- 期望：客户端不直连 ``$($boundary.boundary.disallowedDirectStores -join ', ')``。  ",
+  "  Expected: the client does not directly connect to ``$($boundary.boundary.disallowedDirectStores -join ', ')``.",
   "",
   "## 验收项 1 / Check 1",
   "",
@@ -165,6 +202,8 @@ $mdLines = @(
   "",
   "- 确认登录页、首页或任一主界面能稳定渲染。  ",
   "  Confirm that the login page, home page, or any main screen renders correctly.",
+  "- 确认交付给客户端的是 API 地址与客户端配置，而不是数据库账号或数据库连接串。  ",
+  "  Confirm that the client handoff contains API endpoints and client configuration, not database credentials or direct connection strings.",
   "- 确认关闭程序后不会残留异常前台窗口。  ",
   "  Confirm that no abnormal foreground window remains after closing the app.",
   "- 若接收方使用品牌化安装流程，确认安装界面文案、图标和收口动作符合预期。  ",
@@ -174,6 +213,8 @@ $mdLines = @(
   "",
   "- 三条路径至少有一条作为实际交付路径通过人工复核。  ",
   "  At least one of the three delivery paths must pass manual review as the actual handoff path.",
+  "- API-only 边界留证必须为 ``ready=true``，且 ``allowedDataEntry=API-only``。  ",
+  "  The API-only boundary proof must report ``ready=true`` and ``allowedDataEntry=API-only``.",
   "- 对外主交付建议仍优先使用 ``latest.zip`` 或 Inno 安装器；custom BA 用于品牌化场景。  ",
   "  For external handoff, ``latest.zip`` or the Inno installer remains the preferred path; custom BA is for branded scenarios."
 )

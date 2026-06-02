@@ -1,3 +1,9 @@
+---
+title: github-repo-governance
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/standards/github-repo-governance
+---
+
 # GitHub 仓库治理（企业化约束，必须落地）
 
 目标：把“高质量/高规范/不乱推送”从口头约定变成 **GitHub 设置强制**，避免单人/多人协作时主分支失控。

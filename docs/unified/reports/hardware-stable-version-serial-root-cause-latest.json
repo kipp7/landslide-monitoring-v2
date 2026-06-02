@@ -1,7 +1,7 @@
 ﻿{
-    "generatedAt":  "2026-04-07T12:53:15Z",
+    "generatedAt":  "2026-04-07T13:09:12Z",
     "targetPort":  "COM5",
-    "conclusion":  "hardware-stable-version-serial-port-state-needs-manual-review",
+    "conclusion":  "hardware-stable-version-target-com-port-is-visible-as-a-single-usb-serial-owner-and-can-be-validated-directly",
     "checks":  {
                    "anyPortsClassDevices":  true,
                    "anyPresentPortsClassDevices":  true,
@@ -10,30 +10,21 @@
                    "usbSerialPresent":  true,
                    "billboardSignalsPresent":  true,
                    "serialDriverPackagesInstalled":  true,
-                   "targetPortOwnershipStable":  false,
+                   "targetPortOwnershipStable":  true,
                    "targetPortCollision":  false
                },
     "likelyCause":  "serial-port-state-needs-manual-review",
     "targetPortOwnership":  {
                                 "port":  "COM5",
-                                "classification":  "multiple-present-usb-serial-devices",
-                                "ownershipStable":  false,
+                                "classification":  "usb-serial-visible",
+                                "ownershipStable":  true,
                                 "visibleInSystemIoPorts":  false,
-                                "presentDeviceCount":  2,
+                                "presentDeviceCount":  1,
                                 "presentBluetoothCount":  0,
-                                "presentUsbSerialCount":  2,
+                                "presentUsbSerialCount":  1,
                                 "win32DeviceCount":  0,
                                 "historicalCh340AssignmentCount":  8,
                                 "presentDevices":  [
-                                                       {
-                                                           "Status":  "Error",
-                                                           "Class":  "Ports",
-                                                           "FriendlyName":  "USB-SERIAL CH340 (COM5)",
-                                                           "InstanceId":  "USB\\VID_1A86\u0026PID_7523\\5\u00267A08FDB\u00260\u00261",
-                                                           "PortName":  "COM5",
-                                                           "IsBluetooth":  false,
-                                                           "IsUsbSerial":  true
-                                                       },
                                                        {
                                                            "Status":  "OK",
                                                            "Class":  "Ports",
@@ -50,12 +41,12 @@
                                 "historicalCh340Assignments":  [
                                                                    {
                                                                        "InstanceId":  "USB\\VID_1A86\u0026PID_7523\\5\u00267A08FDB\u00260\u00261",
-                                                                       "FriendlyName":  "USB-SERIAL CH340 (COM5)",
+                                                                       "FriendlyName":  "USB-SERIAL CH340 (COM9)",
                                                                        "PortName":  "COM5",
                                                                        "SymbolicName":  "\\??\\USB#VID_1A86\u0026PID_7523#5\u00267a08fdb\u00260\u00261#{a5dcbf10-6530-11d2-901f-00c04fb951ed}",
                                                                        "Present":  true,
-                                                                       "PresentStatus":  "Error",
-                                                                       "ConfigManagerErrorCode":  31
+                                                                       "PresentStatus":  "OK",
+                                                                       "ConfigManagerErrorCode":  0
                                                                    },
                                                                    {
                                                                        "InstanceId":  "USB\\VID_1A86\u0026PID_7523\\6\u00261A39A4CD\u00260\u00261",
@@ -122,8 +113,8 @@
                                                                    }
                                                                ],
                                 "recommendedNextSteps":  [
-                                                             "the same COM number appears to be claimed by more than one present USB serial device; clean up stale mappings before live testing",
-                                                             "replug the intended adapter and confirm only one Present=true USB serial owner remains"
+                                                             "this port has a single visible USB serial owner; proceed with passive probe or live gate validation on this port",
+                                                             "avoid opening this port from multiple tools at once"
                                                          ]
                             },
     "portOwnership":  [
@@ -161,24 +152,15 @@
                           },
                           {
                               "port":  "COM5",
-                              "classification":  "multiple-present-usb-serial-devices",
-                              "ownershipStable":  false,
+                              "classification":  "usb-serial-visible",
+                              "ownershipStable":  true,
                               "visibleInSystemIoPorts":  false,
-                              "presentDeviceCount":  2,
+                              "presentDeviceCount":  1,
                               "presentBluetoothCount":  0,
-                              "presentUsbSerialCount":  2,
+                              "presentUsbSerialCount":  1,
                               "win32DeviceCount":  0,
                               "historicalCh340AssignmentCount":  8,
                               "presentDevices":  [
-                                                     {
-                                                         "Status":  "Error",
-                                                         "Class":  "Ports",
-                                                         "FriendlyName":  "USB-SERIAL CH340 (COM5)",
-                                                         "InstanceId":  "USB\\VID_1A86\u0026PID_7523\\5\u00267A08FDB\u00260\u00261",
-                                                         "PortName":  "COM5",
-                                                         "IsBluetooth":  false,
-                                                         "IsUsbSerial":  true
-                                                     },
                                                      {
                                                          "Status":  "OK",
                                                          "Class":  "Ports",
@@ -195,12 +177,12 @@
                               "historicalCh340Assignments":  [
                                                                  {
                                                                      "InstanceId":  "USB\\VID_1A86\u0026PID_7523\\5\u00267A08FDB\u00260\u00261",
-                                                                     "FriendlyName":  "USB-SERIAL CH340 (COM5)",
+                                                                     "FriendlyName":  "USB-SERIAL CH340 (COM9)",
                                                                      "PortName":  "COM5",
                                                                      "SymbolicName":  "\\??\\USB#VID_1A86\u0026PID_7523#5\u00267a08fdb\u00260\u00261#{a5dcbf10-6530-11d2-901f-00c04fb951ed}",
                                                                      "Present":  true,
-                                                                     "PresentStatus":  "Error",
-                                                                     "ConfigManagerErrorCode":  31
+                                                                     "PresentStatus":  "OK",
+                                                                     "ConfigManagerErrorCode":  0
                                                                  },
                                                                  {
                                                                      "InstanceId":  "USB\\VID_1A86\u0026PID_7523\\6\u00261A39A4CD\u00260\u00261",
@@ -267,22 +249,30 @@
                                                                  }
                                                              ],
                               "recommendedNextSteps":  [
-                                                           "the same COM number appears to be claimed by more than one present USB serial device; clean up stale mappings before live testing",
-                                                           "replug the intended adapter and confirm only one Present=true USB serial owner remains"
+                                                           "this port has a single visible USB serial owner; proceed with passive probe or live gate validation on this port",
+                                                           "avoid opening this port from multiple tools at once"
                                                        ]
                           },
                           {
                               "port":  "COM9",
-                              "classification":  "historical-usb-serial-assignment-only",
-                              "ownershipStable":  false,
+                              "classification":  "usb-serial-visible",
+                              "ownershipStable":  true,
                               "visibleInSystemIoPorts":  false,
-                              "presentDeviceCount":  0,
+                              "presentDeviceCount":  1,
                               "presentBluetoothCount":  0,
-                              "presentUsbSerialCount":  0,
+                              "presentUsbSerialCount":  1,
                               "win32DeviceCount":  0,
                               "historicalCh340AssignmentCount":  1,
                               "presentDevices":  [
-
+                                                     {
+                                                         "Status":  "OK",
+                                                         "Class":  "Ports",
+                                                         "FriendlyName":  "USB-SERIAL CH340 (COM9)",
+                                                         "InstanceId":  "USB\\VID_1A86\u0026PID_7523\\5\u00267A08FDB\u00260\u00261",
+                                                         "PortName":  "COM9",
+                                                         "IsBluetooth":  false,
+                                                         "IsUsbSerial":  true
+                                                     }
                                                  ],
                               "win32Devices":  [
 
@@ -299,8 +289,8 @@
                                                                  }
                                                              ],
                               "recommendedNextSteps":  [
-                                                           "this COM number still exists in historical CH340 assignments, but no present USB serial owner is active right now",
-                                                           "replug the intended adapter and verify which COM number it claims after reconnect"
+                                                           "this port has a single visible USB serial owner; proceed with passive probe or live gate validation on this port",
+                                                           "avoid opening this port from multiple tools at once"
                                                        ]
                           }
                       ],
@@ -361,11 +351,11 @@
                                          "IsUsbSerial":  false
                                      },
                                      {
-                                         "Status":  "Error",
+                                         "Status":  "OK",
                                          "Class":  "Ports",
-                                         "FriendlyName":  "USB-SERIAL CH340 (COM5)",
+                                         "FriendlyName":  "USB-SERIAL CH340 (COM9)",
                                          "InstanceId":  "USB\\VID_1A86\u0026PID_7523\\5\u00267A08FDB\u00260\u00261",
-                                         "PortName":  "COM5",
+                                         "PortName":  "COM9",
                                          "IsBluetooth":  false,
                                          "IsUsbSerial":  true
                                      },
@@ -480,11 +470,11 @@
                                  ],
                          "present":  [
                                          {
-                                             "Status":  "Error",
+                                             "Status":  "OK",
                                              "Class":  "Ports",
-                                             "FriendlyName":  "USB-SERIAL CH340 (COM5)",
+                                             "FriendlyName":  "USB-SERIAL CH340 (COM9)",
                                              "InstanceId":  "USB\\VID_1A86\u0026PID_7523\\5\u00267A08FDB\u00260\u00261",
-                                             "PortName":  "COM5",
+                                             "PortName":  "COM9",
                                              "IsBluetooth":  false,
                                              "IsUsbSerial":  true
                                          },
@@ -500,11 +490,11 @@
                                      ],
                          "nonBluetooth":  [
                                               {
-                                                  "Status":  "Error",
+                                                  "Status":  "OK",
                                                   "Class":  "Ports",
-                                                  "FriendlyName":  "USB-SERIAL CH340 (COM5)",
+                                                  "FriendlyName":  "USB-SERIAL CH340 (COM9)",
                                                   "InstanceId":  "USB\\VID_1A86\u0026PID_7523\\5\u00267A08FDB\u00260\u00261",
-                                                  "PortName":  "COM5",
+                                                  "PortName":  "COM9",
                                                   "IsBluetooth":  false,
                                                   "IsUsbSerial":  true
                                               },
@@ -593,9 +583,9 @@
                                      "InstanceId":  "USB\\VID_0B05\u0026PID_1951\\6\u002632422B62\u00260\u00262"
                                  },
                                  {
-                                     "Status":  "Error",
+                                     "Status":  "OK",
                                      "Class":  "Ports",
-                                     "FriendlyName":  "USB-SERIAL CH340 (COM5)",
+                                     "FriendlyName":  "USB-SERIAL CH340 (COM9)",
                                      "InstanceId":  "USB\\VID_1A86\u0026PID_7523\\5\u00267A08FDB\u00260\u00261"
                                  },
                                  {
@@ -789,6 +779,18 @@
                                ],
     "recentBillboardEvents":  [
                                   {
+                                      "TimeCreated":  "\/Date(1775567179044)\/",
+                                      "Id":  112,
+                                      "LevelDisplayName":  "信息",
+                                      "Message":  "已为设备“USB 2.0 BILLBOARD”({d850308c-15ab-530d-97cb-a20f75fb35bf})提供服务，处理了 4 个任务，写入了 0 个属性，活动工作时间为 2569 毫秒。"
+                                  },
+                                  {
+                                      "TimeCreated":  "\/Date(1775567087869)\/",
+                                      "Id":  112,
+                                      "LevelDisplayName":  "信息",
+                                      "Message":  "已为设备“USB 2.0 BILLBOARD”({d850308c-15ab-530d-97cb-a20f75fb35bf})提供服务，处理了 4 个任务，写入了 0 个属性，活动工作时间为 2406 毫秒。"
+                                  },
+                                  {
                                       "TimeCreated":  "\/Date(1775566358489)\/",
                                       "Id":  112,
                                       "LevelDisplayName":  "信息",
@@ -805,12 +807,6 @@
                                       "Id":  112,
                                       "LevelDisplayName":  "信息",
                                       "Message":  "已为设备“USB 2.0 BILLBOARD”({d850308c-15ab-530d-97cb-a20f75fb35bf})提供服务，处理了 4 个任务，写入了 0 个属性，活动工作时间为 1120 毫秒。"
-                                  },
-                                  {
-                                      "TimeCreated":  "\/Date(1775552487142)\/",
-                                      "Id":  112,
-                                      "LevelDisplayName":  "信息",
-                                      "Message":  "已为设备“USB 2.0 BILLBOARD”({d850308c-15ab-530d-97cb-a20f75fb35bf})提供服务，处理了 4 个任务，写入了 0 个属性，活动工作时间为 2147 毫秒。"
                                   }
                               ],
     "recommendedNextSteps":  [

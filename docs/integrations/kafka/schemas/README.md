@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/kafka/schemas/readme
+---
+
 ﻿# integrations/kafka/schemas/
 
 本目录存放 Kafka topic payload 的 JSON Schema（机器可读契约）。

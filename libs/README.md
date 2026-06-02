@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: landslide-monitoring-v2-mainline/libs/readme
+---
+
 # libs/
 
 跨端共享库（不可直接对外提供服务）。
@@ -12,4 +18,3 @@
 - `libs/validation/`：schema 校验与错误映射
 - `libs/observability/`：日志、traceId、metrics
 - `libs/shared-types/`：共享 DTO（最终由 OpenAPI 生成）
-

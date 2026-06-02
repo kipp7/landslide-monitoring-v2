@@ -1,3 +1,9 @@
+---
+title: task-queue-template
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/unified/task-queue-template
+---
+
 # 任务队列模板
 
 ## 状态定义

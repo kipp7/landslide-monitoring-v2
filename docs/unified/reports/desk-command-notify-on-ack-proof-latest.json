@@ -6,14 +6,14 @@
   },
   "commandNotifyOnAck": {
     "deviceId": "00000000-0000-0000-0000-000000000001",
-    "defaultCommandId": "11fbe395-4735-4f6d-94f9-4fa5ad2ed302",
+    "defaultCommandId": "31e7c0e0-2fb8-46e7-a7f2-6f61dc1a792c",
     "defaultNotifyOnAck": false,
     "defaultSuccessNotificationPolicy": "silent",
     "defaultEffectiveSuccessNotificationPolicy": "silent",
-    "optInCommandId": "bb4a9cb7-060a-469c-91df-1ca0b5425da8",
+    "optInCommandId": "34454307-ca2d-4203-b3b9-e6f8a9a98177",
     "optInNotifyOnAck": true,
     "optInSuccessNotificationPolicy": "always_notify",
     "optInEffectiveSuccessNotificationPolicy": "always_notify",
-    "commandsLoaded": 20
+    "commandsLoaded": 8
   }
 }

@@ -1,3 +1,9 @@
+---
+title: design
+type: note
+permalink: landslide-monitoring-v2-mainline/openspec/changes/add-modern-desktop-installer-shell/design
+---
+
 ## Context
 
 当前 `desk-win` 已经完成：

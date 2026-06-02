@@ -1,3 +1,9 @@
+---
+title: emqx-http-auth
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/deployment/single-host/emqx-http-auth
+---
+
 # EMQX HTTP 鉴权/ACL 接线（单机）
 
 目标：把 EMQX 的鉴权（authn）与 ACL（authz）接到 `api-service`，实现：

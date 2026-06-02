@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: landslide-monitoring-v2-mainline/memory/readme
+---
+
 ﻿# Memory Notes
 
 Use this folder for durable project knowledge that should survive Codex sessions.

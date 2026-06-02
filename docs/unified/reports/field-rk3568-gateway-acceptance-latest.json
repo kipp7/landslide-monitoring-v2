@@ -1,11 +1,11 @@
 ﻿{
-    "generatedAt":  "2026-04-09T16:59:11Z",
-    "accepted":  true,
+    "generatedAt":  "2026-04-13T12:13:54Z",
+    "accepted":  false,
     "mode":  "rk3568-field-gateway-acceptance",
     "deployMode":  "skip",
-    "currentBoundary":  "board-runtime-and-command-proof-ready",
+    "currentBoundary":  "board-runtime-or-command-proof-not-yet-accepted",
     "board":  {
-                  "host":  "192.168.124.172",
+                  "host":  "192.168.124.179",
                   "sshPort":  22,
                   "repoRoot":  "/home/linaro/landslide-monitoring-v2-mainline",
                   "southboundSerialDevice":  "/dev/ttyS3",
@@ -18,11 +18,11 @@
                      "ackTopicPrefix":  "cmd_ack/"
                  },
     "warmup":  {
-                   "applied":  false,
+                   "applied":  true,
                    "satisfied":  false,
                    "timeoutSeconds":  60,
                    "pollSeconds":  5,
-                   "elapsedSeconds":  0
+                   "elapsedSeconds":  40
                },
     "deploy":  {
                    "mode":  "not-run"
@@ -31,38 +31,63 @@
                     "report":  "docs/unified/reports/field-rk3568-gateway-runtime-latest.json",
                     "serviceActive":  "active",
                     "serviceEnabled":  "enabled",
-                    "mqttConnected":  true,
+                    "mqttConnected":  false,
                     "serialOpen":  true,
                     "routeMode":  "configured-node-routing",
                     "configuredNodes":  3,
                     "configuredPorts":  1,
-                    "spoolPending":  0,
-                    "schemaRejected":  66,
-                    "rejectedMessages":  66,
+                    "spoolPending":  8,
+                    "schemaRejected":  0,
+                    "rejectedMessages":  0,
                     "rejectedWriteFailures":  0,
                     "port":  {
                                  "serialDevice":  "/dev/ttyS3",
                                  "open":  true,
                                  "reconnectScheduled":  false,
+                                 "sendOwnerState":  "waiting-for-ack",
                                  "mappedNodeCount":  3,
-                                 "enabledNodeCount":  2,
+                                 "enabledNodeCount":  3,
                                  "mappedDeviceIds":  [
                                                          "00000000-0000-0000-0000-000000000001",
                                                          "00000000-0000-0000-0000-000000000002",
                                                          "00000000-0000-0000-0000-000000000003"
                                                      ],
-                                 "telemetryMessages":  623,
-                                 "commandWrites":  26,
-                                 "ackMessages":  13,
+                                 "telemetryMessages":  8,
+                                 "commandWrites":  12,
+                                 "queuedCommands":  1,
+                                 "ackMessages":  0,
+                                 "pendingCommandId":  "33a96fba-7066-494a-b44a-8a1a96358bc3",
+                                 "pendingCommandType":  "poll_latest_telemetry",
+                                 "pendingCommandDeviceId":  "00000000-0000-0000-0000-000000000003",
+                                 "quietWindowUntilTs":  "2026-04-13T12:13:14.693Z",
+                                 "lastQuietWindowStartTs":  "2026-04-13T12:13:04.693Z",
+                                 "lastQuietWindowCloseTs":  "2026-04-13T12:13:00.565Z",
+                                 "lastQuietWindowCloseReason":  "acked",
+                                 "quietWindowTimeouts":  3,
+                                 "lastPrewriteQuietSatisfiedTs":  "2026-04-13T12:13:04.692Z",
+                                 "lastPrewriteQuietWaitMs":  301,
+                                 "prewriteQuietTimeouts":  0,
+                                 "lastPrewriteFlushTs":  "2026-04-13T12:13:04.693Z",
+                                 "prewriteFlushFailures":  0,
                                  "reconnectAttempts":  0,
                                  "consecutiveReconnectFailures":  0,
-                                 "serialChunks":  18712,
-                                 "serialBytes":  496694,
-                                 "lastReadTs":  "2026-04-09T16:58:57.813Z",
-                                 "lastOpenTs":  "2026-04-09T16:21:02.916Z",
+                                 "serialChunks":  287,
+                                 "serialBytes":  7618,
+                                 "lastReadTs":  "2026-04-13T12:13:04.228Z",
+                                 "lastOpenTs":  "2026-04-13T12:11:53.319Z",
                                  "lastCloseTs":  null,
-                                 "lastCommandTs":  "2026-04-09T16:55:38.069Z",
-                                 "lastAckTs":  "2026-04-09T16:52:43.714Z",
+                                 "lastCommandTs":  "2026-04-13T12:13:04.728Z",
+                                 "lastAckTs":  "2026-04-13T12:13:00.565Z",
+                                 "lastPollCommandTs":  "2026-04-13T12:13:04.728Z",
+                                 "lastPollTelemetryTs":  "2026-04-13T12:13:04.229Z",
+                                 "lastPollSessionCloseTs":  "2026-04-13T12:13:04.230Z",
+                                 "lastPollSessionCloseReason":  "telemetry",
+                                 "activePollCommandId":  null,
+                                 "activePollDeviceId":  null,
+                                 "pollCommandsIssued":  12,
+                                 "pollTelemetryMatches":  8,
+                                 "pollAckSuppressions":  8,
+                                 "pollSessionTimeouts":  3,
                                  "lastReconnectTs":  null,
                                  "lastReconnectReason":  null,
                                  "lastError":  null,
@@ -75,12 +100,19 @@
                                       "installLabel":  "FIELD-NODE-A",
                                       "southboundPort":  "/dev/ttyS3",
                                       "enabled":  true,
-                                      "telemetryMessages":  312,
-                                      "commandForwards":  0,
+                                      "telemetryMessages":  4,
+                                      "commandForwards":  4,
                                       "ackPublishes":  0,
-                                      "lastTelemetryTs":  "2026-04-09T16:58:54.920Z",
-                                      "lastCommandTs":  null,
-                                      "lastAckTs":  null,
+                                      "lastTelemetryTs":  "2026-04-13T12:12:59.305Z",
+                                      "lastSeenTs":  "2026-04-13T12:12:59.305Z",
+                                      "lastSeenKind":  "telemetry",
+                                      "lastCommandTs":  "2026-04-13T12:12:54.919Z",
+                                      "lastAckTs":  "2026-04-13T12:12:55.640Z",
+                                      "lastTelemetryAgeMs":  9026,
+                                      "lastSeenAgeMs":  9026,
+                                      "effectiveDegradedAfterMs":  45000,
+                                      "effectiveOfflineAfterMs":  90000,
+                                      "statusReason":  "recent-telemetry",
                                       "status":  "online"
                                   },
                                   {
@@ -89,12 +121,19 @@
                                       "installLabel":  "FIELD-NODE-B",
                                       "southboundPort":  "/dev/ttyS3",
                                       "enabled":  true,
-                                      "telemetryMessages":  311,
-                                      "commandForwards":  26,
-                                      "ackPublishes":  13,
-                                      "lastTelemetryTs":  "2026-04-09T16:58:57.813Z",
-                                      "lastCommandTs":  "2026-04-09T16:55:38.069Z",
-                                      "lastAckTs":  "2026-04-09T16:52:43.714Z",
+                                      "telemetryMessages":  4,
+                                      "commandForwards":  4,
+                                      "ackPublishes":  0,
+                                      "lastTelemetryTs":  "2026-04-13T12:13:04.229Z",
+                                      "lastSeenTs":  "2026-04-13T12:13:04.229Z",
+                                      "lastSeenKind":  "telemetry",
+                                      "lastCommandTs":  "2026-04-13T12:12:59.822Z",
+                                      "lastAckTs":  "2026-04-13T12:13:00.565Z",
+                                      "lastTelemetryAgeMs":  4102,
+                                      "lastSeenAgeMs":  4102,
+                                      "effectiveDegradedAfterMs":  45000,
+                                      "effectiveOfflineAfterMs":  90000,
+                                      "statusReason":  "recent-telemetry",
                                       "status":  "online"
                                   },
                                   {
@@ -102,13 +141,20 @@
                                       "deviceId":  "00000000-0000-0000-0000-000000000003",
                                       "installLabel":  "FIELD-NODE-C",
                                       "southboundPort":  "/dev/ttyS3",
-                                      "enabled":  false,
+                                      "enabled":  true,
                                       "telemetryMessages":  0,
-                                      "commandForwards":  0,
+                                      "commandForwards":  4,
                                       "ackPublishes":  0,
                                       "lastTelemetryTs":  null,
-                                      "lastCommandTs":  null,
+                                      "lastSeenTs":  null,
+                                      "lastSeenKind":  null,
+                                      "lastCommandTs":  "2026-04-13T12:13:04.728Z",
                                       "lastAckTs":  null,
+                                      "lastTelemetryAgeMs":  null,
+                                      "lastSeenAgeMs":  null,
+                                      "effectiveDegradedAfterMs":  45000,
+                                      "effectiveOfflineAfterMs":  90000,
+                                      "statusReason":  "no-node-activity-yet",
                                       "status":  "configured"
                                   }
                               ]
@@ -116,16 +162,16 @@
     "commandProof":  {
                          "report":  "docs/unified/reports/field-rk3568-gateway-node-command-proof-latest.json",
                          "deviceId":  "00000000-0000-0000-0000-000000000002",
-                         "action":  "manual-collect",
-                         "passed":  true,
-                         "commandId":  "056081ac-9997-4b5e-9f7f-8c76209a778c",
-                         "ackStatus":  "acked",
-                         "diagnosisSummary":  "command-forward-and-ack-publish-succeeded",
-                         "parseFailureCount":  1,
-                         "commandForwardsBefore":  26,
-                         "commandForwardsAfter":  27,
-                         "ackPublishesBefore":  13,
-                         "ackPublishesAfter":  14
+                         "action":  "set-report-5",
+                         "passed":  false,
+                         "commandId":  "9736ef45-a96d-489a-957c-8df5cb18ea34",
+                         "ackStatus":  "",
+                         "diagnosisSummary":  "forwarded-but-not-observed-at-target",
+                         "parseFailureCount":  0,
+                         "commandForwardsBefore":  4,
+                         "commandForwardsAfter":  6,
+                         "ackPublishesBefore":  0,
+                         "ackPublishesAfter":  0
                      },
     "checks":  [
                    {
@@ -142,8 +188,8 @@
                    },
                    {
                        "key":  "mqttConnected",
-                       "ok":  true,
-                       "actual":  true,
+                       "ok":  false,
+                       "actual":  false,
                        "expected":  true
                    },
                    {
@@ -167,26 +213,26 @@
                    {
                        "key":  "enabledNodeCount",
                        "ok":  true,
-                       "actual":  2,
-                       "expected":  2
+                       "actual":  3,
+                       "expected":  3
                    },
                    {
                        "key":  "nodeAOnline",
                        "ok":  true,
                        "actual":  "online",
-                       "expected":  "online"
+                       "expected":  "online|degraded"
                    },
                    {
                        "key":  "nodeBOnline",
                        "ok":  true,
                        "actual":  "online",
-                       "expected":  "online"
+                       "expected":  "online|degraded"
                    },
                    {
                        "key":  "nodeCPrepared",
-                       "ok":  true,
+                       "ok":  false,
                        "actual":  "configured",
-                       "expected":  "configured|online"
+                       "expected":  "online|degraded"
                    },
                    {
                        "key":  "telemetryTopicPrefix",
@@ -220,14 +266,14 @@
                    },
                    {
                        "key":  "commandProofPassed",
-                       "ok":  true,
-                       "actual":  true,
+                       "ok":  false,
+                       "actual":  false,
                        "expected":  true
                    },
                    {
                        "key":  "commandProofAckStatus",
-                       "ok":  true,
-                       "actual":  "acked",
+                       "ok":  false,
+                       "actual":  "",
                        "expected":  "acked"
                    }
                ],

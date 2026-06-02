@@ -5,6 +5,31 @@ type SessionState = {
   refreshToken: string | null;
 };
 
+async function getSeriesWithAliases(
+  telemetry: ReturnType<typeof createHttpClient>["telemetry"],
+  input: {
+    deviceId: string;
+    sensorKeys: string[];
+    startTime: string;
+    endTime: string;
+    interval: "raw" | "1m" | "5m" | "1h" | "1d";
+  }
+) {
+  for (const sensorKey of input.sensorKeys) {
+    const points = await telemetry.getSeries({
+      deviceId: input.deviceId,
+      sensorKey,
+      startTime: input.startTime,
+      endTime: input.endTime,
+      interval: input.interval
+    });
+    if (points.length > 0) {
+      return { sensorKey, points };
+    }
+  }
+  return { sensorKey: input.sensorKeys[0] ?? "", points: [] as Array<{ ts: string; value: number }> };
+}
+
 async function main(): Promise<void> {
   const state: SessionState = { token: null, refreshToken: null };
 
@@ -67,10 +92,22 @@ async function main(): Promise<void> {
   const [temperature, humidity, acceleration, gyroscope] = await Promise.all([
     client.telemetry.getSeries({ deviceId: target.id, sensorKey: "temperature_c", startTime, endTime, interval: "1h" }),
     client.telemetry.getSeries({ deviceId: target.id, sensorKey: "humidity_pct", startTime, endTime, interval: "1h" }),
-    client.telemetry.getSeries({ deviceId: target.id, sensorKey: "acceleration_x", startTime, endTime, interval: "1h" }),
-    client.telemetry.getSeries({ deviceId: target.id, sensorKey: "gyroscope_x", startTime, endTime, interval: "1h" })
+    getSeriesWithAliases(client.telemetry, {
+      deviceId: target.id,
+      sensorKeys: ["accel_x_g", "acceleration_x"],
+      startTime,
+      endTime,
+      interval: "1h"
+    }),
+    getSeriesWithAliases(client.telemetry, {
+      deviceId: target.id,
+      sensorKeys: ["gyro_x_dps", "gyroscope_x"],
+      startTime,
+      endTime,
+      interval: "1h"
+    })
   ]);
-  if (!temperature.length || !humidity.length || !acceleration.length || !gyroscope.length) {
+  if (!temperature.length || !humidity.length || !acceleration.points.length || !gyroscope.points.length) {
     throw new Error("analysis page telemetry series missing");
   }
 
@@ -87,8 +124,10 @@ async function main(): Promise<void> {
       rainfallSum: trend.rainfallMm.reduce((sum, value) => sum + value, 0),
       temperaturePoints: temperature.length,
       humidityPoints: humidity.length,
-      accelerationPoints: acceleration.length,
-      gyroscopePoints: gyroscope.length
+      accelerationSensorKey: acceleration.sensorKey,
+      accelerationPoints: acceleration.points.length,
+      gyroscopeSensorKey: gyroscope.sensorKey,
+      gyroscopePoints: gyroscope.points.length
     }
   };
 

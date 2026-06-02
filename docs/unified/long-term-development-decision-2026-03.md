@@ -1,3 +1,9 @@
+---
+title: long-term-development-decision-2026-03
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/unified/long-term-development-decision-2026-03
+---
+
 # 长期开发主线决策（2026-03）
 
 ## 1. 决策目标

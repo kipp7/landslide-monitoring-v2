@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/kafka/readme
+---
+
 ﻿# integrations/kafka/
 
 该目录描述内部数据总线对接契约（topic、分区键、消费组、DLQ、回放）。

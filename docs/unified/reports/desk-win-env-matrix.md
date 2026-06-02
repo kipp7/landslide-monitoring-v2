@@ -1,3 +1,9 @@
+---
+title: desk-win-env-matrix
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/unified/reports/desk-win-env-matrix
+---
+
 # Desk-win 环境配置矩阵
 
 ## 1. 运行模式

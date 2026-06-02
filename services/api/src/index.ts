@@ -20,6 +20,7 @@ import { registerAlertRoutes } from "./routes/alerts";
 import { registerAlertNotificationRoutes } from "./routes/alert-notifications";
 import { registerAlertRuleRoutes } from "./routes/alert-rules";
 import { registerAlertRuleReplayRoutes } from "./routes/alert-rules-replay";
+import { registerFieldAlarmRoutes } from "./routes/field-alarm";
 import { registerTelemetryDlqRoutes } from "./routes/telemetry-dlq";
 import { registerSystemLegacyCompatRoutes, registerSystemRoutes } from "./routes/system";
 import { registerAuthRoutes } from "./routes/auth";
@@ -34,6 +35,7 @@ import { registerHuaweiLegacyCompatRoutes } from "./routes/huawei-legacy";
 import { registerCameraLegacyCompatRoutes, registerCameraRoutes } from "./routes/camera";
 import { registerDeviceHealthExpertLegacyCompatRoutes, registerDeviceHealthExpertRoutes } from "./routes/device-health-expert";
 import { registerAiPredictionLegacyCompatRoutes, registerAiPredictionRoutes } from "./routes/ai-predictions";
+import { registerOnboardingRoutes } from "./routes/onboarding";
 import { registerLegacyDisabledRoutes } from "./routes/legacy-disabled";
 import { registerLegacyDeviceManagementCompatRoutes } from "./routes/legacy-device-management";
 import { registerLegacyDebugToolRoutes } from "./routes/legacy-debug-tools";
@@ -51,7 +53,14 @@ async function main(): Promise<void> {
     disableRequestLogging: true
   });
 
-  const defaultCorsOrigins = new Set(["http://localhost:3000", "http://127.0.0.1:3000"]);
+  const defaultCorsOrigins = new Set([
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
+    "http://appassets.local",
+    "https://appassets.local"
+  ]);
   const corsOrigins = new Set([...(config.corsOrigins ?? []), ...defaultCorsOrigins]);
 
   await app.register(cors, {
@@ -283,6 +292,7 @@ async function main(): Promise<void> {
     registerAlertNotificationRoutes(v1, config, pg);
     registerAlertRuleRoutes(v1, config, pg);
     registerAlertRuleReplayRoutes(v1, config, ch, pg);
+    registerFieldAlarmRoutes(v1, config, pg);
     registerCommandEventRoutes(v1, config, pg);
     registerCommandNotificationRoutes(v1, config, pg);
     registerTelemetryDlqRoutes(v1, config, pg);
@@ -295,6 +305,7 @@ async function main(): Promise<void> {
     registerDeviceHealthExpertRoutes(v1, config, ch, pg);
     registerCameraRoutes(v1, config, pg);
     registerAiPredictionRoutes(v1, config, pg);
+    registerOnboardingRoutes(v1, config, ch, pg);
     done();
   }, { prefix: "/api/v1" });
 

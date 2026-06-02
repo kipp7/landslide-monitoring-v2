@@ -1,3 +1,9 @@
+---
+title: algo-worker-online-replay
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/unified/agent-briefs/algo-worker-online-replay
+---
+
 # 任务简报：algo-worker-online-replay
 
 ## 当前状态

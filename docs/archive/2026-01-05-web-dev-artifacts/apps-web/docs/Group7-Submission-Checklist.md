@@ -1,3 +1,9 @@
+---
+title: Group7-Submission-Checklist
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/archive/2026-01-05-web-dev-artifacts/apps-web/docs/group7-submission-checklist
+---
+
 # 第七组（数字媒体设计高校学生组）提交清单
 
 - 截止时间：2025-09-30 17:00（提交后不可修改）
@@ -51,8 +57,3 @@ submit-g7/
 - 可选补充：/optimized-demo（若展示关键优化点）
 
 > 注：/debug-api、/analysis2、旧版页面（page-old）不建议纳入正式提交。
-
-
-
-
-

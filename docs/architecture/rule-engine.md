@@ -1,3 +1,9 @@
+---
+title: rule-engine
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/architecture/rule-engine
+---
+
 ﻿# 规则引擎设计（v2）
 
 目标：把“报警逻辑”从硬编码变成可配置、可回放、可解释，并能逐步引入 AI/预测模块；同时保证写入链路稳定（不因规则/算法阻塞设备上报）。

@@ -1,3 +1,9 @@
+---
+title: proposal
+type: note
+permalink: landslide-monitoring-v2-mainline/openspec/changes/add-v2-backend-local-runtime/proposal
+---
+
 ## Why
 
 桌面端目前以 Mock 为主，但 v2 后端最终仍需要稳定运行，否则无法从“演示 UI”走向“真实数据平台”。目前后端存在“API 多、bug 多、跑不起来”的问题，需要先建立一个可持续推进的最小可运行基线（local runtime baseline）。
@@ -15,4 +21,3 @@
 
 - 不要求一次性修完所有 API
 - 不在本变更内把桌面端从 Mock 全量切到 HTTP
-

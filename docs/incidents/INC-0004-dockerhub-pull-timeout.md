@@ -1,3 +1,9 @@
+---
+title: INC-0004-dockerhub-pull-timeout
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/incidents/inc-0004-dockerhub-pull-timeout
+---
+
 # INC-0004: Docker Hub 拉取镜像超时导致基础设施无法启动
 
 ## Summary
@@ -48,4 +54,3 @@
 - 测试入口：`docs/guides/testing/single-host-smoke-test.md`
 - 排障证据：`docs/guides/testing/troubleshooting-and-evidence.md`
 - 部署物料：`infra/compose/README.md`
-

@@ -1,3 +1,9 @@
+---
+title: single-host-smoke-test
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/testing/single-host-smoke-test
+---
+
 # 单机基础设施冒烟测试（必须通过）
 
 适用范围：`infra/compose/` 的 Docker Compose 基础设施。

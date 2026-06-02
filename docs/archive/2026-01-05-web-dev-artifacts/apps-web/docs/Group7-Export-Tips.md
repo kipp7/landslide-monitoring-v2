@@ -1,3 +1,9 @@
+---
+title: Group7-Export-Tips
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/archive/2026-01-05-web-dev-artifacts/apps-web/docs/group7-export-tips
+---
+
 # Group 7 导出与打包提示
 
 ## 截图
@@ -23,8 +29,3 @@
 - 不含第三方受限素材；或已取得授权并标注来源
 - 隐私数据脱敏（设备 ID、地理坐标如需隐藏则马赛克）
 - 与报名表、授权协议信息一致（人名、团队、赛区）
-
-
-
-
-

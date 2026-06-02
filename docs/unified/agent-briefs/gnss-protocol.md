@@ -1,3 +1,9 @@
+---
+title: gnss-protocol
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/unified/agent-briefs/gnss-protocol
+---
+
 # 任务简报：gnss-protocol
 
 ## 当前状态

@@ -1,3 +1,9 @@
+---
+title: TEMPLATE
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/mqtt/template
+---
+
 # MQTT 契约模板：<Topic 或消息类型>
 
 ## Topic
@@ -22,4 +28,3 @@
 - QoS:
 - Retain:
 - 重试/乱序/重复：
-

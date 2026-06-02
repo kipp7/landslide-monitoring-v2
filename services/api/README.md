@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: landslide-monitoring-v2-mainline/services/api/readme
+---
+
 # api-service（HTTP API）
 
 本服务提供对外 HTTP API（`/api/v1`），严格对齐契约：`docs/integrations/api/openapi.yaml`。
@@ -22,4 +28,3 @@
 - `cd services/api`
 - 复制 `.env.example` 为 `.env` 并填写（不要提交 `.env`）
 - `node dist/index.js`
-

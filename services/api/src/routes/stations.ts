@@ -2,6 +2,11 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AppConfig } from "../config";
 import { requirePermission, type AdminAuthConfig } from "../authz";
+import {
+  deriveRegionCodeFromSlopeCode,
+  deriveSlopeCodeFromStationCode,
+  normalizeCanonicalCode,
+} from "../field-identity";
 import { fail, ok } from "../http";
 import type { PgPool } from "../postgres";
 import { queryOne, withPgClient } from "../postgres";
@@ -47,6 +52,72 @@ type StationRow = {
   updated_at: string;
 };
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : null;
+}
+
+function readString(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
+function readFirstString(record: Record<string, unknown> | null, keys: string[]): string | null {
+  for (const key of keys) {
+    const value = readString(record?.[key]);
+    if (value) return value;
+  }
+  return null;
+}
+
+function formalStationPredicate(alias = "stations"): string {
+  return `COALESCE(${alias}.station_code, '') NOT IN ('DEMO001', 'DEMO002')
+    AND COALESCE(${alias}.metadata->>'note', '') NOT IN ('field_hardware_uplink_replay', 'field_rehearsal', 'smoke_test', 'seed demo')
+    AND COALESCE(${alias}.metadata->>'identityClass', COALESCE(${alias}.metadata->>'identity_class', '')) NOT IN ('seed', 'replay', 'rehearsal', 'smoke_test', 'lab')`;
+}
+
+function buildStationCanonicalMetadata(
+  stationCode: string,
+  metadata: Record<string, unknown> | null
+): Record<string, unknown> {
+  const merged = { ...(metadata ?? {}) };
+  const normalizedStationCode = normalizeCanonicalCode(stationCode);
+  const slopeCode =
+    readFirstString(merged, ["slopeCode", "slope_code"]) ??
+    deriveSlopeCodeFromStationCode(normalizedStationCode);
+  const regionCode =
+    readFirstString(merged, ["regionCode", "region_code"]) ??
+    deriveRegionCodeFromSlopeCode(slopeCode);
+
+  if (normalizedStationCode) merged.stationCode = normalizedStationCode;
+  if (slopeCode) merged.slopeCode = slopeCode;
+  if (regionCode) merged.regionCode = regionCode;
+  return merged;
+}
+
+function buildStationReadModel(row: StationRow) {
+  const metadata = buildStationCanonicalMetadata(row.station_code, asRecord(row.metadata));
+  const regionCode = readFirstString(metadata, ["regionCode", "region_code"]);
+  const slopeCode = readFirstString(metadata, ["slopeCode", "slope_code"]);
+  const lifecycleStatus = readFirstString(metadata, ["lifecycleStatus", "lifecycle_status"]);
+  const displayName = readFirstString(metadata, ["displayName", "display_name"]) ?? row.station_name;
+
+  return {
+    stationId: row.station_id,
+    stationCode: row.station_code,
+    stationName: row.station_name,
+    displayName,
+    status: row.status,
+    latitude: row.latitude,
+    longitude: row.longitude,
+    altitude: row.altitude,
+    metadata: metadata ?? {},
+    regionCode,
+    slopeCode,
+    lifecycleStatus,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
 export function registerStationRoutes(
   app: FastifyInstance,
   config: AppConfig,
@@ -69,7 +140,7 @@ export function registerStationRoutes(
     }
     const { page, pageSize, keyword, status } = parseQuery.data;
 
-    const where: string[] = ["deleted_at IS NULL"];
+    const where: string[] = ["deleted_at IS NULL", formalStationPredicate("stations")];
     const params: unknown[] = [];
     const add = (sql: string, val: unknown) => {
       params.push(val);
@@ -118,18 +189,7 @@ export function registerStationRoutes(
     ok(
       reply,
       {
-        list: data.list.map((s) => ({
-          stationId: s.station_id,
-          stationCode: s.station_code,
-          stationName: s.station_name,
-          status: s.status,
-          latitude: s.latitude,
-          longitude: s.longitude,
-          altitude: s.altitude,
-          metadata: s.metadata ?? {},
-          createdAt: s.created_at,
-          updatedAt: s.updated_at
-        })),
+        list: data.list.map((row) => buildStationReadModel(row)),
         pagination: {
           page,
           pageSize,
@@ -172,7 +232,7 @@ export function registerStationRoutes(
             to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at,
             to_char(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS updated_at
           FROM stations
-          WHERE station_id = $1 AND deleted_at IS NULL
+          WHERE station_id = $1 AND deleted_at IS NULL AND ${formalStationPredicate("stations")}
         `,
         [stationId]
       )
@@ -185,18 +245,7 @@ export function registerStationRoutes(
 
     ok(
       reply,
-      {
-        stationId: row.station_id,
-        stationCode: row.station_code,
-        stationName: row.station_name,
-        status: row.status,
-        latitude: row.latitude,
-        longitude: row.longitude,
-        altitude: row.altitude,
-        metadata: row.metadata ?? {},
-        createdAt: row.created_at,
-        updatedAt: row.updated_at
-      },
+      buildStationReadModel(row),
       traceId
     );
   });
@@ -241,7 +290,7 @@ export function registerStationRoutes(
             body.latitude ?? null,
             body.longitude ?? null,
             body.altitude ?? null,
-            JSON.stringify(body.metadata ?? {})
+            JSON.stringify(buildStationCanonicalMetadata(body.stationCode, body.metadata ?? null))
           ]
         )
       );
@@ -283,6 +332,34 @@ export function registerStationRoutes(
     const latitudeProvided = body.latitude !== undefined;
     const longitudeProvided = body.longitude !== undefined;
     const altitudeProvided = body.altitude !== undefined;
+    const currentStation = await withPgClient(pg, async (client) =>
+      queryOne<{ station_code: string; metadata: unknown }>(
+        client,
+        `
+          SELECT station_code, metadata
+          FROM stations
+          WHERE station_id = $1 AND deleted_at IS NULL
+        `,
+        [stationId]
+      )
+    );
+
+    if (!currentStation) {
+      fail(reply, 404, "资源不存在", traceId, { stationId });
+      return;
+    }
+
+    const nextMetadata =
+      body.metadata === undefined
+        ? null
+        : buildStationCanonicalMetadata(
+            currentStation.station_code,
+            {
+              ...(asRecord(currentStation.metadata) ?? {}),
+              ...(body.metadata ?? {}),
+            }
+          );
+
     const updated = await withPgClient(pg, async (client) => {
       const row = await queryOne<{ updated_at: string }>(
         client,
@@ -309,7 +386,7 @@ export function registerStationRoutes(
           longitudeProvided ? body.longitude : null,
           altitudeProvided,
           altitudeProvided ? body.altitude : null,
-          body.metadata ? JSON.stringify(body.metadata) : null
+          nextMetadata ? JSON.stringify(nextMetadata) : null
         ]
       );
       return row?.updated_at ?? null;

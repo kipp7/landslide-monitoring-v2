@@ -1,3 +1,9 @@
+---
+title: jwt-rbac-bootstrap
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/deployment/single-host/jwt-rbac-bootstrap
+---
+
 # 单机：启用 JWT/RBAC（Web 登录）Bootstrap
 
 目标：在单机环境把 `api-service` 从“开发期免鉴权/手工 token”平滑切到“JWT 登录 + RBAC 权限控制”，并保证有可追溯的运维/审计入口。

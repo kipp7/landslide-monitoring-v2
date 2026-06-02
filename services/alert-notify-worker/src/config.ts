@@ -27,7 +27,20 @@ const configSchema = z.object({
   postgresDatabase: z.string().default("landslide_monitor"),
   postgresPoolMax: z.coerce.number().int().positive().default(5),
 
-  notifyType: z.enum(["app", "sms", "email", "wechat"]).default("app")
+  notifyType: z.enum(["app", "sms", "email", "wechat"]).default("app"),
+  smsRecipientMode: z.enum(["subscriptions", "contact_library", "both"]).default("subscriptions"),
+  smsProvider: z.enum(["mock", "aliyun"]).default("mock"),
+  smsRealSendEnabled: z
+    .string()
+    .optional()
+    .transform((v) => (v ?? "false").toLowerCase())
+    .pipe(z.enum(["true", "false"]))
+    .transform((v) => v === "true"),
+  smsAliyunAccessKeyId: optionalNonEmptyString(),
+  smsAliyunAccessKeySecret: optionalNonEmptyString(),
+  smsAliyunEndpoint: z.string().default("dysmsapi.aliyuncs.com"),
+  smsAliyunSignName: optionalNonEmptyString(),
+  smsAliyunTemplateCode: optionalNonEmptyString()
 });
 
 export type AppConfig = z.infer<typeof configSchema>;
@@ -49,7 +62,14 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
     postgresDatabase: env.POSTGRES_DATABASE,
     postgresPoolMax: env.POSTGRES_POOL_MAX,
 
-    notifyType: env.NOTIFY_TYPE
+    notifyType: env.NOTIFY_TYPE,
+    smsRecipientMode: env.SMS_RECIPIENT_MODE,
+    smsProvider: env.SMS_PROVIDER,
+    smsRealSendEnabled: env.SMS_REAL_SEND_ENABLED,
+    smsAliyunAccessKeyId: env.SMS_ALIYUN_ACCESS_KEY_ID,
+    smsAliyunAccessKeySecret: env.SMS_ALIYUN_ACCESS_KEY_SECRET,
+    smsAliyunEndpoint: env.SMS_ALIYUN_ENDPOINT,
+    smsAliyunSignName: env.SMS_ALIYUN_SIGN_NAME,
+    smsAliyunTemplateCode: env.SMS_ALIYUN_TEMPLATE_CODE
   });
 }
-

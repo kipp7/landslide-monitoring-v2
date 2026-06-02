@@ -1,9 +1,10 @@
-﻿---
+---
 title: decision-title
 type: note
 tags:
-  - decision
+- decision
 status: active
+permalink: landslide-monitoring-v2-mainline/memory/templates/decision-template
 ---
 
 # Decision: decision-title

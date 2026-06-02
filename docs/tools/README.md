@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/tools/readme
+---
+
 ﻿# tools/
 
 本目录提供“契约优先”的**可执行校验脚本**，把文档要求落地为可检查项。

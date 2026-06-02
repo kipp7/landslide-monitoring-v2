@@ -1,3 +1,9 @@
+---
+title: design
+type: note
+permalink: landslide-monitoring-v2-mainline/openspec/changes/add-field-hardware-gateway-architecture/design
+---
+
 ## Context
 
 当前项目的软件主链已经较成熟：

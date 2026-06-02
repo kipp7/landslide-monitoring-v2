@@ -1,3 +1,9 @@
+---
+title: INC-0006-git-https-connection-reset
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/incidents/inc-0006-git-https-connection-reset
+---
+
 # INC-0006: Git 命令行访问 GitHub 连接重置/超时（影响 fetch/pull/push）
 
 ## Summary
@@ -88,4 +94,3 @@ git fetch origin
 - 在 `docs/guides/standards/pull-request-howto.md` 增加“网络不稳定时的替代路径”：
   - 通过 GitHub 网页创建 PR、解决冲突、合并
   - 命令行仅做本地门禁与小步提交
-

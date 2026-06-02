@@ -1,3 +1,9 @@
+---
+title: TEAM_RULES
+type: note
+permalink: landslide-monitoring-v2-mainline/memory/team-rules
+---
+
 ﻿# Team Memory Rules
 
 ## Purpose

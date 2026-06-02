@@ -1,3 +1,9 @@
+---
+title: backend-architecture
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/standards/backend-architecture
+---
+
 ﻿# 后端工程结构规范（实现阶段必须遵守）
 
 目标：即使单机部署，也按“可拆分/可扩展/可回放”的标准组织代码，避免把所有逻辑堆进一个服务里。
@@ -43,4 +49,3 @@
 - HTTP 契约：`docs/integrations/api/openapi.yaml`
 - MQTT/Kafka/Rules schema：见 `docs/integrations/contract-registry.md`
 - 实现阶段建议：将 schema 校验纳入 CI（见 `docs/guides/ai/hooks-workflow.md`）
-

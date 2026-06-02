@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-  [string]$BoardHost = "192.168.124.172",
+  [string]$BoardHost = "192.168.124.179",
   [string]$User = "linaro",
   [string]$Password = "",
   [int]$SshPort = 22,
@@ -171,12 +171,28 @@ $result = ($rawText.Substring($jsonStart) | ConvertFrom-Json)
 
 $expectedWifiDevice = [string]$result.configuredEnv.WIFI_DEVICE
 $expectedStaConnectionName = [string]$result.configuredEnv.STA_CONNECTION_NAME
+$expectedApConnectionName = [string]$result.configuredEnv.AP_CONNECTION_NAME
 $nmcliGeneral = [string]$result.nmcliGeneral.stdout
+$nmcliRadio = [string]$result.nmcliRadio.stdout
+$nmcliDeviceStatus = [string]$result.nmcliDeviceStatus.stdout
+$nmcliConnections = [string]$result.nmcliConnections.stdout
 $activeConnections = [string]$result.nmcliActiveConnections.stdout
 $ipv4Addresses = [string]$result.ipv4Addresses.stdout
 $runtimeMode = [string]$result.runtimeStatus.mode
 $runtimeLastError = [string]$result.runtimeStatus.lastError
 $expectedActiveConnection = "${expectedStaConnectionName}:802-11-wireless:${expectedWifiDevice}"
+$healthyRuntimeModes = @("sta_connected", "ethernet_uplink")
+$runtimeModeHealthy = $healthyRuntimeModes -contains $runtimeMode
+$staOrEthernetConnectionOk = ($activeConnections -like "*$expectedActiveConnection*") -or ($activeConnections -like "*:802-3-ethernet:*")
+$wifiDeviceReachable = (
+  ($nmcliDeviceStatus -like "*${expectedWifiDevice}:wifi:connected:*") -or
+  ($nmcliDeviceStatus -like "*${expectedWifiDevice}:wifi:disconnected:*")
+)
+$wifiRadioEnabled = ($nmcliRadio -like "*enabled:enabled*")
+$apProfileMatches = @($nmcliConnections -split "`r?`n" | Where-Object { $_ -like "${expectedApConnectionName}:*" })
+$apProfileCount = $apProfileMatches.Count
+$apFallbackActive = ($activeConnections -like "*${expectedApConnectionName}:802-11-wireless:${expectedWifiDevice}*")
+$apSuppressedWhileHealthy = ((-not $runtimeModeHealthy) -or (-not $apFallbackActive))
 
 $checks = @(
   (Get-Check -Key "bootstrapServiceActive" -Ok:([string]$result.bootstrapService.isActive.stdout -eq "active") -Actual ([string]$result.bootstrapService.isActive.stdout) -Expected "active"),
@@ -184,10 +200,14 @@ $checks = @(
   (Get-Check -Key "gatewayServiceActive" -Ok:([string]$result.gatewayService.isActive.stdout -eq "active") -Actual ([string]$result.gatewayService.isActive.stdout) -Expected "active"),
   (Get-Check -Key "gatewayServiceEnabled" -Ok:([string]$result.gatewayService.isEnabled.stdout -eq "enabled") -Actual ([string]$result.gatewayService.isEnabled.stdout) -Expected "enabled"),
   (Get-Check -Key "nmcliConnectedFull" -Ok:($nmcliGeneral -eq "connected:full") -Actual $nmcliGeneral -Expected "connected:full"),
-  (Get-Check -Key "staConnectionActive" -Ok:($activeConnections -like "*$expectedActiveConnection*") -Actual $activeConnections -Expected $expectedActiveConnection),
-  (Get-Check -Key "runtimeModeStaConnected" -Ok:($runtimeMode -eq "sta_connected") -Actual $runtimeMode -Expected "sta_connected"),
+  (Get-Check -Key "wifiRadioEnabled" -Ok:$wifiRadioEnabled -Actual $nmcliRadio -Expected "enabled:enabled:<wwan-hw>:<wwan>"),
+  (Get-Check -Key "wifiDeviceReachable" -Ok:$wifiDeviceReachable -Actual $nmcliDeviceStatus -Expected "${expectedWifiDevice}:wifi:connected|disconnected:<connection>"),
+  (Get-Check -Key "apProfileCanonicalSingle" -Ok:($apProfileCount -eq 1) -Actual $apProfileCount -Expected 1),
+  (Get-Check -Key "apSuppressedWhileHealthy" -Ok:$apSuppressedWhileHealthy -Actual $activeConnections -Expected "${expectedApConnectionName} inactive while mode=sta_connected|ethernet_uplink"),
+  (Get-Check -Key "uplinkConnectionActive" -Ok:$staOrEthernetConnectionOk -Actual $activeConnections -Expected "$expectedActiveConnection or <ethernet-uplink>"),
+  (Get-Check -Key "runtimeModeHealthyUplink" -Ok:$runtimeModeHealthy -Actual $runtimeMode -Expected "sta_connected|ethernet_uplink"),
   (Get-Check -Key "runtimeLastErrorClear" -Ok:([string]::IsNullOrWhiteSpace($runtimeLastError)) -Actual $(if ([string]::IsNullOrWhiteSpace($runtimeLastError)) { $null } else { $runtimeLastError }) -Expected $null),
-  (Get-Check -Key "ipv4PresentOnWifiDevice" -Ok:($ipv4Addresses -like "*${expectedWifiDevice}:*") -Actual $ipv4Addresses -Expected "${expectedWifiDevice}:<ipv4>")
+  (Get-Check -Key "ipv4PresentOnUplink" -Ok:(($ipv4Addresses -like "*${expectedWifiDevice}:*") -or ($ipv4Addresses -like "*eth0:*")) -Actual $ipv4Addresses -Expected "${expectedWifiDevice}:<ipv4> or eth0:<ipv4>")
 )
 
 $accepted = (@($checks | Where-Object { -not $_.ok }).Count -eq 0)
@@ -208,7 +228,9 @@ $report = [ordered]@{
   bootstrapService = $result.bootstrapService
   gatewayService = $result.gatewayService
   nmcliGeneral = $result.nmcliGeneral
+  nmcliRadio = $result.nmcliRadio
   nmcliDeviceStatus = $result.nmcliDeviceStatus
+  nmcliConnections = $result.nmcliConnections
   nmcliActiveConnections = $result.nmcliActiveConnections
   ipv4Addresses = $result.ipv4Addresses
   runtimeStatus = $result.runtimeStatus

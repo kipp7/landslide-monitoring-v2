@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import type { AppConfig } from "../config";
 import { requirePermission, type AdminAuthConfig } from "../authz";
@@ -40,6 +41,10 @@ const updateUserSchema = z
   .strict();
 
 type RoleRow = { role_id: string; role_name: string; display_name: string; description: string | null };
+
+function generateTemporaryPassword(): string {
+  return `Lsm@${randomBytes(9).toString("base64url")}`;
+}
 
 export function registerUserRoutes(app: FastifyInstance, config: AppConfig, pg: PgPool | null): void {
   const adminCfg: AdminAuthConfig = { adminApiToken: config.adminApiToken, jwtEnabled: Boolean(config.jwtAccessSecret) };
@@ -114,7 +119,7 @@ export function registerUserRoutes(app: FastifyInstance, config: AppConfig, pg: 
     const params: unknown[] = [];
     const add = (sql: string, val: unknown) => {
       params.push(val);
-      where.push(sql.replace("$X", "$" + String(params.length)));
+      where.push(sql.replaceAll("$X", "$" + String(params.length)));
     };
 
     if (keyword) add("(u.username ILIKE $X OR u.real_name ILIKE $X OR u.phone ILIKE $X)", `%${keyword}%`);
@@ -494,8 +499,8 @@ export function registerUserRoutes(app: FastifyInstance, config: AppConfig, pg: 
     }
     const userId = parseId.data;
 
-    const random = crypto.randomUUID() + crypto.randomUUID();
-    const nextHash = await hashPassword(random);
+    const temporaryPassword = generateTemporaryPassword();
+    const nextHash = await hashPassword(temporaryPassword);
 
     const updated = await withPgClient(pg, async (client) => {
       const res = await client.query("UPDATE users SET password_hash=$2, updated_at = NOW() WHERE user_id=$1 AND deleted_at IS NULL", [
@@ -521,7 +526,7 @@ export function registerUserRoutes(app: FastifyInstance, config: AppConfig, pg: 
 
     ok(
       reply,
-      { userId, mustChangeOnNextLogin: true, resetAt: new Date().toISOString() },
+      { userId, temporaryPassword, mustChangeOnNextLogin: true, resetAt: new Date().toISOString() },
       traceId
     );
   });

@@ -1,3 +1,9 @@
+---
+title: Group7-Architecture
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/archive/2026-01-05-web-dev-artifacts/apps-web/docs/group7-architecture
+---
+
 # Group 7 系统架构图（Mermaid）
 
 > 可在支持 Mermaid 的工具中导出为 PNG/PDF；或使用浏览器扩展/VSCode 插件截图。
@@ -54,8 +60,3 @@ flowchart TB
 - API Routes 协同业务服务模块，统一对外的读写/计算入口。
 - 数据层使用 PostgreSQL（Supabase）存储结构化数据；Realtime 为前端提供订阅/推送。
 - 物联设备数据通过 IoT 服务接入，完成清洗、映射与入库；异常/状态变化通过 Realtime 通知前端。
-
-
-
-
-

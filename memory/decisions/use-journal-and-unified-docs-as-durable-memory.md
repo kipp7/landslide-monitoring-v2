@@ -2,8 +2,9 @@
 title: use-journal-and-unified-docs-as-durable-memory
 type: note
 tags:
-  - decision
+- decision
 status: active
+permalink: landslide-monitoring-v2-mainline/memory/decisions/use-journal-and-unified-docs-as-durable-memory
 ---
 
 # Decision: use-journal-and-unified-docs-as-durable-memory

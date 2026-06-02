@@ -1,3 +1,9 @@
+---
+title: kickoff-checklist
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/roadmap/kickoff-checklist
+---
+
 # 重构启动前检查清单（开始写代码之前必须完成）
 
 目标：把“准备开始重构”变成一套可执行的启动条件，确保后续进入代码阶段不会因为环境、流程、契约缺失而反复返工。
@@ -39,4 +45,3 @@
 - [ ] Web/App：只做最小展示，且不硬编码传感器元数据
 
 建议把 M1 拆成 3~6 个小 PR，保持每个 PR 可 review、可回滚。
-

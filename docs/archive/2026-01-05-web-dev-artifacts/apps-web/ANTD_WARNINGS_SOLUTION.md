@@ -1,3 +1,9 @@
+---
+title: ANTD_WARNINGS_SOLUTION
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/archive/2026-01-05-web-dev-artifacts/apps-web/antd-warnings-solution
+---
+
 # Ant Design 警告修复方案
 
 ## 🔍 当前警告

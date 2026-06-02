@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-  [string]$BoardHost = "192.168.124.172",
+  [string]$BoardHost = "192.168.124.179",
   [string]$User = "linaro",
   [string]$Password = "",
   [int]$SshPort = 22,
@@ -9,7 +9,7 @@ param(
   [string]$EnvFile = "/etc/lsmv2/field-gateway.env",
   [string]$HealthFile = "/var/lib/lsmv2/field-gateway/health/runtime-health.json",
   [int]$JournalLines = 80,
-  [string]$OutFile = ""
+  [string]$OutFile = "docs/unified/reports/field-rk3568-gateway-runtime-latest.json"
 )
 
 $ErrorActionPreference = "Stop"
@@ -39,7 +39,7 @@ script = Path(sys.argv[5]).read_text(encoding="utf-8")
 
 client = paramiko.SSHClient()
 client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-client.connect(hostname=host, username=user, password=password, port=port, timeout=15, banner_timeout=15, auth_timeout=15)
+client.connect(hostname=host, username=user, password=password, port=port, timeout=20, banner_timeout=60, auth_timeout=30)
 stdin, stdout, stderr = client.exec_command("bash -s --", timeout=180)
 stdin.write(script)
 stdin.flush()

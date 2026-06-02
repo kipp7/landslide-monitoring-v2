@@ -1,9 +1,31 @@
 ﻿{
-    "generatedAt":  "2026-03-24T01:41:21Z",
+    "generatedAt":  "2026-05-21T11:40:07Z",
     "latestZip":  "artifacts/desk-win/latest.zip",
-    "installerExe":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\installer\\LandslideDesk-Setup-win-x64-938f86e.exe",
-    "customInstallerExe":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\customba-installer\\LandslideDesk-CustomBA-Setup-938f86e-20260324-094034.exe",
+    "boundaryReport":  "docs/unified/reports/desk-api-boundary-latest.json",
+    "installerExe":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\installer\\LandslideDesk-Setup-win-x64-628c350.exe",
+    "customInstallerExe":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\customba-installer\\LandslideDesk-CustomBA-Setup-628c350-20260512-174022.exe",
     "checks":  [
+                   {
+                       "id":  "api-boundary",
+                       "title":  "API-only boundary proof",
+                       "target":  "docs/unified/reports/desk-api-boundary-latest.json",
+                       "expected":  [
+                                        "Boundary report ready=true",
+                                        "currentFormalClient=desk-win",
+                                        "allowedDataEntry=API-only",
+                                        "No direct PostgreSQL or ClickHouse access on the client"
+                                    ],
+                       "automatedReference":  {
+                                                  "report":  "docs/unified/reports/desk-api-boundary-latest.json",
+                                                  "ready":  true,
+                                                  "currentFormalClient":  "desk-win",
+                                                  "allowedDataEntry":  "API-only",
+                                                  "disallowedDirectStores":  [
+                                                                                 "PostgreSQL",
+                                                                                 "ClickHouse"
+                                                                             ]
+                                              }
+                   },
                    {
                        "id":  "zip-open",
                        "title":  "latest.zip unpack and launch",
@@ -23,7 +45,7 @@
                    {
                        "id":  "inno-install",
                        "title":  "Inno install, launch, uninstall",
-                       "target":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\installer\\LandslideDesk-Setup-win-x64-938f86e.exe",
+                       "target":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\installer\\LandslideDesk-Setup-win-x64-628c350.exe",
                        "expected":  [
                                         "Installer completes successfully",
                                         "Installed app reaches visible UI",
@@ -41,7 +63,7 @@
                    {
                        "id":  "customba-install",
                        "title":  "Custom BA install, launch, uninstall",
-                       "target":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\customba-installer\\LandslideDesk-CustomBA-Setup-938f86e-20260324-094034.exe",
+                       "target":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\customba-installer\\LandslideDesk-CustomBA-Setup-628c350-20260512-174022.exe",
                        "expected":  [
                                         "Custom BA can complete guided install",
                                         "Installed app reaches visible UI",
@@ -50,10 +72,10 @@
                        "automatedReference":  {
                                                   "report":  "docs/unified/reports/desk-win-customba-installer-verify-latest.json",
                                                   "installExitCode":  0,
-                                                  "aliveAfterLaunch":  true,
-                                                  "readyAfterLaunch":  true,
-                                                  "uninstallExitCode":  0,
-                                                  "ready":  true
+                                                  "aliveAfterLaunch":  false,
+                                                  "readyAfterLaunch":  false,
+                                                  "uninstallExitCode":  null,
+                                                  "ready":  false
                                               }
                    }
                ]

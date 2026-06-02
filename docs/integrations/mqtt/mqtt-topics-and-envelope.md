@@ -1,3 +1,9 @@
+---
+title: mqtt-topics-and-envelope
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/mqtt/mqtt-topics-and-envelope
+---
+
 ﻿# MQTT Topic 规范与 TelemetryEnvelope
 
 目标：上报“可扩展、不写死”，支持稀疏字段、断电重连、重复/乱序，并保证后端可幂等处理。

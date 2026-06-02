@@ -1,3 +1,9 @@
+---
+title: design
+type: note
+permalink: landslide-monitoring-v2-mainline/openspec/changes/add-command-acked-notification-policy/design
+---
+
 ## Context
 
 当前命令通知域已经形成稳定真值：

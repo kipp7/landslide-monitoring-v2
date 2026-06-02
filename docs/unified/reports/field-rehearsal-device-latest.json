@@ -3,12 +3,12 @@
     "code":  200,
     "message":  "ok",
     "data":  {
-                 "deviceId":  "bbc65525-3f4f-4393-82b6-5a5237117955",
+                 "deviceId":  "b0f9382d-464a-4cce-a36c-3a890d1c63a8",
                  "deviceSecret":  "***REDACTED***",
                  "schemaVersion":  1,
                  "credVersion":  1
              },
-    "timestamp":  "2026-03-25T01:23:29.223Z",
-    "traceId":  "34d280d0-8a92-41bf-aa16-a4c956b3dbcf",
+    "timestamp":  "2026-03-26T11:15:46.341Z",
+    "traceId":  "2a05290b-07a5-4067-a90d-d695b9f2ec58",
     "secretFile":  "backups/evidence/field-rehearsal-device-latest.json"
 }

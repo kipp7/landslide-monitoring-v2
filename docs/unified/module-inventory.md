@@ -1,3 +1,9 @@
+---
+title: module-inventory
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/unified/module-inventory
+---
+
 # 模块与职责清单
 
 ## 1. 仓库级别清单

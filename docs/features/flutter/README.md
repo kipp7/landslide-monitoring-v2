@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/features/flutter/readme
+---
+
 ﻿# features/flutter/
 
 移动端（Flutter）PRD/规格与架构说明，用于实现与迭代。

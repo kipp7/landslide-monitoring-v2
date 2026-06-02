@@ -1,3 +1,9 @@
+---
+title: platform-restore-check
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/unified/agent-briefs/platform-restore-check
+---
+
 # 任务简报：platform-restore-check
 
 ## 当前状态

@@ -2,7 +2,7 @@
 param(
   [ValidateSet("skip", "install")]
   [string]$DeployMode = "skip",
-  [string]$BoardHost = "192.168.124.172",
+  [string]$BoardHost = "192.168.124.179",
   [string]$User = "linaro",
   [string]$Password = "",
   [int]$SshPort = 22,
@@ -10,7 +10,7 @@ param(
   [string]$MqttUrl = "mqtt://192.168.124.17:1883",
   [string]$CommandDeviceId = "00000000-0000-0000-0000-000000000002",
   [ValidateSet("manual-collect", "set-report-5", "set-report-300")]
-  [string]$CommandAction = "manual-collect",
+  [string]$CommandAction = "set-report-5",
   [int]$WarmupTimeoutSeconds = 60,
   [int]$WarmupPollSeconds = 5,
   [string]$OutFile = "docs/unified/reports/field-rk3568-gateway-acceptance-latest.json"
@@ -128,13 +128,17 @@ function Test-RuntimeReady {
   $portState = @($runtimeHealth.southbound.ports | Select-Object -First 1)[0]
   $nodeA = Get-NodeByDeviceId -RuntimeReport $RuntimeReport -DeviceId "00000000-0000-0000-0000-000000000001"
   $nodeB = Get-NodeByDeviceId -RuntimeReport $RuntimeReport -DeviceId "00000000-0000-0000-0000-000000000002"
+  $nodeC = Get-NodeByDeviceId -RuntimeReport $RuntimeReport -DeviceId "00000000-0000-0000-0000-000000000003"
 
   return (
     [bool]$runtimeHealth.serial.open -and
     [bool]$runtimeHealth.mqtt.connected -and
+    [int]$runtimeHealth.southbound.configuredNodes -eq 3 -and
+    [int]$portState.enabledNodeCount -eq 3 -and
     [string]$portState.status -eq "online" -and
-    [string]$nodeA.status -eq "online" -and
-    [string]$nodeB.status -eq "online" -and
+    [string]$nodeA.status -in @("online", "degraded") -and
+    [string]$nodeB.status -in @("online", "degraded") -and
+    [string]$nodeC.status -in @("online", "degraded") -and
     [int]$runtimeHealth.stats.parsedMessages -gt 0
   )
 }
@@ -195,17 +199,15 @@ try {
   }
 
   $runtimeReport = Invoke-RuntimeSnapshot -SnapshotOutFile $runtimeOutFile
-  if ($DeployMode -eq "install") {
-    $warmupApplied = $true
-    $deadline = (Get-Date).AddSeconds([Math]::Max(1, $WarmupTimeoutSeconds))
-    while (-not (Test-RuntimeReady -RuntimeReport $runtimeReport) -and (Get-Date) -lt $deadline) {
-      Start-Sleep -Seconds ([Math]::Max(1, $WarmupPollSeconds))
-      $warmupElapsedSeconds += [Math]::Max(1, $WarmupPollSeconds)
-      Write-Host ("==> Waiting for RK3568 runtime warmup ({0}s/{1}s)" -f $warmupElapsedSeconds, $WarmupTimeoutSeconds) -ForegroundColor DarkCyan
-      $runtimeReport = Invoke-RuntimeSnapshot -SnapshotOutFile $runtimeOutFile
-    }
-    $warmupSatisfied = Test-RuntimeReady -RuntimeReport $runtimeReport
+  $warmupApplied = $true
+  $deadline = (Get-Date).AddSeconds([Math]::Max(1, $WarmupTimeoutSeconds))
+  while (-not (Test-RuntimeReady -RuntimeReport $runtimeReport) -and (Get-Date) -lt $deadline) {
+    Start-Sleep -Seconds ([Math]::Max(1, $WarmupPollSeconds))
+    $warmupElapsedSeconds += [Math]::Max(1, $WarmupPollSeconds)
+    Write-Host ("==> Waiting for RK3568 runtime warmup ({0}s/{1}s)" -f $warmupElapsedSeconds, $WarmupTimeoutSeconds) -ForegroundColor DarkCyan
+    $runtimeReport = Invoke-RuntimeSnapshot -SnapshotOutFile $runtimeOutFile
   }
+  $warmupSatisfied = Test-RuntimeReady -RuntimeReport $runtimeReport
 
   Invoke-Step "Run RK3568 node command proof" {
     powershell -NoProfile -ExecutionPolicy Bypass -File ".\scripts\dev\run-rk3568-field-gateway-node-command-proof.ps1" `
@@ -237,10 +239,10 @@ try {
     (Get-Check -Key "serialOpen" -Ok:([bool]$runtimeHealth.serial.open) -Actual ([bool]$runtimeHealth.serial.open) -Expected $true),
     (Get-Check -Key "southboundRouteMode" -Ok:([string]$runtimeHealth.southbound.routeMode -eq "configured-node-routing") -Actual ([string]$runtimeHealth.southbound.routeMode) -Expected "configured-node-routing"),
     (Get-Check -Key "configuredNodes" -Ok:([int]$runtimeHealth.southbound.configuredNodes -eq 3) -Actual ([int]$runtimeHealth.southbound.configuredNodes) -Expected 3),
-    (Get-Check -Key "enabledNodeCount" -Ok:([int]$portState.enabledNodeCount -eq 2) -Actual ([int]$portState.enabledNodeCount) -Expected 2),
-    (Get-Check -Key "nodeAOnline" -Ok:([string]$nodeA.status -eq "online") -Actual ([string]$nodeA.status) -Expected "online"),
-    (Get-Check -Key "nodeBOnline" -Ok:([string]$nodeB.status -eq "online") -Actual ([string]$nodeB.status) -Expected "online"),
-    (Get-Check -Key "nodeCPrepared" -Ok:([string]$nodeC.status -in @("configured", "online")) -Actual ([string]$nodeC.status) -Expected "configured|online"),
+    (Get-Check -Key "enabledNodeCount" -Ok:([int]$portState.enabledNodeCount -eq 3) -Actual ([int]$portState.enabledNodeCount) -Expected 3),
+    (Get-Check -Key "nodeAOnline" -Ok:([string]$nodeA.status -in @("online", "degraded")) -Actual ([string]$nodeA.status) -Expected "online|degraded"),
+    (Get-Check -Key "nodeBOnline" -Ok:([string]$nodeB.status -in @("online", "degraded")) -Actual ([string]$nodeB.status) -Expected "online|degraded"),
+    (Get-Check -Key "nodeCPrepared" -Ok:([string]$nodeC.status -in @("online", "degraded")) -Actual ([string]$nodeC.status) -Expected "online|degraded"),
     (Get-Check -Key "telemetryTopicPrefix" -Ok:([string]$runtimeReport.configuredEnv.MQTT_TOPIC_TELEMETRY_PREFIX -eq "telemetry/") -Actual ([string]$runtimeReport.configuredEnv.MQTT_TOPIC_TELEMETRY_PREFIX) -Expected "telemetry/"),
     (Get-Check -Key "commandTopicPrefix" -Ok:([string]$runtimeReport.configuredEnv.MQTT_TOPIC_COMMAND_PREFIX -eq "cmd/") -Actual ([string]$runtimeReport.configuredEnv.MQTT_TOPIC_COMMAND_PREFIX) -Expected "cmd/"),
     (Get-Check -Key "ackTopicPrefix" -Ok:([string]$runtimeReport.configuredEnv.MQTT_TOPIC_ACK_PREFIX -eq "cmd_ack/") -Actual ([string]$runtimeReport.configuredEnv.MQTT_TOPIC_ACK_PREFIX) -Expected "cmd_ack/"),

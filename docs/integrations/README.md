@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/readme
+---
+
 ﻿# integrations/
 
 该目录是所有“对接契约”的唯一来源，避免全局搜索与多份文档不一致。

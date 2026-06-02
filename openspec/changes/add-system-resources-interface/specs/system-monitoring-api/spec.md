@@ -1,3 +1,9 @@
+---
+title: spec
+type: note
+permalink: landslide-monitoring-v2-mainline/openspec/changes/add-system-resources-interface/specs/system-monitoring-api/spec
+---
+
 ## ADDED Requirements
 
 ### Requirement: Separate Resource Status Model

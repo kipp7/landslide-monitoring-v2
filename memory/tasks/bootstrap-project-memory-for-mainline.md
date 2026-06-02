@@ -2,8 +2,9 @@
 title: bootstrap-project-memory-for-mainline
 type: note
 tags:
-  - task
+- task
 status: active
+permalink: landslide-monitoring-v2-mainline/memory/tasks/bootstrap-project-memory-for-mainline
 ---
 
 # Task: bootstrap-project-memory-for-mainline

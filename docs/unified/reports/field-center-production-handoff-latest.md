@@ -4,7 +4,7 @@
 
 ## Current Boundary
 
-- generatedAt: `2026-04-09T15:53:54Z`
+- generatedAt: `2026-04-14T06:15:20Z`
 - accepted: `true`
 - currentBoundary: `center-production-handoff-ready`
 - primaryRunbook: `docs/guides/runbooks/single-host-runbook.md`

@@ -1,3 +1,9 @@
+---
+title: web-local-dev
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/testing/web-local-dev
+---
+
 # Web 本地登录联调（JWT + ADMIN_API_TOKEN 引导）
 
 目标：解决 Web（`http://localhost:3000`）与 api-service（`http://localhost:8080`）的本地联调配置问题，并说明“第一次登录密码从哪来”。

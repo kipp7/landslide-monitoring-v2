@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/mqtt/schemas/readme
+---
+
 ﻿# integrations/mqtt/schemas/
 
 本目录存放 MQTT 消息体的 JSON Schema（机器可读契约）。

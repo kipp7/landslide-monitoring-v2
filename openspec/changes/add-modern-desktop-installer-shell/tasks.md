@@ -1,3 +1,9 @@
+---
+title: tasks
+type: note
+permalink: landslide-monitoring-v2-mainline/openspec/changes/add-modern-desktop-installer-shell/tasks
+---
+
 ## 1. Discovery
 
 - [ ] 1.1 明确现代化安装器壳层目标与视觉边界，不再将欢迎图替代为整体 UI 方案

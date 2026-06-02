@@ -58,6 +58,14 @@ function numberOrNull(v: unknown): number | null {
   return null;
 }
 
+function readFirstNumber(source: Record<string, unknown>, keys: string[]): number | null {
+  for (const key of keys) {
+    const value = numberOrNull(source[key]);
+    if (value != null) return value;
+  }
+  return null;
+}
+
 function buildLegacyPrediction(sensorData: Record<string, unknown>[]): {
   score: number;
   level: "low" | "medium" | "high";
@@ -65,10 +73,10 @@ function buildLegacyPrediction(sensorData: Record<string, unknown>[]): {
   recommendation: string;
 } {
   const latest = sensorData[0] ?? {};
-  const ax = numberOrNull(latest.acceleration_x) ?? 0;
-  const ay = numberOrNull(latest.acceleration_y) ?? 0;
-  const az = numberOrNull(latest.acceleration_z) ?? 0;
-  const humidity = numberOrNull(latest.humidity) ?? 0;
+  const ax = readFirstNumber(latest, ["accel_x_g", "acceleration_x"]) ?? 0;
+  const ay = readFirstNumber(latest, ["accel_y_g", "acceleration_y"]) ?? 0;
+  const az = readFirstNumber(latest, ["accel_z_g", "acceleration_z"]) ?? 0;
+  const humidity = readFirstNumber(latest, ["humidity_pct", "humidity"]) ?? 0;
 
   const accelMag = Math.sqrt(ax * ax + ay * ay + az * az);
   const accelScore = clamp01(accelMag / 2);

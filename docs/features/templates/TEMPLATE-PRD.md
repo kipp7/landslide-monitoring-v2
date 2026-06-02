@@ -1,3 +1,9 @@
+---
+title: TEMPLATE-PRD
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/features/templates/template-prd
+---
+
 ﻿# PRD 模板：<功能名称>
 
 > 该模板用于“明确要做什么（What）”，并作为 AI 实现/修 Bug 的唯一需求来源之一。
@@ -62,4 +68,3 @@
 
 - M0:
 - M1:
-

@@ -1,3 +1,9 @@
+---
+title: 05-data
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/api/05-data
+---
+
 # 数据接口（v2：ClickHouse 遥测，稀疏指标）
 
 原则：

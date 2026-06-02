@@ -1,3 +1,9 @@
+---
+title: api-tools
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/testing/api-tools
+---
+
 # API/鉴权/数据格式快速测试（给联调用）
 
 这份文档的目标很简单：让你能**快速确认接口能不能通**、**有没有带上 token**、**数据格式对不对**。

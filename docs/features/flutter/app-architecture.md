@@ -1,4 +1,33 @@
-﻿# Flutter App 架构与技术栈（v2）
+---
+title: app-architecture
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/features/flutter/app-architecture
+---
+
+﻿# Flutter App 架构与技术栈（历史参考）
+
+## 0. 当前状态说明（2026-04-20）
+
+本文件不再是当前移动端的最高优先级架构真值。
+
+当前已确认的移动端主线是：
+
+- HarmonyOS-first 山体风险空间指挥 App
+- 先做页面级高保真原型
+- 当前原型工作区：`apps/mobile/`
+- 当前原型技术：`React + Vite`
+
+因此，本文件现在的角色是：
+
+- 保留此前 `Flutter v2` 路线下的工程化经验
+- 作为未来 HarmonyOS 原生实现时可复用的业务约束参考
+- 不再作为“当前必须按此落地”的唯一实现路线
+
+当前正式产品与设计真值请优先查看：
+
+- `apps/mobile/README.md`
+- `openspec/changes/add-harmonyos-spatial-app-ui-foundation/design.md`
+- `openspec/changes/add-harmonyos-spatial-app-ui-foundation/specs/harmonyos-spatial-app-ui/spec.md`
 
 本文件用于约束 App 的工程形态，确保：
 
@@ -86,4 +115,3 @@ App 端闭环定义：
 - App PRD：`docs/features/prd/mobile-app.md`
 - API 契约：`docs/integrations/api/openapi.yaml`
 - 前端/组件规范（同样适用于 App）：`docs/guides/standards/frontend-components.md`
-

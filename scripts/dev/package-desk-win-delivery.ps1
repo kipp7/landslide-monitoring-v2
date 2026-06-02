@@ -4,6 +4,7 @@ param(
   [string]$BuildInfoFile = "docs/unified/reports/desk-win-build-info-latest.json",
   [string]$PackageVerifyFile = "docs/unified/reports/desk-win-package-verify-latest.json",
   [string]$PrerequisitesFile = "docs/unified/reports/desk-win-prerequisites-latest.json",
+  [string]$BoundaryReportFile = "docs/unified/reports/desk-api-boundary-latest.json",
   [string]$DeliveryCheckFile = "docs/unified/reports/desk-win-delivery-latest.json",
   [string]$DeliveryHashFile = "docs/unified/reports/desk-win-delivery-hash-latest.json",
   [string]$BuildChunkFile = "docs/unified/reports/desk-build-chunks-latest.json",
@@ -28,11 +29,43 @@ param(
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
+function New-ZipArchiveFromDirectory {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$SourceDir,
+    [Parameter(Mandatory = $true)]
+    [string]$DestinationZip
+  )
+
+  if (-not (Test-Path -LiteralPath $SourceDir)) {
+    throw "archive source directory not found: $SourceDir"
+  }
+
+  if (Test-Path -LiteralPath $DestinationZip) {
+    Remove-Item -LiteralPath $DestinationZip -Force
+  }
+
+  $tarCommand = Get-Command "tar.exe" -ErrorAction SilentlyContinue
+  if ($tarCommand) {
+    & $tarCommand.Source -a -cf $DestinationZip -C $SourceDir .
+    if ($LASTEXITCODE -ne 0) {
+      throw "tar.exe failed while creating delivery zip (exit=$LASTEXITCODE)"
+    }
+  } else {
+    Compress-Archive -Path (Join-Path $SourceDir "*") -DestinationPath $DestinationZip -Force
+  }
+
+  if (-not (Test-Path -LiteralPath $DestinationZip)) {
+    throw "delivery zip was not created: $DestinationZip"
+  }
+}
+
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $fullPackageManifest = Join-Path $repoRoot $PackageManifestFile
 $fullBuildInfo = Join-Path $repoRoot $BuildInfoFile
 $fullPackageVerify = Join-Path $repoRoot $PackageVerifyFile
 $fullPrerequisites = Join-Path $repoRoot $PrerequisitesFile
+$fullBoundaryReport = Join-Path $repoRoot $BoundaryReportFile
 $fullDeliveryCheck = Join-Path $repoRoot $DeliveryCheckFile
 $fullDeliveryHash = Join-Path $repoRoot $DeliveryHashFile
 $fullBuildChunk = Join-Path $repoRoot $BuildChunkFile
@@ -53,7 +86,7 @@ $fullChecklist = Join-Path $repoRoot $ChecklistFile
 $fullOutDir = Join-Path $repoRoot $OutDir
 $reportFile = Join-Path $repoRoot "docs/unified/reports/desk-win-delivery-bundle-latest.json"
 
-foreach ($path in @($fullPackageManifest, $fullBuildInfo, $fullPackageVerify, $fullPrerequisites, $fullDeliveryCheck, $fullDeliveryHash, $fullBuildChunk, $fullDeliveryIndex, $fullLatestVerify, $fullDeliverySummary, $fullReleaseNotes, $fullProductionHandoff, $fullProductionHandoffJson, $fullManualAcceptanceMd, $fullManualAcceptanceJson, $fullInstallerReport, $fullInstallerVerify, $fullCustomInstallerReport, $fullCustomInstallerVerify, $fullEnvMatrix, $fullChecklist)) {
+foreach ($path in @($fullPackageManifest, $fullBuildInfo, $fullPackageVerify, $fullPrerequisites, $fullBoundaryReport, $fullDeliveryCheck, $fullDeliveryHash, $fullBuildChunk, $fullDeliveryIndex, $fullLatestVerify, $fullDeliverySummary, $fullReleaseNotes, $fullProductionHandoff, $fullProductionHandoffJson, $fullManualAcceptanceMd, $fullManualAcceptanceJson, $fullInstallerReport, $fullInstallerVerify, $fullCustomInstallerReport, $fullCustomInstallerVerify, $fullEnvMatrix, $fullChecklist)) {
   if (-not (Test-Path $path)) {
     throw "required file not found: $path"
   }
@@ -106,6 +139,7 @@ Copy-Item -Path $fullBuildInfo -Destination (Join-Path $bundleDir "reports/desk-
 Copy-Item -Path $fullPackageVerify -Destination (Join-Path $bundleDir "reports/desk-win-package-verify-latest.json") -Force
 Copy-Item -Path $fullLatestVerify -Destination (Join-Path $bundleDir "reports/desk-win-latest-package-verify-latest.json") -Force
 Copy-Item -Path $fullPrerequisites -Destination (Join-Path $bundleDir "reports/desk-win-prerequisites-latest.json") -Force
+Copy-Item -Path $fullBoundaryReport -Destination (Join-Path $bundleDir "reports/desk-api-boundary-latest.json") -Force
 Copy-Item -Path $fullDeliveryCheck -Destination (Join-Path $bundleDir "reports/desk-win-delivery-latest.json") -Force
 Copy-Item -Path $fullDeliveryHash -Destination (Join-Path $bundleDir "reports/desk-win-delivery-hash-latest.json") -Force
 Copy-Item -Path $fullBuildChunk -Destination (Join-Path $bundleDir "reports/desk-build-chunks-latest.json") -Force
@@ -193,10 +227,15 @@ Desk-win Delivery Bundle
 Contents:
 - package/: published desk-win package
 - docs/: delivery docs and environment matrix
-- reports/: package / verify / prerequisites / delivery / hash reports
+- reports/: package / verify / prerequisites / api-boundary / delivery / hash reports
 - installer/: current Inno installer
 - custom-installer/: current custom BA installer
 - start-packaged.ps1 / stop-packaged.ps1 / verify-packaged.ps1: standalone helper scripts
+
+Delivery boundary:
+- current formal client: desk-win
+- business data entry: API-only
+- do not provide direct PostgreSQL / ClickHouse connection details to the client
 
 Recommended validation order:
 1. Read docs/desk-win-env-matrix.md
@@ -206,12 +245,13 @@ Recommended validation order:
 5. Read docs/desk-win-manual-acceptance-latest.md
 6. Read docs/desk-win-delivery-index-latest.json
 7. Check reports/desk-win-delivery-latest.json (`ready` should be true)
-8. Run .\verify-packaged.ps1
-9. Run .\start-packaged.ps1
+8. Check reports/desk-api-boundary-latest.json (`ready` should be true)
+9. Run .\verify-packaged.ps1
+10. Run .\start-packaged.ps1
 "@
 Set-Content -Path (Join-Path $bundleDir "README.txt") -Value $readme -Encoding UTF8
 
-Compress-Archive -Path (Join-Path $bundleDir "*") -DestinationPath $bundleZip -Force
+New-ZipArchiveFromDirectory -SourceDir $bundleDir -DestinationZip $bundleZip
 
 $bundleFiles = Get-ChildItem -Path $bundleDir -Recurse -File
 $result = [ordered]@{

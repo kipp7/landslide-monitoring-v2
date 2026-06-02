@@ -1,3 +1,9 @@
+---
+title: INC-0005-github-rulesets-and-status-checks-setup
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/incidents/inc-0005-github-rulesets-and-status-checks-setup
+---
+
 # INC-0005: GitHub Rulesets 配置与 Required Status Checks 选择困难（含 422 修复）
 
 ## Summary
@@ -125,4 +131,3 @@ $r.rules | ConvertTo-Json -Depth 50
 
 - 如果命令行经常无法访问 GitHub（`Recv failure: Connection was reset`），请参考：
   - `docs/incidents/INC-0006-git-https-connection-reset.md`
-

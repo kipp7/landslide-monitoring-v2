@@ -1,3 +1,9 @@
+---
+title: device-runtime-behavior
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/firmware/device-runtime-behavior
+---
+
 # 设备运行行为与重连策略（固件必须遵守）
 
 本文件定义设备端的“运行行为契约”，避免实现阶段出现：
@@ -73,4 +79,3 @@
 - payload 过大时分包/降采样（后续可扩展协议）
 - sensor 读数异常（NaN/Inf）应在上报前清洗为 null 或字符串错误码
 - 同一周期内避免发布多条重复消息（除非明确需要）
-

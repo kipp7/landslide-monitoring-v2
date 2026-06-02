@@ -1,3 +1,9 @@
+---
+title: rule-dsl-storage-mapping
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/rules/rule-dsl-storage-mapping
+---
+
 # 规则 DSL 的落库与接口映射（v2，无遗漏）
 
 本文件把三件事一次讲清楚，避免后续“文档有 DSL、数据库存不下、API 传不全”的断层：
@@ -122,4 +128,3 @@
 - `alert_rule_versions.dsl_json` 内的 `dslVersion` 与列 `dsl_version` 一致
 - `dsl_json.severity` 与列 `severity` 一致（如果两者都存在）
 - 规则引擎输出事件必须写 `rule_version`
-

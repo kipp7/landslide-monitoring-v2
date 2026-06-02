@@ -1,3 +1,9 @@
+---
+title: final-acceptance-walkthrough
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/roadmap/final-acceptance-walkthrough
+---
+
 # 最终验收走查（参考区 vs v2）
 
 目的：对照参考区（`E:\学校\06 工作区\2\openharmony\landslide-monitor`）逐页走查 v2 的落地点，确认“功能不缺失”，并把仍存在的缺口拆成最小 WS 子项继续推进。

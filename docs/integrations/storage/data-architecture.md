@@ -1,3 +1,9 @@
+---
+title: data-architecture
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/storage/data-architecture
+---
+
 # 存储设计（PostgreSQL + ClickHouse，不写死）
 
 目标：业务数据强一致、遥测数据高吞吐与高效聚合；新增传感器/指标不频繁改表结构。
@@ -76,4 +82,3 @@
 - 新增指标：只需在 PostgreSQL `sensors` 插入定义；设备开始上报该 `sensor_key` 即可落 ClickHouse。
 - 删除/停用指标：在 `sensors` 标记 `disabled`（不要立刻删历史数据）。
 - 设备缺传感器：不影响写入；是否异常由规则引擎决定（缺失策略配置化）。
-

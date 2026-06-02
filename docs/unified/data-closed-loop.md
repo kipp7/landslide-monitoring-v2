@@ -1,3 +1,9 @@
+---
+title: data-closed-loop
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/unified/data-closed-loop
+---
+
 # 数据闭环统一说明
 
 ## 1. 为什么先统一数据闭环

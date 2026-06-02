@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/archive/readme
+---
+
 # archive/
 
 本目录用于归档旧项目与已完成内容：**永远保留背后的故事**，但不作为权威契约或当前实现依据。

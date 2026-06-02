@@ -1,3 +1,9 @@
+---
+title: tasks
+type: note
+permalink: landslide-monitoring-v2-mainline/openspec/changes/add-system-resources-interface/tasks
+---
+
 ## 1. Contract
 
 - [ ] 1.1 定义 `SystemResourceStatus` 接口模型

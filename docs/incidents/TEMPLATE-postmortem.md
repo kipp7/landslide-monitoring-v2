@@ -1,3 +1,9 @@
+---
+title: TEMPLATE-postmortem
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/incidents/template-postmortem
+---
+
 # INC-XXXX: <Title>
 
 ## Summary
@@ -56,4 +62,3 @@
 - 相关契约（integrations）：
 - 相关 PRD（features）：
 - 相关提交/PR（实现阶段）：
-

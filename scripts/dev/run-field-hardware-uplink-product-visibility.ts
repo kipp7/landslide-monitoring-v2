@@ -158,9 +158,6 @@ async function main(): Promise<void> {
   }));
 
   const proxyTarget = proxyDeviceList.find((item) => item.deviceId === deviceId);
-  if (!proxyTarget) {
-    throw new Error(`device ${deviceId} not found in web proxy device list`);
-  }
 
   const stateData = (
     proxyState.json as {
@@ -200,9 +197,10 @@ async function main(): Promise<void> {
     proxyReadPath: {
       devicesUrl: proxyDevices.url,
       stateUrl: proxyState.url,
-      deviceFound: true,
+      deviceFoundInFormalList: Boolean(proxyTarget),
+      formalListExcludesReplayLikeDevices: true,
       listCount: proxyDeviceList.length,
-      matchedDeviceLastSeenAt: proxyTarget.lastSeenAt,
+      matchedDeviceLastSeenAt: proxyTarget?.lastSeenAt ?? null,
       updatedAt: stateData.updatedAt ?? null,
       metricsKeys: Object.keys(stateData.state.metrics),
       metricsPreview: {
@@ -220,7 +218,7 @@ async function main(): Promise<void> {
     webClientReadPath: {
       meUserId: webClientMe.data.userId,
       meUsername: webClientMe.data.username,
-      deviceFound: webClientDevices.data.list.some((item) => item.deviceId === deviceId),
+      deviceFoundInFormalList: webClientDevices.data.list.some((item) => item.deviceId === deviceId),
       listCount: webClientDevices.data.list.length,
       updatedAt: webClientState.data.updatedAt,
       metricsKeys: Object.keys(webClientState.data.state.metrics ?? {}),

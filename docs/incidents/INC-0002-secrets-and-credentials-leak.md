@@ -1,3 +1,9 @@
+---
+title: INC-0002-secrets-and-credentials-leak
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/incidents/inc-0002-secrets-and-credentials-leak
+---
+
 ﻿# INC-0002: 密钥/凭据泄露风险（env 与源码回退常量）
 
 ## Summary
@@ -44,4 +50,3 @@ v2 的根本修复：
 
 - 标准：`docs/guides/standards/backend-rules.md`
 - AI 清单：`docs/guides/ai/checklists.md`
-

@@ -42,6 +42,12 @@ type BaselineRow = {
   updated_at: string;
 };
 
+function formalDevicePredicate(alias = "devices"): string {
+  return `COALESCE(${alias}.device_name, '') NOT LIKE 'field-hardware-replay-%'
+    AND COALESCE(${alias}.metadata->>'note', '') NOT IN ('field_hardware_uplink_replay', 'field_rehearsal', 'smoke_test', 'seed demo')
+    AND COALESCE(${alias}.metadata->>'identityClass', COALESCE(${alias}.metadata->>'identity_class', '')) NOT IN ('seed', 'replay', 'rehearsal', 'smoke_test', 'lab')`;
+}
+
 export function registerGpsBaselineRoutes(app: FastifyInstance, config: AppConfig, pg: PgPool | null): void {
   const adminCfg: AdminAuthConfig = { adminApiToken: config.adminApiToken, jwtEnabled: Boolean(config.jwtAccessSecret) };
 
@@ -60,7 +66,7 @@ export function registerGpsBaselineRoutes(app: FastifyInstance, config: AppConfi
     }
     const { page, pageSize, keyword } = parseQuery.data;
 
-    const where: string[] = ["d.status != 'revoked'"];
+    const where: string[] = ["d.status != 'revoked'", formalDevicePredicate("d")];
     const params: unknown[] = [];
     const add = (sql: string, val: unknown) => {
       params.push(val);
@@ -163,7 +169,7 @@ export function registerGpsBaselineRoutes(app: FastifyInstance, config: AppConfi
             to_char(gb.updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS updated_at
           FROM gps_baselines gb
           JOIN devices d ON d.device_id = gb.device_id
-          WHERE gb.device_id = $1 AND d.status != 'revoked'
+          WHERE gb.device_id = $1 AND d.status != 'revoked' AND ${formalDevicePredicate("d")}
         `,
         [deviceId]
       )
@@ -213,9 +219,11 @@ export function registerGpsBaselineRoutes(app: FastifyInstance, config: AppConfi
     const body = parseBody.data;
 
     const exists = await withPgClient(pg, async (client) =>
-      queryOne<{ device_id: string }>(client, `SELECT device_id FROM devices WHERE device_id = $1 AND status != 'revoked'`, [
-        deviceId
-      ])
+      queryOne<{ device_id: string }>(
+        client,
+        `SELECT device_id FROM devices WHERE device_id = $1 AND status != 'revoked' AND ${formalDevicePredicate("devices")}`,
+        [deviceId]
+      )
     );
     if (!exists) {
       fail(reply, 404, "资源不存在", traceId, { deviceId });

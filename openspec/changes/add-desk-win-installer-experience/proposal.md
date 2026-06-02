@@ -1,3 +1,9 @@
+---
+title: proposal
+type: note
+permalink: landslide-monitoring-v2-mainline/openspec/changes/add-desk-win-installer-experience/proposal
+---
+
 # Change: Desk-win Installer Experience
 
 ## Why

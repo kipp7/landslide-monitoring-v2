@@ -6,8 +6,10 @@ import { HomeRedirect } from "./HomeRedirect";
 import { RequireAuth } from "./RequireAuth";
 
 const AnalysisPage = lazy(async () => ({ default: (await import("../views/AnalysisPage")).AnalysisPage }));
+const AccountManagementPage = lazy(async () => ({ default: (await import("../views/AccountManagementPage")).AccountManagementPage }));
 const BaselinesPage = lazy(async () => ({ default: (await import("../views/BaselinesPage")).BaselinesPage }));
 const DeviceManagementPage = lazy(async () => ({ default: (await import("../views/DeviceManagementPage")).DeviceManagementPage }));
+const DeviceOnboardingPage = lazy(async () => ({ default: (await import("../views/DeviceOnboardingPage")).DeviceOnboardingPage }));
 const DevicesPage = lazy(async () => ({ default: (await import("../views/DevicesPage")).DevicesPage }));
 const GpsMonitoringPage = lazy(async () => ({ default: (await import("../views/GpsMonitoringPage")).GpsMonitoringPage }));
 const GpsPage = lazy(async () => ({ default: (await import("../views/GpsPage")).GpsPage }));
@@ -35,8 +37,10 @@ export function AppRoutes() {
           <Route index element={<Navigate to="home" replace />} />
           <Route path="home" element={<HomePage />} />
           <Route path="analysis" element={<AnalysisPage />} />
+          <Route path="device-management/onboarding" element={<DeviceOnboardingPage />} />
           <Route path="device-management" element={<DeviceManagementPage />} />
           <Route path="gps-monitoring" element={<GpsMonitoringPage />} />
+          <Route path="accounts" element={<AccountManagementPage />} />
           <Route path="settings" element={<SettingsPage />} />
 
           <Route path="dashboard" element={<Navigate to="/app/home" replace />} />

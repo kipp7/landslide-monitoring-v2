@@ -1,24 +1,24 @@
 {
-    "generatedAt":  "2026-04-10T06:39:20Z",
+    "generatedAt":  "2026-04-14T06:15:20Z",
     "accepted":  true,
     "mode":  "field-center-production-handoff",
     "currentBoundary":  "center-production-handoff-ready",
     "upstreamBaselines":  {
                               "centerRuntimeFreeze":  {
                                                           "file":  "docs/unified/reports/field-center-runtime-freeze-latest.json",
-                                                          "generatedAt":  "2026-04-10T06:39:20Z",
+                                                          "generatedAt":  "2026-04-14T06:15:20Z",
                                                           "accepted":  true,
                                                           "boundary":  "center-runtime-freeze-ready"
                                                       },
                               "centerComposeAcceptance":  {
                                                               "file":  "docs/unified/reports/field-center-compose-acceptance-latest.json",
-                                                              "generatedAt":  "2026-04-10T06:36:34Z",
+                                                              "generatedAt":  "2026-04-14T06:14:56Z",
                                                               "accepted":  true,
                                                               "boundary":  "full-path-ready"
                                                           },
                               "phaseReadiness":  {
                                                      "file":  "docs/unified/reports/field-center-deployment-software-adaptation-readiness-latest.json",
-                                                     "generatedAt":  "2026-04-10T06:39:18Z",
+                                                     "generatedAt":  "2026-04-14T06:03:00Z",
                                                      "accepted":  true,
                                                      "boundary":  "center-deployment-software-adaptation-ready"
                                                  }

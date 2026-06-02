@@ -1,3 +1,9 @@
+---
+title: qr-scanning
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/features/flutter/qr-scanning
+---
+
 ﻿# App 扫码能力（QR/条码）与技术选型（v2）
 
 ## 1. 为什么需要扫码
@@ -58,4 +64,3 @@
 
 - App PRD：`docs/features/prd/mobile-app.md`
 - API：`docs/integrations/api/openapi.yaml`
-

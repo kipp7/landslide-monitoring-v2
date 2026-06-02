@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/incidents/readme
+---
+
 ﻿# incidents/
 
 本目录保存事故复盘（Postmortem）。当旧 Bug 复现、同类问题再次出现时，这里是最关键的上下文来源。

@@ -1,3 +1,9 @@
+---
+title: algo-worker-online-replay
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/unified/reports/algo-worker-online-replay
+---
+
 # algo-worker-online-replay
 
 ## 2026-03-13 Checkpoint

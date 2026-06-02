@@ -1,3 +1,9 @@
+---
+title: proposal
+type: note
+permalink: landslide-monitoring-v2-mainline/openspec/changes/add-command-acked-notification-policy/proposal
+---
+
 ## Why
 
 当前命令回执链路已经拿到三条真值：

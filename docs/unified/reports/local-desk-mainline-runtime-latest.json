@@ -1,5 +1,5 @@
 ﻿{
-    "generatedAt":  "2026-03-24T06:09:59Z",
+    "generatedAt":  "2026-04-15T07:11:46Z",
     "api":  {
                 "process":  null,
                 "health":  {
@@ -10,24 +10,28 @@
                            }
             },
     "desk":  {
-                 "process":  null,
+                 "process":  {
+                                 "port":  5174,
+                                 "pid":  35336,
+                                 "localAddress":  "::1",
+                                 "name":  "node.exe",
+                                 "commandLine":  "\"node\"   \"E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\node_modules\\.bin\\\\..\\vite\\bin\\vite.js\" --port 5174"
+                             },
                  "healthIpv6":  {
-                                    "ok":  false,
-                                    "statusCode":  null,
-                                    "url":  "http://[::1]:5174",
-                                    "error":  "The operation has timed out."
+                                    "ok":  true,
+                                    "statusCode":  200,
+                                    "url":  "http://[::1]:5174"
                                 },
                  "healthLocalhost":  {
-                                         "ok":  false,
-                                         "statusCode":  null,
-                                         "url":  "http://localhost:5174",
-                                         "error":  "The operation has timed out."
+                                         "ok":  true,
+                                         "statusCode":  200,
+                                         "url":  "http://localhost:5174"
                                      }
              },
     "deskWin":  {
-                    "running":  false,
-                    "pid":  null,
-                    "name":  null,
-                    "commandLine":  null
+                    "running":  true,
+                    "pid":  37740,
+                    "name":  "LandslideDesk.Win.exe",
+                    "commandLine":  "\"E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\apps\\desk-win\\LandslideDesk.Win\\bin\\Debug\\net8.0-windows\\LandslideDesk.Win.exe\" "
                 }
 }

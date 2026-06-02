@@ -1,3 +1,9 @@
+---
+title: device-commands
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/features/prd/device-commands
+---
+
 ﻿# PRD：设备命令下发与回执（控制/配置）
 
 ## 1. 背景
@@ -26,4 +32,3 @@
 - API：`docs/integrations/api/03-devices.md`
 - MQTT：`docs/integrations/mqtt/mqtt-topics-and-envelope.md`
 - DB：`docs/integrations/storage/postgres/tables/13-device-commands.sql`
-

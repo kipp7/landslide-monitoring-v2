@@ -90,6 +90,51 @@ class BootstrapRuntime:
             results.append({"name": parts[0], "type": parts[1], "device": parts[2]})
         return results
 
+    def connection_profiles(self) -> list[dict[str, str]]:
+        proc = run(["nmcli", "-t", "-f", "NAME,UUID,TYPE", "connection", "show"])
+        results: list[dict[str, str]] = []
+        for line in proc.stdout.splitlines():
+            parts = line.split(":", 2)
+            if len(parts) != 3:
+                continue
+            results.append({"name": parts[0], "uuid": parts[1], "type": parts[2]})
+        return results
+
+    def delete_connection_uuid(self, uuid: str) -> None:
+        if uuid:
+            run(["nmcli", "connection", "delete", "uuid", uuid])
+
+    def cleanup_ap_profiles(self) -> None:
+        ap_related = [
+            item
+            for item in self.connection_profiles()
+            if item["type"] == "802-11-wireless"
+            and (
+                item["name"] == self.ap_connection_name
+                or item["name"] == self.ap_ssid
+                or item["name"].startswith(f"{self.ap_ssid} ")
+            )
+        ]
+        for item in ap_related:
+            self.delete_connection_uuid(item["uuid"])
+
+    def has_ethernet_uplink(self, active_connections: list[dict[str, str]], general: dict[str, str]) -> bool:
+        if general.get("state") != "connected" or general.get("connectivity") != "full":
+            return False
+
+        for item in active_connections:
+            if item["type"] == "802-3-ethernet" and item["device"]:
+                return True
+
+        return False
+
+    def ensure_wifi_operational(self, wifi_device: str) -> None:
+        # Keep the Wi-Fi radio unblocked so the board can fall back to STA
+        # immediately after Ethernet disappears.
+        run(["rfkill", "unblock", "wifi"])
+        run(["nmcli", "radio", "wifi", "on"])
+        run(["nmcli", "device", "set", wifi_device, "managed", "yes"])
+
     def ip_addrs(self) -> list[str]:
         proc = run(["bash", "-lc", "ip -o -4 addr show | awk '{print $2\":\"$4}'"])
         return [line.strip() for line in proc.stdout.splitlines() if line.strip()]
@@ -170,7 +215,9 @@ class BootstrapRuntime:
             check=True,
         )
 
-    def ensure_ap_profile(self, wifi_device: str) -> None:
+    def ensure_ap_profile(self, wifi_device: str, current_mode: str) -> None:
+        if current_mode != "ap_fallback":
+            self.cleanup_ap_profiles()
         exists = run(["nmcli", "-t", "-f", "NAME", "connection", "show", self.ap_connection_name]).returncode == 0
         if not exists:
             run(
@@ -195,10 +242,14 @@ class BootstrapRuntime:
                 "connection",
                 "modify",
                 self.ap_connection_name,
+                "connection.interface-name",
+                wifi_device,
                 "802-11-wireless.mode",
                 "ap",
                 "802-11-wireless.band",
                 "bg",
+                "802-11-wireless.hidden",
+                "no",
                 "ipv4.method",
                 "shared",
                 "ipv6.method",
@@ -242,6 +293,8 @@ class BootstrapRuntime:
         gateway_state = self.gateway_service_state()
         gateway_enabled = self.gateway_service_enabled()
         mode = self.classify_mode(wifi_device or "", active_connections) if wifi_device else "no_wifi_device"
+        if self.has_ethernet_uplink(active_connections, general):
+            mode = "ethernet_uplink"
 
         return {
           "generatedAt": iso_now(),
@@ -282,9 +335,21 @@ class BootstrapRuntime:
             self.set_mode("no_wifi_device")
             return
 
+        self.ensure_wifi_operational(wifi_device)
         self.ensure_gateway_started()
         active_connections = self.active_connections()
+        general = self.general_state()
         current_mode = self.classify_mode(wifi_device, active_connections)
+        self.ensure_ap_profile(wifi_device, current_mode)
+        active_connections = self.active_connections()
+        current_mode = self.classify_mode(wifi_device, active_connections)
+        if self.has_ethernet_uplink(active_connections, general):
+            if any(item["device"] == wifi_device and item["name"] == self.ap_connection_name for item in active_connections):
+                self.connection_down(self.ap_connection_name)
+            self.last_action = "ethernet-healthy"
+            self.last_error = None
+            self.set_mode("ethernet_uplink")
+            return
 
         if current_mode == "sta_connected":
             for item in active_connections:

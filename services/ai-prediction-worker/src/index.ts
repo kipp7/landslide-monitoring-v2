@@ -5,16 +5,11 @@ import { Kafka, logLevel } from "kafkajs";
 import { Pool } from "pg";
 import path from "node:path";
 import crypto from "node:crypto";
+import { createClickhouseClient } from "./clickhouse";
 import { loadConfigFromEnv } from "./config";
-
-type TelemetryRawV1 = {
-  schema_version: 1;
-  received_ts: string;
-  device_id: string;
-  seq?: number;
-  metrics: Record<string, unknown>;
-  meta?: Record<string, unknown>;
-};
+import { loadArtifactRegistry } from "./pipeline/artifacts/artifact-registry";
+import { predictFromTelemetry } from "./pipeline/predict-pipeline";
+import type { TelemetryRawV1 } from "./pipeline/types";
 
 type AiPredictionEventV1 = {
   schema_version: 1;
@@ -49,56 +44,6 @@ function createPgPool(config: ReturnType<typeof loadConfigFromEnv>): Pool {
     database: config.postgresDatabase,
     max: config.postgresPoolMax
   });
-}
-
-function clamp01(v: number): number {
-  if (Number.isNaN(v) || !Number.isFinite(v)) return 0;
-  if (v < 0) return 0;
-  if (v > 1) return 1;
-  return v;
-}
-
-function pickNumber(metrics: Record<string, unknown>, keys: string[]): number | null {
-  for (const k of keys) {
-    const v = metrics[k];
-    if (typeof v === "number" && Number.isFinite(v)) return v;
-  }
-  return null;
-}
-
-function riskLevel(score: number): "low" | "medium" | "high" {
-  if (score >= 0.8) return "high";
-  if (score >= 0.4) return "medium";
-  return "low";
-}
-
-function heuristicScore(metrics: Record<string, unknown>): { score: number; explain: string } {
-  const displacement = pickNumber(metrics, [
-    "displacement_mm",
-    "displacement",
-    "disp_mm",
-    "gps_displacement_mm"
-  ]);
-  const tilt = pickNumber(metrics, ["tilt_deg", "tilt", "inclination_deg"]);
-  const vibration = pickNumber(metrics, ["vibration", "vibration_g", "accel_g"]);
-
-  const dispScore = displacement === null ? 0 : clamp01(Math.abs(displacement) / 100);
-  const tiltScore = tilt === null ? 0 : clamp01(Math.abs(tilt) / 10);
-  const vibScore = vibration === null ? 0 : clamp01(Math.abs(vibration) / 5);
-
-  const score = clamp01(dispScore * 0.6 + tiltScore * 0.3 + vibScore * 0.1);
-  const dispLabel = displacement === null ? "n/a" : String(displacement);
-  const tiltLabel = tilt === null ? "n/a" : String(tilt);
-  const vibLabel = vibration === null ? "n/a" : String(vibration);
-  const explain = `heuristic: disp=${dispLabel}, tilt=${tiltLabel}, vib=${vibLabel}`;
-  return { score, explain };
-}
-
-async function resolveStationId(pg: Pool, deviceId: string): Promise<string | null> {
-  const res = await pg.query<{ station_id: string | null }>("SELECT station_id FROM devices WHERE device_id=$1", [
-    deviceId
-  ]);
-  return res.rows[0]?.station_id ?? null;
 }
 
 async function main(): Promise<void> {
@@ -140,6 +85,10 @@ async function main(): Promise<void> {
   await consumer.subscribe({ topic: config.kafkaTopicTelemetryRaw, fromBeginning: false });
 
   const pg = createPgPool(config);
+  const clickhouse = createClickhouseClient(config);
+  const artifactRegistry = await loadArtifactRegistry(
+    path.resolve(repoRoot, config.artifactRootDir)
+  );
 
   await consumer.run({
     eachMessage: async ({ message }) => {
@@ -158,31 +107,36 @@ async function main(): Promise<void> {
       }
 
       const telemetry: TelemetryRawV1 = parsed;
-      const { score, explain } = heuristicScore(telemetry.metrics);
-      const level = riskLevel(score);
+      const prediction = await predictFromTelemetry({
+        clickhouse,
+        telemetry,
+        pg,
+        config,
+        artifactRegistry
+      });
       const createdTs = new Date().toISOString();
       const predictedTs = new Date(Date.now() + config.predictHorizonSeconds * 1000).toISOString();
       const predictionId = crypto.randomUUID();
-      const stationId = await resolveStationId(pg, telemetry.device_id);
 
       const event: AiPredictionEventV1 = {
         schema_version: 1,
         prediction_id: predictionId,
         created_ts: createdTs,
         device_id: telemetry.device_id,
-        station_id: stationId,
-        model_key: config.modelKey,
-        model_version: config.modelVersion,
+        station_id: prediction.stationId,
+        model_key: prediction.modelKey,
+        model_version: prediction.modelVersion,
         horizon_seconds: config.predictHorizonSeconds,
         predicted_ts: predictedTs,
-        risk_score: score,
-        risk_level: level,
-        explain,
+        risk_score: prediction.riskScore,
+        risk_level: prediction.riskLevel,
+        explain: prediction.explain,
         payload: {
           source: "telemetry.raw.v1",
           received_ts: telemetry.received_ts,
           seq: telemetry.seq ?? null,
-          metrics: telemetry.metrics
+          metrics: telemetry.metrics,
+          ...prediction.payloadExt
         }
       };
 
@@ -235,6 +189,7 @@ async function main(): Promise<void> {
     logger.info("shutting down...");
     await consumer.disconnect();
     await producer.disconnect();
+    await clickhouse?.close();
     await pg.end();
     process.exit(0);
   };

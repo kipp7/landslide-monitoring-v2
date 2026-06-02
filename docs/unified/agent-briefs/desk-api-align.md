@@ -1,3 +1,9 @@
+---
+title: desk-api-align
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/unified/agent-briefs/desk-api-align
+---
+
 # 任务简报：desk-api-align
 
 ## 当前状态

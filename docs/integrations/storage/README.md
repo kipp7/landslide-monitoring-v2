@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/storage/readme
+---
+
 ﻿# integrations/storage/
 
 该目录描述存储层契约：
@@ -9,4 +15,3 @@
 - `docs/integrations/storage/overview.md`
 - `docs/integrations/storage/postgres/`
 - `docs/integrations/storage/clickhouse/`
-

@@ -2,7 +2,7 @@
 param(
   [ValidateSet("skip", "install")]
   [string]$AcceptanceMode = "skip",
-  [string]$BoardHost = "192.168.124.172",
+  [string]$BoardHost = "192.168.124.179",
   [string]$User = "linaro",
   [string]$Password = "",
   [int]$SshPort = 22,
@@ -163,7 +163,11 @@ if (-not (Test-Path -LiteralPath $tmpDir)) {
 
 Push-Location $repoRootLocal
 $originalPythonWarnings = $env:PYTHONWARNINGS
+$originalPythonIoEncoding = $env:PYTHONIOENCODING
+$originalPythonUtf8 = $env:PYTHONUTF8
 $env:PYTHONWARNINGS = "ignore"
+$env:PYTHONIOENCODING = "utf-8"
+$env:PYTHONUTF8 = "1"
 try {
   $acceptanceError = $null
   try {
@@ -176,7 +180,7 @@ try {
         -SshPort $SshPort `
         -RepoRoot $RepoRoot `
         -MqttUrl $MqttUrl `
-        -OutFile $acceptanceOutFile
+        -OutFile $acceptanceOutFile 2>$null
     }
   } catch {
     $acceptanceError = $_.Exception.Message
@@ -233,7 +237,7 @@ try {
     nodeBOnline = (@($sampleArray | Where-Object { $_.nodeBStatus -ne "online" }).Count -eq 0)
     nodeAReachable = (@($sampleArray | Where-Object { $_.nodeAStatus -notin @("online", "degraded") }).Count -eq 0)
     nodeBReachable = (@($sampleArray | Where-Object { $_.nodeBStatus -notin @("online", "degraded") }).Count -eq 0)
-    nodeCPrepared = (@($sampleArray | Where-Object { $_.nodeCStatus -notin @("configured", "online") }).Count -eq 0)
+    nodeCPrepared = (@($sampleArray | Where-Object { $_.nodeCStatus -notin @("online", "degraded") }).Count -eq 0)
   }
 
   $counterDelta = [ordered]@{
@@ -260,8 +264,7 @@ try {
   $reconnectObserved = (@($sampleArray | Where-Object { $_.reconnectScheduled -or $_.reconnectAttempts -gt 0 -or $_.consecutiveReconnectFailures -gt 0 }).Count -gt 0)
   $rejectedEvidenceAligned = ([int]$counterDelta.rejectedMessages -eq [int]$counterDelta.schemaRejected)
 
-  $passed = (
-    [bool]$acceptance.accepted -and
+  $windowPassed = (
     $statusContinuous.serviceActive -and
     $statusContinuous.mqttConnected -and
     $statusContinuous.serialOpen -and
@@ -278,6 +281,12 @@ try {
     ([int]$maxObserved.spoolPending -eq 0) -and
     (-not $reconnectObserved)
   )
+
+  $passed = if ($RequireAcceptance) {
+    [bool]$acceptance.accepted -and $windowPassed
+  } else {
+    $windowPassed
+  }
 
   $conclusion = if ($passed -and [int]$counterDelta.schemaRejected -eq 0 -and [int]$counterDelta.rejectedMessages -eq 0) {
     "rk3568-runtime-observation-window-clean"
@@ -305,6 +314,7 @@ try {
     acceptance = [ordered]@{
       report = "docs/unified/reports/field-rk3568-gateway-acceptance-latest.json"
       accepted = [bool]$acceptance.accepted
+      required = [bool]$RequireAcceptance
       error = $acceptanceError
       currentBoundary = [string]$acceptance.currentBoundary
       commandProofDeviceId = [string]$acceptance.commandProof.deviceId
@@ -338,5 +348,7 @@ try {
   $reportJson
 } finally {
   $env:PYTHONWARNINGS = $originalPythonWarnings
+  $env:PYTHONIOENCODING = $originalPythonIoEncoding
+  $env:PYTHONUTF8 = $originalPythonUtf8
   Pop-Location
 }

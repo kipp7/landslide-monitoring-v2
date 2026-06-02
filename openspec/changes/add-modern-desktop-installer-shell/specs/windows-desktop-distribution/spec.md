@@ -1,3 +1,9 @@
+---
+title: spec
+type: note
+permalink: landslide-monitoring-v2-mainline/openspec/changes/add-modern-desktop-installer-shell/specs/windows-desktop-distribution/spec
+---
+
 ## ADDED Requirements
 
 ### Requirement: Modern Installer Shell

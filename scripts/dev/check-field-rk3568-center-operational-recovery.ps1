@@ -8,7 +8,7 @@ param(
   [string]$MqttUrl = "mqtt://127.0.0.1:1883",
   [string]$Username = "admin",
   [string]$Password = "123456",
-  [string]$BoardHost = "192.168.124.172",
+  [string]$BoardHost = "192.168.124.179",
   [string]$BoardUser = "linaro",
   [string]$BoardPassword = "",
   [int]$BoardSshPort = 22,
@@ -60,6 +60,19 @@ function Resolve-OutputPath {
   }
 
   return Join-Path $RootPath $CandidatePath
+}
+
+function Read-JsonFile {
+  param(
+    [string]$Path,
+    [string]$Label
+  )
+
+  if (-not (Test-Path -LiteralPath $Path)) {
+    throw "$Label not found: $Path"
+  }
+
+  return (Get-Content -LiteralPath $Path -Raw -Encoding UTF8) | ConvertFrom-Json
 }
 
 function Convert-TextToJsonObject {
@@ -338,22 +351,37 @@ try {
     }
   }
 
-  $runtime = Invoke-JsonScript "RK3568 field gateway runtime snapshot" {
-    $runtimeArgs = @(
-      "-NoProfile",
-      "-ExecutionPolicy", "Bypass",
-      "-File", ".\scripts\dev\check-rk3568-field-gateway-runtime.ps1",
-      "-BoardHost", $BoardHost,
-      "-User", $BoardUser,
-      "-SshPort", ([string]$BoardSshPort),
-      "-RepoRoot", $BoardRepoRoot,
-      "-ServiceName", $GatewayServiceName,
-      "-OutFile", $runtimeOutFile
-    )
-    if (-not [string]::IsNullOrWhiteSpace($BoardPassword)) {
-      $runtimeArgs += @("-Password", $BoardPassword)
-    }
-    powershell @runtimeArgs
+  Write-Host "==> RK3568 field gateway runtime snapshot" -ForegroundColor Cyan
+  $runtimeArgs = @(
+    "-NoProfile",
+    "-ExecutionPolicy", "Bypass",
+    "-File", ".\scripts\dev\check-rk3568-field-gateway-runtime.ps1",
+    "-BoardHost", $BoardHost,
+    "-User", $BoardUser,
+    "-SshPort", ([string]$BoardSshPort),
+    "-RepoRoot", $BoardRepoRoot,
+    "-ServiceName", $GatewayServiceName,
+    "-OutFile", $runtimeOutFile
+  )
+  if (-not [string]::IsNullOrWhiteSpace($BoardPassword)) {
+    $runtimeArgs += @("-Password", $BoardPassword)
+  }
+
+  $previousPreference = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  try {
+    $runtimeOutput = & powershell @runtimeArgs 2>&1 | ForEach-Object { $_.ToString() } | Out-String
+  } finally {
+    $ErrorActionPreference = $previousPreference
+  }
+  if ($LASTEXITCODE -ne 0) {
+    throw "RK3568 field gateway runtime snapshot failed (exit=$LASTEXITCODE)"
+  }
+
+  if (Test-Path -LiteralPath $runtimeOutFile) {
+    $runtime = Read-JsonFile -Path $runtimeOutFile -Label "RK3568 field gateway runtime snapshot report"
+  } else {
+    $runtime = Convert-TextToJsonObject -Text $runtimeOutput -Label "RK3568 field gateway runtime snapshot"
   }
 
   $closureArgs = @(
@@ -425,11 +453,15 @@ try {
     (Get-Check -Key "boardParserNoiseWithinBudget" -Ok:([bool]$closureBoardWindow.parserNoiseWithinBudget) -Actual ([bool]$closureBoardWindow.parserNoiseWithinBudget) -Expected $true),
     (Get-Check -Key "boardRejectedEvidenceAligned" -Ok:([bool]$closureBoardWindow.rejectedEvidenceAligned) -Actual ([bool]$closureBoardWindow.rejectedEvidenceAligned) -Expected $true),
     (Get-Check -Key "boardRejectedWriteFailuresDeltaZero" -Ok:([int]$closureBoardWindow.counterDelta.rejectedWriteFailures -eq 0) -Actual ([int]$closureBoardWindow.counterDelta.rejectedWriteFailures) -Expected 0),
-    (Get-Check -Key "stableCommandAcked" -Ok:([string]$closureStableCommand.ackStatus -eq "acked") -Actual ([string]$closureStableCommand.ackStatus) -Expected "acked"),
     (Get-Check -Key "nodeAApiMetricsContract" -Ok:([bool]$closureNodeAApi.metricsContractOk) -Actual ([bool]$closureNodeAApi.metricsContractOk) -Expected $true),
     (Get-Check -Key "nodeAWebMetricsContract" -Ok:([bool]$closureNodeAWeb.metricsContractOk) -Actual ([bool]$closureNodeAWeb.metricsContractOk) -Expected $true),
     (Get-Check -Key "nodeBApiMetricsContract" -Ok:([bool]$closureNodeBApi.metricsContractOk) -Actual ([bool]$closureNodeBApi.metricsContractOk) -Expected $true),
     (Get-Check -Key "nodeBWebMetricsContract" -Ok:([bool]$closureNodeBWeb.metricsContractOk) -Actual ([bool]$closureNodeBWeb.metricsContractOk) -Expected $true)
+  )
+
+  $strictChecks = @(
+    (Get-Check -Key "closureStrictAccepted" -Ok:([bool]$closure.strictAcceptance.accepted) -Actual ([bool]$closure.strictAcceptance.accepted) -Expected $true),
+    (Get-Check -Key "stableCommandAcked" -Ok:([string]$closureStableCommand.ackStatus -eq "acked") -Actual ([string]$closureStableCommand.ackStatus) -Expected "acked")
   )
 
   if ($RestartGatewayService.IsPresent) {
@@ -440,6 +472,7 @@ try {
   }
 
   $accepted = (@($checks | Where-Object { -not $_.ok }).Count -eq 0)
+  $strictAccepted = (@($strictChecks | Where-Object { -not $_.ok }).Count -eq 0)
   $cleanWindowReopened = (
     [bool]$closure.accepted -and
     [bool]$closureBoardWindow.strictlyClean -and
@@ -451,6 +484,12 @@ try {
     accepted = $accepted
     mode = "field-rk3568-center-operational-recovery"
     currentBoundary = if ($accepted) { "rk3568-center-operational-recovery-ready" } else { "rk3568-center-operational-recovery-needs-review" }
+    strictAcceptance = [ordered]@{
+      accepted = $strictAccepted
+      currentBoundary = if ($strictAccepted) { "rk3568-center-operational-recovery-strict-ready" } else { "rk3568-center-operational-recovery-strict-needs-review" }
+      failureKeys = @($strictChecks | Where-Object { -not $_.ok } | ForEach-Object { $_.key })
+      summary = if ($strictAccepted) { "strict-recovery-proof-ready" } else { "operationally-recovered-but-strict-command-proof-still-needs-review" }
+    }
     cleanWindowReopened = $cleanWindowReopened
     centerDeployMode = $CenterDeployMode
     restart = $restart
@@ -483,6 +522,7 @@ try {
       boardObservationRejectedWriteFailuresDelta = [int]$closureBoardWindow.counterDelta.rejectedWriteFailures
       boardObservationRejectedEvidenceAligned = [bool]$closureBoardWindow.rejectedEvidenceAligned
       boardObservationSampleCount = [int]$closure.boardObservation.sampleCount
+      strictAcceptance = $closure.strictAcceptance
       commandId = [string]$closureStableCommand.commandId
       ackStatus = [string]$closureStableCommand.ackStatus
       parseFailureCount = [int]$closureStableCommand.successfulAttempt.parseFailureCount
@@ -491,7 +531,7 @@ try {
       nodeBMetricsKeyCountApi = [int]$closure.livePlatform.nodeB.api.snapshot.metricsKeyCount
       nodeBMetricsKeyCountWeb = [int]$closure.livePlatform.nodeB.web.snapshot.metricsKeyCount
     }
-    checks = $checks
+    checks = @($checks + $strictChecks)
     nextUse = @(
       "standard recovery check: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-field-rk3568-center-operational-recovery.ps1 -BoardPassword <password> -AllowUnsafeSecrets",
       "controlled restart + recovery check: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev\check-field-rk3568-center-operational-recovery.ps1 -RestartGatewayService -BoardPassword <password> -AllowUnsafeSecrets",

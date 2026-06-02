@@ -6,6 +6,7 @@ import { Kafka, logLevel } from "kafkajs";
 import { Pool } from "pg";
 import path from "node:path";
 import { loadConfigFromEnv } from "./config";
+import { createSmsProvider } from "./sms-provider";
 
 type AlertEventV1 = {
   schema_version: 1;
@@ -20,6 +21,17 @@ type AlertEventV1 = {
   station_id?: string | null;
   evidence?: Record<string, unknown>;
   explain?: string;
+};
+
+type BuiltNotification = { title: string; content: string };
+
+type SmsContactRecipient = {
+  contact_id: string;
+  contact_name: string;
+  phone_e164: string;
+  min_severity: Severity;
+  duty_label: string | null;
+  scope_rank: number;
 };
 
 function repoRootFromHere(): string {
@@ -45,7 +57,7 @@ function shouldNotify(ev: AlertEventV1): boolean {
   return ev.event_type === "ALERT_TRIGGER" || ev.event_type === "ALERT_UPDATE";
 }
 
-function buildNotification(ev: AlertEventV1): { title: string; content: string } {
+function buildNotification(ev: AlertEventV1): BuiltNotification {
   const title = `告警：${ev.alert_id}`;
   const content =
     `eventType=${ev.event_type}\n` +
@@ -56,6 +68,161 @@ function buildNotification(ev: AlertEventV1): { title: string; content: string }
     `ruleVersion=${String(ev.rule_version)}\n` +
     `createdTs=${ev.created_ts}\n`;
   return { title, content };
+}
+
+function buildSmsTemplateParams(ev: AlertEventV1, recipient: SmsContactRecipient): Record<string, unknown> {
+  return {
+    alertId: ev.alert_id,
+    eventType: ev.event_type,
+    severity: ev.severity,
+    stationId: ev.station_id ?? "",
+    deviceId: ev.device_id ?? "",
+    ruleId: ev.rule_id,
+    contactName: recipient.contact_name,
+    dutyLabel: recipient.duty_label ?? ""
+  };
+}
+
+async function hasContactLibrary(pg: Pool): Promise<boolean> {
+  const result = await pg.query<{ ok: boolean }>(
+    `
+      SELECT
+        to_regclass('public.alert_contacts') IS NOT NULL
+        AND to_regclass('public.alert_contact_bindings') IS NOT NULL
+        AND to_regclass('public.alert_sms_delivery_jobs') IS NOT NULL AS ok
+    `
+  );
+  return result.rows[0]?.ok === true;
+}
+
+async function resolveSmsContactRecipients(pg: Pool, ev: AlertEventV1): Promise<SmsContactRecipient[]> {
+  const result = await pg.query<SmsContactRecipient>(
+    `
+      WITH event_station AS (
+        SELECT
+          station_id,
+          station_code,
+          COALESCE(metadata->>'regionCode', metadata->>'region_code', metadata->>'region') AS region_code
+        FROM stations
+        WHERE station_id = $2::uuid
+      ),
+      matched AS (
+        SELECT DISTINCT ON (c.contact_id)
+          c.contact_id,
+          c.contact_name,
+          c.phone_e164,
+          b.min_severity,
+          b.duty_label,
+          CASE
+            WHEN b.device_id = $1::uuid OR g.device_id = $1::uuid THEN 1
+            WHEN b.station_id = $2::uuid OR g.station_id = $2::uuid THEN 2
+            WHEN b.region_code IS NOT NULL AND b.region_code = event_station.region_code THEN 3
+            WHEN g.region_code IS NOT NULL AND g.region_code = event_station.region_code THEN 4
+            WHEN g.group_type = 'global' THEN 9
+            ELSE 20
+          END AS scope_rank
+        FROM alert_contact_bindings b
+        JOIN alert_contacts c ON c.contact_id = b.contact_id
+        LEFT JOIN alert_contact_groups g ON g.group_id = b.group_id
+        LEFT JOIN event_station ON TRUE
+        WHERE b.is_active = TRUE
+          AND b.notify_sms = TRUE
+          AND c.is_active = TRUE
+          AND (
+            ($1::uuid IS NOT NULL AND (b.device_id = $1::uuid OR g.device_id = $1::uuid))
+            OR ($2::uuid IS NOT NULL AND (b.station_id = $2::uuid OR g.station_id = $2::uuid))
+            OR (event_station.region_code IS NOT NULL AND (b.region_code = event_station.region_code OR g.region_code = event_station.region_code))
+            OR g.group_type = 'global'
+          )
+        ORDER BY c.contact_id, scope_rank ASC, b.priority ASC
+      )
+      SELECT contact_id, contact_name, phone_e164, min_severity, duty_label, scope_rank
+      FROM matched
+      ORDER BY scope_rank ASC, contact_name ASC
+    `,
+    [ev.device_id ?? null, ev.station_id ?? null]
+  );
+  return result.rows;
+}
+
+async function createOrReuseSmsJob(
+  pg: Pool,
+  ev: AlertEventV1,
+  recipient: SmsContactRecipient,
+  provider: string,
+  notification: BuiltNotification
+): Promise<{ jobId: string; status: string }> {
+  const result = await pg.query<{ sms_job_id: string; status: string }>(
+    `
+      INSERT INTO alert_sms_delivery_jobs (
+        event_id,
+        contact_id,
+        phone_e164,
+        provider,
+        status,
+        title,
+        content,
+        template_params
+      )
+      VALUES (
+        $1::uuid,
+        $2::uuid,
+        $3,
+        $4,
+        'queued',
+        $5,
+        $6,
+        $7::jsonb
+      )
+      ON CONFLICT (event_id, contact_id, phone_e164, provider)
+      DO UPDATE SET updated_at = NOW()
+      RETURNING sms_job_id, status
+    `,
+    [
+      ev.event_id,
+      recipient.contact_id,
+      recipient.phone_e164,
+      provider,
+      notification.title,
+      notification.content,
+      JSON.stringify(buildSmsTemplateParams(ev, recipient))
+    ]
+  );
+  const row = result.rows[0];
+  if (!row) throw new Error("failed to create sms delivery job");
+  return { jobId: row.sms_job_id, status: row.status };
+}
+
+async function updateSmsJobResult(
+  pg: Pool,
+  jobId: string,
+  result: {
+    status: "sent" | "failed" | "skipped";
+    providerMessageId?: string;
+    providerResponse: Record<string, unknown>;
+    errorMessage?: string;
+  }
+): Promise<void> {
+  await pg.query(
+    `
+      UPDATE alert_sms_delivery_jobs
+      SET
+        status = $2::varchar,
+        provider_message_id = $3,
+        provider_response = $4::jsonb,
+        error_message = $5,
+        sent_at = CASE WHEN $2::varchar = 'sent' THEN NOW() ELSE sent_at END,
+        updated_at = NOW()
+      WHERE sms_job_id = $1::uuid
+    `,
+    [
+      jobId,
+      result.status,
+      result.providerMessageId ?? null,
+      JSON.stringify(result.providerResponse),
+      result.errorMessage ?? null
+    ]
+  );
 }
 
 function isQuietNow(now: Date, start: string, end: string): boolean {
@@ -107,8 +274,21 @@ async function main(): Promise<void> {
   await consumer.subscribe({ topic: config.kafkaTopicAlertsEvents, fromBeginning: false });
 
   const pg = createPgPool(config);
+  const smsProvider = createSmsProvider(config);
+  const contactLibraryEnabled =
+    config.notifyType === "sms" && (config.smsRecipientMode === "contact_library" || config.smsRecipientMode === "both");
+  const contactLibraryAvailable = contactLibraryEnabled ? await hasContactLibrary(pg) : false;
 
-  logger.info({ topic: config.kafkaTopicAlertsEvents, notifyType: config.notifyType }, "alert-notify-worker started");
+  logger.info(
+    {
+      topic: config.kafkaTopicAlertsEvents,
+      notifyType: config.notifyType,
+      smsRecipientMode: config.smsRecipientMode,
+      smsProvider: smsProvider.providerName,
+      contactLibraryAvailable
+    },
+    "alert-notify-worker started"
+  );
 
   await consumer.run({
     autoCommit: false,
@@ -178,28 +358,48 @@ async function main(): Promise<void> {
           const n = buildNotification(ev);
           const now = new Date();
 
-          for (const sub of subs.rows) {
-            if (!compareSeverityAtLeast(ev.severity, sub.min_severity)) continue;
-            if (config.notifyType === "app" && !sub.notify_app) continue;
-            if (config.notifyType === "sms" && !sub.notify_sms) continue;
-            if (config.notifyType === "email" && !sub.notify_email) continue;
-            if (sub.quiet_start_time && sub.quiet_end_time && isQuietNow(now, sub.quiet_start_time, sub.quiet_end_time)) {
-              continue;
-            }
+          if (config.notifyType !== "sms" || config.smsRecipientMode !== "contact_library") {
+            for (const sub of subs.rows) {
+              if (!compareSeverityAtLeast(ev.severity, sub.min_severity)) continue;
+              if (config.notifyType === "app" && !sub.notify_app) continue;
+              if (config.notifyType === "sms" && !sub.notify_sms) continue;
+              if (config.notifyType === "email" && !sub.notify_email) continue;
+              if (sub.quiet_start_time && sub.quiet_end_time && isQuietNow(now, sub.quiet_start_time, sub.quiet_end_time)) {
+                continue;
+              }
 
-            await pg.query(
-              `
-                INSERT INTO alert_notifications (
-                  event_id, user_id, notify_type, status, title, content
-                )
-                SELECT $1::uuid, $2::uuid, $3::varchar, 'pending', $4, $5
-                WHERE NOT EXISTS (
-                  SELECT 1 FROM alert_notifications
-                  WHERE event_id = $1::uuid AND user_id = $2::uuid AND notify_type = $3::varchar
-                )
-              `,
-              [ev.event_id, sub.user_id, config.notifyType, n.title, n.content]
-            );
+              await pg.query(
+                `
+                  INSERT INTO alert_notifications (
+                    event_id, user_id, notify_type, status, title, content
+                  )
+                  SELECT $1::uuid, $2::uuid, $3::varchar, 'pending', $4, $5
+                  WHERE NOT EXISTS (
+                    SELECT 1 FROM alert_notifications
+                    WHERE event_id = $1::uuid AND user_id = $2::uuid AND notify_type = $3::varchar
+                  )
+                `,
+                [ev.event_id, sub.user_id, config.notifyType, n.title, n.content]
+              );
+            }
+          }
+
+          if (contactLibraryEnabled && contactLibraryAvailable) {
+            const recipients = await resolveSmsContactRecipients(pg, ev);
+            for (const recipient of recipients) {
+              if (!compareSeverityAtLeast(ev.severity, recipient.min_severity)) continue;
+              const job = await createOrReuseSmsJob(pg, ev, recipient, smsProvider.providerName, n);
+              if (job.status === "sent" || job.status === "delivered") continue;
+
+              const result = await smsProvider.send({
+                jobId: job.jobId,
+                phoneE164: recipient.phone_e164,
+                title: n.title,
+                content: n.content,
+                templateParams: buildSmsTemplateParams(ev, recipient)
+              });
+              await updateSmsJobResult(pg, job.jobId, result);
+            }
           }
 
           logger.info({ traceId, eventId: ev.event_id, eventType: ev.event_type, alertId: ev.alert_id }, "notifications processed");

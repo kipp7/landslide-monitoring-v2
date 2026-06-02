@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/rules/readme
+---
+
 ﻿# integrations/rules/
 
 该目录描述规则系统的对接契约（DSL、落库映射、版本与回放约定）。

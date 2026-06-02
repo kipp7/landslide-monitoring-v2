@@ -1,3 +1,9 @@
+---
+title: platform-closed-loop-check-2026-03
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/unified/platform-closed-loop-check-2026-03
+---
+
 # 平台服务与数据闭环核查（2026-03）
 
 ## 1. 核查目标

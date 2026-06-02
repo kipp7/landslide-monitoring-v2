@@ -1,3 +1,9 @@
+---
+title: Group7-Screenshot-Plan
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/archive/2026-01-05-web-dev-artifacts/apps-web/docs/group7-screenshot-plan
+---
+
 # Group 7 截图计划与命名规范
 
 ## 命名规范
@@ -45,8 +51,3 @@
 - 统一窗口宽度，隐藏地址栏干扰元素
 - 关键处加红框/标注（如需），但保持简洁
 - 若含大屏场景，额外导出 2560×1440 版本
-
-
-
-
-

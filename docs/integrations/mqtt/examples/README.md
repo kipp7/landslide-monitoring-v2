@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/mqtt/examples/readme
+---
+
 ﻿# MQTT 示例（与 JSON Schema 对齐）
 
 本目录存放 MQTT 消息的**机器可验证**示例，用于：

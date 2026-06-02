@@ -1,3 +1,9 @@
+---
+title: README
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/tools/postman/readme
+---
+
 # Postman 测试套件（本地）
 
 用于快速验证：接口连通、token 是否生效、数据格式是否对齐。
@@ -15,4 +21,3 @@
 
 - `baseUrl`：默认 `http://localhost:8080`
 - `token`：默认 `dev`（本地联调用）
-

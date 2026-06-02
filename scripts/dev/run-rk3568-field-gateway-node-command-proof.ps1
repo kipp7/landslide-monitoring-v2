@@ -2,16 +2,21 @@
 param(
   [Parameter(Mandatory = $true)]
   [string]$DeviceId,
-  [ValidateSet("manual-collect", "set-report-5", "set-report-300")]
+  [ValidateSet("manual-collect", "set-report-5", "set-report-300", "set-report-custom")]
   [string]$Action = "manual-collect",
-  [string]$BoardHost = "192.168.124.172",
+  [int]$ReportIntervalSeconds = 0,
+  [string]$BoardHost = "192.168.124.179",
   [string]$User = "linaro",
   [string]$Password = "",
   [int]$SshPort = 22,
   [string]$ServiceName = "lsmv2-field-gateway.service",
   [string]$HealthFile = "/var/lib/lsmv2/field-gateway/health/runtime-health.json",
+  [string]$RejectedDir = "/var/lib/lsmv2/field-gateway/spool/rejected",
   [string]$MqttUrl = "mqtt://127.0.0.1:1883",
   [string]$ApiEnvFile = "services/api/.env",
+  [string]$ApiBaseUrl = "http://127.0.0.1:8080",
+  [string]$ApiUsername = "admin",
+  [string]$ApiPassword = "123456",
   [string]$MqttUsername = "",
   [string]$MqttPassword = "",
   [int]$WaitSeconds = 40,
@@ -68,7 +73,7 @@ script = Path(sys.argv[5]).read_text(encoding="utf-8")
 
 client = paramiko.SSHClient()
 client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-client.connect(hostname=host, username=user, password=password, port=port, timeout=15, banner_timeout=15, auth_timeout=15)
+client.connect(hostname=host, username=user, password=password, port=port, timeout=20, banner_timeout=60, auth_timeout=30)
 stdin, stdout, stderr = client.exec_command("bash -s --", timeout=120)
 stdin.write(script)
 stdin.flush()
@@ -163,6 +168,101 @@ journalctl -u '$RemoteServiceName' -n $LineCount --no-pager | grep -F '$CommandI
   return [string](Invoke-RemoteBash -TargetHost $TargetHost -TargetUser $TargetUser -TargetPassword $TargetPassword -TargetPort $TargetPort -ScriptText $script | Out-String)
 }
 
+function Get-RemoteRejectedEvidence {
+  param(
+    [string]$TargetHost,
+    [string]$TargetUser,
+    [string]$TargetPassword,
+    [int]$TargetPort,
+    [string]$RemoteRejectedDir,
+    [string]$CommandId,
+    [string]$DeviceId
+  )
+
+  $pythonSnippet = @'
+import json
+from pathlib import Path
+
+rejected_dir = Path("__REJECTED_DIR__")
+command_id = "__COMMAND_ID__"
+device_id = "__DEVICE_ID__"
+
+summary = {
+    "available": rejected_dir.exists(),
+    "dir": str(rejected_dir),
+    "commandId": command_id,
+    "deviceId": device_id,
+    "commandIdMatchCount": 0,
+    "deviceIdMatchCount": 0,
+    "ackMarkerCount": 0,
+    "ackedStatusCount": 0,
+    "commandIdAndAckMarkerCount": 0,
+    "commandIdAndAckedStatusCount": 0,
+    "samples": []
+}
+
+if rejected_dir.exists():
+    files = sorted(rejected_dir.glob("*.json"), reverse=True)[:200]
+    for path in files:
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            continue
+
+        has_command = command_id in text
+        has_device = device_id in text
+        has_ack_marker = '"ack_ts"' in text
+        has_acked = '"status":"acked"' in text or '"status": "acked"' in text
+
+        if has_command:
+            summary["commandIdMatchCount"] += 1
+        if has_device:
+            summary["deviceIdMatchCount"] += 1
+        if has_ack_marker:
+            summary["ackMarkerCount"] += 1
+        if has_acked:
+            summary["ackedStatusCount"] += 1
+        if has_command and has_ack_marker:
+            summary["commandIdAndAckMarkerCount"] += 1
+        if has_command and has_acked:
+            summary["commandIdAndAckedStatusCount"] += 1
+
+        if has_command or has_ack_marker:
+            anchor = text.find(command_id)
+            if anchor < 0:
+                anchor = text.find('"ack_ts"')
+            if anchor < 0:
+                anchor = 0
+            start = max(anchor - 180, 0)
+            end = min(anchor + 220, len(text))
+            excerpt = text[start:end].replace("\n", "\\n").replace("\r", "")
+            summary["samples"].append({
+                "file": str(path),
+                "containsCommandId": has_command,
+                "containsDeviceId": has_device,
+                "containsAckMarker": has_ack_marker,
+                "containsAckedStatus": has_acked,
+                "excerpt": excerpt
+            })
+
+summary["samples"] = summary["samples"][:5]
+print(json.dumps(summary, ensure_ascii=False))
+'@
+
+  $remoteScript = @"
+set -euo pipefail
+python3 - <<'PY'
+$pythonSnippet
+PY
+"@
+
+  $remoteScript = $remoteScript.Replace("__REJECTED_DIR__", $RemoteRejectedDir.Replace("\", "\\"))
+  $remoteScript = $remoteScript.Replace("__COMMAND_ID__", $CommandId)
+  $remoteScript = $remoteScript.Replace("__DEVICE_ID__", $DeviceId)
+
+  return (Invoke-RemoteBash -TargetHost $TargetHost -TargetUser $TargetUser -TargetPassword $TargetPassword -TargetPort $TargetPort -ScriptText $remoteScript | ConvertFrom-Json)
+}
+
 function Get-ActionSpec {
   param([string]$ActionName)
 
@@ -194,6 +294,20 @@ function Get-ActionSpec {
           report_interval_s = 300
         }
         payloadLabel = "set_report_interval_300s_runtime_node_proof"
+      }
+    }
+    "set-report-custom" {
+      if ($ReportIntervalSeconds -le 0) {
+        throw "set-report-custom requires -ReportIntervalSeconds > 0"
+      }
+
+      return [ordered]@{
+        commandType = "set_config"
+        payload = [ordered]@{
+          sampling_s = 5
+          report_interval_s = $ReportIntervalSeconds
+        }
+        payloadLabel = ("set_report_interval_{0}s_runtime_node_proof" -f $ReportIntervalSeconds)
       }
     }
     default {
@@ -244,10 +358,112 @@ function Convert-JournalLineToStructuredEvent {
   }
 }
 
+function New-ApiSession {
+  param(
+    [string]$BaseUrl,
+    [string]$UserNameValue,
+    [string]$PasswordValue
+  )
+
+  $loginUri = ($BaseUrl.TrimEnd("/") + "/api/v1/auth/login")
+  $loginBody = @{
+    username = $UserNameValue
+    password = $PasswordValue
+  } | ConvertTo-Json -Compress
+
+  $login = Invoke-RestMethod -Uri $loginUri -Method Post -ContentType "application/json" -Body $loginBody -Headers @{
+    Accept = "application/json"
+  }
+
+  $token = [string]$login.data.token
+  if ([string]::IsNullOrWhiteSpace($token)) {
+    throw "Auth token missing from $loginUri"
+  }
+
+  return [pscustomobject]@{
+    baseUrl = $BaseUrl.TrimEnd("/")
+    headers = @{
+      Accept = "application/json"
+      Authorization = "Bearer $token"
+    }
+  }
+}
+
+function Get-DeviceStateSnapshot {
+  param(
+    $Session,
+    [string]$TargetDeviceId
+  )
+
+  return Invoke-RestMethod -Uri ($Session.baseUrl + "/api/v1/data/state/" + [uri]::EscapeDataString($TargetDeviceId)) -Method Get -Headers $Session.headers -TimeoutSec 10
+}
+
+function Try-Get-ReadPathEvidence {
+  param(
+    $Session,
+    [string]$TargetDeviceId,
+    [string]$ExpectedCommandId,
+    [string]$ExpectedCommandType,
+    [datetime]$IssuedAtUtc
+  )
+
+  if ($null -eq $Session) {
+    return $null
+  }
+
+  try {
+    $response = Get-DeviceStateSnapshot -Session $Session -TargetDeviceId $TargetDeviceId
+    $stateData = $response.data
+    $state = $stateData.state
+    $meta = if ($state) { $state.meta } else { $null }
+    $updatedAtText = if ($null -ne $stateData.PSObject.Properties["updatedAt"]) { [string]$stateData.updatedAt } else { "" }
+    $updatedAtUtc = $null
+    if (-not [string]::IsNullOrWhiteSpace($updatedAtText)) {
+      $updatedAtUtc = [DateTime]::Parse($updatedAtText, [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::AssumeUniversal -bor [System.Globalization.DateTimeStyles]::AdjustToUniversal)
+    }
+
+    $lastCommandId = if ($meta -and $null -ne $meta.PSObject.Properties["last_command_id"]) { [string]$meta.last_command_id } else { "" }
+    $lastCommandType = if ($meta -and $null -ne $meta.PSObject.Properties["last_command_type"]) { [string]$meta.last_command_type } else { "" }
+    $uploadTrigger = if ($meta -and $null -ne $meta.PSObject.Properties["upload_trigger"]) { [string]$meta.upload_trigger } else { "" }
+
+    $commandIdMatch = ($lastCommandId -eq $ExpectedCommandId)
+    $commandTypeMatch = ($lastCommandType -eq $ExpectedCommandType)
+    $updatedAfterIssue = ($null -ne $updatedAtUtc -and $updatedAtUtc -ge $IssuedAtUtc)
+    $telemetryAdvancedToCommand = ($commandIdMatch -and $commandTypeMatch -and $updatedAfterIssue)
+
+    return [pscustomobject][ordered]@{
+      available = $true
+      error = $null
+      updatedAt = $updatedAtText
+      updatedAfterIssue = $updatedAfterIssue
+      lastCommandId = $lastCommandId
+      lastCommandType = $lastCommandType
+      uploadTrigger = $uploadTrigger
+      commandIdMatch = $commandIdMatch
+      commandTypeMatch = $commandTypeMatch
+      telemetryAdvancedToCommand = $telemetryAdvancedToCommand
+    }
+  } catch {
+    return [pscustomobject][ordered]@{
+      available = $false
+      error = $_.Exception.Message
+      updatedAt = $null
+      updatedAfterIssue = $false
+      lastCommandId = ""
+      lastCommandType = ""
+      uploadTrigger = ""
+      commandIdMatch = $false
+      commandTypeMatch = $false
+      telemetryAdvancedToCommand = $false
+    }
+  }
+}
+
 function Get-ParseFailureEvidence {
   param(
     [string]$JournalText,
-    [string]$CommandId
+    [string]$CommandId,
+    [Nullable[Int64]]$MinEventTime = $null
   )
 
   $evidence = @()
@@ -258,6 +474,10 @@ function Get-ParseFailureEvidence {
 
     $event = Convert-JournalLineToStructuredEvent -Line $line
     if (-not $event) { continue }
+    if ($MinEventTime -ne $null) {
+      if ($null -eq $event.PSObject.Properties["time"]) { continue }
+      if ([Int64]$event.time -lt $MinEventTime.Value) { continue }
+    }
 
     $rawPayloadSnippet = ""
     if ($null -ne $event.PSObject.Properties["rawPayloadSnippet"]) {
@@ -332,35 +552,81 @@ function Get-CommandEventEvidence {
 function Get-ProofDiagnosis {
   param(
     [bool]$ProofPassed,
+    $HealthBefore,
     $HealthAfter,
+    $BeforeNode,
+    $AfterNode,
+    $CommandForwardEvidence,
+    $ReadPathEvidence,
+    $RejectedEvidence,
     [string]$JournalText,
     [string]$CommandId,
     [string]$AckStatus = ""
   )
 
-  $parseFailureEvidence = @(Get-ParseFailureEvidence -JournalText $JournalText -CommandId $CommandId)
+  $minEventTime = $null
+  if ($CommandForwardEvidence -and $null -ne $CommandForwardEvidence.PSObject.Properties["time"]) {
+    $minEventTime = [Int64]$CommandForwardEvidence.time
+  }
+  $parseFailureEvidence = @(Get-ParseFailureEvidence -JournalText $JournalText -CommandId $CommandId -MinEventTime $minEventTime)
   $failureModes = @($parseFailureEvidence | ForEach-Object { $_.failureMode } | Select-Object -Unique)
-  $ackMessagesPublished = [int]$HealthAfter.stats.ackMessagesPublished
-  $commandsForwarded = [int]$HealthAfter.stats.commandsForwarded
+  $ackMessagesPublishedBefore = [int]$HealthBefore.stats.ackMessagesPublished
+  $ackMessagesPublishedAfter = [int]$HealthAfter.stats.ackMessagesPublished
+  $ackMessagesPublishedDelta = $ackMessagesPublishedAfter - $ackMessagesPublishedBefore
+  $commandsForwardedBefore = [int]$HealthBefore.stats.commandsForwarded
+  $commandsForwardedAfter = [int]$HealthAfter.stats.commandsForwarded
+  $commandsForwardedDelta = $commandsForwardedAfter - $commandsForwardedBefore
+  $nodeAckPublishesBefore = if ($BeforeNode -and $null -ne $BeforeNode.PSObject.Properties["ackPublishes"]) { [int]$BeforeNode.ackPublishes } else { 0 }
+  $nodeAckPublishesAfter = if ($AfterNode -and $null -ne $AfterNode.PSObject.Properties["ackPublishes"]) { [int]$AfterNode.ackPublishes } else { 0 }
+  $nodeAckPublishesDelta = $nodeAckPublishesAfter - $nodeAckPublishesBefore
+  $nodeTelemetryBefore = if ($BeforeNode -and $null -ne $BeforeNode.PSObject.Properties["telemetryMessages"]) { [int]$BeforeNode.telemetryMessages } else { 0 }
+  $nodeTelemetryAfter = if ($AfterNode -and $null -ne $AfterNode.PSObject.Properties["telemetryMessages"]) { [int]$AfterNode.telemetryMessages } else { 0 }
+  $nodeTelemetryDelta = $nodeTelemetryAfter - $nodeTelemetryBefore
+  $nodeStatusBefore = if ($BeforeNode -and $null -ne $BeforeNode.PSObject.Properties["status"]) { [string]$BeforeNode.status } else { "" }
+  $nodeStatusAfter = if ($AfterNode -and $null -ne $AfterNode.PSObject.Properties["status"]) { [string]$AfterNode.status } else { "" }
+  $targetTelemetryAdvancedToCommand = ($null -ne $ReadPathEvidence -and [bool]$ReadPathEvidence.telemetryAdvancedToCommand)
+  $rejectedCommandIdMatchCount = if ($null -ne $RejectedEvidence -and $null -ne $RejectedEvidence.PSObject.Properties["commandIdMatchCount"]) { [int]$RejectedEvidence.commandIdMatchCount } else { 0 }
+  $rejectedCommandIdAndAckMarkerCount = if ($null -ne $RejectedEvidence -and $null -ne $RejectedEvidence.PSObject.Properties["commandIdAndAckMarkerCount"]) { [int]$RejectedEvidence.commandIdAndAckMarkerCount } else { 0 }
 
   $summary = if ($ProofPassed) {
     "command-forward-and-ack-publish-succeeded"
   } elseif ($AckStatus -and $AckStatus -ne "acked") {
     "command-forwarded-but-ack-status-not-acked"
-  } elseif ($commandsForwarded -le 0) {
+  } elseif ($commandsForwardedDelta -le 0) {
     "command-did-not-forward"
-  } elseif ($ackMessagesPublished -gt 0) {
-    "ack-published-but-proof-did-not-classify-as-passed"
+  } elseif ($targetTelemetryAdvancedToCommand -and $rejectedCommandIdMatchCount -gt 0 -and $rejectedCommandIdAndAckMarkerCount -le 0) {
+    "target-consumed-command-and-command-id-appears-in-rejected-evidence-without-explicit-ack-marker"
+  } elseif ($targetTelemetryAdvancedToCommand -and ($failureModes -contains "shared-stream-byte-interleaving")) {
+    "target-consumed-command-but-ack-corrupted-by-shared-stream-byte-interleaving"
+  } elseif ($targetTelemetryAdvancedToCommand -and ($failureModes -contains "southbound-json-fragmentation")) {
+    "target-consumed-command-but-ack-corrupted-by-southbound-json-fragmentation"
+  } elseif ($targetTelemetryAdvancedToCommand -and ($nodeAckPublishesDelta -le 0 -and $ackMessagesPublishedDelta -le 0)) {
+    "target-consumed-command-but-ack-not-published"
+  } elseif ($nodeAckPublishesDelta -gt 0 -or $ackMessagesPublishedDelta -gt 0) {
+    "ack-published-outside-proof-classification"
+  } elseif ($nodeStatusAfter -eq "offline" -and $nodeTelemetryDelta -le 0) {
+    "command-forwarded-while-node-offline"
   } elseif ($failureModes -contains "shared-stream-byte-interleaving") {
-    "ack-blocked-by-shared-stream-byte-interleaving"
+    "forwarded-but-not-observed-at-target-with-shared-stream-byte-interleaving"
   } elseif ($failureModes -contains "southbound-json-fragmentation") {
-    "ack-blocked-by-southbound-json-fragmentation"
+    "forwarded-but-not-observed-at-target-with-southbound-json-fragmentation"
   } else {
-    "ack-not-observed"
+    "forwarded-but-not-observed-at-target"
   }
 
   return [ordered]@{
     summary = $summary
+    commandsForwardedDelta = $commandsForwardedDelta
+    ackMessagesPublishedDelta = $ackMessagesPublishedDelta
+    nodeAckPublishesDelta = $nodeAckPublishesDelta
+    nodeTelemetryDelta = $nodeTelemetryDelta
+    nodeStatusBefore = $nodeStatusBefore
+    nodeStatusAfter = $nodeStatusAfter
+    targetTelemetryAdvancedToCommand = $targetTelemetryAdvancedToCommand
+    readPathAvailable = ($null -ne $ReadPathEvidence -and [bool]$ReadPathEvidence.available)
+    readPathError = if ($null -ne $ReadPathEvidence) { $ReadPathEvidence.error } else { $null }
+    rejectedCommandIdMatchCount = $rejectedCommandIdMatchCount
+    rejectedCommandIdAndAckMarkerCount = $rejectedCommandIdAndAckMarkerCount
     parseFailureCount = @($parseFailureEvidence).Count
     failureModes = @($failureModes)
     parseFailureEvidence = @($parseFailureEvidence | Select-Object -First 5)
@@ -384,6 +650,7 @@ if (-not $resolvedPassword) {
 $actionSpec = Get-ActionSpec -ActionName $Action
 $commandId = [guid]::NewGuid().ToString()
 $issuedTs = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+$issuedAtUtc = [DateTime]::Parse($issuedTs, [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::AssumeUniversal -bor [System.Globalization.DateTimeStyles]::AdjustToUniversal)
 $stamp = Get-Date -Format "yyyyMMdd-HHmmss-fff"
 $deviceSuffix = $DeviceId.Substring($DeviceId.Length - 4)
 $payloadFile = Join-Path $tmpDir ("rk3568-node-command-{0}-{1}.json" -f $deviceSuffix, $stamp)
@@ -400,6 +667,12 @@ $payloadDoc | ConvertTo-Json -Depth 8 -Compress | Set-Content -Path $payloadFile
 
 $healthBefore = Get-RemoteHealth -TargetHost $BoardHost -TargetUser $User -TargetPassword $Password -TargetPort $SshPort -RemoteHealthFile $HealthFile
 $beforeNode = Get-NodeState -Health $healthBefore -TargetDeviceId $DeviceId
+$apiSession = $null
+try {
+  $apiSession = New-ApiSession -BaseUrl $ApiBaseUrl -UserNameValue $ApiUsername -PasswordValue $ApiPassword
+} catch {
+  $apiSession = $null
+}
 
 $injectScript = Join-Path $repoRoot "scripts/dev/inject-hardware-stable-version-command.ps1"
 $publishArgs = @(
@@ -438,10 +711,13 @@ $proofPassed = $false
 $commandForwardEvidence = $null
 $ackEvidence = $null
 $ackStatus = ""
+$readPathEvidence = $null
+$rejectedEvidence = $null
 
 while ((Get-Date) -lt $deadline) {
   Start-Sleep -Seconds ([Math]::Max(1, $PollSeconds))
   $healthAfter = Get-RemoteHealth -TargetHost $BoardHost -TargetUser $User -TargetPassword $Password -TargetPort $SshPort -RemoteHealthFile $HealthFile
+  $readPathEvidence = Try-Get-ReadPathEvidence -Session $apiSession -TargetDeviceId $DeviceId -ExpectedCommandId $commandId -ExpectedCommandType $actionSpec.commandType -IssuedAtUtc $issuedAtUtc
   $journalTail = Get-RemoteJournalTail -TargetHost $BoardHost -TargetUser $User -TargetPassword $Password -TargetPort $SshPort -RemoteServiceName $ServiceName -LineCount 160
   $commandJournal = Get-RemoteJournalForCommand -TargetHost $BoardHost -TargetUser $User -TargetPassword $Password -TargetPort $SshPort -RemoteServiceName $ServiceName -CommandId $commandId -LineCount 600
   if ($commandJournal) {
@@ -462,13 +738,15 @@ while ((Get-Date) -lt $deadline) {
 }
 
 $afterNode = Get-NodeState -Health $healthAfter -TargetDeviceId $DeviceId
-$diagnosis = Get-ProofDiagnosis -ProofPassed:$proofPassed -HealthAfter $healthAfter -JournalText $journalTail -CommandId $commandId -AckStatus $ackStatus
+$rejectedEvidence = Get-RemoteRejectedEvidence -TargetHost $BoardHost -TargetUser $User -TargetPassword $Password -TargetPort $SshPort -RemoteRejectedDir $RejectedDir -CommandId $commandId -DeviceId $DeviceId
+$diagnosis = Get-ProofDiagnosis -ProofPassed:$proofPassed -HealthBefore $healthBefore -HealthAfter $healthAfter -BeforeNode $beforeNode -AfterNode $afterNode -CommandForwardEvidence $commandForwardEvidence -ReadPathEvidence $readPathEvidence -RejectedEvidence $rejectedEvidence -JournalText $journalTail -CommandId $commandId -AckStatus $ackStatus
 $result = [ordered]@{
   generatedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
   passed = $proofPassed
   boardHost = $BoardHost
   serviceName = $ServiceName
   mqttUrl = $MqttUrl
+  apiBaseUrl = $ApiBaseUrl
   action = $Action
   command = $payloadDoc
   payloadFile = To-RepoRelativePath -RootPath $repoRoot -TargetPath $payloadFile
@@ -489,6 +767,8 @@ $result = [ordered]@{
   }
   commandEvidence = $commandForwardEvidence
   ackEvidence = $ackEvidence
+  readPathEvidence = $readPathEvidence
+  rejectedEvidence = $rejectedEvidence
   diagnosis = $diagnosis
   runtimeHealth = $healthAfter
   journalTail = $journalTail

@@ -1,3 +1,9 @@
+---
+title: desk-win-delivery-checklist
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/unified/reports/desk-win-delivery-checklist
+---
+
 # Desk-win 交付检查清单
 
 ## 1. 构建
@@ -26,13 +32,21 @@
 - 关闭窗口默认进入托盘
 - 崩溃日志可写入本地 AppData
 
-## 5. 交付说明
+## 5. API-only 边界
+
+- `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/check-desk-api-boundary.ps1` 通过
+- `docs/unified/reports/desk-api-boundary-latest.json` 中 `ready=true`
+- `apps/desk` 未引入 PostgreSQL / ClickHouse / ORM / Supabase 直连依赖
+- `apps/desk-win` 未引入数据库驱动包
+- `apps/desk` / `apps/desk-win` 未出现数据库连接串与驱动引用
+
+## 6. 交付说明
 
 - `apps/desk-win/README.md` 已更新
 - `docs/unified/reports/desk-win-env-matrix.md` 已提供环境配置矩阵
 - 已知非阻塞项已单独记录，不混入启动失败问题
 
-## 6. 当前已知非阻塞项
+## 7. 当前已知非阻塞项
 
 - `vite` chunk size warning 仍存在
 - 包体积仍偏大，属于下一阶段性能优化项

@@ -1,0 +1,266 @@
+{
+  "generatedAt": "2026-05-06T07:48:59.124Z",
+  "mode": "hermes-edge-supervisor-stress-test",
+  "label": "rk3568-hermes-supervisor-30s-c12",
+  "target": {
+    "baseUrl": "http://127.0.0.1:18082",
+    "durationSeconds": 30,
+    "actualElapsedSeconds": 30.02,
+    "concurrency": 12,
+    "recheckEvery": 30,
+    "timeoutMs": 5000,
+    "startedAt": "2026-05-06T07:48:29.104Z"
+  },
+  "accepted": true,
+  "summary": {
+    "totalRequests": 8143,
+    "okRequests": 8143,
+    "invalidRequests": 0,
+    "errorRate": 0,
+    "throughputRps": 271.254,
+    "latency": {
+      "count": 8143,
+      "minMs": 21.02,
+      "meanMs": 43.602,
+      "p50Ms": 37.785,
+      "p90Ms": 63.434,
+      "p95Ms": 72.65,
+      "p99Ms": 94.818,
+      "maxMs": 329.502
+    }
+  },
+  "endpoints": {
+    "supervision": {
+      "total": 7872,
+      "ok": 7872,
+      "invalid": 0,
+      "latency": {
+        "count": 7872,
+        "minMs": 21.02,
+        "meanMs": 42.333,
+        "p50Ms": 37.467,
+        "p90Ms": 58.609,
+        "p95Ms": 67.308,
+        "p99Ms": 82.998,
+        "maxMs": 329.502
+      },
+      "latestInspection": {
+        "valid": true,
+        "modelLoaded": true,
+        "diagnosisType": "center_mqtt_route_unreachable",
+        "confidence": 0.992188,
+        "featureCount": 64,
+        "aiModelCount": 1,
+        "naturalLanguageReady": true,
+        "error": null
+      }
+    },
+    "recheck": {
+      "total": 271,
+      "ok": 271,
+      "invalid": 0,
+      "latency": {
+        "count": 271,
+        "minMs": 55.918,
+        "meanMs": 80.462,
+        "p50Ms": 74.816,
+        "p90Ms": 103.44,
+        "p95Ms": 111.04,
+        "p99Ms": 138.808,
+        "maxMs": 158.88
+      },
+      "latestInspection": {
+        "valid": true,
+        "action": "recheck",
+        "actionStatus": "completed",
+        "safetyGatewayCoreTouched": false,
+        "safetySerialTouched": false,
+        "safetyMqttTouched": false,
+        "error": null
+      }
+    }
+  },
+  "errors": {},
+  "sampleTail": [
+    {
+      "seq": 8123,
+      "kind": "supervision",
+      "status": 200,
+      "ok": true,
+      "valid": true,
+      "latencyMs": 42.301,
+      "error": null
+    },
+    {
+      "seq": 8124,
+      "kind": "supervision",
+      "status": 200,
+      "ok": true,
+      "valid": true,
+      "latencyMs": 36.142,
+      "error": null
+    },
+    {
+      "seq": 8125,
+      "kind": "supervision",
+      "status": 200,
+      "ok": true,
+      "valid": true,
+      "latencyMs": 36.162,
+      "error": null
+    },
+    {
+      "seq": 8126,
+      "kind": "supervision",
+      "status": 200,
+      "ok": true,
+      "valid": true,
+      "latencyMs": 36.274,
+      "error": null
+    },
+    {
+      "seq": 8127,
+      "kind": "supervision",
+      "status": 200,
+      "ok": true,
+      "valid": true,
+      "latencyMs": 36.326,
+      "error": null
+    },
+    {
+      "seq": 8128,
+      "kind": "supervision",
+      "status": 200,
+      "ok": true,
+      "valid": true,
+      "latencyMs": 35.696,
+      "error": null
+    },
+    {
+      "seq": 8129,
+      "kind": "supervision",
+      "status": 200,
+      "ok": true,
+      "valid": true,
+      "latencyMs": 35.807,
+      "error": null
+    },
+    {
+      "seq": 8131,
+      "kind": "supervision",
+      "status": 200,
+      "ok": true,
+      "valid": true,
+      "latencyMs": 31.767,
+      "error": null
+    },
+    {
+      "seq": 8132,
+      "kind": "supervision",
+      "status": 200,
+      "ok": true,
+      "valid": true,
+      "latencyMs": 32.371,
+      "error": null
+    },
+    {
+      "seq": 8133,
+      "kind": "supervision",
+      "status": 200,
+      "ok": true,
+      "valid": true,
+      "latencyMs": 31.457,
+      "error": null
+    },
+    {
+      "seq": 8134,
+      "kind": "supervision",
+      "status": 200,
+      "ok": true,
+      "valid": true,
+      "latencyMs": 30.032,
+      "error": null
+    },
+    {
+      "seq": 8135,
+      "kind": "supervision",
+      "status": 200,
+      "ok": true,
+      "valid": true,
+      "latencyMs": 27.93,
+      "error": null
+    },
+    {
+      "seq": 8136,
+      "kind": "supervision",
+      "status": 200,
+      "ok": true,
+      "valid": true,
+      "latencyMs": 26.697,
+      "error": null
+    },
+    {
+      "seq": 8137,
+      "kind": "supervision",
+      "status": 200,
+      "ok": true,
+      "valid": true,
+      "latencyMs": 25.538,
+      "error": null
+    },
+    {
+      "seq": 8138,
+      "kind": "supervision",
+      "status": 200,
+      "ok": true,
+      "valid": true,
+      "latencyMs": 24.246,
+      "error": null
+    },
+    {
+      "seq": 8139,
+      "kind": "supervision",
+      "status": 200,
+      "ok": true,
+      "valid": true,
+      "latencyMs": 23.023,
+      "error": null
+    },
+    {
+      "seq": 8140,
+      "kind": "supervision",
+      "status": 200,
+      "ok": true,
+      "valid": true,
+      "latencyMs": 22.102,
+      "error": null
+    },
+    {
+      "seq": 8141,
+      "kind": "supervision",
+      "status": 200,
+      "ok": true,
+      "valid": true,
+      "latencyMs": 21.02,
+      "error": null
+    },
+    {
+      "seq": 8130,
+      "kind": "recheck",
+      "status": 202,
+      "ok": true,
+      "valid": true,
+      "latencyMs": 55.918,
+      "error": null
+    },
+    {
+      "seq": 8142,
+      "kind": "supervision",
+      "status": 200,
+      "ok": true,
+      "valid": true,
+      "latencyMs": 21.374,
+      "error": null
+    }
+  ]
+}

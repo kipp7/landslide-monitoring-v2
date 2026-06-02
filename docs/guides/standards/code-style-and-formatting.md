@@ -1,3 +1,9 @@
+---
+title: code-style-and-formatting
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/guides/standards/code-style-and-formatting
+---
+
 ﻿# 代码风格与格式化（必须遵守）
 
 目标：用工具把“风格争论”消灭在提交前；让每一次提交都能被自动化校验；避免“项目越写越乱”。

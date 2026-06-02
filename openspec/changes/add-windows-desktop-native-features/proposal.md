@@ -1,3 +1,9 @@
+---
+title: proposal
+type: note
+permalink: landslide-monitoring-v2-mainline/openspec/changes/add-windows-desktop-native-features/proposal
+---
+
 ## Why
 
 当前 `apps/desk-win` 只是“能跑起来”的 WebView2 壳，距离可交付的 Win11 原生软件还有差距：缺少系统托盘、通知、开机自启、深链接、原生文件对话框等“桌面软件必备体验”。
@@ -23,4 +29,3 @@
 - 需要引入少量桌面端依赖（托盘/通知/安装注册表项等）
 - 增加 Host Bridge 事件与动作类型，需要前端配合调用
 - 交付体验提升：用户可像普通桌面软件一样使用、最小化、后台驻留与接受通知
-

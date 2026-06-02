@@ -1,0 +1,132 @@
+﻿{
+    "generatedAt":  "2026-04-14T15:52:39Z",
+    "mode":  "field-gps-baseline-readiness",
+    "sourceCommissioningReport":  "docs/unified/reports/field-formal-device-commissioning-latest.json",
+    "thresholds":  {
+                       "sampleLimit":  50,
+                       "requiredPoints":  20,
+                       "sessionGapSeconds":  600,
+                       "goodP95Meters":  2,
+                       "warnP95Meters":  5
+                   },
+    "devices":  [
+                    {
+                        "fieldNodeId":  "A",
+                        "deviceId":  "00000000-0000-0000-0000-000000000001",
+                        "baselineAcceptance":  {
+                                                   "commissioningPassed":  false,
+                                                   "autoEstablishStatusCode":  200,
+                                                   "qualityLevel":  "bad",
+                                                   "qualityP95Meters":  14.315830321936426,
+                                                   "qualityMaxMeters":  14.427898524768604
+                                               },
+                        "rawGps":  {
+                                       "totalPointsFetched":  50,
+                                       "latestPointTs":  "2026-04-14T18:30:43Z",
+                                       "sessions":  [
+                                                        {
+                                                            "startTs":  "2026-04-14T18:12:26Z",
+                                                            "endTs":  "2026-04-14T18:30:43Z",
+                                                            "points":  50,
+                                                            "spanSeconds":  1097,
+                                                            "centroidLatitude":  22.5795343,
+                                                            "centroidLongitude":  114.09443465999999,
+                                                            "p95Meters":  35.775589605070529,
+                                                            "maxMeters":  37.148903540462442,
+                                                            "firstToLastMeters":  74.102516991275579
+                                                        }
+                                                    ],
+                                       "currentSession":  {
+                                                              "startTs":  "2026-04-14T18:12:26Z",
+                                                              "endTs":  "2026-04-14T18:30:43Z",
+                                                              "points":  50,
+                                                              "spanSeconds":  1097,
+                                                              "centroidLatitude":  22.5795343,
+                                                              "centroidLongitude":  114.09443465999999,
+                                                              "p95Meters":  35.775589605070529,
+                                                              "maxMeters":  37.148903540462442,
+                                                              "firstToLastMeters":  74.102516991275579
+                                                          },
+                                       "currentSessionPoints":  50,
+                                       "previousToCurrentSessionJumpMeters":  null
+                                   },
+                        "diagnosis":  {
+                                          "verdict":  "current_session_drift_bad",
+                                          "reason":  "The current continuous session itself is drifting, so the poor quality is not caused by old-session mixing.",
+                                          "recommendation":  "Keep the device stationary, ensure stable sky view, let GPS warm up fully, and inspect hardware or antenna if needed."
+                                      }
+                    },
+                    {
+                        "fieldNodeId":  "B",
+                        "deviceId":  "00000000-0000-0000-0000-000000000002",
+                        "baselineAcceptance":  {
+                                                   "commissioningPassed":  false,
+                                                   "autoEstablishStatusCode":  200,
+                                                   "qualityLevel":  "bad",
+                                                   "qualityP95Meters":  4323.7402276584362,
+                                                   "qualityMaxMeters":  4325.1145373626441
+                                               },
+                        "rawGps":  {
+                                       "totalPointsFetched":  50,
+                                       "latestPointTs":  "2026-04-14T18:36:55Z",
+                                       "sessions":  [
+                                                        {
+                                                            "startTs":  "2026-04-14T18:12:31Z",
+                                                            "endTs":  "2026-04-14T18:36:55Z",
+                                                            "points":  50,
+                                                            "spanSeconds":  1464,
+                                                            "centroidLatitude":  22.576760880000005,
+                                                            "centroidLongitude":  114.09166119999998,
+                                                            "p95Meters":  44.958555176810613,
+                                                            "maxMeters":  48.275829217637991,
+                                                            "firstToLastMeters":  91.0995062254603
+                                                        }
+                                                    ],
+                                       "currentSession":  {
+                                                              "startTs":  "2026-04-14T18:12:31Z",
+                                                              "endTs":  "2026-04-14T18:36:55Z",
+                                                              "points":  50,
+                                                              "spanSeconds":  1464,
+                                                              "centroidLatitude":  22.576760880000005,
+                                                              "centroidLongitude":  114.09166119999998,
+                                                              "p95Meters":  44.958555176810613,
+                                                              "maxMeters":  48.275829217637991,
+                                                              "firstToLastMeters":  91.0995062254603
+                                                          },
+                                       "currentSessionPoints":  50,
+                                       "previousToCurrentSessionJumpMeters":  null
+                                   },
+                        "diagnosis":  {
+                                          "verdict":  "current_session_drift_bad",
+                                          "reason":  "The current continuous session itself is drifting, so the poor quality is not caused by old-session mixing.",
+                                          "recommendation":  "Keep the device stationary, ensure stable sky view, let GPS warm up fully, and inspect hardware or antenna if needed."
+                                      }
+                    },
+                    {
+                        "fieldNodeId":  "C",
+                        "deviceId":  "00000000-0000-0000-0000-000000000003",
+                        "baselineAcceptance":  {
+                                                   "commissioningPassed":  false,
+                                                   "autoEstablishStatusCode":  400,
+                                                   "qualityLevel":  "",
+                                                   "qualityP95Meters":  null,
+                                                   "qualityMaxMeters":  null
+                                               },
+                        "rawGps":  {
+                                       "totalPointsFetched":  0,
+                                       "latestPointTs":  "",
+                                       "sessions":  [
+
+                                                    ],
+                                       "currentSession":  null,
+                                       "currentSessionPoints":  0,
+                                       "previousToCurrentSessionJumpMeters":  null
+                                   },
+                        "diagnosis":  {
+                                          "verdict":  "no_gps_points",
+                                          "reason":  "No valid gps_latitude/gps_longitude points were found in ClickHouse for this device.",
+                                          "recommendation":  "Restore GPS uplink for this node first, then rerun commissioning baseline."
+                                      }
+                    }
+                ]
+}

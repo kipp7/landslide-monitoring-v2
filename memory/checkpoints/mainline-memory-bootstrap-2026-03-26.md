@@ -2,8 +2,9 @@
 title: mainline-memory-bootstrap-2026-03-26
 type: note
 tags:
-  - checkpoint
+- checkpoint
 status: active
+permalink: landslide-monitoring-v2-mainline/memory/checkpoints/mainline-memory-bootstrap-2026-03-26
 ---
 
 # Checkpoint: mainline-memory-bootstrap-2026-03-26

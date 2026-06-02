@@ -1,3 +1,9 @@
+---
+title: 017-iot-server-compat
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/api/017-iot-server-compat
+---
+
 # 17) iot-server 兼容端点（/devices/*）
 
 参考区的 Next API（`landslide-monitor/landslide-monitor/frontend/app/api/iot/devices/*`）会将请求代理到 `IOT_SERVICE_BASE`，并调用 **无 `/api` 前缀** 的 iot-server 风格端点（如 `/devices/mappings`）。

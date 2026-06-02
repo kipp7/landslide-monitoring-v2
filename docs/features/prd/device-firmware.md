@@ -1,3 +1,9 @@
+---
+title: device-firmware
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/features/prd/device-firmware
+---
+
 ﻿# PRD：单片机端固件适配（MQTT Device Agent，v2）
 
 ## 1. 背景
@@ -90,4 +96,3 @@
 - MQTT 契约：`docs/integrations/mqtt/README.md`
 - MQTT 示例：`docs/integrations/mqtt/examples/README.md`
 - Kafka 契约（后端链路）：`docs/integrations/kafka/README.md`
-

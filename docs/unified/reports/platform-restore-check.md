@@ -1,3 +1,9 @@
+---
+title: platform-restore-check
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/unified/reports/platform-restore-check
+---
+
 # 平台恢复核查报告
 
 ## 基本信息

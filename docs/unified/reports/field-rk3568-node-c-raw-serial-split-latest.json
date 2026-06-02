@@ -1,0 +1,136 @@
+{
+    "generatedAt":  "2026-04-12T09:40:57Z",
+    "conclusion":  "node-command-not-observed-at-target-before-rk3568-publish",
+    "boardHost":  "192.168.124.179",
+    "serialDevice":  "/dev/ttyS3",
+    "deviceId":  "00000000-0000-0000-0000-000000000003",
+    "summary":  {
+                    "manualCollectAckForCommandCount":  0,
+                    "manualCollectTelemetryAdvancedToCommand":  false,
+                    "setReport5AckForCommandCount":  0,
+                    "setReport5TelemetryAdvancedToCommand":  false,
+                    "targetLastCommandTypesRemainEmpty":  true,
+                    "targetUploadTriggersAllPeriodic":  true
+                },
+    "manualCollect":  {
+                          "generatedAt":  "2026-04-12T09:40:33Z",
+                          "boardHost":  "192.168.124.179",
+                          "serviceName":  "lsmv2-field-gateway.service",
+                          "action":  "manual-collect",
+                          "command":  {
+                                          "schema_version":  1,
+                                          "command_id":  "3d70ceac-49f4-4c6e-b348-06cbb8a86aea",
+                                          "device_id":  "00000000-0000-0000-0000-000000000003",
+                                          "command_type":  "manual_collect",
+                                          "payload":  {
+                                                          "source":  "rk3568-raw-serial-capture"
+                                                      },
+                                          "issued_ts":  "2026-04-12T09:40:10Z"
+                                      },
+                          "rawCapture":  {
+                                             "generatedAt":  "2026-04-12T09:40:34Z",
+                                             "serviceName":  "lsmv2-field-gateway.service",
+                                             "serviceWasActive":  true,
+                                             "serviceStopMethod":  "sudo-systemctl",
+                                             "serialDevice":  "/dev/ttyS3",
+                                             "baudRate":  115200,
+                                             "captureSeconds":  20,
+                                             "payloadBytes":  240,
+                                             "capturedBytes":  6382,
+                                             "lineCount":  11,
+                                             "ackLikeLineCount":  0,
+                                             "targetDeviceId":  "00000000-0000-0000-0000-000000000003",
+                                             "targetCommandId":  "3d70ceac-49f4-4c6e-b348-06cbb8a86aea",
+                                             "targetTelemetryLineCount":  3,
+                                             "targetAckLineCount":  0,
+                                             "targetAckForCommandCount":  0,
+                                             "targetTelemetryAdvancedToCommand":  false,
+                                             "targetLastCommandTypes":  [
+                                                                            "",
+                                                                            "",
+                                                                            ""
+                                                                        ],
+                                             "targetLastCommandIds":  [
+                                                                          "",
+                                                                          "",
+                                                                          ""
+                                                                      ],
+                                             "targetUploadTriggers":  [
+                                                                          "periodic",
+                                                                          "periodic",
+                                                                          "periodic"
+                                                                      ],
+                                             "payloadText":  "{\"schema_version\":1,\"command_id\":\"3d70ceac-49f4-4c6e-b348-06cbb8a86aea\",\"device_id\":\"00000000-0000-0000-0000-000000000003\",\"command_type\":\"manual_collect\",\"payload\":{\"source\":\"rk3568-raw-serial-capture\"},\"issued_ts\":\"2026-04-12T09:40:10Z\"}\n",
+                                             "capturedText":  "titude\":22.565920,\"gps_longitude\":114.080818,\"battery_pct\":8,\"warning_flag\":true},\"meta\":{\"install_label\":\"FIELD-NODE-C\",\"legacy_node\":\"C\",\"uptime_s\":13560,\"last_command_type\":\"\",\"last_command_id\":\"\",\"last_command_uptime_s\":0,\"upload_trigger\":\"periodic\",\"legacy_valid_flags\":{\"temp_ok\":1,\"imu_ok\":1,\"gps_ok\":1}}}\n{\"schema_version\":1,\"device_id\":\"00000000-0000-0000-0000-000000000001\",\"event_ts\":null,\"seq\":28476,\"metrics\":{\"temperature_c\":29.7,\"humidity_pct\":62.5,\"accel_x_g\":-1.00,\"accel_y_g\":-0.84,\"accel_z_g\":1.00,\"gyro_x_dps\":0.5,\"gyro_y_dps\":-0.3,\"gyro_z_dps\":0.1,\"tilt_x_deg\":5304.31,\"tilt_y_deg\":3182.69,\"gps_latitude\":22.827749,\"gps_longitude\":114.342651,\"battery_pct\":25,\"warning_flag\":true},\"meta\":{\"install_label\":\"FIELD-NODE-A\",\"legacy_node\":\"A\",\"uptime_s\":168933,\"last_command_type\":\"set_config\",\"last_command_id\":\"094d1e33-4c44-47d4-8255-35fc716c569d\",\"last_command_uptime_s\":93013,\"upload_trigger\":\"periodic\",\"legacy_valid_flags\":{\"temp_ok\":1,\"imu_ok\":1,\"gps_ok\":1}}}\n{\"schema_version\":1,\"device_id\":\"00000000-0000-0000-0000-000000000002\",\"event_ts\":null,\"seq\":28333,\"metrics\":{\"temperature_c\":22.5,\"humidity_pct\":52.9,\"accel_x_g\":-0.99,\"accel_y_g\":-0.86,\"accel_z_g\":1.00,\"gyro_x_dps\":0.5,\"gyro_y_dps\":-0.3,\"gyro_z_dps\":0.1,\"tilt_x_deg\":5300.86,\"tilt_y_deg\":3180.69,\"gps_latitude\":22.826319,\"gps_longitude\":114.341217,\"battery_pct\":68,\"warning_flag\":true},\"meta\":{\"install_label\":\"FIELD-NODE-B\",\"legacy_node\":\"B\",\"uptime_s\":168939,\"last_command_type\":\"manual_collect\",\"last_command_id\":\"043abec0-e9be-44c3-9709-942fbd8eb876\",\"last_command_uptime_s\":163644,\"upload_trigger\":\"periodic\",\"legacy_valid_flags\":{\"temp_ok\":1,\"imu_ok\":1,\"gps_ok\":1}}}\n{\"schema_version\":1,\"device_id\":\"00000000-0000-0000-0000-000000000003\",\"event_ts\":null,\"seq\":2294,\"metrics\":{\"temperature_c\":25.2,\"humidity_pct\":59.5,\"accel_x_g\":-0.67,\"accel_y_g\":0.73,\"accel_z_g\":1.00,\"gyro_x_dps\":0.5,\"gyro_y_dps\":-0.3,\"gyro_z_dps\":0.1,\"tilt_x_deg\":678.22,\"tilt_y_deg\":406.98,\"gps_latitude\":22.565929,\"gps_longitude\":114.080826,\"battery_pct\":7,\"warning_flag\":true},\"meta\":{\"install_label\":\"FIELD-NODE-C\",\"legacy_node\":\"C\",\"uptime_s\":13566,\"last_command_type\":\"\",\"last_command_id\":\"\",\"last_command_uptime_s\":0,\"upload_trigger\":\"periodic\",\"legacy_valid_flags\":{\"temp_ok\":1,\"imu_ok\":1,\"gps_ok\":1}}}\n{\"schema_version\":1,\"device_id\":\"00000000-0000-0000-0000-000000000001\",\"event_ts\":null,\"seq\":28477,\"metrics\":{\"temperature_c\":29.8,\"humidity_pct\":63.9,\"accel_x_g\":-1.00,\"accel_y_g\":-0.84,\"accel_z_g\":1.00,\"gyro_x_dps\":0.5,\"gyro_y_dps\":-0.3,\"gyro_z_dps\":0.1,\"tilt_x_deg\":5304.28,\"tilt_y_deg\":3182.72,\"gps_latitude\":22.827759,\"gps_longitude\":114.342659,\"battery_pct\":24,\"warning_flag\":true},\"meta\":{\"install_label\":\"FIELD-NODE-A\",\"legacy_node\":\"A\",\"uptime_s\":168938,\"last_command_type\":\"set_config\",\"last_command_id\":\"094d1e33-4c44-47d4-8255-35fc716c569d\",\"last_command_uptime_s\":93013,\"upload_trigger\":\"periodic\",\"legacy_valid_flags\":{\"temp_ok\":1,\"imu_ok\":1,\"gps_ok\":1}}}\n{\"schema_version\":1,\"device_id\":\"00000000-0000-0000-0000-000000000002\",\"event_ts\":null,\"seq\":28334,\"metrics\":{\"temperature_c\":23.0,\"humidity_pct\":51.9,\"accel_x_g\":-0.99,\"accel_y_g\":-0.86,\"accel_z_g\":1.00,\"gyro_x_dps\":0.5,\"gyro_y_dps\":-0.3,\"gyro_z_dps\":0.1,\"tilt_x_deg\":5301.02,\"tilt_y_deg\":3180.68,\"gps_latitude\":22.826330,\"gps_longitude\":114.341232,\"battery_pct\":67,\"warning_flag\":true},\"meta\":{\"install_label\":\"FIELD-NODE-B\",\"legacy_node\":\"B\",\"uptime_s\":168949,\"last_command_type\":\"manual_collect\",\"last_command_id\":\"043abec0-e9be-44c3-9709-942fbd8eb876\",\"last_command_uptime_s\":163644,\"upload_trigger\":\"periodic\",\"legacy_valid_flags\":{\"temp_ok\":1,\"imu_ok\":1,\"gps_ok\":1}}}\n{\"schema_version\":1,\"device_id\":\"00000000-0000-0000-0000-000000000003\",\"event_ts\":null,\"seq\":2295,\"metrics\":{\"temperature_c\":24.7,\"humidity_pct\":61.0,\"accel_x_g\":-0.66,\"accel_y_g\":0.73,\"accel_z_g\":1.00,\"gyro_x_dps\":0.5,\"gyro_y_dps\":-0.3,\"gyro_z_dps\":0.1,\"tilt_x_deg\":678.62,\"tilt_y_deg\":407.09,\"gps_latitude\":22.565939,\"gps_longitude\":114.080841,\"battery_pct\":6,\"warning_flag\":true},\"meta\":{\"install_label\":\"FIELD-NODE-C\",\"legacy_node\":\"C\",\"uptime_s\":13572,\"last_command_type\":\"\",\"last_command_id\":\"\",\"last_command_uptime_s\":0,\"upload_trigger\":\"periodic\",\"legacy_valid_flags\":{\"temp_ok\":1,\"imu_ok\":1,\"gps_ok\":1}}}\n{\"schema_version\":1,\"device_id\":\"00000000-0000-0000-0000-000000000001\",\"event_ts\":null,\"seq\":28478,\"metrics\":{\"temperature_c\":29.9,\"humidity_pct\":65.3,\"accel_x_g\":-1.00,\"accel_y_g\":-0.84,\"accel_z_g\":1.00,\"gyro_x_dps\":0.5,\"gyro_y_dps\":-0.3,\"gyro_z_dps\":0.1,\"tilt_x_deg\":5304.28,\"tilt_y_deg\":3182.76,\"gps_latitude\":22.827768,\"gps_longitude\":114.342667,\"battery_pct\":23,\"warning_flag\":true},\"meta\":{\"install_label\":\"FIELD-NODE-A\",\"legacy_node\":\"A\",\"uptime_s\":168948,\"last_command_type\":\"set_config\",\"last_command_id\":\"094d1e33-4c44-47d4-8255-35fc716c569d\",\"last_command_uptime_s\":93013,\"upload_trigger\":\"periodic\",\"legacy_valid_flags\":{\"temp_ok\":1,\"imu_ok\":1,\"gps_ok\":1}}}\n{\"schema_version\":1,\"device_id\":\"00000000-0000-0000-0000-000000000002\",\"event_ts\":null,\"seq\":28335,\"metrics\":{\"temperature_c\":23.4,\"humidity_pct\":51.1,\"accel_x_g\":-0.99,\"accel_y_g\":-0.86,\"accel_z_g\":1.00,\"gyro_x_dps\":0.5,\"gyro_y_dps\":-0.3,\"gyro_z_dps\":0.1,\"tilt_x_deg\":5301.15,\"tilt_y_deg\":3180.66,\"gps_latitude\":22.826340,\"gps_longitude\":114.341240,\"battery_pct\":66,\"warning_flag\":true},\"meta\":{\"install_label\":\"FIELD-NODE-B\",\"legacy_node\":\"B\",\"uptime_s\":168954,\"last_command_type\":\"manual_collect\",\"last_command_id\":\"043abec0-e9be-44c3-9709-942fbd8eb876\",\"last_command_uptime_s\":163644,\"upload_trigger\":\"periodic\",\"legacy_valid_flags\":{\"temp_ok\":1,\"imu_ok\":1,\"gps_ok\":1}}}\n{\"schema_version\":1,\"device_id\":\"00000000-0000-0000-0000-000000000003\",\"event_ts\":null,\"seq\":2296,\"metrics\":{\"temperature_c\":24.2,\"humidity_pct\":62.4,\"accel_x_g\":-0.66,\"accel_y_g\":0.73,\"accel_z_g\":1.00,\"gyro_x_dps\":0.5,\"gyro_y_dps\":-0.3,\"gyro_z_dps\":0.1,\"tilt_x_deg\":678.97,\"tilt_y_deg\":407.17,\"gps_latitude\":22.565948,\"gps_longitude\":114.080849,\"battery_pct\":5,\"warning_flag\":true},\"meta\":{\"install_label\":\"FIELD-NODE-C\",\"legacy_node\":\"C\",\"uptime_s\":13577,\"last_command_type\":\"\",\"last_command_id\":\"\",\"last_command_uptime_s\":0,\"upload_trigger\":\"periodic\",\"legacy_valid_flags\":{\"temp_ok\":1,\"imu_ok\":1,\"gps_ok\":1}}}\n{\"schema_version\":1,\"device_id\":\"00000000-0000-0000-0000-000000000001\",\"event_ts\":null,\"seq\":28479,\"metrics\":{\"temperature_c\":30.0,\"humidity_pct\":66.5,\"accel_x_g\":-0.99,\"accel_y_g\":-0.84,\"acce",
+                                             "ackLikeLines":  [
+
+                                                              ],
+                                             "targetAckLines":  [
+
+                                                                ]
+                                         }
+                      },
+    "setReport5":  {
+                       "generatedAt":  "2026-04-12T09:40:57Z",
+                       "boardHost":  "192.168.124.179",
+                       "serviceName":  "lsmv2-field-gateway.service",
+                       "action":  "set-report-5",
+                       "command":  {
+                                       "schema_version":  1,
+                                       "command_id":  "959da42b-0030-4b79-80ac-65de37ef13d6",
+                                       "device_id":  "00000000-0000-0000-0000-000000000003",
+                                       "command_type":  "set_config",
+                                       "payload":  {
+                                                       "sampling_s":  5,
+                                                       "report_interval_s":  5
+                                                   },
+                                       "issued_ts":  "2026-04-12T09:40:34Z"
+                                   },
+                       "rawCapture":  {
+                                          "generatedAt":  "2026-04-12T09:40:59Z",
+                                          "serviceName":  "lsmv2-field-gateway.service",
+                                          "serviceWasActive":  true,
+                                          "serviceStopMethod":  "sudo-systemctl",
+                                          "serialDevice":  "/dev/ttyS3",
+                                          "baudRate":  115200,
+                                          "captureSeconds":  20,
+                                          "payloadBytes":  236,
+                                          "capturedBytes":  6210,
+                                          "lineCount":  10,
+                                          "ackLikeLineCount":  0,
+                                          "targetDeviceId":  "00000000-0000-0000-0000-000000000003",
+                                          "targetCommandId":  "959da42b-0030-4b79-80ac-65de37ef13d6",
+                                          "targetTelemetryLineCount":  3,
+                                          "targetAckLineCount":  0,
+                                          "targetAckForCommandCount":  0,
+                                          "targetTelemetryAdvancedToCommand":  false,
+                                          "targetLastCommandTypes":  [
+                                                                         "",
+                                                                         "",
+                                                                         ""
+                                                                     ],
+                                          "targetLastCommandIds":  [
+                                                                       "",
+                                                                       "",
+                                                                       ""
+                                                                   ],
+                                          "targetUploadTriggers":  [
+                                                                       "periodic",
+                                                                       "periodic",
+                                                                       "periodic"
+                                                                   ],
+                                          "payloadText":  "{\"schema_version\":1,\"command_id\":\"959da42b-0030-4b79-80ac-65de37ef13d6\",\"device_id\":\"00000000-0000-0000-0000-000000000003\",\"command_type\":\"set_config\",\"payload\":{\"sampling_s\":5,\"report_interval_s\":5},\"issued_ts\":\"2026-04-12T09:40:34Z\"}\n",
+                                          "capturedText":  "{\"schema_version\":1,\"device_id\":\"00000000-0000-0000-0000-000000000001\",\"event_ts\":null,\"seq\":28480,\"metrics\":{\"temperature_c\":30.0,\"humidity_pct\":67.5,\"accel_x_g\":-0.99,\"accel_y_g\":-0.84,\"accel_z_g\":1.00,\"gyro_x_dps\":0.5,\"gyro_y_dps\":-0.3,\"gyro_z_dps\":0.1,\"tilt_x_deg\":5304.19,\"tilt_y_deg\":3182.73,\"gps_latitude\":22.827789,\"gps_longitude\":114.342690,\"battery_pct\":21,\"warning_flag\":true},\"meta\":{\"install_label\":\"FIELD-NODE-A\",\"legacy_node\":\"A\",\"uptime_s\":168958,\"last_command_type\":\"set_config\",\"last_command_id\":\"094d1e33-4c44-47d4-8255-35fc716c569d\",\"last_command_uptime_s\":93013,\"upload_trigger\":\"periodic\",\"legacy_valid_flags\":{\"temp_ok\":1,\"imu_ok\":1,\"gps_ok\":1}}}\n{\"schema_version\":1,\"device_id\":\"00000000-0000-0000-0000-000000000002\",\"event_ts\":null,\"seq\":28337,\"metrics\":{\"temperature_c\":24.4,\"humidity_pct\":50.2,\"accel_x_g\":-0.99,\"accel_y_g\":-0.86,\"accel_z_g\":1.00,\"gyro_x_dps\":0.5,\"gyro_y_dps\":-0.3,\"gyro_z_dps\":0.1,\"tilt_x_deg\":5301.43,\"tilt_y_deg\":3180.64,\"gps_latitude\":22.826359,\"gps_longitude\":114.341263,\"battery_pct\":64,\"warning_flag\":true},\"meta\":{\"install_label\":\"FIELD-NODE-B\",\"legacy_node\":\"B\",\"uptime_s\":168964,\"last_command_type\":\"manual_collect\",\"last_command_id\":\"043abec0-e9be-44c3-9709-942fbd8eb876\",\"last_command_uptime_s\":163644,\"upload_trigger\":\"periodic\",\"legacy_valid_flags\":{\"temp_ok\":1,\"imu_ok\":1,\"gps_ok\":1}}}\n{\"schema_version\":1,\"device_id\":\"00000000-0000-0000-0000-000000000003\",\"event_ts\":null,\"seq\":2298,\"metrics\":{\"temperature_c\":23.2,\"humidity_pct\":65.2,\"accel_x_g\":-0.65,\"accel_y_g\":0.74,\"accel_z_g\":1.00,\"gyro_x_dps\":0.5,\"gyro_y_dps\":-0.3,\"gyro_z_dps\":0.1,\"tilt_x_deg\":679.74,\"tilt_y_deg\":407.41,\"gps_latitude\":22.565969,\"gps_longitude\":114.080872,\"battery_pct\":3,\"warning_flag\":true},\"meta\":{\"install_label\":\"FIELD-NODE-C\",\"legacy_node\":\"C\",\"uptime_s\":13589,\"last_command_type\":\"\",\"last_command_id\":\"\",\"last_command_uptime_s\":0,\"upload_trigger\":\"periodic\",\"legacy_valid_flags\":{\"temp_ok\":1,\"imu_ok\":1,\"gps_ok\":1}}}\n{\"schema_version\":1,\"device_id\":\"00000000-0000-0000-0000-000000000001\",\"event_ts\":null,\"seq\":28481,\"metrics\":{\"temperature_c\":29.9,\"humidity_pct\":68.4,\"accel_x_g\":-0.99,\"accel_y_g\":-0.84,\"accel_z_g\":1.00,\"gyro_x_dps\":0.5,\"gyro_y_dps\":-0.3,\"gyro_z_dps\":0.1,\"tilt_x_deg\":5304.14,\"tilt_y_deg\":3182.69,\"gps_latitude\":22.827799,\"gps_longitude\":114.342697,\"battery_pct\":20,\"warning_flag\":true},\"meta\":{\"install_label\":\"FIELD-NODE-A\",\"legacy_node\":\"A\",\"uptime_s\":168963,\"last_command_type\":\"set_config\",\"last_command_id\":\"094d1e33-4c44-47d4-8255-35fc716c569d\",\"last_command_uptime_s\":93013,\"upload_trigger\":\"periodic\",\"legacy_valid_flags\":{\"temp_ok\":1,\"imu_ok\":1,\"gps_ok\":1}}}\n{\"schema_version\":1,\"device_id\":\"00000000-0000-0000-0000-000000000002\",\"event_ts\":null,\"seq\":28338,\"metrics\":{\"temperature_c\":24.9,\"humidity_pct\":50.0,\"accel_x_g\":-0.99,\"accel_y_g\":-0.86,\"accel_z_g\":1.00,\"gyro_x_dps\":0.5,\"gyro_y_dps\":-0.3,\"gyro_z_dps\":0.1,\"tilt_x_deg\":5301.58,\"tilt_y_deg\":3180.66,\"gps_latitude\":22.826368,\"gps_longitude\":114.341270,\"battery_pct\":63,\"warning_flag\":true},\"meta\":{\"install_label\":\"FIELD-NODE-B\",\"legacy_node\":\"B\",\"uptime_s\":168969,\"last_command_type\":\"manual_collect\",\"last_command_id\":\"043abec0-e9be-44c3-9709-942fbd8eb876\",\"last_command_uptime_s\":163644,\"upload_trigger\":\"periodic\",\"legacy_valid_flags\":{\"temp_ok\":1,\"imu_ok\":1,\"gps_ok\":1}}}\n{\"schema_version\":1,\"device_id\":\"00000000-0000-0000-0000-000000000003\",\"event_ts\":null,\"seq\":2299,\"metrics\":{\"temperature_c\":22.8,\"humidity_pct\":66.4,\"accel_x_g\":-0.64,\"accel_y_g\":0.74,\"accel_z_g\":1.00,\"gyro_x_dps\":0.5,\"gyro_y_dps\":-0.3,\"gyro_z_dps\":0.1,\"tilt_x_deg\":680.11,\"tilt_y_deg\":407.55,\"gps_latitude\":22.565979,\"gps_longitude\":114.080879,\"battery_pct\":2,\"warning_flag\":true},\"meta\":{\"install_label\":\"FIELD-NODE-C\",\"legacy_node\":\"C\",\"uptime_s\":13595,\"last_command_type\":\"\",\"last_command_id\":\"\",\"last_command_uptime_s\":0,\"upload_trigger\":\"periodic\",\"legacy_valid_flags\":{\"temp_ok\":1,\"imu_ok\":1,\"gps_ok\":1}}}\n{\"schema_version\":1,\"device_id\":\"00000000-0000-0000-0000-000000000001\",\"event_ts\":null,\"seq\":28482,\"metrics\":{\"temperature_c\":29.8,\"humidity_pct\":69.1,\"accel_x_g\":-0.99,\"accel_y_g\":-0.84,\"accel_z_g\":1.00,\"gyro_x_dps\":0.5,\"gyro_y_dps\":-0.3,\"gyro_z_dps\":0.1,\"tilt_x_deg\":5304.10,\"tilt_y_deg\":3182.65,\"gps_latitude\":22.827808,\"gps_longitude\":114.342712,\"battery_pct\":19,\"warning_flag\":true},\"meta\":{\"install_label\":\"FIELD-NODE-A\",\"legacy_node\":\"A\",\"uptime_s\":168968,\"last_command_type\":\"set_config\",\"last_command_id\":\"094d1e33-4c44-47d4-8255-35fc716c569d\",\"last_command_uptime_s\":93013,\"upload_trigger\":\"periodic\",\"legacy_valid_flags\":{\"temp_ok\":1,\"imu_ok\":1,\"gps_ok\":1}}}\n{\"schema_version\":1,\"device_id\":\"00000000-0000-0000-0000-000000000002\",\"event_ts\":null,\"seq\":28339,\"metrics\":{\"temperature_c\":25.4,\"humidity_pct\":50.1,\"accel_x_g\":-0.99,\"accel_y_g\":-0.86,\"accel_z_g\":1.00,\"gyro_x_dps\":0.5,\"gyro_y_dps\":-0.3,\"gyro_z_dps\":0.1,\"tilt_x_deg\":5301.78,\"tilt_y_deg\":3180.72,\"gps_latitude\":22.826380,\"gps_longitude\":114.341278,\"battery_pct\":62,\"warning_flag\":true},\"meta\":{\"install_label\":\"FIELD-NODE-B\",\"legacy_node\":\"B\",\"uptime_s\":168979,\"last_command_type\":\"manual_collect\",\"last_command_id\":\"043abec0-e9be-44c3-9709-942fbd8eb876\",\"last_command_uptime_s\":163644,\"upload_trigger\":\"periodic\",\"legacy_valid_flags\":{\"temp_ok\":1,\"imu_ok\":1,\"gps_ok\":1}}}\n{\"schema_version\":1,\"device_id\":\"00000000-0000-0000-0000-000000000003\",\"event_ts\":null,\"seq\":2300,\"metrics\":{\"temperature_c\":22.3,\"humidity_pct\":67.5,\"accel_x_g\":-0.64,\"accel_y_g\":0.74,\"accel_z_g\":1.00,\"gyro_x_dps\":0.5,\"gyro_y_dps\":-0.3,\"gyro_z_dps\":0.1,\"tilt_x_deg\":680.46,\"tilt_y_deg\":407.71,\"gps_latitude\":22.565989,\"gps_longitude\":114.080887,\"battery_pct\":1,\"warning_flag\":true},\"meta\":{\"install_label\":\"FIELD-NODE-C\",\"legacy_node\":\"C\",\"uptime_s\":13601,\"last_command_type\":\"\",\"last_command_id\":\"\",\"last_command_uptime_s\":0,\"upload_trigger\":\"periodic\",\"legacy_valid_flags\":{\"temp_ok\":1,\"imu_ok\":1,\"gps_ok\":1}}}\n{\"schema_version\":1,\"device_id\":\"00000000-0000-0000-0000-000000000001\",\"event_ts\":null,\"seq\":28483,\"metrics\":{\"temperature_c\":29.7,\"humidity_pct\":69.6,\"accel_x_g\":-0.99,\"accel_y_g\":-0.84,\"accel_z_g\":1.00,\"gyro_x_dps\":0.5,\"gyro_y_dps\":-0.3,\"gyro_z_dps\":0.1,\"tilt_x_deg\":5304.11,\"tilt_y_deg\":3182.64,\"gps_latitude\":22.827820,\"gps_longi",
+                                          "ackLikeLines":  [
+
+                                                           ],
+                                          "targetAckLines":  [
+
+                                                             ]
+                                      }
+                   },
+    "sourceFiles":  {
+                        "manualCollect":  ".tmp/rk3568-raw-upstream-boundary-manual-20260412-174010-175.json",
+                        "setReport5":  ".tmp/rk3568-raw-upstream-boundary-set5-20260412-174010-175.json"
+                    }
+}

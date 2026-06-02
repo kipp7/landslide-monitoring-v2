@@ -10,7 +10,7 @@ param(
   [string]$MqttUrl = "mqtt://127.0.0.1:1883",
   [string]$Username = "admin",
   [string]$Password = "123456",
-  [string]$BoardHost = "192.168.124.172",
+  [string]$BoardHost = "192.168.124.179",
   [string]$BoardUser = "linaro",
   [string]$BoardPassword = "",
   [int]$BoardSshPort = 22,

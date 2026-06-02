@@ -2,7 +2,8 @@
 param(
   [string]$PromoteFile = "docs/unified/reports/desk-win-delivery-promote-latest.json",
   [string]$OutFile = "docs/unified/reports/desk-win-latest-package-verify-latest.json",
-  [int]$WaitSeconds = 15
+  [int]$WaitSeconds = 15,
+  [int]$PostReadyQuietSeconds = 60
 )
 
 $ErrorActionPreference = "Stop"
@@ -30,6 +31,32 @@ function Wait-ForDeskReady {
   }
 
   return $false
+}
+
+function Get-DeskRuntimeErrorInfo {
+  param(
+    [string]$LogPath
+  )
+
+  if (-not (Test-Path $LogPath)) {
+    return [pscustomobject]@{
+      count = 0
+      sample = @()
+    }
+  }
+
+  $content = Get-Content -Path $LogPath -Raw -ErrorAction SilentlyContinue
+  $count = if ([string]::IsNullOrWhiteSpace($content)) { 0 } else { ([regex]::Matches($content, "Frontend runtime error:")).Count }
+  $sample = @(
+    Get-Content -Path $LogPath -ErrorAction SilentlyContinue |
+      Where-Object { $_ -match "Frontend runtime error:" } |
+      Select-Object -Last 5
+  )
+
+  return [pscustomobject]@{
+    count = $count
+    sample = $sample
+  }
 }
 
 if (-not (Test-Path $fullPromoteFile)) {
@@ -73,6 +100,10 @@ for ($i = 0; $i -lt $WaitSeconds; $i++) {
 }
 
 $ready = Wait-ForDeskReady -LogPath $runtimeLog -Seconds $WaitSeconds
+if ($ready -and $PostReadyQuietSeconds -gt 0) {
+  Start-Sleep -Seconds $PostReadyQuietSeconds
+}
+$runtimeErrorInfo = Get-DeskRuntimeErrorInfo -LogPath $runtimeLog
 
 $stopped = $false
 try {
@@ -92,6 +123,9 @@ $result = [ordered]@{
   startedPid = $proc.Id
   aliveAfterLaunch = $alive
   readyAfterLaunch = $ready
+  postReadyQuietSeconds = $PostReadyQuietSeconds
+  runtimeErrorCount = $runtimeErrorInfo.count
+  runtimeErrorSample = @($runtimeErrorInfo.sample)
   stoppedAfterVerify = $stopped
   runtimeLog = $runtimeLog
 }
@@ -109,6 +143,10 @@ if (-not $alive) {
 
 if (-not $ready) {
   throw "desk-win latest package did not report app ready during verification"
+}
+
+if ($runtimeErrorInfo.count -gt 0) {
+  throw "desk-win latest package reported frontend runtime errors during verification"
 }
 
 $json

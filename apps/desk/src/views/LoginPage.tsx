@@ -5,12 +5,13 @@ import {
   RadarChartOutlined,
   SafetyCertificateOutlined
 } from "@ant-design/icons";
-import { App as AntApp, Button, Divider, Form, Input, Space, Tabs, Tag, Typography } from "antd";
+import { App as AntApp, Button, Divider, Form, Input, Space, Tabs, Typography } from "antd";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { useApi } from "../api/ApiProvider";
 import { TerrainBackdrop } from "../components/TerrainBackdrop";
+import { mobileLoginEnabled, operatorDebugFeaturesEnabled } from "../config/runtimeFlags";
 import { useAuthStore } from "../stores/authStore";
 import { useSettingsStore } from "../stores/settingsStore";
 import "./login.css";
@@ -19,7 +20,6 @@ export function LoginPage() {
   const api = useApi();
   const token = useAuthStore((s) => s.token);
   const setSession = useAuthStore((s) => s.setSession);
-  const apiMode = useSettingsStore((s) => s.apiMode);
   const terrainQuality = useSettingsStore((s) => s.terrainQuality);
   const navigate = useNavigate();
   const location = useLocation();
@@ -87,7 +87,7 @@ export function LoginPage() {
 
           <div className="desk-login-hero-title">让风险可见，让预警更快</div>
           <div className="desk-login-hero-desc">
-            汇聚 GNSS、雨量、倾角、温湿度与视频等多源数据，构建监测站态势总览、异常告警与趋势分析，支撑风险研判与处置决策。
+            汇聚 GNSS、雨量、倾角、土壤水分、温度与电导率等多源数据，构建监测站态势总览、异常告警与趋势分析，支撑风险研判与处置决策。
           </div>
 
           <div className="desk-login-features">
@@ -109,7 +109,7 @@ export function LoginPage() {
               <ApiOutlined className="desk-login-feature-ico" />
               <div className="desk-login-feature-txt">
                 <div className="t">可扩展对接</div>
-                <div className="d">数据源可切换，接口封装统一，便于逐步联调上线。</div>
+                <div className="d">统一接口封装，便于现场接入、边缘扩展与后续能力升级。</div>
               </div>
             </div>
             <div className="desk-login-feature">
@@ -122,9 +122,8 @@ export function LoginPage() {
           </div>
 
           <div className="desk-login-hero-foot">
-            <Tag color={apiMode === "mock" ? "blue" : "geekblue"}>{apiMode === "mock" ? "演示环境" : "联调环境"}</Tag>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              当前为预览版本；正式交付将提供 Windows 11 桌面端。
+              当前交付形态：Windows 11 桌面端。
             </Typography.Text>
           </div>
         </div>
@@ -164,31 +163,35 @@ export function LoginPage() {
                   </Form>
                 )
               },
-              {
-                key: "mobile",
-                label: "手机号登录",
-                children: (
-                  <Form
-                    form={mobileForm}
-                    layout="vertical"
-                    onFinish={(values: { mobile: string; code: string }) => {
-                      void loginMobile(values);
-                    }}
-                  >
-                    <Form.Item label="手机号" name="mobile" rules={[{ required: true, message: "请输入手机号" }]}>
-                      <Input size="large" placeholder="请输入手机号" autoComplete="tel" allowClear />
-                    </Form.Item>
-                    <Form.Item label="验证码" name="code" rules={[{ required: true, message: "请输入验证码" }]}>
-                      <Input size="large" placeholder="请输入验证码" autoComplete="one-time-code" />
-                    </Form.Item>
-                    <Form.Item style={{ marginBottom: 8 }}>
-                      <Button type="primary" htmlType="submit" block size="large" loading={submitting}>
-                        登录
-                      </Button>
-                    </Form.Item>
-                  </Form>
-                )
-              }
+              ...(mobileLoginEnabled
+                ? [
+                    {
+                      key: "mobile",
+                      label: "手机号登录",
+                      children: (
+                        <Form
+                          form={mobileForm}
+                          layout="vertical"
+                          onFinish={(values: { mobile: string; code: string }) => {
+                            void loginMobile(values);
+                          }}
+                        >
+                          <Form.Item label="手机号" name="mobile" rules={[{ required: true, message: "请输入手机号" }]}>
+                            <Input size="large" placeholder="请输入手机号" autoComplete="tel" allowClear />
+                          </Form.Item>
+                          <Form.Item label="验证码" name="code" rules={[{ required: true, message: "请输入验证码" }]}>
+                            <Input size="large" placeholder="请输入验证码" autoComplete="one-time-code" />
+                          </Form.Item>
+                          <Form.Item style={{ marginBottom: 8 }}>
+                            <Button type="primary" htmlType="submit" block size="large" loading={submitting}>
+                              登录
+                            </Button>
+                          </Form.Item>
+                        </Form>
+                      )
+                    }
+                  ]
+                : [])
             ]}
           />
 
@@ -196,16 +199,20 @@ export function LoginPage() {
 
           <div className="desk-login-panel-foot">
             <Space size={10} wrap>
-              <Button
-                type="link"
-                onClick={() => {
-                  accountForm.setFieldsValue({ username: "admin", password: "123456" });
-                  message.success("已填充体验账号");
-                }}
-              >
-                快速体验
-              </Button>
-              <span className="desk-login-sep" aria-hidden="true" />
+              {operatorDebugFeaturesEnabled ? (
+                <>
+                  <Button
+                    type="link"
+                    onClick={() => {
+                      accountForm.setFieldsValue({ username: "admin", password: "123456" });
+                      message.success("已填充账号");
+                    }}
+                  >
+                    快速填充
+                  </Button>
+                  <span className="desk-login-sep" aria-hidden="true" />
+                </>
+              ) : null}
               <Button
                 type="link"
                 onClick={() => {
@@ -218,15 +225,12 @@ export function LoginPage() {
               <Button
                 type="link"
                 onClick={() => {
-                  message.info("可在系统设置中切换演示/联调数据源");
+                  message.info("新账号由管理员在账号管理中注册；如需调整接口地址或权限，请联系管理员处理");
                 }}
               >
-                登录帮助
+                注册与登录帮助
               </Button>
             </Space>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              提示：演示环境不校验真实验证码；正式环境以实际短信服务为准。
-            </Typography.Text>
           </div>
         </div>
       </div>

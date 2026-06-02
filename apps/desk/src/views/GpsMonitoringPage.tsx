@@ -18,19 +18,24 @@ import {
   Typography
 } from "antd";
 import { ExportOutlined, ReloadOutlined, SettingOutlined } from "@ant-design/icons";
-import dayjs from "dayjs";
 import ReactECharts from "echarts-for-react";
+import dayjs from "dayjs";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
-import type { Baseline, Device, GpsDerivedAnalysis, GpsSeries } from "../api/client";
+import type { AiPrediction, Baseline, Device, GpsDerivedAnalysis, GpsSeries, TelemetrySeriesPoint } from "../api/client";
 import { useApi } from "../api/ApiProvider";
 import { BaseCard } from "../components/BaseCard";
+import { formatBeijingDateTime, formatBeijingMonthDay, formatBeijingMonthDayTime, formatBeijingTime } from "../utils/beijingTime";
 import { buildGpsAnalysisExport, buildGpsChartExport, buildGpsCsvExport, buildGpsReportExport, triggerPreparedExport } from "./gpsMonitoringExport";
 import "./gpsMonitoring.css";
 
 type TimeRange = "1h" | "6h" | "24h" | "7d" | "15d" | "30d";
+type GpsTabKey = "realtime" | "ceemd" | "prediction" | "data";
 type Thresholds = { blue: number; yellow: number; red: number };
+type GpsReferencePoint = { lat: number; lng: number; source: "baseline" | "temporary"; label: string };
+type GpsTrendDirection = NonNullable<GpsDerivedAnalysis["trendDiagnostics"]>["direction"];
+type GpsThresholdForecastPoint = NonNullable<NonNullable<GpsDerivedAnalysis["prediction"]>["thresholdForecast"]>["longTerm"]["red"];
 
 const GPS_THRESHOLD_BLUE_KEY = "gps.displacement_threshold_blue_mm";
 const GPS_THRESHOLD_YELLOW_KEY = "gps.displacement_threshold_yellow_mm";
@@ -41,20 +46,24 @@ function isTimeRange(value: string): value is TimeRange {
   return value === "1h" || value === "6h" || value === "24h" || value === "7d" || value === "15d" || value === "30d";
 }
 
+function isGpsTabKey(value: string | null): value is GpsTabKey {
+  return value === "realtime" || value === "ceemd" || value === "prediction" || value === "data";
+}
+
 type GpsChartRow = {
   key: string;
   ts: string;
   time: string;
   displacement: number;
   horizontal: number;
-  vertical: number;
+  vertical: number | null;
   velocityMmH: number;
-  temperature: number;
-  humidity: number;
-  confidence: number;
+  temperature: number | null;
+  humidity: number | null;
+  confidence: number | null;
   riskLevel: number;
-  lat: number;
-  lng: number;
+  lat: number | null;
+  lng: number | null;
 };
 
 function daysFromRange(range: TimeRange) {
@@ -66,17 +75,48 @@ function daysFromRange(range: TimeRange) {
   return 30;
 }
 
-function stable01(seed: string) {
-  let h = 2166136261;
-  for (let i = 0; i < seed.length; i += 1) {
-    h ^= seed.charCodeAt(i);
-    h = Math.imul(h, 16777619);
+function computeTelemetryWindow(range: TimeRange): { startTime: string; endTime: string; interval: "5m" | "1h" | "1d" } {
+  const end = new Date();
+  const start = new Date(end);
+  let interval: "5m" | "1h" | "1d" = "1h";
+
+  if (range === "1h") {
+    start.setHours(start.getHours() - 1);
+    interval = "5m";
+  } else if (range === "6h") {
+    start.setHours(start.getHours() - 6);
+    interval = "5m";
+  } else if (range === "24h") {
+    start.setHours(start.getHours() - 24);
+    interval = "1h";
+  } else if (range === "7d") {
+    start.setDate(start.getDate() - 7);
+    interval = "1h";
+  } else if (range === "15d") {
+    start.setDate(start.getDate() - 15);
+    interval = "1d";
+  } else {
+    start.setDate(start.getDate() - 30);
+    interval = "1d";
   }
-  return (h >>> 0) / 4294967295;
+
+  return { startTime: start.toISOString(), endTime: end.toISOString(), interval };
 }
 
-function noise(seed: string, amplitude: number) {
-  return (stable01(seed) - 0.5) * 2 * amplitude;
+function bucketKey(ts: string, range: TimeRange): string {
+  if (range === "1h" || range === "6h") return formatBeijingDateTime(ts, { includeSeconds: false });
+  if (range === "24h" || range === "7d") return formatBeijingMonthDayTime(ts, { includeMinutes: false });
+  return formatBeijingMonthDay(ts);
+}
+
+function readOptionalNumber(value: number | null | undefined, digits = 2): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  return Number(value.toFixed(digits));
+}
+
+function formatOptionalNumber(value: number | null | undefined, digits = 2): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "—";
+  return value.toFixed(digits);
 }
 
 function riskFromDispMm(dispMm: number, thresholds: Thresholds) {
@@ -100,11 +140,168 @@ function riskDesc(level: number) {
   return "正常";
 }
 
+function trendDirectionText(direction: GpsTrendDirection | null | undefined): string {
+  if (direction === "increasing") return "上升";
+  if (direction === "decreasing") return "下降";
+  if (direction === "stable") return "平稳";
+  return "--";
+}
+
+function aiRiskDesc(level: AiPrediction["riskLevel"]): string {
+  if (level === "high") return "高风险";
+  if (level === "medium") return "中风险";
+  if (level === "low") return "低风险";
+  return "未知";
+}
+
+function aiRiskColor(level: AiPrediction["riskLevel"]) {
+  if (level === "high") return "#ef4444";
+  if (level === "medium") return "#f59e0b";
+  if (level === "low") return "#22c55e";
+  return "rgba(148, 163, 184, 0.9)";
+}
+
+function forecastHorizonText(value: string | null | undefined): string {
+  if (value === "24h") return "未来 24h";
+  if (value === "72h") return "未来 72h";
+  if (value && value.trim()) return `未来 ${value.trim()}`;
+  return "未来窗口";
+}
+
+function formatForecastDisplacementMm(value: number | null | undefined, digits = 3): string {
+  return typeof value === "number" && Number.isFinite(value) ? `${value.toFixed(digits)} mm` : "--";
+}
+
+function formatTargetValue(value: string | null | undefined): string {
+  const text = value?.trim();
+  return text ? text : "—";
+}
+
+function buildMonitoringPointLabel(device: Device | null, forecast: AiPrediction["forecastInference"] | null | undefined): string {
+  return formatTargetValue([forecast?.pointId, device?.displayName, device?.installLabel, device?.stationName, device?.name].find((value) => value?.trim()));
+}
+
+function forecastRunStatusText(forecast: AiPrediction["forecastInference"] | null | undefined): string {
+  if (!forecast) return "待输出";
+  if (forecast.requiredFeaturesSatisfied === false) return "特征待补";
+  return "运行正常";
+}
+
+function forecastRunStatusColor(forecast: AiPrediction["forecastInference"] | null | undefined): string {
+  if (!forecast) return "default";
+  if (forecast.requiredFeaturesSatisfied === false) return "orange";
+  return "green";
+}
+
+function thresholdEtaText(forecast: GpsThresholdForecastPoint | null | undefined): string {
+  if (!forecast) return "等待越界判断";
+  if (!forecast.breached) return "红色阈值未触发";
+  if (forecast.etaHours != null) return `${forecast.etaHours}h 触发红色阈值`;
+  if (forecast.etaDays != null) return `${forecast.etaDays}d 触发红色阈值`;
+  return "红色阈值已触发";
+}
+
 function axisTheme() {
   return {
     axisLabel: { color: "rgba(226, 232, 240, 0.85)" },
     axisLine: { lineStyle: { color: "rgba(148, 163, 184, 0.45)" } },
     splitLine: { lineStyle: { color: "rgba(148, 163, 184, 0.12)" } }
+  };
+}
+
+function haversineMeters(aLat: number, aLon: number, bLat: number, bLon: number): number {
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const radius = 6371000;
+  const dLat = toRad(bLat - aLat);
+  const dLon = toRad(bLon - aLon);
+  const lat1 = toRad(aLat);
+  const lat2 = toRad(bLat);
+  const sinDLat = Math.sin(dLat / 2);
+  const sinDLon = Math.sin(dLon / 2);
+  const h = sinDLat * sinDLat + Math.cos(lat1) * Math.cos(lat2) * sinDLon * sinDLon;
+  return 2 * radius * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+function normalizeIdentityClass(value?: string | null): string {
+  return value?.trim().toLowerCase() ?? "";
+}
+
+function isFormalIdentityClass(value?: string | null): boolean {
+  return normalizeIdentityClass(value) === "formal";
+}
+
+function isBaselineMissingError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  const normalized = message.toLowerCase();
+  return message.includes("未找到基准点") || normalized.includes("baseline");
+}
+
+function formatGpsAxisTime(ts: string, range: TimeRange): string {
+  if (range === "1h" || range === "6h") return formatBeijingMonthDayTime(ts);
+  if (range === "24h" || range === "7d") return formatBeijingMonthDayTime(ts, { includeMinutes: false });
+  return formatBeijingMonthDay(ts);
+}
+
+function buildRawGpsSeriesFromTelemetry(
+  deviceId: string,
+  latSeries: TelemetrySeriesPoint[],
+  lngSeries: TelemetrySeriesPoint[]
+): { series: GpsSeries; referencePoint: GpsReferencePoint | null } {
+  const rows = new Map<string, { lat?: number; lng?: number }>();
+
+  for (const point of latSeries) {
+    const entry = rows.get(point.ts) ?? {};
+    entry.lat = point.value;
+    rows.set(point.ts, entry);
+  }
+
+  for (const point of lngSeries) {
+    const entry = rows.get(point.ts) ?? {};
+    entry.lng = point.value;
+    rows.set(point.ts, entry);
+  }
+
+  const ordered = Array.from(rows.entries())
+    .filter((entry): entry is [string, { lat: number; lng: number }] => {
+      const value = entry[1];
+      return typeof value.lat === "number" && Number.isFinite(value.lat) && typeof value.lng === "number" && Number.isFinite(value.lng);
+    })
+    .sort((a, b) => Date.parse(a[0]) - Date.parse(b[0]));
+
+  if (!ordered.length) {
+    return {
+      series: { deviceId, deviceName: deviceId, points: [] },
+      referencePoint: null
+    };
+  }
+
+  const referenceSeed = ordered.slice(0, Math.min(12, ordered.length));
+  const referenceLat = referenceSeed.reduce((sum, entry) => sum + entry[1].lat, 0) / referenceSeed.length;
+  const referenceLng = referenceSeed.reduce((sum, entry) => sum + entry[1].lng, 0) / referenceSeed.length;
+  const referencePoint: GpsReferencePoint = {
+    lat: Number(referenceLat.toFixed(6)),
+    lng: Number(referenceLng.toFixed(6)),
+    source: "temporary",
+    label: "临时参考点"
+  };
+
+  return {
+    series: {
+      deviceId,
+      deviceName: deviceId,
+      points: ordered.map(([ts, coords]) => {
+        const horizontalMeters = haversineMeters(referenceLat, referenceLng, coords.lat, coords.lng);
+        const horizontalMm = Number((horizontalMeters * 1000).toFixed(2));
+        return {
+          ts,
+          dispMm: horizontalMm,
+          horizontalMm,
+          latitude: Number(coords.lat.toFixed(6)),
+          longitude: Number(coords.lng.toFixed(6))
+        };
+      })
+    },
+    referencePoint
   };
 }
 
@@ -118,13 +315,19 @@ export function GpsMonitoringPage() {
   const [baselines, setBaselines] = useState<Baseline[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>("");
   const [timeRange, setTimeRange] = useState<TimeRange>("7d");
+  const [activeTab, setActiveTab] = useState<GpsTabKey>("realtime");
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [series, setSeries] = useState<GpsSeries | null>(null);
   const [derivedAnalysis, setDerivedAnalysis] = useState<GpsDerivedAnalysis | null>(null);
+  const [temperatureSeries, setTemperatureSeries] = useState<TelemetrySeriesPoint[]>([]);
+  const [humiditySeries, setHumiditySeries] = useState<TelemetrySeriesPoint[]>([]);
   const [lastUpdateTime, setLastUpdateTime] = useState<string>("");
-  const [nowTime, setNowTime] = useState<string>(new Date().toLocaleTimeString("zh-CN"));
+  const [nowTime, setNowTime] = useState<string>(formatBeijingTime(new Date()));
+  const [temporaryReferencePoint, setTemporaryReferencePoint] = useState<GpsReferencePoint | null>(null);
+  const [gpsNotice, setGpsNotice] = useState<string | null>(null);
+  const [latestAiPrediction, setLatestAiPrediction] = useState<AiPrediction | null>(null);
 
   const [showSettings, setShowSettings] = useState(false);
   const [thresholds, setThresholds] = useState<Thresholds>({ blue: 2, yellow: 5, red: 8 });
@@ -144,7 +347,7 @@ export function GpsMonitoringPage() {
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setNowTime(new Date().toLocaleTimeString("zh-CN"));
+      setNowTime(formatBeijingTime(new Date()));
     }, 1000);
     return () => clearInterval(timer);
   }, []);
@@ -158,9 +361,11 @@ export function GpsMonitoringPage() {
     const qDevice = params.get("deviceId");
     const qRange = params.get("range");
     const qAuto = params.get("autoRefresh");
+    const qTab = params.get("tab");
 
     if (qDevice) setSelectedDeviceId(qDevice);
     if (qRange && isTimeRange(qRange)) setTimeRange(qRange);
+    if (isGpsTabKey(qTab)) setActiveTab(qTab);
     if (qAuto === "1" || qAuto === "true") setAutoRefresh(true);
     if (qAuto === "0" || qAuto === "false") setAutoRefresh(false);
   }, [location.search]);
@@ -171,12 +376,13 @@ export function GpsMonitoringPage() {
     if (selectedDeviceId) params.set("deviceId", selectedDeviceId);
     else params.delete("deviceId");
     params.set("range", timeRange);
+    params.set("tab", activeTab);
     params.set("autoRefresh", autoRefresh ? "1" : "0");
     const nextSearch = `?${params.toString()}`;
     if (nextSearch !== (location.search || "")) {
       navigate({ pathname: location.pathname, search: nextSearch }, { replace: true });
     }
-  }, [autoRefresh, location.pathname, location.search, navigate, selectedDeviceId, timeRange]);
+  }, [activeTab, autoRefresh, location.pathname, location.search, navigate, selectedDeviceId, timeRange]);
 
   useEffect(() => {
     const abort = new AbortController();
@@ -186,16 +392,17 @@ export function GpsMonitoringPage() {
       try {
         const [deviceList, baselineList] = await Promise.all([api.devices.list(), api.baselines.list()]);
         if (abort.signal.aborted) return;
-        const baselineIds = new Set(baselineList.map((item) => item.deviceId));
-        const gnss = deviceList.filter((d) => d.type === "gnss" && baselineIds.has(d.id));
+        const gnssCandidates = deviceList.filter((d) => d.type === "gnss");
+        const formalGnss = gnssCandidates.filter((d) => isFormalIdentityClass(d.identityClass));
+        const gnss = formalGnss.length > 0 ? formalGnss : gnssCandidates;
         setDevices(gnss);
         setBaselines(baselineList);
-        setSelectedDeviceId((prev) => (prev && baselineIds.has(prev) ? prev : gnss[0]?.id || ""));
+        setSelectedDeviceId((prev) => (prev && gnss.some((device) => device.id === prev) ? prev : gnss[0]?.id || ""));
       } catch (err) {
         if (abort.signal.aborted) return;
         const msg = (err as Error).message;
         setLoadError(msg);
-        message.error(`GPS 页面加载失败：${msg}（可在系统设置切换数据源）`);
+        message.error(`形变监测页面加载失败：${msg}（可在系统设置检查数据源与接口地址）`);
       } finally {
         if (!abort.signal.aborted) setLoading(false);
       }
@@ -238,17 +445,90 @@ export function GpsMonitoringPage() {
     setLoadError(null);
     try {
       const days = daysFromRange(timeRange);
-      const [s, analysis] = await Promise.all([
-        api.gps.getSeries({ deviceId: selectedDeviceId, days }),
-        api.gps.getDerivedAnalysis({ deviceId: selectedDeviceId, rangeLabel: timeRange, limit: dataLimit })
+      const telemetryWindow = computeTelemetryWindow(timeRange);
+      let nextSeries: GpsSeries;
+      let nextDerivedAnalysis: GpsDerivedAnalysis | null = null;
+      let nextTemporaryReferencePoint: GpsReferencePoint | null = null;
+      let nextNotice: string | null = null;
+
+      try {
+        nextSeries = await api.gps.getSeries({ deviceId: selectedDeviceId, days });
+        try {
+          nextDerivedAnalysis = await api.gps.getDerivedAnalysis({ deviceId: selectedDeviceId, rangeLabel: timeRange, limit: dataLimit });
+        } catch (analysisError) {
+          nextNotice = isBaselineMissingError(analysisError)
+            ? "当前设备尚未建立持久基线，分析页已退化为实时坐标视图。"
+            : `形变分析暂不可用：${analysisError instanceof Error ? analysisError.message : String(analysisError)}`;
+        }
+      } catch (seriesError) {
+        if (!isBaselineMissingError(seriesError)) {
+          throw seriesError;
+        }
+
+        const [latSeries, lngSeries] = await Promise.all([
+          api.telemetry.getSeries({
+            deviceId: selectedDeviceId,
+            sensorKey: "gps_latitude",
+            startTime: telemetryWindow.startTime,
+            endTime: telemetryWindow.endTime,
+            interval: telemetryWindow.interval
+          }),
+          api.telemetry.getSeries({
+            deviceId: selectedDeviceId,
+            sensorKey: "gps_longitude",
+            startTime: telemetryWindow.startTime,
+            endTime: telemetryWindow.endTime,
+            interval: telemetryWindow.interval
+          })
+        ]);
+
+        const rawGps = buildRawGpsSeriesFromTelemetry(selectedDeviceId, latSeries, lngSeries);
+        nextSeries = rawGps.series;
+        nextTemporaryReferencePoint = rawGps.referencePoint;
+        nextNotice = rawGps.referencePoint
+          ? "当前设备尚未建立持久基线，页面已按实时坐标自动生成临时参考点，仅用于当前窗口查看。"
+          : "当前设备尚未建立持久基线，且当前窗口没有可用定位坐标数据。";
+      }
+
+      const [temperature, humidity, aiPredictionResult] = await Promise.all([
+        api.telemetry
+          .getSeries({
+            deviceId: selectedDeviceId,
+            sensorKey: "temperature_c",
+            startTime: telemetryWindow.startTime,
+            endTime: telemetryWindow.endTime,
+            interval: telemetryWindow.interval
+          })
+          .catch(() => []),
+        api.telemetry
+          .getSeries({
+            deviceId: selectedDeviceId,
+            sensorKey: "humidity_pct",
+            startTime: telemetryWindow.startTime,
+            endTime: telemetryWindow.endTime,
+            interval: telemetryWindow.interval
+          })
+          .catch(() => []),
+        api.aiPredictions
+          .list({
+            page: 1,
+            pageSize: 1,
+            deviceId: selectedDeviceId
+          })
+          .catch(() => null)
       ]);
-      setSeries(s);
-      setDerivedAnalysis(analysis);
-      setLastUpdateTime(new Date().toLocaleTimeString("zh-CN"));
+      setSeries(nextSeries);
+      setDerivedAnalysis(nextDerivedAnalysis);
+      setTemperatureSeries(temperature);
+      setHumiditySeries(humidity);
+      setLatestAiPrediction(aiPredictionResult?.list[0] ?? null);
+      setTemporaryReferencePoint(nextTemporaryReferencePoint);
+      setGpsNotice(nextNotice);
+      setLastUpdateTime(formatBeijingDateTime(new Date()));
     } catch (err) {
       const msg = (err as Error).message;
       setLoadError(msg);
-      message.error(`获取 GPS 数据失败：${msg}`);
+      message.error(`获取形变数据失败：${msg}`);
     } finally {
       setLoading(false);
     }
@@ -274,49 +554,48 @@ export function GpsMonitoringPage() {
     () => baselines.find((b) => b.deviceId === selectedDeviceId) ?? null,
     [baselines, selectedDeviceId]
   );
+  const referencePoint = baseline
+    ? ({ lat: baseline.baselineLat, lng: baseline.baselineLng, source: "baseline", label: "持久基线" } satisfies GpsReferencePoint)
+    : temporaryReferencePoint;
 
   const pts = series?.points ?? [];
 
   const chartData: GpsChartRow[] = useMemo(() => {
-    const baseLat = baseline?.baselineLat ?? 22.684674;
-    const baseLng = baseline?.baselineLng ?? 110.189371;
+    const temperatureByBucket = new Map<string, number>();
+    const humidityByBucket = new Map<string, number>();
+    for (const point of temperatureSeries) {
+      temperatureByBucket.set(bucketKey(point.ts, timeRange), point.value);
+    }
+    for (const point of humiditySeries) {
+      humidityByBucket.set(bucketKey(point.ts, timeRange), point.value);
+    }
     const rows: GpsChartRow[] = [];
 
     for (let i = 0; i < pts.length; i += 1) {
       const p = pts[i]!;
       const prev = i > 0 ? pts[i - 1]! : null;
       const disp = p.dispMm;
-
-      const horizontal = Number((disp * 0.72 + noise(`${selectedDeviceId}-h-${i}`, 0.18)).toFixed(2));
-      const vertical = Number((disp * 0.28 + noise(`${selectedDeviceId}-v-${i}`, 0.12)).toFixed(2));
+      const rowBucket = bucketKey(p.ts, timeRange);
+      const horizontal = readOptionalNumber(p.horizontalMm ?? disp, 2) ?? disp;
+      const vertical = readOptionalNumber(p.verticalMm, 2);
 
       const dtHours = prev ? Math.max(1 / 60, (Date.parse(p.ts) - Date.parse(prev.ts)) / 3.6e6) : 1;
       const velocityMmH = prev ? Number(((disp - prev.dispMm) / dtHours).toFixed(3)) : 0;
-
-      const temperature = Number(
-        (15.5 + Math.sin(i / 5) * 1.4 + noise(`${selectedDeviceId}-t-${i}`, 0.2)).toFixed(1)
-      );
-      const humidity = Number(
-        (82 + Math.cos(i / 6) * 5 + noise(`${selectedDeviceId}-hum-${i}`, 1.2)).toFixed(0)
-      );
-      const confidence = Number(
-        (0.72 + Math.sin(i / 7) * 0.08 + noise(`${selectedDeviceId}-c-${i}`, 0.02)).toFixed(2)
-      );
       const riskLevel = riskFromDispMm(disp, thresholds);
-
-      const lat = Number((baseLat + noise(`${selectedDeviceId}-lat-${i}`, 0.00002)).toFixed(6));
-      const lng = Number((baseLng + noise(`${selectedDeviceId}-lng-${i}`, 0.00002)).toFixed(6));
+      const confidence = readOptionalNumber(derivedAnalysis?.prediction?.confidence ?? derivedAnalysis?.qualityScore, 2);
+      const lat = readOptionalNumber(p.latitude, 6);
+      const lng = readOptionalNumber(p.longitude, 6);
 
       rows.push({
         key: `${p.ts}-${i}`,
         ts: p.ts,
-        time: dayjs(p.ts).format("MM-DD HH:mm"),
+        time: formatGpsAxisTime(p.ts, timeRange),
         displacement: Number(disp.toFixed(2)),
         horizontal,
         vertical,
         velocityMmH,
-        temperature,
-        humidity,
+        temperature: readOptionalNumber(temperatureByBucket.get(rowBucket), 1),
+        humidity: readOptionalNumber(humidityByBucket.get(rowBucket), 0),
         confidence,
         riskLevel,
         lat,
@@ -325,12 +604,47 @@ export function GpsMonitoringPage() {
     }
 
     return rows.slice(-dataLimit);
-  }, [baseline?.baselineLat, baseline?.baselineLng, dataLimit, pts, selectedDeviceId, thresholds]);
+  }, [dataLimit, derivedAnalysis?.prediction?.confidence, derivedAnalysis?.qualityScore, humiditySeries, pts, temperatureSeries, thresholds, timeRange]);
 
   const latest = chartData.at(-1) ?? null;
+  const predictionConfidencePct = derivedAnalysis?.prediction ? Math.round(derivedAnalysis.prediction.confidence * 100) : null;
+  const longRedForecast = derivedAnalysis?.prediction?.thresholdForecast?.longTerm.red ?? null;
+  const hasEnvData = useMemo(() => chartData.some((row) => row.temperature != null || row.humidity != null), [chartData]);
+  const hasCoordData = useMemo(() => chartData.some((row) => row.lat != null && row.lng != null), [chartData]);
+  const hasCeemdData = Boolean(derivedAnalysis?.ceemd?.imfs?.length && derivedAnalysis?.ceemd?.residue?.length);
+  const hasShortPrediction = Boolean(derivedAnalysis?.prediction?.shortTerm?.length && chartData.length);
+  const hasLongPrediction = Boolean(derivedAnalysis?.prediction?.longTerm?.length && chartData.length);
 
   const latestDisp = latest?.displacement ?? 0;
   const level = riskFromDispMm(latestDisp, thresholds);
+  const displacementLabel = baseline ? "最新位移（持久基线）" : referencePoint ? "最新位移（临时参考）" : "最新位移";
+  const referenceStatusText = baseline ? "持久基线已建立" : referencePoint ? "临时参考点" : "未形成参考点";
+  const forecastInference = latestAiPrediction?.forecastInference ?? null;
+  const riskCalibration = latestAiPrediction?.riskCalibration ?? null;
+  const forecastRunStatus = forecastRunStatusText(forecastInference);
+  const trendDiagnostics = derivedAnalysis?.trendDiagnostics ?? null;
+  const monitoringPointLabel = buildMonitoringPointLabel(selectedDevice, forecastInference);
+  const predictionTargetItems = [
+    { key: "region", label: "区域", value: selectedDevice?.regionCode },
+    { key: "slope", label: "坡段", value: selectedDevice?.slopeCode },
+    { key: "station", label: "站点", value: selectedDevice?.displayName ?? selectedDevice?.stationName },
+    { key: "point", label: "监测点", value: monitoringPointLabel },
+    { key: "device", label: "设备", value: selectedDevice?.deviceName ?? selectedDevice?.name ?? selectedDevice?.id },
+    { key: "node", label: "节点", value: selectedDevice?.nodeCode },
+    { key: "window", label: "预测窗口", value: forecastInference ? forecastHorizonText(forecastInference.horizonSpec) : "等待模型输出" }
+  ];
+  const selectedDeviceStatusText =
+    selectedDevice?.lifecycleStatus === "active"
+      ? "在役"
+      : selectedDevice?.lifecycleStatus === "inactive"
+        ? "停用"
+        : selectedDevice?.status === "online"
+          ? "在线"
+          : selectedDevice?.status === "warning"
+            ? "告警"
+            : selectedDevice?.status === "offline"
+              ? "离线"
+              : "未选择";
 
   const quality = useMemo(() => {
     const expected = Math.min(200, daysFromRange(timeRange) * 24);
@@ -452,16 +766,35 @@ export function GpsMonitoringPage() {
   }, [chartData]);
 
   const coordOption = useMemo(() => {
-    const baseLat = baseline?.baselineLat ?? 22.684674;
-    const baseLng = baseline?.baselineLng ?? 110.189371;
-    const curLat = latest?.lat ?? baseLat;
-    const curLng = latest?.lng ?? baseLng;
+    const baseLat = referencePoint?.lat ?? latest?.lat ?? chartData[0]?.lat ?? 22.684674;
+    const baseLng = referencePoint?.lng ?? latest?.lng ?? chartData[0]?.lng ?? 110.189371;
+    const curLat = latest?.lat ?? null;
+    const curLng = latest?.lng ?? null;
+    const referenceLabel = referencePoint?.source === "temporary" ? "临时参考点" : "基线点";
 
     const pad = 0.00008;
-    const minLng = Math.min(baseLng, curLng) - pad;
-    const maxLng = Math.max(baseLng, curLng) + pad;
-    const minLat = Math.min(baseLat, curLat) - pad;
-    const maxLat = Math.max(baseLat, curLat) + pad;
+    const minLng = Math.min(baseLng, ...(curLng == null ? [] : [curLng])) - pad;
+    const maxLng = Math.max(baseLng, ...(curLng == null ? [] : [curLng])) + pad;
+    const minLat = Math.min(baseLat, ...(curLat == null ? [] : [curLat])) - pad;
+    const maxLat = Math.max(baseLat, ...(curLat == null ? [] : [curLat])) + pad;
+    const points = [
+      {
+        name: referenceLabel,
+        value: [baseLng, baseLat] as [number, number],
+        symbolSize: 16,
+        itemStyle: { color: "#22c55e", shadowBlur: 12, shadowColor: "rgba(34, 211, 238, 0.18)" }
+      },
+      ...(curLat != null && curLng != null
+        ? [
+            {
+              name: "最新点",
+              value: [curLng, curLat] as [number, number],
+              symbolSize: 18,
+              itemStyle: { color: riskColor(level), shadowBlur: 14, shadowColor: "rgba(34, 211, 238, 0.22)" }
+            }
+          ]
+        : [])
+    ];
 
     return {
       backgroundColor: "transparent",
@@ -482,94 +815,36 @@ export function GpsMonitoringPage() {
       series: [
         {
           type: "scatter",
-          data: [
-            {
-              name: "基线点",
-              value: [baseLng, baseLat] as [number, number],
-              symbolSize: 16,
-              itemStyle: { color: "#22c55e", shadowBlur: 12, shadowColor: "rgba(34, 211, 238, 0.18)" }
-            },
-            {
-              name: "最新点",
-              value: [curLng, curLat] as [number, number],
-              symbolSize: 18,
-              itemStyle: { color: riskColor(level), shadowBlur: 14, shadowColor: "rgba(34, 211, 238, 0.22)" }
-            }
-          ]
+          data: points
         }
       ]
     };
-  }, [baseline?.baselineLat, baseline?.baselineLng, latest?.lat, latest?.lng, level]);
+  }, [chartData, latest?.lat, latest?.lng, level, referencePoint]);
 
   const ceemdMetrics = useMemo(() => {
-    if (derivedAnalysis?.ceemd) {
-      return {
-        q: Math.round(derivedAnalysis.ceemd.qualityScore * 100),
-        snr: Number((Math.max(0, (derivedAnalysis.ceemd.dominantFrequencies[0] ?? 0) * 10000)).toFixed(1)),
-        ortho: Number(derivedAnalysis.ceemd.orthogonality.toFixed(2)),
-        recon: Number(derivedAnalysis.ceemd.reconstructionError.toFixed(3))
-      };
-    }
-    const q = Math.round(72 + stable01(`${selectedDeviceId}-ceemd-q`) * 26);
-    const snr = Number((14 + stable01(`${selectedDeviceId}-ceemd-snr`) * 12).toFixed(1));
-    const ortho = Number((0.82 + stable01(`${selectedDeviceId}-ceemd-ortho`) * 0.16).toFixed(2));
-    const recon = Number((0.04 + stable01(`${selectedDeviceId}-ceemd-recon`) * 0.18).toFixed(3));
-    return { q, snr, ortho, recon };
-  }, [derivedAnalysis, selectedDeviceId]);
+    if (!derivedAnalysis?.ceemd) return null;
+    return {
+      q: Math.round(derivedAnalysis.ceemd.qualityScore * 100),
+      snr: Number((Math.max(0, (derivedAnalysis.ceemd.dominantFrequencies[0] ?? 0) * 10000)).toFixed(1)),
+      ortho: Number(derivedAnalysis.ceemd.orthogonality.toFixed(2)),
+      recon: Number(derivedAnalysis.ceemd.reconstructionError.toFixed(3))
+    };
+  }, [derivedAnalysis]);
 
   const longTermPredictionOption = useMemo(() => {
-    if (derivedAnalysis?.prediction?.longTerm?.length) {
-      const history = chartData.slice(-30);
-      const historyX = history.map((x) => x.time);
-      const historyY = history.map((x) => x.displacement);
-      const future = derivedAnalysis.prediction.longTerm;
-      const longLower = derivedAnalysis.prediction.confidenceIntervals?.longTermLower ?? [];
-      const longUpper = derivedAnalysis.prediction.confidenceIntervals?.longTermUpper ?? [];
-      const futureX = Array.from({ length: future.length }, (_, idx) => dayjs().add(idx + 1, "day").format("MM-DD"));
-      const allX = [...historyX, ...futureX];
-      const historyPad: (number | null)[] = [...historyY, ...future.map(() => null)];
-      const predPad: (number | null)[] = [...historyY.map(() => null), ...future];
-      const lower: (number | null)[] = [...historyY.map(() => null), ...(longLower.length ? longLower : future.map((v) => Number((v - 1.8).toFixed(2))))];
-      const upper: (number | null)[] = [...historyY.map(() => null), ...(longUpper.length ? longUpper : future.map((v) => Number((v + 1.8).toFixed(2))))];
-      return {
-        backgroundColor: "transparent",
-        textStyle: { color: "rgba(226, 232, 240, 0.9)" },
-        tooltip: { trigger: "axis" },
-        legend: {
-          data: ["历史", "预测", "置信区间"],
-          top: 10,
-          textStyle: { color: "rgba(226, 232, 240, 0.85)", fontSize: 12 }
-        },
-        grid: { left: 54, right: 16, top: 44, bottom: 54 },
-        xAxis: { type: "category", data: allX, ...axisTheme() },
-        yAxis: { type: "value", name: "mm", ...axisTheme() },
-        series: [
-          { name: "历史", type: "line", showSymbol: false, data: historyPad, lineStyle: { width: 2.5, color: "#22d3ee" } },
-          { name: "预测", type: "line", showSymbol: false, data: predPad, lineStyle: { width: 2.5, color: "#34d399" }, areaStyle: { color: "rgba(52, 211, 153, 0.10)" } },
-          { name: "置信区间", type: "line", showSymbol: false, data: lower, lineStyle: { opacity: 0 }, stack: "band-long" },
-          { name: "置信区间", type: "line", showSymbol: false, data: upper, lineStyle: { opacity: 0 }, areaStyle: { color: "rgba(52, 211, 153, 0.14)" }, stack: "band-long" }
-        ]
-      };
-    }
+    if (!derivedAnalysis?.prediction?.longTerm?.length || !chartData.length) return null;
     const history = chartData.slice(-30);
     const historyX = history.map((x) => x.time);
     const historyY = history.map((x) => x.displacement);
-
-    const last = history.at(-1)?.displacement ?? 0;
-    const prev = history.at(-10)?.displacement ?? 0;
-    const slope = (last - prev) / 10;
-
-    const future = Array.from({ length: 14 }, (_, idx) => {
-      const y = last + slope * (idx + 1) + noise(`${selectedDeviceId}-pred-long-${idx}`, 0.55);
-      return Number(y.toFixed(2));
-    });
-    const futureX = Array.from({ length: 14 }, (_, idx) => dayjs().add(idx + 1, "day").format("MM-DD"));
-
+    const future = derivedAnalysis.prediction.longTerm;
+    const longLower = derivedAnalysis.prediction.confidenceIntervals?.longTermLower ?? [];
+    const longUpper = derivedAnalysis.prediction.confidenceIntervals?.longTermUpper ?? [];
+    const futureX = Array.from({ length: future.length }, (_, idx) => dayjs().add(idx + 1, "day").format("MM-DD"));
     const allX = [...historyX, ...futureX];
     const historyPad: (number | null)[] = [...historyY, ...future.map(() => null)];
     const predPad: (number | null)[] = [...historyY.map(() => null), ...future];
-    const lower: (number | null)[] = [...historyY.map(() => null), ...future.map((v) => Number((v - 1.8).toFixed(2)))];
-    const upper: (number | null)[] = [...historyY.map(() => null), ...future.map((v) => Number((v + 1.8).toFixed(2)))];
+    const lower: (number | null)[] = [...historyY.map(() => null), ...longLower];
+    const upper: (number | null)[] = [...historyY.map(() => null), ...longUpper];
 
     return {
       backgroundColor: "transparent",
@@ -618,43 +893,10 @@ export function GpsMonitoringPage() {
         }
       ]
     };
-  }, [chartData, derivedAnalysis, selectedDeviceId]);
+  }, [chartData, derivedAnalysis]);
 
   const ceemdSeriesOption = useMemo(() => {
-    if (derivedAnalysis?.ceemd?.imfs?.length) {
-      return {
-        backgroundColor: "transparent",
-        textStyle: { color: "rgba(226, 232, 240, 0.9)" },
-        tooltip: { trigger: "axis" },
-        legend: {
-          data: ["IMF-1", "IMF-2", "IMF-3", "Residue"],
-          top: 10,
-          textStyle: { color: "rgba(226, 232, 240, 0.85)", fontSize: 12 }
-        },
-        grid: { left: 54, right: 16, top: 44, bottom: 54 },
-        xAxis: { type: "category", data: chartData.map((x) => x.time), ...axisTheme() },
-        yAxis: { type: "value", name: "分量", ...axisTheme() },
-        series: [
-          { name: "IMF-1", type: "line", showSymbol: false, smooth: true, data: derivedAnalysis.ceemd.imfs[0] ?? [], lineStyle: { width: 2, color: "#22d3ee" } },
-          { name: "IMF-2", type: "line", showSymbol: false, smooth: true, data: derivedAnalysis.ceemd.imfs[1] ?? [], lineStyle: { width: 2, color: "#34d399" } },
-          { name: "IMF-3", type: "line", showSymbol: false, smooth: true, data: derivedAnalysis.ceemd.imfs[2] ?? [], lineStyle: { width: 2, color: "#60a5fa" } },
-          { name: "Residue", type: "line", showSymbol: false, smooth: true, data: derivedAnalysis.ceemd.residue ?? [], lineStyle: { width: 2.5, color: "#fbbf24" } }
-        ]
-      };
-    }
-    const imf1 = chartData.map((_, i) =>
-      Number((Math.sin(i / 1.8) * 0.4 + noise(`${selectedDeviceId}-imf1-${i}`, 0.08)).toFixed(3))
-    );
-    const imf2 = chartData.map((_, i) =>
-      Number((Math.sin(i / 4.2) * 0.7 + noise(`${selectedDeviceId}-imf2-${i}`, 0.08)).toFixed(3))
-    );
-    const imf3 = chartData.map((_, i) =>
-      Number((Math.sin(i / 10.5) * 1.1 + noise(`${selectedDeviceId}-imf3-${i}`, 0.08)).toFixed(3))
-    );
-    const residue = chartData.map((x, i) =>
-      Number((x.displacement * 0.12 + noise(`${selectedDeviceId}-res-${i}`, 0.12)).toFixed(3))
-    );
-
+    if (!derivedAnalysis?.ceemd?.imfs?.length) return null;
     return {
       backgroundColor: "transparent",
       textStyle: { color: "rgba(226, 232, 240, 0.9)" },
@@ -668,22 +910,22 @@ export function GpsMonitoringPage() {
       xAxis: { type: "category", data: chartData.map((x) => x.time), ...axisTheme() },
       yAxis: { type: "value", name: "分量", ...axisTheme() },
       series: [
-        { name: "IMF-1", type: "line", showSymbol: false, smooth: true, data: imf1, lineStyle: { width: 2, color: "#22d3ee" } },
-        { name: "IMF-2", type: "line", showSymbol: false, smooth: true, data: imf2, lineStyle: { width: 2, color: "#34d399" } },
-        { name: "IMF-3", type: "line", showSymbol: false, smooth: true, data: imf3, lineStyle: { width: 2, color: "#60a5fa" } },
-        { name: "Residue", type: "line", showSymbol: false, smooth: true, data: residue, lineStyle: { width: 2.5, color: "#fbbf24" } }
+        { name: "IMF-1", type: "line", showSymbol: false, smooth: true, data: derivedAnalysis.ceemd.imfs[0] ?? [], lineStyle: { width: 2, color: "#22d3ee" } },
+        { name: "IMF-2", type: "line", showSymbol: false, smooth: true, data: derivedAnalysis.ceemd.imfs[1] ?? [], lineStyle: { width: 2, color: "#34d399" } },
+        { name: "IMF-3", type: "line", showSymbol: false, smooth: true, data: derivedAnalysis.ceemd.imfs[2] ?? [], lineStyle: { width: 2, color: "#60a5fa" } },
+        { name: "Residue", type: "line", showSymbol: false, smooth: true, data: derivedAnalysis.ceemd.residue ?? [], lineStyle: { width: 2.5, color: "#fbbf24" } }
       ]
     };
-  }, [chartData, derivedAnalysis, selectedDeviceId]);
+  }, [chartData, derivedAnalysis]);
 
   const ceemdEnergyOption = useMemo(() => {
-    if (derivedAnalysis?.ceemd?.energyDistribution?.length) {
-      const energies = derivedAnalysis.ceemd.energyDistribution.map((value) => Math.round(value * 100));
-      const e1 = energies[0] ?? 0;
-      const e2 = energies[1] ?? 0;
-      const e3 = energies[2] ?? 0;
-      const e4 = Math.max(1, 100 - e1 - e2 - e3);
-      return {
+    if (!derivedAnalysis?.ceemd?.energyDistribution?.length) return null;
+    const energies = derivedAnalysis.ceemd.energyDistribution.map((value) => Math.round(value * 100));
+    const e1 = energies[0] ?? 0;
+    const e2 = energies[1] ?? 0;
+    const e3 = energies[2] ?? 0;
+    const e4 = Math.max(1, 100 - e1 - e2 - e3);
+    return {
         backgroundColor: "transparent",
         textStyle: { color: "rgba(226, 232, 240, 0.9)" },
         tooltip: { trigger: "item" },
@@ -703,87 +945,23 @@ export function GpsMonitoringPage() {
           }
         ]
       };
-    }
-    const e1 = Math.round(20 + stable01(`${selectedDeviceId}-e1`) * 20);
-    const e2 = Math.round(25 + stable01(`${selectedDeviceId}-e2`) * 18);
-    const e3 = Math.round(15 + stable01(`${selectedDeviceId}-e3`) * 25);
-    const e4 = Math.max(1, 100 - e1 - e2 - e3);
-
-    return {
-      backgroundColor: "transparent",
-      textStyle: { color: "rgba(226, 232, 240, 0.9)" },
-      tooltip: { trigger: "item" },
-      grid: { left: 40, right: 16, top: 20, bottom: 40 },
-      xAxis: { type: "category", data: ["IMF-1", "IMF-2", "IMF-3", "Residue"], ...axisTheme() },
-      yAxis: { type: "value", name: "%", ...axisTheme() },
-      series: [
-        {
-          type: "bar",
-          data: [
-            { value: e1, itemStyle: { color: "#22d3ee" } },
-            { value: e2, itemStyle: { color: "#34d399" } },
-            { value: e3, itemStyle: { color: "#60a5fa" } },
-            { value: e4, itemStyle: { color: "#fbbf24" } }
-          ],
-          barWidth: 18
-        }
-      ]
-    };
-  }, [derivedAnalysis, selectedDeviceId]);
+  }, [derivedAnalysis]);
 
   const predictionOption = useMemo(() => {
-    if (derivedAnalysis?.prediction?.shortTerm?.length) {
-      const history = chartData.slice(-24);
-      const historyX = history.map((x) => x.time);
-      const historyY = history.map((x) => x.displacement);
-      const future = derivedAnalysis.prediction.shortTerm;
-      const shortLower = derivedAnalysis.prediction.confidenceIntervals?.shortTermLower ?? [];
-      const shortUpper = derivedAnalysis.prediction.confidenceIntervals?.shortTermUpper ?? [];
-      const futureX = Array.from({ length: future.length }, (_, idx) => dayjs().add(idx + 1, "hour").format("MM-DD HH:mm"));
-      const allX = [...historyX, ...futureX];
-      const historyPad: (number | null)[] = [...historyY, ...future.map(() => null)];
-      const predPad: (number | null)[] = [...historyY.map(() => null), ...future];
-      const lower: (number | null)[] = [...historyY.map(() => null), ...(shortLower.length ? shortLower : future.map((v) => Number((v - 0.8).toFixed(2))))];
-      const upper: (number | null)[] = [...historyY.map(() => null), ...(shortUpper.length ? shortUpper : future.map((v) => Number((v + 0.8).toFixed(2))))];
-      return {
-        backgroundColor: "transparent",
-        textStyle: { color: "rgba(226, 232, 240, 0.9)" },
-        tooltip: { trigger: "axis" },
-        legend: {
-          data: ["历史", "预测", "置信区间"],
-          top: 10,
-          textStyle: { color: "rgba(226, 232, 240, 0.85)", fontSize: 12 }
-        },
-        grid: { left: 54, right: 16, top: 44, bottom: 54 },
-        xAxis: { type: "category", data: allX, ...axisTheme() },
-        yAxis: { type: "value", name: "mm", ...axisTheme() },
-        series: [
-          { name: "历史", type: "line", showSymbol: false, data: historyPad, lineStyle: { width: 2.5, color: "#22d3ee" } },
-          { name: "预测", type: "line", showSymbol: false, data: predPad, lineStyle: { width: 2.5, color: "#a78bfa" }, areaStyle: { color: "rgba(167, 139, 250, 0.10)" } },
-          { name: "置信区间", type: "line", showSymbol: false, data: lower, lineStyle: { opacity: 0 }, stack: "band" },
-          { name: "置信区间", type: "line", showSymbol: false, data: upper, lineStyle: { opacity: 0 }, areaStyle: { color: "rgba(167, 139, 250, 0.14)" }, stack: "band" }
-        ]
-      };
-    }
+    if (!derivedAnalysis?.prediction?.shortTerm?.length || !chartData.length) return null;
     const history = chartData.slice(-24);
     const historyX = history.map((x) => x.time);
     const historyY = history.map((x) => x.displacement);
-
-    const last = history.at(-1)?.displacement ?? 0;
-    const prev = history.at(-6)?.displacement ?? 0;
-    const slope = (last - prev) / 6;
-
-    const future = Array.from({ length: 12 }, (_, idx) => {
-      const y = last + slope * (idx + 1) + noise(`${selectedDeviceId}-pred-${idx}`, 0.25);
-      return Number(y.toFixed(2));
-    });
-    const futureX = Array.from({ length: 12 }, (_, idx) => dayjs().add(idx + 1, "hour").format("MM-DD HH:mm"));
+    const future = derivedAnalysis.prediction.shortTerm;
+    const shortLower = derivedAnalysis.prediction.confidenceIntervals?.shortTermLower ?? [];
+    const shortUpper = derivedAnalysis.prediction.confidenceIntervals?.shortTermUpper ?? [];
+    const futureX = Array.from({ length: future.length }, (_, idx) => dayjs().add(idx + 1, "hour").format("MM-DD HH:mm"));
 
     const allX = [...historyX, ...futureX];
     const historyPad: (number | null)[] = [...historyY, ...future.map(() => null)];
     const predPad: (number | null)[] = [...historyY.map(() => null), ...future];
-    const lower: (number | null)[] = [...historyY.map(() => null), ...future.map((v) => Number((v - 0.8).toFixed(2)))];
-    const upper: (number | null)[] = [...historyY.map(() => null), ...future.map((v) => Number((v + 0.8).toFixed(2)))];
+    const lower: (number | null)[] = [...historyY.map(() => null), ...shortLower];
+    const upper: (number | null)[] = [...historyY.map(() => null), ...shortUpper];
 
     return {
       backgroundColor: "transparent",
@@ -832,7 +1010,7 @@ export function GpsMonitoringPage() {
         }
       ]
     };
-  }, [chartData, derivedAnalysis, selectedDeviceId]);
+  }, [chartData, derivedAnalysis]);
 
   const realtimeRows = useMemo(() => chartData.slice(-24).reverse(), [chartData]);
 
@@ -917,7 +1095,8 @@ export function GpsMonitoringPage() {
                           timeRange,
                           rowCount: chartData.length,
                           rows: chartData,
-                          derivedAnalysis
+                          derivedAnalysis,
+                          forecastInference: latestAiPrediction?.forecastInference ?? null
                         })
                       );
                       message.success("已导出分析结果");
@@ -929,7 +1108,8 @@ export function GpsMonitoringPage() {
                           baseline,
                           timeRange,
                           rows: chartData,
-                          derivedAnalysis
+                          derivedAnalysis,
+                          forecastInference: latestAiPrediction?.forecastInference ?? null
                         })
                       );
                       message.success("已导出综合报告");
@@ -996,12 +1176,47 @@ export function GpsMonitoringPage() {
             description={
               <div style={{ color: "rgba(226,232,240,0.9)" }}>
                 <div style={{ marginBottom: 6 }}>{loadError}</div>
-                <div style={{ color: "rgba(148,163,184,0.9)" }}>可在「系统设置」切换数据源（演示/在线接口）。</div>
+                <div style={{ color: "rgba(148,163,184,0.9)" }}>可在「系统设置」检查当前数据源与接口地址。</div>
               </div>
             }
           />
         </div>
       ) : null}
+
+      {gpsNotice ? (
+        <div style={{ marginBottom: 12 }}>
+          <Alert
+            type={referencePoint ? "warning" : "info"}
+            showIcon
+            message={baseline ? "形变分析提示" : "形变参考点提示"}
+            description={<div style={{ color: "rgba(226,232,240,0.9)" }}>{gpsNotice}</div>}
+          />
+        </div>
+      ) : null}
+
+      <section className="desk-gps-target-strip" aria-label="当前监测对象">
+        <div className="desk-gps-target-main">
+          <div className="desk-gps-target-eyebrow">当前监测对象</div>
+          <div className="desk-gps-target-title">{monitoringPointLabel}</div>
+          <div className="desk-gps-target-sub">
+            {formatTargetValue(selectedDevice?.stationName)} · {formatTargetValue(selectedDevice?.nodeCode)}
+          </div>
+        </div>
+        <div className="desk-gps-target-items">
+          {predictionTargetItems.map((item) => (
+            <div className="desk-gps-target-item" key={item.key}>
+              <div className="desk-gps-target-k">{item.label}</div>
+              <div className="desk-gps-target-v" title={formatTargetValue(item.value)}>
+                {formatTargetValue(item.value)}
+              </div>
+            </div>
+          ))}
+          <div className="desk-gps-target-item is-status">
+            <div className="desk-gps-target-k">状态</div>
+            <div className="desk-gps-target-v">{selectedDeviceStatusText}</div>
+          </div>
+        </div>
+      </section>
 
       <div className="desk-gps-stats">
         <div className="desk-gps-stat">
@@ -1018,15 +1233,15 @@ export function GpsMonitoringPage() {
         </div>
 
         <div className="desk-gps-stat">
-          <div className="desk-gps-stat-label">最新位移（基线点）</div>
+          <div className="desk-gps-stat-label">{displacementLabel}</div>
           <div className="desk-gps-stat-main">
-            <span className="desk-gps-stat-value" style={{ color: baseline ? "#22c55e" : "rgba(148,163,184,0.9)" }}>
-              {baseline ? latestDisp.toFixed(2) : "0.00"}
+            <span className="desk-gps-stat-value" style={{ color: referencePoint ? "#22c55e" : "rgba(148,163,184,0.9)" }}>
+              {referencePoint ? latestDisp.toFixed(2) : "0.00"}
             </span>
             <span className="desk-gps-stat-unit">mm</span>
           </div>
           <div className="desk-gps-stat-sub">
-            {baseline ? (latest ? `更新: ${new Date(latest.ts).toLocaleString("zh-CN")}` : "无数据") : "未设置基线点"}
+            {referencePoint ? (latest ? `更新: ${formatBeijingDateTime(latest.ts)}` : "无数据") : "当前窗口未形成参考点"}
           </div>
         </div>
 
@@ -1065,7 +1280,10 @@ export function GpsMonitoringPage() {
 
       <div className="desk-gps-main">
         <Tabs
-          defaultActiveKey="realtime"
+          activeKey={activeTab}
+          onChange={(key) => {
+            if (isGpsTabKey(key)) setActiveTab(key);
+          }}
           items={[
             {
               key: "realtime",
@@ -1088,7 +1306,13 @@ export function GpsMonitoringPage() {
                   </Col>
                   <Col xs={24} lg={12}>
                     <BaseCard title="环境因素">
-                      {loading ? <div className="desk-loading">加载中…</div> : <ReactECharts option={envOption} style={{ height: 320 }} />}
+                      {loading ? (
+                        <div className="desk-loading">加载中…</div>
+                      ) : hasEnvData ? (
+                        <ReactECharts option={envOption} style={{ height: 320 }} />
+                      ) : (
+                        <div className="desk-dm-empty">当前时间窗口内暂无温湿度序列数据。</div>
+                      )}
                     </BaseCard>
                   </Col>
                   <Col xs={24} lg={12}>
@@ -1103,7 +1327,7 @@ export function GpsMonitoringPage() {
                             {
                               title: "时间",
                               dataIndex: "ts",
-                              render: (v: string) => dayjs(v).format("YYYY-MM-DD HH:mm:ss")
+                              render: (v: string) => formatBeijingDateTime(v)
                             },
                             { title: "位移(mm)", dataIndex: "displacement" },
                             { title: "速度(mm/h)", dataIndex: "velocityMmH" },
@@ -1125,13 +1349,13 @@ export function GpsMonitoringPage() {
                     <BaseCard title="基线 / 最新坐标">
                       <div className="desk-gps-coord">
                         <div className="desk-gps-coord-kv">
-                          <div className="desk-gps-coord-title">GPS 坐标</div>
+                          <div className="desk-gps-coord-title">定位坐标</div>
                           <div className="desk-gps-coord-row">
-                            <span className="desk-gps-coord-k">基线</span>
+                            <span className="desk-gps-coord-k">{baseline ? "基线" : "参考点"}</span>
                             <span className="desk-gps-coord-v">
-                              {baseline ? (
+                              {referencePoint ? (
                                 <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}>
-                                  {baseline.baselineLat.toFixed(6)}, {baseline.baselineLng.toFixed(6)}
+                                  {referencePoint.lat.toFixed(6)}, {referencePoint.lng.toFixed(6)}
                                 </span>
                               ) : (
                                 <span style={{ color: "rgba(148,163,184,0.9)" }}>未建立</span>
@@ -1141,7 +1365,7 @@ export function GpsMonitoringPage() {
                           <div className="desk-gps-coord-row">
                             <span className="desk-gps-coord-k">最新</span>
                             <span className="desk-gps-coord-v">
-                              {latest ? (
+                              {latest?.lat != null && latest?.lng != null ? (
                                 <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}>
                                   {latest.lat.toFixed(6)}, {latest.lng.toFixed(6)}
                                 </span>
@@ -1158,10 +1382,16 @@ export function GpsMonitoringPage() {
                               </Tag>
                             </span>
                           </div>
-                          <div className="desk-gps-coord-tip">提示：地图为示意（散点展示基线点与最新点）。</div>
+                          <div className="desk-gps-coord-tip">{referenceStatusText}。坐标图展示参考点与当前最新定位点位。</div>
                         </div>
                         <div className="desk-gps-coord-chart">
-                          {loading ? <div className="desk-loading">加载中…</div> : <ReactECharts option={coordOption} style={{ height: 220 }} />}
+                          {loading ? (
+                            <div className="desk-loading">加载中…</div>
+                          ) : hasCoordData || referencePoint ? (
+                            <ReactECharts option={coordOption} style={{ height: 220 }} />
+                          ) : (
+                            <div className="desk-dm-empty">当前没有可展示的定位坐标点。</div>
+                          )}
                         </div>
                       </div>
                     </BaseCard>
@@ -1178,53 +1408,65 @@ export function GpsMonitoringPage() {
                     <BaseCard title="分解结果">
                       {loading ? (
                         <div className="desk-loading">加载中…</div>
-                      ) : (
+                      ) : hasCeemdData && ceemdSeriesOption ? (
                         <ReactECharts option={ceemdSeriesOption} style={{ height: 360 }} />
+                      ) : (
+                        <div className="desk-dm-empty">当前数据量不足，暂未生成 CEEMD 分解结果。</div>
                       )}
                     </BaseCard>
                   </Col>
                   <Col xs={24} lg={8}>
                     <BaseCard title="能量分布">
-                      {loading ? <div className="desk-loading">加载中…</div> : <ReactECharts option={ceemdEnergyOption} style={{ height: 360 }} />}
+                      {loading ? (
+                        <div className="desk-loading">加载中…</div>
+                      ) : hasCeemdData && ceemdEnergyOption ? (
+                        <ReactECharts option={ceemdEnergyOption} style={{ height: 360 }} />
+                      ) : (
+                        <div className="desk-dm-empty">当前没有可用的能量分布结果。</div>
+                      )}
                     </BaseCard>
                   </Col>
                   <Col span={24}>
                     <BaseCard title="CEEMD 分解概览">
                       <Row gutter={[12, 12]}>
                         <Col xs={24} lg={10}>
-                          <div className="desk-gps-ceemd-metrics">
-                            <div className="desk-gps-ceemd-metric">
-                              <div className="desk-gps-ceemd-k">质量评分</div>
-                              <div className="desk-gps-ceemd-v">{ceemdMetrics.q}/100</div>
-                              <Progress
-                                percent={ceemdMetrics.q}
-                                showInfo={false}
-                                strokeColor={ceemdMetrics.q >= 85 ? "#22c55e" : ceemdMetrics.q >= 70 ? "#f59e0b" : "#ef4444"}
-                              />
+                          {ceemdMetrics ? (
+                            <div className="desk-gps-ceemd-metrics">
+                              <div className="desk-gps-ceemd-metric">
+                                <div className="desk-gps-ceemd-k">质量评分</div>
+                                <div className="desk-gps-ceemd-v">{ceemdMetrics.q}/100</div>
+                                <Progress
+                                  percent={ceemdMetrics.q}
+                                  showInfo={false}
+                                  strokeColor={ceemdMetrics.q >= 85 ? "#22c55e" : ceemdMetrics.q >= 70 ? "#f59e0b" : "#ef4444"}
+                                />
+                              </div>
+                              <div className="desk-gps-ceemd-metric">
+                                <div className="desk-gps-ceemd-k">重构误差</div>
+                                <div className="desk-gps-ceemd-v">{ceemdMetrics.recon}</div>
+                                <div className="desk-gps-ceemd-muted">越小越好</div>
+                              </div>
+                              <div className="desk-gps-ceemd-metric">
+                                <div className="desk-gps-ceemd-k">正交性</div>
+                                <div className="desk-gps-ceemd-v">{ceemdMetrics.ortho}</div>
+                                <div className="desk-gps-ceemd-muted">0~1</div>
+                              </div>
+                              <div className="desk-gps-ceemd-metric">
+                                <div className="desk-gps-ceemd-k">SNR</div>
+                                <div className="desk-gps-ceemd-v">{ceemdMetrics.snr} dB</div>
+                                <div className="desk-gps-ceemd-muted">信噪比</div>
+                              </div>
                             </div>
-                            <div className="desk-gps-ceemd-metric">
-                              <div className="desk-gps-ceemd-k">重构误差</div>
-                              <div className="desk-gps-ceemd-v">{ceemdMetrics.recon}</div>
-                              <div className="desk-gps-ceemd-muted">越小越好</div>
-                            </div>
-                            <div className="desk-gps-ceemd-metric">
-                              <div className="desk-gps-ceemd-k">正交性</div>
-                              <div className="desk-gps-ceemd-v">{ceemdMetrics.ortho}</div>
-                              <div className="desk-gps-ceemd-muted">0~1</div>
-                            </div>
-                            <div className="desk-gps-ceemd-metric">
-                              <div className="desk-gps-ceemd-k">SNR</div>
-                              <div className="desk-gps-ceemd-v">{ceemdMetrics.snr} dB</div>
-                              <div className="desk-gps-ceemd-muted">信噪比</div>
-                            </div>
-                          </div>
+                          ) : (
+                            <div className="desk-dm-empty">当前没有可展示的分解质量指标。</div>
+                          )}
                         </Col>
                         <Col xs={24} lg={14}>
                           <div className="desk-gps-note">
                             <div className="desk-gps-note-title">分解解释</div>
                             <div className="desk-gps-note-line">- IMF-1/2/3：不同频段的细节成分</div>
                             <div className="desk-gps-note-line">- Residue：长期趋势项</div>
-                            <div className="desk-gps-note-line">- 后续对接：dominant frequency / energy distribution / 质量指标</div>
+                            <div className="desk-gps-note-line">- 质量评分、重构误差与正交性均来自当前后端分析结果。</div>
                           </div>
                         </Col>
                       </Row>
@@ -1235,7 +1477,7 @@ export function GpsMonitoringPage() {
                       <div className="desk-gps-note">
                         <div className="desk-gps-note-title">CEEMD 说明</div>
                         <div className="desk-gps-note-line">- 本页展示分解曲线与能量占比。</div>
-                        <div className="desk-gps-note-line">- 后续可对接 v2 后端：CEEMD 分解 / IMF 分量 / 质量指标。</div>
+                        <div className="desk-gps-note-line">- 当样本量不足或分析服务未返回结果时，页面将保持空态而不再补造数据。</div>
                       </div>
                     </BaseCard>
                   </Col>
@@ -1247,9 +1489,104 @@ export function GpsMonitoringPage() {
               label: "预测分析",
               children: (
                 <Row gutter={[12, 12]}>
+                  <Col span={24}>
+                    <BaseCard title="AI形变预测">
+                      <div className="desk-gps-forecast-grid">
+                        <div className="desk-gps-forecast-card is-primary">
+                          <div className="desk-gps-forecast-k">预计增量</div>
+                          <div className="desk-gps-forecast-v">
+                            {formatForecastDisplacementMm(forecastInference?.predictedDisplacementMm)}
+                          </div>
+                          <div className="desk-gps-forecast-sub">
+                            {forecastInference ? `${forecastHorizonText(forecastInference.horizonSpec)} · ${monitoringPointLabel}` : "等待模型输出"}
+                          </div>
+                        </div>
+                        <div className="desk-gps-forecast-card">
+                          <div className="desk-gps-forecast-k">预测对象</div>
+                          <div className="desk-gps-forecast-v">
+                            {monitoringPointLabel}
+                          </div>
+                          <div className="desk-gps-forecast-sub">
+                            {formatTargetValue(selectedDevice?.slopeCode)} · {formatTargetValue(selectedDevice?.nodeCode)}
+                          </div>
+                        </div>
+                        <div className="desk-gps-forecast-card">
+                          <div className="desk-gps-forecast-k">当前位移</div>
+                          <div className="desk-gps-forecast-v">
+                            {latest ? `${latest.displacement.toFixed(2)} mm` : "--"}
+                          </div>
+                          <div className="desk-gps-forecast-sub">
+                            水平 {formatOptionalNumber(latest?.horizontal, 2)} / 垂直 {formatOptionalNumber(latest?.vertical, 2)}
+                          </div>
+                        </div>
+                        <div className="desk-gps-forecast-card">
+                          <div className="desk-gps-forecast-k">形变速度</div>
+                          <div className="desk-gps-forecast-v">
+                            {latest ? `${latest.velocityMmH.toFixed(3)} mm/h` : "--"}
+                          </div>
+                          <div className="desk-gps-forecast-sub">
+                            近 {formatOptionalNumber(trendDiagnostics?.durationHours, 1)}h 变化 {formatOptionalNumber(trendDiagnostics?.changeMm, 2)} mm
+                          </div>
+                        </div>
+                        <div className="desk-gps-forecast-card">
+                          <div className="desk-gps-forecast-k">趋势方向</div>
+                          <div className="desk-gps-forecast-v">
+                            {trendDirectionText(trendDiagnostics?.direction)}
+                          </div>
+                          <div className="desk-gps-forecast-sub">
+                            拟合 {formatOptionalNumber(trendDiagnostics?.regressionFitR2, 2)} / 波动 {formatOptionalNumber(trendDiagnostics?.volatilityMm, 2)} mm
+                          </div>
+                        </div>
+                        <div className="desk-gps-forecast-card">
+                          <div className="desk-gps-forecast-k">预测置信</div>
+                          <div className="desk-gps-forecast-v">
+                            {predictionConfidencePct == null ? "--" : `${predictionConfidencePct}%`}
+                          </div>
+                          <div className="desk-gps-forecast-sub">
+                            曲线预测置信度
+                          </div>
+                        </div>
+                        <div className="desk-gps-forecast-card">
+                          <div className="desk-gps-forecast-k">数据质量</div>
+                          <div className="desk-gps-forecast-v">
+                            {quality.pct}%
+                          </div>
+                          <div className="desk-gps-forecast-sub">
+                            样本 {pts.length} · {referenceStatusText}
+                          </div>
+                        </div>
+                        <div className="desk-gps-forecast-card">
+                          <div className="desk-gps-forecast-k">模型状态</div>
+                          <div className="desk-gps-forecast-v">
+                            <Tag color={forecastRunStatusColor(forecastInference)}>
+                              {forecastRunStatus}
+                            </Tag>
+                          </div>
+                          <div className="desk-gps-forecast-sub" title={forecastInference?.modelKey ?? undefined}>
+                            {forecastInference?.modelVersion ? `版本 ${forecastInference.modelVersion}` : "暂无版本信息"}
+                          </div>
+                        </div>
+                        <div className="desk-gps-forecast-card">
+                          <div className="desk-gps-forecast-k">风险参考</div>
+                          <div className="desk-gps-forecast-v" style={{ color: aiRiskColor(latestAiPrediction?.riskLevel ?? null) }}>
+                            {latestAiPrediction ? aiRiskDesc(latestAiPrediction.riskLevel) : "--"}
+                          </div>
+                          <div className="desk-gps-forecast-sub">
+                            {riskCalibration ? thresholdEtaText(longRedForecast) : "预警模型独立判断"}
+                          </div>
+                        </div>
+                      </div>
+                    </BaseCard>
+                  </Col>
                   <Col xs={24} lg={16}>
                     <BaseCard title="短期预测">
-                      {loading ? <div className="desk-loading">加载中…</div> : <ReactECharts option={predictionOption} style={{ height: 360 }} />}
+                      {loading ? (
+                        <div className="desk-loading">加载中…</div>
+                      ) : hasShortPrediction && predictionOption ? (
+                        <ReactECharts option={predictionOption} style={{ height: 360 }} />
+                      ) : (
+                        <div className="desk-dm-empty">当前没有可展示的短期预测结果。</div>
+                      )}
                     </BaseCard>
                   </Col>
                   <Col xs={24} lg={8}>
@@ -1259,25 +1596,54 @@ export function GpsMonitoringPage() {
                         <div className="desk-gps-note-line">
                           当前风险：
                           <span style={{ color: riskColor(level), fontWeight: 900, marginLeft: 8 }}>{riskDesc(level)}</span>
+                          <span className="desk-gps-note-muted" style={{ marginLeft: 8 }}>位移阈值</span>
+                        </div>
+                        <div className="desk-gps-note-line">
+                          预警参考：
+                          <span style={{ color: aiRiskColor(latestAiPrediction?.riskLevel ?? null), fontWeight: 900, marginLeft: 8 }}>
+                            {latestAiPrediction ? aiRiskDesc(latestAiPrediction.riskLevel) : "--"}
+                          </span>
+                        </div>
+                        <div className="desk-gps-note-line">
+                          AI形变预测：
+                          <span style={{ color: "#22d3ee", fontWeight: 900, marginLeft: 8 }}>
+                            {latestAiPrediction?.forecastInference
+                              ? `${forecastHorizonText(latestAiPrediction.forecastInference.horizonSpec)} ${formatForecastDisplacementMm(
+                                  latestAiPrediction.forecastInference.predictedDisplacementMm
+                                )}`
+                              : "--"}
+                          </span>
                         </div>
                         <div className="desk-gps-note-line">
                           置信度：
                           <span style={{ fontWeight: 900, marginLeft: 8 }}>
-                            {latest ? `${Math.round(latest.confidence * 100)}%` : "--"}
+                            {predictionConfidencePct == null ? "--" : `${predictionConfidencePct}%`}
                           </span>
                         </div>
                         <div className="desk-gps-note-line">
                           基线：
                           <span style={{ fontWeight: 900, marginLeft: 8 }}>{baseline ? "已建立" : "未建立"}</span>
                         </div>
+                        <div className="desk-gps-note-line">
+                          趋势方向：
+                          <span style={{ fontWeight: 900, marginLeft: 8 }}>
+                            {trendDirectionText(trendDiagnostics?.direction)}
+                          </span>
+                        </div>
                         <div style={{ height: 10 }} />
-                        <div className="desk-gps-note-muted">提示：这里只做 UI/交互与结构对齐，预测/评估后续接入后端。</div>
+                        <div className="desk-gps-note-muted">AI 形变预测用于短期增量参考，预警等级由风险模型单独判断。</div>
                       </div>
                     </BaseCard>
                   </Col>
                   <Col xs={24} lg={16}>
                     <BaseCard title="长期预测">
-                      {loading ? <div className="desk-loading">加载中…</div> : <ReactECharts option={longTermPredictionOption} style={{ height: 360 }} />}
+                      {loading ? (
+                        <div className="desk-loading">加载中…</div>
+                      ) : hasLongPrediction && longTermPredictionOption ? (
+                        <ReactECharts option={longTermPredictionOption} style={{ height: 360 }} />
+                      ) : (
+                        <div className="desk-dm-empty">当前没有可展示的长期预测结果。</div>
+                      )}
                     </BaseCard>
                   </Col>
                   <Col xs={24} lg={8}>
@@ -1298,14 +1664,38 @@ export function GpsMonitoringPage() {
                           </div>
                         </div>
                         <div className="desk-gps-ceemd-metric">
+                          <div className="desk-gps-ceemd-k">预警参考</div>
+                          <div className="desk-gps-ceemd-v" style={{ color: aiRiskColor(latestAiPrediction?.riskLevel ?? null) }}>
+                            {latestAiPrediction ? aiRiskDesc(latestAiPrediction.riskLevel) : "--"}
+                          </div>
+                          <div className="desk-gps-note-muted">
+                            {latestAiPrediction?.riskCalibration ? "预警模型已校准" : "暂无预警参考"}
+                          </div>
+                        </div>
+                        <div className="desk-gps-ceemd-metric">
+                          <div className="desk-gps-ceemd-k">AI形变预测</div>
+                          <div className="desk-gps-ceemd-v" style={{ color: "#22d3ee" }}>
+                            {formatForecastDisplacementMm(latestAiPrediction?.forecastInference?.predictedDisplacementMm)}
+                          </div>
+                          <div className="desk-gps-note-muted">
+                            {latestAiPrediction?.forecastInference
+                              ? `${forecastHorizonText(latestAiPrediction.forecastInference.horizonSpec)} · ${forecastRunStatusText(latestAiPrediction.forecastInference)}`
+                              : "暂无 AI 预测输出"}
+                          </div>
+                        </div>
+                        <div className="desk-gps-ceemd-metric">
                           <div className="desk-gps-ceemd-k">模型置信度</div>
-                          <div className="desk-gps-ceemd-v">{latest ? `${Math.round(latest.confidence * 100)}%` : "--"}</div>
-                          <Progress percent={latest ? Math.round(latest.confidence * 100) : 0} showInfo={false} strokeColor="rgba(34,211,238,0.9)" />
+                          <div className="desk-gps-ceemd-v">{predictionConfidencePct == null ? "--" : `${predictionConfidencePct}%`}</div>
+                          <Progress percent={predictionConfidencePct ?? 0} showInfo={false} strokeColor="rgba(34,211,238,0.9)" />
+                        </div>
+                        <div className="desk-gps-ceemd-metric">
+                          <div className="desk-gps-ceemd-k">红色阈值长期越界</div>
+                          <div className="desk-gps-ceemd-v">
+                            {longRedForecast?.breached ? `${longRedForecast.etaHours ?? "-"} h` : "未触发"}
+                          </div>
                         </div>
                       </div>
-                      <div className="desk-gps-note-muted" style={{ marginTop: 8 }}>
-                        提示：指标为演示数据，后续对接 v2 后端预测服务。
-                      </div>
+                      <div className="desk-gps-note-muted" style={{ marginTop: 8 }}>空态表示后端尚未返回预测结果，不再补造样例指标。</div>
                     </BaseCard>
                   </Col>
                 </Row>
@@ -1315,7 +1705,7 @@ export function GpsMonitoringPage() {
               key: "data",
               label: "数据详情",
               children: (
-                <BaseCard title="GPS 数据表" style={{ height: "calc(100vh - 360px)" }}>
+                <BaseCard title="形变数据表" style={{ height: "calc(100vh - 360px)" }}>
                   <div className="desk-dark-table">
                     <Table<GpsChartRow>
                       rowKey="key"
@@ -1325,7 +1715,7 @@ export function GpsMonitoringPage() {
                       pagination={{ pageSize: 12 }}
                       scroll={{ x: 1200 }}
                       columns={[
-                        { title: "时间", dataIndex: "ts", width: 170, render: (v: string) => dayjs(v).format("YYYY-MM-DD HH:mm:ss") },
+                        { title: "时间", dataIndex: "ts", width: 170, render: (v: string) => formatBeijingDateTime(v) },
                         {
                           title: "风险",
                           dataIndex: "riskLevel",
@@ -1336,15 +1726,15 @@ export function GpsMonitoringPage() {
                             </Tag>
                           )
                         },
-                        { title: "位移(mm)", dataIndex: "displacement", width: 110 },
-                        { title: "水平(mm)", dataIndex: "horizontal", width: 110 },
-                        { title: "垂直(mm)", dataIndex: "vertical", width: 110 },
-                        { title: "速度(mm/h)", dataIndex: "velocityMmH", width: 120 },
-                        { title: "置信度", dataIndex: "confidence", width: 110, render: (v: number) => v.toFixed(2) },
-                        { title: "温度(°C)", dataIndex: "temperature", width: 110 },
-                        { title: "湿度(%)", dataIndex: "humidity", width: 100 },
-                        { title: "纬度", dataIndex: "lat", width: 120 },
-                        { title: "经度", dataIndex: "lng", width: 120 }
+                        { title: "位移(mm)", dataIndex: "displacement", width: 110, render: (v: number) => formatOptionalNumber(v, 2) },
+                        { title: "水平(mm)", dataIndex: "horizontal", width: 110, render: (v: number | null) => formatOptionalNumber(v, 2) },
+                        { title: "垂直(mm)", dataIndex: "vertical", width: 110, render: (v: number | null) => formatOptionalNumber(v, 2) },
+                        { title: "速度(mm/h)", dataIndex: "velocityMmH", width: 120, render: (v: number) => formatOptionalNumber(v, 3) },
+                        { title: "置信度", dataIndex: "confidence", width: 110, render: (v: number | null) => formatOptionalNumber(v, 2) },
+                        { title: "温度(°C)", dataIndex: "temperature", width: 110, render: (v: number | null) => formatOptionalNumber(v, 1) },
+                        { title: "湿度(%)", dataIndex: "humidity", width: 100, render: (v: number | null) => formatOptionalNumber(v, 0) },
+                        { title: "纬度", dataIndex: "lat", width: 120, render: (v: number | null) => formatOptionalNumber(v, 6) },
+                        { title: "经度", dataIndex: "lng", width: 120, render: (v: number | null) => formatOptionalNumber(v, 6) }
                       ]}
                     />
                   </div>

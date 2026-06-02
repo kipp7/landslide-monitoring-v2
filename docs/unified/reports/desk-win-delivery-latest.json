@@ -1,17 +1,19 @@
 ﻿{
-    "generatedAt":  "2026-03-24T01:38:35Z",
+    "generatedAt":  "2026-05-21T11:40:05Z",
     "ready":  true,
     "inputs":  {
                    "packageManifestFile":  "docs/unified/reports/desk-win-package-latest.json",
                    "packageVerifyFile":  "docs/unified/reports/desk-win-package-verify-latest.json",
-                   "prerequisitesFile":  "docs/unified/reports/desk-win-prerequisites-latest.json"
+                   "prerequisitesFile":  "docs/unified/reports/desk-win-prerequisites-latest.json",
+                   "boundaryReportFile":  "docs/unified/reports/desk-api-boundary-latest.json"
                },
     "summary":  {
                     "outputDir":  "artifacts/desk-win/win-x64",
                     "exePath":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\win-x64\\LandslideDesk.Win.exe",
                     "webIndex":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\win-x64\\web\\index.html",
-                    "packageFileCount":  401,
-                    "packageTotalBytes":  167416908
+                    "packageFileCount":  150,
+                    "packageTotalBytes":  328661748,
+                    "boundaryReady":  true
                 },
     "checks":  [
                    {
@@ -59,8 +61,14 @@
                    {
                        "key":  "prereqWebView2",
                        "ok":  true,
-                       "actual":  "146.0.3856.72",
+                       "actual":  "148.0.3967.70",
                        "expected":  "installed"
+                   },
+                   {
+                       "key":  "apiOnlyBoundary",
+                       "ok":  true,
+                       "actual":  true,
+                       "expected":  true
                    }
                ],
     "failedKeys":  [

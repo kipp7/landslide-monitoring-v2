@@ -1,5 +1,5 @@
 ﻿{
-    "generatedAt":  "2026-03-22T09:45:36Z",
+    "generatedAt":  "2026-04-15T05:32:03Z",
     "manifest":  {
                      "file":  "docs/unified/reports/desk-win-package-latest.json",
                      "exePath":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\win-x64\\LandslideDesk.Win.exe",
@@ -8,10 +8,10 @@
                      "webIndexExists":  true
                  },
     "runtime":  {
-                    "running":  true,
-                    "pid":  30528,
-                    "executablePath":  "E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\win-x64\\LandslideDesk.Win.exe",
-                    "commandLine":  "\"E:\\学校\\02 项目\\99 山体滑坡优化完善\\landslide-monitoring-v2-mainline\\artifacts\\desk-win\\win-x64\\LandslideDesk.Win.exe\" ",
-                    "isLatestPackage":  true
+                    "running":  false,
+                    "pid":  null,
+                    "executablePath":  null,
+                    "commandLine":  null,
+                    "isLatestPackage":  false
                 }
 }

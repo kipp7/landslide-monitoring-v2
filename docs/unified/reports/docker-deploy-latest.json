@@ -1,8 +1,8 @@
 ﻿{
-    "generatedAt":  "2026-04-09T17:14:53Z",
+    "generatedAt":  "2026-04-14T07:32:14Z",
     "envFile":  "infra/compose/.env",
     "envCreated":  false,
-    "validateOnly":  true,
+    "validateOnly":  false,
     "withOps":  false,
     "allowUnsafeSecrets":  true,
     "docker":  {
@@ -13,8 +13,8 @@
                     "app":  "infra/compose/docker-compose.app.yml"
                 },
     "status":  {
-                   "started":  false,
-                   "initialized":  false,
+                   "started":  true,
+                   "initialized":  true,
                    "seeded":  false
                },
     "warnings":  [

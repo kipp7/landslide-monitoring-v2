@@ -39,7 +39,12 @@ function Invoke-JsonScript([string]$Label, [scriptblock]$Action) {
   if (-not $trimmed) {
     throw "$Label returned empty output"
   }
-  return $trimmed | ConvertFrom-Json
+  $jsonStart = $trimmed.IndexOf("{")
+  $jsonEnd = $trimmed.LastIndexOf("}")
+  if ($jsonStart -lt 0 -or $jsonEnd -lt $jsonStart) {
+    throw "$Label did not return JSON output"
+  }
+  return ($trimmed.Substring($jsonStart, $jsonEnd - $jsonStart + 1) | ConvertFrom-Json)
 }
 
 function Invoke-Step([string]$Label, [scriptblock]$Action) {

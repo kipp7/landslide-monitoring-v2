@@ -1,3 +1,9 @@
+---
+title: ESP32-CAM-Integration
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/archive/2026-01-05-web-dev-artifacts/apps-web/esp32-cam-integration
+---
+
 # ESP32-CAM 集成说明
 
 ## 🎥 功能概述

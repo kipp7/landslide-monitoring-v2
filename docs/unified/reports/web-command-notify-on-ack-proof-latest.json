@@ -5,15 +5,15 @@
     "baseUrl": "http://127.0.0.1:8081"
   },
   "webCommandNotifyOnAck": {
-    "deviceId": "00000000-0000-0000-0000-000000000001",
-    "defaultCommandId": "1736d297-76f5-4774-8b67-d9acfa03d732",
+    "deviceId": "b0f9382d-464a-4cce-a36c-3a890d1c63a8",
+    "defaultCommandId": "00a20423-f57a-47eb-b40e-8aa5e71259e9",
     "defaultNotifyOnAck": false,
     "defaultSuccessNotificationPolicy": "silent",
     "defaultEffectiveSuccessNotificationPolicy": "silent",
-    "optInCommandId": "c1df46cf-7e8c-4461-bdc0-0ed4c0541909",
+    "optInCommandId": "abb8ac64-0883-4f05-900d-bb497b0a953c",
     "optInNotifyOnAck": true,
     "optInSuccessNotificationPolicy": "always_notify",
     "optInEffectiveSuccessNotificationPolicy": "always_notify",
-    "commandsLoaded": 23
+    "commandsLoaded": 24
   }
 }

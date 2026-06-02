@@ -288,6 +288,120 @@ permalink: landslide-monitoring-v2-mainline/docs/guides/runbooks/single-host-run
   - 历史累计 `publishFailures`
   不再单独代表当前上行失败；只有在最近发布已停止、`spoolPending > 0` 或 `rejectedWriteFailures > 0` 时，才视为当前正式上行冻结失效
 
+## 10.1.1 Center + RK3568 正式主入口
+
+当当前目标不是分别看 compose acceptance、routine guard、live closure，而是要给运维/交接/阶段验收一个单命令正式入口，直接用：
+
+- 常规主入口：
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/check-field-center-rk3568-operator-entry.ps1 -BoardPassword <password> -AllowUnsafeSecrets`
+- 严格 zero-noise 主入口：
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/check-field-center-rk3568-operator-entry.ps1 -BoardPassword <password> -AllowUnsafeSecrets -RequireZeroSchemaRejectedDelta`
+
+这条入口会顺序收口：
+
+- `check-field-center-compose-acceptance.ps1`
+- `check-field-center-rk3568-routine-guard.ps1`
+- `field-rk3568-center-live-closure-latest.json`
+
+标准报告输出：
+
+- `docs/unified/reports/field-center-rk3568-operator-entry-latest.json`
+
+当前工程口径：
+
+- `accepted = true` 表示：
+  - center compose 主链仍是 `full-path-ready`
+  - RK3568 routine guard 仍整体闭合
+  - RK3568 live closure 仍保持 `rk3568-live-center-closure-ready`
+  - 当前中心侧 operator 线可以作为正式阶段主入口复跑与交接
+
+## 10.1.2 RK3568 Edge Link Quality 只读摘要入口
+
+当当前目标不是重跑正式验收，而是要给 RK3568 本地监控、后续 `OpenClaw` sidecar、或者运维大盘提供一份当前链路质量摘要，直接用：
+
+- `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/check-rk3568-edge-link-quality.ps1`
+
+这条入口只读聚合当前 latest 报告，不会重新 SSH 上板，也不会重新触发串口命令窗口。它当前读取：
+
+- `docs/unified/reports/field-rk3568-gateway-runtime-latest.json`
+- `docs/unified/reports/field-rk3568-network-bootstrap-latest.json`
+- `docs/unified/reports/field-center-rk3568-operator-entry-latest.json`
+
+标准报告输出：
+
+- `docs/unified/reports/field-rk3568-edge-link-quality-latest.json`
+
+当前工程口径：
+
+- 这条线的定位是：
+  - RK3568 边缘侧只读质量摘要
+  - 未来本地质量监控 / `OpenClaw` sidecar 的输入骨架
+  - 非正式 operator 验收替代品
+- `accepted = true` 仅表示：
+  - operator mainline 仍是绿的
+  - network bootstrap 仍在 `sta_connected`
+  - runtime snapshot 中 `serial.open=true`
+  - runtime snapshot 中 `mqtt.connected=true`
+- 如果报告里出现：
+  - `northbound_publish = critical`
+  - 但 `operator_mainline = healthy`
+  - 且 source `generatedAt` 明显偏旧
+  先刷新：
+  - `check-field-center-rk3568-operator-entry.ps1`
+  - `check-rk3568-field-gateway-runtime.ps1`
+  再判断是否是真故障，而不是把旧快照直接当成当前事故升级
+- 当前允许它把：
+  - `parser_noise = attention`
+  - `spoolPending > 0`
+  - source freshness 超预算
+  暴露为质量关注项，用于后续边缘监控建设，但这不自动推翻当前正式主线
+- 后续若接入 `OpenClaw`，只能先消费这类只读摘要，不得反向控制 gateway 主链
+
+## 10.1.3 RK3568 本地链路质量 Sidecar
+
+当当前目标不是在 Windows 主机上重跑 latest 报告，而是要把 RK3568 自己变成一个长期可读的边缘质量观察点，直接使用本地 sidecar：
+
+- 服务目录：
+  - `services/field-link-monitor`
+- 本地 HTTP：
+  - `http://127.0.0.1:18081/healthz`
+  - `http://127.0.0.1:18081/v1/summary`
+
+当前 sidecar 只读取：
+
+- `/var/lib/lsmv2/field-gateway/health/runtime-health.json`
+- `/var/lib/lsmv2/network-bootstrap/status/runtime-status.json`
+
+并输出：
+
+- `/var/lib/lsmv2/field-link-monitor/status/summary.json`
+
+RK3568 本机安装：
+
+- `sudo bash services/field-link-monitor/deploy/install-rk3568-field-link-monitor.sh`
+
+RK3568 本机检查：
+
+- `bash services/field-link-monitor/deploy/check-rk3568-field-link-monitor.sh`
+
+当前工程口径：
+
+- 这是：
+  - RK3568 本地只读 sidecar
+  - 显示屏 / OpenClaw / 本地运维页的统一输入层
+  - 不反向接管 gateway 主链
+- `accepted = true` 表示：
+  - sidecar 能读取本地两份源文件
+  - sidecar 能生成本地 summary 并提供 HTTP
+- 真正链路状态仍看：
+  - `summary.overallLevel`
+  - `dimensions[]`
+- 第一版 sidecar 允许直接暴露：
+  - `northbound_publish`
+  - `parser_noise`
+  - `node_*`
+  这些质量维度，但不负责做告警动作或自动修复
+
 ## 10.2 RK3568 开机联网与热点回退入口
 
 当当前目标是固化 RK3568 的开机联网行为，而不是单独看 gateway uplink 或 center handoff 时，直接走 `network bootstrap` 入口，不要手工 SSH 上板后临时敲 `nmcli`。
@@ -295,6 +409,15 @@ permalink: landslide-monitoring-v2-mainline/docs/guides/runbooks/single-host-run
 当前正式口径：
 
 - `STA first, AP fallback`
+- 当 `eth0` 已经 `connected/full` 时，稳态允许是 `ethernet_uplink`
+- `ethernet_uplink` 期间不允许误起 `lsmv2-ap-fallback`
+- `wlan0` 可以保持 `JRSPR_5G` 关联，作为拔掉网线后的热备切换入口
+- `lsmv2-ap-fallback` 必须保持单一 canonical profile
+- 受控 AP 验证时应满足：
+  - `nmcli connection up lsmv2-ap-fallback`
+  - `GENERAL.CONNECTION = lsmv2-ap-fallback`
+  - `IP4.ADDRESS = 10.42.0.1/24`
+  - SSID 对外显示为 `rk3568-1`
 - AP fallback 维护热点固定名：
   - `rk3568-1`
 - `network bootstrap` 只负责：

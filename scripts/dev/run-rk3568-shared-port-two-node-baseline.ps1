@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
   [string]$DeviceId = "00000000-0000-0000-0000-000000000002",
-  [string]$BoardHost = "192.168.124.172",
+  [string]$BoardHost = "192.168.124.179",
   [string]$User = "linaro",
   [string]$Password = "",
   [int]$SshPort = 22,

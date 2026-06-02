@@ -1,3 +1,9 @@
+---
+title: rule-dsl-spec
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/integrations/rules/rule-dsl-spec
+---
+
 ﻿# 规则 DSL 规范（v1，可实现且可扩展）
 
 本 DSL 用于把“告警逻辑”做成数据（存库、版本化、可回放），避免硬编码。目标是：**多规则 + 多传感器组合 + 窗口 + 防抖回差 + 缺失策略 + 可插拔算法/AI**，并且不影响写入链路稳定性。

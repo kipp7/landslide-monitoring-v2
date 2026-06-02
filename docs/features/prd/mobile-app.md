@@ -1,4 +1,49 @@
-﻿# PRD：移动端 App（Flutter，v2）
+---
+title: mobile-app
+type: note
+permalink: landslide-monitoring-v2-mainline/docs/features/prd/mobile-app
+---
+
+﻿# PRD：移动端 App
+
+## 0. 当前真值（2026-04-20）
+
+当前移动端方向已经从“Flutter 通用巡检 App”收口为“HarmonyOS-first 山体风险空间指挥 App”。
+
+本阶段的正式真值是：
+
+- 产品方向：HarmonyOS 空间风险应用
+- 交付阶段：页面级高保真原型优先
+- 当前工作区：`apps/mobile/`
+- 当前原型技术：`React + Vite`
+- 当前主信息架构：
+  - `空间`
+  - `事件`
+  - `任务`
+  - `我的`
+
+当前阶段目标：
+
+- 先冻结页面体系、视觉系统、动效与 HarmonyOS 能力接入位
+- 先完成高保真页面原型与可预览工作区
+- 后续再迁入 HarmonyOS 原生运行时
+
+当前不应再把移动端定义为：
+
+- 桌面端缩小版
+- 设备表优先的泛后台 App
+- 已经落地完成的 Flutter 工程
+
+相关真值入口：
+
+- `apps/mobile/README.md`
+- `openspec/changes/add-harmonyos-spatial-app-ui-foundation/proposal.md`
+- `openspec/changes/add-harmonyos-spatial-app-ui-foundation/design.md`
+- `openspec/changes/add-harmonyos-spatial-app-ui-foundation/specs/harmonyos-spatial-app-ui/spec.md`
+
+## 0.1 历史说明
+
+以下章节保留的是此前 `Flutter v2` 路线下形成的 API-only、离线缓存、扫码等业务约束，它们仍可作为后续 HarmonyOS 原生实现时的业务参考，但不再代表当前移动端产品定位与首阶段交付物。
 
 ## 1. 背景
 

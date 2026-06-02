@@ -54,12 +54,22 @@ services:
       MQTT_INTERNAL_USERNAME: ${MQTT_INTERNAL_USERNAME:-ingest-service}
       MQTT_INTERNAL_PASSWORD: ${MQTT_INTERNAL_PASSWORD:-}
       EMQX_WEBHOOK_TOKEN: ${EMQX_WEBHOOK_TOKEN:-}
+      RK3568_ALARM_ACTUATOR_URL: ${RK3568_ALARM_ACTUATOR_URL:-}
+      RK3568_FIELD_LINK_MONITOR_URL: ${RK3568_FIELD_LINK_MONITOR_URL:-}
+      RK3568_HERMES_EDGE_SUPERVISOR_URL: ${RK3568_HERMES_EDGE_SUPERVISOR_URL:-}
+      RK3568_STATUS_HTTP_TIMEOUT_MS: ${RK3568_STATUS_HTTP_TIMEOUT_MS:-6000}
+    volumes:
+      # Expose the latest RK3568/Hermes evidence artifacts to the API runtime.
+      # The API reads these files on demand for the desktop System Monitor.
+      - ../../docs/unified/reports:/repo/docs/unified/reports:ro
     ports:
       - "8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
       clickhouse:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
 
   web:
@@ -147,6 +157,151 @@ services:
       kafka:
         condition: service_healthy
       clickhouse:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  rule-engine-worker:
+    image: lsmv2/rule-engine-worker:latest
+    build:
+      context: ../..
+      dockerfile: services/rule-engine-worker/Dockerfile
+    container_name: lsmv2_rule_engine_worker
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: rule-engine-worker
+      KAFKA_BROKERS: ${KAFKA_BROKERS_INTERNAL:-kafka:9092}
+      KAFKA_CLIENT_ID: rule-engine-worker
+      KAFKA_GROUP_ID: rule-engine-worker.v1
+      KAFKA_TOPIC_TELEMETRY_RAW: telemetry.raw.v1
+      KAFKA_TOPIC_ALERTS_EVENTS: alerts.events.v1
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: ${PG_PORT:-5432}
+      POSTGRES_USER: ${PG_USER:-landslide}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-change-me}
+      POSTGRES_DATABASE: ${PG_DATABASE:-landslide_monitor}
+      POSTGRES_POOL_MAX: ${RULE_ENGINE_POSTGRES_POOL_MAX:-5}
+      RULES_REFRESH_MS: ${RULES_REFRESH_MS:-2000}
+      MAX_POINTS_PER_RULE: ${RULE_ENGINE_MAX_POINTS_PER_RULE:-600}
+      RK3568_ALARM_ACTUATOR_URL: ${RK3568_ALARM_ACTUATOR_URL:-}
+      ACTUATOR_TIMEOUT_MS: ${RULE_ENGINE_ACTUATOR_TIMEOUT_MS:-5000}
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  command-dispatcher:
+    image: lsmv2/command-dispatcher:latest
+    build:
+      context: ../..
+      dockerfile: services/command-dispatcher/Dockerfile
+    container_name: lsmv2_command_dispatcher
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: command-dispatcher
+      KAFKA_BROKERS: ${KAFKA_BROKERS_INTERNAL:-kafka:9092}
+      KAFKA_CLIENT_ID: command-dispatcher
+      KAFKA_GROUP_ID: command-dispatcher.v1
+      KAFKA_TOPIC_DEVICE_COMMANDS: device.commands.v1
+      MQTT_URL: mqtt://emqx:1883
+      MQTT_USERNAME: ${MQTT_INTERNAL_USERNAME:-ingest-service}
+      MQTT_PASSWORD: ${MQTT_INTERNAL_PASSWORD:-}
+      MQTT_TOPIC_COMMAND_PREFIX: cmd/
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: ${PG_PORT:-5432}
+      POSTGRES_USER: ${PG_USER:-landslide}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-change-me}
+      POSTGRES_DATABASE: ${PG_DATABASE:-landslide_monitor}
+      POSTGRES_POOL_MAX: ${COMMAND_POSTGRES_POOL_MAX:-5}
+    depends_on:
+      emqx:
+        condition: service_started
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  command-ack-receiver:
+    image: lsmv2/command-ack-receiver:latest
+    build:
+      context: ../..
+      dockerfile: services/command-ack-receiver/Dockerfile
+    container_name: lsmv2_command_ack_receiver
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: command-ack-receiver
+      MQTT_URL: mqtt://emqx:1883
+      MQTT_USERNAME: ${MQTT_INTERNAL_USERNAME:-ingest-service}
+      MQTT_PASSWORD: ${MQTT_INTERNAL_PASSWORD:-}
+      MQTT_TOPIC_ACK_PREFIX: cmd_ack/
+      KAFKA_BROKERS: ${KAFKA_BROKERS_INTERNAL:-kafka:9092}
+      KAFKA_CLIENT_ID: command-ack-receiver
+      KAFKA_GROUP_ID: command-ack-receiver.v1
+      KAFKA_TOPIC_DEVICE_COMMAND_ACKS: device.command_acks.v1
+      KAFKA_TOPIC_DEVICE_COMMAND_EVENTS: device.command_events.v1
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: ${PG_PORT:-5432}
+      POSTGRES_USER: ${PG_USER:-landslide}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-change-me}
+      POSTGRES_DATABASE: ${PG_DATABASE:-landslide_monitor}
+      POSTGRES_POOL_MAX: ${COMMAND_POSTGRES_POOL_MAX:-5}
+    depends_on:
+      emqx:
+        condition: service_started
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  command-events-recorder:
+    image: lsmv2/command-events-recorder:latest
+    build:
+      context: ../..
+      dockerfile: services/command-events-recorder/Dockerfile
+    container_name: lsmv2_command_events_recorder
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: command-events-recorder
+      KAFKA_BROKERS: ${KAFKA_BROKERS_INTERNAL:-kafka:9092}
+      KAFKA_CLIENT_ID: command-events-recorder
+      KAFKA_GROUP_ID: command-events-recorder.v1
+      KAFKA_TOPIC_DEVICE_COMMAND_EVENTS: device.command_events.v1
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: ${PG_PORT:-5432}
+      POSTGRES_USER: ${PG_USER:-landslide}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-change-me}
+      POSTGRES_DATABASE: ${PG_DATABASE:-landslide_monitor}
+      POSTGRES_POOL_MAX: ${COMMAND_POSTGRES_POOL_MAX:-5}
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  command-timeout-worker:
+    image: lsmv2/command-timeout-worker:latest
+    build:
+      context: ../..
+      dockerfile: services/command-timeout-worker/Dockerfile
+    container_name: lsmv2_command_timeout_worker
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: command-timeout-worker
+      KAFKA_BROKERS: ${KAFKA_BROKERS_INTERNAL:-kafka:9092}
+      KAFKA_CLIENT_ID: command-timeout-worker
+      KAFKA_TOPIC_DEVICE_COMMAND_EVENTS: device.command_events.v1
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: ${PG_PORT:-5432}
+      POSTGRES_USER: ${PG_USER:-landslide}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-change-me}
+      POSTGRES_DATABASE: ${PG_DATABASE:-landslide_monitor}
+      POSTGRES_POOL_MAX: ${COMMAND_POSTGRES_POOL_MAX:-5}
+      COMMAND_ACK_TIMEOUT_SECONDS: ${COMMAND_ACK_TIMEOUT_SECONDS:-60}
+      SCAN_INTERVAL_MS: ${COMMAND_TIMEOUT_SCAN_INTERVAL_MS:-5000}
+      SCAN_LIMIT: ${COMMAND_TIMEOUT_SCAN_LIMIT:-200}
+    depends_on:
+      kafka:
         condition: service_healthy
       postgres:
         condition: service_healthy
