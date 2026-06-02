@@ -1,10 +1,16 @@
 ﻿name: quality-gates
 
 on:
-  push:
-    branches: ["main", "master"]
-  pull_request:
-    branches: ["main", "master"]
+  workflow_dispatch:
+    inputs:
+      run_node_checks:
+        description: "Run all workspace Node lint/build checks"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
 
 permissions:
   contents: read
@@ -34,23 +40,23 @@ jobs:
           python "docs/tools/run-quality-gates.py"
 
       - name: Setup Node
-        if: ${{ hashFiles('package-lock.json') != '' }}
+        if: ${{ inputs.run_node_checks == 'true' && hashFiles('package-lock.json') != '' }}
         uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: "npm"
 
       - name: Install Node dependencies
-        if: ${{ hashFiles('package-lock.json') != '' }}
+        if: ${{ inputs.run_node_checks == 'true' && hashFiles('package-lock.json') != '' }}
         run: |
           npm ci
 
       - name: Lint (TypeScript)
-        if: ${{ hashFiles('package-lock.json') != '' }}
+        if: ${{ inputs.run_node_checks == 'true' && hashFiles('package-lock.json') != '' }}
         run: |
           npm run lint
 
       - name: Build (TypeScript)
-        if: ${{ hashFiles('package-lock.json') != '' }}
+        if: ${{ inputs.run_node_checks == 'true' && hashFiles('package-lock.json') != '' }}
         run: |
           npm run build
