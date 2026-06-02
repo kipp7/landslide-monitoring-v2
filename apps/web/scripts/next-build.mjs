@@ -1,5 +1,4 @@
 import { spawn } from "node:child_process";
-import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -46,26 +45,6 @@ try {
           `[next-build] Removed broken local Next.js folder: ${localNextDir} (using upstream: ${upstreamNextDir})`
         );
       }
-    }
-  }
-} catch {
-  // best-effort only
-}
-
-try {
-  const localNodeModulesDir = path.resolve(process.cwd(), "node_modules");
-  const localNextDir = path.join(localNodeModulesDir, "next");
-  if (upstreamNextDir && !fs.existsSync(path.join(localNextDir, "dist", "shared", "lib", "utils.js"))) {
-    fs.mkdirSync(localNodeModulesDir, { recursive: true });
-    fs.rmSync(localNextDir, { recursive: true, force: true });
-    try {
-      fs.symlinkSync(upstreamNextDir, localNextDir, "junction");
-      console.warn(`[next-build] Linked local Next.js folder to upstream package: ${localNextDir} -> ${upstreamNextDir}`);
-    } catch {
-      execFileSync("cmd.exe", ["/d", "/s", "/c", `mklink /J "${localNextDir}" "${upstreamNextDir}"`], {
-        stdio: "ignore"
-      });
-      console.warn(`[next-build] Linked local Next.js folder to upstream package via cmd mklink: ${localNextDir} -> ${upstreamNextDir}`);
     }
   }
 } catch {
