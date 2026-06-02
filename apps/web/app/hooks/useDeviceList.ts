@@ -76,7 +76,7 @@ export default function useDeviceList() {
           firmwareVersion: String(device.metadata?.firmwareVersion ?? 'unknown'),
           installDate: formatDate(device.createdAt),
           lastCheck: formatDate(lastSeenAt),
-          last_active: lastSeenAt || device.createdAt,
+          last_active: lastSeenAt || device.createdAt || '',
           status: determineDeviceStatus(device.status, lastSeenAt),
         }
       })
