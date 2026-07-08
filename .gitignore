@@ -1,11 +1,9 @@
-﻿# OS / editor
+# OS / editors
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
 *.iml
-.cursor/
-.playwright-mcp/
 
 # Logs
 *.log
@@ -13,98 +11,57 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Archives / large artifacts
-*.rar
-*.zip
-artifacts/*
-!artifacts/desk-win/
-artifacts/desk-win/*
-!artifacts/desk-win/CURRENT-BASELINE.md
-
-# Env files (never commit real secrets)
+# Environment and local credentials
 .env
 .env.*
 !.env.example
 !.env.template
-
-# Node / Next.js
-node_modules/
-.next/
-.next_web/
-.next_v2_dev/
-.next_v2_build/
-dist/
-build/
-out/
-
-# .NET
-.vs/
-**/bin/
-**/obj/
-
-# Flutter / Dart
-.dart_tool/
-.flutter-plugins
-.flutter-plugins-dependencies
-.packages
-pubspec.lock
-build/
-
-# Python
-__pycache__/
-*.pyc
-.pytest_cache/
-.venv/
-venv/
-
-# Local data directories (infra)
-/data/
-/volumes/
-/backups/
-.tmp/
-
-# Tools (installed separately)
-/OpenSpec-main/
-
-# Local scratch docs
-database_table_analysis.md
-Supabase妯℃嫙鏁版嵁鐢熸垚/
-
-# Local runtime outputs
-services/api/stdout.txt
-services/api/stderr.txt
-apps/desk-win/installer-customba/artifacts/
-
-# memory-context-workspace
-.context/
-.bm-state/
-.tools/
-.venv/
-node_modules/
-__pycache__/
-*.log
-ctx-*.log
-*.db
-*.sqlite
-*.sqlite3
-# /memory-context-workspace
-
-
-# Secrets / credentials (keep encrypted backups only)
-key/
-keys/
 *.pem
 *.key
 *.p12
 *.pfx
 id_rsa*
-secrets/*
-!secrets/README.md
-!secrets/*.age
-!secrets/*.gpg
-!secrets/*.7z
-!secrets/*.zip.enc
+keys/
+secrets/
 
-# Frontend generated backup directories
-**/dist.backup-*/
-**/dist.backup*/
+# Node / Vite
+node_modules/
+dist/
+build/
+coverage/
+.vite/
+
+# .NET / Visual Studio
+.vs/
+**/bin/
+**/obj/
+TestResults/
+
+# Desktop release outputs
+artifacts/
+apps/windows-shell/installer-customba/artifacts/
+apps/windows-shell/installer-modern/artifacts/
+apps/windows-shell/installer/Output/
+
+# Local scratch
+.tmp/
+*.db
+*.sqlite
+*.sqlite3
+
+# Local workspace/runtime caches
+.bm-state/
+.context/
+.tmp/
+.tools/
+backups/
+data/
+key/
+keys/
+*.db
+*.sqlite
+*.sqlite3
+
+# Local evidence and generated reports
+reports/
+docs/reports/

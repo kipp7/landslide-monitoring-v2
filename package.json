@@ -1,33 +1,56 @@
 {
   "name": "landslide-monitoring-v2",
+  "version": "0.1.0",
   "private": true,
+  "description": "Windows desktop client for landslide monitoring, built with React, Vite, WPF, and WebView2.",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kipp7/landslide-monitoring-v2.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kipp7/landslide-monitoring-v2/issues"
+  },
+  "homepage": "https://github.com/kipp7/landslide-monitoring-v2#readme",
   "workspaces": [
-    "libs/*",
-    "services/*",
-    "apps/*"
+    "apps/desktop-ui"
   ],
   "engines": {
     "node": ">=20"
   },
   "scripts": {
-    "lint": "npm -ws run lint",
-    "format": "prettier -w .",
-    "format:check": "prettier -c .",
-    "build": "npm -ws run build"
+    "dev": "npm -w apps/desktop-ui run dev",
+    "build": "npm -w apps/desktop-ui run build",
+    "preview": "npm -w apps/desktop-ui run preview",
+    "lint": "npm -w apps/desktop-ui run lint",
+    "desktop:dev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/desktop/start-desktop-dev.ps1",
+    "desktop:publish": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/desktop/package-windows.ps1",
+    "desktop:package": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/desktop/package-windows.ps1",
+    "desktop:verify": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/desktop/verify-windows-package.ps1",
+    "desktop:installer": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/desktop/build-windows-installer.ps1",
+    "desktop:preflight": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/desktop/check-windows-prerequisites.ps1"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
     "@types/node": "^22.10.5",
-    "ajv": "^8.17.1",
     "eslint": "^9.17.0",
     "eslint-config-prettier": "^9.1.0",
-    "geotiff": "^3.0.5",
     "globals": "^15.14.0",
     "prettier": "^3.4.2",
-    "proj4": "^2.20.8",
-    "tsx": "^4.19.4",
     "typescript": "^5.7.3",
-    "typescript-eslint": "^8.18.0",
-    "xlsx": "^0.18.5"
-  }
+    "typescript-eslint": "^8.18.0"
+  },
+  "keywords": [
+    "landslide-monitoring",
+    "desktop",
+    "wpf",
+    "webview2",
+    "react",
+    "vite",
+    "gis",
+    "iot",
+    "early-warning"
+  ],
+  "author": "kipp7",
+  "license": "MIT"
 }

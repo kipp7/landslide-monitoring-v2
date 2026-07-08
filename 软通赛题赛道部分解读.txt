@@ -1,3 +1,0 @@
-软通动力
-鸿湖万联Hi3863（星闪，240MHz）RK2206（Cortex-M4F，200MHz）RK3568（Cortex-A55，1TOPs NPU）SwanLinkOS / OpenHarmony / DevEco Studio星闪套装方向10个扩展模块（红外/指纹/穿戴/语音/交通等），SLE+WiFi+BLE通晓开发板方向RK2206+OpenHarmony，多传感器IoT应用SC-3568HA套件RK3568鸿蒙系统，1TOPs NPU，AIoT北向应用▸ 在OpenHarmony/SwanLinkOS上开发完整应用▸ 利用星闪SLE技术实现设备互联▸ 传感器数据采集、显示与控制▸ 可选接入MQTT云平台或本地AI推理✓ 硬件平台能运行SwanLinkOS操作系统✓ 使用DevEco Studio或VS Code开发✓ 建议选用软通教育推荐的硬件平台1安装DevEco Studio，搭建OpenHarmony/SwanLinkOS开发环境2星闪方向：用Hi3863实现SLE设备发现和连接，配合扩展模块3通晓板方向：驱动RK2206传感器，编写鸿蒙轻量JS/C服务43568方向：利用NPU跑AI模型，结合5.5寸触屏设计HMI5对接MQTT平台实现数据可视化与远程控制📋 软通教育产品支持
-鸿蒙生态资源
