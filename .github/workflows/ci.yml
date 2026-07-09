@@ -9,7 +9,7 @@ on:
 jobs:
   desktop-ui:
     name: Desktop UI
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
@@ -35,6 +35,14 @@ jobs:
 
       - name: Lint edge services
         run: npm run edge:lint
+
+  windows-shell:
+    name: Windows Shell
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
