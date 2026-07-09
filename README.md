@@ -11,7 +11,7 @@ English | [简体中文](README.zh-CN.md)
 
 Landslide Monitoring V2 is an end-to-end open-source landslide monitoring system. It brings together the Windows operator client, RK3568 edge gateway services, RK2206 field-node firmware, and carrier-board hardware handoff assets in one public repository.
 
-The project is organized for practical engineering work: each maintained surface has a clear owner, build boundary, public README, validation path, and security expectation.
+The repository is organized around the system parts people actually build and use: desktop, edge gateway, field firmware, and hardware handoff.
 
 ## System Overview
 
@@ -129,9 +129,9 @@ Default packaging outputs stay outside Git:
 - [中文项目范围](docs/zh-CN/PROJECT_SCOPE.md)
 - [中文发布流程](docs/zh-CN/RELEASE.md)
 
-## Public Safety Boundary
+## Repository Scope
 
-This repository intentionally includes project-owned source, documentation, examples, and selected hardware handoff assets. It does not include production credentials, private field configuration, local evidence bundles, generated release artifacts, full vendor SDK checkouts, or historical work logs.
+This repository includes public source code, documentation, examples, deployment templates, the RK2206 firmware package, and carrier-board handoff files. Runtime secrets, local logs, generated builds, and site-specific configuration should stay outside Git.
 
 ## Contributing
 
