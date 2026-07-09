@@ -12,7 +12,7 @@ This directory contains the stable RK2206 XL01 field-node firmware package used 
 
 ## Upstream Build Context
 
-The firmware is intended to be built inside the project OpenHarmony/RK2206 vendor tree. This repository keeps the project-owned application package and documentation, not a full vendor SDK checkout.
+The firmware is designed to be built inside a compatible OpenHarmony/RK2206 vendor tree. This directory contains the application package and documentation needed for that integration.
 
 ## Key Files
 

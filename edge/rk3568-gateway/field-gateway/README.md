@@ -1,13 +1,13 @@
 # Field Gateway
 
-`field-gateway` is the RK3568 southbound gateway service for Landslide Monitoring V2. It reads field-node telemetry from serial links, reconstructs messages, validates envelopes, publishes MQTT telemetry, manages command windows, and writes local health evidence for sidecar services.
+`field-gateway` is the RK3568 southbound gateway service for Landslide Monitoring V2. It reads field-node telemetry from serial links, reconstructs messages, validates envelopes, publishes MQTT telemetry, manages command windows, and writes local health files for sidecar services.
 
 ## Responsibilities
 
 - Serial ingestion from RK2206/XL01 field links.
 - JSON or framed telemetry reconstruction.
 - MQTT telemetry publishing and command acknowledgement routing.
-- Local spool/cache handling for publish retries and rejected evidence.
+- Local spool/cache handling for publish retries and rejected messages.
 - Runtime health file output for local monitoring.
 - Optional polling mode for shared southbound links.
 
@@ -55,7 +55,7 @@ sudo bash edge/rk3568-gateway/field-gateway/deploy/install-rk3568.sh \
   --mqtt-url mqtt://<broker-host>:1883
 ```
 
-The installer keeps an existing environment file by default. Pass `--overwrite-env` only when intentionally replacing local device configuration.
+The installer keeps an existing environment file by default. Pass `--overwrite-env` when replacing local device configuration.
 
 Default runtime locations:
 
@@ -73,7 +73,7 @@ cat /var/lib/lsmv2/field-gateway/health/runtime-health.json
 bash edge/rk3568-gateway/field-gateway/deploy/check-rk3568-runtime.sh
 ```
 
-## Public Safety Notes
+## Local Data
 
 - Do not commit device passwords, broker credentials, private endpoints, or site-specific node maps.
 - Keep real runtime data under `/var/lib/lsmv2` or another local state directory outside Git.

@@ -8,13 +8,13 @@ This directory contains the RK3568 edge services that bridge field nodes and the
 | --- | --- |
 | `field-gateway` | Main serial-to-MQTT gateway with spool/cache, health file output, polling, command ACK handling, and RK3568 deployment scripts. |
 | `field-link-monitor` | Read-only local sidecar that summarizes field-link health and exposes local supervision endpoints. |
-| `hermes-edge-supervisor` | Local edge supervision service that consumes health evidence and produces automation guidance. |
+| `hermes-edge-supervisor` | Local edge supervision service that consumes health signals and produces operator guidance. |
 | `rk3568-alarm-actuator` | Local actuator service for RK3568-driven field alarm control. |
 
 ## Deployment
 
 Each service keeps its own `deploy/` directory when deployment assets exist. Environment examples use placeholders and must be copied to local `.env` or systemd environment files before real deployment.
 
-## Public Safety
+## Local Configuration
 
-Runtime data, real credentials, local field logs, and machine-specific service files should remain outside Git. Use `.env.example` and `deploy/*.example` files as templates only.
+Keep deployment-specific values in local environment files. Use `.env.example` and `deploy/*.example` files as templates for device configuration.

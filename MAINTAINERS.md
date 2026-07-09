@@ -4,10 +4,10 @@ This project keeps the public repository focused on maintained, buildable system
 
 ## Review Principles
 
-- Keep changes scoped to a documented product surface and avoid reviving historical modules without a public README, validation path, and ownership boundary.
+- Keep changes scoped to a documented product area and add a public README plus validation path when reintroducing older modules.
 - Prefer small pull requests with clear screenshots for UI work and clear review notes for firmware, edge, or hardware changes.
 - Do not merge generated artifacts such as `dist/`, `bin/`, `obj/`, `artifacts/`, local reports, runtime state, or package output directories.
-- Do not publish credentials, production endpoints, private field configuration, customer-specific site data, or local environment values.
+- Do not publish credentials, production endpoints, site-specific configuration, or local environment values.
 - Require the CI workflow to pass before merging.
 
 ## Dependency Updates

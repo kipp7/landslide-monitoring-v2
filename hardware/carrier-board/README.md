@@ -20,4 +20,4 @@ This directory contains the public carrier-board handoff package for the RK2206/
 
 ## Manufacturing Notice
 
-Review the schematic, BOM, pick-and-place orientation, connector footprints, and supplier substitutions before ordering. The files are a public engineering handoff package, not a guarantee that a fabrication vendor will accept every component without review.
+Review the schematic, BOM, pick-and-place orientation, connector footprints, and supplier substitutions before ordering. Fabrication should be checked against the selected vendor's requirements.

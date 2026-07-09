@@ -1,6 +1,6 @@
 # RK3568 Alarm Actuator
 
-`rk3568-alarm-actuator` is the RK3568 local actuator service for field sound/light alarm hardware. It is intentionally separate from telemetry ingestion and gateway supervision so alarm control cannot interfere with the field data path.
+`rk3568-alarm-actuator` is the RK3568 local actuator service for field sound/light alarm hardware. It runs separately from telemetry ingestion and gateway supervision so alarm control stays isolated from the field data path.
 
 ## Responsibilities
 
@@ -36,4 +36,4 @@ ALARM_REQUIRE_ECHO=false \
 node edge/rk3568-gateway/rk3568-alarm-actuator/dist/index.js
 ```
 
-Use local environment files or systemd environment files for real deployment values. Do not commit device-specific serial mappings, hardware acceptance logs, or local credentials.
+Use local environment files or systemd environment files for deployment values. Keep device-specific serial mappings, hardware acceptance logs, and local credentials outside Git.

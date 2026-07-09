@@ -51,7 +51,7 @@ For firmware or hardware changes, update the package README and include the buil
 - Include screenshots or short screen recordings for visible UI changes.
 - Update both English and Chinese documentation when public setup, commands, scope, or behavior changes.
 - Avoid committing generated outputs from `artifacts/`, `dist/`, `bin/`, `obj/`, local reports, or runtime state directories.
-- Do not commit real credentials, private endpoints, field passwords, customer-specific site data, local evidence bundles, or local environment files.
+- Do not commit credentials, private endpoints, device passwords, site-specific configuration, local logs, or local environment files.
 
 ## Project Conventions
 
@@ -60,7 +60,7 @@ For firmware or hardware changes, update the package README and include the buil
 - Keep generated package reports under `docs/reports`.
 - Keep edge services buildable through root workspace scripts.
 - Treat hardware files as reviewable engineering handoff assets, not unchecked manufacturing guarantees.
-- Prefer clear operational docs over internal work logs.
+- Prefer clear operational docs over temporary notes.
 
 ## Commit Style
 

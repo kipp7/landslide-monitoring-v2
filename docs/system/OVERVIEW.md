@@ -23,6 +23,6 @@ RS485/GPS/SHT30/MPU6050 sensors
   -> Windows desktop operator console
 ```
 
-## Repository Policy
+## Repository Scope
 
-This repository publishes project-owned source, hardware handoff assets, and operational documentation. Vendor SDK trees, local credentials, generated caches, field logs, and machine-specific evidence bundles stay out of the current public tree.
+This repository publishes the maintained application source, hardware handoff assets, and operational documentation. Vendor SDK trees, credentials, generated caches, local logs, and site-specific configuration stay outside the public tree.
