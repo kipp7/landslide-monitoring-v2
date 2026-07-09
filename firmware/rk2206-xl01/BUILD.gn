@@ -1,0 +1,31 @@
+static_library("xl01_landslide_monitor") {
+    sources = [
+        # Main application
+        "main/landslide_main.c",
+
+        # App contract builders
+        "app/device_identity.c",
+        "app/device_command_parser.c",
+        "app/telemetry_envelope_builder.c",
+        "app/command_ack_builder.c",
+        
+        # Utilities
+        "utils/fifo.c",
+        "utils/watchdog_mgr.c",
+        
+        # Drivers - XL01
+        "drivers/xl01/xl01_driver.c",
+        
+        # Drivers - Sensors
+        "drivers/sensors/sht30_driver.c",
+        "drivers/sensors/mpu6050_driver.c",
+        "drivers/sensors/gps_driver.c",
+    ]
+
+    include_dirs = [
+        ".",  # 当前项目目录，用于访问utils/fifo.h等
+        "//utils/native/lite/include",
+        "//kernel/liteos_m/kal/cmsis",
+        "//base/iot_hardware/peripheral/interfaces/kits",
+    ]
+}

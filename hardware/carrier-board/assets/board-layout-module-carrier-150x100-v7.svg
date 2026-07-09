@@ -1,0 +1,184 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="1000" viewBox="0 0 150 100">
+  <defs>
+    <style>
+      .board { fill:#fbfaf6; stroke:#202020; stroke-width:0.45; }
+      .zone { fill:#f4f2eb; stroke:#b9b2a4; stroke-width:0.2; stroke-dasharray:1.2 1.2; }
+      .part { fill:#ffffff; stroke:#222; stroke-width:0.35; rx:0.8; }
+      .module { fill:#eef7ff; stroke:#195a9a; stroke-width:0.35; rx:0.8; }
+      .power { fill:#fff1e7; stroke:#b54a18; stroke-width:0.35; rx:0.8; }
+      .wireless { fill:#f0fff4; stroke:#21823d; stroke-width:0.35; rx:0.8; }
+      .rs485 { fill:#f4f0ff; stroke:#5b39a8; stroke-width:0.35; rx:0.8; }
+      .keepout { fill:#e9ffe9; stroke:#1f8a3b; stroke-width:0.3; stroke-dasharray:1.5 1; }
+      .dim { stroke:#555; stroke-width:0.22; fill:none; marker-start:url(#arrow); marker-end:url(#arrow); }
+      .thin { stroke:#2670c7; stroke-width:0.25; fill:none; }
+      .thickPower { stroke:#d45b1f; stroke-width:0.9; fill:none; }
+      .rsline { stroke:#6b45b5; stroke-width:0.45; fill:none; }
+      .txt { font-family:Arial, "Microsoft YaHei", sans-serif; fill:#111; font-size:2.4px; }
+      .small { font-family:Arial, "Microsoft YaHei", sans-serif; fill:#222; font-size:1.8px; }
+      .tiny { font-family:Arial, "Microsoft YaHei", sans-serif; fill:#333; font-size:1.45px; }
+      .pin { fill:#d71920; stroke:#8c1116; stroke-width:0.15; }
+      .pinText { font-family:Arial, "Microsoft YaHei", sans-serif; fill:#b00000; font-size:1.6px; font-weight:bold; }
+      .labelBox { fill:#fff; stroke:#bbb; stroke-width:0.15; rx:0.5; }
+    </style>
+    <marker id="arrow" viewBox="0 0 4 4" refX="2" refY="2" markerWidth="3" markerHeight="3" orient="auto-start-reverse">
+      <path d="M0,0 L4,2 L0,4 z" fill="#555"/>
+    </marker>
+  </defs>
+
+  <!-- Board -->
+  <rect class="board" x="0.5" y="0.5" width="149" height="99" rx="3"/>
+  <text class="txt" x="4" y="5.5">模块载板布局建议图 v7，板框 150mm x 100mm</text>
+  <text class="small" x="4" y="8.3">仅用于布局规划；CJMCU-752 孔位/排距、模块外形、Pin1 方向打板前必须按实物复核。</text>
+
+  <!-- Board dimensions -->
+  <line class="dim" x1="0.5" y1="98" x2="149.5" y2="98"/>
+  <text class="small" x="68" y="96.5">150mm</text>
+  <line class="dim" x1="148" y1="0.5" x2="148" y2="99.5"/>
+  <text class="small" transform="translate(145.5,55) rotate(-90)">100mm</text>
+
+  <!-- Zones -->
+  <rect class="zone" x="3" y="11" width="57" height="45"/>
+  <text class="small" x="5" y="14">电源输入/降压区</text>
+  <rect class="zone" x="64" y="3" width="42" height="31"/>
+  <text class="small" x="66" y="6">无线/调试区</text>
+  <rect class="zone" x="109" y="26" width="38" height="70"/>
+  <text class="small" x="111" y="29">双串口 + RS485 区</text>
+  <rect class="zone" x="33" y="35" width="78" height="62"/>
+  <text class="small" x="35" y="38">RK2206 主控投影区</text>
+
+  <!-- Power input chain -->
+  <rect class="power" x="4" y="18" width="12" height="8"/>
+  <text class="txt" x="5.1" y="21">J1</text>
+  <text class="small" x="5.1" y="23.4">XH2.54 2P</text>
+  <text class="tiny" x="4.8" y="25.2">开口朝板外</text>
+  <circle class="pin" cx="4.2" cy="20" r="0.8"/><text class="pinText" x="5.2" y="19.6">1 BAT+</text>
+  <circle class="pin" cx="4.2" cy="23.3" r="0.8"/><text class="pinText" x="5.2" y="23.9">2 BAT-</text>
+
+  <rect class="power" x="20" y="17.5" width="13.5" height="6.6"/>
+  <text class="txt" x="21" y="20.4">SW1</text>
+  <text class="small" x="21" y="22.7">SS-12D10G5</text>
+  <text class="tiny" x="20.8" y="24.7">拨杆/亚克力开孔</text>
+
+  <rect class="power" x="6" y="30" width="9" height="5"/>
+  <text class="small" x="6.8" y="33.2">F1</text>
+  <rect class="power" x="18" y="29" width="10" height="6"/>
+  <text class="small" x="18.7" y="32.7">Q1+D5</text>
+  <rect class="power" x="31" y="29" width="9" height="6"/>
+  <text class="small" x="31.6" y="32.7">D4</text>
+  <rect class="power" x="43" y="28" width="8" height="8"/>
+  <text class="small" x="43.8" y="31.6">C15</text>
+  <text class="tiny" x="43.8" y="33.6">100uF</text>
+  <rect class="power" x="52.5" y="29" width="5.5" height="5"/>
+  <text class="tiny" x="52.8" y="32.1">C16</text>
+
+  <rect class="power" x="7" y="39" width="22.5" height="17"/>
+  <text class="txt" x="9" y="43">U1 MP1584</text>
+  <text class="small" x="9" y="46">5V module</text>
+  <text class="tiny" x="9" y="49">22.5 x 17mm</text>
+  <text class="tiny" x="9" y="52">先调到 5.00V</text>
+
+  <rect class="power" x="35" y="39" width="22.5" height="17"/>
+  <text class="txt" x="37" y="43">U2 MP1584</text>
+  <text class="small" x="37" y="46">3.3V module</text>
+  <text class="tiny" x="37" y="49">22.5 x 17mm</text>
+  <text class="tiny" x="37" y="52">先调到 3.30V</text>
+
+  <rect class="part" x="5" y="58" width="17" height="6"/>
+  <text class="small" x="6" y="61.7">D1+R1 电源灯</text>
+
+  <!-- Wireless / DL-XLS1 / GPS -->
+  <rect class="keepout" x="62" y="2" width="35" height="9"/>
+  <text class="tiny" x="64" y="7">DL-XLS1 天线方向/禁铜禁金属区</text>
+  <rect class="wireless" x="69" y="10" width="18" height="27"/>
+  <text class="txt" x="71" y="15">U3</text>
+  <text class="small" x="71" y="18">DL-XLS1</text>
+  <text class="tiny" x="71" y="21">18 x 27mm</text>
+  <circle class="pin" cx="69.8" cy="11.2" r="0.7"/><text class="pinText" x="70.7" y="11.7">Pin1</text>
+
+  <rect class="wireless" x="90" y="11" width="11" height="7"/>
+  <text class="small" x="91" y="14">J2 CMD</text>
+  <rect class="wireless" x="90" y="20" width="11" height="7"/>
+  <text class="small" x="91" y="23">J3 USR</text>
+  <rect class="wireless" x="90" y="29" width="9" height="5"/>
+  <text class="tiny" x="91" y="32.1">SW2 KEY</text>
+
+  <rect class="wireless" x="111" y="8" width="18" height="7"/>
+  <text class="small" x="112" y="11">J4 GPS</text>
+  <text class="tiny" x="112" y="13.2">5V/GND/TX/RX</text>
+  <rect class="keepout" x="108" y="2" width="31" height="5"/>
+  <text class="tiny" x="110" y="5.2">GPS 远离 MP1584</text>
+
+  <!-- RK2206 footprint projection -->
+  <rect class="module" x="34" y="37" width="72.5" height="60.7"/>
+  <text class="txt" x="37" y="42">RK2206 模块投影</text>
+  <text class="small" x="37" y="45">72.5 x 60.7 x 11.1mm</text>
+  <text class="tiny" x="37" y="48">J5/J8 1x12P 母座，高 8.5mm</text>
+  <circle class="pin" cx="35.5" cy="38.5" r="0.8"/><text class="pinText" x="36.5" y="39">Pin1 方向按实物</text>
+  <rect class="part" x="36" y="70" width="68" height="8"/>
+  <text class="tiny" x="38" y="74.7">RK2206 插上后检查亚克力盖板高度，避免与排母/模块干涉</text>
+
+  <!-- UART expander module -->
+  <rect class="module" x="112" y="31" width="24" height="23"/>
+  <text class="txt" x="114" y="35">U4 CJMCU-752</text>
+  <text class="small" x="114" y="38">SC16IS752 模块</text>
+  <text class="tiny" x="114" y="41">24 x 23mm</text>
+  <text class="tiny" x="114" y="44">2x8 + 2x5 排母</text>
+  <text class="tiny" x="114" y="47">孔位必须实测</text>
+  <circle class="pin" cx="113" cy="32" r="0.7"/><text class="pinText" x="114" y="32.5">Pin1</text>
+
+  <!-- RS485 modules -->
+  <rect class="rs485" x="111" y="58" width="34" height="18"/>
+  <text class="txt" x="113" y="62">U5 RS485 ISO 1</text>
+  <text class="small" x="113" y="65">34 x 18mm</text>
+  <text class="tiny" x="113" y="68">VIN/TX/RX/GND 左侧</text>
+  <text class="tiny" x="113" y="71">A+/B+/EARTH 右侧</text>
+  <circle class="pin" cx="112" cy="59" r="0.7"/><text class="pinText" x="113" y="59.5">Pin1</text>
+
+  <rect class="rs485" x="111" y="79" width="34" height="18"/>
+  <text class="txt" x="113" y="83">U6 RS485 ISO 2</text>
+  <text class="small" x="113" y="86">34 x 18mm</text>
+  <text class="tiny" x="113" y="89">自动收发，无 DE</text>
+  <text class="tiny" x="113" y="92">默认 120Ω 可改</text>
+  <circle class="pin" cx="112" cy="80" r="0.7"/><text class="pinText" x="113" y="80.5">Pin1</text>
+
+  <rect class="rs485" x="145" y="59" width="3" height="15"/>
+  <text class="tiny" transform="translate(147.5,73) rotate(-90)">CH1 A/B/地朝外</text>
+  <rect class="rs485" x="145" y="80" width="3" height="15"/>
+  <text class="tiny" transform="translate(147.5,94) rotate(-90)">CH2 A/B/地朝外</text>
+
+  <!-- Recommended routing arrows -->
+  <path class="thickPower" d="M16,22 C18,22 18,21 20,21"/>
+  <path class="thickPower" d="M33.5,21 C43,21 47,25 47,28"/>
+  <path class="thickPower" d="M47,36 C35,37 25,38 18,39"/>
+  <path class="thickPower" d="M47,36 C47,38 46,39 46,39"/>
+  <text class="tiny" x="17" y="27.8">VBAT_IN/VBAT_SW 1.0-1.5mm</text>
+
+  <path class="thin" d="M101,70 C108,66 110,49 112,43"/>
+  <text class="tiny" x="96" y="67">I2C SDA/SCL 0.2-0.3mm</text>
+
+  <path class="thin" d="M136,42 C142,45 144,55 144,58"/>
+  <path class="thin" d="M136,45 C140,50 140,76 144,79"/>
+  <text class="tiny" x="118" y="56.8">UART TX/RX 交叉到模块</text>
+
+  <path class="rsline" d="M145,67 L149,67"/>
+  <path class="rsline" d="M145,88 L149,88"/>
+  <text class="tiny" x="125" y="77.7">RS485 A/B 0.3-0.5mm，短且并行</text>
+
+  <!-- Mounting holes -->
+  <circle cx="6" cy="6" r="1.6" fill="none" stroke="#111" stroke-width="0.3"/>
+  <circle cx="144" cy="6" r="1.6" fill="none" stroke="#111" stroke-width="0.3"/>
+  <circle cx="6" cy="94" r="1.6" fill="none" stroke="#111" stroke-width="0.3"/>
+  <circle cx="144" cy="94" r="1.6" fill="none" stroke="#111" stroke-width="0.3"/>
+  <text class="tiny" x="8" y="6.5">M3 孔 3.2mm，孔心离边 ≥5mm</text>
+
+  <!-- Notes -->
+  <rect class="labelBox" x="4" y="66" width="28" height="26"/>
+  <text class="small" x="5.2" y="69">布局顺序</text>
+  <text class="tiny" x="5.2" y="72">1. 先锁 RK2206 投影</text>
+  <text class="tiny" x="5.2" y="75">2. 电源区靠左，粗线短</text>
+  <text class="tiny" x="5.2" y="78">3. DL-XLS1 靠边避开电源</text>
+  <text class="tiny" x="5.2" y="81">4. U4 放 RK 与 RS485 之间</text>
+  <text class="tiny" x="5.2" y="84">5. U5/U6 靠右边接传感器</text>
+  <text class="tiny" x="5.2" y="87">6. 模块间留 2-3mm 烙铁空间</text>
+  <text class="tiny" x="5.2" y="90">7. 手焊件不按 SMT 约束</text>
+</svg>
