@@ -1,6 +1,6 @@
 # Architecture
 
-Landslide Monitoring V2 Desktop is organized as a small desktop-first workspace. The public repository keeps the runtime boundary explicit: a React monitoring interface, a Windows host, and packaging scripts.
+Landslide Monitoring V2 Desktop is organized as a focused desktop-first workspace. The runtime boundary is explicit: a React monitoring interface, a native Windows host, and reproducible packaging scripts.
 
 ## System Boundary
 
@@ -11,7 +11,7 @@ Operator
       -> Mock data or compatible monitoring API
 ```
 
-The public project does not include backend services, mobile clients, production deployment infrastructure, private field configuration, or internal work logs.
+Backend services, mobile clients, web dashboards, production infrastructure, hardware experiments, and private field configuration are outside the current maintenance scope.
 
 ## Applications
 
@@ -54,7 +54,7 @@ The shell also owns Windows-specific behavior such as startup checks, native win
 
 ## Design Principles
 
-- Keep the public repository focused on the maintained desktop client.
+- Keep the repository focused on the maintained desktop client.
 - Prefer clear directory names over internal abbreviations.
 - Keep generated artifacts out of Git.
 - Allow UI work without backend deployment through mock data.

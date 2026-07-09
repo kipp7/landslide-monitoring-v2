@@ -2,14 +2,14 @@
 
 English | [简体中文](zh-CN/README.md)
 
-This documentation set is intentionally small and operational. It explains the public desktop-client boundary, the application layout, and the local Windows packaging flow.
+This documentation set is intentionally compact and practical. It explains the desktop product architecture, supported repository surface, Windows packaging flow, and contribution expectations.
 
 ## Start Here
 
 | Document | Purpose |
 | --- | --- |
 | [Architecture](ARCHITECTURE.md) | Runtime boundary, application responsibilities, and packaging flow. |
-| [Project Scope](PROJECT_SCOPE.md) | What is supported in the current public tree and what remains only in history. |
+| [Project Scope](PROJECT_SCOPE.md) | Supported repository surface, maintenance rules, and non-goals. |
 | [Release Process](RELEASE.md) | Local build, packaging, verification, and GitHub release checklist. |
 | [Desktop UI](../apps/desktop-ui/README.md) | React/Vite UI package responsibilities and commands. |
 | [Windows Shell](../apps/windows-shell/README.md) | WPF/WebView2 host responsibilities and packaging behavior. |
@@ -17,25 +17,25 @@ This documentation set is intentionally small and operational. It explains the p
 | [Maintainers Guide](../MAINTAINERS.md) | Review policy, dependency update cadence, and release readiness checks. |
 | [Security](../SECURITY.md) | Vulnerability reporting and secret-handling policy. |
 
-## Repository Standards
+## Repository Conventions
 
-- Public directory names should describe product responsibility, not internal history.
-- Generated artifacts belong under `artifacts/` and must stay out of Git.
+- Directory names describe product responsibility and runtime ownership.
+- Generated artifacts belong under `artifacts/` and stay out of Git.
 - Local reports belong under `docs/reports/` and should be regenerated as needed.
-- Documentation should be updated in English and Chinese when public-facing behavior changes.
-- Pull requests should include screenshots or recordings for visible UI changes.
+- Public-facing behavior changes should update both English and Chinese documentation.
+- Pull requests that change visible UI should include screenshots or recordings.
 
-## Current Public Boundary
+## Maintained Surface
 
-The public project includes:
+The current public repository maintains:
 
 - Desktop UI source
 - Windows shell source
 - Installer resources
 - Desktop packaging and verification scripts
-- Public documentation and GitHub project metadata
+- Public documentation and project governance files
 
-The public project excludes:
+The following areas are outside the current maintenance scope:
 
 - Backend services
 - Mobile apps
