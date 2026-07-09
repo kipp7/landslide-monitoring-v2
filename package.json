@@ -1,7 +1,7 @@
 {
   "name": "landslide-monitoring-v2",
   "version": "0.1.0",
-  "description": "Windows desktop client for landslide monitoring, built with React, Vite, WPF, and WebView2.",
+  "description": "End-to-end landslide monitoring system with Windows desktop client, RK3568 edge gateway, RK2206 field firmware, and carrier-board hardware assets.",
   "type": "module",
   "repository": {
     "type": "git",
@@ -12,7 +12,9 @@
   },
   "homepage": "https://github.com/kipp7/landslide-monitoring-v2#readme",
   "workspaces": [
-    "apps/desktop-ui"
+    "apps/desktop-ui",
+    "edge/rk3568-gateway/*",
+    "packages/*"
   ],
   "engines": {
     "node": ">=20"
@@ -27,7 +29,9 @@
     "desktop:package": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/desktop/package-windows.ps1",
     "desktop:verify": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/desktop/verify-windows-package.ps1",
     "desktop:installer": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/desktop/build-windows-installer.ps1",
-    "desktop:preflight": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/desktop/check-windows-prerequisites.ps1"
+    "desktop:preflight": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/desktop/check-windows-prerequisites.ps1",
+    "edge:build": "npm run build -w @lsmv2/observability && npm run build -w @lsmv2/validation && npm run build -w @lsmv2/field-gateway && npm run build -w @lsmv2/field-link-monitor && npm run build -w @lsmv2/hermes-edge-supervisor && npm run build -w @lsmv2/rk3568-alarm-actuator",
+    "edge:lint": "npm run lint -w @lsmv2/observability && npm run lint -w @lsmv2/validation && npm run lint -w @lsmv2/field-gateway && npm run lint -w @lsmv2/field-link-monitor && npm run lint -w @lsmv2/hermes-edge-supervisor && npm run lint -w @lsmv2/rk3568-alarm-actuator"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
@@ -41,14 +45,19 @@
   },
   "keywords": [
     "landslide-monitoring",
-    "desktop",
+    "edge-gateway",
+    "rk3568",
+    "rk2206",
+    "openharmony",
+    "desktop-app",
     "wpf",
     "webview2",
     "react",
     "vite",
     "gis",
     "iot",
-    "early-warning"
+    "early-warning",
+    "pcb"
   ],
   "author": "kipp7",
   "license": "MIT"

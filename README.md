@@ -1,38 +1,57 @@
-# Landslide Monitoring V2 Desktop
+# Landslide Monitoring V2
 
 [![CI](https://github.com/kipp7/landslide-monitoring-v2/actions/workflows/ci.yml/badge.svg)](https://github.com/kipp7/landslide-monitoring-v2/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Windows](https://img.shields.io/badge/platform-Windows-0078D4.svg)](apps/windows-shell)
-[![React](https://img.shields.io/badge/UI-React%20%2B%20Vite-61DAFB.svg)](apps/desktop-ui)
-[![TypeScript](https://img.shields.io/badge/Language-TypeScript-3178C6.svg)](apps/desktop-ui)
+[![Edge](https://img.shields.io/badge/edge-RK3568-2E7D32.svg)](edge/rk3568-gateway)
+[![Firmware](https://img.shields.io/badge/firmware-RK2206-7952B3.svg)](firmware/rk2206-xl01)
+[![Hardware](https://img.shields.io/badge/hardware-carrier%20board-455A64.svg)](hardware/carrier-board)
 
 English | [简体中文](README.zh-CN.md)
 
-A production-minded Windows desktop client for landslide monitoring, field-device supervision, and early-warning operations.
+Landslide Monitoring V2 is an end-to-end open-source landslide monitoring system. It brings together the Windows operator client, RK3568 edge gateway services, RK2206 field-node firmware, and carrier-board hardware handoff assets in one public repository.
 
-Landslide Monitoring V2 Desktop combines a React/Vite operator console with a native WPF + WebView2 Windows shell. The public repository is scoped to the actively maintained desktop product surface: local UI development, Windows packaging, release verification, and project documentation.
+The project is organized for practical engineering work: each maintained surface has a clear owner, build boundary, public README, validation path, and security expectation.
 
-## Overview
+## System Overview
 
-Landslide monitoring workflows often need a dependable operator-facing client: site overview, field device status, GPS deformation trends, alert review, and packaging that can run on Windows machines used by engineering teams. This project provides that desktop layer as a clean, public, and reusable codebase.
+```text
+RK2206 field nodes
+  -> RK3568 edge gateway
+    -> compatible monitoring API / MQTT broker
+      -> Windows desktop operator client
+```
 
 ## Highlights
 
-- Monitoring workspace for sites, devices, GPS deformation, alerts, account screens, and system status.
-- Native Windows shell with WebView2, startup preflight checks, tray support, and packaged static assets.
-- Mock-data-first development so UI contributors can run the app without deploying a backend.
-- Scripted packaging flow for portable Windows builds and optional installer generation.
-- Bilingual documentation, CI, issue templates, security policy, maintainer notes, and MIT license.
+- Windows monitoring client built with React, Vite, WPF, and WebView2.
+- RK3568 edge services for serial telemetry, MQTT forwarding, local health summaries, supervision, and alarm actuation.
+- RK2206 XL01 field firmware package for sensor acquisition, telemetry envelopes, command acknowledgements, watchdogs, and board utilities.
+- Carrier-board public handoff package with schematic, PCB preview, Gerber, BOM, pick-and-place, and LCEDA source package.
+- Bilingual documentation, GitHub issue templates, maintainer notes, security policy, CI, and MIT license.
 
-## Product Surface
+## Repository Layout
 
-| Area | Description |
+| Path | Responsibility |
 | --- | --- |
-| Dashboard | Operator overview for key monitoring sites and system state. |
-| Device Management | Device list, command actions, diagnostics, and field status review. |
-| GPS Monitoring | GPS deformation views, export paths, and threshold-oriented workflows. |
-| Analysis | Visual analysis pages built around charts, maps, and domain mock data. |
-| Windows Shell | WPF/WebView2 host for packaging and running the UI as a desktop app. |
+| `apps/desktop-ui/` | React + Vite monitoring interface for operator workflows. |
+| `apps/windows-shell/` | WPF + WebView2 Windows host, packaging assets, and native startup checks. |
+| `edge/rk3568-gateway/` | RK3568 gateway, link-monitor, supervisor, and alarm actuator services. |
+| `firmware/rk2206-xl01/` | RK2206 XL01 field-node firmware package and pinout notes. |
+| `hardware/carrier-board/` | Public carrier-board design and fabrication handoff assets. |
+| `packages/` | Shared TypeScript packages used by edge services. |
+| `scripts/desktop/` | Windows desktop development, packaging, and verification scripts. |
+| `docs/` | Architecture, scope, release, system, maintainer, and bilingual documentation. |
+
+## Maintained Surfaces
+
+| Surface | Status | Primary Docs |
+| --- | --- | --- |
+| Windows desktop client | Maintained | [Desktop UI](apps/desktop-ui/README.md), [Windows shell](apps/windows-shell/README.md) |
+| RK3568 edge gateway | Maintained | [Edge gateway](edge/rk3568-gateway/README.md) |
+| RK2206 field firmware | Maintained as public firmware package | [Firmware](firmware/rk2206-xl01/README.md) |
+| Carrier-board hardware handoff | Maintained as public design package | [Hardware](hardware/carrier-board/README.md) |
+| Web/mobile/backend infrastructure | Not included in the public tree | [Project scope](docs/PROJECT_SCOPE.md) |
 
 ## Tech Stack
 
@@ -40,42 +59,11 @@ Landslide monitoring workflows often need a dependable operator-facing client: s
 | --- | --- |
 | Desktop UI | React 18, TypeScript, Vite, Ant Design |
 | Visualization | ECharts, Leaflet, Three.js |
-| Native shell | .NET 8, WPF, WebView2 |
+| Native desktop shell | .NET 8, WPF, WebView2 |
+| Edge services | Node.js 20, TypeScript, MQTT, serialport, systemd deployment templates |
+| Field firmware | OpenHarmony/RK2206 application package |
+| Hardware handoff | Schematic, PCB preview, Gerber, BOM, pick-and-place, LCEDA project package |
 | Tooling | npm workspaces, ESLint, Prettier, GitHub Actions |
-
-## Repository Layout
-
-```text
-apps/
-  desktop-ui/       React + Vite desktop monitoring interface
-  windows-shell/    WPF + WebView2 host, installer assets, native startup checks
-docs/
-  ARCHITECTURE.md   English architecture overview
-  RELEASE.md        English release and packaging guide
-  zh-CN/            Chinese documentation
-  reports/          Local generated reports, not release artifacts
-scripts/
-  desktop/          Desktop development, packaging, and verification scripts
-```
-
-## Public Scope
-
-This repository is maintained as a desktop-client project. The current `main` branch supports:
-
-- Desktop UI development and build tooling.
-- Native Windows host and installer resources.
-- Desktop packaging, verification, and release workflow.
-- Public documentation and GitHub project governance.
-
-Legacy web, mobile, backend, infrastructure, hardware experiments, and private field configuration are not maintained in the current public tree. See [Project scope](docs/PROJECT_SCOPE.md) for the full boundary.
-
-## Requirements
-
-- Windows 10/11
-- Node.js 20+
-- npm 10+
-- .NET 8 SDK with Windows Desktop support
-- Microsoft Edge WebView2 Runtime
 
 ## Quick Start
 
@@ -86,7 +74,7 @@ npm install
 npm run dev
 ```
 
-The UI dev server starts at `http://localhost:5174/`.
+The desktop UI dev server starts at `http://localhost:5174/`.
 
 Launch the native Windows shell against the dev server:
 
@@ -94,12 +82,27 @@ Launch the native Windows shell against the dev server:
 npm run desktop:dev
 ```
 
-## Build And Package
+## Build And Validate
 
-Build the React desktop UI:
+Desktop UI:
 
 ```powershell
+npm audit
+npm run lint
 npm run build
+```
+
+RK3568 edge services:
+
+```powershell
+npm run edge:build
+npm run edge:lint
+```
+
+Windows shell:
+
+```powershell
+dotnet build .\apps\windows-shell\LandslideDesk.Win\LandslideDesk.Win.csproj -c Release
 ```
 
 Create the default Windows portable package:
@@ -108,51 +111,31 @@ Create the default Windows portable package:
 npm run desktop:publish
 ```
 
-Default output:
+Default packaging outputs stay outside Git:
 
 - `artifacts/windows/portable/`
 - `docs/reports/windows-package-latest.json`
 
-## Verification
-
-```powershell
-npm audit
-npm run lint
-npm run build
-dotnet build .\apps\windows-shell\LandslideDesk.Win\LandslideDesk.Win.csproj -c Release
-```
-
-After packaging:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\desktop\verify-windows-package.ps1
-```
-
 ## Documentation
 
 - [Documentation hub](docs/README.md)
+- [System overview](docs/system/OVERVIEW.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Project scope](docs/PROJECT_SCOPE.md)
 - [Release process](docs/RELEASE.md)
 - [中文文档总览](docs/zh-CN/README.md)
+- [中文系统概览](docs/zh-CN/system/OVERVIEW.md)
 - [中文架构说明](docs/zh-CN/ARCHITECTURE.md)
 - [中文项目范围](docs/zh-CN/PROJECT_SCOPE.md)
 - [中文发布流程](docs/zh-CN/RELEASE.md)
-- [Desktop UI package](apps/desktop-ui/README.md)
-- [Windows shell package](apps/windows-shell/README.md)
-- [Contributing guide](CONTRIBUTING.md)
-- [中文贡献指南](CONTRIBUTING.zh-CN.md)
-- [Maintainers guide](MAINTAINERS.md)
-- [中文维护者指南](docs/zh-CN/MAINTAINERS.md)
-- [Security policy](SECURITY.md)
 
-## Project Status
+## Public Safety Boundary
 
-The project is ready for desktop UI exploration, Windows packaging, and integration with compatible landslide-monitoring APIs. The next maturity milestones are public demo data, product screenshots, signed release artifacts, and a stable release cadence.
+This repository intentionally includes project-owned source, documentation, examples, and selected hardware handoff assets. It does not include production credentials, private field configuration, local evidence bundles, generated release artifacts, full vendor SDK checkouts, or historical work logs.
 
 ## Contributing
 
-Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
+Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request, and include screenshots or recordings for visible UI changes.
 
 ## License
 

@@ -30,6 +30,12 @@ jobs:
       - name: Build UI
         run: npm run build
 
+      - name: Build edge services
+        run: npm run edge:build
+
+      - name: Lint edge services
+        run: npm run edge:lint
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:

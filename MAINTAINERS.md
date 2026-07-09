@@ -1,13 +1,13 @@
 # Maintainers Guide
 
-This project keeps the public repository focused on the maintained Windows desktop client. The goal is a stable, readable codebase that contributors can build locally and reviewers can trust.
+This project keeps the public repository focused on maintained, buildable system surfaces: the Windows desktop client, RK3568 edge services, RK2206 field firmware package, carrier-board hardware handoff assets, packaging scripts, and public documentation.
 
 ## Review Principles
 
-- Keep changes scoped to the desktop UI, Windows shell, packaging scripts, or documentation.
-- Prefer small pull requests with clear screenshots for UI work.
-- Do not merge generated artifacts such as `dist/`, `bin/`, `obj/`, `artifacts/`, or local reports.
-- Do not publish credentials, production endpoints, private field configuration, or local environment values.
+- Keep changes scoped to a documented product surface and avoid reviving historical modules without a public README, validation path, and ownership boundary.
+- Prefer small pull requests with clear screenshots for UI work and clear review notes for firmware, edge, or hardware changes.
+- Do not merge generated artifacts such as `dist/`, `bin/`, `obj/`, `artifacts/`, local reports, runtime state, or package output directories.
+- Do not publish credentials, production endpoints, private field configuration, customer-specific site data, or local environment values.
 - Require the CI workflow to pass before merging.
 
 ## Dependency Updates
@@ -24,6 +24,8 @@ When reviewing dependency changes, run:
 npm audit
 npm run lint
 npm run build
+npm run edge:build
+npm run edge:lint
 dotnet build .\apps\windows-shell\LandslideDesk.Win\LandslideDesk.Win.csproj -c Release
 ```
 
@@ -37,8 +39,10 @@ npm run desktop:publish
 
 Before creating a release, confirm:
 
-- README and `docs/` match the current desktop scope.
+- README and `docs/` match the current end-to-end public scope.
 - `CHANGELOG.md` has a dated entry.
 - The Windows package includes `web/index.html`.
+- Edge services build and lint from the root workspace.
+- Firmware and hardware README files match the published package contents.
 - The working tree is clean after removing generated outputs.
 - Main branch CI is green.
