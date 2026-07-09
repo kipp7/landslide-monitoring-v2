@@ -95,4 +95,4 @@ The carrier-board directory contains public design and fabrication handoff files
 - Keep generated artifacts, local reports, and machine state out of Git.
 - Allow desktop UI work without backend deployment through mock data.
 - Keep RK3568 services independently buildable and lintable.
-- Treat hardware deliverables as reviewable handoff assets, not unchecked manufacturing guarantees.
+- Treat hardware deliverables as reviewable handoff assets and check them against the selected vendor's requirements.

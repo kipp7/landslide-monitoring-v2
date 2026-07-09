@@ -59,7 +59,7 @@ For firmware or hardware changes, update the package README and include the buil
 - Keep desktop automation under `scripts/desktop`.
 - Keep generated package reports under `docs/reports`.
 - Keep edge services buildable through root workspace scripts.
-- Treat hardware files as reviewable engineering handoff assets, not unchecked manufacturing guarantees.
+- Treat hardware files as reviewable engineering handoff assets and check them against the selected vendor's requirements.
 - Prefer clear operational docs over temporary notes.
 
 ## Commit Style

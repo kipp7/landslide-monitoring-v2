@@ -13,7 +13,7 @@
 
 ## Environment
 
-Use `.env.example` as a local template. Real deployment values should live in a local `.env`, systemd environment file, or device-management system and must not be committed.
+Use `.env.example` as a local template. Deployment values should live in a local `.env`, systemd environment file, or device-management system outside Git.
 
 Common variables:
 
