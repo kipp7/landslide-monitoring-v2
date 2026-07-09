@@ -8,13 +8,11 @@
 
 English | [简体中文](README.zh-CN.md)
 
-Production-minded Windows desktop client for landslide monitoring, field-device supervision, and early-warning workflows.
+A production-minded Windows desktop client for landslide monitoring, field-device supervision, and early-warning operations.
 
-The repository is intentionally focused: it contains the maintained desktop experience only, with a React/Vite monitoring UI and a native WPF + WebView2 Windows shell. Backend services, mobile apps, deployment infrastructure, internal work logs, and private environment material are deliberately kept out of the public project.
+Landslide Monitoring V2 Desktop combines a React/Vite operator console with a native WPF + WebView2 Windows shell. The public repository is scoped to the actively maintained desktop product surface: local UI development, Windows packaging, release verification, and project documentation.
 
-This repository keeps the original project history for traceability. The current public `main` branch is intentionally narrowed to the maintained desktop client; older web, mobile, backend, infrastructure, hardware, and internal research materials remain available only through Git history and are not part of the supported public surface.
-
-## Why This Project
+## Overview
 
 Landslide monitoring workflows often need a dependable operator-facing client: site overview, field device status, GPS deformation trends, alert review, and packaging that can run on Windows machines used by engineering teams. This project provides that desktop layer as a clean, public, and reusable codebase.
 
@@ -24,7 +22,7 @@ Landslide monitoring workflows often need a dependable operator-facing client: s
 - Native Windows shell with WebView2, startup preflight checks, tray support, and packaged static assets.
 - Mock-data-first development so UI contributors can run the app without deploying a backend.
 - Scripted packaging flow for portable Windows builds and optional installer generation.
-- Professional public layout with bilingual documentation, CI, issue templates, security policy, and MIT license.
+- Bilingual documentation, CI, issue templates, security policy, maintainer notes, and MIT license.
 
 ## Product Surface
 
@@ -59,6 +57,17 @@ docs/
 scripts/
   desktop/          Desktop development, packaging, and verification scripts
 ```
+
+## Public Scope
+
+This repository is maintained as a desktop-client project. The current `main` branch supports:
+
+- Desktop UI development and build tooling.
+- Native Windows host and installer resources.
+- Desktop packaging, verification, and release workflow.
+- Public documentation and GitHub project governance.
+
+Legacy web, mobile, backend, infrastructure, hardware experiments, and private field configuration are not maintained in the current public tree. See [Project scope](docs/PROJECT_SCOPE.md) for the full boundary.
 
 ## Requirements
 
@@ -139,7 +148,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\desktop\verify-win
 
 ## Project Status
 
-This is a desktop-client-only public repository. It is ready for UI exploration, Windows packaging, and integration with compatible landslide-monitoring APIs. Public demo datasets, screenshots, and signed release artifacts can be added as the project matures.
+The project is ready for desktop UI exploration, Windows packaging, and integration with compatible landslide-monitoring APIs. The next maturity milestones are public demo data, product screenshots, signed release artifacts, and a stable release cadence.
 
 ## Contributing
 

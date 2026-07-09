@@ -1,7 +1,6 @@
 {
   "name": "landslide-monitoring-v2",
   "version": "0.1.0",
-  "private": true,
   "description": "Windows desktop client for landslide monitoring, built with React, Vite, WPF, and WebView2.",
   "type": "module",
   "repository": {

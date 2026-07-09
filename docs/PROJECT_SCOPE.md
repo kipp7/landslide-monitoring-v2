@@ -1,8 +1,8 @@
 # Project Scope
 
-This repository preserves the original `landslide-monitoring-v2` Git history, but the current public tree is intentionally scoped to the maintained Windows desktop client.
+This repository is maintained as the public Windows desktop client for Landslide Monitoring V2. The current `main` branch is scoped to the desktop UI, native Windows host, packaging scripts, and public documentation.
 
-## Supported Public Surface
+## Maintained Surface
 
 - `apps/desktop-ui/` - React + Vite desktop monitoring interface.
 - `apps/windows-shell/` - WPF + WebView2 Windows host and installer resources.
@@ -10,19 +10,19 @@ This repository preserves the original `landslide-monitoring-v2` Git history, bu
 - `docs/` - public architecture, release, maintainer, and bilingual documentation.
 - `.github/` - CI, issue templates, pull request template, and dependency automation.
 
-## Historical Only
+## Current Non-Goals
 
-The following areas are not part of the supported public surface and have been removed from the current tree:
+The following areas are outside the current maintenance scope:
 
 - Web dashboards.
 - Mobile clients.
 - Backend services.
 - Deployment infrastructure.
 - Hardware experiments and board bring-up notes.
-- Internal journals, memory files, local evidence bundles, and private field configuration.
+- Internal journals, work logs, local evidence bundles, and private field configuration.
 
-These materials may still exist in old commits for traceability. They should not be treated as maintained, supported, or ready for public reuse.
+The repository preserves historical commits for project traceability. Historical files should not be treated as maintained APIs, supported modules, or release-ready assets.
 
 ## Maintenance Rule
 
-New work should keep the public tree desktop-focused unless maintainers explicitly decide to revive another product surface. If another surface is revived later, it should return as a deliberate, documented module with its own CI, docs, and security review.
+New work should keep the public tree desktop-focused unless maintainers explicitly decide to revive another product surface. If another surface is revived later, it should return as a documented module with its own CI coverage, user-facing docs, ownership, and security review.

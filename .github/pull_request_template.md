@@ -1,6 +1,7 @@
 ## Summary
 
--
+- What changed:
+- Why it changed:
 
 ## Type
 
@@ -12,7 +13,7 @@
 
 ## Screenshots
 
-Add screenshots or recordings for UI changes.
+Add screenshots or recordings for visible UI changes. Use `N/A` for non-UI changes.
 
 ## Checks
 
