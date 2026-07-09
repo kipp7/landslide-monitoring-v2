@@ -4,7 +4,7 @@
 
 ## Responsibilities
 
-- Read `field-gateway` runtime health evidence.
+- Read `field-gateway` runtime health files.
 - Read local network-bootstrap status when available.
 - Produce a field-link quality summary.
 - Expose read-only localhost HTTP endpoints for local UI, diagnostics, or supervision layers.
@@ -14,7 +14,7 @@
 Allowed:
 
 - Display link level, node status, publish freshness, parser noise, and local network state.
-- Convert health evidence into operator or maintainer guidance.
+- Convert health signals into operator or maintainer guidance.
 - Support local diagnostic dashboards through read-only endpoints.
 
 Not allowed:
@@ -68,6 +68,6 @@ sudo journalctl -u lsmv2-field-link-monitor -n 100 --no-pager
 bash edge/rk3568-gateway/field-link-monitor/deploy/check-rk3568-field-link-monitor.sh
 ```
 
-## Public Safety Notes
+## Local Data
 
 Keep real health snapshots, network state, and site-specific configuration outside Git. Commit only examples and templates with placeholder values.

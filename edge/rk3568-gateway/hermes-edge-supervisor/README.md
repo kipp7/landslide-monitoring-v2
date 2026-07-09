@@ -1,4 +1,4 @@
-# Hermes Edge Supervisor
+# Edge Supervisor
 
 `hermes-edge-supervisor` is a local RK3568 supervision sidecar. It consumes read-only link-monitor evidence, combines it with local resource checks and an optional lightweight diagnosis model, and exposes operator-facing supervision output.
 
@@ -7,9 +7,9 @@
 - Poll local field-link summary and automation endpoints.
 - Produce supervision summaries and event logs.
 - Expose read-only HTTP endpoints for local display or operator tooling.
-- Keep diagnostic actions bounded to sidecar-safe refresh and evidence collection.
+- Keep diagnostic actions limited to sidecar refresh and local health collection.
 
-## Safety Boundary
+## Service Boundary
 
 This service does not:
 
@@ -63,6 +63,6 @@ sudo journalctl -u lsmv2-hermes-edge-supervisor -n 100 --no-pager
 bash edge/rk3568-gateway/hermes-edge-supervisor/deploy/check-rk3568-hermes-edge-supervisor.sh
 ```
 
-## Public Safety Notes
+## Local Data
 
-The committed model JSON and examples are public-safe project assets. Do not commit local field evidence, device-specific reports, private endpoints, or generated stress-test reports.
+The committed model JSON and examples are part of the public package. Keep device-specific reports, private endpoints, local logs, and generated stress-test reports outside Git.

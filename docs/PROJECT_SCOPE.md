@@ -14,27 +14,26 @@ This repository is maintained as the public source tree for Landslide Monitoring
 - `docs/` - public architecture, release, system, maintainer, and bilingual documentation.
 - `.github/` - CI, issue templates, pull request template, and dependency automation.
 
-## Public Boundary
+## Repository Contents
 
-The repository intentionally includes:
+The public tree includes:
 
-- Project-owned source code.
+- Application source for the maintained desktop, edge, and firmware packages.
 - Public examples and deployment templates.
-- Firmware package files that can be integrated into a compatible vendor build tree.
-- Hardware handoff files selected for public review.
+- Firmware package files for integration with a compatible vendor build tree.
+- Carrier-board design and fabrication handoff files.
 - Build, lint, packaging, and verification scripts.
-- Public governance documents.
+- Public documentation, issue templates, and pull request templates.
 
-The repository intentionally excludes:
+The following areas are outside the current public tree:
 
 - Production backend services and deployment infrastructure.
 - Mobile applications and web dashboard application code.
-- Full vendor SDK checkouts.
+- Vendor SDK trees.
 - Generated release artifacts and local build outputs.
-- Real credentials, private endpoints, field passwords, and local environment files.
-- Customer-specific site configuration, local evidence bundles, and operational logs.
-- Internal journals, work notes, and local runtime state directories.
+- Credentials, private endpoints, device passwords, and local environment files.
+- Site-specific configuration, local logs, and runtime state.
 
 ## Maintenance Rule
 
-New work should keep each product surface explicit. If a new module is added, it should include a public README, ownership boundary, validation command, security review, and CI coverage when practical. Historical files should not be treated as maintained APIs, supported modules, or release-ready assets unless they are reintroduced under a documented public path.
+New modules should include a README, local validation command, and CI coverage when practical. Areas that are not listed as maintained should be reintroduced through a documented public path before being treated as supported.

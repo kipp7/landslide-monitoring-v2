@@ -18,7 +18,7 @@ Operator layer
     -> React monitoring UI hosted by WPF + WebView2
 ```
 
-The public tree contains source, documentation, examples, deployment templates, and hardware handoff assets. Runtime secrets, local logs, generated builds, and site-specific configuration should stay outside Git.
+The public tree contains source, documentation, examples, deployment templates, and hardware handoff assets. Runtime secrets, generated builds, local logs, and site-specific configuration stay outside Git.
 
 ## Applications And Packages
 
@@ -28,7 +28,7 @@ The public tree contains source, documentation, examples, deployment templates, 
 | `apps/windows-shell` | WPF/WebView2 native host, startup preflight checks, tray behavior, installer assets. |
 | `edge/rk3568-gateway/field-gateway` | Serial-to-MQTT gateway with local spool/cache, health output, command ACK handling, and deployment templates. |
 | `edge/rk3568-gateway/field-link-monitor` | Read-only local sidecar that summarizes field-link health. |
-| `edge/rk3568-gateway/hermes-edge-supervisor` | Local supervision service that consumes health evidence and produces operator-facing guidance. |
+| `edge/rk3568-gateway/hermes-edge-supervisor` | Local supervision service that consumes health signals and produces operator-facing guidance. |
 | `edge/rk3568-gateway/rk3568-alarm-actuator` | RK3568 alarm actuator service for field sound/light alarm control. |
 | `firmware/rk2206-xl01` | RK2206 XL01 firmware package intended for an OpenHarmony/RK2206 vendor build tree. |
 | `hardware/carrier-board` | Public carrier-board schematic, board preview, Gerber, BOM, pick-and-place, and LCEDA handoff package. |
@@ -62,7 +62,7 @@ The RK3568 layer bridges field devices and upstream monitoring services. Its pub
 
 - `field-gateway` owns serial ingestion, message reconstruction, MQTT publishing, spool/cache behavior, command windows, and health files.
 - `field-link-monitor` reads local status files and exposes read-only supervision summaries.
-- `hermes-edge-supervisor` converts local evidence into safe diagnostic and operator guidance output.
+- `hermes-edge-supervisor` turns local health signals into diagnostic and operator guidance output.
 - `rk3568-alarm-actuator` controls field alarm hardware without taking over telemetry or gateway responsibilities.
 
 Edge services are TypeScript packages and are validated from the root workspace:
@@ -74,7 +74,7 @@ npm run edge:lint
 
 ## Field Firmware
 
-The RK2206 XL01 firmware package contains project-owned application code, configuration, drivers, pinout notes, and build metadata. It is not a full OpenHarmony vendor SDK checkout. Build integration happens by placing the package into the expected vendor tree and using the OpenHarmony/RK2206 build flow.
+The RK2206 XL01 firmware package contains application code, configuration, drivers, pinout notes, and build metadata. It is designed for integration with a compatible OpenHarmony/RK2206 vendor tree and uses the standard OpenHarmony/RK2206 build flow.
 
 ## Hardware Handoff
 
@@ -91,7 +91,7 @@ The carrier-board directory contains public design and fabrication handoff files
 ## Design Principles
 
 - Keep public modules tied to clear product responsibilities.
-- Prefer readable directory names over historical abbreviations.
+- Prefer readable directory names over internal abbreviations.
 - Keep generated artifacts, local reports, and machine state out of Git.
 - Allow desktop UI work without backend deployment through mock data.
 - Keep RK3568 services independently buildable and lintable.

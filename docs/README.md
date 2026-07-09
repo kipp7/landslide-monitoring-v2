@@ -2,7 +2,7 @@
 
 English | [简体中文](zh-CN/README.md)
 
-This documentation set keeps the public repository small, clear, and buildable. It explains the maintained end-to-end system surfaces, runtime boundaries, local validation commands, release process, and contribution expectations.
+This documentation set keeps the public repository small, clear, and buildable. It explains the maintained system areas, runtime boundaries, local validation commands, release process, and contribution workflow.
 
 ## Start Here
 
@@ -10,11 +10,11 @@ This documentation set keeps the public repository small, clear, and buildable. 
 | --- | --- |
 | [System Overview](system/OVERVIEW.md) | End-to-end product surfaces and data flow. |
 | [Architecture](ARCHITECTURE.md) | Runtime boundary, module responsibilities, and packaging flow. |
-| [Project Scope](PROJECT_SCOPE.md) | Public repository boundary, maintained surfaces, and non-goals. |
+| [Project Scope](PROJECT_SCOPE.md) | Repository contents, maintained areas, and current non-goals. |
 | [Release Process](RELEASE.md) | Local build, validation, packaging, and GitHub release checklist. |
 | [Desktop UI](../apps/desktop-ui/README.md) | React/Vite UI package responsibilities and commands. |
 | [Windows Shell](../apps/windows-shell/README.md) | WPF/WebView2 host responsibilities and packaging behavior. |
-| [RK3568 Edge Gateway](../edge/rk3568-gateway/README.md) | Edge service responsibilities, deployment boundary, and public safety notes. |
+| [RK3568 Edge Gateway](../edge/rk3568-gateway/README.md) | Edge service responsibilities, deployment notes, and local configuration. |
 | [RK2206 Firmware](../firmware/rk2206-xl01/README.md) | Field-node firmware package and build context. |
 | [Carrier Board](../hardware/carrier-board/README.md) | Hardware design and fabrication handoff package. |
 | [Contributing](../CONTRIBUTING.md) | Contribution workflow, checks, and project conventions. |
@@ -23,7 +23,7 @@ This documentation set keeps the public repository small, clear, and buildable. 
 
 ## Repository Conventions
 
-- Directory names describe product responsibility and runtime ownership.
+- Directory names describe product responsibility and runtime role.
 - Generated artifacts belong under `artifacts/` and stay out of Git.
 - Local reports belong under `docs/reports/` and should be regenerated as needed.
 - Public-facing behavior changes should update both English and Chinese documentation.
@@ -39,7 +39,7 @@ The current public repository maintains:
 - RK2206 XL01 field firmware package.
 - Carrier-board hardware design and fabrication handoff assets.
 - Desktop packaging and verification scripts.
-- Public documentation and GitHub project governance files.
+- Public documentation, issue templates, and pull request templates.
 
 The following areas are outside the current public scope:
 
@@ -47,5 +47,5 @@ The following areas are outside the current public scope:
 - Mobile applications.
 - Web dashboard application code.
 - Production deployment infrastructure.
-- Private field configuration and customer-specific site data.
-- Internal journals, work logs, local evidence bundles, and local environment files.
+- Site-specific configuration and environment files.
+- Credentials, generated outputs, local logs, and runtime state.

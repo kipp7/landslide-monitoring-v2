@@ -27,7 +27,7 @@ sudo bash edge/rk3568-gateway/field-gateway/deploy/install-rk3568.sh \
   --mqtt-url mqtt://<broker-host>:1883
 ```
 
-The installer preserves an existing `/etc/lsmv2/field-gateway.env` by default. Use `--overwrite-env` only when intentionally replacing local device configuration.
+The installer preserves an existing `/etc/lsmv2/field-gateway.env` by default. Use `--overwrite-env` when replacing local device configuration.
 
 ## Runtime Defaults
 
@@ -61,8 +61,8 @@ sudo bash edge/rk3568-gateway/field-gateway/deploy/install-rk3568-network-bootst
   --ap-psk <setup-ap-password>
 ```
 
-## Public Safety Notes
+## Local Data
 
 - Do not commit real broker URLs, Wi-Fi PSKs, device passwords, private endpoints, or site-specific node maps.
 - Keep generated runtime state under `/var/lib/lsmv2` or another local path outside Git.
-- Treat files in this directory as deployment templates; production deployment should be reviewed per site.
+- Treat files in this directory as deployment templates and review deployment values per site.
