@@ -50,8 +50,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\desktop\verify-win
 - 每个 PR 聚焦一个功能、修复或文档主题。
 - 可见界面改动请附截图或短录屏。
 - 公开安装、命令、范围或行为变化需要同步更新中英文文档。
-- 不要提交 `artifacts/`、`dist/`、`bin/`、`obj/`、本地报告或运行状态目录等生成产物。
-- 不要提交凭据、私有端点、设备口令、点位特定配置、本地日志或本地环境文件。
+- 生成产物、本地报告和运行状态目录应保留在 Git 之外，例如 `artifacts/`、`dist/`、`bin/` 和 `obj/`。
+- 凭据、私有端点、设备口令、点位特定配置、本地日志和本地环境文件应保留在 Git 之外。
 
 ## 项目约定
 
@@ -59,8 +59,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\desktop\verify-win
 - 桌面端自动化脚本统一放在 `scripts/desktop`。
 - 本地打包报告统一放在 `docs/reports`。
 - 边缘服务应能通过根目录 workspace 脚本构建。
-- 硬件文件作为可复核工程交付资料维护，不作为未经检查的打板保证。
-- 优先保留清晰的工程文档，不提交临时工作日志。
+- 硬件文件作为可复核工程交付资料维护，打板前应结合所选供应商要求复核。
+- 优先保留清晰的工程文档，临时工作日志应留在仓库之外。
 
 ## Commit 风格
 

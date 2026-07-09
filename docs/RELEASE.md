@@ -59,7 +59,7 @@ npm run edge:build
 npm run edge:lint
 ```
 
-Deployment to a physical RK3568 board requires local environment files and site-specific values that must not be committed.
+Deployment to a physical RK3568 board requires local environment files and site-specific values that stay outside Git.
 
 ## Firmware And Hardware Review
 

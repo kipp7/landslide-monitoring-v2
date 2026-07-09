@@ -111,7 +111,7 @@ dotnet build .\apps\windows-shell\LandslideDesk.Win\LandslideDesk.Win.csproj -c 
 npm run desktop:publish
 ```
 
-默认打包输出不提交到 Git：
+默认打包输出保留在 Git 之外：
 
 - `artifacts/windows/portable/`
 - `docs/reports/windows-package-latest.json`
