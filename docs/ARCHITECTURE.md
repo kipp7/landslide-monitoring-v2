@@ -1,6 +1,6 @@
 # Architecture
 
-Landslide Monitoring V2 is organized as a public end-to-end monitoring workspace. The repository keeps the actively maintained system surfaces together while keeping generated artifacts, private deployments, and full vendor SDK checkouts outside Git.
+Landslide Monitoring V2 is organized as a public end-to-end monitoring workspace. The repository keeps the desktop client, edge gateway, field firmware, and carrier-board handoff files together in one buildable tree.
 
 ## System Boundary
 
@@ -18,7 +18,7 @@ Operator layer
     -> React monitoring UI hosted by WPF + WebView2
 ```
 
-The public tree contains source, documentation, examples, deployment templates, and selected hardware handoff assets. Production backend services, customer-specific deployment configuration, local field evidence, and release artifacts are intentionally excluded.
+The public tree contains source, documentation, examples, deployment templates, and hardware handoff assets. Runtime secrets, local logs, generated builds, and site-specific configuration should stay outside Git.
 
 ## Applications And Packages
 
