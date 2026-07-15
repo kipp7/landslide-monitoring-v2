@@ -9,6 +9,10 @@
 
 English | [简体中文](README.zh-CN.md)
 
+<p align="center">
+  <img src="docs/assets/branding/social-preview.png" alt="Landslide Monitoring V2 end-to-end system preview" width="100%" />
+</p>
+
 Landslide Monitoring V2 is an end-to-end open-source landslide monitoring system. It brings together the Windows operator client, RK3568 edge gateway services, RK2206 field-node firmware, and carrier-board hardware handoff assets in one public repository.
 
 The repository is organized around four product areas: desktop operations, edge gateway services, field firmware, and carrier-board hardware.

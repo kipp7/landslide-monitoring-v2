@@ -9,6 +9,10 @@
 
 [English](README.md) | 简体中文
 
+<p align="center">
+  <img src="docs/assets/branding/social-preview.png" alt="山体滑坡监测 V2 端到端系统预览" width="100%" />
+</p>
+
 山体滑坡监测 V2 是一个端到端开源山体滑坡监测系统。仓库同时包含 Windows 操作员客户端、RK3568 边缘网关服务、RK2206 现场节点固件，以及载板硬件交付资料。
 
 仓库围绕四个产品面组织：桌面端操作、边缘网关服务、现场固件和载板硬件资料。
