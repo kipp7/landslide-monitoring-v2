@@ -13,9 +13,9 @@ English | [简体中文](README.zh-CN.md)
   <img src="docs/assets/branding/social-preview.png" alt="Landslide Monitoring V2 end-to-end system preview" width="100%" />
 </p>
 
-Landslide Monitoring V2 is an end-to-end open-source landslide monitoring system. It brings together the Windows operator client, RK3568 edge gateway services, RK2206 field-node firmware, and carrier-board hardware handoff assets in one public repository.
+Landslide Monitoring V2 is an end-to-end open-source landslide monitoring system. It brings together the Windows operator client, cloud backend services, RK3568 edge gateway services, RK2206 field-node firmware, and carrier-board hardware handoff assets in one public repository.
 
-The repository is organized around four product areas: desktop operations, edge gateway services, field firmware, and carrier-board hardware.
+The repository is organized around five product areas: desktop operations, cloud backend services, edge gateway services, field firmware, and carrier-board hardware.
 
 ## System Overview
 
@@ -29,6 +29,7 @@ RK2206 field nodes
 ## Highlights
 
 - Windows monitoring client built with React, Vite, WPF, and WebView2.
+- Cloud backend with REST API, PostgreSQL, ClickHouse, EMQX, Kafka, telemetry ingestion, rules, and device-command workers.
 - RK3568 edge services for serial telemetry, MQTT forwarding, local health summaries, supervision, and alarm actuation.
 - RK2206 XL01 field firmware package for sensor acquisition, telemetry envelopes, command acknowledgements, watchdogs, and board utilities.
 - Carrier-board public handoff package with schematic, PCB preview, Gerber, BOM, pick-and-place, and LCEDA source package.
@@ -40,10 +41,12 @@ RK2206 field nodes
 | --- | --- |
 | `apps/desktop-ui/` | React + Vite monitoring interface for operator workflows. |
 | `apps/windows-shell/` | WPF + WebView2 Windows host, packaging assets, and native startup checks. |
+| `services/` | Cloud API, telemetry, alerting, prediction, and command-processing services. |
+| `infra/compose/` | Single-host backend infrastructure and application deployment. |
 | `edge/rk3568-gateway/` | RK3568 gateway, link-monitor, supervisor, and alarm actuator services. |
 | `firmware/rk2206-xl01/` | RK2206 XL01 field-node firmware package and pinout notes. |
 | `hardware/carrier-board/` | Public carrier-board design and fabrication handoff assets. |
-| `packages/` | Shared TypeScript packages used by edge services. |
+| `packages/`, `libs/` | Shared TypeScript packages used by edge and backend services. |
 | `scripts/desktop/` | Windows desktop development, packaging, and verification scripts. |
 | `docs/` | Architecture, scope, release, system, maintainer, and bilingual documentation. |
 
@@ -52,10 +55,11 @@ RK2206 field nodes
 | Surface | Status | Primary Docs |
 | --- | --- | --- |
 | Windows desktop client | Maintained | [Desktop UI](apps/desktop-ui/README.md), [Windows shell](apps/windows-shell/README.md) |
+| Cloud backend | Maintained | [Docker Compose deployment](infra/compose/README.md) |
 | RK3568 edge gateway | Maintained | [Edge gateway](edge/rk3568-gateway/README.md) |
 | RK2206 field firmware | Maintained as public firmware package | [Firmware](firmware/rk2206-xl01/README.md) |
 | Carrier-board hardware handoff | Maintained as public design package | [Hardware](hardware/carrier-board/README.md) |
-| Web/mobile/backend infrastructure | Not included in the public tree | [Project scope](docs/PROJECT_SCOPE.md) |
+| Web and mobile applications | Not included in the public tree | [Project scope](docs/PROJECT_SCOPE.md) |
 
 ## Tech Stack
 
@@ -64,6 +68,7 @@ RK2206 field nodes
 | Desktop UI | React 18, TypeScript, Vite, Ant Design |
 | Visualization | ECharts, Leaflet, Three.js |
 | Native desktop shell | .NET 8, WPF, WebView2 |
+| Cloud backend | Node.js 20, Fastify, PostgreSQL, ClickHouse, EMQX, Kafka |
 | Edge services | Node.js 20, TypeScript, MQTT, serialport, systemd deployment templates |
 | Field firmware | OpenHarmony/RK2206 application package |
 | Hardware handoff | Schematic, PCB preview, Gerber, BOM, pick-and-place, LCEDA project package |

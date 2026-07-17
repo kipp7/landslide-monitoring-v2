@@ -65,3 +65,6 @@ keys/
 # Local evidence and generated reports
 reports/
 docs/reports/
+!docs/unified/reports/
+docs/unified/reports/*
+!docs/unified/reports/README.md

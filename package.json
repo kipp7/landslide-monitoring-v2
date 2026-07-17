@@ -14,7 +14,23 @@
   "workspaces": [
     "apps/desktop-ui",
     "edge/rk3568-gateway/*",
-    "packages/*"
+    "packages/*",
+    "libs/regional-model-library",
+    "libs/rules",
+    "services/ai-prediction-worker",
+    "services/alert-notify-worker",
+    "services/api",
+    "services/command-ack-receiver",
+    "services/command-dispatcher",
+    "services/command-events-recorder",
+    "services/command-notify-worker",
+    "services/command-timeout-worker",
+    "services/huawei-iot-adapter",
+    "services/ingest",
+    "services/presence-recorder",
+    "services/rule-engine-worker",
+    "services/telemetry-dlq-recorder",
+    "services/telemetry-writer"
   ],
   "engines": {
     "node": ">=20"

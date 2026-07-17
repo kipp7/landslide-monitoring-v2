@@ -1,0 +1,20 @@
+{
+  "name": "@lsmv2/ingest-service",
+  "private": true,
+  "version": "0.0.0",
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint src --max-warnings=0",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@lsmv2/observability": "*",
+    "@lsmv2/validation": "*",
+    "dotenv": "^16.4.7",
+    "kafkajs": "^2.2.4",
+    "mqtt": "^5.10.3",
+    "zod": "^3.24.1"
+  }
+}

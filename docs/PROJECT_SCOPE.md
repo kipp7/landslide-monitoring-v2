@@ -1,15 +1,17 @@
 # Project Scope
 
-This repository is maintained as the public source tree for Landslide Monitoring V2, an end-to-end landslide monitoring system. The current `main` branch includes the actively maintained desktop client, RK3568 edge gateway services, RK2206 field firmware package, carrier-board hardware handoff assets, packaging scripts, and public documentation.
+This repository is maintained as the public source tree for Landslide Monitoring V2, an end-to-end landslide monitoring system. The current `main` branch includes the actively maintained desktop client, cloud backend, RK3568 edge gateway services, RK2206 field firmware package, carrier-board hardware handoff assets, packaging scripts, and public documentation.
 
 ## Maintained Surface
 
 - `apps/desktop-ui/` - React + Vite monitoring interface.
 - `apps/windows-shell/` - WPF + WebView2 Windows host and installer resources.
+- `services/` - cloud API, telemetry, alerting, prediction, and command-processing services.
+- `infra/compose/` - single-host backend infrastructure and application deployment.
 - `edge/rk3568-gateway/` - RK3568 edge services and deployment templates.
 - `firmware/rk2206-xl01/` - RK2206 XL01 field-node firmware package.
 - `hardware/carrier-board/` - carrier-board design and fabrication handoff assets.
-- `packages/` - shared TypeScript packages used by the edge services.
+- `packages/` and `libs/` - shared TypeScript packages used by edge and backend services.
 - `scripts/desktop/` - desktop development, packaging, and verification scripts.
 - `docs/` - public architecture, release, system, maintainer, and bilingual documentation.
 - `.github/` - CI, issue templates, pull request template, and dependency automation.
@@ -18,7 +20,7 @@ This repository is maintained as the public source tree for Landslide Monitoring
 
 The public tree includes:
 
-- Application source for the maintained desktop, edge, and firmware packages.
+- Application source for the maintained desktop, backend, edge, and firmware packages.
 - Public examples and deployment templates.
 - Firmware package files for integration with a compatible vendor build tree.
 - Carrier-board design and fabrication handoff files.
@@ -27,7 +29,6 @@ The public tree includes:
 
 The following areas are outside the current public tree:
 
-- Production backend services and deployment infrastructure.
 - Mobile applications and web dashboard application code.
 - Vendor SDK trees.
 - Generated release artifacts and local build outputs.
