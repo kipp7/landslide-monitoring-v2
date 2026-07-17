@@ -13,9 +13,9 @@
   <img src="docs/assets/branding/social-preview.png" alt="山体滑坡监测 V2 端到端系统预览" width="100%" />
 </p>
 
-山体滑坡监测 V2 是一个端到端开源山体滑坡监测系统。仓库同时包含 Windows 操作员客户端、RK3568 边缘网关服务、RK2206 现场节点固件，以及载板硬件交付资料。
+山体滑坡监测 V2 是一个端到端开源山体滑坡监测系统。仓库同时包含 Windows 操作员客户端、云端后端服务、RK3568 边缘网关服务、RK2206 现场节点固件，以及载板硬件交付资料。
 
-仓库围绕四个产品面组织：桌面端操作、边缘网关服务、现场固件和载板硬件资料。
+仓库围绕五个产品面组织：桌面端操作、云端后端服务、边缘网关服务、现场固件和载板硬件资料。
 
 ## 系统概览
 
@@ -29,6 +29,7 @@ RK2206 现场节点
 ## 项目亮点
 
 - Windows 监测客户端基于 React、Vite、WPF 和 WebView2。
+- 云端后端包含 REST API、PostgreSQL、ClickHouse、EMQX、Kafka、遥测采集、规则和设备命令 Worker。
 - RK3568 边缘服务覆盖串口遥测、MQTT 转发、本地健康摘要、监督服务和声光报警执行。
 - RK2206 XL01 现场固件包覆盖传感采集、遥测封包、指令确认、看门狗和板级工具。
 - 载板硬件交付包包含原理图、PCB 预览、Gerber、BOM、坐标文件和 LCEDA 源工程包。
@@ -40,10 +41,12 @@ RK2206 现场节点
 | --- | --- |
 | `apps/desktop-ui/` | React + Vite 监测操作界面。 |
 | `apps/windows-shell/` | WPF + WebView2 Windows 宿主、打包资源和启动检查。 |
+| `services/` | 云端 API、遥测、告警、预测和命令处理服务。 |
+| `infra/compose/` | 单机后端基础设施与应用部署。 |
 | `edge/rk3568-gateway/` | RK3568 网关、链路监测、监督服务和声光报警执行服务。 |
 | `firmware/rk2206-xl01/` | RK2206 XL01 现场节点固件包和引脚说明。 |
 | `hardware/carrier-board/` | 载板公开设计和打板交付资料。 |
-| `packages/` | 边缘服务共用的 TypeScript 包。 |
+| `packages/`、`libs/` | 边缘与后端服务共用的 TypeScript 包。 |
 | `scripts/desktop/` | Windows 桌面端开发、打包和验证脚本。 |
 | `docs/` | 架构、范围、发布、系统、维护和中英文文档。 |
 
@@ -52,10 +55,11 @@ RK2206 现场节点
 | 维护面 | 状态 | 主要文档 |
 | --- | --- | --- |
 | Windows 桌面客户端 | 持续维护 | [Desktop UI](apps/desktop-ui/README.md)、[Windows Shell](apps/windows-shell/README.md) |
+| 云端后端 | 持续维护 | [Docker Compose 部署](infra/compose/README.md) |
 | RK3568 边缘网关 | 持续维护 | [边缘网关](edge/rk3568-gateway/README.md) |
 | RK2206 现场固件 | 作为公开固件包维护 | [固件说明](firmware/rk2206-xl01/README.md) |
 | 载板硬件交付资料 | 作为公开设计包维护 | [硬件说明](hardware/carrier-board/README.md) |
-| Web / 移动端 / 后端基础设施 | 不包含在公开树中 | [项目范围](docs/zh-CN/PROJECT_SCOPE.md) |
+| Web / 移动端应用 | 不包含在公开树中 | [项目范围](docs/zh-CN/PROJECT_SCOPE.md) |
 
 ## 技术栈
 
@@ -64,6 +68,7 @@ RK2206 现场节点
 | 桌面 UI | React 18、TypeScript、Vite、Ant Design |
 | 可视化 | ECharts、Leaflet、Three.js |
 | 原生桌面壳 | .NET 8、WPF、WebView2 |
+| 云端后端 | Node.js 20、Fastify、PostgreSQL、ClickHouse、EMQX、Kafka |
 | 边缘服务 | Node.js 20、TypeScript、MQTT、serialport、systemd 部署模板 |
 | 现场固件 | OpenHarmony/RK2206 应用包 |
 | 硬件交付 | 原理图、PCB 预览、Gerber、BOM、坐标文件、LCEDA 工程包 |
