@@ -6,6 +6,7 @@ import { Kafka, logLevel } from "kafkajs";
 import { Pool } from "pg";
 import path from "node:path";
 import { loadConfigFromEnv } from "./config";
+import { evaluateSequenceReset, shouldDiscardSyntheticShadow } from "./sequence-policy";
 
 type TelemetryRawV1 = {
   schema_version: 1;
@@ -257,49 +258,12 @@ function sanitizeFieldProfileShadowState(state: ShadowState): ShadowState {
   };
 }
 
-function toFiniteNumberOrNull(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    if (!trimmed) return null;
-    const parsed = Number(trimmed);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
-}
-
-function getShadowMetaNumber(state: ShadowState | null | undefined, key: string): number | null {
-  if (!state) return null;
-  return toFiniteNumberOrNull(state.meta[key]);
-}
-
-function getPayloadMetaNumber(payload: TelemetryRawV1, key: string): number | null {
-  if (!payload.meta || typeof payload.meta !== "object") return null;
-  return toFiniteNumberOrNull(payload.meta[key]);
-}
-
-function shouldAcceptSeqAfterUptimeRollback(
-  payload: TelemetryRawV1,
-  latestSeq: number,
-  previousShadowState: ShadowState | null | undefined
-): { accept: boolean; previousUptimeS: number | null; nextUptimeS: number | null } {
-  const previousUptimeS = getShadowMetaNumber(previousShadowState, "uptime_s");
-  const nextUptimeS = getPayloadMetaNumber(payload, "uptime_s");
-  return {
-    accept:
-      previousUptimeS != null &&
-      nextUptimeS != null &&
-      payload.seq != null &&
-      payload.seq <= latestSeq &&
-      nextUptimeS < previousUptimeS,
-    previousUptimeS,
-    nextUptimeS
-  };
-}
-
 function buildShadowState(payload: TelemetryRawV1, previousState: unknown): ShadowState {
-  const previousRaw = normalizeShadowState(previousState);
+  const normalizedPrevious = normalizeShadowState(previousState);
   const payloadMeta = payload.meta && typeof payload.meta === "object" ? payload.meta : {};
+  const previousRaw = shouldDiscardSyntheticShadow(payload, normalizedPrevious)
+    ? { metrics: {}, meta: {} }
+    : normalizedPrevious;
   const useFieldProfileSanitizer =
     isFieldProfileMetaRecord(payloadMeta) || isFieldProfileMetaRecord(previousRaw.meta);
   const previous = useFieldProfileSanitizer ? sanitizeFieldProfileShadowState(previousRaw) : previousRaw;
@@ -799,7 +763,7 @@ async function main(): Promise<void> {
             }
 
             if (latestSeq != null && payload.seq <= latestSeq) {
-              const seqResetDecision = shouldAcceptSeqAfterUptimeRollback(
+              const seqResetDecision = evaluateSequenceReset(
                 payload,
                 latestSeq,
                 latestShadowStateByDeviceId.get(payload.device_id)
@@ -813,10 +777,11 @@ async function main(): Promise<void> {
                     deviceId: payload.device_id,
                     seq: payload.seq,
                     latestSeq,
+                    resetReason: seqResetDecision.reason,
                     previousUptimeS: seqResetDecision.previousUptimeS,
                     nextUptimeS: seqResetDecision.nextUptimeS
                   },
-                  "telemetry seq rollback accepted after uptime rollback"
+                  "telemetry seq rollback accepted for a verified producer reset"
                 );
               } else {
                 const reasonCode = payload.seq === latestSeq ? "duplicate_seq" : "stale_seq";
