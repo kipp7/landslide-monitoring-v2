@@ -45,6 +45,7 @@ export class AlertLocationRepository {
         longitude: alertCoordinate.longitude,
         source: 'alert',
         locationName: alert?.title || '告警位置',
+        deviceId: alert?.deviceId,
         updatedAt: alertCoordinate.updatedAt ?? alert?.lastEventAt
       };
     }
@@ -53,9 +54,6 @@ export class AlertLocationRepository {
     if (device) {
       const deviceLocation = await this.deviceGpsLocation(device);
       if (deviceLocation) return deviceLocation;
-    } else if (!alert) {
-      const previewLocation = await this.previewGpsLocation(devices);
-      if (previewLocation) return previewLocation;
     }
 
     const station = this.findStation(alert?.stationId ?? device?.stationId, stations);
@@ -64,7 +62,8 @@ export class AlertLocationRepository {
         latitude: station.latitude as number,
         longitude: station.longitude as number,
         source: 'station',
-        locationName: stationDisplayName(station)
+        locationName: stationDisplayName(station),
+        deviceId: device?.deviceId
       };
     }
 
@@ -73,6 +72,36 @@ export class AlertLocationRepository {
       longitude: DEFAULT_LONGITUDE,
       source: 'default',
       locationName: '厦门大学默认位置'
+    };
+  }
+
+  async resolveNodes(devices: Array<Device>): Promise<Array<AlertMapLocation>> {
+    const sorted = devices.slice().sort((left: Device, right: Device) =>
+      deviceDisplayName(left).localeCompare(deviceDisplayName(right))
+    );
+    const tasks: Array<Promise<AlertMapLocation>> = [];
+    for (let index = 0; index < sorted.length; index++) {
+      tasks.push(this.resolveNode(sorted[index], index, sorted.length));
+    }
+    return Promise.all(tasks);
+  }
+
+  private async resolveNode(device: Device, index: number, total: number): Promise<AlertMapLocation> {
+    let gps: AlertMapLocation | null = null;
+    try {
+      gps = await this.deviceGpsLocation(device);
+    } catch {
+      gps = null;
+    }
+    if (gps) return gps;
+    const angle = -Math.PI / 2 + (Math.PI * 2 * index) / Math.max(total, 1);
+    const radius = total > 1 ? 0.0012 : 0;
+    return {
+      latitude: DEFAULT_LATITUDE + Math.sin(angle) * radius,
+      longitude: DEFAULT_LONGITUDE + Math.cos(angle) * radius,
+      source: 'default',
+      locationName: deviceDisplayName(device),
+      deviceId: device.deviceId
     };
   }
 
@@ -186,6 +215,7 @@ export class AlertLocationRepository {
       longitude: coordinate.longitude,
       source,
       locationName: deviceDisplayName(device),
+      deviceId: device.deviceId,
       updatedAt: coordinate.updatedAt
     };
   }
@@ -210,25 +240,6 @@ export class AlertLocationRepository {
     return this.cachedLastGps(device.deviceId);
   }
 
-  private async previewGpsLocation(devices: Array<Device>): Promise<AlertMapLocation | null> {
-    let latestFallback: AlertMapLocation | null = null;
-    for (let index = 0; index < devices.length; index++) {
-      const location = await this.deviceGpsLocation(devices[index]);
-      if (!location) continue;
-      if (location.source === 'gps-live') return location;
-      if (!latestFallback || this.locationTimestamp(location) > this.locationTimestamp(latestFallback)) {
-        latestFallback = location;
-      }
-    }
-    return latestFallback;
-  }
-
-  private locationTimestamp(location: AlertMapLocation): number {
-    if (!location.updatedAt) return 0;
-    const timestamp = new Date(location.updatedAt).getTime();
-    return Number.isFinite(timestamp) ? timestamp : 0;
-  }
-
   private async saveLastGps(deviceId: string, location: AlertMapLocation): Promise<void> {
     await this.cache.write(
       this.cache.key('/map/last-gps', deviceId),
@@ -237,6 +248,7 @@ export class AlertLocationRepository {
         longitude: location.longitude,
         source: 'gps-last',
         locationName: location.locationName,
+        deviceId,
         updatedAt: location.updatedAt
       } as AlertMapLocation
     );
@@ -253,6 +265,7 @@ export class AlertLocationRepository {
       longitude: cached.value.longitude,
       source: 'gps-last',
       locationName: cached.value.locationName,
+      deviceId,
       updatedAt: cached.value.updatedAt
     };
   }

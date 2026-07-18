@@ -47,6 +47,10 @@ built from DevEco Studio or with its bundled `hvigorw` command after setting
   the last GPS rather than real-time data. GPS values outside the project's
   China operating region are treated as invalid device data and cannot replace
   the last valid position.
+- Map preview renders every monitoring node and fits the viewport to all node
+  markers. Nodes without GPS use the same three-point spread around Xiamen
+  University as the Windows desktop, while an active alert remains centred and
+  is the only marker that uses the warning ripple.
 - The most recent valid GPS snapshot is stored in Preferences using the same
   API-server and user cache namespace. It is cleared on logout or server
   change, so positions cannot leak across accounts or environments.

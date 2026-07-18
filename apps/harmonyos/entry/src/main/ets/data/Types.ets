@@ -150,6 +150,7 @@ export interface AlertMapLocation {
   longitude: number;
   source: AlertLocationSource;
   locationName: string;
+  deviceId?: string;
   updatedAt?: string;
 }
 
