@@ -26,6 +26,11 @@ Common variables:
 - `SPOOL_ROOT_DIR` - local spool root.
 - `HEALTH_FILE_PATH` - runtime health JSON output path.
 - `SOUTHBOUND_POLLING_ENABLED` - enables gateway-managed polling on shared links.
+- `SOUTHBOUND_POLLING_INTERVAL_MS` - poll start cadence; production uses `1000` for one node per second.
+- `SOUTHBOUND_POLLING_SESSION_TIMEOUT_MS` - command-to-telemetry timeout; a missing node cannot hold the shared link indefinitely.
+- `SOUTHBOUND_POLLING_COMMAND_CHUNK_BYTES` / `SOUTHBOUND_POLLING_COMMAND_CHUNK_DELAY_MS` - poll-only downlink pacing. Normal control commands keep the conservative `COMMAND_SERIAL_*` pacing.
+
+Internal `poll_latest_telemetry` commands are intentionally ACK-less. The matching telemetry frame closes the poll session, while externally issued control commands continue to use command ACKs and the full quiet-window guard. With three healthy nodes and a `1000 ms` cadence, each node reports about once every three seconds.
 
 ## Local Development
 

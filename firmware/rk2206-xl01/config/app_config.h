@@ -50,9 +50,13 @@
 #define FIELD_LINK_WIRE_MODE FIELD_LINK_WIRE_MODE_COBS_CRC_V1
 #define FIELD_LINK_MAX_PAYLOAD_BYTES 1024
 #define XL01_UART_TX_CHUNK_SIZE 32     // Long transparent payloads are more stable when split into small UART bursts
-#define XL01_UART_TX_CHUNK_DELAY_MS 30 // Delay between UART bursts to avoid overrunning XL01 transparent serial path
+#define XL01_UART_TX_CHUNK_DELAY_MS 15 // Fast-poll profile; 15ms keeps the XL01 path below the 1s slot
 #define PLATFORM_POST_ACK_QUIET_MS 1200 // Hold telemetry briefly after any command ACK to keep the shared XL01 stream separable
 #define PLATFORM_MANUAL_COLLECT_DELAY_MS 1500 // manual_collect waits longer so ACK is not immediately followed by forced telemetry
+// Scheduler polls use telemetry itself as the completion signal. Keeping this at
+// zero removes one radio frame and the 2.7s ACK guard without changing normal commands.
+#define POLL_LATEST_TELEMETRY_ACK_ENABLED 0
+#define POLL_REQUEST_CHECK_INTERVAL_MS 50 // Keep command-to-telemetry latency inside the 1s gateway slot
 #define EDGE_UPLINK_MODE_PERIODIC 0
 #define EDGE_UPLINK_MODE_POLLED 1
 // Production pull mode:
