@@ -11,6 +11,7 @@ Quectel EC200A cellular uplink available after boot.
 | `install-rk3568-cellular-modem-ensure.sh` | Installs the modem ensure script and its systemd service/timer. |
 | `install-rk3568-cellular-link-guardian.sh` | Installs the route and cloud business-port guardian. |
 | `install-rk3568-tunnel-sshd-keepalive.sh` | Applies server-side SSH keepalive limits for a dedicated reverse-tunnel account. |
+| `install-cloud-rk3568-tunnel-cwp-bypass.sh` | Keeps key-only SSH reachable when Tencent CWP/YunJing rejects changing carrier egress addresses. |
 
 ## Design Boundary
 
@@ -22,6 +23,12 @@ Quectel EC200A cellular uplink available after boot.
 - A disabled reverse-tunnel service is not restarted by either guardian.
 - Real cloud addresses, credentials, APNs, interface names, and connection
   profile names belong in local environment files.
+
+Tencent CWP/YunJing may classify a carrier-grade NAT address before the RK3568
+uses it. A fixed source-IP allowlist is therefore not durable. The optional
+cloud installer keeps an SSH-only accept rule before the YunJing input jump and
+hardens sshd to public-key authentication for the named admin and tunnel users.
+It does not bypass filtering for MQTT, API, database, or other host ports.
 
 ## Install
 
@@ -43,6 +50,17 @@ Existing modem-ensure configuration is preserved. The link-guardian installer
 writes `/etc/lsmv2/rk3568-cellular-link-guardian.env` from the values supplied
 at install time.
 
+On the cloud host, after creating the dedicated tunnel account:
+
+```bash
+sudo ADMIN_USER=<admin-user> TUNNEL_USER=<tunnel-user> \
+  bash edge/rk3568-gateway/cellular/install-cloud-rk3568-tunnel-cwp-bypass.sh
+```
+
+Use this only when SSH password authentication is already disabled and both
+accounts have verified public keys. The installer validates sshd before reload
+and restores the previous hardening file if validation fails.
+
 ## Validate
 
 ```bash
@@ -50,6 +68,7 @@ python3 edge/rk3568-gateway/cellular/rk3568-cellular-modem-ensure.py --self-test
 bash -n edge/rk3568-gateway/cellular/install-rk3568-cellular-modem-ensure.sh
 bash -n edge/rk3568-gateway/cellular/install-rk3568-cellular-link-guardian.sh
 bash -n edge/rk3568-gateway/cellular/install-rk3568-tunnel-sshd-keepalive.sh
+bash -n edge/rk3568-gateway/cellular/install-cloud-rk3568-tunnel-cwp-bypass.sh
 ```
 
 On a deployed board:
@@ -59,6 +78,14 @@ cat /var/lib/lsmv2/cellular-cloud/modem-status.json
 cat /var/lib/lsmv2/cellular-cloud/status.json
 systemctl status lsmv2-rk3568-cellular-modem-ensure.timer --no-pager
 systemctl status lsmv2-rk3568-cellular-link-guardian.timer --no-pager
+```
+
+On the cloud host:
+
+```bash
+systemctl status lsmv2-rk3568-cwp-ssh-allow.timer --no-pager
+cat /var/lib/lsmv2/cloud-security/cwp-ssh-allow-status.json
+sshd -T | grep -E 'permitrootlogin|passwordauthentication|maxauthtries|allowusers'
 ```
 
 Do not commit populated environment files, SSH keys, SIM identifiers, carrier
