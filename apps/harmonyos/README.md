@@ -50,7 +50,9 @@ built from DevEco Studio or with its bundled `hvigorw` command after setting
 - Map preview renders every monitoring node and fits the viewport to all node
   markers. Nodes without GPS use the same three-point spread around Xiamen
   University as the Windows desktop, while an active alert remains centred and
-  is the only marker that uses the warning ripple.
+  switches the matching node to a red warning ripple. Other nodes retain a
+  green monitoring ripple; a separate red ripple is used when the precise alert
+  coordinate differs from its node location.
 - The most recent valid GPS snapshot is stored in Preferences using the same
   API-server and user cache namespace. It is cleared on logout or server
   change, so positions cannot leak across accounts or environments.

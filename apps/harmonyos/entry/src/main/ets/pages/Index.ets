@@ -2585,7 +2585,7 @@ struct AlertMapPane {
   onRetry: () => void = () => {};
 
   private sourceTone(): string {
-    if (!this.alert) return '#477B96';
+    if (!this.alert) return UI_COLOR_SUCCESS;
     if (!this.location) return UI_COLOR_MUTED;
     if (this.location.source === 'alert') return UI_COLOR_DANGER;
     if (this.location.source === 'gps-live') return UI_COLOR_SUCCESS;
