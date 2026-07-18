@@ -46,6 +46,20 @@ static const char *StateChinese(const AlarmSnapshot *snapshot)
     return "正常";
 }
 
+static bool IsSupportedChinese24(const unsigned char *glyph)
+{
+    static const unsigned char supported[] =
+        "℃安板备闭变标表不测查察常撤程持传窗当灯等低电定动度短发分风幅感高告估关观光果乎滑化环机"
+        "级即极急几继加间监检建键降角结紧近警境据开靠可口离立烈明评坡期启器前强轻倾趋全弱上设升"
+        "湿时势数态通图危微温稳无析下显险晓斜信行续要议意因预长照振正值指置中主注状准自子最";
+    size_t offset;
+
+    for (offset = 0; offset + 2U < sizeof(supported) - 1U; offset += 3U) {
+        if (memcmp(supported + offset, glyph, 3U) == 0) return true;
+    }
+    return false;
+}
+
 static void SafeShortId(char *target, size_t target_size, const char *source)
 {
     size_t length;
@@ -87,9 +101,11 @@ static void ShowMixedText(uint16_t x, uint16_t y, const char *text, uint16_t fg,
             ++cursor;
         } else if ((cursor[0] & 0xF0U) == 0xE0U && cursor[1] != '\0' && cursor[2] != '\0') {
             char glyph[4] = { (char)cursor[0], (char)cursor[1], (char)cursor[2], '\0' };
-            if (used + size > max_width) break;
-            ShowChinese((uint16_t)(x + used), y, glyph, fg, bg, size);
-            used = (uint16_t)(used + size);
+            uint16_t width = size == 24U && !IsSupportedChinese24(cursor) ? (uint16_t)(size / 2U) : size;
+            if (used + width > max_width) break;
+            if (width == size) ShowChinese((uint16_t)(x + used), y, glyph, fg, bg, size);
+            else ShowAscii((uint16_t)(x + used), y, "?", fg, bg, size);
+            used = (uint16_t)(used + width);
             cursor += 3;
         } else {
             ++cursor;
@@ -108,10 +124,10 @@ static void ShowProtocolStatus(const AlarmSnapshot *snapshot, uint16_t fg, uint1
     uint16_t wifi_color = bg == LCD_WHITE ? (snapshot->wifi_connected ? LCD_GREEN : LCD_RED) : fg;
     uint16_t mqtt_color = bg == LCD_WHITE ? (snapshot->mqtt_connected ? LCD_GREEN : LCD_RED) : fg;
 
-    ShowAscii(12, 220, "Wi-Fi", fg, bg, 16);
-    ShowChinese(58, 220, snapshot->wifi_connected ? "正常" : "关闭", wifi_color, bg, 16);
-    ShowAscii(170, 220, "MQTT", fg, bg, 16);
-    ShowChinese(210, 220, snapshot->mqtt_connected ? "正常" : "关闭", mqtt_color, bg, 16);
+    ShowAscii(8, 220, "Wi-Fi", fg, bg, 16);
+    ShowChinese(54, 216, snapshot->wifi_connected ? "正常" : "关闭", wifi_color, bg, 24);
+    ShowAscii(164, 220, "MQTT", fg, bg, 16);
+    ShowChinese(210, 216, snapshot->mqtt_connected ? "正常" : "关闭", mqtt_color, bg, 24);
 }
 
 static void ShowAlertContext(const AlarmSnapshot *snapshot, uint16_t fg, uint16_t bg)
@@ -121,14 +137,14 @@ static void ShowAlertContext(const AlarmSnapshot *snapshot, uint16_t fg, uint16_
 
     SafeShortId(station, sizeof(station), snapshot->desired.station_id);
     SafeShortId(alert, sizeof(alert), snapshot->desired.alert_id);
-    ShowChinese(12, 136, "告警", fg, bg, 16);
-    ShowMixedText(58, 136, snapshot->desired.title, fg, bg, 16, 250);
-    ShowChinese(12, 158, "建议", fg, bg, 16);
-    ShowMixedText(58, 158, snapshot->desired.message, fg, bg, 16, 250);
-    ShowChinese(12, 180, "监测", fg, bg, 16);
-    ShowAscii(58, 180, station[0] ? station : "--", fg, bg, 16);
-    ShowAscii(12, 202, "ID", fg, bg, 16);
-    ShowAscii(58, 202, alert[0] ? alert : "--", fg, bg, 16);
+    ShowChinese(8, 112, "告警", fg, bg, 24);
+    ShowMixedText(64, 112, snapshot->desired.title, fg, bg, 24, 240);
+    ShowChinese(8, 138, "建议", fg, bg, 24);
+    ShowMixedText(64, 138, snapshot->desired.message, fg, bg, 24, 240);
+    ShowChinese(8, 164, "监测", fg, bg, 24);
+    ShowAscii(64, 168, station[0] ? station : "--", fg, bg, 16);
+    ShowAscii(8, 194, "ID", fg, bg, 16);
+    ShowAscii(64, 194, alert[0] ? alert : "--", fg, bg, 16);
 }
 
 static void ShowDeviceContext(const AlarmSnapshot *snapshot, uint16_t fg, uint16_t bg)
@@ -137,15 +153,15 @@ static void ShowDeviceContext(const AlarmSnapshot *snapshot, uint16_t fg, uint16
     char line[48];
 
     SafeShortId(device, sizeof(device), TONGXIAO_DEVICE_ID);
-    ShowChinese(12, 136, "设备", fg, bg, 16);
-    ShowAscii(58, 136, device, fg, bg, 16);
-    ShowAscii(12, 158, "FW", fg, bg, 16);
-    ShowAscii(58, 158, TONGXIAO_FIRMWARE_VERSION, fg, bg, 16);
-    ShowAscii(12, 180, "REV", fg, bg, 16);
+    ShowChinese(8, 112, "设备", fg, bg, 24);
+    ShowAscii(64, 116, device, fg, bg, 16);
+    ShowAscii(8, 142, "FW", fg, bg, 16);
+    ShowAscii(64, 142, TONGXIAO_FIRMWARE_VERSION, fg, bg, 16);
+    ShowAscii(8, 168, "REV", fg, bg, 16);
     snprintf(line, sizeof(line), "%llu", (unsigned long long)snapshot->desired.revision);
-    ShowAscii(58, 180, line, fg, bg, 16);
-    ShowChinese(12, 202, "设备状态", fg, bg, 16);
-    ShowChinese(90, 202, StateChinese(snapshot), fg, bg, 16);
+    ShowAscii(64, 168, line, fg, bg, 16);
+    ShowChinese(8, 190, "状态", fg, bg, 24);
+    ShowChinese(64, 190, StateChinese(snapshot), fg, bg, 24);
 }
 
 void AlarmDisplay_Init(void)
@@ -175,37 +191,35 @@ void AlarmDisplay_Render(const AlarmSnapshot *snapshot)
     }
 
     lcd_fill(0, 0, LCD_W, LCD_H, background);
-    ShowChineseCentered(10, "滑坡风险告警", foreground, background, 24);
-    lcd_draw_line(12, 44, 307, 44, foreground);
+    ShowChineseCentered(6, "滑坡风险告警", foreground, background, 24);
+    lcd_draw_line(12, 38, 307, 38, foreground);
 
     if (snapshot->self_test_active || snapshot->desired.display == ALARM_DISPLAY_SELF_TEST) {
-        ShowChineseCentered(58, "设备自检", foreground, background, 24);
-        ShowChineseCentered(90, "振动灯光检测", foreground, background, 24);
+        ShowChineseCentered(46, "设备自检", foreground, background, 24);
+        ShowChineseCentered(76, "振动灯光检测", foreground, background, 24);
     } else if (snapshot->desired.state == ALARM_STATE_ACTIVE) {
-        ShowChinese(44, 54, "风险等级", foreground, background, 16);
-        ShowChinese(124, 50, SeverityChinese(snapshot->desired.severity), foreground, background, 24);
-        ShowChinese(184, 50, "风险", foreground, background, 24);
+        ShowChinese(80, 46, "风险等级", foreground, background, 24);
+        ShowChinese(192, 46, SeverityChinese(snapshot->desired.severity), foreground, background, 24);
         if (snapshot->locally_silenced) {
-            ShowChineseCentered(88, "告警关闭", foreground, background, 24);
-            ShowChineseCentered(112, "风险继续观察", foreground, background, 16);
+            ShowChineseCentered(76, "告警关闭", foreground, background, 24);
         } else {
-            ShowChineseCentered(88,
+            ShowChineseCentered(76,
                 snapshot->desired.severity == ALARM_SEVERITY_CRITICAL ? "紧急撤离" : "准备撤离",
                 foreground, background, 24);
         }
     } else if (snapshot->desired.state == ALARM_STATE_SILENCED) {
-        ShowChineseCentered(58, "告警关闭", foreground, background, 24);
-        ShowChineseCentered(92, "风险继续观察", foreground, background, 24);
+        ShowChineseCentered(46, "告警关闭", foreground, background, 24);
+        ShowChineseCentered(76, "风险继续观察", foreground, background, 24);
     } else if (snapshot->desired.display == ALARM_DISPLAY_ALL_CLEAR) {
-        ShowChineseCentered(58, "风险正常", LCD_GREEN, background, 24);
-        ShowChineseCentered(92, "继续观察", foreground, background, 24);
+        ShowChineseCentered(46, "风险正常", LCD_GREEN, background, 24);
+        ShowChineseCentered(76, "继续观察", foreground, background, 24);
     } else {
-        ShowChineseCentered(58, "设备正常", LCD_GREEN, background, 24);
-        ShowChinese(68, 94, "风险等级", foreground, background, 16);
-        ShowChinese(148, 90, "正常", LCD_GREEN, background, 24);
+        ShowChineseCentered(46, "设备正常", LCD_GREEN, background, 24);
+        ShowChinese(80, 76, "风险等级", foreground, background, 24);
+        ShowChinese(192, 76, "正常", LCD_GREEN, background, 24);
     }
 
-    lcd_draw_line(12, 126, 307, 126, foreground);
+    lcd_draw_line(12, 106, 307, 106, foreground);
     if (HasAlertContext(snapshot)) ShowAlertContext(snapshot, foreground, background);
     else ShowDeviceContext(snapshot, foreground, background);
     ShowProtocolStatus(snapshot, foreground, background);
