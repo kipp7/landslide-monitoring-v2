@@ -166,6 +166,42 @@
       box-shadow: 0 2px 8px rgba(109, 42, 30, 0.42);
     }
 
+    .node-marker {
+      display: grid;
+      width: 30px;
+      height: 30px;
+      place-items: center;
+      border: 2px solid #ffffff;
+      border-radius: 50%;
+      color: #ffffff;
+      background: #477b96;
+      box-shadow: 0 3px 10px rgba(24, 33, 43, 0.34);
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .node-marker--live { background: #3c9d82; }
+    .node-marker--last { background: #477b96; }
+    .node-marker--default { background: #99441f; }
+
+    .node-map-tooltip {
+      border: 0;
+      border-radius: 6px;
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.96);
+      box-shadow: var(--shadow-control);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .node-map-tooltip::before { display: none; }
+
+    .node-map-tooltip__source {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
     @keyframes alert-pulse {
       0% {
         opacity: 0.72;
@@ -244,8 +280,9 @@
       'use strict';
 
       var map = null;
-      var marker = null;
-      var pendingLocation = null;
+      var alertMarker = null;
+      var nodeMarkers = [];
+      var pendingMapState = null;
       var pendingTianDiTuKey = '';
       var tianDiTuLayers = [];
       var tileReady = false;
@@ -359,41 +396,119 @@
         }, 12000);
       }
 
-      function focus(latitude, longitude, zoom) {
-        if (!map || !validCoordinate(latitude, longitude)) return;
-        statusElement.classList.remove('is-visible');
-        var position = [latitude, longitude];
-        if (!marker) {
+      function escapeHtml(value) {
+        return String(value || '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+
+      function sourceLabel(source) {
+        if (source === 'gps-live') return '实时 GPS';
+        if (source === 'gps-last') return '最后有效 GPS';
+        if (source === 'station') return '站点登记位置';
+        return '厦门大学默认位置';
+      }
+
+      function sourceClass(source) {
+        if (source === 'gps-live') return 'live';
+        if (source === 'gps-last') return 'last';
+        if (source === 'default') return 'default';
+        return 'station';
+      }
+
+      function nodeLabel(location, index) {
+        var match = String(location.locationName || '').match(/(?:节点|node)[\s_-]*([a-z])/i);
+        return match ? match[1].toUpperCase() : String(index + 1);
+      }
+
+      function clearNodeMarkers() {
+        nodeMarkers.forEach(function (item) { map.removeLayer(item); });
+        nodeMarkers = [];
+      }
+
+      function renderNodes(locations) {
+        clearNodeMarkers();
+        var points = [];
+        (Array.isArray(locations) ? locations : []).forEach(function (location, index) {
+          var latitude = Number(location.latitude);
+          var longitude = Number(location.longitude);
+          if (!validCoordinate(latitude, longitude)) return;
+          var label = nodeLabel(location, index);
+          var icon = L.divIcon({
+            className: '',
+            html: '<div class="node-marker node-marker--' + sourceClass(location.source) + '">' + label + '</div>',
+            iconSize: [30, 30],
+            iconAnchor: [15, 15]
+          });
+          var nodeMarker = L.marker([latitude, longitude], {
+            icon: icon,
+            keyboard: false,
+            zIndexOffset: 400
+          }).addTo(map);
+          nodeMarker.bindTooltip(
+            '<strong>' + escapeHtml(location.locationName) + '</strong><br>' +
+              '<span class="node-map-tooltip__source">' + sourceLabel(location.source) + '</span>',
+            { className: 'node-map-tooltip', direction: 'top', offset: [0, -12], opacity: 1 }
+          );
+          nodeMarkers.push(nodeMarker);
+          points.push([latitude, longitude]);
+        });
+        return points;
+      }
+
+      function renderAlertMarker(location, visible) {
+        if (!visible || !location || !validCoordinate(Number(location.latitude), Number(location.longitude))) {
+          if (alertMarker) map.removeLayer(alertMarker);
+          alertMarker = null;
+          return null;
+        }
+        var position = [Number(location.latitude), Number(location.longitude)];
+        if (!alertMarker) {
           var icon = L.divIcon({
             className: '',
             html: '<div class="alert-marker" aria-hidden="true"><span class="alert-marker__pulse"></span><span class="alert-marker__core"></span></div>',
             iconSize: [24, 24],
             iconAnchor: [12, 12]
           });
-          marker = L.marker(position, { icon: icon, keyboard: false, zIndexOffset: 800 }).addTo(map);
+          alertMarker = L.marker(position, { icon: icon, keyboard: false, zIndexOffset: 800 }).addTo(map);
         } else {
-          marker.setLatLng(position);
+          alertMarker.setLatLng(position);
         }
-        var targetZoom = Number.isFinite(zoom) ? Math.max(3, Math.min(18, zoom)) : 13;
-        map.flyTo(position, targetZoom, { animate: true, duration: 0.7 });
+        return position;
       }
 
-      window.focusAlert = function (latitude, longitude, zoom) {
-        var lat = Number(latitude);
-        var lng = Number(longitude);
-        var targetZoom = Number(zoom);
-        pendingLocation = [lat, lng, targetZoom];
-        focus(lat, lng, targetZoom);
+      function renderMapState(focusLocation, locations, highlightAlert) {
+        if (!map) return;
+        statusElement.classList.remove('is-visible');
+        var points = renderNodes(locations);
+        var alertPosition = renderAlertMarker(focusLocation, highlightAlert);
+        if (alertPosition) {
+          map.flyTo(alertPosition, 14, { animate: true, duration: 0.7 });
+        } else if (points.length === 1) {
+          map.flyTo(points[0], 14, { animate: true, duration: 0.7 });
+        } else if (points.length > 1) {
+          map.fitBounds(points, { padding: [42, 42], maxZoom: 15, animate: true });
+        } else if (focusLocation && validCoordinate(Number(focusLocation.latitude), Number(focusLocation.longitude))) {
+          map.flyTo([Number(focusLocation.latitude), Number(focusLocation.longitude)], 14, { animate: true, duration: 0.7 });
+        }
+      }
+
+      window.renderMapState = function (focusLocation, locations, highlightAlert, refreshTiles) {
+        pendingMapState = {
+          focusLocation: focusLocation,
+          locations: Array.isArray(locations) ? locations : [],
+          highlightAlert: Boolean(highlightAlert)
+        };
+        renderMapState(pendingMapState.focusLocation, pendingMapState.locations, pendingMapState.highlightAlert);
+        if (refreshTiles && map && !tileReady) loadTianDiTu(pendingTianDiTuKey);
       };
 
       window.configureTianDiTu = function (key) {
         pendingTianDiTuKey = typeof key === 'string' ? key.trim() : '';
         if (map) loadTianDiTu(pendingTianDiTuKey);
-      };
-
-      window.refreshAlertMap = function (latitude, longitude, zoom) {
-        window.focusAlert(latitude, longitude, zoom);
-        if (map && !tileReady) loadTianDiTu(pendingTianDiTuKey);
       };
 
       function initialise() {
@@ -414,8 +529,8 @@
         document.getElementById('zoom-in').addEventListener('click', function () { map.zoomIn(); });
         document.getElementById('zoom-out').addEventListener('click', function () { map.zoomOut(); });
 
-        if (pendingLocation) {
-          focus(pendingLocation[0], pendingLocation[1], pendingLocation[2]);
+        if (pendingMapState) {
+          renderMapState(pendingMapState.focusLocation, pendingMapState.locations, pendingMapState.highlightAlert);
         } else {
           map.setView([24.43803, 118.09631], 14);
         }

@@ -9,23 +9,27 @@ const MAP_BROWSER_USER_AGENT: string =
 
 @Component
 export struct AlertMapView {
-  @Prop @Watch('onLocationChanged') location: AlertMapLocation;
+  @Prop @Watch('onMapStateChanged') location: AlertMapLocation;
+  @Prop @Watch('onMapStateChanged') locations: Array<AlertMapLocation>;
+  @Prop @Watch('onMapStateChanged') highlightAlert: boolean;
   onRelocate: () => void = () => {};
   @State private pageReady: boolean = false;
   @State private mapError: string = '';
   private controller: webview.WebviewController = new webview.WebviewController();
   private webReady: boolean = false;
 
-  private focusScript(): string {
-    return `window.focusAlert(${this.location.latitude}, ${this.location.longitude}, 14);`;
+  private mapStateScript(refreshTiles: boolean = false): string {
+    const focus = JSON.stringify(this.location);
+    const locations = JSON.stringify(this.locations);
+    return `window.renderMapState(${focus}, ${locations}, ${this.highlightAlert}, ${refreshTiles});`;
   }
 
   private initialiseScript(): string {
-    return `window.configureTianDiTu('${TIAN_DI_TU_BROWSER_KEY}');${this.focusScript()}`;
+    return `window.configureTianDiTu('${TIAN_DI_TU_BROWSER_KEY}');${this.mapStateScript()}`;
   }
 
   private refreshScript(): string {
-    return `window.refreshAlertMap(${this.location.latitude}, ${this.location.longitude}, 14);`;
+    return this.mapStateScript(true);
   }
 
   private initialiseMap(): void {
@@ -49,16 +53,12 @@ export struct AlertMapView {
       });
   }
 
-  private focusAlert(): void {
-    this.runMapScript(this.focusScript());
-  }
-
   private refreshAlert(): void {
     this.runMapScript(this.refreshScript());
   }
 
-  private onLocationChanged(): void {
-    this.focusAlert();
+  private onMapStateChanged(): void {
+    this.runMapScript(this.mapStateScript());
   }
 
   build() {

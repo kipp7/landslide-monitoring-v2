@@ -80,6 +80,7 @@ struct Index {
   @State private alertRefreshing: boolean = false;
   @State private alertMapAlert: Alert | null = null;
   @State private alertMapLocation: AlertMapLocation | null = null;
+  @State private alertMapLocations: Array<AlertMapLocation> = [];
   @State private alertMapLoading: boolean = false;
   @State private appVisible: boolean = true;
 
@@ -766,6 +767,7 @@ struct Index {
     this.alertMapAlert = alert;
     if (!preserveCurrentMap || !this.alertMapLocation) {
       this.alertMapLocation = null;
+      this.alertMapLocations = [];
       this.alertMapLoading = true;
     }
     this.screen = 'alert-map';
@@ -801,7 +803,18 @@ struct Index {
       this.alertLocationRepository = new AlertLocationRepository(this.api, this.cache);
     }
     if (this.alertLocationRepository) {
-      const resolved = await this.alertLocationRepository.resolve(alert, events, stations, devices);
+      const monitoringDevices: Array<Device> = [];
+      for (let index = 0; index < devices.length; index++) {
+        if (devices[index].status.toLowerCase() === 'revoked' || isAlarmActuatorDevice(devices[index])) continue;
+        monitoringDevices.push(devices[index]);
+      }
+      const locations = await this.alertLocationRepository.resolveNodes(monitoringDevices);
+      this.alertMapLocations = locations;
+      const resolved = alert
+        ? await this.alertLocationRepository.resolve(alert, events, stations, monitoringDevices)
+        : locations.length > 0
+          ? locations[0]
+          : await this.alertLocationRepository.resolve(null, [], stations, []);
       if (resolved || !preserveCurrentMap) this.alertMapLocation = resolved;
     }
     this.alertMapLoading = false;
@@ -965,6 +978,7 @@ struct Index {
             AlertMapPane({
               alert: this.alertMapAlert,
               location: this.alertMapLocation,
+              locations: this.alertMapLocations,
               loading: this.alertMapLoading,
               active: this.appVisible,
               onBack: () => this.closeAlertMap(),
@@ -2564,12 +2578,14 @@ struct AlertsPane {
 struct AlertMapPane {
   @Prop alert: Alert | null;
   @Prop location: AlertMapLocation | null;
+  @Prop locations: Array<AlertMapLocation>;
   @Prop loading: boolean;
   @Prop active: boolean;
   onBack: () => void = () => {};
   onRetry: () => void = () => {};
 
   private sourceTone(): string {
+    if (!this.alert) return '#477B96';
     if (!this.location) return UI_COLOR_MUTED;
     if (this.location.source === 'alert') return UI_COLOR_DANGER;
     if (this.location.source === 'gps-live') return UI_COLOR_SUCCESS;
@@ -2582,7 +2598,28 @@ struct AlertMapPane {
   }
 
   private alertTitle(): string {
-    return this.alert?.title || '当前无活动告警';
+    return this.alert?.title || '全部监测节点';
+  }
+
+  private sourceCount(source: string): number {
+    let count = 0;
+    for (let index = 0; index < this.locations.length; index++) {
+      if (this.locations[index].source === source) count++;
+    }
+    return count;
+  }
+
+  private nodeSummary(): string {
+    const live = this.sourceCount('gps-live');
+    const last = this.sourceCount('gps-last');
+    const registered = this.sourceCount('station');
+    const fallback = this.sourceCount('default');
+    const parts: Array<string> = [];
+    if (live > 0) parts.push(`实时 ${live}`);
+    if (last > 0) parts.push(`最后位置 ${last}`);
+    if (registered > 0) parts.push(`站点坐标 ${registered}`);
+    if (fallback > 0) parts.push(`默认位置 ${fallback}`);
+    return parts.length > 0 ? parts.join(' · ') : '节点位置待确认';
   }
 
   private coordinateText(): string {
@@ -2606,7 +2643,9 @@ struct AlertMapPane {
             .fontSize(20)
             .fontWeight(FontWeight.Bold)
             .fontColor(UI_COLOR_TEXT)
-          Text(this.location ? alertLocationSourceLabel(this.location.source) : '正在解析位置')
+          Text(this.alert
+            ? this.location ? alertLocationSourceLabel(this.location.source) : '正在解析位置'
+            : `${this.locations.length} 个监测节点`)
             .fontSize(11)
             .fontColor(this.sourceTone())
         }
@@ -2624,7 +2663,7 @@ struct AlertMapPane {
             .width(30)
             .height(30)
             .color(UI_COLOR_ACCENT)
-          Text('正在定位告警位置')
+          Text(this.alert ? '正在定位告警位置' : '正在读取节点位置')
             .fontSize(14)
             .fontWeight(FontWeight.Medium)
             .fontColor(UI_COLOR_TEXT)
@@ -2637,6 +2676,8 @@ struct AlertMapPane {
           if (this.active) {
             AlertMapView({
               location: this.location as AlertMapLocation,
+              locations: this.locations,
+              highlightAlert: this.alert !== null,
               onRelocate: () => this.onRetry()
             })
           } else {
@@ -2648,15 +2689,15 @@ struct AlertMapPane {
 
           Column({ space: 10 }) {
             Row() {
-              Text(alertLocationSourceLabel(this.location.source))
+              Text(this.alert ? alertLocationSourceLabel(this.location.source) : '节点总览')
                 .fontSize(11)
                 .fontWeight(FontWeight.Medium)
                 .fontColor(this.sourceTone())
                 .padding({ left: 8, right: 8, top: 4, bottom: 4 })
-                .backgroundColor(this.location.source === 'default' ? '#FFF1EA' : '#EEF2F0')
+                .backgroundColor(this.alert && this.location.source === 'default' ? '#FFF1EA' : '#EEF2F0')
                 .borderRadius(4)
               Blank().layoutWeight(1)
-              Text(this.alert ? severityLabel(this.alert.severity) : '预览')
+              Text(this.alert ? severityLabel(this.alert.severity) : `共 ${this.locations.length} 个`)
                 .fontSize(11)
                 .fontWeight(FontWeight.Medium)
                 .fontColor(this.alert ? UI_COLOR_DANGER : UI_COLOR_MAP_MUTED)
@@ -2671,7 +2712,7 @@ struct AlertMapPane {
             Row({ space: 8 }) {
               Circle({ width: 8, height: 8 })
                 .fill(this.sourceTone())
-              Text(this.location.locationName)
+              Text(this.alert ? this.location.locationName : 'A / B / C 节点位置')
                 .fontSize(13)
                 .fontWeight(FontWeight.Medium)
                 .fontColor('#52606D')
@@ -2679,13 +2720,19 @@ struct AlertMapPane {
                 .maxLines(1)
                 .textOverflow({ overflow: TextOverflow.Ellipsis })
             }
-            Text(this.coordinateText())
-              .fontSize(16)
-              .fontWeight(FontWeight.Medium)
-              .fontColor(UI_COLOR_TEXT)
-            Text(this.updatedText())
-              .fontSize(11)
-              .fontColor(UI_COLOR_MAP_MUTED)
+            if (this.alert) {
+              Text(this.coordinateText())
+                .fontSize(16)
+                .fontWeight(FontWeight.Medium)
+                .fontColor(UI_COLOR_TEXT)
+              Text(this.updatedText())
+                .fontSize(11)
+                .fontColor(UI_COLOR_MAP_MUTED)
+            } else {
+              Text(this.nodeSummary())
+                .fontSize(13)
+                .fontColor(UI_COLOR_MAP_MUTED)
+            }
           }
           .width('100%')
           .padding({ left: 18, right: 18, top: 14, bottom: 18 })
