@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>告警地图</title>
+  <link rel="stylesheet" href="leaflet.css">
+  <style>
+    :root {
+      --surface: #eef2f0;
+      --surface-raised: #ffffff;
+      --text: #18212b;
+      --muted: #56616c;
+      --border: #d7dfdb;
+      --danger: #b44832;
+      --shadow-control: 0 4px 14px rgba(24, 33, 43, 0.16);
+      --space-sm: 8px;
+      --space-md: 12px;
+      --details-reserved: 220px;
+    }
+
+    * {
+      box-sizing: border-box;
+      letter-spacing: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: var(--surface);
+    }
+
+    #map {
+      width: 100%;
+      height: calc(100% - var(--details-reserved));
+      background: var(--surface);
+    }
+
+    body {
+      color: var(--text);
+      font-family: "HarmonyOS Sans SC", "Noto Sans SC", sans-serif;
+    }
+
+    .leaflet-container {
+      position: relative;
+      overflow: hidden;
+      background: var(--surface);
+      font-family: inherit;
+    }
+
+    .leaflet-pane,
+    .leaflet-tile,
+    .leaflet-marker-icon,
+    .leaflet-marker-shadow,
+    .leaflet-tile-container,
+    .leaflet-pane > svg,
+    .leaflet-pane > canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    .leaflet-pane { z-index: 400; }
+    .leaflet-tile-pane { z-index: 200; }
+    .leaflet-overlay-pane { z-index: 400; }
+    .leaflet-shadow-pane { z-index: 500; }
+    .leaflet-marker-pane { z-index: 600; }
+    .leaflet-tooltip-pane { z-index: 650; }
+    .leaflet-popup-pane { z-index: 700; }
+
+    .leaflet-tile {
+      visibility: hidden;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+
+    .leaflet-tile-loaded {
+      visibility: inherit;
+    }
+
+    .leaflet-zoom-animated {
+      transform-origin: 0 0;
+    }
+
+    .leaflet-container.leaflet-touch-drag {
+      touch-action: pinch-zoom;
+    }
+
+    .leaflet-container.leaflet-touch-drag.leaflet-touch-zoom {
+      touch-action: none;
+    }
+
+    .map-zoom {
+      position: absolute;
+      z-index: 1001;
+      top: var(--space-md);
+      left: var(--space-md);
+      display: flex;
+      overflow: hidden;
+      flex-direction: column;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      background: var(--surface-raised);
+      box-shadow: var(--shadow-control);
+    }
+
+    .map-zoom button {
+      width: 44px;
+      height: 44px;
+      padding: 0;
+      border: 0;
+      color: var(--text);
+      background: var(--surface-raised);
+      font-family: inherit;
+      font-size: 22px;
+      line-height: 44px;
+    }
+
+    .map-zoom button + button {
+      border-top: 1px solid var(--border);
+    }
+
+    .map-zoom button:active {
+      background: #e8eeeb;
+    }
+
+    .map-zoom button:focus-visible {
+      outline: 2px solid #477b96;
+      outline-offset: -3px;
+    }
+
+    .alert-marker {
+      position: relative;
+      width: 24px;
+      height: 24px;
+    }
+
+    .alert-marker__pulse,
+    .alert-marker__pulse::after {
+      position: absolute;
+      inset: 0;
+      content: "";
+      border: 2px solid var(--danger);
+      border-radius: 50%;
+      opacity: 0;
+      animation: alert-pulse 2.4s cubic-bezier(0.2, 0.7, 0.3, 1) infinite;
+    }
+
+    .alert-marker__pulse::after {
+      animation-delay: 1.2s;
+    }
+
+    .alert-marker__core {
+      position: absolute;
+      top: 7px;
+      left: 7px;
+      width: 10px;
+      height: 10px;
+      border: 2px solid var(--surface-raised);
+      border-radius: 50%;
+      background: var(--danger);
+      box-shadow: 0 2px 8px rgba(109, 42, 30, 0.42);
+    }
+
+    @keyframes alert-pulse {
+      0% {
+        opacity: 0.72;
+        transform: scale(0.55);
+      }
+      72%,
+      100% {
+        opacity: 0;
+        transform: scale(3.6);
+      }
+    }
+
+    .map-status {
+      position: absolute;
+      z-index: 1000;
+      top: var(--space-md);
+      left: 56px;
+      right: 68px;
+      display: none;
+      min-height: 36px;
+      align-items: center;
+      padding: var(--space-sm) var(--space-md);
+      border: 1px solid #ead3cc;
+      border-radius: 7px;
+      color: #7e3527;
+      background: rgba(255, 248, 245, 0.96);
+      box-shadow: var(--shadow-control);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .map-status.is-visible {
+      display: flex;
+    }
+
+    .map-loading {
+      position: absolute;
+      z-index: 999;
+      top: 46%;
+      left: 50%;
+      padding: var(--space-sm) var(--space-md);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.94);
+      box-shadow: var(--shadow-control);
+      font-size: 12px;
+      transform: translate(-50%, -50%);
+    }
+
+    .map-loading.is-hidden {
+      display: none;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .alert-marker__pulse,
+      .alert-marker__pulse::after {
+        opacity: 0.45;
+        animation: none;
+        transform: scale(1.5);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="map" role="application" aria-label="告警位置地图"></div>
+  <div id="map-loading" class="map-loading" role="status">正在加载天地图卫星影像</div>
+  <div id="map-zoom" class="map-zoom" aria-label="地图缩放">
+    <button id="zoom-in" type="button" aria-label="放大">+</button>
+    <button id="zoom-out" type="button" aria-label="缩小">−</button>
+  </div>
+  <div id="map-status" class="map-status" role="status">地图底图加载失败，告警坐标仍可查看</div>
+  <script src="leaflet.js"></script>
+  <script>
+    (function () {
+      'use strict';
+
+      var map = null;
+      var marker = null;
+      var pendingLocation = null;
+      var pendingTianDiTuKey = '';
+      var tianDiTuLayers = [];
+      var tileReady = false;
+      var tileFailureCount = 0;
+      var tileTimeout = null;
+      var statusElement = document.getElementById('map-status');
+      var loadingElement = document.getElementById('map-loading');
+      var zoomElement = document.getElementById('map-zoom');
+
+      function validCoordinate(latitude, longitude) {
+        return Number.isFinite(latitude) && Number.isFinite(longitude) &&
+          latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude < 180 &&
+          !(Math.abs(latitude) < 0.000001 && Math.abs(longitude) < 0.000001);
+      }
+
+      function showStatus(message) {
+        loadingElement.classList.add('is-hidden');
+        statusElement.textContent = message;
+        statusElement.classList.add('is-visible');
+        document.title = 'map-status';
+      }
+
+      function clearTileTimeout() {
+        if (tileTimeout !== null) {
+          window.clearTimeout(tileTimeout);
+          tileTimeout = null;
+        }
+      }
+
+      function markTileReady() {
+        if (!tileReady) {
+          tileReady = true;
+          clearTileTimeout();
+          loadingElement.classList.add('is-hidden');
+          statusElement.classList.remove('is-visible');
+          document.title = 'map-ready';
+        }
+      }
+
+      function noteTileFailure() {
+        tileFailureCount += 1;
+        if (!tileReady && tileFailureCount >= 4) {
+          clearTileTimeout();
+          showStatus('天地图影像加载失败，告警坐标仍可查看');
+        }
+      }
+
+      function tianDiTuTileUrl(layer, key, coords, zoom, host) {
+        return 'https://t' + host + '.tianditu.gov.cn/DataServer?T=' + layer +
+          '_w&x=' + coords.x + '&y=' + coords.y + '&l=' + zoom + '&tk=' + encodeURIComponent(key);
+      }
+
+      function createTianDiTuLayer(layer, key, options) {
+        var TianDiTuLayer = L.TileLayer.extend({
+          getTileUrl: function (coords) {
+            var host = Math.abs(coords.x + coords.y) % 8;
+            var zoom = this._getZoomForUrl();
+            return tianDiTuTileUrl(layer, key, coords, zoom, host);
+          }
+        });
+        return new TianDiTuLayer('', options);
+      }
+
+      function retryTile(event, tileLayer, layer, key) {
+        var retries = Number(event.tile.getAttribute('data-tdt-retries') || '0') + 1;
+        if (retries >= 8) {
+          noteTileFailure();
+          return;
+        }
+        event.tile.setAttribute('data-tdt-retries', String(retries));
+        var firstHost = Math.abs(event.coords.x + event.coords.y) % 8;
+        var nextHost = (firstHost + retries) % 8;
+        event.tile.src = tianDiTuTileUrl(layer, key, event.coords, tileLayer._getZoomForUrl(), nextHost);
+      }
+
+      function loadTianDiTu(key) {
+        if (!map) return;
+        tianDiTuLayers.forEach(function (layer) { map.removeLayer(layer); });
+        tianDiTuLayers = [];
+        clearTileTimeout();
+        tileReady = false;
+        tileFailureCount = 0;
+        statusElement.classList.remove('is-visible');
+        loadingElement.textContent = '正在加载天地图卫星影像';
+        loadingElement.classList.remove('is-hidden');
+
+        if (!key) {
+          showStatus('地图服务未配置，告警坐标仍可查看');
+          return;
+        }
+
+        var options = {
+          minZoom: 3,
+          maxZoom: 18,
+          maxNativeZoom: 18,
+          updateWhenIdle: true,
+          keepBuffer: 3
+        };
+        var imagery = createTianDiTuLayer('img', key, options);
+        var labels = createTianDiTuLayer('cia', key, options);
+        imagery.on('tileload', markTileReady);
+        imagery.on('load', markTileReady);
+        imagery.on('tileerror', function (event) { retryTile(event, imagery, 'img', key); });
+        labels.on('tileerror', function (event) { retryTile(event, labels, 'cia', key); });
+        imagery.addTo(map);
+        labels.addTo(map);
+        imagery.bringToBack();
+        tianDiTuLayers = [imagery, labels];
+        tileTimeout = window.setTimeout(function () {
+          if (!tileReady) showStatus('天地图影像加载超时，告警坐标仍可查看');
+        }, 12000);
+      }
+
+      function focus(latitude, longitude, zoom) {
+        if (!map || !validCoordinate(latitude, longitude)) return;
+        statusElement.classList.remove('is-visible');
+        var position = [latitude, longitude];
+        if (!marker) {
+          var icon = L.divIcon({
+            className: '',
+            html: '<div class="alert-marker" aria-hidden="true"><span class="alert-marker__pulse"></span><span class="alert-marker__core"></span></div>',
+            iconSize: [24, 24],
+            iconAnchor: [12, 12]
+          });
+          marker = L.marker(position, { icon: icon, keyboard: false, zIndexOffset: 800 }).addTo(map);
+        } else {
+          marker.setLatLng(position);
+        }
+        var targetZoom = Number.isFinite(zoom) ? Math.max(3, Math.min(18, zoom)) : 13;
+        map.flyTo(position, targetZoom, { animate: true, duration: 0.7 });
+      }
+
+      window.focusAlert = function (latitude, longitude, zoom) {
+        var lat = Number(latitude);
+        var lng = Number(longitude);
+        var targetZoom = Number(zoom);
+        pendingLocation = [lat, lng, targetZoom];
+        focus(lat, lng, targetZoom);
+      };
+
+      window.configureTianDiTu = function (key) {
+        pendingTianDiTuKey = typeof key === 'string' ? key.trim() : '';
+        if (map) loadTianDiTu(pendingTianDiTuKey);
+      };
+
+      window.refreshAlertMap = function (latitude, longitude, zoom) {
+        window.focusAlert(latitude, longitude, zoom);
+        if (map && !tileReady) loadTianDiTu(pendingTianDiTuKey);
+      };
+
+      function initialise() {
+        if (typeof L === 'undefined') {
+          showStatus('地图组件加载失败，告警坐标仍可查看');
+          return;
+        }
+
+        map = L.map('map', {
+          zoomControl: false,
+          attributionControl: false,
+          minZoom: 3,
+          maxZoom: 18,
+          preferCanvas: true
+        });
+        L.DomEvent.disableClickPropagation(zoomElement);
+        L.DomEvent.disableScrollPropagation(zoomElement);
+        document.getElementById('zoom-in').addEventListener('click', function () { map.zoomIn(); });
+        document.getElementById('zoom-out').addEventListener('click', function () { map.zoomOut(); });
+
+        if (pendingLocation) {
+          focus(pendingLocation[0], pendingLocation[1], pendingLocation[2]);
+        } else {
+          map.setView([22.68313880324831, 110.19415268685714], 12);
+        }
+        if (pendingTianDiTuKey) loadTianDiTu(pendingTianDiTuKey);
+      }
+
+      window.addEventListener('load', initialise, { once: true });
+    }());
+  </script>
+</body>
+</html>

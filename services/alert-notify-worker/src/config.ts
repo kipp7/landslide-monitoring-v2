@@ -8,6 +8,14 @@ function optionalNonEmptyString() {
   }, z.string().min(1).optional());
 }
 
+function optionalNonEmptyUrl() {
+  return z.preprocess((v) => {
+    if (typeof v !== "string") return v;
+    const trimmed = v.trim();
+    return trimmed.length === 0 ? undefined : trimmed;
+  }, z.string().url().optional());
+}
+
 const configSchema = z.object({
   serviceName: z.string().default("alert-notify-worker"),
 
@@ -40,7 +48,17 @@ const configSchema = z.object({
   smsAliyunAccessKeySecret: optionalNonEmptyString(),
   smsAliyunEndpoint: z.string().default("dysmsapi.aliyuncs.com"),
   smsAliyunSignName: optionalNonEmptyString(),
-  smsAliyunTemplateCode: optionalNonEmptyString()
+  smsAliyunTemplateCode: optionalNonEmptyString(),
+  huaweiPushEnabled: z
+    .string()
+    .optional()
+    .transform((v) => (v ?? "false").toLowerCase())
+    .pipe(z.enum(["true", "false"]))
+    .transform((v) => v === "true"),
+  huaweiPushTokenUrl: z.string().url().default("https://oauth-login.cloud.huawei.com/oauth2/v3/token"),
+  huaweiPushSendUrl: optionalNonEmptyUrl(),
+  huaweiPushClientId: optionalNonEmptyString(),
+  huaweiPushClientSecret: optionalNonEmptyString()
 });
 
 export type AppConfig = z.infer<typeof configSchema>;
@@ -70,6 +88,11 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
     smsAliyunAccessKeySecret: env.SMS_ALIYUN_ACCESS_KEY_SECRET,
     smsAliyunEndpoint: env.SMS_ALIYUN_ENDPOINT,
     smsAliyunSignName: env.SMS_ALIYUN_SIGN_NAME,
-    smsAliyunTemplateCode: env.SMS_ALIYUN_TEMPLATE_CODE
+    smsAliyunTemplateCode: env.SMS_ALIYUN_TEMPLATE_CODE,
+    huaweiPushEnabled: env.HUAWEI_PUSH_ENABLED,
+    huaweiPushTokenUrl: env.HUAWEI_PUSH_TOKEN_URL,
+    huaweiPushSendUrl: env.HUAWEI_PUSH_SEND_URL,
+    huaweiPushClientId: env.HUAWEI_PUSH_CLIENT_ID,
+    huaweiPushClientSecret: env.HUAWEI_PUSH_CLIENT_SECRET
   });
 }

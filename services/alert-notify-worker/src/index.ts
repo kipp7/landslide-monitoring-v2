@@ -6,6 +6,7 @@ import { Kafka, logLevel } from "kafkajs";
 import { Pool } from "pg";
 import path from "node:path";
 import { loadConfigFromEnv } from "./config";
+import { HuaweiPushProvider } from "./huawei-push-provider";
 import { createSmsProvider } from "./sms-provider";
 
 type AlertEventV1 = {
@@ -58,15 +59,15 @@ function shouldNotify(ev: AlertEventV1): boolean {
 }
 
 function buildNotification(ev: AlertEventV1): BuiltNotification {
-  const title = `告警：${ev.alert_id}`;
-  const content =
-    `eventType=${ev.event_type}\n` +
-    `severity=${ev.severity}\n` +
-    (ev.device_id ? `deviceId=${ev.device_id}\n` : "") +
-    (ev.station_id ? `stationId=${ev.station_id}\n` : "") +
-    `ruleId=${ev.rule_id}\n` +
-    `ruleVersion=${String(ev.rule_version)}\n` +
-    `createdTs=${ev.created_ts}\n`;
+  const severityNames: Record<Severity, string> = {
+    low: "提示",
+    medium: "关注",
+    high: "高风险",
+    critical: "严重"
+  };
+  const severityName = severityNames[ev.severity];
+  const title = `${severityName}监测告警`;
+  const content = `监测数据达到${severityName}预警条件，请及时查看告警位置与详情。`;
   return { title, content };
 }
 
@@ -275,6 +276,7 @@ async function main(): Promise<void> {
 
   const pg = createPgPool(config);
   const smsProvider = createSmsProvider(config);
+  const huaweiPushProvider = new HuaweiPushProvider(config);
   const contactLibraryEnabled =
     config.notifyType === "sms" && (config.smsRecipientMode === "contact_library" || config.smsRecipientMode === "both");
   const contactLibraryAvailable = contactLibraryEnabled ? await hasContactLibrary(pg) : false;
@@ -285,6 +287,7 @@ async function main(): Promise<void> {
       notifyType: config.notifyType,
       smsRecipientMode: config.smsRecipientMode,
       smsProvider: smsProvider.providerName,
+      huaweiPushConfigured: huaweiPushProvider.isConfigured(),
       contactLibraryAvailable
     },
     "alert-notify-worker started"
@@ -368,7 +371,7 @@ async function main(): Promise<void> {
                 continue;
               }
 
-              await pg.query(
+              const notificationResult = await pg.query<{ notification_id: string }>(
                 `
                   INSERT INTO alert_notifications (
                     event_id, user_id, notify_type, status, title, content
@@ -378,9 +381,62 @@ async function main(): Promise<void> {
                     SELECT 1 FROM alert_notifications
                     WHERE event_id = $1::uuid AND user_id = $2::uuid AND notify_type = $3::varchar
                   )
+                  RETURNING notification_id
                 `,
                 [ev.event_id, sub.user_id, config.notifyType, n.title, n.content]
               );
+
+              const notificationId = notificationResult.rows[0]?.notification_id;
+              if (notificationId && config.notifyType === "app" && huaweiPushProvider.isConfigured()) {
+                const tokenResult = await pg.query<{ push_token: string }>(
+                  `
+                    SELECT push_token
+                    FROM app_push_devices
+                    WHERE user_id = $1::uuid AND is_active = TRUE
+                    ORDER BY last_registered_at DESC
+                  `,
+                  [sub.user_id]
+                );
+                if (tokenResult.rows.length > 0) {
+                  try {
+                    const pushResult = await huaweiPushProvider.send(
+                      tokenResult.rows.map((row) => row.push_token),
+                      {
+                        eventId: ev.event_id,
+                        alertId: ev.alert_id,
+                        eventType: ev.event_type,
+                        severity: ev.severity,
+                        title: n.title,
+                        content: n.content,
+                        deviceId: ev.device_id,
+                        stationId: ev.station_id
+                      }
+                    );
+                    await pg.query(
+                      `
+                        UPDATE alert_notifications
+                        SET status = 'sent', sent_at = NOW(), error_message = NULL
+                        WHERE notification_id = $1::uuid
+                      `,
+                      [notificationId]
+                    );
+                    logger.info(
+                      { traceId, notificationId, providerMessageId: pushResult.providerMessageId },
+                      "HarmonyOS push sent"
+                    );
+                  } catch (error) {
+                    await pg.query(
+                      `
+                        UPDATE alert_notifications
+                        SET status = 'failed', error_message = $2, retry_count = retry_count + 1
+                        WHERE notification_id = $1::uuid
+                      `,
+                      [notificationId, error instanceof Error ? error.message.slice(0, 2000) : "Huawei Push Kit failed"]
+                    );
+                    logger.error({ traceId, notificationId, err: error }, "HarmonyOS push failed");
+                  }
+                }
+              }
             }
           }
 
