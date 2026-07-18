@@ -30,6 +30,46 @@ cloud installer keeps an SSH-only accept rule before the YunJing input jump and
 hardens sshd to public-key authentication for the named admin and tunnel users.
 It does not bypass filtering for MQTT, API, database, or other host ports.
 
+## Cold-Boot Baseline
+
+A five-cycle physical power-off/power-on acceptance run on the reference
+RK3568 and EC200A hardware produced the following baseline:
+
+- the outbound MQTT connection was available in `24.7-24.9 s` on four cycles;
+- one cycle needed `55.7 s` to become stable after a stale reverse-forward
+  listener from the previous abrupt power loss was released and retried;
+- the modem was registered and attached before the periodic readiness check
+  reported an explicit `SIM READY` at about `144 s`;
+- no cycle issued an EC200A `AT+CFUN=1,1` reset.
+
+The first readiness check may report `sim_not_ready` while the module is still
+initializing. That is a normal startup wait, not a recovery action. Recovery is
+used only after the configured repeated-failure threshold is reached. Data can
+already be flowing before the slower periodic diagnostic records explicit SIM
+readiness.
+
+## Replacing the SIM
+
+Power the RK3568 and EC200A off before inserting or removing a SIM. Do not rely
+on hot-swap behavior during a field deployment.
+
+A China Mobile consumer phone SIM normally uses the same `cmnet` APN as the
+reference China Mobile IoT SIM, so it usually works without changing the
+application or cloud host. Before using a replacement SIM:
+
+- activate mobile data and verify the plan has remaining traffic;
+- disable the SIM PIN in a phone, because the guardian does not store or enter
+  a PIN;
+- confirm the subscription has no device/IMEI restriction or private APN;
+- perform a cold boot and verify registration, attach, MQTT, and API reachability
+  from the status files below.
+
+Carrier-grade NAT does not prevent this deployment from working because MQTT,
+API traffic, and the reverse tunnel are outbound connections from the RK3568.
+If a replacement SIM requires an APN other than `cmnet`, update
+`EXPECTED_APN` in `/etc/lsmv2/rk3568-cellular-modem-ensure.env`, then restart
+the modem readiness service and validate the new profile before competition.
+
 ## Install
 
 Install modem readiness checks on the RK3568:
