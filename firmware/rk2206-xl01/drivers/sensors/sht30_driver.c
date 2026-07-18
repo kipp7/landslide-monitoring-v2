@@ -26,6 +26,30 @@
 #define SHT30_CMD_MEASURE   0x2C06      // High precision measurement
 #define SHT30_CMD_RESET     0x30A2      // Soft reset
 
+static uint8_t SHT30_Crc8(const uint8_t *data, unsigned int len)
+{
+    uint8_t crc = 0xFF;
+    unsigned int i;
+    unsigned int bit;
+
+    if (data == NULL) {
+        return 0;
+    }
+
+    for (i = 0; i < len; ++i) {
+        crc ^= data[i];
+        for (bit = 0; bit < 8; ++bit) {
+            if ((crc & 0x80U) != 0U) {
+                crc = (uint8_t)((crc << 1) ^ 0x31U);
+            } else {
+                crc <<= 1;
+            }
+        }
+    }
+
+    return crc;
+}
+
 int SHT30_Init(void)
 {
     printf("[SHT30] Initializing...\n");
@@ -48,6 +72,10 @@ int SHT30_Read(float *temp, float *humi)
 {
     uint8_t cmd[2] = {(SHT30_CMD_MEASURE >> 8) & 0xFF, SHT30_CMD_MEASURE & 0xFF};
     uint8_t buffer[6];
+
+    if (temp == NULL || humi == NULL) {
+        return -10;
+    }
     
     // Send measurement command
     unsigned int ret = IoTI2cWrite(I2C_IDX, SHT30_I2C_ADDR, cmd, 2);
@@ -63,6 +91,12 @@ int SHT30_Read(float *temp, float *humi)
     if (ret != IOT_SUCCESS) {
         return -2;
     }
+
+    if (SHT30_Crc8(&buffer[0], 2) != buffer[2] ||
+        SHT30_Crc8(&buffer[3], 2) != buffer[5]) {
+        printf("[WARN] SHT30 CRC mismatch\n");
+        return -3;
+    }
     
     // Parse data
     uint16_t temp_raw = (buffer[0] << 8) | buffer[1];
@@ -71,6 +105,6 @@ int SHT30_Read(float *temp, float *humi)
     // Convert to physical values
     *temp = -45.0f + 175.0f * temp_raw / 65535.0f;
     *humi = 100.0f * humi_raw / 65535.0f;
-    
+
     return 0;
 }
