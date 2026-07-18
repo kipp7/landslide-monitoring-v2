@@ -8,9 +8,33 @@
 
 static bool g_lcd_ready;
 
-static void Show(uint16_t x, uint16_t y, const char *text, uint16_t fg, uint16_t bg, uint8_t size)
+static void ShowAscii(uint16_t x, uint16_t y, const char *text, uint16_t fg, uint16_t bg, uint8_t size)
 {
     lcd_show_string(x, y, (const uint8_t *)text, fg, bg, size, 0);
+}
+
+static void ShowChinese(uint16_t x, uint16_t y, const char *text, uint16_t fg, uint16_t bg, uint8_t size)
+{
+    lcd_show_chinese(x, y, (uint8_t *)text, fg, bg, size, 0);
+}
+
+static void ShowChineseCentered(uint16_t y, const char *text, uint16_t fg, uint16_t bg, uint8_t size)
+{
+    size_t characters = strlen(text) / 3U;
+    uint16_t width = (uint16_t)(characters * size);
+    uint16_t x = width < LCD_W ? (uint16_t)((LCD_W - width) / 2U) : 0;
+    ShowChinese(x, y, text, fg, bg, size);
+}
+
+static const char *SeverityChinese(AlarmSeverity severity)
+{
+    switch (severity) {
+        case ALARM_SEVERITY_LOW: return "低";
+        case ALARM_SEVERITY_MEDIUM: return "中";
+        case ALARM_SEVERITY_HIGH: return "高";
+        case ALARM_SEVERITY_CRITICAL: return "极高";
+        default: return "正常";
+    }
 }
 
 static void SafeAscii(char *target, size_t target_size, const char *source)
@@ -39,10 +63,13 @@ void AlarmDisplay_Render(const AlarmSnapshot *snapshot)
     char alert[25];
 
     if (!g_lcd_ready || snapshot == NULL) return;
-    if (snapshot->desired.state == ALARM_STATE_ACTIVE) {
+    if (snapshot->self_test_active || snapshot->desired.display == ALARM_DISPLAY_SELF_TEST) {
+        background = LCD_BLUE;
+        foreground = LCD_WHITE;
+    } else if (snapshot->desired.state == ALARM_STATE_ACTIVE && !snapshot->locally_silenced) {
         background = LCD_RED;
         foreground = LCD_WHITE;
-    } else if (snapshot->desired.state == ALARM_STATE_SILENCED) {
+    } else if (snapshot->desired.state == ALARM_STATE_SILENCED || snapshot->locally_silenced) {
         background = LCD_YELLOW;
         foreground = LCD_BLACK;
     } else {
@@ -51,36 +78,46 @@ void AlarmDisplay_Render(const AlarmSnapshot *snapshot)
     }
 
     lcd_fill(0, 0, LCD_W, LCD_H, background);
-    Show(16, 12, "LANDSLIDE ALARM TERMINAL", foreground, background, 24);
+    ShowChineseCentered(10, "滑坡风险告警", foreground, background, 24);
     lcd_draw_line(12, 44, 307, 44, foreground);
 
-    if (snapshot->desired.state == ALARM_STATE_ACTIVE) {
-        snprintf(line, sizeof(line), "RISK: %s", AlarmSeverity_Name(snapshot->desired.severity));
-        Show(16, 62, line, foreground, background, 32);
-        Show(16, 104,
-            snapshot->desired.severity == ALARM_SEVERITY_CRITICAL ? "EVACUATE NOW" : "LEAVE SLOPE AREA",
-            foreground, background, 24);
+    if (snapshot->self_test_active || snapshot->desired.display == ALARM_DISPLAY_SELF_TEST) {
+        ShowChineseCentered(60, "设备自检", foreground, background, 24);
+        ShowChineseCentered(94, "振动灯光检测", foreground, background, 24);
+        ShowAscii(80, 124, "BUZZER / MOTOR / RGB", foreground, background, 16);
+    } else if (snapshot->desired.state == ALARM_STATE_ACTIVE) {
+        ShowChinese(16, 58, "当前等级", foreground, background, 16);
+        ShowChinese(104, 54, SeverityChinese(snapshot->desired.severity), foreground, background, 24);
+        ShowChinese(164, 54, "风险", foreground, background, 24);
+        if (snapshot->locally_silenced) {
+            ShowChineseCentered(88, "告警关闭", foreground, background, 24);
+            ShowChineseCentered(116, "风险继续观察", foreground, background, 24);
+        } else {
+            ShowChineseCentered(92,
+                snapshot->desired.severity == ALARM_SEVERITY_CRITICAL ? "紧急撤离" : "准备撤离",
+                foreground, background, 24);
+        }
     } else if (snapshot->desired.state == ALARM_STATE_SILENCED) {
-        Show(16, 62, "ALARM SILENCED", foreground, background, 32);
-        Show(16, 104, "WAIT FOR REVIEW", foreground, background, 24);
+        ShowChineseCentered(62, "告警关闭", foreground, background, 24);
+        ShowChineseCentered(98, "风险继续观察", foreground, background, 24);
     } else if (snapshot->desired.display == ALARM_DISPLAY_ALL_CLEAR) {
-        Show(16, 62, "ALL CLEAR", LCD_GREEN, background, 32);
-        Show(16, 104, "FOLLOW STAFF INSTRUCTIONS", foreground, background, 16);
+        ShowChineseCentered(62, "风险正常", LCD_GREEN, background, 24);
+        ShowChineseCentered(98, "继续观察", foreground, background, 24);
     } else {
-        Show(16, 62, "STANDBY", LCD_GREEN, background, 32);
-        Show(16, 104, "SERVER CONTROLS RISK STATE", foreground, background, 16);
+        ShowChineseCentered(62, "设备正常", LCD_GREEN, background, 24);
+        ShowChineseCentered(98, "准备告警", foreground, background, 24);
     }
 
     SafeAscii(station, sizeof(station), snapshot->desired.station_id);
     SafeAscii(alert, sizeof(alert), snapshot->desired.alert_id);
     snprintf(line, sizeof(line), "SITE: %s", station[0] ? station : "--");
-    Show(16, 146, line, foreground, background, 16);
+    ShowAscii(16, 146, line, foreground, background, 16);
     snprintf(line, sizeof(line), "ALERT: %s", alert[0] ? alert : "--");
-    Show(16, 166, line, foreground, background, 16);
+    ShowAscii(16, 166, line, foreground, background, 16);
     snprintf(line, sizeof(line), "REV: %llu", (unsigned long long)snapshot->desired.revision);
-    Show(16, 186, line, foreground, background, 16);
+    ShowAscii(16, 186, line, foreground, background, 16);
     snprintf(line, sizeof(line), "WIFI:%s  MQTT:%s",
         snapshot->wifi_connected ? "OK" : "DOWN",
         snapshot->mqtt_connected ? "OK" : "DOWN");
-    Show(16, 214, line, foreground, background, 16);
+    ShowAscii(16, 214, line, foreground, background, 16);
 }

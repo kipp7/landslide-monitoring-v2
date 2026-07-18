@@ -48,6 +48,14 @@ typedef enum {
     ALARM_PHRASE_SELF_TEST_01
 } AlarmPhraseId;
 
+typedef enum {
+    ALARM_BUTTON_NONE = 0,
+    ALARM_BUTTON_UP,
+    ALARM_BUTTON_DOWN,
+    ALARM_BUTTON_LEFT,
+    ALARM_BUTTON_RIGHT
+} AlarmButton;
+
 typedef struct {
     uint64_t revision;
     AlarmState state;
@@ -69,6 +77,8 @@ typedef struct {
     bool wifi_connected;
     bool mqtt_connected;
     bool voice_armed;
+    bool locally_silenced;
+    bool self_test_active;
 } AlarmSnapshot;
 
 int AlarmDesired_Parse(const char *json, uint32_t length, AlarmDesiredState *out);
@@ -78,6 +88,10 @@ int AlarmController_ApplyDesired(const AlarmDesiredState *desired, bool allow_vo
 void AlarmController_SetNetworkStatus(bool wifi_connected, bool mqtt_connected);
 void AlarmController_Tick(uint32_t elapsed_ms);
 void AlarmController_Snapshot(AlarmSnapshot *out);
+void AlarmController_HandleButton(AlarmButton button);
+
+void AlarmButtons_Init(void);
+void AlarmButtons_Tick(uint32_t elapsed_ms);
 
 void AlarmOutputs_Init(void);
 void AlarmOutputs_Tick(const AlarmDesiredState *desired, uint32_t phase_ms);

@@ -11,6 +11,8 @@
 
 #define VOICE_UART EUART2_M1
 
+static bool g_voice_ready;
+
 static uint8_t PhraseIndex(AlarmPhraseId phrase)
 {
     switch (phrase) {
@@ -37,7 +39,8 @@ void AlarmVoice_Init(void)
     attr.stopBits = IOT_UART_STOP_BIT_1;
     attr.txBlock = IOT_UART_BLOCK_STATE_NONE_BLOCK;
     IoTUartDeinit(VOICE_UART);
-    if (IoTUartInit(VOICE_UART, &attr) != IOT_SUCCESS) printf("SU03-T UART init failed\n");
+    g_voice_ready = IoTUartInit(VOICE_UART, &attr) == IOT_SUCCESS;
+    if (!g_voice_ready) printf("SU03-T UART init failed\n");
     /* Deliberately no startup transmission and no playback call here. */
 #else
     printf("SU03-T disabled: silent boot guaranteed by main firmware\n");
@@ -47,10 +50,9 @@ void AlarmVoice_Init(void)
 void AlarmVoice_Play(AlarmPhraseId phrase)
 {
 #if TONGXIAO_VOICE_ENABLED
-    uint8_t frame[50];
+    uint8_t frame[6];
     uint8_t index = PhraseIndex(phrase);
-    if (index == 0) return;
-    memset(frame, 0, sizeof(frame));
+    if (!g_voice_ready || index == 0) return;
     frame[0] = 0xAA;
     frame[1] = 0x55;
     frame[2] = index;

@@ -8,6 +8,27 @@
 static AlarmSnapshot g_snapshot;
 static uint32_t g_phase_ms;
 static uint32_t g_voice_elapsed_ms;
+static uint32_t g_self_test_remaining_ms;
+
+#define SELF_TEST_DURATION_MS 3000U
+
+static void BuildEffectiveDesired(const AlarmSnapshot *snapshot, AlarmDesiredState *effective)
+{
+    *effective = snapshot->desired;
+    if (snapshot->self_test_active) {
+        effective->state = ALARM_STATE_ACTIVE;
+        effective->severity = ALARM_SEVERITY_HIGH;
+        effective->buzzer = true;
+        effective->motor = true;
+        effective->rgb = ALARM_RGB_RED_FLASH;
+        effective->display = ALARM_DISPLAY_SELF_TEST;
+        effective->voice_phrase = ALARM_PHRASE_NONE;
+        effective->voice_repeat_seconds = 0;
+    } else if (snapshot->locally_silenced && effective->state == ALARM_STATE_ACTIVE) {
+        effective->buzzer = false;
+        effective->motor = false;
+    }
+}
 
 const char *AlarmState_Name(AlarmState state)
 {
@@ -72,6 +93,7 @@ void AlarmController_Init(void)
     g_snapshot.desired.display = ALARM_DISPLAY_STANDBY;
     g_phase_ms = 0;
     g_voice_elapsed_ms = 0;
+    g_self_test_remaining_ms = 0;
 
     AlarmOutputs_Init();
     AlarmVoice_Init();
@@ -95,8 +117,11 @@ int AlarmController_ApplyDesired(const AlarmDesiredState *desired, bool allow_vo
     }
     g_snapshot.desired = *desired;
     g_snapshot.voice_armed = allow_voice && desired->voice_phrase != ALARM_PHRASE_NONE;
+    g_snapshot.locally_silenced = false;
+    g_snapshot.self_test_active = false;
     g_phase_ms = 0;
     g_voice_elapsed_ms = 0;
+    g_self_test_remaining_ms = 0;
     render = g_snapshot;
     play_voice = g_snapshot.voice_armed;
     LOS_TaskUnlock();
@@ -131,10 +156,22 @@ void AlarmController_SetNetworkStatus(bool wifi_connected, bool mqtt_connected)
 void AlarmController_Tick(uint32_t elapsed_ms)
 {
     AlarmSnapshot current;
+    AlarmDesiredState effective;
     AlarmPhraseId repeat_phrase = ALARM_PHRASE_NONE;
+    bool render_changed = false;
 
     LOS_TaskLock();
     g_phase_ms += elapsed_ms;
+    if (g_snapshot.self_test_active) {
+        if (elapsed_ms >= g_self_test_remaining_ms) {
+            g_self_test_remaining_ms = 0;
+            g_snapshot.self_test_active = false;
+            g_phase_ms = 0;
+            render_changed = true;
+        } else {
+            g_self_test_remaining_ms -= elapsed_ms;
+        }
+    }
     if (g_snapshot.voice_armed && g_snapshot.desired.state == ALARM_STATE_ACTIVE &&
         g_snapshot.desired.voice_repeat_seconds > 0) {
         g_voice_elapsed_ms += elapsed_ms;
@@ -148,7 +185,9 @@ void AlarmController_Tick(uint32_t elapsed_ms)
     current = g_snapshot;
     LOS_TaskUnlock();
 
-    AlarmOutputs_Tick(&current.desired, g_phase_ms);
+    BuildEffectiveDesired(&current, &effective);
+    AlarmOutputs_Tick(&effective, g_phase_ms);
+    if (render_changed) AlarmDisplay_Render(&current);
     if (repeat_phrase != ALARM_PHRASE_NONE) AlarmVoice_Play(repeat_phrase);
 }
 
@@ -158,4 +197,59 @@ void AlarmController_Snapshot(AlarmSnapshot *out)
     LOS_TaskLock();
     *out = g_snapshot;
     LOS_TaskUnlock();
+}
+
+void AlarmController_HandleButton(AlarmButton button)
+{
+    AlarmSnapshot render;
+    AlarmDesiredState effective;
+    bool changed = false;
+
+    LOS_TaskLock();
+    switch (button) {
+        case ALARM_BUTTON_UP:
+            if (g_snapshot.desired.state == ALARM_STATE_IDLE) {
+                g_snapshot.self_test_active = true;
+                g_self_test_remaining_ms = SELF_TEST_DURATION_MS;
+                g_phase_ms = 0;
+                changed = true;
+            }
+            break;
+        case ALARM_BUTTON_DOWN:
+            if (g_snapshot.self_test_active) {
+                g_snapshot.self_test_active = false;
+                g_self_test_remaining_ms = 0;
+                g_phase_ms = 0;
+                changed = true;
+            }
+            break;
+        case ALARM_BUTTON_LEFT:
+            if (g_snapshot.desired.state == ALARM_STATE_ACTIVE && !g_snapshot.locally_silenced) {
+                g_snapshot.locally_silenced = true;
+                g_snapshot.voice_armed = false;
+                changed = true;
+            }
+            break;
+        case ALARM_BUTTON_RIGHT:
+            if (g_snapshot.desired.state == ALARM_STATE_ACTIVE && g_snapshot.locally_silenced) {
+                g_snapshot.locally_silenced = false;
+                g_phase_ms = 0;
+                changed = true;
+            }
+            break;
+        default:
+            break;
+    }
+    render = g_snapshot;
+    LOS_TaskUnlock();
+
+    if (!changed) {
+        printf("Button action ignored for current alarm state\n");
+        return;
+    }
+    BuildEffectiveDesired(&render, &effective);
+    AlarmOutputs_Tick(&effective, 0);
+    AlarmDisplay_Render(&render);
+    printf("Local controls updated: silenced=%d self_test=%d\n",
+        render.locally_silenced, render.self_test_active);
 }

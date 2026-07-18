@@ -4,13 +4,14 @@
 static_library("rk2206_tongxiao_alarm") {
   sources = [
     "src/alarm_controller.c",
+    "src/alarm_buttons.c",
     "src/alarm_display.c",
     "src/alarm_mqtt.c",
     "src/alarm_outputs.c",
     "src/alarm_parser.c",
     "src/alarm_voice.c",
     "src/tongxiao_alarm_main.c",
-    "//vendor/isoftstone/rk2206/samples/c2_lcd/src/lcd.c",
+    "//vendor/isoftstone/rk2206/samples/landslide_monitor/src/lcd.c",
   ]
 
   include_dirs = [
@@ -27,7 +28,7 @@ static_library("rk2206_tongxiao_alarm") {
     "//third_party/musl/porting/liteos_m/kernel/include",
     "//third_party/paho_mqtt/MQTTPacket/src",
     "//third_party/paho_mqtt/MQTTClient-C/src",
-    "//vendor/isoftstone/rk2206/samples/c2_lcd/include",
+    "//vendor/isoftstone/rk2206/samples/landslide_monitor/include",
   ]
 
   deps = [ "//device/rockchip/hardware:hardware" ]

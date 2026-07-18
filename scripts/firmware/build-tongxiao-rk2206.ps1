@@ -78,11 +78,19 @@ $credentialFileValue = if ([string]::IsNullOrWhiteSpace($CredentialFile)) {
 $openHarmonyRootFull = (Resolve-Path -LiteralPath $OpenHarmonyRoot).Path
 $sourceRoot = Join-Path $repoRoot "firmware\rk2206-tongxiao-alarm"
 $vendorRoot = Join-Path $openHarmonyRootFull "vendor\isoftstone\rk2206\samples\rk2206_tongxiao_alarm"
+$lcdDriverRoot = Join-Path $openHarmonyRootFull "vendor\isoftstone\rk2206\samples\landslide_monitor"
 $sampleBuildFile = Join-Path $openHarmonyRootFull "vendor\isoftstone\rk2206\samples\BUILD.gn"
 $sdkMakefile = Join-Path $openHarmonyRootFull "device\rockchip\rk2206\sdk_liteos\Makefile"
 $alarmConfigFile = Join-Path $vendorRoot "config\alarm_config.h"
 $productOut = Join-Path $openHarmonyRootFull "out\rk2206\isoftstone-rk2206"
 $artifactDirectoryFull = [IO.Path]::GetFullPath($artifactDirectoryValue)
+
+foreach ($lcdDependency in @("src\lcd.c", "include\lcd.h", "include\lcd_font.h")) {
+  $lcdDependencyPath = Join-Path $lcdDriverRoot $lcdDependency
+  if (-not (Test-Path -LiteralPath $lcdDependencyPath -PathType Leaf)) {
+    throw "Tongxiao Chinese LCD dependency is missing: $lcdDependencyPath"
+  }
+}
 
 Assert-FirmwareSourceSynced -SourceRoot $sourceRoot -VendorRoot $vendorRoot
 
@@ -145,6 +153,7 @@ $lockStream = $null
 $lockCreated = $false
 $ownsProductOut = $false
 $originalProductOutMoved = $false
+$originalProductOutCopied = $false
 $sampleBuildPatched = $false
 $sdkMakefilePatched = $false
 $alarmConfigPatched = $false
@@ -172,10 +181,16 @@ try {
   Assert-PathInsideRoot -Root $openHarmonyRootFull -Path $productOut
   Assert-PathInsideRoot -Root $openHarmonyRootFull -Path $outputBackup
   if ($hadProductOut) {
-    Move-Item -LiteralPath $productOut -Destination $outputBackup
-    $originalProductOutMoved = $true
+    try {
+      Move-Item -LiteralPath $productOut -Destination $outputBackup
+      $originalProductOutMoved = $true
+    } catch {
+      Write-Warning "Cannot rename the shared output directory; using copy-and-restore fallback."
+      Copy-Item -LiteralPath $productOut -Destination $outputBackup -Recurse -Force
+      $originalProductOutCopied = $true
+    }
   }
-  $ownsProductOut = $true
+  $ownsProductOut = -not $originalProductOutCopied
 
   $sampleBuildPatched = $true
   [IO.File]::WriteAllText($sampleBuildFile, $sampleBuildText.Replace($xl01Feature, $tongxiaoFeature))
@@ -260,7 +275,17 @@ finally {
   }
 
   try {
-    if ($ownsProductOut -and (Test-Path -LiteralPath $productOut)) {
+    if ($originalProductOutCopied -and (Test-Path -LiteralPath $productOut)) {
+      Assert-PathInsideRoot -Root $openHarmonyRootFull -Path $productOut
+      Assert-PathInsideRoot -Root $openHarmonyRootFull -Path $outputBackup
+      foreach ($entry in Get-ChildItem -LiteralPath $productOut -Force) {
+        Remove-Item -LiteralPath $entry.FullName -Recurse -Force
+      }
+      foreach ($entry in Get-ChildItem -LiteralPath $outputBackup -Force) {
+        Copy-Item -LiteralPath $entry.FullName -Destination $productOut -Recurse -Force
+      }
+      Remove-Item -LiteralPath $outputBackup -Recurse -Force
+    } elseif ($ownsProductOut -and (Test-Path -LiteralPath $productOut)) {
       Assert-PathInsideRoot -Root $openHarmonyRootFull -Path $productOut
       Remove-Item -LiteralPath $productOut -Recurse -Force
     }

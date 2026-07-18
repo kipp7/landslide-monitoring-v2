@@ -1,6 +1,6 @@
 # 通晓 RK2206 Wi-Fi 应急告警终端
 
-本固件把通晓套件作为山体滑坡平台的现场告警执行器，不采集传感器、不计算风险。OpenHarmony LiteOS-M 应用通过 Wi-Fi/MQTT 接收服务端 retained desired 状态，驱动蜂鸣器、振动马达、RGB 灯和 ST7789V LCD，可选驱动 SU03-T 固定播报。
+本固件把通晓套件作为山体滑坡平台的现场告警执行器，不采集传感器、不计算风险。OpenHarmony LiteOS-M 应用通过 Wi-Fi/MQTT 接收服务端 retained desired 状态，驱动蜂鸣器、振动马达、RGB 灯和中文 ST7789V LCD，可选驱动 SU03-T 固定播报。
 
 ## 当前部署参数
 
@@ -60,9 +60,20 @@ powershell -ExecutionPolicy Bypass -File scripts/firmware/build-tongxiao-rk2206.
 - `/silence` 后蜂鸣器和马达关闭、琥珀灯常亮、屏幕保留待复核。
 - MQTT 断线不擅自改变服务端最后一次风险状态，只在 LCD 标记断线并自动重连。
 
+## LCD 与按键
+
+- LCD 使用套件 `landslide_monitor` Sample 的完整 UTF-8 中文字库。风险等级、撤离指令、静音、自检和待机状态均用中文显示；站点 ID、告警 ID、revision、Wi-Fi/MQTT 等协议值保留 ASCII，避免伪造或截断服务端数据。
+- 四个方向键通过 ADC7（GPIO0_PC7）读取，并做 80 ms 防抖。
+- `↑`：仅在 `idle` 状态执行 3 秒本地自检，联动蜂鸣器、马达和 RGB，不播放语音。
+- `↓`：立即停止本地自检并恢复服务端状态。
+- `←`：在 `active` 状态本地消音，停止蜂鸣器、马达和后续语音重复，LCD/RGB 仍保留风险告警。
+- `→`：恢复当前 `active` 状态的蜂鸣器和马达；为防止突然发声，不自动恢复本轮语音重复。
+
+按键操作不修改服务端 desired state。任何 revision 更高的新服务端状态都会清除本地消音和自检覆盖。
+
 ## SU03-T
 
-必须先按 `docs/integrations/tongxiao-alarm-terminal.md` 重新生成 SU03-T 工程，关闭模块自身的上电、唤醒和未识别回复，并完成冷启动静音测试。通过后才能把 `TONGXIAO_VOICE_ENABLED` 改为 `1`。
+RK2206 的 `Firmware.img` 不包含 SU03-T 词库。必须先按 `docs/integrations/tongxiao-alarm-terminal.md` 在智能公元平台单独生成并烧录 SU03-T 工程，关闭模块自身的上电、唤醒和未识别回复，并完成冷启动静音测试。通过后才能把 `TONGXIAO_VOICE_ENABLED` 改为 `1` 并重新构建 RK2206 固件。
 
 ## SwanLinkOS 说明
 

@@ -9,8 +9,10 @@ static void AlarmOutputTask(void *arg)
 {
     (void)arg;
     AlarmController_Init();
+    AlarmButtons_Init();
     while (1) {
         AlarmController_Tick(100);
+        AlarmButtons_Tick(100);
         LOS_Msleep(100);
     }
 }
