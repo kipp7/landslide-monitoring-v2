@@ -29,6 +29,8 @@
 #define MPU6050_REG_GYRO_CONFIG     0x1B    // Gyroscope config
 #define MPU6050_REG_CONFIG          0x1A    // General config
 #define MPU6050_REG_ACCEL_XOUT_H    0x3B    // Accelerometer X high byte
+#define MPU6050_I2C_RETRY_COUNT     3
+#define MPU6050_I2C_RETRY_DELAY_MS  2
 
 // ==================== Private Functions ====================
 
@@ -40,24 +42,52 @@ static int MPU6050_WriteReg(uint8_t reg, uint8_t value)
 
 static int MPU6050_ReadReg(uint8_t reg, uint8_t *value)
 {
-    unsigned int ret = IoTI2cWrite(I2C_IDX, MPU6050_I2C_ADDR, &reg, 1);
-    if (ret != IOT_SUCCESS) return -1;
-    
-    ret = IoTI2cRead(I2C_IDX, MPU6050_I2C_ADDR, value, 1);
-    if (ret != IOT_SUCCESS) return -2;
-    
-    return 0;
+    int attempt;
+    int last_ret = -1;
+
+    for (attempt = 0; attempt < MPU6050_I2C_RETRY_COUNT; ++attempt) {
+        unsigned int ret = IoTI2cWrite(I2C_IDX, MPU6050_I2C_ADDR, &reg, 1);
+        if (ret != IOT_SUCCESS) {
+            last_ret = -1;
+        } else {
+            ret = IoTI2cRead(I2C_IDX, MPU6050_I2C_ADDR, value, 1);
+            if (ret == IOT_SUCCESS) {
+                return 0;
+            }
+            last_ret = -2;
+        }
+
+        if (attempt + 1 < MPU6050_I2C_RETRY_COUNT) {
+            LOS_Msleep(MPU6050_I2C_RETRY_DELAY_MS);
+        }
+    }
+
+    return last_ret;
 }
 
 static int MPU6050_ReadMultiReg(uint8_t reg, uint8_t *buffer, uint8_t len)
 {
-    unsigned int ret = IoTI2cWrite(I2C_IDX, MPU6050_I2C_ADDR, &reg, 1);
-    if (ret != IOT_SUCCESS) return -1;
-    
-    ret = IoTI2cRead(I2C_IDX, MPU6050_I2C_ADDR, buffer, len);
-    if (ret != IOT_SUCCESS) return -2;
-    
-    return 0;
+    int attempt;
+    int last_ret = -1;
+
+    for (attempt = 0; attempt < MPU6050_I2C_RETRY_COUNT; ++attempt) {
+        unsigned int ret = IoTI2cWrite(I2C_IDX, MPU6050_I2C_ADDR, &reg, 1);
+        if (ret != IOT_SUCCESS) {
+            last_ret = -1;
+        } else {
+            ret = IoTI2cRead(I2C_IDX, MPU6050_I2C_ADDR, buffer, len);
+            if (ret == IOT_SUCCESS) {
+                return 0;
+            }
+            last_ret = -2;
+        }
+
+        if (attempt + 1 < MPU6050_I2C_RETRY_COUNT) {
+            LOS_Msleep(MPU6050_I2C_RETRY_DELAY_MS);
+        }
+    }
+
+    return last_ret;
 }
 
 // ==================== Public Functions ====================
@@ -104,15 +134,15 @@ int MPU6050_Init(void)
     }
     LOS_Msleep(10);
     
-    // Configure accelerometer range (±2g)
-    printf("[DEBUG] Configuring accelerometer (±2g)...\n");
+    // Configure accelerometer range (+/-2g)
+    printf("[DEBUG] Configuring accelerometer (+/-2g)...\n");
     if (MPU6050_WriteReg(MPU6050_REG_ACCEL_CONFIG, 0x00) != 0) {
         printf("[ERROR] Accel config failed\n");
         return -4;
     }
     
-    // Configure gyroscope range (±250°/s)
-    printf("[DEBUG] Configuring gyroscope (±250°/s)...\n");
+    // Configure gyroscope range (+/-250 dps)
+    printf("[DEBUG] Configuring gyroscope (+/-250 dps)...\n");
     if (MPU6050_WriteReg(MPU6050_REG_GYRO_CONFIG, 0x00) != 0) {
         printf("[ERROR] Gyro config failed\n");
         return -5;
@@ -138,7 +168,8 @@ int MPU6050_Read(float *ax, float *ay, float *az,
     // Read 14 bytes starting from accelerometer register
     int ret = MPU6050_ReadMultiReg(MPU6050_REG_ACCEL_XOUT_H, buffer, 14);
     if (ret != 0) {
-        printf("[ERROR] MPU6050 read failed (ret=%d)\n", ret);
+        printf("[ERROR] MPU6050 read failed after %d retries (ret=%d)\n",
+               MPU6050_I2C_RETRY_COUNT, ret);
         return -1;
     }
     

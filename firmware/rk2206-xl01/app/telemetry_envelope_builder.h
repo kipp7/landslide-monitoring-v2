@@ -7,7 +7,19 @@
 extern "C" {
 #endif
 
-int BuildTelemetryEnvelopeV1(const SensorData *data, char *output, int output_size);
+#define TELEMETRY_ENVELOPE_ERR_EMPTY_METRICS (-2)
+
+int BuildTelemetryEnvelopeV1(
+    const SensorData *data,
+    const char *last_command_type,
+    const char *last_command_id,
+    unsigned int last_command_uptime_s,
+    const char *upload_trigger,
+    const char *event_ts,
+    const char *time_source,
+    char *output,
+    int output_size
+);
 
 #ifdef __cplusplus
 }

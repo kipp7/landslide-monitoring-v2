@@ -8,6 +8,9 @@ This directory contains the stable RK2206 XL01 field-node firmware package used 
 - GPS and deformation data handling.
 - Telemetry envelope construction.
 - Device command parsing and command acknowledgement.
+- COBS/CRC framed southbound transport and gateway-polled telemetry.
+- SC16IS752-backed RS485 soil, optional conductivity, and tilt acquisition.
+- Watchdog-backed recovery after 180 seconds without an accepted gateway command.
 - Watchdog, FIFO, and board-level utility helpers.
 
 ## Upstream Build Context

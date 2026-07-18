@@ -28,11 +28,22 @@ void XL01_Init(void);
 int XL01_SendWithRetry(const char *data, int len, Statistics *stats);
 
 /**
+ * Send a payload without link-level retry logic.
+ */
+int XL01_SendRaw(const char *data, int len);
+
+/**
  * Send a platform command ack payload.
  * This is different from link-level ACK/OK confirmation and is intended
  * to carry DeviceCommandAck v1 JSON toward the gateway/platform side.
  */
 int XL01_SendPlatformCommandAck(const char *data, int len);
+
+/**
+ * Send a platform command payload toward the shared link.
+ * In framed mode this is tagged as a command frame; in legacy mode it falls back to raw JSON.
+ */
+int XL01_SendPlatformCommand(const char *data, int len);
 
 /**
  * Poll UART for received data (call from high-priority task)
@@ -61,5 +72,11 @@ int XL01_HasLinkAck(void);
  * Clear current link-level ack state.
  */
 void XL01_ClearLinkAck(void);
+
+/**
+ * Probe whether the underlying UART reports pending RX data.
+ * Returns 0 when data is pending, non-zero otherwise.
+ */
+unsigned int XL01_DebugReadAny(void);
 
 #endif // DRIVERS_XL01_DRIVER_H

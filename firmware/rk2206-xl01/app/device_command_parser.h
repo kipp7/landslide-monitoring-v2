@@ -9,6 +9,13 @@ typedef struct {
     char command_id[64];
     char device_id[64];
     char command_type[64];
+    char issued_ts[40];
+    char sent_ts[40];
+    char gateway_sent_ts[40];
+    char time_sync_sent_ts[40];
+    int has_sent_ts;
+    int has_gateway_sent_ts;
+    int has_time_sync_sent_ts;
     int has_sampling_s;
     int sampling_s;
     int has_report_interval_s;

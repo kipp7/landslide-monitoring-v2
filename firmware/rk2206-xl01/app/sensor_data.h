@@ -17,6 +17,13 @@ typedef struct {
     float temperature;          // °C
     float humidity;             // %
     int temp_valid;             // 0=invalid, 1=valid
+
+    // RS485 soil sensor
+    float soil_temperature;      // °C
+    float soil_moisture;         // %
+    float soil_ec;               // us/cm when the optional 0x0002 register is available
+    int soil_ec_valid;           // 0=unsupported/read failed, 1=valid
+    int soil_valid;              // 0=invalid, 1=valid
     
     // GPS
     float latitude;             // Decimal degrees
@@ -26,8 +33,13 @@ typedef struct {
     // Accelerometer & Gyroscope (MPU6050)
     float accel_x, accel_y, accel_z;    // g
     float gyro_x, gyro_y, gyro_z;       // °/s
-    float angle_x, angle_y;             // Tilt angle (°)
+    float angle_x, angle_y, angle_z;    // Tilt angle (°)
     int imu_valid;                      // 0=invalid, 1=valid
+
+    // RS485 tilt/rain sensors
+    int tilt_valid;                      // 0=invalid, 1=valid
+    float rain_total;                    // mm
+    int rain_valid;                      // 0=invalid, 1=valid
     
     // Status
     int warning;                // Warning flag
