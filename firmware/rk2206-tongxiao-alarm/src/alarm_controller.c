@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "alarm_config.h"
 #include "los_task.h"
 
 static AlarmSnapshot g_snapshot;
@@ -116,7 +117,8 @@ int AlarmController_ApplyDesired(const AlarmDesiredState *desired, bool allow_vo
         return 1;
     }
     g_snapshot.desired = *desired;
-    g_snapshot.voice_armed = allow_voice && desired->voice_phrase != ALARM_PHRASE_NONE;
+    g_snapshot.voice_armed = allow_voice && TONGXIAO_VOICE_ENABLED &&
+        desired->voice_phrase != ALARM_PHRASE_NONE;
     g_snapshot.locally_silenced = false;
     g_snapshot.self_test_active = false;
     g_phase_ms = 0;
