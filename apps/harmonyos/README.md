@@ -42,11 +42,11 @@ built from DevEco Studio or with its bundled `hvigorw` command after setting
   A/B/C monitoring statistics.
 - The alert map resolves coordinates in this order: coordinates recorded with
   the alert, recent device GPS, seven-day GPS history, the last GPS snapshot,
-  station coordinates, and finally the Windows desktop preset position at
-  Guabangshan, Yulin (`22.68313880324831, 110.19415268685714`). A stale GPS
-  value is labelled as the last GPS rather than real-time data. GPS values
-  outside the project's China operating region are treated as invalid device
-  data and cannot replace the last valid position.
+  station coordinates, and finally the Windows desktop default position at
+  Xiamen University (`24.43803, 118.09631`). A stale GPS value is labelled as
+  the last GPS rather than real-time data. GPS values outside the project's
+  China operating region are treated as invalid device data and cannot replace
+  the last valid position.
 - The most recent valid GPS snapshot is stored in Preferences using the same
   API-server and user cache namespace. It is cleared on logout or server
   change, so positions cannot leak across accounts or environments.

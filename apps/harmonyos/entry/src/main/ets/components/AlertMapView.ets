@@ -17,8 +17,7 @@ export struct AlertMapView {
   private webReady: boolean = false;
 
   private focusScript(): string {
-    const zoom = this.location.source === 'demo' ? 12 : 14;
-    return `window.focusAlert(${this.location.latitude}, ${this.location.longitude}, ${zoom});`;
+    return `window.focusAlert(${this.location.latitude}, ${this.location.longitude}, 14);`;
   }
 
   private initialiseScript(): string {
@@ -26,8 +25,7 @@ export struct AlertMapView {
   }
 
   private refreshScript(): string {
-    const zoom = this.location.source === 'demo' ? 12 : 14;
-    return `window.refreshAlertMap(${this.location.latitude}, ${this.location.longitude}, ${zoom});`;
+    return `window.refreshAlertMap(${this.location.latitude}, ${this.location.longitude}, 14);`;
   }
 
   private initialiseMap(): void {
