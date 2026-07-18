@@ -1,0 +1,16 @@
+{
+  "string": [
+    {
+      "name": "app_name",
+      "value": "山体监测"
+    },
+    {
+      "name": "module_desc",
+      "value": "山体滑坡监测移动端"
+    },
+    {
+      "name": "entry_desc",
+      "value": "山体滑坡监测入口"
+    }
+  ]
+}

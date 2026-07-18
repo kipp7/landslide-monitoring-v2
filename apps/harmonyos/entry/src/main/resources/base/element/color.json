@@ -1,0 +1,9 @@
+{
+  "color": [
+    { "name": "brand_orange", "value": "#E46D35" },
+    { "name": "ink", "value": "#18212B" },
+    { "name": "muted", "value": "#6C7782" },
+    { "name": "surface", "value": "#F5F7F8" },
+    { "name": "start_window_background", "value": "#F5F7F8" }
+  ]
+}

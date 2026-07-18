@@ -1,0 +1,2906 @@
+import common from '@ohos.app.ability.common';
+import { ApiClient, ApiError } from '../data/ApiClient';
+import { DEFAULT_API_BASE_URL, normalizeApiBaseUrl } from '../data/ApiConfig';
+import { AlertLocationRepository, alertLocationSourceLabel } from '../data/AlertLocationRepository';
+import { CacheManager } from '../data/CacheManager';
+import { MonitoringRepository } from '../data/Repositories';
+import { SecureSession, SessionStore } from '../data/SessionStore';
+import { AlertNotificationService } from '../data/AlertNotificationService';
+import { AlertStreamClient } from '../data/AlertStreamClient';
+import { PushRegistrationService } from '../data/PushRegistrationService';
+import { Alert, AlertEvent, AlertMapLocation, AlertStreamEvent, DashboardSummary, Device, DeviceState, MetricSeries, SeriesPoint, SeriesResponse, Station, alertStatusLabel, deviceConnectivityLabel, deviceDisplayName, deviceSupportsConductivity, deviceTypeLabel, displayMetric, eventTypeLabel, isAlarmActuatorDevice, isDeviceOnline, isOnlineStatus, metricShortLabel, metricUnitLabel, metricValue, relativeTime, severityLabel, shortTime, soilConductivityValue, soilMoistureValue, soilTemperatureValue, stationDisplayName, stationNameLabel, stationStatusLabel, userDisplayName } from '../data/Types';
+import { AlertMapView } from '../components/AlertMapView';
+import { MetricCard } from '../components/MetricCard';
+import { StatusBanner } from '../components/StatusBanner';
+
+type AppScreen = 'overview' | 'stations' | 'alerts' | 'settings' | 'device' | 'alert-map';
+
+const UI_COLOR_TEXT: string = '#18212B';
+const UI_COLOR_MUTED: string = '#6C7782';
+const UI_COLOR_SUBTLE: string = '#8A949E';
+const UI_COLOR_SURFACE: string = '#FFFFFF';
+const UI_COLOR_ACCENT: string = '#E46D35';
+const UI_COLOR_SUCCESS: string = '#3C9D82';
+const UI_COLOR_DANGER: string = '#B44832';
+const UI_COLOR_MAP_DEMO: string = '#99441F';
+const UI_COLOR_MAP_MUTED: string = '#5B6670';
+const UI_COLOR_LOGIN_BRAND: string = '#173D32';
+const UI_COLOR_LOGIN_PAGE: string = '#F3F6F4';
+const UI_COLOR_LOGIN_FIELD: string = '#E8EEEB';
+const UI_COLOR_LOGIN_BORDER: string = '#D7E0DC';
+const UI_COLOR_LOGIN_ERROR: string = '#F8EAE6';
+const UI_PAGE_PADDING: number = 16;
+
+interface DeviceMonitoringTrend {
+  device: Device;
+  response: SeriesResponse;
+  latestStateAt?: string;
+}
+
+@Entry
+@Component
+struct Index {
+  @StorageLink('pendingAlertId') @Watch('onPendingAlertChanged') private pendingAlertId: string = '';
+  @State private sessionRestoring: boolean = true;
+  @State private loggedIn: boolean = false;
+  @State private showLoginServerSettings: boolean = false;
+  @State private busy: boolean = false;
+  @State private errorMessage: string = '';
+  @State private screen: AppScreen = 'overview';
+  @State private username: string = '';
+  @State private userName: string = '';
+  @State private apiBaseUrl: string = DEFAULT_API_BASE_URL;
+  @State private overviewFreshness: string = '尚未更新';
+  @State private stationFreshness: string = '尚未更新';
+  @State private deviceFreshness: string = '尚未更新';
+  @State private alertFreshness: string = '尚未更新';
+  @State private overviewOffline: boolean = false;
+  @State private stationOffline: boolean = false;
+  @State private deviceOffline: boolean = false;
+  @State private alertOffline: boolean = false;
+  @State private connectionState: string = 'unknown';
+  @State private connectionUpdatedAt: string = '尚未请求';
+  @State private dashboard: DashboardSummary | null = null;
+  @State private overviewTrends: Array<DeviceMonitoringTrend> = [];
+  @State private stations: Array<Station> = [];
+  @State private devices: Array<Device> = [];
+  @State private alarmActuators: Array<Device> = [];
+  @State private deviceStates: Array<DeviceState> = [];
+  @State private selectedStationId: string = '';
+  @State private selectedDevice: Device | null = null;
+  @State private selectedDeviceState: DeviceState | null = null;
+  @State private selectedSeries: SeriesResponse | null = null;
+  @State private alerts: Array<Alert> = [];
+  @State private selectedAlert: Alert | null = null;
+  @State private alertEvents: Array<AlertEvent> = [];
+  @State private eventsLoading: boolean = false;
+  @State private stationRefreshing: boolean = false;
+  @State private deviceRefreshing: boolean = false;
+  @State private overviewRefreshing: boolean = false;
+  @State private alertRefreshing: boolean = false;
+  @State private alertMapAlert: Alert | null = null;
+  @State private alertMapLocation: AlertMapLocation | null = null;
+  @State private alertMapLoading: boolean = false;
+  @State private appVisible: boolean = true;
+
+  private context: common.UIAbilityContext | undefined = undefined;
+  private api: ApiClient = new ApiClient(DEFAULT_API_BASE_URL);
+  private repository: MonitoringRepository | undefined = undefined;
+  private cache: CacheManager | undefined = undefined;
+  private alertLocationRepository: AlertLocationRepository | undefined = undefined;
+  private alertStream: AlertStreamClient | undefined = undefined;
+  private alertNotifications: AlertNotificationService | undefined = undefined;
+  private pushRegistration: PushRegistrationService = new PushRegistrationService();
+  private handlingPendingAlert: boolean = false;
+  private overviewTimer: number | undefined = undefined;
+  private alertTimer: number | undefined = undefined;
+  private stationTimer: number | undefined = undefined;
+  private deviceTimer: number | undefined = undefined;
+  private deviceSeriesTimer: number | undefined = undefined;
+  private stationRequestSequence: number = 0;
+  private stationStateRequestSequence: number = 0;
+
+  aboutToAppear(): void {
+    this.context = getContext(this) as common.UIAbilityContext;
+    this.api.setTokenObserver(() => {
+      this.saveSession();
+    });
+    this.restoreSession();
+  }
+
+  aboutToDisappear(): void {
+    this.stopTimers();
+    this.stopAlertStream();
+  }
+
+  onPageShow(): void {
+    this.appVisible = true;
+    if (!this.loggedIn) return;
+    this.startTimers();
+    this.startAlertStream();
+    this.refreshCurrentScreen();
+  }
+
+  onPageHide(): void {
+    this.appVisible = false;
+    this.stopTimers();
+    this.stopAlertStream();
+  }
+
+  private getRepository(): MonitoringRepository {
+    if (!this.repository && this.context) {
+      this.cache = new CacheManager(this.context, this.api.getBaseUrl(), this.username || 'anonymous');
+      this.repository = new MonitoringRepository(this.api, this.cache);
+      this.alertLocationRepository = new AlertLocationRepository(this.api, this.cache);
+    }
+    return this.repository as MonitoringRepository;
+  }
+
+  private rebuildRepository(): void {
+    if (!this.context) return;
+    this.cache = new CacheManager(this.context, this.api.getBaseUrl(), this.username || 'anonymous');
+    this.repository = new MonitoringRepository(this.api, this.cache);
+    this.alertLocationRepository = new AlertLocationRepository(this.api, this.cache);
+  }
+
+  private releaseRepositories(): void {
+    this.repository = undefined;
+    this.cache = undefined;
+    this.alertLocationRepository = undefined;
+  }
+
+  private async saveSession(): Promise<void> {
+    if (!this.loggedIn || !this.username || !this.api.hasSession()) return;
+    const session: SecureSession = {
+      apiBaseUrl: this.api.getBaseUrl(),
+      username: this.username,
+      userName: this.userName,
+      accessToken: this.api.getAccessToken(),
+      refreshToken: this.api.getRefreshToken()
+    };
+    try {
+      await SessionStore.save(session);
+    } catch {
+      // The active in-memory session remains usable when secure storage is unavailable.
+    }
+  }
+
+  private async restoreSession(): Promise<void> {
+    try {
+      const session = await SessionStore.load();
+      if (!session) return;
+      const apiBaseUrl = normalizeApiBaseUrl(session.apiBaseUrl);
+      if (!apiBaseUrl) {
+        await SessionStore.clear();
+        return;
+      }
+
+      this.apiBaseUrl = apiBaseUrl;
+      this.api.setBaseUrl(apiBaseUrl);
+      this.username = session.username;
+      this.userName = session.userName || userDisplayName(session.username);
+      this.api.setTokens(session.accessToken, session.refreshToken);
+      this.loggedIn = true;
+      this.rebuildRepository();
+
+      try {
+        const user = await this.api.currentUser();
+        this.userName = userDisplayName(user.realName ?? user.username);
+        this.markConnection(true);
+        await this.saveSession();
+      } catch (error) {
+        if (error instanceof ApiError && error.statusCode === 401) {
+          await this.invalidateSession();
+          return;
+        }
+        this.markConnection(false);
+      }
+
+      await this.loadOverview();
+      this.startTimers();
+      this.startAlertStream();
+      this.pushRegistration.register(this.api);
+      await this.openPendingAlert();
+    } finally {
+      this.sessionRestoring = false;
+    }
+  }
+
+  private async invalidateSession(): Promise<void> {
+    this.stopTimers();
+    this.stopAlertStream();
+    this.api.clearTokens();
+    if (this.repository) await this.repository.clear();
+    await SessionStore.clear();
+    this.releaseRepositories();
+    this.loggedIn = false;
+    this.userName = '';
+    this.username = '';
+    this.connectionState = 'unknown';
+    this.connectionUpdatedAt = '尚未请求';
+    this.resetMonitoringData();
+  }
+
+  private markConnection(success: boolean): void {
+    this.connectionState = success ? 'success' : 'failure';
+    this.connectionUpdatedAt = shortTime(new Date().toISOString());
+    if (success) this.errorMessage = '';
+  }
+
+  private resetMonitoringData(): void {
+    this.dashboard = null;
+    this.overviewTrends = [];
+    this.stations = [];
+    this.devices = [];
+    this.alarmActuators = [];
+    this.deviceStates = [];
+    this.selectedStationId = '';
+    this.selectedDevice = null;
+    this.selectedDeviceState = null;
+    this.selectedSeries = null;
+    this.alerts = [];
+    this.selectedAlert = null;
+    this.alertEvents = [];
+    this.alertMapAlert = null;
+    this.alertMapLocation = null;
+    this.alertMapLoading = false;
+    this.overviewFreshness = '尚未更新';
+    this.stationFreshness = '尚未更新';
+    this.deviceFreshness = '尚未更新';
+    this.alertFreshness = '尚未更新';
+    this.overviewOffline = false;
+    this.stationOffline = false;
+    this.deviceOffline = false;
+    this.alertOffline = false;
+    this.overviewRefreshing = false;
+    this.stationRefreshing = false;
+    this.deviceRefreshing = false;
+    this.alertRefreshing = false;
+    this.screen = 'overview';
+    this.errorMessage = '';
+  }
+
+  private async login(username: string, password: string, apiBaseUrl: string): Promise<void> {
+    this.busy = true;
+    this.errorMessage = '';
+    try {
+      const normalized = normalizeApiBaseUrl(apiBaseUrl);
+      if (normalized.length === 0) {
+        throw new Error('请输入服务器 API 地址');
+      }
+      if (normalized !== this.api.getBaseUrl()) {
+        await this.saveApiBase(normalized);
+      }
+      const session = await this.api.login(username.trim(), password);
+      this.username = username.trim();
+      this.userName = userDisplayName(session.user.realName ?? session.user.username);
+      this.loggedIn = true;
+      this.showLoginServerSettings = false;
+      this.markConnection(true);
+      this.rebuildRepository();
+      await this.saveSession();
+      await this.loadOverview();
+      this.startTimers();
+      this.startAlertStream();
+      this.pushRegistration.register(this.api);
+      await this.openPendingAlert();
+    } catch (error) {
+      this.markConnection(false);
+      this.errorMessage = this.errorText(error);
+      this.showLoginServerSettings = this.isServerConnectionFailure(error);
+    } finally {
+      this.busy = false;
+    }
+  }
+
+  private isServerConnectionFailure(error: Object): boolean {
+    if (error instanceof ApiError) {
+      return error.statusCode === 0 || error.statusCode === 404 || error.statusCode === 408;
+    }
+    return true;
+  }
+
+  private async saveLoginServerBase(value: string): Promise<void> {
+    const normalized = normalizeApiBaseUrl(value);
+    if (!normalized) {
+      this.errorMessage = '请输入有效的服务器 API 地址';
+      return;
+    }
+    await this.saveApiBase(normalized);
+    this.errorMessage = '';
+    this.showLoginServerSettings = false;
+  }
+
+  private closeLoginServerSettings(): void {
+    this.errorMessage = '';
+    this.showLoginServerSettings = false;
+  }
+
+  private async logout(): Promise<void> {
+    this.stopTimers();
+    this.stopAlertStream();
+    await this.pushRegistration.unregister(this.api);
+    try {
+      await this.api.logout();
+    } catch {
+      this.api.clearTokens();
+    }
+    if (this.repository) await this.repository.clear();
+    await SessionStore.clear();
+    this.releaseRepositories();
+    this.loggedIn = false;
+    this.userName = '';
+    this.username = '';
+    this.connectionState = 'unknown';
+    this.connectionUpdatedAt = '尚未请求';
+    this.resetMonitoringData();
+  }
+
+  private applyRealtimeDeviceCounts(summary: DashboardSummary, devices: Array<Device>, states: Array<DeviceState> = []): DashboardSummary {
+    let total = 0;
+    let online = 0;
+    for (let index = 0; index < devices.length; index++) {
+      if (devices[index].status.toLowerCase() === 'revoked' || isAlarmActuatorDevice(devices[index])) continue;
+      total += 1;
+      let latestStateAt: string | undefined = undefined;
+      for (let stateIndex = 0; stateIndex < states.length; stateIndex++) {
+        if (states[stateIndex].deviceId === devices[index].deviceId) {
+          latestStateAt = states[stateIndex].updatedAt;
+          break;
+        }
+      }
+      if (isDeviceOnline(devices[index], latestStateAt)) online += 1;
+    }
+    summary.totalDevices = total;
+    summary.onlineDevices = online;
+    summary.offlineDevices = Math.max(0, total - online);
+    return summary;
+  }
+
+  private extractAlarmActuators(devices: Array<Device>): Array<Device> {
+    const actuators: Array<Device> = [];
+    for (let index = 0; index < devices.length; index++) {
+      if (isAlarmActuatorDevice(devices[index])) actuators.push(devices[index]);
+    }
+    return actuators;
+  }
+
+  private async loadOverview(): Promise<void> {
+    if (this.overviewRefreshing) return;
+    this.overviewRefreshing = true;
+    if (!this.repository) this.getRepository();
+    const repository = this.repository as MonitoringRepository;
+    try {
+      const cachedDashboard = await repository.cachedDashboard();
+      const cachedDevices = await repository.cachedDevices('');
+      if (cachedDevices) this.alarmActuators = this.extractAlarmActuators(cachedDevices.value);
+      if (cachedDashboard) {
+        this.dashboard = cachedDevices
+          ? this.applyRealtimeDeviceCounts(cachedDashboard.value, cachedDevices.value)
+          : cachedDashboard.value;
+        this.overviewFreshness = `缓存于 ${shortTime(new Date(cachedDashboard.savedAt).toISOString())}`;
+      }
+
+      const values = await Promise.all([repository.dashboard(), repository.devices('')]);
+      this.alarmActuators = this.extractAlarmActuators(values[1]);
+      this.dashboard = this.applyRealtimeDeviceCounts(values[0], values[1]);
+      this.overviewFreshness = `更新于 ${shortTime(new Date().toISOString())}`;
+      this.overviewOffline = false;
+      this.markConnection(true);
+      await this.loadOverviewTrends(values[1]);
+    } catch (error) {
+      this.overviewOffline = true;
+      this.markConnection(false);
+      this.errorMessage = this.errorText(error);
+    } finally {
+      this.overviewRefreshing = false;
+    }
+  }
+
+  private mergeOverviewTrend(trends: Array<DeviceMonitoringTrend>, device: Device, response: SeriesResponse): Array<DeviceMonitoringTrend> {
+    const next: Array<DeviceMonitoringTrend> = [];
+    let latestStateAt: string | undefined = undefined;
+    for (let index = 0; index < trends.length; index++) {
+      if (trends[index].device.deviceId !== device.deviceId) {
+        next.push(trends[index]);
+      } else {
+        latestStateAt = trends[index].latestStateAt;
+      }
+    }
+    next.push({ device, response, latestStateAt });
+    return next;
+  }
+
+  private mergeOverviewState(trends: Array<DeviceMonitoringTrend>, deviceId: string, state: DeviceState): Array<DeviceMonitoringTrend> {
+    const next: Array<DeviceMonitoringTrend> = [];
+    for (let index = 0; index < trends.length; index++) {
+      const trend = trends[index];
+      next.push(trend.device.deviceId === deviceId
+        ? { device: trend.device, response: trend.response, latestStateAt: state.updatedAt }
+        : trend);
+    }
+    return next;
+  }
+
+  private async fetchWeeklySeries(repository: MonitoringRepository, deviceId: string): Promise<SeriesResponse | null> {
+    try {
+      return await repository.weeklySeries(deviceId);
+    } catch {
+      return null;
+    }
+  }
+
+  private async loadOverviewTrends(devices: Array<Device>): Promise<void> {
+    if (!this.repository) return;
+    const repository = this.repository as MonitoringRepository;
+    let next: Array<DeviceMonitoringTrend> = [];
+    const refreshDevices: Array<Device> = [];
+    const stateTasks: Array<Promise<DeviceState | null>> = [];
+    let latestStates: Array<DeviceState> = [];
+    for (let index = 0; index < devices.length; index++) {
+      if (isAlarmActuatorDevice(devices[index])) continue;
+      const cached = await repository.cachedWeeklySeries(devices[index].deviceId);
+      if (cached) next = this.mergeOverviewTrend(next, devices[index], cached.value);
+      if (!cached || !cached.fresh) refreshDevices.push(devices[index]);
+      const cachedState = await repository.cachedState(devices[index].deviceId);
+      if (cachedState) {
+        next = this.mergeOverviewState(next, devices[index].deviceId, cachedState.value);
+        latestStates = this.mergeDeviceState(latestStates, cachedState.value);
+      }
+      stateTasks.push(this.fetchDeviceState(repository, devices[index].deviceId));
+    }
+    if (next.length > 0) this.overviewTrends = next;
+
+    const tasks: Array<Promise<SeriesResponse | null>> = [];
+    for (let index = 0; index < refreshDevices.length; index++) {
+      tasks.push(this.fetchWeeklySeries(repository, refreshDevices[index].deviceId));
+    }
+    const responses = await Promise.all(tasks);
+    const states = await Promise.all(stateTasks);
+    for (let index = 0; index < responses.length; index++) {
+      if (responses[index]) {
+        next = this.mergeOverviewTrend(next, refreshDevices[index], responses[index] as SeriesResponse);
+      }
+    }
+    for (let index = 0; index < states.length; index++) {
+      if (states[index]) {
+        const state = states[index] as DeviceState;
+        next = this.mergeOverviewState(next, devices[index].deviceId, state);
+        latestStates = this.mergeDeviceState(latestStates, state);
+      }
+    }
+    this.overviewTrends = next;
+    if (this.dashboard) this.dashboard = this.applyRealtimeDeviceCounts(this.dashboard, devices, latestStates);
+  }
+
+  private async loadStations(): Promise<void> {
+    const requestSequence = ++this.stationRequestSequence;
+    this.stationRefreshing = true;
+    if (!this.repository) this.getRepository();
+    const repository = this.repository as MonitoringRepository;
+    try {
+      const cached = await repository.cachedStations();
+      const cachedDevices = await repository.cachedDevices('');
+      if (requestSequence !== this.stationRequestSequence) return;
+      if (cached) this.stations = cached.value;
+      if (cachedDevices) this.alarmActuators = this.extractAlarmActuators(cachedDevices.value);
+
+      const allDevicesTask: Promise<Array<Device>> = repository.devices('').catch(() => []);
+      const stations = await repository.stations();
+      if (requestSequence !== this.stationRequestSequence) return;
+      this.stations = stations;
+      const allDevices = await allDevicesTask;
+      if (requestSequence !== this.stationRequestSequence) return;
+      if (allDevices.length > 0) this.alarmActuators = this.extractAlarmActuators(allDevices);
+      this.stationFreshness = `更新于 ${shortTime(new Date().toISOString())}`;
+      this.stationOffline = false;
+      this.markConnection(true);
+    } catch (error) {
+      if (requestSequence !== this.stationRequestSequence) return;
+      this.stationOffline = true;
+      this.markConnection(false);
+      this.errorMessage = this.errorText(error);
+    }
+    if (requestSequence !== this.stationRequestSequence) return;
+
+    let stationId = this.selectedStationId;
+    let selectedStationExists = false;
+    for (let index = 0; index < this.stations.length; index++) {
+      if (this.stations[index].stationId === stationId) selectedStationExists = true;
+    }
+    if (!selectedStationExists) stationId = this.stations.length > 0 ? this.stations[0].stationId : '';
+
+    if (stationId.length > 0) {
+      await this.loadDevices(stationId, requestSequence);
+    } else {
+      this.selectedStationId = '';
+      this.devices = [];
+      this.deviceStates = [];
+    }
+    if (requestSequence === this.stationRequestSequence) {
+      this.stationRefreshing = false;
+    }
+  }
+
+  private async loadDevices(stationId: string, parentRequestSequence?: number): Promise<void> {
+    const requestSequence = parentRequestSequence ?? ++this.stationRequestSequence;
+    if (parentRequestSequence === undefined) this.stationRefreshing = true;
+    if (this.selectedStationId !== stationId) this.deviceStates = [];
+    this.selectedStationId = stationId;
+    if (!this.repository) this.getRepository();
+    const repository = this.repository as MonitoringRepository;
+    try {
+      const cached = await repository.cachedDevices(stationId);
+      if (requestSequence !== this.stationRequestSequence || stationId !== this.selectedStationId) return;
+      if (cached) this.devices = cached.value;
+
+      const devices = await repository.devices(stationId);
+      if (requestSequence !== this.stationRequestSequence || stationId !== this.selectedStationId) return;
+      this.devices = devices;
+      this.stationOffline = false;
+      this.markConnection(true);
+    } catch (error) {
+      if (requestSequence !== this.stationRequestSequence || stationId !== this.selectedStationId) return;
+      this.stationOffline = true;
+      this.markConnection(false);
+      this.errorMessage = this.errorText(error);
+    }
+    await this.refreshStationDeviceStates(stationId);
+    if (requestSequence === this.stationRequestSequence) this.stationRefreshing = false;
+  }
+
+  private async fetchDeviceState(repository: MonitoringRepository, deviceId: string): Promise<DeviceState | null> {
+    try {
+      return await repository.deviceState(deviceId);
+    } catch {
+      return null;
+    }
+  }
+
+  private mergeDeviceState(states: Array<DeviceState>, state: DeviceState): Array<DeviceState> {
+    const next: Array<DeviceState> = [];
+    for (let index = 0; index < states.length; index++) {
+      if (states[index].deviceId !== state.deviceId) next.push(states[index]);
+    }
+    next.push(state);
+    return next;
+  }
+
+  private async refreshStationDeviceStates(stationId: string = this.selectedStationId): Promise<void> {
+    if (!this.repository || stationId.length === 0 || stationId !== this.selectedStationId) return;
+    const stateRequestSequence = ++this.stationStateRequestSequence;
+    const repository = this.repository as MonitoringRepository;
+    const stationDevices: Array<Device> = [];
+    for (let index = 0; index < this.devices.length; index++) {
+      if (!isAlarmActuatorDevice(this.devices[index])) stationDevices.push(this.devices[index]);
+    }
+    let nextStates: Array<DeviceState> = [];
+    const tasks: Array<Promise<DeviceState | null>> = [];
+    for (let index = 0; index < stationDevices.length; index++) {
+      const cached = await repository.cachedState(stationDevices[index].deviceId);
+      if (cached) nextStates = this.mergeDeviceState(nextStates, cached.value);
+      tasks.push(this.fetchDeviceState(repository, stationDevices[index].deviceId));
+    }
+    if (stateRequestSequence !== this.stationStateRequestSequence || stationId !== this.selectedStationId) return;
+    if (nextStates.length > 0) this.deviceStates = nextStates;
+    const states = await Promise.all(tasks);
+    let updated = false;
+    for (let index = 0; index < states.length; index++) {
+      if (states[index]) {
+        nextStates = this.mergeDeviceState(nextStates, states[index] as DeviceState);
+        updated = true;
+      }
+    }
+    if (stateRequestSequence !== this.stationStateRequestSequence || stationId !== this.selectedStationId) return;
+    this.deviceStates = nextStates;
+    if (updated) {
+      this.stationFreshness = `更新于 ${shortTime(new Date().toISOString())}`;
+      this.stationOffline = false;
+      this.markConnection(true);
+    } else if (stationDevices.length > 0) {
+      this.stationOffline = true;
+      this.markConnection(false);
+    }
+  }
+
+  private async loadAlerts(): Promise<void> {
+    if (this.alertRefreshing) return;
+    this.alertRefreshing = true;
+    if (!this.repository) this.getRepository();
+    const repository = this.repository as MonitoringRepository;
+    try {
+      const cached = await repository.cachedAlerts();
+      if (cached) {
+        this.alerts = cached.value.list ?? [];
+        this.alertFreshness = `缓存于 ${shortTime(new Date(cached.savedAt).toISOString())}`;
+      }
+      const page = await repository.alerts();
+      this.alerts = page.list ?? [];
+      this.alertFreshness = `更新于 ${shortTime(new Date().toISOString())}`;
+      this.alertOffline = false;
+      this.markConnection(true);
+
+      if (this.selectedAlert) {
+        let selectedStillExists = false;
+        for (let index = 0; index < this.alerts.length; index++) {
+          if (this.alerts[index].alertId === this.selectedAlert?.alertId) selectedStillExists = true;
+        }
+        if (!selectedStillExists) {
+          this.selectedAlert = null;
+          this.alertEvents = [];
+        }
+      }
+    } catch (error) {
+      this.alertOffline = true;
+      this.markConnection(false);
+      this.errorMessage = this.errorText(error);
+    } finally {
+      this.alertRefreshing = false;
+    }
+  }
+
+  private async openDevice(device: Device): Promise<void> {
+    this.selectedDevice = device;
+    this.selectedDeviceState = null;
+    this.selectedSeries = null;
+    this.screen = 'device';
+    this.stopDeviceTimers();
+    await this.refreshDevice();
+    this.startDeviceTimers();
+  }
+
+  private async refreshDevice(): Promise<void> {
+    if (!this.selectedDevice || !this.repository || this.deviceRefreshing) return;
+    this.deviceRefreshing = true;
+    const repository = this.repository as MonitoringRepository;
+    const deviceId = this.selectedDevice.deviceId;
+    try {
+      const cachedState = await repository.cachedState(deviceId);
+      const cachedSeries = await repository.cachedSeries(deviceId);
+      if (cachedState) this.selectedDeviceState = cachedState.value;
+      if (cachedSeries) this.selectedSeries = cachedSeries.value;
+      await Promise.all([this.refreshDeviceState(true), this.refreshDeviceSeries()]);
+    } finally {
+      this.deviceRefreshing = false;
+    }
+  }
+
+  private async refreshDeviceState(showError: boolean = false): Promise<void> {
+    if (this.screen !== 'device' || !this.selectedDevice || !this.repository) return;
+    try {
+      this.selectedDeviceState = await (this.repository as MonitoringRepository).deviceState(this.selectedDevice.deviceId);
+      this.deviceFreshness = `更新于 ${shortTime(new Date().toISOString())}`;
+      this.deviceOffline = false;
+      this.markConnection(true);
+    } catch (error) {
+      this.deviceOffline = true;
+      this.markConnection(false);
+      if (showError) this.errorMessage = this.errorText(error);
+    }
+  }
+
+  private async refreshDeviceSeries(): Promise<void> {
+    if (this.screen !== 'device' || !this.selectedDevice || !this.repository) return;
+    try {
+      this.selectedSeries = await (this.repository as MonitoringRepository).series(this.selectedDevice.deviceId);
+    } catch {
+      // Latest values remain available when historical storage is temporarily unavailable.
+    }
+  }
+
+  private startAlertStream(): void {
+    if (!this.loggedIn || !this.appVisible || !this.api.hasSession()) return;
+    if (!this.alertStream) {
+      this.alertStream = new AlertStreamClient(this.api, (event: AlertStreamEvent) => {
+        this.handleAlertStreamEvent(event);
+      });
+    }
+    if (!this.alertNotifications && this.context) {
+      this.alertNotifications = new AlertNotificationService(this.context);
+      this.alertNotifications.prepare();
+    }
+    this.alertStream.start();
+  }
+
+  private stopAlertStream(): void {
+    if (this.alertStream) this.alertStream.stop();
+    this.alertStream = undefined;
+  }
+
+  private handleAlertStreamEvent(event: AlertStreamEvent): void {
+    if (!this.loggedIn) return;
+    if (event.eventType === 'ALERT_TRIGGER' && this.alertNotifications) {
+      this.alertNotifications.publish(event);
+    }
+    if (this.screen === 'alerts') this.loadAlerts();
+    if (this.screen === 'overview') this.loadOverview();
+    if (this.selectedAlert?.alertId === event.alertId) this.openAlert(this.selectedAlert);
+  }
+
+  private onPendingAlertChanged(): void {
+    this.openPendingAlert();
+  }
+
+  private async openPendingAlert(): Promise<void> {
+    const alertId = this.pendingAlertId.trim();
+    if (!alertId || !this.loggedIn || !this.repository || this.handlingPendingAlert) return;
+    this.handlingPendingAlert = true;
+    try {
+      this.screen = 'alerts';
+      await this.loadAlerts();
+      let target: Alert | null = null;
+      for (let index = 0; index < this.alerts.length; index++) {
+        if (this.alerts[index].alertId === alertId) {
+          target = this.alerts[index];
+          break;
+        }
+      }
+      if (target) await this.openAlertMap(target);
+    } finally {
+      this.pendingAlertId = '';
+      this.handlingPendingAlert = false;
+    }
+  }
+
+  private async openAlert(alert: Alert): Promise<void> {
+    this.selectedAlert = alert;
+    this.alertEvents = [];
+    this.eventsLoading = true;
+    try {
+      const response = await (this.repository as MonitoringRepository).alertEvents(alert.alertId);
+      this.alertEvents = response.events ?? [];
+      this.alertOffline = false;
+      this.markConnection(true);
+    } catch (error) {
+      this.alertOffline = true;
+      this.markConnection(false);
+      this.errorMessage = this.errorText(error);
+    } finally {
+      this.eventsLoading = false;
+    }
+  }
+
+  private async openAlertMap(alert: Alert | null, preserveCurrentMap: boolean = false): Promise<void> {
+    if (!this.repository) this.getRepository();
+    const repository = this.repository as MonitoringRepository;
+    this.alertMapAlert = alert;
+    if (!preserveCurrentMap || !this.alertMapLocation) {
+      this.alertMapLocation = null;
+      this.alertMapLoading = true;
+    }
+    this.screen = 'alert-map';
+    this.stopDeviceTimers();
+
+    let events: Array<AlertEvent> = [];
+    let stations: Array<Station> = [];
+    let devices: Array<Device> = [];
+    try {
+      if (alert) {
+        this.selectedAlert = alert;
+        const response = await repository.alertEvents(alert.alertId);
+        events = response.events ?? [];
+        this.alertEvents = events;
+      }
+    } catch {
+      events = this.alertEvents;
+    }
+    try {
+      stations = await repository.stations();
+    } catch {
+      const cached = await repository.cachedStations();
+      stations = cached?.value ?? [];
+    }
+    try {
+      devices = await repository.devices('');
+    } catch {
+      const cached = await repository.cachedDevices('');
+      devices = cached?.value ?? [];
+    }
+
+    if (!this.alertLocationRepository && this.cache) {
+      this.alertLocationRepository = new AlertLocationRepository(this.api, this.cache);
+    }
+    if (this.alertLocationRepository) {
+      const resolved = await this.alertLocationRepository.resolve(alert, events, stations, devices);
+      if (resolved || !preserveCurrentMap) this.alertMapLocation = resolved;
+    }
+    this.alertMapLoading = false;
+  }
+
+  private closeAlertMap(): void {
+    this.screen = 'alerts';
+    this.alertMapLoading = false;
+    this.loadAlerts();
+  }
+
+  private selectScreen(screen: AppScreen): void {
+    this.screen = screen;
+    this.errorMessage = '';
+    if (screen === 'overview') this.loadOverview();
+    if (screen === 'stations') this.loadStations();
+    if (screen === 'alerts') this.loadAlerts();
+    if (screen !== 'device') this.stopDeviceTimers();
+  }
+
+  private refreshCurrentScreen(): void {
+    if (this.screen === 'overview') this.loadOverview();
+    if (this.screen === 'stations') this.loadStations();
+    if (this.screen === 'alerts') this.loadAlerts();
+    if (this.screen === 'device') this.refreshDevice();
+    if (this.screen === 'alert-map') this.openAlertMap(this.alertMapAlert, true);
+  }
+
+  private async saveApiBase(value: string): Promise<void> {
+    const normalized = normalizeApiBaseUrl(value);
+    if (normalized.length === 0) return;
+    if (normalized === this.api.getBaseUrl()) return;
+    if (this.loggedIn) await this.pushRegistration.unregister(this.api);
+    if (this.repository) await this.repository.clear();
+    this.stopTimers();
+    this.stopAlertStream();
+    this.api.clearTokens();
+    await SessionStore.clear();
+    this.apiBaseUrl = normalized;
+    this.api.setBaseUrl(normalized);
+    this.releaseRepositories();
+    this.loggedIn = false;
+    this.userName = '';
+    this.username = '';
+    this.connectionState = 'unknown';
+    this.connectionUpdatedAt = '尚未请求';
+    this.resetMonitoringData();
+  }
+
+  private startTimers(): void {
+    this.stopTimers();
+    this.overviewTimer = setInterval(() => {
+      if (this.loggedIn && this.screen === 'overview') this.loadOverview();
+    }, 30000);
+    this.alertTimer = setInterval(() => {
+      if (this.loggedIn && this.screen === 'alerts') this.loadAlerts();
+    }, 30000);
+    this.stationTimer = setInterval(() => {
+      if (this.loggedIn && this.screen === 'stations') this.refreshStationDeviceStates();
+    }, 10000);
+    if (this.screen === 'device') this.startDeviceTimers();
+  }
+
+  private startDeviceTimers(): void {
+    this.stopDeviceTimers();
+    if (!this.loggedIn || this.screen !== 'device') return;
+    this.deviceTimer = setInterval(() => {
+      this.refreshDeviceState();
+    }, 10000);
+    this.deviceSeriesTimer = setInterval(() => {
+      this.refreshDeviceSeries();
+    }, 120000);
+  }
+
+  private stopDeviceTimers(): void {
+    if (this.deviceTimer !== undefined) {
+      clearInterval(this.deviceTimer);
+      this.deviceTimer = undefined;
+    }
+    if (this.deviceSeriesTimer !== undefined) {
+      clearInterval(this.deviceSeriesTimer);
+      this.deviceSeriesTimer = undefined;
+    }
+  }
+
+  private stopTimers(): void {
+    if (this.overviewTimer !== undefined) clearInterval(this.overviewTimer);
+    if (this.alertTimer !== undefined) clearInterval(this.alertTimer);
+    if (this.stationTimer !== undefined) clearInterval(this.stationTimer);
+    this.stopDeviceTimers();
+    this.overviewTimer = undefined;
+    this.alertTimer = undefined;
+    this.stationTimer = undefined;
+  }
+
+  private errorText(error: Object): string {
+    if (error instanceof ApiError) return error.message;
+    if (error instanceof Error) return error.message;
+    return '网络请求失败，请检查服务器地址和连接';
+  }
+
+  build() {
+    Stack() {
+      if (this.sessionRestoring) {
+        SessionRestoringPane();
+      } else if (!this.loggedIn) {
+        if (this.showLoginServerSettings) {
+          LoginServerSettingsPane({
+            apiBaseUrl: this.apiBaseUrl,
+            errorMessage: this.errorMessage,
+            onSave: (value: string) => this.saveLoginServerBase(value),
+            onBack: () => this.closeLoginServerSettings()
+          });
+        } else {
+          LoginPane({
+            busy: this.busy,
+            errorMessage: this.errorMessage,
+            apiBaseUrl: this.apiBaseUrl,
+            onSubmit: (username: string, password: string, apiBaseUrl: string) =>
+              this.login(username, password, apiBaseUrl)
+          });
+        }
+      } else {
+        Column() {
+          if (this.screen === 'overview') {
+            OverviewPane({
+              dashboard: this.dashboard,
+              trends: this.overviewTrends,
+              freshness: this.overviewFreshness,
+              offline: this.overviewOffline,
+              refreshing: this.overviewRefreshing,
+              onOpenStations: () => this.selectScreen('stations'),
+              onRefresh: () => this.loadOverview()
+            });
+          } else if (this.screen === 'stations') {
+            StationsPane({
+              stations: this.stations,
+              devices: this.devices,
+              alarmActuators: this.alarmActuators,
+              deviceStates: this.deviceStates,
+              selectedStationId: this.selectedStationId,
+              freshness: this.stationFreshness,
+              offline: this.stationOffline,
+              refreshing: this.stationRefreshing,
+              onSelectStation: (id: string) => this.loadDevices(id),
+              onSelectDevice: (device: Device) => this.openDevice(device),
+              onRefresh: () => this.loadStations()
+            });
+          } else if (this.screen === 'device') {
+            DevicePane({
+              device: this.selectedDevice,
+              state: this.selectedDeviceState,
+              series: this.selectedSeries,
+              freshness: this.deviceFreshness,
+              offline: this.deviceOffline,
+              refreshing: this.deviceRefreshing,
+              onRefresh: () => this.refreshDevice(),
+              onBack: () => this.selectScreen('stations')
+            });
+          } else if (this.screen === 'alert-map') {
+            AlertMapPane({
+              alert: this.alertMapAlert,
+              location: this.alertMapLocation,
+              loading: this.alertMapLoading,
+              active: this.appVisible,
+              onBack: () => this.closeAlertMap(),
+              onRetry: () => this.openAlertMap(this.alertMapAlert, true)
+            });
+          } else if (this.screen === 'alerts') {
+            AlertsPane({
+              alerts: this.alerts,
+              selectedAlert: this.selectedAlert,
+              events: this.alertEvents,
+              loadingEvents: this.eventsLoading,
+              freshness: this.alertFreshness,
+              offline: this.alertOffline,
+              refreshing: this.alertRefreshing,
+              onSelect: (alert: Alert) => this.openAlert(alert),
+              onOpenMap: (alert: Alert | null) => this.openAlertMap(alert),
+              onRefresh: () => this.loadAlerts()
+            });
+          } else {
+            SettingsPane({
+              userName: this.userName,
+              apiBaseUrl: this.apiBaseUrl,
+              connectionState: this.connectionState,
+              connectionUpdatedAt: this.connectionUpdatedAt,
+              onSave: (value: string) => this.saveApiBase(value),
+              onLogout: () => this.logout()
+            });
+          }
+          if (this.screen !== 'device' && this.screen !== 'alert-map') {
+            BottomTabs({
+              screen: this.screen,
+              alertCount: this.dashboard?.pendingAlerts ?? this.alerts.length,
+              onSelect: (screen: AppScreen) => this.selectScreen(screen)
+            });
+          }
+        }
+        .width('100%')
+        .height('100%')
+        .backgroundColor('#F5F7F8')
+      }
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor('#F5F7F8')
+  }
+}
+
+@Component
+struct RefreshIconButton {
+  @Prop refreshing: boolean;
+  onRefresh: () => void = () => {};
+
+  build() {
+    Button({ type: ButtonType.Circle }) {
+      if (this.refreshing) {
+        LoadingProgress()
+          .width(18)
+          .height(18)
+          .color(UI_COLOR_ACCENT)
+      } else {
+        SymbolGlyph($r('sys.symbol.arrow_clockwise'))
+          .fontSize(20)
+          .fontColor([UI_COLOR_TEXT])
+      }
+    }
+    .width(44)
+    .height(44)
+    .backgroundColor(UI_COLOR_SURFACE)
+    .enabled(!this.refreshing)
+    .stateEffect(!this.refreshing)
+    .accessibilityText(this.refreshing ? '正在同步数据' : '刷新数据')
+    .onClick(() => this.onRefresh())
+  }
+}
+
+@Component
+struct BackIconButton {
+  @Prop accessibilityLabel: string = '返回';
+  onBack: () => void = () => {};
+
+  build() {
+    Button({ type: ButtonType.Circle }) {
+      SymbolGlyph($r('sys.symbol.chevron_left'))
+        .fontSize(22)
+        .fontColor([UI_COLOR_TEXT])
+    }
+    .width(44)
+    .height(44)
+    .backgroundColor(UI_COLOR_SURFACE)
+    .accessibilityText(this.accessibilityLabel)
+    .onClick(() => this.onBack())
+  }
+}
+
+@Component
+struct PageHeader {
+  @Prop title: string;
+  @Prop subtitle: string;
+  @Prop offline: boolean;
+  @Prop refreshing: boolean;
+  onRefresh: () => void = () => {};
+
+  build() {
+    Row() {
+      Column({ space: 3 }) {
+        Text(this.title)
+          .fontSize(22)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(UI_COLOR_TEXT)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+        Text(this.refreshing ? '正在同步最新数据' : this.subtitle)
+          .fontSize(11)
+          .fontColor(this.offline ? UI_COLOR_DANGER : UI_COLOR_MUTED)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+      }
+      .alignItems(HorizontalAlign.Start)
+      .layoutWeight(1)
+      RefreshIconButton({ refreshing: this.refreshing, onRefresh: () => this.onRefresh() })
+    }
+    .padding({ left: UI_PAGE_PADDING, right: UI_PAGE_PADDING, top: 8, bottom: 12 })
+    .width('100%')
+  }
+}
+
+@Component
+struct SessionRestoringPane {
+  build() {
+    Column({ space: 12 }) {
+      LoadingProgress()
+        .width(28)
+        .height(28)
+        .color(UI_COLOR_ACCENT)
+      Text('正在恢复登录状态')
+        .fontSize(16)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(UI_COLOR_TEXT)
+      Text('准备最近一次监测数据')
+        .fontSize(11)
+        .fontColor(UI_COLOR_MUTED)
+    }
+    .width('100%')
+    .height('100%')
+    .justifyContent(FlexAlign.Center)
+    .backgroundColor('#F5F7F8')
+    .accessibilityText('正在恢复登录状态')
+  }
+}
+
+@Component
+struct LoginPane {
+  @Prop busy: boolean;
+  @Prop errorMessage: string;
+  @Prop apiBaseUrl: string;
+  onSubmit: (username: string, password: string, apiBaseUrl: string) => void = () => {};
+  @State private username: string = 'admin';
+  @State private password: string = '';
+
+  build() {
+    Scroll() {
+      Column() {
+        Row({ space: 14 }) {
+          Image($r('app.media.app_icon'))
+            .width(64)
+            .height(64)
+            .borderRadius(8)
+          Column({ space: 4 }) {
+            Text('山体滑坡监测')
+              .fontSize(24)
+              .fontWeight(FontWeight.Bold)
+              .fontColor(UI_COLOR_TEXT)
+              .maxLines(1)
+            Text('鸿蒙移动监测端')
+              .fontSize(12)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(UI_COLOR_LOGIN_BRAND)
+          }
+          .alignItems(HorizontalAlign.Start)
+          .layoutWeight(1)
+        }
+        .width('100%')
+
+        Blank().height(48)
+
+        Text('登录监测平台')
+          .fontSize(21)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(UI_COLOR_TEXT)
+          .width('100%')
+
+        Blank().height(28)
+
+        Column({ space: 10 }) {
+          Text('账号')
+            .fontSize(13)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(UI_COLOR_TEXT)
+          TextInput({ placeholder: '请输入账号', text: this.username })
+            .onChange((value: string) => this.username = value)
+            .height(50)
+            .fontSize(15)
+            .fontColor(UI_COLOR_TEXT)
+            .placeholderColor(UI_COLOR_SUBTLE)
+            .caretColor(UI_COLOR_LOGIN_BRAND)
+            .backgroundColor(UI_COLOR_LOGIN_FIELD)
+            .border({ width: 1, color: UI_COLOR_LOGIN_BORDER })
+            .borderRadius(8)
+        }
+        .width('100%')
+        .alignItems(HorizontalAlign.Start)
+
+        Blank().height(18)
+
+        Column({ space: 10 }) {
+          Text('密码')
+            .fontSize(13)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(UI_COLOR_TEXT)
+          TextInput({ placeholder: '请输入密码', text: this.password })
+            .type(InputType.Password)
+            .onChange((value: string) => this.password = value)
+            .height(50)
+            .fontSize(15)
+            .fontColor(UI_COLOR_TEXT)
+            .placeholderColor(UI_COLOR_SUBTLE)
+            .caretColor(UI_COLOR_LOGIN_BRAND)
+            .backgroundColor(UI_COLOR_LOGIN_FIELD)
+            .border({ width: 1, color: UI_COLOR_LOGIN_BORDER })
+            .borderRadius(8)
+        }
+        .width('100%')
+        .alignItems(HorizontalAlign.Start)
+
+        if (this.errorMessage.length > 0) {
+          Row({ space: 10 }) {
+            Text('!')
+              .fontSize(12)
+              .fontWeight(FontWeight.Bold)
+              .fontColor(UI_COLOR_DANGER)
+              .width(20)
+              .height(20)
+              .textAlign(TextAlign.Center)
+              .backgroundColor('#FFFFFF')
+              .borderRadius(10)
+            Text(this.errorMessage)
+              .fontSize(12)
+              .fontColor(UI_COLOR_DANGER)
+              .layoutWeight(1)
+          }
+          .width('100%')
+          .padding(12)
+          .margin({ top: 16 })
+          .borderRadius(8)
+          .backgroundColor(UI_COLOR_LOGIN_ERROR)
+          .alignItems(VerticalAlign.Center)
+        }
+
+        Button(this.busy ? '正在连接' : '登录')
+          .enabled(!this.busy && this.username.trim().length > 0 && this.password.length > 0)
+          .backgroundColor(UI_COLOR_LOGIN_BRAND)
+          .fontColor('#FFFFFF')
+          .fontSize(15)
+          .fontWeight(FontWeight.Medium)
+          .borderRadius(8)
+          .width('100%')
+          .height(50)
+          .margin({ top: 24 })
+          .onClick(() => this.onSubmit(this.username, this.password, this.apiBaseUrl))
+      }
+      .width('100%')
+      .padding({ left: 24, right: 24, top: 52, bottom: 32 })
+      .alignItems(HorizontalAlign.Start)
+    }
+    .width('100%')
+    .height('100%')
+    .scrollBar(BarState.Off)
+    .backgroundColor(UI_COLOR_LOGIN_PAGE)
+  }
+}
+
+@Component
+struct LoginServerSettingsPane {
+  @Prop apiBaseUrl: string;
+  @Prop errorMessage: string;
+  onSave: (apiBaseUrl: string) => void = () => {};
+  onBack: () => void = () => {};
+  @State private draftUrl: string = '';
+
+  aboutToAppear(): void {
+    this.draftUrl = this.apiBaseUrl;
+  }
+
+  build() {
+    Column() {
+      Row({ space: 12 }) {
+        BackIconButton({ accessibilityLabel: '返回登录', onBack: () => this.onBack() })
+        Text('服务器连接')
+          .fontSize(20)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(UI_COLOR_TEXT)
+      }
+      .width('100%')
+      .height(60)
+      .padding({ left: 16, right: 20, top: 4, bottom: 8 })
+
+      Scroll() {
+        Column() {
+          Row({ space: 12 }) {
+            Image($r('app.media.app_icon'))
+              .width(48)
+              .height(48)
+              .borderRadius(8)
+            Column({ space: 4 }) {
+              Text('无法连接监测服务器')
+                .fontSize(18)
+                .fontWeight(FontWeight.Bold)
+                .fontColor(UI_COLOR_TEXT)
+              Text('请检查网络或重新设置地址')
+                .fontSize(12)
+                .fontColor(UI_COLOR_MUTED)
+            }
+            .alignItems(HorizontalAlign.Start)
+            .layoutWeight(1)
+          }
+          .width('100%')
+
+          if (this.errorMessage.length > 0) {
+            Text(this.errorMessage)
+              .fontSize(12)
+              .fontColor(UI_COLOR_DANGER)
+              .width('100%')
+              .padding(12)
+              .margin({ top: 20 })
+              .borderRadius(8)
+              .backgroundColor(UI_COLOR_LOGIN_ERROR)
+          }
+
+          Column({ space: 10 }) {
+            Text('服务器 API 地址')
+              .fontSize(13)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(UI_COLOR_TEXT)
+            TextInput({ placeholder: 'http://host:port/api/v1', text: this.draftUrl })
+              .onChange((value: string) => this.draftUrl = value)
+              .height(50)
+              .fontSize(14)
+              .fontColor(UI_COLOR_TEXT)
+              .placeholderColor(UI_COLOR_SUBTLE)
+              .caretColor(UI_COLOR_LOGIN_BRAND)
+              .backgroundColor(UI_COLOR_LOGIN_FIELD)
+              .border({ width: 1, color: UI_COLOR_LOGIN_BORDER })
+              .borderRadius(8)
+            Text('需要包含 /api/v1 路径')
+              .fontSize(11)
+              .fontColor(UI_COLOR_MUTED)
+          }
+          .width('100%')
+          .alignItems(HorizontalAlign.Start)
+          .margin({ top: 30 })
+
+          Button('保存并返回登录')
+            .enabled(this.draftUrl.trim().length > 0)
+            .backgroundColor(UI_COLOR_LOGIN_BRAND)
+            .fontColor('#FFFFFF')
+            .fontSize(15)
+            .fontWeight(FontWeight.Medium)
+            .borderRadius(8)
+            .width('100%')
+            .height(50)
+            .margin({ top: 28 })
+            .onClick(() => this.onSave(this.draftUrl))
+        }
+        .width('100%')
+        .padding({ left: 24, right: 24, top: 28, bottom: 32 })
+        .alignItems(HorizontalAlign.Start)
+      }
+      .width('100%')
+      .layoutWeight(1)
+      .scrollBar(BarState.Off)
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(UI_COLOR_LOGIN_PAGE)
+  }
+}
+
+@Component
+struct OverviewPane {
+  @Prop dashboard: DashboardSummary | null;
+  @Prop trends: Array<DeviceMonitoringTrend>;
+  @Prop freshness: string;
+  @Prop offline: boolean;
+  @Prop refreshing: boolean;
+  onOpenStations: () => void = () => {};
+  onRefresh: () => void = () => {};
+
+  build() {
+    Column() {
+      PageHeader({
+        title: '监测总览',
+        subtitle: this.freshness,
+        offline: this.offline,
+        refreshing: this.refreshing,
+        onRefresh: () => this.onRefresh()
+      });
+      Scroll() {
+        Column({ space: 12 }) {
+          StatusBanner({
+            text: this.refreshing
+              ? '正在同步 · 当前数据保持可见'
+              : this.offline
+              ? `离线缓存 · ${this.freshness}`
+              : `实时数据 · ${this.dashboard?.onlineDevices ?? '--'} / ${this.dashboard?.totalDevices ?? '--'} 台设备在线 · ${this.freshness}`,
+            tone: this.refreshing ? UI_COLOR_ACCENT : this.offline ? UI_COLOR_DANGER : UI_COLOR_SUCCESS
+          });
+          Row({ space: 8 }) {
+            MetricCard({ label: '在线设备', value: `${this.dashboard?.onlineDevices ?? '--'}`, detail: `共 ${this.dashboard?.totalDevices ?? '--'} 台`, accent: '#3C9D82' });
+            MetricCard({ label: '监测站点', value: `${this.dashboard?.stations ?? '--'}`, detail: '查看设备', accent: '#E46D35', actionable: true, onTap: () => this.onOpenStations() });
+          }
+          Row({ space: 8 }) {
+            MetricCard({ label: '待处理告警', value: `${this.dashboard?.pendingAlerts ?? '--'}`, detail: `今日 ${this.dashboard?.todayAlerts ?? '--'} 条`, accent: '#B44832' });
+            MetricCard({ label: '今日数据', value: `${this.dashboard?.todayDataCount ?? '--'}`, detail: '条遥测记录', accent: '#477B96' });
+          }
+          OverviewTrendPane({ trends: this.trends });
+        }
+        .padding({ left: 16, right: 16, bottom: 24 })
+        .width('100%')
+      }
+      .layoutWeight(1)
+      .scrollBar(BarState.Off)
+      .align(Alignment.TopStart)
+    }
+    .layoutWeight(1)
+  }
+}
+
+@Component
+struct OverviewTrendPane {
+  @Prop trends: Array<DeviceMonitoringTrend>;
+  @State private selectedMetricKey: string = 'tilt_y_deg';
+
+  private metricOptions(): Array<DeviceMetricOption> {
+    return [
+      { sensorKey: 'tilt_y_deg', label: 'Y 倾角' },
+      { sensorKey: 'soil_temperature_c', label: '土壤温度' },
+      { sensorKey: 'soil_moisture_pct', label: '土壤湿度' },
+      { sensorKey: 'electrical_conductivity_us_cm', label: '电导率' }
+    ];
+  }
+
+  private metricFor(trend: DeviceMonitoringTrend): MetricSeries | null {
+    if (this.selectedMetricKey === 'electrical_conductivity_us_cm' &&
+      !deviceSupportsConductivity(trend.device)) return null;
+    const series = trend.response.series;
+    for (let index = 0; index < series.length; index++) {
+      if (series[index].sensorKey === this.selectedMetricKey) return series[index];
+    }
+    return null;
+  }
+
+  private hasMetric(sensorKey: string): boolean {
+    for (let index = 0; index < this.trends.length; index++) {
+      if (sensorKey === 'electrical_conductivity_us_cm' &&
+        !deviceSupportsConductivity(this.trends[index].device)) continue;
+      const series = this.trends[index].response.series;
+      for (let metricIndex = 0; metricIndex < series.length; metricIndex++) {
+        if (series[metricIndex].sensorKey === sensorKey) return true;
+      }
+    }
+    return false;
+  }
+
+  build() {
+    Column({ space: 10 }) {
+      Row() {
+        Column({ space: 2 }) {
+          Text('近 7 日监测趋势')
+            .fontSize(16)
+            .fontWeight(FontWeight.Bold)
+            .fontColor('#18212B')
+          Text('按节点对比 · 1 小时均值')
+            .fontSize(10)
+            .fontColor('#8A949E')
+        }
+        .alignItems(HorizontalAlign.Start)
+      }
+      .width('100%')
+      Row({ space: 4 }) {
+        ForEach(this.metricOptions(), (option: DeviceMetricOption) => {
+          MetricSegment({
+            label: option.label,
+            active: this.selectedMetricKey === option.sensorKey,
+            available: this.hasMetric(option.sensorKey),
+            onTap: () => this.selectedMetricKey = option.sensorKey
+          });
+        }, (option: DeviceMetricOption) => option.sensorKey)
+      }
+      .width('100%')
+      if (this.trends.length > 0) {
+        ForEach(this.trends, (trend: DeviceMonitoringTrend, index: number) => {
+          OverviewTrendRow({
+            trend: trend,
+            metric: this.metricFor(trend),
+            unsupported: this.selectedMetricKey === 'electrical_conductivity_us_cm' &&
+              !deviceSupportsConductivity(trend.device),
+            showDivider: index < this.trends.length - 1
+          });
+        }, (trend: DeviceMonitoringTrend) => `${trend.device.deviceId}-${this.selectedMetricKey}`)
+      } else {
+        Column({ space: 5 }) {
+          Text('正在获取节点趋势')
+            .fontSize(13)
+            .fontWeight(FontWeight.Medium)
+            .fontColor('#18212B')
+          Text('总览数值可先正常查看')
+            .fontSize(11)
+            .fontColor('#6C7782')
+        }
+        .alignItems(HorizontalAlign.Start)
+        .padding({ top: 12, bottom: 12 })
+        .width('100%')
+      }
+    }
+    .padding(14)
+    .backgroundColor('#FFFFFF')
+    .borderRadius(8)
+    .width('100%')
+  }
+}
+
+@Component
+struct OverviewTrendRow {
+  @Prop trend: DeviceMonitoringTrend;
+  @Prop metric: MetricSeries | null;
+  @Prop unsupported: boolean;
+  @Prop showDivider: boolean;
+
+  private unit(): string {
+    if (!this.metric) return '';
+    if (this.metric.sensorKey === 'tilt_y_deg') return '°';
+    if (this.metric.sensorKey === 'soil_temperature_c') return '°C';
+    if (this.metric.sensorKey === 'soil_moisture_pct') return '%';
+    if (this.metric.sensorKey === 'electrical_conductivity_us_cm') return 'μS/cm';
+    return metricUnitLabel(this.metric.unit);
+  }
+
+  private digits(): number {
+    if (this.metric?.sensorKey === 'tilt_y_deg') return 2;
+    if (this.metric?.sensorKey === 'electrical_conductivity_us_cm') return 0;
+    return 1;
+  }
+
+  private latest(): string {
+    if (!this.metric || this.metric.points.length === 0) return '--';
+    return this.metric.points[this.metric.points.length - 1].value.toFixed(this.digits());
+  }
+
+  private change(): string {
+    if (!this.metric || this.metric.points.length < 2) return '暂无对比';
+    const points = this.metric.points;
+    const value = points[points.length - 1].value - points[0].value;
+    return `区间 ${value > 0 ? '+' : ''}${value.toFixed(this.digits())}${this.unit()}`;
+  }
+
+  private latestTime(): string {
+    if (!this.metric || this.metric.points.length === 0) return '暂无历史数据';
+    return `${this.metric.points.length} 个时段 · 截至 ${shortTime(this.metric.points[this.metric.points.length - 1].ts)}`;
+  }
+
+  private summaryText(): string {
+    if (this.unsupported) return '未配置该监测项';
+    return `${this.latestTime()} · ${this.change()}`;
+  }
+
+  private accent(): string {
+    if (this.metric?.sensorKey === 'soil_temperature_c') return '#B96B38';
+    if (this.metric?.sensorKey === 'soil_moisture_pct') return '#3C9D82';
+    if (this.metric?.sensorKey === 'electrical_conductivity_us_cm') return '#8B6D2E';
+    return '#477B96';
+  }
+
+  private fillColor(): string {
+    if (this.metric?.sensorKey === 'soil_temperature_c') return 'rgba(185,107,56,0.08)';
+    if (this.metric?.sensorKey === 'soil_moisture_pct') return 'rgba(60,157,130,0.08)';
+    if (this.metric?.sensorKey === 'electrical_conductivity_us_cm') return 'rgba(139,109,46,0.08)';
+    return 'rgba(71,123,150,0.08)';
+  }
+
+  build() {
+    Column({ space: 7 }) {
+      Row({ space: 8 }) {
+        Circle({ width: 8, height: 8 })
+          .fill(isDeviceOnline(this.trend.device, this.trend.latestStateAt) ? UI_COLOR_SUCCESS : UI_COLOR_DANGER)
+        Column({ space: 2 }) {
+          Text(deviceDisplayName(this.trend.device))
+            .fontSize(13)
+            .fontWeight(FontWeight.Medium)
+            .fontColor('#18212B')
+          Text(this.summaryText())
+            .fontSize(10)
+            .fontColor('#6C7782')
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+        }
+        .alignItems(HorizontalAlign.Start)
+        .layoutWeight(1)
+        Text(`${this.latest()}${this.unit()}`)
+          .fontSize(18)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(this.metric ? this.accent() : '#8A949E')
+      }
+      if (this.metric && this.metric.points.length >= 2) {
+        TrendLineChart({
+          metric: this.metric as MetricSeries,
+          accent: this.accent(),
+          fillColor: this.fillColor(),
+          chartHeight: 48,
+          showGrid: false
+        });
+      } else {
+        Text(this.unsupported ? '此节点未配置电导率传感器' :
+          this.metric ? '仅 1 个数据点，暂不能形成趋势' : '该节点暂无此项历史数据')
+          .fontSize(10)
+          .fontColor('#8A949E')
+      }
+      if (this.showDivider) {
+        Divider().color('#EEF1F3').margin({ top: 3 })
+      }
+    }
+    .width('100%')
+  }
+}
+
+@Component
+struct StationsPane {
+  @Prop stations: Array<Station>;
+  @Prop devices: Array<Device>;
+  @Prop alarmActuators: Array<Device>;
+  @Prop deviceStates: Array<DeviceState>;
+  @Prop selectedStationId: string;
+  @Prop freshness: string;
+  @Prop offline: boolean;
+  @Prop refreshing: boolean;
+  onSelectStation: (id: string) => void = () => {};
+  onSelectDevice: (device: Device) => void = () => {};
+  onRefresh: () => void = () => {};
+
+  private selectedStation(): Station | null {
+    for (let index = 0; index < this.stations.length; index++) {
+      if (this.stations[index].stationId === this.selectedStationId) return this.stations[index];
+    }
+    return null;
+  }
+
+  private monitoringDevices(): Array<Device> {
+    const devices: Array<Device> = [];
+    for (let index = 0; index < this.devices.length; index++) {
+      if (!isAlarmActuatorDevice(this.devices[index])) devices.push(this.devices[index]);
+    }
+    return devices;
+  }
+
+  private linkageDevices(): Array<Device> {
+    const devices: Array<Device> = [];
+    for (let index = 0; index < this.devices.length; index++) {
+      if (isAlarmActuatorDevice(this.devices[index])) devices.push(this.devices[index]);
+    }
+    for (let index = 0; index < this.alarmActuators.length; index++) {
+      let exists = false;
+      for (let current = 0; current < devices.length; current++) {
+        if (devices[current].deviceId === this.alarmActuators[index].deviceId) exists = true;
+      }
+      if (!exists) devices.push(this.alarmActuators[index]);
+    }
+    return devices;
+  }
+
+  private onlineDeviceCount(devices: Array<Device>): number {
+    let count = 0;
+    for (let index = 0; index < devices.length; index++) {
+      if (this.deviceIsOnline(devices[index])) count += 1;
+    }
+    return count;
+  }
+
+  private stationDeviceSummary(): string {
+    const monitoring = this.monitoringDevices();
+    const linkage = this.linkageDevices();
+    const base = `${monitoring.length} 个监测节点 · ${this.onlineDeviceCount(monitoring)} 个在线`;
+    return linkage.length > 0 ? `${base} · ${linkage.length} 台联动设备` : base;
+  }
+
+  private stateForDevice(deviceId: string): DeviceState | null {
+    for (let index = 0; index < this.deviceStates.length; index++) {
+      if (this.deviceStates[index].deviceId === deviceId) return this.deviceStates[index];
+    }
+    return null;
+  }
+
+  private deviceUpdatedAt(device: Device): string | undefined {
+    return this.stateForDevice(device.deviceId)?.updatedAt ?? device.lastSeenAt;
+  }
+
+  private deviceIsOnline(device: Device): boolean {
+    return isDeviceOnline(device, this.deviceUpdatedAt(device));
+  }
+
+  private deviceStatus(device: Device): string {
+    return deviceConnectivityLabel(device, this.deviceUpdatedAt(device));
+  }
+
+  private selectedStationName(): string {
+    const station = this.selectedStation();
+    return station ? stationDisplayName(station) : '当前监测站';
+  }
+
+  build() {
+    Column() {
+      PageHeader({
+        title: '监测站点',
+        subtitle: `共 ${this.stations.length} 个站点 · ${this.freshness}`,
+        offline: this.offline,
+        refreshing: this.refreshing,
+        onRefresh: () => this.onRefresh()
+      });
+      Scroll() {
+        Column({ space: 12 }) {
+          StatusBanner({
+            text: this.refreshing
+              ? `正在同步 · 保留当前 ${this.monitoringDevices().length} 个节点数据`
+              : this.offline
+              ? `离线缓存 · ${this.freshness}`
+              : `实时数据 · ${this.onlineDeviceCount(this.monitoringDevices())} / ${this.monitoringDevices().length} 个监测节点在线 · ${this.freshness}`,
+            tone: this.refreshing ? UI_COLOR_ACCENT : this.offline ? UI_COLOR_DANGER : UI_COLOR_SUCCESS
+          });
+          Text('选择站点')
+            .fontSize(13)
+            .fontWeight(FontWeight.Medium)
+            .fontColor('#52606D')
+            .width('100%')
+          ForEach(this.stations, (station: Station) => {
+            Row({ space: 12 }) {
+              Circle({ width: 10, height: 10 })
+                .fill(isOnlineStatus(station.status) ? '#3C9D82' : '#B44832')
+              Column({ space: 4 }) {
+                Text(stationDisplayName(station))
+                  .fontSize(16)
+                  .fontWeight(FontWeight.Medium)
+                  .fontColor('#18212B')
+                  .maxLines(1)
+                  .textOverflow({ overflow: TextOverflow.Ellipsis })
+                Text(`${station.stationCode ?? '未设置编号'} · ${station.regionCode ?? '未配置区域'}`)
+                  .fontSize(11)
+                  .fontColor('#6C7782')
+              }
+              .alignItems(HorizontalAlign.Start)
+              .layoutWeight(1)
+              Text(stationStatusLabel(station.status))
+                .fontSize(11)
+                .fontColor(isOnlineStatus(station.status) ? '#287C67' : '#B44832')
+            }
+            .padding({ left: 14, right: 14, top: 13, bottom: 13 })
+            .backgroundColor(this.selectedStationId === station.stationId ? '#FFF1EA' : '#FFFFFF')
+            .borderRadius(8)
+            .width('100%')
+            .onClick(() => this.onSelectStation(station.stationId))
+          }, (station: Station) => station.stationId)
+          if (this.selectedStationId.length > 0) {
+            Divider().color('#E3E8EB').margin({ top: 4, bottom: 2 })
+            Row() {
+              Column({ space: 3 }) {
+                Text(this.selectedStationName())
+                  .fontSize(17)
+                  .fontWeight(FontWeight.Bold)
+                  .fontColor('#18212B')
+                Text(this.stationDeviceSummary())
+                  .fontSize(12)
+                  .fontColor('#6C7782')
+              }
+              .alignItems(HorizontalAlign.Start)
+              .layoutWeight(1)
+              Text('设备列表')
+                .fontSize(12)
+                .fontColor('#6C7782')
+            }
+            .width('100%')
+            ForEach(this.monitoringDevices(), (device: Device) => {
+              Column({ space: 10 }) {
+                Row({ space: 12 }) {
+                  Circle({ width: 10, height: 10 })
+                    .fill(this.deviceIsOnline(device) ? '#3C9D82' : '#B44832')
+                  Column({ space: 4 }) {
+                    Text(deviceDisplayName(device))
+                      .fontSize(15)
+                      .fontWeight(FontWeight.Medium)
+                      .fontColor('#18212B')
+                    Text(`${deviceTypeLabel(device.deviceType)} · ${relativeTime(this.deviceUpdatedAt(device))}`)
+                      .fontSize(11)
+                      .fontColor('#6C7782')
+                  }
+                  .alignItems(HorizontalAlign.Start)
+                  .layoutWeight(1)
+                  Column({ space: 2 }) {
+                    Text(this.deviceStatus(device))
+                      .fontSize(11)
+                      .fontColor(this.deviceIsOnline(device) ? '#287C67' : '#B44832')
+                    Text('›')
+                      .fontSize(22)
+                      .fontColor('#8A949E')
+                  }
+                }
+                if (this.stateForDevice(device.deviceId)) {
+                  Divider().color('#EEF1F3')
+                  Row() {
+                    StationMetric({ label: 'X 倾角', value: displayMetric(metricValue(this.stateForDevice(device.deviceId), 'tilt_x_deg')), unit: '°' });
+                    StationMetric({ label: 'Y 倾角', value: displayMetric(metricValue(this.stateForDevice(device.deviceId), 'tilt_y_deg')), unit: '°' });
+                    StationMetric({ label: '土壤温度', value: displayMetric(soilTemperatureValue(this.stateForDevice(device.deviceId)), 1), unit: '°C' });
+                    StationMetric({ label: '土壤湿度', value: displayMetric(soilMoistureValue(this.stateForDevice(device.deviceId)), 1), unit: '%' });
+                  }
+                  .width('100%')
+                } else {
+                  Text('正在获取节点实时数据…')
+                    .fontSize(11)
+                    .fontColor('#8A949E')
+                    .width('100%')
+                }
+              }
+              .padding({ left: 14, right: 12, top: 13, bottom: 13 })
+              .backgroundColor('#FFFFFF')
+              .borderRadius(8)
+              .width('100%')
+              .onClick(() => this.onSelectDevice(device))
+            }, (device: Device) => device.deviceId)
+            if (this.monitoringDevices().length === 0) {
+              Text('该站点暂无监测节点')
+                .fontSize(13)
+                .fontColor('#6C7782')
+            }
+            if (this.linkageDevices().length > 0) {
+              Text('联动告警设备')
+                .fontSize(13)
+                .fontWeight(FontWeight.Medium)
+                .fontColor('#52606D')
+                .width('100%')
+                .margin({ top: 6 })
+              ForEach(this.linkageDevices(), (device: Device) => {
+                Row({ space: 12 }) {
+                  Stack({ alignContent: Alignment.Center }) {
+                    Circle({ width: 36, height: 36 })
+                      .fill(this.deviceIsOnline(device) ? '#EAF5F1' : '#F8E9E5')
+                    SymbolGlyph($r('sys.symbol.bell'))
+                      .fontSize(18)
+                      .fontColor([this.deviceIsOnline(device) ? UI_COLOR_SUCCESS : UI_COLOR_DANGER])
+                  }
+                  .width(36)
+                  .height(36)
+                  Column({ space: 4 }) {
+                    Text(deviceDisplayName(device))
+                      .fontSize(15)
+                      .fontWeight(FontWeight.Medium)
+                      .fontColor(UI_COLOR_TEXT)
+                      .maxLines(1)
+                      .textOverflow({ overflow: TextOverflow.Ellipsis })
+                    Text(`联动告警终端 · ${relativeTime(this.deviceUpdatedAt(device))}`)
+                      .fontSize(11)
+                      .fontColor(UI_COLOR_MUTED)
+                  }
+                  .alignItems(HorizontalAlign.Start)
+                  .layoutWeight(1)
+                  Text(this.deviceStatus(device))
+                    .fontSize(11)
+                    .fontWeight(FontWeight.Medium)
+                    .fontColor(this.deviceIsOnline(device) ? '#287C67' : UI_COLOR_DANGER)
+                }
+                .padding({ left: 14, right: 14, top: 13, bottom: 13 })
+                .backgroundColor(UI_COLOR_SURFACE)
+                .borderRadius(8)
+                .width('100%')
+              }, (device: Device) => device.deviceId)
+            }
+          }
+          if (this.stations.length === 0) {
+            Text('暂无站点数据')
+              .fontSize(13)
+              .fontColor('#6C7782')
+          }
+        }
+        .padding({ left: 16, right: 16, bottom: 24 })
+        .width('100%')
+      }
+      .layoutWeight(1)
+      .scrollBar(BarState.Off)
+      .align(Alignment.TopStart)
+    }
+    .layoutWeight(1)
+  }
+}
+
+@Component
+struct StationMetric {
+  @Prop label: string;
+  @Prop value: string;
+  @Prop unit: string;
+
+  build() {
+    Column({ space: 3 }) {
+      Text(this.label)
+        .fontSize(10)
+        .fontColor('#6C7782')
+      Text(`${this.value}${this.unit}`)
+        .fontSize(13)
+        .fontWeight(FontWeight.Medium)
+        .fontColor('#18212B')
+        .maxLines(1)
+    }
+    .alignItems(HorizontalAlign.Start)
+    .layoutWeight(1)
+  }
+}
+
+@Component
+struct CurrentMetricsPane {
+  @Prop state: DeviceState | null;
+  @Prop conductivity: number | null;
+  @Prop showConductivity: boolean;
+
+  build() {
+    Column({ space: 12 }) {
+      Row() {
+        Text('当前监测值')
+          .fontSize(15)
+          .fontWeight(FontWeight.Bold)
+          .fontColor('#18212B')
+        Blank().layoutWeight(1)
+        Text(relativeTime(this.state?.updatedAt))
+          .fontSize(11)
+          .fontColor('#6C7782')
+      }
+      Row() {
+        DetailMetric({ label: 'X 轴倾角', value: displayMetric(metricValue(this.state, 'tilt_x_deg')), unit: '°' });
+        DetailMetric({ label: 'Y 轴倾角', value: displayMetric(metricValue(this.state, 'tilt_y_deg')), unit: '°' });
+      }
+      Divider().color('#EEF1F3')
+      Row() {
+        DetailMetric({ label: '土壤温度', value: displayMetric(soilTemperatureValue(this.state), 1), unit: '°C' });
+        DetailMetric({ label: '土壤湿度', value: displayMetric(soilMoistureValue(this.state), 1), unit: '%' });
+      }
+      if (this.showConductivity) {
+        Divider().color('#EEF1F3')
+        Row() {
+          DetailMetric({ label: '土壤电导率', value: displayMetric(this.conductivity, 0), unit: 'μS/cm' });
+        }
+      }
+    }
+    .padding(14)
+    .backgroundColor('#FFFFFF')
+    .borderRadius(8)
+    .width('100%')
+  }
+}
+
+@Component
+struct DetailMetric {
+  @Prop label: string;
+  @Prop value: string;
+  @Prop unit: string;
+
+  build() {
+    Column({ space: 4 }) {
+      Text(this.label)
+        .fontSize(11)
+        .fontColor('#6C7782')
+      Text(`${this.value}${this.unit}`)
+        .fontSize(22)
+        .fontWeight(FontWeight.Bold)
+        .fontColor('#18212B')
+        .maxLines(1)
+    }
+    .alignItems(HorizontalAlign.Start)
+    .layoutWeight(1)
+  }
+}
+
+@Component
+struct DevicePane {
+  @Prop device: Device | null;
+  @Prop state: DeviceState | null;
+  @Prop series: SeriesResponse | null;
+  @Prop freshness: string;
+  @Prop offline: boolean;
+  @Prop refreshing: boolean;
+  onRefresh: () => void = () => {};
+  onBack: () => void = () => {};
+  @State private selectedMetricKey: string = 'tilt_x_deg';
+
+  private metricOptions(): Array<DeviceMetricOption> {
+    const options: Array<DeviceMetricOption> = [
+      { sensorKey: 'tilt_x_deg', label: 'X 倾角' },
+      { sensorKey: 'tilt_y_deg', label: 'Y 倾角' },
+      { sensorKey: 'soil_temperature_c', label: '土壤温度' },
+      { sensorKey: 'soil_moisture_pct', label: '土壤湿度' }
+    ];
+    if (deviceSupportsConductivity(this.device)) {
+      options.push({ sensorKey: 'electrical_conductivity_us_cm', label: '电导率' });
+    }
+    return options;
+  }
+
+  private metricFor(sensorKey: string): MetricSeries | null {
+    if (sensorKey === 'electrical_conductivity_us_cm' &&
+      !deviceSupportsConductivity(this.device)) return null;
+    const metrics = this.series?.series ?? [];
+    for (let index = 0; index < metrics.length; index++) {
+      if (metrics[index].sensorKey === sensorKey) return metrics[index];
+    }
+    return null;
+  }
+
+  private activeMetric(): MetricSeries | null {
+    const selected = this.metricFor(this.selectedMetricKey);
+    if (selected) return selected;
+    const metrics = this.series?.series ?? [];
+    return metrics.length > 0 ? metrics[0] : null;
+  }
+
+  private activeMetricKey(): string {
+    return this.activeMetric()?.sensorKey ?? this.selectedMetricKey;
+  }
+
+  private activeMetrics(): Array<MetricSeries> {
+    const metric = this.activeMetric();
+    return metric ? [metric] : [];
+  }
+
+  private metricRenderKey(metric: MetricSeries): string {
+    const latest = metric.points.length > 0 ? metric.points[metric.points.length - 1].ts : 'empty';
+    return `${metric.sensorKey}-${latest}`;
+  }
+
+  private currentConductivity(): number | null {
+    if (!deviceSupportsConductivity(this.device)) return null;
+    const current = soilConductivityValue(this.state);
+    if (current !== null) return current;
+    const series = this.metricFor('electrical_conductivity_us_cm');
+    if (!series || series.points.length === 0) return null;
+    return series.points[series.points.length - 1].value;
+  }
+
+  build() {
+    Column() {
+      Row({ space: 12 }) {
+        BackIconButton({ accessibilityLabel: '返回站点列表', onBack: () => this.onBack() })
+        Column({ space: 3 }) {
+          Text(this.device ? deviceDisplayName(this.device) : '设备详情')
+            .fontSize(20)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(UI_COLOR_TEXT)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+          Text(stationNameLabel(this.device?.stationName))
+            .fontSize(11)
+            .fontColor(UI_COLOR_MUTED)
+        }
+        .alignItems(HorizontalAlign.Start)
+        .layoutWeight(1)
+        RefreshIconButton({ refreshing: this.refreshing, onRefresh: () => this.onRefresh() })
+      }
+      .height(60)
+      .padding({ left: UI_PAGE_PADDING, right: UI_PAGE_PADDING, top: 4, bottom: 8 })
+      Scroll() {
+        Column({ space: 12 }) {
+          StatusBanner({
+            text: this.refreshing
+              ? '正在同步 · 当前监测值保持可见'
+              : this.offline
+              ? `离线缓存 · ${this.freshness}`
+              : `实时数据 · ${this.device ? deviceConnectivityLabel(this.device, this.state?.updatedAt) : '状态未知'} · ${this.freshness}`,
+            tone: this.refreshing ? UI_COLOR_ACCENT : this.offline ? UI_COLOR_DANGER : this.device && isDeviceOnline(this.device, this.state?.updatedAt) ? UI_COLOR_SUCCESS : UI_COLOR_DANGER
+          });
+          CurrentMetricsPane({
+            state: this.state,
+            conductivity: this.currentConductivity(),
+            showConductivity: deviceSupportsConductivity(this.device)
+          });
+          Row() {
+            Text('24 小时趋势')
+              .fontSize(16)
+              .fontWeight(FontWeight.Bold)
+              .fontColor('#18212B')
+            Blank().layoutWeight(1)
+            Text('5 分钟均值')
+              .fontSize(11)
+              .fontColor('#6C7782')
+          }
+          .width('100%')
+          Row({ space: 4 }) {
+            ForEach(this.metricOptions(), (option: DeviceMetricOption) => {
+              MetricSegment({
+                label: option.label,
+                active: this.activeMetricKey() === option.sensorKey,
+                available: this.metricFor(option.sensorKey) !== null,
+                onTap: () => this.selectedMetricKey = option.sensorKey
+              });
+            }, (option: DeviceMetricOption) => option.sensorKey)
+          }
+          .width('100%')
+          ForEach(this.activeMetrics(), (metric: MetricSeries) => {
+            SeriesTrendCard({ metric: metric });
+          }, (metric: MetricSeries) => this.metricRenderKey(metric))
+          if (this.activeMetrics().length === 0) {
+            Column({ space: 6 }) {
+              Text('暂无历史趋势')
+                .fontSize(14)
+                .fontWeight(FontWeight.Medium)
+                .fontColor('#18212B')
+              Text('当前值仍会每 10 秒更新')
+                .fontSize(11)
+                .fontColor('#6C7782')
+            }
+            .alignItems(HorizontalAlign.Start)
+            .padding(14)
+            .backgroundColor('#FFFFFF')
+            .borderRadius(8)
+            .width('100%')
+          }
+        }
+        .padding({ left: 16, right: 16, bottom: 24 })
+      }
+      .layoutWeight(1)
+      .scrollBar(BarState.Off)
+      .align(Alignment.TopStart)
+    }
+    .layoutWeight(1)
+  }
+}
+
+interface DeviceMetricOption {
+  sensorKey: string;
+  label: string;
+}
+
+@Component
+struct MetricSegment {
+  @Prop label: string;
+  @Prop active: boolean;
+  @Prop available: boolean;
+  onTap: () => void = () => {};
+
+  build() {
+    Text(this.label)
+      .fontSize(11)
+      .fontWeight(this.active ? FontWeight.Bold : FontWeight.Medium)
+      .fontColor(this.active ? '#FFFFFF' : this.available ? '#52606D' : '#AAB2B9')
+      .textAlign(TextAlign.Center)
+      .maxLines(1)
+      .height(34)
+      .layoutWeight(1)
+      .backgroundColor(this.active ? '#18212B' : '#E9EDF0')
+      .borderRadius(6)
+      .enabled(this.available)
+      .onClick(() => {
+        if (this.available) this.onTap();
+      })
+  }
+}
+
+@Component
+struct SeriesTrendCard {
+  @Prop metric: MetricSeries;
+
+  private points(): Array<SeriesPoint> {
+    return this.metric.points;
+  }
+
+  private digits(): number {
+    if (this.metric.sensorKey === 'electrical_conductivity_us_cm') return 0;
+    return this.metric.sensorKey === 'soil_temperature_c' || this.metric.sensorKey === 'soil_moisture_pct' ? 1 : 2;
+  }
+
+  private formatted(value: number): string {
+    return value.toFixed(this.digits());
+  }
+
+  private unit(): string {
+    const configured = metricUnitLabel(this.metric.unit);
+    if (configured.length > 0) return configured === 'C' ? '°C' : configured;
+    if (this.metric.sensorKey.startsWith('tilt_')) return '°';
+    if (this.metric.sensorKey === 'soil_temperature_c') return '°C';
+    if (this.metric.sensorKey === 'soil_moisture_pct') return '%';
+    if (this.metric.sensorKey === 'electrical_conductivity_us_cm') return 'μS/cm';
+    return '';
+  }
+
+  private latestValue(): string {
+    if (this.metric.points.length === 0) return '--';
+    const latest = this.metric.points[this.metric.points.length - 1];
+    return this.formatted(latest.value);
+  }
+
+  private minimum(): number {
+    const points = this.points();
+    if (points.length === 0) return 0;
+    let value = points[0].value;
+    for (let index = 1; index < points.length; index++) value = Math.min(value, points[index].value);
+    return value;
+  }
+
+  private maximum(): number {
+    const points = this.points();
+    if (points.length === 0) return 0;
+    let value = points[0].value;
+    for (let index = 1; index < points.length; index++) value = Math.max(value, points[index].value);
+    return value;
+  }
+
+  private change(): number {
+    const points = this.points();
+    if (points.length < 2) return 0;
+    return points[points.length - 1].value - points[0].value;
+  }
+
+  private changeText(): string {
+    const value = this.change();
+    const sign = value > 0 ? '+' : '';
+    return `${sign}${this.formatted(value)}${this.unit()}`;
+  }
+
+  private accent(): string {
+    switch (this.metric.sensorKey) {
+      case 'tilt_y_deg': return '#477B96';
+      case 'soil_temperature_c': return '#B96B38';
+      case 'soil_moisture_pct': return '#3C9D82';
+      case 'electrical_conductivity_us_cm': return '#8B6D2E';
+      default: return '#E46D35';
+    }
+  }
+
+  private fillColor(): string {
+    switch (this.metric.sensorKey) {
+      case 'tilt_y_deg': return 'rgba(71,123,150,0.10)';
+      case 'soil_temperature_c': return 'rgba(185,107,56,0.10)';
+      case 'soil_moisture_pct': return 'rgba(60,157,130,0.10)';
+      case 'electrical_conductivity_us_cm': return 'rgba(139,109,46,0.10)';
+      default: return 'rgba(228,109,53,0.10)';
+    }
+  }
+
+  private startTime(): string {
+    const points = this.points();
+    return points.length > 0 ? shortTime(points[0].ts) : '--';
+  }
+
+  private endTime(): string {
+    const points = this.points();
+    return points.length > 0 ? shortTime(points[points.length - 1].ts) : '--';
+  }
+
+  build() {
+    Column({ space: 10 }) {
+      Row() {
+        Column({ space: 2 }) {
+          Text(metricShortLabel(this.metric.sensorKey))
+            .fontSize(15)
+            .fontWeight(FontWeight.Bold)
+            .fontColor('#18212B')
+          Text(`${this.metric.points.length} 个数据点 · ${this.startTime()} 至 ${this.endTime()}`)
+            .fontSize(11)
+            .fontColor('#6C7782')
+        }
+        .alignItems(HorizontalAlign.Start)
+        Blank().layoutWeight(1)
+        Text(`${this.latestValue()}${this.unit()}`)
+          .fontSize(25)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(this.accent())
+      }
+      Row() {
+        TrendStat({ label: '最低', value: `${this.formatted(this.minimum())}${this.unit()}` });
+        TrendStat({ label: '最高', value: `${this.formatted(this.maximum())}${this.unit()}` });
+        TrendStat({ label: '区间变化', value: this.changeText() });
+      }
+      .width('100%')
+      TrendLineChart({ metric: this.metric, accent: this.accent(), fillColor: this.fillColor() });
+      Row() {
+        Text(this.startTime())
+          .fontSize(10)
+          .fontColor(UI_COLOR_SUBTLE)
+        Blank().layoutWeight(1)
+        Text(this.endTime())
+          .fontSize(10)
+          .fontColor(UI_COLOR_SUBTLE)
+      }
+      .width('100%')
+    }
+    .padding(14)
+    .backgroundColor('#FFFFFF')
+    .borderRadius(8)
+    .width('100%')
+  }
+}
+
+@Component
+struct TrendStat {
+  @Prop label: string;
+  @Prop value: string;
+
+  build() {
+    Column({ space: 2 }) {
+      Text(this.label)
+        .fontSize(10)
+        .fontColor('#8A949E')
+      Text(this.value)
+        .fontSize(12)
+        .fontWeight(FontWeight.Medium)
+        .fontColor('#52606D')
+        .maxLines(1)
+    }
+    .alignItems(HorizontalAlign.Start)
+    .layoutWeight(1)
+  }
+}
+
+@Component
+struct TrendLineChart {
+  @Prop metric: MetricSeries;
+  @Prop accent: string;
+  @Prop fillColor: string;
+  @Prop chartHeight: number = 92;
+  @Prop showGrid: boolean = true;
+  private settings: RenderingContextSettings = new RenderingContextSettings(true);
+  private context: CanvasRenderingContext2D = new CanvasRenderingContext2D(this.settings);
+  private chartWidth: number = 320;
+
+  private points(): Array<SeriesPoint> {
+    const source = this.metric.points;
+    if (source.length <= 96) return source;
+    const sampled: Array<SeriesPoint> = [];
+    const step = (source.length - 1) / 95;
+    for (let index = 0; index < 96; index++) {
+      sampled.push(source[Math.round(index * step)]);
+    }
+    return sampled;
+  }
+
+  private drawChart(): void {
+    const width = this.chartWidth;
+    const height = this.chartHeight;
+    const points = this.points();
+    this.context.clearRect(0, 0, width, height);
+
+    const plotTop = 6;
+    const plotBottom = height - 6;
+    if (this.showGrid) {
+      this.context.strokeStyle = '#E5EAED';
+      this.context.lineWidth = 1;
+      for (let index = 0; index < 3; index++) {
+        const y = plotTop + index * (plotBottom - plotTop) / 2;
+        this.context.beginPath();
+        this.context.moveTo(0, y);
+        this.context.lineTo(width, y);
+        this.context.stroke();
+      }
+    }
+    if (points.length === 0) return;
+
+    let minimum = points[0].value;
+    let maximum = points[0].value;
+    for (let index = 1; index < points.length; index++) {
+      minimum = Math.min(minimum, points[index].value);
+      maximum = Math.max(maximum, points[index].value);
+    }
+    if (Math.abs(maximum - minimum) < 0.000001) {
+      const padding = Math.max(1, Math.abs(maximum) * 0.05);
+      minimum -= padding;
+      maximum += padding;
+    }
+
+    const plotHeight = plotBottom - plotTop;
+    const xStep = points.length > 1 ? width / (points.length - 1) : 0;
+    const yFor = (value: number): number => plotBottom - (value - minimum) / (maximum - minimum) * plotHeight;
+
+    if (points.length === 1) {
+      this.context.beginPath();
+      this.context.arc(width / 2, yFor(points[0].value), 4, 0, Math.PI * 2);
+      this.context.fillStyle = '#FFFFFF';
+      this.context.fill();
+      this.context.strokeStyle = this.accent;
+      this.context.lineWidth = 2;
+      this.context.stroke();
+      return;
+    }
+
+    this.context.beginPath();
+    this.context.moveTo(0, plotBottom);
+    for (let index = 0; index < points.length; index++) {
+      this.context.lineTo(index * xStep, yFor(points[index].value));
+    }
+    this.context.lineTo((points.length - 1) * xStep, plotBottom);
+    this.context.closePath();
+    this.context.fillStyle = this.fillColor;
+    this.context.fill();
+
+    this.context.beginPath();
+    for (let index = 0; index < points.length; index++) {
+      const x = index * xStep;
+      const y = yFor(points[index].value);
+      if (index === 0) this.context.moveTo(x, y);
+      else this.context.lineTo(x, y);
+    }
+    this.context.strokeStyle = this.accent;
+    this.context.lineWidth = 2.5;
+    this.context.stroke();
+
+    const lastX = (points.length - 1) * xStep;
+    const lastY = yFor(points[points.length - 1].value);
+    this.context.beginPath();
+    this.context.arc(lastX, lastY, 4, 0, Math.PI * 2);
+    this.context.fillStyle = '#FFFFFF';
+    this.context.fill();
+    this.context.strokeStyle = this.accent;
+    this.context.lineWidth = 2;
+    this.context.stroke();
+  }
+
+  build() {
+    Canvas(this.context)
+      .width('100%')
+      .height(this.chartHeight)
+      .onReady(() => this.drawChart())
+      .onAreaChange((oldValue: Area, newValue: Area) => {
+        if (typeof newValue.width === 'number' && newValue.width > 0) {
+          this.chartWidth = newValue.width;
+          this.drawChart();
+        }
+      })
+  }
+}
+
+@Component
+struct AlertsPane {
+  @Prop alerts: Array<Alert>;
+  @Prop selectedAlert: Alert | null;
+  @Prop events: Array<AlertEvent>;
+  @Prop loadingEvents: boolean;
+  @Prop freshness: string;
+  @Prop offline: boolean;
+  @Prop refreshing: boolean;
+  onSelect: (alert: Alert) => void = () => {};
+  onOpenMap: (alert: Alert | null) => void = () => {};
+  onRefresh: () => void = () => {};
+
+  build() {
+    Column() {
+      PageHeader({
+        title: '当前告警',
+        subtitle: `${this.alerts.length} 条待处理 · ${this.freshness}`,
+        offline: this.offline,
+        refreshing: this.refreshing,
+        onRefresh: () => this.onRefresh()
+      });
+      Scroll() {
+        Column({ space: 10 }) {
+          ForEach(this.alerts, (alert: Alert) => {
+            Column({ space: 10 }) {
+              Row() {
+                Column({ space: 4 }) {
+                  Text(alert.title)
+                    .fontSize(14)
+                    .fontWeight(FontWeight.Medium)
+                    .fontColor('#18212B')
+                    .maxLines(2)
+                  Text(`${alertStatusLabel(alert.status)} · ${relativeTime(alert.lastEventAt)}`)
+                    .fontSize(11)
+                    .fontColor('#6C7782')
+                }
+                .alignItems(HorizontalAlign.Start)
+                .layoutWeight(1)
+                Text(severityLabel(alert.severity))
+                  .fontSize(11)
+                  .fontColor(alert.severity === 'critical' || alert.severity === 'high' ? '#B44832' : '#A76A2E')
+              }
+              Divider().color('#EEF1F3')
+              Row({ space: 8 }) {
+                SymbolGlyph($r('sys.symbol.dot_radiowaves_left_and_right'))
+                  .fontSize(15)
+                  .fontColor(['#B44832'])
+                Text('告警位置')
+                  .fontSize(11)
+                  .fontColor('#6C7782')
+                Blank().layoutWeight(1)
+                Button('查看地图')
+                  .height(34)
+                  .fontSize(12)
+                  .fontColor('#FFFFFF')
+                  .backgroundColor('#18212B')
+                  .borderRadius(6)
+                  .onClick(() => this.onOpenMap(alert))
+              }
+            }
+            .padding(14)
+            .backgroundColor(this.selectedAlert?.alertId === alert.alertId ? '#FFF1EA' : '#FFFFFF')
+            .borderRadius(8)
+            .onClick(() => this.onSelect(alert))
+          }, (alert: Alert) => alert.alertId)
+          if (this.alerts.length === 0) {
+            Column({ space: 8 }) {
+              Stack({ alignContent: Alignment.Center }) {
+                Circle({ width: 44, height: 44 })
+                  .fill(this.offline ? '#F8E9E5' : this.refreshing ? '#FFF1EA' : '#EAF5F1')
+                SymbolGlyph($r('sys.symbol.bell'))
+                  .fontSize(21)
+                  .fontColor([this.offline ? UI_COLOR_DANGER : this.refreshing ? UI_COLOR_ACCENT : UI_COLOR_SUCCESS])
+              }
+              .width(44)
+              .height(44)
+              Text(this.refreshing ? '正在检查告警状态' : this.offline ? '暂时无法获取告警' : '当前无活动告警')
+                .fontSize(16)
+                .fontWeight(FontWeight.Medium)
+                .fontColor('#18212B')
+              Text(this.offline ? `保留最近缓存 · ${this.freshness}` : this.refreshing ? '正在连接监测服务器' : '监测系统运行正常')
+                .fontSize(12)
+                .fontColor('#6C7782')
+              Button() {
+                Row({ space: 7 }) {
+                  SymbolGlyph($r('sys.symbol.dot_radiowaves_left_and_right'))
+                    .fontSize(17)
+                    .fontColor(['#FFFFFF'])
+                  Text('地图预览')
+                    .fontSize(13)
+                    .fontWeight(FontWeight.Medium)
+                    .fontColor('#FFFFFF')
+                }
+              }
+              .height(42)
+              .margin({ top: 8 })
+              .padding({ left: 18, right: 18 })
+              .backgroundColor('#18212B')
+              .borderRadius(7)
+              .onClick(() => this.onOpenMap(null))
+            }
+            .justifyContent(FlexAlign.Center)
+            .padding({ top: 28, bottom: 28 })
+            .backgroundColor('#FFFFFF')
+            .borderRadius(8)
+            .width('100%')
+          }
+          if (this.selectedAlert) {
+            Row() {
+              Text('事件记录')
+                .fontSize(16)
+                .fontWeight(FontWeight.Bold)
+                .fontColor('#18212B')
+              Blank().layoutWeight(1)
+              Button('地图')
+                .height(34)
+                .fontSize(12)
+                .fontColor('#18212B')
+                .backgroundColor('#E9EDF0')
+                .borderRadius(6)
+                .onClick(() => this.onOpenMap(this.selectedAlert))
+            }
+            .width('100%')
+            .margin({ top: 8 })
+            if (this.loadingEvents) {
+              Text('正在读取事件…')
+                .fontSize(13)
+                .fontColor('#6C7782')
+            }
+            ForEach(this.events, (event: AlertEvent) => {
+              Column({ space: 4 }) {
+                Text(eventTypeLabel(event.eventType))
+                  .fontSize(13)
+                  .fontColor('#18212B')
+                Text(`${relativeTime(event.createdAt)} · ${severityLabel(event.severity ?? '')}`)
+                  .fontSize(11)
+                  .fontColor('#6C7782')
+              }
+              .padding(12)
+              .backgroundColor('#FFFFFF')
+              .borderRadius(8)
+            }, (event: AlertEvent) => event.eventId)
+          }
+        }
+        .padding({ left: 16, right: 16, bottom: 24 })
+        .width('100%')
+      }
+      .layoutWeight(1)
+      .scrollBar(BarState.Off)
+      .align(Alignment.TopStart)
+    }
+    .layoutWeight(1)
+  }
+}
+
+@Component
+struct AlertMapPane {
+  @Prop alert: Alert | null;
+  @Prop location: AlertMapLocation | null;
+  @Prop loading: boolean;
+  @Prop active: boolean;
+  onBack: () => void = () => {};
+  onRetry: () => void = () => {};
+
+  private sourceTone(): string {
+    if (!this.location) return UI_COLOR_MUTED;
+    if (this.location.source === 'alert') return UI_COLOR_DANGER;
+    if (this.location.source === 'gps-live') return UI_COLOR_SUCCESS;
+    if (this.location.source === 'demo') return UI_COLOR_MAP_DEMO;
+    return '#477B96';
+  }
+
+  private mapTitle(): string {
+    return this.alert ? '告警地图' : '地图预览';
+  }
+
+  private alertTitle(): string {
+    return this.alert?.title || '当前无活动告警';
+  }
+
+  private coordinateText(): string {
+    if (!this.location) return '--';
+    return `${this.location.latitude.toFixed(6)}, ${this.location.longitude.toFixed(6)}`;
+  }
+
+  private updatedText(): string {
+    if (!this.location?.updatedAt) {
+      return this.location?.source === 'demo' ? '预设坐标' : '坐标时间待确认';
+    }
+    return `坐标更新于 ${shortTime(this.location.updatedAt)}`;
+  }
+
+  build() {
+    Column() {
+      Row({ space: 12 }) {
+        BackIconButton({ accessibilityLabel: '返回告警列表', onBack: () => this.onBack() })
+        Column({ space: 3 }) {
+          Text(this.mapTitle())
+            .fontSize(20)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(UI_COLOR_TEXT)
+          Text(this.location ? alertLocationSourceLabel(this.location.source) : '正在解析位置')
+            .fontSize(11)
+            .fontColor(this.sourceTone())
+        }
+        .alignItems(HorizontalAlign.Start)
+        .layoutWeight(1)
+      }
+      .height(60)
+      .padding({ left: 16, right: 16, top: 4, bottom: 8 })
+      .backgroundColor('#F5F7F8')
+      .width('100%')
+
+      if (this.loading) {
+        Column({ space: 10 }) {
+          LoadingProgress()
+            .width(30)
+            .height(30)
+            .color(UI_COLOR_ACCENT)
+          Text('正在定位告警位置')
+            .fontSize(14)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(UI_COLOR_TEXT)
+        }
+        .layoutWeight(1)
+        .width('100%')
+        .justifyContent(FlexAlign.Center)
+      } else if (this.location) {
+        Stack({ alignContent: Alignment.Bottom }) {
+          if (this.active) {
+            AlertMapView({
+              location: this.location as AlertMapLocation,
+              onRelocate: () => this.onRetry()
+            })
+          } else {
+            Column()
+              .width('100%')
+              .height('100%')
+              .backgroundColor('#EEF2F0')
+          }
+
+          Column({ space: 10 }) {
+            Row() {
+              Text(alertLocationSourceLabel(this.location.source))
+                .fontSize(11)
+                .fontWeight(FontWeight.Medium)
+                .fontColor(this.sourceTone())
+                .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+                .backgroundColor(this.location.source === 'demo' ? '#FFF1EA' : '#EEF2F0')
+                .borderRadius(4)
+              Blank().layoutWeight(1)
+              Text(this.alert ? severityLabel(this.alert.severity) : '预览')
+                .fontSize(11)
+                .fontWeight(FontWeight.Medium)
+                .fontColor(this.alert ? UI_COLOR_DANGER : UI_COLOR_MAP_MUTED)
+            }
+            .width('100%')
+            Text(this.alertTitle())
+              .fontSize(18)
+              .fontWeight(FontWeight.Bold)
+              .fontColor(UI_COLOR_TEXT)
+              .maxLines(2)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+            Row({ space: 8 }) {
+              Circle({ width: 8, height: 8 })
+                .fill(this.sourceTone())
+              Text(this.location.locationName)
+                .fontSize(13)
+                .fontWeight(FontWeight.Medium)
+                .fontColor('#52606D')
+                .layoutWeight(1)
+                .maxLines(1)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+            }
+            Text(this.coordinateText())
+              .fontSize(16)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(UI_COLOR_TEXT)
+            Text(this.updatedText())
+              .fontSize(11)
+              .fontColor(UI_COLOR_MAP_MUTED)
+          }
+          .width('100%')
+          .padding({ left: 18, right: 18, top: 14, bottom: 18 })
+          .backgroundColor('#FAFCFB')
+          .borderRadius({ topLeft: 8, topRight: 8 })
+          .shadow({ radius: 14, color: '#26000000', offsetY: -3 })
+        }
+        .layoutWeight(1)
+        .width('100%')
+      } else {
+        Column({ space: 10 }) {
+          SymbolGlyph($r('sys.symbol.dot_radiowaves_left_and_right'))
+            .fontSize(28)
+            .fontColor([UI_COLOR_DANGER])
+          Text('位置解析失败')
+            .fontSize(16)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(UI_COLOR_TEXT)
+          Button('重新定位')
+            .height(44)
+            .fontSize(13)
+            .fontColor('#FFFFFF')
+            .backgroundColor(UI_COLOR_TEXT)
+            .borderRadius(7)
+            .onClick(() => this.onRetry())
+        }
+        .layoutWeight(1)
+        .width('100%')
+        .justifyContent(FlexAlign.Center)
+      }
+    }
+    .layoutWeight(1)
+    .width('100%')
+    .backgroundColor('#F5F7F8')
+  }
+}
+
+
+@Component
+struct SettingsPane {
+  @Prop userName: string;
+  @Prop apiBaseUrl: string;
+  @Prop connectionState: string;
+  @Prop connectionUpdatedAt: string;
+  onSave: (value: string) => void = () => {};
+  onLogout: () => void = () => {};
+  @State private draftUrl: string = '';
+
+  aboutToAppear(): void {
+    this.draftUrl = this.apiBaseUrl;
+  }
+
+  private connectionTone(): string {
+    if (this.connectionState === 'success') return '#3C9D82';
+    if (this.connectionState === 'failure') return '#B44832';
+    return '#8A949E';
+  }
+
+  private connectionText(): string {
+    if (this.connectionState === 'success') return `最近请求成功 · ${this.connectionUpdatedAt}`;
+    if (this.connectionState === 'failure') return `最近请求失败 · ${this.connectionUpdatedAt}`;
+    return '尚未验证服务器连接';
+  }
+
+  build() {
+    Column() {
+      Column({ space: 3 }) {
+        Text('我的')
+          .fontSize(22)
+          .fontWeight(FontWeight.Bold)
+          .fontColor('#18212B')
+        Text('账号与服务器连接')
+          .fontSize(11)
+          .fontColor('#6C7782')
+      }
+      .alignItems(HorizontalAlign.Start)
+      .padding({ left: 16, right: 16, top: 8, bottom: 12 })
+      .width('100%')
+      Scroll() {
+        Column({ space: 12 }) {
+          Row({ space: 12 }) {
+            Text(this.userName.slice(0, 1))
+              .fontSize(18)
+              .fontWeight(FontWeight.Bold)
+              .fontColor('#FFFFFF')
+              .textAlign(TextAlign.Center)
+              .width(44)
+              .height(44)
+              .backgroundColor('#477B96')
+              .borderRadius(22)
+            Column({ space: 3 }) {
+              Text(this.userName)
+                .fontSize(16)
+                .fontWeight(FontWeight.Medium)
+                .fontColor('#18212B')
+              Text('已登录')
+                .fontSize(11)
+                .fontColor('#3C9D82')
+            }
+            .alignItems(HorizontalAlign.Start)
+          }
+          .padding(14)
+          .backgroundColor('#FFFFFF')
+          .borderRadius(8)
+          .width('100%')
+          Text('服务器连接')
+            .fontSize(13)
+            .fontWeight(FontWeight.Medium)
+            .fontColor('#52606D')
+            .width('100%')
+          Column({ space: 10 }) {
+            Row({ space: 8 }) {
+              Circle({ width: 8, height: 8 }).fill(this.connectionTone())
+              Text(this.connectionText())
+                .fontSize(12)
+                .fontColor(this.connectionState === 'failure' ? '#B44832' : '#52606D')
+            }
+            TextInput({ text: this.draftUrl, placeholder: 'https://example.com/api/v1' })
+              .onChange((value: string) => this.draftUrl = value)
+              .height(44)
+              .backgroundColor('#F5F7F8')
+              .borderRadius(6)
+            Button('保存服务器设置')
+              .width('100%')
+              .height(42)
+              .backgroundColor('#18212B')
+              .fontColor('#FFFFFF')
+              .onClick(() => this.onSave(this.draftUrl))
+          }
+          .alignItems(HorizontalAlign.Start)
+          .padding(14)
+          .backgroundColor('#FFFFFF')
+          .borderRadius(8)
+          .width('100%')
+          Button('退出登录')
+            .width('100%')
+            .height(44)
+            .fontColor('#B44832')
+            .backgroundColor('#FFFFFF')
+            .onClick(() => this.onLogout())
+        }
+        .padding({ left: 16, right: 16, bottom: 24 })
+        .width('100%')
+      }
+      .layoutWeight(1)
+      .scrollBar(BarState.Off)
+      .align(Alignment.TopStart)
+    }
+    .layoutWeight(1)
+  }
+}
+
+@Component
+struct BottomTabs {
+  @Prop screen: AppScreen;
+  @Prop alertCount: number;
+  onSelect: (screen: AppScreen) => void = () => {};
+
+  build() {
+    Column() {
+      Divider().color('#EEF1F3')
+      Row() {
+        TabButton({ label: '总览', icon: $r('sys.symbol.house'), active: this.screen === 'overview', badgeCount: 0, onTap: () => this.onSelect('overview') });
+        TabButton({ label: '站点', icon: $r('sys.symbol.dot_radiowaves_left_and_right'), active: this.screen === 'stations' || this.screen === 'device', badgeCount: 0, onTap: () => this.onSelect('stations') });
+        TabButton({ label: '告警', icon: $r('sys.symbol.bell'), active: this.screen === 'alerts', badgeCount: this.alertCount, onTap: () => this.onSelect('alerts') });
+        TabButton({ label: '我的', icon: $r('sys.symbol.person_crop_circle_fill_1'), active: this.screen === 'settings', badgeCount: 0, onTap: () => this.onSelect('settings') });
+      }
+      .layoutWeight(1)
+      .width('100%')
+    }
+    .height(65)
+    .width('100%')
+    .backgroundColor(UI_COLOR_SURFACE)
+  }
+}
+
+@Component
+struct TabButton {
+  @Prop label: string;
+  @Prop icon: Resource;
+  @Prop active: boolean;
+  @Prop badgeCount: number;
+  onTap: () => void = () => {};
+
+  build() {
+    Column({ space: 2 }) {
+      Stack({ alignContent: Alignment.TopEnd }) {
+        SymbolGlyph(this.icon)
+          .fontSize(22)
+          .fontColor([this.active ? UI_COLOR_ACCENT : UI_COLOR_MUTED])
+        if (this.badgeCount > 0) {
+          Text(this.badgeCount > 99 ? '99+' : `${this.badgeCount}`)
+            .fontSize(8)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(UI_COLOR_SURFACE)
+            .textAlign(TextAlign.Center)
+            .width(this.badgeCount > 99 ? 24 : 15)
+            .height(15)
+            .padding({ left: 3, right: 3 })
+            .backgroundColor(UI_COLOR_DANGER)
+            .borderRadius(8)
+            .offset({ x: 8, y: -3 })
+        }
+      }
+      .width(32)
+      .height(24)
+      Text(this.label)
+        .fontSize(10)
+        .fontColor(this.active ? UI_COLOR_ACCENT : UI_COLOR_MUTED)
+        .fontWeight(this.active ? FontWeight.Bold : FontWeight.Medium)
+    }
+    .layoutWeight(1)
+    .height('100%')
+    .justifyContent(FlexAlign.Center)
+    .accessibilityText(`${this.label}${this.badgeCount > 0 ? `，${this.badgeCount} 条待处理` : ''}`)
+    .onClick(() => this.onTap())
+  }
+}
