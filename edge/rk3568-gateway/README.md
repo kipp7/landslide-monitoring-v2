@@ -10,6 +10,7 @@ This directory contains the RK3568 edge services that bridge field nodes and the
 | `field-link-monitor` | Read-only local sidecar that summarizes field-link health and exposes local supervision endpoints. |
 | `hermes-edge-supervisor` | Local edge supervision service that consumes health signals and produces operator guidance. |
 | `rk3568-alarm-actuator` | Local actuator service for RK3568-driven field alarm control. |
+| `cellular` | EC200A readiness, business-link health, and optional reverse-tunnel deployment helpers. |
 
 ## Deployment
 
