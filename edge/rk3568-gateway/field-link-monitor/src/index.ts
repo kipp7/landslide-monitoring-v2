@@ -5,6 +5,8 @@ import path from "node:path";
 import dotenv from "dotenv";
 import { createLogger } from "@lsmv2/observability";
 import { loadConfigFromEnv, type AppConfig } from "./config";
+import { assessNetworkMode } from "./network-mode";
+import { assessPublishPath } from "./publish-path";
 
 type JsonObject = Record<string, unknown>;
 type Level = "healthy" | "attention" | "degraded" | "critical";
@@ -409,15 +411,9 @@ class FieldLinkMonitor {
         })
     );
 
-    const networkLevel: Level =
-      runtimeMode === "sta_connected" ? "healthy" : runtimeMode === "ap_fallback" ? "attention" : "critical";
+    const networkAssessment = assessNetworkMode(runtimeMode);
     dimensions.push(
-      newDimension("network_bootstrap", networkLevel,
-        runtimeMode === "sta_connected"
-          ? "rk3568 network bootstrap is in sta_connected"
-          : runtimeMode === "ap_fallback"
-            ? "rk3568 network bootstrap has fallen back to AP mode"
-            : "rk3568 network bootstrap is not in a steady-state mode",
+      newDimension("network_bootstrap", networkAssessment.level, networkAssessment.summary,
         {
           mode: runtimeMode,
           lastError: networkLastError,
@@ -440,12 +436,12 @@ class FieldLinkMonitor {
         })
     );
 
-    let publishLevel: Level = "healthy";
-    if (lastPublishedAgeSeconds === null || lastPublishedAgeSeconds * 1000 > this.config.publishFreshnessMs) {
-      publishLevel = "critical";
-    } else if ((spoolPending ?? 0) > 0 || getString(stats, "lastError")) {
-      publishLevel = "attention";
-    }
+    const publishLevel = assessPublishPath({
+      lastPublishedAgeSeconds,
+      publishFreshnessMs: this.config.publishFreshnessMs,
+      spoolPending,
+      publishFailures
+    });
     dimensions.push(
       newDimension("northbound_publish", publishLevel,
         publishLevel === "healthy"
