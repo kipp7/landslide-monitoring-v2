@@ -198,7 +198,8 @@ try {
 
   $firmwareImage = Join-Path $productOut "images\Firmware.img"
   $liteOsImage = Join-Path $productOut "liteos.bin"
-  foreach ($image in @($firmwareImage, $liteOsImage)) {
+  $loaderImage = Join-Path $productOut "images\rk2206_db_loader.bin"
+  foreach ($image in @($firmwareImage, $liteOsImage, $loaderImage)) {
     if (-not (Test-Path -LiteralPath $image -PathType Leaf)) {
       throw "Expected build artifact is missing: $image"
     }
@@ -207,12 +208,15 @@ try {
   New-Item -ItemType Directory -Path $artifactDirectoryFull -Force | Out-Null
   $firmwareArchive = Join-Path $artifactDirectoryFull "Firmware-tongxiao-alarm-rk2206.img"
   $liteOsArchive = Join-Path $artifactDirectoryFull "liteos-tongxiao-alarm-rk2206.bin"
+  $loaderArchive = Join-Path $artifactDirectoryFull "rk2206_db_loader.bin"
   Copy-Item -LiteralPath $firmwareImage -Destination $firmwareArchive -Force
   Copy-Item -LiteralPath $liteOsImage -Destination $liteOsArchive -Force
+  Copy-Item -LiteralPath $loaderImage -Destination $loaderArchive -Force
 
   $hashLines = @(
     "SHA256  $((Get-FileHash -LiteralPath $firmwareArchive -Algorithm SHA256).Hash)  $([IO.Path]::GetFileName($firmwareArchive))",
-    "SHA256  $((Get-FileHash -LiteralPath $liteOsArchive -Algorithm SHA256).Hash)  $([IO.Path]::GetFileName($liteOsArchive))"
+    "SHA256  $((Get-FileHash -LiteralPath $liteOsArchive -Algorithm SHA256).Hash)  $([IO.Path]::GetFileName($liteOsArchive))",
+    "SHA256  $((Get-FileHash -LiteralPath $loaderArchive -Algorithm SHA256).Hash)  $([IO.Path]::GetFileName($loaderArchive))"
   )
   [IO.File]::WriteAllLines((Join-Path $artifactDirectoryFull "SHA256SUMS.txt"), $hashLines)
 

@@ -34,6 +34,7 @@ powershell -ExecutionPolicy Bypass -File scripts/firmware/build-tongxiao-rk2206.
 
 - `artifacts/firmware/rk2206-tongxiao-alarm/Firmware-tongxiao-alarm-rk2206.img`
 - `artifacts/firmware/rk2206-tongxiao-alarm/liteos-tongxiao-alarm-rk2206.bin`
+- `artifacts/firmware/rk2206-tongxiao-alarm/rk2206_db_loader.bin`
 
 `artifacts/` 已被 Git 忽略。烧录通晓板时只使用带 `tongxiao-alarm` 名称的镜像，禁止根据共享目录里泛化的 `Firmware.img` 猜测固件角色。
 
