@@ -95,6 +95,16 @@ export const presenceEventSchema = z.object({
 
 export type PresenceEvent = z.infer<typeof presenceEventSchema>;
 
+export function isPresenceFresh(
+  presence: PresenceEvent | null,
+  receivedAtMs: number | null,
+  nowMs: number,
+  staleAfterMs: number
+): boolean {
+  if (presence?.status !== "online" || receivedAtMs === null || staleAfterMs < 0) return false;
+  return nowMs - receivedAtMs <= staleAfterMs;
+}
+
 export class RevisionClock {
   private current = 0;
 

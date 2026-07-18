@@ -18,7 +18,8 @@ const configSchema = z.object({
   mqttPassword: z.string().optional(),
   mqttDesiredPrefix: z.string().min(1).default("alarm/desired/"),
   mqttReportedPrefix: z.string().min(1).default("alarm/reported/"),
-  mqttPresencePrefix: z.string().min(1).default("presence/")
+  mqttPresencePrefix: z.string().min(1).default("presence/"),
+  presenceStaleSeconds: z.coerce.number().int().positive().max(3600).default(90)
 });
 
 export function loadConfigFromEnv(env: NodeJS.ProcessEnv) {
@@ -33,7 +34,8 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv) {
     mqttPassword: env.MQTT_PASSWORD,
     mqttDesiredPrefix: env.MQTT_ALARM_DESIRED_PREFIX,
     mqttReportedPrefix: env.MQTT_ALARM_REPORTED_PREFIX,
-    mqttPresencePrefix: env.MQTT_PRESENCE_PREFIX
+    mqttPresencePrefix: env.MQTT_PRESENCE_PREFIX,
+    presenceStaleSeconds: env.TONGXIAO_PRESENCE_STALE_SECONDS
   });
 }
 

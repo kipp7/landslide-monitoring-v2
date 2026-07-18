@@ -9,6 +9,7 @@ import {
   alarmDesiredStateSchema,
   alarmReportedStateSchema,
   createDesiredState,
+  isPresenceFresh,
   parseActionContext,
   presenceEventSchema,
   RevisionClock,
@@ -51,6 +52,7 @@ function main(): void {
   let desired: AlarmDesiredState | null = null;
   let reported: AlarmReportedState | null = null;
   let presence: PresenceEvent | null = null;
+  let presenceReceivedAtMs: number | null = null;
   let lastAction: AlarmAction | null = null;
   let lastActionAt: string | null = null;
   let lastError: string | null = null;
@@ -114,7 +116,10 @@ function main(): void {
         reported = next;
       } else if (topic === presenceTopic) {
         const next = presenceEventSchema.parse(parsed);
-        if (next.device_id === config.deviceId) presence = next;
+        if (next.device_id === config.deviceId) {
+          presence = next;
+          presenceReceivedAtMs = Date.now();
+        }
       }
     } catch (err) {
       logger.warn({ err, topic }, "invalid alarm terminal mqtt payload ignored");
@@ -130,7 +135,16 @@ function main(): void {
     });
 
   const statusPayload = () => {
-    const boardOnline = mqttConnected && presence?.status === "online";
+    const nowMs = Date.now();
+    const presenceAgeSeconds = presenceReceivedAtMs === null
+      ? null
+      : Math.max(0, Math.floor((nowMs - presenceReceivedAtMs) / 1000));
+    const boardOnline = mqttConnected && isPresenceFresh(
+      presence,
+      presenceReceivedAtMs,
+      nowMs,
+      config.presenceStaleSeconds * 1000
+    );
     const inSync = desired !== null && reported?.applied_revision === desired.revision;
     return {
       available: mqttConnected,
@@ -147,6 +161,8 @@ function main(): void {
         desired,
         reported,
         presence,
+        presenceAgeSeconds,
+        presenceStaleSeconds: config.presenceStaleSeconds,
         voiceEnabled: config.voiceEnabled
       }
     };

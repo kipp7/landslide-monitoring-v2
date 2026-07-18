@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createDesiredState, RevisionClock } from "../src/contract";
+import { loadConfigFromEnv } from "../src/config";
+import { createDesiredState, isPresenceFresh, RevisionClock } from "../src/contract";
 
 const deviceId = "00000000-0000-4000-8000-000000022206";
 
@@ -70,4 +71,27 @@ void test("revision clock stays monotonic across retained state and clock skew",
   clock.observe(5000);
   assert.equal(clock.next(1000), 5001);
   assert.equal(clock.next(9000), 9000);
+});
+
+void test("presence expires from board online status after the receipt freshness window", () => {
+  const presence = {
+    schema_version: 1 as const,
+    device_id: deviceId,
+    event_ts: "1970-01-01T00:00:00.000Z",
+    status: "online" as const,
+    meta: { fw: "credential-check" }
+  };
+
+  assert.equal(isPresenceFresh(presence, 1000, 90_999, 90_000), true);
+  assert.equal(isPresenceFresh(presence, 1000, 91_001, 90_000), false);
+  assert.equal(isPresenceFresh({ ...presence, status: "offline" }, 1000, 1001, 90_000), false);
+});
+
+void test("presence freshness configuration defaults to 90 seconds and accepts an override", () => {
+  assert.equal(loadConfigFromEnv({ TONGXIAO_DEVICE_ID: deviceId }).presenceStaleSeconds, 90);
+  assert.equal(
+    loadConfigFromEnv({ TONGXIAO_DEVICE_ID: deviceId, TONGXIAO_PRESENCE_STALE_SECONDS: "120" })
+      .presenceStaleSeconds,
+    120
+  );
 });

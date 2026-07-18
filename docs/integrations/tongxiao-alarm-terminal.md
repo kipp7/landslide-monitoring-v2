@@ -10,7 +10,7 @@
 
 - 期望状态：`alarm/desired/{device_id}`，平台到设备，QoS 1，retain=true
 - 回报状态：`alarm/reported/{device_id}`，设备到平台，QoS 1，retain=true
-- 在线状态：`presence/{device_id}`，设备到平台，QoS 1，retain=true，并配置离线遗嘱
+- 在线状态：`presence/{device_id}`，设备到平台，QoS 1，retain=true，并配置离线遗嘱。桥接服务以本地收到 presence 的时间为准，默认 90 秒未收到新事件就判定离线，不会永久信任旧的 retained `online`。
 
 设备只应用 `revision` 严格大于最后已应用值的消息。相同或更旧的消息必须忽略，防止 MQTT 重投和乱序导致再次播报或恢复旧告警。
 
