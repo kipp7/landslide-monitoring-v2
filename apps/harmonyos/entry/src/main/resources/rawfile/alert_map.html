@@ -167,23 +167,58 @@
     }
 
     .node-marker {
-      display: grid;
-      width: 30px;
-      height: 30px;
-      place-items: center;
-      border: 2px solid #ffffff;
-      border-radius: 50%;
+      --node-color: #3c9d82;
+      --node-delay: 0s;
+      position: relative;
+      width: 34px;
+      height: 34px;
       color: #ffffff;
-      background: #477b96;
-      box-shadow: 0 3px 10px rgba(24, 33, 43, 0.34);
       font-size: 12px;
       font-weight: 700;
       line-height: 1;
     }
 
-    .node-marker--live { background: #3c9d82; }
-    .node-marker--last { background: #477b96; }
-    .node-marker--default { background: #99441f; }
+    .node-marker--alert { --node-color: var(--danger); }
+
+    .node-marker__pulse,
+    .node-marker__pulse::after {
+      position: absolute;
+      inset: 3px;
+      content: "";
+      border: 2px solid var(--node-color);
+      border-radius: 50%;
+      background: rgba(60, 157, 130, 0.14);
+      box-shadow: 0 0 10px rgba(60, 157, 130, 0.24);
+      opacity: 0.72;
+      animation: node-pulse 2.8s cubic-bezier(0.2, 0.7, 0.3, 1) infinite;
+      animation-delay: var(--node-delay);
+    }
+
+    .node-marker--alert .node-marker__pulse,
+    .node-marker--alert .node-marker__pulse::after {
+      background: rgba(180, 72, 50, 0.14);
+      box-shadow: 0 0 10px rgba(180, 72, 50, 0.26);
+    }
+
+    .node-marker__pulse::after {
+      inset: -2px;
+      animation-delay: calc(var(--node-delay) + 1.4s);
+    }
+
+    .node-marker__core {
+      position: absolute;
+      inset: 3px;
+      display: grid;
+      place-items: center;
+      border: 2px solid #ffffff;
+      border-radius: 50%;
+      background: var(--node-color);
+      box-shadow: 0 0 0 5px rgba(60, 157, 130, 0.22), 0 3px 10px rgba(24, 33, 43, 0.34);
+    }
+
+    .node-marker--alert .node-marker__core {
+      box-shadow: 0 0 0 5px rgba(180, 72, 50, 0.22), 0 3px 10px rgba(109, 42, 30, 0.38);
+    }
 
     .node-map-tooltip {
       border: 0;
@@ -211,6 +246,18 @@
       100% {
         opacity: 0;
         transform: scale(3.6);
+      }
+    }
+
+    @keyframes node-pulse {
+      0% {
+        opacity: 0.76;
+        transform: scale(0.72);
+      }
+      75%,
+      100% {
+        opacity: 0.08;
+        transform: scale(2.5);
       }
     }
 
@@ -258,7 +305,9 @@
 
     @media (prefers-reduced-motion: reduce) {
       .alert-marker__pulse,
-      .alert-marker__pulse::after {
+      .alert-marker__pulse::after,
+      .node-marker__pulse,
+      .node-marker__pulse::after {
         opacity: 0.45;
         animation: none;
         transform: scale(1.5);
@@ -412,13 +461,6 @@
         return '厦门大学默认位置';
       }
 
-      function sourceClass(source) {
-        if (source === 'gps-live') return 'live';
-        if (source === 'gps-last') return 'last';
-        if (source === 'default') return 'default';
-        return 'station';
-      }
-
       function nodeLabel(location, index) {
         var match = String(location.locationName || '').match(/(?:节点|node)[\s_-]*([a-z])/i);
         return match ? match[1].toUpperCase() : String(index + 1);
@@ -429,19 +471,33 @@
         nodeMarkers = [];
       }
 
-      function renderNodes(locations) {
+      function isAlertNode(location, focusLocation, highlightAlert) {
+        if (!highlightAlert || !focusLocation) return false;
+        var sameDevice = location.deviceId && focusLocation.deviceId && location.deviceId === focusLocation.deviceId;
+        var closeCoordinate =
+          Math.abs(Number(location.latitude) - Number(focusLocation.latitude)) < 0.00005 &&
+          Math.abs(Number(location.longitude) - Number(focusLocation.longitude)) < 0.00005;
+        return closeCoordinate && (sameDevice || !focusLocation.deviceId);
+      }
+
+      function renderNodes(locations, focusLocation, highlightAlert) {
         clearNodeMarkers();
         var points = [];
+        var alertNodeMatched = false;
         (Array.isArray(locations) ? locations : []).forEach(function (location, index) {
           var latitude = Number(location.latitude);
           var longitude = Number(location.longitude);
           if (!validCoordinate(latitude, longitude)) return;
           var label = nodeLabel(location, index);
+          var alertNode = isAlertNode(location, focusLocation, highlightAlert);
+          if (alertNode) alertNodeMatched = true;
+          var delay = (index * 0.35).toFixed(2) + 's';
           var icon = L.divIcon({
             className: '',
-            html: '<div class="node-marker node-marker--' + sourceClass(location.source) + '">' + label + '</div>',
-            iconSize: [30, 30],
-            iconAnchor: [15, 15]
+            html: '<div class="node-marker' + (alertNode ? ' node-marker--alert' : '') + '" style="--node-delay:' + delay + '">' +
+              '<span class="node-marker__pulse"></span><span class="node-marker__core">' + label + '</span></div>',
+            iconSize: [34, 34],
+            iconAnchor: [17, 17]
           });
           var nodeMarker = L.marker([latitude, longitude], {
             icon: icon,
@@ -456,7 +512,7 @@
           nodeMarkers.push(nodeMarker);
           points.push([latitude, longitude]);
         });
-        return points;
+        return { points: points, alertNodeMatched: alertNodeMatched };
       }
 
       function renderAlertMarker(location, visible) {
@@ -483,10 +539,11 @@
       function renderMapState(focusLocation, locations, highlightAlert) {
         if (!map) return;
         statusElement.classList.remove('is-visible');
-        var points = renderNodes(locations);
-        var alertPosition = renderAlertMarker(focusLocation, highlightAlert);
-        if (alertPosition) {
-          map.flyTo(alertPosition, 14, { animate: true, duration: 0.7 });
+        var nodeState = renderNodes(locations, focusLocation, highlightAlert);
+        var points = nodeState.points;
+        renderAlertMarker(focusLocation, highlightAlert && !nodeState.alertNodeMatched);
+        if (highlightAlert && focusLocation && validCoordinate(Number(focusLocation.latitude), Number(focusLocation.longitude))) {
+          map.flyTo([Number(focusLocation.latitude), Number(focusLocation.longitude)], 14, { animate: true, duration: 0.7 });
         } else if (points.length === 1) {
           map.flyTo(points[0], 14, { animate: true, duration: 0.7 });
         } else if (points.length > 1) {
