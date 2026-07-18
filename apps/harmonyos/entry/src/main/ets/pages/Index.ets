@@ -22,7 +22,7 @@ const UI_COLOR_SURFACE: string = '#FFFFFF';
 const UI_COLOR_ACCENT: string = '#E46D35';
 const UI_COLOR_SUCCESS: string = '#3C9D82';
 const UI_COLOR_DANGER: string = '#B44832';
-const UI_COLOR_MAP_DEMO: string = '#99441F';
+const UI_COLOR_MAP_DEFAULT: string = '#99441F';
 const UI_COLOR_MAP_MUTED: string = '#5B6670';
 const UI_COLOR_LOGIN_BRAND: string = '#173D32';
 const UI_COLOR_LOGIN_PAGE: string = '#F3F6F4';
@@ -2573,7 +2573,7 @@ struct AlertMapPane {
     if (!this.location) return UI_COLOR_MUTED;
     if (this.location.source === 'alert') return UI_COLOR_DANGER;
     if (this.location.source === 'gps-live') return UI_COLOR_SUCCESS;
-    if (this.location.source === 'demo') return UI_COLOR_MAP_DEMO;
+    if (this.location.source === 'default') return UI_COLOR_MAP_DEFAULT;
     return '#477B96';
   }
 
@@ -2592,7 +2592,7 @@ struct AlertMapPane {
 
   private updatedText(): string {
     if (!this.location?.updatedAt) {
-      return this.location?.source === 'demo' ? '预设坐标' : '坐标时间待确认';
+      return this.location?.source === 'default' ? '等待首次有效 GPS' : '坐标时间待确认';
     }
     return `坐标更新于 ${shortTime(this.location.updatedAt)}`;
   }
@@ -2653,7 +2653,7 @@ struct AlertMapPane {
                 .fontWeight(FontWeight.Medium)
                 .fontColor(this.sourceTone())
                 .padding({ left: 8, right: 8, top: 4, bottom: 4 })
-                .backgroundColor(this.location.source === 'demo' ? '#FFF1EA' : '#EEF2F0')
+                .backgroundColor(this.location.source === 'default' ? '#FFF1EA' : '#EEF2F0')
                 .borderRadius(4)
               Blank().layoutWeight(1)
               Text(this.alert ? severityLabel(this.alert.severity) : '预览')

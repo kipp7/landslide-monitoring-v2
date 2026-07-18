@@ -2,9 +2,9 @@ import { ApiClient } from './ApiClient';
 import { CacheManager } from './CacheManager';
 import { Alert, AlertEvent, AlertLocationSource, AlertMapLocation, Device, DeviceState, JsonRecord, SeriesResponse, Station, deviceDisplayName, numberValue, stationDisplayName } from './Types';
 
-// Keep the preset fallback aligned with the Windows desktop monitoring map.
-const DEMO_LATITUDE: number = 22.68313880324831;
-const DEMO_LONGITUDE: number = 110.19415268685714;
+// Keep the fallback aligned with the active Windows desktop monitoring map.
+const DEFAULT_LATITUDE: number = 24.43803;
+const DEFAULT_LONGITUDE: number = 118.09631;
 const LAST_LOCATION_TTL: number = 10 * 365 * 24 * 60 * 60 * 1000;
 const LIVE_GPS_WINDOW: number = 15 * 60 * 1000;
 const CHINA_MIN_LATITUDE: number = 3;
@@ -69,10 +69,10 @@ export class AlertLocationRepository {
     }
 
     return {
-      latitude: DEMO_LATITUDE,
-      longitude: DEMO_LONGITUDE,
-      source: 'demo',
-      locationName: '广西玉林 · 挂傍山'
+      latitude: DEFAULT_LATITUDE,
+      longitude: DEFAULT_LONGITUDE,
+      source: 'default',
+      locationName: '厦门大学默认位置'
     };
   }
 
@@ -266,12 +266,11 @@ export class AlertLocationRepository {
   }
 
   private findStation(stationId: string | undefined, stations: Array<Station>): Station | null {
-    if (stationId) {
-      for (let index = 0; index < stations.length; index++) {
-        if (stations[index].stationId === stationId) return stations[index];
-      }
+    if (!stationId) return null;
+    for (let index = 0; index < stations.length; index++) {
+      if (stations[index].stationId === stationId) return stations[index];
     }
-    return stations.length > 0 ? stations[0] : null;
+    return null;
   }
 
   private validCoordinate(latitude: number | null | undefined, longitude: number | null | undefined): boolean {
@@ -294,6 +293,6 @@ export function alertLocationSourceLabel(source: AlertLocationSource): string {
     case 'gps-live': return '实时 GPS';
     case 'gps-last': return '最后 GPS';
     case 'station': return '站点坐标';
-    default: return '预设位置';
+    default: return '默认位置';
   }
 }

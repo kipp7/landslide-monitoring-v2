@@ -143,7 +143,7 @@ export interface AlertStreamEvent {
   createdAt: string;
 }
 
-export type AlertLocationSource = 'alert' | 'gps-live' | 'gps-last' | 'station' | 'demo';
+export type AlertLocationSource = 'alert' | 'gps-live' | 'gps-last' | 'station' | 'default';
 
 export interface AlertMapLocation {
   latitude: number;
