@@ -1090,9 +1090,7 @@ class GatewayRuntime {
     }, this.config.healthEmitIntervalMs);
 
     if (this.config.southboundPollingEnabled) {
-      this.pollerTimer = setInterval(() => {
-        this.tickSouthboundPolling();
-      }, this.config.southboundPollingIntervalMs);
+      this.scheduleSouthboundPolling(this.config.southboundPollingIntervalMs);
     }
 
     await this.emitHealth();
@@ -1103,7 +1101,7 @@ class GatewayRuntime {
     this.logger.info({ signal }, "field gateway shutting down");
     if (this.replayTimer) clearInterval(this.replayTimer);
     if (this.healthTimer) clearInterval(this.healthTimer);
-    if (this.pollerTimer) clearInterval(this.pollerTimer);
+    if (this.pollerTimer) clearTimeout(this.pollerTimer);
     for (const timer of this.serialReconnectTimers.values()) {
       clearTimeout(timer);
     }
@@ -1680,18 +1678,24 @@ class GatewayRuntime {
   }
 
   private tickSouthboundPolling(): void {
+    this.pollerTimer = null;
     if (!this.config.southboundPollingEnabled || this.stopping) {
       return;
     }
 
+    let issued = false;
+    let busy = false;
     for (const portPath of this.getConfiguredPortPaths()) {
       if (this.pendingCommandWindows.has(portPath)) {
+        busy = true;
         continue;
       }
       if (this.activePollTelemetryWindows.has(portPath)) {
+        busy = true;
         continue;
       }
       if (this.portCommandChains.has(portPath)) {
+        busy = true;
         continue;
       }
 
@@ -1705,8 +1709,25 @@ class GatewayRuntime {
         continue;
       }
 
+      issued = true;
       void this.issueInternalPollForNode(nextNode, portPath);
     }
+
+    // A busy port will schedule itself when its active session closes. This avoids
+    // a fixed timer boundary turning a 1.05s response into a skipped 2s slot.
+    if (!issued && !busy) {
+      this.scheduleSouthboundPolling(this.config.southboundPollingIntervalMs);
+    }
+  }
+
+  private scheduleSouthboundPolling(delayMs: number): void {
+    if (!this.config.southboundPollingEnabled || this.stopping || this.pollerTimer) {
+      return;
+    }
+
+    this.pollerTimer = setTimeout(() => {
+      this.tickSouthboundPolling();
+    }, Math.max(0, delayMs));
   }
 
   private nextPollingNodeForPort(portPath: string): NodeRuntimeState | null {
@@ -2131,9 +2152,17 @@ class GatewayRuntime {
     const portState = this.ensurePortRuntimeState(portPath);
 
     if (activeWindow) {
+      const elapsedMs = Math.max(0, Date.now() - activeWindow.startedAtMs);
       clearTimeout(activeWindow.timer);
       this.activePollTelemetryWindows.delete(portPath);
       this.internalPollCommands.delete(activeWindow.commandId);
+      if (reason !== "shutdown") {
+        const nextDelayMs =
+          reason === "telemetry"
+            ? Math.max(0, this.config.southboundPollingIntervalMs - elapsedMs)
+            : this.config.southboundPollingIntervalMs;
+        this.scheduleSouthboundPolling(nextDelayMs);
+      }
     }
 
     portState.activePollCommandId = null;
@@ -2163,6 +2192,9 @@ class GatewayRuntime {
     portState.pendingCommandType = null;
     portState.pendingCommandDeviceId = null;
     portState.sendOwnerState = this.activePollTelemetryWindows.has(portPath) ? "waiting-for-poll-telemetry" : "idle";
+    if (!this.activePollTelemetryWindows.has(portPath)) {
+      this.scheduleSouthboundPolling(this.config.southboundPollingIntervalMs);
+    }
   }
 
   private async replayPending(reason: "ingest" | "interval" | "mqtt-connect"): Promise<void> {
