@@ -1,0 +1,45 @@
+# Copyright (c) 2026
+# Licensed under the Apache License, Version 2.0.
+
+static_library("rk2206_tongxiao_alarm") {
+  sources = [
+    "src/alarm_controller.c",
+    "src/alarm_display.c",
+    "src/alarm_mqtt.c",
+    "src/alarm_outputs.c",
+    "src/alarm_parser.c",
+    "src/alarm_voice.c",
+    "src/tongxiao_alarm_main.c",
+    "//vendor/isoftstone/rk2206/samples/c2_lcd/src/lcd.c",
+  ]
+
+  include_dirs = [
+    "config",
+    "include",
+    "//utils/native/lite/include",
+    "//kernel/liteos_m/components/shell/include",
+    "//base/iot_hardware/peripheral/interfaces/kits",
+    "//device/rockchip/rk2206/adapter/include",
+    "//device/rockchip/rk2206/sdk_liteos/board/include",
+    "//device/rockchip/hardware/lib/hal/inc",
+    "//device/rockchip/hardware/lib/CMSIS/Device/RK2206/Include/",
+    "//third_party/cJSON",
+    "//third_party/musl/porting/liteos_m/kernel/include",
+    "//third_party/paho_mqtt/MQTTPacket/src",
+    "//third_party/paho_mqtt/MQTTClient-C/src",
+    "//vendor/isoftstone/rk2206/samples/c2_lcd/include",
+  ]
+
+  deps = [ "//device/rockchip/hardware:hardware" ]
+
+  cflags = [
+    "-Wall",
+    "-Wextra",
+    "-std=c99",
+  ]
+
+  cflags_c = [
+    "-Wno-unused-parameter",
+    "-Wno-sign-compare",
+  ]
+}

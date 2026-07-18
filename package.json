@@ -30,7 +30,8 @@
     "services/presence-recorder",
     "services/rule-engine-worker",
     "services/telemetry-dlq-recorder",
-    "services/telemetry-writer"
+    "services/telemetry-writer",
+    "services/tongxiao-alarm-bridge"
   ],
   "engines": {
     "node": ">=20"

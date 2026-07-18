@@ -282,7 +282,10 @@ async function main(): Promise<void> {
       evidence_kind: string;
       evidence_source: string;
       created_at: string;
-      severity: string;
+      severity: Severity;
+      station_id: string | null;
+      title: string;
+      message: string;
     }>(
       `
         SELECT
@@ -291,7 +294,10 @@ async function main(): Promise<void> {
           coalesce(evidence->>'kind', '') AS evidence_kind,
           coalesce(evidence->>'source', '') AS evidence_source,
           to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at,
-          severity
+          severity,
+          station_id,
+          coalesce(title, '') AS title,
+          coalesce(message, '') AS message
         FROM alert_events
         WHERE rule_id = $1 AND device_id = $2
         ORDER BY created_at DESC
@@ -313,14 +319,21 @@ async function main(): Promise<void> {
     });
   };
 
-  const actuateFieldAlarm = async (path: "/alarm_on" | "/silence", context?: Record<string, unknown>) => {
+  const actuateFieldAlarm = async (path: "/alarm_on" | "/silence", context: Record<string, unknown>) => {
     const baseUrl = normalizeBaseUrl(config.rk3568AlarmActuatorUrl);
     if (!baseUrl) return;
 
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), config.actuatorTimeoutMs);
+    const timer = setTimeout(() => {
+      controller.abort();
+    }, config.actuatorTimeoutMs);
     try {
-      const res = await fetch(`${baseUrl}${path}`, { method: "POST", signal: controller.signal });
+      const res = await fetch(`${baseUrl}${path}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ source: "rule-engine-worker", ...context }),
+        signal: controller.signal
+      });
       const body = await res.text().catch(() => "");
       if (!res.ok) {
         logger.warn({ status: res.status, path, body: body.slice(0, 500), ...context }, "rk3568 alarm actuator returned non-2xx");
@@ -340,6 +353,10 @@ async function main(): Promise<void> {
     severity: Severity;
     evidenceKind: unknown;
     reason: "new-alert-trigger" | "active-alert-reconcile" | "rule-alert-resolve";
+    alertId?: string;
+    stationId?: string | null;
+    title?: string;
+    message?: string;
   }) => {
     if (args.evidenceKind !== "rule") return;
     if (args.severity !== "high" && args.severity !== "critical") return;
@@ -347,7 +364,12 @@ async function main(): Promise<void> {
       await actuateFieldAlarm("/silence", {
         ruleId: args.ruleId,
         deviceId: args.deviceId,
-        reason: args.reason
+        reason: args.reason,
+        severity: args.severity,
+        alertId: args.alertId ?? null,
+        stationId: args.stationId ?? null,
+        title: args.title ?? "",
+        message: args.message ?? ""
       });
       return;
     }
@@ -372,7 +394,12 @@ async function main(): Promise<void> {
     await actuateFieldAlarm("/alarm_on", {
       ruleId: args.ruleId,
       deviceId: args.deviceId,
-      reason: args.reason
+      reason: args.reason,
+      severity: args.severity,
+      alertId: args.alertId ?? null,
+      stationId: args.stationId ?? null,
+      title: args.title ?? "",
+      message: args.message ?? ""
     });
   };
 
@@ -438,7 +465,11 @@ async function main(): Promise<void> {
         deviceId: args.deviceId,
         severity: args.severity,
         evidenceKind: args.evidence.kind,
-        reason: "new-alert-trigger"
+        reason: "new-alert-trigger",
+        alertId: args.alertId,
+        stationId: args.stationId,
+        title: args.title,
+        message: args.message
       });
     } else if (args.eventType === "ALERT_RESOLVE") {
       await maybeActuateFieldAlarm({
@@ -446,7 +477,11 @@ async function main(): Promise<void> {
         deviceId: args.deviceId,
         severity: args.severity,
         evidenceKind: args.evidence.kind,
-        reason: "rule-alert-resolve"
+        reason: "rule-alert-resolve",
+        alertId: args.alertId,
+        stationId: args.stationId,
+        title: args.title,
+        message: args.message
       });
     }
 
@@ -690,7 +725,11 @@ async function main(): Promise<void> {
                 deviceId,
                 severity: dsl.severity,
                 evidenceKind: lastKind,
-                reason: "active-alert-reconcile"
+                reason: "active-alert-reconcile",
+                ...(latest?.alert_id ? { alertId: latest.alert_id } : {}),
+                stationId: latest?.station_id ?? r.row.station_id ?? deviceStationId,
+                title: latest?.title ?? title,
+                message: latest?.message ?? messageText
               });
             }
             continue;

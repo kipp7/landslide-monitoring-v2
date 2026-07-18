@@ -18,11 +18,16 @@ permalink: landslide-monitoring-v2-mainline/docs/integrations/mqtt/mqtt-topics-a
   - `cmd/{device_id}`
 - 命令回执（设备 → 平台）
   - `cmd_ack/{device_id}`
+- 告警终端期望状态（平台 → 设备）
+  - `alarm/desired/{device_id}`（QoS 1，retain）
+- 告警终端回报状态（设备 → 平台）
+  - `alarm/reported/{device_id}`（QoS 1，retain）
 
 说明：
 
 - `device_id` 必须与 MQTT username 一致，便于 ACL 限制“只能发自己”。
 - 主题中不建议包含站点等业务字段，避免设备换绑导致 topic 规则变化。
+- 告警终端按递增 `revision` 应用 retained desired 状态，重复或更旧 revision 不得再次执行输出或播报。
 
 ## 2. TelemetryEnvelope（JSON，v1）
 
