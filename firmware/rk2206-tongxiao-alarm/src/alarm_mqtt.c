@@ -17,6 +17,7 @@ static unsigned char g_send_buffer[MQTT_BUFFER_BYTES];
 static unsigned char g_read_buffer[MQTT_BUFFER_BYTES];
 static Network g_network;
 static MQTTClient g_client;
+static bool g_reported_pending;
 
 static const char *DeviceTimestamp(void)
 {
@@ -35,12 +36,13 @@ static int PublishText(const char *topic, const char *payload, bool retained)
     return MQTTPublish(&g_client, topic, &message);
 }
 
-static void PublishPresence(const char *status)
+static int PublishPresence(const char *status)
 {
     cJSON *root = cJSON_CreateObject();
     cJSON *meta;
     char *payload;
-    if (root == NULL) return;
+    int result = -1;
+    if (root == NULL) return result;
     cJSON_AddNumberToObject(root, "schema_version", 1);
     cJSON_AddStringToObject(root, "device_id", TONGXIAO_DEVICE_ID);
     cJSON_AddStringToObject(root, "event_ts", DeviceTimestamp());
@@ -50,19 +52,21 @@ static void PublishPresence(const char *status)
     cJSON_AddStringToObject(meta, "role", "tongxiao_alarm_terminal");
     payload = cJSON_PrintUnformatted(root);
     if (payload != NULL) {
-        PublishText(TONGXIAO_PRESENCE_TOPIC, payload, true);
+        result = PublishText(TONGXIAO_PRESENCE_TOPIC, payload, true);
         cJSON_free(payload);
     }
     cJSON_Delete(root);
+    return result;
 }
 
-static void PublishReported(void)
+static int PublishReported(void)
 {
     AlarmSnapshot snapshot;
     cJSON *root = cJSON_CreateObject();
     cJSON *outputs;
     char *payload;
-    if (root == NULL) return;
+    int result = -1;
+    if (root == NULL) return result;
     AlarmController_Snapshot(&snapshot);
 
     cJSON_AddNumberToObject(root, "schema_version", 1);
@@ -86,10 +90,27 @@ static void PublishReported(void)
 
     payload = cJSON_PrintUnformatted(root);
     if (payload != NULL) {
-        if (PublishText(TONGXIAO_REPORTED_TOPIC, payload, true) != 0) printf("reported publish failed\n");
+        result = PublishText(TONGXIAO_REPORTED_TOPIC, payload, true);
         cJSON_free(payload);
     }
     cJSON_Delete(root);
+    return result;
+}
+
+static int FlushReported(void)
+{
+    int result;
+    if (!g_reported_pending) return 0;
+    if (!MQTTIsConnected(&g_client)) return -1;
+
+    /* A desired packet received while MQTTPublish waits for PUBACK re-arms this flag. */
+    g_reported_pending = false;
+    result = PublishReported();
+    if (result != 0) {
+        g_reported_pending = true;
+        printf("reported publish failed code=%d\n", result);
+    }
+    return result;
 }
 
 static void DesiredArrived(MessageData *data)
@@ -110,7 +131,7 @@ static void DesiredArrived(MessageData *data)
     allow_voice = data->message->retained == 0;
     apply_result = AlarmController_ApplyDesired(&desired, allow_voice);
     if (apply_result < 0) printf("Desired revision=%llu failed\n", (unsigned long long)desired.revision);
-    else PublishReported();
+    else g_reported_pending = true;
 }
 
 static void ConfigureWifi(void)
@@ -208,16 +229,24 @@ void AlarmMqtt_Run(void)
         mqtt_failures = 0;
         printf("MQTT connected topic=%s\n", TONGXIAO_DESIRED_TOPIC);
         AlarmController_SetNetworkStatus(true, true);
-        PublishPresence("online");
-        PublishReported();
+        g_reported_pending = true;
+        result = PublishPresence("online");
+        if (result == 0) result = FlushReported();
+        if (result != 0) printf("MQTT initial state publish failed code=%d\n", result);
         presence_seconds = 0;
 
-        while (1) {
+        while (result == 0) {
             result = MQTTYield(&g_client, 1000);
             if (result != 0 && result != 255) break;
+            result = FlushReported();
+            if (result != 0) break;
             ++presence_seconds;
             if (presence_seconds >= TONGXIAO_PRESENCE_INTERVAL_SECONDS) {
-                PublishPresence("online");
+                result = PublishPresence("online");
+                if (result != 0) {
+                    printf("presence publish failed code=%d\n", result);
+                    break;
+                }
                 presence_seconds = 0;
             }
         }

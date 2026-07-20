@@ -10,6 +10,7 @@ static AlarmSnapshot g_snapshot;
 static uint32_t g_phase_ms;
 static uint32_t g_voice_elapsed_ms;
 static uint32_t g_next_voice_delay_ms;
+static uint32_t g_voice_priority_remaining_ms;
 static uint32_t g_self_test_remaining_ms;
 static uint8_t g_all_clear_repeats_remaining;
 
@@ -17,6 +18,19 @@ static uint8_t g_all_clear_repeats_remaining;
 #define CRITICAL_FIRST_REPEAT_DELAY_MS 25000U
 #define ALL_CLEAR_REPEAT_INTERVAL_MS 12000U
 #define ALL_CLEAR_TOTAL_PLAYS 3U
+#define PREPARE_VOICE_PRIORITY_MS 18000U
+#define EVACUATE_VOICE_PRIORITY_MS 24000U
+#define EVACUATE_REPEAT_VOICE_PRIORITY_MS 8000U
+
+static uint32_t VoicePriorityDurationMs(AlarmPhraseId phrase)
+{
+    switch (phrase) {
+        case ALARM_PHRASE_PREPARE_01: return PREPARE_VOICE_PRIORITY_MS;
+        case ALARM_PHRASE_EVACUATE_01: return EVACUATE_VOICE_PRIORITY_MS;
+        case ALARM_PHRASE_EVACUATE_REPEAT_01: return EVACUATE_REPEAT_VOICE_PRIORITY_MS;
+        default: return 0;
+    }
+}
 
 static void ConfigureVoiceSchedule(const AlarmDesiredState *desired, bool play_voice)
 {
@@ -42,7 +56,8 @@ static void ConfigureVoiceSchedule(const AlarmDesiredState *desired, bool play_v
     }
 }
 
-static void BuildEffectiveDesired(const AlarmSnapshot *snapshot, AlarmDesiredState *effective)
+static void BuildEffectiveDesired(const AlarmSnapshot *snapshot, AlarmDesiredState *effective,
+    bool voice_priority_active)
 {
     *effective = snapshot->desired;
     if (snapshot->self_test_active) {
@@ -54,7 +69,8 @@ static void BuildEffectiveDesired(const AlarmSnapshot *snapshot, AlarmDesiredSta
         effective->display = ALARM_DISPLAY_SELF_TEST;
         effective->voice_phrase = ALARM_PHRASE_NONE;
         effective->voice_repeat_seconds = 0;
-    } else if (snapshot->locally_silenced && effective->state == ALARM_STATE_ACTIVE) {
+    } else if ((snapshot->locally_silenced || voice_priority_active) &&
+        effective->state == ALARM_STATE_ACTIVE) {
         effective->buzzer = false;
         effective->motor = false;
     }
@@ -124,6 +140,7 @@ void AlarmController_Init(void)
     g_phase_ms = 0;
     g_voice_elapsed_ms = 0;
     g_next_voice_delay_ms = 0;
+    g_voice_priority_remaining_ms = 0;
     g_self_test_remaining_ms = 0;
     g_all_clear_repeats_remaining = 0;
 
@@ -138,7 +155,10 @@ void AlarmController_Init(void)
 int AlarmController_ApplyDesired(const AlarmDesiredState *desired, bool allow_voice)
 {
     AlarmSnapshot render;
+    AlarmDesiredState effective;
     bool play_voice;
+    bool voice_priority_active;
+    uint32_t voice_priority_ms;
 
     if (desired == NULL || desired->revision == 0) return -1;
 
@@ -155,13 +175,25 @@ int AlarmController_ApplyDesired(const AlarmDesiredState *desired, bool allow_vo
     g_phase_ms = 0;
     g_self_test_remaining_ms = 0;
     ConfigureVoiceSchedule(desired, g_snapshot.voice_armed);
+    voice_priority_ms = g_snapshot.voice_armed
+        ? VoicePriorityDurationMs(desired->voice_phrase)
+        : 0;
+    g_voice_priority_remaining_ms = voice_priority_ms;
     render = g_snapshot;
     play_voice = g_snapshot.voice_armed;
+    voice_priority_active = g_voice_priority_remaining_ms > 0;
     LOS_TaskUnlock();
 
-    AlarmOutputs_Tick(&render.desired, 0);
+    BuildEffectiveDesired(&render, &effective, voice_priority_active);
+    AlarmOutputs_Tick(&effective, 0);
     AlarmDisplay_Render(&render);
-    if (play_voice) AlarmVoice_Play(render.desired.voice_phrase);
+    if (play_voice) {
+        if (voice_priority_ms > 0) {
+            printf("Voice priority active phrase=%s quiet_ms=%u\n",
+                AlarmPhrase_Name(render.desired.voice_phrase), (unsigned int)voice_priority_ms);
+        }
+        AlarmVoice_Play(render.desired.voice_phrase);
+    }
 
     printf("Applied alarm desired revision=%llu state=%s severity=%s voice=%s\n",
         (unsigned long long)render.desired.revision,
@@ -192,9 +224,16 @@ void AlarmController_Tick(uint32_t elapsed_ms)
     AlarmDesiredState effective;
     AlarmPhraseId repeat_phrase = ALARM_PHRASE_NONE;
     bool render_changed = false;
+    bool voice_priority_active;
+    uint32_t voice_priority_ms = 0;
 
     LOS_TaskLock();
     g_phase_ms += elapsed_ms;
+    if (g_voice_priority_remaining_ms > 0) {
+        g_voice_priority_remaining_ms = elapsed_ms >= g_voice_priority_remaining_ms
+            ? 0
+            : g_voice_priority_remaining_ms - elapsed_ms;
+    }
     if (g_snapshot.self_test_active) {
         if (elapsed_ms >= g_self_test_remaining_ms) {
             g_self_test_remaining_ms = 0;
@@ -214,6 +253,8 @@ void AlarmController_Tick(uint32_t elapsed_ms)
                 repeat_phrase = g_snapshot.desired.severity == ALARM_SEVERITY_CRITICAL
                     ? ALARM_PHRASE_EVACUATE_REPEAT_01
                     : g_snapshot.desired.voice_phrase;
+                voice_priority_ms = VoicePriorityDurationMs(repeat_phrase);
+                g_voice_priority_remaining_ms = voice_priority_ms;
                 g_next_voice_delay_ms = (uint32_t)g_snapshot.desired.voice_repeat_seconds * 1000U;
             } else if (g_snapshot.desired.state == ALARM_STATE_IDLE &&
                 g_snapshot.desired.voice_phrase == ALARM_PHRASE_ALL_CLEAR_01 &&
@@ -232,12 +273,19 @@ void AlarmController_Tick(uint32_t elapsed_ms)
         }
     }
     current = g_snapshot;
+    voice_priority_active = g_voice_priority_remaining_ms > 0;
     LOS_TaskUnlock();
 
-    BuildEffectiveDesired(&current, &effective);
+    BuildEffectiveDesired(&current, &effective, voice_priority_active);
     AlarmOutputs_Tick(&effective, g_phase_ms);
     if (render_changed) AlarmDisplay_Render(&current);
-    if (repeat_phrase != ALARM_PHRASE_NONE) AlarmVoice_Play(repeat_phrase);
+    if (repeat_phrase != ALARM_PHRASE_NONE) {
+        if (voice_priority_ms > 0) {
+            printf("Voice priority active phrase=%s quiet_ms=%u\n",
+                AlarmPhrase_Name(repeat_phrase), (unsigned int)voice_priority_ms);
+        }
+        AlarmVoice_Play(repeat_phrase);
+    }
 }
 
 void AlarmController_Snapshot(AlarmSnapshot *out)
@@ -253,6 +301,7 @@ void AlarmController_HandleButton(AlarmButton button)
     AlarmSnapshot render;
     AlarmDesiredState effective;
     bool changed = false;
+    bool voice_priority_active;
 
     LOS_TaskLock();
     switch (button) {
@@ -262,6 +311,7 @@ void AlarmController_HandleButton(AlarmButton button)
                 g_snapshot.voice_armed = false;
                 g_voice_elapsed_ms = 0;
                 g_next_voice_delay_ms = 0;
+                g_voice_priority_remaining_ms = 0;
                 g_all_clear_repeats_remaining = 0;
                 g_self_test_remaining_ms = SELF_TEST_DURATION_MS;
                 g_phase_ms = 0;
@@ -282,6 +332,7 @@ void AlarmController_HandleButton(AlarmButton button)
                 g_snapshot.voice_armed = false;
                 g_voice_elapsed_ms = 0;
                 g_next_voice_delay_ms = 0;
+                g_voice_priority_remaining_ms = 0;
                 changed = true;
             }
             break;
@@ -296,13 +347,14 @@ void AlarmController_HandleButton(AlarmButton button)
             break;
     }
     render = g_snapshot;
+    voice_priority_active = g_voice_priority_remaining_ms > 0;
     LOS_TaskUnlock();
 
     if (!changed) {
         printf("Button action ignored for current alarm state\n");
         return;
     }
-    BuildEffectiveDesired(&render, &effective);
+    BuildEffectiveDesired(&render, &effective, voice_priority_active);
     AlarmOutputs_Tick(&effective, 0);
     AlarmDisplay_Render(&render);
     printf("Local controls updated: silenced=%d self_test=%d\n",
