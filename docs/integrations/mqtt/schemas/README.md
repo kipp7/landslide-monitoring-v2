@@ -14,6 +14,8 @@ permalink: landslide-monitoring-v2-mainline/docs/integrations/mqtt/schemas/readm
 - DeviceCommand v1：`docs/integrations/mqtt/schemas/device-command.v1.schema.json`
 - DeviceCommandAck v1：`docs/integrations/mqtt/schemas/device-command-ack.v1.schema.json`
 - PresenceEvent v1：`docs/integrations/mqtt/schemas/presence-event.v1.schema.json`
+- AlarmDesiredState v1：`docs/integrations/mqtt/schemas/alarm-desired-state.v1.schema.json`
+- AlarmReportedState v1：`docs/integrations/mqtt/schemas/alarm-reported-state.v1.schema.json`
 
 配套示例（用于脚本校验/联调对齐）：
 

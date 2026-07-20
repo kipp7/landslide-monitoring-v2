@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "device_id": "00000000-0000-4000-8000-000000022206",
+  "applied_revision": 1752912000001,
+  "reported_ts": "2026-07-19T08:00:00.420Z",
+  "state": "active",
+  "severity": "critical",
+  "outputs": {
+    "buzzer": true,
+    "motor": true,
+    "rgb": "red_fast_flash",
+    "display": "risk",
+    "voice_phrase_id": "EVACUATE_01"
+  },
+  "firmware_version": "1.0.0",
+  "rssi_dbm": -53,
+  "last_error": null
+}

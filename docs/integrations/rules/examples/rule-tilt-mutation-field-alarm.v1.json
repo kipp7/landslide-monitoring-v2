@@ -1,10 +1,10 @@
 {
   "dslVersion": 1,
-  "name": "现场倾角突变声光联动（演示秒触发版，仅用于实机演示）",
+  "name": "旧相邻点倾角突变规则（已停用，保留用于兼容审计）",
   "scope": {
     "type": "global"
   },
-  "enabled": true,
+  "enabled": false,
   "severity": "high",
   "cooldown": { "minutes": 0 },
   "timeField": "received",
@@ -19,7 +19,7 @@
           "window": { "type": "points", "points": 2 }
         },
         "operator": ">=",
-        "value": 0.08
+        "value": 3
       },
       {
         "metric": {
@@ -28,7 +28,7 @@
           "window": { "type": "points", "points": 2 }
         },
         "operator": "<=",
-        "value": -0.08
+        "value": -3
       },
       {
         "metric": {
@@ -37,7 +37,7 @@
           "window": { "type": "points", "points": 2 }
         },
         "operator": ">=",
-        "value": 0.08
+        "value": 3
       },
       {
         "metric": {
@@ -46,7 +46,7 @@
           "window": { "type": "points", "points": 2 }
         },
         "operator": "<=",
-        "value": -0.08
+        "value": -3
       },
       {
         "metric": {
@@ -55,7 +55,7 @@
           "window": { "type": "points", "points": 2 }
         },
         "operator": ">=",
-        "value": 0.08
+        "value": 3
       },
       {
         "metric": {
@@ -64,15 +64,15 @@
           "window": { "type": "points", "points": 2 }
         },
         "operator": "<=",
-        "value": -0.08
+        "value": -3
       }
     ]
   },
   "actions": [
     {
       "type": "emit_alert",
-      "titleTemplate": "倾角突变触发现场声光联动",
-      "messageTemplate": "节点 {{deviceId}} 倾角 X/Y/Z 任一轴相邻两次上报变化超过 0.08°，演示秒触发规则已触发 RK3568 声光报警并进入人工复核。"
+      "titleTemplate": "旧相邻点倾角规则已停用",
+      "messageTemplate": "请使用 field_alarm.competition_tilt_profile.v1 相对基线状态机；本规则不参与告警计算。"
     }
   ]
 }

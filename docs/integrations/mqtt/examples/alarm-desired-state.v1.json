@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "device_id": "00000000-0000-4000-8000-000000022206",
+  "revision": 1752912000001,
+  "issued_ts": "2026-07-19T08:00:00.001Z",
+  "state": "active",
+  "severity": "critical",
+  "source": "rule-engine-worker",
+  "reason": "new-alert-trigger",
+  "alert": {
+    "alert_id": "7cff6677-81e9-43cc-90e9-acd85e80f398",
+    "station_id": "station-01",
+    "title": "监测区域滑坡风险达到严重级别",
+    "message": "请立即沿指定疏散路线撤离。"
+  },
+  "outputs": {
+    "buzzer": true,
+    "motor": true,
+    "rgb": "red_fast_flash",
+    "display": "risk",
+    "voice": {
+      "phrase_id": "EVACUATE_01",
+      "repeat_seconds": 30
+    }
+  }
+}

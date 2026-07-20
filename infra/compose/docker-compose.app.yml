@@ -54,7 +54,7 @@ services:
       MQTT_INTERNAL_USERNAME: ${MQTT_INTERNAL_USERNAME:-ingest-service}
       MQTT_INTERNAL_PASSWORD: ${MQTT_INTERNAL_PASSWORD:-}
       EMQX_WEBHOOK_TOKEN: ${EMQX_WEBHOOK_TOKEN:-}
-      RK3568_ALARM_ACTUATOR_URL: ${RK3568_ALARM_ACTUATOR_URL:-}
+      RK3568_ALARM_ACTUATOR_URL: ${RK3568_ALARM_ACTUATOR_URL:-http://tongxiao-alarm-bridge:18088}
       RK3568_FIELD_LINK_MONITOR_URL: ${RK3568_FIELD_LINK_MONITOR_URL:-}
       RK3568_HERMES_EDGE_SUPERVISOR_URL: ${RK3568_HERMES_EDGE_SUPERVISOR_URL:-}
       RK3568_STATUS_HTTP_TIMEOUT_MS: ${RK3568_STATUS_HTTP_TIMEOUT_MS:-6000}
@@ -71,6 +71,8 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
+      tongxiao-alarm-bridge:
+        condition: service_started
 
   web:
     profiles: ["legacy-web"]
@@ -162,6 +164,30 @@ services:
       postgres:
         condition: service_healthy
 
+  tongxiao-alarm-bridge:
+    image: lsmv2/tongxiao-alarm-bridge:latest
+    build:
+      context: ../..
+      dockerfile: services/tongxiao-alarm-bridge/Dockerfile
+    container_name: lsmv2_tongxiao_alarm_bridge
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: tongxiao-alarm-bridge
+      ALARM_BRIDGE_HOST: 0.0.0.0
+      ALARM_BRIDGE_PORT: 18088
+      TONGXIAO_DEVICE_ID: ${TONGXIAO_DEVICE_ID:-00000000-0000-4000-8000-000000022206}
+      TONGXIAO_VOICE_ENABLED: ${TONGXIAO_VOICE_ENABLED:-false}
+      TONGXIAO_PRESENCE_STALE_SECONDS: ${TONGXIAO_PRESENCE_STALE_SECONDS:-90}
+      MQTT_URL: mqtt://emqx:1883
+      MQTT_USERNAME: ${MQTT_INTERNAL_USERNAME:-ingest-service}
+      MQTT_PASSWORD: ${MQTT_INTERNAL_PASSWORD:-}
+      MQTT_ALARM_DESIRED_PREFIX: alarm/desired/
+      MQTT_ALARM_REPORTED_PREFIX: alarm/reported/
+      MQTT_PRESENCE_PREFIX: presence/
+    depends_on:
+      emqx:
+        condition: service_started
+
   rule-engine-worker:
     image: lsmv2/rule-engine-worker:latest
     build:
@@ -184,13 +210,15 @@ services:
       POSTGRES_POOL_MAX: ${RULE_ENGINE_POSTGRES_POOL_MAX:-5}
       RULES_REFRESH_MS: ${RULES_REFRESH_MS:-2000}
       MAX_POINTS_PER_RULE: ${RULE_ENGINE_MAX_POINTS_PER_RULE:-600}
-      RK3568_ALARM_ACTUATOR_URL: ${RK3568_ALARM_ACTUATOR_URL:-}
+      RK3568_ALARM_ACTUATOR_URL: ${RK3568_ALARM_ACTUATOR_URL:-http://tongxiao-alarm-bridge:18088}
       ACTUATOR_TIMEOUT_MS: ${RULE_ENGINE_ACTUATOR_TIMEOUT_MS:-5000}
     depends_on:
       kafka:
         condition: service_healthy
       postgres:
         condition: service_healthy
+      tongxiao-alarm-bridge:
+        condition: service_started
 
   alert-notify-worker:
     image: lsmv2/alert-notify-worker:latest
