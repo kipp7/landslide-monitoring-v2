@@ -75,6 +75,60 @@ type PublishState = {
   hardRuleTriggered: boolean;
 };
 
+const DEVICE_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
+const METRIC_KEY_PATTERN = /^[a-z0-9_]+$/u;
+const TELEMETRY_DEDUPLICATION_LIMIT = 1024;
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function topicDeviceId(topic: string, topicFilter: string): string | null {
+  if (!topicFilter.endsWith("+")) return null;
+  const prefix = topicFilter.slice(0, -1);
+  if (!topic.startsWith(prefix)) return null;
+  const deviceId = topic.slice(prefix.length);
+  return deviceId.length > 0 && !deviceId.includes("/") ? deviceId : null;
+}
+
+export function parseTelemetryMessage(
+  topic: string,
+  topicFilter: string,
+  raw: string,
+  receivedAt: string
+): EdgeTelemetrySnapshot {
+  const topicDevice = topicDeviceId(topic, topicFilter);
+  if (!topicDevice) throw new Error("telemetry topic does not match configured filter");
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw) as unknown;
+  } catch {
+    throw new Error("telemetry payload is not valid JSON");
+  }
+  if (!isObject(parsed) || parsed.schema_version !== 1)
+    throw new Error("telemetry schema_version must be 1");
+  if (typeof parsed.device_id !== "string" || !DEVICE_ID_PATTERN.test(parsed.device_id))
+    throw new Error("telemetry device_id is invalid");
+  if (parsed.device_id.toLowerCase() !== topicDevice.toLowerCase())
+    throw new Error("telemetry device_id does not match MQTT topic");
+  if (!isObject(parsed.metrics) || Object.keys(parsed.metrics).length === 0)
+    throw new Error("telemetry metrics must be a non-empty object");
+  const metrics: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(parsed.metrics)) {
+    if (!METRIC_KEY_PATTERN.test(key)) throw new Error(`telemetry metric key is invalid: ${key}`);
+    if (
+      value !== null &&
+      typeof value !== "number" &&
+      typeof value !== "string" &&
+      typeof value !== "boolean"
+    )
+      throw new Error(`telemetry metric value is invalid: ${key}`);
+    metrics[key] = value;
+  }
+  if (!Number.isFinite(Date.parse(receivedAt))) throw new Error("telemetry receivedAt is invalid");
+  return { deviceId: parsed.device_id, receivedAt, metrics };
+}
+
 function levelRank(level: EdgeRiskLevel): number {
   if (level === "danger") return 3;
   if (level === "warning") return 2;
@@ -105,6 +159,9 @@ export class EdgeRiskAgent {
   private readonly histories = new Map<string, EdgeTelemetrySnapshot[]>();
   private readonly evaluations = new Map<string, EdgeRiskEvaluation>();
   private readonly publishStates = new Map<string, PublishState>();
+  private readonly telemetryFingerprints = new Set<string>();
+  private readonly telemetryFingerprintOrder: string[] = [];
+  private ingestQueue: Promise<void> = Promise.resolve();
   private pendingEvents: AiPredictionEventV1[] = [];
   private recentTasks: EdgeAgentTask[] = [];
 
@@ -126,37 +183,65 @@ export class EdgeRiskAgent {
       this.mqttClient?.subscribe(this.config.mqttModelTopic, { qos: 1 }, (error) => {
         if (error) this.runtimeError = `MQTT 模型订阅失败：${error.message}`;
       });
+      this.mqttClient?.subscribe(this.config.mqttTelemetryTopic, { qos: 1 }, (error) => {
+        if (error) this.runtimeError = `MQTT 遥测订阅失败：${error.message}`;
+      });
       void this.flushPendingEvents().catch((error: unknown) =>
         this.captureRuntimeError("离线队列上传失败", error)
       );
     });
     this.mqttClient.on("message", (topic, payload) => {
-      if (topic !== this.config.mqttModelTopic) return;
-      void this.acceptModel(payload.toString("utf8")).catch((error: unknown) =>
-        this.captureRuntimeError("模型激活失败", error)
+      if (topic === this.config.mqttModelTopic) {
+        void this.acceptModel(payload.toString("utf8")).catch((error: unknown) =>
+          this.captureRuntimeError("模型激活失败", error)
+        );
+        return;
+      }
+      if (!topicDeviceId(topic, this.config.mqttTelemetryTopic)) return;
+      void this.acceptTelemetry(topic, payload).catch((error: unknown) =>
+        this.captureRuntimeError("MQTT 遥测接收失败", error)
       );
     });
     this.mqttClient.on("error", (error) => this.captureRuntimeError("MQTT 连接异常", error));
   }
 
   async stop(): Promise<void> {
+    await this.ingestQueue;
     await this.safePersistState();
     this.mqttClient?.end(true);
     this.mqttClient = null;
   }
 
-  async ingest(snapshots: EdgeTelemetrySnapshot[], forcePublish = false): Promise<void> {
-    if (!this.model) return;
-    const publishTasks: Promise<void>[] = [];
+  ingest(snapshots: EdgeTelemetrySnapshot[], forcePublish = false): Promise<void> {
+    const current = this.ingestQueue.then(() => this.runIngest(snapshots, forcePublish));
+    this.ingestQueue = current.catch(() => undefined);
+    return current;
+  }
+
+  private async runIngest(
+    snapshots: EdgeTelemetrySnapshot[],
+    forcePublish: boolean
+  ): Promise<void> {
+    const model = this.model;
+    if (!model) return;
     for (const snapshot of snapshots) {
-      const history = this.appendHistory(snapshot);
+      if (!Number.isFinite(Date.parse(snapshot.receivedAt))) continue;
+      this.appendHistory(snapshot);
+    }
+    const publishTasks: Promise<void>[] = [];
+    const deviceIds = new Set([
+      ...model.calibrations.map((calibration) => calibration.deviceId),
+      ...this.histories.keys(),
+    ]);
+    for (const deviceId of deviceIds) {
+      const history = this.histories.get(deviceId) ?? [];
       const evaluation = evaluateEdgeRisk({
-        artifact: this.model,
-        deviceId: snapshot.deviceId,
+        artifact: model,
+        deviceId,
         history,
       });
-      this.evaluations.set(snapshot.deviceId, evaluation);
-      if (forcePublish || this.shouldPublish(evaluation)) {
+      this.evaluations.set(deviceId, evaluation);
+      if (history.length > 0 && (forcePublish || this.shouldPublish(evaluation))) {
         publishTasks.push(this.executePredictionTask(evaluation));
       }
     }
@@ -176,7 +261,7 @@ export class EdgeRiskAgent {
     return {
       mode: "hermes-edge-risk-agent",
       generatedAt: new Date().toISOString(),
-      available: this.model !== null && devices.length > 0,
+      available: this.model !== null && devices.some((device) => device.dataUpdatedAt !== null),
       mqttConnected: this.mqttClient?.connected === true,
       model: {
         loaded: this.model !== null,
@@ -206,6 +291,50 @@ export class EdgeRiskAgent {
     history.sort((left, right) => Date.parse(left.receivedAt) - Date.parse(right.receivedAt));
     this.histories.set(snapshot.deviceId, history);
     return history;
+  }
+
+  private async acceptTelemetry(topic: string, payload: Buffer): Promise<void> {
+    if (payload.byteLength > this.config.mqttTelemetryMaxPayloadBytes)
+      throw new Error(
+        `telemetry payload exceeds ${String(this.config.mqttTelemetryMaxPayloadBytes)} bytes`
+      );
+    const raw = payload.toString("utf8");
+    const snapshot = parseTelemetryMessage(
+      topic,
+      this.config.mqttTelemetryTopic,
+      raw,
+      new Date().toISOString()
+    );
+    const fingerprint = createHash("sha256").update(topic).update("\0").update(raw).digest("hex");
+    if (this.telemetryFingerprints.has(fingerprint)) return;
+    this.telemetryFingerprints.add(fingerprint);
+    this.telemetryFingerprintOrder.push(fingerprint);
+    while (this.telemetryFingerprintOrder.length > TELEMETRY_DEDUPLICATION_LIMIT) {
+      const oldest = this.telemetryFingerprintOrder.shift();
+      if (oldest) this.telemetryFingerprints.delete(oldest);
+    }
+    await this.ingest([snapshot]);
+    if (this.runtimeError?.startsWith("MQTT 遥测接收失败：")) this.runtimeError = null;
+  }
+
+  private rebuildEvaluations(): void {
+    const model = this.model;
+    this.evaluations.clear();
+    if (!model) return;
+    const deviceIds = new Set([
+      ...model.calibrations.map((calibration) => calibration.deviceId),
+      ...this.histories.keys(),
+    ]);
+    for (const deviceId of deviceIds) {
+      this.evaluations.set(
+        deviceId,
+        evaluateEdgeRisk({
+          artifact: model,
+          deviceId,
+          history: this.histories.get(deviceId) ?? [],
+        })
+      );
+    }
   }
 
   private shouldPublish(evaluation: EdgeRiskEvaluation): boolean {
@@ -353,6 +482,7 @@ export class EdgeRiskAgent {
     this.model = parsed;
     this.modelError = null;
     this.publishStates.clear();
+    this.rebuildEvaluations();
     const task: EdgeAgentTask = {
       taskId: randomUUID(),
       taskKey: "activate_model",
@@ -379,8 +509,10 @@ export class EdgeRiskAgent {
       if (!hasValidChecksum(parsed)) throw new Error("local model failed checksum validation");
       this.model = parsed;
       this.modelError = null;
+      this.rebuildEvaluations();
     } catch (error) {
       this.model = null;
+      this.evaluations.clear();
       this.modelError = error instanceof Error ? error.message : String(error);
     }
   }

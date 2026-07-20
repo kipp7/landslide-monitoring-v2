@@ -2,10 +2,10 @@
 
 ## Stability boundary
 
-- `field-gateway` only exposes its last validated telemetry frame in the
-  existing health snapshot. Serial parsing, spooling and MQTT publishing do
-  not call AI code.
-- `field-link-monitor` forwards that snapshot read-only.
+- `field-gateway` continues publishing its existing validated telemetry envelope;
+  serial parsing, spooling and MQTT publishing do not call AI code.
+- Hermes independently subscribes read-only to `telemetry/+`. This avoids a
+  field-gateway or field-link-monitor upgrade and keeps both services untouched.
 - Hermes inference is advisory and runs in its existing sidecar service with
   `CPUQuota=50%`, `MemoryMax=384M`, `TasksMax=64` and lower process priority.
 - The server worker is an opt-in Compose profile with `0.5 CPU / 384 MB`.

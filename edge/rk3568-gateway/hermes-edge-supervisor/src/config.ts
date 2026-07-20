@@ -27,6 +27,16 @@ const configSchema = z.object({
   mqttPassword: optionalNonEmptyString(),
   mqttClientId: z.string().min(1).default("hermes-edge-supervisor"),
   mqttModelTopic: z.string().min(1).default("edge/ai/models/landslide-risk/v1"),
+  mqttTelemetryTopic: z
+    .string()
+    .regex(/^[^+#]*\+$/, "MQTT telemetry topic must end with one single-level wildcard")
+    .default("telemetry/+"),
+  mqttTelemetryMaxPayloadBytes: z.coerce
+    .number()
+    .int()
+    .min(1024)
+    .max(1024 * 1024)
+    .default(64 * 1024),
   mqttPredictionTopicPrefix: z.string().min(1).default("edge/ai/predictions/"),
   riskModelPath: z
     .string()
@@ -69,6 +79,8 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
     mqttPassword: env.MQTT_PASSWORD,
     mqttClientId: env.MQTT_CLIENT_ID,
     mqttModelTopic: env.MQTT_MODEL_TOPIC,
+    mqttTelemetryTopic: env.MQTT_TELEMETRY_TOPIC,
+    mqttTelemetryMaxPayloadBytes: env.MQTT_TELEMETRY_MAX_PAYLOAD_BYTES,
     mqttPredictionTopicPrefix: env.MQTT_PREDICTION_TOPIC_PREFIX,
     riskModelPath: env.RISK_MODEL_PATH,
     riskStatePath: env.RISK_STATE_PATH,
