@@ -5,6 +5,7 @@
 ## Responsibilities
 
 - Poll local field-link summary and automation endpoints.
+- Subscribe read-only to the existing validated `telemetry/+` MQTT stream for risk inference.
 - Produce supervision summaries and event logs.
 - Expose read-only HTTP endpoints for local display or operator tooling.
 - Keep diagnostic actions limited to sidecar refresh and local health collection.
@@ -30,6 +31,8 @@ Use `.env.example` as a local template. Key variables:
 - `SUPERVISION_FILE_PATH` - generated supervision JSON output.
 - `EVENT_LOG_FILE_PATH` - generated event log path.
 - `HTTP_HOST` / `HTTP_PORT` - local HTTP listener.
+- `MQTT_TELEMETRY_TOPIC` - existing field telemetry subscription (default `telemetry/+`).
+- `MQTT_TELEMETRY_MAX_PAYLOAD_BYTES` - input size limit before JSON validation.
 
 ## Local Development
 
@@ -45,6 +48,7 @@ Endpoints:
 
 - `GET /healthz`
 - `GET /v1/supervision`
+- `GET /v1/edge-risk`
 - `POST /v1/actions`
 
 ## RK3568 Deployment
