@@ -1,0 +1,9 @@
+{
+  "name": "entry",
+  "version": "1.0.0",
+  "description": "HarmonyOS landslide monitoring entry module",
+  "main": "",
+  "author": "kipp7",
+  "license": "MIT",
+  "dependencies": {}
+}

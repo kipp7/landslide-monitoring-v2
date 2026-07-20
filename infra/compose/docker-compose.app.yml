@@ -220,6 +220,37 @@ services:
       tongxiao-alarm-bridge:
         condition: service_started
 
+  alert-notify-worker:
+    image: lsmv2/alert-notify-worker:latest
+    build:
+      context: ../..
+      dockerfile: services/alert-notify-worker/Dockerfile
+    container_name: lsmv2_alert_notify_worker
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: alert-notify-worker
+      KAFKA_BROKERS: ${KAFKA_BROKERS_INTERNAL:-kafka:9092}
+      KAFKA_CLIENT_ID: alert-notify-worker
+      KAFKA_GROUP_ID: alert-notify-worker.v1
+      KAFKA_TOPIC_ALERTS_EVENTS: alerts.events.v1
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: ${PG_PORT:-5432}
+      POSTGRES_USER: ${PG_USER:-landslide}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-change-me}
+      POSTGRES_DATABASE: ${PG_DATABASE:-landslide_monitor}
+      POSTGRES_POOL_MAX: ${ALERT_NOTIFY_POSTGRES_POOL_MAX:-5}
+      NOTIFY_TYPE: app
+      HUAWEI_PUSH_ENABLED: ${HUAWEI_PUSH_ENABLED:-false}
+      HUAWEI_PUSH_TOKEN_URL: ${HUAWEI_PUSH_TOKEN_URL:-https://oauth-login.cloud.huawei.com/oauth2/v3/token}
+      HUAWEI_PUSH_SEND_URL: ${HUAWEI_PUSH_SEND_URL:-}
+      HUAWEI_PUSH_CLIENT_ID: ${HUAWEI_PUSH_CLIENT_ID:-}
+      HUAWEI_PUSH_CLIENT_SECRET: ${HUAWEI_PUSH_CLIENT_SECRET:-}
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
   command-dispatcher:
     image: lsmv2/command-dispatcher:latest
     build:

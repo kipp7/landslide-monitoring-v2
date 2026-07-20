@@ -21,6 +21,8 @@ import { registerAlertNotificationRoutes } from "./routes/alert-notifications";
 import { registerAlertRuleRoutes } from "./routes/alert-rules";
 import { registerAlertRuleReplayRoutes } from "./routes/alert-rules-replay";
 import { registerFieldAlarmRoutes } from "./routes/field-alarm";
+import { registerAlertStreamRoutes } from "./routes/alert-stream";
+import { registerPushDeviceRoutes } from "./routes/push-devices";
 import { registerTelemetryDlqRoutes } from "./routes/telemetry-dlq";
 import { registerSystemLegacyCompatRoutes, registerSystemRoutes } from "./routes/system";
 import { registerAuthRoutes } from "./routes/auth";
@@ -289,6 +291,8 @@ async function main(): Promise<void> {
     registerSensorRoutes(v1, config, pg);
     registerStationRoutes(v1, config, pg);
     registerAlertRoutes(v1, config, pg);
+    registerAlertStreamRoutes(v1, config, pg);
+    registerPushDeviceRoutes(v1, config, pg);
     registerAlertNotificationRoutes(v1, config, pg);
     registerAlertRuleRoutes(v1, config, pg);
     registerAlertRuleReplayRoutes(v1, config, ch, pg);

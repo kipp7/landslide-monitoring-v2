@@ -1,0 +1,8 @@
+.hvigor/
+.idea/
+.impeccable.md
+build/
+entry/build/
+oh_modules/
+*.hap
+*.log

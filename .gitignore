@@ -58,6 +58,8 @@ apps/windows-shell/installer/Output/
 .tools/
 backups/
 data/
+!apps/harmonyos/entry/src/main/ets/data/
+!apps/harmonyos/entry/src/main/ets/data/**
 key/
 keys/
 *.db
