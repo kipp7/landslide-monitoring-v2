@@ -45,6 +45,49 @@ function edgeNodeFallbackName(deviceId: string): string {
   return `监测节点 ${suffix}`;
 }
 
+function hermesDiagnosisLabel(value: string | undefined): string {
+  if (value === 'healthy_watch') return '链路运行平稳';
+  if (value === 'center_mqtt_route_unreachable') return '中心消息通路不可达';
+  if (value === 'center_mqtt_service_unavailable') return '中心消息服务不可用';
+  if (value === 'southbound_serial_or_gateway_gap') return '南向采集链路异常';
+  if (value === 'field_nodes_not_reporting') return '现场节点未形成有效上报';
+  if (value === 'shared_port_noise') return '共享串口存在数据干扰';
+  if (value === 'ap_fallback_backhaul_degraded') return '回传网络质量下降';
+  if (value === 'publish_backlog_pressure') return '上报队列存在积压压力';
+  if (value === 'edge_resource_pressure') return '边缘主机资源压力偏高';
+  if (value === 'model_unavailable') return '诊断模型暂不可用';
+  return '需要人工复核';
+}
+
+function localizedHermesText(value: string): string {
+  let result = value;
+  result = result.replace('spool pending', '待上传队列');
+  result = result.replace('publish freshness', '上报时效');
+  result = result.replace('field-gateway journal', '网关运行日志');
+  result = result.replace('field-gateway', '现场网关');
+  result = result.replace('/dev/ttyS3', '南向串口');
+  result = result.replace('serial 和 southbound', '串口与南向链路');
+  result = result.replace('rejected/schemaRejected/interleaving', '拒收、格式校验与数据交错');
+  result = result.replace('RK3568 parser', 'RK3568 解析器');
+  result = result.replace('STA 网络', '主 Wi-Fi 网络');
+  result = result.replace('AP fallback', '维护热点回退');
+  result = result.replace('CPU load', '处理器负载');
+  result = result.replace('telemetry', '遥测上报');
+  result = result.replace('supervision', '监督');
+  result = result.replace('Commands are suggestions for operator/export tooling; this action does not execute them.',
+    '仅生成供值守人员查看的诊断计划，不会执行系统命令。');
+  return result;
+}
+
+function hermesActionSummary(action: HermesAction): string {
+  if (action.action === 'recheck' && action.result.diagnosisType) {
+    const confidence = action.result.confidence;
+    const confidenceText = confidence === undefined ? '' : `，研判置信度 ${Math.round(confidence * 100)}%`;
+    return `已完成边缘风险复检：${hermesDiagnosisLabel(action.result.diagnosisType)}${confidenceText}。`;
+  }
+  return localizedHermesText(action.summary);
+}
+
 interface DeviceMonitoringTrend {
   device: Device;
   response: SeriesResponse;
@@ -2252,7 +2295,12 @@ struct HermesCommandPanel {
   }
 
   private actionPlan(): Array<string> {
-    return this.lastAction?.result.recommendedPlan ?? [];
+    const source = this.lastAction?.result.recommendedPlan ?? [];
+    const result: Array<string> = [];
+    for (let index = 0; index < source.length; index++) {
+      result.push(localizedHermesText(source[index]));
+    }
+    return result;
   }
 
   build() {
@@ -2344,7 +2392,7 @@ struct HermesCommandPanel {
       if (this.lastAction) {
         Column({ space: 7 }) {
           Row() {
-            Text(this.lastAction?.summary ?? '')
+            Text(this.lastAction ? hermesActionSummary(this.lastAction) : '')
               .fontSize(12)
               .fontWeight(FontWeight.Medium)
               .fontColor(UI_COLOR_TEXT)
@@ -2365,7 +2413,7 @@ struct HermesCommandPanel {
               }
             })
           } else if (this.lastAction?.result.note) {
-            Text(this.lastAction.result.note)
+            Text(localizedHermesText(this.lastAction.result.note))
               .fontSize(10)
               .fontColor(UI_COLOR_MUTED)
               .width('100%')
@@ -2609,7 +2657,7 @@ struct HermesActionTimelineRow {
             .fontColor(UI_COLOR_SUBTLE)
         }
         .width('100%')
-        Text(this.action.summary)
+        Text(hermesActionSummary(this.action))
           .fontSize(10)
           .fontColor(UI_COLOR_MUTED)
           .maxLines(2)
