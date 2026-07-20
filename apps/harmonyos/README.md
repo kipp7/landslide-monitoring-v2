@@ -18,9 +18,10 @@ built from DevEco Studio or with its bundled `hvigorw` command after setting
 
 - Login, dashboard, stations, devices, telemetry, alerts, and predictions use
   the existing `/api/v1` contract.
-- Dashboard `todayDataCount` and today's alert count use the Beijing calendar
-  day (`UTC+8`, starting at local 00:00), matching the Chinese UI's
-  `今日上报` label.
+- Dashboard `todayReportCount` counts distinct device reports, while
+  `todayDataCount` remains the sparse ClickHouse sensor-row count for API
+  compatibility. Both use the Beijing calendar day (`UTC+8`, starting at
+  local 00:00); the App's `今日上报` card displays report count only.
 - Successful summary, station, device, and latest-state responses are cached
   with TTLs. The app renders stale data immediately and refreshes in the
   background.
@@ -43,6 +44,9 @@ built from DevEco Studio or with its bundled `hvigorw` command after setting
   alarm actuators. The Tongxiao RK2206 terminal is shown separately as
   `通晓 RK2206 声光告警终端` under linkage alarm devices, so it cannot distort
   A/B/C monitoring statistics.
+- The Tongxiao linkage status comes from `/api/v1/field-alarm/status` and its
+  physical-device probe when available. It is not inferred from telemetry
+  `lastSeenAt`, because the actuator is not a monitoring-data producer.
 - The alert map resolves coordinates in this order: coordinates recorded with
   the alert, recent device GPS, seven-day GPS history, the last GPS snapshot,
   station coordinates, and finally the Windows desktop default position at

@@ -1,5 +1,5 @@
 import http from '@ohos.net.http';
-import { ApiEnvelope, LoginData, UserSummary, DashboardSummary, WeeklyTrend, Station, Device, DeviceState, SensorDefinition, MetricSeries, SeriesResponse, AlertPage, AlertEventsResponse, PredictionPage } from './Types';
+import { ApiEnvelope, LoginData, UserSummary, DashboardSummary, WeeklyTrend, Station, Device, DeviceState, SensorDefinition, MetricSeries, SeriesResponse, AlertPage, AlertEventsResponse, PredictionPage, FieldAlarmStatus } from './Types';
 import { normalizeApiBaseUrl } from './ApiConfig';
 
 export class ApiError extends Error {
@@ -125,6 +125,10 @@ export class ApiClient {
     const query = stationId ? `?stationId=${encodeURIComponent(stationId)}&page=1&pageSize=100` : '?page=1&pageSize=100';
     const data = await this.request<Object>(`/devices${query}`);
     return this.listFromPage<Device>(data);
+  }
+
+  async fieldAlarmStatus(): Promise<FieldAlarmStatus> {
+    return this.request<FieldAlarmStatus>('/field-alarm/status');
   }
 
   async sensors(deviceId: string): Promise<Array<SensorDefinition>> {

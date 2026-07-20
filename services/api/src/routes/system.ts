@@ -249,6 +249,7 @@ type HermesEdgeStatusData = {
 
 type DashboardSummaryData = {
   todayDataCount: number;
+  todayReportCount: number;
   onlineDevices: number;
   offlineDevices: number;
   pendingAlerts: number;
@@ -258,6 +259,11 @@ type DashboardSummaryData = {
   freshDevices: number;
   totalDevices: number;
   lastUpdatedAt: string;
+};
+
+type TodayTelemetryCounts = {
+  dataPoints: number;
+  reports: number;
 };
 
 type DeskDashboardSummaryData = {
@@ -1033,25 +1039,27 @@ async function buildSystemStatusData(
   };
 }
 
-async function queryTodayDataCount(
+async function queryTodayTelemetryCounts(
   config: AppConfig,
   ch: ClickHouseClient,
   pg: PgPool | null,
   start: Date,
   end: Date
-): Promise<number> {
+): Promise<TodayTelemetryCounts> {
   try {
-    if (!pg) return 0;
+    if (!pg) return { dataPoints: 0, reports: 0 };
     const formalIds = await withPgClient(pg, async (client) => {
       const res = await client.query<{ device_id: string }>(
         `SELECT device_id::text AS device_id FROM devices WHERE ${formalDevicePredicate("devices")}`
       );
       return res.rows.map((row) => row.device_id);
     });
-    if (formalIds.length === 0) return 0;
+    if (formalIds.length === 0) return { dataPoints: 0, reports: 0 };
     const res = await ch.query({
       query: `
-        SELECT toUInt64(count()) AS c
+        SELECT
+          toUInt64(count()) AS data_points,
+          toUInt64(uniqExact(tuple(device_id, received_ts))) AS reports
         FROM ${config.clickhouseDatabase}.${config.clickhouseTable}
         WHERE received_ts >= toDateTime64({start:String}, 3, 'UTC')
           AND received_ts < toDateTime64({end:String}, 3, 'UTC')
@@ -1064,11 +1072,15 @@ async function queryTodayDataCount(
       },
       format: "JSONEachRow"
     });
-    const rows: { c: number | string }[] = await res.json();
-    const value = rows[0]?.c;
-    return typeof value === "string" ? Number(value) : value ?? 0;
+    const rows: { data_points: number | string; reports: number | string }[] = await res.json();
+    const dataPoints = rows[0]?.data_points ?? 0;
+    const reports = rows[0]?.reports ?? 0;
+    return {
+      dataPoints: typeof dataPoints === "string" ? Number(dataPoints) : dataPoints,
+      reports: typeof reports === "string" ? Number(reports) : reports
+    };
   } catch {
-    return 0;
+    return { dataPoints: 0, reports: 0 };
   }
 }
 
@@ -1079,7 +1091,7 @@ async function buildDashboardSummaryData(
 ): Promise<DashboardSummaryData> {
   const now = new Date();
   const start = beijingStartOfDayUtc(now);
-  const todayDataCount = await queryTodayDataCount(config, ch, pg, start, now);
+  const todayCounts = await queryTodayTelemetryCounts(config, ch, pg, start, now);
   const freshThreshold = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
   const data = await withPgClient(pg, async (client) => {
@@ -1210,7 +1222,8 @@ async function buildDashboardSummaryData(
   }
 
   return {
-    todayDataCount,
+    todayDataCount: todayCounts.dataPoints,
+    todayReportCount: todayCounts.reports,
     onlineDevices,
     offlineDevices,
     pendingAlerts,

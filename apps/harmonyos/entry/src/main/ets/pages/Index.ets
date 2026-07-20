@@ -69,6 +69,7 @@ struct Index {
   @State private stations: Array<Station> = [];
   @State private devices: Array<Device> = [];
   @State private alarmActuators: Array<Device> = [];
+  @State private alarmActuatorOnline: boolean | null = null;
   @State private deviceStates: Array<DeviceState> = [];
   @State private stationMapLocations: Array<AlertMapLocation> = [];
   @State private stationMapLoading: boolean = false;
@@ -257,6 +258,7 @@ struct Index {
     this.stations = [];
     this.devices = [];
     this.alarmActuators = [];
+    this.alarmActuatorOnline = null;
     this.deviceStates = [];
     this.stationMapLocations = [];
     this.stationMapLoading = false;
@@ -401,6 +403,7 @@ struct Index {
     this.overviewRefreshing = true;
     if (!this.repository) this.getRepository();
     const repository = this.repository as MonitoringRepository;
+    this.refreshAlarmActuatorStatus();
     try {
       const cachedDashboard = await repository.cachedDashboard();
       const cachedDevices = await repository.cachedDevices('');
@@ -509,6 +512,7 @@ struct Index {
     this.stationRefreshing = true;
     if (!this.repository) this.getRepository();
     const repository = this.repository as MonitoringRepository;
+    this.refreshAlarmActuatorStatus();
     try {
       const cached = await repository.cachedStations();
       const cachedDevices = await repository.cachedDevices('');
@@ -672,6 +676,21 @@ struct Index {
       this.stationOffline = true;
       this.markConnection(false);
     }
+  }
+
+  private async refreshAlarmActuatorStatus(): Promise<void> {
+    if (!this.repository) return;
+    try {
+      const status = await (this.repository as MonitoringRepository).fieldAlarmStatus();
+      this.alarmActuatorOnline = status.actuator.yx75r?.available ?? status.actuator.available;
+    } catch {
+      // Preserve the last verified state when the status request is interrupted.
+    }
+  }
+
+  private refreshStationRealtime(): void {
+    this.refreshStationDeviceStates();
+    this.refreshAlarmActuatorStatus();
   }
 
   private async loadAlerts(): Promise<void> {
@@ -1186,7 +1205,7 @@ struct Index {
       if (this.loggedIn && this.screen === 'alerts') this.loadAlerts();
     }, 30000);
     this.stationTimer = setInterval(() => {
-      if (this.loggedIn && this.screen === 'stations') this.refreshStationDeviceStates();
+      if (this.loggedIn && this.screen === 'stations') this.refreshStationRealtime();
     }, 10000);
     if (this.screen === 'device') this.startDeviceTimers();
   }
@@ -1267,6 +1286,7 @@ struct Index {
               stations: this.stations,
               devices: this.devices,
               alarmActuators: this.alarmActuators,
+              alarmActuatorOnline: this.alarmActuatorOnline,
               deviceStates: this.deviceStates,
               mapLocations: this.stationMapLocations,
               mapLoading: this.stationMapLoading,
@@ -1739,7 +1759,7 @@ struct OverviewPane {
           }
           Row({ space: 8 }) {
             MetricCard({ label: '待处理告警', value: `${this.dashboard?.pendingAlerts ?? '--'}`, detail: `今日 ${this.dashboard?.todayAlerts ?? '--'} 条`, accent: '#B44832' });
-            MetricCard({ label: '今日上报', value: `${this.dashboard?.todayDataCount ?? '--'}`, detail: '北京时间 00:00 起', accent: '#477B96' });
+            MetricCard({ label: '今日上报', value: `${this.dashboard?.todayReportCount ?? '--'}`, detail: '次设备上报 · 北京时间', accent: '#477B96' });
           }
           OverviewTrendPane({ trends: this.trends });
         }
@@ -1956,6 +1976,7 @@ struct StationsPane {
   @Prop stations: Array<Station>;
   @Prop devices: Array<Device>;
   @Prop alarmActuators: Array<Device>;
+  @Prop alarmActuatorOnline: boolean | null;
   @Prop deviceStates: Array<DeviceState>;
   @Prop mapLocations: Array<AlertMapLocation>;
   @Prop mapLoading: boolean;
@@ -2025,11 +2046,23 @@ struct StationsPane {
   }
 
   private deviceIsOnline(device: Device): boolean {
+    if (isAlarmActuatorDevice(device)) {
+      return this.alarmActuatorOnline ?? isOnlineStatus(device.status);
+    }
     return isDeviceOnline(device, this.deviceUpdatedAt(device));
   }
 
   private deviceStatus(device: Device): string {
+    if (isAlarmActuatorDevice(device)) {
+      if (this.alarmActuatorOnline === null) return '检测中';
+      return this.alarmActuatorOnline ? '在线' : '离线';
+    }
     return deviceConnectivityLabel(device, this.deviceUpdatedAt(device));
+  }
+
+  private linkageStatusDetail(): string {
+    if (this.alarmActuatorOnline === null) return '正在检测现场声光链路';
+    return this.alarmActuatorOnline ? '现场声光链路正常' : '现场声光链路中断';
   }
 
   private selectedStationName(): string {
@@ -2262,7 +2295,7 @@ struct StationsPane {
                       .fontColor(UI_COLOR_TEXT)
                       .maxLines(1)
                       .textOverflow({ overflow: TextOverflow.Ellipsis })
-                    Text(`联动告警终端 · ${relativeTime(this.deviceUpdatedAt(device))}`)
+                    Text(this.linkageStatusDetail())
                       .fontSize(11)
                       .fontColor(UI_COLOR_MUTED)
                   }
