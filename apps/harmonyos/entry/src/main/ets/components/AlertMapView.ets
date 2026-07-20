@@ -1,5 +1,5 @@
 import webview from '@ohos.web.webview';
-import { AlertMapLocation } from '../data/Types';
+import { AlertMapLocation, EvacuationTarget, UserMapLocation } from '../data/Types';
 import { TIAN_DI_TU_BROWSER_KEY } from '../data/MapConfig';
 
 const MAP_COLOR_MUTED: string = '#5B6670';
@@ -12,6 +12,9 @@ export struct AlertMapView {
   @Prop @Watch('onMapStateChanged') location: AlertMapLocation;
   @Prop @Watch('onMapStateChanged') locations: Array<AlertMapLocation>;
   @Prop @Watch('onMapStateChanged') highlightAlert: boolean;
+  @Prop @Watch('onMapStateChanged') userLocation: UserMapLocation | null;
+  @Prop @Watch('onMapStateChanged') evacuationTarget: EvacuationTarget | null;
+  @Prop refreshAccessibilityText: string = '刷新地图、告警位置和手机定位';
   onRelocate: () => void = () => {};
   @State private pageReady: boolean = false;
   @State private mapError: string = '';
@@ -21,7 +24,9 @@ export struct AlertMapView {
   private mapStateScript(refreshTiles: boolean = false): string {
     const focus = JSON.stringify(this.location);
     const locations = JSON.stringify(this.locations);
-    return `window.renderMapState(${focus}, ${locations}, ${this.highlightAlert}, ${refreshTiles});`;
+    const userLocation = JSON.stringify(this.userLocation);
+    const evacuationTarget = JSON.stringify(this.evacuationTarget);
+    return `window.renderMapState(${focus}, ${locations}, ${this.highlightAlert}, ${userLocation}, ${evacuationTarget}, ${refreshTiles});`;
   }
 
   private initialiseScript(): string {
@@ -129,7 +134,7 @@ export struct AlertMapView {
       .margin({ top: 14, right: 14 })
       .backgroundColor('#FFFFFF')
       .shadow({ radius: 10, color: '#22000000', offsetY: 3 })
-      .accessibilityText('刷新并重新定位告警位置')
+      .accessibilityText(this.refreshAccessibilityText)
       .onClick(() => {
         this.refreshAlert();
         this.onRelocate();

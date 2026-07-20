@@ -1,6 +1,7 @@
 import common from '@ohos.app.ability.common';
 import { audio } from '@kit.AudioKit';
 import { media } from '@kit.MediaKit';
+import { vibrator } from '@kit.SensorServiceKit';
 
 const ALERT_ALARM_RESOURCE: string = 'alert_alarm.wav';
 
@@ -12,6 +13,7 @@ export class AlertAlarmService {
   private preparePromise: Promise<boolean> | null = null;
   private desiredPlaying: boolean = false;
   private requestVersion: number = 0;
+  private vibrationTimer: number | undefined = undefined;
 
   constructor(context: common.UIAbilityContext) {
     this.context = context;
@@ -22,6 +24,7 @@ export class AlertAlarmService {
     this.desiredPlaying = true;
     this.requestVersion += 1;
     const requestVersion = this.requestVersion;
+    this.startVibrationLoop();
     await this.stopCurrentStream();
     if (!await this.prepare() || !this.desiredPlaying || requestVersion !== this.requestVersion) {
       console.warn('[AlertAlarm] start cancelled before playback');
@@ -49,6 +52,7 @@ export class AlertAlarmService {
     console.info('[AlertAlarm] stop requested');
     this.desiredPlaying = false;
     this.requestVersion += 1;
+    this.stopVibrationLoop();
     await this.stopCurrentStream();
   }
 
@@ -85,6 +89,34 @@ export class AlertAlarmService {
     } catch {
       // A completed or interrupted stream is already stopped.
     }
+  }
+
+  private startVibrationLoop(): void {
+    this.stopVibrationLoop();
+    this.vibratePulse();
+    this.vibrationTimer = setInterval(() => {
+      if (this.desiredPlaying) this.vibratePulse();
+    }, 1500);
+  }
+
+  private stopVibrationLoop(): void {
+    if (this.vibrationTimer !== undefined) clearInterval(this.vibrationTimer);
+    this.vibrationTimer = undefined;
+    vibrator.stopVibration().catch(() => {
+      // A completed pulse or a device without a vibrator is already quiet.
+    });
+  }
+
+  private vibratePulse(): void {
+    vibrator.startVibration({
+      type: 'time',
+      duration: 650
+    }, {
+      id: 0,
+      usage: 'alarm'
+    }).catch(() => {
+      // Audio and the visual alert remain available when vibration is unsupported.
+    });
   }
 
   private prepare(): Promise<boolean> {

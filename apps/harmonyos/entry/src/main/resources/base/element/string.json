@@ -11,6 +11,10 @@
     {
       "name": "entry_desc",
       "value": "山体滑坡监测入口"
+    },
+    {
+      "name": "location_permission_reason",
+      "value": "用于在告警地图中显示您的当前位置，并计算与告警点或安全集合点的距离"
     }
   ]
 }

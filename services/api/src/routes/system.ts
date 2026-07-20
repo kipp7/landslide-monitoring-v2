@@ -38,6 +38,13 @@ function utcStartOfDay(d: Date): Date {
   return x;
 }
 
+function beijingStartOfDayUtc(d: Date): Date {
+  const beijingOffsetMs = 8 * 60 * 60 * 1000;
+  const local = new Date(d.getTime() + beijingOffsetMs);
+  local.setUTCHours(0, 0, 0, 0);
+  return new Date(local.getTime() - beijingOffsetMs);
+}
+
 function utcTomorrowStart(d: Date): Date {
   const x = utcStartOfDay(d);
   x.setUTCDate(x.getUTCDate() + 1);
@@ -1036,7 +1043,8 @@ async function queryTodayDataCount(
   config: AppConfig,
   ch: ClickHouseClient,
   pg: PgPool | null,
-  start: Date
+  start: Date,
+  end: Date
 ): Promise<number> {
   try {
     if (!pg) return 0;
@@ -1053,9 +1061,13 @@ async function queryTodayDataCount(
         SELECT count()::UInt64 AS c
         FROM ${config.clickhouseDatabase}.${config.clickhouseTable}
         WHERE received_ts >= {start:DateTime64(3, 'UTC')}
+          AND received_ts < {end:DateTime64(3, 'UTC')}
           AND device_id IN (${quotedIds})
       `,
-      query_params: { start: toClickhouseDateTime64Utc(start) },
+      query_params: {
+        start: toClickhouseDateTime64Utc(start),
+        end: toClickhouseDateTime64Utc(end)
+      },
       format: "JSONEachRow"
     });
     const rows: { c: number | string }[] = await res.json();
@@ -1072,8 +1084,8 @@ async function buildDashboardSummaryData(
   pg: PgPool
 ): Promise<DashboardSummaryData> {
   const now = new Date();
-  const start = utcStartOfDay(now);
-  const todayDataCount = await queryTodayDataCount(config, ch, pg, start);
+  const start = beijingStartOfDayUtc(now);
+  const todayDataCount = await queryTodayDataCount(config, ch, pg, start, now);
   const freshThreshold = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
   const data = await withPgClient(pg, async (client) => {

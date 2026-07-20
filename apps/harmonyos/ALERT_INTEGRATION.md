@@ -54,6 +54,19 @@ GET /api/v1/data/series/{deviceId}
 
 定位优先级为告警证据 GPS、设备实时 GPS、设备七日历史 GPS、最后有效 GPS、站点 GPS、厦门大学默认位置。
 
+打开具体告警地图时，App 会在获得系统授权后读取手机当前定位，用于在本机计算与告警点或安全集合点的直线距离和相对方位。手机定位不上传服务器、不写入业务数据库，也不保存到本地快照；退出地图后只保留当前进程中的临时状态。
+
+服务器核验过安全集合点后，可在告警 `evidence` 中下发：
+
+| 字段 | 说明 |
+| --- | --- |
+| `safeZoneLatitude` / `safe_zone_latitude` | 安全集合点纬度 |
+| `safeZoneLongitude` / `safe_zone_longitude` | 安全集合点经度 |
+| `safeZoneName` / `safe_zone_name` | 面向人员显示的集合点名称 |
+| `evacuationInstruction` / `evacuation_instruction` | 经现场核验的撤离说明 |
+
+没有核验过的安全集合点或撤离路线时，App 只提示远离边坡与沟谷、遵循现场疏散标识，不根据手机与告警点的两点直线擅自生成逃生方向。
+
 ## 后台 Push
 
 后台推送继续使用现有设备注册接口：

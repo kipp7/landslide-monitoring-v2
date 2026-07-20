@@ -7,9 +7,10 @@ import { MonitoringRepository } from '../data/Repositories';
 import { SecureSession, SessionStore } from '../data/SessionStore';
 import { AlertNotificationService } from '../data/AlertNotificationService';
 import { AlertAlarmService } from '../data/AlertAlarmService';
+import { DeviceLocationService } from '../data/DeviceLocationService';
 import { AlertStreamClient } from '../data/AlertStreamClient';
 import { PushRegistrationService } from '../data/PushRegistrationService';
-import { Alert, AlertEvent, AlertMapLocation, AlertStreamEvent, DashboardSummary, Device, DeviceState, MetricSeries, SeriesPoint, SeriesResponse, Station, alertStatusLabel, deviceConnectivityLabel, deviceDisplayName, deviceSupportsConductivity, deviceTypeLabel, displayMetric, eventTypeLabel, isAlarmActuatorDevice, isDeviceOnline, isOnlineStatus, metricShortLabel, metricUnitLabel, metricValue, relativeTime, severityLabel, shortTime, soilConductivityValue, soilMoistureValue, soilTemperatureValue, stationDisplayName, stationNameLabel, stationStatusLabel, userDisplayName } from '../data/Types';
+import { Alert, AlertEvent, AlertMapLocation, AlertStreamEvent, DashboardSummary, Device, DeviceState, EvacuationTarget, MetricSeries, SeriesPoint, SeriesResponse, Station, UserLocationStatus, UserMapLocation, alertStatusLabel, deviceConnectivityLabel, deviceDisplayName, deviceSupportsConductivity, deviceTypeLabel, displayMetric, eventTypeLabel, isAlarmActuatorDevice, isDeviceOnline, isOnlineStatus, metricShortLabel, metricUnitLabel, metricValue, numberValue, relativeTime, severityLabel, shortTime, soilConductivityValue, soilMoistureValue, soilTemperatureValue, stationDisplayName, stationNameLabel, stationStatusLabel, userDisplayName } from '../data/Types';
 import { AlertMapView } from '../components/AlertMapView';
 import { ActiveAlertBanner, InAppAlertOverlay } from '../components/InAppAlertOverlay';
 import { MetricCard } from '../components/MetricCard';
@@ -69,6 +70,8 @@ struct Index {
   @State private devices: Array<Device> = [];
   @State private alarmActuators: Array<Device> = [];
   @State private deviceStates: Array<DeviceState> = [];
+  @State private stationMapLocations: Array<AlertMapLocation> = [];
+  @State private stationMapLoading: boolean = false;
   @State private selectedStationId: string = '';
   @State private selectedDevice: Device | null = null;
   @State private selectedDeviceState: DeviceState | null = null;
@@ -85,6 +88,8 @@ struct Index {
   @State private alertMapLocation: AlertMapLocation | null = null;
   @State private alertMapLocations: Array<AlertMapLocation> = [];
   @State private alertMapLoading: boolean = false;
+  @State private userMapLocation: UserMapLocation | null = null;
+  @State private userLocationStatus: UserLocationStatus = 'idle';
   @State private appVisible: boolean = true;
   @State private activeAlertEvent: AlertStreamEvent | null = null;
   @State private alertOverlayVisible: boolean = false;
@@ -96,6 +101,7 @@ struct Index {
   private repository: MonitoringRepository | undefined = undefined;
   private cache: CacheManager | undefined = undefined;
   private alertLocationRepository: AlertLocationRepository | undefined = undefined;
+  private deviceLocationService: DeviceLocationService | undefined = undefined;
   private alertStream: AlertStreamClient | undefined = undefined;
   private alertNotifications: AlertNotificationService | undefined = undefined;
   private alertAlarm: AlertAlarmService | undefined = undefined;
@@ -109,10 +115,13 @@ struct Index {
   private deviceSeriesTimer: number | undefined = undefined;
   private stationRequestSequence: number = 0;
   private stationStateRequestSequence: number = 0;
+  private stationMapRequestSequence: number = 0;
+  private userLocationRequestSequence: number = 0;
 
   aboutToAppear(): void {
     this.context = getContext(this) as common.UIAbilityContext;
     this.alertAlarm = new AlertAlarmService(this.context);
+    this.deviceLocationService = new DeviceLocationService(this.context);
     this.api.setTokenObserver(() => {
       this.saveSession();
     });
@@ -249,6 +258,9 @@ struct Index {
     this.devices = [];
     this.alarmActuators = [];
     this.deviceStates = [];
+    this.stationMapLocations = [];
+    this.stationMapLoading = false;
+    this.stationMapRequestSequence += 1;
     this.selectedStationId = '';
     this.selectedDevice = null;
     this.selectedDeviceState = null;
@@ -258,7 +270,11 @@ struct Index {
     this.alertEvents = [];
     this.alertMapAlert = null;
     this.alertMapLocation = null;
+    this.alertMapLocations = [];
     this.alertMapLoading = false;
+    this.userMapLocation = null;
+    this.userLocationStatus = 'idle';
+    this.userLocationRequestSequence += 1;
     this.overviewFreshness = '尚未更新';
     this.stationFreshness = '尚未更新';
     this.deviceFreshness = '尚未更新';
@@ -498,15 +514,21 @@ struct Index {
       const cachedDevices = await repository.cachedDevices('');
       if (requestSequence !== this.stationRequestSequence) return;
       if (cached) this.stations = cached.value;
-      if (cachedDevices) this.alarmActuators = this.extractAlarmActuators(cachedDevices.value);
+      if (cachedDevices) {
+        this.alarmActuators = this.extractAlarmActuators(cachedDevices.value);
+        this.loadStationMapLocations(cachedDevices.value);
+      }
 
-      const allDevicesTask: Promise<Array<Device>> = repository.devices('').catch(() => []);
+      const allDevicesTask: Promise<Array<Device> | null> = repository.devices('').catch(() => null);
       const stations = await repository.stations();
       if (requestSequence !== this.stationRequestSequence) return;
       this.stations = stations;
       const allDevices = await allDevicesTask;
       if (requestSequence !== this.stationRequestSequence) return;
-      if (allDevices.length > 0) this.alarmActuators = this.extractAlarmActuators(allDevices);
+      if (allDevices) {
+        this.alarmActuators = this.extractAlarmActuators(allDevices);
+        this.loadStationMapLocations(allDevices);
+      }
       this.stationFreshness = `更新于 ${shortTime(new Date().toISOString())}`;
       this.stationOffline = false;
       this.markConnection(true);
@@ -535,6 +557,40 @@ struct Index {
     if (requestSequence === this.stationRequestSequence) {
       this.stationRefreshing = false;
     }
+  }
+
+  private async loadStationMapLocations(devices: Array<Device>): Promise<void> {
+    const requestSequence = ++this.stationMapRequestSequence;
+    this.stationMapLoading = true;
+    if (!this.alertLocationRepository && this.cache) {
+      this.alertLocationRepository = new AlertLocationRepository(this.api, this.cache);
+    }
+    const monitoringDevices: Array<Device> = [];
+    for (let index = 0; index < devices.length; index++) {
+      if (devices[index].status.toLowerCase() === 'revoked' || isAlarmActuatorDevice(devices[index])) continue;
+      monitoringDevices.push(devices[index]);
+    }
+    try {
+      const locations = this.alertLocationRepository
+        ? await this.alertLocationRepository.resolveNodes(monitoringDevices)
+        : [];
+      if (requestSequence === this.stationMapRequestSequence) this.stationMapLocations = locations;
+    } finally {
+      if (requestSequence === this.stationMapRequestSequence) this.stationMapLoading = false;
+    }
+  }
+
+  private async refreshStationMap(): Promise<void> {
+    if (!this.repository) this.getRepository();
+    const repository = this.repository as MonitoringRepository;
+    let devices: Array<Device> = [];
+    try {
+      devices = await repository.devices('');
+    } catch {
+      const cached = await repository.cachedDevices('');
+      devices = cached?.value ?? [];
+    }
+    await this.loadStationMapLocations(devices);
   }
 
   private async loadDevices(stationId: string, parentRequestSequence?: number): Promise<void> {
@@ -992,9 +1048,12 @@ struct Index {
       this.alertMapLocation = null;
       this.alertMapLocations = [];
       this.alertMapLoading = true;
+      this.userMapLocation = null;
+      this.userLocationStatus = alert ? 'locating' : 'idle';
     }
     this.screen = 'alert-map';
     this.stopDeviceTimers();
+    if (alert && !preserveCurrentMap) this.refreshUserMapLocation();
 
     let events: Array<AlertEvent> = [];
     let stations: Array<Station> = [];
@@ -1043,7 +1102,25 @@ struct Index {
     this.alertMapLoading = false;
   }
 
+  private async refreshUserMapLocation(): Promise<void> {
+    const alertId = this.alertMapAlert?.alertId;
+    if (!alertId || !this.context) return;
+    if (!this.deviceLocationService) this.deviceLocationService = new DeviceLocationService(this.context);
+    const requestSequence = ++this.userLocationRequestSequence;
+    this.userLocationStatus = 'locating';
+    const result = await this.deviceLocationService.current();
+    if (requestSequence !== this.userLocationRequestSequence || this.alertMapAlert?.alertId !== alertId) return;
+    this.userLocationStatus = result.status;
+    this.userMapLocation = result.location ?? null;
+  }
+
+  private refreshAlertMap(): void {
+    this.openAlertMap(this.alertMapAlert, true);
+    if (this.alertMapAlert) this.refreshUserMapLocation();
+  }
+
   private closeAlertMap(): void {
+    this.userLocationRequestSequence += 1;
     this.screen = 'alerts';
     this.alertMapLoading = false;
     this.loadAlerts();
@@ -1065,7 +1142,7 @@ struct Index {
     if (this.screen === 'stations') this.loadStations();
     if (this.screen === 'alerts') this.loadAlerts();
     if (this.screen === 'device') this.refreshDevice();
-    if (this.screen === 'alert-map') this.openAlertMap(this.alertMapAlert, true);
+    if (this.screen === 'alert-map') this.refreshAlertMap();
   }
 
   private async saveApiBase(value: string): Promise<void> {
@@ -1087,6 +1164,17 @@ struct Index {
     this.connectionState = 'unknown';
     this.connectionUpdatedAt = '尚未请求';
     this.resetMonitoringData();
+  }
+
+  private async clearLocalCache(): Promise<void> {
+    if (this.repository) await this.repository.clear();
+    this.rebuildRepository();
+    this.stationMapLocations = [];
+    this.stationMapLoading = false;
+    this.overviewFreshness = '本地缓存已清理';
+    this.stationFreshness = '本地缓存已清理';
+    this.deviceFreshness = '本地缓存已清理';
+    this.alertFreshness = '本地缓存已清理';
   }
 
   private startTimers(): void {
@@ -1180,12 +1268,15 @@ struct Index {
               devices: this.devices,
               alarmActuators: this.alarmActuators,
               deviceStates: this.deviceStates,
+              mapLocations: this.stationMapLocations,
+              mapLoading: this.stationMapLoading,
               selectedStationId: this.selectedStationId,
               freshness: this.stationFreshness,
               offline: this.stationOffline,
               refreshing: this.stationRefreshing,
               onSelectStation: (id: string) => this.loadDevices(id),
               onSelectDevice: (device: Device) => this.openDevice(device),
+              onRefreshMap: () => this.refreshStationMap(),
               onRefresh: () => this.loadStations()
             });
           } else if (this.screen === 'device') {
@@ -1206,8 +1297,11 @@ struct Index {
               locations: this.alertMapLocations,
               loading: this.alertMapLoading,
               active: this.appVisible,
+              userLocation: this.userMapLocation,
+              userLocationStatus: this.userLocationStatus,
               onBack: () => this.closeAlertMap(),
-              onRetry: () => this.openAlertMap(this.alertMapAlert, true)
+              onRetry: () => this.refreshAlertMap(),
+              onRelocateUser: () => this.refreshUserMapLocation()
             });
           } else if (this.screen === 'alerts') {
             AlertsPane({
@@ -1229,6 +1323,7 @@ struct Index {
               connectionState: this.connectionState,
               connectionUpdatedAt: this.connectionUpdatedAt,
               onSave: (value: string) => this.saveApiBase(value),
+              onClearCache: () => this.clearLocalCache(),
               onLogout: () => this.logout()
             });
           }
@@ -1644,7 +1739,7 @@ struct OverviewPane {
           }
           Row({ space: 8 }) {
             MetricCard({ label: '待处理告警', value: `${this.dashboard?.pendingAlerts ?? '--'}`, detail: `今日 ${this.dashboard?.todayAlerts ?? '--'} 条`, accent: '#B44832' });
-            MetricCard({ label: '今日数据', value: `${this.dashboard?.todayDataCount ?? '--'}`, detail: '条遥测记录', accent: '#477B96' });
+            MetricCard({ label: '今日上报', value: `${this.dashboard?.todayDataCount ?? '--'}`, detail: '北京时间 00:00 起', accent: '#477B96' });
           }
           OverviewTrendPane({ trends: this.trends });
         }
@@ -1862,12 +1957,15 @@ struct StationsPane {
   @Prop devices: Array<Device>;
   @Prop alarmActuators: Array<Device>;
   @Prop deviceStates: Array<DeviceState>;
+  @Prop mapLocations: Array<AlertMapLocation>;
+  @Prop mapLoading: boolean;
   @Prop selectedStationId: string;
   @Prop freshness: string;
   @Prop offline: boolean;
   @Prop refreshing: boolean;
   onSelectStation: (id: string) => void = () => {};
   onSelectDevice: (device: Device) => void = () => {};
+  onRefreshMap: () => void = () => {};
   onRefresh: () => void = () => {};
 
   private selectedStation(): Station | null {
@@ -1939,6 +2037,31 @@ struct StationsPane {
     return station ? stationDisplayName(station) : '当前监测站';
   }
 
+  private mapFocus(): AlertMapLocation | null {
+    for (let deviceIndex = 0; deviceIndex < this.devices.length; deviceIndex++) {
+      if (isAlarmActuatorDevice(this.devices[deviceIndex])) continue;
+      for (let locationIndex = 0; locationIndex < this.mapLocations.length; locationIndex++) {
+        if (this.mapLocations[locationIndex].deviceId === this.devices[deviceIndex].deviceId) {
+          return this.mapLocations[locationIndex];
+        }
+      }
+    }
+    return this.mapLocations.length > 0 ? this.mapLocations[0] : null;
+  }
+
+  private mapStatusText(): string {
+    if (this.mapLoading) return this.mapLocations.length > 0 ? '正在更新节点位置' : '正在获取节点位置';
+    if (this.mapLocations.length === 0) return '暂无可显示的位置';
+    let liveCount = 0;
+    let retainedCount = 0;
+    for (let index = 0; index < this.mapLocations.length; index++) {
+      if (this.mapLocations[index].source === 'gps-live') liveCount += 1;
+      if (this.mapLocations[index].source === 'gps-last') retainedCount += 1;
+    }
+    const detail = liveCount > 0 ? ` · ${liveCount} 个实时 GPS` : retainedCount > 0 ? ` · ${retainedCount} 个最后位置` : '';
+    return `${this.mapLocations.length} 个监测节点${detail}`;
+  }
+
   build() {
     Column() {
       PageHeader({
@@ -1958,6 +2081,59 @@ struct StationsPane {
               : `实时数据 · ${this.onlineDeviceCount(this.monitoringDevices())} / ${this.monitoringDevices().length} 个监测节点在线 · ${this.freshness}`,
             tone: this.refreshing ? UI_COLOR_ACCENT : this.offline ? UI_COLOR_DANGER : UI_COLOR_SUCCESS
           });
+          Column({ space: 10 }) {
+            Row() {
+              Column({ space: 3 }) {
+                Text('站点分布')
+                  .fontSize(16)
+                  .fontWeight(FontWeight.Bold)
+                  .fontColor(UI_COLOR_TEXT)
+                Text(this.mapStatusText())
+                  .fontSize(11)
+                  .fontColor(UI_COLOR_MUTED)
+              }
+              .alignItems(HorizontalAlign.Start)
+              .layoutWeight(1)
+              if (this.mapLoading) {
+                LoadingProgress()
+                  .width(20)
+                  .height(20)
+                  .color(UI_COLOR_ACCENT)
+              }
+            }
+            .width('100%')
+
+            if (this.mapFocus()) {
+              AlertMapView({
+                location: this.mapFocus() as AlertMapLocation,
+                locations: this.mapLocations,
+                highlightAlert: false,
+                userLocation: null,
+                evacuationTarget: null,
+                refreshAccessibilityText: '刷新站点分布与地图',
+                onRelocate: () => this.onRefreshMap()
+              })
+                .width('100%')
+                .height(238)
+                .borderRadius(8)
+                .clip(true)
+            } else {
+              Column({ space: 8 }) {
+                SymbolGlyph($r('sys.symbol.map'))
+                  .fontSize(28)
+                  .fontColor([UI_COLOR_SUBTLE])
+                Text(this.mapLoading ? '正在准备站点地图' : '节点位置可用后将在这里显示')
+                  .fontSize(12)
+                  .fontColor(UI_COLOR_MUTED)
+              }
+              .width('100%')
+              .height(150)
+              .justifyContent(FlexAlign.Center)
+              .backgroundColor('#EEF2F0')
+              .borderRadius(8)
+            }
+          }
+          .width('100%')
           Text('选择站点')
             .fontSize(13)
             .fontWeight(FontWeight.Medium)
@@ -2824,8 +3000,11 @@ struct AlertMapPane {
   @Prop locations: Array<AlertMapLocation>;
   @Prop loading: boolean;
   @Prop active: boolean;
+  @Prop userLocation: UserMapLocation | null;
+  @Prop userLocationStatus: UserLocationStatus;
   onBack: () => void = () => {};
   onRetry: () => void = () => {};
+  onRelocateUser: () => void = () => {};
 
   private sourceTone(): string {
     if (!this.alert) return UI_COLOR_SUCCESS;
@@ -2877,6 +3056,93 @@ struct AlertMapPane {
     return `坐标更新于 ${shortTime(this.location.updatedAt)}`;
   }
 
+  private evidenceNumber(keys: Array<string>): number | null {
+    for (let index = 0; index < keys.length; index++) {
+      const value = numberValue(this.alert?.evidence?.[keys[index]]);
+      if (value !== null) return value;
+    }
+    return null;
+  }
+
+  private evidenceText(keys: Array<string>): string {
+    for (let index = 0; index < keys.length; index++) {
+      const value = this.alert?.evidence?.[keys[index]];
+      if (typeof value === 'string' && value.trim().length > 0) return value.trim();
+    }
+    return '';
+  }
+
+  private evacuationTarget(): EvacuationTarget | null {
+    const latitude = this.evidenceNumber(['safeZoneLatitude', 'safe_zone_latitude']);
+    const longitude = this.evidenceNumber(['safeZoneLongitude', 'safe_zone_longitude']);
+    if (latitude === null || longitude === null || latitude < -90 || latitude > 90 ||
+      longitude < -180 || longitude > 180) return null;
+    const name = this.evidenceText(['safeZoneName', 'safe_zone_name']) || '安全集合点';
+    const instruction = this.evidenceText(['evacuationInstruction', 'evacuation_instruction']);
+    const target: EvacuationTarget = { latitude, longitude, name };
+    if (instruction.length > 0) target.instruction = instruction;
+    return target;
+  }
+
+  private distanceMeters(latitude: number, longitude: number): number | null {
+    if (!this.userLocation) return null;
+    const earthRadius = 6371000;
+    const radians = Math.PI / 180;
+    const deltaLatitude = (latitude - this.userLocation.latitude) * radians;
+    const deltaLongitude = (longitude - this.userLocation.longitude) * radians;
+    const sourceLatitude = this.userLocation.latitude * radians;
+    const targetLatitude = latitude * radians;
+    const haversine = Math.sin(deltaLatitude / 2) * Math.sin(deltaLatitude / 2) +
+      Math.cos(sourceLatitude) * Math.cos(targetLatitude) *
+      Math.sin(deltaLongitude / 2) * Math.sin(deltaLongitude / 2);
+    return earthRadius * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
+  }
+
+  private formattedDistance(distance: number | null): string {
+    if (distance === null) return '--';
+    if (distance < 1000) return `${Math.max(1, Math.round(distance))} 米`;
+    return `${(distance / 1000).toFixed(distance < 10000 ? 1 : 0)} 公里`;
+  }
+
+  private bearingLabel(latitude: number, longitude: number): string {
+    if (!this.userLocation) return '--';
+    const radians = Math.PI / 180;
+    const sourceLatitude = this.userLocation.latitude * radians;
+    const targetLatitude = latitude * radians;
+    const deltaLongitude = (longitude - this.userLocation.longitude) * radians;
+    const y = Math.sin(deltaLongitude) * Math.cos(targetLatitude);
+    const x = Math.cos(sourceLatitude) * Math.sin(targetLatitude) -
+      Math.sin(sourceLatitude) * Math.cos(targetLatitude) * Math.cos(deltaLongitude);
+    const degrees = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+    const directions: Array<string> = ['北', '东北', '东', '东南', '南', '西南', '西', '西北'];
+    return directions[Math.round(degrees / 45) % directions.length];
+  }
+
+  private userLocationText(): string {
+    if (this.userLocationStatus === 'locating') return '正在获取手机定位';
+    if (this.userLocationStatus === 'denied') return '未获得手机定位权限';
+    if (this.userLocationStatus === 'unavailable') return '手机定位暂时不可用';
+    if (this.userLocation) return `我的位置 · 精度约 ${Math.max(1, Math.round(this.userLocation.accuracy))} 米`;
+    return '尚未获取手机定位';
+  }
+
+  private proximityText(): string {
+    const target = this.evacuationTarget();
+    if (target && this.userLocation) {
+      return `${target.name}在${this.bearingLabel(target.latitude, target.longitude)}方向 · ${this.formattedDistance(this.distanceMeters(target.latitude, target.longitude))}`;
+    }
+    if (!this.location || this.location.source === 'default') return '告警位置待确认，暂不计算撤离距离';
+    if (!this.userLocation) return '获取手机定位后显示与告警点的距离';
+    return `距告警点 ${this.formattedDistance(this.distanceMeters(this.location.latitude, this.location.longitude))} · 告警点在${this.bearingLabel(this.location.latitude, this.location.longitude)}方向`;
+  }
+
+  private evacuationAdvice(): string {
+    const target = this.evacuationTarget();
+    if (target?.instruction) return target.instruction;
+    if (target) return `快速离开危险区域，按核验路线前往${target.name}`;
+    return '立即远离边坡与沟谷，按现场疏散标识前往安全区域';
+  }
+
   build() {
     Column() {
       Row({ space: 12 }) {
@@ -2921,6 +3187,8 @@ struct AlertMapPane {
               location: this.location as AlertMapLocation,
               locations: this.locations,
               highlightAlert: this.alert !== null,
+              userLocation: this.userLocation,
+              evacuationTarget: this.evacuationTarget(),
               onRelocate: () => this.onRetry()
             })
           } else {
@@ -2964,13 +3232,60 @@ struct AlertMapPane {
                 .textOverflow({ overflow: TextOverflow.Ellipsis })
             }
             if (this.alert) {
-              Text(this.coordinateText())
-                .fontSize(16)
-                .fontWeight(FontWeight.Medium)
-                .fontColor(UI_COLOR_TEXT)
-              Text(this.updatedText())
-                .fontSize(11)
-                .fontColor(UI_COLOR_MAP_MUTED)
+              Column({ space: 8 }) {
+                Row({ space: 8 }) {
+                  Circle({ width: 8, height: 8 })
+                    .fill(this.userLocation ? '#377BB1' : UI_COLOR_SUBTLE)
+                  Text(this.userLocationText())
+                    .fontSize(12)
+                    .fontColor(this.userLocation ? '#285F89' : UI_COLOR_MAP_MUTED)
+                    .layoutWeight(1)
+                  if (this.userLocationStatus !== 'locating') {
+                    Button({ type: ButtonType.Circle }) {
+                      SymbolGlyph($r('sys.symbol.arrow_clockwise'))
+                        .fontSize(15)
+                        .fontColor(['#285F89'])
+                    }
+                    .width(30)
+                    .height(30)
+                    .backgroundColor('#EAF3F8')
+                    .accessibilityText('重新获取手机定位')
+                    .onClick(() => this.onRelocateUser())
+                  }
+                }
+                .width('100%')
+                .alignItems(VerticalAlign.Center)
+
+                Text(this.proximityText())
+                  .width('100%')
+                  .fontSize(14)
+                  .fontWeight(FontWeight.Bold)
+                  .fontColor(this.location.source === 'default' ? UI_COLOR_MAP_DEFAULT : UI_COLOR_TEXT)
+
+                Row({ space: 9 }) {
+                  SymbolGlyph($r('sys.symbol.exclamationmark_triangle'))
+                    .fontSize(17)
+                    .fontColor([UI_COLOR_DANGER])
+                  Text(this.evacuationAdvice())
+                    .fontSize(13)
+                    .fontWeight(FontWeight.Medium)
+                    .fontColor('#7E2E21')
+                    .lineHeight(19)
+                    .layoutWeight(1)
+                    .maxLines(3)
+                }
+                .width('100%')
+                .padding({ left: 12, right: 12, top: 10, bottom: 10 })
+                .backgroundColor('#F9ECE8')
+                .borderRadius(6)
+
+                Text(`${this.coordinateText()} · ${this.updatedText()}`)
+                  .fontSize(10)
+                  .fontColor(UI_COLOR_MAP_MUTED)
+                  .maxLines(1)
+                  .textOverflow({ overflow: TextOverflow.Ellipsis })
+              }
+              .width('100%')
             } else {
               Text(this.nodeSummary())
                 .fontSize(13)
@@ -3021,8 +3336,11 @@ struct SettingsPane {
   @Prop connectionState: string;
   @Prop connectionUpdatedAt: string;
   onSave: (value: string) => void = () => {};
+  onClearCache: () => void = () => {};
   onLogout: () => void = () => {};
   @State private draftUrl: string = '';
+  @State private editingServer: boolean = false;
+  @State private cacheStatus: string = '保留最近一次总览、站点与设备快照';
 
   aboutToAppear(): void {
     this.draftUrl = this.apiBaseUrl;
@@ -3040,91 +3358,278 @@ struct SettingsPane {
     return '尚未验证服务器连接';
   }
 
+  private clearCache(): void {
+    this.onClearCache();
+    this.cacheStatus = '本地缓存已清理';
+  }
+
   build() {
     Column() {
-      Column({ space: 3 }) {
-        Text('我的')
-          .fontSize(22)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#18212B')
-        Text('账号与服务器连接')
-          .fontSize(11)
-          .fontColor('#6C7782')
-      }
-      .alignItems(HorizontalAlign.Start)
-      .padding({ left: 16, right: 16, top: 8, bottom: 12 })
-      .width('100%')
-      Scroll() {
-        Column({ space: 12 }) {
-          Row({ space: 12 }) {
-            Text(this.userName.slice(0, 1))
-              .fontSize(18)
+      if (this.editingServer) {
+        Row({ space: 10 }) {
+          BackIconButton({ accessibilityLabel: '返回我的', onBack: () => this.editingServer = false })
+          Column({ space: 3 }) {
+            Text('服务器连接')
+              .fontSize(20)
               .fontWeight(FontWeight.Bold)
-              .fontColor('#FFFFFF')
-              .textAlign(TextAlign.Center)
-              .width(44)
-              .height(44)
-              .backgroundColor('#477B96')
-              .borderRadius(22)
-            Column({ space: 3 }) {
-              Text(this.userName)
-                .fontSize(16)
-                .fontWeight(FontWeight.Medium)
-                .fontColor('#18212B')
-              Text('已登录')
-                .fontSize(11)
-                .fontColor('#3C9D82')
-            }
-            .alignItems(HorizontalAlign.Start)
-          }
-          .padding(14)
-          .backgroundColor('#FFFFFF')
-          .borderRadius(8)
-          .width('100%')
-          Text('服务器连接')
-            .fontSize(13)
-            .fontWeight(FontWeight.Medium)
-            .fontColor('#52606D')
-            .width('100%')
-          Column({ space: 10 }) {
-            Row({ space: 8 }) {
-              Circle({ width: 8, height: 8 }).fill(this.connectionTone())
-              Text(this.connectionText())
-                .fontSize(12)
-                .fontColor(this.connectionState === 'failure' ? '#B44832' : '#52606D')
-            }
-            TextInput({ text: this.draftUrl, placeholder: 'https://example.com/api/v1' })
-              .onChange((value: string) => this.draftUrl = value)
-              .height(44)
-              .backgroundColor('#F5F7F8')
-              .borderRadius(6)
-            Button('保存服务器设置')
-              .width('100%')
-              .height(42)
-              .backgroundColor('#18212B')
-              .fontColor('#FFFFFF')
-              .onClick(() => this.onSave(this.draftUrl))
+              .fontColor(UI_COLOR_TEXT)
+            Text('修改后需要重新登录')
+              .fontSize(11)
+              .fontColor(UI_COLOR_MUTED)
           }
           .alignItems(HorizontalAlign.Start)
-          .padding(14)
-          .backgroundColor('#FFFFFF')
-          .borderRadius(8)
-          .width('100%')
-          Button('退出登录')
-            .width('100%')
-            .height(44)
-            .fontColor('#B44832')
-            .backgroundColor('#FFFFFF')
-            .onClick(() => this.onLogout())
         }
-        .padding({ left: 16, right: 16, bottom: 24 })
+        .padding({ left: 8, right: 16, top: 6, bottom: 10 })
         .width('100%')
+
+        Scroll() {
+          Column({ space: 16 }) {
+            Row({ space: 9 }) {
+              Circle({ width: 9, height: 9 }).fill(this.connectionTone())
+              Text(this.connectionText())
+                .fontSize(12)
+                .fontColor(this.connectionState === 'failure' ? UI_COLOR_DANGER : UI_COLOR_MUTED)
+                .layoutWeight(1)
+            }
+            .width('100%')
+            .padding(14)
+            .backgroundColor(UI_COLOR_SURFACE)
+            .borderRadius(8)
+
+            Column({ space: 10 }) {
+              Text('服务器 API 地址')
+                .fontSize(13)
+                .fontWeight(FontWeight.Medium)
+                .fontColor(UI_COLOR_TEXT)
+              TextInput({ text: this.draftUrl, placeholder: 'http://host:port/api/v1' })
+                .onChange((value: string) => this.draftUrl = value)
+                .height(48)
+                .fontSize(14)
+                .backgroundColor('#F2F5F4')
+                .border({ width: 1, color: UI_COLOR_LOGIN_BORDER })
+                .borderRadius(8)
+              Text('地址需要包含 /api/v1')
+                .fontSize(11)
+                .fontColor(UI_COLOR_MUTED)
+            }
+            .alignItems(HorizontalAlign.Start)
+            .width('100%')
+
+            Button('保存服务器设置')
+              .enabled(this.draftUrl.trim().length > 0)
+              .width('100%')
+              .height(48)
+              .fontColor(UI_COLOR_SURFACE)
+              .backgroundColor(UI_COLOR_TEXT)
+              .borderRadius(8)
+              .onClick(() => {
+                this.onSave(this.draftUrl);
+                this.editingServer = false;
+              })
+          }
+          .padding({ left: 16, right: 16, bottom: 24 })
+          .width('100%')
+        }
+        .layoutWeight(1)
+        .scrollBar(BarState.Off)
+      } else {
+        Column({ space: 3 }) {
+          Text('我的')
+            .fontSize(22)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(UI_COLOR_TEXT)
+          Text('账号、安全与数据')
+            .fontSize(11)
+            .fontColor(UI_COLOR_MUTED)
+        }
+        .alignItems(HorizontalAlign.Start)
+        .padding({ left: 16, right: 16, top: 8, bottom: 12 })
+        .width('100%')
+
+        Scroll() {
+          Column({ space: 14 }) {
+            Row({ space: 12 }) {
+              Text(this.userName.slice(0, 1))
+                .fontSize(18)
+                .fontWeight(FontWeight.Bold)
+                .fontColor(UI_COLOR_SURFACE)
+                .textAlign(TextAlign.Center)
+                .width(44)
+                .height(44)
+                .backgroundColor('#477B96')
+                .borderRadius(22)
+              Column({ space: 3 }) {
+                Text(this.userName)
+                  .fontSize(16)
+                  .fontWeight(FontWeight.Medium)
+                  .fontColor(UI_COLOR_TEXT)
+                Text('已登录 · 监测平台账号')
+                  .fontSize(11)
+                  .fontColor(UI_COLOR_SUCCESS)
+              }
+              .alignItems(HorizontalAlign.Start)
+            }
+            .padding(14)
+            .backgroundColor(UI_COLOR_SURFACE)
+            .borderRadius(8)
+            .width('100%')
+
+            SettingsSectionTitle({ text: '告警与安全' });
+            Column() {
+              SettingsItem({
+                icon: $r('sys.symbol.bell'),
+                title: '告警提醒',
+                detail: '软件内弹窗、声音与震动',
+                tone: UI_COLOR_DANGER,
+                actionable: false
+              });
+              Divider().color('#EEF1F3').margin({ left: 52 })
+              SettingsItem({
+                icon: $r('sys.symbol.dot_radiowaves_left_and_right'),
+                title: '定位使用',
+                detail: '查看告警地图时获取当前位置',
+                tone: '#377BB1',
+                actionable: false
+              });
+            }
+            .width('100%')
+            .backgroundColor(UI_COLOR_SURFACE)
+            .borderRadius(8)
+
+            SettingsSectionTitle({ text: '数据与连接' });
+            Column() {
+              SettingsItem({
+                icon: $r('sys.symbol.arrow_clockwise'),
+                title: '数据更新',
+                detail: '总览 30 秒 · 节点状态 10 秒',
+                tone: UI_COLOR_SUCCESS,
+                actionable: false
+              });
+              Divider().color('#EEF1F3').margin({ left: 52 })
+              SettingsItem({
+                icon: $r('sys.symbol.house'),
+                title: '本地缓存',
+                detail: this.cacheStatus,
+                tone: '#477B96',
+                actionable: true,
+                actionLabel: '清理',
+                onTap: () => this.clearCache()
+              });
+              Divider().color('#EEF1F3').margin({ left: 52 })
+              SettingsItem({
+                icon: $r('sys.symbol.dot_radiowaves_left_and_right'),
+                title: '服务器连接',
+                detail: this.connectionText(),
+                tone: this.connectionTone(),
+                actionable: true,
+                actionLabel: '修改',
+                onTap: () => this.editingServer = true
+              });
+            }
+            .width('100%')
+            .backgroundColor(UI_COLOR_SURFACE)
+            .borderRadius(8)
+
+            SettingsSectionTitle({ text: '关于' });
+            Column() {
+              SettingsItem({
+                icon: $r('sys.symbol.person_crop_circle_fill_1'),
+                title: '山体滑坡监测',
+                detail: 'HarmonyOS 移动端 · 版本 0.1.0',
+                tone: UI_COLOR_ACCENT,
+                actionable: false
+              });
+            }
+            .width('100%')
+            .backgroundColor(UI_COLOR_SURFACE)
+            .borderRadius(8)
+
+            Button('退出登录')
+              .width('100%')
+              .height(46)
+              .fontColor(UI_COLOR_DANGER)
+              .backgroundColor(UI_COLOR_SURFACE)
+              .borderRadius(8)
+              .onClick(() => this.onLogout())
+          }
+          .padding({ left: 16, right: 16, bottom: 24 })
+          .width('100%')
+        }
+        .layoutWeight(1)
+        .scrollBar(BarState.Off)
+        .align(Alignment.TopStart)
       }
-      .layoutWeight(1)
-      .scrollBar(BarState.Off)
-      .align(Alignment.TopStart)
     }
     .layoutWeight(1)
+  }
+}
+
+@Component
+struct SettingsSectionTitle {
+  @Prop text: string;
+
+  build() {
+    Text(this.text)
+      .fontSize(13)
+      .fontWeight(FontWeight.Medium)
+      .fontColor('#52606D')
+      .width('100%')
+  }
+}
+
+@Component
+struct SettingsItem {
+  @Prop icon: Resource;
+  @Prop title: string;
+  @Prop detail: string;
+  @Prop tone: string;
+  @Prop actionable: boolean;
+  @Prop actionLabel: string = '';
+  onTap: () => void = () => {};
+
+  build() {
+    Row({ space: 12 }) {
+      Stack({ alignContent: Alignment.Center }) {
+        Circle({ width: 36, height: 36 }).fill('#EEF2F0')
+        SymbolGlyph(this.icon)
+          .fontSize(18)
+          .fontColor([this.tone])
+      }
+      .width(36)
+      .height(36)
+      Column({ space: 3 }) {
+        Text(this.title)
+          .fontSize(14)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(UI_COLOR_TEXT)
+        Text(this.detail)
+          .fontSize(11)
+          .fontColor(UI_COLOR_MUTED)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+      }
+      .alignItems(HorizontalAlign.Start)
+      .layoutWeight(1)
+      if (this.actionable) {
+        Row({ space: 5 }) {
+          if (this.actionLabel.length > 0) {
+            Text(this.actionLabel)
+              .fontSize(11)
+              .fontColor(UI_COLOR_MUTED)
+          }
+          SymbolGlyph($r('sys.symbol.chevron_right'))
+            .fontSize(15)
+            .fontColor([UI_COLOR_SUBTLE])
+        }
+      }
+    }
+    .width('100%')
+    .height(64)
+    .padding({ left: 12, right: 12 })
+    .alignItems(VerticalAlign.Center)
+    .onClick(() => {
+      if (this.actionable) this.onTap();
+    })
   }
 }
 
