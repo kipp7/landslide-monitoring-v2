@@ -124,10 +124,10 @@ static void ShowProtocolStatus(const AlarmSnapshot *snapshot, uint16_t fg, uint1
     uint16_t wifi_color = bg == LCD_WHITE ? (snapshot->wifi_connected ? LCD_GREEN : LCD_RED) : fg;
     uint16_t mqtt_color = bg == LCD_WHITE ? (snapshot->mqtt_connected ? LCD_GREEN : LCD_RED) : fg;
 
-    ShowAscii(8, 220, "Wi-Fi", fg, bg, 16);
-    ShowChinese(54, 216, snapshot->wifi_connected ? "正常" : "关闭", wifi_color, bg, 24);
-    ShowAscii(164, 220, "MQTT", fg, bg, 16);
-    ShowChinese(210, 216, snapshot->mqtt_connected ? "正常" : "关闭", mqtt_color, bg, 24);
+    ShowAscii(40, 216, "WIFI", fg, bg, 24);
+    ShowChinese(96, 216, snapshot->wifi_connected ? "正常" : "关闭", wifi_color, bg, 24);
+    ShowAscii(176, 216, "MQTT", fg, bg, 24);
+    ShowChinese(232, 216, snapshot->mqtt_connected ? "正常" : "关闭", mqtt_color, bg, 24);
 }
 
 static void ShowAlertContext(const AlarmSnapshot *snapshot, uint16_t fg, uint16_t bg)
