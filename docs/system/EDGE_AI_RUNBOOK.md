@@ -9,6 +9,10 @@
 - Hermes inference is advisory and runs in its existing sidecar service with
   `CPUQuota=50%`, `MemoryMax=384M`, `TasksMax=64` and lower process priority.
 - The server worker is an opt-in Compose profile with `0.5 CPU / 384 MB`.
+- Edge AI Compose deployments set `SERVER_PREDICTIONS_ENABLED=false`, so the
+  worker trains models and receives edge results without writing one server
+  prediction for every telemetry message. The legacy default remains `true`
+  for deployments that already rely on that server prediction stream.
 - The rule engine remains the only authority for physical alarms.
 
 ## Server rollout

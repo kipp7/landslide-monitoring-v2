@@ -24,6 +24,12 @@ const configSchema = z.object({
   kafkaGroupId: z.string().default("ai-prediction-worker.v1"),
   kafkaTopicTelemetryRaw: z.string().default("telemetry.raw.v1"),
   kafkaTopicAiPredictions: z.string().default("ai.predictions.v1"),
+  serverPredictionsEnabled: z
+    .string()
+    .optional()
+    .transform((value) => (value ?? "true").toLowerCase())
+    .pipe(z.enum(["true", "false"]))
+    .transform((value) => value === "true"),
 
   mqttUrl: optionalNonEmptyString(),
   mqttUsername: optionalNonEmptyString(),
@@ -72,6 +78,7 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
     kafkaGroupId: env.KAFKA_GROUP_ID,
     kafkaTopicTelemetryRaw: env.KAFKA_TOPIC_TELEMETRY_RAW,
     kafkaTopicAiPredictions: env.KAFKA_TOPIC_AI_PREDICTIONS,
+    serverPredictionsEnabled: env.SERVER_PREDICTIONS_ENABLED,
 
     mqttUrl: env.MQTT_URL,
     mqttUsername: env.MQTT_USERNAME,

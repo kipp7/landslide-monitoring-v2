@@ -65,7 +65,9 @@ void test("trainer creates checksummed artifacts and retains only ten versions",
     KAFKA_BROKERS: "127.0.0.1:9092",
     POSTGRES_PASSWORD: "test-only",
     EDGE_MODEL_DIRECTORY: directory,
+    SERVER_PREDICTIONS_ENABLED: "false",
   });
+  assert.equal(config.serverPredictionsEnabled, false);
 
   let latestVersion = "";
   for (let index = 0; index < 11; index += 1) {
