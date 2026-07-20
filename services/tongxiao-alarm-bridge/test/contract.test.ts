@@ -27,7 +27,31 @@ void test("critical alarm drives every local warning output and fixed evacuation
   assert.equal(desired.outputs.buzzer, true);
   assert.equal(desired.outputs.motor, true);
   assert.equal(desired.outputs.rgb, "red_fast_flash");
-  assert.deepEqual(desired.outputs.voice, { phrase_id: "EVACUATE_01", repeat_seconds: 30 });
+  assert.deepEqual(desired.outputs.voice, { phrase_id: "EVACUATE_01", repeat_seconds: 15 });
+});
+
+void test("high alarm repeats the full preparation phrase while risk remains active", () => {
+  const desired = createDesiredState({
+    action: "alarm_on",
+    context: { severity: "high" },
+    deviceId,
+    revision: 102,
+    voiceEnabled: true
+  });
+
+  assert.deepEqual(desired.outputs.voice, { phrase_id: "PREPARE_01", repeat_seconds: 30 });
+});
+
+void test("all clear requests spaced repeats for the firmware three-play schedule", () => {
+  const desired = createDesiredState({
+    action: "alarm_off",
+    context: {},
+    deviceId,
+    revision: 103,
+    voiceEnabled: true
+  });
+
+  assert.deepEqual(desired.outputs.voice, { phrase_id: "ALL_CLEAR_01", repeat_seconds: 12 });
 });
 
 void test("voice is absent when the deployment has not passed silent-boot verification", () => {
@@ -35,7 +59,7 @@ void test("voice is absent when the deployment has not passed silent-boot verifi
     action: "alarm_on",
     context: { severity: "high" },
     deviceId,
-    revision: 102,
+    revision: 104,
     voiceEnabled: false
   });
   assert.equal(desired.outputs.voice, null);

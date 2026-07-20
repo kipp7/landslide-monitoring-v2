@@ -9,9 +9,38 @@
 static AlarmSnapshot g_snapshot;
 static uint32_t g_phase_ms;
 static uint32_t g_voice_elapsed_ms;
+static uint32_t g_next_voice_delay_ms;
 static uint32_t g_self_test_remaining_ms;
+static uint8_t g_all_clear_repeats_remaining;
 
 #define SELF_TEST_DURATION_MS 3000U
+#define CRITICAL_FIRST_REPEAT_DELAY_MS 25000U
+#define ALL_CLEAR_REPEAT_INTERVAL_MS 12000U
+#define ALL_CLEAR_TOTAL_PLAYS 3U
+
+static void ConfigureVoiceSchedule(const AlarmDesiredState *desired, bool play_voice)
+{
+    uint32_t requested_interval_ms;
+
+    g_voice_elapsed_ms = 0;
+    g_next_voice_delay_ms = 0;
+    g_all_clear_repeats_remaining = 0;
+    if (!play_voice || desired == NULL) return;
+
+    requested_interval_ms = (uint32_t)desired->voice_repeat_seconds * 1000U;
+    if (desired->state == ALARM_STATE_ACTIVE && requested_interval_ms > 0) {
+        g_next_voice_delay_ms = desired->severity == ALARM_SEVERITY_CRITICAL &&
+            requested_interval_ms < CRITICAL_FIRST_REPEAT_DELAY_MS
+            ? CRITICAL_FIRST_REPEAT_DELAY_MS
+            : requested_interval_ms;
+    } else if (desired->state == ALARM_STATE_IDLE &&
+        desired->voice_phrase == ALARM_PHRASE_ALL_CLEAR_01) {
+        g_all_clear_repeats_remaining = ALL_CLEAR_TOTAL_PLAYS - 1U;
+        g_next_voice_delay_ms = requested_interval_ms > 0
+            ? requested_interval_ms
+            : ALL_CLEAR_REPEAT_INTERVAL_MS;
+    }
+}
 
 static void BuildEffectiveDesired(const AlarmSnapshot *snapshot, AlarmDesiredState *effective)
 {
@@ -94,7 +123,9 @@ void AlarmController_Init(void)
     g_snapshot.desired.display = ALARM_DISPLAY_STANDBY;
     g_phase_ms = 0;
     g_voice_elapsed_ms = 0;
+    g_next_voice_delay_ms = 0;
     g_self_test_remaining_ms = 0;
+    g_all_clear_repeats_remaining = 0;
 
     AlarmOutputs_Init();
     AlarmVoice_Init();
@@ -122,8 +153,8 @@ int AlarmController_ApplyDesired(const AlarmDesiredState *desired, bool allow_vo
     g_snapshot.locally_silenced = false;
     g_snapshot.self_test_active = false;
     g_phase_ms = 0;
-    g_voice_elapsed_ms = 0;
     g_self_test_remaining_ms = 0;
+    ConfigureVoiceSchedule(desired, g_snapshot.voice_armed);
     render = g_snapshot;
     play_voice = g_snapshot.voice_armed;
     LOS_TaskUnlock();
@@ -174,14 +205,30 @@ void AlarmController_Tick(uint32_t elapsed_ms)
             g_self_test_remaining_ms -= elapsed_ms;
         }
     }
-    if (g_snapshot.voice_armed && g_snapshot.desired.state == ALARM_STATE_ACTIVE &&
-        g_snapshot.desired.voice_repeat_seconds > 0) {
+    if (g_snapshot.voice_armed && g_next_voice_delay_ms > 0) {
         g_voice_elapsed_ms += elapsed_ms;
-        if (g_voice_elapsed_ms >= (uint32_t)g_snapshot.desired.voice_repeat_seconds * 1000U) {
+        if (g_voice_elapsed_ms >= g_next_voice_delay_ms) {
             g_voice_elapsed_ms = 0;
-            repeat_phrase = g_snapshot.desired.severity == ALARM_SEVERITY_CRITICAL
-                ? ALARM_PHRASE_EVACUATE_REPEAT_01
-                : g_snapshot.desired.voice_phrase;
+            if (g_snapshot.desired.state == ALARM_STATE_ACTIVE &&
+                g_snapshot.desired.voice_repeat_seconds > 0) {
+                repeat_phrase = g_snapshot.desired.severity == ALARM_SEVERITY_CRITICAL
+                    ? ALARM_PHRASE_EVACUATE_REPEAT_01
+                    : g_snapshot.desired.voice_phrase;
+                g_next_voice_delay_ms = (uint32_t)g_snapshot.desired.voice_repeat_seconds * 1000U;
+            } else if (g_snapshot.desired.state == ALARM_STATE_IDLE &&
+                g_snapshot.desired.voice_phrase == ALARM_PHRASE_ALL_CLEAR_01 &&
+                g_all_clear_repeats_remaining > 0) {
+                repeat_phrase = ALARM_PHRASE_ALL_CLEAR_01;
+                --g_all_clear_repeats_remaining;
+                g_next_voice_delay_ms = g_all_clear_repeats_remaining > 0
+                    ? (uint32_t)g_snapshot.desired.voice_repeat_seconds * 1000U
+                    : 0;
+                if (g_next_voice_delay_ms == 0 && g_all_clear_repeats_remaining > 0) {
+                    g_next_voice_delay_ms = ALL_CLEAR_REPEAT_INTERVAL_MS;
+                }
+            } else {
+                g_next_voice_delay_ms = 0;
+            }
         }
     }
     current = g_snapshot;
@@ -212,6 +259,10 @@ void AlarmController_HandleButton(AlarmButton button)
         case ALARM_BUTTON_UP:
             if (g_snapshot.desired.state == ALARM_STATE_IDLE) {
                 g_snapshot.self_test_active = true;
+                g_snapshot.voice_armed = false;
+                g_voice_elapsed_ms = 0;
+                g_next_voice_delay_ms = 0;
+                g_all_clear_repeats_remaining = 0;
                 g_self_test_remaining_ms = SELF_TEST_DURATION_MS;
                 g_phase_ms = 0;
                 changed = true;
@@ -229,6 +280,8 @@ void AlarmController_HandleButton(AlarmButton button)
             if (g_snapshot.desired.state == ALARM_STATE_ACTIVE && !g_snapshot.locally_silenced) {
                 g_snapshot.locally_silenced = true;
                 g_snapshot.voice_armed = false;
+                g_voice_elapsed_ms = 0;
+                g_next_voice_delay_ms = 0;
                 changed = true;
             }
             break;

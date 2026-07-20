@@ -93,7 +93,9 @@ powershell -ExecutionPolicy Bypass -File scripts/firmware/build-tongxiao-rk2206.
 
 RK2206 的 `Firmware.img` 不包含 SU03-T 词库。必须先按 `docs/integrations/tongxiao-alarm-terminal.md` 在智能公元平台单独生成并烧录 SU03-T 工程，关闭模块自身的上电、唤醒和未识别回复，并完成冷启动静音测试。通过后才能使用 `-EnableVoice` 构建独立 RK2206 语音试验固件。
 
-语音试验配置使用板内 `EUART2_M1`（PB2/PB3）连接 SU03-T，115200/8N1。首次收到非 retained 的高风险告警发送 `AA 55 01 00 55 AA`，严重告警发送 `AA 55 02 00 55 AA`；严重告警每 30 秒发送精简重复词，解除时发送 `AA 55 04 00 55 AA`。上电、MQTT 重连和 retained 状态恢复均不发送播放帧，本地或服务端消音会停止后续重复播报。
+语音试验配置使用板内 `EUART2_M1`（PB2/PB3）连接 SU03-T，115200/8N1。首次收到非 retained 的高风险告警发送 `AA 55 01 00 55 AA`，严重告警发送 `AA 55 02 00 55 AA`，解除时发送 `AA 55 04 00 55 AA`。上电、MQTT 重连和 retained 状态恢复均不发送播放帧，本地或服务端消音会停止后续重复播报。
+
+`v1.3.1-voice-repeat` 起，高风险每 30 秒重复完整准备撤离词；严重告警首次完整播报后等待 25 秒，再每 15 秒重复精简撤离词，直到本地/服务端消音或解除。解除通知立即播放一次，之后每 12 秒再播放一次，总计 3 次。新 revision 会取消旧状态尚未完成的播报计划，上电、重连和 retained 恢复仍保持静默。
 
 ## SwanLinkOS 说明
 

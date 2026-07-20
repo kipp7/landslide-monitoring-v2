@@ -169,7 +169,7 @@ export function createDesiredState(args: {
         voice: args.voiceEnabled
           ? {
               phrase_id: severity === "critical" ? "EVACUATE_01" : "PREPARE_01",
-              repeat_seconds: severity === "critical" ? 30 : 60
+              repeat_seconds: severity === "critical" ? 15 : 30
             }
           : null
       }
@@ -202,7 +202,7 @@ export function createDesiredState(args: {
       motor: false,
       rgb: "off",
       display: "all_clear",
-      voice: args.voiceEnabled ? { phrase_id: "ALL_CLEAR_01", repeat_seconds: 0 } : null
+      voice: args.voiceEnabled ? { phrase_id: "ALL_CLEAR_01", repeat_seconds: 12 } : null
     }
   });
 }
