@@ -27,6 +27,7 @@ RUN npm -w packages/edge-risk-model run build \
   && npm -w services/ai-prediction-worker run build
 
 RUN npm prune --omit=dev
+RUN node -e "require('ajv/dist/2020'); require('./packages/validation/dist').createAjv()"
 
 FROM node:20-alpine AS runtime
 WORKDIR /repo

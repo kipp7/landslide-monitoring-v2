@@ -16,6 +16,8 @@
     "@lsmv2/observability": "*",
     "@lsmv2/regional-model-library": "*",
     "@lsmv2/validation": "*",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
     "dotenv": "^16.4.7",
     "kafkajs": "^2.2.4",
     "mqtt": "^5.10.3",
