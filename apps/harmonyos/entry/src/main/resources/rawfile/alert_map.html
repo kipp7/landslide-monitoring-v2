@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <title>告警地图</title>
+  <title>监测地图</title>
   <link rel="stylesheet" href="leaflet.css">
   <style>
     :root {
@@ -16,7 +16,7 @@
       --shadow-control: 0 4px 14px rgba(24, 33, 43, 0.16);
       --space-sm: 8px;
       --space-md: 12px;
-      --details-reserved: 220px;
+      --details-reserved: 0px;
     }
 
     * {
@@ -164,6 +164,43 @@
       border-radius: 50%;
       background: var(--danger);
       box-shadow: 0 2px 8px rgba(109, 42, 30, 0.42);
+    }
+
+    .user-marker {
+      position: relative;
+      width: 28px;
+      height: 28px;
+    }
+
+    .user-marker__ring {
+      position: absolute;
+      inset: 0;
+      border: 2px solid rgba(55, 123, 177, 0.58);
+      border-radius: 50%;
+      background: rgba(55, 123, 177, 0.18);
+    }
+
+    .user-marker__core {
+      position: absolute;
+      inset: 7px;
+      border: 2px solid #ffffff;
+      border-radius: 50%;
+      background: #377bb1;
+      box-shadow: 0 2px 9px rgba(23, 69, 106, 0.42);
+    }
+
+    .safe-marker {
+      display: grid;
+      width: 30px;
+      height: 30px;
+      place-items: center;
+      border: 3px solid #ffffff;
+      border-radius: 50%;
+      color: #ffffff;
+      background: #27856d;
+      box-shadow: 0 3px 10px rgba(24, 81, 66, 0.42);
+      font-size: 15px;
+      font-weight: 700;
     }
 
     .node-marker {
@@ -316,13 +353,13 @@
   </style>
 </head>
 <body>
-  <div id="map" role="application" aria-label="告警位置地图"></div>
+  <div id="map" role="application" aria-label="监测位置地图"></div>
   <div id="map-loading" class="map-loading" role="status">正在加载天地图卫星影像</div>
   <div id="map-zoom" class="map-zoom" aria-label="地图缩放">
     <button id="zoom-in" type="button" aria-label="放大">+</button>
     <button id="zoom-out" type="button" aria-label="缩小">−</button>
   </div>
-  <div id="map-status" class="map-status" role="status">地图底图加载失败，告警坐标仍可查看</div>
+  <div id="map-status" class="map-status" role="status">地图底图加载失败，位置标记仍可查看</div>
   <script src="leaflet.js"></script>
   <script>
     (function () {
@@ -331,6 +368,9 @@
       var map = null;
       var alertMarker = null;
       var nodeMarkers = [];
+      var userMarker = null;
+      var safeMarker = null;
+      var guidanceLine = null;
       var pendingMapState = null;
       var pendingTianDiTuKey = '';
       var tianDiTuLayers = [];
@@ -375,7 +415,7 @@
         tileFailureCount += 1;
         if (!tileReady && tileFailureCount >= 4) {
           clearTileTimeout();
-          showStatus('天地图影像加载失败，告警坐标仍可查看');
+          showStatus('天地图影像加载失败，位置标记仍可查看');
         }
       }
 
@@ -419,7 +459,7 @@
         loadingElement.classList.remove('is-hidden');
 
         if (!key) {
-          showStatus('地图服务未配置，告警坐标仍可查看');
+          showStatus('地图服务未配置，位置标记仍可查看');
           return;
         }
 
@@ -441,7 +481,7 @@
         imagery.bringToBack();
         tianDiTuLayers = [imagery, labels];
         tileTimeout = window.setTimeout(function () {
-          if (!tileReady) showStatus('天地图影像加载超时，告警坐标仍可查看');
+          if (!tileReady) showStatus('天地图影像加载超时，位置标记仍可查看');
         }, 12000);
       }
 
@@ -536,13 +576,77 @@
         return position;
       }
 
-      function renderMapState(focusLocation, locations, highlightAlert) {
+      function clearGuidanceLayers() {
+        if (userMarker) map.removeLayer(userMarker);
+        if (safeMarker) map.removeLayer(safeMarker);
+        if (guidanceLine) map.removeLayer(guidanceLine);
+        userMarker = null;
+        safeMarker = null;
+        guidanceLine = null;
+      }
+
+      function renderGuidance(userLocation, evacuationTarget, focusLocation, highlightAlert) {
+        clearGuidanceLayers();
+        var viewPoints = [];
+        var userPoint = null;
+        var safePoint = null;
+        if (userLocation && validCoordinate(Number(userLocation.latitude), Number(userLocation.longitude))) {
+          userPoint = [Number(userLocation.latitude), Number(userLocation.longitude)];
+          var userIcon = L.divIcon({
+            className: '',
+            html: '<div class="user-marker" aria-hidden="true"><span class="user-marker__ring"></span><span class="user-marker__core"></span></div>',
+            iconSize: [28, 28],
+            iconAnchor: [14, 14]
+          });
+          userMarker = L.marker(userPoint, { icon: userIcon, keyboard: false, zIndexOffset: 900 }).addTo(map);
+          userMarker.bindTooltip(
+            '<strong>我的位置</strong><br><span class="node-map-tooltip__source">定位精度约 ' +
+              Math.max(0, Math.round(Number(userLocation.accuracy) || 0)) + ' 米</span>',
+            { className: 'node-map-tooltip', direction: 'top', offset: [0, -10], opacity: 1 }
+          );
+        }
+        if (evacuationTarget && validCoordinate(Number(evacuationTarget.latitude), Number(evacuationTarget.longitude))) {
+          safePoint = [Number(evacuationTarget.latitude), Number(evacuationTarget.longitude)];
+          var safeIcon = L.divIcon({
+            className: '',
+            html: '<div class="safe-marker" aria-hidden="true">安</div>',
+            iconSize: [30, 30],
+            iconAnchor: [15, 15]
+          });
+          safeMarker = L.marker(safePoint, { icon: safeIcon, keyboard: false, zIndexOffset: 850 }).addTo(map);
+          safeMarker.bindTooltip(
+            '<strong>' + escapeHtml(evacuationTarget.name || '安全集合点') + '</strong>',
+            { className: 'node-map-tooltip', direction: 'top', offset: [0, -11], opacity: 1 }
+          );
+        }
+        var focusValid = focusLocation && focusLocation.source !== 'default' &&
+          validCoordinate(Number(focusLocation.latitude), Number(focusLocation.longitude));
+        if (userPoint && safePoint) {
+          guidanceLine = L.polyline([userPoint, safePoint], {
+            color: '#27856d', weight: 4, opacity: 0.88, dashArray: '8 8'
+          }).addTo(map);
+          viewPoints.push(userPoint, safePoint);
+          if (focusValid) viewPoints.push([Number(focusLocation.latitude), Number(focusLocation.longitude)]);
+        } else if (userPoint && focusValid && highlightAlert) {
+          var alertPoint = [Number(focusLocation.latitude), Number(focusLocation.longitude)];
+          guidanceLine = L.polyline([userPoint, alertPoint], {
+            color: '#b44832', weight: 3, opacity: 0.72, dashArray: '7 9'
+          }).addTo(map);
+          viewPoints.push(userPoint, alertPoint);
+        }
+        return viewPoints;
+      }
+
+      function renderMapState(focusLocation, locations, highlightAlert, userLocation, evacuationTarget) {
         if (!map) return;
         statusElement.classList.remove('is-visible');
         var nodeState = renderNodes(locations, focusLocation, highlightAlert);
         var points = nodeState.points;
         renderAlertMarker(focusLocation, highlightAlert && !nodeState.alertNodeMatched);
-        if (highlightAlert && focusLocation && validCoordinate(Number(focusLocation.latitude), Number(focusLocation.longitude))) {
+        var guidancePoints = renderGuidance(userLocation, evacuationTarget, focusLocation, highlightAlert);
+        if (guidancePoints.length > 1) {
+          map.fitBounds(guidancePoints, { paddingTopLeft: [54, 76], paddingBottomRight: [54, 360], maxZoom: 16, animate: true });
+        } else if (highlightAlert && focusLocation && validCoordinate(Number(focusLocation.latitude), Number(focusLocation.longitude))) {
           map.flyTo([Number(focusLocation.latitude), Number(focusLocation.longitude)], 14, { animate: true, duration: 0.7 });
         } else if (points.length === 1) {
           map.flyTo(points[0], 14, { animate: true, duration: 0.7 });
@@ -553,13 +657,16 @@
         }
       }
 
-      window.renderMapState = function (focusLocation, locations, highlightAlert, refreshTiles) {
+      window.renderMapState = function (focusLocation, locations, highlightAlert, userLocation, evacuationTarget, refreshTiles) {
         pendingMapState = {
           focusLocation: focusLocation,
           locations: Array.isArray(locations) ? locations : [],
-          highlightAlert: Boolean(highlightAlert)
+          highlightAlert: Boolean(highlightAlert),
+          userLocation: userLocation,
+          evacuationTarget: evacuationTarget
         };
-        renderMapState(pendingMapState.focusLocation, pendingMapState.locations, pendingMapState.highlightAlert);
+        renderMapState(pendingMapState.focusLocation, pendingMapState.locations, pendingMapState.highlightAlert,
+          pendingMapState.userLocation, pendingMapState.evacuationTarget);
         if (refreshTiles && map && !tileReady) loadTianDiTu(pendingTianDiTuKey);
       };
 
@@ -570,7 +677,7 @@
 
       function initialise() {
         if (typeof L === 'undefined') {
-          showStatus('地图组件加载失败，告警坐标仍可查看');
+          showStatus('地图组件加载失败，位置标记仍可查看');
           return;
         }
 
@@ -587,7 +694,8 @@
         document.getElementById('zoom-out').addEventListener('click', function () { map.zoomOut(); });
 
         if (pendingMapState) {
-          renderMapState(pendingMapState.focusLocation, pendingMapState.locations, pendingMapState.highlightAlert);
+          renderMapState(pendingMapState.focusLocation, pendingMapState.locations, pendingMapState.highlightAlert,
+            pendingMapState.userLocation, pendingMapState.evacuationTarget);
         } else {
           map.setView([24.43803, 118.09631], 14);
         }

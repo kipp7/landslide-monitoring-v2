@@ -158,7 +158,7 @@ export struct InAppAlertOverlay {
               SymbolGlyph($r('sys.symbol.bell'))
                 .fontSize(17)
                 .fontColor([this.muted ? COLOR_MUTED : this.accentColor()])
-              Text(`${this.alertTime()} · ${this.muted ? '警报声已静音' : '警报声已开启'}`)
+              Text(`${this.alertTime()} · ${this.muted ? '声音与震动已暂停' : '声音与震动警报中'}`)
                 .fontSize(13)
                 .fontColor(COLOR_MUTED)
                 .maxLines(2)
@@ -193,7 +193,7 @@ export struct InAppAlertOverlay {
             .layoutWeight(1)
             .backgroundColor('#EEF1F2')
             .borderRadius(6)
-            .accessibilityText(this.muted ? '恢复告警声音' : '暂时静音告警声音')
+            .accessibilityText(this.muted ? '恢复告警声音和震动' : '暂时关闭告警声音和震动')
             .onClick(() => this.onToggleMute())
 
             Button() {
@@ -269,7 +269,7 @@ export struct ActiveAlertBanner {
             .fontColor('#FFFFFF')
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
-          Text(this.muted ? '告警未解除 · 警报声已静音' : '告警未解除 · 警报持续中')
+          Text(this.muted ? '告警未解除 · 声音与震动已暂停' : '告警未解除 · 声音与震动持续中')
             .width('100%')
             .fontSize(11)
             .fontColor('#FADDD5')

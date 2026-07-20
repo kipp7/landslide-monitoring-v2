@@ -18,6 +18,9 @@ built from DevEco Studio or with its bundled `hvigorw` command after setting
 
 - Login, dashboard, stations, devices, telemetry, alerts, and predictions use
   the existing `/api/v1` contract.
+- Dashboard `todayDataCount` and today's alert count use the Beijing calendar
+  day (`UTC+8`, starting at local 00:00), matching the Chinese UI's
+  `今日上报` label.
 - Successful summary, station, device, and latest-state responses are cached
   with TTLs. The app renders stale data immediately and refreshes in the
   background.
@@ -53,17 +56,24 @@ built from DevEco Studio or with its bundled `hvigorw` command after setting
   switches the matching node to a red warning ripple. Other nodes retain a
   green monitoring ripple; a separate red ripple is used when the precise alert
   coordinate differs from its node location.
+- The station page embeds the same map as a distribution view. It shows every
+  monitoring node, focuses the selected station, and refreshes GPS without
+  introducing a second location model.
 - The most recent valid GPS snapshot is stored in Preferences using the same
   API-server and user cache namespace. It is cleared on logout or server
   change, so positions cannot leak across accounts or environments.
 - Foreground `ALERT_TRIGGER` SSE events open a blocking in-app alert panel and
-  start the bundled civil-defense-style alarm sound. Updates replace the same
+  start the bundled smooth civil-defense-style alarm with a synchronized
+  vibration cadence. Muting pauses both sound and vibration. Updates replace the same
   `alertId` in place, critical escalation reopens the strong reminder, and
   acknowledgement leaves the warning active, and only resolution removes that
   alert from the panel. Concurrent node alerts are queued by `alertId` instead
   of being duplicated by event ID.
   See [`ALERT_INTEGRATION.md`](./ALERT_INTEGRATION.md) for the shared Windows,
   App, and Push payload contract.
+- The **My** page keeps the API address hidden in normal use. Connection state,
+  cache cleanup, refresh cadence, location use, and app version are grouped as
+  settings; the address is only exposed after opening the server editor.
 - The map uses Leaflet with TianDiTu `img_w` satellite imagery and `cia_w`
   Chinese annotations. Its browser-side key is injected by ArkTS from
   `entry/src/main/ets/data/MapConfig.ets`. Map tiles are not part of the
@@ -76,7 +86,8 @@ The normal login screen uses the default API base URL from
 `entry/src/main/ets/data/ApiConfig.ets` and keeps it hidden. Authentication
 errors remain on the login screen. If the server cannot be reached or the API
 path is invalid, the app opens a separate server connection screen where the
-address can be changed. Signed-in users can also change it under **My**.
+address can be changed. Signed-in users can open **My > Server connection** to
+change it; changing environments clears the current session and cached data.
 
 For emulator and LAN debugging, use a reachable LAN or HTTPS URL that includes
 the `/api/v1` path. `127.0.0.1` inside an emulator refers to the emulator

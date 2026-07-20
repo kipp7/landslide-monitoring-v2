@@ -156,6 +156,22 @@ export interface AlertMapLocation {
   updatedAt?: string;
 }
 
+export type UserLocationStatus = 'idle' | 'locating' | 'ready' | 'denied' | 'unavailable';
+
+export interface UserMapLocation {
+  latitude: number;
+  longitude: number;
+  accuracy: number;
+  updatedAt: string;
+}
+
+export interface EvacuationTarget {
+  latitude: number;
+  longitude: number;
+  name: string;
+  instruction?: string;
+}
+
 export interface AlertPage {
   list: Array<Alert>;
   pagination?: JsonRecord;
