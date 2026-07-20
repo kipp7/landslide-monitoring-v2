@@ -30,6 +30,16 @@ powershell -ExecutionPolicy Bypass -File scripts/firmware/build-tongxiao-rk2206.
 powershell -ExecutionPolicy Bypass -File scripts/firmware/build-tongxiao-rk2206.ps1 -ConfirmNoActiveXl01Flash
 ```
 
+稳定构建始终保持语音关闭。仅在 SU03-T 已烧入“无开机播报、包含固定串口播放动作”的词库后，才能构建独立语音试验包：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/firmware/build-tongxiao-rk2206.ps1 `
+  -FirmwareVersion 1.3.0-voice-test -EnableVoice -ConfirmNoActiveXl01Flash `
+  -ArtifactDirectory <独立试验输出目录>
+```
+
+`-EnableVoice` 只临时修改 vendor 构建副本，结束后恢复源码默认的 `TONGXIAO_VOICE_ENABLED=0`，不得把语音试验镜像覆盖稳定版目录。
+
 脚本会校验主仓库与 vendor 源码哈希，拒绝与其他 `hb/ninja` 构建并发，暂存并在结束后恢复原有 XL01 `out`，把通晓产物单独保存为：
 
 - `artifacts/firmware/rk2206-tongxiao-alarm/Firmware-tongxiao-alarm-rk2206.img`
@@ -80,7 +90,9 @@ powershell -ExecutionPolicy Bypass -File scripts/firmware/build-tongxiao-rk2206.
 
 ## SU03-T
 
-RK2206 的 `Firmware.img` 不包含 SU03-T 词库。必须先按 `docs/integrations/tongxiao-alarm-terminal.md` 在智能公元平台单独生成并烧录 SU03-T 工程，关闭模块自身的上电、唤醒和未识别回复，并完成冷启动静音测试。通过后才能把 `TONGXIAO_VOICE_ENABLED` 改为 `1` 并重新构建 RK2206 固件。
+RK2206 的 `Firmware.img` 不包含 SU03-T 词库。必须先按 `docs/integrations/tongxiao-alarm-terminal.md` 在智能公元平台单独生成并烧录 SU03-T 工程，关闭模块自身的上电、唤醒和未识别回复，并完成冷启动静音测试。通过后才能使用 `-EnableVoice` 构建独立 RK2206 语音试验固件。
+
+语音试验配置使用板内 `EUART2_M1`（PB2/PB3）连接 SU03-T，115200/8N1。首次收到非 retained 的高风险告警发送 `AA 55 01 00 55 AA`，严重告警发送 `AA 55 02 00 55 AA`；严重告警每 30 秒发送精简重复词，解除时发送 `AA 55 04 00 55 AA`。上电、MQTT 重连和 retained 状态恢复均不发送播放帧，本地或服务端消音会停止后续重复播报。
 
 ## SwanLinkOS 说明
 

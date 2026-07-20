@@ -37,10 +37,11 @@ void AlarmVoice_Init(void)
     attr.parity = IOT_UART_PARITY_NONE;
     attr.rxBlock = IOT_UART_BLOCK_STATE_NONE_BLOCK;
     attr.stopBits = IOT_UART_STOP_BIT_1;
-    attr.txBlock = IOT_UART_BLOCK_STATE_NONE_BLOCK;
+    attr.txBlock = IOT_UART_BLOCK_STATE_BLOCK;
     IoTUartDeinit(VOICE_UART);
     g_voice_ready = IoTUartInit(VOICE_UART, &attr) == IOT_SUCCESS;
     if (!g_voice_ready) printf("SU03-T UART init failed\n");
+    else printf("SU03-T UART ready: EUART2_M1 115200 8N1\n");
     /* Deliberately no startup transmission and no playback call here. */
 #else
     printf("SU03-T disabled: silent boot guaranteed by main firmware\n");
@@ -59,7 +60,11 @@ void AlarmVoice_Play(AlarmPhraseId phrase)
     frame[3] = 0;
     frame[4] = 0x55;
     frame[5] = 0xAA;
-    IoTUartWrite(VOICE_UART, frame, sizeof(frame));
+    if (IoTUartWrite(VOICE_UART, frame, sizeof(frame)) != (int)sizeof(frame)) {
+        printf("SU03-T frame write failed phrase=%u\n", (unsigned int)index);
+    } else {
+        printf("SU03-T frame sent phrase=%u\n", (unsigned int)index);
+    }
 #else
     (void)phrase;
 #endif

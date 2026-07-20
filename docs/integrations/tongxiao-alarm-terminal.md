@@ -61,6 +61,12 @@ SU03-T 是独立语音芯片，不能用 RKDevTool 或 RK2206 的 `Firmware.img`
 
 如果现场没有 SU03-T 官方烧录器，保持 `TONGXIAO_VOICE_ENABLED=0`，并使用板载 K7/语音供电开关关闭模块供电；蜂鸣器、马达、RGB、独立报警灯和 LCD 不受影响。
 
+### RK2206 语音试验构建
+
+主仓库保持 `TONGXIAO_VOICE_ENABLED=0` 作为稳定默认值。已完成 SU03-T 冷启动静音和五条 HEX 帧测试后，使用构建脚本的 `-EnableVoice -FirmwareVersion 1.3.0-voice-test` 生成独立试验镜像。RK2206 侧使用通晓原厂样例相同的 `EUART2_M1`（PB2/PB3），它与 SU03-T 平台所称的模块 `UART1_RX/TX` 是板内互连的两端，名称不同不代表接错串口。
+
+语音试验镜像只对非 retained 的新 revision 播报。上电、Wi-Fi/MQTT 重连和 retained 状态恢复不得播报；本地消音与服务端静音会停止重复播报。生产桥接器还必须显式配置 `TONGXIAO_VOICE_ENABLED=true` 才会在 desired state 中下发固定 phrase ID。
+
 ## 本地按键
 
 通晓板的四个方向键共用 ADC7（GPIO0_PC7），不作为服务端风险状态的真源：

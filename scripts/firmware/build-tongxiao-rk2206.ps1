@@ -4,7 +4,9 @@ param(
   [string]$ContainerName = "openharmony-dev",
   [string]$ArtifactDirectory = "",
   [string]$CredentialFile = "",
+  [string]$FirmwareVersion = "",
   [switch]$CheckOnly,
+  [switch]$EnableVoice,
   [switch]$ConfirmNoActiveXl01Flash
 )
 
@@ -84,6 +86,23 @@ $sdkMakefile = Join-Path $openHarmonyRootFull "device\rockchip\rk2206\sdk_liteos
 $alarmConfigFile = Join-Path $vendorRoot "config\alarm_config.h"
 $productOut = Join-Path $openHarmonyRootFull "out\rk2206\isoftstone-rk2206"
 $artifactDirectoryFull = [IO.Path]::GetFullPath($artifactDirectoryValue)
+$sourceConfigText = [IO.File]::ReadAllText((Join-Path $sourceRoot "config\alarm_config.h"))
+$sourceVersionMatch = [regex]::Match(
+  $sourceConfigText,
+  '(?m)^#define TONGXIAO_FIRMWARE_VERSION "([^"]+)"$'
+)
+if (-not $sourceVersionMatch.Success) {
+  throw "Cannot read the source Tongxiao firmware version."
+}
+$sourceFirmwareVersion = $sourceVersionMatch.Groups[1].Value
+$effectiveFirmwareVersion = if ([string]::IsNullOrWhiteSpace($FirmwareVersion)) {
+  $sourceFirmwareVersion
+} else {
+  $FirmwareVersion.Trim()
+}
+if ($effectiveFirmwareVersion -notmatch '^[0-9A-Za-z][0-9A-Za-z._-]{0,31}$') {
+  throw "FirmwareVersion must be 1-32 ASCII letters, digits, dots, underscores or hyphens."
+}
 
 foreach ($lcdDependency in @("src\lcd.c", "include\lcd.h", "include\lcd_font.h")) {
   $lcdDependencyPath = Join-Path $lcdDriverRoot $lcdDependency
@@ -139,6 +158,7 @@ if (-not $sdkMakefileText.Contains($xl01Libraries)) {
 
 Write-Host "Tongxiao preflight passed: source is synced and no hb/ninja build is active."
 Write-Host "Tongxiao credential is present for the fixed production device (secret not printed)."
+Write-Host "Tongxiao build profile: firmware=$effectiveFirmwareVersion voice=$([bool]$EnableVoice)."
 if ($CheckOnly) {
   return
 }
@@ -165,10 +185,18 @@ $emptySsidLine = '#define TONGXIAO_WIFI_SSID ""'
 $emptyWifiPasswordLine = '#define TONGXIAO_WIFI_PASSWORD ""'
 $emptyMqttHostLine = '#define TONGXIAO_MQTT_HOST ""'
 $emptyPasswordLine = '#define TONGXIAO_MQTT_PASSWORD ""'
+$sourceVersionLine = "#define TONGXIAO_FIRMWARE_VERSION `"$sourceFirmwareVersion`""
+$voiceDisabledLine = '#define TONGXIAO_VOICE_ENABLED 0'
 foreach ($placeholder in @($emptySsidLine, $emptyWifiPasswordLine, $emptyMqttHostLine, $emptyPasswordLine)) {
   if (-not $alarmConfigText.Contains($placeholder)) {
     throw "Vendor alarm_config.h does not contain the expected empty credential placeholder: $placeholder"
   }
+}
+if (-not $alarmConfigText.Contains($sourceVersionLine)) {
+  throw "Vendor alarm_config.h does not contain the expected firmware version line."
+}
+if (-not $alarmConfigText.Contains($voiceDisabledLine)) {
+  throw "Vendor alarm_config.h must default to disabled voice before a profile build."
 }
 $hadProductOut = Test-Path -LiteralPath $productOut
 
@@ -201,6 +229,13 @@ try {
   $alarmConfigText = $alarmConfigText.Replace($emptyWifiPasswordLine, "#define TONGXIAO_WIFI_PASSWORD `"$wifiPassword`"")
   $alarmConfigText = $alarmConfigText.Replace($emptyMqttHostLine, "#define TONGXIAO_MQTT_HOST `"$mqttHost`"")
   $alarmConfigText = $alarmConfigText.Replace($emptyPasswordLine, "#define TONGXIAO_MQTT_PASSWORD `"$deviceSecret`"")
+  $alarmConfigText = $alarmConfigText.Replace(
+    $sourceVersionLine,
+    "#define TONGXIAO_FIRMWARE_VERSION `"$effectiveFirmwareVersion`""
+  )
+  if ($EnableVoice) {
+    $alarmConfigText = $alarmConfigText.Replace($voiceDisabledLine, '#define TONGXIAO_VOICE_ENABLED 1')
+  }
   [IO.File]::WriteAllText(
     $alarmConfigFile,
     $alarmConfigText
@@ -241,6 +276,8 @@ try {
     os = "OpenHarmony LiteOS-M"
     built_at = [DateTimeOffset]::Now.ToString("o")
     source = "firmware/rk2206-tongxiao-alarm"
+    firmware_version = $effectiveFirmwareVersion
+    voice_enabled = [bool]$EnableVoice
   }
   [IO.File]::WriteAllText(
     (Join-Path $artifactDirectoryFull "build-metadata.json"),
