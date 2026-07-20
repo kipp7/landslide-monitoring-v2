@@ -281,3 +281,119 @@ export function compareSeverityAtLeast(actual: Severity, min: Severity): boolean
   const order: Record<Severity, number> = { low: 1, medium: 2, high: 3, critical: 4 };
   return order[actual] >= order[min];
 }
+
+export const tiltVectorSchema = z
+  .object({
+    x: z.number().finite(),
+    y: z.number().finite(),
+    z: z.number().finite()
+  })
+  .strict();
+
+export type TiltVector = z.infer<typeof tiltVectorSchema>;
+
+export const competitionTiltThresholdsSchema = z
+  .object({
+    highDeg: z.number().positive().max(45),
+    criticalDeg: z.number().positive().max(90),
+    recoveryDeg: z.number().nonnegative().max(45),
+    triggerPoints: z.number().int().min(1).max(10),
+    recoveryPoints: z.number().int().min(1).max(10),
+    updateStepDeg: z.number().positive().max(10)
+  })
+  .strict()
+  .refine((value) => value.criticalDeg > value.highDeg, {
+    message: "criticalDeg must be greater than highDeg",
+    path: ["criticalDeg"]
+  })
+  .refine((value) => value.recoveryDeg < value.highDeg, {
+    message: "recoveryDeg must be lower than highDeg",
+    path: ["recoveryDeg"]
+  });
+
+export type CompetitionTiltThresholds = z.infer<typeof competitionTiltThresholdsSchema>;
+
+export const DEFAULT_COMPETITION_TILT_THRESHOLDS: CompetitionTiltThresholds = {
+  highDeg: 3,
+  criticalDeg: 7,
+  recoveryDeg: 1.5,
+  triggerPoints: 2,
+  recoveryPoints: 2,
+  updateStepDeg: 0.25
+};
+
+export const competitionTiltDeviceSchema = z
+  .object({
+    deviceId: z.string().uuid(),
+    deviceName: z.string().min(1).max(100),
+    stationId: z.string().uuid().nullable(),
+    baseline: tiltVectorSchema,
+    capturedAt: z.string().datetime()
+  })
+  .strict();
+
+export const competitionTiltProfileSchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    mode: z.literal("competition_relative_tilt"),
+    enabled: z.boolean(),
+    ruleId: z.string().uuid(),
+    ruleVersion: z.number().int().positive(),
+    capturedAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+    thresholds: competitionTiltThresholdsSchema,
+    devices: z.array(competitionTiltDeviceSchema).min(1).max(100)
+  })
+  .strict();
+
+export type CompetitionTiltProfile = z.infer<typeof competitionTiltProfileSchema>;
+
+export type CompetitionTiltDeviation = {
+  current: TiltVector;
+  baseline: TiltVector;
+  delta: TiltVector;
+  maxAxis: "x" | "y" | "z";
+  maxDeviationDeg: number;
+};
+
+export function readTiltVector(metrics: Record<string, unknown>): TiltVector | null {
+  const x = metrics.tilt_x_deg;
+  const y = metrics.tilt_y_deg;
+  const zValue = metrics.tilt_z_deg;
+  if (
+    typeof x !== "number" ||
+    !Number.isFinite(x) ||
+    typeof y !== "number" ||
+    !Number.isFinite(y) ||
+    typeof zValue !== "number" ||
+    !Number.isFinite(zValue)
+  ) {
+    return null;
+  }
+  return { x, y, z: zValue };
+}
+
+export function computeCompetitionTiltDeviation(
+  current: TiltVector,
+  baseline: TiltVector
+): CompetitionTiltDeviation {
+  const delta: TiltVector = {
+    x: current.x - baseline.x,
+    y: current.y - baseline.y,
+    z: current.z - baseline.z
+  };
+  const axes: { axis: "x" | "y" | "z"; value: number }[] = [
+    { axis: "x", value: Math.abs(delta.x) },
+    { axis: "y", value: Math.abs(delta.y) },
+    { axis: "z", value: Math.abs(delta.z) }
+  ];
+  axes.sort((a, b) => b.value - a.value);
+  const maximum = axes[0] ?? { axis: "x" as const, value: 0 };
+  return {
+    current,
+    baseline,
+    delta,
+    maxAxis: maximum.axis,
+    maxDeviationDeg: maximum.value
+  };
+}

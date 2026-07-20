@@ -46,6 +46,8 @@ permalink: landslide-monitoring-v2-mainline/docs/integrations/api/06-alerts
         "status": "active",
         "severity": "high",
         "title": "位移趋势异常",
+        "message": "节点相对基线偏移达到高风险阈值",
+        "evidence": { "maxAxis": "y", "maxDeviationDeg": 3.4 },
         "deviceId": "2c1f2d8e-2bb7-4f58-bb6a-6c2a0f4a7a4c",
         "ruleId": "1afdc6d7-8c2f-4b2b-9c9a-69e4d9e4b2fa",
         "ruleVersion": 3,
@@ -64,6 +66,24 @@ permalink: landslide-monitoring-v2-mainline/docs/integrations/api/06-alerts
   "timestamp": "2025-12-15T10:00:00Z",
   "traceId": "req_01J..."
 }
+```
+
+## 1.1 告警实时流
+
+**GET** `/alerts/stream`
+
+权限：`alert:view`
+
+- 响应类型为 `text/event-stream`，事件名固定为 `alert`。
+- SSE `id` 与数据中的 `eventId` 相同；客户端重连时使用 `Last-Event-ID` 续传。
+- 数据字段固定为 `type`、`eventId`、`alertId`、`eventType`、`severity`、`title`、`message`、`deviceId`、`stationId`、`evidence`、`createdAt`，有效坐标还会提升为顶层 `latitude/longitude`。
+- Windows 与 HarmonyOS App 必须按 `alertId` 更新同一生命周期；不得把 `ALERT_UPDATE` 当成新告警重复入队。
+- 服务端 500 ms 内查询新事件并每 15 秒发送心跳。SSE 中断不改变 PostgreSQL 告警事实，客户端应使用 `/alerts` 作为恢复快照。
+
+```text
+id: 3cae3f27-63d2-4f2a-9fe1-54c57d727463
+event: alert
+data: {"type":"alert","eventId":"3cae3f27-63d2-4f2a-9fe1-54c57d727463","alertId":"d2e7ca4b-63e2-4d0a-9ff8-2f045eb6ed86","eventType":"ALERT_TRIGGER","severity":"high","title":"节点 B 倾角高风险告警","message":"节点 B 相对比赛基线的 Y 轴偏移 3.4°，达到 3° 高风险阈值。","deviceId":"...","stationId":"...","evidence":{"maxAxis":"y","maxDeviationDeg":3.4},"createdAt":"2026-07-20T02:10:00.000Z"}
 ```
 
 ## 12. Anomaly assessment（兼容旧系统）

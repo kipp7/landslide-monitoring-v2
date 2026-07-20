@@ -31,6 +31,8 @@ type AlertAggRow = {
   status: "active" | "acked" | "resolved";
   severity: "low" | "medium" | "high" | "critical";
   title: string | null;
+  message: string | null;
+  evidence: unknown;
   device_id: string | null;
   station_id: string | null;
   rule_id: string | null;
@@ -50,6 +52,33 @@ type AlertEventRow = {
   evidence: unknown;
   created_at: string;
 };
+
+type AlertStreamRow = {
+  event_id: string;
+  alert_id: string;
+  event_type: "ALERT_TRIGGER" | "ALERT_UPDATE" | "ALERT_RESOLVE" | "ALERT_ACK";
+  severity: "low" | "medium" | "high" | "critical";
+  title: string | null;
+  message: string | null;
+  device_id: string | null;
+  station_id: string | null;
+  evidence: unknown;
+  created_at: Date;
+};
+
+const ZERO_UUID = "00000000-0000-0000-0000-000000000000";
+
+function streamCoordinates(evidence: unknown): { latitude?: number; longitude?: number } {
+  if (!evidence || typeof evidence !== "object") return {};
+  const root = evidence as Record<string, unknown>;
+  const gps = root.gps && typeof root.gps === "object" ? (root.gps as Record<string, unknown>) : {};
+  const latitude = typeof root.latitude === "number" ? root.latitude : gps.latitude;
+  const longitude = typeof root.longitude === "number" ? root.longitude : gps.longitude;
+  return {
+    ...(typeof latitude === "number" && Number.isFinite(latitude) ? { latitude } : {}),
+    ...(typeof longitude === "number" && Number.isFinite(longitude) ? { longitude } : {})
+  };
+}
 
 export function registerAlertRoutes(app: FastifyInstance, config: AppConfig, pg: PgPool | null): void {
   const adminCfg: AdminAuthConfig = { adminApiToken: config.adminApiToken, jwtEnabled: Boolean(config.jwtAccessSecret) };
@@ -119,6 +148,8 @@ export function registerAlertRoutes(app: FastifyInstance, config: AppConfig, pg:
               event_type,
               severity,
               title,
+              message,
+              evidence,
               device_id,
               station_id,
               rule_id,
@@ -137,6 +168,8 @@ export function registerAlertRoutes(app: FastifyInstance, config: AppConfig, pg:
               END AS status,
               severity,
               title,
+              message,
+              evidence,
               device_id,
               station_id,
               rule_id,
@@ -159,6 +192,8 @@ export function registerAlertRoutes(app: FastifyInstance, config: AppConfig, pg:
               event_type,
               severity,
               title,
+              message,
+              evidence,
               device_id,
               station_id,
               rule_id,
@@ -177,6 +212,8 @@ export function registerAlertRoutes(app: FastifyInstance, config: AppConfig, pg:
               END AS status,
               severity,
               title,
+              message,
+              evidence,
               device_id,
               station_id,
               rule_id,
@@ -259,6 +296,8 @@ export function registerAlertRoutes(app: FastifyInstance, config: AppConfig, pg:
           status: a.status,
           severity: a.severity,
           title: a.title ?? "",
+          message: a.message ?? "",
+          evidence: a.evidence ?? {},
           deviceId: a.device_id,
           stationId: a.station_id,
           ruleId: a.rule_id ?? "",
@@ -275,6 +314,114 @@ export function registerAlertRoutes(app: FastifyInstance, config: AppConfig, pg:
       },
       traceId
     );
+  });
+
+  app.get("/alerts/stream", async (request, reply) => {
+    const traceId = request.traceId;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "alert:view"))) return;
+    if (!pg) {
+      fail(reply, 503, "PostgreSQL 未配置", traceId);
+      return;
+    }
+
+    const requestedLastEventId = request.headers["last-event-id"];
+    const parsedLastEventId =
+      typeof requestedLastEventId === "string" ? alertIdSchema.safeParse(requestedLastEventId) : null;
+    const initialCursor = await withPgClient(pg, async (client) => {
+      if (parsedLastEventId?.success) {
+        const exact = await queryOne<{ event_id: string; created_at: Date }>(
+          client,
+          "SELECT event_id, created_at FROM alert_events WHERE event_id = $1",
+          [parsedLastEventId.data]
+        );
+        if (exact) return exact;
+      }
+      return queryOne<{ event_id: string; created_at: Date }>(
+        client,
+        "SELECT event_id, created_at FROM alert_events ORDER BY created_at DESC, event_id DESC LIMIT 1"
+      );
+    });
+    let cursor: { event_id: string; created_at: Date } = initialCursor ?? {
+      event_id: ZERO_UUID,
+      created_at: new Date()
+    };
+
+    reply.hijack();
+    const raw = reply.raw;
+    raw.writeHead(200, {
+      "content-type": "text/event-stream; charset=utf-8",
+      "cache-control": "no-cache, no-transform",
+      connection: "keep-alive",
+      "x-accel-buffering": "no"
+    });
+    raw.write("retry: 2000\n\n");
+
+    let closed = false;
+    let pollTimer: NodeJS.Timeout | null = null;
+    const heartbeat = setInterval(() => {
+      if (!closed) raw.write(`: heartbeat ${new Date().toISOString()}\n\n`);
+    }, 15_000);
+    const close = () => {
+      if (closed) return;
+      closed = true;
+      if (pollTimer) clearTimeout(pollTimer);
+      clearInterval(heartbeat);
+    };
+    request.raw.on("close", close);
+    request.raw.on("aborted", close);
+
+    const poll = async () => {
+      if (closed) return;
+      try {
+        const rows = await withPgClient(pg, async (client) =>
+          client.query<AlertStreamRow>(
+            `
+              SELECT
+                event_id,
+                alert_id,
+                event_type,
+                severity,
+                title,
+                message,
+                device_id,
+                station_id,
+                evidence,
+                created_at
+              FROM alert_events
+              WHERE created_at > $1
+                 OR (created_at = $1 AND event_id::text > $2)
+              ORDER BY created_at ASC, event_id ASC
+              LIMIT 100
+            `,
+            [cursor.created_at, cursor.event_id]
+          )
+        );
+        for (const row of rows.rows) {
+          const createdAt = row.created_at instanceof Date ? row.created_at.toISOString() : new Date(row.created_at).toISOString();
+          const event = {
+            type: "alert",
+            eventId: row.event_id,
+            alertId: row.alert_id,
+            eventType: row.event_type,
+            severity: row.severity,
+            title: row.title ?? "监测告警",
+            message: row.message ?? "",
+            deviceId: row.device_id,
+            stationId: row.station_id,
+            evidence: row.evidence ?? {},
+            ...streamCoordinates(row.evidence),
+            createdAt
+          };
+          raw.write(`id: ${row.event_id}\nevent: alert\ndata: ${JSON.stringify(event)}\n\n`);
+          cursor = { event_id: row.event_id, created_at: row.created_at };
+        }
+      } catch (err) {
+        request.log.warn({ err }, "alert SSE poll failed; stream will retry");
+      } finally {
+        pollTimer = setTimeout(() => void poll(), 500);
+      }
+    };
+    void poll();
   });
 
   app.get("/alerts/:alertId/events", async (request, reply) => {
@@ -433,7 +580,7 @@ export function registerAlertRoutes(app: FastifyInstance, config: AppConfig, pg:
         return;
       }
 
-      enqueueOperationLog(pg, request, {
+      void enqueueOperationLog(pg, request, {
         module: "alert",
         action: eventType === "ALERT_ACK" ? "ack_alert" : "resolve_alert",
         description: "manual alert action",
