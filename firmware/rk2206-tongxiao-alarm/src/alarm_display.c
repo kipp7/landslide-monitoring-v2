@@ -13,6 +13,7 @@ static AlarmSnapshot g_rendered_snapshot;
 
 #define STATUS_LABEL_X 40U
 #define STATUS_VALUE_X 96U
+#define SUMMARY_PAIR_GAP 8U
 
 /* 24x24 Song-style glyphs missing from the board's bundled Chinese font. */
 static const uint32_t GLYPH_GU_24[24] = {
@@ -85,12 +86,29 @@ static void ShowChinese(uint16_t x, uint16_t y, const char *text, uint16_t fg, u
     }
 }
 
-static void ShowChineseCentered(uint16_t y, const char *text, uint16_t fg, uint16_t bg, uint8_t size)
+static uint16_t ChineseTextWidth(const char *text, uint8_t size)
 {
     size_t characters = strlen(text) / 3U;
-    uint16_t width = (uint16_t)(characters * size);
+    return (uint16_t)(characters * size);
+}
+
+static void ShowChineseCentered(uint16_t y, const char *text, uint16_t fg, uint16_t bg, uint8_t size)
+{
+    uint16_t width = ChineseTextWidth(text, size);
     uint16_t x = width < LCD_W ? (uint16_t)((LCD_W - width) / 2U) : 0;
     ShowChinese(x, y, text, fg, bg, size);
+}
+
+static void ShowChinesePairCentered(uint16_t y, const char *label, const char *value,
+    uint16_t label_color, uint16_t value_color, uint16_t bg, uint8_t size)
+{
+    uint16_t label_width = ChineseTextWidth(label, size);
+    uint16_t value_width = ChineseTextWidth(value, size);
+    uint16_t total_width = (uint16_t)(label_width + SUMMARY_PAIR_GAP + value_width);
+    uint16_t x = total_width < LCD_W ? (uint16_t)((LCD_W - total_width) / 2U) : 0;
+
+    ShowChinese(x, y, label, label_color, bg, size);
+    ShowChinese((uint16_t)(x + label_width + SUMMARY_PAIR_GAP), y, value, value_color, bg, size);
 }
 
 static const char *SeverityChinese(AlarmSeverity severity)
@@ -185,7 +203,9 @@ static void ShowAlertContext(const AlarmSnapshot *snapshot, uint16_t fg, uint16_
 static void ShowDeviceContext(const AlarmSnapshot *snapshot, uint16_t fg, uint16_t bg)
 {
     char device[24];
-    char line[48];
+    char revision[48];
+    char revision_display[20];
+    size_t revision_length;
 
     SafeShortId(device, sizeof(device), TONGXIAO_DEVICE_ID);
     ShowChinese(STATUS_LABEL_X, 112, "设备", fg, bg, 24);
@@ -193,8 +213,14 @@ static void ShowDeviceContext(const AlarmSnapshot *snapshot, uint16_t fg, uint16
     ShowChinese(STATUS_LABEL_X, 138, "固件", fg, bg, 24);
     ShowAscii(STATUS_VALUE_X, 138, TONGXIAO_FIRMWARE_VERSION, fg, bg, 24);
     ShowChinese(STATUS_LABEL_X, 164, "指令", fg, bg, 24);
-    snprintf(line, sizeof(line), "%llu", (unsigned long long)snapshot->desired.revision);
-    ShowAscii(STATUS_VALUE_X, 164, line, fg, bg, 24);
+    snprintf(revision, sizeof(revision), "%llu", (unsigned long long)snapshot->desired.revision);
+    revision_length = strlen(revision);
+    if (revision_length > 15U) {
+        snprintf(revision_display, sizeof(revision_display), "...%.12s", revision + revision_length - 12U);
+    } else {
+        snprintf(revision_display, sizeof(revision_display), "%s", revision);
+    }
+    ShowAscii(STATUS_VALUE_X, 164, revision_display, fg, bg, 24);
     ShowChinese(STATUS_LABEL_X, 190, "状态", fg, bg, 24);
     ShowChinese(STATUS_VALUE_X, 190, StateChinese(snapshot), fg, bg, 24);
 }
@@ -241,11 +267,11 @@ void AlarmDisplay_Render(const AlarmSnapshot *snapshot)
     lcd_draw_line(12, 38, 307, 38, foreground);
 
     if (snapshot->self_test_active || snapshot->desired.display == ALARM_DISPLAY_SELF_TEST) {
-        ShowChineseCentered(46, "设备自检", foreground, background, 24);
+        ShowChinesePairCentered(46, "设备", "自检", foreground, foreground, background, 24);
         ShowChineseCentered(76, "振动灯光检测", foreground, background, 24);
     } else if (snapshot->desired.state == ALARM_STATE_ACTIVE) {
-        ShowChinese(80, 46, "风险等级", foreground, background, 24);
-        ShowChinese(192, 46, SeverityChinese(snapshot->desired.severity), foreground, background, 24);
+        ShowChinesePairCentered(46, "风险等级", SeverityChinese(snapshot->desired.severity),
+            foreground, foreground, background, 24);
         if (snapshot->locally_silenced) {
             ShowChineseCentered(76, "告警关闭", foreground, background, 24);
         } else {
@@ -254,16 +280,14 @@ void AlarmDisplay_Render(const AlarmSnapshot *snapshot)
                 foreground, background, 24);
         }
     } else if (snapshot->desired.state == ALARM_STATE_SILENCED) {
-        ShowChineseCentered(46, "告警关闭", foreground, background, 24);
+        ShowChinesePairCentered(46, "告警", "关闭", foreground, foreground, background, 24);
         ShowChineseCentered(76, "风险继续观察", foreground, background, 24);
     } else if (snapshot->desired.display == ALARM_DISPLAY_ALL_CLEAR) {
-        ShowChineseCentered(46, "风险正常", LCD_GREEN, background, 24);
+        ShowChinesePairCentered(46, "风险", "正常", foreground, LCD_GREEN, background, 24);
         ShowChineseCentered(76, "继续观察", foreground, background, 24);
     } else {
-        ShowChinese(STATUS_LABEL_X, 46, "设备", foreground, background, 24);
-        ShowChinese(STATUS_VALUE_X, 46, "正常", LCD_GREEN, background, 24);
-        ShowChinese(80, 76, "风险等级", foreground, background, 24);
-        ShowChinese(192, 76, "正常", LCD_GREEN, background, 24);
+        ShowChinesePairCentered(46, "设备", "正常", foreground, LCD_GREEN, background, 24);
+        ShowChinesePairCentered(76, "风险等级", "正常", foreground, LCD_GREEN, background, 24);
     }
 
     lcd_draw_line(12, 106, 307, 106, foreground);
