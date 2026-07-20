@@ -730,6 +730,9 @@ struct Index {
       this.presentInAppAlert(event);
     } else if (eventType === 'ALERT_UPDATE') {
       this.updateInAppAlert(event);
+    } else if (eventType === 'ALERT_ACK') {
+      if (this.alertNotifications) this.alertNotifications.cancel(event.alertId);
+      this.resolveInAppAlert(event.alertId);
     } else if (eventType === 'ALERT_RESOLVE') {
       if (this.alertNotifications) this.alertNotifications.cancel(event.alertId);
       this.resolveInAppAlert(event.alertId);
@@ -752,7 +755,7 @@ struct Index {
       let shouldPresentFromAlert = true;
       if (pendingEvent) {
         const eventType = pendingEvent.eventType.toUpperCase();
-        if (eventType === 'ALERT_RESOLVE') {
+        if (eventType === 'ALERT_ACK' || eventType === 'ALERT_RESOLVE') {
           if (this.alertNotifications) this.alertNotifications.cancel(pendingEvent.alertId);
           this.resolveInAppAlert(pendingEvent.alertId);
           shouldPresentFromAlert = false;
