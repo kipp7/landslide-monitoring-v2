@@ -299,7 +299,7 @@ async function resolveLegacyOrUuidDeviceId(pg: PgPool, input: string): Promise<s
 
 type GpsPoint = { ts: string; lat: number; lon: number; alt: number | null };
 
-const MAX_BASELINE_CLUSTER_DISTANCE_METERS = 500;
+const MAX_BASELINE_CLUSTER_DISTANCE_METERS = 100;
 
 function median(values: number[]): number {
   const sorted = [...values].sort((a, b) => a - b);
