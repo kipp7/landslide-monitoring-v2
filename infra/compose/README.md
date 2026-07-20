@@ -47,6 +47,16 @@ permalink: landslide-monitoring-v2-mainline/infra/compose/readme
 
 > 如果出现镜像拉取超时（Docker Hub 在国内经常不稳定），请先在 Docker Desktop 配置 Registry Mirror，再重试。
 
+### 2.1 可选边缘 AI
+
+边缘 AI Worker 默认不启动，不影响采集、入库和规则告警。完成模型验证后再显式启用：
+
+- 构建：`docker compose -f infra/compose/docker-compose.yml -f infra/compose/docker-compose.app.yml --env-file infra/compose/.env --profile edge-ai build ai-prediction-worker`
+- 启动：`docker compose -f infra/compose/docker-compose.yml -f infra/compose/docker-compose.app.yml --env-file infra/compose/.env --profile edge-ai up -d ai-prediction-worker`
+- 回退：`docker compose -f infra/compose/docker-compose.yml -f infra/compose/docker-compose.app.yml --env-file infra/compose/.env --profile edge-ai stop ai-prediction-worker`
+
+该 Worker 限制为 `0.5 CPU / 384 MB`，训练查询限制单线程、30 秒和 256 MB；停止它不会停止 Kafka、ClickHouse、遥测写入或规则引擎。详细边界见 `docs/system/EDGE_AI_RUNBOOK.md`。
+
 5. 初始化数据库（首次启动后执行一次）：
 
    - PostgreSQL：`powershell -ExecutionPolicy Bypass -File infra/compose/scripts/init-postgres.ps1`

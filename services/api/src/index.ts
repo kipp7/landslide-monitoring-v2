@@ -21,6 +21,7 @@ import { registerAlertNotificationRoutes } from "./routes/alert-notifications";
 import { registerAlertRuleRoutes } from "./routes/alert-rules";
 import { registerAlertRuleReplayRoutes } from "./routes/alert-rules-replay";
 import { registerFieldAlarmRoutes } from "./routes/field-alarm";
+import { registerEdgeAiRoutes } from "./routes/edge-ai";
 import { registerAlertStreamRoutes } from "./routes/alert-stream";
 import { registerPushDeviceRoutes } from "./routes/push-devices";
 import { registerTelemetryDlqRoutes } from "./routes/telemetry-dlq";
@@ -297,6 +298,7 @@ async function main(): Promise<void> {
     registerAlertRuleRoutes(v1, config, pg);
     registerAlertRuleReplayRoutes(v1, config, ch, pg);
     registerFieldAlarmRoutes(v1, config, pg);
+    registerEdgeAiRoutes(v1, config, pg);
     registerCommandEventRoutes(v1, config, pg);
     registerCommandNotificationRoutes(v1, config, pg);
     registerTelemetryDlqRoutes(v1, config, pg);

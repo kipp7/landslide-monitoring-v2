@@ -3,8 +3,10 @@ import { promises as fs } from "node:fs";
 import http, { type IncomingMessage, type ServerResponse } from "node:http";
 import path from "node:path";
 import dotenv from "dotenv";
+import type { EdgeTelemetrySnapshot } from "@lsmv2/edge-risk-model";
 import { createLogger } from "@lsmv2/observability";
 import { loadConfigFromEnv, type AppConfig } from "./config";
+import { EdgeRiskAgent, type EdgeRiskAgentStatus } from "./edge-risk-agent";
 
 type JsonObject = Record<string, unknown>;
 type Level = "healthy" | "attention" | "degraded" | "critical";
@@ -92,6 +94,7 @@ type SupervisionReport = {
   };
   aiDiagnosis: AiDiagnosis;
   aiModels: AiModelStatus[];
+  edgeRiskAgent: EdgeRiskAgentStatus;
   actionInterface: {
     mode: "safe_intent_router";
     endpoints: string[];
@@ -182,7 +185,9 @@ async function writeJsonAtomic(targetPath: string, value: unknown): Promise<void
   await fs.rename(tempPath, resolved);
 }
 
-async function fetchJson(url: string): Promise<{ document: JsonObject | null; error: string | null }> {
+async function fetchJson(
+  url: string
+): Promise<{ document: JsonObject | null; error: string | null }> {
   try {
     const response = await fetch(url, { method: "GET" });
     if (!response.ok) {
@@ -200,6 +205,7 @@ async function fetchJson(url: string): Promise<{ document: JsonObject | null; er
 
 class HermesEdgeSupervisor {
   private readonly logger: ReturnType<typeof createLogger>;
+  private readonly edgeRiskAgent: EdgeRiskAgent;
   private refreshTimer: NodeJS.Timeout | null = null;
   private server: http.Server | null = null;
   private latestReport: SupervisionReport | null = null;
@@ -209,10 +215,19 @@ class HermesEdgeSupervisor {
 
   constructor(private readonly config: AppConfig) {
     this.logger = createLogger(config.serviceName);
+    this.edgeRiskAgent = new EdgeRiskAgent(config);
   }
 
   async start(): Promise<void> {
     await this.loadDiagnosisModel();
+    try {
+      await this.edgeRiskAgent.start();
+    } catch (error) {
+      this.logger.warn(
+        { err: error },
+        "optional edge risk agent failed to start; core supervision remains available"
+      );
+    }
     await this.refresh();
     this.refreshTimer = setInterval(() => {
       void this.refresh();
@@ -244,7 +259,7 @@ class HermesEdgeSupervisor {
         diagnosisModelError: this.diagnosisModelError,
         supervisionFilePath: this.config.supervisionFilePath,
         httpHost: this.config.httpHost,
-        httpPort: this.config.httpPort
+        httpPort: this.config.httpPort,
       },
       "hermes edge supervisor started"
     );
@@ -266,6 +281,12 @@ class HermesEdgeSupervisor {
       this.server = null;
     }
 
+    try {
+      await this.edgeRiskAgent.stop();
+    } catch (error) {
+      this.logger.warn({ err: error }, "optional edge risk agent failed to stop cleanly");
+    }
+
     this.logger.info({ signal }, "hermes edge supervisor stopped");
   }
 
@@ -280,7 +301,7 @@ class HermesEdgeSupervisor {
         generatedAt: report?.generatedAt ?? isoNow(),
         accepted: report?.accepted ?? false,
         currentBoundary: report?.currentBoundary ?? "hermes-edge-supervisor-needs-review",
-        overallLevel: report?.summary.overallLevel ?? "critical"
+        overallLevel: report?.summary.overallLevel ?? "critical",
       });
       return;
     }
@@ -295,11 +316,16 @@ class HermesEdgeSupervisor {
       return;
     }
 
+    if (method === "GET" && requestUrl === "/v1/edge-risk") {
+      this.respondJson(response, 200, this.edgeRiskAgent.status());
+      return;
+    }
+
     if (method === "GET" && requestUrl === "/v1/actions") {
       this.respondJson(response, 200, {
         schema_version: 1,
         generatedAt: isoNow(),
-        actions: this.recentActions
+        actions: this.recentActions,
       });
       return;
     }
@@ -317,7 +343,14 @@ class HermesEdgeSupervisor {
     if (method === "GET" && requestUrl === "/") {
       this.respondJson(response, 200, {
         service: this.config.serviceName,
-        endpoints: ["/healthz", "/v1/supervision", "/v1/actions", "/v1/intent-catalog", "POST /v1/actions/recheck"]
+        endpoints: [
+          "/healthz",
+          "/v1/supervision",
+          "/v1/edge-risk",
+          "/v1/actions",
+          "/v1/intent-catalog",
+          "POST /v1/actions/recheck",
+        ],
       });
       return;
     }
@@ -329,14 +362,22 @@ class HermesEdgeSupervisor {
     const payload = JSON.stringify(body, null, 2);
     response.writeHead(statusCode, {
       "Content-Type": "application/json; charset=utf-8",
-      "Content-Length": Buffer.byteLength(payload, "utf8")
+      "Content-Length": Buffer.byteLength(payload, "utf8"),
     });
     response.end(payload);
   }
 
-  private async handleActionRequest(requestUrl: string, request: IncomingMessage, response: ServerResponse): Promise<void> {
+  private async handleActionRequest(
+    requestUrl: string,
+    request: IncomingMessage,
+    response: ServerResponse
+  ): Promise<void> {
     const actionName = requestUrl.replace("/v1/actions/", "").split("?")[0];
-    if (actionName !== "recheck" && actionName !== "collect_logs" && actionName !== "generate_report") {
+    if (
+      actionName !== "recheck" &&
+      actionName !== "collect_logs" &&
+      actionName !== "generate_report"
+    ) {
       this.respondJson(response, 404, { error: "unknown_action" });
       return;
     }
@@ -346,7 +387,7 @@ class HermesEdgeSupervisor {
     const requestedBy = getString(body, "requestedBy") ?? "local-operator-or-display";
 
     if (actionName === "recheck") {
-      await this.refresh();
+      await this.refresh(true);
     }
 
     const report = this.latestReport;
@@ -358,7 +399,7 @@ class HermesEdgeSupervisor {
       requestedBy,
       naturalLanguageIntent,
       summary: this.actionSummary(actionName, report),
-      result: this.actionResult(actionName, report)
+      result: this.actionResult(actionName, report),
     };
 
     await this.recordAction(action);
@@ -371,8 +412,9 @@ class HermesEdgeSupervisor {
         gatewayCoreTouched: false,
         serialTouched: false,
         mqttTouched: false,
-        message: "Hermes action API only refreshes/collects sidecar evidence; it does not control field-gateway."
-      }
+        message:
+          "Hermes action API only refreshes/collects sidecar evidence; it does not control field-gateway.",
+      },
     });
   }
 
@@ -416,7 +458,10 @@ class HermesEdgeSupervisor {
     return "已生成当前 Hermes 监督摘要，可用于显示屏或中心端报告。";
   }
 
-  private actionResult(action: HermesAction["action"], report: SupervisionReport | null): JsonObject {
+  private actionResult(
+    action: HermesAction["action"],
+    report: SupervisionReport | null
+  ): JsonObject {
     if (!report) {
       return { reportReady: false };
     }
@@ -427,9 +472,9 @@ class HermesEdgeSupervisor {
         suggestedCommands: [
           "systemctl status lsmv2-field-gateway --no-pager",
           "journalctl -u lsmv2-field-gateway -n 120 --no-pager",
-          "journalctl -u lsmv2-hermes-edge-supervisor -n 120 --no-pager"
+          "journalctl -u lsmv2-hermes-edge-supervisor -n 120 --no-pager",
         ],
-        note: "Commands are suggestions for operator/export tooling; this action does not execute them."
+        note: "Commands are suggestions for operator/export tooling; this action does not execute them.",
       };
     }
 
@@ -442,7 +487,11 @@ class HermesEdgeSupervisor {
       confidenceLevel: report.aiDiagnosis.confidenceLevel,
       taskCount: report.summary.taskCount,
       blockedCount: report.summary.blockedCount,
-      recommendedPlan: report.aiDiagnosis.recommendedPlan
+      recommendedPlan: report.aiDiagnosis.recommendedPlan,
+      edgeRiskLevel: report.edgeRiskAgent.overallRiskLevel,
+      edgeRiskScore: report.edgeRiskAgent.maxRiskScore,
+      edgeRiskModelVersion: report.edgeRiskAgent.model.modelVersion,
+      edgeAgentPendingUploads: report.edgeRiskAgent.pendingUploadCount,
     };
   }
 
@@ -451,53 +500,65 @@ class HermesEdgeSupervisor {
       schema_version: 1,
       generatedAt: isoNow(),
       mode: "safe_intent_catalog",
-      description: "Natural-language/display layers should map user intent to these safe Hermes actions.",
+      description:
+        "Natural-language/display layers should map user intent to these safe Hermes actions.",
       intents: [
         {
           action: "recheck",
           exampleUtterances: ["检查一下链路", "重新诊断 RK3568", "复检当前状态"],
           method: "POST",
           path: "/v1/actions/recheck",
-          safety: "read-only refresh and model inference"
+          safety: "read-only refresh and model inference",
         },
         {
           action: "collect_logs",
           exampleUtterances: ["准备诊断日志", "我要看现场证据", "收集网关日志线索"],
           method: "POST",
           path: "/v1/actions/collect_logs",
-          safety: "returns log collection plan only"
+          safety: "returns log collection plan only",
         },
         {
           action: "generate_report",
           exampleUtterances: ["生成当前报告", "告诉我现在是什么问题", "给评委展示边缘智能状态"],
           method: "POST",
           path: "/v1/actions/generate_report",
-          safety: "summarizes latest supervision report"
-        }
+          safety: "summarizes latest supervision report",
+        },
       ],
       prohibitedActions: [
         "open serial port",
         "restart field-gateway automatically",
         "change mqtt uplink ownership",
-        "switch wifi without operator approval"
-      ]
+        "switch wifi without operator approval",
+      ],
     };
   }
 
-  private async refresh(): Promise<void> {
+  private async refresh(forceRiskPublish = false): Promise<void> {
     const fetchedAt = isoNow();
     const [automationSource, summarySource, localResources] = await Promise.all([
       fetchJson(this.config.automationUrl),
       fetchJson(this.config.summaryUrl),
-      this.collectLocalResources()
+      this.collectLocalResources(),
     ]);
+    try {
+      await this.edgeRiskAgent.ingest(
+        this.extractTelemetrySnapshots(summarySource.document),
+        forceRiskPublish
+      );
+    } catch (error) {
+      this.logger.warn(
+        { err: error },
+        "optional edge risk refresh failed; preserving core supervision report"
+      );
+    }
     const report = this.buildReport({
       automationDocument: automationSource.document,
       automationError: automationSource.error,
       summaryDocument: summarySource.document,
       summaryError: summarySource.error,
       localResources,
-      fetchedAt
+      fetchedAt,
     });
     this.latestReport = report;
     await writeJsonAtomic(this.config.supervisionFilePath, report);
@@ -511,7 +572,14 @@ class HermesEdgeSupervisor {
     localResources: LocalResourceSnapshot;
     fetchedAt: string;
   }): SupervisionReport {
-    const { automationDocument, automationError, summaryDocument, summaryError, localResources, fetchedAt } = input;
+    const {
+      automationDocument,
+      automationError,
+      summaryDocument,
+      summaryError,
+      localResources,
+      fetchedAt,
+    } = input;
     const tasks = this.extractTasks(automationDocument);
     const automationGeneratedAt = getString(automationDocument, "generatedAt");
     const summaryGeneratedAt = getString(summaryDocument, "generatedAt");
@@ -519,15 +587,25 @@ class HermesEdgeSupervisor {
     const recommendedCount = tasks.filter((task) => task.status === "recommended").length;
     const clearCount = tasks.filter((task) => task.status === "clear").length;
     const safeAutomatableCount = tasks.filter((task) => task.safeToAutomate).length;
-    const overallLevel = tasks.reduce<Level>((current, task) => (
-      levelRank(task.severity) > levelRank(current) ? task.severity : current
-    ), automationError || summaryError ? "critical" : "healthy");
+    const overallLevel = tasks.reduce<Level>(
+      (current, task) => (levelRank(task.severity) > levelRank(current) ? task.severity : current),
+      automationError || summaryError ? "critical" : "healthy"
+    );
     const automationAgeSeconds = ageSeconds(automationGeneratedAt);
     const summaryAgeSeconds = ageSeconds(summaryGeneratedAt);
-    const automationFresh = automationAgeSeconds === null || automationAgeSeconds * 1000 <= this.config.sourceStaleAfterMs;
-    const summaryFresh = summaryAgeSeconds === null || summaryAgeSeconds * 1000 <= this.config.sourceStaleAfterMs;
-    const accepted = !automationError && !summaryError && automationFresh && summaryFresh && tasks.length > 0;
-    const aiDiagnosis = this.runAiDiagnosis(summaryDocument ?? automationDocument, tasks, localResources);
+    const automationFresh =
+      automationAgeSeconds === null ||
+      automationAgeSeconds * 1000 <= this.config.sourceStaleAfterMs;
+    const summaryFresh =
+      summaryAgeSeconds === null || summaryAgeSeconds * 1000 <= this.config.sourceStaleAfterMs;
+    const accepted =
+      !automationError && !summaryError && automationFresh && summaryFresh && tasks.length > 0;
+    const aiDiagnosis = this.runAiDiagnosis(
+      summaryDocument ?? automationDocument,
+      tasks,
+      localResources
+    );
+    const edgeRiskAgent = this.edgeRiskAgent.status();
 
     return {
       schema_version: 1,
@@ -535,7 +613,9 @@ class HermesEdgeSupervisor {
       service: this.config.serviceName,
       mode: "hermes-edge-supervisor",
       accepted,
-      currentBoundary: accepted ? "hermes-edge-supervisor-ready" : "hermes-edge-supervisor-needs-review",
+      currentBoundary: accepted
+        ? "hermes-edge-supervisor-ready"
+        : "hermes-edge-supervisor-needs-review",
       source: {
         automationUrl: this.config.automationUrl,
         summaryUrl: this.config.summaryUrl,
@@ -545,7 +625,7 @@ class HermesEdgeSupervisor {
         automationAgeSeconds,
         summaryAgeSeconds,
         automationError,
-        summaryError
+        summaryError,
       },
       localResources,
       summary: {
@@ -554,7 +634,7 @@ class HermesEdgeSupervisor {
         blockedCount,
         recommendedCount,
         clearCount,
-        safeAutomatableCount
+        safeAutomatableCount,
       },
       hermesPlan: {
         nextTasks: tasks,
@@ -562,8 +642,8 @@ class HermesEdgeSupervisor {
         protectedCore: {
           gatewayCore: true,
           serialIngest: true,
-          mqttUplink: true
-        }
+          mqttUplink: true,
+        },
       },
       aiDiagnosis,
       aiModels: [
@@ -574,17 +654,45 @@ class HermesEdgeSupervisor {
           modelType: aiDiagnosis.modelType,
           modelVersion: aiDiagnosis.modelVersion,
           featureCount: Object.keys(aiDiagnosis.featureVector).length,
-          output: aiDiagnosis
-        }
+          output: aiDiagnosis,
+        },
       ],
+      edgeRiskAgent,
       actionInterface: {
         mode: "safe_intent_router",
-        endpoints: ["/v1/intent-catalog", "/v1/actions", "POST /v1/actions/recheck", "POST /v1/actions/collect_logs", "POST /v1/actions/generate_report"],
+        endpoints: [
+          "/v1/edge-risk",
+          "/v1/intent-catalog",
+          "/v1/actions",
+          "POST /v1/actions/recheck",
+          "POST /v1/actions/collect_logs",
+          "POST /v1/actions/generate_report",
+        ],
         supportedActions: ["recheck", "collect_logs", "generate_report"],
         safetyBoundary: "read_only_or_sidecar_only",
-        naturalLanguageReady: true
-      }
+        naturalLanguageReady: true,
+      },
     };
+  }
+
+  private extractTelemetrySnapshots(summaryDocument: JsonObject | null): EdgeTelemetrySnapshot[] {
+    const dimensions = Array.isArray(summaryDocument?.dimensions) ? summaryDocument.dimensions : [];
+    const snapshots: EdgeTelemetrySnapshot[] = [];
+    for (const dimension of dimensions) {
+      if (!isObject(dimension) || !isObject(dimension.evidence)) continue;
+      const evidence = dimension.evidence;
+      const deviceId = typeof evidence.deviceId === "string" ? evidence.deviceId : null;
+      const latestTelemetry = isObject(evidence.latestTelemetry) ? evidence.latestTelemetry : null;
+      const receivedAt =
+        latestTelemetry && typeof latestTelemetry.receivedTs === "string"
+          ? latestTelemetry.receivedTs
+          : null;
+      const metrics =
+        latestTelemetry && isObject(latestTelemetry.metrics) ? latestTelemetry.metrics : null;
+      if (!deviceId || !receivedAt || !metrics) continue;
+      snapshots.push({ deviceId, receivedAt, metrics });
+    }
+    return snapshots;
   }
 
   private async collectLocalResources(): Promise<LocalResourceSnapshot> {
@@ -597,7 +705,7 @@ class HermesEdgeSupervisor {
       diskFreeMb: null,
       diskFreeRatio: null,
       maxTemperatureC: null,
-      error: null
+      error: null,
     };
     const errors: string[] = [];
 
@@ -613,9 +721,13 @@ class HermesEdgeSupervisor {
       const memRaw = await fs.readFile("/proc/meminfo", "utf8");
       const meminfo = this.parseMeminfo(memRaw);
       snapshot.memTotalMb = meminfo.MemTotal ? Math.round(meminfo.MemTotal / 1024) : null;
-      snapshot.memAvailableMb = meminfo.MemAvailable ? Math.round(meminfo.MemAvailable / 1024) : null;
+      snapshot.memAvailableMb = meminfo.MemAvailable
+        ? Math.round(meminfo.MemAvailable / 1024)
+        : null;
       snapshot.memAvailableRatio =
-        meminfo.MemTotal && meminfo.MemAvailable ? Number((meminfo.MemAvailable / meminfo.MemTotal).toFixed(4)) : null;
+        meminfo.MemTotal && meminfo.MemAvailable
+          ? Number((meminfo.MemAvailable / meminfo.MemTotal).toFixed(4))
+          : null;
     } catch (error) {
       errors.push(`meminfo:${error instanceof Error ? error.message : String(error)}`);
     }
@@ -646,7 +758,8 @@ class HermesEdgeSupervisor {
           // Ignore individual thermal zones; some kernels expose transient entries.
         }
       }
-      snapshot.maxTemperatureC = temperatures.length > 0 ? Number(Math.max(...temperatures).toFixed(2)) : null;
+      snapshot.maxTemperatureC =
+        temperatures.length > 0 ? Number(Math.max(...temperatures).toFixed(2)) : null;
     } catch (error) {
       errors.push(`thermal:${error instanceof Error ? error.message : String(error)}`);
     }
@@ -698,7 +811,11 @@ class HermesEdgeSupervisor {
     );
   }
 
-  private runAiDiagnosis(document: JsonObject | null, tasks: HermesTask[], localResources: LocalResourceSnapshot): AiDiagnosis {
+  private runAiDiagnosis(
+    document: JsonObject | null,
+    tasks: HermesTask[],
+    localResources: LocalResourceSnapshot
+  ): AiDiagnosis {
     const model = this.diagnosisModel;
     const featureVector = this.buildFeatureVector(document, tasks, localResources);
     if (!model) {
@@ -714,7 +831,7 @@ class HermesEdgeSupervisor {
         classProbabilities: {},
         recommendedPlan: ["检查 DIAGNOSIS_MODEL_PATH 是否指向有效模型产物。"],
         modelLoaded: false,
-        modelError: this.diagnosisModelError
+        modelError: this.diagnosisModelError,
       };
     }
 
@@ -745,7 +862,7 @@ class HermesEdgeSupervisor {
       classProbabilities,
       recommendedPlan: this.diagnosisPlan(diagnosisType),
       modelLoaded: true,
-      modelError: null
+      modelError: null,
     };
   }
 
@@ -770,7 +887,7 @@ class HermesEdgeSupervisor {
     while (tree.childrenLeft[node] !== -1 && tree.childrenRight[node] !== -1) {
       const featureIndex = tree.feature[node] ?? -1;
       const threshold = tree.threshold[node] ?? 0;
-      const value = featureIndex >= 0 ? values[featureIndex] ?? 0 : 0;
+      const value = featureIndex >= 0 ? (values[featureIndex] ?? 0) : 0;
       const nextNode = value <= threshold ? tree.childrenLeft[node] : tree.childrenRight[node];
       node = nextNode ?? -1;
       if (node < 0) {
@@ -799,28 +916,36 @@ class HermesEdgeSupervisor {
     const interleaving = dimensions.source_interleaving;
     const gatewaySource = dimensions.gateway_health_source;
     const networkSource = dimensions.network_status_source;
-    const nodeDimensions = Object.entries(dimensions).filter(([key]) => key.startsWith("node_")).map(([, value]) => value);
+    const nodeDimensions = Object.entries(dimensions)
+      .filter(([key]) => key.startsWith("node_"))
+      .map(([, value]) => value);
     const summary = isObject(document?.summary) ? document.summary : {};
     const allEvidenceText = JSON.stringify(tasks.map((task) => task.evidence)).toLowerCase();
     const taskEvidence = this.mergeTaskEvidence(tasks);
     const sources = this.readSources(document);
-    const portStatus = getString(southbound?.evidence, "portStatus") ?? getString(taskEvidence, "portStatus");
+    const portStatus =
+      getString(southbound?.evidence, "portStatus") ?? getString(taskEvidence, "portStatus");
     const networkMode = getString(network?.evidence, "mode") ?? getString(taskEvidence, "mode");
     const lastPublishedAgeSeconds =
       this.readNumber(northbound?.evidence, "lastPublishedAgeSeconds") ??
       this.readNumber(taskEvidence, "lastPublishedAgeSeconds");
     const serialOpen = (southbound?.evidence.serialOpen ?? taskEvidence.serialOpen) === true;
-    const mqttConnected = (southbound?.evidence.mqttConnected ?? taskEvidence.mqttConnected) === true;
-    const lastSerialReadAgeSeconds = this.readNumber(southbound?.evidence, "lastSerialReadAgeSeconds");
+    const mqttConnected =
+      (southbound?.evidence.mqttConnected ?? taskEvidence.mqttConnected) === true;
+    const lastSerialReadAgeSeconds = this.readNumber(
+      southbound?.evidence,
+      "lastSerialReadAgeSeconds"
+    );
     const nodeConfiguredCount =
-      nodeDimensions.filter((dimension) => getString(dimension.evidence, "status") === "configured").length ||
+      nodeDimensions.filter((dimension) => getString(dimension.evidence, "status") === "configured")
+        .length ||
       tasks.filter((task) => getString(task.evidence, "status") === "configured").length;
     const nodeOfflineCount =
-      nodeDimensions.filter((dimension) => getString(dimension.evidence, "status") === "offline").length ||
-      tasks.filter((task) => getString(task.evidence, "status") === "offline").length;
+      nodeDimensions.filter((dimension) => getString(dimension.evidence, "status") === "offline")
+        .length || tasks.filter((task) => getString(task.evidence, "status") === "offline").length;
     const nodeOnlineCount =
-      nodeDimensions.filter((dimension) => getString(dimension.evidence, "status") === "online").length ||
-      tasks.filter((task) => getString(task.evidence, "status") === "online").length;
+      nodeDimensions.filter((dimension) => getString(dimension.evidence, "status") === "online")
+        .length || tasks.filter((task) => getString(task.evidence, "status") === "online").length;
     const nodeTelemetryMessagesTotal = nodeDimensions.reduce(
       (sum, dimension) => sum + (this.readNumber(dimension.evidence, "telemetryMessages") ?? 0),
       0
@@ -847,10 +972,17 @@ class HermesEdgeSupervisor {
     const clearTaskCount = tasks.filter((task) => task.status === "clear").length;
     const safeAutomatableCount = tasks.filter((task) => task.safeToAutomate).length;
     const readOnlyTaskCount = tasks.filter((task) => task.automationScope === "read_only").length;
-    const operatorRequiredTaskCount = tasks.filter((task) => task.automationScope === "operator_required").length;
-    const publishFailures = this.readNumber(northbound?.evidence, "publishFailures") ?? this.readNumber(taskEvidence, "publishFailures") ?? 0;
+    const operatorRequiredTaskCount = tasks.filter(
+      (task) => task.automationScope === "operator_required"
+    ).length;
+    const publishFailures =
+      this.readNumber(northbound?.evidence, "publishFailures") ??
+      this.readNumber(taskEvidence, "publishFailures") ??
+      0;
     const schemaRejected =
-      this.readNumber(parserNoise?.evidence, "schemaRejected") ?? this.readNumber(taskEvidence, "schemaRejected") ?? 0;
+      this.readNumber(parserNoise?.evidence, "schemaRejected") ??
+      this.readNumber(taskEvidence, "schemaRejected") ??
+      0;
     const interleavingWithMultipleSchemas =
       this.readNumber(interleaving?.evidence, "interleavingWithMultipleSchemas") ??
       this.readNumber(taskEvidence, "interleavingWithMultipleSchemas") ??
@@ -859,7 +991,8 @@ class HermesEdgeSupervisor {
       this.readNumber(interleaving?.evidence, "interleavingWithMultipleDeviceIds") ??
       this.readNumber(taskEvidence, "interleavingWithMultipleDeviceIds") ??
       0;
-    const networkLastErrorPresent = getString(network?.evidence, "lastError") || getString(taskEvidence, "lastError") ? 1 : 0;
+    const networkLastErrorPresent =
+      getString(network?.evidence, "lastError") || getString(taskEvidence, "lastError") ? 1 : 0;
     const summaryScore = this.readNumber(summary, "score") ?? 0;
     const summaryOverallLevelRank = levelRank(this.asLevel(getString(summary, "overallLevel")));
     const gatewaySourceExists = gatewaySource?.evidence.exists === true ? 1 : 0;
@@ -867,16 +1000,29 @@ class HermesEdgeSupervisor {
     const gatewaySourceErrorPresent = getString(gatewaySource?.evidence, "error") ? 1 : 0;
     const networkSourceErrorPresent = getString(networkSource?.evidence, "error") ? 1 : 0;
     const gatewaySourceStale =
-      (this.readNumber(gatewaySource?.evidence, "ageSeconds") ?? 0) * 1000 > this.config.sourceStaleAfterMs ? 1 : 0;
+      (this.readNumber(gatewaySource?.evidence, "ageSeconds") ?? 0) * 1000 >
+      this.config.sourceStaleAfterMs
+        ? 1
+        : 0;
     const networkSourceStale =
-      (this.readNumber(networkSource?.evidence, "ageSeconds") ?? 0) * 1000 > this.config.sourceStaleAfterMs ? 1 : 0;
+      (this.readNumber(networkSource?.evidence, "ageSeconds") ?? 0) * 1000 >
+      this.config.sourceStaleAfterMs
+        ? 1
+        : 0;
     const nodeTotalCount = Math.max(1, nodeConfiguredCount + nodeOfflineCount + nodeOnlineCount);
     const lastPublishedFreshnessBreach =
-      lastPublishedAgeSeconds === null || lastPublishedAgeSeconds * 1000 > this.config.sourceStaleAfterMs ? 1 : 0;
+      lastPublishedAgeSeconds === null ||
+      lastPublishedAgeSeconds * 1000 > this.config.sourceStaleAfterMs
+        ? 1
+        : 0;
     const serialOpenButNoRead = serialOpen && lastSerialReadAgeSeconds === null ? 1 : 0;
     const mqttConnectedButNoPublish = mqttConnected && lastPublishedAgeSeconds === null ? 1 : 0;
     const taskPressureScore =
-      criticalTaskCount * 3 + degradedTaskCount * 2 + attentionTaskCount + blockedTaskCount * 2 + recommendedTaskCount;
+      criticalTaskCount * 3 +
+      degradedTaskCount * 2 +
+      attentionTaskCount +
+      blockedTaskCount * 2 +
+      recommendedTaskCount;
     const resourcePressure =
       (localResources.memAvailableRatio !== null && localResources.memAvailableRatio < 0.15) ||
       (localResources.diskFreeRatio !== null && localResources.diskFreeRatio < 0.15) ||
@@ -908,7 +1054,10 @@ class HermesEdgeSupervisor {
       lastSerialReadAgeSeconds: lastSerialReadAgeSeconds ?? 0,
       serialOpenButNoRead,
       mqttConnectedButNoPublish,
-      spoolPending: this.readNumber(northbound?.evidence, "spoolPending") ?? this.readNumber(taskEvidence, "spoolPending") ?? 0,
+      spoolPending:
+        this.readNumber(northbound?.evidence, "spoolPending") ??
+        this.readNumber(taskEvidence, "spoolPending") ??
+        0,
       publishFailures,
       schemaRejected,
       rejectedWriteFailures:
@@ -916,7 +1065,9 @@ class HermesEdgeSupervisor {
         this.readNumber(taskEvidence, "rejectedWriteFailures") ??
         0,
       rejectedMessages:
-        this.readNumber(parserNoise?.evidence, "rejectedMessages") ?? this.readNumber(taskEvidence, "rejectedMessages") ?? 0,
+        this.readNumber(parserNoise?.evidence, "rejectedMessages") ??
+        this.readNumber(taskEvidence, "rejectedMessages") ??
+        0,
       interleavingSuspected:
         this.readNumber(interleaving?.evidence, "interleavingSuspected") ??
         this.readNumber(taskEvidence, "interleavingSuspected") ??
@@ -930,8 +1081,12 @@ class HermesEdgeSupervisor {
       nodeTelemetryMessagesTotal,
       nodeCommandForwardsTotal,
       nodeAckPublishesTotal,
-      nodeLastTelemetryMissingCount: Math.max(0, nodeDimensions.length - nodeLastTelemetryAges.length),
-      nodeMaxLastTelemetryAgeSeconds: nodeLastTelemetryAges.length > 0 ? Math.max(...nodeLastTelemetryAges) : 0,
+      nodeLastTelemetryMissingCount: Math.max(
+        0,
+        nodeDimensions.length - nodeLastTelemetryAges.length
+      ),
+      nodeMaxLastTelemetryAgeSeconds:
+        nodeLastTelemetryAges.length > 0 ? Math.max(...nodeLastTelemetryAges) : 0,
       nodeLastAckMissingCount: Math.max(0, nodeDimensions.length - nodeLastAckAges.length),
       nodeMaxLastAckAgeSeconds: nodeLastAckAges.length > 0 ? Math.max(...nodeLastAckAges) : 0,
       gatewaySourceAgeSeconds: this.readNumber(sources.gatewayHealth, "ageSeconds") ?? 0,
@@ -955,7 +1110,7 @@ class HermesEdgeSupervisor {
       resourcePressure,
       hasEnetunreach: allEvidenceText.includes("enetunreach") ? 1 : 0,
       hasEconnrefused: allEvidenceText.includes("econnrefused") ? 1 : 0,
-      hasTimeout: allEvidenceText.includes("timeout") ? 1 : 0
+      hasTimeout: allEvidenceText.includes("timeout") ? 1 : 0,
     };
   }
 
@@ -971,7 +1126,9 @@ class HermesEdgeSupervisor {
     return merged;
   }
 
-  private readDimensions(document: JsonObject | null): Record<string, { level: string | null; evidence: JsonObject }> {
+  private readDimensions(
+    document: JsonObject | null
+  ): Record<string, { level: string | null; evidence: JsonObject }> {
     const dimensions: Record<string, { level: string | null; evidence: JsonObject }> = {};
     const rawDimensions = Array.isArray(document?.dimensions) ? document.dimensions : [];
     for (const rawDimension of rawDimensions) {
@@ -980,17 +1137,20 @@ class HermesEdgeSupervisor {
       if (!key) continue;
       dimensions[key] = {
         level: getString(rawDimension, "level"),
-        evidence: isObject(rawDimension.evidence) ? rawDimension.evidence : {}
+        evidence: isObject(rawDimension.evidence) ? rawDimension.evidence : {},
       };
     }
     return dimensions;
   }
 
-  private readSources(document: JsonObject | null): { gatewayHealth: JsonObject; networkStatus: JsonObject } {
+  private readSources(document: JsonObject | null): {
+    gatewayHealth: JsonObject;
+    networkStatus: JsonObject;
+  } {
     const sources = isObject(document?.sources) ? document.sources : {};
     return {
       gatewayHealth: isObject(sources.gatewayHealth) ? sources.gatewayHealth : {},
-      networkStatus: isObject(sources.networkStatus) ? sources.networkStatus : {}
+      networkStatus: isObject(sources.networkStatus) ? sources.networkStatus : {},
     };
   }
 
@@ -1028,21 +1188,53 @@ class HermesEdgeSupervisor {
   private diagnosisPlan(diagnosisType: string): string[] {
     switch (diagnosisType) {
       case "center_mqtt_route_unreachable":
-        return ["检查 RK3568 到中心服务器 IP 的路由。", "检查中心服务器 1883 端口和防火墙。", "采集 field-gateway journal 中的 MQTT 错误。"];
+        return [
+          "检查 RK3568 到中心服务器 IP 的路由。",
+          "检查中心服务器 1883 端口和防火墙。",
+          "采集 field-gateway journal 中的 MQTT 错误。",
+        ];
       case "center_mqtt_service_unavailable":
-        return ["检查 EMQX/MQTT Broker 是否运行。", "确认 1883 端口监听。", "复核 MQTT 地址和认证配置。"];
+        return [
+          "检查 EMQX/MQTT Broker 是否运行。",
+          "确认 1883 端口监听。",
+          "复核 MQTT 地址和认证配置。",
+        ];
       case "southbound_serial_or_gateway_gap":
-        return ["检查 /dev/ttyS3 是否仍被 field-gateway 独占。", "查看 field-gateway 健康文件的 serial 和 southbound 状态。", "人工确认后再考虑重启网关。"];
+        return [
+          "检查 /dev/ttyS3 是否仍被 field-gateway 独占。",
+          "查看 field-gateway 健康文件的 serial 和 southbound 状态。",
+          "人工确认后再考虑重启网关。",
+        ];
       case "field_nodes_not_reporting":
-        return ["检查现场节点供电和中心节点聚合链路。", "查看节点最近 telemetry 时间。", "保留节点 A/B/C 状态证据。"];
+        return [
+          "检查现场节点供电和中心节点聚合链路。",
+          "查看节点最近 telemetry 时间。",
+          "保留节点 A/B/C 状态证据。",
+        ];
       case "shared_port_noise":
-        return ["采集 rejected/schemaRejected/interleaving 证据。", "复核中心节点共享流输出节奏。", "不要扩大 RK3568 parser 补丁面。"];
+        return [
+          "采集 rejected/schemaRejected/interleaving 证据。",
+          "复核中心节点共享流输出节奏。",
+          "不要扩大 RK3568 parser 补丁面。",
+        ];
       case "ap_fallback_backhaul_degraded":
-        return ["检查 STA 网络和回传路由。", "确认是否进入维护热点模式。", "恢复回传前不要执行高风险远程动作。"];
+        return [
+          "检查 STA 网络和回传路由。",
+          "确认是否进入维护热点模式。",
+          "恢复回传前不要执行高风险远程动作。",
+        ];
       case "publish_backlog_pressure":
-        return ["检查 spool pending 变化趋势。", "确认 MQTT 连接质量。", "观察 publish freshness 是否恢复。"];
+        return [
+          "检查 spool pending 变化趋势。",
+          "确认 MQTT 连接质量。",
+          "观察 publish freshness 是否恢复。",
+        ];
       case "edge_resource_pressure":
-        return ["检查 CPU load、内存、磁盘和温度。", "清理非主链路旧产物或降低旁路服务频率。", "不要因资源压力自动重启 field-gateway。"];
+        return [
+          "检查 CPU load、内存、磁盘和温度。",
+          "清理非主链路旧产物或降低旁路服务频率。",
+          "不要因资源压力自动重启 field-gateway。",
+        ];
       case "healthy_watch":
         return ["保持 Hermes 轻量巡检。", "继续记录 supervision 摘要。"];
       default:
@@ -1064,12 +1256,17 @@ class HermesEdgeSupervisor {
       safeToAutomate: task.safeToAutomate === true,
       automationScope: getString(task, "automationScope") ?? "operator_required",
       evidence: isObject(task.evidence) ? task.evidence : {},
-      operatorAction: getString(task, "operatorAction") ?? "记录证据并等待人工确认。"
+      operatorAction: getString(task, "operatorAction") ?? "记录证据并等待人工确认。",
     }));
   }
 
   private asLevel(value: string | null): Level {
-    if (value === "healthy" || value === "attention" || value === "degraded" || value === "critical") {
+    if (
+      value === "healthy" ||
+      value === "attention" ||
+      value === "degraded" ||
+      value === "critical"
+    ) {
       return value;
     }
     return "attention";

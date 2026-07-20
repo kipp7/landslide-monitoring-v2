@@ -31,6 +31,7 @@ permalink: landslide-monitoring-v2-mainline/docs/integrations/api/readme
 - `docs/integrations/api/013-ai-predictions.md`
 - `docs/integrations/api/014-legacy-device-management.md`
 - `docs/integrations/api/018-desk-ui.md`
+- `docs/integrations/api/019-edge-ai.md`
 
 机器可读契约（实现阶段用于生成 SDK/Mock/校验）：
 

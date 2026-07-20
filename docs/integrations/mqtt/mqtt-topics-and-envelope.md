@@ -18,11 +18,18 @@ permalink: landslide-monitoring-v2-mainline/docs/integrations/mqtt/mqtt-topics-a
   - `cmd/{device_id}`
 - 命令回执（设备 → 平台）
   - `cmd_ack/{device_id}`
+- 边缘风险模型（平台 → RK3568，QoS 1 retained）
+  - `edge/ai/models/landslide-risk/v1`
+- 边缘研判结果（RK3568 → 平台，QoS 1）
+  - `edge/ai/predictions/{device_id}`
 
 说明：
 
 - `device_id` 必须与 MQTT username 一致，便于 ACL 限制“只能发自己”。
 - 主题中不建议包含站点等业务字段，避免设备换绑导致 topic 规则变化。
+- AI topic 只供平台内部账号与 RK3568 Hermes 使用。模型必须先通过结构和
+  SHA-256 校验才能激活，边缘结果使用 `prediction_id` 幂等写入现有
+  `ai_predictions`，不新增数据库。
 
 ## 2. TelemetryEnvelope（JSON，v1）
 

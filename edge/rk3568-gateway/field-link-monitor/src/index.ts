@@ -509,7 +509,8 @@ class FieldLinkMonitor {
           commandForwards: getNumber(node, "commandForwards"),
           ackPublishes: getNumber(node, "ackPublishes"),
           lastTelemetryAgeSeconds: ageSeconds(getString(node, "lastTelemetryTs")),
-          lastAckAgeSeconds: ageSeconds(getString(node, "lastAckTs"))
+          lastAckAgeSeconds: ageSeconds(getString(node, "lastAckTs")),
+          latestTelemetry: getObject(node, "latestTelemetry")
         })
       );
     }

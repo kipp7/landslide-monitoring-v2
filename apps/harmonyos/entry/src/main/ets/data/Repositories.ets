@@ -1,6 +1,6 @@
 import { ApiClient } from './ApiClient';
 import { CacheManager, CacheRead } from './CacheManager';
-import { DashboardSummary, WeeklyTrend, Station, Device, DeviceState, SensorDefinition, SeriesResponse, AlertPage, AlertEventsResponse, PredictionPage, FieldAlarmStatus } from './Types';
+import { DashboardSummary, WeeklyTrend, Station, Device, DeviceState, SensorDefinition, SeriesResponse, AlertPage, AlertEventsResponse, PredictionPage, FieldAlarmStatus, EdgeAiStatus } from './Types';
 
 interface CacheTtlConfig {
   state: number;
@@ -29,6 +29,7 @@ export class MonitoringRepository {
   private deviceListRequests: Map<string, Promise<Array<Device>>> = new Map<string, Promise<Array<Device>>>();
   private alertsRequest: Promise<AlertPage> | null = null;
   private fieldAlarmStatusRequest: Promise<FieldAlarmStatus> | null = null;
+  private edgeAiStatusRequest: Promise<EdgeAiStatus> | null = null;
 
   constructor(api: ApiClient, cache: CacheManager) {
     this.api = api;
@@ -115,6 +116,30 @@ export class MonitoringRepository {
     } finally {
       this.fieldAlarmStatusRequest = null;
     }
+  }
+
+  cachedEdgeAiStatus(): Promise<CacheRead<EdgeAiStatus> | null> {
+    return this.cache.read<EdgeAiStatus>(this.cache.key('/edge-ai/status'), TTL.summary);
+  }
+
+  async edgeAiStatus(): Promise<EdgeAiStatus> {
+    if (this.edgeAiStatusRequest) return this.edgeAiStatusRequest;
+    this.edgeAiStatusRequest = this.fetchEdgeAiStatus();
+    try {
+      return await this.edgeAiStatusRequest;
+    } finally {
+      this.edgeAiStatusRequest = null;
+    }
+  }
+
+  private async fetchEdgeAiStatus(): Promise<EdgeAiStatus> {
+    const value = await this.api.edgeAiStatus();
+    if (value.available) await this.cache.write(this.cache.key('/edge-ai/status'), value);
+    return value;
+  }
+
+  async recheckEdgeAi(): Promise<void> {
+    await this.api.recheckEdgeAi();
   }
 
   cachedState(deviceId: string): Promise<CacheRead<DeviceState> | null> {
@@ -216,6 +241,7 @@ export class MonitoringRepository {
     this.stationListRequest = null;
     this.alertsRequest = null;
     this.fieldAlarmStatusRequest = null;
+    this.edgeAiStatusRequest = null;
     this.deviceListRequests.clear();
     this.stateRequests.clear();
     this.seriesRequests.clear();
