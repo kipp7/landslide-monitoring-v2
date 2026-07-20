@@ -1,5 +1,5 @@
 import http from '@ohos.net.http';
-import { ApiEnvelope, LoginData, UserSummary, DashboardSummary, WeeklyTrend, Station, Device, DeviceState, SensorDefinition, MetricSeries, SeriesResponse, AlertPage, AlertEventsResponse, PredictionPage, FieldAlarmStatus, EdgeAiStatus } from './Types';
+import { ApiEnvelope, LoginData, UserSummary, DashboardSummary, WeeklyTrend, Station, Device, DeviceState, SensorDefinition, MetricSeries, SeriesResponse, AlertPage, AlertEventsResponse, PredictionPage, FieldAlarmStatus, EdgeAiStatus, EdgeAiActionName, EdgeAiActionResponse, EdgeAiActionHistory, EdgeAiIntentResponse } from './Types';
 import { normalizeApiBaseUrl } from './ApiConfig';
 
 export class ApiError extends Error {
@@ -35,8 +35,12 @@ interface PushDeviceRequest {
 }
 
 interface EdgeAiActionRequest {
-  action: string;
+  action: EdgeAiActionName;
   intent?: string;
+}
+
+interface EdgeAiIntentRequest {
+  intent: string;
 }
 
 export class ApiClient {
@@ -231,12 +235,21 @@ export class ApiClient {
     return this.request<EdgeAiStatus>('/edge-ai/status');
   }
 
-  async recheckEdgeAi(): Promise<void> {
+  async edgeAiActions(): Promise<EdgeAiActionHistory> {
+    return this.request<EdgeAiActionHistory>('/edge-ai/actions');
+  }
+
+  async runEdgeAiAction(action: EdgeAiActionName, intent: string): Promise<EdgeAiActionResponse> {
     const body: EdgeAiActionRequest = {
-      action: 'recheck',
-      intent: '移动端请求立即复检当前边缘风险和链路状态'
+      action,
+      intent
     };
-    await this.request<Object>('/edge-ai/actions', http.RequestMethod.POST, body);
+    return this.request<EdgeAiActionResponse>('/edge-ai/actions', http.RequestMethod.POST, body);
+  }
+
+  async runEdgeAiIntent(intent: string): Promise<EdgeAiIntentResponse> {
+    const body: EdgeAiIntentRequest = { intent };
+    return this.request<EdgeAiIntentResponse>('/edge-ai/intents', http.RequestMethod.POST, body);
   }
 
   async refreshSession(): Promise<boolean> {

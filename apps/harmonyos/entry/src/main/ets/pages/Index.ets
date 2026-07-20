@@ -10,7 +10,7 @@ import { AlertAlarmService } from '../data/AlertAlarmService';
 import { DeviceLocationService } from '../data/DeviceLocationService';
 import { AlertStreamClient } from '../data/AlertStreamClient';
 import { PushRegistrationService } from '../data/PushRegistrationService';
-import { Alert, AlertEvent, AlertMapLocation, AlertStreamEvent, DashboardSummary, Device, DeviceState, EdgeAgentTask, EdgeAiStatus, EdgeRiskDevice, EvacuationTarget, MetricSeries, SeriesPoint, SeriesResponse, Station, UserLocationStatus, UserMapLocation, alertStatusLabel, beijingClockTime, deviceConnectivityLabel, deviceDisplayName, deviceSupportsConductivity, deviceTypeLabel, displayMetric, eventTypeLabel, isAlarmActuatorDevice, isDeviceOnline, isOnlineStatus, metricShortLabel, metricUnitLabel, metricValue, numberValue, relativeTime, severityLabel, shortTime, soilConductivityValue, soilMoistureValue, soilTemperatureValue, stationDisplayName, stationNameLabel, stationStatusLabel, userDisplayName } from '../data/Types';
+import { Alert, AlertEvent, AlertMapLocation, AlertStreamEvent, DashboardSummary, Device, DeviceState, EdgeAgentTask, EdgeAiActionName, EdgeAiIntentResolution, EdgeAiStatus, EdgeRiskDevice, EvacuationTarget, HermesAction, MetricSeries, SeriesPoint, SeriesResponse, Station, UserLocationStatus, UserMapLocation, alertStatusLabel, beijingClockTime, deviceConnectivityLabel, deviceDisplayName, deviceSupportsConductivity, deviceTypeLabel, displayMetric, eventTypeLabel, isAlarmActuatorDevice, isDeviceOnline, isOnlineStatus, metricShortLabel, metricUnitLabel, metricValue, numberValue, relativeTime, severityLabel, shortTime, soilConductivityValue, soilMoistureValue, soilTemperatureValue, stationDisplayName, stationNameLabel, stationStatusLabel, userDisplayName } from '../data/Types';
 import { AlertMapView } from '../components/AlertMapView';
 import { ActiveAlertBanner, InAppAlertOverlay } from '../components/InAppAlertOverlay';
 import { MetricCard } from '../components/MetricCard';
@@ -32,7 +32,18 @@ const UI_COLOR_LOGIN_PAGE: string = '#F3F6F4';
 const UI_COLOR_LOGIN_FIELD: string = '#E8EEEB';
 const UI_COLOR_LOGIN_BORDER: string = '#D7E0DC';
 const UI_COLOR_LOGIN_ERROR: string = '#F8EAE6';
+const UI_COLOR_HERMES: string = '#173D32';
+const UI_COLOR_HERMES_SOFT: string = '#EAF1ED';
+const UI_COLOR_HERMES_LINE: string = '#C9D8D0';
 const UI_PAGE_PADDING: number = 16;
+
+function edgeNodeFallbackName(deviceId: string): string {
+  const suffix = deviceId.slice(-4);
+  if (suffix === '0001') return '监测节点 A';
+  if (suffix === '0002') return '监测节点 B';
+  if (suffix === '0003') return '监测节点 C';
+  return `监测节点 ${suffix}`;
+}
 
 interface DeviceMonitoringTrend {
   device: Device;
@@ -67,6 +78,10 @@ struct Index {
   @State private dashboard: DashboardSummary | null = null;
   @State private edgeAiStatus: EdgeAiStatus | null = null;
   @State private edgeAiRefreshing: boolean = false;
+  @State private edgeAiActionBusy: boolean = false;
+  @State private edgeAiActions: Array<HermesAction> = [];
+  @State private edgeAiLastAction: HermesAction | null = null;
+  @State private edgeAiIntentResolution: EdgeAiIntentResolution | null = null;
   @State private overviewTrends: Array<DeviceMonitoringTrend> = [];
   @State private stations: Array<Station> = [];
   @State private devices: Array<Device> = [];
@@ -704,24 +719,82 @@ struct Index {
       if (status.available || !cached) this.edgeAiStatus = status;
     } catch {
       // AI is an optional sidecar; keep its last snapshot without affecting monitoring pages.
-    } finally {
-      this.edgeAiRefreshing = false;
     }
+    try {
+      const history = await repository.edgeAiActions();
+      this.edgeAiActions = history.actions ?? [];
+      if (!this.edgeAiLastAction && this.edgeAiActions.length > 0) {
+        this.edgeAiLastAction = this.edgeAiActions[0];
+      }
+    } catch {
+      // Keep the latest visible task history when the edge action endpoint is interrupted.
+    }
+    this.edgeAiRefreshing = false;
   }
 
   private async recheckEdgeAi(): Promise<void> {
-    if (!this.repository || this.edgeAiRefreshing) return;
-    this.edgeAiRefreshing = true;
+    await this.runEdgeAiAction('recheck', '移动端请求立即复检当前边缘风险和链路状态');
+  }
+
+  private actionIntent(action: EdgeAiActionName): string {
+    if (action === 'collect_logs') return '诊断当前边缘链路并生成只读日志采集计划';
+    if (action === 'generate_report') return '生成当前山体监测与边缘风险态势报告';
+    return '重新研判全部监测节点的当前风险状态';
+  }
+
+  private async refreshEdgeAiAfterAction(repository: MonitoringRepository): Promise<void> {
+    const status = await repository.edgeAiStatus();
+    if (status.available || !this.edgeAiStatus?.available) this.edgeAiStatus = status;
+    try {
+      const history = await repository.edgeAiActions();
+      this.edgeAiActions = history.actions ?? [];
+    } catch {
+      // The completed action remains visible even when history refresh is interrupted.
+    }
+  }
+
+  private async runEdgeAiAction(action: EdgeAiActionName, intent: string = ''): Promise<void> {
+    if (!this.repository || this.edgeAiActionBusy) return;
+    this.edgeAiActionBusy = true;
+    this.edgeAiIntentResolution = null;
     try {
       const repository = this.repository as MonitoringRepository;
-      await repository.recheckEdgeAi();
-      const status = await repository.edgeAiStatus();
-      if (status.available || !this.edgeAiStatus?.available) this.edgeAiStatus = status;
+      const response = await repository.runEdgeAiAction(action, intent.length > 0 ? intent : this.actionIntent(action));
+      this.edgeAiLastAction = response.action;
+      await this.refreshEdgeAiAfterAction(repository);
     } catch (error) {
       this.errorMessage = this.errorText(error);
     } finally {
-      this.edgeAiRefreshing = false;
+      this.edgeAiActionBusy = false;
     }
+  }
+
+  private async runEdgeAiIntent(intent: string): Promise<void> {
+    if (!this.repository || this.edgeAiActionBusy || intent.trim().length === 0) return;
+    this.edgeAiActionBusy = true;
+    try {
+      const repository = this.repository as MonitoringRepository;
+      const response = await repository.runEdgeAiIntent(intent.trim());
+      this.edgeAiIntentResolution = response.resolution;
+      if (response.execution?.action) {
+        this.edgeAiLastAction = response.execution.action;
+        await this.refreshEdgeAiAfterAction(repository);
+      }
+    } catch (error) {
+      this.errorMessage = this.errorText(error);
+    } finally {
+      this.edgeAiActionBusy = false;
+    }
+  }
+
+  private async openEdgeAiDevice(deviceId: string): Promise<void> {
+    for (let index = 0; index < this.devices.length; index++) {
+      if (this.devices[index].deviceId === deviceId) {
+        await this.openDevice(this.devices[index]);
+        return;
+      }
+    }
+    this.errorMessage = '暂未找到该监测节点，请先刷新站点数据';
   }
 
   private refreshStationRealtime(): void {
@@ -1349,9 +1422,16 @@ struct Index {
           } else if (this.screen === 'ai') {
             AiPane({
               status: this.edgeAiStatus,
-              refreshing: this.edgeAiRefreshing,
+              devices: this.devices,
+              actions: this.edgeAiActions,
+              lastAction: this.edgeAiLastAction,
+              intentResolution: this.edgeAiIntentResolution,
+              refreshing: this.edgeAiRefreshing || this.edgeAiActionBusy,
+              executing: this.edgeAiActionBusy,
               onRefresh: () => this.loadEdgeAiStatus(),
-              onRecheck: () => this.recheckEdgeAi()
+              onAction: (action: EdgeAiActionName) => this.runEdgeAiAction(action),
+              onIntent: (intent: string) => this.runEdgeAiIntent(intent),
+              onOpenDevice: (deviceId: string) => this.openEdgeAiDevice(deviceId)
             });
           } else if (this.screen === 'device') {
             DevicePane({
@@ -1969,49 +2049,56 @@ struct OverviewAlertCard {
 @Component
 struct AiPane {
   @Prop status: EdgeAiStatus | null;
+  @Prop devices: Array<Device>;
+  @Prop actions: Array<HermesAction>;
+  @Prop lastAction: HermesAction | null;
+  @Prop intentResolution: EdgeAiIntentResolution | null;
   @Prop refreshing: boolean;
+  @Prop executing: boolean;
   onRefresh: () => void = () => {};
-  onRecheck: () => void = () => {};
+  onAction: (action: EdgeAiActionName) => void = () => {};
+  onIntent: (intent: string) => void = () => {};
+  onOpenDevice: (deviceId: string) => void = () => {};
 
   private subtitle(): string {
-    if (!this.status) return '正在连接边缘研判';
-    if (!this.status.available) return '边缘研判暂不可用 · 保留最近状态';
-    if (this.status.model.loaded) return `模型 ${this.status.model.modelVersion ?? '--'} · ${shortTime(this.status.generatedAt)}`;
-    return '模型正在准备';
-  }
-
-  private bannerText(): string {
-    if (this.refreshing) return '正在同步 AI 研判状态';
-    if (!this.status) return '尚未获取 AI 研判状态';
-    if (!this.status.available) return 'AI 研判暂不可用，最近一次有效状态仍保留';
-    return `边缘链路${this.status.mqttConnected ? '正常' : '离线运行'} · ${this.status.devices.length} 个节点参与研判`;
-  }
-
-  private bannerTone(): string {
-    if (this.refreshing) return UI_COLOR_ACCENT;
-    if (!this.status || !this.status.available) return UI_COLOR_MUTED;
-    if (this.status.overallRiskLevel === 'danger' || this.status.overallRiskLevel === 'warning') return UI_COLOR_DANGER;
-    return UI_COLOR_SUCCESS;
+    if (!this.status) return '正在连接 RK3568 边缘智能';
+    if (!this.status.available) return '边缘智能暂不可用 · 保留最近任务';
+    return `安全执行 · ${this.status.devices.length} 个节点 · ${shortTime(this.status.generatedAt)}`;
   }
 
   build() {
     Column() {
       PageHeader({
-        title: 'AI 研判',
+        title: 'Hermes 智能',
         subtitle: this.subtitle(),
         offline: this.status !== null && !this.status.available,
         refreshing: this.refreshing,
         onRefresh: () => this.onRefresh()
       });
       Scroll() {
-        Column({ space: 12 }) {
-          StatusBanner({ text: this.bannerText(), tone: this.bannerTone() });
-          EdgeAiCard({
+        Column({ space: 18 }) {
+          HermesSituationPanel({
             status: this.status,
-            refreshing: this.refreshing,
-            onRecheck: () => this.onRecheck()
+            devices: this.devices,
+            onOpenDevice: (deviceId: string) => this.onOpenDevice(deviceId)
           });
-          AiRuntimeSummary({ status: this.status });
+          HermesCommandPanel({
+            executing: this.executing,
+            resolution: this.intentResolution,
+            lastAction: this.lastAction,
+            onAction: (action: EdgeAiActionName) => this.onAction(action),
+            onIntent: (intent: string) => this.onIntent(intent)
+          });
+          HermesNodeSection({
+            status: this.status,
+            devices: this.devices,
+            onOpenDevice: (deviceId: string) => this.onOpenDevice(deviceId)
+          });
+          HermesTaskSection({
+            actions: this.actions,
+            fallbackTasks: this.status?.tasks ?? []
+          });
+          HermesRuntimeStrip({ status: this.status });
         }
         .padding({ left: 16, right: 16, bottom: 24 })
         .width('100%')
@@ -2021,78 +2108,26 @@ struct AiPane {
       .align(Alignment.TopStart)
     }
     .layoutWeight(1)
+    .backgroundColor('#F5F7F6')
   }
 }
 
 @Component
-struct AiRuntimeSummary {
+struct HermesSituationPanel {
   @Prop status: EdgeAiStatus | null;
-
-  build() {
-    Column({ space: 9 }) {
-      Text('运行状态')
-        .fontSize(15)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(UI_COLOR_TEXT)
-        .width('100%')
-      Row() {
-        Column({ space: 2 }) {
-          Text(this.status?.model.loaded ? '已加载' : '未就绪')
-            .fontSize(16)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(this.status?.model.loaded ? UI_COLOR_SUCCESS : UI_COLOR_MUTED)
-          Text('模型状态')
-            .fontSize(10)
-            .fontColor(UI_COLOR_MUTED)
-        }
-        .alignItems(HorizontalAlign.Start)
-        .layoutWeight(1)
-        Column({ space: 2 }) {
-          Text(`${this.status?.devices.length ?? 0}`)
-            .fontSize(16)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(UI_COLOR_TEXT)
-          Text('研判节点')
-            .fontSize(10)
-            .fontColor(UI_COLOR_MUTED)
-        }
-        .alignItems(HorizontalAlign.Start)
-        .layoutWeight(1)
-        Column({ space: 2 }) {
-          Text(`${this.status?.pendingUploadCount ?? 0}`)
-            .fontSize(16)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(UI_COLOR_TEXT)
-          Text('待上传研判')
-            .fontSize(10)
-            .fontColor(UI_COLOR_MUTED)
-        }
-        .alignItems(HorizontalAlign.Start)
-        .layoutWeight(1)
-      }
-      .width('100%')
-    }
-    .padding(14)
-    .backgroundColor(UI_COLOR_SURFACE)
-    .borderRadius(8)
-    .width('100%')
-  }
-}
-
-@Component
-struct EdgeAiCard {
-  @Prop status: EdgeAiStatus | null;
-  @Prop refreshing: boolean;
-  onRecheck: () => void = () => {};
+  @Prop devices: Array<Device>;
+  onOpenDevice: (deviceId: string) => void = () => {};
 
   private primaryDevice(): EdgeRiskDevice | null {
     if (!this.status || this.status.devices.length === 0) return null;
     return this.status.devices[0];
   }
 
-  private latestTask(): EdgeAgentTask | null {
-    if (!this.status || this.status.tasks.length === 0) return null;
-    return this.status.tasks[0];
+  private deviceLabel(deviceId: string): string {
+    for (let index = 0; index < this.devices.length; index++) {
+      if (this.devices[index].deviceId === deviceId) return deviceDisplayName(this.devices[index]);
+    }
+    return edgeNodeFallbackName(deviceId);
   }
 
   private riskLabel(): string {
@@ -2100,157 +2135,591 @@ struct EdgeAiCard {
     if (level === 'danger') return '危险';
     if (level === 'warning') return '预警';
     if (level === 'attention') return '关注';
-    if (level === 'normal') return '正常';
-    return '准备中';
+    if (level === 'normal') return '平稳';
+    return '待连接';
   }
 
-  private riskColor(): string {
-    const level = this.status?.overallRiskLevel ?? 'unavailable';
-    if (level === 'danger') return '#B44832';
-    if (level === 'warning') return '#D46B2E';
-    if (level === 'attention') return '#A06A18';
-    if (level === 'normal') return '#3C9D82';
-    return '#7A858F';
-  }
-
-  private scoreText(): string {
-    const score = this.status?.maxRiskScore;
-    if (score === undefined || score === null) return '--';
-    return `${Math.round(score * 100)}%`;
+  private headline(): string {
+    const device = this.primaryDevice();
+    if (!this.status?.available) return '等待边缘侧恢复实时研判';
+    if (device?.hardRuleTriggered) return `${this.deviceLabel(device.deviceId)}触发安全阈值`;
+    if (device) return device.explain;
+    return 'Hermes 正在建立当前态势';
   }
 
   private recommendation(): string {
     const level = this.status?.overallRiskLevel ?? 'unavailable';
-    if (level === 'danger') return '已触发安全阈值，请立即按现场预案处置';
-    if (level === 'warning') return '建议提高监测频率并准备现场复核';
-    if (level === 'attention') return '建议持续观察倾角、GPS 与土壤变化';
-    if (level === 'normal') return '监测数据平稳，系统正在持续巡检';
-    return '研判服务正在连接，请稍后复检';
+    if (level === 'danger') return '立即核对现场告警与人员安全，保持物理处置由规则引擎和人工确认。';
+    if (level === 'warning') return '提高监测频率，复核主要风险因素并准备现场处置。';
+    if (level === 'attention') return '持续观察倾角、GPS 与土壤变化，关注风险是否继续上升。';
+    if (level === 'normal') return '三个节点持续参与研判，当前无需新增现场动作。';
+    return '最近一次有效任务仍保留，监测主链路不受影响。';
   }
 
-  private factorsText(): string {
-    const device = this.primaryDevice();
-    if (!device || device.factors.length === 0) return '';
-    return `主要因素 · ${device.factors.join(' · ')}`;
+  private scoreText(): string {
+    const score = this.status?.maxRiskScore;
+    return score === undefined || score === null ? '--' : `${Math.round(score * 100)}%`;
   }
 
-  private dataTimeText(): string {
-    const device = this.primaryDevice();
-    const updatedAt = device?.dataUpdatedAt;
-    if (!updatedAt) return '尚无研判数据';
-    if (device?.dataStatus === 'offline') return `设备离线 · 最后数据 ${shortTime(updatedAt)}`;
-    if (device?.dataStatus === 'stale') return `数据延迟 · 更新于 ${shortTime(updatedAt)}`;
-    if (device?.dataStatus === 'insufficient') return `数据不足 · 更新于 ${shortTime(updatedAt)}`;
-    return `实时数据 · 更新于 ${shortTime(updatedAt)}`;
+  build() {
+    Column({ space: 14 }) {
+      Row() {
+        Row({ space: 7 }) {
+          Circle({ width: 8, height: 8 })
+            .fill(this.status?.available ? '#75D3B7' : '#AAB5AF')
+          Text('HERMES · 边缘态势')
+            .fontSize(11)
+            .fontWeight(FontWeight.Medium)
+            .fontColor('#DDEAE4')
+        }
+        .layoutWeight(1)
+        Text(this.riskLabel())
+          .fontSize(12)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(this.status?.overallRiskLevel === 'danger' ? '#FFE0D6' : '#EAF4EF')
+      }
+      .width('100%')
+
+      Text(this.headline())
+        .fontSize(21)
+        .fontWeight(FontWeight.Bold)
+        .fontColor('#F4F8F6')
+        .lineHeight(29)
+        .maxLines(3)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+        .width('100%')
+
+      Text(this.recommendation())
+        .fontSize(12)
+        .fontColor('#C8D9D1')
+        .lineHeight(19)
+        .width('100%')
+
+      Row({ space: 8 }) {
+        Text(`风险 ${this.scoreText()}`)
+          .fontSize(10)
+          .fontWeight(FontWeight.Medium)
+          .fontColor('#173D32')
+          .backgroundColor('#DDECE5')
+          .borderRadius(5)
+          .padding({ left: 9, right: 9, top: 5, bottom: 5 })
+        Text(this.status?.mqttConnected ? '链路在线' : '离线研判')
+          .fontSize(10)
+          .fontColor('#DDEAE4')
+          .backgroundColor('#285648')
+          .borderRadius(5)
+          .padding({ left: 9, right: 9, top: 5, bottom: 5 })
+        Blank()
+        if (this.primaryDevice()) {
+          Button('查看节点')
+            .height(34)
+            .fontSize(11)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(UI_COLOR_HERMES)
+            .backgroundColor('#F2F7F4')
+            .borderRadius(6)
+            .onClick(() => this.onOpenDevice((this.primaryDevice() as EdgeRiskDevice).deviceId))
+        }
+      }
+      .width('100%')
+    }
+    .padding(16)
+    .backgroundColor(UI_COLOR_HERMES)
+    .borderRadius(10)
+    .width('100%')
   }
+}
+
+@Component
+struct HermesCommandPanel {
+  @Prop executing: boolean;
+  @Prop resolution: EdgeAiIntentResolution | null;
+  @Prop lastAction: HermesAction | null;
+  @State private intentText: string = '';
+  onAction: (action: EdgeAiActionName) => void = () => {};
+  onIntent: (intent: string) => void = () => {};
+
+  private submitIntent(): void {
+    const value = this.intentText.trim();
+    if (value.length === 0 || this.executing) return;
+    this.onIntent(value);
+  }
+
+  private feedbackColor(): string {
+    if (this.resolution?.blocked) return UI_COLOR_DANGER;
+    if (this.resolution?.resolved) return UI_COLOR_SUCCESS;
+    return '#A06A18';
+  }
+
+  private actionPlan(): Array<string> {
+    return this.lastAction?.result.recommendedPlan ?? [];
+  }
+
+  build() {
+    Column({ space: 11 }) {
+      Row() {
+        Text('交给 Hermes')
+          .fontSize(17)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(UI_COLOR_TEXT)
+        .layoutWeight(1)
+        Text(this.executing ? '执行中' : '只读安全模式')
+          .fontSize(10)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.executing ? UI_COLOR_ACCENT : UI_COLOR_HERMES)
+          .backgroundColor(this.executing ? '#F7ECE6' : UI_COLOR_HERMES_SOFT)
+          .borderRadius(5)
+          .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+      }
+      .width('100%')
+
+      Row({ space: 8 }) {
+        TextInput({ text: this.intentText, placeholder: '询问风险，或安排一项安全任务' })
+          .height(44)
+          .fontSize(13)
+          .fontColor(UI_COLOR_TEXT)
+          .placeholderColor(UI_COLOR_SUBTLE)
+          .caretColor(UI_COLOR_HERMES)
+          .backgroundColor(UI_COLOR_SURFACE)
+          .border({ width: 1, color: UI_COLOR_HERMES_LINE })
+          .borderRadius(7)
+          .padding({ left: 12, right: 12 })
+          .onChange((value: string) => this.intentText = value)
+          .enabled(!this.executing)
+          .layoutWeight(1)
+        Button({ type: ButtonType.Circle }) {
+          if (this.executing) {
+            LoadingProgress().width(18).height(18).color('#FFFFFF')
+          } else {
+            SymbolGlyph($r('sys.symbol.chevron_right'))
+              .fontSize(19)
+              .fontColor(['#FFFFFF'])
+          }
+        }
+        .width(44)
+        .height(44)
+        .backgroundColor(UI_COLOR_HERMES)
+        .enabled(!this.executing && this.intentText.trim().length > 0)
+        .accessibilityText('提交 Hermes 任务')
+        .onClick(() => this.submitIntent())
+      }
+      .width('100%')
+
+      Row({ space: 7 }) {
+        HermesQuickAction({
+          label: '重新研判',
+          action: 'recheck',
+          actionEnabled: !this.executing,
+          onAction: (action: EdgeAiActionName) => this.onAction(action)
+        });
+        HermesQuickAction({
+          label: '生成报告',
+          action: 'generate_report',
+          actionEnabled: !this.executing,
+          onAction: (action: EdgeAiActionName) => this.onAction(action)
+        });
+        HermesQuickAction({
+          label: '诊断链路',
+          action: 'collect_logs',
+          actionEnabled: !this.executing,
+          onAction: (action: EdgeAiActionName) => this.onAction(action)
+        });
+      }
+      .width('100%')
+
+      if (this.resolution) {
+        Row({ space: 8 }) {
+          Circle({ width: 8, height: 8 }).fill(this.feedbackColor())
+          Text(this.resolution?.reason ?? '')
+            .fontSize(11)
+            .fontColor(this.feedbackColor())
+            .layoutWeight(1)
+        }
+        .padding({ left: 11, right: 11, top: 9, bottom: 9 })
+        .backgroundColor(this.resolution?.blocked ? '#F8EAE6' : '#F1F5F2')
+        .borderRadius(7)
+        .width('100%')
+      }
+
+      if (this.lastAction) {
+        Column({ space: 7 }) {
+          Row() {
+            Text(this.lastAction?.summary ?? '')
+              .fontSize(12)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(UI_COLOR_TEXT)
+              .layoutWeight(1)
+            Text(shortTime(this.lastAction?.createdAt ?? ''))
+              .fontSize(9)
+              .fontColor(UI_COLOR_SUBTLE)
+          }
+          .width('100%')
+          if (this.actionPlan().length > 0) {
+            ForEach(this.actionPlan().slice(0, 3), (item: string) => {
+              Row({ space: 7 }) {
+                Circle({ width: 5, height: 5 }).fill(UI_COLOR_HERMES)
+                Text(item)
+                  .fontSize(10)
+                  .fontColor(UI_COLOR_MUTED)
+                  .layoutWeight(1)
+              }
+            })
+          } else if (this.lastAction?.result.note) {
+            Text(this.lastAction.result.note)
+              .fontSize(10)
+              .fontColor(UI_COLOR_MUTED)
+              .width('100%')
+          }
+          Text('已执行 · 已记录 · 未触碰网关核心')
+            .fontSize(9)
+            .fontColor(UI_COLOR_SUCCESS)
+            .width('100%')
+        }
+        .padding(12)
+        .backgroundColor(UI_COLOR_SURFACE)
+        .borderRadius(8)
+        .width('100%')
+      }
+    }
+    .padding({ top: 2 })
+    .width('100%')
+  }
+}
+
+@Component
+struct HermesQuickAction {
+  @Prop label: string;
+  @Prop action: EdgeAiActionName;
+  @Prop actionEnabled: boolean;
+  onAction: (action: EdgeAiActionName) => void = () => {};
+
+  build() {
+    Button(this.label)
+      .height(36)
+      .fontSize(11)
+      .fontWeight(FontWeight.Medium)
+      .fontColor(UI_COLOR_HERMES)
+      .backgroundColor(UI_COLOR_HERMES_SOFT)
+      .borderRadius(6)
+      .enabled(this.actionEnabled)
+      .layoutWeight(1)
+      .onClick(() => this.onAction(this.action))
+  }
+}
+
+@Component
+struct HermesNodeSection {
+  @Prop status: EdgeAiStatus | null;
+  @Prop devices: Array<Device>;
+  onOpenDevice: (deviceId: string) => void = () => {};
 
   build() {
     Column({ space: 10 }) {
       Row() {
-        Column({ space: 2 }) {
-          Text('AI 边缘研判')
-            .fontSize(16)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(UI_COLOR_TEXT)
-          Text(this.status?.model.loaded
-            ? `模型 ${this.status.model.modelVersion ?? '--'} · ${this.status.mqttConnected ? '链路正常' : '离线运行'}`
-            : '模型尚未就绪')
-            .fontSize(10)
-            .fontColor(UI_COLOR_MUTED)
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-        }
-        .alignItems(HorizontalAlign.Start)
-        .layoutWeight(1)
-        Text(this.riskLabel())
-          .fontSize(12)
-          .fontWeight(FontWeight.Medium)
-          .fontColor('#FFFFFF')
-          .backgroundColor(this.riskColor())
-          .borderRadius(5)
-          .padding({ left: 10, right: 10, top: 5, bottom: 5 })
-      }
-      .width('100%')
-
-      Row() {
-        Column({ space: 2 }) {
-          Text(this.scoreText())
-            .fontSize(25)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(UI_COLOR_TEXT)
-          Text('综合风险')
-            .fontSize(10)
-            .fontColor(UI_COLOR_MUTED)
-        }
-        .alignItems(HorizontalAlign.Start)
-        .width('28%')
-        Column({ space: 3 }) {
-          Text(this.primaryDevice()?.explain ?? this.recommendation())
-            .fontSize(12)
-            .fontColor(UI_COLOR_TEXT)
-            .maxLines(2)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-          Text(this.dataTimeText())
-            .fontSize(10)
-            .fontColor(UI_COLOR_MUTED)
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-        }
-        .alignItems(HorizontalAlign.Start)
-        .layoutWeight(1)
-      }
-      .width('100%')
-
-      if (this.factorsText().length > 0) {
-        Text(this.factorsText())
+        Text('节点研判')
+          .fontSize(17)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(UI_COLOR_TEXT)
+          .layoutWeight(1)
+        Text(`${this.status?.devices.length ?? 0} 个节点`)
           .fontSize(10)
-          .fontColor(this.riskColor())
-          .maxLines(2)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-          .width('100%')
+          .fontColor(UI_COLOR_MUTED)
       }
-
-      Row({ space: 8 }) {
-        Column({ space: 2 }) {
-          Text(this.latestTask()?.title ?? '自主任务待命')
+      .width('100%')
+      Column() {
+        if (!this.status || this.status.devices.length === 0) {
+          Text('等待节点遥测进入边缘研判')
             .fontSize(11)
-            .fontWeight(FontWeight.Medium)
-            .fontColor(UI_COLOR_TEXT)
-          Text(this.latestTask()?.verification ?? `待上传 ${this.status?.pendingUploadCount ?? 0} 条`)
-            .fontSize(9)
             .fontColor(UI_COLOR_MUTED)
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-        }
-        .alignItems(HorizontalAlign.Start)
-        .layoutWeight(1)
-        Button({ type: ButtonType.Normal }) {
-          Row({ space: 4 }) {
-            if (this.refreshing) {
-              LoadingProgress().width(14).height(14).color(UI_COLOR_ACCENT)
-            } else {
-              SymbolGlyph($r('sys.symbol.arrow_clockwise'))
-                .fontSize(15)
-                .fontColor([UI_COLOR_ACCENT])
+            .padding(14)
+            .width('100%')
+        } else {
+          ForEach(this.status.devices, (risk: EdgeRiskDevice, index: number) => {
+            HermesNodeRow({
+              risk: risk,
+              devices: this.devices,
+              onOpen: (deviceId: string) => this.onOpenDevice(deviceId)
+            });
+            if (index < (this.status?.devices.length ?? 0) - 1) {
+              Divider().strokeWidth(1).color('#E8ECEA').margin({ left: 14, right: 14 })
             }
-            Text('复检')
-              .fontSize(11)
-              .fontWeight(FontWeight.Medium)
-              .fontColor(UI_COLOR_ACCENT)
-          }
+          }, (risk: EdgeRiskDevice) => risk.deviceId)
         }
-        .height(34)
-        .padding({ left: 10, right: 10 })
-        .borderRadius(6)
-        .backgroundColor('#F7ECE6')
-        .enabled(!this.refreshing)
-        .onClick(() => this.onRecheck())
       }
+      .backgroundColor(UI_COLOR_SURFACE)
+      .borderRadius(9)
       .width('100%')
     }
-    .padding(14)
-    .backgroundColor(UI_COLOR_SURFACE)
-    .borderRadius(8)
+    .width('100%')
+  }
+}
+
+@Component
+struct HermesNodeRow {
+  @Prop risk: EdgeRiskDevice;
+  @Prop devices: Array<Device>;
+  onOpen: (deviceId: string) => void = () => {};
+
+  private deviceLabel(): string {
+    for (let index = 0; index < this.devices.length; index++) {
+      if (this.devices[index].deviceId === this.risk.deviceId) return deviceDisplayName(this.devices[index]);
+    }
+    return edgeNodeFallbackName(this.risk.deviceId);
+  }
+
+  private riskLabel(): string {
+    if (this.risk.riskLevel === 'danger') return '危险';
+    if (this.risk.riskLevel === 'warning') return '预警';
+    if (this.risk.riskLevel === 'attention') return '关注';
+    return '平稳';
+  }
+
+  private riskColor(): string {
+    if (this.risk.riskLevel === 'danger') return UI_COLOR_DANGER;
+    if (this.risk.riskLevel === 'warning') return '#D46B2E';
+    if (this.risk.riskLevel === 'attention') return '#A06A18';
+    return UI_COLOR_SUCCESS;
+  }
+
+  private dataLabel(): string {
+    if (this.risk.dataStatus === 'offline') return '离线数据';
+    if (this.risk.dataStatus === 'stale') return '数据延迟';
+    if (this.risk.dataStatus === 'insufficient') return '数据不足';
+    return '实时';
+  }
+
+  private factorText(): string {
+    const value = this.risk.factors.length > 0 ? this.risk.factors[0] : this.risk.explain;
+    return value.replace('deg', '°');
+  }
+
+  build() {
+    Row({ space: 11 }) {
+      Column({ space: 3 }) {
+        Text(this.deviceLabel())
+          .fontSize(13)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(UI_COLOR_TEXT)
+        Text(this.factorText())
+          .fontSize(10)
+          .fontColor(UI_COLOR_MUTED)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+        Text(`${this.dataLabel()} · ${this.risk.dataUpdatedAt ? shortTime(this.risk.dataUpdatedAt) : '尚无数据'}`)
+          .fontSize(9)
+          .fontColor(UI_COLOR_SUBTLE)
+      }
+      .alignItems(HorizontalAlign.Start)
+      .layoutWeight(1)
+      Column({ space: 3 }) {
+        Text(this.riskLabel())
+          .fontSize(10)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(this.riskColor())
+        Text(`${Math.round(this.risk.riskScore * 100)}%`)
+          .fontSize(12)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(UI_COLOR_TEXT)
+      }
+      .alignItems(HorizontalAlign.End)
+      SymbolGlyph($r('sys.symbol.chevron_right'))
+        .fontSize(16)
+        .fontColor([UI_COLOR_SUBTLE])
+    }
+    .padding({ left: 14, right: 12, top: 12, bottom: 12 })
+    .width('100%')
+    .onClick(() => this.onOpen(this.risk.deviceId))
+  }
+}
+
+@Component
+struct HermesTaskSection {
+  @Prop actions: Array<HermesAction>;
+  @Prop fallbackTasks: Array<EdgeAgentTask>;
+
+  build() {
+    Column({ space: 10 }) {
+      Row() {
+        Text('任务轨迹')
+          .fontSize(17)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(UI_COLOR_TEXT)
+          .layoutWeight(1)
+        Text('发现 · 执行 · 验证')
+          .fontSize(10)
+          .fontColor(UI_COLOR_MUTED)
+      }
+      .width('100%')
+      if (this.actions.length > 0) {
+        ForEach(this.actions.slice(0, 5), (action: HermesAction, index: number) => {
+          HermesActionTimelineRow({
+            action: action,
+            last: index === Math.min(this.actions.length, 5) - 1
+          });
+        }, (action: HermesAction) => action.id)
+      } else if (this.fallbackTasks.length > 0) {
+        ForEach(this.fallbackTasks.slice(0, 4), (task: EdgeAgentTask, index: number) => {
+          HermesPredictionTimelineRow({
+            task: task,
+            last: index === Math.min(this.fallbackTasks.length, 4) - 1
+          });
+        }, (task: EdgeAgentTask) => task.taskId)
+      } else {
+        Text('Hermes 正在等待下一项安全任务')
+          .fontSize(11)
+          .fontColor(UI_COLOR_MUTED)
+          .padding({ top: 8, bottom: 8 })
+          .width('100%')
+      }
+    }
+    .width('100%')
+  }
+}
+
+@Component
+struct HermesActionTimelineRow {
+  @Prop action: HermesAction;
+  @Prop last: boolean;
+
+  private actionLabel(): string {
+    if (this.action.action === 'collect_logs') return '链路诊断';
+    if (this.action.action === 'generate_report') return '态势报告';
+    return '风险复检';
+  }
+
+  build() {
+    Row({ space: 10 }) {
+      Column() {
+        Circle({ width: 10, height: 10 }).fill(UI_COLOR_SUCCESS)
+        if (!this.last) {
+          Rect().width(2).height(42).fill(UI_COLOR_HERMES_LINE)
+        }
+      }
+      .width(12)
+      .alignItems(HorizontalAlign.Center)
+      Column({ space: 3 }) {
+        Row() {
+          Text(this.actionLabel())
+            .fontSize(12)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(UI_COLOR_TEXT)
+            .layoutWeight(1)
+          Text(shortTime(this.action.createdAt))
+            .fontSize(9)
+            .fontColor(UI_COLOR_SUBTLE)
+        }
+        .width('100%')
+        Text(this.action.summary)
+          .fontSize(10)
+          .fontColor(UI_COLOR_MUTED)
+          .maxLines(2)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+        Text('验证完成 · 操作已留痕')
+          .fontSize(9)
+          .fontColor(UI_COLOR_SUCCESS)
+      }
+      .padding({ bottom: this.last ? 0 : 8 })
+      .layoutWeight(1)
+    }
+    .alignItems(VerticalAlign.Top)
+    .width('100%')
+  }
+}
+
+@Component
+struct HermesPredictionTimelineRow {
+  @Prop task: EdgeAgentTask;
+  @Prop last: boolean;
+
+  build() {
+    Row({ space: 10 }) {
+      Column() {
+        Circle({ width: 10, height: 10 }).fill(this.task.status === 'completed' ? UI_COLOR_SUCCESS : UI_COLOR_ACCENT)
+        if (!this.last) {
+          Rect().width(2).height(42).fill(UI_COLOR_HERMES_LINE)
+        }
+      }
+      .width(12)
+      .alignItems(HorizontalAlign.Center)
+      Column({ space: 3 }) {
+        Row() {
+          Text(this.task.title)
+            .fontSize(12)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(UI_COLOR_TEXT)
+            .layoutWeight(1)
+          Text(shortTime(this.task.createdAt))
+            .fontSize(9)
+            .fontColor(UI_COLOR_SUBTLE)
+        }
+        .width('100%')
+        Text(this.task.verification)
+          .fontSize(10)
+          .fontColor(UI_COLOR_MUTED)
+          .maxLines(2)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+      }
+      .padding({ bottom: this.last ? 0 : 8 })
+      .layoutWeight(1)
+    }
+    .alignItems(VerticalAlign.Top)
+    .width('100%')
+  }
+}
+
+@Component
+struct HermesRuntimeStrip {
+  @Prop status: EdgeAiStatus | null;
+
+  build() {
+    Row() {
+      Column({ space: 2 }) {
+        Text(this.status?.model.loaded ? '就绪' : '准备中')
+          .fontSize(14)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(this.status?.model.loaded ? UI_COLOR_SUCCESS : UI_COLOR_MUTED)
+        Text('风险模型')
+          .fontSize(9)
+          .fontColor(UI_COLOR_MUTED)
+      }
+      .alignItems(HorizontalAlign.Start)
+      .layoutWeight(1)
+      Column({ space: 2 }) {
+        Text(`${this.status?.devices.length ?? 0}`)
+          .fontSize(14)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(UI_COLOR_TEXT)
+        Text('研判节点')
+          .fontSize(9)
+          .fontColor(UI_COLOR_MUTED)
+      }
+      .alignItems(HorizontalAlign.Start)
+      .layoutWeight(1)
+      Column({ space: 2 }) {
+        Text(`${this.status?.pendingUploadCount ?? 0}`)
+          .fontSize(14)
+          .fontWeight(FontWeight.Bold)
+          .fontColor((this.status?.pendingUploadCount ?? 0) > 0 ? UI_COLOR_ACCENT : UI_COLOR_TEXT)
+        Text('待回传')
+          .fontSize(9)
+          .fontColor(UI_COLOR_MUTED)
+      }
+      .alignItems(HorizontalAlign.Start)
+      .layoutWeight(1)
+      Column({ space: 2 }) {
+        Text(this.status?.mqttConnected ? '在线' : '离线')
+          .fontSize(14)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(this.status?.mqttConnected ? UI_COLOR_SUCCESS : UI_COLOR_DANGER)
+        Text('边缘链路')
+          .fontSize(9)
+          .fontColor(UI_COLOR_MUTED)
+      }
+      .alignItems(HorizontalAlign.Start)
+      .layoutWeight(1)
+    }
+    .padding({ top: 13, bottom: 13 })
+    .border({ width: { top: 1, bottom: 1 }, color: UI_COLOR_HERMES_LINE })
     .width('100%')
   }
 }
