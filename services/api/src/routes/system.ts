@@ -9,6 +9,7 @@ import { requirePermission, type AdminAuthConfig } from "../authz";
 import { fail, ok } from "../http";
 import type { PgPool } from "../postgres";
 import { queryOne, withPgClient } from "../postgres";
+import { beijingStartOfDayUtc } from "../time";
 
 async function checkClickhouse(ch: ClickHouseClient): Promise<{ status: string; error?: string }> {
   try {
@@ -36,13 +37,6 @@ function utcStartOfDay(d: Date): Date {
   const x = new Date(d.getTime());
   x.setUTCHours(0, 0, 0, 0);
   return x;
-}
-
-function beijingStartOfDayUtc(d: Date): Date {
-  const beijingOffsetMs = 8 * 60 * 60 * 1000;
-  const local = new Date(d.getTime() + beijingOffsetMs);
-  local.setUTCHours(0, 0, 0, 0);
-  return new Date(local.getTime() - beijingOffsetMs);
 }
 
 function utcTomorrowStart(d: Date): Date {
@@ -1055,18 +1049,18 @@ async function queryTodayDataCount(
       return res.rows.map((row) => row.device_id);
     });
     if (formalIds.length === 0) return 0;
-    const quotedIds = formalIds.map((deviceId) => `'${deviceId}'`).join(",");
     const res = await ch.query({
       query: `
-        SELECT count()::UInt64 AS c
+        SELECT toUInt64(count()) AS c
         FROM ${config.clickhouseDatabase}.${config.clickhouseTable}
-        WHERE received_ts >= {start:DateTime64(3, 'UTC')}
-          AND received_ts < {end:DateTime64(3, 'UTC')}
-          AND device_id IN (${quotedIds})
+        WHERE received_ts >= toDateTime64({start:String}, 3, 'UTC')
+          AND received_ts < toDateTime64({end:String}, 3, 'UTC')
+          AND device_id IN {deviceIds:Array(String)}
       `,
       query_params: {
         start: toClickhouseDateTime64Utc(start),
-        end: toClickhouseDateTime64Utc(end)
+        end: toClickhouseDateTime64Utc(end),
+        deviceIds: formalIds
       },
       format: "JSONEachRow"
     });
