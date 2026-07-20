@@ -6,6 +6,7 @@ import { requirePermission, type AdminAuthConfig } from "../authz";
 import { fail, ok } from "../http";
 import type { PgPool } from "../postgres";
 import { queryOne, withPgClient } from "../postgres";
+import { beijingStartOfDayUtc } from "../time";
 
 const deviceIdSchema = z.string().uuid();
 
@@ -97,12 +98,6 @@ function intervalSeconds(interval: "1m" | "5m" | "1h" | "1d"): number {
   return 86400;
 }
 
-function utcStartOfDay(d: Date): Date {
-  const x = new Date(d.getTime());
-  x.setUTCHours(0, 0, 0, 0);
-  return x;
-}
-
 function toClickhouseDateTime64Utc(d: Date): string {
   // ClickHouse DateTime64 text format: "YYYY-MM-DD HH:MM:SS.mmm" (no trailing "Z", no "T")
   return d.toISOString().replace("T", " ").replace("Z", "");
@@ -124,19 +119,22 @@ async function queryTodayTelemetryCountForDevice(
   config: AppConfig,
   ch: ClickHouseClient,
   deviceId: string,
-  start: Date
+  start: Date,
+  end: Date
 ): Promise<number> {
   try {
     const result = await ch.query({
       query: `
-        SELECT count()::UInt64 AS c
+        SELECT toUInt64(count()) AS c
         FROM ${config.clickhouseDatabase}.${config.clickhouseTable}
         WHERE device_id = {deviceId:String}
-          AND received_ts >= {start:DateTime64(3, 'UTC')}
+          AND received_ts >= toDateTime64({start:String}, 3, 'UTC')
+          AND received_ts < toDateTime64({end:String}, 3, 'UTC')
       `,
       query_params: {
         deviceId,
-        start: toClickhouseDateTime64Utc(start)
+        start: toClickhouseDateTime64Utc(start),
+        end: toClickhouseDateTime64Utc(end)
       },
       format: "JSONEachRow"
     });
@@ -165,7 +163,8 @@ export function registerDataRoutes(
       return;
     }
     const deviceId = parseId.data;
-    const todayDataCount = await queryTodayTelemetryCountForDevice(config, ch, deviceId, utcStartOfDay(new Date()));
+    const now = new Date();
+    const todayDataCount = await queryTodayTelemetryCountForDevice(config, ch, deviceId, beijingStartOfDayUtc(now), now);
 
     if (pg) {
       const row = await withPgClient(pg, async (client) =>
