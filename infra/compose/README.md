@@ -57,6 +57,8 @@ permalink: landslide-monitoring-v2-mainline/infra/compose/readme
 
 该 Worker 限制为 `0.5 CPU / 384 MB`，训练查询限制单线程、30 秒和 256 MB；停止它不会停止 Kafka、ClickHouse、遥测写入或规则引擎。详细边界见 `docs/system/EDGE_AI_RUNBOOK.md`。
 
+如果生产服务器保留的是不可整体替换的部署快照，先加载已验证镜像，再单独使用 `docker-compose.edge-ai.runtime.yml` 接入现有 Docker 网络。该运行清单不会定义或重建任何核心容器。
+
 5. 初始化数据库（首次启动后执行一次）：
 
    - PostgreSQL：`powershell -ExecutionPolicy Bypass -File infra/compose/scripts/init-postgres.ps1`

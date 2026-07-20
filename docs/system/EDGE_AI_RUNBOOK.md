@@ -26,6 +26,23 @@
 Rollback is limited to stopping `ai-prediction-worker`. No database migration
 or data rollback is required.
 
+For a production server that keeps an immutable private Compose snapshot, load
+the already verified image and use only
+`infra/compose/docker-compose.edge-ai.runtime.yml`. This runtime file joins the
+existing `${EDGE_AI_DOCKER_NETWORK}` and does not redefine API, ingest,
+telemetry writer, rule engine or command services:
+
+```bash
+docker compose \
+  -f infra/compose/docker-compose.edge-ai.runtime.yml \
+  --env-file /path/to/production.env \
+  --profile edge-ai up -d ai-prediction-worker
+```
+
+Set `EDGE_AI_DOCKER_NETWORK` when the production project's default network is
+not `lsmv2-production_default`. Stop the same service with `docker compose stop`
+to roll back.
+
 ## RK3568 rollout
 
 1. Preserve the current Hermes environment file and service unit.
