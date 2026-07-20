@@ -36,6 +36,17 @@ jobs:
       - name: Lint edge services
         run: npm run edge:lint
 
+      - name: Test edge risk isolation
+        run: |
+          npm test -w @lsmv2/edge-risk-model
+          npm test -w @lsmv2/hermes-edge-supervisor
+
+      - name: Test server edge AI integration
+        run: |
+          npm run lint -w @lsmv2/ai-prediction-worker
+          npm test -w @lsmv2/ai-prediction-worker
+          npm test -w @lsmv2/api-service
+
   windows-shell:
     name: Windows Shell
     runs-on: windows-latest

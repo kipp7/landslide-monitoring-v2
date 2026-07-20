@@ -10,7 +10,7 @@ import { AlertAlarmService } from '../data/AlertAlarmService';
 import { DeviceLocationService } from '../data/DeviceLocationService';
 import { AlertStreamClient } from '../data/AlertStreamClient';
 import { PushRegistrationService } from '../data/PushRegistrationService';
-import { Alert, AlertEvent, AlertMapLocation, AlertStreamEvent, DashboardSummary, Device, DeviceState, EvacuationTarget, MetricSeries, SeriesPoint, SeriesResponse, Station, UserLocationStatus, UserMapLocation, alertStatusLabel, deviceConnectivityLabel, deviceDisplayName, deviceSupportsConductivity, deviceTypeLabel, displayMetric, eventTypeLabel, isAlarmActuatorDevice, isDeviceOnline, isOnlineStatus, metricShortLabel, metricUnitLabel, metricValue, numberValue, relativeTime, severityLabel, shortTime, soilConductivityValue, soilMoistureValue, soilTemperatureValue, stationDisplayName, stationNameLabel, stationStatusLabel, userDisplayName } from '../data/Types';
+import { Alert, AlertEvent, AlertMapLocation, AlertStreamEvent, DashboardSummary, Device, DeviceState, EdgeAgentTask, EdgeAiStatus, EdgeRiskDevice, EvacuationTarget, MetricSeries, SeriesPoint, SeriesResponse, Station, UserLocationStatus, UserMapLocation, alertStatusLabel, beijingClockTime, deviceConnectivityLabel, deviceDisplayName, deviceSupportsConductivity, deviceTypeLabel, displayMetric, eventTypeLabel, isAlarmActuatorDevice, isDeviceOnline, isOnlineStatus, metricShortLabel, metricUnitLabel, metricValue, numberValue, relativeTime, severityLabel, shortTime, soilConductivityValue, soilMoistureValue, soilTemperatureValue, stationDisplayName, stationNameLabel, stationStatusLabel, userDisplayName } from '../data/Types';
 import { AlertMapView } from '../components/AlertMapView';
 import { ActiveAlertBanner, InAppAlertOverlay } from '../components/InAppAlertOverlay';
 import { MetricCard } from '../components/MetricCard';
@@ -65,6 +65,8 @@ struct Index {
   @State private connectionState: string = 'unknown';
   @State private connectionUpdatedAt: string = '尚未请求';
   @State private dashboard: DashboardSummary | null = null;
+  @State private edgeAiStatus: EdgeAiStatus | null = null;
+  @State private edgeAiRefreshing: boolean = false;
   @State private overviewTrends: Array<DeviceMonitoringTrend> = [];
   @State private stations: Array<Station> = [];
   @State private devices: Array<Device> = [];
@@ -254,6 +256,8 @@ struct Index {
   private resetMonitoringData(): void {
     this.clearInAppAlerts();
     this.dashboard = null;
+    this.edgeAiStatus = null;
+    this.edgeAiRefreshing = false;
     this.overviewTrends = [];
     this.stations = [];
     this.devices = [];
@@ -404,6 +408,7 @@ struct Index {
     if (!this.repository) this.getRepository();
     const repository = this.repository as MonitoringRepository;
     this.refreshAlarmActuatorStatus();
+    this.loadEdgeAiStatus();
     try {
       const cachedDashboard = await repository.cachedDashboard();
       const cachedDevices = await repository.cachedDevices('');
@@ -685,6 +690,37 @@ struct Index {
       this.alarmActuatorOnline = status.actuator.yx75r?.available ?? status.actuator.available;
     } catch {
       // Preserve the last verified state when the status request is interrupted.
+    }
+  }
+
+  private async loadEdgeAiStatus(): Promise<void> {
+    if (!this.repository || this.edgeAiRefreshing) return;
+    this.edgeAiRefreshing = true;
+    const repository = this.repository as MonitoringRepository;
+    try {
+      const cached = await repository.cachedEdgeAiStatus();
+      if (cached) this.edgeAiStatus = cached.value;
+      const status = await repository.edgeAiStatus();
+      if (status.available || !cached) this.edgeAiStatus = status;
+    } catch {
+      // AI is an optional sidecar; keep its last snapshot without affecting monitoring pages.
+    } finally {
+      this.edgeAiRefreshing = false;
+    }
+  }
+
+  private async recheckEdgeAi(): Promise<void> {
+    if (!this.repository || this.edgeAiRefreshing) return;
+    this.edgeAiRefreshing = true;
+    try {
+      const repository = this.repository as MonitoringRepository;
+      await repository.recheckEdgeAi();
+      const status = await repository.edgeAiStatus();
+      if (status.available || !this.edgeAiStatus?.available) this.edgeAiStatus = status;
+    } catch (error) {
+      this.errorMessage = this.errorText(error);
+    } finally {
+      this.edgeAiRefreshing = false;
     }
   }
 
@@ -1274,11 +1310,14 @@ struct Index {
           if (this.screen === 'overview') {
             OverviewPane({
               dashboard: this.dashboard,
+              edgeAiStatus: this.edgeAiStatus,
+              edgeAiRefreshing: this.edgeAiRefreshing,
               trends: this.overviewTrends,
               freshness: this.overviewFreshness,
               offline: this.overviewOffline,
               refreshing: this.overviewRefreshing,
               onOpenStations: () => this.selectScreen('stations'),
+              onRecheckEdgeAi: () => this.recheckEdgeAi(),
               onRefresh: () => this.loadOverview()
             });
           } else if (this.screen === 'stations') {
@@ -1727,11 +1766,14 @@ struct LoginServerSettingsPane {
 @Component
 struct OverviewPane {
   @Prop dashboard: DashboardSummary | null;
+  @Prop edgeAiStatus: EdgeAiStatus | null;
+  @Prop edgeAiRefreshing: boolean;
   @Prop trends: Array<DeviceMonitoringTrend>;
   @Prop freshness: string;
   @Prop offline: boolean;
   @Prop refreshing: boolean;
   onOpenStations: () => void = () => {};
+  onRecheckEdgeAi: () => void = () => {};
   onRefresh: () => void = () => {};
 
   build() {
@@ -1759,8 +1801,13 @@ struct OverviewPane {
           }
           Row({ space: 8 }) {
             MetricCard({ label: '待处理告警', value: `${this.dashboard?.pendingAlerts ?? '--'}`, detail: `今日 ${this.dashboard?.todayAlerts ?? '--'} 条`, accent: '#B44832' });
-            MetricCard({ label: '今日上报', value: `${this.dashboard?.todayReportCount ?? '--'}`, detail: '次设备上报 · 北京时间', accent: '#477B96' });
+            MetricCard({ label: '今日数据上传条数', value: `${this.dashboard?.todayReportCount ?? '--'}`, detail: `北京时间 ${beijingClockTime(this.dashboard?.lastUpdatedAt)}`, accent: '#477B96' });
           }
+          EdgeAiCard({
+            status: this.edgeAiStatus,
+            refreshing: this.edgeAiRefreshing,
+            onRecheck: () => this.onRecheckEdgeAi()
+          });
           OverviewTrendPane({ trends: this.trends });
         }
         .padding({ left: 16, right: 16, bottom: 24 })
@@ -1771,6 +1818,182 @@ struct OverviewPane {
       .align(Alignment.TopStart)
     }
     .layoutWeight(1)
+  }
+}
+
+@Component
+struct EdgeAiCard {
+  @Prop status: EdgeAiStatus | null;
+  @Prop refreshing: boolean;
+  onRecheck: () => void = () => {};
+
+  private primaryDevice(): EdgeRiskDevice | null {
+    if (!this.status || this.status.devices.length === 0) return null;
+    return this.status.devices[0];
+  }
+
+  private latestTask(): EdgeAgentTask | null {
+    if (!this.status || this.status.tasks.length === 0) return null;
+    return this.status.tasks[0];
+  }
+
+  private riskLabel(): string {
+    const level = this.status?.overallRiskLevel ?? 'unavailable';
+    if (level === 'danger') return '危险';
+    if (level === 'warning') return '预警';
+    if (level === 'attention') return '关注';
+    if (level === 'normal') return '正常';
+    return '准备中';
+  }
+
+  private riskColor(): string {
+    const level = this.status?.overallRiskLevel ?? 'unavailable';
+    if (level === 'danger') return '#B44832';
+    if (level === 'warning') return '#D46B2E';
+    if (level === 'attention') return '#A06A18';
+    if (level === 'normal') return '#3C9D82';
+    return '#7A858F';
+  }
+
+  private scoreText(): string {
+    const score = this.status?.maxRiskScore;
+    if (score === undefined || score === null) return '--';
+    return `${Math.round(score * 100)}%`;
+  }
+
+  private recommendation(): string {
+    const level = this.status?.overallRiskLevel ?? 'unavailable';
+    if (level === 'danger') return '已触发安全阈值，请立即按现场预案处置';
+    if (level === 'warning') return '建议提高监测频率并准备现场复核';
+    if (level === 'attention') return '建议持续观察倾角、GPS 与土壤变化';
+    if (level === 'normal') return '监测数据平稳，系统正在持续巡检';
+    return '研判服务正在连接，请稍后复检';
+  }
+
+  private factorsText(): string {
+    const device = this.primaryDevice();
+    if (!device || device.factors.length === 0) return '';
+    return `主要因素 · ${device.factors.join(' · ')}`;
+  }
+
+  private dataTimeText(): string {
+    const device = this.primaryDevice();
+    const updatedAt = device?.dataUpdatedAt;
+    if (!updatedAt) return '尚无研判数据';
+    if (device?.dataStatus === 'offline') return `设备离线 · 最后数据 ${shortTime(updatedAt)}`;
+    if (device?.dataStatus === 'stale') return `数据延迟 · 更新于 ${shortTime(updatedAt)}`;
+    if (device?.dataStatus === 'insufficient') return `数据不足 · 更新于 ${shortTime(updatedAt)}`;
+    return `实时数据 · 更新于 ${shortTime(updatedAt)}`;
+  }
+
+  build() {
+    Column({ space: 10 }) {
+      Row() {
+        Column({ space: 2 }) {
+          Text('AI 边缘研判')
+            .fontSize(16)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(UI_COLOR_TEXT)
+          Text(this.status?.model.loaded
+            ? `模型 ${this.status.model.modelVersion ?? '--'} · ${this.status.mqttConnected ? '链路正常' : '离线运行'}`
+            : '模型尚未就绪')
+            .fontSize(10)
+            .fontColor(UI_COLOR_MUTED)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+        }
+        .alignItems(HorizontalAlign.Start)
+        .layoutWeight(1)
+        Text(this.riskLabel())
+          .fontSize(12)
+          .fontWeight(FontWeight.Medium)
+          .fontColor('#FFFFFF')
+          .backgroundColor(this.riskColor())
+          .borderRadius(5)
+          .padding({ left: 10, right: 10, top: 5, bottom: 5 })
+      }
+      .width('100%')
+
+      Row() {
+        Column({ space: 2 }) {
+          Text(this.scoreText())
+            .fontSize(25)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(UI_COLOR_TEXT)
+          Text('综合风险')
+            .fontSize(10)
+            .fontColor(UI_COLOR_MUTED)
+        }
+        .alignItems(HorizontalAlign.Start)
+        .width('28%')
+        Column({ space: 3 }) {
+          Text(this.primaryDevice()?.explain ?? this.recommendation())
+            .fontSize(12)
+            .fontColor(UI_COLOR_TEXT)
+            .maxLines(2)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+          Text(this.dataTimeText())
+            .fontSize(10)
+            .fontColor(UI_COLOR_MUTED)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+        }
+        .alignItems(HorizontalAlign.Start)
+        .layoutWeight(1)
+      }
+      .width('100%')
+
+      if (this.factorsText().length > 0) {
+        Text(this.factorsText())
+          .fontSize(10)
+          .fontColor(this.riskColor())
+          .maxLines(2)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+          .width('100%')
+      }
+
+      Row({ space: 8 }) {
+        Column({ space: 2 }) {
+          Text(this.latestTask()?.title ?? '自主任务待命')
+            .fontSize(11)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(UI_COLOR_TEXT)
+          Text(this.latestTask()?.verification ?? `待上传 ${this.status?.pendingUploadCount ?? 0} 条`)
+            .fontSize(9)
+            .fontColor(UI_COLOR_MUTED)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+        }
+        .alignItems(HorizontalAlign.Start)
+        .layoutWeight(1)
+        Button({ type: ButtonType.Normal }) {
+          Row({ space: 4 }) {
+            if (this.refreshing) {
+              LoadingProgress().width(14).height(14).color(UI_COLOR_ACCENT)
+            } else {
+              SymbolGlyph($r('sys.symbol.arrow_clockwise'))
+                .fontSize(15)
+                .fontColor([UI_COLOR_ACCENT])
+            }
+            Text('复检')
+              .fontSize(11)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(UI_COLOR_ACCENT)
+          }
+        }
+        .height(34)
+        .padding({ left: 10, right: 10 })
+        .borderRadius(6)
+        .backgroundColor('#F7ECE6')
+        .enabled(!this.refreshing)
+        .onClick(() => this.onRecheck())
+      }
+      .width('100%')
+    }
+    .padding(14)
+    .backgroundColor(UI_COLOR_SURFACE)
+    .borderRadius(8)
+    .width('100%')
   }
 }
 

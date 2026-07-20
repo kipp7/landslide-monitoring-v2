@@ -232,6 +232,69 @@ export interface PredictionPage {
   list: Array<AiPrediction>;
 }
 
+export interface EdgeRiskFeature {
+  key: string;
+  label: string;
+  value?: number;
+  unit: string;
+  score: number;
+  weight: number;
+  available: boolean;
+}
+
+export interface EdgeRiskDevice {
+  deviceId: string;
+  stationId?: string;
+  generatedAt: string;
+  dataUpdatedAt?: string;
+  dataStatus: string;
+  modelKey: string;
+  modelVersion: string;
+  riskScore: number;
+  riskLevel: string;
+  confidence: number;
+  hardRuleTriggered: boolean;
+  hardRuleReasons: Array<string>;
+  explain: string;
+  factors: Array<string>;
+  features: Array<EdgeRiskFeature>;
+}
+
+export interface EdgeAgentTask {
+  taskId: string;
+  taskKey: string;
+  title: string;
+  status: string;
+  trigger: string;
+  deviceId?: string;
+  createdAt: string;
+  completedAt?: string;
+  verification: string;
+}
+
+export interface EdgeRiskModelStatus {
+  loaded: boolean;
+  modelKey?: string;
+  modelVersion?: string;
+  trainedAt?: string;
+  trainingSource?: string;
+  error?: string;
+}
+
+export interface EdgeAiStatus {
+  available: boolean;
+  mode: string;
+  generatedAt: string;
+  mqttConnected: boolean;
+  model: EdgeRiskModelStatus;
+  overallRiskLevel: string;
+  maxRiskScore?: number;
+  hardRuleTriggered: boolean;
+  devices: Array<EdgeRiskDevice>;
+  tasks: Array<EdgeAgentTask>;
+  pendingUploadCount: number;
+}
+
 export function numberValue(value: Object | undefined): number | null {
   if (typeof value === 'number') return value;
   if (typeof value === 'string') {
@@ -506,4 +569,15 @@ export function shortTime(value: string | undefined): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+function twoDigit(value: number): string {
+  return value < 10 ? `0${value}` : `${value}`;
+}
+
+export function beijingClockTime(value: string | undefined): string {
+  const date = value ? new Date(value) : new Date();
+  if (Number.isNaN(date.getTime())) return '--:--:--';
+  const beijing = new Date(date.getTime() + 8 * 60 * 60 * 1000);
+  return `${twoDigit(beijing.getUTCHours())}:${twoDigit(beijing.getUTCMinutes())}:${twoDigit(beijing.getUTCSeconds())}`;
 }

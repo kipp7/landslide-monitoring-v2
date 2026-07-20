@@ -1,0 +1,13 @@
+{
+  "name": "@lsmv2/edge-risk-model",
+  "version": "0.1.0",
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint src --max-warnings=0",
+    "test": "npm run build && node --test dist/index.test.js"
+  },
+  "license": "MIT"
+}

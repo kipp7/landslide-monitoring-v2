@@ -21,7 +21,13 @@ built from DevEco Studio or with its bundled `hvigorw` command after setting
 - Dashboard `todayReportCount` counts distinct device reports, while
   `todayDataCount` remains the sparse ClickHouse sensor-row count for API
   compatibility. Both use the Beijing calendar day (`UTC+8`, starting at
-  local 00:00); the App's `今日上报` card displays report count only.
+  local 00:00); the App displays it as `今日数据上传条数` with the exact
+  Beijing update time and does not label it as sensor rows.
+- Edge AI status uses `/api/v1/edge-ai/status` and is loaded independently
+  from the monitoring dashboard. If RK3568 Hermes is unavailable, the App
+  keeps the last cached AI snapshot and all original monitoring pages continue
+  to refresh normally. The `复检` action is limited to the existing safe
+  intent router and cannot restart the gateway or change alarm rules.
 - Successful summary, station, device, and latest-state responses are cached
   with TTLs. The app renders stale data immediately and refreshes in the
   background.

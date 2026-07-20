@@ -71,6 +71,12 @@ type NodeRuntimeState = {
   effectiveOfflineAfterMs: number | null;
   statusReason: string | null;
   status: "configured" | "online" | "degraded" | "offline";
+  latestTelemetry: {
+    receivedTs: string;
+    eventTs: string | null;
+    seq: number | null;
+    metrics: Record<string, number | string | boolean | null>;
+  } | null;
 };
 
 type PortRuntimeState = {
@@ -1545,6 +1551,12 @@ class GatewayRuntime {
     nodeState.lastSeenTs = receivedTs;
     nodeState.lastSeenKind = "telemetry";
     nodeState.status = "online";
+    nodeState.latestTelemetry = {
+      receivedTs,
+      eventTs: envelope.event_ts ?? null,
+      seq: envelope.seq ?? null,
+      metrics: { ...envelope.metrics }
+    };
     portState.telemetryMessages += 1;
 
     const record: SpoolRecord = {
@@ -2455,7 +2467,8 @@ class GatewayRuntime {
       effectiveDegradedAfterMs: null,
       effectiveOfflineAfterMs: null,
       statusReason: null,
-      status: "configured"
+      status: "configured",
+      latestTelemetry: null
     };
   }
 
@@ -2619,7 +2632,8 @@ class GatewayRuntime {
       effectiveDegradedAfterMs: null,
       effectiveOfflineAfterMs: null,
       statusReason: null,
-      status: "configured"
+      status: "configured",
+      latestTelemetry: null
     };
     this.nodeState.set(deviceId, created);
 

@@ -39,7 +39,7 @@ function parseRequiredFeatureKey(featureKey: string): {
   window: string | null;
   runtimeSource: RuntimeFieldAdaptation["fields"][number]["runtimeSource"];
 } {
-  const match = featureKey.match(/^(.+)_(last|delta|mean|min|max|sum)_(6h|24h|72h)$/u);
+  const match = /^(.+)_(last|delta|mean|min|max|sum)_(6h|24h|72h)$/u.exec(featureKey);
   if (!match) {
     return {
       canonicalKey: featureKey,

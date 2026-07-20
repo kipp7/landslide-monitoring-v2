@@ -1,5 +1,5 @@
 import http from '@ohos.net.http';
-import { ApiEnvelope, LoginData, UserSummary, DashboardSummary, WeeklyTrend, Station, Device, DeviceState, SensorDefinition, MetricSeries, SeriesResponse, AlertPage, AlertEventsResponse, PredictionPage, FieldAlarmStatus } from './Types';
+import { ApiEnvelope, LoginData, UserSummary, DashboardSummary, WeeklyTrend, Station, Device, DeviceState, SensorDefinition, MetricSeries, SeriesResponse, AlertPage, AlertEventsResponse, PredictionPage, FieldAlarmStatus, EdgeAiStatus } from './Types';
 import { normalizeApiBaseUrl } from './ApiConfig';
 
 export class ApiError extends Error {
@@ -32,6 +32,11 @@ interface PushDeviceRequest {
   token: string;
   platform?: string;
   bundleName?: string;
+}
+
+interface EdgeAiActionRequest {
+  action: string;
+  intent?: string;
 }
 
 export class ApiClient {
@@ -220,6 +225,18 @@ export class ApiClient {
 
   async predictions(): Promise<PredictionPage> {
     return this.request<PredictionPage>('/ai/predictions?page=1&pageSize=5');
+  }
+
+  async edgeAiStatus(): Promise<EdgeAiStatus> {
+    return this.request<EdgeAiStatus>('/edge-ai/status');
+  }
+
+  async recheckEdgeAi(): Promise<void> {
+    const body: EdgeAiActionRequest = {
+      action: 'recheck',
+      intent: '移动端请求立即复检当前边缘风险和链路状态'
+    };
+    await this.request<Object>('/edge-ai/actions', http.RequestMethod.POST, body);
   }
 
   async refreshSession(): Promise<boolean> {

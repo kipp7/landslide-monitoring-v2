@@ -16,6 +16,9 @@ SUMMARY_URL="${SUMMARY_URL:-http://127.0.0.1:18081/v1/summary}"
 DIAGNOSIS_MODEL_PATH="${DIAGNOSIS_MODEL_PATH:-${REPO_ROOT}/edge/rk3568-gateway/hermes-edge-supervisor/models/edge-diagnosis-rf-v1.json}"
 HTTP_HOST="${HTTP_HOST:-0.0.0.0}"
 HTTP_PORT="${HTTP_PORT:-18082}"
+MQTT_URL="${MQTT_URL:-}"
+MQTT_USERNAME="${MQTT_USERNAME:-ingest-service}"
+MQTT_PASSWORD="${MQTT_PASSWORD:-}"
 BUILD_FIRST=1
 ENABLE_NOW=1
 OVERWRITE_ENV=0
@@ -98,9 +101,11 @@ if [[ "${BUILD_FIRST}" -eq 1 ]]; then
     cd \"${REPO_ROOT}\"
     rm -rf \
       \"${REPO_ROOT}/edge/rk3568-gateway/hermes-edge-supervisor/dist\" \
+      \"${REPO_ROOT}/packages/edge-risk-model/dist\" \
       \"${REPO_ROOT}/packages/observability/dist\"
     npm install
     npm run build \
+      --workspace @lsmv2/edge-risk-model \
       --workspace @lsmv2/observability \
       --workspace @lsmv2/hermes-edge-supervisor
   "
@@ -110,6 +115,7 @@ install -d -m 0755 -o root -g root "$(dirname "${ENV_FILE_PATH}")"
 install -d -m 0755 -o "${RUN_USER}" -g "${RUN_GROUP}" "${STATE_ROOT}"
 install -d -m 0755 -o "${RUN_USER}" -g "${RUN_GROUP}" "${STATE_ROOT}/status"
 install -d -m 0755 -o "${RUN_USER}" -g "${RUN_GROUP}" "${STATE_ROOT}/events"
+install -d -m 0755 -o "${RUN_USER}" -g "${RUN_GROUP}" "${STATE_ROOT}/models"
 
 if [[ ! -f "${ENV_FILE_PATH}" || "${OVERWRITE_ENV}" -eq 1 ]]; then
 cat > "${ENV_FILE_PATH}" <<EOF
@@ -123,6 +129,18 @@ HTTP_HOST=${HTTP_HOST}
 HTTP_PORT=${HTTP_PORT}
 POLL_INTERVAL_MS=5000
 SOURCE_STALE_AFTER_MS=120000
+MQTT_URL=${MQTT_URL}
+MQTT_USERNAME=${MQTT_USERNAME}
+MQTT_PASSWORD=${MQTT_PASSWORD}
+MQTT_CLIENT_ID=hermes-edge-supervisor
+MQTT_MODEL_TOPIC=edge/ai/models/landslide-risk/v1
+MQTT_PREDICTION_TOPIC_PREFIX=edge/ai/predictions/
+RISK_MODEL_PATH=${STATE_ROOT}/models/landslide-risk-latest.json
+RISK_STATE_PATH=${STATE_ROOT}/status/edge-risk-state.json
+RISK_TASK_LOG_PATH=${STATE_ROOT}/events/edge-agent-tasks.jsonl
+RISK_HISTORY_WINDOW_MS=1860000
+PREDICTION_PUBLISH_INTERVAL_MS=60000
+PREDICTION_HORIZON_SECONDS=3600
 EOF
 else
   echo "Keeping existing environment file: ${ENV_FILE_PATH}"

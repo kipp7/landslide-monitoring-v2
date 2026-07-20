@@ -1597,6 +1597,55 @@ paths:
         default:
           $ref: "#/components/responses/ErrorResponse"
 
+  /edge-ai/status:
+    get:
+      tags: [ai]
+      summary: Get RK3568 edge AI status
+      responses:
+        "200":
+          description: Edge AI status or an unavailable fallback
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/EdgeAiStatus"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /edge-ai/actions:
+    post:
+      tags: [ai]
+      summary: Request a bounded Hermes sidecar action
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EdgeAiActionRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "503":
+          $ref: "#/components/responses/ErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
   /alerts:
     get:
       tags: [alerts]
@@ -4380,3 +4429,52 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/AiPrediction"
+
+    EdgeAiActionRequest:
+      type: object
+      additionalProperties: false
+      required: [action]
+      properties:
+        action:
+          type: string
+          enum: [recheck, collect_logs, generate_report]
+        intent:
+          type: string
+          maxLength: 500
+
+    EdgeAiStatus:
+      type: object
+      required:
+        [available, mode, generatedAt, mqttConnected, model, overallRiskLevel, hardRuleTriggered, devices, tasks, pendingUploadCount]
+      properties:
+        available: { type: boolean }
+        mode: { type: string, enum: [hermes-edge-risk-agent] }
+        generatedAt: { type: string, format: date-time }
+        mqttConnected: { type: boolean }
+        overallRiskLevel:
+          type: string
+          enum: [normal, attention, warning, danger, unavailable]
+        maxRiskScore: { type: number, nullable: true, minimum: 0, maximum: 1 }
+        hardRuleTriggered: { type: boolean }
+        pendingUploadCount: { type: integer, minimum: 0, maximum: 200 }
+        runtimeError: { type: string, nullable: true }
+        model:
+          type: object
+          required: [loaded]
+          properties:
+            loaded: { type: boolean }
+            modelKey: { type: string, nullable: true }
+            modelVersion: { type: string, nullable: true }
+            trainedAt: { type: string, format: date-time, nullable: true }
+            trainingSource: { type: string, nullable: true }
+            error: { type: string, nullable: true }
+        devices:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        tasks:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
