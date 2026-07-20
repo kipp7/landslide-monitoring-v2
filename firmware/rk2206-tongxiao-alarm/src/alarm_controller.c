@@ -69,9 +69,11 @@ static void BuildEffectiveDesired(const AlarmSnapshot *snapshot, AlarmDesiredSta
         effective->display = ALARM_DISPLAY_SELF_TEST;
         effective->voice_phrase = ALARM_PHRASE_NONE;
         effective->voice_repeat_seconds = 0;
-    } else if ((snapshot->locally_silenced || voice_priority_active) &&
-        effective->state == ALARM_STATE_ACTIVE) {
+    } else if (snapshot->locally_silenced && effective->state == ALARM_STATE_ACTIVE) {
         effective->buzzer = false;
+        effective->motor = false;
+    } else if (voice_priority_active && effective->state == ALARM_STATE_ACTIVE) {
+        /* Shed the motor's startup current without silencing the audible alarm. */
         effective->motor = false;
     }
 }

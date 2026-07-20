@@ -34,7 +34,7 @@ powershell -ExecutionPolicy Bypass -File scripts/firmware/build-tongxiao-rk2206.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/firmware/build-tongxiao-rk2206.ps1 `
-  -FirmwareVersion 1.3.2-voice-priority -EnableVoice -ConfirmNoActiveXl01Flash `
+  -FirmwareVersion 1.3.3-voice-motor-shed -EnableVoice -ConfirmNoActiveXl01Flash `
   -ArtifactDirectory <独立试验输出目录>
 ```
 
@@ -97,7 +97,7 @@ RK2206 的 `Firmware.img` 不包含 SU03-T 词库。必须先按 `docs/integrati
 
 `v1.3.1-voice-repeat` 起，高风险每 30 秒重复完整准备撤离词；严重告警首次完整播报后等待 25 秒，再每 15 秒重复精简撤离词，直到本地/服务端消音或解除。解除通知立即播放一次，之后每 12 秒再播放一次，总计 3 次。新 revision 会取消旧状态尚未完成的播报计划，上电、重连和 retained 恢复仍保持静默。
 
-`v1.3.2-voice-priority` 起，每次风险播报前先关闭蜂鸣器和马达，为 SU03-T 留出共享供电和清晰播音窗口；RGB 与独立报警灯始终继续闪烁。准备撤离、完整紧急撤离和精简重复撤离的窗口分别为 18 秒、24 秒和 8 秒，窗口结束后蜂鸣器和马达自动恢复。MQTT 的 retained `reported` 状态改为在 desired 消息回调返回后发布，避免回调内嵌套 QoS 1 发布造成会话断开。
+`v1.3.3-voice-motor-shed` 起，每次风险播报前只暂停启动电流较大的马达，蜂鸣器仍按原告警节奏发声，RGB 与独立报警灯也继续闪烁。准备撤离、完整紧急撤离和精简重复撤离的马达卸载窗口分别为 18 秒、24 秒和 8 秒，窗口结束后马达自动恢复；这既降低共享供电压降，也避免语音期间现场告警完全安静。MQTT 的 retained `reported` 状态改为在 desired 消息回调返回后发布，避免回调内嵌套 QoS 1 发布造成会话断开。
 
 ## SwanLinkOS 说明
 

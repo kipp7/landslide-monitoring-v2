@@ -65,9 +65,9 @@ SU03-T 是独立语音芯片，不能用 RKDevTool 或 RK2206 的 `Firmware.img`
 
 ### RK2206 语音试验构建
 
-主仓库保持 `TONGXIAO_VOICE_ENABLED=0` 作为稳定默认值。已完成 SU03-T 冷启动静音和五条 HEX 帧测试后，使用构建脚本的 `-EnableVoice -FirmwareVersion 1.3.2-voice-priority` 生成独立试验镜像。RK2206 侧使用通晓原厂样例相同的 `EUART2_M1`（PB2/PB3），它与 SU03-T 平台所称的模块 `UART1_RX/TX` 是板内互连的两端，名称不同不代表接错串口。
+主仓库保持 `TONGXIAO_VOICE_ENABLED=0` 作为稳定默认值。已完成 SU03-T 冷启动静音和五条 HEX 帧测试后，使用构建脚本的 `-EnableVoice -FirmwareVersion 1.3.3-voice-motor-shed` 生成独立试验镜像。RK2206 侧使用通晓原厂样例相同的 `EUART2_M1`（PB2/PB3），它与 SU03-T 平台所称的模块 `UART1_RX/TX` 是板内互连的两端，名称不同不代表接错串口。
 
-语音试验镜像只对非 retained 的新 revision 播报。上电、Wi-Fi/MQTT 重连和 retained 状态恢复不得播报；本地消音与服务端静音会停止重复播报。高风险每 30 秒重复完整准备撤离词；严重告警首次完整播报后等待 25 秒，再每 15 秒重复精简撤离词；解除通知间隔 12 秒共播放 3 次。每次风险播报期间，板端会按词长暂停蜂鸣器和马达 18 秒（准备撤离）、24 秒（完整紧急撤离）或 8 秒（精简重复撤离），避免共享供电压降和机械噪声遮住语音；RGB 与独立报警灯不中断，窗口结束后蜂鸣器和马达自动恢复。生产桥接器还必须显式配置 `TONGXIAO_VOICE_ENABLED=true` 才会在 desired state 中下发固定 phrase ID。
+语音试验镜像只对非 retained 的新 revision 播报。上电、Wi-Fi/MQTT 重连和 retained 状态恢复不得播报；本地消音与服务端静音会停止重复播报。高风险每 30 秒重复完整准备撤离词；严重告警首次完整播报后等待 25 秒，再每 15 秒重复精简撤离词；解除通知间隔 12 秒共播放 3 次。每次风险播报期间，板端会按词长只暂停马达 18 秒（准备撤离）、24 秒（完整紧急撤离）或 8 秒（精简重复撤离），削减最主要的启动电流和机械噪声；蜂鸣器保持原告警节奏，RGB 与独立报警灯也不中断，窗口结束后马达自动恢复。生产桥接器还必须显式配置 `TONGXIAO_VOICE_ENABLED=true` 才会在 desired state 中下发固定 phrase ID。
 
 ## 本地按键
 
