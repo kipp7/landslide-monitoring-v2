@@ -76,6 +76,19 @@ function haversineMeters(aLat: number, aLon: number, bLat: number, bLon: number)
   return 2 * r * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
 }
 
+const MAX_DEFORMATION_DISTANCE_METERS = 500;
+
+function isValidGpsCoordinatePair(lat: number, lon: number): boolean {
+  return (
+    Number.isFinite(lat) &&
+    Number.isFinite(lon) &&
+    Math.abs(lat) > 0.0001 &&
+    Math.abs(lon) > 0.0001 &&
+    Math.abs(lat) <= 90 &&
+    Math.abs(lon) <= 180
+  );
+}
+
 export function clamp01(n: number): number {
   if (n < 0) return 0;
   if (n > 1) return 1;
@@ -503,7 +516,13 @@ export function registerGpsDeformationRoutes(
     const rows: Row[] = await result.json();
     const baseline = parsedBaseline.data;
     const baseAlt = typeof baseline.altitude === "number" ? baseline.altitude : null;
-    const validRows = rows.filter((r): r is Row & { lat: number; lon: number } => typeof r.lat === "number" && typeof r.lon === "number");
+    const validRows = rows.filter(
+      (r): r is Row & { lat: number; lon: number } =>
+        typeof r.lat === "number" &&
+        typeof r.lon === "number" &&
+        isValidGpsCoordinatePair(r.lat, r.lon) &&
+        haversineMeters(baseline.latitude, baseline.longitude, r.lat, r.lon) <= MAX_DEFORMATION_DISTANCE_METERS
+    );
     const points = validRows.map((r) => {
       const horizontalMeters = haversineMeters(baseline.latitude, baseline.longitude, r.lat, r.lon);
       const verticalMeters = baseAlt !== null && typeof r.alt === "number" ? r.alt - baseAlt : null;
