@@ -1,9 +1,13 @@
 import { createLogger } from "@lsmv2/observability";
 import {
+  competitionTiltProfileSchema,
+  computeCompetitionTiltDeviation,
   evalCondition,
   findFirstSensorLeaf,
+  readTiltVector,
   ruleDslSchema,
   templateString,
+  type CompetitionTiltProfile,
   type MetricPoint,
   type MetricSeriesGetter,
   type MetricWindow,
@@ -96,6 +100,20 @@ type AlertEventV1 = {
   explain?: string;
 };
 
+type CompetitionTiltRuntimeState = {
+  profileUpdatedAt: string;
+  armed: boolean;
+  highStreak: number;
+  criticalStreak: number;
+  recoveryStreak: number;
+  lastResolvedEventAt: string | null;
+  lastPublishedDeviationDeg: number | null;
+  lastPublishedAxis: "x" | "y" | "z" | null;
+};
+
+const COMPETITION_PROFILE_CONFIG_KEY = "field_alarm.competition_tilt_profile.v1";
+const COMPETITION_PROFILE_REFRESH_MS = 1000;
+
 const ACTUATOR_RECONCILE_COOLDOWN_MS = Math.max(
   0,
   Number.parseInt(process.env.ACTUATOR_RECONCILE_COOLDOWN_MS ?? "30000", 10) || 0
@@ -143,6 +161,8 @@ async function main(): Promise<void> {
 
   let cachedRules: { row: DbRuleRow; dsl: RuleDslV1 }[] = [];
   let lastRefreshMs = 0;
+  let competitionProfile: CompetitionTiltProfile | null = null;
+  let competitionProfileRefreshedAtMs = 0;
 
   const refreshRules = async () => {
     const now = Date.now();
@@ -187,12 +207,34 @@ async function main(): Promise<void> {
     logger.info({ rules: cachedRules.length }, "rules refreshed");
   };
 
+  const refreshCompetitionProfile = async () => {
+    const now = Date.now();
+    if (now - competitionProfileRefreshedAtMs < COMPETITION_PROFILE_REFRESH_MS) return;
+    competitionProfileRefreshedAtMs = now;
+    const row = await pg.query<{ config_value: string | null }>(
+      "SELECT config_value FROM system_configs WHERE config_key = $1",
+      [COMPETITION_PROFILE_CONFIG_KEY]
+    );
+    const raw = row.rows[0]?.config_value;
+    if (!raw) {
+      competitionProfile = null;
+      return;
+    }
+    try {
+      competitionProfile = competitionTiltProfileSchema.parse(JSON.parse(raw) as unknown);
+    } catch (err) {
+      competitionProfile = null;
+      logger.warn({ err }, "invalid competition tilt profile ignored");
+    }
+  };
+
   const windowByKey = new Map<ActiveKey, WindowState>();
   const deviceInfoById = new Map<string, DeviceInfo>();
   const deviceSensorsById = new Map<string, DeviceSensorInfo>();
   const seriesByKey = new Map<ActiveKey, SeriesState>();
-  const lastActuationByKey = new Map<ActiveKey, number>();
   const lastManualResetByKey = new Map<ActiveKey, string>();
+  const competitionStateByDevice = new Map<string, CompetitionTiltRuntimeState>();
+  let lastAggregateActuation: { signature: string; atMs: number } | null = null;
 
   const getDeviceInfo = async (deviceId: string): Promise<DeviceInfo> => {
     const now = Date.now();
@@ -319,7 +361,10 @@ async function main(): Promise<void> {
     });
   };
 
-  const actuateFieldAlarm = async (path: "/alarm_on" | "/silence", context: Record<string, unknown>) => {
+  const actuateFieldAlarm = async (
+    path: "/alarm_on" | "/alarm_off" | "/silence",
+    context: Record<string, unknown>
+  ) => {
     const baseUrl = normalizeBaseUrl(config.rk3568AlarmActuatorUrl);
     if (!baseUrl) return;
 
@@ -347,12 +392,53 @@ async function main(): Promise<void> {
     }
   };
 
+  const loadActuatorAggregate = async () => {
+    const rows = await pg.query<{
+      alert_id: string;
+      event_type: string;
+      severity: Severity;
+      rule_id: string | null;
+      device_id: string | null;
+      station_id: string | null;
+      title: string | null;
+      message: string | null;
+    }>(
+      `
+        WITH latest AS (
+          SELECT DISTINCT ON (alert_id)
+            alert_id,
+            event_type,
+            severity,
+            rule_id,
+            device_id,
+            station_id,
+            title,
+            message,
+            created_at
+          FROM alert_events
+          ORDER BY alert_id, created_at DESC
+        )
+        SELECT alert_id, event_type, severity, rule_id, device_id, station_id, title, message
+        FROM latest
+        WHERE severity IN ('high', 'critical')
+          AND event_type IN ('ALERT_TRIGGER', 'ALERT_UPDATE', 'ALERT_ACK')
+        ORDER BY
+          CASE severity WHEN 'critical' THEN 4 WHEN 'high' THEN 3 ELSE 0 END DESC,
+          created_at DESC
+      `
+    );
+    return {
+      active: rows.rows.filter((row) => row.event_type === "ALERT_TRIGGER" || row.event_type === "ALERT_UPDATE"),
+      acked: rows.rows.filter((row) => row.event_type === "ALERT_ACK")
+    };
+  };
+
   const maybeActuateFieldAlarm = async (args: {
     ruleId: string;
     deviceId: string;
     severity: Severity;
     evidenceKind: unknown;
-    reason: "new-alert-trigger" | "active-alert-reconcile" | "rule-alert-resolve";
+    reason: "new-alert-trigger" | "alert-severity-update" | "active-alert-reconcile" | "rule-alert-resolve";
     alertId?: string;
     stationId?: string | null;
     title?: string;
@@ -360,46 +446,41 @@ async function main(): Promise<void> {
   }) => {
     if (args.evidenceKind !== "rule") return;
     if (args.severity !== "high" && args.severity !== "critical") return;
-    if (args.reason === "rule-alert-resolve") {
-      await actuateFieldAlarm("/silence", {
-        ruleId: args.ruleId,
-        deviceId: args.deviceId,
-        reason: args.reason,
-        severity: args.severity,
-        alertId: args.alertId ?? null,
-        stationId: args.stationId ?? null,
-        title: args.title ?? "",
-        message: args.message ?? ""
-      });
-      return;
-    }
-
-    const key = makeActiveKey(args.ruleId, args.deviceId);
+    const aggregate = await loadActuatorAggregate();
+    const target = aggregate.active[0];
     const now = Date.now();
-    const last = lastActuationByKey.get(key) ?? 0;
-    if (ACTUATOR_RECONCILE_COOLDOWN_MS > 0 && now - last < ACTUATOR_RECONCILE_COOLDOWN_MS) {
+    const path = target ? "/alarm_on" : aggregate.acked.length > 0 ? "/silence" : "/alarm_off";
+    const signature = target
+      ? `${path}:${target.alert_id}:${target.severity}`
+      : `${path}:${aggregate.acked[0]?.alert_id ?? "none"}`;
+    if (
+      lastAggregateActuation?.signature === signature &&
+      ACTUATOR_RECONCILE_COOLDOWN_MS > 0 &&
+      now - lastAggregateActuation.atMs < ACTUATOR_RECONCILE_COOLDOWN_MS
+    ) {
       logger.info(
         {
-          ruleId: args.ruleId,
-          deviceId: args.deviceId,
+          signature,
           reason: args.reason,
           cooldownMs: ACTUATOR_RECONCILE_COOLDOWN_MS
         },
-        "rk3568 alarm actuator skipped by local reconcile cooldown"
+        "field alarm actuator skipped by aggregate reconcile cooldown"
       );
       return;
     }
 
-    lastActuationByKey.set(key, now);
-    await actuateFieldAlarm("/alarm_on", {
-      ruleId: args.ruleId,
-      deviceId: args.deviceId,
+    lastAggregateActuation = { signature, atMs: now };
+    await actuateFieldAlarm(path, {
+      ruleId: target?.rule_id ?? args.ruleId,
+      deviceId: target?.device_id ?? args.deviceId,
       reason: args.reason,
-      severity: args.severity,
-      alertId: args.alertId ?? null,
-      stationId: args.stationId ?? null,
-      title: args.title ?? "",
-      message: args.message ?? ""
+      severity: target?.severity ?? args.severity,
+      alertId: target?.alert_id ?? args.alertId ?? null,
+      stationId: target?.station_id ?? args.stationId ?? null,
+      title: target?.title ?? args.title ?? "",
+      message: target?.message ?? args.message ?? "",
+      activeAlertCount: aggregate.active.length,
+      ackedAlertCount: aggregate.acked.length
     });
   };
 
@@ -459,13 +540,13 @@ async function main(): Promise<void> {
       explain: args.explain
     });
 
-    if (args.eventType === "ALERT_TRIGGER") {
+    if (args.eventType === "ALERT_TRIGGER" || args.eventType === "ALERT_UPDATE") {
       await maybeActuateFieldAlarm({
         ruleId: args.ruleId,
         deviceId: args.deviceId,
         severity: args.severity,
         evidenceKind: args.evidence.kind,
-        reason: "new-alert-trigger",
+        reason: args.eventType === "ALERT_TRIGGER" ? "new-alert-trigger" : "alert-severity-update",
         alertId: args.alertId,
         stationId: args.stationId,
         title: args.title,
@@ -486,6 +567,171 @@ async function main(): Promise<void> {
     }
 
     return row;
+  };
+
+  const evaluateCompetitionTiltProfile = async (payload: TelemetryRawV1) => {
+    const profile = competitionProfile;
+    if (!profile?.enabled) return;
+    const configuredDevice = profile.devices.find((device) => device.deviceId === payload.device_id);
+    if (!configuredDevice) return;
+
+    const current = readTiltVector(payload.metrics);
+    if (!current) return;
+    const deviation = computeCompetitionTiltDeviation(current, configuredDevice.baseline);
+    const thresholds = profile.thresholds;
+    const latest = await loadLatestAlertForRuleDevice(profile.ruleId, payload.device_id);
+    let runtime = competitionStateByDevice.get(payload.device_id);
+    if (runtime?.profileUpdatedAt !== profile.updatedAt) {
+      runtime = {
+        profileUpdatedAt: profile.updatedAt,
+        armed: true,
+        highStreak: 0,
+        criticalStreak: 0,
+        recoveryStreak: 0,
+        lastResolvedEventAt: null,
+        lastPublishedDeviationDeg: null,
+        lastPublishedAxis: null
+      };
+      competitionStateByDevice.set(payload.device_id, runtime);
+    }
+
+    const latestIsActive = latest?.event_type === "ALERT_TRIGGER" || latest?.event_type === "ALERT_UPDATE";
+    const latestIsAcked = latest?.event_type === "ALERT_ACK";
+    const latestIsResolved = latest?.event_type === "ALERT_RESOLVE";
+
+    if (latestIsResolved && runtime.lastResolvedEventAt !== latest.created_at) {
+      runtime.armed = false;
+      runtime.highStreak = 0;
+      runtime.criticalStreak = 0;
+      runtime.recoveryStreak = 0;
+      runtime.lastResolvedEventAt = latest.created_at;
+      runtime.lastPublishedDeviationDeg = null;
+      runtime.lastPublishedAxis = null;
+    }
+
+    if (!runtime.armed && !latestIsActive && !latestIsAcked) {
+      runtime.recoveryStreak =
+        deviation.maxDeviationDeg <= thresholds.recoveryDeg ? runtime.recoveryStreak + 1 : 0;
+      if (runtime.recoveryStreak < thresholds.recoveryPoints) return;
+      runtime.armed = true;
+      runtime.recoveryStreak = 0;
+      logger.info(
+        { deviceId: payload.device_id, maxDeviationDeg: deviation.maxDeviationDeg },
+        "competition tilt profile re-armed after returning to baseline"
+      );
+    }
+
+    const rounded = (value: number) => Number(value.toFixed(3));
+    const severityForDeviation: Severity =
+      deviation.maxDeviationDeg >= thresholds.criticalDeg ? "critical" : "high";
+    const titleForSeverity = (severity: Severity) =>
+      severity === "critical"
+        ? `${configuredDevice.deviceName} 严重倾角告警`
+        : `${configuredDevice.deviceName} 倾角高风险告警`;
+    const messageForSeverity = (severity: Severity) => {
+      const threshold = severity === "critical" ? thresholds.criticalDeg : thresholds.highDeg;
+      return `${configuredDevice.deviceName} 相对比赛基线的 ${deviation.maxAxis.toUpperCase()} 轴偏移 ${String(
+        rounded(deviation.maxDeviationDeg)
+      )}°，达到 ${String(threshold)}° ${severity === "critical" ? "严重风险" : "高风险"}阈值。`;
+    };
+    const evidence = (severity: Severity, consecutivePoints: number) => ({
+      kind: "rule",
+      source: "competition_relative_tilt",
+      mode: profile.mode,
+      baseline: configuredDevice.baseline,
+      current: deviation.current,
+      delta: {
+        x: rounded(deviation.delta.x),
+        y: rounded(deviation.delta.y),
+        z: rounded(deviation.delta.z)
+      },
+      maxAxis: deviation.maxAxis,
+      maxDeviationDeg: rounded(deviation.maxDeviationDeg),
+      thresholds,
+      severity,
+      consecutivePoints,
+      receivedTs: payload.received_ts,
+      seq: payload.seq ?? null,
+      latchedUntilManualResolve: true
+    });
+
+    if (latestIsActive || latestIsAcked) {
+      runtime.criticalStreak =
+        deviation.maxDeviationDeg >= thresholds.criticalDeg ? runtime.criticalStreak + 1 : 0;
+      if (latest.severity !== "critical" && runtime.criticalStreak >= thresholds.triggerPoints) {
+        await insertAlertEvent({
+          alertId: latest.alert_id,
+          eventType: "ALERT_UPDATE",
+          ruleId: profile.ruleId,
+          ruleVersion: profile.ruleVersion,
+          deviceId: payload.device_id,
+          stationId: configuredDevice.stationId,
+          severity: "critical",
+          title: titleForSeverity("critical"),
+          message: messageForSeverity("critical"),
+          evidence: evidence("critical", runtime.criticalStreak),
+          explain: "competition tilt alert escalated to critical and remains latched until manual resolve"
+        });
+        runtime.lastPublishedDeviationDeg = deviation.maxDeviationDeg;
+        runtime.lastPublishedAxis = deviation.maxAxis;
+        return;
+      }
+
+      const movementSinceUpdate =
+        runtime.lastPublishedDeviationDeg === null
+          ? Number.POSITIVE_INFINITY
+          : Math.abs(deviation.maxDeviationDeg - runtime.lastPublishedDeviationDeg);
+      if (
+        latestIsActive &&
+        (movementSinceUpdate >= thresholds.updateStepDeg || runtime.lastPublishedAxis !== deviation.maxAxis)
+      ) {
+        const severity = latest.severity === "critical" ? "critical" : severityForDeviation;
+        await insertAlertEvent({
+          alertId: latest.alert_id,
+          eventType: "ALERT_UPDATE",
+          ruleId: profile.ruleId,
+          ruleVersion: profile.ruleVersion,
+          deviceId: payload.device_id,
+          stationId: configuredDevice.stationId,
+          severity,
+          title: titleForSeverity(severity),
+          message: messageForSeverity(severity),
+          evidence: evidence(severity, severity === "critical" ? runtime.criticalStreak : runtime.highStreak),
+          explain: "competition tilt alert evidence updated; alert remains latched until manual resolve"
+        });
+        runtime.lastPublishedDeviationDeg = deviation.maxDeviationDeg;
+        runtime.lastPublishedAxis = deviation.maxAxis;
+      }
+      return;
+    }
+
+    runtime.criticalStreak =
+      deviation.maxDeviationDeg >= thresholds.criticalDeg ? runtime.criticalStreak + 1 : 0;
+    runtime.highStreak = deviation.maxDeviationDeg >= thresholds.highDeg ? runtime.highStreak + 1 : 0;
+    if (runtime.highStreak < thresholds.triggerPoints) return;
+
+    const severity =
+      runtime.criticalStreak >= thresholds.triggerPoints ? ("critical" as const) : ("high" as const);
+    const alertId = crypto.randomUUID();
+    await insertAlertEvent({
+      alertId,
+      eventType: "ALERT_TRIGGER",
+      ruleId: profile.ruleId,
+      ruleVersion: profile.ruleVersion,
+      deviceId: payload.device_id,
+      stationId: configuredDevice.stationId,
+      severity,
+      title: titleForSeverity(severity),
+      message: messageForSeverity(severity),
+      evidence: evidence(severity, severity === "critical" ? runtime.criticalStreak : runtime.highStreak),
+      explain: "competition tilt alert triggered from real telemetry and latched until manual resolve"
+    });
+    runtime.lastPublishedDeviationDeg = deviation.maxDeviationDeg;
+    runtime.lastPublishedAxis = deviation.maxAxis;
+    logger.info(
+      { deviceId: payload.device_id, alertId, severity, maxDeviationDeg: deviation.maxDeviationDeg },
+      "competition tilt alert triggered"
+    );
   };
 
   logger.info(
@@ -511,6 +757,7 @@ async function main(): Promise<void> {
       }
 
       await refreshRules();
+      await refreshCompetitionProfile();
 
       const deviceId = payload.device_id;
       const tsMs = Date.parse(payload.received_ts);
@@ -539,7 +786,6 @@ async function main(): Promise<void> {
         ) {
           seriesByKey.delete(key);
           windowByKey.delete(key);
-          lastActuationByKey.delete(key);
           lastManualResetByKey.set(key, latest.created_at);
           logger.info(
             { ruleId: r.row.rule_id, deviceId, alertId: latest.alert_id, resetAt: latest.created_at },
@@ -795,6 +1041,7 @@ async function main(): Promise<void> {
           );
         }
       }
+      await evaluateCompetitionTiltProfile(payload);
     }
   });
 

@@ -74,6 +74,17 @@ SU03-T 是独立语音芯片，不能用 RKDevTool 或 RK2206 的 `Firmware.img`
 
 新 revision 的服务端 desired state 会清除本地覆盖，确保现场终端不会永久偏离平台状态。
 
+## 比赛相对倾角告警
+
+- Windows 监测大屏通过 `POST /api/v1/field-alarm/competition-profile/capture` 采集各在线节点当前 `tilt_x_deg/y_deg/z_deg`，数据超过 30 秒或缺轴时拒绝作为基线。
+- 配置保存在 `system_configs.field_alarm.competition_tilt_profile.v1`。默认高风险阈值 `3°`、严重风险阈值 `7°`、连续确认 `2` 个上报点、回到 `1.5°` 内连续 `2` 点后重新布防。
+- 计算使用当前姿态相对各自基线的 X/Y/Z 最大绝对偏移，因此传感器不要求水平放置。遥测必须来自真实节点，不注入演示值。
+- 单节点只维护一个 `alertId`：首次达到阈值发送 `ALERT_TRIGGER`，高风险升级为严重风险时发送 `ALERT_UPDATE`，不会并列生成两条告警。
+- 告警保持锁存，传感器恢复不会自动清除；必须由值守端确认或解除。解除后传感器需回到恢复范围才会重新布防，避免仍处于倾斜状态时立即重复告警。
+- 多节点同时告警时，桥接器始终执行所有活跃告警中的最高等级。确认或解除其中一个节点不得关闭其他节点仍需要的蜂鸣器、马达、RGB 和 LCD 风险态。
+- Windows 与 HarmonyOS App 共用 `/api/v1/alerts/stream` SSE 事件，按 `alertId` 更新；原因与证据字段统一使用 `baseline`、`current`、`delta`、`maxAxis`、`maxDeviationDeg` 和 `thresholds`。
+- 旧的相邻两点 `0.08°` 突变规则已停用。重新采集比赛基线时，API 还会禁用数据库中同名旧规则，避免双重触发。
+
 ## 开机静音硬约束
 
 1. 通晓主固件上电后第一件事是停止蜂鸣器、马达和 RGB，不调用任何语音播放函数。
