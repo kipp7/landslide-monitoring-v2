@@ -16,7 +16,7 @@ import { ActiveAlertBanner, InAppAlertOverlay } from '../components/InAppAlertOv
 import { MetricCard } from '../components/MetricCard';
 import { StatusBanner } from '../components/StatusBanner';
 
-type AppScreen = 'overview' | 'stations' | 'alerts' | 'settings' | 'device' | 'alert-map';
+type AppScreen = 'overview' | 'stations' | 'ai' | 'alerts' | 'settings' | 'device' | 'alert-map';
 
 const UI_COLOR_TEXT: string = '#18212B';
 const UI_COLOR_MUTED: string = '#6C7782';
@@ -408,7 +408,7 @@ struct Index {
     if (!this.repository) this.getRepository();
     const repository = this.repository as MonitoringRepository;
     this.refreshAlarmActuatorStatus();
-    this.loadEdgeAiStatus();
+    this.loadAlerts();
     try {
       const cachedDashboard = await repository.cachedDashboard();
       const cachedDevices = await repository.cachedDevices('');
@@ -744,7 +744,7 @@ struct Index {
       this.alerts = page.list ?? [];
       this.alertFreshness = `更新于 ${shortTime(new Date().toISOString())}`;
       this.alertOffline = false;
-      this.markConnection(true);
+      if (this.screen === 'alerts') this.markConnection(true);
 
       if (this.selectedAlert) {
         let selectedStillExists = false;
@@ -758,8 +758,10 @@ struct Index {
       }
     } catch (error) {
       this.alertOffline = true;
-      this.markConnection(false);
-      this.errorMessage = this.errorText(error);
+      if (this.screen === 'alerts') {
+        this.markConnection(false);
+        this.errorMessage = this.errorText(error);
+      }
     } finally {
       this.alertRefreshing = false;
     }
@@ -845,7 +847,7 @@ struct Index {
       if (this.alertNotifications) this.alertNotifications.cancel(event.alertId);
       this.resolveInAppAlert(event.alertId);
     }
-    if (this.screen === 'alerts') this.loadAlerts();
+    if (this.screen === 'alerts' || this.screen === 'overview') this.loadAlerts();
     if (this.screen === 'overview') this.loadOverview();
     if (this.selectedAlert?.alertId === event.alertId) this.openAlert(this.selectedAlert);
   }
@@ -1188,6 +1190,7 @@ struct Index {
     this.errorMessage = '';
     if (screen === 'overview') this.loadOverview();
     if (screen === 'stations') this.loadStations();
+    if (screen === 'ai') this.loadEdgeAiStatus();
     if (screen === 'alerts') this.loadAlerts();
     if (screen !== 'device') this.stopDeviceTimers();
   }
@@ -1195,6 +1198,7 @@ struct Index {
   private refreshCurrentScreen(): void {
     if (this.screen === 'overview') this.loadOverview();
     if (this.screen === 'stations') this.loadStations();
+    if (this.screen === 'ai') this.loadEdgeAiStatus();
     if (this.screen === 'alerts') this.loadAlerts();
     if (this.screen === 'device') this.refreshDevice();
     if (this.screen === 'alert-map') this.refreshAlertMap();
@@ -1236,9 +1240,10 @@ struct Index {
     this.stopTimers();
     this.overviewTimer = setInterval(() => {
       if (this.loggedIn && this.screen === 'overview') this.loadOverview();
+      if (this.loggedIn && this.screen === 'ai') this.loadEdgeAiStatus();
     }, 30000);
     this.alertTimer = setInterval(() => {
-      if (this.loggedIn && this.screen === 'alerts') this.loadAlerts();
+      if (this.loggedIn && (this.screen === 'overview' || this.screen === 'alerts')) this.loadAlerts();
     }, 30000);
     this.stationTimer = setInterval(() => {
       if (this.loggedIn && this.screen === 'stations') this.refreshStationRealtime();
@@ -1310,14 +1315,17 @@ struct Index {
           if (this.screen === 'overview') {
             OverviewPane({
               dashboard: this.dashboard,
-              edgeAiStatus: this.edgeAiStatus,
-              edgeAiRefreshing: this.edgeAiRefreshing,
+              alerts: this.alerts,
+              alertFreshness: this.alertFreshness,
+              alertOffline: this.alertOffline,
+              alertRefreshing: this.alertRefreshing,
               trends: this.overviewTrends,
               freshness: this.overviewFreshness,
               offline: this.overviewOffline,
               refreshing: this.overviewRefreshing,
               onOpenStations: () => this.selectScreen('stations'),
-              onRecheckEdgeAi: () => this.recheckEdgeAi(),
+              onOpenAlerts: () => this.selectScreen('alerts'),
+              onOpenAlertMap: (alert: Alert | null) => this.openAlertMap(alert),
               onRefresh: () => this.loadOverview()
             });
           } else if (this.screen === 'stations') {
@@ -1337,6 +1345,13 @@ struct Index {
               onSelectDevice: (device: Device) => this.openDevice(device),
               onRefreshMap: () => this.refreshStationMap(),
               onRefresh: () => this.loadStations()
+            });
+          } else if (this.screen === 'ai') {
+            AiPane({
+              status: this.edgeAiStatus,
+              refreshing: this.edgeAiRefreshing,
+              onRefresh: () => this.loadEdgeAiStatus(),
+              onRecheck: () => this.recheckEdgeAi()
             });
           } else if (this.screen === 'device') {
             DevicePane({
@@ -1396,7 +1411,6 @@ struct Index {
           if (this.screen !== 'device' && this.screen !== 'alert-map') {
             BottomTabs({
               screen: this.screen,
-              alertCount: this.dashboard?.pendingAlerts ?? this.alerts.length,
               onSelect: (screen: AppScreen) => this.selectScreen(screen)
             });
           }
@@ -1766,14 +1780,17 @@ struct LoginServerSettingsPane {
 @Component
 struct OverviewPane {
   @Prop dashboard: DashboardSummary | null;
-  @Prop edgeAiStatus: EdgeAiStatus | null;
-  @Prop edgeAiRefreshing: boolean;
+  @Prop alerts: Array<Alert>;
+  @Prop alertFreshness: string;
+  @Prop alertOffline: boolean;
+  @Prop alertRefreshing: boolean;
   @Prop trends: Array<DeviceMonitoringTrend>;
   @Prop freshness: string;
   @Prop offline: boolean;
   @Prop refreshing: boolean;
   onOpenStations: () => void = () => {};
-  onRecheckEdgeAi: () => void = () => {};
+  onOpenAlerts: () => void = () => {};
+  onOpenAlertMap: (alert: Alert | null) => void = () => {};
   onRefresh: () => void = () => {};
 
   build() {
@@ -1800,13 +1817,16 @@ struct OverviewPane {
             MetricCard({ label: '监测站点', value: `${this.dashboard?.stations ?? '--'}`, detail: '查看设备', accent: '#E46D35', actionable: true, onTap: () => this.onOpenStations() });
           }
           Row({ space: 8 }) {
-            MetricCard({ label: '待处理告警', value: `${this.dashboard?.pendingAlerts ?? '--'}`, detail: `今日 ${this.dashboard?.todayAlerts ?? '--'} 条`, accent: '#B44832' });
+            MetricCard({ label: '离线设备', value: `${this.dashboard?.offlineDevices ?? '--'}`, detail: '需要关注', accent: '#B44832' });
             MetricCard({ label: '今日数据上传条数', value: `${this.dashboard?.todayReportCount ?? '--'}`, detail: `北京时间 ${beijingClockTime(this.dashboard?.lastUpdatedAt)}`, accent: '#477B96' });
           }
-          EdgeAiCard({
-            status: this.edgeAiStatus,
-            refreshing: this.edgeAiRefreshing,
-            onRecheck: () => this.onRecheckEdgeAi()
+          OverviewAlertCard({
+            alerts: this.alerts,
+            freshness: this.alertFreshness,
+            offline: this.alertOffline,
+            refreshing: this.alertRefreshing,
+            onOpenAlerts: () => this.onOpenAlerts(),
+            onOpenMap: (alert: Alert | null) => this.onOpenAlertMap(alert)
           });
           OverviewTrendPane({ trends: this.trends });
         }
@@ -1818,6 +1838,244 @@ struct OverviewPane {
       .align(Alignment.TopStart)
     }
     .layoutWeight(1)
+  }
+}
+
+@Component
+struct OverviewAlertCard {
+  @Prop alerts: Array<Alert>;
+  @Prop freshness: string;
+  @Prop offline: boolean;
+  @Prop refreshing: boolean;
+  onOpenAlerts: () => void = () => {};
+  onOpenMap: (alert: Alert | null) => void = () => {};
+
+  private primaryAlert(): Alert | null {
+    return this.alerts.length > 0 ? this.alerts[0] : null;
+  }
+
+  private severityColor(alert: Alert): string {
+    return alert.severity === 'critical' || alert.severity === 'high' ? UI_COLOR_DANGER : '#A76A2E';
+  }
+
+  private statusText(): string {
+    if (this.refreshing) return '正在同步告警状态';
+    if (this.offline) return `缓存数据 · ${this.freshness}`;
+    if (this.alerts.length === 0) return '当前无活动告警';
+    return `${this.alerts.length} 条待处理 · ${this.freshness}`;
+  }
+
+  build() {
+    Column({ space: 10 }) {
+      Row({ space: 10 }) {
+        Stack({ alignContent: Alignment.Center }) {
+          Circle({ width: 38, height: 38 })
+            .fill(this.alerts.length > 0 ? '#F8E9E5' : '#EAF5F1')
+          SymbolGlyph($r('sys.symbol.bell'))
+            .fontSize(18)
+            .fontColor([this.alerts.length > 0 ? UI_COLOR_DANGER : UI_COLOR_SUCCESS])
+        }
+        .width(38)
+        .height(38)
+        Column({ space: 2 }) {
+          Text('告警中心')
+            .fontSize(16)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(UI_COLOR_TEXT)
+          Text(this.statusText())
+            .fontSize(10)
+            .fontColor(this.offline ? UI_COLOR_DANGER : UI_COLOR_MUTED)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+        }
+        .alignItems(HorizontalAlign.Start)
+        .layoutWeight(1)
+        Button({ type: ButtonType.Circle }) {
+          SymbolGlyph($r('sys.symbol.chevron_right'))
+            .fontSize(16)
+            .fontColor([UI_COLOR_MUTED])
+        }
+        .width(32)
+        .height(32)
+        .backgroundColor('#F1F3F4')
+        .onClick(() => this.onOpenAlerts())
+      }
+      .width('100%')
+
+      if (this.primaryAlert()) {
+        Column({ space: 7 }) {
+          Row() {
+            Text(this.primaryAlert()?.title ?? '监测告警')
+              .fontSize(13)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(UI_COLOR_TEXT)
+              .maxLines(2)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+              .layoutWeight(1)
+            Text(severityLabel(this.primaryAlert()?.severity ?? ''))
+              .fontSize(10)
+              .fontColor(this.severityColor(this.primaryAlert() as Alert))
+          }
+          Text(`${alertStatusLabel(this.primaryAlert()?.status ?? '')} · ${relativeTime(this.primaryAlert()?.lastEventAt)}`)
+            .fontSize(11)
+            .fontColor(UI_COLOR_MUTED)
+          Row({ space: 8 }) {
+            Button('查看全部')
+              .height(34)
+              .fontSize(12)
+              .fontColor('#FFFFFF')
+              .backgroundColor(UI_COLOR_TEXT)
+              .borderRadius(6)
+              .layoutWeight(1)
+              .onClick(() => this.onOpenAlerts())
+            Button('地图定位')
+              .height(34)
+              .fontSize(12)
+              .fontColor(UI_COLOR_TEXT)
+              .backgroundColor('#E9EDF0')
+              .borderRadius(6)
+              .layoutWeight(1)
+              .onClick(() => this.onOpenMap(this.primaryAlert()))
+          }
+          .width('100%')
+        }
+        .padding(12)
+        .backgroundColor('#FFF7F3')
+        .borderRadius(7)
+      } else {
+        Row({ space: 8 }) {
+          Text(this.offline ? '暂时无法获取最新告警' : '系统运行正常，暂无活动告警')
+            .fontSize(12)
+            .fontColor(UI_COLOR_MUTED)
+            .layoutWeight(1)
+          Button('查看全部')
+            .height(32)
+            .fontSize(11)
+            .fontColor(UI_COLOR_TEXT)
+            .backgroundColor('#E9EDF0')
+            .borderRadius(6)
+            .onClick(() => this.onOpenAlerts())
+        }
+        .width('100%')
+      }
+    }
+    .padding(14)
+    .backgroundColor(UI_COLOR_SURFACE)
+    .borderRadius(8)
+    .width('100%')
+  }
+}
+
+@Component
+struct AiPane {
+  @Prop status: EdgeAiStatus | null;
+  @Prop refreshing: boolean;
+  onRefresh: () => void = () => {};
+  onRecheck: () => void = () => {};
+
+  private subtitle(): string {
+    if (!this.status) return '正在连接边缘研判';
+    if (!this.status.available) return '边缘研判暂不可用 · 保留最近状态';
+    if (this.status.model.loaded) return `模型 ${this.status.model.modelVersion ?? '--'} · ${shortTime(this.status.generatedAt)}`;
+    return '模型正在准备';
+  }
+
+  private bannerText(): string {
+    if (this.refreshing) return '正在同步 AI 研判状态';
+    if (!this.status) return '尚未获取 AI 研判状态';
+    if (!this.status.available) return 'AI 研判暂不可用，最近一次有效状态仍保留';
+    return `边缘链路${this.status.mqttConnected ? '正常' : '离线运行'} · ${this.status.devices.length} 个节点参与研判`;
+  }
+
+  private bannerTone(): string {
+    if (this.refreshing) return UI_COLOR_ACCENT;
+    if (!this.status || !this.status.available) return UI_COLOR_MUTED;
+    if (this.status.overallRiskLevel === 'danger' || this.status.overallRiskLevel === 'warning') return UI_COLOR_DANGER;
+    return UI_COLOR_SUCCESS;
+  }
+
+  build() {
+    Column() {
+      PageHeader({
+        title: 'AI 研判',
+        subtitle: this.subtitle(),
+        offline: this.status !== null && !this.status.available,
+        refreshing: this.refreshing,
+        onRefresh: () => this.onRefresh()
+      });
+      Scroll() {
+        Column({ space: 12 }) {
+          StatusBanner({ text: this.bannerText(), tone: this.bannerTone() });
+          EdgeAiCard({
+            status: this.status,
+            refreshing: this.refreshing,
+            onRecheck: () => this.onRecheck()
+          });
+          AiRuntimeSummary({ status: this.status });
+        }
+        .padding({ left: 16, right: 16, bottom: 24 })
+        .width('100%')
+      }
+      .layoutWeight(1)
+      .scrollBar(BarState.Off)
+      .align(Alignment.TopStart)
+    }
+    .layoutWeight(1)
+  }
+}
+
+@Component
+struct AiRuntimeSummary {
+  @Prop status: EdgeAiStatus | null;
+
+  build() {
+    Column({ space: 9 }) {
+      Text('运行状态')
+        .fontSize(15)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(UI_COLOR_TEXT)
+        .width('100%')
+      Row() {
+        Column({ space: 2 }) {
+          Text(this.status?.model.loaded ? '已加载' : '未就绪')
+            .fontSize(16)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(this.status?.model.loaded ? UI_COLOR_SUCCESS : UI_COLOR_MUTED)
+          Text('模型状态')
+            .fontSize(10)
+            .fontColor(UI_COLOR_MUTED)
+        }
+        .alignItems(HorizontalAlign.Start)
+        .layoutWeight(1)
+        Column({ space: 2 }) {
+          Text(`${this.status?.devices.length ?? 0}`)
+            .fontSize(16)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(UI_COLOR_TEXT)
+          Text('研判节点')
+            .fontSize(10)
+            .fontColor(UI_COLOR_MUTED)
+        }
+        .alignItems(HorizontalAlign.Start)
+        .layoutWeight(1)
+        Column({ space: 2 }) {
+          Text(`${this.status?.pendingUploadCount ?? 0}`)
+            .fontSize(16)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(UI_COLOR_TEXT)
+          Text('待上传研判')
+            .fontSize(10)
+            .fontColor(UI_COLOR_MUTED)
+        }
+        .alignItems(HorizontalAlign.Start)
+        .layoutWeight(1)
+      }
+      .width('100%')
+    }
+    .padding(14)
+    .backgroundColor(UI_COLOR_SURFACE)
+    .borderRadius(8)
+    .width('100%')
   }
 }
 
@@ -3892,16 +4150,15 @@ struct SettingsItem {
 @Component
 struct BottomTabs {
   @Prop screen: AppScreen;
-  @Prop alertCount: number;
   onSelect: (screen: AppScreen) => void = () => {};
 
   build() {
     Column() {
       Divider().color('#EEF1F3')
       Row() {
-        TabButton({ label: '总览', icon: $r('sys.symbol.house'), active: this.screen === 'overview', badgeCount: 0, onTap: () => this.onSelect('overview') });
+        TabButton({ label: '总览', icon: $r('sys.symbol.house'), active: this.screen === 'overview' || this.screen === 'alerts', badgeCount: 0, onTap: () => this.onSelect('overview') });
         TabButton({ label: '站点', icon: $r('sys.symbol.dot_radiowaves_left_and_right'), active: this.screen === 'stations' || this.screen === 'device', badgeCount: 0, onTap: () => this.onSelect('stations') });
-        TabButton({ label: '告警', icon: $r('sys.symbol.bell'), active: this.screen === 'alerts', badgeCount: this.alertCount, onTap: () => this.onSelect('alerts') });
+        TabButton({ label: 'AI', icon: $r('sys.symbol.arrow_clockwise'), textIcon: 'AI', active: this.screen === 'ai', badgeCount: 0, onTap: () => this.onSelect('ai') });
         TabButton({ label: '我的', icon: $r('sys.symbol.person_crop_circle_fill_1'), active: this.screen === 'settings', badgeCount: 0, onTap: () => this.onSelect('settings') });
       }
       .layoutWeight(1)
@@ -3917,6 +4174,7 @@ struct BottomTabs {
 struct TabButton {
   @Prop label: string;
   @Prop icon: Resource;
+  @Prop textIcon: string = '';
   @Prop active: boolean;
   @Prop badgeCount: number;
   onTap: () => void = () => {};
@@ -3924,9 +4182,21 @@ struct TabButton {
   build() {
     Column({ space: 2 }) {
       Stack({ alignContent: Alignment.TopEnd }) {
-        SymbolGlyph(this.icon)
-          .fontSize(22)
-          .fontColor([this.active ? UI_COLOR_ACCENT : UI_COLOR_MUTED])
+        if (this.textIcon.length > 0) {
+          Text(this.textIcon)
+            .fontSize(11)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(this.active ? UI_COLOR_ACCENT : UI_COLOR_MUTED)
+            .textAlign(TextAlign.Center)
+            .width(25)
+            .height(22)
+            .border({ width: 1.5, color: this.active ? UI_COLOR_ACCENT : UI_COLOR_MUTED })
+            .borderRadius(6)
+        } else {
+          SymbolGlyph(this.icon)
+            .fontSize(22)
+            .fontColor([this.active ? UI_COLOR_ACCENT : UI_COLOR_MUTED])
+        }
         if (this.badgeCount > 0) {
           Text(this.badgeCount > 99 ? '99+' : `${this.badgeCount}`)
             .fontSize(8)
