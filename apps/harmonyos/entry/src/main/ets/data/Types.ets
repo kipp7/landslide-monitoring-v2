@@ -139,6 +139,8 @@ export interface AlertStreamEvent {
   message: string;
   deviceId?: string;
   stationId?: string;
+  latitude?: number;
+  longitude?: number;
   evidence?: JsonRecord;
   createdAt: string;
 }
@@ -438,11 +440,15 @@ export function severityLabel(value: string): string {
 export function eventTypeLabel(value: string): string {
   switch (value.toLowerCase()) {
     case 'created':
+    case 'alert_trigger':
     case 'triggered': return '触发告警';
     case 'acknowledged':
+    case 'alert_ack':
     case 'acked': return '确认告警';
+    case 'alert_resolve':
     case 'resolved': return '解除告警';
     case 'updated':
+    case 'alert_update':
     case 'status_changed': return '状态更新';
     default: return '告警事件';
   }

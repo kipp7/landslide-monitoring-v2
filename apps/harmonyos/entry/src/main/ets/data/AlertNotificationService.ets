@@ -35,7 +35,15 @@ export class AlertNotificationService {
           bundleName: APP_BUNDLE_NAME,
           abilityName: APP_ABILITY_NAME,
           parameters: {
-            alertId: event.alertId
+            alertId: event.alertId,
+            eventId: event.eventId,
+            eventType: event.eventType,
+            severity: event.severity,
+            title: event.title,
+            message: event.message,
+            deviceId: event.deviceId ?? '',
+            stationId: event.stationId ?? '',
+            createdAt: event.createdAt
           }
         }],
         actionType: wantAgent.OperationType.START_ABILITY,
@@ -62,6 +70,14 @@ export class AlertNotificationService {
       });
     } catch {
       // A denied permission or unavailable notification service must not interrupt SSE updates.
+    }
+  }
+
+  async cancel(alertId: string): Promise<void> {
+    try {
+      await notificationManager.cancel(this.notificationId(alertId));
+    } catch {
+      // The notification may already be dismissed or unavailable.
     }
   }
 

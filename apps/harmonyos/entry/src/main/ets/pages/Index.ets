@@ -6,10 +6,12 @@ import { CacheManager } from '../data/CacheManager';
 import { MonitoringRepository } from '../data/Repositories';
 import { SecureSession, SessionStore } from '../data/SessionStore';
 import { AlertNotificationService } from '../data/AlertNotificationService';
+import { AlertAlarmService } from '../data/AlertAlarmService';
 import { AlertStreamClient } from '../data/AlertStreamClient';
 import { PushRegistrationService } from '../data/PushRegistrationService';
 import { Alert, AlertEvent, AlertMapLocation, AlertStreamEvent, DashboardSummary, Device, DeviceState, MetricSeries, SeriesPoint, SeriesResponse, Station, alertStatusLabel, deviceConnectivityLabel, deviceDisplayName, deviceSupportsConductivity, deviceTypeLabel, displayMetric, eventTypeLabel, isAlarmActuatorDevice, isDeviceOnline, isOnlineStatus, metricShortLabel, metricUnitLabel, metricValue, relativeTime, severityLabel, shortTime, soilConductivityValue, soilMoistureValue, soilTemperatureValue, stationDisplayName, stationNameLabel, stationStatusLabel, userDisplayName } from '../data/Types';
 import { AlertMapView } from '../components/AlertMapView';
+import { ActiveAlertBanner, InAppAlertOverlay } from '../components/InAppAlertOverlay';
 import { MetricCard } from '../components/MetricCard';
 import { StatusBanner } from '../components/StatusBanner';
 
@@ -41,6 +43,7 @@ interface DeviceMonitoringTrend {
 @Component
 struct Index {
   @StorageLink('pendingAlertId') @Watch('onPendingAlertChanged') private pendingAlertId: string = '';
+  @StorageLink('pendingAlertPayload') private pendingAlertPayload: string = '';
   @State private sessionRestoring: boolean = true;
   @State private loggedIn: boolean = false;
   @State private showLoginServerSettings: boolean = false;
@@ -83,6 +86,10 @@ struct Index {
   @State private alertMapLocations: Array<AlertMapLocation> = [];
   @State private alertMapLoading: boolean = false;
   @State private appVisible: boolean = true;
+  @State private activeAlertEvent: AlertStreamEvent | null = null;
+  @State private alertOverlayVisible: boolean = false;
+  @State private alertAlarmMuted: boolean = false;
+  @State private queuedAlertCount: number = 0;
 
   private context: common.UIAbilityContext | undefined = undefined;
   private api: ApiClient = new ApiClient(DEFAULT_API_BASE_URL);
@@ -91,7 +98,9 @@ struct Index {
   private alertLocationRepository: AlertLocationRepository | undefined = undefined;
   private alertStream: AlertStreamClient | undefined = undefined;
   private alertNotifications: AlertNotificationService | undefined = undefined;
+  private alertAlarm: AlertAlarmService | undefined = undefined;
   private pushRegistration: PushRegistrationService = new PushRegistrationService();
+  private alertEventQueue: Array<AlertStreamEvent> = [];
   private handlingPendingAlert: boolean = false;
   private overviewTimer: number | undefined = undefined;
   private alertTimer: number | undefined = undefined;
@@ -103,6 +112,7 @@ struct Index {
 
   aboutToAppear(): void {
     this.context = getContext(this) as common.UIAbilityContext;
+    this.alertAlarm = new AlertAlarmService(this.context);
     this.api.setTokenObserver(() => {
       this.saveSession();
     });
@@ -111,7 +121,9 @@ struct Index {
 
   aboutToDisappear(): void {
     this.stopTimers();
-    this.stopAlertStream();
+    this.stopAlertStream(true);
+    if (this.alertAlarm) this.alertAlarm.release();
+    this.alertAlarm = undefined;
   }
 
   onPageShow(): void {
@@ -120,6 +132,7 @@ struct Index {
     this.startTimers();
     this.startAlertStream();
     this.refreshCurrentScreen();
+    if (this.activeAlertEvent && !this.alertAlarmMuted) this.getAlertAlarm().start();
   }
 
   onPageHide(): void {
@@ -209,7 +222,7 @@ struct Index {
 
   private async invalidateSession(): Promise<void> {
     this.stopTimers();
-    this.stopAlertStream();
+    this.stopAlertStream(true);
     this.api.clearTokens();
     if (this.repository) await this.repository.clear();
     await SessionStore.clear();
@@ -229,6 +242,7 @@ struct Index {
   }
 
   private resetMonitoringData(): void {
+    this.clearInAppAlerts();
     this.dashboard = null;
     this.overviewTrends = [];
     this.stations = [];
@@ -319,7 +333,7 @@ struct Index {
 
   private async logout(): Promise<void> {
     this.stopTimers();
-    this.stopAlertStream();
+    this.stopAlertStream(true);
     await this.pushRegistration.unregister(this.api);
     try {
       await this.api.logout();
@@ -703,15 +717,22 @@ struct Index {
     this.alertStream.start();
   }
 
-  private stopAlertStream(): void {
+  private stopAlertStream(resetClient: boolean = false): void {
     if (this.alertStream) this.alertStream.stop();
-    this.alertStream = undefined;
+    if (resetClient) this.alertStream = undefined;
   }
 
   private handleAlertStreamEvent(event: AlertStreamEvent): void {
     if (!this.loggedIn) return;
-    if (event.eventType === 'ALERT_TRIGGER' && this.alertNotifications) {
-      this.alertNotifications.publish(event);
+    const eventType = event.eventType.toUpperCase();
+    if (eventType === 'ALERT_TRIGGER') {
+      if (this.alertNotifications) this.alertNotifications.publish(event);
+      this.presentInAppAlert(event);
+    } else if (eventType === 'ALERT_UPDATE') {
+      this.updateInAppAlert(event);
+    } else if (eventType === 'ALERT_RESOLVE') {
+      if (this.alertNotifications) this.alertNotifications.cancel(event.alertId);
+      this.resolveInAppAlert(event.alertId);
     }
     if (this.screen === 'alerts') this.loadAlerts();
     if (this.screen === 'overview') this.loadOverview();
@@ -727,6 +748,21 @@ struct Index {
     if (!alertId || !this.loggedIn || !this.repository || this.handlingPendingAlert) return;
     this.handlingPendingAlert = true;
     try {
+      const pendingEvent = this.parsePendingAlertEvent(alertId);
+      let shouldPresentFromAlert = true;
+      if (pendingEvent) {
+        const eventType = pendingEvent.eventType.toUpperCase();
+        if (eventType === 'ALERT_RESOLVE') {
+          if (this.alertNotifications) this.alertNotifications.cancel(pendingEvent.alertId);
+          this.resolveInAppAlert(pendingEvent.alertId);
+          shouldPresentFromAlert = false;
+        } else if (eventType === 'ALERT_UPDATE' && this.activeAlertEvent?.alertId === pendingEvent.alertId) {
+          this.activeAlertEvent = pendingEvent;
+          shouldPresentFromAlert = false;
+        } else if (eventType === 'ALERT_TRIGGER') {
+          this.presentInAppAlert(pendingEvent);
+        }
+      }
       this.screen = 'alerts';
       await this.loadAlerts();
       let target: Alert | null = null;
@@ -736,11 +772,198 @@ struct Index {
           break;
         }
       }
-      if (target) await this.openAlertMap(target);
+      if (target && shouldPresentFromAlert) this.presentInAppAlert(this.streamEventFromAlert(target));
     } finally {
       this.pendingAlertId = '';
+      this.pendingAlertPayload = '';
       this.handlingPendingAlert = false;
     }
+  }
+
+  private parsePendingAlertEvent(alertId: string): AlertStreamEvent | null {
+    if (!this.pendingAlertPayload.trim()) return null;
+    try {
+      const event = JSON.parse(this.pendingAlertPayload) as AlertStreamEvent;
+      if (!event.eventId || event.alertId !== alertId) return null;
+      return event;
+    } catch {
+      return null;
+    }
+  }
+
+  private getAlertAlarm(): AlertAlarmService {
+    if (!this.alertAlarm && this.context) this.alertAlarm = new AlertAlarmService(this.context);
+    return this.alertAlarm as AlertAlarmService;
+  }
+
+  private presentInAppAlert(event: AlertStreamEvent): void {
+    if (this.activeAlertEvent) {
+      if (this.activeAlertEvent.alertId === event.alertId) {
+        const escalated = this.activeAlertEvent.severity.toLowerCase() !== 'critical' &&
+          event.severity.toLowerCase() === 'critical';
+        this.activeAlertEvent = event;
+        if (escalated) {
+          this.alertOverlayVisible = true;
+          this.alertAlarmMuted = false;
+          this.getAlertAlarm().start();
+        }
+        return;
+      }
+      for (let index = 0; index < this.alertEventQueue.length; index++) {
+        if (this.alertEventQueue[index].alertId === event.alertId) {
+          this.alertEventQueue[index] = event;
+          return;
+        }
+      }
+      this.alertEventQueue.push(event);
+      this.queuedAlertCount = this.alertEventQueue.length;
+      this.alertOverlayVisible = true;
+      if (this.alertAlarmMuted) {
+        this.alertAlarmMuted = false;
+        this.getAlertAlarm().start();
+      }
+      return;
+    }
+    this.activeAlertEvent = event;
+    this.alertOverlayVisible = true;
+    this.alertAlarmMuted = false;
+    this.getAlertAlarm().start();
+  }
+
+  private updateInAppAlert(event: AlertStreamEvent): void {
+    if (this.activeAlertEvent?.alertId === event.alertId) {
+      this.presentInAppAlert(event);
+      return;
+    }
+    for (let index = 0; index < this.alertEventQueue.length; index++) {
+      if (this.alertEventQueue[index].alertId === event.alertId) {
+        this.alertEventQueue[index] = event;
+        return;
+      }
+    }
+    if (event.severity.toLowerCase() === 'critical') this.presentInAppAlert(event);
+  }
+
+  private toggleAlertAlarm(): void {
+    this.alertAlarmMuted = !this.alertAlarmMuted;
+    if (this.alertAlarmMuted) {
+      if (this.alertAlarm) this.alertAlarm.stop();
+    } else if (this.activeAlertEvent) {
+      this.getAlertAlarm().start();
+    }
+  }
+
+  private hideInAppAlert(): void {
+    this.alertOverlayVisible = false;
+  }
+
+  private resolveInAppAlert(alertId: string): void {
+    if (this.activeAlertEvent?.alertId === alertId) {
+      if (this.alertAlarm) this.alertAlarm.stop();
+      this.activeAlertEvent = null;
+      this.alertOverlayVisible = false;
+      this.alertAlarmMuted = false;
+      const next = this.alertEventQueue.shift();
+      this.queuedAlertCount = this.alertEventQueue.length;
+      if (next) this.presentInAppAlert(next);
+      return;
+    }
+    const remaining: Array<AlertStreamEvent> = [];
+    for (let index = 0; index < this.alertEventQueue.length; index++) {
+      if (this.alertEventQueue[index].alertId !== alertId) remaining.push(this.alertEventQueue[index]);
+    }
+    this.alertEventQueue = remaining;
+    this.queuedAlertCount = remaining.length;
+  }
+
+  private discardInAppAlert(): void {
+    if (this.alertAlarm) this.alertAlarm.stop();
+    this.activeAlertEvent = null;
+    this.alertOverlayVisible = false;
+    this.alertAlarmMuted = false;
+    const next = this.alertEventQueue.shift();
+    this.queuedAlertCount = this.alertEventQueue.length;
+    if (next) this.presentInAppAlert(next);
+  }
+
+  private clearInAppAlerts(): void {
+    if (this.alertAlarm) this.alertAlarm.stop();
+    this.activeAlertEvent = null;
+    this.alertOverlayVisible = false;
+    this.alertAlarmMuted = false;
+    this.alertEventQueue = [];
+    this.queuedAlertCount = 0;
+  }
+
+  private streamEventFromAlert(alert: Alert): AlertStreamEvent {
+    const event: AlertStreamEvent = {
+      type: 'alert',
+      eventId: `notification-${alert.alertId}`,
+      alertId: alert.alertId,
+      eventType: 'ALERT_TRIGGER',
+      severity: alert.severity,
+      title: alert.title,
+      message: alert.message ?? '',
+      deviceId: alert.deviceId,
+      stationId: alert.stationId,
+      evidence: alert.evidence,
+      createdAt: alert.lastEventAt ?? new Date().toISOString()
+    };
+    if (alert.latitude !== undefined) event.latitude = alert.latitude;
+    if (alert.longitude !== undefined) event.longitude = alert.longitude;
+    return event;
+  }
+
+  private alertFromStreamEvent(event: AlertStreamEvent): Alert {
+    const alert: Alert = {
+      alertId: event.alertId,
+      status: 'active',
+      severity: event.severity,
+      title: event.title.trim().length > 0 ? event.title : '监测告警',
+      message: event.message,
+      deviceId: event.deviceId,
+      stationId: event.stationId,
+      evidence: event.evidence,
+      lastEventAt: event.createdAt
+    };
+    if (event.latitude !== undefined) alert.latitude = event.latitude;
+    if (event.longitude !== undefined) alert.longitude = event.longitude;
+    return alert;
+  }
+
+  private async openActiveAlertMap(): Promise<void> {
+    const event = this.activeAlertEvent;
+    if (!event) return;
+    const alert = this.alertFromStreamEvent(event);
+    this.alertOverlayVisible = false;
+    await this.openAlertMap(alert);
+  }
+
+  private activeAlertSourceLabel(): string {
+    const event = this.activeAlertEvent;
+    if (!event) return '监测告警';
+    if (event.deviceId) {
+      for (let index = 0; index < this.devices.length; index++) {
+        if (this.devices[index].deviceId === event.deviceId) return deviceDisplayName(this.devices[index]);
+      }
+      for (let index = 0; index < this.overviewTrends.length; index++) {
+        if (this.overviewTrends[index].device.deviceId === event.deviceId) {
+          return deviceDisplayName(this.overviewTrends[index].device);
+        }
+      }
+      return `监测设备 ${this.shortIdentifier(event.deviceId)}`;
+    }
+    if (event.stationId) {
+      for (let index = 0; index < this.stations.length; index++) {
+        if (this.stations[index].stationId === event.stationId) return stationDisplayName(this.stations[index]);
+      }
+      return `监测站点 ${this.shortIdentifier(event.stationId)}`;
+    }
+    return '监测站点';
+  }
+
+  private shortIdentifier(value: string): string {
+    return value.length > 8 ? value.slice(-8) : value;
   }
 
   private async openAlert(alert: Alert): Promise<void> {
@@ -824,6 +1047,8 @@ struct Index {
     this.screen = 'alerts';
     this.alertMapLoading = false;
     this.loadAlerts();
+    if (this.activeAlertEvent) this.alertOverlayVisible = true;
+    if (!this.activeAlertEvent && this.alertEventQueue.length > 0) this.discardInAppAlert();
   }
 
   private selectScreen(screen: AppScreen): void {
@@ -850,7 +1075,7 @@ struct Index {
     if (this.loggedIn) await this.pushRegistration.unregister(this.api);
     if (this.repository) await this.repository.clear();
     this.stopTimers();
-    this.stopAlertStream();
+    this.stopAlertStream(true);
     this.api.clearTokens();
     await SessionStore.clear();
     this.apiBaseUrl = normalized;
@@ -1007,6 +1232,13 @@ struct Index {
               onLogout: () => this.logout()
             });
           }
+          if (this.activeAlertEvent && !this.alertOverlayVisible && this.screen !== 'alert-map') {
+            ActiveAlertBanner({
+              event: this.activeAlertEvent as AlertStreamEvent,
+              muted: this.alertAlarmMuted,
+              onOpen: () => this.alertOverlayVisible = true
+            });
+          }
           if (this.screen !== 'device' && this.screen !== 'alert-map') {
             BottomTabs({
               screen: this.screen,
@@ -1018,6 +1250,17 @@ struct Index {
         .width('100%')
         .height('100%')
         .backgroundColor('#F5F7F8')
+      }
+      if (this.loggedIn && this.activeAlertEvent && this.alertOverlayVisible) {
+        InAppAlertOverlay({
+          event: this.activeAlertEvent as AlertStreamEvent,
+          muted: this.alertAlarmMuted,
+          queuedCount: this.queuedAlertCount,
+          sourceLabel: this.activeAlertSourceLabel(),
+          onToggleMute: () => this.toggleAlertAlarm(),
+          onOpenMap: () => this.openActiveAlertMap(),
+          onDismiss: () => this.hideInAppAlert()
+        });
       }
     }
     .width('100%')
