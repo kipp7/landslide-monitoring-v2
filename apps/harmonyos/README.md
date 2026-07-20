@@ -59,7 +59,9 @@ built from DevEco Studio or with its bundled `hvigorw` command after setting
   University as the Windows desktop, while an active alert remains centred and
   switches the matching node to a red warning ripple. Other nodes retain a
   green monitoring ripple; a separate red ripple is used when the precise alert
-  coordinate differs from its node location.
+  coordinate differs from its node location. Live GPS markers that resolve to
+  the same site are spread only in the presentation layer and labelled as such,
+  so A/B/C remain selectable without changing their stored coordinates.
 - The station page embeds the same map as a distribution view. It shows every
   monitoring node, focuses the selected station, and refreshes GPS without
   introducing a second location model.
