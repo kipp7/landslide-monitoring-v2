@@ -520,14 +520,50 @@
         return closeCoordinate && (sameDevice || !focusLocation.deviceId);
       }
 
-      function renderNodes(locations, focusLocation, highlightAlert) {
-        clearNodeMarkers();
-        var points = [];
-        var alertNodeMatched = false;
+      function buildNodeLayouts(locations) {
+        var layouts = [];
+        var groups = {};
         (Array.isArray(locations) ? locations : []).forEach(function (location, index) {
           var latitude = Number(location.latitude);
           var longitude = Number(location.longitude);
           if (!validCoordinate(latitude, longitude)) return;
+          var key = latitude.toFixed(4) + ',' + longitude.toFixed(4);
+          if (!groups[key]) groups[key] = [];
+          groups[key].push({ location: location, index: index, latitude: latitude, longitude: longitude });
+        });
+        Object.keys(groups).forEach(function (key) {
+          var members = groups[key];
+          members.forEach(function (member, memberIndex) {
+            var latitude = member.latitude;
+            var longitude = member.longitude;
+            var spread = members.length > 1;
+            if (spread) {
+              var angle = -Math.PI / 2 + Math.PI * 2 * memberIndex / members.length;
+              var radius = 0.00075;
+              latitude += Math.sin(angle) * radius;
+              longitude += Math.cos(angle) * radius / Math.max(0.5, Math.cos(member.latitude * Math.PI / 180));
+            }
+            layouts.push({
+              location: member.location,
+              index: member.index,
+              latitude: latitude,
+              longitude: longitude,
+              spread: spread
+            });
+          });
+        });
+        return layouts.sort(function (left, right) { return left.index - right.index; });
+      }
+
+      function renderNodes(locations, focusLocation, highlightAlert) {
+        clearNodeMarkers();
+        var points = [];
+        var alertNodeMatched = false;
+        buildNodeLayouts(locations).forEach(function (layout) {
+          var location = layout.location;
+          var index = layout.index;
+          var latitude = layout.latitude;
+          var longitude = layout.longitude;
           var label = nodeLabel(location, index);
           var alertNode = isAlertNode(location, focusLocation, highlightAlert);
           if (alertNode) alertNodeMatched = true;
@@ -546,7 +582,8 @@
           }).addTo(map);
           nodeMarker.bindTooltip(
             '<strong>' + escapeHtml(location.locationName) + '</strong><br>' +
-              '<span class="node-map-tooltip__source">' + sourceLabel(location.source) + '</span>',
+              '<span class="node-map-tooltip__source">' + sourceLabel(location.source) +
+              (layout.spread ? ' · 同址展开显示' : '') + '</span>',
             { className: 'node-map-tooltip', direction: 'top', offset: [0, -12], opacity: 1 }
           );
           nodeMarkers.push(nodeMarker);

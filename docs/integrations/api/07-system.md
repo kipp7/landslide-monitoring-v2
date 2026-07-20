@@ -312,7 +312,9 @@ permalink: landslide-monitoring-v2-mainline/docs/integrations/api/07-system
 权限：`data:view`
 
 说明：
-- `todayDataCount` 来自 ClickHouse（按 `received_ts` 统计北京时间自然日，范围为北京时间 00:00 至当前时刻）
+- `todayDataCount` 是 ClickHouse 稀疏表中的传感器数据点行数
+- `todayReportCount` 按 `device_id + received_ts` 去重，表示设备实际上报次数
+- 两项今日统计均使用北京时间自然日，范围为北京时间 00:00 至当前时刻
 - `pendingAlerts` 由告警事件流聚合得到
 
 响应（示例）：
@@ -323,6 +325,7 @@ permalink: landslide-monitoring-v2-mainline/docs/integrations/api/07-system
   "message": "ok",
   "data": {
     "todayDataCount": 123456,
+    "todayReportCount": 12000,
     "onlineDevices": 10,
     "offlineDevices": 2,
     "pendingAlerts": 3,

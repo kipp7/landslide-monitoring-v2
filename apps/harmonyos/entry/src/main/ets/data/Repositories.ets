@@ -1,6 +1,6 @@
 import { ApiClient } from './ApiClient';
 import { CacheManager, CacheRead } from './CacheManager';
-import { DashboardSummary, WeeklyTrend, Station, Device, DeviceState, SensorDefinition, SeriesResponse, AlertPage, AlertEventsResponse, PredictionPage } from './Types';
+import { DashboardSummary, WeeklyTrend, Station, Device, DeviceState, SensorDefinition, SeriesResponse, AlertPage, AlertEventsResponse, PredictionPage, FieldAlarmStatus } from './Types';
 
 interface CacheTtlConfig {
   state: number;
@@ -28,6 +28,7 @@ export class MonitoringRepository {
   private stationListRequest: Promise<Array<Station>> | null = null;
   private deviceListRequests: Map<string, Promise<Array<Device>>> = new Map<string, Promise<Array<Device>>>();
   private alertsRequest: Promise<AlertPage> | null = null;
+  private fieldAlarmStatusRequest: Promise<FieldAlarmStatus> | null = null;
 
   constructor(api: ApiClient, cache: CacheManager) {
     this.api = api;
@@ -104,6 +105,16 @@ export class MonitoringRepository {
     const value = await this.api.devices(stationId);
     await this.cache.write(this.cache.key('/devices', stationId), value);
     return value;
+  }
+
+  async fieldAlarmStatus(): Promise<FieldAlarmStatus> {
+    if (this.fieldAlarmStatusRequest) return this.fieldAlarmStatusRequest;
+    this.fieldAlarmStatusRequest = this.api.fieldAlarmStatus();
+    try {
+      return await this.fieldAlarmStatusRequest;
+    } finally {
+      this.fieldAlarmStatusRequest = null;
+    }
   }
 
   cachedState(deviceId: string): Promise<CacheRead<DeviceState> | null> {
@@ -204,6 +215,7 @@ export class MonitoringRepository {
     this.dashboardRequest = null;
     this.stationListRequest = null;
     this.alertsRequest = null;
+    this.fieldAlarmStatusRequest = null;
     this.deviceListRequests.clear();
     this.stateRequests.clear();
     this.seriesRequests.clear();

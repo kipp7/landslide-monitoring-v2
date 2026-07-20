@@ -76,6 +76,11 @@ type RawRow = {
   quality: number | null;
 };
 
+type TodayTelemetryCounts = {
+  dataPoints: number;
+  reports: number;
+};
+
 function normalizeMetricValue(row: {
   value_f64?: number | null;
   value_i64?: number | null;
@@ -115,17 +120,19 @@ function toClickhouseDateTime64Expr(paramName: string): string {
   return `toDateTime64({${paramName}:String}, 3, 'UTC')`;
 }
 
-async function queryTodayTelemetryCountForDevice(
+async function queryTodayTelemetryCountsForDevice(
   config: AppConfig,
   ch: ClickHouseClient,
   deviceId: string,
   start: Date,
   end: Date
-): Promise<number> {
+): Promise<TodayTelemetryCounts> {
   try {
     const result = await ch.query({
       query: `
-        SELECT toUInt64(count()) AS c
+        SELECT
+          toUInt64(count()) AS data_points,
+          toUInt64(uniqExact(received_ts)) AS reports
         FROM ${config.clickhouseDatabase}.${config.clickhouseTable}
         WHERE device_id = {deviceId:String}
           AND received_ts >= toDateTime64({start:String}, 3, 'UTC')
@@ -138,11 +145,15 @@ async function queryTodayTelemetryCountForDevice(
       },
       format: "JSONEachRow"
     });
-    const rows: { c: number | string }[] = await result.json();
-    const value = rows[0]?.c;
-    return typeof value === "string" ? Number(value) : value ?? 0;
+    const rows: { data_points: number | string; reports: number | string }[] = await result.json();
+    const dataPoints = rows[0]?.data_points ?? 0;
+    const reports = rows[0]?.reports ?? 0;
+    return {
+      dataPoints: typeof dataPoints === "string" ? Number(dataPoints) : dataPoints,
+      reports: typeof reports === "string" ? Number(reports) : reports
+    };
   } catch {
-    return 0;
+    return { dataPoints: 0, reports: 0 };
   }
 }
 
@@ -164,7 +175,7 @@ export function registerDataRoutes(
     }
     const deviceId = parseId.data;
     const now = new Date();
-    const todayDataCount = await queryTodayTelemetryCountForDevice(config, ch, deviceId, beijingStartOfDayUtc(now), now);
+    const todayCounts = await queryTodayTelemetryCountsForDevice(config, ch, deviceId, beijingStartOfDayUtc(now), now);
 
     if (pg) {
       const row = await withPgClient(pg, async (client) =>
@@ -190,7 +201,8 @@ export function registerDataRoutes(
           typeof stateRecord.meta === "object" && stateRecord.meta !== null
             ? { ...(stateRecord.meta as Record<string, unknown>) }
             : {};
-        meta.todayDataCount = todayDataCount;
+        meta.todayDataCount = todayCounts.dataPoints;
+        meta.todayReportCount = todayCounts.reports;
         ok(reply, { deviceId, updatedAt: row.updated_at, state: { ...stateRecord, metrics, meta } }, traceId);
         return;
       }
@@ -231,7 +243,11 @@ export function registerDataRoutes(
 
     ok(
       reply,
-      { deviceId, updatedAt: updatedAt ?? new Date().toISOString(), state: { metrics, meta: { todayDataCount } } },
+      {
+        deviceId,
+        updatedAt: updatedAt ?? new Date().toISOString(),
+        state: { metrics, meta: { todayDataCount: todayCounts.dataPoints, todayReportCount: todayCounts.reports } }
+      },
       traceId
     );
   });

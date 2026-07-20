@@ -27,6 +27,7 @@ export interface LoginData {
 
 export interface DashboardSummary {
   todayDataCount: number;
+  todayReportCount?: number;
   onlineDevices: number;
   offlineDevices: number;
   pendingAlerts: number;
@@ -36,6 +37,25 @@ export interface DashboardSummary {
   freshDevices: number;
   totalDevices: number;
   lastUpdatedAt: string;
+}
+
+export interface FieldAlarmDeviceProbe {
+  available?: boolean;
+  queriedAt?: string;
+}
+
+export interface FieldAlarmActuatorStatus {
+  available: boolean;
+  state?: string;
+  lastActionAt?: string;
+  yx75r?: FieldAlarmDeviceProbe;
+}
+
+export interface FieldAlarmStatus {
+  active: boolean;
+  silenced: boolean;
+  state: string;
+  actuator: FieldAlarmActuatorStatus;
 }
 
 export interface WeeklyTrend {
