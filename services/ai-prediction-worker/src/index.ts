@@ -157,8 +157,10 @@ async function main(): Promise<void> {
   let retrainInProgress = false;
 
   await producer.connect();
-  await consumer.connect();
-  await consumer.subscribe({ topic: config.kafkaTopicTelemetryRaw, fromBeginning: false });
+  if (config.serverPredictionsEnabled) {
+    await consumer.connect();
+    await consumer.subscribe({ topic: config.kafkaTopicTelemetryRaw, fromBeginning: false });
+  }
 
   const retrain = async (): Promise<void> => {
     if (retrainInProgress) return;
@@ -240,53 +242,62 @@ async function main(): Promise<void> {
   void retrain();
   retrainTimer = setInterval(() => void retrain(), config.edgeModelRetrainIntervalMs);
 
-  await consumer.run({
-    eachMessage: async ({ message }) => {
-      const raw = message.value?.toString("utf8") ?? "";
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(raw) as unknown;
-      } catch (error) {
-        logger.warn({ err: error }, "invalid telemetry JSON");
-        return;
-      }
-      if (!validateTelemetryRaw.validate(parsed)) {
-        logger.warn(
-          { errors: validateTelemetryRaw.errors },
-          "telemetry schema rejected by AI worker"
-        );
-        return;
-      }
-      const telemetry = parsed;
-      try {
-        const prediction = await predictFromTelemetry({
-          clickhouse,
-          telemetry,
-          pg,
-          config,
-          artifactRegistry,
-        });
-        const event = buildServerPredictionEvent(config, telemetry, prediction);
-        if (!validateAiPrediction.validate(event)) {
-          logger.error(
-            { errors: validateAiPrediction.errors },
-            "generated AI prediction schema rejected"
+  if (config.serverPredictionsEnabled) {
+    await consumer.run({
+      eachMessage: async ({ message }) => {
+        const raw = message.value?.toString("utf8") ?? "";
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(raw) as unknown;
+        } catch (error) {
+          logger.warn({ err: error }, "invalid telemetry JSON");
+          return;
+        }
+        if (!validateTelemetryRaw.validate(parsed)) {
+          logger.warn(
+            { errors: validateTelemetryRaw.errors },
+            "telemetry schema rejected by AI worker"
           );
           return;
         }
-        if (await persistPrediction(pg, event)) {
-          await publishKafka(producer, config.kafkaTopicAiPredictions, event);
+        const telemetry = parsed;
+        try {
+          const prediction = await predictFromTelemetry({
+            clickhouse,
+            telemetry,
+            pg,
+            config,
+            artifactRegistry,
+          });
+          const event = buildServerPredictionEvent(config, telemetry, prediction);
+          if (!validateAiPrediction.validate(event)) {
+            logger.error(
+              { errors: validateAiPrediction.errors },
+              "generated AI prediction schema rejected"
+            );
+            return;
+          }
+          if (await persistPrediction(pg, event)) {
+            await publishKafka(producer, config.kafkaTopicAiPredictions, event);
+          }
+        } catch (error) {
+          logger.error(
+            { err: error, deviceId: telemetry.device_id },
+            "server AI prediction failed"
+          );
         }
-      } catch (error) {
-        logger.error({ err: error, deviceId: telemetry.device_id }, "server AI prediction failed");
-      }
-    },
-  });
+      },
+    });
+  } else {
+    logger.info(
+      "server per-telemetry predictions disabled; edge model coordination remains active"
+    );
+  }
 
   const shutdown = async (): Promise<void> => {
     clearInterval(retrainTimer);
     mqttClient?.end(true);
-    await consumer.disconnect();
+    if (config.serverPredictionsEnabled) await consumer.disconnect();
     await producer.disconnect();
     await clickhouse?.close();
     await pg.end();
