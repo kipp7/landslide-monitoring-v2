@@ -11,6 +11,7 @@
 #include "los_task.h"
 
 #define MQTT_BUFFER_BYTES 2048
+#define MQTT_RETRIES_BEFORE_WIFI_RESET 3U
 
 static unsigned char g_send_buffer[MQTT_BUFFER_BYTES];
 static unsigned char g_read_buffer[MQTT_BUFFER_BYTES];
@@ -170,17 +171,23 @@ static int ConnectMqtt(void)
 void AlarmMqtt_Run(void)
 {
     uint32_t presence_seconds;
+    uint32_t mqtt_failures = 0;
+    bool wifi_connected = false;
     int result;
     ConfigureWifi();
 
     while (1) {
-        AlarmController_SetNetworkStatus(false, false);
-        SetWifiModeOff();
-        result = SetWifiModeOn();
-        if (result != 0) {
-            printf("Wi-Fi connect failed SSID=%s code=%d\n", TONGXIAO_WIFI_SSID, result);
-            LOS_Msleep(3000);
-            continue;
+        if (!wifi_connected) {
+            AlarmController_SetNetworkStatus(false, false);
+            SetWifiModeOff();
+            result = SetWifiModeOn();
+            if (result != 0) {
+                printf("Wi-Fi connect failed SSID=%s code=%d\n", TONGXIAO_WIFI_SSID, result);
+                LOS_Msleep(3000);
+                continue;
+            }
+            wifi_connected = true;
+            mqtt_failures = 0;
         }
         AlarmController_SetNetworkStatus(true, false);
 
@@ -188,10 +195,17 @@ void AlarmMqtt_Run(void)
         if (result != 0) {
             printf("MQTT connect failed host=%s code=%d\n", TONGXIAO_MQTT_HOST, result);
             NetworkDisconnect(&g_network);
+            ++mqtt_failures;
+            if (mqtt_failures >= MQTT_RETRIES_BEFORE_WIFI_RESET) {
+                printf("MQTT failed %u times; resetting Wi-Fi\n", (unsigned int)mqtt_failures);
+                wifi_connected = false;
+                mqtt_failures = 0;
+            }
             LOS_Msleep(2000);
             continue;
         }
 
+        mqtt_failures = 0;
         printf("MQTT connected topic=%s\n", TONGXIAO_DESIRED_TOPIC);
         AlarmController_SetNetworkStatus(true, true);
         PublishPresence("online");
@@ -212,6 +226,7 @@ void AlarmMqtt_Run(void)
         AlarmController_SetNetworkStatus(true, false);
         MQTTDisconnect(&g_client);
         NetworkDisconnect(&g_network);
+        /* Keep the Wi-Fi association and retry MQTT before cycling the radio. */
         LOS_Msleep(2000);
     }
 }
