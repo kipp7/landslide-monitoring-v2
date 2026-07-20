@@ -49,6 +49,10 @@
     "edge:build": "npm run build -w @lsmv2/edge-risk-model && npm run build -w @lsmv2/observability && npm run build -w @lsmv2/validation && npm run build -w @lsmv2/field-gateway && npm run build -w @lsmv2/field-link-monitor && npm run build -w @lsmv2/hermes-edge-supervisor && npm run build -w @lsmv2/rk3568-alarm-actuator",
     "edge:lint": "npm run lint -w @lsmv2/edge-risk-model && npm run lint -w @lsmv2/observability && npm run lint -w @lsmv2/validation && npm run lint -w @lsmv2/field-gateway && npm run lint -w @lsmv2/field-link-monitor && npm run lint -w @lsmv2/hermes-edge-supervisor && npm run lint -w @lsmv2/rk3568-alarm-actuator"
   },
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1"
+  },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
     "@types/node": "^22.10.5",
