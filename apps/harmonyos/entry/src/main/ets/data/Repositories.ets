@@ -1,6 +1,6 @@
 import { ApiClient } from './ApiClient';
 import { CacheManager, CacheRead } from './CacheManager';
-import { DashboardSummary, WeeklyTrend, Station, Device, DeviceState, SensorDefinition, SeriesResponse, AlertPage, AlertEventsResponse, PredictionPage, FieldAlarmStatus, EdgeAiStatus } from './Types';
+import { DashboardSummary, WeeklyTrend, Station, Device, DeviceState, SensorDefinition, SeriesResponse, AlertPage, AlertEventsResponse, PredictionPage, FieldAlarmStatus, EdgeAiStatus, EdgeAiActionName, EdgeAiActionResponse, EdgeAiActionHistory, EdgeAiIntentResponse } from './Types';
 
 interface CacheTtlConfig {
   state: number;
@@ -30,6 +30,7 @@ export class MonitoringRepository {
   private alertsRequest: Promise<AlertPage> | null = null;
   private fieldAlarmStatusRequest: Promise<FieldAlarmStatus> | null = null;
   private edgeAiStatusRequest: Promise<EdgeAiStatus> | null = null;
+  private edgeAiActionsRequest: Promise<EdgeAiActionHistory> | null = null;
 
   constructor(api: ApiClient, cache: CacheManager) {
     this.api = api;
@@ -138,8 +139,22 @@ export class MonitoringRepository {
     return value;
   }
 
-  async recheckEdgeAi(): Promise<void> {
-    await this.api.recheckEdgeAi();
+  async edgeAiActions(): Promise<EdgeAiActionHistory> {
+    if (this.edgeAiActionsRequest) return this.edgeAiActionsRequest;
+    this.edgeAiActionsRequest = this.api.edgeAiActions();
+    try {
+      return await this.edgeAiActionsRequest;
+    } finally {
+      this.edgeAiActionsRequest = null;
+    }
+  }
+
+  runEdgeAiAction(action: EdgeAiActionName, intent: string): Promise<EdgeAiActionResponse> {
+    return this.api.runEdgeAiAction(action, intent);
+  }
+
+  runEdgeAiIntent(intent: string): Promise<EdgeAiIntentResponse> {
+    return this.api.runEdgeAiIntent(intent);
   }
 
   cachedState(deviceId: string): Promise<CacheRead<DeviceState> | null> {

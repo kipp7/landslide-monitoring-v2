@@ -913,7 +913,8 @@ paths:
         - name: eventType
           in: query
           required: false
-          schema: { type: string, enum: [COMMAND_SENT, COMMAND_ACKED, COMMAND_FAILED, COMMAND_TIMEOUT] }
+          schema:
+            { type: string, enum: [COMMAND_SENT, COMMAND_ACKED, COMMAND_FAILED, COMMAND_TIMEOUT] }
       responses:
         "200":
           description: ok
@@ -955,7 +956,8 @@ paths:
         - name: eventType
           in: query
           required: false
-          schema: { type: string, enum: [COMMAND_SENT, COMMAND_ACKED, COMMAND_FAILED, COMMAND_TIMEOUT] }
+          schema:
+            { type: string, enum: [COMMAND_SENT, COMMAND_ACKED, COMMAND_FAILED, COMMAND_TIMEOUT] }
         - name: bucket
           in: query
           required: false
@@ -1040,7 +1042,8 @@ paths:
         - name: eventType
           in: query
           required: false
-          schema: { type: string, enum: [COMMAND_SENT, COMMAND_ACKED, COMMAND_FAILED, COMMAND_TIMEOUT] }
+          schema:
+            { type: string, enum: [COMMAND_SENT, COMMAND_ACKED, COMMAND_FAILED, COMMAND_TIMEOUT] }
         - name: status
           in: query
           required: false
@@ -1623,6 +1626,20 @@ paths:
           $ref: "#/components/responses/ErrorResponse"
 
   /edge-ai/actions:
+    get:
+      tags: [ai]
+      summary: List recent Hermes actions
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "503":
+          $ref: "#/components/responses/ErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
     post:
       tags: [ai]
       summary: Request a bounded Hermes sidecar action
@@ -1632,6 +1649,30 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/EdgeAiActionRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "503":
+          $ref: "#/components/responses/ErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /edge-ai/intents:
+    post:
+      tags: [ai]
+      summary: Resolve and execute a safe natural-language Hermes intent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EdgeAiIntentRequest"
       responses:
         "200":
           $ref: "#/components/responses/SuccessResponse"
@@ -3306,7 +3347,16 @@ components:
 
     DashboardSummary:
       type: object
-      required: [todayDataCount, onlineDevices, offlineDevices, pendingAlerts, alertsBySeverity, stations, lastUpdatedAt]
+      required:
+        [
+          todayDataCount,
+          onlineDevices,
+          offlineDevices,
+          pendingAlerts,
+          alertsBySeverity,
+          stations,
+          lastUpdatedAt,
+        ]
       properties:
         todayDataCount: { type: integer, minimum: 0 }
         onlineDevices: { type: integer, minimum: 0 }
@@ -3357,7 +3407,14 @@ components:
 
     CreateDeviceCommandResponse:
       type: object
-      required: [commandId, status, notifyOnAck, successNotificationPolicy, effectiveSuccessNotificationPolicy]
+      required:
+        [
+          commandId,
+          status,
+          notifyOnAck,
+          successNotificationPolicy,
+          effectiveSuccessNotificationPolicy,
+        ]
       properties:
         commandId: { type: string, format: uuid }
         status: { type: string, enum: [queued, sent, acked, failed, timeout] }
@@ -3367,7 +3424,19 @@ components:
 
     DeviceCommand:
       type: object
-      required: [commandId, deviceId, commandType, payload, notifyOnAck, successNotificationPolicy, effectiveSuccessNotificationPolicy, status, createdAt, updatedAt]
+      required:
+        [
+          commandId,
+          deviceId,
+          commandType,
+          payload,
+          notifyOnAck,
+          successNotificationPolicy,
+          effectiveSuccessNotificationPolicy,
+          status,
+          createdAt,
+          updatedAt,
+        ]
       properties:
         commandId: { type: string, format: uuid }
         deviceId: { type: string, format: uuid }
@@ -3578,7 +3647,17 @@ components:
 
     TelemetryDlqMessage:
       type: object
-      required: [messageId, receivedAt, deviceId, reasonCode, reasonDetail, rawPayloadPreview, kafka, createdAt]
+      required:
+        [
+          messageId,
+          receivedAt,
+          deviceId,
+          reasonCode,
+          reasonDetail,
+          rawPayloadPreview,
+          kafka,
+          createdAt,
+        ]
       properties:
         messageId: { type: string, format: uuid }
         receivedAt: { type: string, format: date-time }
@@ -3598,7 +3677,8 @@ components:
 
     TelemetryDlqMessageDetail:
       type: object
-      required: [messageId, receivedAt, deviceId, reasonCode, reasonDetail, rawPayload, kafka, createdAt]
+      required:
+        [messageId, receivedAt, deviceId, reasonCode, reasonDetail, rawPayload, kafka, createdAt]
       properties:
         messageId: { type: string, format: uuid }
         receivedAt: { type: string, format: date-time }
@@ -3971,7 +4051,17 @@ components:
 
     AnomalyAssessmentItem:
       type: object
-      required: [anomaly_type, count, severity, priority, latest_time, color, display_name, recommended_action]
+      required:
+        [
+          anomaly_type,
+          count,
+          severity,
+          priority,
+          latest_time,
+          color,
+          display_name,
+          recommended_action,
+        ]
       properties:
         anomaly_type: { type: string }
         count: { type: integer, minimum: 0 }
@@ -4091,7 +4181,11 @@ components:
                   type: object
                   required: [eventType, ts, evidence, explain]
                   properties:
-                    eventType: { type: string, enum: [ALERT_TRIGGER, ALERT_UPDATE, ALERT_RESOLVE, ALERT_ACK] }
+                    eventType:
+                      {
+                        type: string,
+                        enum: [ALERT_TRIGGER, ALERT_UPDATE, ALERT_RESOLVE, ALERT_ACK],
+                      }
                     ts: { type: string, format: date-time }
                     evidence:
                       type: object
@@ -4187,7 +4281,14 @@ components:
 
     GpsBaselineAvailableDevices:
       type: object
-      required: [availableDevices, totalGpsDevices, devicesWithBaseline, devicesNeedingBaseline, lookbackDays]
+      required:
+        [
+          availableDevices,
+          totalGpsDevices,
+          devicesWithBaseline,
+          devicesNeedingBaseline,
+          lookbackDays,
+        ]
       properties:
         availableDevices:
           type: array
@@ -4239,7 +4340,17 @@ components:
 
     GpsBaselineQualityCheck:
       type: object
-      required: [deviceId, lookbackDays, keys, baseline, sample, driftMeters, recommendation, baselineAgeHours]
+      required:
+        [
+          deviceId,
+          lookbackDays,
+          keys,
+          baseline,
+          sample,
+          driftMeters,
+          recommendation,
+          baselineAgeHours,
+        ]
       properties:
         deviceId: { type: string, format: uuid }
         lookbackDays: { type: integer, minimum: 1 }
@@ -4307,7 +4418,17 @@ components:
 
     GpsDeformationPoint:
       type: object
-      required: [ts, latitude, longitude, altitude, horizontalMeters, verticalMeters, distanceMeters, counts]
+      required:
+        [
+          ts,
+          latitude,
+          longitude,
+          altitude,
+          horizontalMeters,
+          verticalMeters,
+          distanceMeters,
+          counts,
+        ]
       properties:
         ts: { type: string, format: date-time }
         latitude: { type: number }
@@ -4346,7 +4467,16 @@ components:
 
     GpsDerivedCeemd:
       type: object
-      required: [imfs, residue, energyDistribution, dominantFrequencies, qualityScore, reconstructionError, orthogonality]
+      required:
+        [
+          imfs,
+          residue,
+          energyDistribution,
+          dominantFrequencies,
+          qualityScore,
+          reconstructionError,
+          orthogonality,
+        ]
       properties:
         imfs:
           type: array
@@ -4393,15 +4523,7 @@ components:
     AiPrediction:
       type: object
       required:
-        [
-          predictionId,
-          deviceId,
-          modelKey,
-          horizonSeconds,
-          predictedTs,
-          riskScore,
-          createdAt
-        ]
+        [predictionId, deviceId, modelKey, horizonSeconds, predictedTs, riskScore, createdAt]
       properties:
         predictionId: { type: string, format: uuid }
         deviceId: { type: string, format: uuid }
@@ -4442,10 +4564,31 @@ components:
           type: string
           maxLength: 500
 
+    EdgeAiIntentRequest:
+      type: object
+      additionalProperties: false
+      required: [intent]
+      properties:
+        intent:
+          type: string
+          minLength: 1
+          maxLength: 500
+
     EdgeAiStatus:
       type: object
       required:
-        [available, mode, generatedAt, mqttConnected, model, overallRiskLevel, hardRuleTriggered, devices, tasks, pendingUploadCount]
+        [
+          available,
+          mode,
+          generatedAt,
+          mqttConnected,
+          model,
+          overallRiskLevel,
+          hardRuleTriggered,
+          devices,
+          tasks,
+          pendingUploadCount,
+        ]
       properties:
         available: { type: boolean }
         mode: { type: string, enum: [hermes-edge-risk-agent] }

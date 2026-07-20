@@ -272,6 +272,73 @@ export interface EdgeAgentTask {
   verification: string;
 }
 
+export type EdgeAiActionName = 'recheck' | 'collect_logs' | 'generate_report';
+
+export interface EdgeAiActionResult {
+  reportReady?: boolean;
+  generatedAt?: string;
+  overallLevel?: string;
+  diagnosisType?: string;
+  confidence?: number;
+  confidenceLevel?: string;
+  taskCount?: number;
+  blockedCount?: number;
+  recommendedPlan?: Array<string>;
+  suggestedCommands?: Array<string>;
+  note?: string;
+  edgeRiskLevel?: string;
+  edgeRiskScore?: number;
+  edgeRiskModelVersion?: string;
+  edgeAgentPendingUploads?: number;
+}
+
+export interface HermesAction {
+  id: string;
+  createdAt: string;
+  action: EdgeAiActionName;
+  status: string;
+  requestedBy: string;
+  naturalLanguageIntent?: string;
+  summary: string;
+  result: EdgeAiActionResult;
+}
+
+export interface EdgeAiSafetyBoundary {
+  readOnly: boolean;
+  gatewayCoreTouched: boolean;
+  serialTouched: boolean;
+  mqttTouched: boolean;
+  message: string;
+}
+
+export interface EdgeAiActionResponse {
+  schema_version: number;
+  accepted: boolean;
+  action: HermesAction;
+  safetyBoundary: EdgeAiSafetyBoundary;
+}
+
+export interface EdgeAiActionHistory {
+  schema_version: number;
+  generatedAt: string;
+  actions: Array<HermesAction>;
+}
+
+export interface EdgeAiIntentResolution {
+  resolved: boolean;
+  blocked: boolean;
+  action?: EdgeAiActionName | null;
+  label?: string | null;
+  reason: string;
+  suggestions: Array<EdgeAiActionName>;
+}
+
+export interface EdgeAiIntentResponse {
+  intent: string;
+  resolution: EdgeAiIntentResolution;
+  execution?: EdgeAiActionResponse | null;
+}
+
 export interface EdgeRiskModelStatus {
   loaded: boolean;
   modelKey?: string;
@@ -293,6 +360,7 @@ export interface EdgeAiStatus {
   devices: Array<EdgeRiskDevice>;
   tasks: Array<EdgeAgentTask>;
   pendingUploadCount: number;
+  runtimeError?: string;
 }
 
 export function numberValue(value: Object | undefined): number | null {

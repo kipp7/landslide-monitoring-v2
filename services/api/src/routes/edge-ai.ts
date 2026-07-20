@@ -13,10 +13,146 @@ const actionSchema = z
   })
   .strict();
 
+const intentSchema = z
+  .object({
+    intent: z.string().trim().min(1).max(500),
+  })
+  .strict();
+
+type SafeHermesAction = z.infer<typeof actionSchema>["action"];
+
+export type EdgeAiIntentResolution = {
+  resolved: boolean;
+  blocked: boolean;
+  action: SafeHermesAction | null;
+  label: string | null;
+  reason: string;
+  suggestions: SafeHermesAction[];
+};
+
 type JsonObject = Record<string, unknown>;
 
 function isObject(value: unknown): value is JsonObject {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+const ACTION_LABELS: Record<SafeHermesAction, string> = {
+  recheck: "重新研判",
+  collect_logs: "诊断链路",
+  generate_report: "生成报告",
+};
+
+const PROTECTED_INTENT_TERMS = [
+  "重启",
+  "关闭服务",
+  "停止服务",
+  "切换网络",
+  "切换wifi",
+  "修改阈值",
+  "调整阈值",
+  "触发告警",
+  "解除告警",
+  "控制设备",
+  "写串口",
+] as const;
+
+const INTENT_TERMS: Record<SafeHermesAction, readonly string[]> = {
+  recheck: [
+    "重新研判",
+    "重新检查",
+    "复检",
+    "检查风险",
+    "为什么危险",
+    "为什么预警",
+    "节点状态",
+    "风险状态",
+    "倾角",
+    "gps",
+    "湿度",
+    "电导率",
+  ],
+  collect_logs: [
+    "收集日志",
+    "日志诊断",
+    "诊断链路",
+    "检查链路",
+    "通信故障",
+    "上传异常",
+    "mqtt",
+    "串口日志",
+    "故障证据",
+  ],
+  generate_report: [
+    "生成报告",
+    "生成简报",
+    "态势报告",
+    "态势简报",
+    "处置报告",
+    "汇报材料",
+    "总结当前",
+  ],
+};
+
+function normalizedIntent(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/gu, "");
+}
+
+export function resolveEdgeAiIntent(intent: string): EdgeAiIntentResolution {
+  const normalized = normalizedIntent(intent);
+  if (PROTECTED_INTENT_TERMS.some((term) => normalized.includes(term))) {
+    return {
+      resolved: false,
+      blocked: true,
+      action: null,
+      label: null,
+      reason: "请求涉及受保护的设备或告警控制，必须由人工在专用页面确认",
+      suggestions: ["recheck", "generate_report"],
+    };
+  }
+
+  const matches = (Object.keys(INTENT_TERMS) as SafeHermesAction[])
+    .map((action) => ({
+      action,
+      terms: INTENT_TERMS[action].filter((term) => normalized.includes(term)),
+    }))
+    .filter((entry) => entry.terms.length > 0)
+    .sort((left, right) => {
+      const countDelta = right.terms.length - left.terms.length;
+      if (countDelta !== 0) return countDelta;
+      const rightLength = Math.max(...right.terms.map((term) => term.length));
+      const leftLength = Math.max(...left.terms.map((term) => term.length));
+      return rightLength - leftLength;
+    });
+  const first = matches[0];
+  const second = matches[1];
+  if (!first) {
+    return {
+      resolved: false,
+      blocked: false,
+      action: null,
+      label: null,
+      reason: "没有识别到可安全执行的任务，请选择建议动作",
+      suggestions: ["recheck", "generate_report", "collect_logs"],
+    };
+  }
+  if (second?.terms.length === first.terms.length) {
+    return {
+      resolved: false,
+      blocked: false,
+      action: null,
+      label: null,
+      reason: "请求同时包含多个任务，请先选择本次要执行的动作",
+      suggestions: [first.action, second.action],
+    };
+  }
+  return {
+    resolved: true,
+    blocked: false,
+    action: first.action,
+    label: ACTION_LABELS[first.action],
+    reason: `识别到“${first.terms.join("、")}”，将执行${ACTION_LABELS[first.action]}`,
+    suggestions: [],
+  };
 }
 
 function hermesBaseUrl(config: AppConfig): string | null {
@@ -124,6 +260,22 @@ export function registerEdgeAiRoutes(
     );
   });
 
+  app.get("/edge-ai/actions", async (request, reply) => {
+    const traceId = request.traceId;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
+    const result = await callHermes(config, "/v1/actions", { method: "GET" });
+    if (!result.ok) {
+      fail(
+        reply,
+        result.status > 0 ? result.status : 503,
+        result.error ?? "Hermes 任务历史暂不可用",
+        traceId
+      );
+      return;
+    }
+    ok(reply, result.body, traceId);
+  });
+
   app.post("/edge-ai/actions", async (request, reply) => {
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "system:config"))) return;
@@ -158,5 +310,46 @@ export function registerEdgeAiRoutes(
       return;
     }
     ok(reply, result.body, traceId);
+  });
+
+  app.post("/edge-ai/intents", async (request, reply) => {
+    const traceId = request.traceId;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "system:config"))) return;
+    const parsed = intentSchema.safeParse(request.body);
+    if (!parsed.success) {
+      fail(reply, 400, "参数错误", traceId, { field: "body", issues: parsed.error.issues });
+      return;
+    }
+    const resolution = resolveEdgeAiIntent(parsed.data.intent);
+    if (!resolution.resolved || !resolution.action) {
+      ok(reply, { intent: parsed.data.intent, resolution, execution: null }, traceId);
+      return;
+    }
+    const result = await callHermes(config, `/v1/actions/${resolution.action}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        requestedBy: "api-user",
+        intent: parsed.data.intent,
+      }),
+    });
+    void enqueueOperationLog(pg, request, {
+      module: "edge_ai",
+      action: resolution.action,
+      description: "Hermes resolved safe natural-language intent",
+      status: result.ok ? "success" : "fail",
+      requestData: { intent: parsed.data.intent, resolution },
+      responseData: result.body,
+    });
+    if (!result.ok) {
+      fail(
+        reply,
+        result.status > 0 ? result.status : 503,
+        result.error ?? "Hermes 意图执行失败",
+        traceId
+      );
+      return;
+    }
+    ok(reply, { intent: parsed.data.intent, resolution, execution: result.body }, traceId);
   });
 }
