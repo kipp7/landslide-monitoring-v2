@@ -46,5 +46,8 @@ COPY --from=builder /repo/services/ai-prediction-worker/package.json /repo/servi
 COPY --from=builder /repo/services/ai-prediction-worker/dist /repo/services/ai-prediction-worker/dist
 COPY docs/integrations/kafka/schemas /repo/docs/integrations/kafka/schemas
 
+RUN mkdir -p /data/models && chown -R node:node /repo /data/models
+
 VOLUME ["/data/models"]
+USER node
 CMD ["node", "services/ai-prediction-worker/dist/index.js"]

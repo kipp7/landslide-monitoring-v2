@@ -1,0 +1,72 @@
+name: lsmv2-edge-ai-runtime
+
+# Runtime-only deployment for servers that consume a prebuilt image and keep
+# their production Compose snapshot immutable. It joins the existing backend
+# network without redefining or recreating any core service.
+services:
+  ai-prediction-worker:
+    profiles: ["edge-ai"]
+    image: ${EDGE_AI_IMAGE:-lsmv2/ai-prediction-worker:latest}
+    pull_policy: never
+    container_name: lsmv2_ai_prediction_worker
+    restart: unless-stopped
+    init: true
+    cpus: 0.50
+    mem_limit: 384m
+    pids_limit: 64
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      NODE_ENV: production
+      NODE_OPTIONS: --max-old-space-size=256
+      SERVICE_NAME: ai-prediction-worker
+      KAFKA_BROKERS: ${KAFKA_BROKERS_INTERNAL:-kafka:9092}
+      KAFKA_CLIENT_ID: ai-prediction-worker
+      KAFKA_GROUP_ID: ai-prediction-worker.v1
+      KAFKA_TOPIC_TELEMETRY_RAW: telemetry.raw.v1
+      KAFKA_TOPIC_AI_PREDICTIONS: ai.predictions.v1
+      MQTT_URL: mqtt://emqx:1883
+      MQTT_USERNAME: ${MQTT_INTERNAL_USERNAME:-ingest-service}
+      MQTT_PASSWORD: ${MQTT_INTERNAL_PASSWORD:-}
+      MQTT_CLIENT_ID: ai-prediction-worker
+      MQTT_EDGE_PREDICTION_TOPIC: edge/ai/predictions/+
+      MQTT_EDGE_MODEL_TOPIC: edge/ai/models/landslide-risk/v1
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: ${PG_PORT:-5432}
+      POSTGRES_USER: ${PG_USER:-landslide}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-change-me}
+      POSTGRES_DATABASE: ${PG_DATABASE:-landslide_monitor}
+      POSTGRES_POOL_MAX: ${AI_PREDICTION_POSTGRES_POOL_MAX:-5}
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_USERNAME: ${CH_USER:-landslide}
+      CLICKHOUSE_PASSWORD: ${CH_PASSWORD:-change-me}
+      CLICKHOUSE_DATABASE: ${CH_DATABASE:-landslide}
+      CLICKHOUSE_TABLE: telemetry_raw
+      PREDICT_HORIZON_SECONDS: ${AI_PREDICT_HORIZON_SECONDS:-3600}
+      EDGE_MODEL_DIRECTORY: /data/models
+      EDGE_MODEL_TRAINING_WINDOW_HOURS: ${EDGE_MODEL_TRAINING_WINDOW_HOURS:-24}
+      EDGE_MODEL_RETRAIN_INTERVAL_MS: ${EDGE_MODEL_RETRAIN_INTERVAL_MS:-21600000}
+    volumes:
+      - edge_ai_models:/data/models
+    networks:
+      - production
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    stop_grace_period: 20s
+
+networks:
+  production:
+    name: ${EDGE_AI_DOCKER_NETWORK:-lsmv2-production_default}
+    external: true
+
+volumes:
+  edge_ai_models:
+    name: ${EDGE_AI_MODEL_VOLUME:-lsmv2_edge_ai_models}
