@@ -48,6 +48,7 @@ Write-Host "Kafka is ready." -ForegroundColor Green
 $topics = @(
   "telemetry.raw.v1",
   "telemetry.dlq.v1",
+  "ai.predictions.v1",
   "alerts.events.v1",
   "device.commands.v1",
   "device.command_acks.v1",
