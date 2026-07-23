@@ -103,6 +103,14 @@ void test("GPS baseline displacement triggers the hard boundary", () => {
     deviceId,
     now,
     history: [
+      snapshot("2026-07-21T03:59:45.000Z", {
+        gps_latitude: 24.43833,
+        gps_longitude: 118.09631,
+      }),
+      snapshot("2026-07-21T03:59:50.000Z", {
+        gps_latitude: 24.43833,
+        gps_longitude: 118.09631,
+      }),
       snapshot("2026-07-21T03:59:55.000Z", {
         tilt_x_deg: 1,
         tilt_y_deg: 2,
@@ -115,6 +123,52 @@ void test("GPS baseline displacement triggers the hard boundary", () => {
   assert.equal(result.riskLevel, "danger");
   assert.equal(result.hardRuleTriggered, true);
   assert.ok(result.hardRuleReasons.some((reason) => reason.includes("GPS基线位移")));
+});
+
+void test("a single GPS outlier cannot trigger the hard boundary", () => {
+  const result = evaluateEdgeRisk({
+    artifact: artifact(),
+    deviceId,
+    now,
+    history: [
+      snapshot("2026-07-21T03:59:35.000Z", {
+        tilt_x_deg: 1,
+        tilt_y_deg: 2,
+        gps_latitude: 24.43803,
+        gps_longitude: 118.09631,
+      }),
+      snapshot("2026-07-21T03:59:40.000Z", {
+        tilt_x_deg: 1,
+        tilt_y_deg: 2,
+        gps_latitude: 24.438031,
+        gps_longitude: 118.096311,
+      }),
+      snapshot("2026-07-21T03:59:45.000Z", {
+        tilt_x_deg: 1,
+        tilt_y_deg: 2,
+        gps_latitude: 24.438029,
+        gps_longitude: 118.096309,
+      }),
+      snapshot("2026-07-21T03:59:50.000Z", {
+        tilt_x_deg: 1,
+        tilt_y_deg: 2,
+        gps_latitude: 24.438032,
+        gps_longitude: 118.096312,
+      }),
+      snapshot("2026-07-21T03:59:55.000Z", {
+        tilt_x_deg: 1,
+        tilt_y_deg: 2,
+        gps_latitude: 24.43803,
+        gps_longitude: 0,
+      }),
+    ],
+  });
+
+  assert.equal(result.hardRuleTriggered, false);
+  assert.equal(result.riskLevel, "normal");
+  assert.ok(
+    (result.features.find((feature) => feature.key === "gps_displacement")?.value ?? 1) < 1
+  );
 });
 
 void test("node without conductivity remains evaluable and stale data is labelled", () => {

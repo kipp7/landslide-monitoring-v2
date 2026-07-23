@@ -33,6 +33,8 @@ Use `.env.example` as a local template. Key variables:
 - `HTTP_HOST` / `HTTP_PORT` - local HTTP listener.
 - `MQTT_TELEMETRY_TOPIC` - existing field telemetry subscription (default `telemetry/+`).
 - `MQTT_TELEMETRY_MAX_PAYLOAD_BYTES` - input size limit before JSON validation.
+- `RISK_MODEL_MAX_AGE_MS` - maximum accepted model age; expired models remain visible for
+  diagnostics but do not evaluate or publish risk.
 
 ## Local Development
 

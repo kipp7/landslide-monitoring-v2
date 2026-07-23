@@ -6,6 +6,9 @@
   serial parsing, spooling and MQTT publishing do not call AI code.
 - Hermes independently subscribes read-only to `telemetry/+`. This avoids a
   field-gateway or field-link-monitor upgrade and keeps both services untouched.
+- GPS risk features require at least three coordinate pairs and use the median
+  of the latest five valid pairs, so a single zero or jump frame cannot trigger
+  the hard displacement boundary.
 - Hermes inference is advisory and runs in its existing sidecar service with
   `CPUQuota=50%`, `MemoryMax=384M`, `TasksMax=64` and lower process priority.
 - The server worker is an opt-in Compose profile with `0.5 CPU / 384 MB`.
@@ -64,6 +67,9 @@ restarts only Hermes. The gateway and rule chain remain untouched.
 
 - Invalid or checksum-mismatched models are rejected; the last valid model is
   retained.
+- A retained model older than `RISK_MODEL_MAX_AGE_MS` stays available for
+  diagnostics, but Hermes stops risk evaluation and publication until a fresh
+  retained model arrives. Live telemetry continues to be buffered locally.
 - MQTT publish waits at most three seconds before queuing locally.
 - The offline queue is persisted atomically and capped at 200 predictions.
 - Model, MQTT or state-file errors are reported in status but cannot fail the

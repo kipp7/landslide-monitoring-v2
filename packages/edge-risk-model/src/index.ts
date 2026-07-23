@@ -116,6 +116,8 @@ const METRIC_ALIASES = {
   latitude: ["gps_latitude", "latitude", "lat"],
   longitude: ["gps_longitude", "longitude", "lng", "lon"],
 } as const;
+const GPS_MEDIAN_SAMPLE_COUNT = 5;
+const GPS_MIN_SAMPLE_COUNT = 3;
 
 export const DEFAULT_EDGE_RISK_POLICY: EdgeRiskPolicy = {
   scoreThresholds: {
@@ -208,6 +210,46 @@ function distanceMeters(lat1: number, lon1: number, lat2: number, lon2: number):
   return radiusM * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(Math.max(0, 1 - a)));
 }
 
+function median(values: number[]): number {
+  const sorted = values.slice().sort((left, right) => left - right);
+  const middle = Math.floor(sorted.length / 2);
+  const value = sorted[middle];
+  if (value === undefined) return Number.NaN;
+  if (sorted.length % 2 === 1) return value;
+  return (value + (sorted[middle - 1] ?? value)) / 2;
+}
+
+function coordinate(snapshot: EdgeTelemetrySnapshot): { latitude: number; longitude: number } | null {
+  const latitude = metricValue(snapshot.metrics, METRIC_ALIASES.latitude);
+  const longitude = metricValue(snapshot.metrics, METRIC_ALIASES.longitude);
+  if (latitude === null || longitude === null) return null;
+  if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) return null;
+  if (latitude === 0 && longitude === 0) return null;
+  return { latitude, longitude };
+}
+
+function robustCoordinateAtOrBefore(
+  history: EdgeTelemetrySnapshot[],
+  targetMs: number
+): { latitude: number; longitude: number } | null {
+  const samples: { latitude: number; longitude: number }[] = [];
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    const snapshot = history[index];
+    if (!snapshot) continue;
+    const snapshotMs = Date.parse(snapshot.receivedAt);
+    if (!Number.isFinite(snapshotMs) || snapshotMs > targetMs) continue;
+    const value = coordinate(snapshot);
+    if (!value) continue;
+    samples.push(value);
+    if (samples.length >= GPS_MEDIAN_SAMPLE_COUNT) break;
+  }
+  if (samples.length < GPS_MIN_SAMPLE_COUNT) return null;
+  return {
+    latitude: median(samples.map((entry) => entry.latitude)),
+    longitude: median(samples.map((entry) => entry.longitude)),
+  };
+}
+
 function closestBefore(
   history: EdgeTelemetrySnapshot[],
   targetMs: number
@@ -284,7 +326,6 @@ export function evaluateEdgeRisk(input: {
     ? Math.max(0, (now.getTime() - latestMs) / 1000)
     : null;
   const snapshot5m = latest ? closestBefore(sortedHistory, latestMs - 5 * 60 * 1000) : null;
-  const snapshot30m = latest ? closestBefore(sortedHistory, latestMs - 30 * 60 * 1000) : null;
 
   const latestTiltX = latest ? metricValue(latest.metrics, METRIC_ALIASES.tiltX) : null;
   const latestTiltY = latest ? metricValue(latest.metrics, METRIC_ALIASES.tiltY) : null;
@@ -294,10 +335,10 @@ export function evaluateEdgeRisk(input: {
   const latestConductivity = latest
     ? metricValue(latest.metrics, METRIC_ALIASES.conductivity)
     : null;
-  const latestLat = latest ? metricValue(latest.metrics, METRIC_ALIASES.latitude) : null;
-  const latestLon = latest ? metricValue(latest.metrics, METRIC_ALIASES.longitude) : null;
-  const lat30m = snapshot30m ? metricValue(snapshot30m.metrics, METRIC_ALIASES.latitude) : null;
-  const lon30m = snapshot30m ? metricValue(snapshot30m.metrics, METRIC_ALIASES.longitude) : null;
+  const latestCoordinate = latest ? robustCoordinateAtOrBefore(sortedHistory, latestMs) : null;
+  const coordinate30m = latest
+    ? robustCoordinateAtOrBefore(sortedHistory, latestMs - 30 * 60 * 1000)
+    : null;
 
   const tiltDeviation =
     latestTiltX !== null &&
@@ -314,20 +355,24 @@ export function evaluateEdgeRisk(input: {
       ? Math.hypot(latestTiltX - tiltX5m, latestTiltY - tiltY5m)
       : null;
   const gpsDisplacement =
-    latestLat !== null &&
-    latestLon !== null &&
+    latestCoordinate !== null &&
     calibration?.baselines.latitude != null &&
     calibration.baselines.longitude != null
       ? distanceMeters(
           calibration.baselines.latitude,
           calibration.baselines.longitude,
-          latestLat,
-          latestLon
+          latestCoordinate.latitude,
+          latestCoordinate.longitude
         )
       : null;
   const gpsMovement30m =
-    latestLat !== null && latestLon !== null && lat30m !== null && lon30m !== null
-      ? distanceMeters(lat30m, lon30m, latestLat, latestLon)
+    latestCoordinate !== null && coordinate30m !== null
+      ? distanceMeters(
+          coordinate30m.latitude,
+          coordinate30m.longitude,
+          latestCoordinate.latitude,
+          latestCoordinate.longitude
+        )
       : null;
   const moistureDelta =
     latestMoisture !== null && calibration?.baselines.soilMoisturePct != null
