@@ -11,13 +11,16 @@ import { EdgeRiskAgent, parseTelemetryMessage } from "./edge-risk-agent";
 const deviceId = "00000000-0000-4000-8000-00000000000b";
 const stationId = "fd5a5432-91ac-4fa9-a6bd-2cd729b1d990";
 
-function signedArtifact(deviceIds: string[] = [deviceId]): EdgeRiskModelArtifact {
+function signedArtifact(
+  deviceIds: string[] = [deviceId],
+  trainedAt = new Date().toISOString()
+): EdgeRiskModelArtifact {
   const unsigned: EdgeRiskModelArtifact = {
     schemaVersion: "lsmv2.edge-landslide-risk.v1",
     modelKey: "landslide-edge-risk",
     modelVersion: "edge-test-v1",
     modelType: "robust_baseline_ensemble",
-    trainedAt: "2026-07-21T03:00:00.000Z",
+    trainedAt,
     trainingWindowHours: 24,
     trainingSource: "test.telemetry_raw",
     deviceCount: deviceIds.length,
@@ -226,5 +229,49 @@ void test("a model with an invalid checksum is never activated", async (context)
   await agent.start();
   assert.equal(agent.status().model.loaded, false);
   assert.match(agent.status().model.error ?? "", /checksum/);
+  await agent.stop();
+});
+
+void test("an expired model buffers telemetry without evaluating or publishing risk", async (context) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "lsmv2-edge-stale-model-"));
+  context.after(async () => {
+    await fs.rm(root, { recursive: true, force: true });
+  });
+  const modelPath = path.join(root, "latest.json");
+  await fs.writeFile(
+    modelPath,
+    JSON.stringify(signedArtifact([deviceId], "2026-07-20T00:00:00.000Z")),
+    "utf8"
+  );
+  const agent = new EdgeRiskAgent(
+    loadConfigFromEnv({
+      RISK_MODEL_PATH: modelPath,
+      RISK_MODEL_MAX_AGE_MS: String(60 * 60_000),
+      RISK_STATE_PATH: path.join(root, "state.json"),
+      RISK_TASK_LOG_PATH: path.join(root, "tasks.jsonl"),
+    })
+  );
+
+  await agent.start();
+  await agent.ingest([
+    {
+      deviceId,
+      receivedAt: new Date().toISOString(),
+      metrics: {
+        tilt_x_deg: 30,
+        tilt_y_deg: 30,
+        gps_latitude: 30,
+        gps_longitude: 120,
+      },
+    },
+  ]);
+
+  const status = agent.status();
+  assert.equal(status.model.loaded, true);
+  assert.match(status.model.error ?? "", /模型已过期/);
+  assert.equal(status.available, false);
+  assert.equal(status.devices.length, 0);
+  assert.equal(status.pendingUploadCount, 0);
+  assert.equal(status.tasks.length, 0);
   await agent.stop();
 });

@@ -42,6 +42,12 @@ const configSchema = z.object({
     .string()
     .min(1)
     .default("./data/hermes-edge-supervisor/models/landslide-risk-latest.json"),
+  riskModelMaxAgeMs: z.coerce
+    .number()
+    .int()
+    .min(60 * 60_000)
+    .max(30 * 24 * 60 * 60_000)
+    .default(12 * 60 * 60_000),
   riskStatePath: z
     .string()
     .min(1)
@@ -83,6 +89,7 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
     mqttTelemetryMaxPayloadBytes: env.MQTT_TELEMETRY_MAX_PAYLOAD_BYTES,
     mqttPredictionTopicPrefix: env.MQTT_PREDICTION_TOPIC_PREFIX,
     riskModelPath: env.RISK_MODEL_PATH,
+    riskModelMaxAgeMs: env.RISK_MODEL_MAX_AGE_MS,
     riskStatePath: env.RISK_STATE_PATH,
     riskTaskLogPath: env.RISK_TASK_LOG_PATH,
     riskHistoryWindowMs: env.RISK_HISTORY_WINDOW_MS,

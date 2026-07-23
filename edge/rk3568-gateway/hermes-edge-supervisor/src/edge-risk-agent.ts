@@ -79,6 +79,18 @@ const DEVICE_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9
 const METRIC_KEY_PATTERN = /^[a-z0-9_]+$/u;
 const TELEMETRY_DEDUPLICATION_LIMIT = 1024;
 
+function modelFreshnessError(
+  model: EdgeRiskModelArtifact,
+  maxAgeMs: number,
+  nowMs = Date.now()
+): string | null {
+  const trainedAtMs = Date.parse(model.trainedAt);
+  if (!Number.isFinite(trainedAtMs)) return "风险模型训练时间无效";
+  const ageMs = Math.max(0, nowMs - trainedAtMs);
+  if (ageMs <= maxAgeMs) return null;
+  return `风险模型已过期：模型年龄 ${String(Math.round(ageMs / 60_000))} 分钟，允许上限 ${String(Math.round(maxAgeMs / 60_000))} 分钟`;
+}
+
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -222,11 +234,15 @@ export class EdgeRiskAgent {
     snapshots: EdgeTelemetrySnapshot[],
     forcePublish: boolean
   ): Promise<void> {
-    const model = this.model;
-    if (!model) return;
     for (const snapshot of snapshots) {
       if (!Number.isFinite(Date.parse(snapshot.receivedAt))) continue;
       this.appendHistory(snapshot);
+    }
+    const model = this.model;
+    if (!model) return;
+    if (modelFreshnessError(model, this.config.riskModelMaxAgeMs)) {
+      this.evaluations.clear();
+      return;
     }
     const publishTasks: Promise<void>[] = [];
     const deviceIds = new Set([
@@ -253,10 +269,15 @@ export class EdgeRiskAgent {
   }
 
   status(): EdgeRiskAgentStatus {
-    const devices = Array.from(this.evaluations.values()).sort((left, right) => {
-      const riskDelta = levelRank(right.riskLevel) - levelRank(left.riskLevel);
-      return riskDelta !== 0 ? riskDelta : right.riskScore - left.riskScore;
-    });
+    const freshnessError = this.model
+      ? modelFreshnessError(this.model, this.config.riskModelMaxAgeMs)
+      : null;
+    const devices = (freshnessError ? [] : Array.from(this.evaluations.values())).sort(
+      (left, right) => {
+        const riskDelta = levelRank(right.riskLevel) - levelRank(left.riskLevel);
+        return riskDelta !== 0 ? riskDelta : right.riskScore - left.riskScore;
+      }
+    );
     const first = devices[0];
     return {
       mode: "hermes-edge-risk-agent",
@@ -269,7 +290,7 @@ export class EdgeRiskAgent {
         modelVersion: this.model?.modelVersion ?? null,
         trainedAt: this.model?.trainedAt ?? null,
         trainingSource: this.model?.trainingSource ?? null,
-        error: this.modelError,
+        error: this.modelError ?? freshnessError,
       },
       overallRiskLevel: first?.riskLevel ?? "unavailable",
       maxRiskScore: first?.riskScore ?? null,
@@ -321,6 +342,7 @@ export class EdgeRiskAgent {
     const model = this.model;
     this.evaluations.clear();
     if (!model) return;
+    if (modelFreshnessError(model, this.config.riskModelMaxAgeMs)) return;
     const deviceIds = new Set([
       ...model.calibrations.map((calibration) => calibration.deviceId),
       ...this.histories.keys(),
