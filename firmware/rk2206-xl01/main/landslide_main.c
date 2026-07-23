@@ -118,7 +118,7 @@ static char g_last_trusted_time_ts[40] = "";
 static char g_last_trusted_time_source[32] = "";
 static volatile uint32_t g_last_platform_command_tick = 0;
 static volatile int g_field_link_recovery_requested = 0;
-#define FW_RX_DIAG_MARKER "fw-field-link-auto-recovery-20260719"
+#define FW_RX_DIAG_MARKER "fw-one-second-poll-v2-20260719"
 bool g_cloud_motor_enabled = false;
 int g_cloud_motor_speed = 0;
 MotorDirection g_cloud_motor_direction = MOTOR_DIRECTION_STOP;
@@ -840,6 +840,7 @@ static void HandlePlatformCommand(const char *commandJson)
 #if PLATFORM_COMMAND_RX_LOG_MODE
         printf("[CMD APPLY RESULT] poll_latest_requested=1\n");
 #endif
+#if POLL_LATEST_TELEMETRY_ACK_ENABLED
         SendPlatformCommandAckWithGuard(
             &cmd,
             "acked",
@@ -847,6 +848,10 @@ static void HandlePlatformCommand(const char *commandJson)
             0,
             1
         );
+#else
+        RecordAcceptedPlatformCommand(&cmd);
+        g_platform_poll_latest_requested = 1;
+#endif
         return;
     }
 
@@ -1374,6 +1379,8 @@ static void* DataUploadTask(const char* arg)
     printf("  UART TX Chunk Delay: %d ms\n", XL01_UART_TX_CHUNK_DELAY_MS);
     printf("  Post ACK Quiet: %d ms\n", PLATFORM_POST_ACK_QUIET_MS);
     printf("  Manual Collect Delay: %d ms\n", PLATFORM_MANUAL_COLLECT_DELAY_MS);
+    printf("  Poll ACK: %s\n", POLL_LATEST_TELEMETRY_ACK_ENABLED ? "Enabled" : "Telemetry confirms poll");
+    printf("  Poll Request Check: %d ms\n", POLL_REQUEST_CHECK_INTERVAL_MS);
     printf("  Edge Uplink Mode: %s\n", EDGE_UPLINK_MODE == EDGE_UPLINK_MODE_POLLED ? "Polled" : "Periodic");
     printf("  Max Retries: %d\n", MAX_RETRY_COUNT);
     printf("  ACK Check: %s\n", ENABLE_ACK_CHECK ? "Enabled" : "Disabled");
@@ -1414,7 +1421,8 @@ static void* DataUploadTask(const char* arg)
         int manual_collect_requested = 0;
         int poll_latest_requested = 0;
         const char *upload_trigger = "periodic";
-        unsigned int sleep_ms = 200;
+        unsigned int sleep_ms =
+            EDGE_UPLINK_MODE == EDGE_UPLINK_MODE_POLLED ? POLL_REQUEST_CHECK_INTERVAL_MS : 200;
 
 #if !ENABLE_SHARED_PORT_SOURCE_CONTROL
         unsigned int quiet_remaining_ms = g_platform_uplink_quiet_remaining_ms;

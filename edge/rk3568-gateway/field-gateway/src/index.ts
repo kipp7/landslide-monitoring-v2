@@ -123,6 +123,9 @@ type PortRuntimeState = {
   pollTelemetryMatches: number;
   pollAckSuppressions: number;
   pollSessionTimeouts: number;
+  lastPollRoundTripMs: number | null;
+  averagePollRoundTripMs: number | null;
+  maxPollRoundTripMs: number;
   lastReconnectTs: string | null;
   lastReconnectReason: string | null;
   lastError: string | null;
@@ -219,6 +222,7 @@ type ActivePollTelemetryWindow = {
   deviceId: string;
   portPath: string;
   startedTs: string;
+  startedAtMs: number;
   timeoutAtMs: number;
   timer: NodeJS.Timeout;
 };
@@ -258,7 +262,7 @@ function isoNow(): string {
 }
 
 function buildInternalPollCommandId(): string {
-  // RK2206 echoes command_id in ACK; keep it schema-compatible so the gateway can close ACK windows.
+  // Keep schema-compatible IDs so legacy firmware ACKs can still be recognized during rollout.
   return randomUUID();
 }
 
@@ -268,15 +272,15 @@ function buildSouthboundCommandPayload(
   origin: SouthboundCommandOrigin
 ): string {
   if (origin === "internal-poll") {
+    // The poll is link-local and telemetry is its completion signal. Avoid redundant
+    // timestamps so the short downlink command fits comfortably inside a 1s slot.
     return JSON.stringify({
       schema_version: command.schema_version,
       command_id: command.command_id,
       device_id: command.device_id,
       command_type: command.command_type,
       payload: {},
-      issued_ts: command.issued_ts,
-      sent_ts: sentTs,
-      gateway_sent_ts: sentTs
+      issued_ts: command.issued_ts
     } satisfies DeviceCommandV1);
   }
 
@@ -1092,9 +1096,7 @@ class GatewayRuntime {
     }, this.config.healthEmitIntervalMs);
 
     if (this.config.southboundPollingEnabled) {
-      this.pollerTimer = setInterval(() => {
-        this.tickSouthboundPolling();
-      }, this.config.southboundPollingIntervalMs);
+      this.scheduleSouthboundPolling(this.config.southboundPollingIntervalMs);
     }
 
     await this.emitHealth();
@@ -1105,7 +1107,7 @@ class GatewayRuntime {
     this.logger.info({ signal }, "field gateway shutting down");
     if (this.replayTimer) clearInterval(this.replayTimer);
     if (this.healthTimer) clearInterval(this.healthTimer);
-    if (this.pollerTimer) clearInterval(this.pollerTimer);
+    if (this.pollerTimer) clearTimeout(this.pollerTimer);
     for (const timer of this.serialReconnectTimers.values()) {
       clearTimeout(timer);
     }
@@ -1535,8 +1537,23 @@ class GatewayRuntime {
     }
 
     const activePollWindow = this.activePollTelemetryWindows.get(sourcePort);
-    const matchedActivePollWindow = activePollWindow?.deviceId === envelope.device_id;
+    const telemetryLastCommandId =
+      envelope.meta && typeof envelope.meta.last_command_id === "string" ? envelope.meta.last_command_id : null;
+    const telemetryUploadTrigger =
+      envelope.meta && typeof envelope.meta.upload_trigger === "string" ? envelope.meta.upload_trigger : null;
+    const matchedActivePollWindow =
+      activePollWindow?.deviceId === envelope.device_id &&
+      telemetryLastCommandId === activePollWindow.commandId &&
+      telemetryUploadTrigger === "scheduler_poll";
     if (matchedActivePollWindow) {
+      const roundTripMs = Math.max(0, Date.now() - activePollWindow.startedAtMs);
+      const previousMatches = portState.pollTelemetryMatches;
+      const previousAverage = portState.averagePollRoundTripMs ?? 0;
+      portState.lastPollRoundTripMs = roundTripMs;
+      portState.averagePollRoundTripMs = Math.round(
+        (previousAverage * previousMatches + roundTripMs) / (previousMatches + 1)
+      );
+      portState.maxPollRoundTripMs = Math.max(portState.maxPollRoundTripMs, roundTripMs);
       this.closeActivePollTelemetryWindow(sourcePort, "telemetry");
       this.stats.internalPollTelemetryMatches += 1;
       this.stats.lastInternalPollTelemetryTs = receivedTs;
@@ -1673,18 +1690,24 @@ class GatewayRuntime {
   }
 
   private tickSouthboundPolling(): void {
+    this.pollerTimer = null;
     if (!this.config.southboundPollingEnabled || this.stopping) {
       return;
     }
 
+    let issued = false;
+    let busy = false;
     for (const portPath of this.getConfiguredPortPaths()) {
       if (this.pendingCommandWindows.has(portPath)) {
+        busy = true;
         continue;
       }
       if (this.activePollTelemetryWindows.has(portPath)) {
+        busy = true;
         continue;
       }
       if (this.portCommandChains.has(portPath)) {
+        busy = true;
         continue;
       }
 
@@ -1698,8 +1721,25 @@ class GatewayRuntime {
         continue;
       }
 
+      issued = true;
       void this.issueInternalPollForNode(nextNode, portPath);
     }
+
+    // A busy port will schedule itself when its active session closes. This avoids
+    // a fixed timer boundary turning a 1.05s response into a skipped 2s slot.
+    if (!issued && !busy) {
+      this.scheduleSouthboundPolling(this.config.southboundPollingIntervalMs);
+    }
+  }
+
+  private scheduleSouthboundPolling(delayMs: number): void {
+    if (!this.config.southboundPollingEnabled || this.stopping || this.pollerTimer) {
+      return;
+    }
+
+    this.pollerTimer = setTimeout(() => {
+      this.tickSouthboundPolling();
+    }, Math.max(0, delayMs));
   }
 
   private nextPollingNodeForPort(portPath: string): NodeRuntimeState | null {
@@ -1757,26 +1797,10 @@ class GatewayRuntime {
         nodeState,
         targetPort
       });
-    } finally {
-      const stillPending = this.internalPollCommands.get(command.command_id);
-      if (stillPending) {
-        this.internalPollCommands.delete(command.command_id);
-        const portState = this.ensurePortRuntimeState(targetPort);
-        portState.pollSessionTimeouts += 1;
-        portState.lastPollSessionCloseTs = isoNow();
-        portState.lastPollSessionCloseReason = "timeout";
-        this.stats.internalPollSessionTimeouts += 1;
-        this.logger.warn(
-          {
-            traceId,
-            serialDevice: targetPort,
-            commandId: command.command_id,
-            commandType: command.command_type,
-            deviceId: command.device_id
-          },
-          "field gateway internal poll did not observe ack before command window closed"
-        );
-      }
+    } catch (err) {
+      this.internalPollCommands.delete(command.command_id);
+      this.closeActivePollTelemetryWindow(targetPort, "failed");
+      throw err;
     }
   }
 
@@ -1897,7 +1921,7 @@ class GatewayRuntime {
   }): Promise<void> {
     const { origin, traceId, topic, payloadBytes, command, nodeState, targetPort } = params;
     const portState = this.ensurePortRuntimeState(targetPort);
-    await this.waitForPortQuietBeforeWrite(targetPort, command);
+    await this.waitForPortQuietBeforeWrite(targetPort, command, origin);
     try {
       await this.flushPortBeforeCommandWrite(targetPort);
       portState.lastPrewriteFlushTs = isoNow();
@@ -1917,14 +1941,18 @@ class GatewayRuntime {
         "field gateway command prewrite flush failed; continuing with write"
       );
     }
-    const quietWindow = this.beginPendingCommandWindow(targetPort, command);
+    const internalPollRecord = origin === "internal-poll" ? this.internalPollCommands.get(command.command_id) : null;
+    const quietWindow = origin === "internal-poll" ? null : this.beginPendingCommandWindow(targetPort, command);
+    if (internalPollRecord) {
+      this.beginActivePollTelemetryWindow(internalPollRecord);
+    }
     portState.sendOwnerState = "writing-command";
 
     try {
       const gatewaySentTs = isoNow();
       const southboundPayload = buildSouthboundCommandPayload(command, gatewaySentTs, origin);
       const southboundPayloadBytes = Buffer.byteLength(southboundPayload, "utf8");
-      await this.writeCommandToSerial(southboundPayload, targetPort);
+      await this.writeCommandToSerial(southboundPayload, targetPort, origin);
       this.stats.commandsForwarded += 1;
       this.stats.lastCommandForwardedTs = gatewaySentTs;
       nodeState.commandForwards += 1;
@@ -1937,27 +1965,39 @@ class GatewayRuntime {
         this.stats.internalPollCommandsIssued += 1;
         this.stats.lastInternalPollCommandTs = this.stats.lastCommandForwardedTs;
       }
-      this.logger.info(
-        {
-          origin,
-          topic,
-          serialDevice: targetPort,
-          commandId: command.command_id,
-          commandType: command.command_type,
-          deviceId: command.device_id,
-          payloadBytes,
-          southboundPayloadBytes,
-          gatewaySentTs,
-          queuedCommands: portState.queuedCommands
-        },
-        "field gateway command forwarded to serial"
-      );
+      const logContext = {
+        origin,
+        topic,
+        serialDevice: targetPort,
+        commandId: command.command_id,
+        commandType: command.command_type,
+        deviceId: command.device_id,
+        payloadBytes,
+        southboundPayloadBytes,
+        gatewaySentTs,
+        queuedCommands: portState.queuedCommands
+      };
+      if (origin === "internal-poll") {
+        this.logger.debug(logContext, "field gateway poll forwarded to serial");
+      } else {
+        this.logger.info(logContext, "field gateway command forwarded to serial");
+      }
     } catch (err) {
       this.stats.commandWriteFailures += 1;
       this.stats.lastError = err instanceof Error ? err.message : String(err);
       portState.lastError = this.stats.lastError;
-      this.closePendingCommandWindow(targetPort, "shutdown");
+      if (origin === "internal-poll") {
+        this.internalPollCommands.delete(command.command_id);
+        this.closeActivePollTelemetryWindow(targetPort, "failed");
+      } else {
+        this.closePendingCommandWindow(targetPort, "shutdown");
+      }
       this.logger.error({ traceId, topic, serialDevice: targetPort, err }, "field gateway command serial write failed");
+      return;
+    }
+
+    if (origin === "internal-poll") {
+      portState.sendOwnerState = "waiting-for-poll-telemetry";
       return;
     }
 
@@ -1965,9 +2005,17 @@ class GatewayRuntime {
     await quietWindow;
   }
 
-  private async waitForPortQuietBeforeWrite(portPath: string, command: DeviceCommandV1): Promise<void> {
-    const quietMs = this.config.commandPrewriteQuietMs;
-    const maxWaitMs = this.config.commandPrewriteMaxWaitMs;
+  private async waitForPortQuietBeforeWrite(
+    portPath: string,
+    command: DeviceCommandV1,
+    origin: SouthboundCommandOrigin
+  ): Promise<void> {
+    const quietMs =
+      origin === "internal-poll" ? this.config.southboundPollingPrewriteQuietMs : this.config.commandPrewriteQuietMs;
+    const maxWaitMs =
+      origin === "internal-poll"
+        ? this.config.southboundPollingPrewriteMaxWaitMs
+        : this.config.commandPrewriteMaxWaitMs;
     const portState = this.ensurePortRuntimeState(portPath);
 
     while (this.activePollTelemetryWindows.has(portPath)) {
@@ -2074,7 +2122,8 @@ class GatewayRuntime {
 
     const portState = this.ensurePortRuntimeState(record.portPath);
     const startedTs = isoNow();
-    const timeoutAtMs = Date.now() + this.config.southboundPollingSessionTimeoutMs;
+    const startedAtMs = Date.now();
+    const timeoutAtMs = startedAtMs + this.config.southboundPollingSessionTimeoutMs;
     portState.sendOwnerState = "waiting-for-poll-telemetry";
     portState.activePollCommandId = record.commandId;
     portState.activePollDeviceId = record.deviceId;
@@ -2101,6 +2150,7 @@ class GatewayRuntime {
       deviceId: record.deviceId,
       portPath: record.portPath,
       startedTs,
+      startedAtMs,
       timeoutAtMs,
       timer
     });
@@ -2114,8 +2164,17 @@ class GatewayRuntime {
     const portState = this.ensurePortRuntimeState(portPath);
 
     if (activeWindow) {
+      const elapsedMs = Math.max(0, Date.now() - activeWindow.startedAtMs);
       clearTimeout(activeWindow.timer);
       this.activePollTelemetryWindows.delete(portPath);
+      this.internalPollCommands.delete(activeWindow.commandId);
+      if (reason !== "shutdown") {
+        const nextDelayMs =
+          reason === "telemetry"
+            ? Math.max(0, this.config.southboundPollingIntervalMs - elapsedMs)
+            : this.config.southboundPollingIntervalMs;
+        this.scheduleSouthboundPolling(nextDelayMs);
+      }
     }
 
     portState.activePollCommandId = null;
@@ -2145,6 +2204,9 @@ class GatewayRuntime {
     portState.pendingCommandType = null;
     portState.pendingCommandDeviceId = null;
     portState.sendOwnerState = this.activePollTelemetryWindows.has(portPath) ? "waiting-for-poll-telemetry" : "idle";
+    if (!this.activePollTelemetryWindows.has(portPath)) {
+      this.scheduleSouthboundPolling(this.config.southboundPollingIntervalMs);
+    }
   }
 
   private async replayPending(reason: "ingest" | "interval" | "mqtt-connect"): Promise<void> {
@@ -2236,7 +2298,7 @@ class GatewayRuntime {
       });
     });
 
-    this.logger.info(
+    this.logger.debug(
       {
         deviceId,
         sourcePort: record.source.serial_device,
@@ -2267,10 +2329,7 @@ class GatewayRuntime {
     }
 
     if (internalPollCommand) {
-      this.internalPollCommands.delete(ack.command_id);
-      if (ack.status === "acked") {
-        this.beginActivePollTelemetryWindow(internalPollCommand);
-      } else {
+      if (ack.status === "failed") {
         this.closeActivePollTelemetryWindow(sourcePort, "failed");
       }
 
@@ -2282,7 +2341,7 @@ class GatewayRuntime {
         nodeState.lastAckTs = seenTs;
         portState.lastAckTs = seenTs;
         portState.pollAckSuppressions += 1;
-        this.logger.info(
+        this.logger.debug(
           {
             serialDevice: sourcePort,
             commandId: ack.command_id,
@@ -2342,7 +2401,11 @@ class GatewayRuntime {
     });
   }
 
-  private async writeCommandToSerial(payload: string, portPath: string): Promise<void> {
+  private async writeCommandToSerial(
+    payload: string,
+    portPath: string,
+    origin: SouthboundCommandOrigin
+  ): Promise<void> {
     const serialPort = this.serialPorts.get(portPath);
     if (!serialPort?.isOpen) {
       throw new Error(`serial port is not open: ${portPath}`);
@@ -2357,11 +2420,23 @@ class GatewayRuntime {
           })
         : Buffer.from(`${payload}\n`, "utf8");
 
-    await this.writeSerialFrame(serialPort, serialFrame);
+    const chunkBytes =
+      origin === "internal-poll"
+        ? this.config.southboundPollingCommandChunkBytes
+        : this.config.commandSerialChunkBytes;
+    const chunkDelayMs =
+      origin === "internal-poll"
+        ? this.config.southboundPollingCommandChunkDelayMs
+        : this.config.commandSerialChunkDelayMs;
+    await this.writeSerialFrame(serialPort, serialFrame, chunkBytes, chunkDelayMs);
   }
 
-  private async writeSerialFrame(serialPort: SerialPort, serialFrame: Buffer): Promise<void> {
-    const chunkBytes = this.config.commandSerialChunkBytes;
+  private async writeSerialFrame(
+    serialPort: SerialPort,
+    serialFrame: Buffer,
+    chunkBytes: number,
+    chunkDelayMs: number
+  ): Promise<void> {
     if (chunkBytes <= 0 || serialFrame.length <= chunkBytes) {
       await this.writeSerialChunk(serialPort, serialFrame);
       return;
@@ -2370,8 +2445,8 @@ class GatewayRuntime {
     for (let offset = 0; offset < serialFrame.length; offset += chunkBytes) {
       const nextOffset = Math.min(offset + chunkBytes, serialFrame.length);
       await this.writeSerialChunk(serialPort, serialFrame.subarray(offset, nextOffset));
-      if (nextOffset < serialFrame.length && this.config.commandSerialChunkDelayMs > 0) {
-        await delay(this.config.commandSerialChunkDelayMs);
+      if (nextOffset < serialFrame.length && chunkDelayMs > 0) {
+        await delay(chunkDelayMs);
       }
     }
   }
@@ -2437,6 +2512,11 @@ class GatewayRuntime {
         routeMode: this.config.southboundNodes.length === 0 ? "legacy-single-port" : "configured-node-routing",
         pollingEnabled: this.config.southboundPollingEnabled,
         pollingCommandType: this.config.southboundPollingCommandType,
+        pollingCompletionSignal: "matching-telemetry",
+        pollingIntervalMs: this.config.southboundPollingIntervalMs,
+        pollingSessionTimeoutMs: this.config.southboundPollingSessionTimeoutMs,
+        pollingCommandChunkBytes: this.config.southboundPollingCommandChunkBytes,
+        pollingCommandChunkDelayMs: this.config.southboundPollingCommandChunkDelayMs,
         configuredNodes: this.config.southboundNodes.length,
         configuredPorts: this.portState.size,
         activeSerialDevice: this.config.serialDevice,
@@ -2518,6 +2598,9 @@ class GatewayRuntime {
       pollTelemetryMatches: 0,
       pollAckSuppressions: 0,
       pollSessionTimeouts: 0,
+      lastPollRoundTripMs: null,
+      averagePollRoundTripMs: null,
+      maxPollRoundTripMs: 0,
       lastReconnectTs: null,
       lastReconnectReason: null,
       lastError: null,

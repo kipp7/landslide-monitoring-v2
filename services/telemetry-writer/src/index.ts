@@ -6,6 +6,7 @@ import { Kafka, logLevel } from "kafkajs";
 import { Pool } from "pg";
 import path from "node:path";
 import { loadConfigFromEnv } from "./config";
+import { mergeFieldProfileMetrics, sanitizeFieldProfileMetrics } from "./field-profile-shadow";
 import { evaluateSequenceReset, shouldDiscardSyntheticShadow } from "./sequence-policy";
 
 type TelemetryRawV1 = {
@@ -54,34 +55,6 @@ type ShadowState = {
   metrics: Record<string, number | string | boolean | null>;
   meta: Record<string, unknown>;
 };
-
-const FIELD_PROFILE_METRIC_KEYS = new Set<string>([
-  "temperature_c",
-  "humidity_pct",
-  "accel_x_g",
-  "accel_y_g",
-  "accel_z_g",
-  "gyro_x_dps",
-  "gyro_y_dps",
-  "gyro_z_dps",
-  "tilt_x_deg",
-  "tilt_y_deg",
-  "gps_latitude",
-  "gps_longitude",
-  "gps_altitude",
-  "battery_pct",
-  "battery_v",
-  "warning_flag",
-  "rainfall_mm",
-  "rainfall_intensity_mm_h",
-  "soil_moisture_pct",
-  "illumination",
-  "rssi_dbm",
-  "snr_db",
-  "packet_loss_pct",
-  "displacement_mm",
-  "vibration_g"
-]);
 
 const FIELD_PROFILE_META_KEYS = new Set<string>([
   "_writer",
@@ -253,7 +226,7 @@ function isFieldProfileMetaRecord(meta: Record<string, unknown> | null | undefin
 
 function sanitizeFieldProfileShadowState(state: ShadowState): ShadowState {
   return {
-    metrics: sanitizeRecordByAllowedKeys(state.metrics, FIELD_PROFILE_METRIC_KEYS),
+    metrics: sanitizeFieldProfileMetrics(state.metrics),
     meta: sanitizeRecordByAllowedKeys(state.meta, FIELD_PROFILE_META_KEYS)
   };
 }
@@ -267,9 +240,9 @@ function buildShadowState(payload: TelemetryRawV1, previousState: unknown): Shad
   const useFieldProfileSanitizer =
     isFieldProfileMetaRecord(payloadMeta) || isFieldProfileMetaRecord(previousRaw.meta);
   const previous = useFieldProfileSanitizer ? sanitizeFieldProfileShadowState(previousRaw) : previousRaw;
-  const nextMetrics = useFieldProfileSanitizer
-    ? sanitizeRecordByAllowedKeys(payload.metrics, FIELD_PROFILE_METRIC_KEYS)
-    : payload.metrics;
+  const mergedMetrics = useFieldProfileSanitizer
+    ? mergeFieldProfileMetrics(previous.metrics, payload.metrics)
+    : { ...previous.metrics, ...payload.metrics };
   const nextPayloadMeta = useFieldProfileSanitizer
     ? sanitizeRecordByAllowedKeys(payloadMeta, FIELD_PROFILE_META_KEYS)
     : payloadMeta;
@@ -286,10 +259,7 @@ function buildShadowState(payload: TelemetryRawV1, previousState: unknown): Shad
   meta._writer = writerMeta;
 
   return {
-    metrics: {
-      ...previous.metrics,
-      ...nextMetrics
-    },
+    metrics: mergedMetrics,
     meta
   };
 }
