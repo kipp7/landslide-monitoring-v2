@@ -1712,6 +1712,99 @@ paths:
         default:
           $ref: "#/components/responses/ErrorResponse"
 
+  /edge-ai/chat:
+    post:
+      tags: [ai]
+      summary: Continue a Hermes conversation and dispatch bounded tasks in order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HermesChatRequest"
+      responses:
+        "200":
+          description: conversation turn completed
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/HermesChatResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "503":
+          $ref: "#/components/responses/ErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /edge-ai/conversations:
+    get:
+      tags: [ai]
+      summary: List the authenticated user's Hermes conversations
+      parameters:
+        - name: pageSize
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /edge-ai/conversations/{conversationId}/messages:
+    get:
+      tags: [ai]
+      summary: Get one owned Hermes conversation, its messages, and task trace
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
+  /edge-ai/tasks/{taskId}:
+    get:
+      tags: [ai]
+      summary: Get one owned Hermes task and its edge result
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
+
   /alerts:
     get:
       tags: [alerts]
@@ -4576,6 +4669,74 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/AiPrediction"
+
+    HermesChatRequest:
+      type: object
+      additionalProperties: false
+      required: [message]
+      properties:
+        conversationId: { type: string, format: uuid }
+        message: { type: string, minLength: 1, maxLength: 2000 }
+
+    HermesConversation:
+      type: object
+      required: [conversationId, title, status, createdAt, updatedAt]
+      properties:
+        conversationId: { type: string, format: uuid }
+        title: { type: string }
+        status: { type: string, enum: [active, archived] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    HermesMessage:
+      type: object
+      required: [messageId, conversationId, role, content, metadata, createdAt]
+      properties:
+        messageId: { type: string, format: uuid }
+        conversationId: { type: string, format: uuid }
+        role: { type: string, enum: [user, assistant, system] }
+        content: { type: string }
+        metadata: { type: object, additionalProperties: true }
+        createdAt: { type: string, format: date-time }
+
+    HermesTask:
+      type: object
+      required: [taskId, conversationId, action, label, status, safetyLevel, result, createdAt]
+      properties:
+        taskId: { type: string, format: uuid }
+        conversationId: { type: string, format: uuid }
+        action: { type: string, enum: [recheck, collect_logs, generate_report] }
+        label: { type: string }
+        status:
+          type: string
+          enum: [queued, running, awaiting_confirmation, succeeded, failed, cancelled]
+        safetyLevel: { type: string, enum: [read_only, approval_required] }
+        summary: { type: string }
+        result: { type: object, additionalProperties: true }
+        edgeActionId: { type: string, nullable: true }
+        error: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        startedAt: { type: string, format: date-time, nullable: true }
+        completedAt: { type: string, format: date-time, nullable: true }
+
+    HermesChatResponse:
+      type: object
+      required: [conversation, messages, tasks, blocked, suggestions]
+      properties:
+        conversation:
+          $ref: "#/components/schemas/HermesConversation"
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/HermesMessage"
+        tasks:
+          type: array
+          items:
+            $ref: "#/components/schemas/HermesTask"
+        blocked: { type: boolean }
+        suggestions:
+          type: array
+          items: { type: string, enum: [recheck, collect_logs, generate_report] }
 
     EdgeAiActionRequest:
       type: object

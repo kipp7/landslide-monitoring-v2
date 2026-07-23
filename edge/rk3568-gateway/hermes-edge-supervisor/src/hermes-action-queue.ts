@@ -41,7 +41,7 @@ type QueueOptions = {
   maxOutstanding: number;
   historyLimit?: number;
   idempotencyLimit?: number;
-  execute: (request: HermesActionRequest) => Promise<HermesActionExecutionResult>;
+  execute: (request: HermesActionRequest, actionId: string) => Promise<HermesActionExecutionResult>;
   onTransition?: (action: HermesAction) => Promise<void>;
   onTransitionError?: (error: unknown, action: HermesAction) => void;
   now?: () => Date;
@@ -168,7 +168,7 @@ export class HermesActionQueue {
     action.summary = "Hermes 正在执行只读任务";
     await this.emit(action);
     try {
-      const completed = await this.options.execute(request);
+      const completed = await this.options.execute(request, action.id);
       action.status = "completed";
       action.summary = completed.summary;
       action.result = completed.result;

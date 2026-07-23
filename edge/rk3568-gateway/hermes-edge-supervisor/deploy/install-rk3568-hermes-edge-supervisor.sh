@@ -116,6 +116,7 @@ install -d -m 0755 -o "${RUN_USER}" -g "${RUN_GROUP}" "${STATE_ROOT}"
 install -d -m 0755 -o "${RUN_USER}" -g "${RUN_GROUP}" "${STATE_ROOT}/status"
 install -d -m 0755 -o "${RUN_USER}" -g "${RUN_GROUP}" "${STATE_ROOT}/events"
 install -d -m 0755 -o "${RUN_USER}" -g "${RUN_GROUP}" "${STATE_ROOT}/models"
+install -d -m 0755 -o "${RUN_USER}" -g "${RUN_GROUP}" "${STATE_ROOT}/artifacts"
 
 if [[ ! -f "${ENV_FILE_PATH}" || "${OVERWRITE_ENV}" -eq 1 ]]; then
 cat > "${ENV_FILE_PATH}" <<EOF
@@ -125,6 +126,8 @@ SUMMARY_URL=${SUMMARY_URL}
 DIAGNOSIS_MODEL_PATH=${DIAGNOSIS_MODEL_PATH}
 SUPERVISION_FILE_PATH=${STATE_ROOT}/status/supervision.json
 EVENT_LOG_FILE_PATH=${STATE_ROOT}/events/events.jsonl
+ACTION_ARTIFACT_DIR=${STATE_ROOT}/artifacts
+ACTION_COMMAND_TIMEOUT_MS=4000
 HTTP_HOST=${HTTP_HOST}
 HTTP_PORT=${HTTP_PORT}
 POLL_INTERVAL_MS=5000

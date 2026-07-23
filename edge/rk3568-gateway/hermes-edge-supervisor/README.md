@@ -30,6 +30,8 @@ Use `.env.example` as a local template. Key variables:
 - `DIAGNOSIS_MODEL_PATH` - optional local diagnosis model JSON.
 - `SUPERVISION_FILE_PATH` - generated supervision JSON output.
 - `EVENT_LOG_FILE_PATH` - generated event log path.
+- `ACTION_ARTIFACT_DIR` - redacted diagnostic bundles and situation reports.
+- `ACTION_COMMAND_TIMEOUT_MS` - per-command timeout for the fixed read-only diagnostic set.
 - `ACTION_QUEUE_MAX_OUTSTANDING` - maximum queued plus running App tasks (default `16`).
 - `HTTP_HOST` / `HTTP_PORT` - local HTTP listener.
 - `MQTT_TELEMETRY_TOPIC` - existing field telemetry subscription (default `telemetry/+`).
@@ -57,6 +59,13 @@ Endpoints:
 - `POST /v1/actions/recheck`
 - `POST /v1/actions/collect_logs`
 - `POST /v1/actions/generate_report`
+
+`collect_logs` executes only a fixed `systemctl`, `journalctl`, and `ip` read
+set without a shell. Output is size-limited, credential-like fields are
+redacted, and the bundle is written under `ACTION_ARTIFACT_DIR`.
+`generate_report` writes a Markdown snapshot from the current supervision
+report. Neither action can restart services, change network state, write a
+serial port, or publish alarm commands.
 
 Action requests accept a stable `requestId`. Repeating the same request ID and
 action returns the original task without executing it twice; reusing the ID for

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import Fastify from "fastify";
 import { loadConfigFromEnv } from "../config";
+import { buildHermesAssistantReply, planHermesMessage } from "../hermes-agent";
 import { registerEdgeAiRoutes, resolveEdgeAiIntent, type EdgeAiIntentResolution } from "./edge-ai";
 
 type EdgeAiEnvelope = {
@@ -61,6 +62,33 @@ void test("safe natural-language intents resolve to bounded Hermes actions", () 
   assert.equal(resolveEdgeAiIntent("帮我检查 B 节点为什么危险").action, "recheck");
   assert.equal(resolveEdgeAiIntent("生成当前态势报告").action, "generate_report");
   assert.equal(resolveEdgeAiIntent("收集 MQTT 链路日志").action, "collect_logs");
+});
+
+void test("chat planner dispatches multiple safe tasks in spoken order", () => {
+  const plan = planHermesMessage("先诊断链路，再重新研判，最后生成报告");
+  assert.equal(plan.blocked, false);
+  assert.deepEqual(plan.actions, ["collect_logs", "recheck", "generate_report"]);
+});
+
+void test("chat planner can continue the previous audited task plan", () => {
+  const plan = planHermesMessage("按刚才的再来一次", ["collect_logs", "generate_report"]);
+  assert.deepEqual(plan.actions, ["collect_logs", "generate_report"]);
+  assert.equal(plan.blocked, false);
+});
+
+void test("chat reply is grounded in completed edge task results", () => {
+  const reply = buildHermesAssistantReply(planHermesMessage("诊断链路"), [
+    {
+      action: "collect_logs",
+      label: "诊断链路",
+      status: "succeeded",
+      summary: "done",
+      result: { collectedCommandCount: 6, artifactName: "diagnostic-1.json" },
+      error: null,
+    },
+  ]);
+  assert.match(reply, /采集 6 项只读证据/u);
+  assert.match(reply, /未接管告警、串口或 MQTT 主链路/u);
 });
 
 void test("protected natural-language intents are blocked without a board call", async () => {

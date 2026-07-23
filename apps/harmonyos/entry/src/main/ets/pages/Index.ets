@@ -10,7 +10,7 @@ import { AlertAlarmService } from '../data/AlertAlarmService';
 import { DeviceLocationService } from '../data/DeviceLocationService';
 import { AlertStreamClient } from '../data/AlertStreamClient';
 import { PushRegistrationService } from '../data/PushRegistrationService';
-import { Alert, AlertEvent, AlertMapLocation, AlertStreamEvent, DashboardSummary, Device, DeviceState, EdgeAgentTask, EdgeAiActionName, EdgeAiIntentResolution, EdgeAiStatus, EdgeRiskDevice, EvacuationTarget, HermesAction, MetricSeries, SeriesPoint, SeriesResponse, Station, UserLocationStatus, UserMapLocation, alertStatusLabel, beijingClockTime, deviceConnectivityLabel, deviceDisplayName, deviceSupportsConductivity, deviceTypeLabel, displayMetric, eventTypeLabel, isAlarmActuatorDevice, isDeviceOnline, isOnlineStatus, metricShortLabel, metricUnitLabel, metricValue, numberValue, relativeTime, severityLabel, shortTime, soilConductivityValue, soilMoistureValue, soilTemperatureValue, stationDisplayName, stationNameLabel, stationStatusLabel, userDisplayName } from '../data/Types';
+import { Alert, AlertEvent, AlertMapLocation, AlertStreamEvent, DashboardSummary, Device, DeviceState, EdgeAgentTask, EdgeAiActionName, EdgeAiIntentResolution, EdgeAiStatus, EdgeRiskDevice, EvacuationTarget, HermesAction, HermesAgentTask, HermesConversation, HermesDiagnosticEvidence, HermesMessage, MetricSeries, SeriesPoint, SeriesResponse, Station, UserLocationStatus, UserMapLocation, alertStatusLabel, beijingClockTime, deviceConnectivityLabel, deviceDisplayName, deviceSupportsConductivity, deviceTypeLabel, displayMetric, eventTypeLabel, isAlarmActuatorDevice, isDeviceOnline, isOnlineStatus, metricShortLabel, metricUnitLabel, metricValue, numberValue, relativeTime, severityLabel, shortTime, soilConductivityValue, soilMoistureValue, soilTemperatureValue, stationDisplayName, stationNameLabel, stationStatusLabel, userDisplayName } from '../data/Types';
 import { AlertMapView } from '../components/AlertMapView';
 import { ActiveAlertBanner, InAppAlertOverlay } from '../components/InAppAlertOverlay';
 import { MetricCard } from '../components/MetricCard';
@@ -128,6 +128,11 @@ struct Index {
   @State private edgeAiActions: Array<HermesAction> = [];
   @State private edgeAiLastAction: HermesAction | null = null;
   @State private edgeAiIntentResolution: EdgeAiIntentResolution | null = null;
+  @State private edgeAiConversations: Array<HermesConversation> = [];
+  @State private edgeAiConversationId: string = '';
+  @State private edgeAiMessages: Array<HermesMessage> = [];
+  @State private edgeAiConversationTasks: Array<HermesAgentTask> = [];
+  @State private edgeAiChatLoading: boolean = false;
   @State private overviewTrends: Array<DeviceMonitoringTrend> = [];
   @State private stations: Array<Station> = [];
   @State private devices: Array<Device> = [];
@@ -319,6 +324,15 @@ struct Index {
     this.dashboard = null;
     this.edgeAiStatus = null;
     this.edgeAiRefreshing = false;
+    this.edgeAiActionBusy = false;
+    this.edgeAiActions = [];
+    this.edgeAiLastAction = null;
+    this.edgeAiIntentResolution = null;
+    this.edgeAiConversations = [];
+    this.edgeAiConversationId = '';
+    this.edgeAiMessages = [];
+    this.edgeAiConversationTasks = [];
+    this.edgeAiChatLoading = false;
     this.overviewTrends = [];
     this.stations = [];
     this.devices = [];
@@ -775,7 +789,55 @@ struct Index {
     } catch {
       // Keep the latest visible task history when the edge action endpoint is interrupted.
     }
+    await this.loadHermesConversations(false);
     this.edgeAiRefreshing = false;
+  }
+
+  private async loadHermesConversations(refreshCurrent: boolean): Promise<void> {
+    if (!this.repository || this.edgeAiChatLoading) return;
+    this.edgeAiChatLoading = true;
+    try {
+      const repository = this.repository as MonitoringRepository;
+      const response = await repository.hermesConversations();
+      this.edgeAiConversations = response.conversations ?? [];
+      let targetId = this.edgeAiConversationId;
+      if (targetId.length === 0 && this.edgeAiConversations.length > 0) {
+        targetId = this.edgeAiConversations[0].conversationId;
+      }
+      if (targetId.length > 0 && (refreshCurrent || this.edgeAiMessages.length === 0)) {
+        const history = await repository.hermesConversation(targetId);
+        this.edgeAiConversationId = history.conversation.conversationId;
+        this.edgeAiMessages = history.messages ?? [];
+        this.edgeAiConversationTasks = history.tasks ?? [];
+      }
+    } catch {
+      // The conversation service is optional during a rolling server upgrade.
+    } finally {
+      this.edgeAiChatLoading = false;
+    }
+  }
+
+  private async openHermesConversation(conversationId: string): Promise<void> {
+    if (!this.repository || this.edgeAiChatLoading || conversationId.length === 0) return;
+    this.edgeAiChatLoading = true;
+    try {
+      const history = await (this.repository as MonitoringRepository).hermesConversation(conversationId);
+      this.edgeAiConversationId = history.conversation.conversationId;
+      this.edgeAiMessages = history.messages ?? [];
+      this.edgeAiConversationTasks = history.tasks ?? [];
+    } catch (error) {
+      this.errorMessage = this.errorText(error);
+    } finally {
+      this.edgeAiChatLoading = false;
+    }
+  }
+
+  private newHermesConversation(): void {
+    if (this.edgeAiActionBusy) return;
+    this.edgeAiConversationId = '';
+    this.edgeAiMessages = [];
+    this.edgeAiConversationTasks = [];
+    this.edgeAiIntentResolution = null;
   }
 
   private async recheckEdgeAi(): Promise<void> {
@@ -783,7 +845,7 @@ struct Index {
   }
 
   private actionIntent(action: EdgeAiActionName): string {
-    if (action === 'collect_logs') return '诊断当前边缘链路并生成只读日志采集计划';
+    if (action === 'collect_logs') return '诊断当前边缘链路，采集只读证据并保存诊断记录';
     if (action === 'generate_report') return '生成当前山体监测与边缘风险态势报告';
     return '重新研判全部监测节点的当前风险状态';
   }
@@ -794,6 +856,7 @@ struct Index {
     try {
       const history = await repository.edgeAiActions();
       this.edgeAiActions = history.actions ?? [];
+      if (this.edgeAiActions.length > 0) this.edgeAiLastAction = this.edgeAiActions[0];
     } catch {
       // The completed action remains visible even when history refresh is interrupted.
     }
@@ -814,35 +877,73 @@ struct Index {
   }
 
   private async runEdgeAiAction(action: EdgeAiActionName, intent: string = ''): Promise<void> {
-    if (!this.repository || this.edgeAiActionBusy) return;
-    this.edgeAiActionBusy = true;
-    this.edgeAiIntentResolution = null;
-    try {
-      const repository = this.repository as MonitoringRepository;
-      const response = await repository.runEdgeAiAction(action, intent.length > 0 ? intent : this.actionIntent(action));
-      this.edgeAiLastAction = response.action;
-      this.edgeAiLastAction = await this.waitForEdgeAiAction(repository, response.action);
-      await this.refreshEdgeAiAfterAction(repository);
-    } catch (error) {
-      this.errorMessage = this.errorText(error);
-    } finally {
-      this.edgeAiActionBusy = false;
-    }
+    await this.sendHermesMessage(intent.length > 0 ? intent : this.actionIntent(action));
   }
 
   private async runEdgeAiIntent(intent: string): Promise<void> {
+    await this.sendHermesMessage(intent);
+  }
+
+  private async sendHermesMessage(intent: string): Promise<void> {
     if (!this.repository || this.edgeAiActionBusy || intent.trim().length === 0) return;
     this.edgeAiActionBusy = true;
+    const localMessageId = `local-${Date.now()}`;
+    const localMessage: HermesMessage = {
+      messageId: localMessageId,
+      conversationId: this.edgeAiConversationId,
+      role: 'user',
+      content: intent.trim(),
+      metadata: {},
+      createdAt: new Date().toISOString()
+    };
+    this.edgeAiMessages = [...this.edgeAiMessages, localMessage];
     try {
       const repository = this.repository as MonitoringRepository;
-      const response = await repository.runEdgeAiIntent(intent.trim());
-      this.edgeAiIntentResolution = response.resolution;
-      if (response.execution?.action) {
-        this.edgeAiLastAction = response.execution.action;
-        this.edgeAiLastAction = await this.waitForEdgeAiAction(repository, response.execution.action);
-        await this.refreshEdgeAiAfterAction(repository);
+      const response = await repository.sendHermesMessage(intent.trim(), this.edgeAiConversationId);
+      this.edgeAiConversationId = response.conversation.conversationId;
+      const nextMessages: Array<HermesMessage> = [];
+      for (let index = 0; index < this.edgeAiMessages.length; index++) {
+        if (this.edgeAiMessages[index].messageId !== localMessageId) nextMessages.push(this.edgeAiMessages[index]);
       }
+      for (let index = 0; index < response.messages.length; index++) {
+        nextMessages.push(response.messages[index]);
+      }
+      this.edgeAiMessages = nextMessages;
+
+      const nextTasks: Array<HermesAgentTask> = [];
+      for (let index = 0; index < response.tasks.length; index++) nextTasks.push(response.tasks[index]);
+      for (let index = 0; index < this.edgeAiConversationTasks.length; index++) {
+        let duplicate = false;
+        for (let responseIndex = 0; responseIndex < response.tasks.length; responseIndex++) {
+          if (response.tasks[responseIndex].taskId === this.edgeAiConversationTasks[index].taskId) duplicate = true;
+        }
+        if (!duplicate) nextTasks.push(this.edgeAiConversationTasks[index]);
+      }
+      this.edgeAiConversationTasks = nextTasks;
+
+      const nextConversations: Array<HermesConversation> = [response.conversation];
+      for (let index = 0; index < this.edgeAiConversations.length; index++) {
+        if (this.edgeAiConversations[index].conversationId !== response.conversation.conversationId) {
+          nextConversations.push(this.edgeAiConversations[index]);
+        }
+      }
+      this.edgeAiConversations = nextConversations;
+      const assistant = response.messages.length > 0 ? response.messages[response.messages.length - 1] : null;
+      this.edgeAiIntentResolution = {
+        resolved: response.tasks.length > 0 && !response.blocked,
+        blocked: response.blocked,
+        action: response.tasks.length === 1 ? response.tasks[0].action : null,
+        label: response.tasks.length === 1 ? response.tasks[0].label : null,
+        reason: assistant?.content ?? '',
+        suggestions: response.suggestions ?? []
+      };
+      await this.refreshEdgeAiAfterAction(repository);
     } catch (error) {
+      const restoredMessages: Array<HermesMessage> = [];
+      for (let index = 0; index < this.edgeAiMessages.length; index++) {
+        if (this.edgeAiMessages[index].messageId !== localMessageId) restoredMessages.push(this.edgeAiMessages[index]);
+      }
+      this.edgeAiMessages = restoredMessages;
       this.errorMessage = this.errorText(error);
     } finally {
       this.edgeAiActionBusy = false;
@@ -1488,11 +1589,18 @@ struct Index {
               actions: this.edgeAiActions,
               lastAction: this.edgeAiLastAction,
               intentResolution: this.edgeAiIntentResolution,
+              conversations: this.edgeAiConversations,
+              conversationId: this.edgeAiConversationId,
+              messages: this.edgeAiMessages,
+              conversationTasks: this.edgeAiConversationTasks,
+              chatLoading: this.edgeAiChatLoading,
               refreshing: this.edgeAiRefreshing || this.edgeAiActionBusy,
               executing: this.edgeAiActionBusy,
               onRefresh: () => this.loadEdgeAiStatus(),
               onAction: (action: EdgeAiActionName) => this.runEdgeAiAction(action),
               onIntent: (intent: string) => this.runEdgeAiIntent(intent),
+              onSelectConversation: (conversationId: string) => this.openHermesConversation(conversationId),
+              onNewConversation: () => this.newHermesConversation(),
               onOpenDevice: (deviceId: string) => this.openEdgeAiDevice(deviceId)
             });
           } else if (this.screen === 'device') {
@@ -2115,11 +2223,18 @@ struct AiPane {
   @Prop actions: Array<HermesAction>;
   @Prop lastAction: HermesAction | null;
   @Prop intentResolution: EdgeAiIntentResolution | null;
+  @Prop conversations: Array<HermesConversation>;
+  @Prop conversationId: string;
+  @Prop messages: Array<HermesMessage>;
+  @Prop conversationTasks: Array<HermesAgentTask>;
+  @Prop chatLoading: boolean;
   @Prop refreshing: boolean;
   @Prop executing: boolean;
   onRefresh: () => void = () => {};
   onAction: (action: EdgeAiActionName) => void = () => {};
   onIntent: (intent: string) => void = () => {};
+  onSelectConversation: (conversationId: string) => void = () => {};
+  onNewConversation: () => void = () => {};
   onOpenDevice: (deviceId: string) => void = () => {};
 
   private subtitle(): string {
@@ -2148,8 +2263,15 @@ struct AiPane {
             executing: this.executing,
             resolution: this.intentResolution,
             lastAction: this.lastAction,
+            conversations: this.conversations,
+            conversationId: this.conversationId,
+            messages: this.messages,
+            tasks: this.conversationTasks,
+            loading: this.chatLoading,
             onAction: (action: EdgeAiActionName) => this.onAction(action),
-            onIntent: (intent: string) => this.onIntent(intent)
+            onIntent: (intent: string) => this.onIntent(intent),
+            onSelectConversation: (conversationId: string) => this.onSelectConversation(conversationId),
+            onNewConversation: () => this.onNewConversation()
           });
           HermesNodeSection({
             status: this.status,
@@ -2157,6 +2279,7 @@ struct AiPane {
             onOpenDevice: (deviceId: string) => this.onOpenDevice(deviceId)
           });
           HermesTaskSection({
+            tasks: this.conversationTasks,
             actions: this.actions,
             fallbackTasks: this.status?.tasks ?? []
           });
@@ -2297,13 +2420,21 @@ struct HermesCommandPanel {
   @Prop executing: boolean;
   @Prop resolution: EdgeAiIntentResolution | null;
   @Prop lastAction: HermesAction | null;
+  @Prop conversations: Array<HermesConversation>;
+  @Prop conversationId: string;
+  @Prop messages: Array<HermesMessage>;
+  @Prop tasks: Array<HermesAgentTask>;
+  @Prop loading: boolean;
   @State private intentText: string = '';
   onAction: (action: EdgeAiActionName) => void = () => {};
   onIntent: (intent: string) => void = () => {};
+  onSelectConversation: (conversationId: string) => void = () => {};
+  onNewConversation: () => void = () => {};
 
   private submitIntent(): void {
     const value = this.intentText.trim();
     if (value.length === 0 || this.executing) return;
+    this.intentText = '';
     this.onIntent(value);
   }
 
@@ -2322,28 +2453,118 @@ struct HermesCommandPanel {
     return result;
   }
 
+  private activeTitle(): string {
+    for (let index = 0; index < this.conversations.length; index++) {
+      if (this.conversations[index].conversationId === this.conversationId) return this.conversations[index].title;
+    }
+    return '新的研判任务';
+  }
+
   build() {
-    Column({ space: 11 }) {
+    Column({ space: 12 }) {
       Row() {
-        Text('交给 Hermes')
-          .fontSize(17)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(UI_COLOR_TEXT)
+        Column({ space: 2 }) {
+          Text('Hermes 对话')
+            .fontSize(18)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(UI_COLOR_TEXT)
+          Text(this.conversationId.length > 0 ? this.activeTitle() : '首次发送后自动保存')
+            .fontSize(12)
+            .fontColor(UI_COLOR_MUTED)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+        }
         .layoutWeight(1)
-        Text(this.executing ? '执行中' : '只读安全模式')
-          .fontSize(10)
+        Button('新对话')
+          .height(44)
+          .fontSize(12)
           .fontWeight(FontWeight.Medium)
-          .fontColor(this.executing ? UI_COLOR_ACCENT : UI_COLOR_HERMES)
-          .backgroundColor(this.executing ? '#F7ECE6' : UI_COLOR_HERMES_SOFT)
-          .borderRadius(5)
-          .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+          .fontColor(UI_COLOR_HERMES)
+          .backgroundColor(UI_COLOR_HERMES_SOFT)
+          .borderRadius(6)
+          .enabled(!this.executing)
+          .onClick(() => this.onNewConversation())
       }
       .width('100%')
 
+      if (this.conversations.length > 0) {
+        Column() {
+          ForEach(this.conversations.slice(0, 3), (conversation: HermesConversation, index: number) => {
+            Row({ space: 10 }) {
+              Circle({ width: 7, height: 7 })
+                .fill(conversation.conversationId === this.conversationId ? UI_COLOR_HERMES : '#C6CECA')
+              Text(conversation.title)
+                .fontSize(13)
+                .fontWeight(conversation.conversationId === this.conversationId ? FontWeight.Medium : FontWeight.Regular)
+                .fontColor(UI_COLOR_TEXT)
+                .maxLines(1)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+                .layoutWeight(1)
+              Text(relativeTime(conversation.updatedAt))
+                .fontSize(11)
+                .fontColor(UI_COLOR_MUTED)
+              SymbolGlyph($r('sys.symbol.chevron_right'))
+                .fontSize(15)
+                .fontColor([UI_COLOR_SUBTLE])
+            }
+            .height(44)
+            .padding({ left: 10, right: 8 })
+            .width('100%')
+            .border({ width: { bottom: index === Math.min(2, this.conversations.length - 1) ? 0 : 1 }, color: '#E1E7E3' })
+            .accessibilityText(`打开历史对话：${conversation.title}`)
+            .onClick(() => this.onSelectConversation(conversation.conversationId))
+          }, (conversation: HermesConversation) => conversation.conversationId)
+        }
+        .backgroundColor('#F0F4F2')
+        .borderRadius(7)
+        .width('100%')
+      }
+
+      if (this.loading) {
+        Row({ space: 8 }) {
+          LoadingProgress().width(18).height(18).color(UI_COLOR_HERMES)
+          Text('正在读取对话记录').fontSize(12).fontColor(UI_COLOR_MUTED)
+        }
+        .height(44)
+      } else if (this.messages.length === 0) {
+        Column({ space: 5 }) {
+          Text('可以直接安排连续任务')
+            .fontSize(14)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(UI_COLOR_TEXT)
+          Text('例如：先诊断链路，再重新研判，最后生成报告。Hermes 会按顺序执行并回传结果。')
+            .fontSize(13)
+            .fontColor(UI_COLOR_MUTED)
+            .lineHeight(20)
+        }
+        .padding(12)
+        .backgroundColor('#EDF3EF')
+        .borderRadius(7)
+        .width('100%')
+      } else {
+        Column({ space: 10 }) {
+          ForEach(this.messages.slice(Math.max(0, this.messages.length - 10)), (message: HermesMessage) => {
+            HermesMessageRow({ message: message });
+          }, (message: HermesMessage) => message.messageId)
+        }
+        .width('100%')
+      }
+
+      if (this.executing) {
+        Row({ space: 8 }) {
+          LoadingProgress().width(18).height(18).color(UI_COLOR_ACCENT)
+          Text('正在规划并执行 RK3568 安全任务')
+            .fontSize(12)
+            .fontColor(UI_COLOR_ACCENT)
+        }
+        .height(36)
+        .width('100%')
+      }
+
       Row({ space: 8 }) {
-        TextInput({ text: this.intentText, placeholder: '询问风险，或安排一项安全任务' })
-          .height(44)
-          .fontSize(13)
+        TextInput({ text: this.intentText, placeholder: '继续追问，或下发一项任务' })
+          .height(48)
+          .fontSize(14)
           .fontColor(UI_COLOR_TEXT)
           .placeholderColor(UI_COLOR_SUBTLE)
           .caretColor(UI_COLOR_HERMES)
@@ -2363,11 +2584,11 @@ struct HermesCommandPanel {
               .fontColor(['#FFFFFF'])
           }
         }
-        .width(44)
-        .height(44)
+        .width(48)
+        .height(48)
         .backgroundColor(UI_COLOR_HERMES)
         .enabled(!this.executing && this.intentText.trim().length > 0)
-        .accessibilityText('提交 Hermes 任务')
+        .accessibilityText('发送给 Hermes')
         .onClick(() => this.submitIntent())
       }
       .width('100%')
@@ -2394,11 +2615,11 @@ struct HermesCommandPanel {
       }
       .width('100%')
 
-      if (this.resolution) {
+      if (this.resolution?.blocked) {
         Row({ space: 8 }) {
           Circle({ width: 8, height: 8 }).fill(this.feedbackColor())
-          Text(this.resolution?.reason ?? '')
-            .fontSize(11)
+          Text('受保护操作未执行，请前往对应功能页人工确认')
+            .fontSize(12)
             .fontColor(this.feedbackColor())
             .layoutWeight(1)
         }
@@ -2456,6 +2677,46 @@ struct HermesCommandPanel {
 }
 
 @Component
+struct HermesMessageRow {
+  @Prop message: HermesMessage;
+
+  build() {
+    Row() {
+      if (this.message.role === 'user') {
+        Blank().layoutWeight(1)
+      }
+      Column({ space: 5 }) {
+        Row() {
+          Text(this.message.role === 'user' ? '我' : 'Hermes')
+            .fontSize(11)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(this.message.role === 'user' ? '#DDE9E3' : UI_COLOR_HERMES)
+            .layoutWeight(1)
+          Text(shortTime(this.message.createdAt))
+            .fontSize(10)
+            .fontColor(this.message.role === 'user' ? '#B9CEC4' : UI_COLOR_SUBTLE)
+        }
+        .width('100%')
+        Text(this.message.content)
+          .fontSize(14)
+          .fontColor(this.message.role === 'user' ? '#F5F8F6' : UI_COLOR_TEXT)
+          .lineHeight(21)
+          .width('100%')
+      }
+      .padding({ left: 12, right: 12, top: 10, bottom: 10 })
+      .backgroundColor(this.message.role === 'user' ? UI_COLOR_HERMES : '#EDF2EF')
+      .borderRadius(7)
+      .width('86%')
+      if (this.message.role !== 'user') {
+        Blank().layoutWeight(1)
+      }
+    }
+    .width('100%')
+    .alignItems(VerticalAlign.Top)
+  }
+}
+
+@Component
 struct HermesQuickAction {
   @Prop label: string;
   @Prop action: EdgeAiActionName;
@@ -2464,8 +2725,8 @@ struct HermesQuickAction {
 
   build() {
     Button(this.label)
-      .height(36)
-      .fontSize(11)
+      .height(44)
+      .fontSize(12)
       .fontWeight(FontWeight.Medium)
       .fontColor(UI_COLOR_HERMES)
       .backgroundColor(UI_COLOR_HERMES_SOFT)
@@ -2603,6 +2864,7 @@ struct HermesNodeRow {
 
 @Component
 struct HermesTaskSection {
+  @Prop tasks: Array<HermesAgentTask>;
   @Prop actions: Array<HermesAction>;
   @Prop fallbackTasks: Array<EdgeAgentTask>;
 
@@ -2614,12 +2876,19 @@ struct HermesTaskSection {
           .fontWeight(FontWeight.Bold)
           .fontColor(UI_COLOR_TEXT)
           .layoutWeight(1)
-        Text('发现 · 执行 · 验证')
-          .fontSize(10)
+        Text('计划 · 执行 · 留痕')
+          .fontSize(12)
           .fontColor(UI_COLOR_MUTED)
       }
       .width('100%')
-      if (this.actions.length > 0) {
+      if (this.tasks.length > 0) {
+        ForEach(this.tasks.slice(0, 6), (task: HermesAgentTask, index: number) => {
+          HermesAgentTaskTimelineRow({
+            task: task,
+            last: index === Math.min(this.tasks.length, 6) - 1
+          });
+        }, (task: HermesAgentTask) => task.taskId)
+      } else if (this.actions.length > 0) {
         ForEach(this.actions.slice(0, 5), (action: HermesAction, index: number) => {
           HermesActionTimelineRow({
             action: action,
@@ -2640,6 +2909,153 @@ struct HermesTaskSection {
           .padding({ top: 8, bottom: 8 })
           .width('100%')
       }
+    }
+    .width('100%')
+  }
+}
+
+@Component
+struct HermesAgentTaskTimelineRow {
+  @Prop task: HermesAgentTask;
+  @Prop last: boolean;
+  @State private expanded: boolean = false;
+
+  private statusLabel(): string {
+    if (this.task.status === 'succeeded') return '已完成';
+    if (this.task.status === 'failed') return '执行失败';
+    if (this.task.status === 'running') return '执行中';
+    if (this.task.status === 'awaiting_confirmation') return '等待确认';
+    return '已排队';
+  }
+
+  private statusColor(): string {
+    if (this.task.status === 'succeeded') return UI_COLOR_SUCCESS;
+    if (this.task.status === 'failed') return UI_COLOR_DANGER;
+    if (this.task.status === 'running') return UI_COLOR_ACCENT;
+    return UI_COLOR_MUTED;
+  }
+
+  private detail(): string {
+    if (this.task.error) return this.task.error;
+    if (this.task.result.artifactName) return `记录：${this.task.result.artifactName}`;
+    if (this.task.summary.length > 0) return localizedHermesText(this.task.summary);
+    return '任务状态已写入服务器审计记录';
+  }
+
+  private hasRecord(): boolean {
+    return (this.task.result.reportText?.length ?? 0) > 0 || (this.task.result.evidence?.length ?? 0) > 0;
+  }
+
+  build() {
+    Column({ space: 8 }) {
+      Row({ space: 10 }) {
+        Column() {
+          Circle({ width: 10, height: 10 }).fill(this.statusColor())
+          if (!this.last) {
+            Rect().width(2).height(48).fill(UI_COLOR_HERMES_LINE)
+          }
+        }
+        .width(12)
+        .alignItems(HorizontalAlign.Center)
+        Column({ space: 4 }) {
+          Row() {
+            Text(this.task.label)
+              .fontSize(14)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(UI_COLOR_TEXT)
+              .layoutWeight(1)
+            Text(this.statusLabel())
+              .fontSize(12)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(this.statusColor())
+          }
+          .width('100%')
+          Text(this.detail())
+            .fontSize(12)
+            .fontColor(UI_COLOR_MUTED)
+            .maxLines(2)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+          Row() {
+            Text(`${shortTime(this.task.createdAt)} · ${this.task.safetyLevel === 'read_only' ? '只读自动执行' : '需要人工确认'}`)
+              .fontSize(11)
+              .fontColor(UI_COLOR_SUBTLE)
+              .layoutWeight(1)
+            if (this.hasRecord()) {
+              Button(this.expanded ? '收起记录' : '查看记录')
+                .height(44)
+                .fontSize(12)
+                .fontColor(UI_COLOR_HERMES)
+                .backgroundColor('#E8EFEB')
+                .borderRadius(6)
+                .onClick(() => this.expanded = !this.expanded)
+            }
+          }
+          .width('100%')
+        }
+        .padding({ bottom: this.last ? 0 : 8 })
+        .layoutWeight(1)
+      }
+      .alignItems(VerticalAlign.Top)
+      .width('100%')
+
+      if (this.expanded && this.hasRecord()) {
+        Column({ space: 10 }) {
+          if (this.task.result.reportText) {
+            Text(this.task.result.reportText)
+              .fontSize(12)
+              .fontColor(UI_COLOR_TEXT)
+              .lineHeight(19)
+              .width('100%')
+          }
+          if (this.task.result.evidence) {
+            ForEach(this.task.result.evidence.slice(0, 6), (evidence: HermesDiagnosticEvidence) => {
+              HermesDiagnosticEvidenceRow({ evidence: evidence });
+            }, (evidence: HermesDiagnosticEvidence) => evidence.command)
+          }
+        }
+        .padding(12)
+        .backgroundColor('#F0F4F2')
+        .borderRadius(7)
+        .width('100%')
+      }
+    }
+    .width('100%')
+  }
+}
+
+@Component
+struct HermesDiagnosticEvidenceRow {
+  @Prop evidence: HermesDiagnosticEvidence;
+
+  private output(): string {
+    if (this.evidence.stdout.trim().length > 0) return this.evidence.stdout.trim();
+    if (this.evidence.stderr.trim().length > 0) return this.evidence.stderr.trim();
+    if (this.evidence.error) return this.evidence.error;
+    return '命令已完成，没有额外输出';
+  }
+
+  build() {
+    Column({ space: 3 }) {
+      Row() {
+        Text(this.evidence.command)
+          .fontSize(11)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(UI_COLOR_TEXT)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+          .layoutWeight(1)
+        Text(this.evidence.ok ? '正常' : '异常')
+          .fontSize(11)
+          .fontColor(this.evidence.ok ? UI_COLOR_SUCCESS : UI_COLOR_DANGER)
+      }
+      .width('100%')
+      Text(this.output())
+        .fontSize(11)
+        .fontColor(UI_COLOR_MUTED)
+        .lineHeight(17)
+        .maxLines(4)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+        .width('100%')
     }
     .width('100%')
   }

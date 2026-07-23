@@ -1,5 +1,5 @@
 import http from '@ohos.net.http';
-import { ApiEnvelope, LoginData, UserSummary, DashboardSummary, WeeklyTrend, Station, Device, DeviceState, SensorDefinition, MetricSeries, SeriesResponse, AlertPage, AlertEventsResponse, PredictionPage, FieldAlarmStatus, EdgeAiStatus, EdgeAiActionName, EdgeAiActionResponse, EdgeAiActionHistory, EdgeAiIntentResponse } from './Types';
+import { ApiEnvelope, LoginData, UserSummary, DashboardSummary, WeeklyTrend, Station, Device, DeviceState, SensorDefinition, MetricSeries, SeriesResponse, AlertPage, AlertEventsResponse, PredictionPage, FieldAlarmStatus, EdgeAiStatus, EdgeAiActionName, EdgeAiActionResponse, EdgeAiActionHistory, EdgeAiIntentResponse, HermesChatResponse, HermesConversationHistory, HermesConversationList } from './Types';
 import { normalizeApiBaseUrl } from './ApiConfig';
 
 export class ApiError extends Error {
@@ -43,6 +43,11 @@ interface EdgeAiActionRequest {
 interface EdgeAiIntentRequest {
   intent: string;
   requestId: string;
+}
+
+interface HermesChatRequest {
+  message: string;
+  conversationId?: string;
 }
 
 export class ApiClient {
@@ -259,6 +264,23 @@ export class ApiClient {
     return this.request<EdgeAiIntentResponse>('/edge-ai/intents', http.RequestMethod.POST, body);
   }
 
+  async hermesConversations(): Promise<HermesConversationList> {
+    return this.request<HermesConversationList>('/edge-ai/conversations?pageSize=20');
+  }
+
+  async hermesConversation(conversationId: string): Promise<HermesConversationHistory> {
+    return this.request<HermesConversationHistory>(
+      `/edge-ai/conversations/${encodeURIComponent(conversationId)}/messages`
+    );
+  }
+
+  async sendHermesMessage(message: string, conversationId: string = ''): Promise<HermesChatResponse> {
+    const body: HermesChatRequest = conversationId.length > 0
+      ? { message: message, conversationId: conversationId }
+      : { message: message };
+    return this.request<HermesChatResponse>('/edge-ai/chat', http.RequestMethod.POST, body, true, true, 30000);
+  }
+
   private edgeAiRequestId(kind: string): string {
     const randomPart = Math.floor(Math.random() * 0xFFFFFFF).toString(36);
     return `harmonyos:${kind}:${Date.now().toString(36)}:${randomPart}`;
@@ -313,7 +335,7 @@ export class ApiClient {
     return this.refreshPromise;
   }
 
-  private async request<T>(path: string, method: Method = http.RequestMethod.GET, body?: Object, auth: boolean = true, retry: boolean = true): Promise<T> {
+  private async request<T>(path: string, method: Method = http.RequestMethod.GET, body?: Object, auth: boolean = true, retry: boolean = true, readTimeoutMs: number = 10000): Promise<T> {
     const request = http.createHttp();
     const headers: Record<string, string> = {
       'Accept': 'application/json',
@@ -327,11 +349,11 @@ export class ApiClient {
         header: headers,
         extraData: body === undefined ? undefined : JSON.stringify(body),
         connectTimeout: 10000,
-        readTimeout: 10000
+        readTimeout: readTimeoutMs
       });
       const envelope = this.parseEnvelope<T>(response.result);
       if (response.responseCode === 401 && auth && retry && await this.refresh()) {
-        return this.request<T>(path, method, body, auth, false);
+        return this.request<T>(path, method, body, auth, false, readTimeoutMs);
       }
       if (response.responseCode < 200 || response.responseCode >= 300 || envelope.success === false) {
         throw new ApiError(envelope.message || `HTTP ${response.responseCode}`, response.responseCode, envelope.traceId || '');

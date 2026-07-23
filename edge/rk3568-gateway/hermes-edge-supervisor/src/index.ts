@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { execFile } from "node:child_process";
 import { promises as fs } from "node:fs";
 import http, { type IncomingMessage, type ServerResponse } from "node:http";
 import path from "node:path";
@@ -44,6 +45,14 @@ type LocalResourceSnapshot = {
   error: string | null;
 };
 
+type DiagnosticCommandResult = {
+  command: string;
+  ok: boolean;
+  exitCode: number | null;
+  stdout: string;
+  stderr: string;
+  error: string | null;
+};
 type AiModelStatus = {
   modelKey: string;
   task: "edge_link_diagnosis";
@@ -221,7 +230,7 @@ class HermesEdgeSupervisor {
     this.edgeRiskAgent = new EdgeRiskAgent(config);
     this.actionQueue = new HermesActionQueue({
       maxOutstanding: config.actionQueueMaxOutstanding,
-      execute: (request) => this.executeAction(request),
+      execute: (request, actionId) => this.executeAction(request, actionId),
       onTransition: (action) => this.appendActionTransition(action),
       onTransitionError: (error, action) => {
         this.logger.warn(
@@ -351,9 +360,7 @@ class HermesEdgeSupervisor {
     if (method === "GET" && requestUrl.startsWith("/v1/actions/")) {
       let actionId: string;
       try {
-        actionId = decodeURIComponent(
-          requestUrl.replace("/v1/actions/", "").split("?")[0] ?? ""
-        );
+        actionId = decodeURIComponent(requestUrl.replace("/v1/actions/", "").split("?")[0] ?? "");
       } catch {
         this.respondJson(response, 400, { error: "invalid_action_id" });
         return;
@@ -430,7 +437,9 @@ class HermesEdgeSupervisor {
     const body = await this.readRequestJson(request);
     const naturalLanguageIntent = getString(body, "intent");
     const requestedBy = getString(body, "requestedBy") ?? "local-operator-or-display";
-    const requestId = getString(body, "requestId") ?? `legacy-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+    const requestId =
+      getString(body, "requestId") ??
+      `legacy-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
     if (!/^[a-z0-9][a-z0-9._:-]{7,127}$/iu.test(requestId)) {
       this.respondJson(response, 400, { error: "invalid_request_id" });
       return;
@@ -447,14 +456,21 @@ class HermesEdgeSupervisor {
         requestedBy,
         naturalLanguageIntent,
       });
-      this.respondJson(response, queued.duplicate ? 200 : 202, this.actionEnvelope(queued.action, queued.duplicate));
+      this.respondJson(
+        response,
+        queued.duplicate ? 200 : 202,
+        this.actionEnvelope(queued.action, queued.duplicate)
+      );
     } catch (error) {
       if (error instanceof HermesActionConflictError) {
         this.respondJson(response, 409, { error: "request_id_conflict" });
         return;
       }
       if (error instanceof HermesActionQueueFullError) {
-        this.respondJson(response, 429, { error: "action_queue_full", queue: this.actionQueue.status() });
+        this.respondJson(response, 429, {
+          error: "action_queue_full",
+          queue: this.actionQueue.status(),
+        });
         return;
       }
       throw error;
@@ -507,7 +523,10 @@ class HermesEdgeSupervisor {
   private async loadActionHistory(): Promise<void> {
     const resolved = path.resolve(this.config.eventLogFilePath);
     try {
-      const lines = (await fs.readFile(resolved, "utf8")).split(/\r?\n/u).filter(Boolean).slice(-768);
+      const lines = (await fs.readFile(resolved, "utf8"))
+        .split(/\r?\n/u)
+        .filter(Boolean)
+        .slice(-768);
       const events: HermesAction[] = [];
       for (const line of lines) {
         try {
@@ -525,6 +544,168 @@ class HermesEdgeSupervisor {
     }
   }
 
+  private redactDiagnosticOutput(value: string): string {
+    return value
+      .replace(
+        /(password|passwd|token|secret|authorization)(\s*[=:]\s*)[^\s,;]+/giu,
+        "$1$2[REDACTED]"
+      )
+      .slice(0, 12_000);
+  }
+
+  private runReadOnlyCommand(command: string, args: string[]): Promise<DiagnosticCommandResult> {
+    return new Promise((resolve) => {
+      execFile(
+        command,
+        args,
+        {
+          timeout: this.config.actionCommandTimeoutMs,
+          maxBuffer: 64 * 1024,
+          encoding: "utf8",
+          windowsHide: true,
+        },
+        (error, stdout, stderr) => {
+          const code =
+            error && typeof (error as { code?: unknown }).code === "number"
+              ? (error as { code: number }).code
+              : error
+                ? 1
+                : 0;
+          resolve({
+            command: [command, ...args].join(" "),
+            ok: error === null,
+            exitCode: code,
+            stdout: this.redactDiagnosticOutput(stdout),
+            stderr: this.redactDiagnosticOutput(stderr),
+            error: error ? error.message : null,
+          });
+        }
+      );
+    });
+  }
+
+  private async collectDiagnosticBundle(
+    actionId: string,
+    report: SupervisionReport
+  ): Promise<JsonObject> {
+    const commands: Array<[string, string[]]> = [
+      [
+        "systemctl",
+        [
+          "show",
+          "lsmv2-field-gateway.service",
+          "lsmv2-field-link-monitor.service",
+          "lsmv2-hermes-edge-supervisor.service",
+          "--property=Id,ActiveState,SubState,NRestarts,MemoryCurrent,CPUUsageNSec",
+          "--no-pager",
+        ],
+      ],
+      [
+        "journalctl",
+        ["-u", "lsmv2-field-gateway.service", "-n", "80", "--no-pager", "-o", "short-iso"],
+      ],
+      [
+        "journalctl",
+        ["-u", "lsmv2-field-link-monitor.service", "-n", "80", "--no-pager", "-o", "short-iso"],
+      ],
+      [
+        "journalctl",
+        ["-u", "lsmv2-hermes-edge-supervisor.service", "-n", "80", "--no-pager", "-o", "short-iso"],
+      ],
+      ["ip", ["-brief", "address"]],
+      ["ip", ["route", "show"]],
+    ];
+    const results = await Promise.all(
+      commands.map(([command, args]) => this.runReadOnlyCommand(command, args))
+    );
+    const generatedAt = isoNow();
+    const artifactName = `diagnostic-${actionId}.json`;
+    const artifact = {
+      schema_version: 1,
+      actionId,
+      generatedAt,
+      supervision: {
+        overallLevel: report.summary.overallLevel,
+        diagnosisType: report.aiDiagnosis.diagnosisType,
+        confidence: report.aiDiagnosis.confidence,
+        localResources: report.localResources,
+        edgeRiskLevel: report.edgeRiskAgent.overallRiskLevel,
+        pendingUploadCount: report.edgeRiskAgent.pendingUploadCount,
+      },
+      commands: results,
+    };
+    await ensureDir(path.resolve(this.config.actionArtifactDir));
+    await writeJsonAtomic(path.join(this.config.actionArtifactDir, artifactName), artifact);
+    const collectedCommandCount = results.filter((result) => result.ok).length;
+    return {
+      reportReady: true,
+      generatedAt,
+      artifactName,
+      collectedCommandCount,
+      failedCommandCount: results.length - collectedCommandCount,
+      diagnosisType: report.aiDiagnosis.diagnosisType,
+      overallLevel: report.summary.overallLevel,
+      evidence: results.map((result) => ({
+        command: result.command,
+        ok: result.ok,
+        exitCode: result.exitCode,
+        stdout: result.stdout,
+        stderr: result.stderr,
+        error: result.error,
+      })),
+      note: "只读诊断证据已在 RK3568 本地落盘，口令和令牌字段已脱敏。",
+    };
+  }
+
+  private async generateSituationReport(
+    actionId: string,
+    report: SupervisionReport
+  ): Promise<JsonObject> {
+    const generatedAt = isoNow();
+    const artifactName = `situation-report-${actionId}.md`;
+    const plan = report.aiDiagnosis.recommendedPlan.map((item) => `- ${item}`).join("\n");
+    const content = [
+      "# Hermes 边缘态势报告",
+      "",
+      `生成时间：${generatedAt}`,
+      `总体状态：${report.summary.overallLevel}`,
+      `边缘风险：${report.edgeRiskAgent.overallRiskLevel}`,
+      `最高风险分：${String(report.edgeRiskAgent.maxRiskScore ?? "暂无")}`,
+      `诊断类型：${report.aiDiagnosis.diagnosisType}`,
+      `研判置信度：${String(Math.round(report.aiDiagnosis.confidence * 100))}%`,
+      `节点数量：${String(report.edgeRiskAgent.devices.length)}`,
+      `待上传任务：${String(report.edgeRiskAgent.pendingUploadCount)}`,
+      "",
+      "## 建议步骤",
+      "",
+      plan || "- 保持观察，等待下一次有效数据。",
+      "",
+      "## 安全边界",
+      "",
+      "本报告仅汇总旁路监督数据，未接管告警、串口采集或 MQTT 上行链路。",
+      "",
+    ].join("\n");
+    await ensureDir(path.resolve(this.config.actionArtifactDir));
+    await fs.writeFile(path.join(this.config.actionArtifactDir, artifactName), content, "utf8");
+    return {
+      reportReady: true,
+      generatedAt,
+      artifactName,
+      reportText: content,
+      overallLevel: report.summary.overallLevel,
+      diagnosisType: report.aiDiagnosis.diagnosisType,
+      confidence: report.aiDiagnosis.confidence,
+      confidenceLevel: report.aiDiagnosis.confidenceLevel,
+      taskCount: report.summary.taskCount,
+      blockedCount: report.summary.blockedCount,
+      recommendedPlan: report.aiDiagnosis.recommendedPlan,
+      edgeRiskLevel: report.edgeRiskAgent.overallRiskLevel,
+      edgeRiskScore: report.edgeRiskAgent.maxRiskScore,
+      edgeRiskModelVersion: report.edgeRiskAgent.model.modelVersion,
+      edgeAgentPendingUploads: report.edgeRiskAgent.pendingUploadCount,
+    };
+  }
+
   private isHermesAction(value: unknown): value is HermesAction {
     if (!isObject(value)) return false;
     return (
@@ -533,8 +714,13 @@ class HermesEdgeSupervisor {
       typeof value.createdAt === "string" &&
       (value.startedAt === null || typeof value.startedAt === "string") &&
       (value.completedAt === null || typeof value.completedAt === "string") &&
-      (value.action === "recheck" || value.action === "collect_logs" || value.action === "generate_report") &&
-      (value.status === "queued" || value.status === "running" || value.status === "completed" || value.status === "failed") &&
+      (value.action === "recheck" ||
+        value.action === "collect_logs" ||
+        value.action === "generate_report") &&
+      (value.status === "queued" ||
+        value.status === "running" ||
+        value.status === "completed" ||
+        value.status === "failed") &&
       typeof value.requestedBy === "string" &&
       (value.naturalLanguageIntent === null || typeof value.naturalLanguageIntent === "string") &&
       typeof value.summary === "string" &&
@@ -543,12 +729,15 @@ class HermesEdgeSupervisor {
     );
   }
 
-  private async executeAction(request: HermesActionRequest): Promise<HermesActionExecutionResult> {
+  private async executeAction(
+    request: HermesActionRequest,
+    actionId: string
+  ): Promise<HermesActionExecutionResult> {
     if (request.action === "recheck") await this.refresh(true);
     const report = this.latestReport;
     return {
       summary: this.actionSummary(request.action, report),
-      result: this.actionResult(request.action, report),
+      result: await this.actionResult(actionId, request.action, report),
     };
   }
 
@@ -560,29 +749,26 @@ class HermesEdgeSupervisor {
         : "已触发边缘复检，但监督报告尚未就绪。";
     }
     if (action === "collect_logs") {
-      return "已生成只读日志采集计划，等待上层展示或人工导出。";
+      return "已在 RK3568 采集只读链路证据并生成诊断记录。";
     }
-    return "已生成当前 Hermes 监督摘要，可用于显示屏或中心端报告。";
+    return "已生成当前 Hermes 边缘态势报告并保存记录。";
   }
 
-  private actionResult(
+  private async actionResult(
+    actionId: string,
     action: HermesActionName,
     report: SupervisionReport | null
-  ): JsonObject {
+  ): Promise<JsonObject> {
     if (!report) {
       return { reportReady: false };
     }
 
     if (action === "collect_logs") {
-      return {
-        reportReady: true,
-        suggestedCommands: [
-          "systemctl status lsmv2-field-gateway --no-pager",
-          "journalctl -u lsmv2-field-gateway -n 120 --no-pager",
-          "journalctl -u lsmv2-hermes-edge-supervisor -n 120 --no-pager",
-        ],
-        note: "Commands are suggestions for operator/export tooling; this action does not execute them.",
-      };
+      return this.collectDiagnosticBundle(actionId, report);
+    }
+
+    if (action === "generate_report") {
+      return this.generateSituationReport(actionId, report);
     }
 
     return {
@@ -622,14 +808,15 @@ class HermesEdgeSupervisor {
           exampleUtterances: ["准备诊断日志", "我要看现场证据", "收集网关日志线索"],
           method: "POST",
           path: "/v1/actions/collect_logs",
-          safety: "returns log collection plan only",
+          safety:
+            "executes a fixed read-only diagnostic command set and stores a redacted artifact",
         },
         {
           action: "generate_report",
           exampleUtterances: ["生成当前报告", "告诉我现在是什么问题", "给评委展示边缘智能状态"],
           method: "POST",
           path: "/v1/actions/generate_report",
-          safety: "summarizes latest supervision report",
+          safety: "summarizes latest supervision report into a local artifact",
         },
       ],
       prohibitedActions: [
