@@ -299,6 +299,37 @@ async function resolveLegacyOrUuidDeviceId(pg: PgPool, input: string): Promise<s
 
 type GpsPoint = { ts: string; lat: number; lon: number; alt: number | null };
 
+const MAX_BASELINE_CLUSTER_DISTANCE_METERS = 100;
+
+function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 0) return ((sorted[mid - 1] ?? 0) + (sorted[mid] ?? 0)) / 2;
+  return sorted[mid] ?? 0;
+}
+
+function isValidGpsPoint(point: GpsPoint): boolean {
+  return (
+    Number.isFinite(point.lat) &&
+    Number.isFinite(point.lon) &&
+    Math.abs(point.lat) > 0.0001 &&
+    Math.abs(point.lon) > 0.0001 &&
+    Math.abs(point.lat) <= 90 &&
+    Math.abs(point.lon) <= 180
+  );
+}
+
+function selectDominantGpsCluster(points: GpsPoint[]): GpsPoint[] {
+  const valid = points.filter(isValidGpsPoint);
+  if (valid.length === 0) return [];
+
+  const centerLat = median(valid.map((point) => point.lat));
+  const centerLon = median(valid.map((point) => point.lon));
+  return valid.filter(
+    (point) => haversineMeters(centerLat, centerLon, point.lat, point.lon) <= MAX_BASELINE_CLUSTER_DISTANCE_METERS
+  );
+}
+
 async function fetchLatestGpsPoints(
   config: AppConfig,
   ch: ClickHouseClient,
@@ -330,6 +361,7 @@ async function fetchLatestGpsPoints(
     LIMIT {limit:UInt32}
   `;
 
+  const candidateLimit = Math.min(5000, Math.max(50, limit * 5));
   const result = await ch.query({
     query: sql,
     query_params: {
@@ -340,13 +372,13 @@ async function fetchLatestGpsPoints(
       altKey: keys.altKey ?? "__no_alt_key__",
       start: toClickhouseDateTime64Utc(start),
       end: toClickhouseDateTime64Utc(end),
-      limit
+      limit: candidateLimit
     },
     format: "JSONEachRow"
   });
   const rows: Row[] = await result.json();
 
-  return rows
+  const points = rows
     .filter((r): r is Row & { lat: number; lon: number } => typeof r.lat === "number" && typeof r.lon === "number")
     .map((r) => ({
       ts: clickhouseStringToIsoZ(r.ts),
@@ -354,6 +386,8 @@ async function fetchLatestGpsPoints(
       lon: r.lon,
       alt: typeof r.alt === "number" ? r.alt : null
     }));
+
+  return selectDominantGpsCluster(points).slice(0, limit);
 }
 
 type RegisterOptions = { legacy?: boolean };

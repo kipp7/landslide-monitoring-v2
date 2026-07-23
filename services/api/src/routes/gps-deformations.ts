@@ -76,6 +76,19 @@ function haversineMeters(aLat: number, aLon: number, bLat: number, bLon: number)
   return 2 * r * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
 }
 
+const MAX_DEFORMATION_DISTANCE_METERS = 100;
+
+function isValidGpsCoordinatePair(lat: number, lon: number): boolean {
+  return (
+    Number.isFinite(lat) &&
+    Number.isFinite(lon) &&
+    Math.abs(lat) > 0.0001 &&
+    Math.abs(lon) > 0.0001 &&
+    Math.abs(lat) <= 90 &&
+    Math.abs(lon) <= 180
+  );
+}
+
 export function clamp01(n: number): number {
   if (n < 0) return 0;
   if (n > 1) return 1;
@@ -468,9 +481,9 @@ export function registerGpsDeformationRoutes(
     const sql = `
       SELECT
         toString(toStartOfInterval(received_ts, INTERVAL {bucket:UInt32} SECOND)) AS ts,
-        avgIf(coalesce(value_f64, toFloat64(value_i64)), sensor_key = {latKey:String}) AS lat,
-        avgIf(coalesce(value_f64, toFloat64(value_i64)), sensor_key = {lonKey:String}) AS lon,
-        avgIf(coalesce(value_f64, toFloat64(value_i64)), sensor_key = {altKey:String}) AS alt,
+        medianIf(coalesce(value_f64, toFloat64(value_i64)), sensor_key = {latKey:String}) AS lat,
+        medianIf(coalesce(value_f64, toFloat64(value_i64)), sensor_key = {lonKey:String}) AS lon,
+        medianIf(coalesce(value_f64, toFloat64(value_i64)), sensor_key = {altKey:String}) AS alt,
         countIf(sensor_key = {latKey:String})::UInt64 AS lat_count,
         countIf(sensor_key = {lonKey:String})::UInt64 AS lon_count,
         countIf(sensor_key = {altKey:String})::UInt64 AS alt_count
@@ -480,7 +493,7 @@ export function registerGpsDeformationRoutes(
         AND received_ts >= {start:DateTime64(3, 'UTC')}
         AND received_ts <= {end:DateTime64(3, 'UTC')}
       GROUP BY ts
-      ORDER BY ts ASC
+      ORDER BY ts DESC
       LIMIT {limit:UInt32}
     `;
 
@@ -503,7 +516,15 @@ export function registerGpsDeformationRoutes(
     const rows: Row[] = await result.json();
     const baseline = parsedBaseline.data;
     const baseAlt = typeof baseline.altitude === "number" ? baseline.altitude : null;
-    const validRows = rows.filter((r): r is Row & { lat: number; lon: number } => typeof r.lat === "number" && typeof r.lon === "number");
+    const validRows = rows
+      .filter(
+        (r): r is Row & { lat: number; lon: number } =>
+          typeof r.lat === "number" &&
+          typeof r.lon === "number" &&
+          isValidGpsCoordinatePair(r.lat, r.lon) &&
+          haversineMeters(baseline.latitude, baseline.longitude, r.lat, r.lon) <= MAX_DEFORMATION_DISTANCE_METERS
+      )
+      .sort((a, b) => a.ts.localeCompare(b.ts));
     const points = validRows.map((r) => {
       const horizontalMeters = haversineMeters(baseline.latitude, baseline.longitude, r.lat, r.lon);
       const verticalMeters = baseAlt !== null && typeof r.alt === "number" ? r.alt - baseAlt : null;
