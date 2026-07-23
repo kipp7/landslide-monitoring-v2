@@ -48,9 +48,14 @@ const aclSchema = z.object({
   action: z.enum(["publish", "subscribe"])
 });
 
-function isAllowedDeviceTopic(action: "publish" | "subscribe", topic: string, deviceId: string): boolean {
-  const pubAllowed = new Set([`telemetry/${deviceId}`, `presence/${deviceId}`, `cmd_ack/${deviceId}`]);
-  const subAllowed = new Set([`cmd/${deviceId}`]);
+export function isAllowedDeviceTopic(action: "publish" | "subscribe", topic: string, deviceId: string): boolean {
+  const pubAllowed = new Set([
+    `telemetry/${deviceId}`,
+    `presence/${deviceId}`,
+    `cmd_ack/${deviceId}`,
+    `alarm/reported/${deviceId}`,
+  ]);
+  const subAllowed = new Set([`cmd/${deviceId}`, `alarm/desired/${deviceId}`]);
   if (action === "publish") return pubAllowed.has(topic);
   return subAllowed.has(topic);
 }

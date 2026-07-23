@@ -22,6 +22,10 @@ permalink: landslide-monitoring-v2-mainline/docs/integrations/mqtt/mqtt-topics-a
   - `edge/ai/models/landslide-risk/v1`
 - 边缘研判结果（RK3568 → 平台，QoS 1）
   - `edge/ai/predictions/{device_id}`
+- 告警终端期望状态（平台 → 设备）
+  - `alarm/desired/{device_id}`（QoS 1，retain）
+- 告警终端回报状态（设备 → 平台）
+  - `alarm/reported/{device_id}`（QoS 1，retain）
 
 说明：
 
@@ -30,6 +34,7 @@ permalink: landslide-monitoring-v2-mainline/docs/integrations/mqtt/mqtt-topics-a
 - AI topic 只供平台内部账号与 RK3568 Hermes 使用。模型必须先通过结构和
   SHA-256 校验才能激活，边缘结果使用 `prediction_id` 幂等写入现有
   `ai_predictions`，不新增数据库。
+- 告警终端按递增 `revision` 应用 retained desired 状态，重复或更旧 revision 不得再次执行输出或播报。
 
 ## 2. TelemetryEnvelope（JSON，v1）
 

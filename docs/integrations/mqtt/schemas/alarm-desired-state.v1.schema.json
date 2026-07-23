@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/schemas/alarm-desired-state.v1.schema.json",
+  "title": "AlarmDesiredState (MQTT) v1",
+  "description": "平台下发给通晓告警终端的保留期望状态。终端只接受 revision 递增的消息。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "device_id",
+    "revision",
+    "issued_ts",
+    "state",
+    "severity",
+    "source",
+    "outputs"
+  ],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "device_id": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    },
+    "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+    "issued_ts": { "type": "string", "format": "date-time" },
+    "state": { "type": "string", "enum": ["idle", "active", "silenced"] },
+    "severity": { "type": "string", "enum": ["normal", "low", "medium", "high", "critical"] },
+    "source": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "reason": { "type": "string", "maxLength": 500 },
+    "alert": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["alert_id", "station_id", "title", "message"],
+      "properties": {
+        "alert_id": { "type": ["string", "null"], "maxLength": 64 },
+        "station_id": { "type": ["string", "null"], "maxLength": 64 },
+        "title": { "type": "string", "maxLength": 120 },
+        "message": { "type": "string", "maxLength": 500 }
+      }
+    },
+    "outputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["buzzer", "motor", "rgb", "display", "voice"],
+      "properties": {
+        "buzzer": { "type": "boolean" },
+        "motor": { "type": "boolean" },
+        "rgb": { "type": "string", "enum": ["off", "red_flash", "red_fast_flash", "amber_solid"] },
+        "display": { "type": "string", "enum": ["standby", "risk", "silenced", "all_clear", "self_test"] },
+        "voice": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["phrase_id", "repeat_seconds"],
+          "properties": {
+            "phrase_id": {
+              "type": "string",
+              "enum": ["PREPARE_01", "EVACUATE_01", "EVACUATE_REPEAT_01", "ALL_CLEAR_01", "SELF_TEST_01"]
+            },
+            "repeat_seconds": { "type": "integer", "minimum": 0, "maximum": 300 }
+          }
+        }
+      }
+    }
+  }
+}
