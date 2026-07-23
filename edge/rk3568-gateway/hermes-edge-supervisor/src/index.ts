@@ -7,8 +7,17 @@ import type { EdgeTelemetrySnapshot } from "@lsmv2/edge-risk-model";
 import { createLogger } from "@lsmv2/observability";
 import { loadConfigFromEnv, type AppConfig } from "./config";
 import { EdgeRiskAgent, type EdgeRiskAgentStatus } from "./edge-risk-agent";
+import {
+  HermesActionConflictError,
+  HermesActionQueue,
+  HermesActionQueueFullError,
+  type HermesAction,
+  type HermesActionExecutionResult,
+  type HermesActionName,
+  type HermesActionRequest,
+  type JsonObject,
+} from "./hermes-action-queue";
 
-type JsonObject = Record<string, unknown>;
 type Level = "healthy" | "attention" | "degraded" | "critical";
 
 type HermesTask = {
@@ -33,17 +42,6 @@ type LocalResourceSnapshot = {
   diskFreeRatio: number | null;
   maxTemperatureC: number | null;
   error: string | null;
-};
-
-type HermesAction = {
-  id: string;
-  createdAt: string;
-  action: "recheck" | "collect_logs" | "generate_report";
-  status: "accepted" | "completed" | "rejected";
-  requestedBy: string;
-  naturalLanguageIntent: string | null;
-  summary: string;
-  result: JsonObject;
 };
 
 type AiModelStatus = {
@@ -101,6 +99,11 @@ type SupervisionReport = {
     supportedActions: HermesAction["action"][];
     safetyBoundary: "read_only_or_sidecar_only";
     naturalLanguageReady: boolean;
+    queue: {
+      queued: number;
+      running: number;
+      capacity: number;
+    };
   };
 };
 
@@ -211,14 +214,26 @@ class HermesEdgeSupervisor {
   private latestReport: SupervisionReport | null = null;
   private diagnosisModel: DiagnosisModelArtifact | null = null;
   private diagnosisModelError: string | null = null;
-  private readonly recentActions: HermesAction[] = [];
+  private readonly actionQueue: HermesActionQueue;
 
   constructor(private readonly config: AppConfig) {
     this.logger = createLogger(config.serviceName);
     this.edgeRiskAgent = new EdgeRiskAgent(config);
+    this.actionQueue = new HermesActionQueue({
+      maxOutstanding: config.actionQueueMaxOutstanding,
+      execute: (request) => this.executeAction(request),
+      onTransition: (action) => this.appendActionTransition(action),
+      onTransitionError: (error, action) => {
+        this.logger.warn(
+          { err: error, actionId: action.id, requestId: action.requestId, status: action.status },
+          "failed to persist Hermes action transition; in-memory execution continues"
+        );
+      },
+    });
   }
 
   async start(): Promise<void> {
+    await this.loadActionHistory();
     await this.loadDiagnosisModel();
     try {
       await this.edgeRiskAgent.start();
@@ -281,6 +296,8 @@ class HermesEdgeSupervisor {
       this.server = null;
     }
 
+    await this.actionQueue.waitForIdle();
+
     try {
       await this.edgeRiskAgent.stop();
     } catch (error) {
@@ -325,8 +342,28 @@ class HermesEdgeSupervisor {
       this.respondJson(response, 200, {
         schema_version: 1,
         generatedAt: isoNow(),
-        actions: this.recentActions,
+        actions: this.actionQueue.list(),
+        queue: this.actionQueue.status(),
       });
+      return;
+    }
+
+    if (method === "GET" && requestUrl.startsWith("/v1/actions/")) {
+      let actionId: string;
+      try {
+        actionId = decodeURIComponent(
+          requestUrl.replace("/v1/actions/", "").split("?")[0] ?? ""
+        );
+      } catch {
+        this.respondJson(response, 400, { error: "invalid_action_id" });
+        return;
+      }
+      const action = this.actionQueue.get(actionId);
+      if (!action) {
+        this.respondJson(response, 404, { error: "action_not_found" });
+        return;
+      }
+      this.respondJson(response, 200, this.actionEnvelope(action, false));
       return;
     }
 
@@ -336,7 +373,14 @@ class HermesEdgeSupervisor {
     }
 
     if (method === "POST" && requestUrl.startsWith("/v1/actions/")) {
-      void this.handleActionRequest(requestUrl, request, response);
+      void this.handleActionRequest(requestUrl, request, response).catch((error: unknown) => {
+        this.logger.error({ err: error }, "Hermes action request failed unexpectedly");
+        if (!response.headersSent) {
+          this.respondJson(response, 500, { error: "action_request_failed" });
+        } else if (!response.writableEnded) {
+          response.destroy();
+        }
+      });
       return;
     }
 
@@ -348,6 +392,7 @@ class HermesEdgeSupervisor {
           "/v1/supervision",
           "/v1/edge-risk",
           "/v1/actions",
+          "GET /v1/actions/:actionId",
           "/v1/intent-catalog",
           "POST /v1/actions/recheck",
         ],
@@ -385,28 +430,44 @@ class HermesEdgeSupervisor {
     const body = await this.readRequestJson(request);
     const naturalLanguageIntent = getString(body, "intent");
     const requestedBy = getString(body, "requestedBy") ?? "local-operator-or-display";
-
-    if (actionName === "recheck") {
-      await this.refresh(true);
+    const requestId = getString(body, "requestId") ?? `legacy-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+    if (!/^[a-z0-9][a-z0-9._:-]{7,127}$/iu.test(requestId)) {
+      this.respondJson(response, 400, { error: "invalid_request_id" });
+      return;
+    }
+    if (requestedBy.length > 128 || (naturalLanguageIntent?.length ?? 0) > 500) {
+      this.respondJson(response, 400, { error: "invalid_action_metadata" });
+      return;
     }
 
-    const report = this.latestReport;
-    const action: HermesAction = {
-      id: randomUUID(),
-      createdAt: isoNow(),
-      action: actionName,
-      status: "completed",
-      requestedBy,
-      naturalLanguageIntent,
-      summary: this.actionSummary(actionName, report),
-      result: this.actionResult(actionName, report),
-    };
+    try {
+      const queued = await this.actionQueue.enqueue({
+        requestId,
+        action: actionName,
+        requestedBy,
+        naturalLanguageIntent,
+      });
+      this.respondJson(response, queued.duplicate ? 200 : 202, this.actionEnvelope(queued.action, queued.duplicate));
+    } catch (error) {
+      if (error instanceof HermesActionConflictError) {
+        this.respondJson(response, 409, { error: "request_id_conflict" });
+        return;
+      }
+      if (error instanceof HermesActionQueueFullError) {
+        this.respondJson(response, 429, { error: "action_queue_full", queue: this.actionQueue.status() });
+        return;
+      }
+      throw error;
+    }
+  }
 
-    await this.recordAction(action);
-    this.respondJson(response, 202, {
+  private actionEnvelope(action: HermesAction, duplicate: boolean): JsonObject {
+    return {
       schema_version: 1,
       accepted: true,
+      duplicate,
       action,
+      queue: this.actionQueue.status(),
       safetyBoundary: {
         readOnly: true,
         gatewayCoreTouched: false,
@@ -415,7 +476,7 @@ class HermesEdgeSupervisor {
         message:
           "Hermes action API only refreshes/collects sidecar evidence; it does not control field-gateway.",
       },
-    });
+    };
   }
 
   private async readRequestJson(request: IncomingMessage): Promise<JsonObject | null> {
@@ -437,15 +498,61 @@ class HermesEdgeSupervisor {
     }
   }
 
-  private async recordAction(action: HermesAction): Promise<void> {
-    this.recentActions.unshift(action);
-    this.recentActions.splice(25);
+  private async appendActionTransition(action: HermesAction): Promise<void> {
     const resolved = path.resolve(this.config.eventLogFilePath);
     await ensureDir(path.dirname(resolved));
     await fs.appendFile(resolved, `${JSON.stringify(action)}\n`, "utf8");
   }
 
-  private actionSummary(action: HermesAction["action"], report: SupervisionReport | null): string {
+  private async loadActionHistory(): Promise<void> {
+    const resolved = path.resolve(this.config.eventLogFilePath);
+    try {
+      const lines = (await fs.readFile(resolved, "utf8")).split(/\r?\n/u).filter(Boolean).slice(-768);
+      const events: HermesAction[] = [];
+      for (const line of lines) {
+        try {
+          const parsed: unknown = JSON.parse(line);
+          if (this.isHermesAction(parsed)) events.push(parsed);
+        } catch {
+          // Preserve valid transitions even if one historical line is malformed.
+        }
+      }
+      await this.actionQueue.restore(events);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        this.logger.warn({ err: error }, "failed to restore Hermes action history");
+      }
+    }
+  }
+
+  private isHermesAction(value: unknown): value is HermesAction {
+    if (!isObject(value)) return false;
+    return (
+      typeof value.id === "string" &&
+      typeof value.requestId === "string" &&
+      typeof value.createdAt === "string" &&
+      (value.startedAt === null || typeof value.startedAt === "string") &&
+      (value.completedAt === null || typeof value.completedAt === "string") &&
+      (value.action === "recheck" || value.action === "collect_logs" || value.action === "generate_report") &&
+      (value.status === "queued" || value.status === "running" || value.status === "completed" || value.status === "failed") &&
+      typeof value.requestedBy === "string" &&
+      (value.naturalLanguageIntent === null || typeof value.naturalLanguageIntent === "string") &&
+      typeof value.summary === "string" &&
+      isObject(value.result) &&
+      (value.error === null || typeof value.error === "string")
+    );
+  }
+
+  private async executeAction(request: HermesActionRequest): Promise<HermesActionExecutionResult> {
+    if (request.action === "recheck") await this.refresh(true);
+    const report = this.latestReport;
+    return {
+      summary: this.actionSummary(request.action, report),
+      result: this.actionResult(request.action, report),
+    };
+  }
+
+  private actionSummary(action: HermesActionName, report: SupervisionReport | null): string {
     const diagnosis = report?.aiDiagnosis;
     if (action === "recheck") {
       return diagnosis
@@ -459,7 +566,7 @@ class HermesEdgeSupervisor {
   }
 
   private actionResult(
-    action: HermesAction["action"],
+    action: HermesActionName,
     report: SupervisionReport | null
   ): JsonObject {
     if (!report) {
@@ -664,6 +771,7 @@ class HermesEdgeSupervisor {
           "/v1/edge-risk",
           "/v1/intent-catalog",
           "/v1/actions",
+          "GET /v1/actions/:actionId",
           "POST /v1/actions/recheck",
           "POST /v1/actions/collect_logs",
           "POST /v1/actions/generate_report",
@@ -671,6 +779,7 @@ class HermesEdgeSupervisor {
         supportedActions: ["recheck", "collect_logs", "generate_report"],
         safetyBoundary: "read_only_or_sidecar_only",
         naturalLanguageReady: true,
+        queue: this.actionQueue.status(),
       },
     };
   }

@@ -37,10 +37,12 @@ interface PushDeviceRequest {
 interface EdgeAiActionRequest {
   action: EdgeAiActionName;
   intent?: string;
+  requestId: string;
 }
 
 interface EdgeAiIntentRequest {
   intent: string;
+  requestId: string;
 }
 
 export class ApiClient {
@@ -239,17 +241,27 @@ export class ApiClient {
     return this.request<EdgeAiActionHistory>('/edge-ai/actions');
   }
 
+  async edgeAiAction(actionId: string): Promise<EdgeAiActionResponse> {
+    return this.request<EdgeAiActionResponse>(`/edge-ai/actions/${encodeURIComponent(actionId)}`);
+  }
+
   async runEdgeAiAction(action: EdgeAiActionName, intent: string): Promise<EdgeAiActionResponse> {
     const body: EdgeAiActionRequest = {
       action,
-      intent
+      intent,
+      requestId: this.edgeAiRequestId(action)
     };
     return this.request<EdgeAiActionResponse>('/edge-ai/actions', http.RequestMethod.POST, body);
   }
 
   async runEdgeAiIntent(intent: string): Promise<EdgeAiIntentResponse> {
-    const body: EdgeAiIntentRequest = { intent };
+    const body: EdgeAiIntentRequest = { intent, requestId: this.edgeAiRequestId('intent') };
     return this.request<EdgeAiIntentResponse>('/edge-ai/intents', http.RequestMethod.POST, body);
+  }
+
+  private edgeAiRequestId(kind: string): string {
+    const randomPart = Math.floor(Math.random() * 0xFFFFFFF).toString(36);
+    return `harmonyos:${kind}:${Date.now().toString(36)}:${randomPart}`;
   }
 
   async refreshSession(): Promise<boolean> {

@@ -30,6 +30,7 @@ Use `.env.example` as a local template. Key variables:
 - `DIAGNOSIS_MODEL_PATH` - optional local diagnosis model JSON.
 - `SUPERVISION_FILE_PATH` - generated supervision JSON output.
 - `EVENT_LOG_FILE_PATH` - generated event log path.
+- `ACTION_QUEUE_MAX_OUTSTANDING` - maximum queued plus running App tasks (default `16`).
 - `HTTP_HOST` / `HTTP_PORT` - local HTTP listener.
 - `MQTT_TELEMETRY_TOPIC` - existing field telemetry subscription (default `telemetry/+`).
 - `MQTT_TELEMETRY_MAX_PAYLOAD_BYTES` - input size limit before JSON validation.
@@ -51,7 +52,18 @@ Endpoints:
 - `GET /healthz`
 - `GET /v1/supervision`
 - `GET /v1/edge-risk`
-- `POST /v1/actions`
+- `GET /v1/actions`
+- `GET /v1/actions/:actionId`
+- `POST /v1/actions/recheck`
+- `POST /v1/actions/collect_logs`
+- `POST /v1/actions/generate_report`
+
+Action requests accept a stable `requestId`. Repeating the same request ID and
+action returns the original task without executing it twice; reusing the ID for
+a different action returns HTTP 409. New tasks return immediately in `queued`
+state and run one at a time, independently of `field-gateway`, MQTT command
+delivery and the serial link. Poll the task endpoint until `completed` or
+`failed`. A restart marks an interrupted task as failed instead of replaying it.
 
 ## RK3568 Deployment
 

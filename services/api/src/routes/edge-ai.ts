@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AppConfig } from "../config";
@@ -10,12 +11,14 @@ const actionSchema = z
   .object({
     action: z.enum(["recheck", "collect_logs", "generate_report"]),
     intent: z.string().max(500).optional(),
+    requestId: z.string().regex(/^[a-z0-9][a-z0-9._:-]{7,127}$/iu).optional(),
   })
   .strict();
 
 const intentSchema = z
   .object({
     intent: z.string().trim().min(1).max(500),
+    requestId: z.string().regex(/^[a-z0-9][a-z0-9._:-]{7,127}$/iu).optional(),
   })
   .strict();
 
@@ -31,6 +34,7 @@ export type EdgeAiIntentResolution = {
 };
 
 type JsonObject = Record<string, unknown>;
+const actionIdSchema = z.string().uuid();
 
 function isObject(value: unknown): value is JsonObject {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -161,6 +165,11 @@ function hermesBaseUrl(config: AppConfig): string | null {
   return configured.replace(/\/+$/, "").replace(/\/v1\/supervision$/, "");
 }
 
+function requestedBy(request: { user?: { username?: string } | null }): string {
+  const username = request.user?.username?.trim();
+  return username ? `app-user:${username}` : "api-token-user";
+}
+
 async function callHermes(
   config: AppConfig,
   path: string,
@@ -276,6 +285,33 @@ export function registerEdgeAiRoutes(
     ok(reply, result.body, traceId);
   });
 
+  app.get("/edge-ai/actions/:actionId", async (request, reply) => {
+    const traceId = request.traceId;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
+    const parsed = actionIdSchema.safeParse(
+      (request.params as { actionId?: unknown }).actionId
+    );
+    if (!parsed.success) {
+      fail(reply, 400, "参数错误", traceId, { field: "actionId" });
+      return;
+    }
+    const result = await callHermes(
+      config,
+      `/v1/actions/${encodeURIComponent(parsed.data)}`,
+      { method: "GET" }
+    );
+    if (!result.ok) {
+      fail(
+        reply,
+        result.status > 0 ? result.status : 503,
+        result.status === 404 ? "Hermes 任务不存在" : result.error ?? "Hermes 任务状态暂不可用",
+        traceId
+      );
+      return;
+    }
+    ok(reply, result.body, traceId);
+  });
+
   app.post("/edge-ai/actions", async (request, reply) => {
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "system:config"))) return;
@@ -284,11 +320,13 @@ export function registerEdgeAiRoutes(
       fail(reply, 400, "参数错误", traceId, { field: "body", issues: parsed.error.issues });
       return;
     }
+    const requestId = parsed.data.requestId ?? randomUUID();
     const result = await callHermes(config, `/v1/actions/${parsed.data.action}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        requestedBy: "api-user",
+        requestId,
+        requestedBy: requestedBy(request),
         intent: parsed.data.intent ?? null,
       }),
     });
@@ -297,7 +335,7 @@ export function registerEdgeAiRoutes(
       action: parsed.data.action,
       description: "Hermes safe edge AI action",
       status: result.ok ? "success" : "fail",
-      requestData: parsed.data,
+      requestData: { ...parsed.data, requestId },
       responseData: result.body,
     });
     if (!result.ok) {
@@ -320,16 +358,18 @@ export function registerEdgeAiRoutes(
       fail(reply, 400, "参数错误", traceId, { field: "body", issues: parsed.error.issues });
       return;
     }
+    const requestId = parsed.data.requestId ?? randomUUID();
     const resolution = resolveEdgeAiIntent(parsed.data.intent);
     if (!resolution.resolved || !resolution.action) {
-      ok(reply, { intent: parsed.data.intent, resolution, execution: null }, traceId);
+      ok(reply, { requestId, intent: parsed.data.intent, resolution, execution: null }, traceId);
       return;
     }
     const result = await callHermes(config, `/v1/actions/${resolution.action}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        requestedBy: "api-user",
+        requestId,
+        requestedBy: requestedBy(request),
         intent: parsed.data.intent,
       }),
     });
@@ -338,7 +378,7 @@ export function registerEdgeAiRoutes(
       action: resolution.action,
       description: "Hermes resolved safe natural-language intent",
       status: result.ok ? "success" : "fail",
-      requestData: { intent: parsed.data.intent, resolution },
+      requestData: { requestId, intent: parsed.data.intent, resolution },
       responseData: result.body,
     });
     if (!result.ok) {
@@ -350,6 +390,6 @@ export function registerEdgeAiRoutes(
       );
       return;
     }
-    ok(reply, { intent: parsed.data.intent, resolution, execution: result.body }, traceId);
+    ok(reply, { requestId, intent: parsed.data.intent, resolution, execution: result.body }, traceId);
   });
 }

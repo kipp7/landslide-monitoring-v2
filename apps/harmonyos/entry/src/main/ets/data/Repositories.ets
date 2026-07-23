@@ -149,6 +149,10 @@ export class MonitoringRepository {
     }
   }
 
+  edgeAiAction(actionId: string): Promise<EdgeAiActionResponse> {
+    return this.api.edgeAiAction(actionId);
+  }
+
   runEdgeAiAction(action: EdgeAiActionName, intent: string): Promise<EdgeAiActionResponse> {
     return this.api.runEdgeAiAction(action, intent);
   }
