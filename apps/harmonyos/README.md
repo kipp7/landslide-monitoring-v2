@@ -24,14 +24,16 @@ built from DevEco Studio or with its bundled `hvigorw` command after setting
   local 00:00); the App displays it as `今日数据上传条数` with the exact
   Beijing update time and does not label it as sensor rows.
 - The **Hermes intelligent workbench** uses `/api/v1/edge-ai/status`,
-  `/api/v1/edge-ai/actions`, and `/api/v1/edge-ai/intents`. It presents the
-  current three-node risk conclusion, evidence, recommended response, action
-  history, and direct navigation to the corresponding monitoring node.
+  `/api/v1/edge-ai/chat`, `/api/v1/edge-ai/conversations`, and the bounded
+  action endpoints. Conversations, user/assistant messages, task status, and
+  results are persisted by the server in the existing PostgreSQL database and
+  isolated by authenticated user. The App remains API-only.
 - Hermes exposes only three bounded, read-only actions to the App: re-evaluate
   risk (`重新研判`), collect diagnostic evidence (`诊断链路`), and generate a
-  situation report (`生成报告`). Natural-language requests are resolved by the
-  server into one of these actions; ambiguous requests return suggestions and
-  do not execute anything.
+  situation report (`生成报告`). A message may contain several safe actions;
+  the server creates an auditable plan and dispatches them to RK3568 in spoken
+  order. The App shows the real conversation and each server task rather than
+  treating an action log as chat history.
 - Protected requests such as restarting services, changing networks or alarm
   thresholds, controlling devices, writing serial data, and triggering or
   clearing physical alarms are blocked before RK3568 is called. Physical alarm

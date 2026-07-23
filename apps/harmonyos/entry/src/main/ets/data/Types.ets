@@ -290,6 +290,20 @@ export interface EdgeAiActionResult {
   edgeRiskScore?: number;
   edgeRiskModelVersion?: string;
   edgeAgentPendingUploads?: number;
+  artifactName?: string;
+  collectedCommandCount?: number;
+  failedCommandCount?: number;
+  reportText?: string;
+  evidence?: Array<HermesDiagnosticEvidence>;
+}
+
+export interface HermesDiagnosticEvidence {
+  command: string;
+  ok: boolean;
+  exitCode?: number;
+  stdout: string;
+  stderr: string;
+  error?: string;
 }
 
 export interface HermesAction {
@@ -337,6 +351,64 @@ export interface EdgeAiIntentResponse {
   intent: string;
   resolution: EdgeAiIntentResolution;
   execution?: EdgeAiActionResponse | null;
+}
+
+export interface HermesConversation {
+  conversationId: string;
+  title: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type HermesMessageRole = 'user' | 'assistant' | 'system';
+
+export interface HermesMessageMetadata {
+  blocked?: boolean;
+  safetyBoundary?: string;
+}
+
+export interface HermesMessage {
+  messageId: string;
+  conversationId: string;
+  role: HermesMessageRole;
+  content: string;
+  metadata: HermesMessageMetadata;
+  createdAt: string;
+}
+
+export interface HermesAgentTask {
+  taskId: string;
+  conversationId: string;
+  action: EdgeAiActionName;
+  label: string;
+  status: string;
+  safetyLevel: string;
+  summary: string;
+  result: EdgeAiActionResult;
+  edgeActionId?: string;
+  error?: string;
+  createdAt: string;
+  startedAt?: string;
+  completedAt?: string;
+}
+
+export interface HermesConversationList {
+  conversations: Array<HermesConversation>;
+}
+
+export interface HermesConversationHistory {
+  conversation: HermesConversation;
+  messages: Array<HermesMessage>;
+  tasks: Array<HermesAgentTask>;
+}
+
+export interface HermesChatResponse {
+  conversation: HermesConversation;
+  messages: Array<HermesMessage>;
+  tasks: Array<HermesAgentTask>;
+  blocked: boolean;
+  suggestions: Array<EdgeAiActionName>;
 }
 
 export interface EdgeRiskModelStatus {

@@ -18,6 +18,8 @@ const configSchema = z.object({
     .min(1)
     .default("./data/hermes-edge-supervisor/status/supervision.json"),
   eventLogFilePath: z.string().min(1).default("./data/hermes-edge-supervisor/events/events.jsonl"),
+  actionArtifactDir: z.string().min(1).default("./data/hermes-edge-supervisor/artifacts"),
+  actionCommandTimeoutMs: z.coerce.number().int().min(500).max(5000).default(4000),
   httpHost: z.string().min(1).default("127.0.0.1"),
   httpPort: z.coerce.number().int().min(1).max(65535).default(18082),
   pollIntervalMs: z.coerce.number().int().positive().default(5000),
@@ -76,6 +78,8 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
     diagnosisModelPath: env.DIAGNOSIS_MODEL_PATH,
     supervisionFilePath: env.SUPERVISION_FILE_PATH,
     eventLogFilePath: env.EVENT_LOG_FILE_PATH,
+    actionArtifactDir: env.ACTION_ARTIFACT_DIR,
+    actionCommandTimeoutMs: env.ACTION_COMMAND_TIMEOUT_MS,
     httpHost: env.HTTP_HOST,
     httpPort: env.HTTP_PORT,
     pollIntervalMs: env.POLL_INTERVAL_MS,

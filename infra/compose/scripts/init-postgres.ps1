@@ -80,12 +80,27 @@ if ($appliedSet.Count -eq 0) {
   Assert-LastExitCode "psql failed: detect existing schema"
   if ($hasExistingSchema.Trim().ToLowerInvariant() -eq "t") {
     Write-Host "Detected existing schema without migration records; backfilling schema_migrations (bootstrap mode)." -ForegroundColor Yellow
+    # These additive migrations are idempotent and must still run on an old
+    # untracked schema. Marking them as applied would skip tables introduced
+    # after the original database was bootstrapped.
+    $bootstrapRerunSafeFiles = New-Object 'System.Collections.Generic.HashSet[string]'
+    foreach ($name in @(
+      "19-device-presence.sql",
+      "22-app-push-devices.sql",
+      "23-hermes-agent.sql"
+    )) {
+      $null = $bootstrapRerunSafeFiles.Add($name)
+    }
     foreach ($f in $sqlFiles) {
+      if ($bootstrapRerunSafeFiles.Contains($f.Name)) {
+        Write-Host "Keeping additive migration pending: $($f.Name)" -ForegroundColor Cyan
+        continue
+      }
       docker compose -f $ComposeFile --env-file $EnvFile exec -T postgres psql -v ON_ERROR_STOP=1 -U $env:PG_USER -d $env:PG_DATABASE -c "INSERT INTO schema_migrations(filename) VALUES ('$($f.Name)') ON CONFLICT DO NOTHING;" 1>$null
       Assert-LastExitCode "psql failed: bootstrap record migration $($f.Name)"
+      $null = $appliedSet.Add($f.Name)
     }
-    Write-Host "Bootstrap complete. PostgreSQL init done." -ForegroundColor Green
-    exit 0
+    Write-Host "Bootstrap records created; applying pending additive migrations." -ForegroundColor Green
   }
 }
 

@@ -1,6 +1,6 @@
 import { ApiClient } from './ApiClient';
 import { CacheManager, CacheRead } from './CacheManager';
-import { DashboardSummary, WeeklyTrend, Station, Device, DeviceState, SensorDefinition, SeriesResponse, AlertPage, AlertEventsResponse, PredictionPage, FieldAlarmStatus, EdgeAiStatus, EdgeAiActionName, EdgeAiActionResponse, EdgeAiActionHistory, EdgeAiIntentResponse } from './Types';
+import { DashboardSummary, WeeklyTrend, Station, Device, DeviceState, SensorDefinition, SeriesResponse, AlertPage, AlertEventsResponse, PredictionPage, FieldAlarmStatus, EdgeAiStatus, EdgeAiActionName, EdgeAiActionResponse, EdgeAiActionHistory, EdgeAiIntentResponse, HermesChatResponse, HermesConversationHistory, HermesConversationList } from './Types';
 
 interface CacheTtlConfig {
   state: number;
@@ -155,6 +155,18 @@ export class MonitoringRepository {
 
   runEdgeAiIntent(intent: string): Promise<EdgeAiIntentResponse> {
     return this.api.runEdgeAiIntent(intent);
+  }
+
+  hermesConversations(): Promise<HermesConversationList> {
+    return this.api.hermesConversations();
+  }
+
+  hermesConversation(conversationId: string): Promise<HermesConversationHistory> {
+    return this.api.hermesConversation(conversationId);
+  }
+
+  sendHermesMessage(message: string, conversationId: string = ''): Promise<HermesChatResponse> {
+    return this.api.sendHermesMessage(message, conversationId);
   }
 
   cachedState(deviceId: string): Promise<CacheRead<DeviceState> | null> {
