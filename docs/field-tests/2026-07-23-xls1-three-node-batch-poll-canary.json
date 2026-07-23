@@ -1,0 +1,167 @@
+{
+  "schemaVersion": 1,
+  "experiment": "xls1-three-node-batch-poll",
+  "startedAt": "2026-07-23T14:19:53.220Z",
+  "finishedAt": "2026-07-23T14:20:10.534Z",
+  "elapsedSeconds": 17.313,
+  "configuration": {
+    "serialDevice": "/dev/ttyS3",
+    "baud": 115200,
+    "durationSeconds": 10.0,
+    "batchIntervalMs": 1000,
+    "interCommandGapMs": 0,
+    "commandChunkBytes": 64,
+    "commandChunkDelayMs": 10,
+    "drainSeconds": 5.0,
+    "nodeOrderPolicy": "rotating-A-B-C"
+  },
+  "result": {
+    "stableOneSecondProfile": false,
+    "expectedTelemetry": 30,
+    "matchedTelemetry": 2,
+    "missingTelemetry": 28,
+    "matchedRate": 0.0667,
+    "batchesSent": 10,
+    "decodeOrJsonErrors": 11,
+    "unmatchedTelemetry": 0,
+    "duplicateTelemetry": 0,
+    "bytesWritten": 6960,
+    "bytesRead": 8678,
+    "trailingUndelimitedBytes": 0
+  },
+  "nodes": {
+    "A": {
+      "expected": 10,
+      "matched": 0,
+      "missing": 10,
+      "matchedRate": 0.0,
+      "arrivalIntervalMs": {
+        "p50": null,
+        "p95": null,
+        "max": null
+      },
+      "commandToTelemetryLatencyMs": {
+        "p50": null,
+        "p95": null,
+        "max": null
+      },
+      "sequence": {
+        "first": null,
+        "last": null,
+        "nonUnitGaps": 0,
+        "maxGap": null
+      }
+    },
+    "B": {
+      "expected": 10,
+      "matched": 2,
+      "missing": 8,
+      "matchedRate": 0.2,
+      "arrivalIntervalMs": {
+        "p50": 3458.3,
+        "p95": 3458.3,
+        "max": 3458.3
+      },
+      "commandToTelemetryLatencyMs": {
+        "p50": 2383.5,
+        "p95": 3810.8,
+        "max": 3810.8
+      },
+      "sequence": {
+        "first": 3476,
+        "last": 3478,
+        "nonUnitGaps": 1,
+        "maxGap": 2
+      }
+    },
+    "C": {
+      "expected": 10,
+      "matched": 0,
+      "missing": 10,
+      "matchedRate": 0.0,
+      "arrivalIntervalMs": {
+        "p50": null,
+        "p95": null,
+        "max": null
+      },
+      "commandToTelemetryLatencyMs": {
+        "p50": null,
+        "p95": null,
+        "max": null
+      },
+      "sequence": {
+        "first": null,
+        "last": null,
+        "nonUnitGaps": 0,
+        "maxGap": null
+      }
+    }
+  },
+  "validFrameTypes": {
+    "1": 2
+  },
+  "errors": {
+    "cobs code exceeded input length": 11
+  },
+  "errorSamples": [
+    {
+      "at": "2026-07-23T14:19:56.956Z",
+      "reason": "cobs code exceeded input length",
+      "frameBytes": 892
+    },
+    {
+      "at": "2026-07-23T14:19:57.756Z",
+      "reason": "cobs code exceeded input length",
+      "frameBytes": 442
+    },
+    {
+      "at": "2026-07-23T14:20:00.493Z",
+      "reason": "cobs code exceeded input length",
+      "frameBytes": 1156
+    },
+    {
+      "at": "2026-07-23T14:20:00.755Z",
+      "reason": "cobs code exceeded input length",
+      "frameBytes": 102
+    },
+    {
+      "at": "2026-07-23T14:20:03.494Z",
+      "reason": "cobs code exceeded input length",
+      "frameBytes": 600
+    },
+    {
+      "at": "2026-07-23T14:20:05.604Z",
+      "reason": "cobs code exceeded input length",
+      "frameBytes": 1706
+    },
+    {
+      "at": "2026-07-23T14:20:05.636Z",
+      "reason": "cobs code exceeded input length",
+      "frameBytes": 23
+    },
+    {
+      "at": "2026-07-23T14:20:06.428Z",
+      "reason": "cobs code exceeded input length",
+      "frameBytes": 335
+    },
+    {
+      "at": "2026-07-23T14:20:08.396Z",
+      "reason": "cobs code exceeded input length",
+      "frameBytes": 1204
+    },
+    {
+      "at": "2026-07-23T14:20:08.995Z",
+      "reason": "cobs code exceeded input length",
+      "frameBytes": 734
+    },
+    {
+      "at": "2026-07-23T14:20:09.138Z",
+      "reason": "cobs code exceeded input length",
+      "frameBytes": 126
+    }
+  ],
+  "recovery": {
+    "serviceWasActive": true,
+    "serviceRestored": true
+  }
+}
