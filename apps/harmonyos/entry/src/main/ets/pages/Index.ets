@@ -80,6 +80,9 @@ function localizedHermesText(value: string): string {
 }
 
 function hermesActionSummary(action: HermesAction): string {
+  if (action.status === 'queued') return '任务已排队，等待 Hermes 执行';
+  if (action.status === 'running') return 'Hermes 正在执行只读任务';
+  if (action.status === 'failed') return action.error ? `任务失败：${action.error}` : '任务执行失败，监测主链路未受影响';
   if (action.action === 'recheck' && action.result.diagnosisType) {
     const confidence = action.result.confidence;
     const confidenceText = confidence === undefined ? '' : `，研判置信度 ${Math.round(confidence * 100)}%`;
@@ -796,6 +799,20 @@ struct Index {
     }
   }
 
+  private async waitForEdgeAiAction(repository: MonitoringRepository, initial: HermesAction): Promise<HermesAction> {
+    let current = initial;
+    for (let index = 0; index < 20; index++) {
+      if (current.status === 'completed' || current.status === 'failed') return current;
+      await new Promise<void>((resolve) => setTimeout(() => resolve(), 500));
+      try {
+        current = (await repository.edgeAiAction(current.id)).action;
+      } catch {
+        return current;
+      }
+    }
+    return current;
+  }
+
   private async runEdgeAiAction(action: EdgeAiActionName, intent: string = ''): Promise<void> {
     if (!this.repository || this.edgeAiActionBusy) return;
     this.edgeAiActionBusy = true;
@@ -804,6 +821,7 @@ struct Index {
       const repository = this.repository as MonitoringRepository;
       const response = await repository.runEdgeAiAction(action, intent.length > 0 ? intent : this.actionIntent(action));
       this.edgeAiLastAction = response.action;
+      this.edgeAiLastAction = await this.waitForEdgeAiAction(repository, response.action);
       await this.refreshEdgeAiAfterAction(repository);
     } catch (error) {
       this.errorMessage = this.errorText(error);
@@ -821,6 +839,7 @@ struct Index {
       this.edgeAiIntentResolution = response.resolution;
       if (response.execution?.action) {
         this.edgeAiLastAction = response.execution.action;
+        this.edgeAiLastAction = await this.waitForEdgeAiAction(repository, response.execution.action);
         await this.refreshEdgeAiAfterAction(repository);
       }
     } catch (error) {
@@ -2418,9 +2437,11 @@ struct HermesCommandPanel {
               .fontColor(UI_COLOR_MUTED)
               .width('100%')
           }
-          Text('已执行 · 已记录 · 未触碰网关核心')
+          Text(this.lastAction.status === 'completed' ? '已执行 · 已记录 · 未触碰网关核心' :
+            this.lastAction.status === 'failed' ? '执行失败 · 主链路未受影响' : '任务已记录 · 正在独立队列中处理')
             .fontSize(9)
-            .fontColor(UI_COLOR_SUCCESS)
+            .fontColor(this.lastAction.status === 'failed' ? UI_COLOR_DANGER :
+              this.lastAction.status === 'completed' ? UI_COLOR_SUCCESS : UI_COLOR_ACCENT)
             .width('100%')
         }
         .padding(12)
@@ -2635,10 +2656,23 @@ struct HermesActionTimelineRow {
     return '风险复检';
   }
 
+  private statusColor(): string {
+    if (this.action.status === 'failed') return UI_COLOR_DANGER;
+    if (this.action.status === 'completed') return UI_COLOR_SUCCESS;
+    return UI_COLOR_ACCENT;
+  }
+
+  private statusText(): string {
+    if (this.action.status === 'failed') return '执行失败 · 主链路未受影响';
+    if (this.action.status === 'completed') return '验证完成 · 操作已留痕';
+    if (this.action.status === 'running') return '执行中 · 使用独立只读队列';
+    return '已排队 · 等待 Hermes 执行';
+  }
+
   build() {
     Row({ space: 10 }) {
       Column() {
-        Circle({ width: 10, height: 10 }).fill(UI_COLOR_SUCCESS)
+        Circle({ width: 10, height: 10 }).fill(this.statusColor())
         if (!this.last) {
           Rect().width(2).height(42).fill(UI_COLOR_HERMES_LINE)
         }
@@ -2662,9 +2696,9 @@ struct HermesActionTimelineRow {
           .fontColor(UI_COLOR_MUTED)
           .maxLines(2)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
-        Text('验证完成 · 操作已留痕')
+        Text(this.statusText())
           .fontSize(9)
-          .fontColor(UI_COLOR_SUCCESS)
+          .fontColor(this.statusColor())
       }
       .padding({ bottom: this.last ? 0 : 8 })
       .layoutWeight(1)
