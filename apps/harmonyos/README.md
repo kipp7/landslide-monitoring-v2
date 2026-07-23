@@ -89,9 +89,10 @@ built from DevEco Studio or with its bundled `hvigorw` command after setting
   start the bundled smooth civil-defense-style alarm with a synchronized
   vibration cadence. Muting pauses both sound and vibration. Updates replace the same
   `alertId` in place, critical escalation reopens the strong reminder, and
-  acknowledgement leaves the warning active, and only resolution removes that
-  alert from the panel. Concurrent node alerts are queued by `alertId` instead
-  of being duplicated by event ID.
+  acknowledgement stops and removes the strong reminder while the alert stays
+  under review in the alert center. Only resolution closes its server-side
+  lifecycle. Concurrent node alerts are queued by `alertId` instead of being
+  duplicated by event ID.
   See [`ALERT_INTEGRATION.md`](./ALERT_INTEGRATION.md) for the shared Windows,
   App, and Push payload contract.
 - The **My** page keeps the API address hidden in normal use. Connection state,
