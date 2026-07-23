@@ -30,12 +30,17 @@ Hermes 未配置或不可达时仍返回 HTTP 200，`available=false`、
 ```json
 {
   "action": "recheck",
-  "intent": "移动端请求立即复检当前边缘风险和链路状态"
+  "intent": "移动端请求立即复检当前边缘风险和链路状态",
+  "requestId": "harmonyos:recheck:m9a2n4:7fx3"
 }
 ```
 
 仅允许：`recheck`、`collect_logs`、`generate_report`。
 重启网关、修改串口、改告警规则和执行设备控制均会在 API 参数校验前被拒绝。
+
+首次提交会立即返回 `queued` 任务和 HTTP 200 API 信封，不等待 RK3568 执行完成。
+App 必须为一次用户操作生成稳定的 `requestId`，认证刷新和网络重试复用该值。
+相同 `requestId` 和动作只执行一次；同一 ID 改成其他动作会返回冲突。
 
 ## 3) 自然语言安全意图
 
@@ -47,7 +52,8 @@ Hermes 未配置或不可达时仍返回 HTTP 200，`available=false`、
 
 ```json
 {
-  "intent": "帮我检查 B 节点为什么危险"
+  "intent": "帮我检查 B 节点为什么危险",
+  "requestId": "harmonyos:intent:m9a2p8:2kw7"
 }
 ```
 
@@ -62,6 +68,17 @@ Hermes 未配置或不可达时仍返回 HTTP 200，`available=false`、
 权限：`data:view`
 
 返回 RK3568 Hermes 最近 25 条安全动作及其执行结果，用于 App 任务时间线。
+
+**GET** `/api/v1/edge-ai/actions/{actionId}`
+
+权限：`data:view`
+
+返回单个任务及当前队列状态。App 在提交后轮询该接口，直到任务进入
+`completed` 或 `failed`。状态转换为 `queued -> running -> completed/failed`；
+Hermes 重启前未完成的任务会变成 `failed`，不会自动重放。
+
+Hermes 同时只执行一个任务，默认最多容纳 16 个排队和运行中的任务。队列已满时
+返回 HTTP 429；这只影响 Hermes 安全任务，不阻塞 MQTT `cmd/+`、串口、遥测或节点任务传输。
 
 ## 5) 数据边界
 

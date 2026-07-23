@@ -14,6 +14,11 @@ type EdgeAiEnvelope = {
   };
 };
 
+function fetchUrl(input: string | URL | Request): string {
+  if (typeof input === "string") return input;
+  return input instanceof URL ? input.href : input.url;
+}
+
 void test("status degrades to unavailable when Hermes is not configured", async () => {
   const app = Fastify({ logger: false });
   app.decorateRequest("traceId", "edge-ai-test");
@@ -111,5 +116,98 @@ void test("protected natural-language intents are blocked without a board call",
   }>();
   assert.equal(body.success, true);
   assert.equal(body.data?.resolution?.blocked, true);
+  await app.close();
+});
+
+void test("action requests preserve identity and Hermes duplicate semantics", async (context) => {
+  const forwarded: { url?: string; body?: unknown } = {};
+  context.mock.method(globalThis, "fetch", async (input: string | URL | Request, init?: RequestInit) => {
+    forwarded.url = fetchUrl(input);
+    if (typeof init?.body !== "string") throw new Error("expected a JSON request body");
+    forwarded.body = JSON.parse(init.body);
+    await Promise.resolve();
+    return new Response(
+      JSON.stringify({
+        schema_version: 1,
+        accepted: true,
+        duplicate: true,
+        action: { id: "00000000-0000-4000-8000-000000000101", status: "queued" },
+      }),
+      { status: 202, headers: { "content-type": "application/json" } }
+    );
+  });
+
+  const app = Fastify({ logger: false });
+  app.decorateRequest("traceId", "edge-ai-test");
+  app.decorateRequest("user", null);
+  app.addHook("onRequest", async (request) => {
+    await Promise.resolve();
+    request.user = { userId: "00000000-0000-4000-8000-000000000201", username: "operator-a" };
+  });
+  const config = loadConfigFromEnv({
+    CLICKHOUSE_URL: "http://127.0.0.1:8123",
+    AUTH_REQUIRED: "false",
+    RK3568_HERMES_EDGE_SUPERVISOR_URL: "http://127.0.0.1:18082",
+  });
+  registerEdgeAiRoutes(app, config, null);
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/edge-ai/actions",
+    payload: {
+      action: "recheck",
+      intent: "立即复检",
+      requestId: "harmonyos:recheck:request-0001",
+    },
+  });
+
+  assert.equal(response.statusCode, 200);
+  const responseBody = response.json<{ data: { duplicate: boolean } }>();
+  assert.equal(responseBody.data.duplicate, true);
+  assert.equal(forwarded.url, "http://127.0.0.1:18082/v1/actions/recheck");
+  assert.deepEqual(forwarded.body, {
+    requestId: "harmonyos:recheck:request-0001",
+    requestedBy: "app-user:operator-a",
+    intent: "立即复检",
+  });
+  await app.close();
+});
+
+void test("single action lookup proxies the Hermes task envelope", async (context) => {
+  const actionId = "00000000-0000-4000-8000-000000000102";
+  let forwardedUrl = "";
+  context.mock.method(globalThis, "fetch", async (input: string | URL | Request) => {
+    forwardedUrl = fetchUrl(input);
+    await Promise.resolve();
+    return new Response(
+      JSON.stringify({
+        schema_version: 1,
+        accepted: true,
+        duplicate: false,
+        action: { id: actionId, status: "completed" },
+      }),
+      { status: 200, headers: { "content-type": "application/json" } }
+    );
+  });
+
+  const app = Fastify({ logger: false });
+  app.decorateRequest("traceId", "edge-ai-test");
+  const config = loadConfigFromEnv({
+    CLICKHOUSE_URL: "http://127.0.0.1:8123",
+    AUTH_REQUIRED: "false",
+    RK3568_HERMES_EDGE_SUPERVISOR_URL: "http://127.0.0.1:18082",
+  });
+  registerEdgeAiRoutes(app, config, null);
+
+  const response = await app.inject({ method: "GET", url: `/edge-ai/actions/${actionId}` });
+  const body = response.json<{
+    success: boolean;
+    data: { duplicate: boolean; action: { id: string; status: string } };
+  }>();
+  assert.equal(response.statusCode, 200);
+  assert.equal(forwardedUrl, `http://127.0.0.1:18082/v1/actions/${actionId}`);
+  assert.equal(body.data.duplicate, false);
+  assert.equal(body.data.action.id, actionId);
+  assert.equal(body.data.action.status, "completed");
   await app.close();
 });

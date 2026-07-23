@@ -308,13 +308,23 @@ export interface HermesDiagnosticEvidence {
 
 export interface HermesAction {
   id: string;
+  requestId?: string;
   createdAt: string;
+  startedAt?: string;
+  completedAt?: string;
   action: EdgeAiActionName;
   status: string;
   requestedBy: string;
   naturalLanguageIntent?: string;
   summary: string;
   result: EdgeAiActionResult;
+  error?: string;
+}
+
+export interface EdgeAiActionQueue {
+  queued: number;
+  running: number;
+  capacity: number;
 }
 
 export interface EdgeAiSafetyBoundary {
@@ -328,7 +338,9 @@ export interface EdgeAiSafetyBoundary {
 export interface EdgeAiActionResponse {
   schema_version: number;
   accepted: boolean;
+  duplicate?: boolean;
   action: HermesAction;
+  queue?: EdgeAiActionQueue;
   safetyBoundary: EdgeAiSafetyBoundary;
 }
 
@@ -336,6 +348,7 @@ export interface EdgeAiActionHistory {
   schema_version: number;
   generatedAt: string;
   actions: Array<HermesAction>;
+  queue?: EdgeAiActionQueue;
 }
 
 export interface EdgeAiIntentResolution {
@@ -348,6 +361,7 @@ export interface EdgeAiIntentResolution {
 }
 
 export interface EdgeAiIntentResponse {
+  requestId?: string;
   intent: string;
   resolution: EdgeAiIntentResolution;
   execution?: EdgeAiActionResponse | null;

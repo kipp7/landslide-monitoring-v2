@@ -32,6 +32,7 @@ Use `.env.example` as a local template. Key variables:
 - `EVENT_LOG_FILE_PATH` - generated event log path.
 - `ACTION_ARTIFACT_DIR` - redacted diagnostic bundles and situation reports.
 - `ACTION_COMMAND_TIMEOUT_MS` - per-command timeout for the fixed read-only diagnostic set.
+- `ACTION_QUEUE_MAX_OUTSTANDING` - maximum queued plus running App tasks (default `16`).
 - `HTTP_HOST` / `HTTP_PORT` - local HTTP listener.
 - `MQTT_TELEMETRY_TOPIC` - existing field telemetry subscription (default `telemetry/+`).
 - `MQTT_TELEMETRY_MAX_PAYLOAD_BYTES` - input size limit before JSON validation.
@@ -54,7 +55,7 @@ Endpoints:
 - `GET /v1/supervision`
 - `GET /v1/edge-risk`
 - `GET /v1/actions`
-- `GET /v1/actions/{actionId}`
+- `GET /v1/actions/:actionId`
 - `POST /v1/actions/recheck`
 - `POST /v1/actions/collect_logs`
 - `POST /v1/actions/generate_report`
@@ -65,6 +66,13 @@ redacted, and the bundle is written under `ACTION_ARTIFACT_DIR`.
 `generate_report` writes a Markdown snapshot from the current supervision
 report. Neither action can restart services, change network state, write a
 serial port, or publish alarm commands.
+
+Action requests accept a stable `requestId`. Repeating the same request ID and
+action returns the original task without executing it twice; reusing the ID for
+a different action returns HTTP 409. New tasks return immediately in `queued`
+state and run one at a time, independently of `field-gateway`, MQTT command
+delivery and the serial link. Poll the task endpoint until `completed` or
+`failed`. A restart marks an interrupted task as failed instead of replaying it.
 
 ## RK3568 Deployment
 

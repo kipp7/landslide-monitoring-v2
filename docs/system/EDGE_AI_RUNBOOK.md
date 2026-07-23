@@ -56,9 +56,16 @@ to roll back.
 2. Build the shared model package and Hermes before restarting anything.
 3. Install with `--no-enable`, inspect the generated unit, then restart only
    `lsmv2-hermes-edge-supervisor`.
-4. Verify `/healthz`, `/v1/supervision` and `/v1/edge-risk`.
-5. Confirm `field-gateway` and `field-link-monitor` restart counts did not
-   change and live telemetry continues upstream.
+4. Record the `field-gateway` and `field-link-monitor` PIDs before the restart.
+5. Verify `/healthz`, `/v1/supervision`, `/v1/edge-risk` and `/v1/actions`.
+6. Submit a safe action with a fixed `requestId`, submit it again, and verify
+   both responses have the same action ID and only one execution reaches a
+   terminal state through `GET /v1/actions/:actionId`.
+7. Submit several safe actions and confirm they move through the queue one at
+   a time while MQTT, serial, spool depth and live telemetry cadence remain
+   healthy.
+8. Confirm the recorded `field-gateway` and `field-link-monitor` PIDs did not
+   change. Only the Hermes PID may change.
 
 Rollback restores the previous Hermes build and environment file, then
 restarts only Hermes. The gateway and rule chain remain untouched.
@@ -76,3 +83,7 @@ restarts only Hermes. The gateway and rule chain remain untouched.
   core Hermes supervision refresh.
 - The App loads AI independently and keeps its last cached snapshot when the
   endpoint is unavailable.
+- App action retries are idempotent by `requestId`; queued tasks are serialized
+  and capped by `ACTION_QUEUE_MAX_OUTSTANDING` (default 16).
+- An interrupted queued or running task is marked failed after Hermes starts;
+  it is never replayed automatically against a newer monitoring snapshot.

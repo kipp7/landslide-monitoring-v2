@@ -1640,6 +1640,31 @@ paths:
           $ref: "#/components/responses/ErrorResponse"
         default:
           $ref: "#/components/responses/ErrorResponse"
+
+  /edge-ai/actions/{actionId}:
+    get:
+      tags: [ai]
+      summary: Get one Hermes action state
+      parameters:
+        - name: actionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundResponse"
+        "503":
+          $ref: "#/components/responses/ErrorResponse"
+        default:
+          $ref: "#/components/responses/ErrorResponse"
     post:
       tags: [ai]
       summary: Request a bounded Hermes sidecar action
@@ -4724,6 +4749,11 @@ components:
         intent:
           type: string
           maxLength: 500
+        requestId:
+          type: string
+          minLength: 8
+          maxLength: 128
+          pattern: "^[a-zA-Z0-9][a-zA-Z0-9._:-]{7,127}$"
 
     EdgeAiIntentRequest:
       type: object
@@ -4734,6 +4764,11 @@ components:
           type: string
           minLength: 1
           maxLength: 500
+        requestId:
+          type: string
+          minLength: 8
+          maxLength: 128
+          pattern: "^[a-zA-Z0-9][a-zA-Z0-9._:-]{7,127}$"
 
     EdgeAiStatus:
       type: object
