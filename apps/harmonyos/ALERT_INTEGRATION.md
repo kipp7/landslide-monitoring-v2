@@ -36,7 +36,7 @@ data: {"type":"alert","eventId":"3cae3f27-63d2-4f2a-9fe1-54c57d727463","alertId"
 | `evidence` | 否 | 告警证据；GPS 建议放在 `latitude`、`longitude`，也兼容 `gps.latitude`、`gps.longitude` |
 | `createdAt` | 是 | ISO 8601 UTC 时间 |
 
-`ALERT_TRIGGER` 会打开应用内强提醒并启动循环警报音；同一 `alertId` 的 `ALERT_UPDATE` 会原位更新原因和证据，升级到 `critical` 时重新打开强提醒并鸣响。`ALERT_ACK` 只记录值守人员已确认，不停止警报；只有同一 `alertId` 的 `ALERT_RESOLVE` 才会从当前面板或多节点队列中移除告警并停止对应提醒。值守人员可在告警未解除时暂时静音，但仍可随时查看告警和地图。
+`ALERT_TRIGGER` 会打开应用内强提醒并启动循环警报音；同一 `alertId` 的 `ALERT_UPDATE` 会原位更新原因和证据，升级到 `critical` 时重新打开强提醒并鸣响。`ALERT_ACK` 会停止并移除该条强提醒，但服务器告警中心仍保留“已确认待复核”；只有同一 `alertId` 的 `ALERT_RESOLVE` 才会结束服务器端告警生命周期。值守人员也可只在本机暂时静音，告警仍可从告警中心和地图查看。
 
 多个节点同时告警时，App 按 `alertId` 维护队列；后续更新替换同一条告警，不得按 `eventId` 追加成重复告警。比赛倾角告警的 `evidence` 使用 `baseline`、`current`、`delta`、`maxAxis`、`maxDeviationDeg` 和 `thresholds`，与 Windows 端共用同一字段。
 
