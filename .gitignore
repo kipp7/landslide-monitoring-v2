@@ -72,3 +72,7 @@ docs/reports/
 !docs/unified/reports/
 docs/unified/reports/*
 !docs/unified/reports/README.md
+
+# Memory/context workspace local artifacts
+.venv/
+ctx-*.log

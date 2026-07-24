@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="980" viewBox="0 0 1200 980">
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto-start-reverse">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#374151"/>
+    </marker>
+    <style>
+      text { font-family: "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; fill: #172033; letter-spacing: 0; }
+      .title { font-size: 30px; font-weight: 700; }
+      .subtitle { font-size: 17px; fill: #4b5563; }
+      .label { font-size: 18px; font-weight: 600; }
+      .note { font-size: 16px; fill: #374151; }
+      .inverse { fill: #ffffff; }
+      .dim { stroke: #374151; stroke-width: 1.5; marker-start: url(#arrow); marker-end: url(#arrow); }
+      .guide { stroke: #9ca3af; stroke-width: 1; stroke-dasharray: 5 5; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="980" fill="#f7f8fa"/>
+  <text x="60" y="58" class="title">太阳能板 / 防水箱安装概念图</text>
+  <text x="60" y="90" class="subtitle">已知外形：太阳能板 290 x 240 x 17 mm；防水箱 320 x 240 x 145 mm。单位：mm。</text>
+
+  <text x="60" y="135" class="label">顶视图（1.5 px/mm）</text>
+  <rect x="100" y="180" width="480" height="360" rx="12" fill="#e6e8eb" stroke="#667085" stroke-width="3"/>
+  <text x="340" y="520" text-anchor="middle" class="note">防水箱 320 x 240</text>
+  <rect x="122.5" y="180" width="435" height="360" fill="#244a73" fill-opacity="0.90" stroke="#102a43" stroke-width="3"/>
+  <g stroke="#9fc5e8" stroke-width="1" opacity="0.7">
+    <path d="M176.9 180V540 M231.3 180V540 M285.7 180V540 M340.0 180V540 M394.4 180V540 M448.8 180V540 M503.1 180V540"/>
+    <path d="M122.5 240H557.5 M122.5 300H557.5 M122.5 360H557.5 M122.5 420H557.5 M122.5 480H557.5"/>
+  </g>
+  <text x="340" y="210" text-anchor="middle" class="inverse" style="font-size:18px;font-weight:700">太阳能板 290 x 240</text>
+
+  <line x1="100" y1="570" x2="580" y2="570" class="dim"/>
+  <line x1="100" y1="542" x2="100" y2="582" class="guide"/>
+  <line x1="580" y1="542" x2="580" y2="582" class="guide"/>
+  <text x="340" y="598" text-anchor="middle" class="note">320</text>
+
+  <line x1="122.5" y1="620" x2="557.5" y2="620" class="dim"/>
+  <line x1="122.5" y1="542" x2="122.5" y2="632" class="guide"/>
+  <line x1="557.5" y1="542" x2="557.5" y2="632" class="guide"/>
+  <text x="340" y="648" text-anchor="middle" class="note">290；两端各约 15</text>
+
+  <line x1="70" y1="180" x2="70" y2="540" class="dim"/>
+  <line x1="72" y1="180" x2="122.5" y2="180" class="guide"/>
+  <line x1="72" y1="540" x2="122.5" y2="540" class="guide"/>
+  <text x="45" y="365" text-anchor="middle" class="note" transform="rotate(-90 45 365)">240；短边无余量</text>
+
+  <rect x="650" y="180" width="490" height="360" rx="6" fill="#ffffff" stroke="#d0d5dd" stroke-width="2"/>
+  <text x="680" y="220" class="label">结构判断</text>
+  <text x="680" y="260" class="note">1. 面板可以覆盖箱体并兼作遮阳板。</text>
+  <text x="680" y="300" class="note">2. 240 mm 短边完全重合，没有箱盖开孔余量。</text>
+  <text x="680" y="340" class="note">3. 面板、箱体分别固定到共同立杆背架。</text>
+  <text x="680" y="380" class="note">4. 不让 0.67 kg 自重和风载传给塑料箱盖。</text>
+  <text x="680" y="420" class="note">5. 面板线缆向下形成滴水弯后进入底部格兰头。</text>
+  <text x="680" y="460" class="note">6. 最终支架需补充边框孔位、接线盒高度和风载。</text>
+
+  <text x="60" y="710" class="label">侧视图（高度示意）</text>
+  <rect x="100" y="790" width="480" height="145" rx="8" fill="#e6e8eb" stroke="#667085" stroke-width="3"/>
+  <text x="340" y="875" text-anchor="middle" class="note">防水箱高度 145</text>
+  <rect x="122.5" y="738" width="435" height="17" fill="#244a73" stroke="#102a43" stroke-width="3"/>
+  <text x="340" y="730" text-anchor="middle" class="note">太阳能板厚度 17</text>
+
+  <path d="M150 755 L150 790 M530 755 L530 790" stroke="#b7791f" stroke-width="8"/>
+  <line x1="610" y1="755" x2="610" y2="790" class="dim"/>
+  <line x1="558" y1="755" x2="622" y2="755" class="guide"/>
+  <line x1="580" y1="790" x2="622" y2="790" class="guide"/>
+  <text x="640" y="778" class="note">建议净距 25-40（概念值 35）</text>
+
+  <path d="M760 720 V935" stroke="#56616f" stroke-width="18"/>
+  <path d="M558 746 H760 M580 850 H760" stroke="#7b8794" stroke-width="10"/>
+  <text x="790" y="825" class="note">共同立杆/背架</text>
+  <text x="790" y="858" class="note">面板和箱体各自承重</text>
+
+  <rect x="60" y="948" width="1080" height="2" fill="#d0d5dd"/>
+  <text x="60" y="972" class="subtitle">DRAFT：仅冻结外形关系与安装原则；不得直接用于钻孔或采购支架。</text>
+</svg>
