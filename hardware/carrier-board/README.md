@@ -2,6 +2,8 @@
 
 This directory contains the public carrier-board handoff package for the RK2206/XL01 landslide monitoring node.
 
+> **Source-of-truth warning:** the `150 x 100 mm` layout notes and SVG are historical placement concepts. The `2026-05-05` production Gerber has an actual `170 x 115 mm` outline with four corner mounting holes. The physical/production board uses finished RK2206, DL-XLS1, CJMCU-752, and isolated RS485 modules, while the exported schematic and BOM still describe an older or partial implementation. Do not order a new assembly until these files are reconciled.
+
 ## Contents
 
 | Path | Purpose |
@@ -20,4 +22,4 @@ This directory contains the public carrier-board handoff package for the RK2206/
 
 ## Manufacturing Notice
 
-Review the schematic, BOM, pick-and-place orientation, connector footprints, and supplier substitutions before ordering. Fabrication should be checked against the selected vendor's requirements.
+The existing files are an as-built investigation package, not a complete internally consistent release. Review the Gerber, editable source, schematic, BOM, pick-and-place orientation, connector footprints, and supplier substitutions before ordering. The active reconciliation and R1.3 requirements are tracked in [`../field-node/`](../field-node/).

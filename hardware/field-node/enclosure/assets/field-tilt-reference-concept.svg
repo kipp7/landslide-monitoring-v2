@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="760" viewBox="0 0 1280 760">
+  <defs>
+    <marker id="arrow" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+      <path d="M0 0 L9 4.5 L0 9 Z" fill="#344054"/>
+    </marker>
+    <style>
+      text { font-family: "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; fill: #172033; letter-spacing: 0; }
+      .title { font-size: 31px; font-weight: 700; }
+      .sub { font-size: 16px; fill: #475467; }
+      .head { font-size: 21px; font-weight: 700; }
+      .label { font-size: 16px; font-weight: 600; }
+      .small { font-size: 14px; fill: #475467; }
+    </style>
+  </defs>
+  <rect width="1280" height="760" fill="#f7f8fa"/>
+  <text x="55" y="55" class="title">倾角传感器刚性基准安装概念图</text>
+  <text x="55" y="87" class="sub">倾角传感器测量的是安装面的姿态；塑料箱和 FR4 只承载电子设备，不进入测量传力路径。</text>
+
+  <rect x="55" y="125" width="475" height="470" rx="8" fill="#fff" stroke="#d92d20" stroke-width="2"/>
+  <text x="85" y="165" class="head" fill="#b42318">不推荐：传感器固定在箱内 FR4</text>
+  <rect x="105" y="215" width="370" height="290" rx="20" fill="#edf1f5" stroke="#667085" stroke-width="4"/>
+  <path d="M135 440 Q290 410 445 445" fill="none" stroke="#175cd3" stroke-width="10"/>
+  <rect x="245" y="343" width="130" height="75" rx="8" fill="#ffe8cc" stroke="#b54708" stroke-width="3" transform="rotate(4 310 380)"/>
+  <text x="310" y="383" text-anchor="middle" class="label" transform="rotate(4 310 380)">倾角传感器</text>
+  <path d="M170 275 C230 245 390 250 435 300" fill="none" stroke="#d92d20" stroke-width="3" stroke-dasharray="8 6" marker-end="url(#arrow)"/>
+  <text x="290" y="235" text-anchor="middle" class="small">塑料箱、FR4、抱箍松动或变形</text>
+  <text x="290" y="535" text-anchor="middle" class="label" fill="#b42318">读数混入箱体变形，不等于坡体倾角</text>
+
+  <rect x="560" y="125" width="665" height="470" rx="8" fill="#fff" stroke="#027a48" stroke-width="2"/>
+  <text x="590" y="165" class="head" fill="#027a48">推荐：独立金属基准固定到监测桩</text>
+  <rect x="685" y="195" width="82" height="350" rx="38" fill="#d0d5dd" stroke="#475467" stroke-width="3"/>
+  <text x="726" y="575" text-anchor="middle" class="small">监测桩必须刚性锚固</text>
+  <rect x="755" y="230" width="32" height="250" fill="#98a2b3" stroke="#475467" stroke-width="2"/>
+  <rect x="785" y="255" width="155" height="118" rx="5" fill="#e6f4ea" stroke="#027a48" stroke-width="3"/>
+  <text x="862" y="291" text-anchor="middle" class="label">304 基准板</text>
+  <text x="862" y="318" text-anchor="middle" class="small">建议 120 x 100 x 3</text>
+  <rect x="806" y="326" width="112" height="62" rx="7" fill="#ffe8cc" stroke="#b54708" stroke-width="3"/>
+  <circle cx="817" cy="337" r="4" fill="#fff" stroke="#344054"/><circle cx="907" cy="337" r="4" fill="#fff" stroke="#344054"/>
+  <circle cx="817" cy="377" r="4" fill="#fff" stroke="#344054"/><circle cx="907" cy="377" r="4" fill="#fff" stroke="#344054"/>
+  <text x="862" y="362" text-anchor="middle" class="label">倾角传感器</text>
+  <path d="M675 265 C650 265 650 305 675 305 M675 435 C650 435 650 475 675 475" fill="none" stroke="#344054" stroke-width="5"/>
+  <line x1="635" y1="305" x2="635" y2="435" stroke="#344054" stroke-width="2" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <text x="620" y="374" text-anchor="middle" class="small" transform="rotate(-90 620 374)">两组抱箍间距 >= 150 mm</text>
+  <rect x="1010" y="235" width="175" height="220" rx="18" fill="#edf1f5" stroke="#667085" stroke-width="3"/>
+  <text x="1097" y="325" text-anchor="middle" class="label">防水箱</text>
+  <text x="1097" y="353" text-anchor="middle" class="small">只承载 PCB、电池</text>
+  <text x="1097" y="380" text-anchor="middle" class="small">可安装在同一背架</text>
+  <line x1="940" y1="330" x2="1002" y2="330" stroke="#98a2b3" stroke-width="3" stroke-dasharray="7 6"/>
+  <text x="975" y="310" text-anchor="middle" class="small">结构分离</text>
+
+  <rect x="55" y="625" width="1170" height="90" rx="8" fill="#fff8e7" stroke="#f0b429" stroke-width="2"/>
+  <text x="80" y="660" class="label">传感器安装参数</text>
+  <text x="80" y="690" class="small">外形 90 x 58 x 36 mm；4 x Ø3.6 mm；孔距 78 x 39 mm；4 x M3 防松紧固；安装面不垫泡棉/软胶，装好后现场校零并做扭矩标记。</text>
+</svg>

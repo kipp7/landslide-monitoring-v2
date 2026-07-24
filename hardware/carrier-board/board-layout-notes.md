@@ -1,5 +1,7 @@
 # PCB Layout Module Carrier v7 Notes
 
+> Historical concept only. The production Gerber outline is `170 x 115 mm`; this document's `150 x 100 mm` reference must not be used for enclosure or fabrication dimensions.
+
 Board reference size: 150mm x 100mm.
 
 This is a placement guide for the hand-soldered module-carrier version. It is not a locked mechanical drawing. Before ordering PCBs, verify real module dimensions, socket spacing, pin 1 direction, and acrylic cover clearance.
