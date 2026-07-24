@@ -70,7 +70,7 @@ npm run stress:telemetry:test
 npm run stress:telemetry:dry-run
 ```
 
-连接生产 MQTT 前还必须显式提供测试设备号、速率和数量。完整链路结果需要同时核对 MQTT ACK、Kafka lag、ClickHouse 唯一序号和指标行数，不能只凭发布端成功判定通过。当前生产压测证据见 `docs/field-tests/telemetry-pipeline-stress-20260724.md`。
+连接生产 MQTT 前还必须显式提供测试设备号、速率和数量。完整链路结果需要同时核对 MQTT ACK、Kafka lag、ClickHouse 唯一序号和指标行数，不能只凭发布端成功判定通过。当前生产压测证据见 `docs/field-tests/telemetry-pipeline-stress-20260724.md` 和 `docs/field-tests/telemetry-capacity-20260725.md`。
 
 ## 固件与硬件复核
 
