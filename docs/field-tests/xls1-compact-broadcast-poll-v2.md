@@ -65,6 +65,26 @@ After deploying the compact production gateway, no new JSON polling commands ent
 
 This proves one gateway broadcast collects all three nodes inside the one-second window on the powered test hardware. It is not three sequential node polls and it does not ask the three radios to transmit simultaneously.
 
+### Final Soak And Cloud Persistence
+
+After the final observability build restarted, the production service completed another `541/541` broadcast batches:
+
+- A/B/C each produced `541` current-tag telemetry frames (`1623/1623` total).
+- Completed batches: `541`; timeout, duplicate and unmatched counters: `0/0/0`.
+- Schema rejects, suspected interleaving, command write failures and MQTT publish failures: all `0`.
+- Spool pending remained `0`; one record interrupted by the controlled service restart was replayed successfully.
+- Final average response latency was `509 ms`; maximum after restart was `870 ms` (`877 ms` maximum across the complete deployment observation).
+
+ClickHouse independently confirmed the northbound path and database write rate:
+
+| Device | Distinct sequences in 60 s | Distinct sequences in 300 s | Latest row age at query |
+| --- | ---: | ---: | ---: |
+| A | 61 | 301 | 564 ms |
+| B | 61 | 301 | 225 ms |
+| C | 61 | 300 | 885 ms |
+
+The expected one-sample-per-second rate is therefore present at the database, not only at the RK3568 serial or MQTT layer.
+
 ## RK3568 Deployment
 
 - Service: `lsmv2-field-gateway.service`
