@@ -6,6 +6,7 @@ import { Kafka, logLevel } from "kafkajs";
 import { Pool } from "pg";
 import path from "node:path";
 import { loadConfigFromEnv } from "./config";
+import { commitResolvedOffsets } from "./kafka-offsets";
 import { mergeFieldProfileMetrics, sanitizeFieldProfileMetrics } from "./field-profile-shadow";
 import { evaluateSequenceReset, shouldDiscardSyntheticShadow } from "./sequence-policy";
 
@@ -592,7 +593,7 @@ async function main(): Promise<void> {
           deviceStateByDeviceId.clear();
           latestSeqByDeviceId.clear();
           latestShadowStateByDeviceId.clear();
-          await ctx.commitOffsetsIfNecessary();
+          await commitResolvedOffsets(ctx);
           return;
         } catch (err) {
           if (isClickhouseUnavailableError(err)) {
@@ -668,7 +669,7 @@ async function main(): Promise<void> {
           deviceStateByDeviceId.clear();
           latestSeqByDeviceId.clear();
           latestShadowStateByDeviceId.clear();
-          await ctx.commitOffsetsIfNecessary();
+          await commitResolvedOffsets(ctx);
           return;
         }
       };
@@ -877,7 +878,7 @@ async function main(): Promise<void> {
         await flush("batch_end");
         pendingRowsCount = 0;
         await ctx.heartbeat();
-        await ctx.commitOffsetsIfNecessary();
+        await commitResolvedOffsets(ctx);
       } catch (err) {
         if (isClickhouseUnavailableError(err)) {
           // cooldown already applied; do not resolve offsets so we can retry later

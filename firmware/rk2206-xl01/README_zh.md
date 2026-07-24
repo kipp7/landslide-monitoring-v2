@@ -1,485 +1,116 @@
-# XL01 滑坡监测节点 - 模块化架构 v2.0
+# RK2206 XL01 现场节点固件
 
-## 项目简介
+本目录是山体滑坡监测系统中 RK2206 节点 A/B/C 的唯一维护源码。当前生产候选版本使用 XLS1 紧凑广播轮询，不再维护另一份手工复制的 OpenHarmony vendor 源码。
 
-基于 RK2206 + XL01 无线模块的滑坡监测节点，采用分层模块化架构设计。
+## 当前生产基线
 
-**当前版本**: v2.0  
-**状态**: 可构建的公开固件包
-**架构**: 分层模块化设计
+- 固件标记：`fw-compact-broadcast-poll-v2-20260724`
+- 遥测负载：46 字节紧凑数据，封装后为 64 字节现场链路帧
+- 网关轮询：RK3568 每秒发送一次广播命令
+- 节点时隙：A/B/C 分别延迟 0/340/680 ms 回传
+- 北向链路：RK3568 解码后继续使用既有 JSON、MQTT、Kafka 和 ClickHouse 合约
+- 自动恢复：生产轮询模式连续 180 秒没有收到有效网关命令时，由看门狗重建节点链路
+- 真实传感器：UM220-IV GNSS、RS485 土壤温度/水分/可选电导率、RS485 倾角
+- 虚拟传感器：关闭
 
----
+协议和现场长跑证据见：
 
-## 架构特点
+- `docs/field-tests/xls1-compact-telemetry-v1.md`
+- `docs/field-tests/xls1-compact-broadcast-poll-v2.md`
 
-### 模块化分层设计
+## 目录结构
 
-```
-xl01_landslide_monitor/
-├── config/           # 配置层：全局参数集中管理
-│   └── app_config.h
-├── utils/            # 工具层：通用功能模块
-│   ├── fifo.h/.c           # FIFO缓冲区
-│   └── watchdog_mgr.h/.c   # 看门狗管理
-├── drivers/          # 驱动层：硬件抽象
-│   ├── xl01/               # 无线通信模块驱动
-│   │   ├── xl01_driver.h
-│   │   └── xl01_driver.c
-│   └── sensors/            # 传感器驱动
-│       ├── sht30_driver.h/.c    # 温湿度
-│       ├── mpu6050_driver.h/.c  # 加速度/陀螺仪
-│       └── gps_driver.h/.c      # GPS定位
-├── app/              # 应用层：数据结构定义
-│   └── sensor_data.h
-└── main/             # 主程序：业务逻辑
-    └── landslide_main.c
-```
-
-### 设计优势
-
-| 特性 | 说明 |
-|-----|------|
-| **关注点分离** | 配置、驱动、应用逻辑各司其职 |
-| **硬件抽象** | 传感器驱动独立，易于测试和替换 |
-| **低耦合** | 模块间依赖最小化 |
-| **高内聚** | 相关功能组织在一起 |
-| **可维护性** | 单一职责原则，修改影响面小 |
-| **可测试性** | 独立模块便于单元测试 |
-| **可扩展性** | 新增传感器只需添加新驱动模块 |
-
----
-
-## 核心功能
-
-### 1. 模块化传感器支持
-每个传感器可独立启用/禁用（在 `config/app_config.h` 中配置）：
-```c
-#define ENABLE_GPS          0    // GPS定位模块
-#define ENABLE_SHT30        0    // 温湿度传感器
-#define ENABLE_MPU6050      0    // 加速度/陀螺仪
-#define ENABLE_VIRTUAL      1    // 虚拟数据（测试用）✓
+```text
+firmware/rk2206-xl01/
+├─ app/                 # 身份、命令、遥测和共享端口业务模型
+├─ config/              # 集中式板级与生产参数
+├─ drivers/
+│  ├─ sensors/          # GNSS、SC16IS752、Modbus 和现场传感器
+│  └─ xl01/             # XLS1 串口、COBS/CRC 帧和广播轮询
+├─ main/                # OpenHarmony 应用入口与任务编排
+├─ tests/               # 可在主机运行的紧凑遥测黄金向量测试
+├─ utils/               # FIFO 与看门狗工具
+├─ BUILD.gn             # OpenHarmony 构建目标
+├─ PINOUT.md            # 接线基线
+└─ CHANGELOG.md         # 固件变更记录
 ```
 
-### 2. ACK确认机制
-当前 ACK 机制分成两层：
+这个分层已经符合当前维护需要。不要把 A/B/C 拆成三套源码；三者仅身份不同，由构建脚本生成。
 
-1. **链路级 ACK**
-- 节点 ↔ 无线/网关之间的确认
-- 当前仍使用 `"ACK"` / `"OK"` 字符串
-- 只用于确认串口/无线链路发送成功
+## 硬件路由
 
-2. **平台命令回执**
-- 不再停留在 `"ACK"` / `"OK"`
-- 对齐软件主线：
-  - `cmd_ack/{device_id}`
-  - `DeviceCommandAck v1`
+| 功能 | 当前路由 | 参数 |
+| --- | --- | --- |
+| XL01 | `EUART2_M1 PB2/PB3` | 115200 baud |
+| UM220-IV GNSS | `EUART0_M0 PB6/PB7` | 115200 baud |
+| SC16IS752 | `EI2C0_M0 PB4/PB5` | 地址 `0x4D`，晶振 1.8432 MHz |
+| 土壤传感器 | SC16IS752 channel 0 | Modbus 地址 1，4800 8N1 |
+| 倾角传感器 | SC16IS752 channel 1 | Modbus 地址 1，4800 8N1 |
 
-当前代码里保留的 `ENABLE_ACK_CHECK` / `ACK_TIMEOUT_MS` 主要属于第 1 层，也就是链路级 ACK：
-```c
-#define ENABLE_ACK_CHECK    1       // 启用ACK检查
-#define ACK_TIMEOUT_MS      1000    // ACK超时（毫秒）
-#define MAX_RETRY_COUNT     3       // 最大重试次数
+更改硬件前必须同步复核 `config/app_config.h`、`PINOUT.md` 和实际板卡。
+
+## A/B/C 身份
+
+身份配置集中在 `config/app_config.h`，三个字段必须成组修改：
+
+| 节点 | `DEVICE_ID` | `INSTALL_LABEL` | `LEGACY_NODE_LABEL` |
+| --- | --- | --- | --- |
+| A | `00000000-0000-0000-0000-000000000001` | `FIELD-NODE-A` | `A` |
+| B | `00000000-0000-0000-0000-000000000002` | `FIELD-NODE-B` | `B` |
+| C | `00000000-0000-0000-0000-000000000003` | `FIELD-NODE-C` | `C` |
+
+公开源码中的 `DEVICE_SECRET` 必须保持占位符 `CHANGE_ME_DEVICE_SECRET`。生产 `.env`、私钥和服务器凭据不得进入本目录或公开 Release。
+
+## OpenHarmony 集成
+
+构建时目标目录为：
+
+```text
+<OpenHarmonyRoot>/vendor/isoftstone/rk2206/samples/xl01_landslide_monitor_v1.1
 ```
 
-工作流程：
-1. RK2206 发送遥测或标准回执 payload
-2. 等待网关/接收端返回链路级 `"ACK\n"` / `"OK"`
-3. 收到 ACK → 链路发送成功 ✓
-4. 超时 → 自动重试（最多3次）
-
-### 3. 防丢包机制
-- **1024字节FIFO缓冲** - 高速接收不丢数据
-- **三任务架构**:
-  - `UartRxTask` (高优先级, 1ms轮询)
-  - `DataProcessTask` (普通优先级)
-  - `SensorUploadTask` (低优先级)
-
-### 4. 看门狗保护
-```c
-#define ENABLE_WATCHDOG     1       // 启用看门狗
-#define WATCHDOG_TIMEOUT    10      // 超时时间（秒）
-```
-系统异常时自动重启恢复。
-
-### 5. 低功耗支持
-```c
-#define UPLOAD_INTERVAL_MS  5000    // 上传间隔（可调）
-#define ENABLE_LOW_POWER    0       // 低功耗模式（预留）
-```
-
----
-
-## 配置参数
-
-所有配置参数都在 `config/app_config.h` 文件中集中管理：
-
-### 身份配置
-```c
-#define IDENTITY_SCHEMA_VERSION  1
-#define CRED_VERSION             1
-#define DEVICE_ID                "00000000-0000-0000-0000-000000000001"
-#define DEVICE_SECRET            "CHANGE_ME_DEVICE_SECRET"
-#define INSTALL_LABEL            "FIELD-NODE-A"
-#define LEGACY_NODE_LABEL        "A"   // 仅调试标签，不再作为平台主身份
-```
-
-### 上传配置
-```c
-#define UPLOAD_INTERVAL_MS  5000    // 上传间隔
-                                    // 推荐值：
-                                    //   3000 = 快速监测
-                                    //   5000 = 标准（推荐）
-                                    //  10000 = 省电模式
-```
-
-### 硬件配置
-```c
-// XL01无线模块
-#define XL01_UART_ID    EUART2_M1   // UART2
-#define XL01_BAUDRATE   115200      // 波特率
-
-// I2C传感器
-#define I2C_IDX         EI2C0_M0    // PB4/PB5
-#define SHT30_I2C_ADDR  0x44        // SHT30地址
-#define MPU6050_I2C_ADDR 0x68       // MPU6050地址
-
-// GPS模块
-#define GPS_UART_ID     EUART0_M0   // PB6/PB7
-#define GPS_BAUDRATE    9600        // 波特率
-```
-
----
-
-## 🚀 快速开始
-
-### 1. 编译固件
+手工构建可以把本目录内容复制到上述位置，然后在 OpenHarmony 根目录运行：
 
 ```bash
-# 进入Docker容器
-docker exec -it openharmony-dev bash
-
-# 编译
-cd /root/workspace/txsmartropenharmony
 hb build -f
-
-# 固件位置
-# out/rk2206/isoftstone-rk2206/liteos.bin
 ```
 
-### 2. 烧录固件
+推荐使用仓库脚本自动生成 A/B/C。脚本只临时同步广播版文件，逐个写入节点身份，导出 IMG/BIN 后恢复 SDK 原文件：
 
-使用HiBurn工具烧录 `liteos.bin` 到RK2206。
-
-生产轮询模式下，`poll_latest_telemetry` 不单独发送命令 ACK，遥测帧本身作为轮询成功回执。普通控制命令仍保留 ACK 和共享串口静默保护。网关按每秒一个节点轮询时，三个节点分别约每三秒上报一次。
-
-### 3. 配置接收端 / 网关
-
-**临时串口接收示例（仅链路验证，不是最终平台真相）**
-```python
-import serial
-ser = serial.Serial("COM3", 115200)
-while True:
-    if ser.in_waiting > 0:
-        line = ser.readline().decode('utf-8').strip()
-        print(line)
-        # 回复链路级 ACK（如果启用了 ACK 检查）
-        ser.write(b"ACK\n")
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\firmware\build-xl01-compact-broadcast-v2.ps1 `
+  -SdkRoot "F:\2\openharmony\txsmartropenharmony" `
+  -ContainerName "openharmony-dev"
 ```
 
-说明：
+## 测试
 
-- 这段 Python 只适合验证串口/无线链路本身
-- 当前长期目标不是“中心节点长期回 ACK 字符串”
-- 而是让网关或适配层最终把数据接入软件主线：
-  - 遥测：`telemetry/{device_id}`
-  - 命令：`cmd/{device_id}`
-  - 回执：`cmd_ack/{device_id}`
+紧凑遥测 Python 黄金向量：
 
-### 4. 观察输出
-
-**RK2206串口输出**:
-```
-========================================
-  Configuration Summary
-========================================
-  Device ID: 00000000-0000-0000-0000-000000000001
-  Upload Interval: 5000 ms
-  ACK Check: Enabled
-  Sensors: Virtual ✓
-========================================
-
-[SEND #1] 245 bytes device=00000000-0000-0000-0000-000000000001 ✓ ACK
-  Temp:25.0°C Humi:60.0% Tilt:0.00° GPS:OK Bat:99%
+```powershell
+python .\scripts\field\compact_telemetry_codec_test.py
 ```
 
-**当前建议对齐到平台主线的上报格式**:
-```json
-{
-  "schema_version": 1,
-  "device_id": "00000000-0000-0000-0000-000000000001",
-  "event_ts": null,
-  "seq": 1,
-  "metrics": {
-    "temperature_c": 25.0,
-    "humidity_pct": 60.0,
-    "tilt_x_deg": 0.0,
-    "tilt_y_deg": 0.0,
-    "gps_latitude": 22.543000,
-    "gps_longitude": 114.057900,
-    "battery_pct": 99,
-    "warning_flag": false
-  },
-  "meta": {
-    "install_label": "FIELD-NODE-A",
-    "legacy_node": "A",
-    "uptime_s": 5,
-    "legacy_valid_flags": {
-      "temp_ok": 1,
-      "imu_ok": 1,
-      "gps_ok": 1
-    }
-  }
-}
+C 主机测试位于：
+
+```text
+firmware/rk2206-xl01/tests/compact_telemetry_builder_host_test.c
 ```
 
-当前软件主线对应 topic：
+真实固件验收还必须包含：A/B/C 身份核对、串口帧校验、广播批次完整率、MQTT 发布、ClickHouse 落库和长时间无重启观察。
 
-- 遥测：`telemetry/{device_id}`
-- 命令：`cmd/{device_id}`
-- 回执：`cmd_ack/{device_id}`
+## 发布
 
----
+所有固件二进制必须与对应 OpenHarmony 源码成对发布。统一入口：
 
-## 🔧 传感器接入流程（模块化方式）
-
-### Step 1: 测试虚拟数据（当前状态）
-```c
-#define ENABLE_VIRTUAL 1  // ✓
-```
-确保 XL01 通信正常，且链路级 ACK 机制工作。
-
-### Step 2: 接入SHT30温湿度
-1. 连接硬件（I2C）
-2. 修改配置（`config/app_config.h`）：
-   ```c
-   #define ENABLE_VIRTUAL 0
-   #define ENABLE_SHT30   1
-   ```
-3. 驱动已实现在 `drivers/sensors/sht30_driver.c`
-4. 编译测试
-
-### Step 3: 接入MPU6050加速度/陀螺仪
-```c
-#define ENABLE_MPU6050 1
-```
-驱动已实现在 `drivers/sensors/mpu6050_driver.c`
-
-### Step 4: 接入GPS模块
-```c
-#define ENABLE_GPS 1
-```
-驱动已实现在 `drivers/sensors/gps_driver.c`（需完善NMEA解析）
-
----
-
-## 📝 添加新传感器（模块化）
-
-遵循模块化原则，添加新传感器非常简单：
-
-### 1. 创建驱动模块
-在 `drivers/sensors/` 下创建 `xxx_driver.h` 和 `xxx_driver.c`：
-
-```c
-// drivers/sensors/xxx_driver.h
-#ifndef DRIVERS_SENSORS_XXX_DRIVER_H
-#define DRIVERS_SENSORS_XXX_DRIVER_H
-
-int XXX_Init(void);
-int XXX_Read(float *value);
-
-#endif
-
-// drivers/sensors/xxx_driver.c
-#include "xxx_driver.h"
-#include "../../config/app_config.h"
-
-int XXX_Init(void) {
-    // 初始化代码
-    return 0;
-}
-
-int XXX_Read(float *value) {
-    // 读取代码
-    return 0;
-}
+```text
+scripts/firmware/package-xl01-release.ps1
 ```
 
-### 2. 更新配置
-在 `config/app_config.h` 中添加：
-```c
-#define ENABLE_XXX  1
-```
+它会同时生成：
 
-### 3. 更新数据结构
-在 `app/sensor_data.h` 的 `SensorData` 结构体中添加字段：
-```c
-typedef struct {
-    // ...现有字段...
-    float xxx_value;  // 新传感器数据
-    int xxx_valid;    // 数据有效标志
-} SensorData;
-```
+- A/B/C IMG、BIN、loader 的固件 ZIP
+- 完整工程、vendor 目录副本、构建脚本、测试和文档的源码 ZIP
+- 两个资产各自的逐文件清单和最终 SHA-256
 
-### 4. 集成到主程序
-在 `main/landslide_main.c` 中：
-```c
-// 引入头文件
-#if ENABLE_XXX
-#include "../drivers/sensors/xxx_driver.h"
-#endif
-
-// SystemInit() 中初始化
-#if ENABLE_XXX
-XXX_Init();
-#endif
-
-// SensorCollectionTask() 中读取
-#if ENABLE_XXX
-if (XXX_Read(&g_sensor_data.xxx_value) == 0) {
-    g_sensor_data.xxx_valid = 1;
-}
-#endif
-
-// DataUploadTask() 中添加到JSON
-// "xxx":%.2f,"xxx_ok":%d,
-```
-
-### 5. 更新构建配置
-在 `BUILD.gn` 的 `sources` 中添加：
-```gn
-"drivers/sensors/xxx_driver.c",
-```
-
-完成！新传感器已集成，无需修改其他模块。
-
----
-
-## 📊 当前软件主线对齐后的遥测格式
-
-```json
-{
-  "schema_version": 1,   // 契约版本
-  "device_id": "00000000-0000-0000-0000-000000000001",
-  "event_ts": null,
-  "seq": 123,            // 序列号
-  "metrics": {
-    "temperature_c": 25.5,
-    "humidity_pct": 62.3,
-    "accel_x_g": 0.15,
-    "accel_y_g": 0.09,
-    "accel_z_g": 1.02,
-    "gyro_x_dps": 0.5,
-    "gyro_y_dps": -0.3,
-    "gyro_z_dps": 0.1,
-    "tilt_x_deg": 0.15,
-    "tilt_y_deg": 0.09,
-    "gps_latitude": 22.543012,
-    "gps_longitude": 114.057923,
-    "battery_pct": 85,
-    "warning_flag": false
-  },
-  "meta": {
-    "install_label": "FIELD-NODE-A",
-    "legacy_node": "A",
-    "uptime_s": 615,
-    "legacy_valid_flags": {
-      "temp_ok": 1,
-      "imu_ok": 1,
-      "gps_ok": 1
-    }
-  }
-}
-```
-
----
-
-## 📈 统计监控
-
-每10个数据包输出统计信息：
-```
-========== Statistics ==========
-  Uptime: 50 sec
-  Sent: 10/10 (Success: 100.0%)
-  Retries: 0, Failed: 0
-  Total bytes: 2450
-  RX packets: 0
-================================
-```
-
----
-
-## ❓ 故障排查
-
-### 问题1: 接收端 / 网关收不到数据
-**检查**:
-- ✓ XL01天线是否连接
-- ✓ 串口连接（白线→RX, 绿线→TX）
-- ✓ XL01是否配置为透传模式
-- ✓ 波特率是否匹配（115200）
-
-### 问题2: ACK总是超时
-**检查**:
-- ✓ 接收端 / 网关程序是否运行
-- ✓ 接收端是否回复链路级 `"ACK\n"`
-- ✓ 串口号是否正确
-- ✓ 增加超时：`#define ACK_TIMEOUT_MS 2000`
-
-### 问题3: 平台命令回执没有闭环
-**检查**:
-- ✓ 当前是否只完成了链路级 ACK，而没有输出标准 `DeviceCommandAck v1`
-- ✓ 当前网关是否把回执发到了 `cmd_ack/{device_id}`
-- ✓ `device_id` 是否与平台设备身份一致
-### 问题4: 编译错误
-**检查**:
-- ✓ 确保所有 `.c` 文件都在 `BUILD.gn` 的 `sources` 中
-- ✓ 确保头文件路径正确（使用相对路径 `../../`）
-- ✓ 确保配置宏定义正确（`config/app_config.h`）
-
----
-
-## 技术特性总结
-
-### 优势
-1. **模块化**: 分层设计，职责清晰
-2. **可维护**: 单一职责，易于定位问题
-3. **可测试**: 独立模块，支持单元测试
-4. **可扩展**: 新增功能不影响现有代码
-5. **运行保护**: 统计信息、异常恢复和看门狗保护
-
-### 性能指标
-- **上传间隔**: 3-60秒（可配置）
-- **链路 ACK 延迟**: 0.2-5.5秒（含重试）
-- **缓冲容量**: 1024字节FIFO
-- **成功率**: >95%（良好信号下）
-
----
-
-## 相关文档
-
-- `CHANGELOG.md` - 变更记录
-- 中心节点 ACK 示例和 ACK 机制说明应以仓库内文档或示例代码为准。
-
----
-
-## 维护信息
-
-**版本**: v2.0  
-**更新**: 2025-10-22  
-**状态**: 固件工程具备模块化基础，但仍在向当前软件主线契约全面收口
-
-**架构亮点**:
-- 分层模块化设计
-- 驱动层硬件抽象
-- 配置集中管理
-- 模块独立可测试
-- 清晰的职责划分
+GitHub 上传后必须用 `scripts/firmware/verify-release-source-assets.ps1` 验证两个资产同时存在。完整命令见 `docs/zh-CN/RELEASE.md`。

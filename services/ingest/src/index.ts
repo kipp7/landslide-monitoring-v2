@@ -5,6 +5,8 @@ import dotenv from "dotenv";
 import mqtt from "mqtt";
 import path from "node:path";
 import { loadConfigFromEnv } from "./config";
+import { KeyedSerialQueue } from "./keyed-serial-queue";
+import { ORDERED_IDEMPOTENT_PRODUCER_CONFIG } from "./kafka-ordering";
 
 type TelemetryEnvelopeV1 = {
   schema_version: 1;
@@ -106,15 +108,14 @@ async function main(): Promise<void> {
     "presence-events.v1.schema.json"
   );
 
-  const validateEnvelope =
-    await loadAndCompileSchema<TelemetryEnvelopeV1>(schemaTelemetryEnvelopePath);
+  const validateEnvelope = await loadAndCompileSchema<TelemetryEnvelopeV1>(schemaTelemetryEnvelopePath);
   const validateRaw = await loadAndCompileSchema<TelemetryRawV1>(schemaTelemetryRawPath);
   const validateDlq = await loadAndCompileSchema<TelemetryDlqV1>(schemaTelemetryDlqPath);
   const validatePresence = await loadAndCompileSchema<PresenceEventV1>(schemaPresenceEventPath);
   const validatePresenceEvents = await loadAndCompileSchema<PresenceEventsV1>(schemaPresenceEventsPath);
 
   const kafka = new Kafka({ clientId: config.kafkaClientId, brokers: config.kafkaBrokers });
-  const producer = kafka.producer();
+  const producer = kafka.producer(ORDERED_IDEMPOTENT_PRODUCER_CONFIG);
   await producer.connect();
 
   const mqttClient = mqtt.connect(config.mqttUrl, {
@@ -122,10 +123,15 @@ async function main(): Promise<void> {
       ? { username: config.mqttUsername, password: config.mqttPassword }
       : {})
   });
+  const topicQueue = new KeyedSerialQueue<string>();
 
   mqttClient.on("connect", () => {
     logger.info(
-      { mqttUrl: config.mqttUrl, topicTelemetry: config.mqttTopicTelemetry, topicPresence: config.mqttTopicPresence },
+      {
+        mqttUrl: config.mqttUrl,
+        topicTelemetry: config.mqttTopicTelemetry,
+        topicPresence: config.mqttTopicPresence
+      },
       "mqtt connected"
     );
     mqttClient.subscribe([config.mqttTopicTelemetry, config.mqttTopicPresence], { qos: 1 }, (err) => {
@@ -142,12 +148,13 @@ async function main(): Promise<void> {
     logger.error({ err }, "mqtt error");
   });
 
-  mqttClient.on("message", async (topic, payload) => {
-    const traceId = newTraceId();
-    const receivedTs = isoNow();
-    const rawPayload = payload.toString("utf-8");
+  const processMessage = async (
+    topic: string,
+    rawPayload: string,
+    traceId: string,
+    receivedTs: string
+  ): Promise<void> => {
     const rawBytes = Buffer.byteLength(rawPayload, "utf8");
-
     const isPresence = topic.startsWith("presence/");
 
     if (isPresence) {
@@ -194,9 +201,7 @@ async function main(): Promise<void> {
       return;
     }
 
-    const publishDlq = async (
-      partial: Omit<TelemetryDlqV1, "schema_version" | "received_ts" | "raw_payload">
-    ) => {
+    const publishDlq = async (partial: Omit<TelemetryDlqV1, "schema_version" | "received_ts" | "raw_payload">) => {
       const trunc = truncateUtf8(rawPayload, config.dlqRawPayloadMaxBytes);
       const dlq: TelemetryDlqV1 = {
         schema_version: 1,
@@ -212,10 +217,7 @@ async function main(): Promise<void> {
       }
 
       if (!validateDlq.validate(dlq)) {
-        logger.error(
-          { traceId, topic, errors: validateDlq.errors },
-          "dlq payload does not match schema (BUG)"
-        );
+        logger.error({ traceId, topic, errors: validateDlq.errors }, "dlq payload does not match schema (BUG)");
         return;
       }
 
@@ -260,7 +262,13 @@ async function main(): Promise<void> {
           device_id: envelope.device_id
         });
         logger.warn(
-          { traceId, topic, deviceId: envelope.device_id, metricsCount, limit: config.metricsMaxKeys },
+          {
+            traceId,
+            topic,
+            deviceId: envelope.device_id,
+            metricsCount,
+            limit: config.metricsMaxKeys
+          },
           "telemetry metrics too many (sent to dlq)"
         );
         return;
@@ -299,11 +307,24 @@ async function main(): Promise<void> {
       });
       logger.warn({ traceId, topic, err }, "invalid telemetry json");
     }
+  };
+
+  mqttClient.on("message", (topic, payload) => {
+    const traceId = newTraceId();
+    const receivedTs = isoNow();
+    const rawPayload = payload.toString("utf-8");
+
+    void topicQueue
+      .run(topic, () => processMessage(topic, rawPayload, traceId, receivedTs))
+      .catch((err: unknown) => {
+        logger.error({ traceId, topic, err }, "mqtt message processing failed");
+      });
   });
 
   const shutdown = async (signal: string) => {
     logger.info({ signal }, "shutting down");
     mqttClient.end(true);
+    await topicQueue.waitForIdle();
     await producer.disconnect();
     process.exit(0);
   };

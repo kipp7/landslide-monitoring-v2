@@ -47,6 +47,8 @@
     "desktop:verify": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/desktop/verify-windows-package.ps1",
     "desktop:installer": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/desktop/build-windows-installer.ps1",
     "desktop:preflight": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/desktop/check-windows-prerequisites.ps1",
+    "stress:telemetry:test": "node --test scripts/load/telemetry-pipeline-stress.test.cjs",
+    "stress:telemetry:dry-run": "node scripts/load/telemetry-pipeline-stress.cjs --device-id 00000000-0000-4000-9000-000000900001 --dry-run",
     "edge:build": "npm run build -w @lsmv2/edge-risk-model && npm run build -w @lsmv2/observability && npm run build -w @lsmv2/validation && npm run build -w @lsmv2/field-gateway && npm run build -w @lsmv2/field-link-monitor && npm run build -w @lsmv2/hermes-edge-supervisor && npm run build -w @lsmv2/rk3568-alarm-actuator",
     "edge:lint": "npm run lint -w @lsmv2/edge-risk-model && npm run lint -w @lsmv2/observability && npm run lint -w @lsmv2/validation && npm run lint -w @lsmv2/field-gateway && npm run lint -w @lsmv2/field-link-monitor && npm run lint -w @lsmv2/hermes-edge-supervisor && npm run lint -w @lsmv2/rk3568-alarm-actuator"
   },
