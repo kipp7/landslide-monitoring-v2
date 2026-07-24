@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <defs>
+    <style>
+      text{font-family:"Microsoft YaHei","Noto Sans SC",sans-serif;fill:#172033;letter-spacing:0}
+      .title{font-size:34px;font-weight:700}.sub{font-size:17px;fill:#516078}.h{font-size:22px;font-weight:700}
+      .b{font-size:17px;font-weight:600}.s{font-size:14px;fill:#43516a}.xs{font-size:12px;fill:#61708a}
+      .panel{fill:#fff;stroke:#cbd3df;stroke-width:2}.node{fill:#f7fafc;stroke:#245b88;stroke-width:3}
+      .green{fill:#e8f6ef;stroke:#147a55;stroke-width:2}.blue{fill:#eaf2fb;stroke:#2f6eb5;stroke-width:2}
+      .amber{fill:#fff6df;stroke:#c98312;stroke-width:2}.violet{fill:#f2edff;stroke:#7651c9;stroke-width:2}
+      .line{fill:none;stroke:#334155;stroke-width:3;marker-end:url(#a)}.radio{fill:none;stroke:#7651c9;stroke-width:3;stroke-dasharray:9 7;marker-end:url(#av)}
+    </style>
+    <marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0 0L9 3L0 6Z" fill="#334155"/></marker>
+    <marker id="av" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0 0L9 3L0 6Z" fill="#7651c9"/></marker>
+  </defs>
+  <rect width="1600" height="900" fill="#f4f6f8"/>
+  <text x="54" y="62" class="title">现场采集节点：项目架构与设备边界</text>
+  <text x="54" y="94" class="sub">FIELD-NODE-HW-EVT0.2 · 架构基线图 · 现场节点、RK3568 网关、通晓告警终端为三台独立设备</text>
+
+  <rect x="50" y="128" width="1040" height="690" rx="6" class="node"/>
+  <text x="78" y="170" class="h">A/B/C 现场采集节点（本套结构图范围）</text>
+  <text x="78" y="196" class="s">每个节点一套：320 × 240 × 145 mm 防水箱 + 共背架太阳能板 + 外置 GNSS 天线</text>
+
+  <rect x="80" y="230" width="270" height="118" rx="5" class="green"/>
+  <text x="104" y="265" class="b">载板 R1.2 / R1.3-DRAFT</text><text x="104" y="292" class="s">PCB 170 × 115 mm</text><text x="104" y="318" class="s">RK2206 主控 + 已有电源开关</text>
+  <rect x="390" y="230" width="260" height="118" rx="5" class="violet"/>
+  <text x="414" y="265" class="b">无线回传 DL-XLS1</text><text x="414" y="292" class="s">PB2/PB3 UART</text><text x="414" y="318" class="s">连接 RK3568 星型链路</text>
+  <path d="M350 289H390" class="line"/>
+
+  <rect x="80" y="385" width="270" height="108" rx="5" class="blue"/>
+  <text x="104" y="420" class="b">GNSS 接收机 UM220-IV NK</text><text x="104" y="447" class="s">PB6/PB7 UART · Rover</text><text x="104" y="473" class="s">外接 BT-760 + 3 m 馈线</text>
+  <path d="M215 385V348" class="line"/>
+
+  <rect x="390" y="385" width="260" height="108" rx="5" class="blue"/>
+  <text x="414" y="420" class="b">SC16IS752 模块</text><text x="414" y="447" class="s">I²C 0x4D · 1.8432 MHz</text><text x="414" y="473" class="s">扩展两路独立 UART</text>
+  <path d="M390 439H350" class="line"/>
+
+  <rect x="710" y="230" width="330" height="263" rx="5" class="panel"/>
+  <text x="734" y="265" class="b">双路隔离 RS485（不能合并）</text>
+  <rect x="736" y="292" width="278" height="74" rx="4" class="green"/><text x="754" y="321" class="b">通道 1：土壤传感器</text><text x="754" y="348" class="s">4800 8N1 · Modbus 地址 1</text>
+  <rect x="736" y="392" width="278" height="74" rx="4" class="amber"/><text x="754" y="421" class="b">通道 2：倾角传感器</text><text x="754" y="448" class="s">4800 8N1 · 90 × 58 × 36 mm</text>
+  <path d="M650 439H710" class="line"/>
+
+  <rect x="80" y="548" width="960" height="220" rx="5" class="panel"/>
+  <text x="104" y="584" class="b">现场节点电源链（独立于载板负载开关）</text>
+  <rect x="104" y="620" width="150" height="72" rx="4" class="blue"/><text x="129" y="651" class="b">SWM-10W</text><text x="120" y="676" class="s">18.68 V / 10 W</text>
+  <rect x="292" y="620" width="170" height="72" rx="4" class="amber"/><text x="313" y="651" class="b">PV 入口保护</text><text x="313" y="676" class="s">反接 / 浪涌 / 保险</text>
+  <rect x="500" y="620" width="190" height="72" rx="4" class="violet"/><text x="523" y="651" class="b">CN3791 候选模块</text><text x="530" y="676" class="s">3S 12.6 V / 1 A</text>
+  <rect x="728" y="620" width="150" height="72" rx="4" class="green"/><text x="748" y="651" class="b">3S 电池包</text><text x="742" y="676" class="s">11.1 V / 55.5 Wh</text>
+  <rect x="916" y="620" width="100" height="72" rx="4" class="green"/><text x="937" y="650" class="b">载板</text><text x="934" y="676" class="s">负载</text>
+  <path d="M254 656H292M462 656H500M690 656H728M878 656H916" class="line"/>
+  <text x="104" y="735" class="s">禁止：太阳能板直接接电池或 VBAT_IN；载板开关不能代替充电管理、保险和维修断开点。</text>
+
+  <rect x="1130" y="128" width="420" height="300" rx="6" class="panel"/>
+  <text x="1160" y="170" class="h">RK3568 边缘网关</text><text x="1160" y="202" class="s">独立外壳 · 不在现场节点箱内</text>
+  <rect x="1160" y="236" width="360" height="72" rx="4" class="violet"/><text x="1184" y="267" class="b">唯一 NTRIP 客户端</text><text x="1184" y="292" class="s">获取原始二进制 RTCM</text>
+  <rect x="1160" y="330" width="360" height="66" rx="4" class="blue"/><text x="1184" y="369" class="b">向 3 个 RK2206 广播 RTCM</text>
+  <path d="M1130 278H1090" class="radio"/>
+
+  <rect x="1130" y="462" width="420" height="190" rx="6" class="panel"/>
+  <text x="1160" y="504" class="h">通晓声光告警终端</text><text x="1160" y="538" class="s">独立 RK2206 告警执行设备</text><text x="1160" y="574" class="s">不共享现场节点外壳、电池或安装板</text>
+  <path d="M1340 428V462" class="radio"/>
+
+  <rect x="1130" y="692" width="420" height="126" rx="6" fill="#fff7e6" stroke="#dc8b16" stroke-width="2"/>
+  <text x="1160" y="732" class="b">结构设计边界</text><text x="1160" y="762" class="s">本轮只冻结现场节点的一体化比赛结构。</text><text x="1160" y="790" class="s">网关和告警终端分别设计，不画入同一箱体。</text>
+  <text x="54" y="864" class="xs">状态：ENGINEERING REFERENCE / NOT FOR FABRICATION · 架构来自仓库硬件与 GNSS 决策记录</text>
+</svg>

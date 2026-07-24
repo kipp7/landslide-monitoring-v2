@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+ <defs><style>
+ text{font-family:"Microsoft YaHei","Noto Sans SC",sans-serif;fill:#172033;letter-spacing:0}.title{font-size:34px;font-weight:700}.sub{font-size:17px;fill:#516078}.h{font-size:20px;font-weight:700}.b{font-size:15px;font-weight:650}.s{font-size:14px;fill:#45536a}.xs{font-size:12px;fill:#65738a}.panel{fill:#fff;stroke:#cbd3df;stroke-width:2}.ok{fill:#e8f6ef;stroke:#147a55;stroke-width:2}.tbd{fill:#fff7e6;stroke:#d88a13;stroke-width:2}.stop{fill:#fff1f0;stroke:#c4453c;stroke-width:2}.row{stroke:#d7dde6;stroke-width:1.5}.tagok{fill:#147a55}.tagtbd{fill:#d88a13}.tagstop{fill:#c4453c}
+ </style></defs>
+ <rect width="1600" height="900" fill="#f4f6f8"/><text x="54" y="60" class="title">设计输入状态与下一步测量清单</text><text x="54" y="92" class="sub">绿色可作为比例与接口输入；黄色必须实测；红色事项完成前禁止发布加工图</text>
+ <rect x="50" y="125" width="480" height="660" rx="6" class="ok"/><text x="80" y="168" class="h">已确认 / 可引用</text>
+ <text x="80" y="218" class="b">防水箱</text><text x="80" y="244" class="s">标称 320 × 240 × 145 mm</text><line x1="80" y1="265" x2="500" y2="265" class="row"/>
+ <text x="80" y="300" class="b">太阳能板 SWM-10W</text><text x="80" y="326" class="s">290 × 240 × 17 mm · 0.67 kg · 10 W</text><line x1="80" y1="347" x2="500" y2="347" class="row"/>
+ <text x="80" y="382" class="b">现场节点 PCB</text><text x="80" y="408" class="s">170 × 115 mm · 4 × Ø3.2 · 边距 3.5 mm</text><line x1="80" y1="429" x2="500" y2="429" class="row"/>
+ <text x="80" y="464" class="b">倾角传感器</text><text x="80" y="490" class="s">90 × 58 × 36 mm · 4 × Ø3.6 · 孔距 78 × 39</text><line x1="80" y1="511" x2="500" y2="511" class="row"/>
+ <text x="80" y="546" class="b">比赛版倾角基准板</text><text x="80" y="572" class="s">304 不锈钢 120 × 85 × 3 mm</text><line x1="80" y1="593" x2="500" y2="593" class="row"/>
+ <text x="80" y="628" class="b">FR4 主安装板</text><text x="80" y="654" class="s">最大外包络 265 × 185 × 3 mm</text><line x1="80" y1="675" x2="500" y2="675" class="row"/>
+ <text x="80" y="710" class="b">GNSS / 电源选型方向</text><text x="80" y="736" class="s">BT-760 + BT-M87SF；CN3791 3S 12.6 V 成品模块</text>
+
+ <rect x="560" y="125" width="480" height="660" rx="6" class="tbd"/><text x="590" y="168" class="h">待实测 / 待卖家图纸</text>
+ <text x="590" y="218" class="b">箱体内部</text><text x="590" y="244" class="s">6 个可用孔中心、孔径、孔深、是否贯通</text><text x="590" y="269" class="s">四侧弧槽/台阶真实轮廓与装入路径</text><line x1="590" y1="290" x2="1010" y2="290" class="row"/>
+ <text x="590" y="325" class="b">电池包</text><text x="590" y="351" class="s">长 × 宽 × 高、重量、出线方向、BMS 与温度范围</text><line x1="590" y1="372" x2="1010" y2="372" class="row"/>
+ <text x="590" y="407" class="b">CN3791 成品模块</text><text x="590" y="433" class="s">外形、孔位、端子高度、终止电压、反灌与温升</text><line x1="590" y1="454" x2="1010" y2="454" class="row"/>
+ <text x="590" y="489" class="b">太阳能板 / 背架</text><text x="590" y="515" class="s">边框孔位、接线盒高度、现场杆径、风载</text><line x1="590" y1="536" x2="1010" y2="536" class="row"/>
+ <text x="590" y="571" class="b">BT-M87SF</text><text x="590" y="597" class="s">3 孔孔径/坐标、中心口、安装面、总高</text><line x1="590" y1="618" x2="1010" y2="618" class="row"/>
+ <text x="590" y="653" class="b">线束与格兰头</text><text x="590" y="679" class="s">每条电缆外径、弯曲半径、端子操作空间</text><line x1="590" y1="700" x2="1010" y2="700" class="row"/>
+ <text x="590" y="735" class="b">整机验证</text><text x="590" y="761" class="s">24 h 功耗、7 天太阳能、IP65、运输后零点复现</text>
+
+ <rect x="1070" y="125" width="480" height="660" rx="6" class="stop"/><text x="1100" y="168" class="h">当前禁止发布 / 禁止采购</text>
+ <text x="1100" y="218" class="b">禁止发布最终 FR4 DXF</text><text x="1100" y="244" class="s">孔位和异形轮廓尚未转印</text><line x1="1100" y1="265" x2="1520" y2="265" class="row"/>
+ <text x="1100" y="300" class="b">禁止按 265 × 185 买完整矩形板</text><text x="1100" y="326" class="s">箱内四边槽会干涉</text><line x1="1100" y1="347" x2="1520" y2="347" class="row"/>
+ <text x="1100" y="382" class="b">禁止换整块铁底板</text><text x="1100" y="408" class="s">重量约 1.16 kg，增加孔柱载荷并影响 RF</text><line x1="1100" y1="429" x2="1520" y2="429" class="row"/>
+ <text x="1100" y="464" class="b">禁止太阳能板直连电池 / 载板</text><text x="1100" y="490" class="s">必须经过 3S CC/CV 充电管理与保护</text><line x1="1100" y1="511" x2="1520" y2="511" class="row"/>
+ <text x="1100" y="546" class="b">禁止批量购买 CN3791 模块</text><text x="1100" y="572" class="s">先买 1 块完成终止电压、反灌、温升验证</text><line x1="1100" y1="593" x2="1520" y2="593" class="row"/>
+ <text x="1100" y="628" class="b">禁止把 AI 外观图当制造基线</text><text x="1100" y="654" class="s">效果图只能在工程图确认后生成</text><line x1="1100" y1="675" x2="1520" y2="675" class="row"/>
+ <text x="1100" y="710" class="b">禁止把三类设备画进一个外壳</text><text x="1100" y="736" class="s">现场节点、RK3568、告警终端分别成机</text>
+ <rect x="50" y="805" width="1500" height="48" rx="5" fill="#24364d"/><text x="78" y="836" fill="#fff" font-size="15" font-weight="650">最近闭环：PET 转印箱体 → 卡尺测电池/CN3791/BT-M87SF → 更新孔表 → 首件 FR4 → 合盖与运输验证 → 再生成制造图和外观渲染</text>
+ <text x="54" y="880" class="xs">FIELD-NODE-HW-EVT0.2 · DESIGN INPUT GATE · 2026-07-25</text>
+</svg>

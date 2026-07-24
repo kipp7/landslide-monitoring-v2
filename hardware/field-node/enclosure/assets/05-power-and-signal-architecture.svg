@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+ <defs><style>
+ text{font-family:"Microsoft YaHei","Noto Sans SC",sans-serif;fill:#172033;letter-spacing:0}.title{font-size:34px;font-weight:700}.sub{font-size:17px;fill:#516078}.h{font-size:21px;font-weight:700}.b{font-size:15px;font-weight:650}.s{font-size:13px;fill:#45536a}.xs{font-size:12px;fill:#65738a}.panel{fill:#fff;stroke:#cbd3df;stroke-width:2}.power{fill:#fff5dc;stroke:#c77a09;stroke-width:2}.logic{fill:#e6f5ed;stroke:#147a55;stroke-width:2}.data{fill:#eaf2fb;stroke:#2f6eb5;stroke-width:2}.radio{fill:#f2edff;stroke:#7651c9;stroke-width:2}.sensor{fill:#f8fafc;stroke:#627086;stroke-width:2}.p{fill:none;stroke:#c77a09;stroke-width:4;marker-end:url(#ap)}.d{fill:none;stroke:#2f6eb5;stroke-width:3;marker-end:url(#ad)}.r{fill:none;stroke:#7651c9;stroke-width:3;stroke-dasharray:9 6;marker-end:url(#ar)}
+ </style><marker id="ap" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0 0L9 3L0 6Z" fill="#c77a09"/></marker><marker id="ad" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0 0L9 3L0 6Z" fill="#2f6eb5"/></marker><marker id="ar" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0 0L9 3L0 6Z" fill="#7651c9"/></marker></defs>
+ <rect width="1600" height="900" fill="#f4f6f8"/><text x="54" y="60" class="title">现场节点电源与信号连接架构</text><text x="54" y="92" class="sub">接线依据图：明确支路与接口方向；不替代 R1.3 原理图或线束长度表</text>
+ <rect x="50" y="125" width="1500" height="285" rx="6" class="panel"/><text x="78" y="165" class="h">电源链（橙色）</text>
+ <rect x="80" y="215" width="170" height="84" rx="5" class="power"/><text x="111" y="249" class="b">SWM-10W 面板</text><text x="103" y="275" class="s">Vmp 18.68 V / 10 W</text>
+ <rect x="294" y="215" width="170" height="84" rx="5" class="power"/><text x="323" y="249" class="b">PV 入口保护</text><text x="315" y="275" class="s">反接 / 浪涌 / 1 A 保险</text>
+ <rect x="508" y="215" width="200" height="84" rx="5" class="power"/><text x="535" y="249" class="b">CN3791 样机候选</text><text x="545" y="275" class="s">3S 12.6 V / 1 A</text>
+ <rect x="752" y="215" width="180" height="84" rx="5" class="power"/><text x="793" y="249" class="b">主保险</text><text x="784" y="275" class="s">初值 2 A · 待实测</text>
+ <rect x="976" y="215" width="180" height="84" rx="5" class="power"/><text x="1006" y="249" class="b">3S 电池包</text><text x="1002" y="275" class="s">11.1 V / 55.5 Wh</text>
+ <rect x="1200" y="215" width="150" height="84" rx="5" class="logic"/><text x="1231" y="249" class="b">载板开关</text><text x="1222" y="275" class="s">只控制负载支路</text>
+ <rect x="1394" y="215" width="125" height="84" rx="5" class="logic"/><text x="1425" y="249" class="b">节点负载</text><text x="1416" y="275" class="s">PCB + 传感器</text>
+ <path d="M250 257H294M464 257H508M708 257H752M932 257H976M1156 257H1200M1350 257H1394" class="p"/>
+ <path d="M1058 299V353H610V299" class="p"/><text x="772" y="378" class="s">载板关闭后，太阳能充电支路仍保持连接；电池连接器兼作维修断开点</text>
+
+ <rect x="50" y="445" width="1500" height="390" rx="6" class="panel"/><text x="78" y="485" class="h">数据链（蓝色）与 RTCM 回传（紫色虚线）</text>
+ <rect x="85" y="535" width="185" height="72" rx="5" class="sensor"/><text x="115" y="568" class="b">土壤温湿度 / EC</text><text x="118" y="591" class="s">RS485 · 4800 8N1</text>
+ <rect x="85" y="660" width="185" height="72" rx="5" class="sensor"/><text x="126" y="693" class="b">倾角传感器</text><text x="118" y="716" class="s">RS485 · 4800 8N1</text>
+ <rect x="320" y="535" width="190" height="72" rx="5" class="data"/><text x="342" y="568" class="b">隔离 RS485 模块 1</text><text x="354" y="591" class="s">土壤通道独立</text>
+ <rect x="320" y="660" width="190" height="72" rx="5" class="data"/><text x="342" y="693" class="b">隔离 RS485 模块 2</text><text x="354" y="716" class="s">倾角通道独立</text>
+ <rect x="565" y="590" width="190" height="92" rx="5" class="data"/><text x="598" y="625" class="b">SC16IS752 模块</text><text x="601" y="651" class="s">0x4D / 1.8432 MHz</text>
+ <rect x="820" y="575" width="190" height="120" rx="5" class="logic"/><text x="879" y="611" class="b">RK2206</text><text x="852" y="638" class="s">传感器采集 / 协议</text><text x="847" y="665" class="s">RTCM 原样转发到 NK</text>
+ <rect x="1080" y="520" width="190" height="82" rx="5" class="radio"/><text x="1125" y="554" class="b">DL-XLS1</text><text x="1110" y="579" class="s">与 RK3568 双向链路</text>
+ <rect x="1080" y="670" width="190" height="82" rx="5" class="data"/><text x="1106" y="704" class="b">UM220-IV NK</text><text x="1123" y="729" class="s">GNSS Rover</text>
+ <rect x="1330" y="520" width="185" height="82" rx="5" class="radio"/><text x="1358" y="554" class="b">RK3568 网关</text><text x="1355" y="579" class="s">唯一 NTRIP 客户端</text>
+ <rect x="1330" y="670" width="185" height="82" rx="5" class="sensor"/><text x="1369" y="704" class="b">BT-760 天线</text><text x="1360" y="729" class="s">3 m / 50 Ω 馈线</text>
+ <path d="M270 571H320M270 696H320M510 571L565 615M510 696L565 657M755 636H820M1010 612L1080 571M1010 661L1080 711M1270 711H1330" class="d"/>
+ <path d="M1330 561H1270M1080 561L1010 602M1080 711L1010 672" class="r"/><text x="1268" y="645" class="s">RTCM 二进制广播路径</text>
+ <text x="54" y="865" class="xs">ELEC/PWR-R0.2 · CONNECTION REFERENCE · 接口极性、线号、保险值和线径须在实物测试后进入正式线束图</text>
+</svg>

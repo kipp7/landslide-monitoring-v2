@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <defs><style>
+    text{font-family:"Microsoft YaHei","Noto Sans SC",sans-serif;fill:#172033;letter-spacing:0}.title{font-size:34px;font-weight:700}.sub{font-size:17px;fill:#526176}.h{font-size:21px;font-weight:700}.b{font-size:16px;font-weight:650}.s{font-size:14px;fill:#46556e}.xs{font-size:12px;fill:#66758c}.dim{font-size:14px;fill:#24364d}
+    .panel{fill:#fff;stroke:#cbd3df;stroke-width:2}.frame{fill:none;stroke:#526173;stroke-width:12}.metal{fill:#d9dee5;stroke:#58677c;stroke-width:3}.solar{fill:#315d87;stroke:#153b60;stroke-width:4}.cell{stroke:#78a2c7;stroke-width:2}.box{fill:#eef1f4;stroke:#68758a;stroke-width:4}.gnss{fill:#fff;stroke:#147a55;stroke-width:4}.d{fill:none;stroke:#344154;stroke-width:2;marker-start:url(#a);marker-end:url(#a)}.ext{stroke:#a0aaba;stroke-width:1.5;stroke-dasharray:6 5}.leader{fill:none;stroke:#334155;stroke-width:2;marker-end:url(#e)}
+  </style><marker id="a" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0 4L8 0V8Z" fill="#344154"/></marker><marker id="e" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0 0L9 3L0 6Z" fill="#334155"/></marker></defs>
+  <rect width="1600" height="900" fill="#f4f6f8"/><text x="54" y="60" class="title">比赛一体式整机：共背架外部布置</text><text x="54" y="92" class="sub">推荐结构：太阳能板、防水箱、GNSS 侧翼平台共用一根刚性背脊，各自承重；不把载荷压在箱盖上</text>
+  <rect x="50" y="125" width="880" height="700" rx="6" class="panel"/><text x="78" y="165" class="h">正视图（已知外形按同一比例绘制）</text>
+  <path d="M500 190V790" class="frame"/><path d="M330 260H500M300 600H500M500 230H735" class="frame"/>
+  <rect x="150" y="210" width="406" height="336" class="solar"/><path d="M208 210V546M266 210V546M324 210V546M382 210V546M440 210V546M498 210V546M150 294H556M150 378H556M150 462H556" class="cell"/>
+  <text x="250" y="250" fill="#fff" font-size="22" font-weight="700">SWM-10W</text><text x="232" y="278" fill="#fff" font-size="17">290 × 240 × 17 mm · 0.67 kg</text>
+  <rect x="129" y="585" width="448" height="336" transform="translate(0,-96)" rx="7" class="box"/><text x="224" y="625" class="h">防水箱 320 × 240 × 145 mm</text><text x="245" y="655" class="s">箱体固定到背架，不悬挂在太阳能板上</text>
+  <rect x="695" y="244" width="170" height="28" rx="3" class="metal"/><rect x="735" y="210" width="90" height="34" rx="3" class="metal"/><ellipse cx="780" cy="184" rx="66" ry="25" class="gnss"/><rect x="752" y="199" width="56" height="12" class="metal"/>
+  <text x="698" y="144" class="b">BT-760 GNSS 天线</text><text x="698" y="164" class="s">BT-M87SF 三孔法兰底座</text><path d="M744 169L770 181" class="leader"/>
+  <text x="610" y="305" class="b">固定侧翼平台</text><text x="610" y="328" class="s">位于面板侧边并高于面板上沿</text><text x="610" y="351" class="s">避免太阳能板遮挡天空视野</text><path d="M690 322L735 250" class="leader"/>
+  <path d="M144 188H562" class="d"/><path d="M150 210V180M556 210V180" class="ext"/><text x="322" y="180" class="dim">290 mm</text>
+  <path d="M106 210V546" class="d"/><path d="M105 210H145M105 546H145" class="ext"/><text x="78" y="390" class="dim" transform="rotate(-90 78 390)">240 mm</text>
+  <path d="M123 805H583" class="d"/><path d="M129 729V813M577 729V813" class="ext"/><text x="328" y="800" class="dim">320 mm</text>
+
+  <rect x="965" y="125" width="585" height="700" rx="6" class="panel"/><text x="995" y="165" class="h">侧视与结构原则</text>
+  <path d="M1350 210V730" class="frame"/><rect x="1100" y="265" width="238" height="24" class="solar" transform="rotate(-12 1338 277)"/><rect x="1085" y="390" width="253" height="255" rx="7" class="box"/>
+  <path d="M1200 310V390M1300 289V390" stroke="#bd7610" stroke-width="8"/><text x="1000" y="340" class="s">面板与箱盖净距建议 25–40 mm</text><path d="M1150 343L1200 325" class="leader"/>
+  <path d="M1350 230H1450" class="frame"/><rect x="1415" y="195" width="70" height="24" class="metal"/><ellipse cx="1450" cy="176" rx="55" ry="22" class="gnss"/>
+  <text x="995" y="690" class="b">共背架的三条受力路径</text><text x="995" y="720" class="s">1. 太阳能板 → 面板支架 → 背脊</text><text x="995" y="748" class="s">2. 防水箱 → 两道横梁 → 背脊</text><text x="995" y="776" class="s">3. GNSS 底座 → 侧翼平台 → 背脊</text>
+  <rect x="995" y="510" width="515" height="145" rx="5" fill="#fff7e6" stroke="#d88a13" stroke-width="2"/><text x="1018" y="545" class="b">待实测后冻结</text><text x="1018" y="575" class="s">太阳能边框孔位、背架横梁长度、BT-M87SF 三孔尺寸、</text><text x="1018" y="602" class="s">箱体背部固定孔、现场杆径与风载。图中支架长度均为示意。</text><text x="1018" y="631" class="s">禁止依据本图直接钻孔或下单定制支架。</text>
+  <text x="54" y="865" class="xs">MECH-R0.2 · ENGINEERING REFERENCE / NOT FOR FABRICATION · 推荐为固定侧翼，不移动 GNSS 工作相位中心</text>
+</svg>

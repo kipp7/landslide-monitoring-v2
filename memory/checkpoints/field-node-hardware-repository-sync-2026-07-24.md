@@ -5,7 +5,7 @@ tags:
   - checkpoint
   - hardware
   - repository
-status: complete
+status: active
 ---
 
 # Checkpoint: field-node-hardware-repository-sync-2026-07-24
@@ -29,6 +29,8 @@ status: complete
 - 硬件产品化任务仍处于尺寸采集和样机验证阶段，并非制造冻结。
 - FR4 最终异形轮廓、箱体支撑孔坐标、倾角小板到 FR4 的四点支撑孔、电池尺寸和线缆直径尚未实测冻结。
 - `CN3791` 3S 12.6 V 成品充电模块仍是样机采购候选，需要台架验证后才能确定。
+- 2026-07-25 已加入七张工程参考 SVG/PNG；外部 Image 2 4K 渲染已通过结构关系检查。内部开箱渲染因虚构模块和载板结构被否决，不纳入 Git 资产。
+- 旧泛化 AI 外观图已明确否决，不纳入 `hardware/field-node/enclosure/assets/` 设计基线。
 
 ## Next Actions
 
@@ -37,6 +39,7 @@ status: complete
 - 生成 FR4 主板和倾角基准板 DXF，并在首件装配后回写实际版本。
 - 完成充电模块的终止电压、夜间反灌、温升和 24 小时功耗测试。
 - 从 V1.2 实物重建模块版原理图和完整 BOM，再启动 R1.3 PCB 设计。
+- 检查工程图 XML、PNG 尺寸、链接、发布风险后，提交并推送 EVT0.2-DRAFT 资料。
 
 ## Risks
 
@@ -47,4 +50,4 @@ status: complete
 
 ## Resume Prompt
 
-继续现场节点硬件产品化：先读取 `memory/tasks/2026-07-23-hardware-productization.md`、`memory/decisions/2026-07-24-field-node-competition-enclosure.md` 和 `hardware/field-node/REVISION.md`，核对远端 `docs/hardware-field-node-evt0-1` 分支状态，再从箱体与电池实测尺寸开始推进，不把 EVT0.1 概念资料当作制造图。
+继续现场节点硬件产品化：先检查 `hardware/field-node/enclosure/assets/` 的工程图与 Image 2 参考渲染，再核对远端 `docs/hardware-field-node-evt0-1` 分支状态；从箱体与电池实测尺寸开始推进，不把 EVT0.2-DRAFT 或任何 AI 渲染当作制造图。

@@ -4,7 +4,7 @@
 
 | Item | Revision | State | Manufacturing status |
 | --- | --- | --- | --- |
-| Integrated field node | `FIELD-NODE-HW-EVT0.1` | Design input | Not released |
+| Integrated field node | `FIELD-NODE-HW-EVT0.2-DRAFT` | Engineering reference set | Not released |
 | Existing carrier board | `R1.2` | As-built reference | Gerber exists; source documents conflict |
 | Carrier-board improvement | `R1.3-DRAFT` | Requirements | Not routed or released |
 | Competition enclosure | `MECH-R0.1` | Concept and measured inputs | Hole coordinates pending |
@@ -20,6 +20,13 @@
 - Added the competition tilt-sensor subplate design and froze the manual-derived `90 x 58 x 36 mm`, `78 x 39 mm` mechanical interface.
 - Recorded the SWM-10W panel and 3S `11.1 V / 5000 mAh` battery inputs.
 - Defined solar charging, interface, protection, and prototype procurement requirements.
+
+### 2026-07-25 - `FIELD-NODE-HW-EVT0.2-DRAFT`
+
+- Added seven deterministic engineering SVG/PNG references covering device boundaries, external arrangement, internal packing, exploded mounting, power/signal paths, GNSS side platform, and design-input status.
+- Added one accepted Image 2 4K external communication render under `enclosure/assets/renderings/`; it is explicitly a non-manufacturing reference. The attempted internal render was rejected for invented modules and is not tracked.
+- Rejected the earlier generic AI exterior render as a design input because it invented enclosure and module geometry.
+- Made the unresolved battery envelope, enclosure hole table, CN3791 dimensions, panel frame holes, and BT-M87SF three-hole data visible in the drawings instead of guessing them.
 
 ## Versioning Rules
 
