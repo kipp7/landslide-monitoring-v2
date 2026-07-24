@@ -1,8 +1,9 @@
 import type { ProducerConfig } from "kafkajs";
 
-// MQTT preserves publication order per connection. Keep the same order while
-// Kafka retries, and suppress retry duplicates before the writer sees them.
+// KeyedSerialQueue establishes same-topic order before this producer. Kafka's
+// idempotent sequence numbers keep partition order safe with up to five
+// in-flight requests while avoiding cross-topic head-of-line blocking.
 export const ORDERED_IDEMPOTENT_PRODUCER_CONFIG: ProducerConfig = Object.freeze({
   idempotent: true,
-  maxInFlightRequests: 1
+  maxInFlightRequests: 5
 });

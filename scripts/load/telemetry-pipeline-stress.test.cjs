@@ -2,7 +2,9 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 
 const {
+  buildPublication,
   buildTelemetryEnvelope,
+  deriveDeviceIds,
   parseArgs,
   percentile
 } = require("./telemetry-pipeline-stress.cjs");
@@ -19,6 +21,8 @@ test("parses bounded load options", () => {
     "128",
     "--device-id",
     TEST_DEVICE_ID,
+    "--devices",
+    "10",
     "--start-seq",
     "101",
     "--run-id",
@@ -27,7 +31,44 @@ test("parses bounded load options", () => {
   assert.equal(options.count, 10000);
   assert.equal(options.rate, 800);
   assert.equal(options.concurrency, 128);
+  assert.equal(options.devices, 10);
   assert.equal(options.startSeq, 101);
+});
+
+test("derives a contiguous isolated UUID range", () => {
+  assert.deepEqual(deriveDeviceIds("00000000-0000-4000-9000-00000090fffe", 3), [
+    "00000000-0000-4000-9000-00000090fffe",
+    "00000000-0000-4000-9000-00000090ffff",
+    "00000000-0000-4000-9000-000000910000"
+  ]);
+});
+
+test("round-robins devices while keeping each sequence contiguous", () => {
+  const options = parseArgs([
+    "--device-id",
+    TEST_DEVICE_ID,
+    "--devices",
+    "3",
+    "--count",
+    "7",
+    "--start-seq",
+    "10",
+    "--run-id",
+    "unit-test"
+  ]);
+  const publications = Array.from({ length: 7 }, (_, index) => buildPublication(options, index));
+  assert.deepEqual(
+    publications.map(({ deviceId, sequence }) => [deviceId.slice(-1), sequence]),
+    [
+      ["1", 10],
+      ["2", 10],
+      ["3", 10],
+      ["1", 11],
+      ["2", 11],
+      ["3", 11],
+      ["1", 12]
+    ]
+  );
 });
 
 test("refuses formal field-node identities", () => {

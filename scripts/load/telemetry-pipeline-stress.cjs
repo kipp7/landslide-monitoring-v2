@@ -19,7 +19,8 @@ function usage() {
     "  --count <n>          Messages to publish (default: 10000)",
     "  --rate <n>           Target messages/second, 0 means unlimited (default: 500)",
     "  --concurrency <n>    Maximum QoS 1 publishes in flight (default: 256)",
-    "  --device-id <uuid>   Dedicated non-production load-test device UUID",
+    "  --device-id <uuid>   First dedicated non-production load-test device UUID",
+    "  --devices <n>        Round-robin device/topic count (default: 1, maximum: 1000)",
     "  --start-seq <n>      First sequence number (default: 1)",
     "  --run-id <value>     Stable run label (default: generated)",
     "  --dry-run            Validate configuration and print one payload without connecting",
@@ -45,6 +46,7 @@ function parseArgs(argv) {
     rate: 500,
     concurrency: 256,
     deviceId: process.env.STRESS_DEVICE_ID ?? "",
+    devices: 1,
     startSeq: 1,
     runId: process.env.STRESS_RUN_ID ?? `stress-${new Date().toISOString().replace(/[-:.TZ]/g, "")}`,
     dryRun: false,
@@ -63,7 +65,9 @@ function parseArgs(argv) {
     else if (arg === "--rate") options.rate = parsePositiveInteger(takeValue(), "rate", { allowZero: true });
     else if (arg === "--concurrency") options.concurrency = parsePositiveInteger(takeValue(), "concurrency");
     else if (arg === "--device-id") options.deviceId = takeValue();
-    else if (arg === "--start-seq") options.startSeq = parsePositiveInteger(takeValue(), "start-seq", { allowZero: true });
+    else if (arg === "--devices") options.devices = parsePositiveInteger(takeValue(), "devices");
+    else if (arg === "--start-seq")
+      options.startSeq = parsePositiveInteger(takeValue(), "start-seq", { allowZero: true });
     else if (arg === "--run-id") options.runId = takeValue();
     else if (arg === "--dry-run") options.dryRun = true;
     else if (arg === "--help") options.help = true;
@@ -72,7 +76,10 @@ function parseArgs(argv) {
 
   if (options.help) return options;
   if (!UUID_PATTERN.test(options.deviceId)) throw new Error("device-id must be a UUID");
-  if (FORMAL_FIELD_DEVICE_IDS.has(options.deviceId.toLowerCase())) {
+  if (options.devices > 1000) throw new Error("devices exceeds the safety limit of 1000");
+  if (options.count < options.devices) throw new Error("count must be at least the device count");
+  const deviceIds = deriveDeviceIds(options.deviceId, options.devices);
+  if (deviceIds.some((deviceId) => FORMAL_FIELD_DEVICE_IDS.has(deviceId.toLowerCase()))) {
     throw new Error("refusing to use a formal A/B/C device UUID for load testing");
   }
   if (options.count > 1_000_000) throw new Error("count exceeds the one-run safety limit of 1,000,000 messages");
@@ -82,11 +89,24 @@ function parseArgs(argv) {
   return options;
 }
 
-function buildTelemetryEnvelope(options, sequence) {
+function deriveDeviceIds(baseDeviceId, count) {
+  if (!UUID_PATTERN.test(baseDeviceId)) throw new Error("device-id must be a UUID");
+  const prefix = baseDeviceId.slice(0, -12);
+  const suffix = BigInt(`0x${baseDeviceId.slice(-12)}`);
+  const maximum = 0xffffffffffffn;
+  if (suffix + BigInt(count - 1) > maximum) throw new Error("derived device UUID range overflows");
+
+  return Array.from({ length: count }, (_, index) => {
+    const nextSuffix = (suffix + BigInt(index)).toString(16).padStart(12, "0");
+    return `${prefix}${nextSuffix}`;
+  });
+}
+
+function buildTelemetryEnvelope(options, sequence, deviceId = options.deviceId) {
   const phase = sequence % 100;
   return {
     schema_version: 1,
-    device_id: options.deviceId,
+    device_id: deviceId,
     event_ts: new Date().toISOString(),
     seq: sequence,
     metrics: {
@@ -107,6 +127,18 @@ function buildTelemetryEnvelope(options, sequence) {
       load_test_run: options.runId,
       source: "telemetry-pipeline-stress"
     }
+  };
+}
+
+function buildPublication(options, index, deviceIds = deriveDeviceIds(options.deviceId, options.devices)) {
+  const deviceIndex = index % deviceIds.length;
+  const deviceId = deviceIds[deviceIndex];
+  const sequence = options.startSeq + Math.floor(index / deviceIds.length);
+  return {
+    deviceId,
+    sequence,
+    topic: `telemetry/${deviceId}`,
+    payload: JSON.stringify(buildTelemetryEnvelope(options, sequence, deviceId))
   };
 }
 
@@ -151,7 +183,7 @@ async function publishLoad(options, env = process.env) {
   if (!mqttUrl) throw new Error("STRESS_MQTT_URL or MQTT_URL is required");
 
   const client = await connectClient(mqttUrl, username, password, options.runId);
-  const topic = `telemetry/${options.deviceId}`;
+  const deviceIds = deriveDeviceIds(options.deviceId, options.devices);
   const latenciesMs = [];
   const errors = [];
   const inFlight = new Set();
@@ -163,11 +195,12 @@ async function publishLoad(options, env = process.env) {
   });
 
   const publishOne = async (index) => {
-    const sequence = options.startSeq + index;
-    const payload = JSON.stringify(buildTelemetryEnvelope(options, sequence));
+    const publication = buildPublication(options, index, deviceIds);
     const publishStartedAt = performance.now();
     await new Promise((resolve, reject) => {
-      client.publish(topic, payload, { qos: 1, retain: false }, (error) => (error ? reject(error) : resolve()));
+      client.publish(publication.topic, publication.payload, { qos: 1, retain: false }, (error) =>
+        error ? reject(error) : resolve()
+      );
     });
     latenciesMs.push(performance.now() - publishStartedAt);
     acknowledged += 1;
@@ -208,13 +241,18 @@ async function publishLoad(options, env = process.env) {
   const maxLatencyMs = latenciesMs.reduce((maximum, value) => Math.max(maximum, value), 0);
   return {
     runId: options.runId,
-    deviceId: options.deviceId,
-    topic,
+    firstDeviceId: options.deviceId,
+    deviceCount: options.devices,
+    deviceIds,
+    topicPrefix: "telemetry/",
     requested: options.count,
     acknowledged,
     failed,
-    startSeq: options.startSeq,
-    endSeq: options.startSeq + options.count - 1,
+    perDeviceStartSeq: options.startSeq,
+    perDeviceMinimumMessages: Math.floor(options.count / options.devices),
+    perDeviceMaximumMessages: Math.ceil(options.count / options.devices),
+    perDeviceMinimumEndSeq: options.startSeq + Math.floor(options.count / options.devices) - 1,
+    perDeviceMaximumEndSeq: options.startSeq + Math.ceil(options.count / options.devices) - 1,
     targetRateMessagesPerSecond: options.rate,
     concurrency: options.concurrency,
     durationMs: Number(durationMs.toFixed(2)),
@@ -236,8 +274,10 @@ async function main() {
     return;
   }
   if (options.dryRun) {
-    const payload = buildTelemetryEnvelope(options, options.startSeq);
-    console.log(JSON.stringify({ options, payload, payloadBytes: Buffer.byteLength(JSON.stringify(payload), "utf8") }, null, 2));
+    const publication = buildPublication(options, 0);
+    console.log(
+      JSON.stringify({ options, publication, payloadBytes: Buffer.byteLength(publication.payload, "utf8") }, null, 2)
+    );
     return;
   }
 
@@ -255,7 +295,9 @@ if (require.main === module) {
 
 module.exports = {
   FORMAL_FIELD_DEVICE_IDS,
+  buildPublication,
   buildTelemetryEnvelope,
+  deriveDeviceIds,
   parseArgs,
   percentile
 };

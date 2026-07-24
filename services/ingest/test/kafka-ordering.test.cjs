@@ -6,7 +6,7 @@ const { ORDERED_IDEMPOTENT_PRODUCER_CONFIG } = require("../dist/kafka-ordering.j
 test("uses an ordered idempotent Kafka producer", () => {
   assert.deepEqual(ORDERED_IDEMPOTENT_PRODUCER_CONFIG, {
     idempotent: true,
-    maxInFlightRequests: 1
+    maxInFlightRequests: 5
   });
   assert.equal(Object.isFrozen(ORDERED_IDEMPOTENT_PRODUCER_CONFIG), true);
 });
