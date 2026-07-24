@@ -5,7 +5,7 @@ tags:
   - checkpoint
   - hardware
   - repository
-status: active
+status: complete
 ---
 
 # Checkpoint: field-node-hardware-repository-sync-2026-07-24
@@ -30,6 +30,7 @@ status: active
 - FR4 最终异形轮廓、箱体支撑孔坐标、倾角小板到 FR4 的四点支撑孔、电池尺寸和线缆直径尚未实测冻结。
 - `CN3791` 3S 12.6 V 成品充电模块仍是样机采购候选，需要台架验证后才能确定。
 - 2026-07-25 已加入七张工程参考 SVG/PNG；外部 Image 2 4K 渲染已通过结构关系检查。内部开箱渲染因虚构模块和载板结构被否决，不纳入 Git 资产。
+- 2026-07-25 提交 `fe0b38b5` 已推送到远端 `docs/hardware-field-node-evt0-1`，PR #352 已更新为 EVT0.2 工程参考包；本检查点的仓库同步动作完成。
 - 旧泛化 AI 外观图已明确否决，不纳入 `hardware/field-node/enclosure/assets/` 设计基线。
 
 ## Next Actions
