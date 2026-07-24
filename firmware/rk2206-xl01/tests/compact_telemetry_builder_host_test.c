@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "../app/compact_telemetry_builder.h"
+#include "../app/compact_poll_command.h"
 #include "../drivers/xl01/field_link_frame.h"
 
 static unsigned int ReadUint32Be(const unsigned char *input)
@@ -83,6 +84,21 @@ int main(void)
     assert(decoded.sequence == 7U);
     assert(decoded.payload_len == payload_len);
     assert(memcmp(decoded.payload, payload, (size_t)payload_len) == 0);
+
+    assert(CompactPollCommand_IsValid("P112345678", COMPACT_POLL_COMMAND_BYTES));
+    assert(!CompactPollCommand_IsValid("P11234567Z", COMPACT_POLL_COMMAND_BYTES));
+    assert(CompactPollCommand_NodeDelayMs("A") == 0U);
+    assert(CompactPollCommand_NodeDelayMs("B") == 340U);
+    assert(CompactPollCommand_NodeDelayMs("C") == 680U);
+    frame_len = FieldLinkFrame_Encode(
+        FIELD_LINK_FRAME_TYPE_COMMAND,
+        8U,
+        "P112345678",
+        COMPACT_POLL_COMMAND_BYTES,
+        frame,
+        sizeof(frame)
+    );
+    assert(frame_len == 28);
 
     printf("compact_payload_bytes=%d field_link_wire_bytes=%d command_tag=%08x\n",
            payload_len,

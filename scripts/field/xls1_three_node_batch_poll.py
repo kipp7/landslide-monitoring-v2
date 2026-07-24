@@ -266,7 +266,7 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
     started_at = utc_now()
     started_mono = time.monotonic()
     send_records: dict[str, dict[str, Any]] = {}
-    send_records_by_tag: dict[int, dict[str, Any]] = {}
+    send_records_by_tag: dict[tuple[int, str], dict[str, Any]] = {}
     received_command_ids: set[str] = set()
     arrivals_by_node: dict[str, list[float]] = defaultdict(list)
     latencies_by_node: dict[str, list[float]] = defaultdict(list)
@@ -281,6 +281,95 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
     bytes_read = 0
     bytes_written = 0
     receive_buffer = bytearray()
+
+    def receive_once(fd: int, timeout: float) -> None:
+        nonlocal bytes_read, unmatched_telemetry, duplicate_telemetry
+
+        readable, _, _ = select.select([fd], [], [], max(0.0, timeout))
+        if not readable:
+            return
+        try:
+            chunk = os.read(fd, 4096)
+        except BlockingIOError:
+            return
+        if not chunk:
+            return
+        bytes_read += len(chunk)
+        receive_buffer.extend(chunk)
+
+        while True:
+            try:
+                delimiter = receive_buffer.index(0)
+            except ValueError:
+                break
+            encoded = bytes(receive_buffer[:delimiter])
+            del receive_buffer[: delimiter + 1]
+            if not encoded:
+                continue
+            received_mono = time.monotonic()
+            try:
+                frame_type, _, payload = decode_frame(encoded)
+            except Exception as exc:
+                reason = str(exc)
+                errors[reason] += 1
+                if len(error_samples) < 20:
+                    error_samples.append(
+                        {
+                            "at": utc_now(),
+                            "reason": reason,
+                            "frameBytes": len(encoded) + 1,
+                            "hexPrefix": encoded[:64].hex(" "),
+                        }
+                    )
+                continue
+
+            valid_frame_types[str(frame_type)] += 1
+            if frame_type != FIELD_LINK_TYPE_TELEMETRY:
+                continue
+            try:
+                if len(payload) == COMPACT_PAYLOAD_BYTES and payload[:3] == b"LS\x01":
+                    telemetry = decode_compact_telemetry(payload)
+                else:
+                    telemetry = json.loads(payload.decode("utf-8"))
+            except Exception as exc:
+                reason = f"telemetry payload decode failed: {exc}"
+                errors[reason] += 1
+                if len(error_samples) < 20:
+                    error_samples.append({"at": utc_now(), "reason": reason, "frameBytes": len(encoded) + 1})
+                continue
+
+            device_id = telemetry.get("device_id")
+            label = node_label(device_id) if isinstance(device_id, str) else None
+            if label is None:
+                errors["telemetry from unknown device"] += 1
+                continue
+            arrivals_by_node[label].append(received_mono)
+            seq = telemetry.get("seq")
+            if isinstance(seq, int):
+                seq_by_node[label].append(seq)
+            meta = telemetry.get("meta")
+            command_id = meta.get("last_command_id") if isinstance(meta, dict) else None
+            last_command_tag = meta.get("last_command_tag") if isinstance(meta, dict) else None
+            if isinstance(command_id, str):
+                send_record = send_records.get(command_id)
+            elif isinstance(last_command_tag, int):
+                send_record = send_records_by_tag.get((last_command_tag, label))
+                command_id = send_record["commandId"] if send_record else None
+            else:
+                send_record = None
+            if not send_record or send_record["node"] != label:
+                unmatched_telemetry += 1
+                continue
+            if command_id in received_command_ids:
+                duplicate_telemetry += 1
+                continue
+            received_command_ids.add(command_id)
+            latency_ms = (received_mono - float(send_record["sentMono"])) * 1000.0
+            latencies_by_node[label].append(latency_ms)
+
+        if len(receive_buffer) > 65536:
+            errors["field-link assembler buffer overflow"] += 1
+            receive_buffer.clear()
 
     fd = os.open(args.serial_device, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
     try:
@@ -307,31 +396,63 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
                 rotation = batches_sent % len(order)
                 order = order[rotation:] + order[:rotation]
                 batch_number = batches_sent + 1
-                for position, (label, device_id) in enumerate(order):
-                    command_id = str(uuid.uuid4())
-                    tag = command_tag(command_id)
-                    while tag in send_records_by_tag:
-                        command_id = str(uuid.uuid4())
-                        tag = command_tag(command_id)
-                    command_payload = build_command(device_id, command_id)
-                    frame = encode_frame(FIELD_LINK_TYPE_COMMAND, serial_sequence, command_payload)
+                if args.broadcast_poll:
+                    poll_command = f"P1{uuid.uuid4().hex[:8].upper()}"
+                    tag = command_tag(poll_command)
+                    while any((tag, label) in send_records_by_tag for label in NODES):
+                        poll_command = f"P1{uuid.uuid4().hex[:8].upper()}"
+                        tag = command_tag(poll_command)
+                    frame = encode_frame(FIELD_LINK_TYPE_COMMAND, serial_sequence, poll_command.encode("ascii"))
                     serial_sequence = (serial_sequence + 1) & 0xFFFFFFFF
                     sent_mono = time.monotonic()
-                    send_record = {
-                        "commandId": command_id,
-                        "commandTag": tag,
-                        "node": label,
-                        "batch": batch_number,
-                        "position": position,
-                        "sentAt": utc_now(),
-                        "sentMono": sent_mono,
-                    }
-                    send_records[command_id] = send_record
-                    send_records_by_tag[tag] = send_record
+                    for position, label in enumerate(NODES):
+                        record_id = f"{poll_command}:{label}"
+                        send_record = {
+                            "commandId": record_id,
+                            "pollCommand": poll_command,
+                            "commandTag": tag,
+                            "node": label,
+                            "batch": batch_number,
+                            "position": position,
+                            "sentAt": utc_now(),
+                            "sentMono": sent_mono,
+                        }
+                        send_records[record_id] = send_record
+                        send_records_by_tag[(tag, label)] = send_record
                     write_chunked(fd, frame, args.command_chunk_bytes, args.command_chunk_delay_ms)
                     bytes_written += len(frame)
-                    if args.inter_command_gap_ms > 0 and position < len(order) - 1:
-                        time.sleep(args.inter_command_gap_ms / 1000.0)
+                else:
+                    for position, (label, device_id) in enumerate(order):
+                        command_id = str(uuid.uuid4())
+                        tag = command_tag(command_id)
+                        while (tag, label) in send_records_by_tag:
+                            command_id = str(uuid.uuid4())
+                            tag = command_tag(command_id)
+                        command_payload = build_command(device_id, command_id)
+                        frame = encode_frame(FIELD_LINK_TYPE_COMMAND, serial_sequence, command_payload)
+                        serial_sequence = (serial_sequence + 1) & 0xFFFFFFFF
+                        sent_mono = time.monotonic()
+                        send_record = {
+                            "commandId": command_id,
+                            "commandTag": tag,
+                            "node": label,
+                            "batch": batch_number,
+                            "position": position,
+                            "sentAt": utc_now(),
+                            "sentMono": sent_mono,
+                        }
+                        send_records[command_id] = send_record
+                        send_records_by_tag[(tag, label)] = send_record
+                        write_chunked(fd, frame, args.command_chunk_bytes, args.command_chunk_delay_ms)
+                        bytes_written += len(frame)
+                        if args.response_wait_ms > 0:
+                            response_deadline = time.monotonic() + args.response_wait_ms / 1000.0
+                            while command_id not in received_command_ids and time.monotonic() < response_deadline:
+                                receive_once(fd, min(0.05, response_deadline - time.monotonic()))
+                        if args.inter_command_gap_ms > 0 and position < len(order) - 1:
+                            gap_deadline = time.monotonic() + args.inter_command_gap_ms / 1000.0
+                            while time.monotonic() < gap_deadline:
+                                receive_once(fd, min(0.05, gap_deadline - time.monotonic()))
                 batches_sent += 1
                 next_batch_at = first_batch_at + batches_sent * args.batch_interval_ms / 1000.0
                 now = time.monotonic()
@@ -343,91 +464,7 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
 
             wake_at = next_batch_at if next_batch_at < send_deadline else (drain_deadline or send_deadline)
             timeout = max(0.0, min(0.1, wake_at - now))
-            readable, _, _ = select.select([fd], [], [], timeout)
-            if not readable:
-                continue
-            try:
-                chunk = os.read(fd, 4096)
-            except BlockingIOError:
-                continue
-            if not chunk:
-                continue
-            bytes_read += len(chunk)
-            receive_buffer.extend(chunk)
-
-            while True:
-                try:
-                    delimiter = receive_buffer.index(0)
-                except ValueError:
-                    break
-                encoded = bytes(receive_buffer[:delimiter])
-                del receive_buffer[: delimiter + 1]
-                if not encoded:
-                    continue
-                received_mono = time.monotonic()
-                try:
-                    frame_type, _, payload = decode_frame(encoded)
-                except Exception as exc:
-                    reason = str(exc)
-                    errors[reason] += 1
-                    if len(error_samples) < 20:
-                        error_samples.append(
-                            {
-                                "at": utc_now(),
-                                "reason": reason,
-                                "frameBytes": len(encoded) + 1,
-                                "hexPrefix": encoded[:64].hex(" "),
-                            }
-                        )
-                    continue
-
-                valid_frame_types[str(frame_type)] += 1
-                if frame_type != FIELD_LINK_TYPE_TELEMETRY:
-                    continue
-                try:
-                    if len(payload) == COMPACT_PAYLOAD_BYTES and payload[:3] == b"LS\x01":
-                        telemetry = decode_compact_telemetry(payload)
-                    else:
-                        telemetry = json.loads(payload.decode("utf-8"))
-                except Exception as exc:
-                    reason = f"telemetry json decode failed: {exc}"
-                    errors[reason] += 1
-                    if len(error_samples) < 20:
-                        error_samples.append({"at": utc_now(), "reason": reason, "frameBytes": len(encoded) + 1})
-                    continue
-
-                device_id = telemetry.get("device_id")
-                label = node_label(device_id) if isinstance(device_id, str) else None
-                if label is None:
-                    errors["telemetry from unknown device"] += 1
-                    continue
-                arrivals_by_node[label].append(received_mono)
-                seq = telemetry.get("seq")
-                if isinstance(seq, int):
-                    seq_by_node[label].append(seq)
-                meta = telemetry.get("meta")
-                command_id = meta.get("last_command_id") if isinstance(meta, dict) else None
-                last_command_tag = meta.get("last_command_tag") if isinstance(meta, dict) else None
-                if isinstance(command_id, str):
-                    send_record = send_records.get(command_id)
-                elif isinstance(last_command_tag, int):
-                    send_record = send_records_by_tag.get(last_command_tag)
-                    command_id = send_record["commandId"] if send_record else None
-                else:
-                    send_record = None
-                if not send_record or send_record["node"] != label:
-                    unmatched_telemetry += 1
-                    continue
-                if command_id in received_command_ids:
-                    duplicate_telemetry += 1
-                    continue
-                received_command_ids.add(command_id)
-                latency_ms = (received_mono - float(send_record["sentMono"])) * 1000.0
-                latencies_by_node[label].append(latency_ms)
-
-            if len(receive_buffer) > 65536:
-                errors["field-link assembler buffer overflow"] += 1
-                receive_buffer.clear()
+            receive_once(fd, timeout)
     finally:
         os.close(fd)
 
@@ -491,6 +528,8 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
             "durationSeconds": args.duration_seconds,
             "batchIntervalMs": args.batch_interval_ms,
             "interCommandGapMs": args.inter_command_gap_ms,
+            "responseWaitMs": args.response_wait_ms,
+            "broadcastPoll": args.broadcast_poll,
             "commandChunkBytes": args.command_chunk_bytes,
             "commandChunkDelayMs": args.command_chunk_delay_ms,
             "drainSeconds": args.drain_seconds,
@@ -524,6 +563,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--duration-seconds", type=float, default=60.0)
     parser.add_argument("--batch-interval-ms", type=int, default=1000)
     parser.add_argument("--inter-command-gap-ms", type=int, default=0)
+    parser.add_argument("--response-wait-ms", type=int, default=0)
+    parser.add_argument("--broadcast-poll", action="store_true")
     parser.add_argument("--command-chunk-bytes", type=int, default=64)
     parser.add_argument("--command-chunk-delay-ms", type=int, default=10)
     parser.add_argument("--settle-ms", type=int, default=2000)

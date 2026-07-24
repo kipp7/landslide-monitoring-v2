@@ -14,7 +14,7 @@ $sampleRelative = "vendor\isoftstone\rk2206\samples\xl01_landslide_monitor_v1.1"
 $sampleRoot = Join-Path $SdkRoot $sampleRelative
 $productOut = Join-Path $SdkRoot "out\rk2206\isoftstone-rk2206"
 if (-not $ArtifactDirectory) {
-  $ArtifactDirectory = Join-Path $repoRoot "artifacts\firmware\rk2206-xl01-compact-v1"
+  $ArtifactDirectory = Join-Path $repoRoot "artifacts\firmware\rk2206-xl01-compact-broadcast-v2"
 }
 $artifactRoot = [System.IO.Path]::GetFullPath($ArtifactDirectory)
 $backupRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("xls1-compact-sdk-backup-" + [guid]::NewGuid().ToString("N"))
@@ -23,8 +23,11 @@ $syncFiles = @(
   "BUILD.gn",
   "config\app_config.h",
   "main\landslide_main.c",
+  "drivers\xl01\xl01_driver.c",
   "app\compact_telemetry_builder.c",
-  "app\compact_telemetry_builder.h"
+  "app\compact_telemetry_builder.h",
+  "app\compact_poll_command.c",
+  "app\compact_poll_command.h"
 )
 
 $nodes = @(
@@ -71,8 +74,8 @@ function Copy-BuildOutputs {
     }
   }
 
-  $imageTarget = Join-Path $artifactRoot ("rk2206-node-{0}-xls1-compact-v1.img" -f $Node.Label)
-  $liteOsTarget = Join-Path $artifactRoot ("rk2206-node-{0}-xls1-compact-v1.bin" -f $Node.Label)
+  $imageTarget = Join-Path $artifactRoot ("rk2206-node-{0}-xls1-compact-broadcast-v2.img" -f $Node.Label)
+  $liteOsTarget = Join-Path $artifactRoot ("rk2206-node-{0}-xls1-compact-broadcast-v2.bin" -f $Node.Label)
   Copy-Item -LiteralPath $imageSource -Destination $imageTarget -Force
   Copy-Item -LiteralPath $liteOsSource -Destination $liteOsTarget -Force
   if (Test-Path -LiteralPath $loaderSource -PathType Leaf) {
@@ -124,10 +127,13 @@ try {
     Sort-Object Name
   $manifest = [ordered]@{
     schemaVersion = 1
-    profile = "rk2206-xl01-compact-v1"
-    firmwareMarker = "fw-compact-single-packet-v1-20260723"
+    profile = "rk2206-xl01-compact-broadcast-v2"
+    firmwareMarker = "fw-compact-broadcast-poll-v2-20260724"
     compactPayloadBytes = 46
     fieldLinkWireBytes = 64
+    compactPollCommandBytes = 10
+    compactPollWireBytes = 28
+    nodeSlotMs = 340
     rollbackRelease = "competition-suite-20260723"
     generatedAt = (Get-Date).ToUniversalTime().ToString("o")
     files = @($files | ForEach-Object {
