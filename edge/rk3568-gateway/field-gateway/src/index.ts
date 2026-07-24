@@ -9,6 +9,11 @@ import { createLogger, newTraceId } from "@lsmv2/observability";
 import { loadAndCompileSchema } from "@lsmv2/validation";
 import { loadConfigFromEnv, type AppConfig } from "./config";
 import {
+  buildCompactBroadcastPollCommand,
+  decodeCompactTelemetryV1,
+  isCompactTelemetryV1
+} from "./compact-telemetry";
+import {
   createCobsCrcFieldLinkAssembler,
   encodeFieldLinkFrame,
   type FieldLinkFrameType,
@@ -177,6 +182,12 @@ type RuntimeStats = {
   internalPollTelemetryMatches: number;
   internalPollAckSuppressions: number;
   internalPollSessionTimeouts: number;
+  compactBroadcastPollsIssued: number;
+  compactBroadcastPollsCompleted: number;
+  compactBroadcastTelemetryMatches: number;
+  compactBroadcastDuplicateTelemetry: number;
+  compactBroadcastUnmatchedTelemetry: number;
+  compactBroadcastPollTimeouts: number;
   spoolPending: number;
   lastSerialReadTs: string | null;
   lastParsedMessageTs: string | null;
@@ -224,6 +235,17 @@ type ActivePollTelemetryWindow = {
   startedTs: string;
   startedAtMs: number;
   timeoutAtMs: number;
+  timer: NodeJS.Timeout;
+};
+
+type ActiveCompactBroadcastPollWindow = {
+  command: string;
+  commandTag: number;
+  portPath: string;
+  expectedDeviceIds: Set<string>;
+  receivedDeviceIds: Set<string>;
+  startedTs: string;
+  startedAtMs: number;
   timer: NodeJS.Timeout;
 };
 
@@ -378,6 +400,7 @@ function createRawJsonAssembler(): GatewayPayloadAssembler {
         .filter(isSouthboundSchemaCandidate)
         .map((rawPayload) => ({
           rawPayload,
+          rawPayloadBytes: Buffer.from(rawPayload, "utf8"),
           frameType: null,
           sequence: null,
           integrity: "not_applicable" as const,
@@ -978,6 +1001,7 @@ class GatewayRuntime {
   private readonly pendingCommandWindows = new Map<string, PendingCommandWindow>();
   private readonly internalPollCommands = new Map<string, InternalPollCommandRecord>();
   private readonly activePollTelemetryWindows = new Map<string, ActivePollTelemetryWindow>();
+  private readonly activeCompactBroadcastPollWindows = new Map<string, ActiveCompactBroadcastPollWindow>();
   private readonly portPollNodeCursor = new Map<string, number>();
   private readonly portLastReadAtMs = new Map<string, number>();
   private fieldLinkTxSequence = 0;
@@ -1004,6 +1028,12 @@ class GatewayRuntime {
     internalPollTelemetryMatches: 0,
     internalPollAckSuppressions: 0,
     internalPollSessionTimeouts: 0,
+    compactBroadcastPollsIssued: 0,
+    compactBroadcastPollsCompleted: 0,
+    compactBroadcastTelemetryMatches: 0,
+    compactBroadcastDuplicateTelemetry: 0,
+    compactBroadcastUnmatchedTelemetry: 0,
+    compactBroadcastPollTimeouts: 0,
     spoolPending: 0,
     lastSerialReadTs: null,
     lastParsedMessageTs: null,
@@ -1121,6 +1151,9 @@ class GatewayRuntime {
     }
     for (const portPath of Array.from(this.activePollTelemetryWindows.keys())) {
       this.closeActivePollTelemetryWindow(portPath, "shutdown");
+    }
+    for (const key of Array.from(this.activeCompactBroadcastPollWindows.keys())) {
+      this.closeCompactBroadcastPollWindow(key, "shutdown");
     }
 
     await this.emitHealth();
@@ -1350,6 +1383,23 @@ class GatewayRuntime {
   }
 
   private async handlePayload(input: FieldLinkInboundPayload, sourcePort: string): Promise<void> {
+    if (input.frameType === "telemetry" && isCompactTelemetryV1(input.rawPayloadBytes)) {
+      try {
+        const envelope = decodeCompactTelemetryV1(input.rawPayloadBytes);
+        await this.handlePayloadCandidate(JSON.stringify(envelope), sourcePort, input.frameType, input.sequence);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.stats.schemaRejected += 1;
+        this.stats.lastError = message;
+        this.ensurePortRuntimeState(sourcePort).lastError = message;
+        this.logger.warn(
+          { err, sourcePort, frameSequence: input.sequence, payloadBytes: input.rawPayloadBytes.length },
+          "field gateway compact telemetry decode failed"
+        );
+      }
+      return;
+    }
+
     const candidates = this.orderedPayloadCandidates(input.rawPayload, sourcePort);
     for (const candidate of candidates) {
       await this.handlePayloadCandidate(candidate, sourcePort, input.frameType, input.sequence);
@@ -1561,6 +1611,23 @@ class GatewayRuntime {
       portState.lastPollTelemetryTs = receivedTs;
     }
 
+    const telemetryLastCommandTag =
+      envelope.meta && typeof envelope.meta.last_command_tag === "number"
+        ? envelope.meta.last_command_tag >>> 0
+        : null;
+    if (
+      this.config.southboundPollingMode === "compact-broadcast-v1" &&
+      telemetryUploadTrigger === "scheduler_poll" &&
+      telemetryLastCommandTag !== null
+    ) {
+      this.matchCompactBroadcastTelemetry(
+        sourcePort,
+        telemetryLastCommandTag,
+        envelope.device_id,
+        receivedTs
+      );
+    }
+
     this.stats.parsedMessages += 1;
     this.stats.lastParsedMessageTs = receivedTs;
     nodeState.telemetryMessages += 1;
@@ -1695,6 +1762,11 @@ class GatewayRuntime {
       return;
     }
 
+    if (this.config.southboundPollingMode === "compact-broadcast-v1") {
+      this.tickCompactBroadcastPolling();
+      return;
+    }
+
     let issued = false;
     let busy = false;
     for (const portPath of this.getConfiguredPortPaths()) {
@@ -1730,6 +1802,141 @@ class GatewayRuntime {
     if (!issued && !busy) {
       this.scheduleSouthboundPolling(this.config.southboundPollingIntervalMs);
     }
+  }
+
+  private tickCompactBroadcastPolling(): void {
+    for (const portPath of this.getConfiguredPortPaths()) {
+      if (this.pendingCommandWindows.has(portPath) || this.portCommandChains.has(portPath)) {
+        continue;
+      }
+
+      const serialPort = this.serialPorts.get(portPath);
+      if (!serialPort?.isOpen) {
+        continue;
+      }
+
+      this.enqueueCompactBroadcastPoll(portPath);
+    }
+
+    this.scheduleSouthboundPolling(this.config.southboundPollingIntervalMs);
+  }
+
+  private enqueueCompactBroadcastPoll(portPath: string): void {
+    const portState = this.ensurePortRuntimeState(portPath);
+    const previousChain = this.portCommandChains.get(portPath) ?? Promise.resolve();
+    portState.queuedCommands += 1;
+
+    const nextChain = previousChain
+      .catch(() => undefined)
+      .then(async () => this.forwardCompactBroadcastPoll(portPath))
+      .finally(() => {
+        portState.queuedCommands = Math.max(0, portState.queuedCommands - 1);
+        if (this.portCommandChains.get(portPath) === nextChain) {
+          this.portCommandChains.delete(portPath);
+        }
+      });
+
+    this.portCommandChains.set(portPath, nextChain);
+    void nextChain;
+  }
+
+  private async forwardCompactBroadcastPoll(portPath: string): Promise<void> {
+    const serialPort = this.serialPorts.get(portPath);
+    if (!serialPort?.isOpen) {
+      return;
+    }
+
+    const expectedDeviceIds = new Set(
+      Array.from(this.nodeState.values())
+        .filter((node) => node.enabled && this.nodePort(node) === portPath)
+        .map((node) => node.deviceId)
+    );
+    if (expectedDeviceIds.size === 0) {
+      return;
+    }
+
+    let compactPoll = buildCompactBroadcastPollCommand(
+      randomUUID().replace(/-/gu, "").slice(0, 8)
+    );
+    let windowKey = this.compactBroadcastPollWindowKey(portPath, compactPoll.commandTag);
+    while (this.activeCompactBroadcastPollWindows.has(windowKey)) {
+      compactPoll = buildCompactBroadcastPollCommand(randomUUID().replace(/-/gu, "").slice(0, 8));
+      windowKey = this.compactBroadcastPollWindowKey(portPath, compactPoll.commandTag);
+    }
+
+    const portState = this.ensurePortRuntimeState(portPath);
+    const startedTs = isoNow();
+    const startedAtMs = Date.now();
+    const timer = setTimeout(() => {
+      this.closeCompactBroadcastPollWindow(windowKey, "timeout");
+    }, this.config.southboundPollingSessionTimeoutMs);
+    const window: ActiveCompactBroadcastPollWindow = {
+      command: compactPoll.command,
+      commandTag: compactPoll.commandTag,
+      portPath,
+      expectedDeviceIds,
+      receivedDeviceIds: new Set<string>(),
+      startedTs,
+      startedAtMs,
+      timer
+    };
+    this.activeCompactBroadcastPollWindows.set(windowKey, window);
+    portState.activePollCommandId = compactPoll.command;
+    portState.activePollDeviceId = "broadcast";
+    portState.sendOwnerState = "writing-command";
+
+    const serialFrame = encodeFieldLinkFrame({
+      frameType: "command",
+      sequence: this.nextFieldLinkTxSequence(),
+      payloadText: compactPoll.command
+    });
+
+    try {
+      await this.writeSerialFrame(
+        serialPort,
+        serialFrame,
+        this.config.southboundPollingCommandChunkBytes,
+        this.config.southboundPollingCommandChunkDelayMs
+      );
+    } catch (err) {
+      this.stats.commandWriteFailures += 1;
+      this.stats.lastError = err instanceof Error ? err.message : String(err);
+      portState.lastError = this.stats.lastError;
+      this.closeCompactBroadcastPollWindow(windowKey, "failed");
+      this.logger.error(
+        { err, serialDevice: portPath, commandTag: compactPoll.commandTag },
+        "field gateway compact broadcast poll write failed"
+      );
+      return;
+    }
+
+    this.stats.commandsForwarded += 1;
+    this.stats.internalPollCommandsIssued += 1;
+    this.stats.compactBroadcastPollsIssued += 1;
+    this.stats.lastCommandForwardedTs = startedTs;
+    this.stats.lastInternalPollCommandTs = startedTs;
+    portState.commandWrites += 1;
+    portState.pollCommandsIssued += 1;
+    portState.lastCommandTs = startedTs;
+    portState.lastPollCommandTs = startedTs;
+    portState.sendOwnerState = "waiting-for-poll-telemetry";
+    for (const deviceId of expectedDeviceIds) {
+      const nodeState = this.nodeState.get(deviceId);
+      if (!nodeState) continue;
+      nodeState.commandForwards += 1;
+      nodeState.lastCommandTs = startedTs;
+    }
+
+    this.logger.debug(
+      {
+        serialDevice: portPath,
+        command: compactPoll.command,
+        commandTag: compactPoll.commandTag,
+        expectedNodes: expectedDeviceIds.size,
+        frameBytes: serialFrame.length
+      },
+      "field gateway compact broadcast poll forwarded to serial"
+    );
   }
 
   private scheduleSouthboundPolling(delayMs: number): void {
@@ -2018,7 +2225,10 @@ class GatewayRuntime {
         : this.config.commandPrewriteMaxWaitMs;
     const portState = this.ensurePortRuntimeState(portPath);
 
-    while (this.activePollTelemetryWindows.has(portPath)) {
+    while (
+      this.activePollTelemetryWindows.has(portPath) ||
+      this.hasActiveCompactBroadcastPollWindowForPort(portPath)
+    ) {
       await delay(100);
     }
 
@@ -2182,6 +2392,103 @@ class GatewayRuntime {
     portState.lastPollSessionCloseTs = isoNow();
     portState.lastPollSessionCloseReason = reason;
     if (!this.pendingCommandWindows.has(portPath)) {
+      portState.sendOwnerState = "idle";
+    }
+  }
+
+  private compactBroadcastPollWindowKey(portPath: string, commandTag: number): string {
+    return `${portPath}:${String(commandTag >>> 0)}`;
+  }
+
+  private hasActiveCompactBroadcastPollWindowForPort(portPath: string): boolean {
+    return Array.from(this.activeCompactBroadcastPollWindows.values()).some(
+      (window) => window.portPath === portPath
+    );
+  }
+
+  private matchCompactBroadcastTelemetry(
+    portPath: string,
+    commandTag: number,
+    deviceId: string,
+    receivedTs: string
+  ): void {
+    const windowKey = this.compactBroadcastPollWindowKey(portPath, commandTag);
+    const window = this.activeCompactBroadcastPollWindows.get(windowKey);
+    if (!window?.expectedDeviceIds.has(deviceId)) {
+      this.stats.compactBroadcastUnmatchedTelemetry += 1;
+      return;
+    }
+
+    if (window.receivedDeviceIds.has(deviceId)) {
+      this.stats.compactBroadcastDuplicateTelemetry += 1;
+      return;
+    }
+
+    window.receivedDeviceIds.add(deviceId);
+    const roundTripMs = Math.max(0, Date.now() - window.startedAtMs);
+    const portState = this.ensurePortRuntimeState(portPath);
+    const previousMatches = portState.pollTelemetryMatches;
+    const previousAverage = portState.averagePollRoundTripMs ?? 0;
+    portState.lastPollRoundTripMs = roundTripMs;
+    portState.averagePollRoundTripMs = Math.round(
+      (previousAverage * previousMatches + roundTripMs) / (previousMatches + 1)
+    );
+    portState.maxPollRoundTripMs = Math.max(portState.maxPollRoundTripMs, roundTripMs);
+    portState.pollTelemetryMatches += 1;
+    portState.lastPollTelemetryTs = receivedTs;
+    this.stats.internalPollTelemetryMatches += 1;
+    this.stats.compactBroadcastTelemetryMatches += 1;
+    this.stats.lastInternalPollTelemetryTs = receivedTs;
+
+    if (window.receivedDeviceIds.size === window.expectedDeviceIds.size) {
+      this.closeCompactBroadcastPollWindow(windowKey, "telemetry");
+    }
+  }
+
+  private closeCompactBroadcastPollWindow(
+    windowKey: string,
+    reason: "telemetry" | "failed" | "timeout" | "shutdown"
+  ): void {
+    const window = this.activeCompactBroadcastPollWindows.get(windowKey);
+    if (!window) {
+      return;
+    }
+
+    clearTimeout(window.timer);
+    this.activeCompactBroadcastPollWindows.delete(windowKey);
+    const portState = this.ensurePortRuntimeState(window.portPath);
+    portState.lastPollSessionCloseTs = isoNow();
+    portState.lastPollSessionCloseReason = reason;
+
+    if (reason === "timeout") {
+      const missingDeviceIds = Array.from(window.expectedDeviceIds).filter(
+        (deviceId) => !window.receivedDeviceIds.has(deviceId)
+      );
+      portState.pollSessionTimeouts += 1;
+      this.stats.internalPollSessionTimeouts += 1;
+      this.stats.compactBroadcastPollTimeouts += 1;
+      this.logger.warn(
+        {
+          serialDevice: window.portPath,
+          command: window.command,
+          commandTag: window.commandTag,
+          receivedNodes: window.receivedDeviceIds.size,
+          expectedNodes: window.expectedDeviceIds.size,
+          missingDeviceIds,
+          pollSessionTimeoutMs: this.config.southboundPollingSessionTimeoutMs
+        },
+        "field gateway compact broadcast telemetry window timed out"
+      );
+    } else if (reason === "telemetry") {
+      this.stats.compactBroadcastPollsCompleted += 1;
+    }
+
+    const remainingWindow = Array.from(this.activeCompactBroadcastPollWindows.values()).find(
+      (candidate) => candidate.portPath === window.portPath
+    );
+    portState.activePollCommandId = remainingWindow?.command ?? null;
+    portState.activePollDeviceId = remainingWindow ? "broadcast" : null;
+    if (!remainingWindow && !this.pendingCommandWindows.has(window.portPath)) {
       portState.sendOwnerState = "idle";
     }
   }
@@ -2511,8 +2818,12 @@ class GatewayRuntime {
       southbound: {
         routeMode: this.config.southboundNodes.length === 0 ? "legacy-single-port" : "configured-node-routing",
         pollingEnabled: this.config.southboundPollingEnabled,
+        pollingMode: this.config.southboundPollingMode,
         pollingCommandType: this.config.southboundPollingCommandType,
-        pollingCompletionSignal: "matching-telemetry",
+        pollingCompletionSignal:
+          this.config.southboundPollingMode === "compact-broadcast-v1"
+            ? "three-command-tag-matched-telemetry-frames"
+            : "matching-command-id-telemetry",
         pollingIntervalMs: this.config.southboundPollingIntervalMs,
         pollingSessionTimeoutMs: this.config.southboundPollingSessionTimeoutMs,
         pollingCommandChunkBytes: this.config.southboundPollingCommandChunkBytes,

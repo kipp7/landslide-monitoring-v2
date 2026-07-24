@@ -4,6 +4,7 @@ export type FieldLinkFrameType = "telemetry" | "command" | "ack" | "control";
 
 export type FieldLinkInboundPayload = {
   rawPayload: string;
+  rawPayloadBytes: Buffer;
   frameType: FieldLinkFrameType | null;
   sequence: number | null;
   integrity: "not_applicable" | "crc32_ok";
@@ -120,12 +121,13 @@ function cobsDecode(input: Buffer): Buffer {
   return Buffer.from(out);
 }
 
-export function encodeFieldLinkFrame(params: {
-  frameType: FieldLinkFrameType;
-  sequence: number;
-  payloadText: string;
-}): Buffer {
-  const payload = Buffer.from(params.payloadText, "utf8");
+export function encodeFieldLinkFrame(
+  params: {
+    frameType: FieldLinkFrameType;
+    sequence: number;
+  } & ({ payloadText: string; payloadBytes?: never } | { payloadBytes: Buffer; payloadText?: never })
+): Buffer {
+  const payload = "payloadBytes" in params ? Buffer.from(params.payloadBytes) : Buffer.from(params.payloadText, "utf8");
   const header = Buffer.alloc(12);
   header.writeUInt8(FIELD_LINK_VERSION, 0);
   header.writeUInt8(FRAME_TYPE_TO_CODE[params.frameType], 1);
@@ -179,8 +181,10 @@ function decodeFieldLinkFrame(frameBytes: Buffer): FieldLinkInboundPayload {
     );
   }
 
+  const rawPayloadBytes = Buffer.from(decoded.subarray(payloadStart, crcStart));
   return {
-    rawPayload: decoded.subarray(payloadStart, crcStart).toString("utf8"),
+    rawPayload: rawPayloadBytes.toString("utf8"),
+    rawPayloadBytes,
     frameType,
     sequence,
     integrity: "crc32_ok",

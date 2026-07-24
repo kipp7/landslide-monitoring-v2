@@ -26,11 +26,12 @@ Common variables:
 - `SPOOL_ROOT_DIR` - local spool root.
 - `HEALTH_FILE_PATH` - runtime health JSON output path.
 - `SOUTHBOUND_POLLING_ENABLED` - enables gateway-managed polling on shared links.
-- `SOUTHBOUND_POLLING_INTERVAL_MS` - poll start cadence; production uses `1000` for one node per second.
+- `SOUTHBOUND_POLLING_MODE` - `round-robin-json` for the rollback firmware or `compact-broadcast-v1` for one A/B/C collection batch per second.
+- `SOUTHBOUND_POLLING_INTERVAL_MS` - poll start cadence; compact production uses `1000` for one broadcast batch per second.
 - `SOUTHBOUND_POLLING_SESSION_TIMEOUT_MS` - command-to-telemetry timeout; a missing node cannot hold the shared link indefinitely.
 - `SOUTHBOUND_POLLING_COMMAND_CHUNK_BYTES` / `SOUTHBOUND_POLLING_COMMAND_CHUNK_DELAY_MS` - poll-only downlink pacing. Normal control commands keep the conservative `COMMAND_SERIAL_*` pacing.
 
-Internal `poll_latest_telemetry` commands are intentionally ACK-less. The matching telemetry frame closes the poll session, while externally issued control commands continue to use command ACKs and the full quiet-window guard. With three healthy nodes and a `1000 ms` cadence, each node reports about once every three seconds.
+In `compact-broadcast-v1` mode the gateway sends one 28-byte field-link command per second. A/B/C receive that same command and return 64-byte frames in fixed `0/340/680 ms` slots. The gateway expands each binary response back into the unchanged telemetry JSON contract before MQTT publishing. Externally issued control commands remain JSON, keep their command ACKs, and temporarily pause broadcast polling while their quiet window is active.
 
 ## Local Development
 
