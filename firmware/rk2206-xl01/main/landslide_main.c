@@ -73,6 +73,7 @@
 #include "../app/shared_port_scheduler.h"
 #include "../app/telemetry_envelope_builder.h"
 #include "../app/compact_telemetry_builder.h"
+#include "../app/compact_poll_command.h"
 
 // Keep the local command/runtime path decoupled from the legacy monolithic
 // header, which defines a conflicting SensorData shape for another sample.
@@ -119,7 +120,7 @@ static char g_last_trusted_time_ts[40] = "";
 static char g_last_trusted_time_source[32] = "";
 static volatile uint32_t g_last_platform_command_tick = 0;
 static volatile int g_field_link_recovery_requested = 0;
-#define FW_RX_DIAG_MARKER "fw-compact-single-packet-v1-20260723"
+#define FW_RX_DIAG_MARKER "fw-compact-broadcast-poll-v2-20260724"
 bool g_cloud_motor_enabled = false;
 int g_cloud_motor_speed = 0;
 MotorDirection g_cloud_motor_direction = MOTOR_DIRECTION_STOP;
@@ -647,12 +648,45 @@ static int IsRuntimeIntervalValid(int seconds)
     return seconds >= COMMAND_INTERVAL_MIN_SECONDS && seconds <= COMMAND_INTERVAL_MAX_SECONDS;
 }
 
+static void HandleCompactBroadcastPoll(const char *command)
+{
+    const DeviceIdentity *identity = DeviceIdentity_Get();
+    unsigned int delay_ms;
+
+    if (identity == NULL || identity->legacy_node_label == NULL ||
+        !CompactPollCommand_IsValid(command, (int)strlen(command))) {
+        return;
+    }
+    if (DOWNLINK_ONLY_MODE || !g_platform_uplink_enabled) {
+        return;
+    }
+
+    strncpy(g_last_platform_command_type, "poll_latest_telemetry", sizeof(g_last_platform_command_type) - 1);
+    g_last_platform_command_type[sizeof(g_last_platform_command_type) - 1] = '\0';
+    strncpy(g_last_platform_command_id, command, sizeof(g_last_platform_command_id) - 1);
+    g_last_platform_command_id[sizeof(g_last_platform_command_id) - 1] = '\0';
+    g_last_platform_command_uptime_s = SensorData_GetUptimeSnapshot();
+    g_last_platform_command_tick = (uint32_t)LOS_TickCountGet();
+
+    delay_ms = CompactPollCommand_NodeDelayMs(identity->legacy_node_label);
+    if (delay_ms > 0U) {
+        LOS_Msleep(delay_ms);
+    }
+    g_platform_poll_latest_requested = 1;
+}
+
 static void HandlePlatformCommand(const char *commandJson)
 {
     DeviceCommandMessage cmd;
     const DeviceIdentity *identity;
     char resultJson[256];
     int sendRet;
+
+    if (commandJson != NULL &&
+        CompactPollCommand_IsValid(commandJson, (int)strlen(commandJson))) {
+        HandleCompactBroadcastPoll(commandJson);
+        return;
+    }
 
     if (ParseDeviceCommandV1(commandJson, &cmd) != 0) {
         printf("[CMD PARSE FAIL] %s\n", commandJson != NULL ? commandJson : "(null)");

@@ -13,6 +13,7 @@
 #include "iot_errno.h"
 #include "lz_hardware.h"
 #include "../../config/app_config.h"
+#include "../../app/compact_poll_command.h"
 #include "../../utils/fifo.h"
 #include "field_link_frame.h"
 
@@ -517,7 +518,8 @@ static void HandleFieldLinkMessage(const FieldLinkFrameMessage *message, Statist
 #endif
 
     if (message->type == FIELD_LINK_FRAME_TYPE_COMMAND) {
-        if (IsPlatformCommandPayload(message->payload)) {
+        if (IsPlatformCommandPayload(message->payload) ||
+            CompactPollCommand_IsValid(message->payload, message->payload_len)) {
             if (EnqueuePlatformCommandPayload(message->payload, message->payload_len, stats) > 0) {
 #if PLATFORM_COMMAND_RX_LOG_MODE
                 if (stats != NULL) {

@@ -10,6 +10,7 @@ static_library("xl01_landslide_monitor") {
         "app/device_command_parser.c",
         "app/telemetry_envelope_builder.c",
         "app/compact_telemetry_builder.c",
+        "app/compact_poll_command.c",
         "app/command_ack_builder.c",
         "app/shared_port_scheduler.c",
         

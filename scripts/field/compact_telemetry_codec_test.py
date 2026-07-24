@@ -43,6 +43,11 @@ def main() -> None:
     assert telemetry["metrics"]["gps_latitude"] == 22.681538
     assert telemetry["metrics"]["gps_longitude"] == 110.19536
     assert telemetry["metrics"]["warning_flag"] is True
+    poll_command = b"P112345678"
+    poll_frame = encode_frame(2, 8, poll_command)
+    assert len(poll_command) == 10
+    assert len(poll_frame) == 28
+    assert command_tag(poll_command.decode("ascii")) == 0x9664C12A
     print("compact telemetry C/Python golden vector passed")
 
 

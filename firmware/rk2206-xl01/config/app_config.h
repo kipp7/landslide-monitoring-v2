@@ -91,7 +91,7 @@
 #define SLEEP_AFTER_SEND    0           // Sleep after each send (low power)
 
 // Version marker
-#define FIRMWARE_SAMPLE_VERSION "v1.1-um220-rs485-compact-v1"
+#define FIRMWARE_SAMPLE_VERSION "v1.1-um220-rs485-compact-v2"
 #define FIELD_BUILD_PROFILE_PRODUCTION 1
 
 // Bring-up diagnostic mode:
