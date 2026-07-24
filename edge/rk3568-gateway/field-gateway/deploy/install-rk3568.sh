@@ -25,9 +25,14 @@ COMMAND_ACK_QUIET_WINDOW_MS="${COMMAND_ACK_QUIET_WINDOW_MS:-10000}"
 COMMAND_PREWRITE_QUIET_MS="${COMMAND_PREWRITE_QUIET_MS:-400}"
 COMMAND_PREWRITE_MAX_WAIT_MS="${COMMAND_PREWRITE_MAX_WAIT_MS:-4000}"
 SOUTHBOUND_POLLING_ENABLED="${SOUTHBOUND_POLLING_ENABLED:-true}"
+SOUTHBOUND_POLLING_MODE="${SOUTHBOUND_POLLING_MODE:-round-robin-json}"
 SOUTHBOUND_POLLING_COMMAND_TYPE="${SOUTHBOUND_POLLING_COMMAND_TYPE:-poll_latest_telemetry}"
-SOUTHBOUND_POLLING_INTERVAL_MS="${SOUTHBOUND_POLLING_INTERVAL_MS:-500}"
-SOUTHBOUND_POLLING_SESSION_TIMEOUT_MS="${SOUTHBOUND_POLLING_SESSION_TIMEOUT_MS:-6000}"
+SOUTHBOUND_POLLING_INTERVAL_MS="${SOUTHBOUND_POLLING_INTERVAL_MS:-1000}"
+SOUTHBOUND_POLLING_SESSION_TIMEOUT_MS="${SOUTHBOUND_POLLING_SESSION_TIMEOUT_MS:-1500}"
+SOUTHBOUND_POLLING_PREWRITE_QUIET_MS="${SOUTHBOUND_POLLING_PREWRITE_QUIET_MS:-100}"
+SOUTHBOUND_POLLING_PREWRITE_MAX_WAIT_MS="${SOUTHBOUND_POLLING_PREWRITE_MAX_WAIT_MS:-250}"
+SOUTHBOUND_POLLING_COMMAND_CHUNK_BYTES="${SOUTHBOUND_POLLING_COMMAND_CHUNK_BYTES:-64}"
+SOUTHBOUND_POLLING_COMMAND_CHUNK_DELAY_MS="${SOUTHBOUND_POLLING_COMMAND_CHUNK_DELAY_MS:-10}"
 SOUTHBOUND_POLLING_SUPPRESS_ACK_PUBLISH="${SOUTHBOUND_POLLING_SUPPRESS_ACK_PUBLISH:-true}"
 BUILD_FIRST=1
 ENABLE_NOW=1
@@ -59,9 +64,14 @@ Options:
   --command-prewrite-quiet-ms <ms>       Required quiet time before command write
   --command-prewrite-max-wait-ms <ms>    Max wait for quiet time before write
   --southbound-polling-enabled <bool>    Enable RK3568 internal polling
+  --southbound-polling-mode <mode>       round-robin-json or compact-broadcast-v1
   --southbound-polling-command-type <value> Internal poll command type
   --southbound-polling-interval-ms <ms>  Internal polling scheduler tick
-  --southbound-polling-session-timeout-ms <ms> Poll ACK-to-telemetry session timeout
+  --southbound-polling-session-timeout-ms <ms> Poll command-to-telemetry session timeout
+  --southbound-polling-prewrite-quiet-ms <ms> Poll-only quiet time before serial write
+  --southbound-polling-prewrite-max-wait-ms <ms> Poll-only max wait for serial quiet
+  --southbound-polling-command-chunk-bytes <bytes> Poll-only serial command chunk size
+  --southbound-polling-command-chunk-delay-ms <ms> Delay between poll command chunks
   --southbound-polling-suppress-ack-publish <bool> Suppress internal poll ACK northbound publish
   --skip-build                Do not run npm install/build
   --no-enable                 Install only, do not enable/start service
@@ -151,6 +161,10 @@ while [[ $# -gt 0 ]]; do
       SOUTHBOUND_POLLING_ENABLED="$2"
       shift 2
       ;;
+    --southbound-polling-mode)
+      SOUTHBOUND_POLLING_MODE="$2"
+      shift 2
+      ;;
     --southbound-polling-command-type)
       SOUTHBOUND_POLLING_COMMAND_TYPE="$2"
       shift 2
@@ -161,6 +175,22 @@ while [[ $# -gt 0 ]]; do
       ;;
     --southbound-polling-session-timeout-ms)
       SOUTHBOUND_POLLING_SESSION_TIMEOUT_MS="$2"
+      shift 2
+      ;;
+    --southbound-polling-prewrite-quiet-ms)
+      SOUTHBOUND_POLLING_PREWRITE_QUIET_MS="$2"
+      shift 2
+      ;;
+    --southbound-polling-prewrite-max-wait-ms)
+      SOUTHBOUND_POLLING_PREWRITE_MAX_WAIT_MS="$2"
+      shift 2
+      ;;
+    --southbound-polling-command-chunk-bytes)
+      SOUTHBOUND_POLLING_COMMAND_CHUNK_BYTES="$2"
+      shift 2
+      ;;
+    --southbound-polling-command-chunk-delay-ms)
+      SOUTHBOUND_POLLING_COMMAND_CHUNK_DELAY_MS="$2"
       shift 2
       ;;
     --southbound-polling-suppress-ack-publish)
@@ -261,9 +291,14 @@ COMMAND_ACK_QUIET_WINDOW_MS=${COMMAND_ACK_QUIET_WINDOW_MS}
 COMMAND_PREWRITE_QUIET_MS=${COMMAND_PREWRITE_QUIET_MS}
 COMMAND_PREWRITE_MAX_WAIT_MS=${COMMAND_PREWRITE_MAX_WAIT_MS}
 SOUTHBOUND_POLLING_ENABLED=${SOUTHBOUND_POLLING_ENABLED}
+SOUTHBOUND_POLLING_MODE=${SOUTHBOUND_POLLING_MODE}
 SOUTHBOUND_POLLING_COMMAND_TYPE=${SOUTHBOUND_POLLING_COMMAND_TYPE}
 SOUTHBOUND_POLLING_INTERVAL_MS=${SOUTHBOUND_POLLING_INTERVAL_MS}
 SOUTHBOUND_POLLING_SESSION_TIMEOUT_MS=${SOUTHBOUND_POLLING_SESSION_TIMEOUT_MS}
+SOUTHBOUND_POLLING_PREWRITE_QUIET_MS=${SOUTHBOUND_POLLING_PREWRITE_QUIET_MS}
+SOUTHBOUND_POLLING_PREWRITE_MAX_WAIT_MS=${SOUTHBOUND_POLLING_PREWRITE_MAX_WAIT_MS}
+SOUTHBOUND_POLLING_COMMAND_CHUNK_BYTES=${SOUTHBOUND_POLLING_COMMAND_CHUNK_BYTES}
+SOUTHBOUND_POLLING_COMMAND_CHUNK_DELAY_MS=${SOUTHBOUND_POLLING_COMMAND_CHUNK_DELAY_MS}
 SOUTHBOUND_POLLING_SUPPRESS_ACK_PUBLISH=${SOUTHBOUND_POLLING_SUPPRESS_ACK_PUBLISH}
 REPLAY_INTERVAL_MS=5000
 HEALTH_EMIT_INTERVAL_MS=5000

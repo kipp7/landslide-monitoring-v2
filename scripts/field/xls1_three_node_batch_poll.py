@@ -273,6 +273,8 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
     seq_by_node: dict[str, list[int]] = defaultdict(list)
     errors: Counter[str] = Counter()
     error_samples: list[dict[str, Any]] = []
+    unmatched_samples: list[dict[str, Any]] = []
+    duplicate_samples: list[dict[str, Any]] = []
     valid_frame_types: Counter[str] = Counter()
     unmatched_telemetry = 0
     duplicate_telemetry = 0
@@ -281,6 +283,10 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
     bytes_read = 0
     bytes_written = 0
     receive_buffer = bytearray()
+    settle_elapsed_ms = 0.0
+    warmup_elapsed_ms = 0.0
+    warmup_batches_sent = 0
+    warmup_bytes_written = 0
 
     def receive_once(fd: int, timeout: float) -> None:
         nonlocal bytes_read, unmatched_telemetry, duplicate_telemetry
@@ -359,9 +365,30 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
                 send_record = None
             if not send_record or send_record["node"] != label:
                 unmatched_telemetry += 1
+                if len(unmatched_samples) < 50:
+                    unmatched_samples.append(
+                        {
+                            "at": utc_now(),
+                            "elapsedMs": round((received_mono - started_mono) * 1000.0, 1),
+                            "node": label,
+                            "sequence": seq,
+                            "commandTag": last_command_tag,
+                        }
+                    )
                 continue
             if command_id in received_command_ids:
                 duplicate_telemetry += 1
+                if len(duplicate_samples) < 50:
+                    duplicate_samples.append(
+                        {
+                            "at": utc_now(),
+                            "elapsedMs": round((received_mono - started_mono) * 1000.0, 1),
+                            "node": label,
+                            "sequence": seq,
+                            "commandTag": last_command_tag,
+                            "batch": send_record["batch"],
+                        }
+                    )
                 continue
             received_command_ids.add(command_id)
             latency_ms = (received_mono - float(send_record["sentMono"])) * 1000.0
@@ -374,15 +401,66 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
     fd = os.open(args.serial_device, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
     try:
         configure_serial(fd, args.baud)
-        settle_deadline = time.monotonic() + args.settle_ms / 1000.0
+        settle_started = time.monotonic()
+        settle_deadline = settle_started + args.settle_ms / 1000.0
+        settle_quiet_since = settle_started
         while time.monotonic() < settle_deadline:
             readable, _, _ = select.select([fd], [], [], 0.1)
             if readable:
                 try:
-                    os.read(fd, 4096)
+                    chunk = os.read(fd, 4096)
+                    if chunk:
+                        settle_quiet_since = time.monotonic()
                 except BlockingIOError:
                     pass
+            if args.settle_quiet_ms > 0 and (
+                time.monotonic() - settle_quiet_since >= args.settle_quiet_ms / 1000.0
+            ):
+                break
+        settle_elapsed_ms = round((time.monotonic() - settle_started) * 1000.0, 1)
         termios.tcflush(fd, termios.TCIOFLUSH)
+
+        if args.warmup_seconds > 0:
+            if not args.broadcast_poll:
+                raise ValueError("--warmup-seconds currently requires --broadcast-poll")
+            warmup_started = time.monotonic()
+            warmup_send_deadline = warmup_started + args.warmup_seconds
+            next_warmup_batch_at = warmup_started
+            while True:
+                now = time.monotonic()
+                if now >= next_warmup_batch_at and next_warmup_batch_at < warmup_send_deadline:
+                    poll_command = f"P1{uuid.uuid4().hex[:8].upper()}"
+                    frame = encode_frame(FIELD_LINK_TYPE_COMMAND, serial_sequence, poll_command.encode("ascii"))
+                    serial_sequence = (serial_sequence + 1) & 0xFFFFFFFF
+                    write_chunked(fd, frame, args.command_chunk_bytes, args.command_chunk_delay_ms)
+                    warmup_batches_sent += 1
+                    warmup_bytes_written += len(frame)
+                    next_warmup_batch_at = (
+                        warmup_started + warmup_batches_sent * args.batch_interval_ms / 1000.0
+                    )
+                    now = time.monotonic()
+
+                if now >= warmup_send_deadline:
+                    break
+                readable, _, _ = select.select(
+                    [fd], [], [], max(0.0, min(0.1, next_warmup_batch_at - now))
+                )
+                if readable:
+                    try:
+                        os.read(fd, 4096)
+                    except BlockingIOError:
+                        pass
+
+            warmup_drain_deadline = time.monotonic() + 1.2
+            while time.monotonic() < warmup_drain_deadline:
+                readable, _, _ = select.select([fd], [], [], 0.1)
+                if readable:
+                    try:
+                        os.read(fd, 4096)
+                    except BlockingIOError:
+                        pass
+            warmup_elapsed_ms = round((time.monotonic() - warmup_started) * 1000.0, 1)
+            termios.tcflush(fd, termios.TCIOFLUSH)
 
         first_batch_at = time.monotonic() + 0.25
         send_deadline = first_batch_at + args.duration_seconds
@@ -526,6 +604,12 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
             "serialDevice": args.serial_device,
             "baud": args.baud,
             "durationSeconds": args.duration_seconds,
+            "settleElapsedMs": settle_elapsed_ms,
+            "settleQuietMs": args.settle_quiet_ms,
+            "warmupSeconds": args.warmup_seconds,
+            "warmupElapsedMs": warmup_elapsed_ms,
+            "warmupBatchesSent": warmup_batches_sent,
+            "warmupBytesWritten": warmup_bytes_written,
             "batchIntervalMs": args.batch_interval_ms,
             "interCommandGapMs": args.inter_command_gap_ms,
             "responseWaitMs": args.response_wait_ms,
@@ -553,6 +637,8 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
         "validFrameTypes": dict(valid_frame_types),
         "errors": dict(errors),
         "errorSamples": error_samples,
+        "unmatchedSamples": unmatched_samples,
+        "duplicateSamples": duplicate_samples,
     }
 
 
@@ -568,8 +654,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--command-chunk-bytes", type=int, default=64)
     parser.add_argument("--command-chunk-delay-ms", type=int, default=10)
     parser.add_argument("--settle-ms", type=int, default=2000)
+    parser.add_argument("--settle-quiet-ms", type=int, default=0)
+    parser.add_argument("--warmup-seconds", type=float, default=0.0)
     parser.add_argument("--drain-seconds", type=float, default=5.0)
     parser.add_argument("--service", default="lsmv2-field-gateway.service")
+    parser.add_argument("--runtime-mask-service", action="store_true")
     parser.add_argument("--report-path", default="")
     parser.add_argument("--required-match-rate", type=float, default=0.99)
     parser.add_argument("--max-p95-interval-ms", type=float, default=1500.0)
@@ -582,7 +671,12 @@ def main() -> int:
         f"/var/lib/lsmv2/experiments/xls1-three-node-batch-poll-{datetime.now().strftime('%Y%m%d-%H%M%S')}.json"
     )
     service_was_active = service_is_active(args.service)
-    recovery: dict[str, Any] = {"serviceWasActive": service_was_active, "serviceRestored": False}
+    service_was_masked = False
+    recovery: dict[str, Any] = {
+        "serviceWasActive": service_was_active,
+        "serviceRuntimeMasked": False,
+        "serviceRestored": False,
+    }
     report: dict[str, Any]
 
     def interrupt_handler(signum: int, _frame: Any) -> None:
@@ -593,7 +687,12 @@ def main() -> int:
 
     try:
         if service_was_active:
-            set_service_state(args.service, "stop")
+            if args.runtime_mask_service:
+                subprocess.run(["systemctl", "mask", "--runtime", "--now", args.service], check=True)
+                service_was_masked = True
+                recovery["serviceRuntimeMasked"] = True
+            else:
+                set_service_state(args.service, "stop")
         report = run_experiment(args)
     except Exception as exc:
         report = {
@@ -605,6 +704,12 @@ def main() -> int:
         }
     finally:
         if service_was_active:
+            restore_errors: list[str] = []
+            if service_was_masked:
+                try:
+                    subprocess.run(["systemctl", "unmask", "--runtime", args.service], check=True)
+                except Exception as exc:
+                    restore_errors.append(f"runtime unmask failed: {exc}")
             try:
                 set_service_state(args.service, "start")
                 deadline = time.monotonic() + 20.0
@@ -612,7 +717,9 @@ def main() -> int:
                     time.sleep(0.5)
                 recovery["serviceRestored"] = service_is_active(args.service)
             except Exception as exc:
-                recovery["serviceRestoreError"] = str(exc)
+                restore_errors.append(f"service start failed: {exc}")
+            if restore_errors:
+                recovery["serviceRestoreError"] = "; ".join(restore_errors)
 
     report["recovery"] = recovery
     report_path.parent.mkdir(parents=True, exist_ok=True)
