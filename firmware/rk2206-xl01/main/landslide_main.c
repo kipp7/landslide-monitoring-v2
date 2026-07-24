@@ -72,6 +72,7 @@
 #include "../app/device_identity.h"
 #include "../app/shared_port_scheduler.h"
 #include "../app/telemetry_envelope_builder.h"
+#include "../app/compact_telemetry_builder.h"
 
 // Keep the local command/runtime path decoupled from the legacy monolithic
 // header, which defines a conflicting SensorData shape for another sample.
@@ -118,7 +119,7 @@ static char g_last_trusted_time_ts[40] = "";
 static char g_last_trusted_time_source[32] = "";
 static volatile uint32_t g_last_platform_command_tick = 0;
 static volatile int g_field_link_recovery_requested = 0;
-#define FW_RX_DIAG_MARKER "fw-one-second-poll-v2-20260719"
+#define FW_RX_DIAG_MARKER "fw-compact-single-packet-v1-20260723"
 bool g_cloud_motor_enabled = false;
 int g_cloud_motor_speed = 0;
 MotorDirection g_cloud_motor_direction = MOTOR_DIRECTION_STOP;
@@ -1351,7 +1352,12 @@ static void* DataProcessTask(const char* arg)
 static void* DataUploadTask(const char* arg)
 {
     (void)arg;
+#if TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V1
+    unsigned char compact_payload[COMPACT_TELEMETRY_V1_PAYLOAD_BYTES];
+#else
     char json[FIELD_LINK_MAX_PAYLOAD_BYTES + 1];
+#endif
+    const char *telemetry_payload;
     SensorData telemetry_snapshot;
     int len;
     unsigned int elapsed_since_upload_ms = UPLOAD_INTERVAL_MS;
@@ -1382,6 +1388,8 @@ static void* DataUploadTask(const char* arg)
     printf("  Poll ACK: %s\n", POLL_LATEST_TELEMETRY_ACK_ENABLED ? "Enabled" : "Telemetry confirms poll");
     printf("  Poll Request Check: %d ms\n", POLL_REQUEST_CHECK_INTERVAL_MS);
     printf("  Edge Uplink Mode: %s\n", EDGE_UPLINK_MODE == EDGE_UPLINK_MODE_POLLED ? "Polled" : "Periodic");
+    printf("  Telemetry Payload: %s\n",
+           TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V1 ? "Compact v1 (46-byte payload)" : "JSON v1");
     printf("  Max Retries: %d\n", MAX_RETRY_COUNT);
     printf("  ACK Check: %s\n", ENABLE_ACK_CHECK ? "Enabled" : "Disabled");
     printf("  ACK Timeout: %d ms\n", ACK_TIMEOUT_MS);
@@ -1520,8 +1528,19 @@ static void* DataUploadTask(const char* arg)
         }
 
         SensorData_TakeUploadSnapshot(&telemetry_snapshot);
+#if TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V1
+        memset(compact_payload, 0, sizeof(compact_payload));
+        len = BuildCompactTelemetryV1(
+            &telemetry_snapshot,
+            DeviceIdentity_Get()->legacy_node_label,
+            g_last_platform_command_id,
+            upload_trigger,
+            compact_payload,
+            sizeof(compact_payload)
+        );
+        telemetry_payload = (const char *)compact_payload;
+#else
         memset(json, 0, sizeof(json));
-        
         len = BuildTelemetryEnvelopeV1(
             &telemetry_snapshot,
             g_last_platform_command_type,
@@ -1533,7 +1552,9 @@ static void* DataUploadTask(const char* arg)
             json,
             sizeof(json)
         );
-        if (len == TELEMETRY_ENVELOPE_ERR_EMPTY_METRICS) {
+        telemetry_payload = json;
+#endif
+        if (len == TELEMETRY_ENVELOPE_ERR_EMPTY_METRICS || len == COMPACT_TELEMETRY_ERR_EMPTY_METRICS) {
 #if PLATFORM_COMMAND_RX_LOG_MODE
             printf("[UPLOAD SKIP] no valid metrics for seq=%u trigger=%s\n",
                    telemetry_snapshot.seq,
@@ -1545,19 +1566,21 @@ static void* DataUploadTask(const char* arg)
             elapsed_since_upload_ms += 200;
             continue;
         }
-        if (len <= 0 || len >= (int)sizeof(json)) {
+        if (len <= 0) {
             printf("[ERROR] Failed to build telemetry envelope\n");
             LOS_Msleep(UPLOAD_INTERVAL_MS);
             continue;
         }
 
+#if TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_JSON_V1
         PrintTelemetryPreTxDiagnostic(json, len);
+#endif
 
 #if ENABLE_SHARED_PORT_SOURCE_CONTROL
         if (SharedPortScheduler_EnqueueNormalTelemetry(
                 DeviceIdentity_Get()->device_id,
                 telemetry_snapshot.seq,
-                json,
+                telemetry_payload,
                 len
             ) <= 0) {
             printf("[SRC CTRL QUEUE FAIL] seq=%u device=%s\n", telemetry_snapshot.seq, DeviceIdentity_Get()->device_id);
@@ -1569,7 +1592,7 @@ static void* DataUploadTask(const char* arg)
         }
 #else
         {
-            int ret = XL01_SendWithRetry(json, len, &g_stats);
+            int ret = XL01_SendWithRetry(telemetry_payload, len, &g_stats);
             g_stats.total_sent++;
             g_stats.total_bytes += len;
 

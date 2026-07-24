@@ -1,5 +1,13 @@
 # 更新日志
 
+## [2026-07-23] - XLS1 单无线包紧凑遥测实验
+
+- 新增固定 `46` 字节 compact telemetry v1；叠加 field-link 头、CRC32、COBS 和结束符后总长固定为 `64` 字节。
+- 继续保留 JSON 命令与命令 ACK，云端 MQTT/JSON 合同不变。
+- 覆盖温湿度、土壤温湿度、电导率、三轴倾角、GPS、雨量、有效位、告警位、序号、uptime 和命令标签。
+- 固件标记：`fw-compact-single-packet-v1-20260723`。
+- 本版本仅用于独立实验分支；`competition-suite-20260723` 仍是正式回滚基线。
+
 ## [2026-07-19] - 一秒轮询 v2
 
 - `poll_latest_telemetry` 改为由匹配的 `scheduler_poll` 遥测帧确认完成，不再单独发送 ACK 或进入 2.7 秒静默保护。

@@ -49,6 +49,11 @@
 // 再各走一套线制。当前主线已决定切到 framed transport，默认直接启用 cobs-crc-v1。
 #define FIELD_LINK_WIRE_MODE FIELD_LINK_WIRE_MODE_COBS_CRC_V1
 #define FIELD_LINK_MAX_PAYLOAD_BYTES 1024
+#define TELEMETRY_PAYLOAD_FORMAT_JSON_V1 0
+#define TELEMETRY_PAYLOAD_FORMAT_COMPACT_V1 1
+// Experimental single-radio-packet profile. A 46-byte payload becomes exactly
+// 64 bytes after the existing field-link header, CRC32, COBS and delimiter.
+#define TELEMETRY_PAYLOAD_FORMAT TELEMETRY_PAYLOAD_FORMAT_COMPACT_V1
 #define XL01_UART_TX_CHUNK_SIZE 32     // Long transparent payloads are more stable when split into small UART bursts
 #define XL01_UART_TX_CHUNK_DELAY_MS 15 // Fast-poll profile; 15ms keeps the XL01 path below the 1s slot
 #define PLATFORM_POST_ACK_QUIET_MS 1200 // Hold telemetry briefly after any command ACK to keep the shared XL01 stream separable
@@ -86,7 +91,7 @@
 #define SLEEP_AFTER_SEND    0           // Sleep after each send (low power)
 
 // Version marker
-#define FIRMWARE_SAMPLE_VERSION "v1.1-um220-rs485"
+#define FIRMWARE_SAMPLE_VERSION "v1.1-um220-rs485-compact-v1"
 #define FIELD_BUILD_PROFILE_PRODUCTION 1
 
 // Bring-up diagnostic mode:

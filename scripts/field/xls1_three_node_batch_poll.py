@@ -12,7 +12,6 @@ import select
 import signal
 import struct
 import subprocess
-import termios
 import time
 import uuid
 from collections import Counter, defaultdict
@@ -20,10 +19,23 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+try:
+    import termios
+except ImportError:
+    termios = None
+
 
 FIELD_LINK_VERSION = 1
 FIELD_LINK_TYPE_TELEMETRY = 1
 FIELD_LINK_TYPE_COMMAND = 2
+COMPACT_PAYLOAD_BYTES = 46
+COMPACT_VALID_TEMP = 1 << 0
+COMPACT_VALID_SOIL = 1 << 1
+COMPACT_VALID_SOIL_EC = 1 << 2
+COMPACT_VALID_TILT = 1 << 3
+COMPACT_VALID_GPS = 1 << 4
+COMPACT_VALID_RAIN = 1 << 5
+COMPACT_VALID_IMU = 1 << 6
 NODES = {
     "A": "00000000-0000-0000-0000-000000000001",
     "B": "00000000-0000-0000-0000-000000000002",
@@ -41,6 +53,14 @@ def percentile(values: list[float], fraction: float) -> float | None:
     ordered = sorted(values)
     index = min(len(ordered) - 1, max(0, math.ceil(len(ordered) * fraction) - 1))
     return round(ordered[index], 1)
+
+
+def command_tag(command_id: str) -> int:
+    value = 2166136261
+    for byte in command_id.encode("ascii"):
+        value ^= byte
+        value = (value * 16777619) & 0xFFFFFFFF
+    return value
 
 
 def cobs_encode(payload: bytes) -> bytes:
@@ -108,6 +128,8 @@ def decode_frame(encoded: bytes) -> tuple[int, int, bytes]:
 
 
 def configure_serial(fd: int, baud: int) -> None:
+    if termios is None:
+        raise RuntimeError("serial experiment requires Linux termios support")
     speed_name = f"B{baud}"
     if not hasattr(termios, speed_name):
         raise ValueError(f"unsupported serial baud rate: {baud}")
@@ -168,6 +190,71 @@ def build_command(node_id: str, command_id: str) -> bytes:
     return json.dumps(command, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
 
 
+def decode_compact_telemetry(payload: bytes) -> dict[str, Any]:
+    if len(payload) != COMPACT_PAYLOAD_BYTES:
+        raise ValueError(f"compact telemetry length mismatch: expected={COMPACT_PAYLOAD_BYTES} actual={len(payload)}")
+    if payload[:3] != b"LS\x01":
+        raise ValueError("compact telemetry magic or version mismatch")
+
+    compact_node = payload[3]
+    if compact_node not in (1, 2, 3):
+        raise ValueError(f"compact telemetry node out of range: {compact_node}")
+    label = chr(ord("A") + compact_node - 1)
+    valid = struct.unpack(">H", payload[6:8])[0]
+    sequence = struct.unpack(">I", payload[8:12])[0]
+    uptime = struct.unpack(">I", payload[12:16])[0]
+    last_command_tag = struct.unpack(">I", payload[16:20])[0]
+    metrics: dict[str, Any] = {}
+
+    if valid & COMPACT_VALID_TEMP:
+        metrics["temperature_c"] = struct.unpack(">h", payload[20:22])[0] / 100.0
+        metrics["humidity_pct"] = struct.unpack(">H", payload[22:24])[0] / 100.0
+    if valid & COMPACT_VALID_SOIL:
+        metrics["soil_temperature_c"] = struct.unpack(">h", payload[24:26])[0] / 100.0
+        metrics["soil_moisture_pct"] = struct.unpack(">H", payload[26:28])[0] / 100.0
+    if valid & COMPACT_VALID_SOIL_EC:
+        metrics["electrical_conductivity_us_cm"] = struct.unpack(">H", payload[28:30])[0]
+    if valid & COMPACT_VALID_TILT:
+        metrics["tilt_x_deg"] = struct.unpack(">h", payload[30:32])[0] / 100.0
+        metrics["tilt_y_deg"] = struct.unpack(">h", payload[32:34])[0] / 100.0
+        metrics["tilt_z_deg"] = struct.unpack(">h", payload[34:36])[0] / 100.0
+        metrics["warning_flag"] = bool(payload[4] & 1)
+    if valid & COMPACT_VALID_GPS:
+        metrics["gps_latitude"] = struct.unpack(">i", payload[36:40])[0] / 1_000_000.0
+        metrics["gps_longitude"] = struct.unpack(">i", payload[40:44])[0] / 1_000_000.0
+    if valid & COMPACT_VALID_RAIN:
+        metrics["rain_total_mm"] = struct.unpack(">H", payload[44:46])[0] / 10.0
+
+    trigger = {
+        1: "periodic",
+        2: "manual_collect",
+        3: "scheduler_poll",
+    }.get(payload[5], "unknown")
+    return {
+        "schema_version": 1,
+        "device_id": NODES[label],
+        "event_ts": None,
+        "seq": sequence,
+        "metrics": metrics,
+        "meta": {
+            "install_label": f"FIELD-NODE-{label}",
+            "legacy_node": label,
+            "uptime_s": uptime,
+            "last_command_tag": last_command_tag,
+            "upload_trigger": trigger,
+            "compact_payload_version": 1,
+            "legacy_valid_flags": {
+                "temp_ok": int(bool(valid & COMPACT_VALID_TEMP)),
+                "imu_ok": int(bool(valid & COMPACT_VALID_IMU)),
+                "gps_ok": int(bool(valid & COMPACT_VALID_GPS)),
+                "soil_ok": int(bool(valid & COMPACT_VALID_SOIL)),
+                "tilt_ok": int(bool(valid & COMPACT_VALID_TILT)),
+                "rain_ok": int(bool(valid & COMPACT_VALID_RAIN)),
+            },
+        },
+    }
+
+
 def node_label(device_id: str) -> str | None:
     for label, configured_id in NODES.items():
         if device_id == configured_id:
@@ -179,6 +266,7 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
     started_at = utc_now()
     started_mono = time.monotonic()
     send_records: dict[str, dict[str, Any]] = {}
+    send_records_by_tag: dict[int, dict[str, Any]] = {}
     received_command_ids: set[str] = set()
     arrivals_by_node: dict[str, list[float]] = defaultdict(list)
     latencies_by_node: dict[str, list[float]] = defaultdict(list)
@@ -221,17 +309,25 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
                 batch_number = batches_sent + 1
                 for position, (label, device_id) in enumerate(order):
                     command_id = str(uuid.uuid4())
+                    tag = command_tag(command_id)
+                    while tag in send_records_by_tag:
+                        command_id = str(uuid.uuid4())
+                        tag = command_tag(command_id)
                     command_payload = build_command(device_id, command_id)
                     frame = encode_frame(FIELD_LINK_TYPE_COMMAND, serial_sequence, command_payload)
                     serial_sequence = (serial_sequence + 1) & 0xFFFFFFFF
                     sent_mono = time.monotonic()
-                    send_records[command_id] = {
+                    send_record = {
+                        "commandId": command_id,
+                        "commandTag": tag,
                         "node": label,
                         "batch": batch_number,
                         "position": position,
                         "sentAt": utc_now(),
                         "sentMono": sent_mono,
                     }
+                    send_records[command_id] = send_record
+                    send_records_by_tag[tag] = send_record
                     write_chunked(fd, frame, args.command_chunk_bytes, args.command_chunk_delay_ms)
                     bytes_written += len(frame)
                     if args.inter_command_gap_ms > 0 and position < len(order) - 1:
@@ -289,7 +385,10 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
                 if frame_type != FIELD_LINK_TYPE_TELEMETRY:
                     continue
                 try:
-                    telemetry = json.loads(payload.decode("utf-8"))
+                    if len(payload) == COMPACT_PAYLOAD_BYTES and payload[:3] == b"LS\x01":
+                        telemetry = decode_compact_telemetry(payload)
+                    else:
+                        telemetry = json.loads(payload.decode("utf-8"))
                 except Exception as exc:
                     reason = f"telemetry json decode failed: {exc}"
                     errors[reason] += 1
@@ -308,7 +407,14 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
                     seq_by_node[label].append(seq)
                 meta = telemetry.get("meta")
                 command_id = meta.get("last_command_id") if isinstance(meta, dict) else None
-                send_record = send_records.get(command_id) if isinstance(command_id, str) else None
+                last_command_tag = meta.get("last_command_tag") if isinstance(meta, dict) else None
+                if isinstance(command_id, str):
+                    send_record = send_records.get(command_id)
+                elif isinstance(last_command_tag, int):
+                    send_record = send_records_by_tag.get(last_command_tag)
+                    command_id = send_record["commandId"] if send_record else None
+                else:
+                    send_record = None
                 if not send_record or send_record["node"] != label:
                     unmatched_telemetry += 1
                     continue
