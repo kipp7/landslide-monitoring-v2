@@ -18,7 +18,7 @@ The `01`-`07` SVG/PNG pairs are engineering reference visuals for the current fi
 
 ## AI reference renders
 
-`renderings/field-node-integrated-exterior-reference-4k.png` is an Image 2 product render generated from the external engineering drawings. It is for communication only and must not be used to infer hole coordinates, bracket lengths, connector locations, or manufacturing tolerances.
+`renderings/image2-set/` contains the accepted `IMAGE2-R0.1` 4K core set: integrated exterior, open enclosure, and mounting-stack exploded view. The earlier `renderings/field-node-integrated-exterior-reference-4k.png` is retained as the source exterior variant. All Image 2 renders are for communication only and must not be used to infer hole coordinates, bracket lengths, connector locations, or manufacturing tolerances.
 
 The attempted open-enclosure Image 2 render was rejected and is not included because it invented extra boards and changed the carrier-board/module geometry. Internal assembly review must use `03-internal-packing-study.*`, `04-internal-mounting-exploded-view.*`, and `05-power-and-signal-architecture.*`.
 

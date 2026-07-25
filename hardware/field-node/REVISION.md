@@ -27,6 +27,7 @@
 - Added one accepted Image 2 4K external communication render under `enclosure/assets/renderings/`; it is explicitly a non-manufacturing reference. The attempted internal render was rejected for invented modules and is not tracked.
 - Rejected the earlier generic AI exterior render as a design input because it invented enclosure and module geometry.
 - Made the unresolved battery envelope, enclosure hole table, CN3791 dimensions, panel frame holes, and BT-M87SF three-hole data visible in the drawings instead of guessing them.
+- Added `IMAGE2-R0.1`: three accepted 4K Image 2 engineering communication views for external integration, open-enclosure module zoning, and mechanical mounting-stack review. GNSS close-up is deferred because the image upstream was temporarily unavailable.
 
 ## Versioning Rules
 

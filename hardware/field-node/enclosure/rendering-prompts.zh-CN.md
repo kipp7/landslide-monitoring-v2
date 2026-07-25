@@ -23,6 +23,10 @@ Avoid: no extra pole separate from the assembly, no screen, no fan, no camera, n
 
 结果：`REJECTED / 不纳入设计资产`。Image 2 输出擅自增加模块并改变载板结构；保留提示词只用于复盘，箱内设计以确定性工程图为准。
 
+## IMAGE2-R0.1 通过条件
+
+`renderings/image2-set/` 的三张图以工程 SVG/PNG 为参考：外观图锁定共背架和侧翼天线；开箱图锁定一个载板、两路隔离 RS485、局部倾角钢板与电池/充电区域；爆炸图锁定 `265 x 185 mm` FR4 和仅 `120 x 85 mm` 的局部 304 小板。所有没有通过这些关系检查的输出都不得进入该目录。
+
 ```text
 Use case: product-mockup
 Asset type: engineering product visualization for enclosure assembly review
