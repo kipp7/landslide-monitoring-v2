@@ -123,6 +123,6 @@
 - 内安装板规格：[`enclosure/internal-mounting-plate-spec.zh-CN.md`](enclosure/internal-mounting-plate-spec.zh-CN.md)
 - 倾角机械接口：[`enclosure/tilt-sensor-mechanical-interface.zh-CN.md`](enclosure/tilt-sensor-mechanical-interface.zh-CN.md)
 - 太阳能供电规格：[`power/solar-power-system-spec.zh-CN.md`](power/solar-power-system-spec.zh-CN.md)
-- 样机采购清单：[`procurement/prototype-bom-r0.1.zh-CN.md`](procurement/prototype-bom-r0.1.zh-CN.md)
+- 当前样机采购清单：[`procurement/prototype-bom-r0.2.zh-CN.md`](procurement/prototype-bom-r0.2.zh-CN.md)；`BOM-R0.1` 保留为历史版本
 - 现有 R1.2 生产资料：[`../carrier-board/production/`](../carrier-board/production/)
 - 持续任务记录：[`../../memory/tasks/2026-07-23-hardware-productization.md`](../../memory/tasks/2026-07-23-hardware-productization.md)

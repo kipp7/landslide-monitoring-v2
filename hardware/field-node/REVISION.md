@@ -7,9 +7,9 @@
 | Integrated field node | `FIELD-NODE-HW-EVT0.2-DRAFT` | Engineering reference set | Not released |
 | Existing carrier board | `R1.2` | As-built reference | Gerber exists; source documents conflict |
 | Carrier-board improvement | `R1.3-DRAFT` | Requirements | Not routed or released |
-| Competition enclosure | `MECH-R0.1` | Concept and measured inputs | Hole coordinates pending |
+| Competition enclosure | `MECH-R0.2-DRAFT` | P1-P6 support selection and measured inputs | Coordinates, boss height, and hole depth pending |
 | Solar subsystem | `PWR-R0.1` | Candidate architecture | Charger and energy budget unqualified |
-| Prototype procurement | `BOM-R0.1` | Sample purchasing list | Not a production AVL |
+| Prototype procurement | `BOM-R0.2` | P1-P6, battery estimate, and GNSS sample items recorded | Not a production AVL |
 
 ## Change History
 
@@ -28,6 +28,8 @@
 - Rejected the earlier generic AI exterior render as a design input because it invented enclosure and module geometry.
 - Made the unresolved battery envelope, enclosure hole table, CN3791 dimensions, panel frame holes, and BT-M87SF three-hole data visible in the drawings instead of guessing them.
 - Added `IMAGE2-R0.1`: three accepted 4K Image 2 engineering communication views for external integration, open-enclosure module zoning, and mechanical mounting-stack review. GNSS close-up is deferred because the image upstream was temporarily unavailable.
+- Advanced the enclosure to `MECH-R0.2-DRAFT`: selected the exact P1-P6 low bosses from the physical box, added a photo locator and M3/FR4/boss section detail, and recorded the battery photo estimate as `70 x 55 x 40 mm` pending caliper confirmation.
+- Advanced the Image 2 set to `IMAGE2-R0.2`: retained the three original 4K outputs and added three reviewed engineering-annotation variants plus editable SVG overlays.
 
 ## Versioning Rules
 

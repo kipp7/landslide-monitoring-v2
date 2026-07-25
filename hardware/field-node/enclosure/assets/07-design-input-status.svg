@@ -13,8 +13,8 @@
  <text x="80" y="710" class="b">GNSS / 电源选型方向</text><text x="80" y="736" class="s">BT-760 + BT-M87SF；CN3791 3S 12.6 V 成品模块</text>
 
  <rect x="560" y="125" width="480" height="660" rx="6" class="tbd"/><text x="590" y="168" class="h">待实测 / 待卖家图纸</text>
- <text x="590" y="218" class="b">箱体内部</text><text x="590" y="244" class="s">6 个可用孔中心、孔径、孔深、是否贯通</text><text x="590" y="269" class="s">四侧弧槽/台阶真实轮廓与装入路径</text><line x1="590" y1="290" x2="1010" y2="290" class="row"/>
- <text x="590" y="325" class="b">电池包</text><text x="590" y="351" class="s">长 × 宽 × 高、重量、出线方向、BMS 与温度范围</text><line x1="590" y1="372" x2="1010" y2="372" class="row"/>
+ <text x="590" y="218" class="b">箱体内部</text><text x="590" y="244" class="s">P1-P6 已选；坐标、柱高、孔径/深度、盲孔状态待测</text><text x="590" y="269" class="s">四侧弧槽/台阶真实轮廓与装入路径</text><line x1="590" y1="290" x2="1010" y2="290" class="row"/>
+ <text x="590" y="325" class="b">电池包</text><text x="590" y="351" class="s">照片估算约 70 × 55 × 40；卡尺尺寸、重量、出线/BMS 待确认</text><line x1="590" y1="372" x2="1010" y2="372" class="row"/>
  <text x="590" y="407" class="b">CN3791 成品模块</text><text x="590" y="433" class="s">外形、孔位、端子高度、终止电压、反灌与温升</text><line x1="590" y1="454" x2="1010" y2="454" class="row"/>
  <text x="590" y="489" class="b">太阳能板 / 背架</text><text x="590" y="515" class="s">边框孔位、接线盒高度、现场杆径、风载</text><line x1="590" y1="536" x2="1010" y2="536" class="row"/>
  <text x="590" y="571" class="b">BT-M87SF</text><text x="590" y="597" class="s">3 孔孔径/坐标、中心口、安装面、总高</text><line x1="590" y1="618" x2="1010" y2="618" class="row"/>

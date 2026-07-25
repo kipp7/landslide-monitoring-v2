@@ -11,6 +11,8 @@ The `01`-`07` SVG/PNG pairs are engineering reference visuals for the current fi
 | `05-power-and-signal-architecture.*` | Solar, 3S battery, CN3791 candidate, RS485, GNSS, and RTCM paths |
 | `06-gnss-side-platform-detail.*` | BT-760 / BT-M87SF side outrigger concept and phase-center stability constraints |
 | `07-design-input-status.*` | Known, TBD, and blocked inputs required before fabrication release |
+| `08-enclosure-six-boss-selection.png` | Physical-box locator for the selected P1-P6 low mounting bosses; photo perspective is not a coordinate source |
+| `09-m3-fr4-boss-section.*` | Section detail for M3 self-tapping screw, washer, 3 mm FR4, rigid spacer, and plastic boss |
 | `internal-layout-concept.*` | Earlier concept visual retained for history; not a manufacturing drawing |
 | `solar-panel-enclosure-mount-concept.*` | Earlier shared back-frame concept retained for history |
 | `competition-tilt-mount-section.*` | Earlier competition tilt stack concept retained for history |
@@ -18,7 +20,7 @@ The `01`-`07` SVG/PNG pairs are engineering reference visuals for the current fi
 
 ## AI reference renders
 
-`renderings/image2-set/` contains the accepted `IMAGE2-R0.1` 4K core set: integrated exterior, open enclosure, and mounting-stack exploded view. The earlier `renderings/field-node-integrated-exterior-reference-4k.png` is retained as the source exterior variant. All Image 2 renders are for communication only and must not be used to infer hole coordinates, bracket lengths, connector locations, or manufacturing tolerances.
+`renderings/image2-set/` contains the accepted `IMAGE2-R0.2` 4K core set: three original Image 2 views, three engineering-annotation variants, and editable SVG overlays. The earlier `renderings/field-node-integrated-exterior-reference-4k.png` is retained as the source exterior variant. All Image 2 renders are for communication only and must not be used to infer hole coordinates, bracket lengths, connector locations, or manufacturing tolerances.
 
 The attempted open-enclosure Image 2 render was rejected and is not included because it invented extra boards and changed the carrier-board/module geometry. Internal assembly review must use `03-internal-packing-study.*`, `04-internal-mounting-exploded-view.*`, and `05-power-and-signal-architecture.*`.
 

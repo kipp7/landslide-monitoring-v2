@@ -33,10 +33,13 @@ status: complete
 - 2026-07-25 提交 `fe0b38b5` 已推送到远端 `docs/hardware-field-node-evt0-1`，PR #352 已更新为 EVT0.2 工程参考包；本检查点的仓库同步动作完成。
 - 2026-07-25 新增 `IMAGE2-R0.1` 三张已验收 4K Image 2 核心图；生成与验收规则记录在 `hardware/field-node/enclosure/assets/renderings/image2-set/README.md`。
 - 旧泛化 AI 外观图已明确否决，不纳入 `hardware/field-node/enclosure/assets/` 设计基线。
+- 2026-07-25 外壳推进到 `MECH-R0.2-DRAFT`：已在实物照片上冻结 P1-P6 六个低位塑料柱，并新增定位图与 M3/FR4/隔离套/塑料柱切面。照片不作为加工坐标来源。
+- 采购清单推进到 `BOM-R0.2`：记录电池约 `70 x 55 x 40 mm` 的照片估算，并补入 BT-760、BT-M87SF、3 m 50 Ω TNC-J → SMA-J 非 RP-SMA 馈线样品项。
+- `IMAGE2-R0.2` 已把三张 4K 原图与三张工程标注版、三份可编辑 SVG 标注层纳入同一版本目录；工程标注不改变原始 Image 2 输出，也不替代制造图。
 
 ## Next Actions
 
-- 用 PET/PP 模板转印箱体内轮廓，测量支撑孔坐标、直径、深度和是否贯通。
+- 用 PET/PP 模板转印箱体内轮廓；只测 P1-P6 的坐标、柱高/共面性、孔径、深度和盲孔状态。
 - 补齐电池外形、BMS、线缆外径和太阳能板边框孔位。
 - 生成 FR4 主板和倾角基准板 DXF，并在首件装配后回写实际版本。
 - 完成充电模块的终止电压、夜间反灌、温升和 24 小时功耗测试。

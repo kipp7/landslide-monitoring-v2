@@ -1,14 +1,16 @@
 # Image 2 Engineering Reference Set
 
-状态：`IMAGE2-R0.1 / 三张核心图已验收`
+状态：`IMAGE2-R0.2 / 三张核心图与工程标注版已验收`
 
 本目录只接收使用 `gpt-image-2` 生成并通过项目结构检查的 4K 图片。工程尺寸仍以同级目录的确定性 SVG/PNG 工程图为准。
 
-| 序号 | 文件 | 工程用途 | 验收状态 |
-| --- | --- | --- | --- |
-| 01 | `01-integrated-exterior-image2-4k.png` | 一体式太阳能板、防水箱、共背架和 GNSS 固定侧翼外观 | 通过 |
-| 02 | `02-open-enclosure-image2-4k.png` | 箱内模块分区、独立倾角小基准板、电池/充电/保险区域 | 通过 |
-| 03 | `03-exploded-mounting-image2-4k.png` | FR4 主板、PCB、电池托盘、四点支撑和局部 304 小板爆炸层级 | 通过 |
+| 序号 | Image 2 原图 | 工程标注版 | 工程用途 | 验收状态 |
+| --- | --- | --- | --- | --- |
+| 01 | `01-integrated-exterior-image2-4k.png` | `01-integrated-exterior-image2-annotated-4k.png` | 一体式太阳能板、防水箱、共背架和 GNSS 固定侧翼外观 | 通过 |
+| 02 | `02-open-enclosure-image2-4k.png` | `02-open-enclosure-image2-annotated-4k.png` | 箱内模块分区、独立倾角小基准板、电池/充电/保险区域 | 通过 |
+| 03 | `03-exploded-mounting-image2-4k.png` | `03-exploded-mounting-image2-annotated-4k.png` | FR4 主板、PCB、电池托盘、四点支撑和局部 304 小板爆炸层级 | 通过 |
+
+`overlays/` 保存三张工程标注的可编辑 SVG 图层。标注版用于评审时快速区分“已确认结构关系”和“待实测输入”；原图保持不变，便于追溯 Image 2 输出。
 
 ## 验收边界
 
