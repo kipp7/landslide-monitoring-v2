@@ -7,7 +7,9 @@ ENC-RECT-X,purchased enclosure,rectangular internal reference length,276.0655,mm
 ENC-RECT-Y,purchased enclosure,rectangular internal reference width,197,mm,NOMINAL,supplier dimension image,fit reference only
 ENC-INNER-CONTOUR,purchased enclosure,scalloped inner contour,,mm,PENDING,physical template required,blocks FR4 DXF
 ENC-P1-P6,purchased enclosure,six boss coordinates,,mm,PENDING,measure from one physical datum,blocks FR4 holes
-ENC-BOSS-Z,purchased enclosure,boss heights and coplanarity,approximately 6; four middle features reported as 5,mm,PENDING,user report needs height-versus-diameter clarification and individual measurements,blocks spacer selection
+ENC-BOSS-Z,purchased enclosure,boss top elevation,approximately 6,mm,PENDING,user reports perimeter 6 and middle 1 mm raised floor plus 5 mm boss are coplanar; verify with straightedge,blocks final enclosure interface
+ENC-CENTER-STEP-Z,purchased enclosure,middle raised floor height,1,mm,NOMINAL,user physical observation; combines with 5 mm middle boss to common 6 mm top plane,reference pending caliper check
+ENC-CENTER-BOSS-Z,purchased enclosure,middle boss height above raised floor,5,mm,NOMINAL,user physical observation; no height compensation shim intended,reference pending caliper check
 ENC-BOSS-HOLE,purchased enclosure,hole diameter depth and blind state,,mm,PENDING,supplier only states M3 self tapping,blocks screw length
 PLT-X,FR4 main plate,maximum blank length,265,mm,NOMINAL,maximum envelope only,reference only
 PLT-Y,FR4 main plate,maximum blank width,185,mm,NOMINAL,maximum envelope only,reference only

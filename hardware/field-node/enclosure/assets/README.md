@@ -12,7 +12,8 @@ The `01`-`07` SVG/PNG pairs are engineering reference visuals for the field-node
 | `06-gnss-side-platform-detail.*` | BT-760 / BT-M87SF side outrigger concept and phase-center stability constraints |
 | `07-design-input-status.*` | Known, TBD, and blocked inputs required before fabrication release |
 | `08-enclosure-six-boss-selection.png` | Historical `MECH-R0.2-DRAFT` locator for the old P1-P6 low bosses; superseded for the enlarged rectangular plate and never a coordinate source |
-| `09-m3-fr4-boss-section.*` | Section detail for M3 self-tapping screw, washer, 3 mm FR4, rigid spacer, and plastic boss |
+| `09-m3-fr4-boss-section.*` | Historical `MECH-R0.2-DRAFT` section with a rigid spacer; superseded by the confirmed coplanar support stack |
+| `10-m3-fr4-coplanar-boss-section.*` | Current `MECH-R0.3-DRAFT` section: perimeter 6 mm and middle 1 + 5 mm supports share one top plane with no height shim |
 | `internal-layout-concept.*` | Earlier concept visual retained for history; not a manufacturing drawing |
 | `solar-panel-enclosure-mount-concept.*` | Earlier shared back-frame concept retained for history |
 | `competition-tilt-mount-section.*` | Earlier competition tilt stack concept retained for history |

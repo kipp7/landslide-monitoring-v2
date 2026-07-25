@@ -36,7 +36,7 @@ The revised R1-R6 pattern forms a broad support polygon around the enlarged rect
 - The enclosure must use a two-point or four-point external bracket and must be recalibrated after transport.
 - The FR4 DXF cannot be released until a `272 x 193 mm` physical template fits freely and captures any local interference plus the R1-R6 boss coordinates.
 - R1-R6 identity, coordinates, boss height, hole depth, blind-hole state, spacer compensation, and screw length are not frozen. Photo pixels must never be converted into machining coordinates.
-- Boss height is user-reported as approximately 6 mm; a separate statement that four middle features are 5 mm remains ambiguous between height and diameter and is not a machining input.
+- The boss top planes are nominally coplanar: perimeter bosses rise approximately 6 mm from the main floor, while the four middle bosses rise 5 mm from a 1 mm raised floor. The FR4 bears directly on these tops with no 1 mm compensation shim; straightedge verification is still required before release.
 
 ## Follow-up
 

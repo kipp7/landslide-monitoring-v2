@@ -50,7 +50,7 @@
 - Replaced the earlier scalloped `265 x 185 mm` direction with a rectangular fit-trial direction based on the supplier's nominal `276.0655 x 197 mm` internal reference envelope.
 - Selected `272 x 193 x 3 mm` as the first fit-trial FR4 candidate, leaving approximately 2 mm nominal clearance per side; it is not released for manufacture until a physical template fits freely.
 - Superseded the old inner P1-P6 selection for the enlarged plate. The new six anchors must be reselected from the upper and lower perimeter boss rows in a three-column by two-row pattern and measured from one physical datum.
-- Recorded the user-reported boss heights as approximately 6 mm, with a separate statement that four middle features are 5 mm still requiring clarification as height versus diameter.
+- Recorded the clarified coplanar boss stack: perimeter bosses rise approximately 6 mm from the main floor; the four middle bosses rise 5 mm from a 1 mm raised floor, so both top planes are nominally level and require no height-compensation shim.
 - Advanced the prototype list to `BOM-R0.3` without overwriting earlier purchasing records.
 
 ## Versioning Rules

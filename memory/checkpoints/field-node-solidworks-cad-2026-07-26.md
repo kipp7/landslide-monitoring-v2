@@ -62,9 +62,9 @@ field-node digital mechanical model without inventing unresolved dimensions.
   `field-node-cad-inputs.csv` with evidence.
 - Fit a `272 x 193 mm` rectangular template, record any local interference, and
   select/measure perimeter R1-R6 from one plate datum.
-- Clarify whether the reported four middle `5 mm` features refer to height or
-  diameter; measure every selected boss height, hole diameter/depth, and blind
-  state before modeling the enclosure interface.
+- Model the nominally coplanar boss stack as perimeter 6 mm versus middle
+  1 mm raised floor plus 5 mm boss. No height-compensation shim is planned;
+  verify R1-R6 top-plane coplanarity, hole diameter/depth, and blind state.
 - Freeze the rectangular FR4 outline and six hole coordinates, then export DXF
   and a dimensioned drawing.
 - Add measured battery, CN3791 module, cable glands, solar frame holes, and GNSS
@@ -83,5 +83,6 @@ field-node digital mechanical model without inventing unresolved dimensions.
 
 Continue field-node CAD from `CAD-R0.2 / MECH-R0.3-DRAFT`: first test a
 `272 x 193 mm` rectangular template and measure perimeter R1-R6 from the plate
-left-bottom datum. Clarify the reported four middle `5 mm` features, then update
-only physically verified inputs before generating the FR4 DXF and assembly.
+left-bottom datum. Model the coplanar `6 mm` versus `1 + 5 mm` support stack,
+then update only physically verified inputs before generating the FR4 DXF and
+assembly.
