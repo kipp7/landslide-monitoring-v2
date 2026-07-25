@@ -28,6 +28,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File hardware/field-node/cad/scri
 # Rebuild CAD-R0.1 and its SLDPRT/STEP/PNG/manifest artifacts.
 & "$env:LOCALAPPDATA\Codex\SolidWorksMCP\source\.venv\Scripts\python.exe" hardware/field-node/cad/automation/build_reference_parts.py
 
+# Rebuild the corrected CAD-R0.2 tilt plate and drawing/export set.
+& "$env:LOCALAPPDATA\Codex\SolidWorksMCP\source\.venv\Scripts\python.exe" hardware/field-node/cad/automation/build_tilt_interface_r02.py
+
 # Inspect the global Codex registration.
 codex mcp get solidworks_mcp
 ```
@@ -39,8 +42,13 @@ codex mcp get solidworks_mcp
   input status and measurement blockers.
 - `hardware/field-node/cad/automation/build_reference_parts.py`: deterministic
   part build and geometry validation.
+- `hardware/field-node/cad/automation/build_tilt_interface_r02.py`: corrected
+  M3 tilt-plate build, localized SW2022 drawing creation, PDF/PNG export, and
+  validated CNC DXF generation.
 - `hardware/field-node/cad/models/CAD-R0.1/manifest.json`: artifact sizes,
   expected volumes, and measured model volumes.
+- `hardware/field-node/cad/models/CAD-R0.2/manifest.json`: corrected interface,
+  final artifact sizes, volumes, and SHA-256 checksums.
 - `%LOCALAPPDATA%\Codex\SolidWorksMCP\source`: pinned third-party checkout and
   virtual environment; never commit it.
 

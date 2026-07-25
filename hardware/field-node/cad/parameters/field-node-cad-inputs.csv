@@ -14,12 +14,14 @@ PLT-HOLE-D,FR4 main plate,P1-P6 clearance hole diameter,3.5,mm,NOMINAL,M3 cleara
 SUB-X,tilt reference plate,length,120,mm,VERIFIED,competition enclosure decision,interface reference
 SUB-Y,tilt reference plate,width,85,mm,VERIFIED,competition enclosure decision,interface reference
 SUB-Z,tilt reference plate,thickness,3,mm,VERIFIED,304 stainless prototype choice,interface reference
-SUB-HOLE-D,tilt reference plate,transmitter mounting hole diameter,3.6,mm,VERIFIED,DL-XLS1 manual,interface reference
+SUB-THREAD,tilt reference plate,transmitter mounting thread,M3 x 0.5 - 6H,,DESIGN,competition subplate fastening decision,review required
+SUB-TAP-DRILL-D,tilt reference plate,modeled M3 tap drill diameter,2.5,mm,DESIGN,ISO metric coarse M3 tapping practice,review required
 SUB-HOLE-PITCH-X,tilt reference plate,hole pitch X,78,mm,VERIFIED,DL-XLS1 manual,interface reference
 SUB-HOLE-PITCH-Y,tilt reference plate,hole pitch Y,39,mm,VERIFIED,DL-XLS1 manual,interface reference
 SEN-X,tilt transmitter,length,90,mm,VERIFIED,DL-XLS1 manual,interface reference
 SEN-Y,tilt transmitter,width,58,mm,VERIFIED,DL-XLS1 manual,interface reference
 SEN-Z,tilt transmitter,height,36,mm,VERIFIED,DL-XLS1 manual,interface reference
+SEN-HOLE-D,tilt transmitter,body clearance hole diameter,3.6,mm,VERIFIED,DL-XLS1 manual,interface reference
 PCB-X,R1.2 carrier board,length,170,mm,VERIFIED,production Gerber outline,interface reference
 PCB-Y,R1.2 carrier board,width,115,mm,VERIFIED,production Gerber outline,interface reference
 PCB-Z,R1.2 carrier board,assumed board thickness,1.6,mm,NOMINAL,measure physical board before standoffs,reference only

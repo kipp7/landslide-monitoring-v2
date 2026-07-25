@@ -35,11 +35,18 @@ field-node digital mechanical model without inventing unresolved dimensions.
   is pushed to `origin/docs/hardware-field-node-evt0-1`.
 - The push uploaded all seven tracked `.SLDPRT` files through Git LFS; local and
   remote branch tips were verified at the same commit.
+- `CAD-R0.2` corrects the tilt-reference plate interface without overwriting
+  `CAD-R0.1`: `FN-SUB-002` uses four diameter 2.5 mm tap-drill holes governed by
+  `M3 x 0.5 - 6H THRU`; the sensor body alone retains diameter 3.6 mm holes.
+- The corrected SLDPRT/STEP/SLDDRW/PDF/PNG/DXF set exists. Solid volume matches
+  `30541.095 mm3`, DXF coordinates round-trip exactly, and the rendered A3 PDF
+  has one nonblank page with readable, non-overlapping views and notes.
 
 ## In Progress
 
-- The CAD setup and known-envelope parts are complete, but the physical enclosure
-  survey and manufacturing assembly have not started.
+- The CAD setup, known-envelope parts, and corrected tilt-interface drawing set
+  are complete, but the physical enclosure survey and manufacturing assembly
+  have not started.
 - Global Codex configuration targets the current hardware worktree path.
 - The pre-existing untracked `tmp/` directory remains outside this work and was
   intentionally neither staged nor deleted.
@@ -65,7 +72,7 @@ field-node digital mechanical model without inventing unresolved dimensions.
 
 ## Resume Prompt
 
-Continue field-node CAD from `CAD-R0.1`: first run the SolidWorks MCP smoke test
-and inspect `models/CAD-R0.1/manifest.json`; then update only physically measured
-`PENDING` inputs and advance to `CAD-R0.2`, without adding guessed P1-P6 or
-enclosure-contour geometry.
+Continue field-node CAD from `CAD-R0.2`: first run the SolidWorks MCP smoke test
+and inspect both revision manifests; then update only physically measured
+`PENDING` enclosure inputs and advance the assembly revision without adding
+guessed P1-P6 or enclosure-contour geometry.

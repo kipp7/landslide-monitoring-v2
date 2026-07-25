@@ -10,7 +10,7 @@
 | Competition enclosure | `MECH-R0.2-DRAFT` | P1-P6 support selection and measured inputs | Coordinates, boss height, and hole depth pending |
 | Solar subsystem | `PWR-R0.1` | Candidate architecture | Charger and energy budget unqualified |
 | Prototype procurement | `BOM-R0.2` | P1-P6, battery estimate, and GNSS sample items recorded | Not a production AVL |
-| Mechanical CAD | `CAD-R0.1` | SOLIDWORKS 2022 automation and known-envelope reference parts | Reference only; not released |
+| Mechanical CAD | `CAD-R0.2` | Tilt-reference plate M3 interface correction and drawing set | Review required; FR4 support holes pending |
 
 ## Change History
 
@@ -38,6 +38,12 @@
 - Reused the `jianjwu/codex_to_solidworks` integration layout while replacing its protected Python payload with readable upstream commit `0de8755`.
 - Added a clean stdio entry point, reproducible installer, MCP smoke test, controlled CAD input register, and reference-part build script.
 - Added independent enclosure, FR4, tilt subplate, carrier-board, tilt-transmitter, battery, and solar-panel envelopes. These models remain `NOT FOR MANUFACTURE`; no P1-P6 coordinates or enclosure scallops were inferred.
+
+### 2026-07-26 - `CAD-R0.2`
+
+- Corrected the tilt-reference plate: the sensor body uses four `Ø3.6 mm` clearance holes, while the 304 plate uses four `M3 x 0.5 - 6H` tapped holes modeled with `Ø2.5 mm` tap drills.
+- Added a reproducible SLDPRT/STEP/SLDDRW/PDF/PNG/DXF drawing set and SHA-256 manifest for `FN-SUB-002`.
+- Kept the plate-to-FR4 support holes absent until the enclosure layout is physically measured and frozen.
 
 ## Versioning Rules
 

@@ -35,6 +35,10 @@ Python compilation with `source code string cannot contain null bytes`.
   status checks and physical artifact/volume validation.
 - Track native SOLIDWORKS files with Git LFS and label `CAD-R0.1` as
   `REFERENCE ONLY / NOT FOR MANUFACTURE`.
+- Preserve released CAD history instead of silently overwriting it. `CAD-R0.2`
+  supersedes only the tilt-reference plate hole definition: the sensor body has
+  four diameter 3.6 mm clearance holes, while the steel plate has four
+  `M3 x 0.5 - 6H THRU` tapped holes modeled with diameter 2.5 mm tap drills.
 
 ## Rationale
 
@@ -54,6 +58,9 @@ engineering release.
   automatic floating dependency update.
 - `CAD-R0.1` contains independent known-envelope parts only. A manufacturing
   assembly, FR4 DXF, and P1-P6 holes remain blocked by physical measurements.
+- `CAD-R0.2/FN-SUB-002` contains the corrected SLDPRT, STEP, SLDDRW, PDF, PNG,
+  and profile/tap-drill DXF. It remains `REVIEW REQUIRED` because the four
+  plate-to-FR4 support holes are not frozen.
 - The global Codex MCP path currently targets the hardware worktree and must be
   repointed after the branch is merged or moved.
 
