@@ -2,11 +2,12 @@
 title: field-node-solidworks-cad-2026-07-26
 type: note
 tags:
-  - checkpoint
-  - hardware
-  - cad
-  - solidworks
+- checkpoint
+- hardware
+- cad
+- solidworks
 status: active
+permalink: landslide-monitoring-v2/memory/checkpoints/field-node-solidworks-cad-2026-07-26
 ---
 
 # Checkpoint: field-node-solidworks-cad-2026-07-26
@@ -31,12 +32,18 @@ field-node digital mechanical model without inventing unresolved dimensions.
 - The tilt subplate and tilt-transmitter models have real 4 x diameter 3.6 mm
   cuts at 78 x 39 mm pitch. The FR4 envelope intentionally has no P1-P6 holes.
 - Native SOLIDWORKS files are configured for Git LFS.
+- CAD automation baseline commit `785c709c63e315d0b7be4277d7769fc24550b43c`
+  is pushed to `origin/docs/hardware-field-node-evt0-1`.
+- The push uploaded all seven tracked `.SLDPRT` files through Git LFS; local and
+  remote branch tips were verified at the same commit.
 
 ## In Progress
 
 - The CAD setup and known-envelope parts are complete, but the physical enclosure
   survey and manufacturing assembly have not started.
 - Global Codex configuration targets the current hardware worktree path.
+- The pre-existing untracked `tmp/` directory remains outside this work and was
+  intentionally neither staged nor deleted.
 
 ## Next Actions
 
