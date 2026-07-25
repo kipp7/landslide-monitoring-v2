@@ -1,0 +1,11 @@
+[mcp_servers.solidworks_mcp]
+command = 'powershell'
+args = [
+  '-NoProfile',
+  '-ExecutionPolicy',
+  'Bypass',
+  '-File',
+  'hardware\field-node\cad\scripts\Start-SolidWorksMcp.ps1'
+]
+startup_timeout_sec = 60
+tool_timeout_sec = 300

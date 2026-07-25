@@ -14,6 +14,7 @@ This package records the current productization work for the RK2206 field node. 
 | [`enclosure/`](enclosure/) | Waterproof enclosure, internal plate, tilt sensor interface, and concept visuals |
 | [`power/`](power/) | 10 W solar panel, 3S battery, and charging subsystem requirements |
 | [`procurement/`](procurement/) | Prototype purchasing list (`BOM-R0.2`) and qualification gates |
+| [`cad/`](cad/) | SOLIDWORKS automation, controlled CAD inputs, native reference models, STEP exports, and previews |
 
 ## Current Decisions
 

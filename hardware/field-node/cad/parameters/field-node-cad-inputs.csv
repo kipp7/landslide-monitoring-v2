@@ -1,0 +1,32 @@
+id,component,parameter,value,unit,input_class,source_or_note,manufacturing_status
+ENC-OUT-X,purchased enclosure,outer length,317.9,mm,NOMINAL,supplier dimension image,reference only
+ENC-OUT-Y,purchased enclosure,outer width,238.9,mm,NOMINAL,supplier dimension image,reference only
+ENC-OUT-Z,purchased enclosure,outer height,144.6,mm,NOMINAL,supplier dimension image,reference only
+ENC-BOTTOM-DEPTH,purchased enclosure,bottom shell depth,91.1,mm,NOMINAL,supplier dimension image,reference only
+ENC-INNER-CONTOUR,purchased enclosure,scalloped inner contour,,mm,PENDING,physical template required,blocks FR4 DXF
+ENC-P1-P6,purchased enclosure,six boss coordinates,,mm,PENDING,measure from one physical datum,blocks FR4 holes
+ENC-BOSS-Z,purchased enclosure,boss heights and coplanarity,,mm,PENDING,measure all six bosses,blocks spacer selection
+ENC-BOSS-HOLE,purchased enclosure,hole diameter depth and blind state,,mm,PENDING,supplier only states M3 self tapping,blocks screw length
+PLT-X,FR4 main plate,maximum blank length,265,mm,NOMINAL,maximum envelope only,reference only
+PLT-Y,FR4 main plate,maximum blank width,185,mm,NOMINAL,maximum envelope only,reference only
+PLT-Z,FR4 main plate,thickness,3,mm,NOMINAL,FR4 G10 prototype choice,reference only
+PLT-HOLE-D,FR4 main plate,P1-P6 clearance hole diameter,3.5,mm,NOMINAL,M3 clearance target pending boss survey,do not drill yet
+SUB-X,tilt reference plate,length,120,mm,VERIFIED,competition enclosure decision,interface reference
+SUB-Y,tilt reference plate,width,85,mm,VERIFIED,competition enclosure decision,interface reference
+SUB-Z,tilt reference plate,thickness,3,mm,VERIFIED,304 stainless prototype choice,interface reference
+SUB-HOLE-D,tilt reference plate,transmitter mounting hole diameter,3.6,mm,VERIFIED,DL-XLS1 manual,interface reference
+SUB-HOLE-PITCH-X,tilt reference plate,hole pitch X,78,mm,VERIFIED,DL-XLS1 manual,interface reference
+SUB-HOLE-PITCH-Y,tilt reference plate,hole pitch Y,39,mm,VERIFIED,DL-XLS1 manual,interface reference
+SEN-X,tilt transmitter,length,90,mm,VERIFIED,DL-XLS1 manual,interface reference
+SEN-Y,tilt transmitter,width,58,mm,VERIFIED,DL-XLS1 manual,interface reference
+SEN-Z,tilt transmitter,height,36,mm,VERIFIED,DL-XLS1 manual,interface reference
+PCB-X,R1.2 carrier board,length,170,mm,VERIFIED,production Gerber outline,interface reference
+PCB-Y,R1.2 carrier board,width,115,mm,VERIFIED,production Gerber outline,interface reference
+PCB-Z,R1.2 carrier board,assumed board thickness,1.6,mm,NOMINAL,measure physical board before standoffs,reference only
+BAT-X,3S battery,length,70,mm,ESTIMATED,photo estimate pending calipers,never machine from this
+BAT-Y,3S battery,width,55,mm,ESTIMATED,photo estimate pending calipers,never machine from this
+BAT-Z,3S battery,height,40,mm,ESTIMATED,photo estimate pending calipers,never machine from this
+SOL-X,SWM-10W solar panel,length,290,mm,VERIFIED,supplier specification,interface reference
+SOL-Y,SWM-10W solar panel,width,240,mm,VERIFIED,supplier specification,interface reference
+SOL-Z,SWM-10W solar panel,height,17,mm,VERIFIED,supplier specification,interface reference
+SOL-HOLES,SWM-10W solar panel,frame mounting holes,,mm,PENDING,measure physical panel,blocks bracket holes
