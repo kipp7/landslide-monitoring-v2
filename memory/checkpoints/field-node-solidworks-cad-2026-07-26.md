@@ -2,12 +2,11 @@
 title: field-node-solidworks-cad-2026-07-26
 type: note
 tags:
-- checkpoint
-- hardware
-- cad
-- solidworks
+  - checkpoint
+  - hardware
+  - cad
+  - solidworks
 status: active
-permalink: landslide-monitoring-v2/memory/checkpoints/field-node-solidworks-cad-2026-07-26
 ---
 
 # Checkpoint: field-node-solidworks-cad-2026-07-26
