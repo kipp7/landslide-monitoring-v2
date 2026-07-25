@@ -7,9 +7,9 @@
 | Integrated field node | `FIELD-NODE-HW-EVT0.2-DRAFT` | Engineering reference set | Not released |
 | Existing carrier board | `R1.2` | As-built reference | Gerber exists; source documents conflict |
 | Carrier-board improvement | `R1.3-DRAFT` | Requirements | Not routed or released |
-| Competition enclosure | `MECH-R0.2-DRAFT` | P1-P6 support selection and measured inputs | Coordinates, boss height, and hole depth pending |
+| Competition enclosure | `MECH-R0.3-DRAFT` | Rectangular FR4 fit trial and perimeter six-point reselection | Fit, coordinates, boss height, and hole depth pending |
 | Solar subsystem | `PWR-R0.1` | Candidate architecture | Charger and energy budget unqualified |
-| Prototype procurement | `BOM-R0.2` | P1-P6, battery estimate, and GNSS sample items recorded | Not a production AVL |
+| Prototype procurement | `BOM-R0.3` | Rectangular FR4 fit trial and perimeter R1-R6 gate recorded | Not a production AVL |
 | Mechanical CAD | `CAD-R0.2` | Tilt-reference plate M3 interface correction and drawing set | Review required; FR4 support holes pending |
 
 ## Change History
@@ -44,6 +44,14 @@
 - Corrected the tilt-reference plate: the sensor body uses four `Ø3.6 mm` clearance holes, while the 304 plate uses four `M3 x 0.5 - 6H` tapped holes modeled with `Ø2.5 mm` tap drills.
 - Added a reproducible SLDPRT/STEP/SLDDRW/PDF/PNG/DXF drawing set and SHA-256 manifest for `FN-SUB-002`.
 - Kept the plate-to-FR4 support holes absent until the enclosure layout is physically measured and frozen.
+
+### 2026-07-26 - `MECH-R0.3-DRAFT`
+
+- Replaced the earlier scalloped `265 x 185 mm` direction with a rectangular fit-trial direction based on the supplier's nominal `276.0655 x 197 mm` internal reference envelope.
+- Selected `272 x 193 x 3 mm` as the first fit-trial FR4 candidate, leaving approximately 2 mm nominal clearance per side; it is not released for manufacture until a physical template fits freely.
+- Superseded the old inner P1-P6 selection for the enlarged plate. The new six anchors must be reselected from the upper and lower perimeter boss rows in a three-column by two-row pattern and measured from one physical datum.
+- Recorded the user-reported boss heights as approximately 6 mm, with a separate statement that four middle features are 5 mm still requiring clarification as height versus diameter.
+- Advanced the prototype list to `BOM-R0.3` without overwriting earlier purchasing records.
 
 ## Versioning Rules
 

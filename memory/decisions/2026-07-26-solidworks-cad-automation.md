@@ -57,7 +57,8 @@ engineering release.
 - Updating the third-party commit is an explicit reviewed change, not an
   automatic floating dependency update.
 - `CAD-R0.1` contains independent known-envelope parts only. A manufacturing
-  assembly, FR4 DXF, and P1-P6 holes remain blocked by physical measurements.
+  assembly, FR4 DXF, and revised perimeter R1-R6 holes remain blocked by
+  physical measurements.
 - `CAD-R0.2/FN-SUB-002` contains the corrected SLDPRT, STEP, SLDDRW, PDF, PNG,
   and profile/tap-drill DXF. It remains `REVIEW REQUIRED` because the four
   plate-to-FR4 support holes are not frozen.
@@ -66,8 +67,9 @@ engineering release.
 
 ## Follow-up
 
-- Measure the enclosure scallops, P1-P6 coordinates/heights/hole depths, battery,
-  charger, panel holes, and cable interfaces.
+- Fit the `272 x 193 mm` rectangular template and measure perimeter R1-R6
+  coordinates/heights/hole depths, battery, charger, panel holes, and cable
+  interfaces.
 - Replace nominal/estimated envelopes only through a new CAD revision.
 - Build the first controlled assembly and DXF after the blocking measurements.
 - Review upstream changes before advancing the pinned MCP commit.

@@ -41,6 +41,11 @@ field-node digital mechanical model without inventing unresolved dimensions.
 - The corrected SLDPRT/STEP/SLDDRW/PDF/PNG/DXF set exists. Solid volume matches
   `30541.095 mm3`, DXF coordinates round-trip exactly, and the rendered A3 PDF
   has one nonblank page with readable, non-overlapping views and notes.
+- `MECH-R0.3-DRAFT` changes the FR4 direction to a rectangular fit trial. The
+  supplier `276.0655 x 197 mm` envelope is nominal; the engineering candidate is
+  `272 x 193 x 3 mm` with about 2 mm clearance per side. The previous P1-P6 boss
+  choice is superseded for the enlarged plate, and new perimeter R1-R6 points
+  must be selected and physically measured.
 
 ## In Progress
 
@@ -55,9 +60,13 @@ field-node digital mechanical model without inventing unresolved dimensions.
 
 - Measure the physical enclosure from one datum and fill every `PENDING` entry in
   `field-node-cad-inputs.csv` with evidence.
-- Create the real scalloped enclosure interior and P1-P6 boss model.
-- Freeze the irregular FR4 outline and six hole coordinates, then export DXF and
-  a dimensioned drawing.
+- Fit a `272 x 193 mm` rectangular template, record any local interference, and
+  select/measure perimeter R1-R6 from one plate datum.
+- Clarify whether the reported four middle `5 mm` features refer to height or
+  diameter; measure every selected boss height, hole diameter/depth, and blind
+  state before modeling the enclosure interface.
+- Freeze the rectangular FR4 outline and six hole coordinates, then export DXF
+  and a dimensioned drawing.
 - Add measured battery, CN3791 module, cable glands, solar frame holes, and GNSS
   hardware before creating the first full assembly.
 - Repoint global MCP configuration after the branch is merged into its permanent
@@ -72,7 +81,7 @@ field-node digital mechanical model without inventing unresolved dimensions.
 
 ## Resume Prompt
 
-Continue field-node CAD from `CAD-R0.2`: first run the SolidWorks MCP smoke test
-and inspect both revision manifests; then update only physically measured
-`PENDING` enclosure inputs and advance the assembly revision without adding
-guessed P1-P6 or enclosure-contour geometry.
+Continue field-node CAD from `CAD-R0.2 / MECH-R0.3-DRAFT`: first test a
+`272 x 193 mm` rectangular template and measure perimeter R1-R6 from the plate
+left-bottom datum. Clarify the reported four middle `5 mm` features, then update
+only physically verified inputs before generating the FR4 DXF and assembly.

@@ -3,14 +3,20 @@ ENC-OUT-X,purchased enclosure,outer length,317.9,mm,NOMINAL,supplier dimension i
 ENC-OUT-Y,purchased enclosure,outer width,238.9,mm,NOMINAL,supplier dimension image,reference only
 ENC-OUT-Z,purchased enclosure,outer height,144.6,mm,NOMINAL,supplier dimension image,reference only
 ENC-BOTTOM-DEPTH,purchased enclosure,bottom shell depth,91.1,mm,NOMINAL,supplier dimension image,reference only
+ENC-RECT-X,purchased enclosure,rectangular internal reference length,276.0655,mm,NOMINAL,supplier dimension image,fit reference only
+ENC-RECT-Y,purchased enclosure,rectangular internal reference width,197,mm,NOMINAL,supplier dimension image,fit reference only
 ENC-INNER-CONTOUR,purchased enclosure,scalloped inner contour,,mm,PENDING,physical template required,blocks FR4 DXF
 ENC-P1-P6,purchased enclosure,six boss coordinates,,mm,PENDING,measure from one physical datum,blocks FR4 holes
-ENC-BOSS-Z,purchased enclosure,boss heights and coplanarity,,mm,PENDING,measure all six bosses,blocks spacer selection
+ENC-BOSS-Z,purchased enclosure,boss heights and coplanarity,approximately 6; four middle features reported as 5,mm,PENDING,user report needs height-versus-diameter clarification and individual measurements,blocks spacer selection
 ENC-BOSS-HOLE,purchased enclosure,hole diameter depth and blind state,,mm,PENDING,supplier only states M3 self tapping,blocks screw length
 PLT-X,FR4 main plate,maximum blank length,265,mm,NOMINAL,maximum envelope only,reference only
 PLT-Y,FR4 main plate,maximum blank width,185,mm,NOMINAL,maximum envelope only,reference only
 PLT-Z,FR4 main plate,thickness,3,mm,NOMINAL,FR4 G10 prototype choice,reference only
 PLT-HOLE-D,FR4 main plate,P1-P6 clearance hole diameter,3.5,mm,NOMINAL,M3 clearance target pending boss survey,do not drill yet
+PLT-R03-X,FR4 rectangular fit-trial plate,length,272,mm,DESIGN,derived from nominal enclosure reference with about 2 mm clearance per side,fit template only
+PLT-R03-Y,FR4 rectangular fit-trial plate,width,193,mm,DESIGN,derived from nominal enclosure reference with 2 mm clearance per side,fit template only
+PLT-R03-Z,FR4 rectangular fit-trial plate,thickness,3,mm,DESIGN,FR4 G10 prototype choice,review required
+PLT-R03-ANCHORS,FR4 rectangular fit-trial plate,perimeter six-anchor coordinates,,mm,PENDING,reselect upper and lower boss rows and measure from one datum,blocks FR4 holes
 SUB-X,tilt reference plate,length,120,mm,VERIFIED,competition enclosure decision,interface reference
 SUB-Y,tilt reference plate,width,85,mm,VERIFIED,competition enclosure decision,interface reference
 SUB-Z,tilt reference plate,thickness,3,mm,VERIFIED,304 stainless prototype choice,interface reference

@@ -18,8 +18,8 @@ The competition build needs one consistent sealed enclosure for the carrier boar
 ## Decision
 
 - Keep the purchased `320 x 240 x 145 mm` enclosure for the competition build.
-- Use an irregular removable 3 mm FR4/G10 main mounting plate; `265 x 185 mm` is its maximum envelope, not a finished rectangular outline.
-- Use the six physical low bosses identified as P1-P6 in `hardware/field-node/enclosure/assets/08-enclosure-six-boss-selection.png`: three positions along the enclosure long axis and two along the short axis. Do not substitute the brass lid bosses or side-wall outer bosses during assembly.
+- Use a removable rectangular 3 mm FR4/G10 main mounting plate. The supplier's `276.0655 x 197 mm` value is a nominal internal reference envelope; the first fit-trial candidate is `272 x 193 x 3 mm` to retain approximately 2 mm clearance per side.
+- Supersede the old inner P1-P6 selection for this enlarged plate. Reselect six low bosses from the upper and lower perimeter rows as left/middle/right pairs, temporarily named R1-R6. Do not substitute the brass lid bosses.
 - Keep the tilt transmitter inside the box for competition consistency.
 - Mount the tilt transmitter on a dedicated `120 x 85 x 3 mm` 304 stainless subplate with four-point support. Keep the PCB, battery, and charger on FR4.
 - Do not use a full steel internal plate.
@@ -28,18 +28,19 @@ The competition build needs one consistent sealed enclosure for the carrier boar
 
 A full `265 x 185 x 3 mm` steel plate weighs about 1.16 kg, adds long-term load to the plastic bosses, and creates RF risk for GPS/DL-XLS1. A local stainless reference plate improves tilt-sensor flatness while retaining electrical insulation and lower mass elsewhere.
 
-The selected P1-P6 pattern forms a broad support polygon around the intended load area, suppresses long-edge bending with the middle pair, and preserves access to the lid fasteners and side-wall reliefs. Six points are sufficient for the 3 mm FR4 prototype without increasing the number of plastic threads that can be damaged during assembly.
+The revised R1-R6 pattern forms a broad support polygon around the enlarged rectangular plate and suppresses long-edge bending with the middle pair. Six points are sufficient for the 3 mm FR4 prototype without increasing the number of plastic threads that can be damaged during assembly. These six holes anchor only the FR4 to the enclosure; every module keeps an independent mounting interface on the FR4.
 
 ## Consequences
 
 - The competition configuration improves repeatability but is not automatically a field-grade measurement reference.
 - The enclosure must use a two-point or four-point external bracket and must be recalibrated after transport.
-- The FR4 DXF cannot be released until a physical template captures the scallops, boss coordinates, and clearances.
-- P1-P6 identity is frozen, but their coordinates, boss height, hole depth, blind-hole state, spacer height, and screw length are not. Photo pixels must never be converted into machining coordinates.
+- The FR4 DXF cannot be released until a `272 x 193 mm` physical template fits freely and captures any local interference plus the R1-R6 boss coordinates.
+- R1-R6 identity, coordinates, boss height, hole depth, blind-hole state, spacer compensation, and screw length are not frozen. Photo pixels must never be converted into machining coordinates.
+- Boss height is user-reported as approximately 6 mm; a separate statement that four middle features are 5 mm remains ambiguous between height and diameter and is not a machining input.
 
 ## Follow-up
 
-- Measure P1-P6 coordinates, boss height, top-plane variation, hole diameter/depth, and blind-hole state; derive rigid-spacer height and limited screw length from those measurements.
+- Fit a `272 x 193 mm` template, select R1-R6, and measure their coordinates, boss height, top-plane variation, hole diameter/depth, and blind-hole state; derive rigid compensation and limited screw length from those measurements.
 - Confirm the photo-estimated `70 x 55 x 40 mm` battery envelope with calipers.
 - Freeze the four subplate-to-FR4 support holes.
 - Generate the FR4 and stainless subplate DXFs.

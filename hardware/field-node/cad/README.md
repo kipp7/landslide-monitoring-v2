@@ -40,6 +40,12 @@ coordinates, boss heights, FR4 reliefs, battery dimensions, charger dimensions,
 and cable interfaces must be measured before a manufacturing assembly or DXF is
 released.
 
+`MECH-R0.3-DRAFT` supersedes the old FR4 direction without overwriting the
+historical `FN-PLT-001` model. The supplier's `276.0655 x 197 mm` rectangle is a
+nominal enclosure reference; the next CAD plate will use a `272 x 193 x 3 mm`
+fit-trial candidate and newly measured perimeter R1-R6 anchors. No R0.3 SLDPRT
+or DXF is released until the physical template and six coordinates are checked.
+
 `models/CAD-R0.2/` corrects the competition tilt-reference plate interface:
 
 - `FN-SUB-002`: 120 x 85 x 3 mm 304 plate with four modeled diameter 2.5 mm

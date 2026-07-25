@@ -1,6 +1,6 @@
 # Enclosure Engineering Visual Assets
 
-The `01`-`07` SVG/PNG pairs are engineering reference visuals for the current field-node architecture. They use confirmed dimensions where available and mark unknown inputs as `TBD`. They are not released manufacturing drawings.
+The `01`-`07` SVG/PNG pairs are engineering reference visuals for the field-node architecture. Plate-specific content in `03`, `04`, `07`, and the P1-P6 locator `08` records the superseded `MECH-R0.2-DRAFT` direction; it must not be used to manufacture the `MECH-R0.3-DRAFT` rectangular plate. The visuals use confirmed dimensions where available and mark unknown inputs as `TBD`. They are not released manufacturing drawings.
 
 | Asset | Scope |
 | --- | --- |
@@ -11,7 +11,7 @@ The `01`-`07` SVG/PNG pairs are engineering reference visuals for the current fi
 | `05-power-and-signal-architecture.*` | Solar, 3S battery, CN3791 candidate, RS485, GNSS, and RTCM paths |
 | `06-gnss-side-platform-detail.*` | BT-760 / BT-M87SF side outrigger concept and phase-center stability constraints |
 | `07-design-input-status.*` | Known, TBD, and blocked inputs required before fabrication release |
-| `08-enclosure-six-boss-selection.png` | Physical-box locator for the selected P1-P6 low mounting bosses; photo perspective is not a coordinate source |
+| `08-enclosure-six-boss-selection.png` | Historical `MECH-R0.2-DRAFT` locator for the old P1-P6 low bosses; superseded for the enlarged rectangular plate and never a coordinate source |
 | `09-m3-fr4-boss-section.*` | Section detail for M3 self-tapping screw, washer, 3 mm FR4, rigid spacer, and plastic boss |
 | `internal-layout-concept.*` | Earlier concept visual retained for history; not a manufacturing drawing |
 | `solar-panel-enclosure-mount-concept.*` | Earlier shared back-frame concept retained for history |
@@ -28,4 +28,4 @@ The previously generated `field-node-integrated-solar-gnss-concept-4k.png` is in
 
 ## Release gate
 
-Do not publish a fabrication DXF or purchase a final FR4 plate until the box hole coordinates, scallop outline, battery envelope, CN3791 module envelope, cable diameters, panel frame holes, and BT-M87SF three-hole data are measured and recorded.
+Do not publish a fabrication DXF or purchase a final FR4 plate until the `272 x 193 mm` template fits freely and perimeter R1-R6 coordinates, heights, hole depths, blind states, battery envelope, CN3791 module envelope, cable diameters, panel frame holes, and BT-M87SF three-hole data are measured and recorded.
