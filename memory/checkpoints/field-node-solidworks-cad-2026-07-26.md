@@ -51,6 +51,9 @@ field-node digital mechanical model without inventing unresolved dimensions.
   and a deterministic labeled top-view SVG/PNG. Transform readback and layout
   checks pass: 6 mm minimum planar clearance, Z=52 mm highest envelope, and
   39.1 mm nominal rim clearance.
+- CAD-R0.3 feature commit `879d019b` is pushed to
+  `origin/docs/hardware-field-node-evt0-1`; all nine native SolidWorks LFS
+  objects uploaded successfully.
 
 ## In Progress
 
@@ -76,8 +79,6 @@ field-node digital mechanical model without inventing unresolved dimensions.
   hardware before promoting the layout to a manufacturing assembly.
 - Repoint global MCP configuration after the branch is merged into its permanent
   worktree path.
-- Commit and push `CAD-R0.3` together with the updated CAD register, revision log,
-  and memory notes; keep the pre-existing untracked `tmp/` directory out of Git.
 
 ## Risks
 
