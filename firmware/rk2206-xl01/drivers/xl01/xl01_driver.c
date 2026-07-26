@@ -12,10 +12,13 @@
 #include "iot_uart.h"
 #include "iot_errno.h"
 #include "lz_hardware.h"
+#include "los_tick.h"
 #include "../../config/app_config.h"
 #include "../../app/compact_poll_command.h"
+#include "../../app/device_identity.h"
 #include "../../utils/fifo.h"
 #include "field_link_frame.h"
+#include "gnss_rtcm_injection.h"
 
 #ifndef PLATFORM_COMMAND_RX_LOG_MODE
 #define PLATFORM_COMMAND_RX_LOG_MODE 0
@@ -42,6 +45,40 @@ static int g_last_rx_fifo_write_status = 0;
 static osMutexId_t g_uart_tx_mutex = NULL;
 static FieldLinkFrameDecoder g_field_link_decoder = {0};
 static unsigned int g_field_link_tx_sequence = 0;
+
+#if ENABLE_GPS && GNSS_RTCM_INJECTION_MODE != GNSS_RTCM_INJECTION_DISABLED
+static uint8_t XL01_LocalNodeNumber(void)
+{
+    const DeviceIdentity *identity = DeviceIdentity_Get();
+
+    if (identity == NULL || identity->legacy_node_label == NULL ||
+        identity->legacy_node_label[1] != '\0') {
+        return 0U;
+    }
+    if (identity->legacy_node_label[0] == 'A') {
+        return 1U;
+    }
+    if (identity->legacy_node_label[0] == 'B') {
+        return 2U;
+    }
+    if (identity->legacy_node_label[0] == 'C') {
+        return 3U;
+    }
+    return 0U;
+}
+
+static uint64_t XL01_MonotonicMs(void)
+{
+    uint64_t ticks = (uint64_t)LOS_TickCountGet();
+    uint64_t ticks_per_second = (uint64_t)g_ticksPerSec;
+
+    if (ticks_per_second == 0U) {
+        return ticks;
+    }
+    return (ticks / ticks_per_second) * 1000U +
+           ((ticks % ticks_per_second) * 1000U) / ticks_per_second;
+}
+#endif
 
 static unsigned int XL01_GetHardwareUartId(void)
 {
@@ -517,6 +554,17 @@ static void HandleFieldLinkMessage(const FieldLinkFrameMessage *message, Statist
     );
 #endif
 
+    if (message->type == FIELD_LINK_FRAME_TYPE_RTCM) {
+#if ENABLE_GPS && GNSS_RTCM_INJECTION_MODE != GNSS_RTCM_INJECTION_DISABLED
+        GnssRtcmInjection_AcceptFragment(
+            (const uint8_t *)message->payload,
+            (uint16_t)message->payload_len,
+            XL01_MonotonicMs()
+        );
+#endif
+        return;
+    }
+
     if (message->type == FIELD_LINK_FRAME_TYPE_COMMAND) {
         if (IsPlatformCommandPayload(message->payload) ||
             CompactPollCommand_IsValid(message->payload, message->payload_len)) {
@@ -706,6 +754,11 @@ void XL01_Init(void)
     ResetPlatformCommandQueue();
     ResetPlatformCommandAssembly();
     FieldLinkFrameDecoder_Init(&g_field_link_decoder);
+#if ENABLE_GPS && GNSS_RTCM_INJECTION_MODE != GNSS_RTCM_INJECTION_DISABLED
+    if (GnssRtcmInjection_Init(XL01_LocalNodeNumber()) != 0) {
+        printf("[ERROR] RTCM injection queue init failed; corrections stay disabled\n");
+    }
+#endif
     g_field_link_tx_sequence = 0;
     g_last_uart_read_status = 0;
     if (g_uart_tx_mutex == NULL) {

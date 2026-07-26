@@ -24,6 +24,7 @@
 #include "los_tick.h"  // For LOS_TickCountGet
 #include "los_task.h"  // For LOS_TaskCreate
 #include "cmsis_os2.h"  // For LOS_Msleep
+#include "../xl01/gnss_rtcm_injection.h"
 
 // GPS UART Configuration (moved from config to avoid dependency)
 // ✓ 最终方案：MPU6050移至PB4/PB5，GPS使用板子标注的UART口
@@ -57,7 +58,8 @@
 static float g_gps_latitude = 0.0f;
 static float g_gps_longitude = 0.0f;
 static bool g_gps_valid = false;
-static bool g_gps_fixed = false;  // GPS定位状态
+static bool g_gps_has_position_fix = false;
+static unsigned char g_gps_gga_quality = 0U;
 static uint32_t g_gps_last_fix_tick = 0;
 
 // NMEA parsing buffer
@@ -71,6 +73,11 @@ static uint32_t g_uart_last_idle_probe_tick = 0;
 static uint32_t g_uart_last_rx_probe_tick = 0;
 static uint32_t g_uart_total_rx_bytes = 0;
 static bool g_line_collecting = false;
+
+#if GNSS_RTCM_INJECTION_MODE != GNSS_RTCM_INJECTION_DISABLED
+static unsigned char g_rtcm_uart_frame[GNSS_RTCM_V3_MAX_FRAME_BYTES];
+static uint32_t g_rtcm_last_status_log_tick = 0U;
+#endif
 
 // UART中断接收FIFO (1024 bytes, defined in fifo.h)
 static Fifo g_gps_fifo;
@@ -208,7 +215,7 @@ static bool IsNmeaSentenceType(const char *line, const char *sentence_type)
 static void ParseGGA(const char* line)
 {
     if (!line) return;
-    bool had_fix = g_gps_fixed;
+    bool had_fix = g_gps_has_position_fix;
     
     // Make a copy for strtok_r
     char copy[GPS_LINE_BUF_SIZE];
@@ -274,17 +281,19 @@ static void ParseGGA(const char* line)
         g_gps_latitude = (float)lat;
         g_gps_longitude = (float)lon;
         g_gps_valid = true;
-        g_gps_fixed = true;
+        g_gps_has_position_fix = true;
+        g_gps_gga_quality = (unsigned char)(fix_quality[0] - '0');
         g_gps_last_fix_tick = LOS_TickCountGet();
 
         if (!had_fix) {
-            printf("[GPS] Fix acquired (GGA q=%c): lat=%.6f lon=%.6f\n", fix_quality[0], lat, lon);
+            printf("[GPS] Position fix acquired (GGA q=%c): lat=%.6f lon=%.6f\n", fix_quality[0], lat, lon);
         }
     } else if (fix_quality[0] == '0') {
         if (had_fix) {
             printf("[GPS] Fix lost (GGA)\n");
         }
-        g_gps_fixed = false;
+        g_gps_has_position_fix = false;
+        g_gps_gga_quality = 0U;
         g_gps_last_fix_tick = 0;
     }
 }
@@ -294,7 +303,6 @@ static void ParseGGA(const char* line)
 static void ParseRMC(const char* line)
 {
     if (!line) return;
-    bool had_fix = g_gps_fixed;
     
     // Make a copy for strtok_r
     char copy[GPS_LINE_BUF_SIZE];
@@ -336,34 +344,11 @@ static void ParseRMC(const char* line)
         }
     }
     
-    // Check if we have valid data (status='A' means valid)
+    // RMC status A means a valid navigation solution, not RTK Fixed. GGA is
+    // the only source of fix quality; RMC must not acquire or sustain Fixed.
     if (latitude_str[0] && longitude_str[0] && (status == 'A' || status == 'a')) {
-        double lat = ConvertToDegrees(latitude_str);
-        double lon = ConvertToDegrees(longitude_str);
-        
-        if (ns == 'S' || ns == 's') {
-            lat = -lat;
-        }
-        if (ew == 'W' || ew == 'w') {
-            lon = -lon;
-        }
-        
-        // Update global data
-        g_gps_latitude = (float)lat;
-        g_gps_longitude = (float)lon;
-        g_gps_valid = true;
-        g_gps_fixed = true;
-        g_gps_last_fix_tick = LOS_TickCountGet();
-
-        if (!had_fix) {
-            printf("[GPS] Fix acquired (RMC): lat=%.6f lon=%.6f\n", lat, lon);
-        }
-    } else if (status == 'V' || status == 'v') {
-        if (had_fix) {
-            printf("[GPS] Fix lost (RMC)\n");
-        }
-        g_gps_fixed = false;
-        g_gps_last_fix_tick = 0;
+        (void)ns;
+        (void)ew;
     } else {
         // 数据不完整的警告
         if (GPS_VERBOSE_NMEA_LOG && status == 'A' && (!latitude_str[0] || !longitude_str[0])) {
@@ -371,6 +356,111 @@ static void ParseRMC(const char* line)
         }
     }
 }
+
+#if GNSS_RTCM_INJECTION_MODE != GNSS_RTCM_INJECTION_DISABLED
+static uint64_t GpsMonotonicMs(void)
+{
+    uint64_t ticks = (uint64_t)LOS_TickCountGet();
+    uint64_t ticks_per_second = (uint64_t)g_ticksPerSec;
+
+    if (ticks_per_second == 0U) {
+        return ticks;
+    }
+    return (ticks / ticks_per_second) * 1000U +
+           ((ticks % ticks_per_second) * 1000U) / ticks_per_second;
+}
+
+static int GPS_WriteRtcmFrame(const unsigned char *frame, uint16_t frame_bytes)
+{
+    uint16_t offset = 0U;
+
+    while (offset < frame_bytes) {
+        uint16_t remaining = (uint16_t)(frame_bytes - offset);
+        uint16_t chunk = remaining > GNSS_RTCM_UART_CHUNK_SIZE
+                             ? GNSS_RTCM_UART_CHUNK_SIZE
+                             : remaining;
+        int written = IoTUartWrite(GPS_UART_ID, frame + offset, chunk);
+
+        if (written != (int)chunk) {
+            GnssRtcmInjection_RecordWriteError(written > 0 ? 1U : 0U);
+            return -1;
+        }
+        offset = (uint16_t)(offset + chunk);
+    }
+
+    GnssRtcmInjection_RecordInjected(frame_bytes);
+    return 0;
+}
+
+static void GPS_ProcessRtcmQueue(void)
+{
+    uint16_t frame_bytes = 0U;
+    uint16_t message_type = 0U;
+    int dequeue_ret = GnssRtcmInjection_TryDequeue(
+        GpsMonotonicMs(),
+        g_rtcm_uart_frame,
+        sizeof(g_rtcm_uart_frame),
+        &frame_bytes,
+        &message_type
+    );
+
+    (void)message_type;
+    if (dequeue_ret <= 0) {
+        return;
+    }
+
+#if GNSS_RTCM_INJECTION_MODE == GNSS_RTCM_INJECTION_PROBE
+    GnssRtcmInjection_RecordProbe(frame_bytes);
+#elif GNSS_RTCM_INJECTION_MODE == GNSS_RTCM_INJECTION_LIVE
+    if (GPS_WriteRtcmFrame(g_rtcm_uart_frame, frame_bytes) != 0) {
+        GnssRtcmInjection_RecordInjectionDrop();
+    }
+#endif
+}
+
+static void GPS_LogRtcmStatus(void)
+{
+    uint32_t now = (uint32_t)LOS_TickCountGet();
+    uint32_t interval = LOS_MS2Tick(GNSS_RTCM_STATUS_LOG_INTERVAL_MS);
+    GnssRtcmInjectionStats stats;
+
+    if (interval == 0U) {
+        interval = 1U;
+    }
+    if (g_rtcm_last_status_log_tick != 0U &&
+        now - g_rtcm_last_status_log_tick < interval) {
+        return;
+    }
+    g_rtcm_last_status_log_tick = now;
+    GnssRtcmInjection_GetStats(&stats);
+    if (stats.accepted_fragments == 0U && stats.rejected_fragments == 0U) {
+        return;
+    }
+    printf(
+        "[RTCM] mode=%d accepted=%u complete=%u duplicate=%u rejected=%u crc=%u "
+        "expired=%u ttl_unverified=%u queue=%u/%u queue_evict=%u queue_expired=%u "
+        "probe=%u injected=%u bytes=%u write_err=%u partial=%u drop=%u\n",
+        GNSS_RTCM_INJECTION_MODE,
+        stats.accepted_fragments,
+        stats.completed_frames,
+        stats.duplicate_fragments,
+        stats.rejected_fragments,
+        stats.crc_errors,
+        stats.expired_assemblies,
+        stats.ttl_unverified_fragments,
+        stats.queue_pending,
+        stats.queue_high_watermark,
+        stats.queue_evictions,
+        stats.queue_expired_frames,
+        stats.probe_validated_frames,
+        stats.injected_frames,
+        stats.injected_bytes,
+        stats.uart_write_errors,
+        stats.uart_partial_writes,
+        stats.injection_dropped_frames
+    );
+}
+#endif
 
 // 后台任务：高频率轮询UART，将数据写入FIFO
 // 注：RK2206 UART不支持硬件中断，使用轮询模拟
@@ -383,6 +473,12 @@ static void GPS_UartPollTask(void)
 #endif
     
     while (1) {
+#if GNSS_RTCM_INJECTION_MODE != GNSS_RTCM_INJECTION_DISABLED
+        // This task exclusively owns GNSS UART I/O. Queue producers never call
+        // IoTUartWrite, so NMEA reads and RTCM writes cannot race in the HAL.
+        GPS_ProcessRtcmQueue();
+        GPS_LogRtcmStatus();
+#endif
         // 尝试读取UART数据
         int len = IoTUartRead(GPS_UART_ID, temp_buf, sizeof(temp_buf));
         if (len > 0) {
@@ -525,7 +621,11 @@ int GPS_Init(void)
         .stopBits = IOT_UART_STOP_BIT_1,
         .parity = IOT_UART_PARITY_NONE,
         .rxBlock = IOT_UART_BLOCK_STATE_NONE_BLOCK,
+#if GNSS_RTCM_INJECTION_MODE == GNSS_RTCM_INJECTION_LIVE
+        .txBlock = IOT_UART_BLOCK_STATE_BLOCK,
+#else
         .txBlock = IOT_UART_BLOCK_STATE_NONE_BLOCK,
+#endif
         .pad = IOT_FLOW_CTRL_NONE,
     };
     
@@ -620,7 +720,7 @@ void GPS_Poll(void)
         }
     }
 
-    if (g_gps_fixed && g_gps_last_fix_tick != 0U) {
+    if (g_gps_has_position_fix && g_gps_last_fix_tick != 0U) {
         uint32_t now = LOS_TickCountGet();
         uint32_t stale_timeout_ticks = LOS_MS2Tick(GPS_FIX_STALE_TIMEOUT_MS);
 
@@ -629,7 +729,8 @@ void GPS_Poll(void)
         }
 
         if ((now - g_gps_last_fix_tick) > stale_timeout_ticks) {
-            g_gps_fixed = false;
+            g_gps_has_position_fix = false;
+            g_gps_gga_quality = 0U;
             g_gps_last_fix_tick = 0U;
             printf("[GPS] Fix expired after %u ms without fresh valid sentence\n", GPS_FIX_STALE_TIMEOUT_MS);
         }
@@ -648,5 +749,10 @@ int GPS_Read(float *lat, float *lon)
     
     // 返回值表示GPS是否有有效定位
     // 但坐标值已经被更新（可能是最后一次有效定位的坐标）
-    return g_gps_fixed ? 0 : -1;
+    return g_gps_has_position_fix ? 0 : -1;
+}
+
+int GPS_GetGgaQuality(void)
+{
+    return (int)g_gps_gga_quality;
 }

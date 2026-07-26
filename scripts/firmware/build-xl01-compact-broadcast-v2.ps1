@@ -3,6 +3,10 @@ param(
   [string]$SdkRoot = "F:\2\openharmony\txsmartropenharmony",
   [string]$ContainerName = "openharmony-dev",
   [string]$ArtifactDirectory = "",
+  [ValidateSet("disabled", "probe", "live")]
+  [string]$GnssRtcmInjectionMode = "disabled",
+  [ValidateSet("A", "B", "C")]
+  [string[]]$NodeLabels = @("A", "B", "C"),
   [switch]$KeepSdkExperimentSource
 )
 
@@ -27,7 +31,11 @@ $syncFiles = @(
   "drivers\xl01\field_link_frame.h",
   "drivers\xl01\gnss_transport_v3.c",
   "drivers\xl01\gnss_transport_v3.h",
+  "drivers\xl01\gnss_rtcm_injection.c",
+  "drivers\xl01\gnss_rtcm_injection.h",
   "drivers\xl01\xl01_driver.c",
+  "drivers\sensors\gps_driver.c",
+  "drivers\sensors\gps_driver.h",
   "app\compact_telemetry_builder.c",
   "app\compact_telemetry_builder.h",
   "app\compact_poll_command.c",
@@ -53,6 +61,33 @@ function Set-SingleMacro {
     throw "Expected one $Macro definition, found $($matches.Count)"
   }
   return [regex]::Replace($Text, $pattern, "#define $Macro                `"$Value`"")
+}
+
+function Set-SingleTokenMacro {
+  param(
+    [string]$Text,
+    [string]$Macro,
+    [string]$Value
+  )
+
+  $pattern = "(?m)^#define\s+" + [regex]::Escape($Macro) + "\s+.*$"
+  $matches = [regex]::Matches($Text, $pattern)
+  if ($matches.Count -ne 1) {
+    throw "Expected one $Macro definition, found $($matches.Count)"
+  }
+  return [regex]::Replace($Text, $pattern, "#define $Macro $Value")
+}
+
+function Set-GnssRtcmInjectionMode {
+  $modeToken = switch ($GnssRtcmInjectionMode) {
+    "disabled" { "GNSS_RTCM_INJECTION_DISABLED" }
+    "probe" { "GNSS_RTCM_INJECTION_PROBE" }
+    "live" { "GNSS_RTCM_INJECTION_LIVE" }
+  }
+  $configPath = Join-Path $sampleRoot "config\app_config.h"
+  $text = [System.IO.File]::ReadAllText($configPath)
+  $text = Set-SingleTokenMacro -Text $text -Macro "GNSS_RTCM_INJECTION_MODE" -Value $modeToken
+  [System.IO.File]::WriteAllText($configPath, $text, [System.Text.UTF8Encoding]::new($false))
 }
 
 function Set-NodeIdentity {
@@ -116,7 +151,9 @@ try {
     Copy-Item -LiteralPath $source -Destination $target -Force
   }
 
-  foreach ($node in $nodes) {
+  Set-GnssRtcmInjectionMode
+
+  foreach ($node in $nodes | Where-Object { $_.Label -in $NodeLabels }) {
     Set-NodeIdentity -Node $node
     Write-Host ("Building compact XLS1 firmware for node {0} ({1})" -f $node.Label, $node.DeviceId)
     docker exec $ContainerName bash -lc "cd /root/workspace/txsmartropenharmony && hb build -f"
@@ -132,6 +169,7 @@ try {
   $manifest = [ordered]@{
     schemaVersion = 1
     profile = "rk2206-xl01-compact-broadcast-v2"
+    gnssRtcmInjectionMode = $GnssRtcmInjectionMode
     firmwareMarker = "fw-compact-broadcast-poll-v2-20260724"
     compactPayloadBytes = 46
     fieldLinkWireBytes = 64

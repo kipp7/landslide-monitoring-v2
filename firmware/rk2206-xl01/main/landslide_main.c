@@ -1431,6 +1431,18 @@ static void* DataUploadTask(const char* arg)
     printf("  Sensors:\n");
     printf("    - Virtual: %s\n", ENABLE_VIRTUAL ? "ON" : "OFF");
     printf("    - GPS: %s\n", ENABLE_GPS ? "ON" : "OFF");
+#if ENABLE_GPS
+    printf("    - RTCM Injection: %s queue=%u max_queue_age=%u ms\n",
+#if GNSS_RTCM_INJECTION_MODE == GNSS_RTCM_INJECTION_LIVE
+           "LIVE",
+#elif GNSS_RTCM_INJECTION_MODE == GNSS_RTCM_INJECTION_PROBE
+           "PROBE (no GNSS UART writes)",
+#else
+           "DISABLED",
+#endif
+           (unsigned int)GNSS_RTCM_QUEUE_DEPTH,
+           (unsigned int)GNSS_RTCM_MAX_QUEUE_AGE_MS);
+#endif
     printf("    - RS485 Bus: %s ready=%s\n",
            ENABLE_RS485_BUS ? "ON" : "OFF",
            g_rs485_ready ? "yes" : "no");

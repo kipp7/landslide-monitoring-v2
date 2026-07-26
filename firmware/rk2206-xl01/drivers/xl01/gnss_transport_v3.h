@@ -117,6 +117,7 @@ typedef struct {
     uint32_t duplicate_fragments;
     uint32_t completed_frames;
     uint32_t rejected_fragments;
+    uint32_t crc_errors;
     uint32_t ttl_unverified_fragments;
     uint32_t expired_assemblies;
     uint32_t capacity_evictions;

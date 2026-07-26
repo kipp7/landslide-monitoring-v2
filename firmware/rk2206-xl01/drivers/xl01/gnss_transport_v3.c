@@ -122,6 +122,19 @@ static uint32_t MaxRtcmTtl(uint8_t message_class)
     return 120000U;
 }
 
+static int RtcmFrameCrcMatches(const uint8_t *frame, uint16_t frame_bytes)
+{
+    uint32_t expected_crc;
+
+    if (frame == NULL || frame_bytes < 3U) {
+        return 0;
+    }
+    expected_crc = ((uint32_t)frame[frame_bytes - 3U] << 16) |
+                   ((uint32_t)frame[frame_bytes - 2U] << 8) |
+                   frame[frame_bytes - 1U];
+    return GnssTransportV3_Crc24q(frame, (uint16_t)(frame_bytes - 3U)) == expected_crc;
+}
+
 int GnssTransportV3_EncodeCore(const GnssCoreV3 *core, uint8_t *output, uint16_t output_bytes)
 {
     if (core == NULL || output == NULL || output_bytes < GNSS_CORE_V3_PAYLOAD_BYTES ||
@@ -493,8 +506,18 @@ GnssRtcmReassemblyStatusV3 GnssRtcmReassemblerV3_Push(
         }
     }
     if (completed_frame == NULL || completed_bytes == NULL ||
-        completed_capacity < fragment.total_bytes ||
-        GnssTransportV3_InspectRtcm3(slot->frame, fragment.total_bytes, &message_type, &frame_crc) != 0 ||
+        completed_capacity < fragment.total_bytes) {
+        ClearSlot(slot);
+        state->rejected_fragments++;
+        return GNSS_RTCM_REASSEMBLY_REJECTED;
+    }
+    if (!RtcmFrameCrcMatches(slot->frame, fragment.total_bytes)) {
+        ClearSlot(slot);
+        state->rejected_fragments++;
+        state->crc_errors++;
+        return GNSS_RTCM_REASSEMBLY_REJECTED;
+    }
+    if (GnssTransportV3_InspectRtcm3(slot->frame, fragment.total_bytes, &message_type, &frame_crc) != 0 ||
         message_type != fragment.message_type || frame_crc != fragment.frame_crc24q) {
         ClearSlot(slot);
         state->rejected_fragments++;

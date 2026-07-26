@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "../drivers/xl01/gnss_transport_v3.h"
+#include "../drivers/xl01/gnss_rtcm_injection.h"
 
 #define RTCM_FRAME_BYTES 129U
 #define TEST_FRAGMENT_DATA_BYTES 31U
@@ -254,12 +255,112 @@ static void TestFreshnessAndSessionRejection(void)
     ) == GNSS_RTCM_REASSEMBLY_REJECTED);
 }
 
+static GnssRtcmReassemblyStatusV3 FeedInjectionFrame(
+    const uint8_t frame[RTCM_FRAME_BYTES],
+    uint32_t session_epoch,
+    uint32_t sequence,
+    uint64_t monotonic_ms,
+    int corrupt_fragment
+)
+{
+    uint8_t payload[GNSS_RTCM_V3_FRAGMENT_HEADER_BYTES + TEST_FRAGMENT_DATA_BYTES];
+    GnssRtcmReassemblyStatusV3 status = GNSS_RTCM_REASSEMBLY_REJECTED;
+    uint8_t index;
+
+    for (index = 0U; index < TEST_FRAGMENT_COUNT; ++index) {
+        uint16_t payload_bytes = BuildFragment(
+            frame,
+            index,
+            session_epoch,
+            sequence,
+            GNSS_V3_TARGET_NODE_A,
+            TEST_NOW_MS,
+            payload
+        );
+        if ((int)index == corrupt_fragment) {
+            payload[GNSS_RTCM_V3_FRAGMENT_HEADER_BYTES] ^= 0x5AU;
+        }
+        status = GnssRtcmInjection_AcceptFragment(
+            payload,
+            payload_bytes,
+            monotonic_ms + index
+        );
+    }
+    return status;
+}
+
+static void TestBoundedInjectionQueue(void)
+{
+    uint8_t frame[RTCM_FRAME_BYTES];
+    uint8_t dequeued[GNSS_RTCM_V3_MAX_FRAME_BYTES];
+    uint16_t dequeued_bytes = 0U;
+    uint16_t message_type = 0U;
+    GnssRtcmInjectionStats stats;
+
+    BuildRtcm(frame);
+    assert(GnssRtcmInjection_Init(0U) == -1);
+    assert(GnssRtcmInjection_Init(1U) == 0);
+    assert(FeedInjectionFrame(frame, 51U, 1U, 1000U, -1) == GNSS_RTCM_REASSEMBLY_COMPLETE);
+    assert(FeedInjectionFrame(frame, 51U, 2U, 1010U, -1) == GNSS_RTCM_REASSEMBLY_COMPLETE);
+    assert(FeedInjectionFrame(frame, 51U, 3U, 1020U, -1) == GNSS_RTCM_REASSEMBLY_COMPLETE);
+
+    GnssRtcmInjection_GetStats(&stats);
+    assert(stats.completed_frames == 3U);
+    assert(stats.queued_frames == 3U);
+    assert(stats.queue_pending == GNSS_RTCM_QUEUE_DEPTH);
+    assert(stats.queue_high_watermark == GNSS_RTCM_QUEUE_DEPTH);
+    assert(stats.queue_evictions == 1U);
+    assert(stats.ttl_unverified_fragments == 15U);
+
+    assert(GnssRtcmInjection_TryDequeue(
+        1100U, dequeued, sizeof(dequeued), &dequeued_bytes, &message_type
+    ) == 1);
+    assert(dequeued_bytes == RTCM_FRAME_BYTES);
+    assert(message_type == 1124U);
+    assert(memcmp(dequeued, frame, RTCM_FRAME_BYTES) == 0);
+    GnssRtcmInjection_RecordProbe(dequeued_bytes);
+
+    assert(GnssRtcmInjection_TryDequeue(
+        1100U, dequeued, sizeof(dequeued), &dequeued_bytes, &message_type
+    ) == 1);
+    assert(GnssRtcmInjection_TryDequeue(
+        1100U, dequeued, sizeof(dequeued), &dequeued_bytes, &message_type
+    ) == 0);
+
+    assert(FeedInjectionFrame(frame, 51U, 4U, 1200U, -1) == GNSS_RTCM_REASSEMBLY_COMPLETE);
+    assert(GnssRtcmInjection_TryDequeue(
+        4205U, dequeued, sizeof(dequeued), &dequeued_bytes, &message_type
+    ) == 0);
+    GnssRtcmInjection_GetStats(&stats);
+    assert(stats.queue_expired_frames == 1U);
+    assert(stats.probe_validated_frames == 1U);
+    assert(stats.probe_validated_bytes == RTCM_FRAME_BYTES);
+}
+
+static void TestInjectionCrcCounter(void)
+{
+    uint8_t frame[RTCM_FRAME_BYTES];
+    GnssRtcmInjectionStats stats;
+
+    BuildRtcm(frame);
+    assert(GnssRtcmInjection_Init(1U) == 0);
+    assert(FeedInjectionFrame(frame, 61U, 1U, 2000U, 2) == GNSS_RTCM_REASSEMBLY_REJECTED);
+    GnssRtcmInjection_GetStats(&stats);
+    assert(stats.completed_frames == 0U);
+    assert(stats.crc_errors == 1U);
+    assert(stats.rejected_fragments == 1U);
+    assert(stats.queue_pending == 0U);
+}
+
 int main(void)
 {
     TestCoreGoldenVector();
     TestRtcmReassembly();
     TestFreshnessAndSessionRejection();
-    printf("gnss_transport_v3_host_test passed reassembler_bytes=%u\n",
-           (unsigned int)sizeof(GnssRtcmReassemblerV3));
+    TestBoundedInjectionQueue();
+    TestInjectionCrcCounter();
+    printf("gnss_transport_v3_host_test passed reassembler_bytes=%u queue_bytes=%u\n",
+           (unsigned int)sizeof(GnssRtcmReassemblerV3),
+           (unsigned int)(GNSS_RTCM_QUEUE_DEPTH * GNSS_RTCM_V3_MAX_FRAME_BYTES));
     return 0;
 }

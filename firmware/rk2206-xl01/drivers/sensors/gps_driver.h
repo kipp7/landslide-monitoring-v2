@@ -31,4 +31,10 @@ void GPS_Poll(void);
  */
 int GPS_Read(float *lat, float *lon);
 
+/**
+ * Return the latest checksum-valid GGA quality code (0/1/2/4/5...).
+ * RMC status never changes this value.
+ */
+int GPS_GetGgaQuality(void);
+
 #endif // DRIVERS_SENSORS_GPS_DRIVER_H

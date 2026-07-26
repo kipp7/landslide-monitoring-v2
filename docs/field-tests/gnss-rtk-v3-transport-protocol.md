@@ -51,6 +51,10 @@ Absolute generation time is required because a module may retain bytes internall
 
 The payload is about 116 bytes after field-link framing. Three nodes at 1 Hz therefore consume no more than about 348 B/s before radio-specific overhead. The old compact telemetry GPS fields remain a rollback/display path and must not feed centimetre displacement calculations.
 
+This is a compact structured summary, not a raw receiver dump. The normal field link does not carry raw NMEA sentences, per-satellite GSV rows or proprietary debug output. C/N0 values are bounded aggregates. Raw receiver evidence may only be enabled as a time-limited diagnostic capture; it must not compete continuously with RTCM.
+
+The professional displacement result is computed once on RK3568 from `GNSS_CORE`: coordinate-frame validation, ECEF/ENU, Hampel, adaptive Kalman, innovation checks, baseline version and alarm persistence stay centralized. RK2206 supplies the raw structured solution and quality evidence; it does not run a second independent displacement filter. Filtered ENU/displacement is a northbound result contract and is not duplicated inside this southbound field-link payload.
+
 ## RTCM Fragment
 
 The RTCM sub-header is 42 bytes including the common header:
@@ -91,6 +95,24 @@ These are bounded software defaults, not measured XLS1 limits. The sweep must al
 - Newer session epoch clears pending and recently-completed state.
 - Capacity pressure evicts the oldest incomplete message; it never allocates an unbounded buffer.
 - Reference messages may be cached at the gateway, but their generated time and class-specific TTL remain visible.
+
+## RK2206 Injection Modes
+
+The firmware has three compile-time modes and defaults to `DISABLED`:
+
+| Mode | Field-link RTCM | Reassemble/CRC/queue | Write UM220 UART |
+| --- | --- | --- | --- |
+| `DISABLED` | ignored | no | no |
+| `PROBE` | accepted | yes | no |
+| `LIVE` | accepted | yes | yes |
+
+The injection queue holds two complete RTCM frames and evicts the oldest frame under pressure, because a newer correction is more valuable than a delayed one. Reassembly is capped at four incomplete frames and 1500 ms. Queue residence is capped at the smaller of the message TTL and 3000 ms.
+
+Only the existing GPS poll task accesses the GNSS UART. The XL01 receive path can enqueue complete frames but cannot call `IoTUartWrite`, which serializes RTCM writes with NMEA reads at the HAL boundary. A queue-lock initialization failure keeps corrections disabled rather than falling back to an unsafe unlocked path.
+
+The current RK2206 build has monotonic time but no independently trusted absolute Unix clock. It therefore enforces reassembly and local queue age while incrementing `ttl_unverified_fragments`; the gateway remains responsible for absolute generated-time filtering. `LIVE` must not be field-enabled until this limitation and the mixed-load gate are explicitly accepted.
+
+Exposed counters include accepted/completed/duplicate/rejected fragments, CRC errors, expired assemblies, capacity evictions, TTL-unverified fragments, queue depth/high-water/eviction/expiration, probe-validated frames, injected bytes, partial writes and injection drops.
 
 ## Capacity Gate
 

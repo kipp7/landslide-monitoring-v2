@@ -21,6 +21,7 @@ static_library("xl01_landslide_monitor") {
         # Drivers - XL01
         "drivers/xl01/field_link_frame.c",
         "drivers/xl01/gnss_transport_v3.c",
+        "drivers/xl01/gnss_rtcm_injection.c",
         "drivers/xl01/xl01_driver.c",
         
         # Drivers - Sensors

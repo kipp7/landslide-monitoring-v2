@@ -148,6 +148,18 @@
 #define GPS_BAUDRATE        115200       // UM220-IV NK EVK config.ini WorkBaudrate defaults to 115200
 #define GPS_UART_PROBE_LOG_MODE 0        // 0=GPS UART confirmed; keep only parsed NMEA/fix logs
 #define GPS_VERBOSE_NMEA_LOG 0           // 0=hide raw GGA/RMC sentences; summary upload line shows GPS status
+// RTCM downlink remains compile-disabled until the mixed-load XLS1 gate passes.
+// PROBE validates receive/reassembly/queueing without writing the GNSS UART.
+#define GNSS_RTCM_INJECTION_DISABLED 0
+#define GNSS_RTCM_INJECTION_PROBE    1
+#define GNSS_RTCM_INJECTION_LIVE     2
+#ifndef GNSS_RTCM_INJECTION_MODE
+#define GNSS_RTCM_INJECTION_MODE GNSS_RTCM_INJECTION_DISABLED
+#endif
+#define GNSS_RTCM_QUEUE_DEPTH 2
+#define GNSS_RTCM_MAX_QUEUE_AGE_MS 3000U
+#define GNSS_RTCM_UART_CHUNK_SIZE 64U
+#define GNSS_RTCM_STATUS_LOG_INTERVAL_MS 10000U
 #endif
 
 #if ENABLE_RS485_BUS
