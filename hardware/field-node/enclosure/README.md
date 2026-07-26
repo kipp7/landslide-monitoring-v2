@@ -1,6 +1,6 @@
 # Field Node Enclosure
 
-Status: `MECH-R0.3-DRAFT / rectangular fit trial and perimeter R1-R6 reselection`
+Status: `MECH-R0.4-DRAFT / rectangular fit trial, nominal H1-H8 anchors, and harness study`
 
 | File | Purpose |
 | --- | --- |
@@ -9,4 +9,4 @@ Status: `MECH-R0.3-DRAFT / rectangular fit trial and perimeter R1-R6 reselection
 | [`tilt-sensor-mechanical-interface.zh-CN.md`](tilt-sensor-mechanical-interface.zh-CN.md) | Frozen transmitter dimensions and competition subplate hole coordinates |
 | [`assets/`](assets/) | Human-readable concept visuals; not manufacturing drawings |
 
-The earlier P1-P6 locator in `assets/08-enclosure-six-boss-selection.png` is retained as `MECH-R0.2-DRAFT` history and is not a machining source for the enlarged rectangular plate. The current direction first fits a `272 x 193 mm` template, then selects upper/lower perimeter bosses R1-R6. The final DXF is intentionally absent until fit, coordinates, height, hole depth, blind-hole state, battery envelope, and cable-entry geometry are measured from the physical unit.
+The earlier P1-P6 and R1-R6 locators are retained as history and are not machining sources for the enlarged rectangular plate. `CAD-R0.4` shows the user's nominal H1-H8 pattern (`X=+/-60.15`, `Y=+80/+30.6/-30.6/-80 mm`) and four optional edge support pads. The final DXF is intentionally absent until fit, physical coordinates, height, hole depth, blind-hole state, coplanarity, battery/CN3791 interfaces, cable outer diameters, and RF bulkhead geometry are measured from the physical unit.

@@ -6,7 +6,7 @@ ENC-BOTTOM-DEPTH,purchased enclosure,bottom shell depth,91.1,mm,NOMINAL,supplier
 ENC-RECT-X,purchased enclosure,rectangular internal reference length,276.0655,mm,NOMINAL,supplier dimension image,fit reference only
 ENC-RECT-Y,purchased enclosure,rectangular internal reference width,197,mm,NOMINAL,supplier dimension image,fit reference only
 ENC-INNER-CONTOUR,purchased enclosure,scalloped inner contour,,mm,PENDING,physical template required,blocks FR4 DXF
-ENC-P1-P6,purchased enclosure,six boss coordinates,,mm,PENDING,measure from one physical datum,blocks FR4 holes
+ENC-H1-H8,purchased enclosure,eight nominal boss coordinates,-60.15;80|60.15;80|-60.15;30.6|60.15;30.6|-60.15;-30.6|60.15;-30.6|-60.15;-80|60.15;-80,mm,NOMINAL,user annotated supplier drawing; verify from one physical datum,blocks FR4 DXF
 ENC-BOSS-Z,purchased enclosure,boss top elevation,approximately 6,mm,PENDING,user reports perimeter 6 and middle 1 mm raised floor plus 5 mm boss are coplanar; verify with straightedge,blocks final enclosure interface
 ENC-CENTER-STEP-Z,purchased enclosure,middle raised floor height,1,mm,NOMINAL,user physical observation; combines with 5 mm middle boss to common 6 mm top plane,reference pending caliper check
 ENC-CENTER-BOSS-Z,purchased enclosure,middle boss height above raised floor,5,mm,NOMINAL,user physical observation; no height compensation shim intended,reference pending caliper check
@@ -14,11 +14,11 @@ ENC-BOSS-HOLE,purchased enclosure,hole diameter depth and blind state,,mm,PENDIN
 PLT-X,FR4 main plate,maximum blank length,265,mm,NOMINAL,maximum envelope only,reference only
 PLT-Y,FR4 main plate,maximum blank width,185,mm,NOMINAL,maximum envelope only,reference only
 PLT-Z,FR4 main plate,thickness,3,mm,NOMINAL,FR4 G10 prototype choice,reference only
-PLT-HOLE-D,FR4 main plate,P1-P6 clearance hole diameter,3.5,mm,NOMINAL,M3 clearance target pending boss survey,do not drill yet
+PLT-HOLE-D,FR4 main plate,H1-H8 clearance hole diameter,3.5,mm,NOMINAL,M3 clearance target pending boss survey,do not drill yet
 PLT-R03-X,FR4 rectangular fit-trial plate,length,272,mm,DESIGN,derived from nominal enclosure reference with about 2 mm clearance per side,fit template only
 PLT-R03-Y,FR4 rectangular fit-trial plate,width,193,mm,DESIGN,derived from nominal enclosure reference with 2 mm clearance per side,fit template only
 PLT-R03-Z,FR4 rectangular fit-trial plate,thickness,3,mm,DESIGN,FR4 G10 prototype choice,review required
-PLT-R03-ANCHORS,FR4 rectangular fit-trial plate,perimeter six-anchor coordinates,,mm,PENDING,reselect upper and lower boss rows and measure from one datum,blocks FR4 holes
+PLT-R04-ANCHORS,FR4 rectangular fit-trial plate,eight-anchor centered coordinates,-60.15;80|60.15;80|-60.15;30.6|60.15;30.6|-60.15;-30.6|60.15;-30.6|-60.15;-80|60.15;-80,mm,NOMINAL,column pitch 120.3 outer row pitch 160 inner row pitch 61.2 from user annotation,verify physical before DXF
 SUB-X,tilt reference plate,length,120,mm,VERIFIED,competition enclosure decision,interface reference
 SUB-Y,tilt reference plate,width,85,mm,VERIFIED,competition enclosure decision,interface reference
 SUB-Z,tilt reference plate,thickness,3,mm,VERIFIED,304 stainless prototype choice,interface reference
@@ -33,9 +33,16 @@ SEN-HOLE-D,tilt transmitter,body clearance hole diameter,3.6,mm,VERIFIED,DL-XLS1
 PCB-X,R1.2 carrier board,length,170,mm,VERIFIED,production Gerber outline,interface reference
 PCB-Y,R1.2 carrier board,width,115,mm,VERIFIED,production Gerber outline,interface reference
 PCB-Z,R1.2 carrier board,assumed board thickness,1.6,mm,NOMINAL,measure physical board before standoffs,reference only
-BAT-X,3S battery,length,70,mm,ESTIMATED,photo estimate pending calipers,never machine from this
-BAT-Y,3S battery,width,55,mm,ESTIMATED,photo estimate pending calipers,never machine from this
-BAT-Z,3S battery,height,40,mm,ESTIMATED,photo estimate pending calipers,never machine from this
+BAT-X,3S battery,length with allowance,66,mm,NOMINAL,user measured 65 mm and requested 1 mm allowance,verify before tray release
+BAT-Y,3S battery,width with allowance,61,mm,NOMINAL,user measured 60 mm and requested 1 mm allowance,verify before tray release
+BAT-Z,3S battery,height with allowance,40,mm,NOMINAL,user measured 38 mm and requested 2 mm allowance,verify before tray release
+CHG-X,CN3791 module,length with allowance,46,mm,NOMINAL,user measured 45 mm and requested allowance,no module holes
+CHG-Y,CN3791 module,width with allowance,21,mm,NOMINAL,user measured 20 mm and requested allowance,no module holes
+CHG-Z,CN3791 module,height with allowance,10,mm,NOMINAL,user measured 9 mm and requested allowance,no module holes
+PCB-HOLE-D,R1.2 carrier board,main mounting-hole diameter,3.2,mm,VERIFIED,production Gerber NPTH drill,interface reference
+PCB-HOLE-PITCH,R1.2 carrier board,main mounting-hole pitch,163;108,mm,VERIFIED,production Gerber NPTH drill,interface reference
+PCB-STANDOFF,CAD-R0.4 carrier layout,standoff height,6,mm,DESIGN,layout choice and screw-head clearance,review required
+PCB-INSTALLED-Z,CAD-R0.4 carrier layout,installed height envelope,35,mm,NOMINAL,user requested allowance above measured approximately 30 mm,layout check only
 SOL-X,SWM-10W solar panel,length,290,mm,VERIFIED,supplier specification,interface reference
 SOL-Y,SWM-10W solar panel,width,240,mm,VERIFIED,supplier specification,interface reference
 SOL-Z,SWM-10W solar panel,height,17,mm,VERIFIED,supplier specification,interface reference
@@ -49,3 +56,10 @@ ASM-R03-CHARGER-CENTER,CAD-R0.3 layout,CN3791 reserved zone center XY,91;-15,mm,
 ASM-R03-TILT-CENTER,CAD-R0.3 layout,tilt plate and transmitter center XY,71;51,mm,DESIGN,local 304 reference plate on FR4,layout reference only
 ASM-R03-MIN-CLEARANCE,CAD-R0.3 layout,minimum planar module clearance,6,mm,DERIVED,axis-aligned envelope validation,layout check only
 ASM-R03-HIGHEST-Z,CAD-R0.3 layout,highest component envelope,52,mm,DERIVED,tilt transmitter envelope top,layout check only
+ASM-R04-PCB-CENTER,CAD-R0.4 layout,carrier PCB center XY,-73;0,mm,DESIGN,CCW rotation places power RS485 toward center and RF toward left wall,layout reference only
+ASM-R04-BATTERY-CENTER,CAD-R0.4 layout,battery center XY,92;-62,mm,DESIGN,cable exits upper-left toward enclosure center,layout reference only
+ASM-R04-CHARGER-CENTER,CAD-R0.4 layout,CN3791 center XY,96;-9,mm,DESIGN,two-ended connector clearance,layout reference only
+ASM-R04-TILT-CENTER,CAD-R0.4 layout,tilt plate and transmitter center XY,68;53,mm,DESIGN,local steel reference plate on 6 mm support,layout reference only
+ASM-R04-MIN-CLEARANCE,CAD-R0.4 layout,minimum planar module clearance,4,mm,DERIVED,axis-aligned holder/tray envelope validation,layout check only
+ASM-R04-HIGHEST-Z,CAD-R0.4 layout,highest component envelope,57,mm,DERIVED,tilt transmitter envelope top,layout check only
+ASM-R04-RIM-CLEARANCE,CAD-R0.4 layout,nominal clearance to bottom-shell rim,34.1,mm,DERIVED,91.1 mm nominal bottom depth minus highest Z,layout check only

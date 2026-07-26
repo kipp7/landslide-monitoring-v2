@@ -54,6 +54,20 @@ field-node digital mechanical model without inventing unresolved dimensions.
 - CAD-R0.3 feature commit `879d019b` is pushed to
   `origin/docs/hardware-field-node-evt0-1`; all nine native SolidWorks LFS
   objects uploaded successfully.
+- `CAD-R0.4` now contains a reproducible 23-component layout/harness assembly.
+  The final full rebuild generated 18 bodies with exact expected/actual volume
+  matches, native/STEP/drawing/PDF/previews, and a SHA-256 manifest. Layout
+  checks pass at 4 mm minimum planar clearance, Z=57 mm highest envelope, and
+  34.1 mm nominal rim clearance. The A3 one-page PDF was rendered through
+  Poppler and visually checked for clipping and overlap.
+- The nominal FR4 H1-H8 pattern is `X=+/-60.15 mm` and
+  `Y=+80/+30.6/-30.6/-80 mm`; these are user-annotated supplier dimensions and
+  remain blocked from fabrication until physically transferred and measured.
+- CAD-R0.4 adds the Gerber-derived carrier holes (4 x diameter 3.2 mm at
+  163 x 108 mm), a 35 mm installed envelope, measured-with-allowance battery
+  and CN3791 bodies, four optional edge pads, a fuse zone, and eight concept
+  harness route solids. Power routing preserves PV -> CN3791 -> battery charge
+  and battery load -> fuse/service disconnect -> PCB DC5521.
 
 ## In Progress
 
@@ -69,14 +83,15 @@ field-node digital mechanical model without inventing unresolved dimensions.
 - Measure the physical enclosure from one datum and fill every `PENDING` entry in
   `field-node-cad-inputs.csv` with evidence.
 - Fit a `272 x 193 mm` rectangular template, record any local interference, and
-  select/measure perimeter R1-R6 from one plate datum.
+  transfer/measure H1-H8 from one plate datum.
 - Model the nominally coplanar boss stack as perimeter 6 mm versus middle
   1 mm raised floor plus 5 mm boss. No height-compensation shim is planned;
-  verify R1-R6 top-plane coplanarity, hole diameter/depth, and blind state.
-- Freeze the rectangular FR4 outline and six hole coordinates, then export DXF
+  verify H1-H8 top-plane coplanarity, hole diameter/depth, and blind state.
+- Freeze the rectangular FR4 outline and eight hole coordinates, then export DXF
   and a dimensioned drawing.
-- Add measured battery, CN3791 module, cable glands, solar frame holes, and GNSS
-  hardware before promoting the layout to a manufacturing assembly.
+- Confirm battery/CN3791 caliper dimensions, then freeze trays/clips; measure
+  cable OD, gland threads, RF bulkheads, solar frame holes, and GNSS hardware
+  before promoting the layout to a manufacturing assembly.
 - Repoint global MCP configuration after the branch is merged into its permanent
   worktree path.
 
@@ -89,7 +104,8 @@ field-node digital mechanical model without inventing unresolved dimensions.
 
 ## Resume Prompt
 
-Continue field-node CAD from `CAD-R0.3 / MECH-R0.3-DRAFT`: verify the generated
-artifact set and Git diff, then fit a `272 x 193 mm` template and measure
-perimeter R1-R6 from the plate left-bottom datum. Update only physically verified
-inputs before generating the FR4 DXF and manufacturing assembly.
+Continue field-node CAD from `CAD-R0.4 / MECH-R0.4-DRAFT`: verify the generated
+artifact set and Git diff, then fit a `272 x 193 mm` template and transfer/measure
+H1-H8 from the plate left-bottom datum. Measure cable/gland/RF interfaces and
+confirm battery/CN3791 envelopes before generating the FR4 DXF or production
+harness.

@@ -7,10 +7,10 @@
 | Integrated field node | `FIELD-NODE-HW-EVT0.2-DRAFT` | Engineering reference set | Not released |
 | Existing carrier board | `R1.2` | As-built reference | Gerber exists; source documents conflict |
 | Carrier-board improvement | `R1.3-DRAFT` | Requirements | Not routed or released |
-| Competition enclosure | `MECH-R0.3-DRAFT` | Rectangular FR4 fit trial and perimeter six-point reselection | Fit, coordinates, boss height, and hole depth pending |
+| Competition enclosure | `MECH-R0.4-DRAFT` | Rectangular FR4 fit trial, nominal 8-hole H1-H8 pattern, edge-support and harness study | Physical fit, coordinates, boss height, hole depth and cable interfaces pending |
 | Solar subsystem | `PWR-R0.1` | Candidate architecture | Charger and energy budget unqualified |
-| Prototype procurement | `BOM-R0.3` | Rectangular FR4 fit trial and perimeter R1-R6 gate recorded | Not a production AVL |
-| Mechanical CAD | `CAD-R0.3` | Controlled internal layout assembly and labeled top view | Review required; FR4 support holes pending |
+| Prototype procurement | `BOM-R0.4` | CAD-R0.4 measured-envelope parts, nominal H1-H8 anchors and harness purchase gates | Not a production AVL |
+| Mechanical CAD | `CAD-R0.4` | 23-component internal layout assembly, 8-hole FR4 and concept harness | Review required; physical anchor/cable interfaces pending |
 
 ## Change History
 
@@ -67,6 +67,15 @@
 - Kept R1-R6 holes, battery dimensions, CN3791 dimensions, and final tray
   scallops explicitly blocked; this revision is layout review only and not for
   manufacture.
+
+### 2026-07-26 - `CAD-R0.4`
+
+- Rebuilt the internal layout as a 23-component SOLIDWORKS 2022 assembly with a `272 x 193 x 3 mm` FR4 nominal plate carrying 8 x `Ø3.5 mm` H1-H8 holes.
+- Recorded the user-specified nominal pattern: columns `120.3 mm`, outer rows `160 mm`, inner rows `61.2 mm`, centered coordinates `X=±60.15`, `Y=+80/+30.6/-30.6/-80 mm`.
+- Added the verified carrier-board four-hole pattern (`Ø3.2 mm`, `163 x 108 mm`), CCW-rotated interface orientation, 35 mm installed-height envelope, `66 x 61 x 40 mm` battery envelope, `46 x 21 x 10 mm` CN3791 envelope, clip/holder zones, fuse/service zone, and four optional edge support pads.
+- Added eight concept harness route solids and preserved the power topology: PV -> CN3791 -> battery charge; battery load -> fuse/maintenance disconnect -> PCB DC5521.
+- Verified 18 generated part/route bodies by volume, inserted 23 assembly components, `4 mm` minimum planar module clearance, `57 mm` highest envelope, and `34.1 mm` nominal rim clearance. Generated native SLDASM/STEP, A3 SLDDRW/PDF/PNG, exploded/isometric/top previews, labeled SVG/PNG, and manifest checksums.
+- Kept H1-H8 physical transfer, boss depth/blind state/coplanarity, cable OD/gland threads, RF bulkhead dimensions, final clip geometry, and FR4 DXF explicitly blocked.
 
 ## Versioning Rules
 

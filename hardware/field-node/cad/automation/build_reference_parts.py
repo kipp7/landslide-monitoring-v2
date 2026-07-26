@@ -67,6 +67,31 @@ async def call(session: ClientSession, name: str, arguments: dict[str, Any]) -> 
     return structured
 
 
+def close_active_model_via_com() -> None:
+    """Close the active document when the upstream close_model tool misfires."""
+
+    pythoncom.CoInitialize()
+    try:
+        app = win32com.client.Dispatch("SldWorks.Application")
+        model = app.ActiveDoc
+        if model is None:
+            return
+        title_value = model.GetTitle
+        title = str(title_value() if callable(title_value) else title_value)
+        app.CloseDoc(title)
+    finally:
+        pythoncom.CoUninitialize()
+
+
+async def safe_close_model(session: ClientSession) -> None:
+    try:
+        await call(session, "close_model", {"input_data": {"save": True}})
+    except RuntimeError as exc:
+        if "close_model failed" not in str(exc):
+            raise
+        close_active_model_via_com()
+
+
 def cut_last_profile_through_all(depth_mm: float) -> str:
     """Create a real cut on localized SW2022 feature trees.
 
@@ -198,7 +223,7 @@ async def build_part(session: ClientSession, spec: PartSpec, output_dir: Path) -
             }
         },
     )
-    await call(session, "close_model", {"input_data": {"save": True}})
+    await safe_close_model(session)
 
     for artifact in (native, step, preview):
         if not artifact.exists() or artifact.stat().st_size == 0:

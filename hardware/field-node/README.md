@@ -13,14 +13,14 @@ This package records the current productization work for the RK2206 field node. 
 | [`electrical/`](electrical/) | Carrier-board R1.3 requirements and electrical boundaries |
 | [`enclosure/`](enclosure/) | Waterproof enclosure, internal plate, tilt sensor interface, and concept visuals |
 | [`power/`](power/) | 10 W solar panel, 3S battery, and charging subsystem requirements |
-| [`procurement/`](procurement/) | Prototype purchasing list (`BOM-R0.3`) and qualification gates |
+| [`procurement/`](procurement/) | Prototype purchasing list (`BOM-R0.4`) and qualification gates |
 | [`cad/`](cad/) | SOLIDWORKS automation, controlled CAD inputs, native reference models, STEP exports, and previews |
 
 ## Current Decisions
 
 - Keep the purchased `320 x 240 x 145 mm` IP65 enclosure for the competition build.
 - Use a removable rectangular 3 mm FR4/G10 internal plate. The supplier's `276.0655 x 197 mm` is a nominal cavity reference; first fit a `272 x 193 mm` template with approximately 2 mm clearance per side.
-- Reselect six low perimeter bosses R1-R6 in a three-column by two-row pattern for the enlarged plate. Their coordinates, height, hole depth, and blind state remain pending physical measurement.
+- Use the CAD-R0.4 nominal H1-H8 two-column/four-row pattern for the enlarged plate, with four optional edge support pads. Physical coordinates, height, hole depth, blind state, and coplanarity remain pending measurement; no FR4 DXF is released.
 - Keep the tilt transmitter inside the competition enclosure on a dedicated `120 x 85 x 3 mm` 304 stainless reference plate. Do not replace the whole FR4 plate with steel.
 - Connect the 10 W panel to the 3S battery through a complete 12.6 V solar charging module. The panel must not connect directly to the battery or carrier board.
 - Preserve the validated RK2206 pinout and module topology while R1.3 adds protection, observability, and maintainability.

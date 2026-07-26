@@ -1,6 +1,6 @@
 # Field Node CAD
 
-Status: `CAD-R0.3 / INTERNAL LAYOUT ASSEMBLY / REVIEW REQUIRED`
+Status: `CAD-R0.4 / INTERNAL LAYOUT + HARNESS ASSEMBLY / REVIEW REQUIRED`
 
 This directory contains the reproducible SOLIDWORKS 2022 automation setup and
 the field-node mechanical reference models. Native models are tracked with Git
@@ -40,12 +40,12 @@ coordinates, boss heights, FR4 reliefs, battery dimensions, charger dimensions,
 and cable interfaces must be measured before a manufacturing assembly or DXF is
 released.
 
-`MECH-R0.3-DRAFT` supersedes the old FR4 direction without overwriting the
+`MECH-R0.4-DRAFT` supersedes the old FR4 direction without overwriting the
 historical `FN-PLT-001` model. The supplier's `276.0655 x 197 mm` rectangle is a
 nominal enclosure reference; the current CAD plate is a `272 x 193 x 3 mm`
-fit-trial candidate with no anchor holes. The physical template, six R1-R6
-coordinates, and local scallop relief must be checked before any manufacturing
-plate or DXF is released.
+fit-trial candidate with eight nominal H1-H8 holes. The physical template, eight
+actual coordinates, boss interfaces, and local scallop relief must be checked
+before any manufacturing plate or DXF is released.
 
 `models/CAD-R0.2/` corrects the competition tilt-reference plate interface:
 
@@ -76,6 +76,22 @@ CN3791 object is only a reserved layout zone. The generator reopens historical
 reference parts read-only. It also packages copies inside `CAD-R0.3` before
 assembly, because SolidWorks can still rewrite binary view/cache data in a
 referenced document despite a read-only open request.
+
+`models/CAD-R0.4/` contains the current 23-component internal layout and harness
+study. It is an engineering packing reference, not a manufacturing release:
+
+- `FN-ASM-002_internal-layout-harness_R0.4.SLDASM/STEP`: nominal tray, four
+  optional edge pads, 8-hole FR4, four-hole carrier PCB, 35 mm carrier envelope,
+  battery/tray, CN3791/clip, fuse zone, tilt stack, and eight harness routes.
+- `*_labeled-top.svg/png`: editable top view with H1-H8, `120.3/160/61.2 mm`
+  dimensions, interface directions, route colors, and blocked inputs.
+- `*.SLDDRW/pdf`, drawing PNG, exploded/isometric/top previews, and
+  `manifest.json` with volume, transform, placement, route, and SHA-256 checks.
+
+The H1-H8 pattern is nominal and must be transferred to the physical enclosure.
+No FR4 DXF is generated. The colored harness bodies are route/clearance
+envelopes, not production round-wire geometry. Cable OD, gland threads, RF
+bulkheads, bend radius, fuse choice, and final tray/clip details remain pending.
 
 ## Automation
 
@@ -108,10 +124,10 @@ Rebuild the corrected tilt-interface release:
 & "$env:LOCALAPPDATA\Codex\SolidWorksMCP\source\.venv\Scripts\python.exe" hardware/field-node/cad/automation/build_tilt_interface_r02.py
 ```
 
-Rebuild the controlled internal layout assembly:
+Rebuild the current internal layout and harness assembly:
 
 ```powershell
-& "$env:LOCALAPPDATA\Codex\SolidWorksMCP\source\.venv\Scripts\python.exe" hardware/field-node/cad/automation/build_layout_assembly_r03.py
+& "$env:LOCALAPPDATA\Codex\SolidWorksMCP\source\.venv\Scripts\python.exe" hardware/field-node/cad/automation/build_layout_assembly_r04.py
 ```
 
 The labeled PNG is rasterized by the workstation `magick` executable from
