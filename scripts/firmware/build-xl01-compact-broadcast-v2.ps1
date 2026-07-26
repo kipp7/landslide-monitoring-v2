@@ -78,6 +78,21 @@ function Set-SingleTokenMacro {
   return [regex]::Replace($Text, $pattern, "#define $Macro $Value")
 }
 
+function Get-QuotedMacroValue {
+  param(
+    [string]$Path,
+    [string]$Macro
+  )
+
+  $text = [System.IO.File]::ReadAllText($Path)
+  $pattern = '(?m)^#define\s+' + [regex]::Escape($Macro) + '\s+"([^"]+)"'
+  $matches = [regex]::Matches($text, $pattern)
+  if ($matches.Count -ne 1) {
+    throw "Expected one quoted $Macro definition in $Path, found $($matches.Count)"
+  }
+  return $matches[0].Groups[1].Value
+}
+
 function Set-GnssRtcmInjectionMode {
   $modeToken = switch ($GnssRtcmInjectionMode) {
     "disabled" { "GNSS_RTCM_INJECTION_DISABLED" }
@@ -170,7 +185,8 @@ try {
     schemaVersion = 1
     profile = "rk2206-xl01-compact-broadcast-v2"
     gnssRtcmInjectionMode = $GnssRtcmInjectionMode
-    firmwareMarker = "fw-compact-broadcast-poll-v2-20260724"
+    firmwareMarker = Get-QuotedMacroValue -Path (Join-Path $sourceRoot "main\landslide_main.c") -Macro "FW_RX_DIAG_MARKER"
+    sampleVersion = Get-QuotedMacroValue -Path (Join-Path $sourceRoot "config\app_config.h") -Macro "FIRMWARE_SAMPLE_VERSION"
     compactPayloadBytes = 46
     fieldLinkWireBytes = 64
     compactPollCommandBytes = 10
