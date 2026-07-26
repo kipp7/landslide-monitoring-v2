@@ -184,7 +184,9 @@ static int FieldLink_DecodeFrame(const unsigned char *frame, int frame_len, Fiel
     if (frame_type != FIELD_LINK_FRAME_TYPE_TELEMETRY &&
         frame_type != FIELD_LINK_FRAME_TYPE_COMMAND &&
         frame_type != FIELD_LINK_FRAME_TYPE_ACK &&
-        frame_type != FIELD_LINK_FRAME_TYPE_CONTROL) {
+        frame_type != FIELD_LINK_FRAME_TYPE_CONTROL &&
+        frame_type != FIELD_LINK_FRAME_TYPE_GNSS_CORE &&
+        frame_type != FIELD_LINK_FRAME_TYPE_RTCM) {
         return -1;
     }
 
@@ -232,7 +234,9 @@ int FieldLinkFrame_Encode(
     if (type != FIELD_LINK_FRAME_TYPE_TELEMETRY &&
         type != FIELD_LINK_FRAME_TYPE_COMMAND &&
         type != FIELD_LINK_FRAME_TYPE_ACK &&
-        type != FIELD_LINK_FRAME_TYPE_CONTROL) {
+        type != FIELD_LINK_FRAME_TYPE_CONTROL &&
+        type != FIELD_LINK_FRAME_TYPE_GNSS_CORE &&
+        type != FIELD_LINK_FRAME_TYPE_RTCM) {
         return -1;
     }
 
@@ -297,6 +301,10 @@ const char *FieldLinkFrameTypeName(FieldLinkFrameType type)
             return "ack";
         case FIELD_LINK_FRAME_TYPE_CONTROL:
             return "control";
+        case FIELD_LINK_FRAME_TYPE_GNSS_CORE:
+            return "gnss-core";
+        case FIELD_LINK_FRAME_TYPE_RTCM:
+            return "rtcm";
         default:
             return "invalid";
     }

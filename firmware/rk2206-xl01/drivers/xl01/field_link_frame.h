@@ -20,6 +20,8 @@ typedef enum {
     FIELD_LINK_FRAME_TYPE_COMMAND = 2,
     FIELD_LINK_FRAME_TYPE_ACK = 3,
     FIELD_LINK_FRAME_TYPE_CONTROL = 4,
+    FIELD_LINK_FRAME_TYPE_GNSS_CORE = 5,
+    FIELD_LINK_FRAME_TYPE_RTCM = 6,
 } FieldLinkFrameType;
 
 typedef struct {

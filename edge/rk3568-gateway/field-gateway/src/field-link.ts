@@ -1,6 +1,6 @@
 export type FieldLinkMode = "raw-json" | "cobs-crc-v1";
 
-export type FieldLinkFrameType = "telemetry" | "command" | "ack" | "control";
+export type FieldLinkFrameType = "telemetry" | "command" | "ack" | "control" | "gnss-core" | "rtcm";
 
 export type FieldLinkInboundPayload = {
   rawPayload: string;
@@ -32,7 +32,9 @@ const FRAME_TYPE_TO_CODE: Record<FieldLinkFrameType, number> = {
   telemetry: 1,
   command: 2,
   ack: 3,
-  control: 4
+  control: 4,
+  "gnss-core": 5,
+  rtcm: 6
 };
 
 const CODE_TO_FRAME_TYPE = new Map<number, FieldLinkFrameType>(
