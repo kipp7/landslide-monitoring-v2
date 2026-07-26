@@ -101,6 +101,9 @@ field-node digital mechanical model without inventing unresolved dimensions.
   the final isometric master state before hashing. The closed-document audit
   verified all 137 listed artifact hashes and byte counts against 137 files;
   `manifest.json` is the 138th file in the output directory.
+- CAD-R0.6 feature commit `7124315c` contains the native round harness,
+  symmetric external concept, reproducible generator, generated artifacts and
+  associated engineering records.
 
 ## In Progress
 
