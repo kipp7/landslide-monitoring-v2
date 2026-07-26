@@ -82,6 +82,9 @@ field-node digital mechanical model without inventing unresolved dimensions.
 - The final CAD-R0.5 rebuild contains 23 assembly components, 19 valid STEP
   headers and 68 hash-verified artifacts. Layout checks pass at 4 mm minimum
   module clearance, Z=59 mm highest envelope and 32.1 mm nominal rim clearance.
+- CAD-R0.5 feature commit `d94db4c7` is pushed to
+  `origin/docs/hardware-field-node-evt0-1`; all 22 new native SOLIDWORKS LFS
+  objects uploaded successfully.
 
 ## In Progress
 
