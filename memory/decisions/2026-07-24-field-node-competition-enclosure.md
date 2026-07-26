@@ -23,6 +23,7 @@ The competition build needs one consistent sealed enclosure for the carrier boar
 - Keep the tilt transmitter inside the box for competition consistency.
 - Mount the tilt transmitter on a dedicated `120 x 85 x 3 mm` 304 stainless subplate with four-point support. Keep the PCB, battery, and charger on FR4.
 - Do not use a full steel internal plate.
+- For the first controlled layout study, place the rotated `170 x 115 mm` carrier PCB on the left, the battery at lower right, a provisional CN3791 zone at right center, and the tilt subplate/transmitter at upper right. Treat these as packing references until the physical modules are measured.
 
 ## Rationale
 

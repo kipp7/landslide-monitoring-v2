@@ -10,7 +10,7 @@
 | Competition enclosure | `MECH-R0.3-DRAFT` | Rectangular FR4 fit trial and perimeter six-point reselection | Fit, coordinates, boss height, and hole depth pending |
 | Solar subsystem | `PWR-R0.1` | Candidate architecture | Charger and energy budget unqualified |
 | Prototype procurement | `BOM-R0.3` | Rectangular FR4 fit trial and perimeter R1-R6 gate recorded | Not a production AVL |
-| Mechanical CAD | `CAD-R0.2` | Tilt-reference plate M3 interface correction and drawing set | Review required; FR4 support holes pending |
+| Mechanical CAD | `CAD-R0.3` | Controlled internal layout assembly and labeled top view | Review required; FR4 support holes pending |
 
 ## Change History
 
@@ -52,6 +52,21 @@
 - Superseded the old inner P1-P6 selection for the enlarged plate. The new six anchors must be reselected from the upper and lower perimeter boss rows in a three-column by two-row pattern and measured from one physical datum.
 - Recorded the clarified coplanar boss stack: perimeter bosses rise approximately 6 mm from the main floor; the four middle bosses rise 5 mm from a 1 mm raised floor, so both top planes are nominally level and require no height-compensation shim.
 - Advanced the prototype list to `BOM-R0.3` without overwriting earlier purchasing records.
+
+### 2026-07-26 - `CAD-R0.3`
+
+- Added a reproducible SOLIDWORKS 2022 seven-component internal layout assembly
+  using the `272 x 193 x 3 mm` FR4 rectangular fit-trial plate.
+- Recorded the controlled placement study: carrier PCB at left rotated 90 deg,
+  photo-estimated battery at lower right, CN3791 reserved zone at right center,
+  and the tilt transmitter on its local 304 reference plate at upper right.
+- Verified component transform readback, seven inserted components, 6 mm minimum
+  planar clearance, 52 mm highest envelope, and 39.1 mm nominal rim clearance.
+- Added native SLDASM/STEP, A3 SLDDRW/PDF/PNG, exploded/isometric/top previews,
+  and a deterministic labeled SVG/PNG top view with a SHA-256 manifest.
+- Kept R1-R6 holes, battery dimensions, CN3791 dimensions, and final tray
+  scallops explicitly blocked; this revision is layout review only and not for
+  manufacture.
 
 ## Versioning Rules
 

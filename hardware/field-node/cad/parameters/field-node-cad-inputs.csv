@@ -40,3 +40,12 @@ SOL-X,SWM-10W solar panel,length,290,mm,VERIFIED,supplier specification,interfac
 SOL-Y,SWM-10W solar panel,width,240,mm,VERIFIED,supplier specification,interface reference
 SOL-Z,SWM-10W solar panel,height,17,mm,VERIFIED,supplier specification,interface reference
 SOL-HOLES,SWM-10W solar panel,frame mounting holes,,mm,PENDING,measure physical panel,blocks bracket holes
+ASM-R03-PLATE-BOTTOM-Z,CAD-R0.3 layout,FR4 bottom above enclosure outer bottom,9,mm,DESIGN,3 mm nominal floor plus 6 mm support top,layout reference only
+ASM-R03-PLATE-TOP-Z,CAD-R0.3 layout,FR4 top above enclosure outer bottom,12,mm,DESIGN,272 x 193 x 3 mm fit-trial plate,layout reference only
+ASM-R03-PCB-CENTER,CAD-R0.3 layout,carrier PCB center XY,-72.5;0,mm,DESIGN,rotated 90 deg for packing,layout reference only
+ASM-R03-PCB-BOTTOM-Z,CAD-R0.3 layout,carrier PCB bottom above enclosure outer bottom,22,mm,DESIGN,10 mm nominal standoff above FR4,layout reference only
+ASM-R03-BATTERY-CENTER,CAD-R0.3 layout,battery envelope center XY,58;-68,mm,ESTIMATED,photo-estimated envelope,never machine from this
+ASM-R03-CHARGER-CENTER,CAD-R0.3 layout,CN3791 reserved zone center XY,91;-15,mm,DESIGN,60 x 35 mm reserved zone only,layout reference only
+ASM-R03-TILT-CENTER,CAD-R0.3 layout,tilt plate and transmitter center XY,71;51,mm,DESIGN,local 304 reference plate on FR4,layout reference only
+ASM-R03-MIN-CLEARANCE,CAD-R0.3 layout,minimum planar module clearance,6,mm,DERIVED,axis-aligned envelope validation,layout check only
+ASM-R03-HIGHEST-Z,CAD-R0.3 layout,highest component envelope,52,mm,DERIVED,tilt transmitter envelope top,layout check only

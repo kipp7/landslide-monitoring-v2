@@ -35,6 +35,15 @@ Python compilation with `source code string cannot contain null bytes`.
   status checks and physical artifact/volume validation.
 - Track native SOLIDWORKS files with Git LFS and label `CAD-R0.1` as
   `REFERENCE ONLY / NOT FOR MANUFACTURE`.
+- Load assembly references with the SolidWorks `Silent + ReadOnly` option, and
+  package inherited R0.1/R0.2 SLDPRT files inside the new revision before opening
+  them. SolidWorks can rewrite binary view/cache data despite a read-only request;
+  revision-local copies prevent that behavior from dirtying released source CAD.
+- Use `CAD-R0.3` for the first controlled internal layout assembly: the assembly
+  is a seven-component packing study with a `272 x 193 x 3 mm` FR4 fit plate,
+  not a manufacturing definition. Store a deterministic labeled SVG/PNG overlay
+  beside the native SLDASM/STEP and A3 drawing, and include all output hashes in
+  the manifest.
 - Preserve released CAD history instead of silently overwriting it. `CAD-R0.2`
   supersedes only the tilt-reference plate hole definition: the sensor body has
   four diameter 3.6 mm clearance holes, while the steel plate has four
@@ -62,6 +71,8 @@ engineering release.
 - `CAD-R0.2/FN-SUB-002` contains the corrected SLDPRT, STEP, SLDDRW, PDF, PNG,
   and profile/tap-drill DXF. It remains `REVIEW REQUIRED` because the four
   plate-to-FR4 support holes are not frozen.
+- `CAD-R0.3` verifies the nominal packing geometry and transform mapping, but its
+  tray, battery, charger zone, and FR4 anchor interface remain provisional.
 - The global Codex MCP path currently targets the hardware worktree and must be
   repointed after the branch is merged or moved.
 
@@ -71,5 +82,6 @@ engineering release.
   coordinates/heights/hole depths, battery, charger, panel holes, and cable
   interfaces.
 - Replace nominal/estimated envelopes only through a new CAD revision.
-- Build the first controlled assembly and DXF after the blocking measurements.
+- Replace the provisional R0.3 envelopes with measured parts, then build the
+  manufacturing assembly and FR4 DXF after the blocking measurements.
 - Review upstream changes before advancing the pinned MCP commit.

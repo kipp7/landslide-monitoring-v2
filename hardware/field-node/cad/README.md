@@ -1,6 +1,6 @@
 # Field Node CAD
 
-Status: `CAD-R0.2 / TILT INTERFACE CORRECTION / REVIEW REQUIRED`
+Status: `CAD-R0.3 / INTERNAL LAYOUT ASSEMBLY / REVIEW REQUIRED`
 
 This directory contains the reproducible SOLIDWORKS 2022 automation setup and
 the field-node mechanical reference models. Native models are tracked with Git
@@ -42,9 +42,10 @@ released.
 
 `MECH-R0.3-DRAFT` supersedes the old FR4 direction without overwriting the
 historical `FN-PLT-001` model. The supplier's `276.0655 x 197 mm` rectangle is a
-nominal enclosure reference; the next CAD plate will use a `272 x 193 x 3 mm`
-fit-trial candidate and newly measured perimeter R1-R6 anchors. No R0.3 SLDPRT
-or DXF is released until the physical template and six coordinates are checked.
+nominal enclosure reference; the current CAD plate is a `272 x 193 x 3 mm`
+fit-trial candidate with no anchor holes. The physical template, six R1-R6
+coordinates, and local scallop relief must be checked before any manufacturing
+plate or DXF is released.
 
 `models/CAD-R0.2/` corrects the competition tilt-reference plate interface:
 
@@ -56,6 +57,25 @@ or DXF is released until the physical template and six coordinates are checked.
   parameter source and are recorded with SHA-256 checksums in the manifest.
 - The four independent holes that eventually attach this plate to the FR4 are
   still absent. Their position remains blocked by the physical enclosure survey.
+
+`models/CAD-R0.3/` contains the first controlled internal layout assembly. It is
+an engineering packing reference, not a manufacturing release:
+
+- `FN-ASM-001_internal-layout_R0.3.SLDASM/STEP`: seven-component nominal layout
+  with the tray, rectangular FR4 fit plate, rotated carrier PCB, battery
+  envelope, CN3791 reserved zone, tilt subplate, and tilt transmitter.
+- `*_labeled-top.svg/png`: deterministic top-view overlay with component IDs,
+  dimensions, coordinate datum, clearances, and blocked inputs.
+- `*.SLDDRW/pdf` and `*_drawing.png`: A3 review drawing with top and isometric views.
+- `manifest.json`: geometry checks, component transforms, artifact sizes, and
+  SHA-256 hashes.
+
+The assembly uses `272 x 193 x 3 mm` FR4, a nominal 6 mm coplanar support top,
+and no R1-R6 holes. The battery remains photo-estimated and the `60 x 35 mm`
+CN3791 object is only a reserved layout zone. The generator reopens historical
+reference parts read-only. It also packages copies inside `CAD-R0.3` before
+assembly, because SolidWorks can still rewrite binary view/cache data in a
+referenced document despite a read-only open request.
 
 ## Automation
 
@@ -87,6 +107,15 @@ Rebuild the corrected tilt-interface release:
 ```powershell
 & "$env:LOCALAPPDATA\Codex\SolidWorksMCP\source\.venv\Scripts\python.exe" hardware/field-node/cad/automation/build_tilt_interface_r02.py
 ```
+
+Rebuild the controlled internal layout assembly:
+
+```powershell
+& "$env:LOCALAPPDATA\Codex\SolidWorksMCP\source\.venv\Scripts\python.exe" hardware/field-node/cad/automation/build_layout_assembly_r03.py
+```
+
+The labeled PNG is rasterized by the workstation `magick` executable from
+ImageMagick; the SVG remains the editable source overlay.
 
 The MCP entry point writes no welcome text to stdout, because stdout is reserved
 for JSON-RPC. Macro recording is disabled and the live adapter is limited to one

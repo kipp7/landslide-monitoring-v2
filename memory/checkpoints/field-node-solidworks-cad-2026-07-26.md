@@ -46,12 +46,17 @@ field-node digital mechanical model without inventing unresolved dimensions.
   `272 x 193 x 3 mm` with about 2 mm clearance per side. The previous P1-P6 boss
   choice is superseded for the enlarged plate, and new perimeter R1-R6 points
   must be selected and physically measured.
+- `CAD-R0.3` now contains a reproducible seven-component internal layout
+  assembly, native/STEP outputs, exploded/isometric/top previews, an A3 drawing,
+  and a deterministic labeled top-view SVG/PNG. Transform readback and layout
+  checks pass: 6 mm minimum planar clearance, Z=52 mm highest envelope, and
+  39.1 mm nominal rim clearance.
 
 ## In Progress
 
-- The CAD setup, known-envelope parts, and corrected tilt-interface drawing set
-  are complete, but the physical enclosure survey and manufacturing assembly
-  have not started.
+- The CAD setup, known-envelope parts, corrected tilt-interface drawing set, and
+  first layout assembly are complete, but the physical enclosure survey and
+  manufacturing assembly have not started.
 - Global Codex configuration targets the current hardware worktree path.
 - The pre-existing untracked `tmp/` directory remains outside this work and was
   intentionally neither staged nor deleted.
@@ -68,9 +73,11 @@ field-node digital mechanical model without inventing unresolved dimensions.
 - Freeze the rectangular FR4 outline and six hole coordinates, then export DXF
   and a dimensioned drawing.
 - Add measured battery, CN3791 module, cable glands, solar frame holes, and GNSS
-  hardware before creating the first full assembly.
+  hardware before promoting the layout to a manufacturing assembly.
 - Repoint global MCP configuration after the branch is merged into its permanent
   worktree path.
+- Commit and push `CAD-R0.3` together with the updated CAD register, revision log,
+  and memory notes; keep the pre-existing untracked `tmp/` directory out of Git.
 
 ## Risks
 
@@ -81,8 +88,7 @@ field-node digital mechanical model without inventing unresolved dimensions.
 
 ## Resume Prompt
 
-Continue field-node CAD from `CAD-R0.2 / MECH-R0.3-DRAFT`: first test a
-`272 x 193 mm` rectangular template and measure perimeter R1-R6 from the plate
-left-bottom datum. Model the coplanar `6 mm` versus `1 + 5 mm` support stack,
-then update only physically verified inputs before generating the FR4 DXF and
-assembly.
+Continue field-node CAD from `CAD-R0.3 / MECH-R0.3-DRAFT`: verify the generated
+artifact set and Git diff, then fit a `272 x 193 mm` template and measure
+perimeter R1-R6 from the plate left-bottom datum. Update only physically verified
+inputs before generating the FR4 DXF and manufacturing assembly.
