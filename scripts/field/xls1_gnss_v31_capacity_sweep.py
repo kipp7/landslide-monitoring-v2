@@ -7,6 +7,7 @@ import argparse
 import binascii
 import json
 import math
+import re
 import struct
 from collections import Counter
 from dataclasses import dataclass
@@ -246,6 +247,68 @@ def model_frames(bytes_per_second: int, duration_seconds: float, model_frame_byt
     return frames
 
 
+def parse_rtcm_type_counts(value: str) -> Counter[int]:
+    counts: Counter[int] = Counter()
+    if value == "none":
+        return counts
+    for item in value.split(","):
+        message_type, separator, count = item.partition(":")
+        if not separator:
+            raise ValueError(f"invalid RTCM type count: {item}")
+        parsed_type = int(message_type)
+        parsed_count = int(count)
+        if not 1 <= parsed_type <= 4095 or parsed_count <= 0:
+            raise ValueError(f"invalid RTCM type count: {item}")
+        counts[parsed_type] += parsed_count
+    return counts
+
+
+def parse_summary_result(result_line: str) -> tuple[float, int, int, Counter[int]]:
+    fields = dict(re.findall(r"(\w+)=([^\s]+)", result_line))
+    required = ("duration", "valid_rtcm_bytes", "rtcm_crc_errors", "rtcm_types")
+    missing = [key for key in required if key not in fields]
+    if missing:
+        raise ValueError(f"summary RESULT is missing: {', '.join(missing)}")
+    duration_value = fields["duration"]
+    if not duration_value.endswith("s"):
+        raise ValueError("summary duration must end in 's'")
+    duration_seconds = float(duration_value[:-1])
+    valid_rtcm_bytes = int(fields["valid_rtcm_bytes"])
+    crc_errors = int(fields["rtcm_crc_errors"])
+    type_counts = parse_rtcm_type_counts(fields["rtcm_types"])
+    if duration_seconds <= 0 or valid_rtcm_bytes <= 0 or crc_errors < 0 or not type_counts:
+        raise ValueError("summary values are outside their valid ranges")
+    return duration_seconds, valid_rtcm_bytes, crc_errors, type_counts
+
+
+def parse_summary_log(path: Path) -> tuple[float, int, int, Counter[int]]:
+    result_lines = [
+        line
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.startswith("RESULT ")
+    ]
+    if not result_lines:
+        raise ValueError("summary log has no RESULT line")
+    return parse_summary_result(result_lines[-1])
+
+
+def model_frames_from_summary(total_bytes: int, type_counts: Counter[int]) -> list[bytes]:
+    frame_count = sum(type_counts.values())
+    if total_bytes < frame_count * 8 or total_bytes > frame_count * RTCM_MAX_FRAME_BYTES:
+        raise ValueError("summary byte count is incompatible with its RTCM frame count")
+    base_frame_bytes, larger_frame_count = divmod(total_bytes, frame_count)
+    frames: list[bytes] = []
+    for message_type, count in sorted(type_counts.items()):
+        for _ in range(count):
+            frame_bytes = base_frame_bytes + (1 if larger_frame_count > 0 else 0)
+            if larger_frame_count > 0:
+                larger_frame_count -= 1
+            frames.append(build_synthetic_rtcm_frame(message_type, frame_bytes))
+    if sum(len(frame) for frame in frames) != total_bytes:
+        raise AssertionError("summary reconstruction byte count drifted")
+    return frames
+
+
 def analyze(
     frames: Iterable[bytes],
     duration_seconds: float,
@@ -320,6 +383,17 @@ def self_test() -> None:
         assert "CRC24Q" in str(exc)
     else:
         raise AssertionError("corrupted RTCM frame unexpectedly passed")
+    summary = (
+        "RESULT completed=False duration=10.5s valid_rtcm_bytes=160 "
+        "rtcm_crc_errors=0 rtcm_types=1005:10,1074:10\n"
+    )
+    duration, total_bytes, errors, counts = parse_summary_result(summary)
+    assert duration == 10.5
+    assert total_bytes == 160
+    assert errors == 0
+    summary_frames = model_frames_from_summary(160, counts)
+    assert len(summary_frames) == 20
+    assert sum(len(item) for item in summary_frames) == 160
     print("xls1 GNSS V3.1 capacity sweep self-test passed")
 
 
@@ -329,6 +403,11 @@ def main() -> int:
     )
     source = parser.add_mutually_exclusive_group()
     source.add_argument("--rtcm-capture", type=Path, help="Raw RTCM3 byte capture without NTRIP credentials")
+    source.add_argument(
+        "--rtcm-summary-log",
+        type=Path,
+        help="ntrip_rtk_test.py text log; only its final RESULT summary is used",
+    )
     source.add_argument("--model-rtcm-bps", type=int, help="Explicit approximate model when no raw capture exists")
     parser.add_argument("--capture-duration-seconds", type=float, default=60.0)
     parser.add_argument("--model-frame-bytes", type=int, default=180)
@@ -345,7 +424,8 @@ def main() -> int:
     if args.capture_duration_seconds <= 0 or args.baud <= 0 or args.control_reserve_bps < 0:
         parser.error("duration and baud must be positive; control reserve must be non-negative")
 
-    capture_diagnostics = {"invalidCrcFrames": 0, "discardedBytes": 0}
+    duration_seconds = args.capture_duration_seconds
+    capture_diagnostics: dict[str, int | None] = {"invalidCrcFrames": 0, "discardedBytes": 0}
     if args.rtcm_capture:
         frames, capture_diagnostics = extract_rtcm_frames(args.rtcm_capture.read_bytes())
         if not frames:
@@ -355,13 +435,35 @@ def main() -> int:
             "captureFile": args.rtcm_capture.name,
             "captureShaOrContent": "not-recorded",
         }
+    elif args.rtcm_summary_log:
+        try:
+            duration_seconds, valid_rtcm_bytes, crc_errors, summary_counts = parse_summary_log(
+                args.rtcm_summary_log
+            )
+            frames = model_frames_from_summary(valid_rtcm_bytes, summary_counts)
+        except (OSError, UnicodeError, ValueError) as exc:
+            parser.error(f"cannot use RTCM summary log: {exc}")
+        capture_diagnostics = {"invalidCrcFrames": crc_errors, "discardedBytes": None}
+        source_info = {
+            "mode": "measured-summary-log",
+            "summaryFile": args.rtcm_summary_log.name,
+            "measuredRtcmBytes": valid_rtcm_bytes,
+            "measuredRtcmBytesPerSecond": round(valid_rtcm_bytes / duration_seconds, 2),
+            "measuredRtcmFrames": sum(summary_counts.values()),
+            "meanRtcmFrameBytes": round(valid_rtcm_bytes / sum(summary_counts.values()), 2),
+            "frameReconstruction": "uniform-average-size-from-measured-byte-and-frame-counts",
+            "individualFrameSizesAvailable": False,
+            "arrivalTimingAvailable": False,
+        }
     else:
         model_bps = args.model_rtcm_bps
         if model_bps is None:
-            parser.error("provide --rtcm-capture or explicitly select --model-rtcm-bps")
+            parser.error(
+                "provide --rtcm-capture, --rtcm-summary-log, or explicitly select --model-rtcm-bps"
+            )
         if model_bps <= 0:
             parser.error("--model-rtcm-bps must be positive")
-        frames = model_frames(model_bps, args.capture_duration_seconds, args.model_frame_bytes)
+        frames = model_frames(model_bps, duration_seconds, args.model_frame_bytes)
         source_info = {
             "mode": "approximate-model",
             "modeledRtcmBytesPerSecond": model_bps,
@@ -372,7 +474,7 @@ def main() -> int:
     results = [
         analyze(
             frames,
-            args.capture_duration_seconds,
+            duration_seconds,
             fragment_bytes,
             profile,
             args.baud,
@@ -386,7 +488,7 @@ def main() -> int:
         "experiment": "xls1-gnss-v31-capacity-sweep-offline",
         "generatedAt": utc_now(),
         "source": source_info,
-        "captureDurationSeconds": args.capture_duration_seconds,
+        "captureDurationSeconds": duration_seconds,
         "captureDiagnostics": capture_diagnostics,
         "rtcmTypeCounts": {str(key): value for key, value in sorted(type_counts.items())},
         "assumptions": {

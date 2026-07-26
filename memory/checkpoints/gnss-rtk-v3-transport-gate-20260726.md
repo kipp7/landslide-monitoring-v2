@@ -25,20 +25,21 @@ status: active
 - 固件模式为 `DISABLED/PROBE/LIVE`，默认 `DISABLED`；`PROBE` 完成接收、重组、CRC 和排队但不写 UM220；互斥锁或节点身份初始化失败时保持关闭。
 - C99 `-Wall -Wextra -Werror` 主机测试通过；重组器 5616 B、两帧数据区 2058 B、单帧发送缓冲约 1029 B，静态新增量仍低于 32 KB RK2206 GNSS 预算。
 - field-gateway 9 项测试和 lint 通过；RK2206/OpenHarmony 的 `DISABLED`、`PROBE`、`LIVE` 三种 A 节点固件均交叉编译通过。只生成了仓库外验证产物，没有刷写设备。
-- 约 882 B/s 的显式模型只用于离线筛选：`32B/15ms` 不适合作为 RTCM 发送参数，`64B/5ms` 和 `128B/0ms` 仍只是待真机验证候选，不能视为空口结论。
-- PC 脚本可只保存 CRC24Q 正确的原始 RTCM 帧，且不写凭据、GGA、NTRIP header 或真实坐标；尚未取得 60 s 实际捕获用于容量计算。
+- 容量工具现可直接读取 PC 测试日志的最终 `RESULT`。2026-07-26 实测摘要为 584.7 s、515609 个有效 RTCM 字节、3608 帧、CRC 错误 0，平均 881.84 B/s；无需为平均容量初筛再次到室外采集。
+- 基于上述实测字节量和帧数重建的离线筛选中，160 B RTCM 分片配 `64B/5ms` 的三节点联合估算为 1948.08 B/s、UART 占用 16.91%、RTCM writer duty 20.12%，可进入真机扫参。现有 `32B/15ms` 在 46/96 B 小分片下 writer duty 为 121.47%/78.87%，不能使用；160 B 分片下仍为 66.40%，余量不足，不作为推荐参数。
+- 文本汇总日志没有单帧原始长度和到达间隔；报告中的分片开销使用实测总字节/总帧数的均匀平均帧重建。该限制不阻塞离线初筛，但瞬时突发、XLS1 空口吞吐和 FIFO 行为仍必须由 `PROBE` 真机门禁验证。
 - 本 checkpoint 和提交均不包含 CORS 主机、账号、密码、真实坐标或现场原始日志。
 
 ## In Progress
 
-- 软件边界已完成并默认关闭；当前等待真实 RTCM 捕获和 XLS1 真机混合负载门禁。
+- 软件边界和基于今日实测日志的离线容量初筛已完成；当前等待 XLS1 单节点 `PROBE` 和三节点真机混合负载门禁。
 - RK2206 当前没有独立可信的 Unix 时钟。节点可执行 1500 ms 重组超时和最多 3000 ms 本地队列龄，但绝对生成时间 TTL 只能计为 `ttl_unverified`，由 RK3568 先做绝对新鲜度过滤。
 - 现有 GPS 驱动已阻止 RMC 状态错误设置 Fixed，并公开原始 GGA quality；完整 GGA/GSA/GST/GSV/RMC/ZDA 定点解析和 `GNSS_CORE` 1 Hz 上送尚未实现。
 
 ## Next Actions
 
-- 用增强后的 PC 脚本捕获至少 60 s 无凭据原始 RTCM，并运行 `scripts/field/xls1_gnss_v31_capacity_sweep.py` 生成 capture-driven 报告。
-- 先制作并确认 `PROBE` 真机测试步骤，只验证无线接收、重组、CRC、队列和计数；确认物理连接与回滚镜像后才能刷写单节点 A。
+- 保留本地报告 `docs/reports/xls1-gnss-v31-capacity-20260726.json` 作为可再生证据；原始 RTCM 抓包降为可选精化，不再作为进入单节点 `PROBE` 的阻塞项。
+- 制作并确认 `PROBE` 真机测试步骤，先以 160 B 分片建立 `32B/15ms` 基线，再受控测试 `64B/5ms`；只验证无线接收、重组、CRC、队列和计数。确认物理连接与回滚镜像后才能刷写单节点 A。
 - 硬件扫参按 `32B/15ms -> 64B/5ms -> 128B/0ms` 顺序，后一个候选只在前一个没有帧损坏、旧队列或控制延迟时进入。
 - 真实门禁负载包含 RTCM、3 个 1 Hz `GNSS_CORE`、compact 环境遥测和控制命令；记录每节点 correction age P50/P95/max、Fixed 连续性、CRC、重组、队列、注入、旧 session 和命令延迟。
 - 至少运行 60 分钟；初始通过条件为 correction age P95 <= 3 s、max <= 5 s、没有旧 session 注入且 Fixed 连续。未通过前保持 `LIVE` 关闭。
@@ -51,7 +52,8 @@ status: active
 - RK2206 无可信绝对时钟时，旧模块队列风险不能只依赖节点 TTL；session epoch 必须持久化，网关必须先拒绝过期数据。
 - `PROBE/LIVE` 目前只完成可构建证明，没有真机运行证据；不得由编译成功推导厘米级三节点已部署。
 - 单 NTRIP 流供 3 台 rover 使用仍需确认服务商授权和同站点空间范围。
+- 汇总日志证明平均输入负载，但不能证明 RTCM 单帧尺寸分布或亚秒级突发；不得用 16.91% UART 估算替代 XLS1 节点端完整率和 correction-age 证据。
 
 ## Resume Prompt
 
-继续 V3.1 传输门禁：先检查分支 `feat/gnss-rtk-v31-transport`、提交 `4ed2ce5b`/`e00107ed` 和凭据扫描；获取 60 s 原始 RTCM capture 做容量报告，然后准备单节点 `PROBE` 真机步骤。不要先启用 `LIVE`，不要先实现滤波、CEEMDAN 或 UI。
+继续 V3.1 传输门禁：检查分支 `feat/gnss-rtk-v31-transport`、今日 584.7 s 汇总日志容量报告及凭据扫描；准备单节点 `PROBE` 真机步骤，优先验证 160 B 分片下的 `32B/15ms` 与 `64B/5ms`。不要先启用 `LIVE`，不要先实现滤波、CEEMDAN 或 UI。
