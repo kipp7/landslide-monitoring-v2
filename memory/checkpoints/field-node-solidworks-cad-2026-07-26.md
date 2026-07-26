@@ -121,6 +121,9 @@ field-node digital mechanical model without inventing unresolved dimensions.
   refreshed without reopening or rewriting R0.6. The temporary reference-file
   writes observed during development were removed; the tracked R0.6 directory
   matches its published commit.
+- CAD-R0.7 feature commit `01b52c9b` contains the structural details, retained
+  external harness, reproducible generator, generated artifacts and associated
+  engineering records.
 
 ## In Progress
 
