@@ -14,15 +14,15 @@ status: active
 
 ## Goal
 
-用最低成本验证现有 3 个 UM220-IV NK 能否在千寻知寸差分服务下稳定获得 RTK Fixed，并在验证通过后将单 NTRIP 客户端、三节点 RTCM 广播方案部署到 RK3568/RK2206 架构。
+将已验证可 Fixed 的 3 套 UM220-IV NK + BT-760 部署为可追溯、资源可控的三节点 RTK 位移系统；先通过共享链路门禁，再实现 RK3568 专业位移算法、服务器长周期分析和现场诊断。
 
 ## Current State
 
-- 千寻知寸 FindCM 试用已激活，PC NTRIP 接入和原始 RTCM 串口注入已验证成功。
-- NK 已进入过 GGA=5 RTK Float，证明差分输入路径和 rover 解算路径有效，但两轮各 10 分钟测试均未出现 GGA=4。
-- 第二个普通天线把首次 Float 缩短至约 3.4 s，并使 Float 占比达到约 85.2%。
-- 已选择北天 BT-760 作为性价比验证天线；待先采购 1 个和 1 条 3 m、50 ohm、TNC-J 到 SMA-J 馈线。
-- RK3568 到 3 个 RK2206 的 RTCM 广播尚未实施，等待 PC 端 BT-760 Fixed 验证。
+- PC NTRIP、RTCM3 CRC、原始串口注入和 BT-760 RTK Fixed 已验证，3 套 BT-760 已到货。
+- `4ed2ce5b` 已完成 V3.1 `GNSS_CORE`/RTCM 有界协议；`e00107ed` 已完成默认关闭的 RK2206 重组、队列、CRC、统计和单任务 GNSS UART 注入边界。
+- 主机测试、field-gateway 9 项回归/lint 及 `DISABLED/PROBE/LIVE` 三模式固件交叉编译均通过；没有刷机。
+- 60 s 实际 RTCM capture、单节点 `PROBE`、三节点 60 分钟混合负载和 `LIVE` 门禁尚未完成。
+- GNSS 常规链路采用 98 字节核心摘要，不连续上传原始 NMEA/逐星明细；专业 ECEF/ENU/Hampel/Kalman 位移链统一由 RK3568 计算。
 
 ## Constraints
 
@@ -30,29 +30,25 @@ status: active
 - RTCM 必须保持原始二进制，不能 JSON/Base64 包装。
 - 不能在 memory、日志或 Git 中保存 NTRIP 主机、账号、密码和真实坐标。
 - UM220-IV NK 按 rover 使用，不依赖其输出基站 RTCM。
-- 三节点批量采购和固件改造必须等待单节点 RTK Fixed 验收结果。
-- 正式遥测必须使用 `double` 和至少 8 位小数，并携带 GGA 质量、卫星数、HDOP 和差分龄。
+- `LIVE` 固件必须等待单节点 `PROBE` 和三节点混合负载验收；编译成功不能替代现场证据。
+- RK2206/南向协议使用纳度/毫米定点整数；RK3568/API 使用 `double`、至少 9 位小数，并保留 GNSS 历元、质量、差分龄、GST/DOP、基站号和 Fixed 连续性。
 
 ## Plan
 
-- 采购并核对 1 个 BT-760 与 3 m、50 ohm、TNC-J 到 SMA-J、非 RP-SMA 馈线。
-- 在开阔天空、固定位置用 COM11/115200 和现有 PC 脚本运行 30 至 60 分钟测试。
-- 记录首次 Fixed 时间、GGA=1/2/4/5 计数和占比、卫星数、HDOP、差分龄、RTCM 类型与断线情况。
-- 若通过，采购另外 2 套同批次天线和馈线。
-- 在现有 COBS + CRC 协议中定义二进制 RTCM 帧，由 RK3568 单客户端广播，RK2206 原样转发到 NK RX。
-- 更新遥测结构和存储精度，随后做 3 节点同时在线、差分龄、固定率、带宽和恢复测试。
-- 若不通过，依次排查开阔度/多路径、天线供电、馈线损耗、差分数据、串口完整性和固件，再评估 UM960/UM982。
+- 捕获至少 60 s 无凭据原始 RTCM，运行 capture-driven 容量报告。
+- 在确认物理连接、回滚镜像和日志采集后，只给单节点刷 `PROBE`；验证重组/CRC/队列/过期/重复计数且 UM220 UART 无写入。
+- 按 32B/15ms、64B/5ms、128B/0ms 顺序扫参，加入 3 个 1 Hz `GNSS_CORE`、compact 环境遥测和控制命令。
+- 至少运行 60 分钟三节点门禁，目标 correction age P95 <=3 s、max <=5 s、无旧 session 注入且 Fixed 连续。
+- 通过后才启用 `LIVE`，随后实现定点 GNSS 解析、RK3568 ECEF/ENU/Hampel/Kalman、服务器 CEEMDAN 和 UI/profile。
 
 ## Open Questions
 
-- BT-760 在相同测试位置能否在约 5 分钟内进入 GGA=4，并保持超过 80% Fixed？
-- UM220-IV NK 在实际山体监测环境中的 Fixed 保持率和重新收敛时间是多少？
-- 共享 115200 链路承载三节点遥测和 RTCM 时的帧调度、优先级与最大队列长度如何定义？
-- 如果需要更换接收机，UM960 与 UM982 在单天线 rover、功耗、接口和成本上的最终选型是什么？
+- DL-XLS1 在真实 RTCM 和三节点上行混合负载下的空口容量、广播行为和旧队列风险是否满足门禁？
+- RK2206 无可信绝对 Unix 时钟时，是否接受网关绝对 TTL + 节点单调队列龄的双层策略，或需要补充可信时间同步？
+- 单条修正流供同一现场 3 台 rover 使用是否满足服务商授权与空间范围？
 
 ## Done When
 
-- 单个 BT-760 在 30 至 60 分钟开阔环境测试中约 5 分钟内首次 Fixed，Fixed 占比高于 80%（优选高于 90%），差分龄稳定在 1 至 3 s。
-- 3 个节点均使用经过验证的天线/馈线并能稳定输出 GGA=4。
-- RK3568 单 NTRIP 客户端到 3 个 RK2206 的 RTCM 二进制广播完成，断线和重连可恢复。
-- 遥测与存储保留足够坐标精度及完整质量字段，系统测试记录可追溯。
+- 3 节点 60 分钟真实混合负载满足 correction age、Fixed 连续性、CRC、队列、旧 session 和命令延迟门槛。
+- 定点 `GNSS_CORE`、RK3568 专业位移算法、可追溯存储和生产/比赛配置均通过测试。
+- RK2206 新增 GNSS RAM/CPU、RK3568 增量 RSS/CPU 和链路占用有实测报告且满足预算。
