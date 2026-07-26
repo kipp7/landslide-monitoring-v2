@@ -18,12 +18,13 @@ The competition build needs one consistent sealed enclosure for the carrier boar
 ## Decision
 
 - Keep the purchased `320 x 240 x 145 mm` enclosure for the competition build.
-- Use a removable rectangular 3 mm FR4/G10 main mounting plate. The supplier's `276.0655 x 197 mm` value is a nominal internal reference envelope; the first fit-trial candidate is `272 x 193 x 3 mm` to retain approximately 2 mm clearance per side.
+- Use a removable rectangular 5 mm FR4/G10 main mounting plate. The supplier's `276.0655 x 197 mm` value is a nominal internal reference envelope; the current fit-trial candidate is `272 x 193 x 5 mm` to retain approximately 2 mm clearance per side while improving stiffness over the historical 3 mm direction.
 - Supersede the old inner P1-P6 and six-point R1-R6 selections for this enlarged plate. Use the user's two-column/four-row H1-H8 pattern as the nominal CAD study: `X=+/-60.15 mm`, `Y=+80/+30.6/-30.6/-80 mm`, with 8 x diameter 3.5 mm FR4 holes. Treat it as `NOMINAL / VERIFY PHYSICAL`, not a released hole table.
 - Keep the tilt transmitter inside the box for competition consistency.
 - Mount the tilt transmitter on a dedicated `120 x 85 x 3 mm` 304 stainless subplate with four-point support. Keep the PCB, battery, and charger on FR4.
 - Do not use a full steel internal plate.
-- For CAD-R0.4, place the CCW-rotated `170 x 115 mm` carrier PCB on the left, the `66 x 61 x 40 mm` battery envelope at lower right, the `46 x 21 x 10 mm` no-hole CN3791 module at right center, and the tilt stack at upper right. Add four optional `12 x 12 x 6 mm` edge support pads and route-envelope parts for power, RS485, GNSS, and XLS1.
+- For CAD-R0.5, retain the CCW-rotated `170 x 115 mm` carrier PCB on the left, the `66 x 61 x 40 mm` battery envelope at lower right, the `46 x 21 x 10 mm` no-hole CN3791 module at right center, and the tilt stack at upper right. Add four optional `12 x 12 x 6 mm` edge support pads and W1-W8 route-envelope parts.
+- Put four interfaces on the lower wall to support downward drip loops: RF1 GNSS and RF2 XLS1 use separate SMA bulkheads; G2 soil and G1 PV use separate cable glands. CAD nominal cutouts are diameter 6.5 mm for RF1/RF2 and diameter 16.5 mm for G1/G2, but purchased sample geometry governs final drilling.
 - Preserve the power topology: solar panel -> CN3791 -> battery charge branch; battery load output -> fuse/service disconnect -> PCB DC5521.
 
 ## Rationale
@@ -32,6 +33,8 @@ A full `265 x 185 x 3 mm` steel plate weighs about 1.16 kg, adds long-term load 
 
 Eight H1-H8 anchors improve lift and torsional restraint, but the `120.3 mm` column pitch leaves about `75.85 mm` FR4 overhang on each long side. Four non-fastened edge pads support these overhangs without adding more plastic threads. The eight holes anchor only the FR4 to the enclosure; every module keeps an independent mounting interface on the FR4.
 
+The 5 mm plate consumes 2 mm more vertical space than CAD-R0.4, but CAD-R0.5 still retains 32.1 mm nominal clearance to the bottom-shell rim. The added thickness does not make the nominal H1-H8 coordinates or plastic-boss strength verified; both remain physical-test gates.
+
 ## Consequences
 
 - The competition configuration improves repeatability but is not automatically a field-grade measurement reference.
@@ -39,6 +42,7 @@ Eight H1-H8 anchors improve lift and torsional restraint, but the `120.3 mm` col
 - The FR4 DXF cannot be released until a `272 x 193 mm` physical template fits freely and captures local interference plus the actual H1-H8 coordinates.
 - H1-H8 identity, physical coordinates, boss height, hole depth, blind-hole state, top coplanarity, and screw length are not frozen. The annotated supplier drawing is a nominal reference, not a machining release.
 - Anchor screw heads fall under module footprints. Fasten FR4 before modules and provide raised standoffs/trays or underside relief.
+- No enclosure drilling drawing is released from the nominal RF1/RF2/G1/G2 cutouts. Confirm thread, sealing washer, anti-rotation flat, tool clearance, cable OD and clamping range from purchased samples first.
 - The boss top planes are nominally coplanar: perimeter bosses rise approximately 6 mm from the main floor, while the four middle bosses rise 5 mm from a 1 mm raised floor. The FR4 bears directly on these tops with no 1 mm compensation shim; straightedge verification is still required before release.
 
 ## Follow-up

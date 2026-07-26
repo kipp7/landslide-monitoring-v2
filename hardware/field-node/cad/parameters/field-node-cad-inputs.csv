@@ -63,3 +63,14 @@ ASM-R04-TILT-CENTER,CAD-R0.4 layout,tilt plate and transmitter center XY,68;53,m
 ASM-R04-MIN-CLEARANCE,CAD-R0.4 layout,minimum planar module clearance,4,mm,DERIVED,axis-aligned holder/tray envelope validation,layout check only
 ASM-R04-HIGHEST-Z,CAD-R0.4 layout,highest component envelope,57,mm,DERIVED,tilt transmitter envelope top,layout check only
 ASM-R04-RIM-CLEARANCE,CAD-R0.4 layout,nominal clearance to bottom-shell rim,34.1,mm,DERIVED,91.1 mm nominal bottom depth minus highest Z,layout check only
+PLT-R05-Z,FR4 main plate,current thickness,5,mm,DESIGN,user selected 5 mm FR4 for stiffness,current review baseline
+ENC-R05-RF1,CAD-R0.5 lower wall,GNSS bulkhead center XZ and nominal cutout,-118;28;6.5,mm,NOMINAL,SMA-K to SMA-K sample-selection geometry,verify purchased bulkhead before drilling
+ENC-R05-RF2,CAD-R0.5 lower wall,XLS1 bulkhead center XZ and nominal cutout,-82;28;6.5,mm,NOMINAL,SMA-K to SMA-K sample-selection geometry,verify purchased bulkhead before drilling
+ENC-R05-G2,CAD-R0.5 lower wall,soil gland center XZ and nominal cutout,60;28;16.5,mm,NOMINAL,M16 sample-selection geometry,verify cable OD thread and clamping range
+ENC-R05-G1,CAD-R0.5 lower wall,PV gland center XZ and nominal cutout,110;28;16.5,mm,NOMINAL,M16 sample-selection geometry,verify cable OD thread and clamping range
+ASM-R05-PLATE-BOTTOM-Z,CAD-R0.5 layout,FR4 bottom above enclosure outer bottom,9,mm,DESIGN,3 mm nominal floor plus 6 mm support top,layout reference only
+ASM-R05-PLATE-TOP-Z,CAD-R0.5 layout,FR4 top above enclosure outer bottom,14,mm,DESIGN,272 x 193 x 5 mm fit-trial plate,layout reference only
+ASM-R05-MIN-CLEARANCE,CAD-R0.5 layout,minimum planar module clearance,4,mm,DERIVED,axis-aligned holder/tray envelope validation,layout check only
+ASM-R05-MIN-HARNESS-CLEARANCE,CAD-R0.5 layout,minimum route clearance to non-endpoint module,2,mm,DERIVED,W1-W8 axis-aligned route-envelope validation,replace with real cable OD and bend radius
+ASM-R05-HIGHEST-Z,CAD-R0.5 layout,highest component envelope,59,mm,DERIVED,tilt transmitter envelope top,layout check only
+ASM-R05-RIM-CLEARANCE,CAD-R0.5 layout,nominal clearance to bottom-shell rim,32.1,mm,DERIVED,91.1 mm nominal bottom depth minus highest Z,layout check only

@@ -7,10 +7,10 @@
 | Integrated field node | `FIELD-NODE-HW-EVT0.2-DRAFT` | Engineering reference set | Not released |
 | Existing carrier board | `R1.2` | As-built reference | Gerber exists; source documents conflict |
 | Carrier-board improvement | `R1.3-DRAFT` | Requirements | Not routed or released |
-| Competition enclosure | `MECH-R0.4-DRAFT` | Rectangular FR4 fit trial, nominal 8-hole H1-H8 pattern, edge-support and harness study | Physical fit, coordinates, boss height, hole depth and cable interfaces pending |
+| Competition enclosure | `MECH-R0.5-DRAFT` | 5 mm rectangular FR4, nominal H1-H8 anchors, four lower-wall ports and W1-W8 harness | Physical fit, anchor survey and purchased interface samples pending |
 | Solar subsystem | `PWR-R0.1` | Candidate architecture | Charger and energy budget unqualified |
-| Prototype procurement | `BOM-R0.4` | CAD-R0.4 measured-envelope parts, nominal H1-H8 anchors and harness purchase gates | Not a production AVL |
-| Mechanical CAD | `CAD-R0.4` | 23-component internal layout assembly, 8-hole FR4 and concept harness | Review required; physical anchor/cable interfaces pending |
+| Prototype procurement | `BOM-R0.5` | 5 mm FR4, sample cable glands/RF bulkheads and W1-W8 purchase gates | Not a production AVL |
+| Mechanical CAD | `CAD-R0.5` | 23-component assembly, 5 mm 8-hole FR4, four real wall cutouts and labeled W1-W8 routes | Review required; nominal ports are not drilling release data |
 
 ## Change History
 
@@ -76,6 +76,15 @@
 - Added eight concept harness route solids and preserved the power topology: PV -> CN3791 -> battery charge; battery load -> fuse/maintenance disconnect -> PCB DC5521.
 - Verified 18 generated part/route bodies by volume, inserted 23 assembly components, `4 mm` minimum planar module clearance, `57 mm` highest envelope, and `34.1 mm` nominal rim clearance. Generated native SLDASM/STEP, A3 SLDDRW/PDF/PNG, exploded/isometric/top previews, labeled SVG/PNG, and manifest checksums.
 - Kept H1-H8 physical transfer, boss depth/blind state/coplanarity, cable OD/gland threads, RF bulkhead dimensions, final clip geometry, and FR4 DXF explicitly blocked.
+
+### 2026-07-26 - `CAD-R0.5`
+
+- Changed the current main plate from `272 x 193 x 3 mm` to user-selected `272 x 193 x 5 mm` FR4/G10 while preserving CAD-R0.4 as history.
+- Added four actual cut features to the nominal lower enclosure wall: `RF1` GNSS and `RF2` XLS1 at `Ø6.5 mm`, plus `G2` soil and `G1` PV at `Ø16.5 mm`. These are sample-selection values, not released drilling dimensions.
+- Replaced color-only harness interpretation with W1-W8 instance names, explicit endpoints/cable classes, a Chinese connectivity SVG/PNG, and labeled lower-wall interfaces.
+- Rerouted W1 around the battery right-side service channel and W6 through the center signal channel. Added automatic route-to-nonendpoint-component collision checks; the final minimum checked clearance is `2 mm`.
+- Verified 19 STEP headers, 68 artifact hashes, four wall-cut expected/actual volume equality, 23 assembly components, `4 mm` minimum planar module clearance, `59 mm` highest envelope, and `32.1 mm` nominal rim clearance.
+- Kept H1-H8 physical coordinates, enclosure scallops, final gland/bulkhead sample geometry, cable OD/bend radii, fuse rating, tray/clip details, FR4 DXF and enclosure drilling drawing blocked.
 
 ## Versioning Rules
 

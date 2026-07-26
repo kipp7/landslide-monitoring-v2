@@ -1,6 +1,6 @@
 # Field Node CAD
 
-Status: `CAD-R0.4 / INTERNAL LAYOUT + HARNESS ASSEMBLY / REVIEW REQUIRED`
+Status: `CAD-R0.5 / 5 MM FR4 + LOWER-WALL PORTS + W1-W8 HARNESS / REVIEW REQUIRED`
 
 This directory contains the reproducible SOLIDWORKS 2022 automation setup and
 the field-node mechanical reference models. Native models are tracked with Git
@@ -40,9 +40,9 @@ coordinates, boss heights, FR4 reliefs, battery dimensions, charger dimensions,
 and cable interfaces must be measured before a manufacturing assembly or DXF is
 released.
 
-`MECH-R0.4-DRAFT` supersedes the old FR4 direction without overwriting the
+`MECH-R0.5-DRAFT` supersedes the old FR4 direction without overwriting the
 historical `FN-PLT-001` model. The supplier's `276.0655 x 197 mm` rectangle is a
-nominal enclosure reference; the current CAD plate is a `272 x 193 x 3 mm`
+nominal enclosure reference; the current CAD plate is a `272 x 193 x 5 mm`
 fit-trial candidate with eight nominal H1-H8 holes. The physical template, eight
 actual coordinates, boss interfaces, and local scallop relief must be checked
 before any manufacturing plate or DXF is released.
@@ -77,7 +77,7 @@ reference parts read-only. It also packages copies inside `CAD-R0.3` before
 assembly, because SolidWorks can still rewrite binary view/cache data in a
 referenced document despite a read-only open request.
 
-`models/CAD-R0.4/` contains the current 23-component internal layout and harness
+`models/CAD-R0.4/` contains the previous 23-component internal layout and harness
 study. It is an engineering packing reference, not a manufacturing release:
 
 - `FN-ASM-002_internal-layout-harness_R0.4.SLDASM/STEP`: nominal tray, four
@@ -92,6 +92,23 @@ The H1-H8 pattern is nominal and must be transferred to the physical enclosure.
 No FR4 DXF is generated. The colored harness bodies are route/clearance
 envelopes, not production round-wire geometry. Cable OD, gland threads, RF
 bulkheads, bend radius, fuse choice, and final tray/clip details remain pending.
+
+`models/CAD-R0.5/` is the current 23-component review assembly:
+
+- `FN-PLT-005` changes the main plate to `272 x 193 x 5 mm` FR4 while retaining
+  the nominal 8 x diameter 3.5 mm H1-H8 pattern.
+- `FN-ENC-004` contains four real lower-wall cut features: RF1/RF2 nominal
+  diameter 6.5 mm SMA bulkhead openings and G1/G2 nominal diameter 16.5 mm M16
+  gland openings. Their expected and actual removed volumes match exactly.
+- Harness parts and assembly instances are named W1-W8. The separate
+  `*_harness-diagram.zh-CN.svg/png` defines endpoints and cable classes; the 3D
+  bodies remain route/clearance envelopes rather than production wire models.
+- W1 uses the battery right-side channel and W6 uses the center signal channel.
+  Automated checks reject any route crossing a non-endpoint module; the current
+  minimum checked harness clearance is 2 mm.
+- The assembly remains `NOT FOR MANUFACTURE`: port sizes/coordinates must be
+  frozen from purchased glands and bulkheads, and no FR4 or enclosure drilling
+  DXF is generated.
 
 ## Automation
 
@@ -124,10 +141,10 @@ Rebuild the corrected tilt-interface release:
 & "$env:LOCALAPPDATA\Codex\SolidWorksMCP\source\.venv\Scripts\python.exe" hardware/field-node/cad/automation/build_tilt_interface_r02.py
 ```
 
-Rebuild the current internal layout and harness assembly:
+Rebuild the current internal layout, ports, and harness assembly:
 
 ```powershell
-& "$env:LOCALAPPDATA\Codex\SolidWorksMCP\source\.venv\Scripts\python.exe" hardware/field-node/cad/automation/build_layout_assembly_r04.py
+& "$env:LOCALAPPDATA\Codex\SolidWorksMCP\source\.venv\Scripts\python.exe" hardware/field-node/cad/automation/build_layout_assembly_r05.py
 ```
 
 The labeled PNG is rasterized by the workstation `magick` executable from

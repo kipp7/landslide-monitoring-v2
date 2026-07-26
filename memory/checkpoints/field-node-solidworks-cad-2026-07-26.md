@@ -71,6 +71,17 @@ field-node digital mechanical model without inventing unresolved dimensions.
 - CAD-R0.4 feature commit `ddb02862` is pushed to
   `origin/docs/hardware-field-node-evt0-1`; the push uploaded all 22 new native
   SOLIDWORKS LFS objects successfully.
+- `CAD-R0.5` changes the current main plate to `272 x 193 x 5 mm` and adds four
+  real lower-wall cut features: RF1/RF2 diameter 6.5 mm SMA nominal openings and
+  G1/G2 diameter 16.5 mm M16 nominal openings. Expected and actual tray volume
+  match exactly, confirming the ports are cut features rather than sketch marks.
+- W1-W8 now have explicit endpoints and cable classes plus a Chinese SVG/PNG
+  connectivity drawing. W1 uses the battery right-side service channel and W6
+  uses the center signal channel. Automated route collision checks pass with a
+  2 mm minimum clearance to non-endpoint module envelopes.
+- The final CAD-R0.5 rebuild contains 23 assembly components, 19 valid STEP
+  headers and 68 hash-verified artifacts. Layout checks pass at 4 mm minimum
+  module clearance, Z=59 mm highest envelope and 32.1 mm nominal rim clearance.
 
 ## In Progress
 
@@ -92,9 +103,10 @@ field-node digital mechanical model without inventing unresolved dimensions.
   verify H1-H8 top-plane coplanarity, hole diameter/depth, and blind state.
 - Freeze the rectangular FR4 outline and eight hole coordinates, then export DXF
   and a dimensioned drawing.
-- Confirm battery/CN3791 caliper dimensions, then freeze trays/clips; measure
-  cable OD, gland threads, RF bulkheads, solar frame holes, and GNSS hardware
-  before promoting the layout to a manufacturing assembly.
+- Confirm battery/CN3791 caliper dimensions, then freeze trays/clips. Buy one
+  sample each of the G1/G2 glands and RF1/RF2 bulkheads; measure thread, cutout,
+  anti-rotation, sealing and tool-clearance geometry before releasing enclosure
+  drilling. Measure cable OD/bend radius, solar frame holes and GNSS hardware.
 - Repoint global MCP configuration after the branch is merged into its permanent
   worktree path.
 
@@ -107,8 +119,8 @@ field-node digital mechanical model without inventing unresolved dimensions.
 
 ## Resume Prompt
 
-Continue field-node CAD from `CAD-R0.4 / MECH-R0.4-DRAFT`: verify the generated
-artifact set and Git diff, then fit a `272 x 193 mm` template and transfer/measure
-H1-H8 from the plate left-bottom datum. Measure cable/gland/RF interfaces and
-confirm battery/CN3791 envelopes before generating the FR4 DXF or production
-harness.
+Continue field-node CAD from `CAD-R0.5 / MECH-R0.5-DRAFT`: fit a `272 x 193 mm`
+template and transfer/measure H1-H8 from the plate left-bottom datum. Buy and
+measure G1/G2 gland plus RF1/RF2 bulkhead samples, then replace nominal wall
+cutouts with verified geometry. Confirm battery/CN3791 envelopes before
+generating FR4/enclosure DXFs or a production harness.
