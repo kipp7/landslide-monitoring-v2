@@ -1,6 +1,6 @@
 # Field Node CAD
 
-Status: `CAD-R0.6 / NATIVE ROUND HARNESS + COMPLETE EXTERNAL INTEGRATION / REVIEW REQUIRED`
+Status: `CAD-R0.7 / RETAINED ROUND HARNESS + STRUCTURAL CONNECTION DETAILS / REVIEW REQUIRED`
 
 This directory contains the reproducible SOLIDWORKS 2022 automation setup and
 the field-node mechanical reference models. Native models are tracked with Git
@@ -127,6 +127,24 @@ SOLIDWORKS 3D-spline circular sweeps and adds the complete external concept:
   load, BT-760 envelope, BT-M87SF three-hole pattern, XLS1 antenna and actual
   cable OD/bend radii remain `PENDING`. R0.6 is not a fabrication release.
 
+`models/CAD-R0.7/` is the current detailed concept and intentionally depends on
+the pinned R0.6 internal and external-structure assemblies:
+
+- `FN-ASM-006A` adds the enclosure rear straps and nominal fastener stack,
+  solar-panel back rails/clamps/pivots, GNSS mast base connection, rail/foot end
+  caps and removable-foot gussets.
+- `FN-ASM-006B` replaces the R0.6 external harness with four revised native
+  round sweeps, eight P-clip envelopes and a lower-wall strain-relief bar.
+- `FN-ASM-006` combines the R0.6 internal assembly, R0.6 external structure and
+  both R0.7 detail subassemblies. It has four top-level subassemblies and 124
+  resolved components.
+- The nominal lid-to-strap gap is `0.55 mm`; the two panel rails are offset
+  `18.5 mm` behind the panel mid-plane. These are layout checks, not tolerance
+  releases.
+- R0.7 contains 18 new SLDPRT, three SLDASM, 21 STEP and 27 PNG files. Actual
+  enclosure/panel holes, fastener grades, tube wall, cable/connector geometry,
+  P-clips and GNSS/XLS1 interfaces remain `PENDING`.
+
 ## Automation
 
 The setup reuses the architecture from `jianjwu/codex_to_solidworks`, but runs
@@ -168,6 +186,12 @@ Rebuild the current native round harness and complete external assembly:
 
 ```powershell
 & "$env:LOCALAPPDATA\Codex\SolidWorksMCP\source\.venv\Scripts\python.exe" hardware/field-node/cad/automation/build_full_assembly_r06.py
+```
+
+Rebuild the current structural details and retained external harness:
+
+```powershell
+& "$env:LOCALAPPDATA\Codex\SolidWorksMCP\source\.venv\Scripts\python.exe" hardware/field-node/cad/automation/build_detail_assembly_r07.py
 ```
 
 The labeled PNG is rasterized by the workstation `magick` executable from

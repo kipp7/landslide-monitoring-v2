@@ -7,10 +7,10 @@
 | Integrated field node | `FIELD-NODE-HW-EVT0.2-DRAFT` | Engineering reference set | Not released |
 | Existing carrier board | `R1.2` | As-built reference | Gerber exists; source documents conflict |
 | Carrier-board improvement | `R1.3-DRAFT` | Requirements | Not routed or released |
-| Competition enclosure | `MECH-R0.6-DRAFT` | 5 mm rectangular FR4, native round W1-W8 harness, symmetric external frame and central braced GNSS mast | Physical fit, interfaces, loads and purchased samples pending |
+| Competition enclosure | `MECH-R0.7-DRAFT` | 5 mm rectangular FR4, retained round harness, detailed symmetric frame interfaces and central braced GNSS mast | Physical fit, interfaces, loads and purchased samples pending |
 | Solar subsystem | `PWR-R0.1` | Candidate architecture | Charger and energy budget unqualified |
 | Prototype procurement | `BOM-R0.5` | 5 mm FR4, sample cable glands/RF bulkheads and W1-W8 purchase gates | Not a production AVL |
-| Mechanical CAD | `CAD-R0.6` | 47 native parts, four assemblies, native 3D round harness and 65-component integrated master | Engineering concept; no drilling or frame fabrication release |
+| Mechanical CAD | `CAD-R0.7` | R0.6 base plus 18 detail parts, three assemblies, retained external harness and 124-component integrated master | Engineering concept; no drilling or frame fabrication release |
 
 ## Change History
 
@@ -102,6 +102,25 @@
   subassemblies. The final master has three top-level subassemblies and 65
   resolved components; 47 SLDPRT, four SLDASM, 39 STEP and 47 PNG artifacts
   passed file/header checks.
+
+### 2026-07-27 - `CAD-R0.7`
+
+- Kept the validated R0.6 internal and symmetric external-structure
+  subassemblies as immutable dependencies. Replaced only the R0.6 external
+  harness in the current master with four revised native circular sweeps.
+- Added two enclosure rear straps, nominal through-bolt/washer envelopes, two
+  solar-panel back rails, four edge clamps, four pivot-pin envelopes, a GNSS
+  mast base plate and fastener envelopes, tube/foot end caps and foot gussets.
+- Added eight nominal cable-retention points, their fastener envelopes and a
+  lower-wall strain-relief bar. The PV route now terminates at the panel rear;
+  GNSS/XLS1 routes follow the left/right rails and central mast.
+- Verified the nominal enclosure-to-strap gap at `0.55 mm`, moved the panel
+  rails `18.5 mm` behind the panel mid-plane, and checked the corrected clip
+  contacts from actual SOLIDWORKS component bounding boxes.
+- The R0.7 master has four top-level subassemblies and 124 resolved components.
+  The delta release contains 18 SLDPRT, three SLDASM, 21 valid STEP and 27
+  nonblank PNG files; 69 manifest artifact hashes are tracked separately from
+  two pinned R0.6 assembly dependencies.
 
 ## Versioning Rules
 

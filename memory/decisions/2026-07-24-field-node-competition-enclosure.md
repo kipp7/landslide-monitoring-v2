@@ -33,6 +33,13 @@ The competition build needs one consistent sealed enclosure for the carrier boar
   unit. Support the enclosure and 35-degree panel on independent crossmembers;
   place BT-760 on a central short mast with two symmetric braces. Reject the
   long one-sided antenna cantilever as the current direction.
+- For CAD-R0.7, retain the R0.6 internal and external-structure assemblies as
+  pinned dependencies, replace the external harness with frame-following round
+  sweeps, and add separate structural-detail and harness-retention
+  subassemblies. Do not overwrite the R0.6 release.
+- Distribute enclosure reaction through two rear straps instead of treating the
+  four small mounting blocks as isolated load points. Keep solar back rails
+  behind the panel body and place external cable clips on real frame members.
 
 ## Rationale
 
@@ -46,6 +53,11 @@ The symmetric external frame reduces torsion and antenna phase-centre motion
 without requiring a separate field pole during competition. It also keeps solar
 wind load off the plastic lid and preserves a single transportable assembly.
 
+The R0.7 split lets purchased clamps, fasteners and measured interfaces replace
+nominal detail parts without rebuilding the validated R0.6 internal layout. It
+also makes retention points reviewable as components rather than implied bends
+in cable geometry.
+
 ## Consequences
 
 - The competition configuration improves repeatability but is not automatically a field-grade measurement reference.
@@ -57,6 +69,9 @@ wind load off the plastic lid and preserves a single transportable assembly.
 - No frame fabrication drawing is released from CAD-R0.6. The 30 x 30 mm member
   envelope, panel angle and removable feet are layout choices; wall thickness,
   hole tables, fasteners, wind load and transport load remain open gates.
+- R0.7 M6/M8 fasteners, P-clips, straps, panel rails, clamps, end caps and
+  gussets are interface envelopes only. Their names do not authorize those
+  nominal sizes for procurement or drilling.
 - The boss top planes are nominally coplanar: perimeter bosses rise approximately 6 mm from the main floor, while the four middle bosses rise 5 mm from a 1 mm raised floor. The FR4 bears directly on these tops with no 1 mm compensation shim; straightedge verification is still required before release.
 
 ## Follow-up
@@ -68,4 +83,7 @@ wind load off the plastic lid and preserves a single transportable assembly.
 - Generate the FR4 and stainless subplate DXFs.
 - Measure SWM-10W frame holes, enclosure rear interface, BT-760 envelope and
   BT-M87SF three-hole pattern; then freeze the external frame connection table.
+- Fit physical cable samples to the eight R0.7 retention stations, replace the
+  clip envelopes with selected parts and verify service loops while opening the
+  enclosure and removing the solar panel.
 - Run closing, transport, zero-repeatability, and IP65 tests.

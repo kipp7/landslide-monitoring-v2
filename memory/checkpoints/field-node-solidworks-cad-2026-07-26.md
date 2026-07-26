@@ -104,12 +104,29 @@ field-node digital mechanical model without inventing unresolved dimensions.
 - CAD-R0.6 feature commit `7124315c` contains the native round harness,
   symmetric external concept, reproducible generator, generated artifacts and
   associated engineering records.
+- `CAD-R0.7` preserves the R0.6 internal and external-structure assemblies as
+  hash-pinned dependencies, replaces the external harness with four refined
+  frame-following circular sweeps, and adds structural-detail plus
+  harness-retention subassemblies.
+- R0.7 adds two enclosure back straps and nominal fastener stacks, two panel
+  back rails/four clamps/four pivots, a GNSS mast base connection, tube and foot
+  caps, four foot gussets, eight cable-clip stations and a lower strain-relief
+  bar. Actual SOLIDWORKS bounding boxes verify a `0.55 mm` nominal lid/strap gap,
+  `18.5 mm` panel back-rail offset and contact at the corrected clip stations.
+- The R0.7 master has four top-level subassemblies and 124 resolved components.
+  Its delta directory contains 18 SLDPRT, three SLDASM, 21 STEP, 27 PNG and 69
+  hash-tracked artifacts plus two recorded R0.6 dependency hashes.
+- The R0.7 generator isolates every 3D cable sweep in a fresh SOLIDWORKS
+  document session and supports `--manifest-only` so dependency hashes can be
+  refreshed without reopening or rewriting R0.6. The temporary reference-file
+  writes observed during development were removed; the tracked R0.6 directory
+  matches its published commit.
 
 ## In Progress
 
-- The CAD setup, native round harness and complete external concept assembly are
-  complete, but the physical interface survey and manufacturing release have
-  not started.
+- The CAD setup, native round harness, complete external concept and nominal
+  connection/retention details are complete, but the physical interface survey
+  and manufacturing release have not started.
 - Global Codex configuration targets the current hardware worktree path.
 - The pre-existing untracked `tmp/` directory remains outside this work and was
   intentionally neither staged nor deleted.
@@ -132,6 +149,8 @@ field-node digital mechanical model without inventing unresolved dimensions.
 - Measure enclosure rear mounting points, SWM-10W holes, BT-760 envelope and
   BT-M87SF three-hole table; select frame wall thickness and fasteners from wind
   and transport loads before generating frame fabrication drawings.
+- Purchase or identify the actual P-clips, cable, connectors, straps and panel
+  clamps; replace the R0.7 envelopes and verify opening/removal service loops.
 - Repoint global MCP configuration after the branch is merged into its permanent
   worktree path.
 
@@ -144,8 +163,9 @@ field-node digital mechanical model without inventing unresolved dimensions.
 
 ## Resume Prompt
 
-Continue field-node CAD from `CAD-R0.6 / MECH-R0.6-DRAFT`: fit a `272 x 193 mm`
+Continue field-node CAD from `CAD-R0.7 / MECH-R0.7-DRAFT`: fit a `272 x 193 mm`
 template and transfer H1-H8; measure G1/G2/RF1/RF2 samples, SWM-10W holes,
-enclosure rear mounts, BT-760 and BT-M87SF. Replace nominal geometry and cable
-OD/bend radii with physical data, calculate frame/fastener loads, then release
-FR4, enclosure and external-frame drawings as new revisions.
+enclosure rear mounts, BT-760 and BT-M87SF. Replace nominal fasteners, clamps,
+P-clips, cable OD/bend radii and interface envelopes with physical data,
+calculate frame/fastener loads, then release FR4, enclosure and external-frame
+drawings as new revisions.
