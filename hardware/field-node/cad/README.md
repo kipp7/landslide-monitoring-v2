@@ -1,6 +1,6 @@
 # Field Node CAD
 
-Status: `CAD-R0.5 / 5 MM FR4 + LOWER-WALL PORTS + W1-W8 HARNESS / REVIEW REQUIRED`
+Status: `CAD-R0.6 / NATIVE ROUND HARNESS + COMPLETE EXTERNAL INTEGRATION / REVIEW REQUIRED`
 
 This directory contains the reproducible SOLIDWORKS 2022 automation setup and
 the field-node mechanical reference models. Native models are tracked with Git
@@ -93,7 +93,7 @@ No FR4 DXF is generated. The colored harness bodies are route/clearance
 envelopes, not production round-wire geometry. Cable OD, gland threads, RF
 bulkheads, bend radius, fuse choice, and final tray/clip details remain pending.
 
-`models/CAD-R0.5/` is the current 23-component review assembly:
+`models/CAD-R0.5/` is the previous 23-component review assembly:
 
 - `FN-PLT-005` changes the main plate to `272 x 193 x 5 mm` FR4 while retaining
   the nominal 8 x diameter 3.5 mm H1-H8 pattern.
@@ -109,6 +109,23 @@ bulkheads, bend radius, fuse choice, and final tray/clip details remain pending.
 - The assembly remains `NOT FOR MANUFACTURE`: port sizes/coordinates must be
   frozen from purchased glands and bulkheads, and no FR4 or enclosure drilling
   DXF is generated.
+
+`models/CAD-R0.6/` replaces the rectangular route envelopes with native
+SOLIDWORKS 3D-spline circular sweeps and adds the complete external concept:
+
+- `FN-ASM-004` is the 31-component open internal assembly. W1-W8 are editable
+  round swept solids; every wall route reaches the nominal connector centre at
+  `Z=28 mm` before crossing the wall.
+- `FN-ASM-005A` contains the symmetric dual-rail frame, independent enclosure
+  mounts, 35-degree SWM-10W panel, central braced GNSS mast, separate XLS1
+  antenna envelope, lid and removable competition feet.
+- `FN-ASM-005B` contains four external round harnesses with downward entries,
+  drip loops and strain-relief routing.
+- `FN-ASM-005` is the three-subassembly master. It resolves 65 components and
+  is left open in SOLIDWORKS after a successful rebuild.
+- The panel holes, enclosure rear interface, tube wall thickness, wind/transport
+  load, BT-760 envelope, BT-M87SF three-hole pattern, XLS1 antenna and actual
+  cable OD/bend radii remain `PENDING`. R0.6 is not a fabrication release.
 
 ## Automation
 
@@ -141,10 +158,16 @@ Rebuild the corrected tilt-interface release:
 & "$env:LOCALAPPDATA\Codex\SolidWorksMCP\source\.venv\Scripts\python.exe" hardware/field-node/cad/automation/build_tilt_interface_r02.py
 ```
 
-Rebuild the current internal layout, ports, and harness assembly:
+Rebuild the previous rectangular route-envelope assembly:
 
 ```powershell
 & "$env:LOCALAPPDATA\Codex\SolidWorksMCP\source\.venv\Scripts\python.exe" hardware/field-node/cad/automation/build_layout_assembly_r05.py
+```
+
+Rebuild the current native round harness and complete external assembly:
+
+```powershell
+& "$env:LOCALAPPDATA\Codex\SolidWorksMCP\source\.venv\Scripts\python.exe" hardware/field-node/cad/automation/build_full_assembly_r06.py
 ```
 
 The labeled PNG is rasterized by the workstation `magick` executable from

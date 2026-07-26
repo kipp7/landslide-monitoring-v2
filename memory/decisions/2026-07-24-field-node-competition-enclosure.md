@@ -26,6 +26,13 @@ The competition build needs one consistent sealed enclosure for the carrier boar
 - For CAD-R0.5, retain the CCW-rotated `170 x 115 mm` carrier PCB on the left, the `66 x 61 x 40 mm` battery envelope at lower right, the `46 x 21 x 10 mm` no-hole CN3791 module at right center, and the tilt stack at upper right. Add four optional `12 x 12 x 6 mm` edge support pads and W1-W8 route-envelope parts.
 - Put four interfaces on the lower wall to support downward drip loops: RF1 GNSS and RF2 XLS1 use separate SMA bulkheads; G2 soil and G1 PV use separate cable glands. CAD nominal cutouts are diameter 6.5 mm for RF1/RF2 and diameter 16.5 mm for G1/G2, but purchased sample geometry governs final drilling.
 - Preserve the power topology: solar panel -> CN3791 -> battery charge branch; battery load output -> fuse/service disconnect -> PCB DC5521.
+- Replace rectangular harness envelopes in CAD-R0.6 with native round 3D
+  sweeps. Wall-entry paths must reach the actual interface centre height before
+  crossing the wall; RF1/RF2 remain GNSS/XLS1 interfaces, not tilt-sensor holes.
+- Use a symmetric dual-rail common back-frame for the one-piece competition
+  unit. Support the enclosure and 35-degree panel on independent crossmembers;
+  place BT-760 on a central short mast with two symmetric braces. Reject the
+  long one-sided antenna cantilever as the current direction.
 
 ## Rationale
 
@@ -35,6 +42,10 @@ Eight H1-H8 anchors improve lift and torsional restraint, but the `120.3 mm` col
 
 The 5 mm plate consumes 2 mm more vertical space than CAD-R0.4, but CAD-R0.5 still retains 32.1 mm nominal clearance to the bottom-shell rim. The added thickness does not make the nominal H1-H8 coordinates or plastic-boss strength verified; both remain physical-test gates.
 
+The symmetric external frame reduces torsion and antenna phase-centre motion
+without requiring a separate field pole during competition. It also keeps solar
+wind load off the plastic lid and preserves a single transportable assembly.
+
 ## Consequences
 
 - The competition configuration improves repeatability but is not automatically a field-grade measurement reference.
@@ -43,6 +54,9 @@ The 5 mm plate consumes 2 mm more vertical space than CAD-R0.4, but CAD-R0.5 sti
 - H1-H8 identity, physical coordinates, boss height, hole depth, blind-hole state, top coplanarity, and screw length are not frozen. The annotated supplier drawing is a nominal reference, not a machining release.
 - Anchor screw heads fall under module footprints. Fasten FR4 before modules and provide raised standoffs/trays or underside relief.
 - No enclosure drilling drawing is released from the nominal RF1/RF2/G1/G2 cutouts. Confirm thread, sealing washer, anti-rotation flat, tool clearance, cable OD and clamping range from purchased samples first.
+- No frame fabrication drawing is released from CAD-R0.6. The 30 x 30 mm member
+  envelope, panel angle and removable feet are layout choices; wall thickness,
+  hole tables, fasteners, wind load and transport load remain open gates.
 - The boss top planes are nominally coplanar: perimeter bosses rise approximately 6 mm from the main floor, while the four middle bosses rise 5 mm from a 1 mm raised floor. The FR4 bears directly on these tops with no 1 mm compensation shim; straightedge verification is still required before release.
 
 ## Follow-up
@@ -52,4 +66,6 @@ The 5 mm plate consumes 2 mm more vertical space than CAD-R0.4, but CAD-R0.5 sti
 - Measure cable OD, gland thread, RF bulkhead, and minimum bend radius before converting route envelopes into a production harness.
 - Freeze the four subplate-to-FR4 support holes.
 - Generate the FR4 and stainless subplate DXFs.
+- Measure SWM-10W frame holes, enclosure rear interface, BT-760 envelope and
+  BT-M87SF three-hole pattern; then freeze the external frame connection table.
 - Run closing, transport, zero-repeatability, and IP65 tests.

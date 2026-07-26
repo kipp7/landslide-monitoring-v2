@@ -1,0 +1,756 @@
+{
+  "revision": "CAD-R0.6",
+  "scope": "native round harness plus symmetric complete external integration",
+  "manufacturing_status": "ENGINEERING CONCEPT / NOT FOR MANUFACTURE",
+  "solidworks": "2022 SP5.0",
+  "assemblies": [
+    {
+      "name": "FN-ASM-004_internal-round-harness_R0.6",
+      "component_count": 31,
+      "native": "FN-ASM-004_internal-round-harness_R0.6.SLDASM",
+      "step": "FN-ASM-004_internal-round-harness_R0.6.STEP",
+      "previews": [
+        "FN-ASM-004_internal-round-harness_R0.6_isometric.png",
+        "FN-ASM-004_internal-round-harness_R0.6_top.png",
+        "FN-ASM-004_internal-round-harness_R0.6_front.png"
+      ],
+      "left_open_in_solidworks": false,
+      "status": "REUSED_FROM_COMPLETED_ASSEMBLY_PASS"
+    },
+    {
+      "name": "FN-ASM-005A_external-structure_R0.6",
+      "native": "FN-ASM-005A_external-structure_R0.6.SLDASM",
+      "step": "FN-ASM-005A_external-structure_R0.6.STEP",
+      "status": "REUSED_FROM_COMPLETED_ASSEMBLY_PASS"
+    },
+    {
+      "name": "FN-ASM-005B_external-harness_R0.6",
+      "native": "FN-ASM-005B_external-harness_R0.6.SLDASM",
+      "step": "FN-ASM-005B_external-harness_R0.6.STEP",
+      "status": "REUSED_FROM_COMPLETED_ASSEMBLY_PASS"
+    },
+    {
+      "name": "FN-ASM-005_full-field-node-concept_R0.6",
+      "component_count": 3,
+      "resolved_component_count": 65,
+      "native": "FN-ASM-005_full-field-node-concept_R0.6.SLDASM",
+      "step": "FN-ASM-005_full-field-node-concept_R0.6.STEP",
+      "previews": [
+        "FN-ASM-005_full-field-node-concept_R0.6_isometric.png",
+        "FN-ASM-005_full-field-node-concept_R0.6_front.png",
+        "FN-ASM-005_full-field-node-concept_R0.6_right.png",
+        "FN-ASM-005_full-field-node-concept_R0.6_top.png"
+      ],
+      "left_open_in_solidworks": true
+    }
+  ],
+  "native_geometry": {
+    "parts": [],
+    "native_sweeps": 18
+  },
+  "validation": {
+    "native_round_sweeps": 12,
+    "structural_native_sweeps": 6,
+    "port_center_z_mm": 28,
+    "rectangular_harness_reused": false,
+    "solar_load_on_lid": false,
+    "gnss_support_symmetric": true,
+    "master_subassembly_count": 3
+  },
+  "blocked_inputs": [
+    "BT-760 physical outer dimensions and TNC datum",
+    "BT-M87SF three-hole pattern",
+    "SWM-10W frame holes",
+    "enclosure rear mount interface",
+    "frame wall thickness fasteners and wind load",
+    "actual cable OD connector length and bend radius",
+    "XLS1 antenna model"
+  ],
+  "artifacts": [
+    {
+      "name": "FN-ANT-002_xls1-bracket-70x80x6_PENDING_R0.6.png",
+      "bytes": 160630,
+      "sha256": "ac0db09ac61fc86a0f2edd7326dd857dbd06a10be5c5c9414e66c9af9c284590"
+    },
+    {
+      "name": "FN-ANT-002_xls1-bracket-70x80x6_PENDING_R0.6.SLDPRT",
+      "bytes": 81690,
+      "sha256": "fb18992044ddcab4f12a05727b0fee2e390021cb6da2d2043e4c9dbe277bbec4"
+    },
+    {
+      "name": "FN-ANT-002_xls1-bracket-70x80x6_PENDING_R0.6.STEP",
+      "bytes": 15693,
+      "sha256": "5408b5c53f10d7cea85d7b703df1991a265e85a119054f88663baf15ff81f037"
+    },
+    {
+      "name": "FN-ANT-003_xls1-whip-D12x180_PENDING_R0.6.png",
+      "bytes": 139053,
+      "sha256": "6bffcf99c19875c975ced0e1de7a5e85638b9ccf37658aa5be1022a5a15ad150"
+    },
+    {
+      "name": "FN-ANT-003_xls1-whip-D12x180_PENDING_R0.6.SLDPRT",
+      "bytes": 39364,
+      "sha256": "be9cf05ea5a2686331fcba694d3a30ffb44c34f0b9fc987c3b8b146854047558"
+    },
+    {
+      "name": "FN-ANT-003_xls1-whip-D12x180_PENDING_R0.6.STEP",
+      "bytes": 11719,
+      "sha256": "a792a343401263c83e44e1b23b7e84f70fbaadf4dc67bd211a4a0dc9504bfb99"
+    },
+    {
+      "name": "FN-ASM-004_internal-round-harness_R0.6.SLDASM",
+      "bytes": 1113171,
+      "sha256": "8703a16509601d472a8e013134d837ce0bdd80502c626be05caba2f11be09687"
+    },
+    {
+      "name": "FN-ASM-004_internal-round-harness_R0.6.STEP",
+      "bytes": 3901718,
+      "sha256": "94196206e2d79c3539d6046402b6a4208d7b6ad22e074a77d1555147aaca6a69"
+    },
+    {
+      "name": "FN-ASM-004_internal-round-harness_R0.6_front.png",
+      "bytes": 118414,
+      "sha256": "40ae54e772002dbfa9c32e2b526413f7a53bf2eced3d9a165e727e7d7ef4cba6"
+    },
+    {
+      "name": "FN-ASM-004_internal-round-harness_R0.6_isometric.png",
+      "bytes": 262130,
+      "sha256": "56388bce0c116e6e34aac62c2499fad4ab1a1f373dbdc8f9f641207612256b5c"
+    },
+    {
+      "name": "FN-ASM-004_internal-round-harness_R0.6_top.png",
+      "bytes": 186855,
+      "sha256": "b2cbaff6b2cc5c37905dcdbaac586de6c158883f53d3c89ede00d92e0c72d15e"
+    },
+    {
+      "name": "FN-ASM-005_full-field-node-concept_R0.6.SLDASM",
+      "bytes": 1970101,
+      "sha256": "7397c4713ed0807ef7de9ac4b28876f1586391fdbcbf71f508ce0c1b1de2f8ea"
+    },
+    {
+      "name": "FN-ASM-005_full-field-node-concept_R0.6.STEP",
+      "bytes": 10325863,
+      "sha256": "3df67adda2bda4f79774fce27b76705c57fd9e02e7154b699ea2f6710722487b"
+    },
+    {
+      "name": "FN-ASM-005_full-field-node-concept_R0.6_front.png",
+      "bytes": 163576,
+      "sha256": "8023b2fadb5cdd8790ba7257f49e153313a341d7a639ffbf6b4dd3ee823798ad"
+    },
+    {
+      "name": "FN-ASM-005_full-field-node-concept_R0.6_isometric.png",
+      "bytes": 201691,
+      "sha256": "b6d0de7ca4d145a1d564aac0f227cb2a9c31ea1636280b550b4ea08d394a9fa7"
+    },
+    {
+      "name": "FN-ASM-005_full-field-node-concept_R0.6_right.png",
+      "bytes": 163249,
+      "sha256": "1b161821be5bd347d2fa3d029e7b88545c213c8dfe633de140b35903465c63de"
+    },
+    {
+      "name": "FN-ASM-005_full-field-node-concept_R0.6_top.png",
+      "bytes": 264148,
+      "sha256": "7036626ceae7f224962d3692ef0b81c400e52a2041c1217bb909a6c7b7a738e4"
+    },
+    {
+      "name": "FN-ASM-005A_external-structure_R0.6.SLDASM",
+      "bytes": 391658,
+      "sha256": "1b46f336c36a05bdf4ed2e69d53e05eaea406d6c272041c97e76943a1eed263b"
+    },
+    {
+      "name": "FN-ASM-005A_external-structure_R0.6.STEP",
+      "bytes": 447544,
+      "sha256": "c0e912b4f910866b189286878cd55c53fc94964556300abdd79d60bd845dbb9b"
+    },
+    {
+      "name": "FN-ASM-005A_external-structure_R0.6_front.png",
+      "bytes": 128394,
+      "sha256": "4313bc1358da9748063487a829856cda61bc30a05a9efe48529c2b0745ae7a04"
+    },
+    {
+      "name": "FN-ASM-005A_external-structure_R0.6_isometric.png",
+      "bytes": 165239,
+      "sha256": "445fa909f3fc6a08ee0609dfddd66fde42db40b5085ac5b55a0414d696eee0af"
+    },
+    {
+      "name": "FN-ASM-005A_external-structure_R0.6_right.png",
+      "bytes": 126625,
+      "sha256": "94ce46daa897f117c29026d2ac804e14499b3d563eef3d6762a81cbb544bed37"
+    },
+    {
+      "name": "FN-ASM-005B_external-harness_R0.6.SLDASM",
+      "bytes": 708428,
+      "sha256": "d70922bb1e72dc74c97257ecf393f85c6faf394544db9992c1ee067a8bd5e2ad"
+    },
+    {
+      "name": "FN-ASM-005B_external-harness_R0.6.STEP",
+      "bytes": 5930400,
+      "sha256": "8514712b1c2028df663f5e69ff2c3094d11551a4b9a5b9eb06c59bbe6b7b10d5"
+    },
+    {
+      "name": "FN-ASM-005B_external-harness_R0.6_front.png",
+      "bytes": 150252,
+      "sha256": "3f422843a96958636451678ed9090cc60a02fc5e8b624406d427d59a86345df6"
+    },
+    {
+      "name": "FN-ASM-005B_external-harness_R0.6_isometric.png",
+      "bytes": 163711,
+      "sha256": "2809885529338f940f43fe984282783191a98785ebf07b82112c778c94030a3b"
+    },
+    {
+      "name": "FN-BAT-003_battery-envelope_USER-MEASURED_R0.5.SLDPRT",
+      "bytes": 77613,
+      "sha256": "364fa126ba3a355cee871ce55eeba6b8919b32a69cd59b61d160bb866e9e3333"
+    },
+    {
+      "name": "FN-BRK-003_enclosure-mount-28x28x18_CONCEPT_R0.6.png",
+      "bytes": 154100,
+      "sha256": "5469c3b301d1d8992df90e93bbc56329bd05ac0c61618416a48489e90c2ceb88"
+    },
+    {
+      "name": "FN-BRK-003_enclosure-mount-28x28x18_CONCEPT_R0.6.SLDPRT",
+      "bytes": 76406,
+      "sha256": "22d6c1262d4e50fa6fe973676ebbc5706d412a750cea16cf25f27f3c200e17cc"
+    },
+    {
+      "name": "FN-BRK-003_enclosure-mount-28x28x18_CONCEPT_R0.6.STEP",
+      "bytes": 15710,
+      "sha256": "1645d344cc5bf77115f76b3c362ec7058ff67d8255296684beaa45b94d3b7ec0"
+    },
+    {
+      "name": "FN-BRK-004_solar-left-lower-strut_D14_CONCEPT_R0.6.png",
+      "bytes": 324261,
+      "sha256": "b2693da9b810081a47ef9acdac744115bc7a96c22365d6719be111311395caf2"
+    },
+    {
+      "name": "FN-BRK-004_solar-left-lower-strut_D14_CONCEPT_R0.6.SLDPRT",
+      "bytes": 168663,
+      "sha256": "79d035e4a20ac95f16d7abd49c576ee768ab50d0169cb093be54f51123a0fb52"
+    },
+    {
+      "name": "FN-BRK-004_solar-left-lower-strut_D14_CONCEPT_R0.6.STEP",
+      "bytes": 20142,
+      "sha256": "7859502eef8409d88c50cc090a015d0d401088feedf2c5981998938ffae4dcc2"
+    },
+    {
+      "name": "FN-BRK-005_solar-right-lower-strut_D14_CONCEPT_R0.6.png",
+      "bytes": 324261,
+      "sha256": "b65a4babe5a0095b9dc0cee01b7382410883d4069454779b99bd687ab1587b83"
+    },
+    {
+      "name": "FN-BRK-005_solar-right-lower-strut_D14_CONCEPT_R0.6.SLDPRT",
+      "bytes": 168717,
+      "sha256": "7512f5da0fa1662116079111f87db0c3ae29a0259f44f32f6ca6364c2e8410a2"
+    },
+    {
+      "name": "FN-BRK-005_solar-right-lower-strut_D14_CONCEPT_R0.6.STEP",
+      "bytes": 20155,
+      "sha256": "735332cdb0f403ade22cc312aa1a410118ecb5dde80a9e04290ef414bea9aed2"
+    },
+    {
+      "name": "FN-BRK-006_solar-left-upper-strut_D14_CONCEPT_R0.6.png",
+      "bytes": 323279,
+      "sha256": "54a27ed4c99905062c426966029e1d74098f5d98f2d9d01516a3baf272d9d610"
+    },
+    {
+      "name": "FN-BRK-006_solar-left-upper-strut_D14_CONCEPT_R0.6.SLDPRT",
+      "bytes": 158001,
+      "sha256": "69c677de162eeb4c6349e5b83f7f226095b046b6a10e0137d538ca283ecb7321"
+    },
+    {
+      "name": "FN-BRK-006_solar-left-upper-strut_D14_CONCEPT_R0.6.STEP",
+      "bytes": 20122,
+      "sha256": "e04123dc40dddaafb8063e3d1178506d8c269074ce1dca9108e70ae896b16d40"
+    },
+    {
+      "name": "FN-BRK-007_solar-right-upper-strut_D14_CONCEPT_R0.6.png",
+      "bytes": 323279,
+      "sha256": "d43530828f1ddce14b3d83e3a21375b2b20ea087d23d02b80ac31802a496f8e2"
+    },
+    {
+      "name": "FN-BRK-007_solar-right-upper-strut_D14_CONCEPT_R0.6.SLDPRT",
+      "bytes": 156862,
+      "sha256": "35bf354a46b1790069dc75958e15dd162c588575b81f88d004c77fab025232be"
+    },
+    {
+      "name": "FN-BRK-007_solar-right-upper-strut_D14_CONCEPT_R0.6.STEP",
+      "bytes": 20109,
+      "sha256": "be4cd0b1cca8faa32a12c1859a9d93935ee32ac353c160174b7d25e146afb530"
+    },
+    {
+      "name": "FN-ENC-004_open-tray_4PORT-NOMINAL_R0.5.SLDPRT",
+      "bytes": 106543,
+      "sha256": "93b25a7e021755298f0fe7eac15dc45a2d8c7f863d7e1e92396743d2a742562d"
+    },
+    {
+      "name": "FN-ENC-006_lid-envelope_NOMINAL_R0.6.png",
+      "bytes": 163500,
+      "sha256": "89da36963109f957ab804b51cdb00a5d8acb1469b71c79734be37e93ea8d9875"
+    },
+    {
+      "name": "FN-ENC-006_lid-envelope_NOMINAL_R0.6.SLDPRT",
+      "bytes": 83876,
+      "sha256": "53b061b52153f415953bb29f6c6f3842b505213a344edce671612d0cfd9de195"
+    },
+    {
+      "name": "FN-ENC-006_lid-envelope_NOMINAL_R0.6.STEP",
+      "bytes": 15639,
+      "sha256": "fa1682054b601409bfb3be9492c1ab64d7dcca28d62d8b3e44f643c83802d751"
+    },
+    {
+      "name": "FN-ENV-002_carrier-installed-height_R0.5.SLDPRT",
+      "bytes": 83660,
+      "sha256": "05760cde70dcc4410e47129f552d45fd5b04486b3555995a1d6f401788f85d50"
+    },
+    {
+      "name": "FN-FRM-002_rail-30x30x650_CONCEPT_R0.6.png",
+      "bytes": 130929,
+      "sha256": "b7e5ac3368ecde822094dd0ad894d7cc44c8e9903801861524175d97b0fac239"
+    },
+    {
+      "name": "FN-FRM-002_rail-30x30x650_CONCEPT_R0.6.SLDPRT",
+      "bytes": 37188,
+      "sha256": "544583e9306647488ffb6c13ae8ccdc78b36a9b41378d7454ebcf3ca634678f0"
+    },
+    {
+      "name": "FN-FRM-002_rail-30x30x650_CONCEPT_R0.6.STEP",
+      "bytes": 15675,
+      "sha256": "6f6e2f6d91b14d8b7b04083d5f1e20e8990d41897e89ddfefc5c965f2ae737cf"
+    },
+    {
+      "name": "FN-FRM-003_crossmember-330x30x30_CONCEPT_R0.6.png",
+      "bytes": 157492,
+      "sha256": "c58ec7b691e768d75f8d4057a9862836b3ebf45e7b50ad27e2009ff3e1371268"
+    },
+    {
+      "name": "FN-FRM-003_crossmember-330x30x30_CONCEPT_R0.6.SLDPRT",
+      "bytes": 66190,
+      "sha256": "384ac18b55dd2a3fa9fda9b5e137c453bc0092580ba00061cac75128dfa38b64"
+    },
+    {
+      "name": "FN-FRM-003_crossmember-330x30x30_CONCEPT_R0.6.STEP",
+      "bytes": 15712,
+      "sha256": "035b3677d0576a43997614594838921ac6f02e422b8af305679d3d7955d1275d"
+    },
+    {
+      "name": "FN-FRM-004_mast-30x30x220_CONCEPT_R0.6.png",
+      "bytes": 133410,
+      "sha256": "55210cd64a416af50f4d3d10af0a0f5912abd5381bffe96b30990a2cd9a5f08c"
+    },
+    {
+      "name": "FN-FRM-004_mast-30x30x220_CONCEPT_R0.6.SLDPRT",
+      "bytes": 40539,
+      "sha256": "c3989d05351ef8c0571b55fd6acdee296c5b6e5e6a2a394f61cece2703434e2b"
+    },
+    {
+      "name": "FN-FRM-004_mast-30x30x220_CONCEPT_R0.6.STEP",
+      "bytes": 15681,
+      "sha256": "d9665a5aefd034c28d821467e86f4fdad7ccd018ef39a3e420a23a8107be846f"
+    },
+    {
+      "name": "FN-FRM-005_removable-foot-50x350x30_CONCEPT_R0.6.png",
+      "bytes": 156855,
+      "sha256": "7d8fb1645510b93a62f163850c2fda08426663979e3e2d6b7d83abb00671b1d4"
+    },
+    {
+      "name": "FN-FRM-005_removable-foot-50x350x30_CONCEPT_R0.6.SLDPRT",
+      "bytes": 69156,
+      "sha256": "98127cef2ff3e6bdbb075de671f11ed742404f0fedafdc9beb14d90e6f3176b0"
+    },
+    {
+      "name": "FN-FRM-005_removable-foot-50x350x30_CONCEPT_R0.6.STEP",
+      "bytes": 15707,
+      "sha256": "b75d0247df29037a73bebecc0be65eb3d501c17b078441e944eb792df3c3bdb8"
+    },
+    {
+      "name": "FN-FRM-006_left-mast-brace_D16_CONCEPT_R0.6.png",
+      "bytes": 170940,
+      "sha256": "de3f7f34916a110473030aebae7cb7d638da6b540d76974878165c543013a583"
+    },
+    {
+      "name": "FN-FRM-006_left-mast-brace_D16_CONCEPT_R0.6.SLDPRT",
+      "bytes": 104915,
+      "sha256": "888dba20d8a138cbc0b1352e3a7130518b4a6c65dc807f98f309aebdf7dc37cb"
+    },
+    {
+      "name": "FN-FRM-006_left-mast-brace_D16_CONCEPT_R0.6.STEP",
+      "bytes": 54967,
+      "sha256": "d890df62424ef40b2733d8821064fbe31c8072030a3ac09453c38975f4b22b4e"
+    },
+    {
+      "name": "FN-FRM-007_right-mast-brace_D16_CONCEPT_R0.6.png",
+      "bytes": 214074,
+      "sha256": "90f2855fa8171d75c06067140d4766a913903b7fc03307bc098416c7d0050dc1"
+    },
+    {
+      "name": "FN-FRM-007_right-mast-brace_D16_CONCEPT_R0.6.SLDPRT",
+      "bytes": 131123,
+      "sha256": "da5dc8d9e6dffa519fd4654d22fdbe84bbb114f4eb8fcb65774c2dff9ae36665"
+    },
+    {
+      "name": "FN-FRM-007_right-mast-brace_D16_CONCEPT_R0.6.STEP",
+      "bytes": 55184,
+      "sha256": "8fe3253d5a1e63a58ddd3b3b18dfcb353f3f7d05800f2f95fb4a2376a9750e68"
+    },
+    {
+      "name": "FN-GNS-002_mast-platform-120x120x6_CONCEPT_R0.6.png",
+      "bytes": 163115,
+      "sha256": "0fc888896c5d5e7d0ceb3fe4b8925ce2c240be81cea7eeb82150d6001e018d37"
+    },
+    {
+      "name": "FN-GNS-002_mast-platform-120x120x6_CONCEPT_R0.6.SLDPRT",
+      "bytes": 80368,
+      "sha256": "bc117a71db1a08cb7a0a701f60b2bd386cb0ff5058e95fb1c6e1d502227c8c23"
+    },
+    {
+      "name": "FN-GNS-002_mast-platform-120x120x6_CONCEPT_R0.6.STEP",
+      "bytes": 15706,
+      "sha256": "840fe164bf29c2f47addf36c6baf98b48f0fe3961107aeaa91b4a79aecddd9fa"
+    },
+    {
+      "name": "FN-GNS-003_BTM87SF-envelope_D78x24_PENDING_R0.6.png",
+      "bytes": 163820,
+      "sha256": "2b77fce0077e0af1bd1d5adaa26289ac7022284145212f9d4d111fe1b2c75297"
+    },
+    {
+      "name": "FN-GNS-003_BTM87SF-envelope_D78x24_PENDING_R0.6.SLDPRT",
+      "bytes": 88098,
+      "sha256": "4b0b1f0136c3b3735612541d09526e3f28f24fb68502e84a7d7f99a4aa52c900"
+    },
+    {
+      "name": "FN-GNS-003_BTM87SF-envelope_D78x24_PENDING_R0.6.STEP",
+      "bytes": 11755,
+      "sha256": "20d69634c69808174ddfb17d19bd59ceb16f6fa59b0dbc670889f2ce921ded3e"
+    },
+    {
+      "name": "FN-GNS-004_BT760-envelope_D180x70_PENDING_R0.6.png",
+      "bytes": 162313,
+      "sha256": "9cbdda578a8a3cef196c4bf9238e414b932be4bb47beaf76b29dbd46b5fd36e8"
+    },
+    {
+      "name": "FN-GNS-004_BT760-envelope_D180x70_PENDING_R0.6.SLDPRT",
+      "bytes": 85236,
+      "sha256": "7fd924e6b38b1311f03af74ac05675d2c9220f49e072123d9bab7fde27a7f814"
+    },
+    {
+      "name": "FN-GNS-004_BT760-envelope_D180x70_PENDING_R0.6.STEP",
+      "bytes": 11738,
+      "sha256": "e69900e0ebf020fa24b34c297f1794feba835640c9185b64cd12ca7fd8650c84"
+    },
+    {
+      "name": "FN-HAR-017_W1-pv-input-round_R0.6.png",
+      "bytes": 229650,
+      "sha256": "a1058cdc43b58a9e1edffd9d91edc59d27839e06c1063320a4a39cc5c349e43b"
+    },
+    {
+      "name": "FN-HAR-017_W1-pv-input-round_R0.6.SLDPRT",
+      "bytes": 229443,
+      "sha256": "20b196b11d4a266b104a04ba24313384e5fffa320900976163a1145dcf4b680f"
+    },
+    {
+      "name": "FN-HAR-017_W1-pv-input-round_R0.6.STEP",
+      "bytes": 617514,
+      "sha256": "70bc3f90531b601e385cf4fe9d90bf9d62e3c937f7119bf66cd42765608639a3"
+    },
+    {
+      "name": "FN-HAR-018_W2-battery-charge-round_R0.6.png",
+      "bytes": 235270,
+      "sha256": "20fb3f40d1e5b997e280160ec69fc48786a54480a037c773bdd7fa7b5d6e215f"
+    },
+    {
+      "name": "FN-HAR-018_W2-battery-charge-round_R0.6.SLDPRT",
+      "bytes": 183759,
+      "sha256": "5a79a775445048ff1a464b7283c233e32b3d2378bcaa4bbb63a7486dc1479065"
+    },
+    {
+      "name": "FN-HAR-018_W2-battery-charge-round_R0.6.STEP",
+      "bytes": 127149,
+      "sha256": "0da529e94d41bb43866e43bfeaf04e6fdedfae178e51896ad35a22327b007fa7"
+    },
+    {
+      "name": "FN-HAR-019_W3-battery-to-fuse-round_R0.6.png",
+      "bytes": 207785,
+      "sha256": "b6ff39982e396ca9b5a9371cd25f751d5e4774b320a33b703104c1b13ca6c77b"
+    },
+    {
+      "name": "FN-HAR-019_W3-battery-to-fuse-round_R0.6.SLDPRT",
+      "bytes": 162371,
+      "sha256": "9c6f6c02f8b4df4927fc24d69961ca2743bca759e184cf69f6b3593afaa92755"
+    },
+    {
+      "name": "FN-HAR-019_W3-battery-to-fuse-round_R0.6.STEP",
+      "bytes": 173151,
+      "sha256": "f02cfce8bf5df252dae85814da736ef5af2ca9521253fde28742c10bdee4529a"
+    },
+    {
+      "name": "FN-HAR-020_W4-fuse-to-dc5521-round_R0.6.png",
+      "bytes": 184818,
+      "sha256": "e8136b7ab73e0028be7b4b17b6a319fa49e09c0fdcc15c1612c692f38ff9b216"
+    },
+    {
+      "name": "FN-HAR-020_W4-fuse-to-dc5521-round_R0.6.SLDPRT",
+      "bytes": 175805,
+      "sha256": "d72e1dbfb00e60f7d3f42da7d2feca8d0dc5923a186284fb9fa19a65e46f0f1d"
+    },
+    {
+      "name": "FN-HAR-020_W4-fuse-to-dc5521-round_R0.6.STEP",
+      "bytes": 63001,
+      "sha256": "02d9b8874d717eb0f8408e0534b65b678bb4bad057e3f3d1f2027b9756f82543"
+    },
+    {
+      "name": "FN-HAR-021_W5-tilt-rs485-round_R0.6.png",
+      "bytes": 211946,
+      "sha256": "d53ca55128fd8c0e027782fb0395e8846d24d6b2d435aa497fb745b826ca5881"
+    },
+    {
+      "name": "FN-HAR-021_W5-tilt-rs485-round_R0.6.SLDPRT",
+      "bytes": 344040,
+      "sha256": "517728977ba475cc0517ba1b3ccf4d15d36411a61b564a9fd6d07bb18da32dc7"
+    },
+    {
+      "name": "FN-HAR-021_W5-tilt-rs485-round_R0.6.STEP",
+      "bytes": 254976,
+      "sha256": "305e615589232b306b2a21fac70ffce3ddab9d3d556086b722faa7150f4bf5a6"
+    },
+    {
+      "name": "FN-HAR-022_W6-soil-rs485-round_R0.6.png",
+      "bytes": 205956,
+      "sha256": "cbaa12bbaf3cf69ff0a6d6a757c66e87e0e545d4cc1f09ed0299acbe620e3ed9"
+    },
+    {
+      "name": "FN-HAR-022_W6-soil-rs485-round_R0.6.SLDPRT",
+      "bytes": 312101,
+      "sha256": "72b95fee0c9ba8c8c1e864d0359cc7c670f55b852c3f87e17a6debf8ce1cff1c"
+    },
+    {
+      "name": "FN-HAR-022_W6-soil-rs485-round_R0.6.STEP",
+      "bytes": 1178423,
+      "sha256": "55e8018758715caea0a25a2bd8811cc3564f8f79265e851af9f3d9d9eaf3cd68"
+    },
+    {
+      "name": "FN-HAR-023_W7-gnss-coax-round_R0.6.png",
+      "bytes": 217984,
+      "sha256": "971d69482e437ab0560108c06fcee28012d27528732392daf9b08bb50e39402c"
+    },
+    {
+      "name": "FN-HAR-023_W7-gnss-coax-round_R0.6.SLDPRT",
+      "bytes": 207872,
+      "sha256": "be3633fdae6c32c02d28ae7e173b97005f8d34c1a5e3435572bdee760e668b26"
+    },
+    {
+      "name": "FN-HAR-023_W7-gnss-coax-round_R0.6.STEP",
+      "bytes": 334956,
+      "sha256": "220b488918ffb66eebfabdcd45a27ef3c869a0a23f4c54b223844136a4a2730d"
+    },
+    {
+      "name": "FN-HAR-024_W8-xls1-coax-round_R0.6.png",
+      "bytes": 195155,
+      "sha256": "ac9d5bf256711f74e43e9f4ca3103a254b1c5be74b3ce9cfcb5b58bbb77872d5"
+    },
+    {
+      "name": "FN-HAR-024_W8-xls1-coax-round_R0.6.SLDPRT",
+      "bytes": 225253,
+      "sha256": "e1013905699c1dea42f8af213f226ef12b1ffb1e6c0ae09df273813b4e207ad1"
+    },
+    {
+      "name": "FN-HAR-024_W8-xls1-coax-round_R0.6.STEP",
+      "bytes": 641174,
+      "sha256": "29fc4387369266136b1b7b8340c7081b8d50e1facd2aec2969db71b14d19cb6d"
+    },
+    {
+      "name": "FN-HAR-025_W1-pv-external-drip-loop_R0.6.png",
+      "bytes": 161388,
+      "sha256": "9e71e4659c39d0262c666b64da5399710e58fddaa250cda6733ca20353b1e2a3"
+    },
+    {
+      "name": "FN-HAR-025_W1-pv-external-drip-loop_R0.6.SLDPRT",
+      "bytes": 351498,
+      "sha256": "6688e6cb26bbf0feaab0b9086544cc0c0acfb620808b5636f1847fba2225fb42"
+    },
+    {
+      "name": "FN-HAR-025_W1-pv-external-drip-loop_R0.6.STEP",
+      "bytes": 1243006,
+      "sha256": "b9a0b2a5c39e0812c8d46ced72be08cc653e05c4df7862d16a24ff0fd1b7f065"
+    },
+    {
+      "name": "FN-HAR-026_W6-soil-service-tail_R0.6.png",
+      "bytes": 160184,
+      "sha256": "cae0208a6afd339035e970ba578e83bd8224561eeb284054f4e53be05dc82689"
+    },
+    {
+      "name": "FN-HAR-026_W6-soil-service-tail_R0.6.SLDPRT",
+      "bytes": 212182,
+      "sha256": "68be76097fc7558427ab8e877359dcd56be4411cfc429178bcbec5ca4de9478e"
+    },
+    {
+      "name": "FN-HAR-026_W6-soil-service-tail_R0.6.STEP",
+      "bytes": 717018,
+      "sha256": "6f8dadd1e49dd0bc8d2f7cd955bb1957f888d4d32ece08f7a797de7dd14b4199"
+    },
+    {
+      "name": "FN-HAR-027_W7-gnss-external-drip-loop_R0.6.png",
+      "bytes": 144163,
+      "sha256": "db63faf7ea6e3bb8499b09409a93693127f6adbb11de07dd6f6805d11471aa0b"
+    },
+    {
+      "name": "FN-HAR-027_W7-gnss-external-drip-loop_R0.6.SLDPRT",
+      "bytes": 505474,
+      "sha256": "8811083ef754b4294aafb8541c4f64f13c84524bcc214385b0a55a8a5f8a31ea"
+    },
+    {
+      "name": "FN-HAR-027_W7-gnss-external-drip-loop_R0.6.STEP",
+      "bytes": 2319174,
+      "sha256": "12602afcf17ab8c5cde8b2b9b719290d520595707980cb8866a2bbcf372abc4f"
+    },
+    {
+      "name": "FN-HAR-028_W8-xls1-external_R0.6.png",
+      "bytes": 141715,
+      "sha256": "1f4c61a264da1c730e55925719a99a208b67600690a2e5b74d6dd11fd77cc6e9"
+    },
+    {
+      "name": "FN-HAR-028_W8-xls1-external_R0.6.SLDPRT",
+      "bytes": 349400,
+      "sha256": "c9460901d40e73753138efabe579a2c1556b10e59e8f5b47970271550390d79f"
+    },
+    {
+      "name": "FN-HAR-028_W8-xls1-external_R0.6.STEP",
+      "bytes": 1579173,
+      "sha256": "d4c9f6555d3017813249a3447a30d618d80591b0eb18342d10f029431c0fafb4"
+    },
+    {
+      "name": "FN-HLD-003_battery-tray-zone_R0.5.SLDPRT",
+      "bytes": 80150,
+      "sha256": "f7dfd09073cf94c7e80bee73503496bd136810c89b77fc298a1661a6e2a406bd"
+    },
+    {
+      "name": "FN-HLD-004_cn3791-clip-zone_R0.5.SLDPRT",
+      "bytes": 78833,
+      "sha256": "f6a0960cfb1bb6cb5bb3568d18deb28afad7f0f7eee81e169768c91c3bd7672b"
+    },
+    {
+      "name": "FN-IFC-002_sma-bulkhead-envelope-D12x34_R0.6.png",
+      "bytes": 338185,
+      "sha256": "429e3429151b3fef7aa59e762a3af846469ddf576ac4ff5cf713548fd4325337"
+    },
+    {
+      "name": "FN-IFC-002_sma-bulkhead-envelope-D12x34_R0.6.SLDPRT",
+      "bytes": 140995,
+      "sha256": "83ed817fdd95c512fc31c284c5e9e111ec4d908c54bba6691cd40e002d9c5b1a"
+    },
+    {
+      "name": "FN-IFC-002_sma-bulkhead-envelope-D12x34_R0.6.STEP",
+      "bytes": 11727,
+      "sha256": "3be6034b895752a2b88e83a3ae7ef079ca8fd5354bb1963e16b5ef9053e30fc1"
+    },
+    {
+      "name": "FN-IFC-003_sma-collar-envelope-D17x5_R0.6.png",
+      "bytes": 198890,
+      "sha256": "f581ccb9ffd2367975f80045a61bc25343ba756d602d0253560dc053f2840f76"
+    },
+    {
+      "name": "FN-IFC-003_sma-collar-envelope-D17x5_R0.6.SLDPRT",
+      "bytes": 78835,
+      "sha256": "ee12d4c1ae586b7420da03bd7b1667d493341c7a73a98258146f37b6e104a29b"
+    },
+    {
+      "name": "FN-IFC-003_sma-collar-envelope-D17x5_R0.6.STEP",
+      "bytes": 11719,
+      "sha256": "b7427686101453b9cf04009ad0867c5100f1e3a1fe55fe271308d19abf0f51dc"
+    },
+    {
+      "name": "FN-IFC-004_m16-gland-envelope-D24x34_R0.6.png",
+      "bytes": 288923,
+      "sha256": "225ec2101623f6749b93dffb99a557328a5952890dd5bc8d8cf25defb7201eca"
+    },
+    {
+      "name": "FN-IFC-004_m16-gland-envelope-D24x34_R0.6.SLDPRT",
+      "bytes": 120086,
+      "sha256": "00f6443f0a4f9db8b34053397a1c66953054cb0510aba344b931666e1d6201c8"
+    },
+    {
+      "name": "FN-IFC-004_m16-gland-envelope-D24x34_R0.6.STEP",
+      "bytes": 11731,
+      "sha256": "a65d2186f9a844d8883e85a90bd2812168c6f0b8d169e9da27df2b127de747b8"
+    },
+    {
+      "name": "FN-IFC-005_m16-cap-envelope-D29x5_R0.6.png",
+      "bytes": 182119,
+      "sha256": "fd303674ca702a9ae11d575c69a162dfbec96c1d77780bdf6fc112fd39a92d27"
+    },
+    {
+      "name": "FN-IFC-005_m16-cap-envelope-D29x5_R0.6.SLDPRT",
+      "bytes": 71386,
+      "sha256": "c6469e34f0da1fa547731fc779f68df4b1eec186a9c24a1bf753f4cb64adb92d"
+    },
+    {
+      "name": "FN-IFC-005_m16-cap-envelope-D29x5_R0.6.STEP",
+      "bytes": 11702,
+      "sha256": "589d35ad2607ee73357c3f119e0e887551dc509076a8f4377f65dc2e99378436"
+    },
+    {
+      "name": "FN-PCB-004_carrier_ROTATED-CCW_4HOLE_R0.5.SLDPRT",
+      "bytes": 85476,
+      "sha256": "a17b0f092832a525b6e1eb71a6c6abc59c211004ed1994098da778f71c2eba00"
+    },
+    {
+      "name": "FN-PLT-005_fr4-5MM_8HOLE-NOMINAL_R0.5.SLDPRT",
+      "bytes": 93037,
+      "sha256": "1200894d751cd5e72e3a298ac667432ed4d14cb588e7407cf5cad22a051a3082"
+    },
+    {
+      "name": "FN-PWR-002_cn3791-module-envelope_R0.5.SLDPRT",
+      "bytes": 82110,
+      "sha256": "4a4321a05d45c0b347f25e688c05e3d838686dcde9ebadc3abb85cadf21b023b"
+    },
+    {
+      "name": "FN-SEN-001_tilt-transmitter-envelope_R0.1.SLDPRT",
+      "bytes": 90120,
+      "sha256": "bf8fc341b8dcbc48c39ce1a974c7e8852c0379988ff4873aa6dd6d927991ad4c"
+    },
+    {
+      "name": "FN-SOL-004_swm10w-panel-envelope_R0.6.png",
+      "bytes": 161992,
+      "sha256": "14869342aa24853f6641d8de725cb333329213f705b52eadc6e4986136495ea0"
+    },
+    {
+      "name": "FN-SOL-004_swm10w-panel-envelope_R0.6.SLDPRT",
+      "bytes": 80834,
+      "sha256": "a637f2a0f2d0c26c46982293c659875134e8e0d3ee3188ff63f99a5caf03923d"
+    },
+    {
+      "name": "FN-SOL-004_swm10w-panel-envelope_R0.6.STEP",
+      "bytes": 15659,
+      "sha256": "ab290e4c34e2f6d5a99f877011aabe9d2cb044fd23cd4a886c704d490bb26a0c"
+    },
+    {
+      "name": "FN-SOL-005_swm10w-active-face_R0.6.png",
+      "bytes": 160569,
+      "sha256": "4060843b6be856d5892bb1dff64f64c0f4095e704b8971276d4c9c6b3828ea75"
+    },
+    {
+      "name": "FN-SOL-005_swm10w-active-face_R0.6.SLDPRT",
+      "bytes": 77694,
+      "sha256": "3e9226ec55551f9b21c96ef96110034c3518a032c5351db99e6980c1e43a7264"
+    },
+    {
+      "name": "FN-SOL-005_swm10w-active-face_R0.6.STEP",
+      "bytes": 15666,
+      "sha256": "4e9a9837de78726be0718cfc9785e3daa46e9ceafe34645fa21ac3dcce6ed4fb"
+    },
+    {
+      "name": "FN-SUB-002_tilt-reference-plate_M3_R0.2.SLDPRT",
+      "bytes": 86919,
+      "sha256": "3ee1741bc92bceb07382a57131cb525f15beaf84f8d3a3b672e16cf105c5421f"
+    },
+    {
+      "name": "FN-SUP-002_edge-support-pad_DRAFT_R0.5.SLDPRT",
+      "bytes": 80251,
+      "sha256": "685ca1ca8b23ca30af5be7b06ecdc5baa4f4ad72ab009e0b2373af1fbb6977a6"
+    },
+    {
+      "name": "FN-ZON-003_fuse-service-disconnect_R0.5.SLDPRT",
+      "bytes": 77142,
+      "sha256": "1e5335b10dfbe93b706319d8ec2a01696837c4b252c5718f2906430dc61ffc02"
+    }
+  ]
+}

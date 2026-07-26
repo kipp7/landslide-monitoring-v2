@@ -7,10 +7,10 @@
 | Integrated field node | `FIELD-NODE-HW-EVT0.2-DRAFT` | Engineering reference set | Not released |
 | Existing carrier board | `R1.2` | As-built reference | Gerber exists; source documents conflict |
 | Carrier-board improvement | `R1.3-DRAFT` | Requirements | Not routed or released |
-| Competition enclosure | `MECH-R0.5-DRAFT` | 5 mm rectangular FR4, nominal H1-H8 anchors, four lower-wall ports and W1-W8 harness | Physical fit, anchor survey and purchased interface samples pending |
+| Competition enclosure | `MECH-R0.6-DRAFT` | 5 mm rectangular FR4, native round W1-W8 harness, symmetric external frame and central braced GNSS mast | Physical fit, interfaces, loads and purchased samples pending |
 | Solar subsystem | `PWR-R0.1` | Candidate architecture | Charger and energy budget unqualified |
 | Prototype procurement | `BOM-R0.5` | 5 mm FR4, sample cable glands/RF bulkheads and W1-W8 purchase gates | Not a production AVL |
-| Mechanical CAD | `CAD-R0.5` | 23-component assembly, 5 mm 8-hole FR4, four real wall cutouts and labeled W1-W8 routes | Review required; nominal ports are not drilling release data |
+| Mechanical CAD | `CAD-R0.6` | 47 native parts, four assemblies, native 3D round harness and 65-component integrated master | Engineering concept; no drilling or frame fabrication release |
 
 ## Change History
 
@@ -85,6 +85,23 @@
 - Rerouted W1 around the battery right-side service channel and W6 through the center signal channel. Added automatic route-to-nonendpoint-component collision checks; the final minimum checked clearance is `2 mm`.
 - Verified 19 STEP headers, 68 artifact hashes, four wall-cut expected/actual volume equality, 23 assembly components, `4 mm` minimum planar module clearance, `59 mm` highest envelope, and `32.1 mm` nominal rim clearance.
 - Kept H1-H8 physical coordinates, enclosure scallops, final gland/bulkhead sample geometry, cable OD/bend radii, fuse rating, tray/clip details, FR4 DXF and enclosure drilling drawing blocked.
+
+### 2026-07-27 - `CAD-R0.6`
+
+- Replaced all rectangular W1-W8 route envelopes with editable SOLIDWORKS
+  native `3D sketch + circular sweep` parts. Internal wall crossings now reach
+  the nominal RF1/RF2/G2/G1 centre plane at `Z=28 mm`.
+- Added separate nominal bulkhead/gland bodies, four external round harnesses,
+  drip loops and service tails. Cable outer diameters and bend radii remain
+  selection inputs rather than manufacturing truth.
+- Rejected the long one-sided GNSS outrigger direction. Added a symmetric
+  dual-rail common back-frame, independently supported enclosure and 35-degree
+  solar panel, central short GNSS mast with two braces, separate XLS1 antenna
+  envelope, and removable competition feet.
+- Split the model into internal, external-structure and external-harness
+  subassemblies. The final master has three top-level subassemblies and 65
+  resolved components; 47 SLDPRT, four SLDASM, 39 STEP and 47 PNG artifacts
+  passed file/header checks.
 
 ## Versioning Rules
 

@@ -85,12 +85,28 @@ field-node digital mechanical model without inventing unresolved dimensions.
 - CAD-R0.5 feature commit `d94db4c7` is pushed to
   `origin/docs/hardware-field-node-evt0-1`; all 22 new native SOLIDWORKS LFS
   objects uploaded successfully.
+- `CAD-R0.6` replaces W1-W8 rectangular route envelopes with editable native
+  SOLIDWORKS 3D-spline circular sweeps. Internal entries align to the nominal
+  `Z=28 mm` RF1/RF2/G2/G1 centre plane; four external routes add drip loops and
+  service tails.
+- The external design now uses a symmetric dual-rail frame, independent box and
+  35-degree panel supports, a central short GNSS mast with two braces, separate
+  XLS1 envelope and removable competition feet. The one-sided long outrigger is
+  no longer the current direction.
+- R0.6 contains 47 SLDPRT, four SLDASM, 39 valid STEP files and 47 PNG files.
+  `FN-ASM-004` has 31 components; the master has three top-level subassemblies
+  and 65 resolved components. Visual checks covered internal isometric plus full
+  isometric/front/right/top views, and the final master is open in SOLIDWORKS.
+- The R0.6 generator now excludes transient SOLIDWORKS `~$` lock files and saves
+  the final isometric master state before hashing. The closed-document audit
+  verified all 137 listed artifact hashes and byte counts against 137 files;
+  `manifest.json` is the 138th file in the output directory.
 
 ## In Progress
 
-- The CAD setup, known-envelope parts, corrected tilt-interface drawing set, and
-  first layout assembly are complete, but the physical enclosure survey and
-  manufacturing assembly have not started.
+- The CAD setup, native round harness and complete external concept assembly are
+  complete, but the physical interface survey and manufacturing release have
+  not started.
 - Global Codex configuration targets the current hardware worktree path.
 - The pre-existing untracked `tmp/` directory remains outside this work and was
   intentionally neither staged nor deleted.
@@ -110,6 +126,9 @@ field-node digital mechanical model without inventing unresolved dimensions.
   sample each of the G1/G2 glands and RF1/RF2 bulkheads; measure thread, cutout,
   anti-rotation, sealing and tool-clearance geometry before releasing enclosure
   drilling. Measure cable OD/bend radius, solar frame holes and GNSS hardware.
+- Measure enclosure rear mounting points, SWM-10W holes, BT-760 envelope and
+  BT-M87SF three-hole table; select frame wall thickness and fasteners from wind
+  and transport loads before generating frame fabrication drawings.
 - Repoint global MCP configuration after the branch is merged into its permanent
   worktree path.
 
@@ -122,8 +141,8 @@ field-node digital mechanical model without inventing unresolved dimensions.
 
 ## Resume Prompt
 
-Continue field-node CAD from `CAD-R0.5 / MECH-R0.5-DRAFT`: fit a `272 x 193 mm`
-template and transfer/measure H1-H8 from the plate left-bottom datum. Buy and
-measure G1/G2 gland plus RF1/RF2 bulkhead samples, then replace nominal wall
-cutouts with verified geometry. Confirm battery/CN3791 envelopes before
-generating FR4/enclosure DXFs or a production harness.
+Continue field-node CAD from `CAD-R0.6 / MECH-R0.6-DRAFT`: fit a `272 x 193 mm`
+template and transfer H1-H8; measure G1/G2/RF1/RF2 samples, SWM-10W holes,
+enclosure rear mounts, BT-760 and BT-M87SF. Replace nominal geometry and cable
+OD/bend radii with physical data, calculate frame/fastener loads, then release
+FR4, enclosure and external-frame drawings as new revisions.
