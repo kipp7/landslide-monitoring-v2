@@ -20,8 +20,8 @@ status: active
 
 - PC NTRIP、RTCM3 CRC、原始串口注入和 BT-760 RTK Fixed 已验证，3 套 BT-760 已到货。
 - `4ed2ce5b` 已完成 V3.1 `GNSS_CORE`/RTCM 有界协议；`e00107ed` 已完成默认关闭的 RK2206 重组、队列、CRC、统计和单任务 GNSS UART 注入边界。
-- 主机测试、field-gateway 9 项回归/lint 及 `DISABLED/PROBE/LIVE` 三模式固件交叉编译均通过；没有刷机。
-- 60 s 实际 RTCM capture、单节点 `PROBE`、三节点 60 分钟混合负载和 `LIVE` 门禁尚未完成。
+- 主机测试、field-gateway 9 项回归/lint 及 `DISABLED/PROBE/LIVE` 三模式固件交叉编译均通过；A/B/C 已刷入已校验的 `PROBE` 正式包并在 RK3568 健康文件中恢复在线。
+- RK3568 已向 A 发送 12 s 的 `32B/15ms` 基线（76 帧/100 分片）且网关自动恢复；由于电脑尚未连接 A 调试 UART，节点端重组/CRC/队列计数仍待核验，单节点 `PROBE` 尚未通过。三节点 60 分钟混合负载和 `LIVE` 门禁也未完成。
 - GNSS 常规链路采用 98 字节核心摘要，不连续上传原始 NMEA/逐星明细；专业 ECEF/ENU/Hampel/Kalman 位移链统一由 RK3568 计算。
 
 ## Constraints
