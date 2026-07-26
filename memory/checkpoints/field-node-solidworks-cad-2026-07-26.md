@@ -68,6 +68,9 @@ field-node digital mechanical model without inventing unresolved dimensions.
   and CN3791 bodies, four optional edge pads, a fuse zone, and eight concept
   harness route solids. Power routing preserves PV -> CN3791 -> battery charge
   and battery load -> fuse/service disconnect -> PCB DC5521.
+- CAD-R0.4 feature commit `ddb02862` is pushed to
+  `origin/docs/hardware-field-node-evt0-1`; the push uploaded all 22 new native
+  SOLIDWORKS LFS objects successfully.
 
 ## In Progress
 
