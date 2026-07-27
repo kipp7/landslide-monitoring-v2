@@ -7,6 +7,7 @@
 #define DRIVERS_XL01_DRIVER_H
 
 #include "../../app/sensor_data.h"
+#include "field_link_rx_stats.h"
 
 typedef struct {
     char payload[256];
@@ -49,6 +50,11 @@ int XL01_SendPlatformCommand(const char *data, int len);
  * Send a binary control payload toward the shared link.
  */
 int XL01_SendControlPayload(const void *data, int len);
+
+/**
+ * Snapshot field-link decoder and UART RX FIFO diagnostics.
+ */
+void XL01_GetFieldLinkRxStats(FieldLinkRxStats *stats);
 
 /**
  * Poll UART for received data (call from high-priority task)

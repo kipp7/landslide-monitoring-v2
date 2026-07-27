@@ -18,16 +18,38 @@ static uint32_t ReadUint32Be(const uint8_t *input)
            input[3];
 }
 
+static void TestFieldLinkRxStats(void)
+{
+    FieldLinkRxStats stats;
+
+    FieldLinkRxStats_Init(&stats);
+    FieldLinkRxStats_RecordDecoded(&stats, 10U, 1U);
+    FieldLinkRxStats_RecordDecoded(&stats, 12U, 0U);
+    FieldLinkRxStats_RecordDecoded(&stats, 12U, 1U);
+    FieldLinkRxStats_RecordDecoded(&stats, 3U, 1U);
+    FieldLinkRxStats_RecordDecodeError(&stats);
+    assert(stats.decoded_frames == 4U);
+    assert(stats.decoded_rtcm_frames == 3U);
+    assert(stats.decode_errors == 1U);
+    assert(stats.sequence_gaps == 1U);
+    assert(stats.sequence_duplicates == 1U);
+    assert(stats.sequence_resets == 1U);
+    assert(stats.last_sequence == 3U);
+    assert(stats.last_sequence_valid == 1U);
+}
+
 int main(void)
 {
     const char query[] = "G3QB89ABCDEF";
     GnssRtcmInjectionStats stats;
-    uint8_t payload[GNSS_PROBE_STATS_RESPONSE_V1_BYTES];
+    FieldLinkRxStats link_stats;
+    uint8_t payload[GNSS_PROBE_STATS_RESPONSE_V2_BYTES];
     uint8_t target = 0U;
     uint32_t nonce = 0U;
     uint32_t *counter = &stats.accepted_fragments;
     unsigned int index;
 
+    TestFieldLinkRxStats();
     assert(GnssProbeStatsQueryV1_Decode(query, 12, &target, &nonce) == 0);
     assert(target == 2U);
     assert(nonce == 0x89ABCDEFU);
@@ -41,11 +63,27 @@ int main(void)
     }
     stats.queue_high_watermark = 19U;
     stats.queue_pending = 20U;
-    assert(GnssProbeStatsResponseV1_Encode(
-        &stats, 2U, GNSS_RTCM_INJECTION_PROBE, nonce, 1234U, payload, sizeof(payload)
-    ) == GNSS_PROBE_STATS_RESPONSE_V1_BYTES);
+    stats.completed_type_1005 = 21U;
+    stats.completed_type_1033 = 22U;
+    stats.completed_type_1074 = 23U;
+    stats.completed_type_1094 = 24U;
+    stats.completed_type_1114 = 25U;
+    stats.completed_type_1124 = 26U;
+    memset(&link_stats, 0, sizeof(link_stats));
+    link_stats.decoded_frames = 31U;
+    link_stats.decoded_rtcm_frames = 32U;
+    link_stats.decode_errors = 33U;
+    link_stats.sequence_gaps = 34U;
+    link_stats.sequence_duplicates = 35U;
+    link_stats.sequence_resets = 36U;
+    link_stats.fifo_dropped_bytes = 37U;
+    link_stats.fifo_drop_events = 38U;
+    assert(GnssProbeStatsResponseV2_Encode(
+        &stats, &link_stats, 2U, GNSS_RTCM_INJECTION_PROBE, nonce, 1234U,
+        payload, sizeof(payload)
+    ) == GNSS_PROBE_STATS_RESPONSE_V2_BYTES);
     assert(memcmp(payload, "G3S", 3) == 0);
-    assert(payload[3] == 1U && payload[4] == 2U && payload[5] == 1U);
+    assert(payload[3] == 2U && payload[4] == 2U && payload[5] == 1U);
     assert(payload[6] == 0U && payload[7] == 0U);
     assert(ReadUint32Be(payload + 8) == nonce);
     assert(ReadUint32Be(payload + 12) == 1234U);
@@ -54,6 +92,12 @@ int main(void)
     }
     assert(ReadUint16Be(payload + 88) == 19U);
     assert(ReadUint16Be(payload + 90) == 20U);
+    for (index = 0U; index < 6U; ++index) {
+        assert(ReadUint32Be(payload + 92U + index * 4U) == index + 21U);
+    }
+    for (index = 0U; index < 8U; ++index) {
+        assert(ReadUint32Be(payload + 116U + index * 4U) == index + 31U);
+    }
     printf("gnss_probe_stats_protocol_host_test passed payload_bytes=%u\n",
            (unsigned int)sizeof(payload));
     return 0;

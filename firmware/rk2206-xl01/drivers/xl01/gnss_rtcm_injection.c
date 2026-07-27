@@ -70,6 +70,29 @@ static void EnqueueCompleted(
 {
     uint8_t tail;
 
+    switch (message_type) {
+        case 1005U:
+            g_stats.completed_type_1005++;
+            break;
+        case 1033U:
+            g_stats.completed_type_1033++;
+            break;
+        case 1074U:
+            g_stats.completed_type_1074++;
+            break;
+        case 1094U:
+            g_stats.completed_type_1094++;
+            break;
+        case 1114U:
+            g_stats.completed_type_1114++;
+            break;
+        case 1124U:
+            g_stats.completed_type_1124++;
+            break;
+        default:
+            break;
+    }
+
     if (g_queue_count >= GNSS_RTCM_QUEUE_DEPTH) {
         EvictQueueHead();
         g_stats.queue_evictions++;

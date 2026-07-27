@@ -298,19 +298,23 @@ static void TestBoundedInjectionQueue(void)
     GnssRtcmInjectionStats stats;
 
     BuildRtcm(frame);
+    assert(GNSS_RTCM_QUEUE_DEPTH == 4U);
     assert(GnssRtcmInjection_Init(0U) == -1);
     assert(GnssRtcmInjection_Init(1U) == 0);
     assert(FeedInjectionFrame(frame, 51U, 1U, 1000U, -1) == GNSS_RTCM_REASSEMBLY_COMPLETE);
     assert(FeedInjectionFrame(frame, 51U, 2U, 1010U, -1) == GNSS_RTCM_REASSEMBLY_COMPLETE);
     assert(FeedInjectionFrame(frame, 51U, 3U, 1020U, -1) == GNSS_RTCM_REASSEMBLY_COMPLETE);
+    assert(FeedInjectionFrame(frame, 51U, 4U, 1030U, -1) == GNSS_RTCM_REASSEMBLY_COMPLETE);
+    assert(FeedInjectionFrame(frame, 51U, 5U, 1040U, -1) == GNSS_RTCM_REASSEMBLY_COMPLETE);
 
     GnssRtcmInjection_GetStats(&stats);
-    assert(stats.completed_frames == 3U);
-    assert(stats.queued_frames == 3U);
+    assert(stats.completed_frames == 5U);
+    assert(stats.queued_frames == 5U);
     assert(stats.queue_pending == GNSS_RTCM_QUEUE_DEPTH);
     assert(stats.queue_high_watermark == GNSS_RTCM_QUEUE_DEPTH);
     assert(stats.queue_evictions == 1U);
-    assert(stats.ttl_unverified_fragments == 15U);
+    assert(stats.ttl_unverified_fragments == 25U);
+    assert(stats.completed_type_1124 == 5U);
 
     assert(GnssRtcmInjection_TryDequeue(
         1100U, dequeued, sizeof(dequeued), &dequeued_bytes, &message_type
@@ -325,9 +329,15 @@ static void TestBoundedInjectionQueue(void)
     ) == 1);
     assert(GnssRtcmInjection_TryDequeue(
         1100U, dequeued, sizeof(dequeued), &dequeued_bytes, &message_type
+    ) == 1);
+    assert(GnssRtcmInjection_TryDequeue(
+        1100U, dequeued, sizeof(dequeued), &dequeued_bytes, &message_type
+    ) == 1);
+    assert(GnssRtcmInjection_TryDequeue(
+        1100U, dequeued, sizeof(dequeued), &dequeued_bytes, &message_type
     ) == 0);
 
-    assert(FeedInjectionFrame(frame, 51U, 4U, 1200U, -1) == GNSS_RTCM_REASSEMBLY_COMPLETE);
+    assert(FeedInjectionFrame(frame, 51U, 6U, 1200U, -1) == GNSS_RTCM_REASSEMBLY_COMPLETE);
     assert(GnssRtcmInjection_TryDequeue(
         4205U, dequeued, sizeof(dequeued), &dequeued_bytes, &message_type
     ) == 0);

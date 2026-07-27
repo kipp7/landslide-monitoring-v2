@@ -49,6 +49,7 @@ status: active
 - QZSS 1114 降到 0.5 Hz 后，B 的 `160 B/160 ms` 60 s 仍丢 2/282 分片并触发 2 次队列淘汰；改成 200 ms 后队列压力消失，但仍丢 2/282 且有重组超时。把分片上限改为 320 B 后，250 B 的 1124 从两包变成一包，12 s 44/44 通过，60 s 丢失降到 1/222，线上负载约 717 B/s。该证据说明降低空口包率有效，但不能消除 B 的低频丢包，0.5 Hz QZSS 不得推广到生产。
 - 关闭可选 QZSS 1114 后，B 的三核心星座 profile 在 160 ms 下 60 s 严格通过：252/252 分片、192/192 帧、27000/27000 B，CRC/拒绝/重组/队列/注入/UART 错误全为 0。该共同候选为 GPS 1074、BDS 1124、Galileo 1094、1005/1033，净 RTCM 450 B/s、field-link 702 B/s；A 已通过包含它和额外 QZSS 的更高负载。
 - field-gateway 新增独立 `rtcm-downlink-shaper.ts` 生产核心和 4 项专项测试：有界流解包、CRC/垃圾字节处理、支持集过滤、per-type newest-only、1 Hz 观测限频、TTL 过期和参考帧优先均已覆盖。全包 14 项测试、TypeScript build 和 lint 通过。该模块尚未接入 NTRIP、端口命令链或串口发送，因而不能被视为 LIVE 或部署完成。
+- 已完成待烧录的 PROBE stats V2：RTCM 新鲜度队列从 2 帧增至 4 帧，增加约 2058 B 静态帧存储；148 字节响应在 V1 的 92 字节基础上追加 1005/1033/1074/1094/1114/1124 完整帧计数，以及 field-link 解码帧、RTCM 帧、解码错误、序号缺口/重复/重启和 RX FIFO 丢弃。Python 门禁可用 `--require-stats-version 2` 强制按类型和链路零增量核对，TypeScript 协议库保持 V1/V2 双栈。C99 主机测试显示重组器 5616 B、队列帧区 4116 B；field-gateway 15 项测试/lint 和 A 的 `DISABLED/PROBE/LIVE` 三模式全量构建通过。该固件尚未烧录，不能替代 A/B/C 真机证据。
 - 本 checkpoint 和提交均不包含 CORS 主机、账号、密码、真实坐标或现场原始日志。
 
 ## In Progress

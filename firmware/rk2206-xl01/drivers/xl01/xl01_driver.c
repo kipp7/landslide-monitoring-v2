@@ -19,6 +19,7 @@
 #include "../../app/gnss_probe_stats_protocol.h"
 #include "../../utils/fifo.h"
 #include "field_link_frame.h"
+#include "field_link_rx_stats.h"
 #include "gnss_rtcm_injection.h"
 
 #ifndef PLATFORM_COMMAND_RX_LOG_MODE
@@ -45,6 +46,7 @@ static int g_last_uart_read_status = 0;
 static int g_last_rx_fifo_write_status = 0;
 static osMutexId_t g_uart_tx_mutex = NULL;
 static FieldLinkFrameDecoder g_field_link_decoder = {0};
+static FieldLinkRxStats g_field_link_rx_stats = {0};
 static unsigned int g_field_link_tx_sequence = 0;
 
 #if ENABLE_GPS && GNSS_RTCM_INJECTION_MODE != GNSS_RTCM_INJECTION_DISABLED
@@ -707,8 +709,14 @@ static void ProcessReceivedChunk(const char *chunk, int len, Statistics *stats)
             &g_field_link_rx_message
         );
         if (decode_ret > 0) {
+            FieldLinkRxStats_RecordDecoded(
+                &g_field_link_rx_stats,
+                g_field_link_rx_message.sequence,
+                g_field_link_rx_message.type == FIELD_LINK_FRAME_TYPE_RTCM ? 1U : 0U
+            );
             HandleFieldLinkMessage(&g_field_link_rx_message, stats);
         } else if (decode_ret < 0) {
+            FieldLinkRxStats_RecordDecodeError(&g_field_link_rx_stats);
             printf("\n[FIELD LINK DROP] decode failure offset=%d", i);
         }
     }
@@ -758,6 +766,7 @@ void XL01_Init(void)
     ResetPlatformCommandQueue();
     ResetPlatformCommandAssembly();
     FieldLinkFrameDecoder_Init(&g_field_link_decoder);
+    FieldLinkRxStats_Init(&g_field_link_rx_stats);
 #if ENABLE_GPS && GNSS_RTCM_INJECTION_MODE != GNSS_RTCM_INJECTION_DISABLED
     if (GnssRtcmInjection_Init(XL01_LocalNodeNumber()) != 0) {
         printf("[ERROR] RTCM injection queue init failed; corrections stay disabled\n");
@@ -899,6 +908,16 @@ int XL01_SendControlPayload(const void *data, int len)
         return -1;
     }
     return XL01_SendTypedPayload(FIELD_LINK_FRAME_TYPE_CONTROL, (const char *)data, len);
+}
+
+void XL01_GetFieldLinkRxStats(FieldLinkRxStats *stats)
+{
+    if (stats == NULL) {
+        return;
+    }
+    *stats = g_field_link_rx_stats;
+    stats->fifo_dropped_bytes = Fifo_DroppedBytes(&g_rx_fifo);
+    stats->fifo_drop_events = Fifo_DroppedEvents(&g_rx_fifo);
 }
 
 void XL01_PollReceive(void)

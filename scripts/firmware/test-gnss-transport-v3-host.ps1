@@ -15,11 +15,14 @@ $appConfig = Join-Path $repoRoot "firmware\rk2206-xl01\config\app_config.h"
 $sourceTest = Join-Path $repoRoot "firmware\rk2206-xl01\tests\gnss_transport_v3_host_test.c"
 $probeProtocolHeader = Join-Path $repoRoot "firmware\rk2206-xl01\app\gnss_probe_stats_protocol.h"
 $probeProtocolImplementation = Join-Path $repoRoot "firmware\rk2206-xl01\app\gnss_probe_stats_protocol.c"
+$fieldLinkStatsHeader = Join-Path $repoRoot "firmware\rk2206-xl01\drivers\xl01\field_link_rx_stats.h"
+$fieldLinkStatsImplementation = Join-Path $repoRoot "firmware\rk2206-xl01\drivers\xl01\field_link_rx_stats.c"
 $probeProtocolTest = Join-Path $repoRoot "firmware\rk2206-xl01\tests\gnss_probe_stats_protocol_host_test.c"
 
 foreach ($required in @(
   $sourceHeader, $sourceImplementation, $injectionHeader, $injectionImplementation,
-  $appConfig, $sourceTest, $probeProtocolHeader, $probeProtocolImplementation, $probeProtocolTest
+  $appConfig, $sourceTest, $probeProtocolHeader, $probeProtocolImplementation,
+  $fieldLinkStatsHeader, $fieldLinkStatsImplementation, $probeProtocolTest
 )) {
   if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
     throw "Required GNSS transport source is missing: $required"
@@ -44,6 +47,8 @@ docker cp $appConfig "${ContainerName}:${containerRoot}/config/app_config.h"
 docker cp $sourceTest "${ContainerName}:${containerRoot}/tests/gnss_transport_v3_host_test.c"
 docker cp $probeProtocolHeader "${ContainerName}:${containerRoot}/app/gnss_probe_stats_protocol.h"
 docker cp $probeProtocolImplementation "${ContainerName}:${containerRoot}/app/gnss_probe_stats_protocol.c"
+docker cp $fieldLinkStatsHeader "${ContainerName}:${containerRoot}/drivers/xl01/field_link_rx_stats.h"
+docker cp $fieldLinkStatsImplementation "${ContainerName}:${containerRoot}/drivers/xl01/field_link_rx_stats.c"
 docker cp $probeProtocolTest "${ContainerName}:${containerRoot}/tests/gnss_probe_stats_protocol_host_test.c"
 if ($LASTEXITCODE -ne 0) {
   throw "Failed to copy GNSS transport sources into the container"
@@ -62,6 +67,7 @@ gcc -std=c99 -Wall -Wextra -Werror -O2 \
 ./gnss_transport_v3_host_test
 gcc -std=c99 -Wall -Wextra -Werror -O2 \
   -DGNSS_RTCM_INJECTION_MODE=GNSS_RTCM_INJECTION_PROBE \
+  drivers/xl01/field_link_rx_stats.c \
   app/gnss_probe_stats_protocol.c \
   tests/gnss_probe_stats_protocol_host_test.c \
   -o gnss_probe_stats_protocol_host_test

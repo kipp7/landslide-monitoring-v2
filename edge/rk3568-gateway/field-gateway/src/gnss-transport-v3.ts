@@ -5,6 +5,7 @@ export const RTCM_FRAGMENT_V3_HEADER_BYTES = 42;
 export const RTCM3_MAX_FRAME_BYTES = 1029;
 export const GNSS_PROBE_STATS_QUERY_V1_BYTES = 12;
 export const GNSS_PROBE_STATS_RESPONSE_V1_BYTES = 92;
+export const GNSS_PROBE_STATS_RESPONSE_V2_BYTES = 148;
 
 export const GNSS_V3_TARGET_GATEWAY = 0;
 export const GNSS_V3_TARGET_NODE_A = 1 << 0;
@@ -115,6 +116,26 @@ export type GnssProbeStatsResponseV1 = {
   stats: GnssProbeStatsV1;
 };
 
+export type GnssProbeStatsResponseV2 = {
+  responseVersion: 2;
+  nodeNumber: 1 | 2 | 3;
+  injectionMode: 0 | 1 | 2;
+  nonce: number;
+  snapshotUptimeS: number;
+  stats: GnssProbeStatsV1;
+  completedTypeCounts: Record<"1005" | "1033" | "1074" | "1094" | "1114" | "1124", number>;
+  linkStats: {
+    decodedFrames: number;
+    decodedRtcmFrames: number;
+    decodeErrors: number;
+    sequenceGaps: number;
+    sequenceDuplicates: number;
+    sequenceResets: number;
+    fifoDroppedBytes: number;
+    fifoDropEvents: number;
+  };
+};
+
 const UINT8_MAX = 0xff;
 const UINT16_MAX = 0xffff;
 const UINT32_MAX = 0xffffffff;
@@ -142,14 +163,26 @@ export function encodeGnssProbeStatsQueryV1(nodeNumber: 1 | 2 | 3, nonce: number
   return Buffer.from(`G3Q${nodeLabel}${nonceHex}`, "ascii");
 }
 
-export function decodeGnssProbeStatsResponseV1(input: Buffer): GnssProbeStatsResponseV1 {
-  if (input.length !== GNSS_PROBE_STATS_RESPONSE_V1_BYTES) {
-    throw new Error(
-      `GNSS PROBE stats payload length mismatch: expected=${String(GNSS_PROBE_STATS_RESPONSE_V1_BYTES)} actual=${String(input.length)}`
-    );
-  }
-  if (input.subarray(0, 3).toString("ascii") !== "G3S" || input.readUInt8(3) !== 1) {
+export function decodeGnssProbeStatsResponse(
+  input: Buffer
+): GnssProbeStatsResponseV1 | GnssProbeStatsResponseV2 {
+  if (input.length < 4 || input.subarray(0, 3).toString("ascii") !== "G3S") {
     throw new Error("GNSS PROBE stats magic or version mismatch");
+  }
+  const responseVersion = input.readUInt8(3);
+  const expectedBytes =
+    responseVersion === 1
+      ? GNSS_PROBE_STATS_RESPONSE_V1_BYTES
+      : responseVersion === 2
+        ? GNSS_PROBE_STATS_RESPONSE_V2_BYTES
+        : null;
+  if (expectedBytes === null) {
+    throw new Error("GNSS PROBE stats version is unsupported");
+  }
+  if (input.length !== expectedBytes) {
+    throw new Error(
+      `GNSS PROBE stats payload length mismatch: expected=${String(expectedBytes)} actual=${String(input.length)}`
+    );
   }
   const nodeNumber = input.readUInt8(4);
   const injectionMode = input.readUInt8(5);
@@ -173,8 +206,7 @@ export function decodeGnssProbeStatsResponseV1(input: Buffer): GnssProbeStatsRes
   const counters = Object.fromEntries(
     counterNames.map((name, index) => [name, input.readUInt32BE(16 + index * 4)])
   ) as Omit<GnssProbeStatsV1, "queueHighWatermark" | "queuePending">;
-  return {
-    responseVersion: 1,
+  const common = {
     nodeNumber: nodeNumber as 1 | 2 | 3,
     injectionMode: injectionMode as 0 | 1 | 2,
     nonce,
@@ -185,6 +217,46 @@ export function decodeGnssProbeStatsResponseV1(input: Buffer): GnssProbeStatsRes
       queuePending: input.readUInt16BE(90)
     }
   };
+  if (responseVersion === 1) {
+    return { responseVersion: 1, ...common };
+  }
+  const typeKeys = ["1005", "1033", "1074", "1094", "1114", "1124"] as const;
+  const linkKeys = [
+    "decodedFrames",
+    "decodedRtcmFrames",
+    "decodeErrors",
+    "sequenceGaps",
+    "sequenceDuplicates",
+    "sequenceResets",
+    "fifoDroppedBytes",
+    "fifoDropEvents"
+  ] as const;
+  return {
+    responseVersion: 2,
+    ...common,
+    completedTypeCounts: Object.fromEntries(
+      typeKeys.map((key, index) => [key, input.readUInt32BE(92 + index * 4)])
+    ) as GnssProbeStatsResponseV2["completedTypeCounts"],
+    linkStats: Object.fromEntries(
+      linkKeys.map((key, index) => [key, input.readUInt32BE(116 + index * 4)])
+    ) as GnssProbeStatsResponseV2["linkStats"]
+  };
+}
+
+export function decodeGnssProbeStatsResponseV1(input: Buffer): GnssProbeStatsResponseV1 {
+  const decoded = decodeGnssProbeStatsResponse(input);
+  if (decoded.responseVersion !== 1) {
+    throw new Error("GNSS PROBE stats response is not V1");
+  }
+  return decoded;
+}
+
+export function decodeGnssProbeStatsResponseV2(input: Buffer): GnssProbeStatsResponseV2 {
+  const decoded = decodeGnssProbeStatsResponse(input);
+  if (decoded.responseVersion !== 2) {
+    throw new Error("GNSS PROBE stats response is not V2");
+  }
+  return decoded;
 }
 
 function encodeCommonHeader(input: GnssTransportHeaderV3, output: Buffer): void {

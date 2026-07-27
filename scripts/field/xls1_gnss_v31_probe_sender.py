@@ -29,7 +29,7 @@ FIELD_LINK_TYPE_COMMAND = 2
 FIELD_LINK_TYPE_CONTROL = 4
 FIELD_LINK_TYPE_RTCM = 6
 RTCM_FRAGMENT_HEADER_BYTES = 42
-GNSS_PROBE_STATS_RESPONSE_BYTES = 92
+GNSS_PROBE_STATS_RESPONSE_BYTES = {1: 92, 2: 148}
 TARGET_MASKS = {"A": 0x01, "B": 0x02, "C": 0x04, "all": 0x07}
 NODE_NUMBERS = {"A": 1, "B": 2, "C": 3}
 PROBE_COUNTER_NAMES = (
@@ -51,6 +51,17 @@ PROBE_COUNTER_NAMES = (
     "uartWriteErrors",
     "uartPartialWrites",
     "injectionDroppedFrames",
+)
+PROBE_TYPE_COUNTERS = (1005, 1033, 1074, 1094, 1114, 1124)
+PROBE_LINK_COUNTER_NAMES = (
+    "decodedFrames",
+    "decodedRtcmFrames",
+    "decodeErrors",
+    "sequenceGaps",
+    "sequenceDuplicates",
+    "sequenceResets",
+    "fifoDroppedBytes",
+    "fifoDropEvents",
 )
 
 # The schedule reproduces the July 26 PC capture at about 880 B/s without
@@ -197,10 +208,13 @@ def encode_probe_stats_query(target: str, nonce: int) -> bytes:
 
 
 def decode_probe_stats_response(payload: bytes) -> dict[str, Any]:
-    if len(payload) != GNSS_PROBE_STATS_RESPONSE_BYTES:
-        raise ValueError("GNSS PROBE stats payload length mismatch")
-    if payload[:3] != b"G3S" or payload[3] != 1:
+    if len(payload) < 4 or payload[:3] != b"G3S":
         raise ValueError("GNSS PROBE stats magic or version mismatch")
+    response_version = payload[3]
+    if response_version not in GNSS_PROBE_STATS_RESPONSE_BYTES:
+        raise ValueError("GNSS PROBE stats version is unsupported")
+    if len(payload) != GNSS_PROBE_STATS_RESPONSE_BYTES[response_version]:
+        raise ValueError("GNSS PROBE stats payload length mismatch")
     node_number = payload[4]
     injection_mode = payload[5]
     if node_number not in (1, 2, 3) or injection_mode not in (0, 1, 2):
@@ -212,8 +226,8 @@ def decode_probe_stats_response(payload: bytes) -> dict[str, Any]:
         raise ValueError("GNSS PROBE stats nonce is zero")
     counter_values = struct.unpack_from(">18I", payload, 16)
     queue_high_watermark, queue_pending = struct.unpack_from(">HH", payload, 88)
-    return {
-        "responseVersion": 1,
+    response = {
+        "responseVersion": response_version,
         "nodeNumber": node_number,
         "injectionMode": injection_mode,
         "nonce": nonce,
@@ -224,6 +238,17 @@ def decode_probe_stats_response(payload: bytes) -> dict[str, Any]:
             "queuePending": queue_pending,
         },
     }
+    if response_version >= 2:
+        type_values = struct.unpack_from(">6I", payload, 92)
+        link_values = struct.unpack_from(">8I", payload, 116)
+        response["completedTypeCounts"] = {
+            str(message_type): value
+            for message_type, value in zip(PROBE_TYPE_COUNTERS, type_values, strict=True)
+        }
+        response["linkStats"] = dict(
+            zip(PROBE_LINK_COUNTER_NAMES, link_values, strict=True)
+        )
+    return response
 
 
 def uint32_delta(after: int, before: int) -> int:
@@ -422,6 +447,8 @@ def evaluate_probe_gate(
     expected_fragments: int,
     expected_frames: int,
     expected_rtcm_bytes: int,
+    expected_message_counts: Counter[int],
+    required_stats_version: int,
 ) -> dict[str, Any]:
     before_stats = baseline["stats"]
     after_stats = final["stats"]
@@ -439,8 +466,19 @@ def evaluate_probe_gate(
             "passed": actual == expected,
         })
 
+    def at_least(name: str, actual: int, expected: int) -> None:
+        checks.append({
+            "name": name,
+            "expected": f">= {expected}",
+            "actual": actual,
+            "passed": actual >= expected,
+        })
+
     exact("baselineInjectionMode", baseline["injectionMode"], 1)
     exact("finalInjectionMode", final["injectionMode"], 1)
+    at_least("baselineStatsVersion", baseline["responseVersion"], required_stats_version)
+    at_least("finalStatsVersion", final["responseVersion"], required_stats_version)
+    exact("sameStatsVersion", final["responseVersion"], baseline["responseVersion"])
     exact("sameNode", final["nodeNumber"], baseline["nodeNumber"])
     checks.append({
         "name": "nodeDidNotReboot",
@@ -476,11 +514,45 @@ def evaluate_probe_gate(
     ):
         exact(f"{name}Delta", deltas[name], 0)
 
+    type_deltas: dict[str, int] | None = None
+    link_deltas: dict[str, int] | None = None
+    if baseline["responseVersion"] >= 2 and final["responseVersion"] >= 2:
+        type_deltas = {
+            str(message_type): uint32_delta(
+                final["completedTypeCounts"][str(message_type)],
+                baseline["completedTypeCounts"][str(message_type)],
+            )
+            for message_type in PROBE_TYPE_COUNTERS
+        }
+        for message_type in PROBE_TYPE_COUNTERS:
+            exact(
+                f"completedType{message_type}Delta",
+                type_deltas[str(message_type)],
+                expected_message_counts[message_type],
+            )
+
+        link_deltas = {
+            name: uint32_delta(final["linkStats"][name], baseline["linkStats"][name])
+            for name in PROBE_LINK_COUNTER_NAMES
+        }
+        exact("decodedRtcmFramesDelta", link_deltas["decodedRtcmFrames"], expected_fragments)
+        for name in (
+            "decodeErrors",
+            "sequenceGaps",
+            "sequenceDuplicates",
+            "sequenceResets",
+            "fifoDroppedBytes",
+            "fifoDropEvents",
+        ):
+            exact(f"{name}Delta", link_deltas[name], 0)
+
     failed = [check["name"] for check in checks if not check["passed"]]
     return {
         "passed": not failed,
         "failedChecks": failed,
         "deltas": deltas,
+        "typeDeltas": type_deltas,
+        "linkDeltas": link_deltas,
         "checks": checks,
     }
 
@@ -681,6 +753,8 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
             fragment_count,
             sum(message_counts.values()),
             raw_bytes,
+            message_counts,
+            args.require_stats_version,
         )
         print(
             f"STATS_FINAL node={args.target} mode={final_stats['injectionMode']} "
@@ -744,6 +818,42 @@ def self_test() -> None:
     assert decoded_response["stats"]["acceptedFragments"] == 1
     assert decoded_response["stats"]["injectionDroppedFrames"] == 18
     assert decoded_response["stats"]["queuePending"] == 20
+    baseline_v2_payload = (
+        b"G3S"
+        + bytes((2, 2, 1, 0, 0))
+        + struct.pack(">II18IHH6I8I", 1, 100, *([0] * 18), 0, 0, *([0] * 14))
+    )
+    final_counters = [1, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 1, 90, 0, 0, 0, 0, 0]
+    final_types = [0, 0, 1, 0, 0, 0]
+    final_link = [2, 1, 0, 0, 0, 0, 0, 0]
+    final_v2_payload = (
+        b"G3S"
+        + bytes((2, 2, 1, 0, 0))
+        + struct.pack(
+            ">II18IHH6I8I",
+            2,
+            101,
+            *final_counters,
+            1,
+            0,
+            *final_types,
+            *final_link,
+        )
+    )
+    baseline_v2 = decode_probe_stats_response(baseline_v2_payload)
+    final_v2 = decode_probe_stats_response(final_v2_payload)
+    assert baseline_v2["responseVersion"] == 2
+    assert final_v2["completedTypeCounts"]["1074"] == 1
+    assert final_v2["linkStats"]["decodedRtcmFrames"] == 1
+    assert evaluate_probe_gate(
+        baseline_v2,
+        final_v2,
+        1,
+        1,
+        90,
+        Counter({1074: 1}),
+        2,
+    )["passed"]
     response_wire = encode_field_link(99, response_payload, FIELD_LINK_TYPE_CONTROL)
     stream_decoder = FieldLinkStreamDecoder()
     decoded_frames = stream_decoder.feed(response_wire[:11])
@@ -816,6 +926,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--drain-ms", type=int, default=2000)
     parser.add_argument("--stats-timeout-seconds", type=float, default=3.0)
     parser.add_argument("--stats-retries", type=int, default=3)
+    parser.add_argument("--require-stats-version", type=int, choices=(1, 2), default=1)
     parser.add_argument("--late-threshold-ms", type=float, default=50.0)
     parser.add_argument("--service", default="lsmv2-field-gateway.service")
     parser.add_argument(
@@ -911,6 +1022,7 @@ def main() -> int:
             "drainMs": args.drain_ms,
             "statsTimeoutSeconds": args.stats_timeout_seconds,
             "statsRetries": args.stats_retries,
+            "requiredStatsVersion": args.require_stats_version,
         },
     }
 

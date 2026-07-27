@@ -121,7 +121,7 @@ static char g_last_trusted_time_ts[40] = "";
 static char g_last_trusted_time_source[32] = "";
 static volatile uint32_t g_last_platform_command_tick = 0;
 static volatile int g_field_link_recovery_requested = 0;
-#define FW_RX_DIAG_MARKER "fw-gnss-rtk-v31-probe-stats-20260727"
+#define FW_RX_DIAG_MARKER "fw-gnss-rtk-v31-probe-stats-v2-20260727"
 bool g_cloud_motor_enabled = false;
 int g_cloud_motor_speed = 0;
 MotorDirection g_cloud_motor_direction = MOTOR_DIRECTION_STOP;
@@ -699,7 +699,8 @@ static uint8_t LocalNodeNumber(void)
 static int HandleGnssProbeStatsQuery(const char *command)
 {
     GnssRtcmInjectionStats stats;
-    uint8_t response[GNSS_PROBE_STATS_RESPONSE_V1_BYTES];
+    FieldLinkRxStats link_stats;
+    uint8_t response[GNSS_PROBE_STATS_RESPONSE_V2_BYTES];
     uint8_t target_node = 0U;
     uint8_t local_node;
     uint32_t nonce = 0U;
@@ -718,8 +719,10 @@ static int HandleGnssProbeStatsQuery(const char *command)
     }
 
     GnssRtcmInjection_GetStats(&stats);
-    response_len = GnssProbeStatsResponseV1_Encode(
+    XL01_GetFieldLinkRxStats(&link_stats);
+    response_len = GnssProbeStatsResponseV2_Encode(
         &stats,
+        &link_stats,
         local_node,
         (uint8_t)GNSS_RTCM_INJECTION_MODE,
         nonce,
@@ -727,7 +730,7 @@ static int HandleGnssProbeStatsQuery(const char *command)
         response,
         sizeof(response)
     );
-    if (response_len != GNSS_PROBE_STATS_RESPONSE_V1_BYTES) {
+    if (response_len != GNSS_PROBE_STATS_RESPONSE_V2_BYTES) {
         printf("[RTCM STATS] encode failed node=%u\n", (unsigned int)local_node);
         return 1;
     }

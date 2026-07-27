@@ -2,7 +2,7 @@
 param(
   [string]$SdkRoot = "F:\2\openharmony\txsmartropenharmony",
   [string]$ContainerName = "openharmony-dev",
-  [string]$ReleaseDirectory = "F:\2\openharmony\rk2206_firmware_releases\xl01_gnss_rtk_v31_probe_stats_20260727",
+  [string]$ReleaseDirectory = "F:\2\openharmony\rk2206_firmware_releases\xl01_gnss_rtk_v31_probe_stats_v2_20260727",
   [string]$RollbackDirectory = "F:\2\openharmony\rk2206_firmware_releases\xl01_one_second_poll_v2_20260719"
 )
 
@@ -122,7 +122,7 @@ try {
   }
   $releaseManifest = [ordered]@{
     schemaVersion = 1
-    profile = "rk2206-xl01-gnss-rtk-v31-probe"
+    profile = "rk2206-xl01-gnss-rtk-v31-probe-stats-v2"
     sourceCommit = $sourceCommit
     gnssRtcmInjectionMode = "probe"
     firmwareMarker = $buildManifest.firmwareMarker
@@ -148,6 +148,8 @@ RK2206 A/B/C GNSS RTK V3.1 PROBE release
 
 Purpose:
 - Validate XL01 RTCM receive, fragmentation, reassembly, CRC24Q and bounded queues.
+- Report PROBE V2 per-message-type and field-link loss diagnostics.
+- Absorb short scheduler stalls with a four-frame newest-first RTCM queue.
 - PROBE never writes RTCM to the UM220 GNSS UART.
 
 Directory layout:

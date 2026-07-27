@@ -106,13 +106,13 @@ The firmware has three compile-time modes and defaults to `DISABLED`:
 | `PROBE` | accepted | yes | no |
 | `LIVE` | accepted | yes | yes |
 
-The injection queue holds two complete RTCM frames and evicts the oldest frame under pressure, because a newer correction is more valuable than a delayed one. Reassembly is capped at four incomplete frames and 1500 ms. Queue residence is capped at the smaller of the message TTL and 3000 ms.
+The injection queue holds four complete RTCM frames and evicts the oldest frame under pressure, because a newer correction is more valuable than a delayed one. The queue was increased from two to four after B showed short scheduler stalls; this adds about 2058 bytes of static frame storage. Reassembly is capped at four incomplete frames and 1500 ms. Queue residence is capped at the smaller of the message TTL and 3000 ms.
 
 Only the existing GPS poll task accesses the GNSS UART. The XL01 receive path can enqueue complete frames but cannot call `IoTUartWrite`, which serializes RTCM writes with NMEA reads at the HAL boundary. A queue-lock initialization failure keeps corrections disabled rather than falling back to an unsafe unlocked path.
 
 The current RK2206 build has monotonic time but no independently trusted absolute Unix clock. It therefore enforces reassembly and local queue age while incrementing `ttl_unverified_fragments`; the gateway remains responsible for absolute generated-time filtering. `LIVE` must not be field-enabled until this limitation and the mixed-load gate are explicitly accepted.
 
-Exposed counters include accepted/completed/duplicate/rejected fragments, CRC errors, expired assemblies, capacity evictions, TTL-unverified fragments, queue depth/high-water/eviction/expiration, probe-validated frames, injected bytes, partial writes and injection drops.
+Exposed counters include accepted/completed/duplicate/rejected fragments, CRC errors, expired assemblies, capacity evictions, TTL-unverified fragments, queue depth/high-water/eviction/expiration, probe-validated frames, injected bytes, partial writes and injection drops. PROBE V2 also reports completed-frame counts for 1005/1033/1074/1094/1114/1124 plus field-link decoded frames, decoded RTCM frames, decode failures, sequence gaps/duplicates/resets and UART RX FIFO drops.
 
 ## RK3568 Closed-Loop PROBE Statistics
 
@@ -124,12 +124,12 @@ G3Q + node letter A/B/C + 8 uppercase hexadecimal nonce
 
 For example, `G3QB89ABCDEF` asks node B for a snapshot. The nonce must be non-zero. All nodes receive the command, but only the addressed node responds. A valid query is first queued by the XL01 receive path and is handled by the normal data-processing task; the UART receive callback never transmits a response.
 
-The node returns a fixed 92-byte binary payload as field-link `control=4`. The outer COBS/CRC32 frame protects the whole response:
+The node returns a fixed binary payload as field-link `control=4`. V1 is 92 bytes; the current V2 is 148 bytes and retains the first 92-byte layout before appending diagnostics. The outer COBS/CRC32 frame protects the whole response:
 
 | Offset | Bytes | Field |
 | ---: | ---: | --- |
 | 0 | 3 | ASCII `G3S` |
-| 3 | 1 | response version `1` |
+| 3 | 1 | response version `1` or `2` |
 | 4 | 1 | node number A/B/C = `1/2/3` |
 | 5 | 1 | injection mode `DISABLED/PROBE/LIVE = 0/1/2` |
 | 6 | 2 | reserved, zero |
@@ -138,8 +138,12 @@ The node returns a fixed 92-byte binary payload as field-link `control=4`. The o
 | 16 | 72 | 18 big-endian uint32 counters in the order below |
 | 88 | 2 | queue high watermark |
 | 90 | 2 | current queue depth |
+| 92 | 24 | V2 only: six completed-frame counters for 1005/1033/1074/1094/1114/1124 |
+| 116 | 32 | V2 only: eight field-link counters in the order below |
 
 Counter order is: accepted, duplicate, rejected, completed, CRC errors, expired assemblies, capacity evictions, TTL-unverified fragments, queued frames, queue evictions, queue-expired frames, PROBE-validated frames, PROBE-validated bytes, injected frames, injected bytes, UART write errors, UART partial writes and injection drops.
+
+V2 field-link counter order is: decoded frames, decoded RTCM frames, decode errors, sequence gaps, sequence duplicates, sequence resets, RX FIFO dropped bytes and RX FIFO drop events. Sequence tracking treats a backward sender restart separately from a forward gap, so a new bounded experiment does not fabricate packet loss.
 
 The RK3568 tool queries once before traffic and once after the drain interval. It computes uint32 wrap-safe deltas, so old accumulated counters do not require a node reboot. A PROBE run passes only when:
 
@@ -149,6 +153,7 @@ The RK3568 tool queries once before traffic and once after the drain interval. I
 - PROBE-validated byte delta exactly equals raw RTCM bytes;
 - baseline and final queue depth are zero;
 - duplicate, reject, CRC, expiration, eviction, injection and UART-write error deltas are all zero.
+- when V2 is required, each tracked RTCM type delta matches the generated schedule, decoded RTCM packets match sent fragments, and field-link decode/gap/duplicate/reset/FIFO-drop deltas are zero.
 
 Any missing statistics response is a failed gate, not an inconclusive successful send. `PROBE` still never writes RTCM to UM220.
 
@@ -167,7 +172,7 @@ Historical compact polling proved A/B/C `541/541` batches with 1623/1623 matched
 
 The 2026-07-27 RK3568-only PROBE runs showed a different limit. At 160-byte fragmentation, A accepted 57-58/100 fragments and B accepted 64/100. Reducing fragment data to 96 bytes caused A to accept 58/128 and complete only 28/76 RTCM frames. CRC and explicit reject counters stayed zero while incomplete assemblies expired. The near-constant accepted packet count indicates a field-link packet-rate or air-link scheduling boundary rather than a 115200 UART byte-capacity limit. Until a stepped-rate or batching design passes the node counter gate, the 16.91% byte estimate must not be presented as an XLS1 RTCM pass.
 
-The stepped-rate profile then separated packet-rate and frame-size effects. On node A, fixed 90-byte RTCM frames passed through 7.5 Hz (90/90) and failed at 8 Hz (80/96). Fixed 160-byte frames passed at 4 Hz (48/48), lost one frame at 5 Hz (59/60), and fell to 48/72 at 6 Hz. A 250-byte single-fragment experiment at 6 Hz received only 19/72. Large-payload batching is therefore not an accepted solution; the safe region depends on both field-link frame rate and encoded length.
+The stepped-rate profile then separated packet-rate and frame-size effects. On node A, fixed 90-byte RTCM frames passed through 7.5 Hz (90/90) and failed at 8 Hz (80/96). Fixed 160-byte frames passed at 4 Hz (48/48), lost one frame at 5 Hz (59/60), and fell to 48/72 at 6 Hz. The earlier 250-byte RTCM-frame experiment still used 160-byte fragmentation, so 6 Hz generated 12 field-link packets per second and received 19/72 frames. It demonstrates packet-rate overload, not that a 250-byte single packet is unsupported; the safe region depends on both field-link frame rate and encoded length.
 
 The vendor product page for UM220-IV NK lists GPS L1, BDS B1, Galileo E1 and QZSS support, but not GLONASS. The hardware candidate profile therefore:
 

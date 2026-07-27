@@ -12,7 +12,9 @@ const {
   GNSS_V3_TARGET_ALL_NODES,
   GNSS_V3_TARGET_NODE_B,
   RTCM_FRAGMENT_V3_HEADER_BYTES,
+  decodeGnssProbeStatsResponse,
   decodeGnssProbeStatsResponseV1,
+  decodeGnssProbeStatsResponseV2,
   RtcmReassemblerV3,
   crc24q,
   decodeGnssCoreV3,
@@ -114,6 +116,39 @@ test("GNSS PROBE stats query and response match the RK2206 golden vector", () =>
   assert.deepEqual(result.errors, []);
   assert.equal(result.payloads[0].frameType, "control");
   assert.deepEqual(decodeGnssProbeStatsResponseV1(result.payloads[0].rawPayloadBytes), decoded);
+});
+
+test("GNSS PROBE V2 exposes per-type and field-link diagnostics", () => {
+  const payload = Buffer.alloc(148);
+  payload.write("G3S", 0, "ascii");
+  payload.writeUInt8(2, 3);
+  payload.writeUInt8(2, 4);
+  payload.writeUInt8(1, 5);
+  payload.writeUInt32BE(0x89abcdef, 8);
+  payload.writeUInt32BE(1234, 12);
+  for (let index = 0; index < 18; index += 1) {
+    payload.writeUInt32BE(index + 1, 16 + index * 4);
+  }
+  payload.writeUInt16BE(19, 88);
+  payload.writeUInt16BE(20, 90);
+  for (let index = 0; index < 6; index += 1) {
+    payload.writeUInt32BE(index + 21, 92 + index * 4);
+  }
+  for (let index = 0; index < 8; index += 1) {
+    payload.writeUInt32BE(index + 31, 116 + index * 4);
+  }
+
+  const decoded = decodeGnssProbeStatsResponseV2(payload);
+  assert.equal(decoded.completedTypeCounts["1124"], 26);
+  assert.equal(decoded.linkStats.decodedRtcmFrames, 32);
+  assert.equal(decoded.linkStats.fifoDropEvents, 38);
+  assert.deepEqual(decodeGnssProbeStatsResponse(payload), decoded);
+  assert.throws(() => decodeGnssProbeStatsResponseV1(payload), /not V1/);
+
+  const wire = encodeFieldLinkFrame({ frameType: "control", sequence: 73, payloadBytes: payload });
+  const result = createCobsCrcFieldLinkAssembler().push(wire);
+  assert.deepEqual(result.errors, []);
+  assert.deepEqual(decodeGnssProbeStatsResponseV2(result.payloads[0].rawPayloadBytes), decoded);
 });
 
 test("GNSS_CORE V3 preserves nanodegrees and survives the binary field-link", () => {

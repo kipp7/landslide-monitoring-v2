@@ -29,6 +29,12 @@ typedef struct {
     uint32_t uart_write_errors;
     uint32_t uart_partial_writes;
     uint32_t injection_dropped_frames;
+    uint32_t completed_type_1005;
+    uint32_t completed_type_1033;
+    uint32_t completed_type_1074;
+    uint32_t completed_type_1094;
+    uint32_t completed_type_1114;
+    uint32_t completed_type_1124;
     uint16_t queue_high_watermark;
     uint16_t queue_pending;
 } GnssRtcmInjectionStats;

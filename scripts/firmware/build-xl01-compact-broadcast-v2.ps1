@@ -29,6 +29,8 @@ $syncFiles = @(
   "main\landslide_main.c",
   "drivers\xl01\field_link_frame.c",
   "drivers\xl01\field_link_frame.h",
+  "drivers\xl01\field_link_rx_stats.c",
+  "drivers\xl01\field_link_rx_stats.h",
   "drivers\xl01\gnss_transport_v3.c",
   "drivers\xl01\gnss_transport_v3.h",
   "drivers\xl01\gnss_rtcm_injection.c",

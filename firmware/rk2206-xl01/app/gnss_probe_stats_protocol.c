@@ -121,3 +121,59 @@ int GnssProbeStatsResponseV1_Encode(
     WriteUint16Be(output + 90, stats != NULL ? stats->queue_pending : 0U);
     return GNSS_PROBE_STATS_RESPONSE_V1_BYTES;
 }
+
+int GnssProbeStatsResponseV2_Encode(
+    const GnssRtcmInjectionStats *stats,
+    const FieldLinkRxStats *link_stats,
+    uint8_t node_number,
+    uint8_t injection_mode,
+    uint32_t nonce,
+    uint32_t snapshot_uptime_s,
+    uint8_t *output,
+    int output_size
+)
+{
+    const uint32_t type_counters[] = {
+        stats != NULL ? stats->completed_type_1005 : 0U,
+        stats != NULL ? stats->completed_type_1033 : 0U,
+        stats != NULL ? stats->completed_type_1074 : 0U,
+        stats != NULL ? stats->completed_type_1094 : 0U,
+        stats != NULL ? stats->completed_type_1114 : 0U,
+        stats != NULL ? stats->completed_type_1124 : 0U,
+    };
+    const uint32_t link_counters[] = {
+        link_stats != NULL ? link_stats->decoded_frames : 0U,
+        link_stats != NULL ? link_stats->decoded_rtcm_frames : 0U,
+        link_stats != NULL ? link_stats->decode_errors : 0U,
+        link_stats != NULL ? link_stats->sequence_gaps : 0U,
+        link_stats != NULL ? link_stats->sequence_duplicates : 0U,
+        link_stats != NULL ? link_stats->sequence_resets : 0U,
+        link_stats != NULL ? link_stats->fifo_dropped_bytes : 0U,
+        link_stats != NULL ? link_stats->fifo_drop_events : 0U,
+    };
+    unsigned int index;
+
+    if (output == NULL || output_size < GNSS_PROBE_STATS_RESPONSE_V2_BYTES) {
+        return -1;
+    }
+    if (GnssProbeStatsResponseV1_Encode(
+            stats,
+            node_number,
+            injection_mode,
+            nonce,
+            snapshot_uptime_s,
+            output,
+            output_size
+        ) != GNSS_PROBE_STATS_RESPONSE_V1_BYTES) {
+        return -1;
+    }
+
+    output[3] = 2U;
+    for (index = 0U; index < sizeof(type_counters) / sizeof(type_counters[0]); ++index) {
+        WriteUint32Be(output + 92U + index * 4U, type_counters[index]);
+    }
+    for (index = 0U; index < sizeof(link_counters) / sizeof(link_counters[0]); ++index) {
+        WriteUint32Be(output + 116U + index * 4U, link_counters[index]);
+    }
+    return GNSS_PROBE_STATS_RESPONSE_V2_BYTES;
+}
