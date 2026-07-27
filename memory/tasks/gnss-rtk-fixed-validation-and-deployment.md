@@ -33,6 +33,7 @@ status: active
 - 共同生产候选默认关闭可选 QZSS 1114，保留 GPS 1074、BDS 1124、Galileo 1094 和 1005/1033。B 在 160 ms 下 60 s 严格通过：252/252 分片、192/192 帧、27000/27000 B，全部异常计数为 0；净 RTCM 450 B/s、field-link 702 B/s。A 已通过包含该负载及额外 QZSS 的严格超集。当前 A/B 在线、C 离线，C 的完整容量预留保持不变。
 - field-gateway 已新增未启用的生产核心 `rtcm-downlink-shaper.ts`：有界 RTCM3 流解析/CRC、UM220 支持集白名单、per-type newest-only、1 Hz 观测限频、观测/参考 TTL、过期淘汰和可审计计数。14 项 field-gateway 测试、TypeScript build/lint 全通过；尚未接 NTRIP、串口调度或 LIVE，不会与现有命令/compact 轮询争用端口。
 - 针对 B 的低频丢包已实现待烧录的 PROBE stats V2：RK2206 队列由 2 增至 4（新增约 2058 B 静态帧区），统计 6 类 RTCM 完整帧和 field-link 有效帧/RTCM 帧/解码错误/序号缺口、重复、重启及 RX FIFO 丢弃；Python 与 TypeScript 均兼容 V1/V2，发布门禁可强制要求 V2。C99 主机测试、Python 自检、field-gateway 15 项测试/lint 和 A 节点 `DISABLED/PROBE/LIVE` 全量交叉编译通过；尚未烧录，不能算现场门禁通过。
+- V2 源提交 `c0eff2a3` 已推送；A/B/C 独立全量构建的只读发布包位于 `F:\2\openharmony\rk2206_firmware_releases\xl01_gnss_rtk_v31_probe_stats_v2_20260727`。9/9 二进制 SHA-256 复算匹配，A/B/C `Firmware.img` 分别为 `2f5995a3...cb15c`、`7a4d86d5...a3777`、`cee103b9...2be54`，节点身份均只命中自身，三份 loader 一致。V1/V2 探针已部署到 RK3568 并通过自检/哈希核对，网关服务保持 active；节点仍运行旧 V1 固件，等待统一烧录。
 - 容量工具已支持 `active=2 + reserved=1`。按历史 881.84 B/s RTCM 数据，A/B 活跃估算为 1768.08 B/s（15.35% UART），C 完整预留 180 B/s，三节点总预算仍为 1948.08 B/s（16.91% UART）。历史 compact 三节点曾连续完成 541/541 批次、1623/1623 遥测，证明 compact 时隙可行，但不代表 RTCM 已通过。
 - GNSS 常规链路采用 98 字节核心摘要，不连续上传原始 NMEA/逐星明细；专业 ECEF/ENU/Hampel/Kalman 位移链统一由 RK3568 计算。
 
