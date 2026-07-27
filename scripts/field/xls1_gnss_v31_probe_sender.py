@@ -66,6 +66,16 @@ PER_SECOND_EVENTS = (
 )
 REFERENCE_EVENTS = ((0.70, 1005, 100), (0.80, 1033, 100))
 
+# UM220-IV NK supports GPS L1, BDS B1, Galileo E1 and QZSS, but not GLONASS.
+# The shaped profile keeps the newest 1 Hz observation for each supported
+# constellation and spreads the two slow reference messages across ten seconds.
+UM220_SHAPED_EVENTS = (
+    (0.00, 1124, 250),
+    (0.40, 1074, 90),
+    (0.60, 1094, 90),
+    (0.80, 1114, 90),
+)
+
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
@@ -481,7 +491,7 @@ def service_is_active(service_name: str) -> bool:
     ).returncode == 0
 
 
-def build_schedule(duration_seconds: float) -> list[tuple[float, int, int]]:
+def build_measured_mix_schedule(duration_seconds: float) -> list[tuple[float, int, int]]:
     schedule: list[tuple[float, int, int]] = []
     whole_seconds = math.ceil(duration_seconds)
     for second in range(whole_seconds):
@@ -495,8 +505,49 @@ def build_schedule(duration_seconds: float) -> list[tuple[float, int, int]]:
     return sorted(schedule)
 
 
+def build_packet_rate_schedule(
+    duration_seconds: float,
+    packet_rate_hz: float,
+    packet_frame_bytes: int,
+    packet_message_type: int,
+) -> list[tuple[float, int, int]]:
+    event_count = math.ceil(duration_seconds * packet_rate_hz - 1e-12)
+    return [
+        (index / packet_rate_hz, packet_message_type, packet_frame_bytes)
+        for index in range(event_count)
+    ]
+
+
+def build_um220_shaped_schedule(duration_seconds: float) -> list[tuple[float, int, int]]:
+    schedule: list[tuple[float, int, int]] = []
+    for second in range(math.ceil(duration_seconds)):
+        events = list(UM220_SHAPED_EVENTS)
+        if second % 10 == 0:
+            events.append((0.20, 1005, 100))
+        if second % 10 == 5:
+            events.append((0.20, 1033, 100))
+        for offset, message_type, frame_bytes in events:
+            due = second + offset
+            if due < duration_seconds:
+                schedule.append((due, message_type, frame_bytes))
+    return sorted(schedule)
+
+
+def build_schedule(args: argparse.Namespace) -> list[tuple[float, int, int]]:
+    if args.profile == "packet-rate":
+        return build_packet_rate_schedule(
+            args.duration_seconds,
+            args.packet_rate_hz,
+            args.packet_frame_bytes,
+            args.packet_message_type,
+        )
+    if args.profile == "um220-shaped":
+        return build_um220_shaped_schedule(args.duration_seconds)
+    return build_measured_mix_schedule(args.duration_seconds)
+
+
 def run_probe(args: argparse.Namespace) -> dict[str, Any]:
-    schedule = build_schedule(args.duration_seconds)
+    schedule = build_schedule(args)
     if not schedule:
         raise ValueError("duration did not produce any scheduled RTCM frames")
     session_epoch = int(time.time()) & 0xFFFFFFFF
@@ -507,6 +558,9 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
     fragment_count = 0
     late_events = 0
     max_lateness_ms = 0.0
+    packet_pacing_waits = 0
+    packet_pacing_wait_ms = 0.0
+    last_packet_write_mono: float | None = None
     message_counts: Counter[int] = Counter()
     started_mono = time.monotonic()
     decoder = FieldLinkStreamDecoder()
@@ -567,8 +621,18 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
                 args.fragment_data_bytes,
             )
             for payload in payloads:
+                if last_packet_write_mono is not None and args.min_packet_interval_ms > 0:
+                    packet_deadline = (
+                        last_packet_write_mono + args.min_packet_interval_ms / 1000.0
+                    )
+                    packet_wait_seconds = packet_deadline - time.monotonic()
+                    if packet_wait_seconds > 0:
+                        time.sleep(packet_wait_seconds)
+                        packet_pacing_waits += 1
+                        packet_pacing_wait_ms += packet_wait_seconds * 1000.0
                 wire_frame = encode_field_link(field_sequence, payload)
                 write_chunked(fd, wire_frame, args.chunk_bytes, args.chunk_delay_ms)
+                last_packet_write_mono = time.monotonic()
                 wire_bytes += len(wire_frame)
                 fragment_count += 1
                 field_sequence = (field_sequence + 1) & 0xFFFFFFFF
@@ -622,6 +686,7 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
         "sessionEpoch": session_epoch,
         "target": args.target,
         "targetMask": TARGET_MASKS[args.target],
+        "profile": args.profile,
         "framesSent": sum(message_counts.values()),
         "fragmentsSent": fragment_count,
         "rtcmRawBytes": raw_bytes,
@@ -632,6 +697,9 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
         "lateEvents": late_events,
         "lateThresholdMs": args.late_threshold_ms,
         "maxLatenessMs": round(max_lateness_ms, 3),
+        "minPacketIntervalMs": args.min_packet_interval_ms,
+        "packetPacingWaits": packet_pacing_waits,
+        "packetPacingWaitMs": round(packet_pacing_wait_ms, 3),
         "messageTypeCounts": {str(key): value for key, value in sorted(message_counts.items())},
         "fieldLinkRxDecodeErrors": decoder.decode_errors,
         "baselineStats": baseline_stats,
@@ -670,11 +738,25 @@ def self_test() -> None:
     assert decoded_frames == [(FIELD_LINK_TYPE_CONTROL, 99, response_payload)]
     assert stream_decoder.decode_errors == 0
     assert uint32_delta(3, 0xFFFFFFFE) == 5
-    ten_second_schedule = build_schedule(10.0)
+    ten_second_schedule = build_measured_mix_schedule(10.0)
     assert len(ten_second_schedule) == 62
     assert sum(item[2] for item in ten_second_schedule) == 8800
     assert Counter(item[1] for item in ten_second_schedule) == Counter(
         {1124: 20, 1074: 10, 1084: 10, 1094: 10, 1114: 10, 1005: 1, 1033: 1}
+    )
+    packet_rate_schedule = build_packet_rate_schedule(2.0, 2.5, 90, 1124)
+    assert packet_rate_schedule == [
+        (0.0, 1124, 90),
+        (0.4, 1124, 90),
+        (0.8, 1124, 90),
+        (1.2, 1124, 90),
+        (1.6, 1124, 90),
+    ]
+    um220_schedule = build_um220_shaped_schedule(10.0)
+    assert len(um220_schedule) == 42
+    assert sum(item[2] for item in um220_schedule) == 5400
+    assert Counter(item[1] for item in um220_schedule) == Counter(
+        {1124: 10, 1074: 10, 1094: 10, 1114: 10, 1005: 1, 1033: 1}
     )
     print("xls1 GNSS V3.1 PROBE sender self-test passed")
 
@@ -687,9 +769,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--baud", type=int, default=115200)
     parser.add_argument("--target", choices=tuple(NODE_NUMBERS), default="A")
     parser.add_argument("--duration-seconds", type=float, default=12.0)
+    parser.add_argument(
+        "--profile",
+        choices=("measured-mix", "packet-rate", "um220-shaped"),
+        default="measured-mix",
+    )
+    parser.add_argument("--packet-rate-hz", type=float, default=2.0)
+    parser.add_argument("--packet-frame-bytes", type=int, default=90)
+    parser.add_argument("--packet-message-type", type=int, default=1124)
     parser.add_argument("--fragment-data-bytes", type=int, default=160)
     parser.add_argument("--chunk-bytes", type=int, default=32)
     parser.add_argument("--chunk-delay-ms", type=int, default=15)
+    parser.add_argument("--min-packet-interval-ms", type=int)
     parser.add_argument("--settle-ms", type=int, default=1000)
     parser.add_argument("--drain-ms", type=int, default=2000)
     parser.add_argument("--stats-timeout-seconds", type=float, default=3.0)
@@ -702,13 +793,34 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--report-path", default="")
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
-    if args.duration_seconds <= 0 or args.baud <= 0 or args.stats_timeout_seconds <= 0:
+    if args.min_packet_interval_ms is None:
+        args.min_packet_interval_ms = 160 if args.profile == "um220-shaped" else 0
+    if (
+        args.duration_seconds <= 0
+        or args.baud <= 0
+        or args.stats_timeout_seconds <= 0
+        or args.packet_rate_hz <= 0
+    ):
         parser.error("duration, baud and stats timeout must be positive")
     if args.stats_retries <= 0:
         parser.error("stats retries must be positive")
     if not 32 <= args.fragment_data_bytes <= 512:
         parser.error("fragment data bytes must be in [32, 512]")
-    if args.chunk_bytes <= 0 or args.chunk_delay_ms < 0 or args.settle_ms < 0 or args.drain_ms < 0:
+    if not 8 <= args.packet_frame_bytes <= 512:
+        parser.error("packet frame bytes must be in [8, 512]")
+    if not 1 <= args.packet_message_type <= 4095:
+        parser.error("packet message type must be in [1, 4095]")
+    if args.profile == "packet-rate" and args.packet_frame_bytes > args.fragment_data_bytes:
+        parser.error(
+            "packet-rate profile requires packet frame bytes <= fragment data bytes"
+        )
+    if (
+        args.chunk_bytes <= 0
+        or args.chunk_delay_ms < 0
+        or args.min_packet_interval_ms < 0
+        or args.settle_ms < 0
+        or args.drain_ms < 0
+    ):
         parser.error("chunk size must be positive and delays must be non-negative")
     return args
 
@@ -730,7 +842,7 @@ def main() -> int:
         "serviceRestored": not service_was_active,
     }
     report: dict[str, Any] = {
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "experiment": "xls1-gnss-v31-probe-closed-loop",
         "startedAt": utc_now(),
         "source": {
@@ -746,9 +858,18 @@ def main() -> int:
             "baud": args.baud,
             "target": args.target,
             "durationSeconds": args.duration_seconds,
+            "profile": args.profile,
+            "packetRateHz": args.packet_rate_hz if args.profile == "packet-rate" else None,
+            "packetFrameBytes": (
+                args.packet_frame_bytes if args.profile == "packet-rate" else None
+            ),
+            "packetMessageType": (
+                args.packet_message_type if args.profile == "packet-rate" else None
+            ),
             "fragmentDataBytes": args.fragment_data_bytes,
             "chunkBytes": args.chunk_bytes,
             "chunkDelayMs": args.chunk_delay_ms,
+            "minPacketIntervalMs": args.min_packet_interval_ms,
             "settleMs": args.settle_ms,
             "drainMs": args.drain_ms,
             "statsTimeoutSeconds": args.stats_timeout_seconds,

@@ -167,6 +167,21 @@ Historical compact polling proved A/B/C `541/541` batches with 1623/1623 matched
 
 The 2026-07-27 RK3568-only PROBE runs showed a different limit. At 160-byte fragmentation, A accepted 57-58/100 fragments and B accepted 64/100. Reducing fragment data to 96 bytes caused A to accept 58/128 and complete only 28/76 RTCM frames. CRC and explicit reject counters stayed zero while incomplete assemblies expired. The near-constant accepted packet count indicates a field-link packet-rate or air-link scheduling boundary rather than a 115200 UART byte-capacity limit. Until a stepped-rate or batching design passes the node counter gate, the 16.91% byte estimate must not be presented as an XLS1 RTCM pass.
 
+The stepped-rate profile then separated packet-rate and frame-size effects. On node A, fixed 90-byte RTCM frames passed through 7.5 Hz (90/90) and failed at 8 Hz (80/96). Fixed 160-byte frames passed at 4 Hz (48/48), lost one frame at 5 Hz (59/60), and fell to 48/72 at 6 Hz. A 250-byte single-fragment experiment at 6 Hz received only 19/72. Large-payload batching is therefore not an accepted solution; the safe region depends on both field-link frame rate and encoded length.
+
+The vendor product page for UM220-IV NK lists GPS L1, BDS B1, Galileo E1 and QZSS support, but not GLONASS. The hardware candidate profile therefore:
+
+- rejects RTCM 1084 before the radio because the receiver cannot use it;
+- keeps the newest 1074, 1094, 1114 and 1124 observation per type;
+- limits 1124 to 1 Hz while keeping the other supported observation types at 1 Hz;
+- preserves 1005/1033 reference messages and absolute generation/TTL evidence;
+- uses 160-byte fragmentation and at least 160 ms between field-link RTCM packets;
+- drops superseded or expired corrections instead of building latency in a FIFO.
+
+This profile models 540 B/s of RTCM and 852 B/s after field-link framing. Node A passed a 60-second synthetic PROBE with 312/312 accepted fragments, 252/252 completed and PROBE-validated RTCM frames, and 32400/32400 validated bytes. It had no CRC, reassembly, queue, decode, injection or UART-write errors, no late events, and 4.365 ms maximum schedule lateness. The gateway service was restored after the test. Node B went offline before its matching run and node C remains offline, so the result is an A-only candidate gate, not a three-node or RTK Fixed acceptance.
+
+The field-gateway now contains an inactive production shaper core with bounded RTCM3 stream parsing, CRC validation, the UM220 message allow-list, per-type newest-only replacement, 1 Hz observation throttling, TTL expiry and counters. It is intentionally not connected to NTRIP, the serial-port command chain or `LIVE` firmware yet. Integration must preserve the gateway's single port owner, add 160-byte fragmentation and 160 ms packet pacing, and expose shaper and node counters before any real correction is transmitted.
+
 The hardware gate requires a real RTCM capture plus three 1 Hz `GNSS_CORE` uplinks, compact environmental telemetry and injected control commands. Record per node:
 
 - correction age P50/P95/max;
