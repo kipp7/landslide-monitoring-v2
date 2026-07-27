@@ -316,6 +316,8 @@ def analyze(
     profile: PacingProfile,
     baud: int,
     control_reserve_bps: int,
+    active_nodes: int,
+    reserved_nodes: int,
 ) -> dict[str, object]:
     frame_list = list(frames)
     rtcm_raw_bytes = sum(len(frame) for frame in frame_list)
@@ -330,15 +332,19 @@ def analyze(
         maximum_wire_frame = max(maximum_wire_frame, *wire_lengths)
         downlink_write_ms += sum(paced_write_ms(length, baud, profile) for length in wire_lengths)
 
-    fixed_wire_bps = (
-        3 * GNSS_CORE_WIRE_BYTES_MAX
+    per_node_wire_bps = GNSS_CORE_WIRE_BYTES_MAX + COMPACT_TELEMETRY_WIRE_BYTES
+    active_fixed_wire_bps = (
+        active_nodes * per_node_wire_bps
         + COMPACT_BROADCAST_POLL_WIRE_BYTES
-        + 3 * COMPACT_TELEMETRY_WIRE_BYTES
         + control_reserve_bps
     )
+    reserved_wire_bps = reserved_nodes * per_node_wire_bps
+    fixed_wire_bps = active_fixed_wire_bps + reserved_wire_bps
     rtcm_wire_bps = rtcm_wire_bytes / duration_seconds
+    active_total_wire_bps = rtcm_wire_bps + active_fixed_wire_bps
     total_wire_bps = rtcm_wire_bps + fixed_wire_bps
     uart_capacity_bps = baud / 10.0
+    active_utilization = active_total_wire_bps / uart_capacity_bps * 100.0
     utilization = total_wire_bps / uart_capacity_bps * 100.0
     writer_duty = downlink_write_ms / (duration_seconds * 1000.0) * 100.0
     return {
@@ -353,9 +359,15 @@ def analyze(
         "rtcmWireBytesPerSecond": round(rtcm_wire_bps, 2),
         "protocolExpansionRatio": round(rtcm_wire_bytes / rtcm_raw_bytes, 4),
         "maximumWireFrameBytes": maximum_wire_frame,
+        "activeNodeCount": active_nodes,
+        "reservedNodeCount": reserved_nodes,
+        "activeGnssTelemetryAndControlBytesPerSecond": active_fixed_wire_bps,
+        "reservedNodeBytesPerSecond": reserved_wire_bps,
         "fixedGnssTelemetryAndControlBytesPerSecond": fixed_wire_bps,
+        "estimatedActiveWireBytesPerSecond": round(active_total_wire_bps, 2),
         "estimatedTotalWireBytesPerSecond": round(total_wire_bps, 2),
         "uartPayloadCapacityBytesPerSecond": round(uart_capacity_bps, 2),
+        "estimatedActiveUartUtilizationPct": round(active_utilization, 2),
         "estimatedCombinedUartUtilizationPct": round(utilization, 2),
         "estimatedRtcmWriterDutyPct": round(writer_duty, 2),
         "eligibleForHardwareSweep": utilization <= 70.0 and writer_duty <= 70.0,
@@ -394,6 +406,19 @@ def self_test() -> None:
     summary_frames = model_frames_from_summary(160, counts)
     assert len(summary_frames) == 20
     assert sum(len(item) for item in summary_frames) == 160
+    budget = analyze(
+        summary_frames,
+        duration,
+        160,
+        PACING_PROFILES[1],
+        115200,
+        128,
+        2,
+        1,
+    )
+    assert budget["activeGnssTelemetryAndControlBytesPerSecond"] == 516
+    assert budget["reservedNodeBytesPerSecond"] == 180
+    assert budget["fixedGnssTelemetryAndControlBytesPerSecond"] == 696
     print("xls1 GNSS V3.1 capacity sweep self-test passed")
 
 
@@ -414,6 +439,8 @@ def main() -> int:
     parser.add_argument("--fragment-data-bytes", type=parse_fragment_sizes, default=[46, 96, 160])
     parser.add_argument("--baud", type=int, default=115200)
     parser.add_argument("--control-reserve-bps", type=int, default=128)
+    parser.add_argument("--active-node-count", type=int, default=3)
+    parser.add_argument("--reserved-node-count", type=int, default=0)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
@@ -423,6 +450,12 @@ def main() -> int:
         return 0
     if args.capture_duration_seconds <= 0 or args.baud <= 0 or args.control_reserve_bps < 0:
         parser.error("duration and baud must be positive; control reserve must be non-negative")
+    if (
+        args.active_node_count < 1
+        or args.reserved_node_count < 0
+        or args.active_node_count + args.reserved_node_count > 3
+    ):
+        parser.error("active nodes must be >= 1 and active + reserved nodes must be <= 3")
 
     duration_seconds = args.capture_duration_seconds
     capture_diagnostics: dict[str, int | None] = {"invalidCrcFrames": 0, "discardedBytes": 0}
@@ -479,12 +512,14 @@ def main() -> int:
             profile,
             args.baud,
             args.control_reserve_bps,
+            args.active_node_count,
+            args.reserved_node_count,
         )
         for fragment_bytes in args.fragment_data_bytes
         for profile in PACING_PROFILES
     ]
     report = {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "experiment": "xls1-gnss-v31-capacity-sweep-offline",
         "generatedAt": utc_now(),
         "source": source_info,
@@ -494,10 +529,19 @@ def main() -> int:
         "assumptions": {
             "baud": args.baud,
             "uartBitsPerByte": 10,
-            "gnssCoreNodesAt1Hz": 3,
+            "activeNodeCount": args.active_node_count,
+            "reservedNodeCount": args.reserved_node_count,
+            "gnssCoreNodesAt1Hz": args.active_node_count + args.reserved_node_count,
             "gnssCoreWireBytesPerNodeMax": GNSS_CORE_WIRE_BYTES_MAX,
             "compactBroadcastPollWireBytesPerSecond": COMPACT_BROADCAST_POLL_WIRE_BYTES,
-            "compactTelemetryWireBytesPerSecond": 3 * COMPACT_TELEMETRY_WIRE_BYTES,
+            "compactTelemetryWireBytesPerSecond": (
+                (args.active_node_count + args.reserved_node_count)
+                * COMPACT_TELEMETRY_WIRE_BYTES
+            ),
+            "reservedNodeWireBytesPerSecond": (
+                args.reserved_node_count
+                * (GNSS_CORE_WIRE_BYTES_MAX + COMPACT_TELEMETRY_WIRE_BYTES)
+            ),
             "controlReserveBytesPerSecond": args.control_reserve_bps,
             "radioCapacityKnown": False,
         },

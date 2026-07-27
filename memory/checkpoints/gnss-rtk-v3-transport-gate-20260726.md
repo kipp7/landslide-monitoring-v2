@@ -39,22 +39,23 @@ status: active
 - C99 主机测试、Python 3.14 自检、field-gateway 10 项测试/lint，以及 A 节点 `DISABLED/PROBE/LIVE` 三种 OpenHarmony 全量交叉编译均通过。三个模式只做构建证明，未烧录或启用 `LIVE`；共享 SDK 样例已恢复原版本。
 - 源码提交 `50c3ec3becf35a79279ddb0100a621e226c8944a` 已推送并与远端 `feat/gnss-rtk-v31-transport` 一致。基于该提交独立全量构建 A/B/C，发布目录为 `F:\2\openharmony\rk2206_firmware_releases\xl01_gnss_rtk_v31_probe_stats_20260727`；未覆盖 2026-07-26 旧包或回滚包。
 - 发布清单固定 `probe`、固件标记 `fw-gnss-rtk-v31-probe-stats-20260727`，9 个二进制独立 SHA256 复算全部匹配。A/B/C `Firmware.img` SHA256 分别为 `263407126151346ce1ac57661c66849adb0ac185a81b4b931dbbe3420b77f941`、`306c60207476524f2de15f00b29bae427482a87df3697d412c313d3e08dd4a55`、`e90103cf03c1bbecd79616a173bc98af1278c03527628f7e5337ad786a470a31`；各节点 liteos 只包含自身 UUID/安装标签，loader 三份哈希一致。
-- 新版闭环发送器已部署到 RK3568 `192.168.124.179` 的 `/usr/local/bin/xls1_gnss_v31_probe_sender.py`。RK3568 Python 3.10 自检通过，部署文件与本地 SHA256 一致，`lsmv2-field-gateway.service` 仍为 active；未对尚未烧录的新固件执行硬件门禁流量。
+- 新版闭环发送器已部署到 RK3568 `192.168.124.179` 的 `/usr/local/bin/xls1_gnss_v31_probe_sender.py`。RK3568 Python 3.10 自检通过，部署文件与本地 SHA256 一致；四轮门禁后 `lsmv2-field-gateway.service` 均自动恢复为 active。
+- 2026-07-27 A/B 已确认运行新 PROBE-stats 并在线，C 无法上线。A/B 闭环统计查询可靠，但四轮 RTCM 门禁均失败：A `160B + 32B/15ms` 为 58/100 分片、43/76 帧；A `160B + 64B/5ms` 为 57/100、41/76；B 同参数为 64/100、47/76；A `96B + 64B/5ms` 为 58/128、28/76。所有运行 CRC/reject/injection/write error 为 0，服务自动恢复。
+- 历史三节点 compact 生产证据为 541/541 批次、1623/1623 tag-matched 遥测、0 timeout，平均/最大响应约 509/870 ms。容量模型现显式区分 A/B active 与 C reserve：A/B 1768.08 B/s（15.35% UART），C 预留 180 B/s，合计 1948.08 B/s（16.91%）。该字节余量不能覆盖当前约 5 个完整 field-link 帧/秒的包率边界。
 - 本 checkpoint 和提交均不包含 CORS 主机、账号、密码、真实坐标或现场原始日志。
 
 ## In Progress
 
-- 软件边界、离线容量初筛、RK3568 到 A 的旧发送基线、新闭环统计软件、A/B/C 发布包和 RK3568 部署均已完成。当前节点仍是 2026-07-26 旧包，必须先统一刷入已生成的 2026-07-27 PROBE-stats A/B/C 包；在此之前旧固件不会响应统计查询，单节点硬件门禁仍未通过。
+- 软件边界、离线容量模型、新闭环统计、A/B/C 发布包和 RK3568 部署均已完成。A/B 新固件查询闭环已实测，C 当前离线；RTCM 包率门禁明确失败，不能进入 LIVE。
 - RK2206 当前没有独立可信的 Unix 时钟。节点可执行 1500 ms 重组超时和最多 3000 ms 本地队列龄，但绝对生成时间 TTL 只能计为 `ttl_unverified`，由 RK3568 先做绝对新鲜度过滤。
 - 现有 GPS 驱动已阻止 RMC 状态错误设置 Fixed，并公开原始 GGA quality；完整 GGA/GSA/GST/GSV/RMC/ZDA 定点解析和 `GNSS_CORE` 1 Hz 上送尚未实现。
 
 ## Next Actions
 
 - 保留本地报告 `docs/reports/xls1-gnss-v31-capacity-20260726.json` 作为可再生证据；原始 RTCM 抓包降为可选精化，不再作为进入单节点 `PROBE` 的阻塞项。
-- 由用户从 `xl01_gnss_rtk_v31_probe_stats_20260727` 的 A/B/C 对应目录执行一次维护操作统一烧录；不要混用三个节点的 `Firmware.img`/`liteos.bin`。
-- 烧录后无需接电脑调试 UART。SSH RK3568，部署新版发送器并对 A 执行 `32B/15ms`；脚本应自动核对本轮理论值 `accepted=100`、`complete=76`、`probe=76`、`probe_bytes=10720`、`ttl_unverified=100`，以及所有拒绝/CRC/淘汰/注入/写错误为 0。
-- A 的 `32B/15ms` 闭环通过后测试 `64B/5ms`，然后按相同方式验证 B/C。不得因为节点在线或 RK3568 写串口成功而跳过节点计数门禁。
-- 硬件扫参按 `32B/15ms -> 64B/5ms -> 128B/0ms` 顺序，后一个候选只在前一个没有帧损坏、旧队列或控制延迟时进入。
+- 保持 C 为离线/不可用状态，不伪造遥测，但在所有容量报告中固定预留 180 B/s；A/B 的实测结论与 C 的估算必须分栏展示。
+- 下一步增加分级 field-link 包率测试，测出无丢包上限；随后优先评估在单个外层载荷中批量携带多个完整 RTCM 帧，减少每秒 field-link 帧数。不得仅继续缩小分片，因为 96 B 已证明分片越多、完成率越低。
+- 新包率/批处理方案先在 A/B PROBE 通过 accepted/completed/bytes 精确门禁，再等 C 恢复后补测 C 和三节点混合负载。
 - 真实门禁负载包含 RTCM、3 个 1 Hz `GNSS_CORE`、compact 环境遥测和控制命令；记录每节点 correction age P50/P95/max、Fixed 连续性、CRC、重组、队列、注入、旧 session 和命令延迟。
 - 至少运行 60 分钟；初始通过条件为 correction age P95 <= 3 s、max <= 5 s、没有旧 session 注入且 Fixed 连续。未通过前保持 `LIVE` 关闭。
 - 传输通过后再完成 RK2206 定点 GNSS 解析与上送、RK3568 ECEF/ENU/Hampel/Kalman、服务器 CEEMDAN 和 UI/profile 集成。
@@ -64,10 +65,11 @@ status: active
 - 115200 只是 MCU-UART 标称值，不能证明 DL-XLS1 的广播、半双工、内部重试和队列吞吐。
 - gateway 输入 RTCM CRC 正常不等于节点收到新鲜修正；必须使用节点端完成/注入/TTL 证据。
 - RK2206 无可信绝对时钟时，旧模块队列风险不能只依赖节点 TTL；session epoch 必须持久化，网关必须先拒绝过期数据。
-- 旧 `PROBE` 已有真机烧录、RK3568 发送和服务恢复证据，但新 PROBE-stats 固件尚未烧录，闭环工具也尚无新固件真机响应；`LIVE` 仍只有可构建证明。不得由编译或发送成功推导单节点 PROBE 通过或厘米级三节点已部署。
+- 新 PROBE-stats 已在 A/B 真机响应并暴露包率损失，C 尚未恢复；`LIVE` 仍只有可构建证明。不得由查询成功、UART 字节余量或历史 compact 三节点证据推导 RTCM PROBE 通过或厘米级三节点已部署。
 - 单 NTRIP 流供 3 台 rover 使用仍需确认服务商授权和同站点空间范围。
 - 汇总日志证明平均输入负载，但不能证明 RTCM 单帧尺寸分布或亚秒级突发；不得用 16.91% UART 估算替代 XLS1 节点端完整率和 correction-age 证据。
+- C 离线不会减少生产容量预算，但会让三节点在线、三节点混合负载和最终厘米级系统验收保持未完成；不得以历史在线证据替代当前 C 复测。
 
 ## Resume Prompt
 
-继续 V3.1 传输门禁：检查分支 `feat/gnss-rtk-v31-transport`、`scripts/field/xls1_gnss_v31_probe_sender.py` 和发布目录 `F:\2\openharmony\rk2206_firmware_releases\xl01_gnss_rtk_v31_probe_stats_20260727`。先确认 A/B/C 是否已统一刷入 PROBE-stats 包；若已刷，直接 SSH RK3568，通过 `/dev/ttyS3` 对 A 运行 12 s `32B/15ms` 闭环门禁，查看报告中的 `hardwareGatePassed` 和前后计数差，不接电脑调试 UART。A 通过后测 `64B/5ms`，随后验证 B/C；不要启用 `LIVE`，不要先实现滤波、CEEMDAN 或 UI。
+继续 V3.1 传输门禁：A/B 新 PROBE-stats 在线，C 离线并预留 180 B/s。读取 `docs/reports/xls1-gnss-v31-probe-ab-20260727.json` 和 `docs/reports/xls1-gnss-v31-capacity-ab-plus-c-reserve-20260727.json`；不要再缩小 RTCM 分片。先实现分级包率测试并确定无丢包上限，再设计/验证多 RTCM 帧批处理以把实际约 6.2 RTCM 帧/秒降到链路上限内。A/B 严格门禁通过后才等待 C 恢复补测；保持 LIVE 关闭。

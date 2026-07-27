@@ -156,6 +156,17 @@ Any missing statistics response is a failed gate, not an inconclusive successful
 
 The PC baseline received about 882 B/s of RTCM. With 160-byte data fragments, large frames add about 60 bytes of V3.1 and field-link overhead per fragment. Actual traffic contains many message sizes, so a capture-driven calculator must determine the real overhead instead of applying one constant multiplier.
 
+Capacity planning counts configured capacity, not only currently online nodes. When A/B are active and C is unavailable, the model keeps C's full `116 B/s GNSS_CORE + 64 B/s compact telemetry = 180 B/s` reserve. It does not emit fake C telemetry. With the measured RTCM summary and 160-byte fragmentation, the current budget is:
+
+| Scope | Estimated wire rate | 115200 UART utilization |
+| --- | ---: | ---: |
+| A/B active | 1768.08 B/s | 15.35% |
+| A/B plus full C reserve | 1948.08 B/s | 16.91% |
+
+Historical compact polling proved A/B/C `541/541` batches with 1623/1623 matched telemetry frames, zero timeout and about 509 ms average response latency. That evidence supports the 64 B/s per-node compact telemetry budget, but it does not prove RTCM capacity.
+
+The 2026-07-27 RK3568-only PROBE runs showed a different limit. At 160-byte fragmentation, A accepted 57-58/100 fragments and B accepted 64/100. Reducing fragment data to 96 bytes caused A to accept 58/128 and complete only 28/76 RTCM frames. CRC and explicit reject counters stayed zero while incomplete assemblies expired. The near-constant accepted packet count indicates a field-link packet-rate or air-link scheduling boundary rather than a 115200 UART byte-capacity limit. Until a stepped-rate or batching design passes the node counter gate, the 16.91% byte estimate must not be presented as an XLS1 RTCM pass.
+
 The hardware gate requires a real RTCM capture plus three 1 Hz `GNSS_CORE` uplinks, compact environmental telemetry and injected control commands. Record per node:
 
 - correction age P50/P95/max;
