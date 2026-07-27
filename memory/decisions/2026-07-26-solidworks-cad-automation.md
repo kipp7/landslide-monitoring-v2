@@ -48,6 +48,10 @@ Python compilation with `source code string cannot contain null bytes`.
   supersedes only the tilt-reference plate hole definition: the sensor body has
   four diameter 3.6 mm clearance holes, while the steel plate has four
   `M3 x 0.5 - 6H THRU` tapped holes modeled with diameter 2.5 mm tap drills.
+- For R0.8 and later connection-review assemblies, copy every reused native part
+  into the new revision before opening it. Run each assembly and drawing as an
+  isolated SOLIDWORKS process, then finalize hashes without SOLIDWORKS. Read-only
+  flags alone do not prevent SW2022 binary view/cache writes.
 
 ## Rationale
 
@@ -75,6 +79,9 @@ engineering release.
   tray, battery, charger zone, and FR4 anchor interface remain provisional.
 - The global Codex MCP path currently targets the hardware worktree and must be
   repointed after the branch is merged or moved.
+- R0.8 duplicates 23 native dependency files by design. The storage cost is
+  accepted in exchange for immutable released revisions and reproducible LFS
+  hashes. Do not deduplicate these files back to R0.6/R0.7 paths.
 
 ## Follow-up
 

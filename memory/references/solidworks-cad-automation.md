@@ -34,6 +34,19 @@ powershell -NoProfile -ExecutionPolicy Bypass -File hardware/field-node/cad/scri
 # Rebuild the current CAD-R0.4 layout/harness assembly and manifest.
 & "$env:LOCALAPPDATA\Codex\SolidWorksMCP\source\.venv\Scripts\python.exe" hardware/field-node/cad/automation/build_layout_assembly_r04.py
 
+# Rebuild CAD-R0.8 connection details in isolated SOLIDWORKS sessions.
+$python = "$env:LOCALAPPDATA\Codex\SolidWorksMCP\source\.venv\Scripts\python.exe"
+0..3 | ForEach-Object {
+  Get-Process SLDWORKS -ErrorAction SilentlyContinue | Stop-Process -Force
+  & $python hardware/field-node/cad/automation/build_review_details_r08.py --assembly-index $_
+}
+0..3 | ForEach-Object {
+  Get-Process SLDWORKS -ErrorAction SilentlyContinue | Stop-Process -Force
+  & $python hardware/field-node/cad/automation/build_review_details_r08.py --drawing-index $_
+}
+Get-Process SLDWORKS -ErrorAction SilentlyContinue | Stop-Process -Force
+& $python hardware/field-node/cad/automation/build_review_details_r08.py --finalize-only
+
 # Inspect the global Codex registration.
 codex mcp get solidworks_mcp
 ```
@@ -51,6 +64,8 @@ codex mcp get solidworks_mcp
 - `hardware/field-node/cad/automation/build_layout_assembly_r04.py`: 8-hole
   FR4, measured-envelope module layout, concept harness, assembly/drawing, and
   deterministic labeled view generation.
+- `hardware/field-node/cad/automation/build_review_details_r08.py`: isolated
+  connection assemblies, native A3 drawings, dependency packaging and manifest.
 - `hardware/field-node/cad/models/CAD-R0.1/manifest.json`: artifact sizes,
   expected volumes, and measured model volumes.
 - `hardware/field-node/cad/models/CAD-R0.2/manifest.json`: corrected interface,
@@ -72,3 +87,5 @@ codex mcp get solidworks_mcp
   `'str' object is not callable`; `safe_close_model` falls back to scoped COM
   closing. Same-title historical packaged parts must be closed before preloading
   a newer assembly revision.
+- R0.8 packages reused SLDPRT files locally. Never repoint its assemblies to
+  released R0.6/R0.7 files; SW2022 can modify binary caches on read-only open.

@@ -124,6 +124,21 @@ field-node digital mechanical model without inventing unresolved dimensions.
 - CAD-R0.7 feature commit `01b52c9b` contains the structural details, retained
   external harness, reproducible generator, generated artifacts and associated
   engineering records.
+- `CAD-R0.8` isolates four connection-review assemblies: enclosure rear strap,
+  solar clamp/pivot, GNSS mast/base/brace and lower-wall drip retention. It adds
+  three perforated section-context parts and four native round local cable
+  sweeps, four native A3 drawings and one four-page PDF review package.
+- Final validation covers 77 artifact hashes, 11 STEP headers, 23 nonblank PNGs,
+  four A3 page boxes and extracted note text. Visual review corrected an
+  enclosure-page edge clip and GNSS title overlap before publication.
+- R0.8 packages 23 reused R0.6/R0.7 SLDPRT references locally before any
+  SOLIDWORKS open. An intermediate SW2022 cache write was detected and restored;
+  the final R0.6/R0.7 worktree is clean.
+- R0.8 assembly and drawing generation runs as eight isolated phases with a
+  SOLIDWORKS restart between phases, avoiding SW2022 reference-close deadlocks.
+- CAD-R0.8 feature commit `09a51dc2742d4871230887eb1d912cfb4f0a10e5`
+  contains the four detail assemblies, packaged native dependencies, A3 review
+  set, deterministic generator and hardware documentation.
 
 ## In Progress
 
@@ -166,7 +181,8 @@ field-node digital mechanical model without inventing unresolved dimensions.
 
 ## Resume Prompt
 
-Continue field-node CAD from `CAD-R0.7 / MECH-R0.7-DRAFT`: fit a `272 x 193 mm`
+Continue field-node CAD from `CAD-R0.8 / MECH-R0.8-DRAFT`: use the four-page
+connection review package to collect interface measurements; fit a `272 x 193 mm`
 template and transfer H1-H8; measure G1/G2/RF1/RF2 samples, SWM-10W holes,
 enclosure rear mounts, BT-760 and BT-M87SF. Replace nominal fasteners, clamps,
 P-clips, cable OD/bend radii and interface envelopes with physical data,
