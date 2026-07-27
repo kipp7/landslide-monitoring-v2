@@ -25,9 +25,33 @@ except ImportError:
 
 
 FIELD_LINK_VERSION = 1
+FIELD_LINK_TYPE_COMMAND = 2
+FIELD_LINK_TYPE_CONTROL = 4
 FIELD_LINK_TYPE_RTCM = 6
 RTCM_FRAGMENT_HEADER_BYTES = 42
+GNSS_PROBE_STATS_RESPONSE_BYTES = 92
 TARGET_MASKS = {"A": 0x01, "B": 0x02, "C": 0x04, "all": 0x07}
+NODE_NUMBERS = {"A": 1, "B": 2, "C": 3}
+PROBE_COUNTER_NAMES = (
+    "acceptedFragments",
+    "duplicateFragments",
+    "rejectedFragments",
+    "completedFrames",
+    "crcErrors",
+    "expiredAssemblies",
+    "capacityEvictions",
+    "ttlUnverifiedFragments",
+    "queuedFrames",
+    "queueEvictions",
+    "queueExpiredFrames",
+    "probeValidatedFrames",
+    "probeValidatedBytes",
+    "injectedFrames",
+    "injectedBytes",
+    "uartWriteErrors",
+    "uartPartialWrites",
+    "injectionDroppedFrames",
+)
 
 # The schedule reproduces the July 26 PC capture at about 880 B/s without
 # retaining site coordinates or NTRIP credentials. Frame sizes approximate the
@@ -80,11 +104,29 @@ def cobs_encode(payload: bytes) -> bytes:
     return bytes(output)
 
 
-def encode_field_link(sequence: int, payload: bytes) -> bytes:
+def cobs_decode(payload: bytes) -> bytes:
+    output = bytearray()
+    index = 0
+    while index < len(payload):
+        code = payload[index]
+        if code == 0:
+            raise ValueError("COBS frame contains an embedded delimiter")
+        index += 1
+        next_index = index + code - 1
+        if next_index > len(payload):
+            raise ValueError("COBS code exceeds the encoded frame")
+        output.extend(payload[index:next_index])
+        index = next_index
+        if code != 0xFF and index < len(payload):
+            output.append(0)
+    return bytes(output)
+
+
+def encode_field_link(sequence: int, payload: bytes, frame_type: int = FIELD_LINK_TYPE_RTCM) -> bytes:
     header = struct.pack(
         ">BBBBII",
         FIELD_LINK_VERSION,
-        FIELD_LINK_TYPE_RTCM,
+        frame_type,
         0,
         0,
         sequence & 0xFFFFFFFF,
@@ -93,6 +135,89 @@ def encode_field_link(sequence: int, payload: bytes) -> bytes:
     packet = header + payload
     crc = binascii.crc32(packet) & 0xFFFFFFFF
     return cobs_encode(packet + struct.pack(">I", crc)) + b"\x00"
+
+
+def decode_field_link(encoded: bytes) -> tuple[int, int, bytes]:
+    packet = cobs_decode(encoded)
+    if len(packet) < 16:
+        raise ValueError("field-link packet is shorter than its header and CRC")
+    version, frame_type, flags, reserved, sequence, payload_bytes = struct.unpack(
+        ">BBBBII", packet[:12]
+    )
+    if version != FIELD_LINK_VERSION or flags != 0 or reserved != 0:
+        raise ValueError("unsupported field-link header")
+    if len(packet) != 12 + payload_bytes + 4:
+        raise ValueError("field-link payload length mismatch")
+    expected_crc = struct.unpack(">I", packet[-4:])[0]
+    actual_crc = binascii.crc32(packet[:-4]) & 0xFFFFFFFF
+    if expected_crc != actual_crc:
+        raise ValueError("field-link CRC32 mismatch")
+    return frame_type, sequence, packet[12:-4]
+
+
+class FieldLinkStreamDecoder:
+    def __init__(self) -> None:
+        self._encoded = bytearray()
+        self.decode_errors = 0
+
+    def feed(self, data: bytes) -> list[tuple[int, int, bytes]]:
+        frames: list[tuple[int, int, bytes]] = []
+        for byte in data:
+            if byte != 0:
+                if len(self._encoded) >= 4096:
+                    self._encoded.clear()
+                    self.decode_errors += 1
+                else:
+                    self._encoded.append(byte)
+                continue
+            if not self._encoded:
+                continue
+            try:
+                frames.append(decode_field_link(bytes(self._encoded)))
+            except ValueError:
+                self.decode_errors += 1
+            self._encoded.clear()
+        return frames
+
+
+def encode_probe_stats_query(target: str, nonce: int) -> bytes:
+    if target not in NODE_NUMBERS or not 1 <= nonce <= 0xFFFFFFFF:
+        raise ValueError("stats query requires node A/B/C and a non-zero uint32 nonce")
+    return f"G3Q{target}{nonce:08X}".encode("ascii")
+
+
+def decode_probe_stats_response(payload: bytes) -> dict[str, Any]:
+    if len(payload) != GNSS_PROBE_STATS_RESPONSE_BYTES:
+        raise ValueError("GNSS PROBE stats payload length mismatch")
+    if payload[:3] != b"G3S" or payload[3] != 1:
+        raise ValueError("GNSS PROBE stats magic or version mismatch")
+    node_number = payload[4]
+    injection_mode = payload[5]
+    if node_number not in (1, 2, 3) or injection_mode not in (0, 1, 2):
+        raise ValueError("GNSS PROBE stats node or injection mode is invalid")
+    if payload[6:8] != b"\x00\x00":
+        raise ValueError("GNSS PROBE stats reserved bytes are non-zero")
+    nonce, snapshot_uptime_s = struct.unpack_from(">II", payload, 8)
+    if nonce == 0:
+        raise ValueError("GNSS PROBE stats nonce is zero")
+    counter_values = struct.unpack_from(">18I", payload, 16)
+    queue_high_watermark, queue_pending = struct.unpack_from(">HH", payload, 88)
+    return {
+        "responseVersion": 1,
+        "nodeNumber": node_number,
+        "injectionMode": injection_mode,
+        "nonce": nonce,
+        "snapshotUptimeS": snapshot_uptime_s,
+        "stats": {
+            **dict(zip(PROBE_COUNTER_NAMES, counter_values, strict=True)),
+            "queueHighWatermark": queue_high_watermark,
+            "queuePending": queue_pending,
+        },
+    }
+
+
+def uint32_delta(after: int, before: int) -> int:
+    return (after - before) & 0xFFFFFFFF
 
 
 def rtcm_class(message_type: int) -> int:
@@ -216,6 +341,140 @@ def write_chunked(fd: int, payload: bytes, chunk_bytes: int, chunk_delay_ms: int
             time.sleep(chunk_delay_ms / 1000.0)
 
 
+def read_field_link_frames(
+    fd: int, decoder: FieldLinkStreamDecoder, timeout_seconds: float
+) -> list[tuple[int, int, bytes]]:
+    frames: list[tuple[int, int, bytes]] = []
+    deadline = time.monotonic() + timeout_seconds
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return frames
+        readable, _, _ = select.select([fd], [], [], remaining)
+        if not readable:
+            return frames
+        try:
+            chunk = os.read(fd, 4096)
+        except BlockingIOError:
+            continue
+        if chunk:
+            frames.extend(decoder.feed(chunk))
+
+
+def query_probe_stats(
+    fd: int,
+    decoder: FieldLinkStreamDecoder,
+    target: str,
+    field_sequence: int,
+    chunk_bytes: int,
+    chunk_delay_ms: int,
+    timeout_seconds: float,
+    retries: int,
+) -> tuple[dict[str, Any], int]:
+    nonce = (time.time_ns() ^ (os.getpid() << 8) ^ field_sequence) & 0xFFFFFFFF
+    if nonce == 0:
+        nonce = 1
+    query = encode_probe_stats_query(target, nonce)
+    next_sequence = field_sequence
+    payload_errors = 0
+
+    for _attempt in range(retries):
+        wire = encode_field_link(next_sequence, query, FIELD_LINK_TYPE_COMMAND)
+        write_chunked(fd, wire, chunk_bytes, chunk_delay_ms)
+        next_sequence = (next_sequence + 1) & 0xFFFFFFFF
+        if next_sequence == 0:
+            next_sequence = 1
+
+        for frame_type, _sequence, payload in read_field_link_frames(
+            fd, decoder, timeout_seconds
+        ):
+            if frame_type != FIELD_LINK_TYPE_CONTROL or not payload.startswith(b"G3S"):
+                continue
+            try:
+                response = decode_probe_stats_response(payload)
+            except ValueError:
+                payload_errors += 1
+                continue
+            if response["nonce"] != nonce or response["nodeNumber"] != NODE_NUMBERS[target]:
+                continue
+            response["queryAttempts"] = _attempt + 1
+            response["payloadDecodeErrorsBeforeMatch"] = payload_errors
+            return response, next_sequence
+
+    raise TimeoutError(
+        f"node {target} did not return a matching PROBE stats response after {retries} attempts"
+    )
+
+
+def evaluate_probe_gate(
+    baseline: dict[str, Any],
+    final: dict[str, Any],
+    expected_fragments: int,
+    expected_frames: int,
+    expected_rtcm_bytes: int,
+) -> dict[str, Any]:
+    before_stats = baseline["stats"]
+    after_stats = final["stats"]
+    deltas = {
+        name: uint32_delta(after_stats[name], before_stats[name])
+        for name in PROBE_COUNTER_NAMES
+    }
+    checks: list[dict[str, Any]] = []
+
+    def exact(name: str, actual: Any, expected: Any) -> None:
+        checks.append({
+            "name": name,
+            "expected": expected,
+            "actual": actual,
+            "passed": actual == expected,
+        })
+
+    exact("baselineInjectionMode", baseline["injectionMode"], 1)
+    exact("finalInjectionMode", final["injectionMode"], 1)
+    exact("sameNode", final["nodeNumber"], baseline["nodeNumber"])
+    checks.append({
+        "name": "nodeDidNotReboot",
+        "expected": "final uptime >= baseline uptime",
+        "actual": {
+            "baseline": baseline["snapshotUptimeS"],
+            "final": final["snapshotUptimeS"],
+        },
+        "passed": final["snapshotUptimeS"] >= baseline["snapshotUptimeS"],
+    })
+    exact("baselineQueuePending", before_stats["queuePending"], 0)
+    exact("finalQueuePending", after_stats["queuePending"], 0)
+    exact("acceptedFragmentsDelta", deltas["acceptedFragments"], expected_fragments)
+    exact("completedFramesDelta", deltas["completedFrames"], expected_frames)
+    exact("ttlUnverifiedFragmentsDelta", deltas["ttlUnverifiedFragments"], expected_fragments)
+    exact("queuedFramesDelta", deltas["queuedFrames"], expected_frames)
+    exact("probeValidatedFramesDelta", deltas["probeValidatedFrames"], expected_frames)
+    exact("probeValidatedBytesDelta", deltas["probeValidatedBytes"], expected_rtcm_bytes)
+
+    for name in (
+        "duplicateFragments",
+        "rejectedFragments",
+        "crcErrors",
+        "expiredAssemblies",
+        "capacityEvictions",
+        "queueEvictions",
+        "queueExpiredFrames",
+        "injectedFrames",
+        "injectedBytes",
+        "uartWriteErrors",
+        "uartPartialWrites",
+        "injectionDroppedFrames",
+    ):
+        exact(f"{name}Delta", deltas[name], 0)
+
+    failed = [check["name"] for check in checks if not check["passed"]]
+    return {
+        "passed": not failed,
+        "failedChecks": failed,
+        "deltas": deltas,
+        "checks": checks,
+    }
+
+
 def service_is_active(service_name: str) -> bool:
     return subprocess.run(
         ["systemctl", "is-active", "--quiet", service_name], check=False
@@ -250,6 +509,10 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
     max_lateness_ms = 0.0
     message_counts: Counter[int] = Counter()
     started_mono = time.monotonic()
+    decoder = FieldLinkStreamDecoder()
+    baseline_stats: dict[str, Any]
+    final_stats: dict[str, Any]
+    counter_gate: dict[str, Any]
 
     fd = os.open(args.serial_device, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
     try:
@@ -263,6 +526,22 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
                 except BlockingIOError:
                     pass
         termios.tcflush(fd, termios.TCIOFLUSH)
+        baseline_stats, field_sequence = query_probe_stats(
+            fd,
+            decoder,
+            args.target,
+            field_sequence,
+            args.chunk_bytes,
+            args.chunk_delay_ms,
+            args.stats_timeout_seconds,
+            args.stats_retries,
+        )
+        print(
+            f"STATS_BASELINE node={args.target} mode={baseline_stats['injectionMode']} "
+            f"uptime={baseline_stats['snapshotUptimeS']} "
+            f"queue={baseline_stats['stats']['queuePending']}",
+            flush=True,
+        )
         started_mono = time.monotonic()
         last_progress_second = -1
 
@@ -309,6 +588,32 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
         termios.tcdrain(fd)
         if args.drain_ms > 0:
             time.sleep(args.drain_ms / 1000.0)
+        final_stats, field_sequence = query_probe_stats(
+            fd,
+            decoder,
+            args.target,
+            field_sequence,
+            args.chunk_bytes,
+            args.chunk_delay_ms,
+            args.stats_timeout_seconds,
+            args.stats_retries,
+        )
+        counter_gate = evaluate_probe_gate(
+            baseline_stats,
+            final_stats,
+            fragment_count,
+            sum(message_counts.values()),
+            raw_bytes,
+        )
+        print(
+            f"STATS_FINAL node={args.target} mode={final_stats['injectionMode']} "
+            f"accepted_delta={counter_gate['deltas']['acceptedFragments']} "
+            f"complete_delta={counter_gate['deltas']['completedFrames']} "
+            f"probe_delta={counter_gate['deltas']['probeValidatedFrames']} "
+            f"bytes_delta={counter_gate['deltas']['probeValidatedBytes']} "
+            f"gate={'PASS' if counter_gate['passed'] else 'FAIL'}",
+            flush=True,
+        )
     finally:
         os.close(fd)
 
@@ -328,8 +633,12 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
         "lateThresholdMs": args.late_threshold_ms,
         "maxLatenessMs": round(max_lateness_ms, 3),
         "messageTypeCounts": {str(key): value for key, value in sorted(message_counts.items())},
-        "nodeCounterGate": "pending-debug-uart",
-        "hardwareGatePassed": False,
+        "fieldLinkRxDecodeErrors": decoder.decode_errors,
+        "baselineStats": baseline_stats,
+        "finalStats": final_stats,
+        "counterGate": counter_gate,
+        "nodeCounterGate": "passed" if counter_gate["passed"] else "failed",
+        "hardwareGatePassed": counter_gate["passed"],
     }
 
 
@@ -343,6 +652,24 @@ def self_test() -> None:
     assert [len(item) for item in fragments] == [202, 132]
     wire_frames = [encode_field_link(index + 1, payload) for index, payload in enumerate(fragments)]
     assert all(item.endswith(b"\x00") for item in wire_frames)
+    query = encode_probe_stats_query("B", 0x89ABCDEF)
+    assert query == b"G3QB89ABCDEF"
+    response_payload = (
+        b"G3S"
+        + bytes((1, 2, 1, 0, 0))
+        + struct.pack(">II18IHH", 0x89ABCDEF, 1234, *range(1, 19), 19, 20)
+    )
+    decoded_response = decode_probe_stats_response(response_payload)
+    assert decoded_response["stats"]["acceptedFragments"] == 1
+    assert decoded_response["stats"]["injectionDroppedFrames"] == 18
+    assert decoded_response["stats"]["queuePending"] == 20
+    response_wire = encode_field_link(99, response_payload, FIELD_LINK_TYPE_CONTROL)
+    stream_decoder = FieldLinkStreamDecoder()
+    decoded_frames = stream_decoder.feed(response_wire[:11])
+    decoded_frames.extend(stream_decoder.feed(response_wire[11:]))
+    assert decoded_frames == [(FIELD_LINK_TYPE_CONTROL, 99, response_payload)]
+    assert stream_decoder.decode_errors == 0
+    assert uint32_delta(3, 0xFFFFFFFE) == 5
     ten_second_schedule = build_schedule(10.0)
     assert len(ten_second_schedule) == 62
     assert sum(item[2] for item in ten_second_schedule) == 8800
@@ -358,13 +685,15 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--serial-device", default="/dev/ttyS3")
     parser.add_argument("--baud", type=int, default=115200)
-    parser.add_argument("--target", choices=tuple(TARGET_MASKS), default="A")
+    parser.add_argument("--target", choices=tuple(NODE_NUMBERS), default="A")
     parser.add_argument("--duration-seconds", type=float, default=12.0)
     parser.add_argument("--fragment-data-bytes", type=int, default=160)
     parser.add_argument("--chunk-bytes", type=int, default=32)
     parser.add_argument("--chunk-delay-ms", type=int, default=15)
     parser.add_argument("--settle-ms", type=int, default=1000)
-    parser.add_argument("--drain-ms", type=int, default=1000)
+    parser.add_argument("--drain-ms", type=int, default=2000)
+    parser.add_argument("--stats-timeout-seconds", type=float, default=3.0)
+    parser.add_argument("--stats-retries", type=int, default=3)
     parser.add_argument("--late-threshold-ms", type=float, default=50.0)
     parser.add_argument("--service", default="lsmv2-field-gateway.service")
     parser.add_argument(
@@ -373,8 +702,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--report-path", default="")
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
-    if args.duration_seconds <= 0 or args.baud <= 0:
-        parser.error("duration and baud must be positive")
+    if args.duration_seconds <= 0 or args.baud <= 0 or args.stats_timeout_seconds <= 0:
+        parser.error("duration, baud and stats timeout must be positive")
+    if args.stats_retries <= 0:
+        parser.error("stats retries must be positive")
     if not 32 <= args.fragment_data_bytes <= 512:
         parser.error("fragment data bytes must be in [32, 512]")
     if args.chunk_bytes <= 0 or args.chunk_delay_ms < 0 or args.settle_ms < 0 or args.drain_ms < 0:
@@ -399,8 +730,8 @@ def main() -> int:
         "serviceRestored": not service_was_active,
     }
     report: dict[str, Any] = {
-        "schemaVersion": 1,
-        "experiment": "xls1-gnss-v31-probe-sender",
+        "schemaVersion": 2,
+        "experiment": "xls1-gnss-v31-probe-closed-loop",
         "startedAt": utc_now(),
         "source": {
             "mode": "credential-free-synthetic-from-measured-summary",
@@ -418,6 +749,10 @@ def main() -> int:
             "fragmentDataBytes": args.fragment_data_bytes,
             "chunkBytes": args.chunk_bytes,
             "chunkDelayMs": args.chunk_delay_ms,
+            "settleMs": args.settle_ms,
+            "drainMs": args.drain_ms,
+            "statsTimeoutSeconds": args.stats_timeout_seconds,
+            "statsRetries": args.stats_retries,
         },
     }
 
@@ -469,15 +804,24 @@ def main() -> int:
         json.dumps(report, ensure_ascii=True, indent=2) + "\n", encoding="utf-8"
     )
     os.replace(temporary_path, report_path)
+    result = report.get("result", {})
     summary = {
         "reportPath": str(report_path),
-        **report.get("result", {}),
+        "target": result.get("target"),
+        "framesSent": result.get("framesSent"),
+        "fragmentsSent": result.get("fragmentsSent"),
+        "hardwareGatePassed": result.get("hardwareGatePassed", False),
+        "failedChecks": result.get("counterGate", {}).get("failedChecks", []),
         **recovery,
     }
     if "fatalError" in report:
         summary["fatalError"] = report["fatalError"]
     print(json.dumps(summary, separators=(",", ":")), flush=True)
-    return 0 if "fatalError" not in report and recovery.get("serviceRestored") else 1
+    return 0 if (
+        "fatalError" not in report
+        and result.get("hardwareGatePassed") is True
+        and recovery.get("serviceRestored")
+    ) else 1
 
 
 if __name__ == "__main__":

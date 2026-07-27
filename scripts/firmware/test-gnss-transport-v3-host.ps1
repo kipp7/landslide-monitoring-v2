@@ -13,8 +13,14 @@ $injectionHeader = Join-Path $repoRoot "firmware\rk2206-xl01\drivers\xl01\gnss_r
 $injectionImplementation = Join-Path $repoRoot "firmware\rk2206-xl01\drivers\xl01\gnss_rtcm_injection.c"
 $appConfig = Join-Path $repoRoot "firmware\rk2206-xl01\config\app_config.h"
 $sourceTest = Join-Path $repoRoot "firmware\rk2206-xl01\tests\gnss_transport_v3_host_test.c"
+$probeProtocolHeader = Join-Path $repoRoot "firmware\rk2206-xl01\app\gnss_probe_stats_protocol.h"
+$probeProtocolImplementation = Join-Path $repoRoot "firmware\rk2206-xl01\app\gnss_probe_stats_protocol.c"
+$probeProtocolTest = Join-Path $repoRoot "firmware\rk2206-xl01\tests\gnss_probe_stats_protocol_host_test.c"
 
-foreach ($required in @($sourceHeader, $sourceImplementation, $injectionHeader, $injectionImplementation, $appConfig, $sourceTest)) {
+foreach ($required in @(
+  $sourceHeader, $sourceImplementation, $injectionHeader, $injectionImplementation,
+  $appConfig, $sourceTest, $probeProtocolHeader, $probeProtocolImplementation, $probeProtocolTest
+)) {
   if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
     throw "Required GNSS transport source is missing: $required"
   }
@@ -25,7 +31,7 @@ if ($LASTEXITCODE -ne 0) {
   throw "Docker container is unavailable: $ContainerName"
 }
 
-docker exec $ContainerName mkdir -p "$containerRoot/drivers/xl01" "$containerRoot/config" "$containerRoot/tests"
+docker exec $ContainerName mkdir -p "$containerRoot/drivers/xl01" "$containerRoot/config" "$containerRoot/app" "$containerRoot/tests"
 if ($LASTEXITCODE -ne 0) {
   throw "Failed to create the container test directory"
 }
@@ -36,6 +42,9 @@ docker cp $injectionHeader "${ContainerName}:${containerRoot}/drivers/xl01/gnss_
 docker cp $injectionImplementation "${ContainerName}:${containerRoot}/drivers/xl01/gnss_rtcm_injection.c"
 docker cp $appConfig "${ContainerName}:${containerRoot}/config/app_config.h"
 docker cp $sourceTest "${ContainerName}:${containerRoot}/tests/gnss_transport_v3_host_test.c"
+docker cp $probeProtocolHeader "${ContainerName}:${containerRoot}/app/gnss_probe_stats_protocol.h"
+docker cp $probeProtocolImplementation "${ContainerName}:${containerRoot}/app/gnss_probe_stats_protocol.c"
+docker cp $probeProtocolTest "${ContainerName}:${containerRoot}/tests/gnss_probe_stats_protocol_host_test.c"
 if ($LASTEXITCODE -ne 0) {
   throw "Failed to copy GNSS transport sources into the container"
 }
@@ -51,6 +60,12 @@ gcc -std=c99 -Wall -Wextra -Werror -O2 \
   tests/gnss_transport_v3_host_test.c \
   -o gnss_transport_v3_host_test
 ./gnss_transport_v3_host_test
+gcc -std=c99 -Wall -Wextra -Werror -O2 \
+  -DGNSS_RTCM_INJECTION_MODE=GNSS_RTCM_INJECTION_PROBE \
+  app/gnss_probe_stats_protocol.c \
+  tests/gnss_probe_stats_protocol_host_test.c \
+  -o gnss_probe_stats_protocol_host_test
+./gnss_probe_stats_protocol_host_test
 "@
 
 docker exec $ContainerName bash -lc $compile

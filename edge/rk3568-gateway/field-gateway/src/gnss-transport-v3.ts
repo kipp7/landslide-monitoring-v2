@@ -3,6 +3,8 @@ export const GNSS_V3_COMMON_HEADER_BYTES = 28;
 export const GNSS_CORE_V3_PAYLOAD_BYTES = 98;
 export const RTCM_FRAGMENT_V3_HEADER_BYTES = 42;
 export const RTCM3_MAX_FRAME_BYTES = 1029;
+export const GNSS_PROBE_STATS_QUERY_V1_BYTES = 12;
+export const GNSS_PROBE_STATS_RESPONSE_V1_BYTES = 92;
 
 export const GNSS_V3_TARGET_GATEWAY = 0;
 export const GNSS_V3_TARGET_NODE_A = 1 << 0;
@@ -81,6 +83,38 @@ export type RtcmFrameInfo = {
   crc24q: number;
 };
 
+export type GnssProbeStatsV1 = {
+  acceptedFragments: number;
+  duplicateFragments: number;
+  rejectedFragments: number;
+  completedFrames: number;
+  crcErrors: number;
+  expiredAssemblies: number;
+  capacityEvictions: number;
+  ttlUnverifiedFragments: number;
+  queuedFrames: number;
+  queueEvictions: number;
+  queueExpiredFrames: number;
+  probeValidatedFrames: number;
+  probeValidatedBytes: number;
+  injectedFrames: number;
+  injectedBytes: number;
+  uartWriteErrors: number;
+  uartPartialWrites: number;
+  injectionDroppedFrames: number;
+  queueHighWatermark: number;
+  queuePending: number;
+};
+
+export type GnssProbeStatsResponseV1 = {
+  responseVersion: 1;
+  nodeNumber: 1 | 2 | 3;
+  injectionMode: 0 | 1 | 2;
+  nonce: number;
+  snapshotUptimeS: number;
+  stats: GnssProbeStatsV1;
+};
+
 const UINT8_MAX = 0xff;
 const UINT16_MAX = 0xffff;
 const UINT32_MAX = 0xffffffff;
@@ -98,6 +132,59 @@ function assertSafeIntegerRange(name: string, value: number, minimum: number, ma
   if (!Number.isSafeInteger(value) || value < minimum || value > maximum) {
     throw new Error(`${name} must be a safe integer in [${String(minimum)}, ${String(maximum)}]`);
   }
+}
+
+export function encodeGnssProbeStatsQueryV1(nodeNumber: 1 | 2 | 3, nonce: number): Buffer {
+  assertIntegerRange("nodeNumber", nodeNumber, 1, 3);
+  assertIntegerRange("nonce", nonce, 1, UINT32_MAX);
+  const nodeLabel = String.fromCharCode(0x40 + nodeNumber);
+  const nonceHex = (nonce >>> 0).toString(16).toUpperCase().padStart(8, "0");
+  return Buffer.from(`G3Q${nodeLabel}${nonceHex}`, "ascii");
+}
+
+export function decodeGnssProbeStatsResponseV1(input: Buffer): GnssProbeStatsResponseV1 {
+  if (input.length !== GNSS_PROBE_STATS_RESPONSE_V1_BYTES) {
+    throw new Error(
+      `GNSS PROBE stats payload length mismatch: expected=${String(GNSS_PROBE_STATS_RESPONSE_V1_BYTES)} actual=${String(input.length)}`
+    );
+  }
+  if (input.subarray(0, 3).toString("ascii") !== "G3S" || input.readUInt8(3) !== 1) {
+    throw new Error("GNSS PROBE stats magic or version mismatch");
+  }
+  const nodeNumber = input.readUInt8(4);
+  const injectionMode = input.readUInt8(5);
+  if (nodeNumber < 1 || nodeNumber > 3 || injectionMode > 2) {
+    throw new Error("GNSS PROBE stats node or injection mode is invalid");
+  }
+  if (input.readUInt16BE(6) !== 0) {
+    throw new Error("GNSS PROBE stats reserved bytes must be zero");
+  }
+  const nonce = input.readUInt32BE(8);
+  if (nonce === 0) {
+    throw new Error("GNSS PROBE stats nonce must be non-zero");
+  }
+  const counterNames: Array<keyof Omit<GnssProbeStatsV1, "queueHighWatermark" | "queuePending">> = [
+    "acceptedFragments", "duplicateFragments", "rejectedFragments", "completedFrames",
+    "crcErrors", "expiredAssemblies", "capacityEvictions", "ttlUnverifiedFragments",
+    "queuedFrames", "queueEvictions", "queueExpiredFrames", "probeValidatedFrames",
+    "probeValidatedBytes", "injectedFrames", "injectedBytes", "uartWriteErrors",
+    "uartPartialWrites", "injectionDroppedFrames"
+  ];
+  const counters = Object.fromEntries(
+    counterNames.map((name, index) => [name, input.readUInt32BE(16 + index * 4)])
+  ) as Omit<GnssProbeStatsV1, "queueHighWatermark" | "queuePending">;
+  return {
+    responseVersion: 1,
+    nodeNumber: nodeNumber as 1 | 2 | 3,
+    injectionMode: injectionMode as 0 | 1 | 2,
+    nonce,
+    snapshotUptimeS: input.readUInt32BE(12),
+    stats: {
+      ...counters,
+      queueHighWatermark: input.readUInt16BE(88),
+      queuePending: input.readUInt16BE(90)
+    }
+  };
 }
 
 function encodeCommonHeader(input: GnssTransportHeaderV3, output: Buffer): void {

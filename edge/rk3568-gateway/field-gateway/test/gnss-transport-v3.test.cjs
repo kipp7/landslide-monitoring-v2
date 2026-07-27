@@ -12,12 +12,14 @@ const {
   GNSS_V3_TARGET_ALL_NODES,
   GNSS_V3_TARGET_NODE_B,
   RTCM_FRAGMENT_V3_HEADER_BYTES,
+  decodeGnssProbeStatsResponseV1,
   RtcmReassemblerV3,
   crc24q,
   decodeGnssCoreV3,
   decodeRtcmFragmentV3,
   defaultRtcmTtlMs,
   encodeGnssCoreV3,
+  encodeGnssProbeStatsQueryV1,
   encodeRtcmFragmentV3,
   fragmentRtcmFrameV3,
   inspectRtcm3Frame,
@@ -85,6 +87,34 @@ function gnssCoreFixture() {
     referenceStationId: 23
   };
 }
+
+test("GNSS PROBE stats query and response match the RK2206 golden vector", () => {
+  const query = encodeGnssProbeStatsQueryV1(2, 0x89abcdef);
+  assert.equal(query.toString("ascii"), "G3QB89ABCDEF");
+  assert.throws(() => encodeGnssProbeStatsQueryV1(2, 0), /nonce/);
+
+  const payload = Buffer.from(
+    "473353010201000089abcdef000004d2" +
+      Array.from({ length: 18 }, (_, index) => (index + 1).toString(16).padStart(8, "0")).join("") +
+      "00130014",
+    "hex"
+  );
+  const decoded = decodeGnssProbeStatsResponseV1(payload);
+  assert.equal(decoded.nodeNumber, 2);
+  assert.equal(decoded.injectionMode, 1);
+  assert.equal(decoded.nonce, 0x89abcdef);
+  assert.equal(decoded.snapshotUptimeS, 1234);
+  assert.equal(decoded.stats.acceptedFragments, 1);
+  assert.equal(decoded.stats.injectionDroppedFrames, 18);
+  assert.equal(decoded.stats.queueHighWatermark, 19);
+  assert.equal(decoded.stats.queuePending, 20);
+
+  const wire = encodeFieldLinkFrame({ frameType: "control", sequence: 72, payloadBytes: payload });
+  const result = createCobsCrcFieldLinkAssembler().push(wire);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.payloads[0].frameType, "control");
+  assert.deepEqual(decodeGnssProbeStatsResponseV1(result.payloads[0].rawPayloadBytes), decoded);
+});
 
 test("GNSS_CORE V3 preserves nanodegrees and survives the binary field-link", () => {
   const fixture = gnssCoreFixture();

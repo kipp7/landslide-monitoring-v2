@@ -34,12 +34,15 @@ $syncFiles = @(
   "drivers\xl01\gnss_rtcm_injection.c",
   "drivers\xl01\gnss_rtcm_injection.h",
   "drivers\xl01\xl01_driver.c",
+  "drivers\xl01\xl01_driver.h",
   "drivers\sensors\gps_driver.c",
   "drivers\sensors\gps_driver.h",
   "app\compact_telemetry_builder.c",
   "app\compact_telemetry_builder.h",
   "app\compact_poll_command.c",
-  "app\compact_poll_command.h"
+  "app\compact_poll_command.h",
+  "app\gnss_probe_stats_protocol.c",
+  "app\gnss_probe_stats_protocol.h"
 )
 
 $nodes = @(

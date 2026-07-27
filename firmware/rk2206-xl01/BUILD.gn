@@ -12,6 +12,7 @@ static_library("xl01_landslide_monitor") {
         "app/compact_telemetry_builder.c",
         "app/compact_poll_command.c",
         "app/command_ack_builder.c",
+        "app/gnss_probe_stats_protocol.c",
         "app/shared_port_scheduler.c",
         
         # Utilities

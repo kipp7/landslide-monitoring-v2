@@ -74,6 +74,7 @@
 #include "../app/telemetry_envelope_builder.h"
 #include "../app/compact_telemetry_builder.h"
 #include "../app/compact_poll_command.h"
+#include "../app/gnss_probe_stats_protocol.h"
 
 // Keep the local command/runtime path decoupled from the legacy monolithic
 // header, which defines a conflicting SensorData shape for another sample.
@@ -120,7 +121,7 @@ static char g_last_trusted_time_ts[40] = "";
 static char g_last_trusted_time_source[32] = "";
 static volatile uint32_t g_last_platform_command_tick = 0;
 static volatile int g_field_link_recovery_requested = 0;
-#define FW_RX_DIAG_MARKER "fw-field-link-recovery-compact-broadcast-v2-20260726"
+#define FW_RX_DIAG_MARKER "fw-gnss-rtk-v31-probe-stats-20260727"
 bool g_cloud_motor_enabled = false;
 int g_cloud_motor_speed = 0;
 MotorDirection g_cloud_motor_direction = MOTOR_DIRECTION_STOP;
@@ -673,6 +674,73 @@ static void HandleCompactBroadcastPoll(const char *command)
         LOS_Msleep(delay_ms);
     }
     g_platform_poll_latest_requested = 1;
+}
+
+static uint8_t LocalNodeNumber(void)
+{
+    const DeviceIdentity *identity = DeviceIdentity_Get();
+
+    if (identity == NULL || identity->legacy_node_label == NULL ||
+        identity->legacy_node_label[1] != '\0') {
+        return 0U;
+    }
+    if (identity->legacy_node_label[0] == 'A') {
+        return 1U;
+    }
+    if (identity->legacy_node_label[0] == 'B') {
+        return 2U;
+    }
+    if (identity->legacy_node_label[0] == 'C') {
+        return 3U;
+    }
+    return 0U;
+}
+
+static int HandleGnssProbeStatsQuery(const char *command)
+{
+    GnssRtcmInjectionStats stats;
+    uint8_t response[GNSS_PROBE_STATS_RESPONSE_V1_BYTES];
+    uint8_t target_node = 0U;
+    uint8_t local_node;
+    uint32_t nonce = 0U;
+    int response_len;
+    int send_ret;
+
+    if (command == NULL || GnssProbeStatsQueryV1_Decode(
+            command, (int)strlen(command), &target_node, &nonce
+        ) != 0) {
+        return 0;
+    }
+
+    local_node = LocalNodeNumber();
+    if (local_node == 0U || target_node != local_node) {
+        return 1;
+    }
+
+    GnssRtcmInjection_GetStats(&stats);
+    response_len = GnssProbeStatsResponseV1_Encode(
+        &stats,
+        local_node,
+        (uint8_t)GNSS_RTCM_INJECTION_MODE,
+        nonce,
+        (uint32_t)SensorData_GetUptimeSnapshot(),
+        response,
+        sizeof(response)
+    );
+    if (response_len != GNSS_PROBE_STATS_RESPONSE_V1_BYTES) {
+        printf("[RTCM STATS] encode failed node=%u\n", (unsigned int)local_node);
+        return 1;
+    }
+
+    send_ret = XL01_SendControlPayload(response, response_len);
+    printf(
+        "[RTCM STATS] node=%u nonce=%08X bytes=%d send=%d\n",
+        (unsigned int)local_node,
+        (unsigned int)nonce,
+        response_len,
+        send_ret
+    );
+    return 1;
 }
 
 static void HandlePlatformCommand(const char *commandJson)
@@ -1366,7 +1434,9 @@ static void* DataProcessTask(const char* arg)
         int processed = XL01_ProcessReceivedData(&g_stats);
 
         while (XL01_TryDequeuePlatformCommand(g_process_command_json, sizeof(g_process_command_json)) > 0) {
-            HandlePlatformCommand(g_process_command_json);
+            if (!HandleGnssProbeStatsQuery(g_process_command_json)) {
+                HandlePlatformCommand(g_process_command_json);
+            }
             processed = 1;
         }
 

@@ -16,6 +16,7 @@
 #include "../../config/app_config.h"
 #include "../../app/compact_poll_command.h"
 #include "../../app/device_identity.h"
+#include "../../app/gnss_probe_stats_protocol.h"
 #include "../../utils/fifo.h"
 #include "field_link_frame.h"
 #include "gnss_rtcm_injection.h"
@@ -567,7 +568,10 @@ static void HandleFieldLinkMessage(const FieldLinkFrameMessage *message, Statist
 
     if (message->type == FIELD_LINK_FRAME_TYPE_COMMAND) {
         if (IsPlatformCommandPayload(message->payload) ||
-            CompactPollCommand_IsValid(message->payload, message->payload_len)) {
+            CompactPollCommand_IsValid(message->payload, message->payload_len) ||
+            GnssProbeStatsQueryV1_Decode(
+                message->payload, message->payload_len, NULL, NULL
+            ) == 0) {
             if (EnqueuePlatformCommandPayload(message->payload, message->payload_len, stats) > 0) {
 #if PLATFORM_COMMAND_RX_LOG_MODE
                 if (stats != NULL) {
@@ -887,6 +891,14 @@ int XL01_SendPlatformCommandAck(const char *data, int len)
 int XL01_SendPlatformCommand(const char *data, int len)
 {
     return XL01_SendTypedPayload(FIELD_LINK_FRAME_TYPE_COMMAND, data, len);
+}
+
+int XL01_SendControlPayload(const void *data, int len)
+{
+    if (data == NULL || len <= 0) {
+        return -1;
+    }
+    return XL01_SendTypedPayload(FIELD_LINK_FRAME_TYPE_CONTROL, (const char *)data, len);
 }
 
 void XL01_PollReceive(void)

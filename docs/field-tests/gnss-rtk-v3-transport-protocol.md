@@ -1,6 +1,6 @@
 # GNSS RTK V3.1 Transport Protocol
 
-Status: offline protocol foundation. This document does not claim that the DL-XLS1/XL01 mixed-load gate has passed.
+Status: protocol and RK3568 closed-loop PROBE tooling implemented. This document does not claim that the newly packaged firmware has passed the DL-XLS1/XL01 hardware gate until A/B/C are flashed and measured.
 
 ## Compatibility Boundary
 
@@ -113,6 +113,44 @@ Only the existing GPS poll task accesses the GNSS UART. The XL01 receive path ca
 The current RK2206 build has monotonic time but no independently trusted absolute Unix clock. It therefore enforces reassembly and local queue age while incrementing `ttl_unverified_fragments`; the gateway remains responsible for absolute generated-time filtering. `LIVE` must not be field-enabled until this limitation and the mixed-load gate are explicitly accepted.
 
 Exposed counters include accepted/completed/duplicate/rejected fragments, CRC errors, expired assemblies, capacity evictions, TTL-unverified fragments, queue depth/high-water/eviction/expiration, probe-validated frames, injected bytes, partial writes and injection drops.
+
+## RK3568 Closed-Loop PROBE Statistics
+
+The hardware gate does not require a PC debug UART. RK3568 sends a fixed 12-byte ASCII query as field-link `command=2`:
+
+```text
+G3Q + node letter A/B/C + 8 uppercase hexadecimal nonce
+```
+
+For example, `G3QB89ABCDEF` asks node B for a snapshot. The nonce must be non-zero. All nodes receive the command, but only the addressed node responds. A valid query is first queued by the XL01 receive path and is handled by the normal data-processing task; the UART receive callback never transmits a response.
+
+The node returns a fixed 92-byte binary payload as field-link `control=4`. The outer COBS/CRC32 frame protects the whole response:
+
+| Offset | Bytes | Field |
+| ---: | ---: | --- |
+| 0 | 3 | ASCII `G3S` |
+| 3 | 1 | response version `1` |
+| 4 | 1 | node number A/B/C = `1/2/3` |
+| 5 | 1 | injection mode `DISABLED/PROBE/LIVE = 0/1/2` |
+| 6 | 2 | reserved, zero |
+| 8 | 4 | echoed nonce |
+| 12 | 4 | node uptime at snapshot, seconds |
+| 16 | 72 | 18 big-endian uint32 counters in the order below |
+| 88 | 2 | queue high watermark |
+| 90 | 2 | current queue depth |
+
+Counter order is: accepted, duplicate, rejected, completed, CRC errors, expired assemblies, capacity evictions, TTL-unverified fragments, queued frames, queue evictions, queue-expired frames, PROBE-validated frames, PROBE-validated bytes, injected frames, injected bytes, UART write errors, UART partial writes and injection drops.
+
+The RK3568 tool queries once before traffic and once after the drain interval. It computes uint32 wrap-safe deltas, so old accumulated counters do not require a node reboot. A PROBE run passes only when:
+
+- firmware reports `PROBE` in both snapshots and node uptime does not move backwards;
+- accepted and TTL-unverified fragment deltas exactly equal sent fragments;
+- completed, queued and PROBE-validated frame deltas exactly equal sent frames;
+- PROBE-validated byte delta exactly equals raw RTCM bytes;
+- baseline and final queue depth are zero;
+- duplicate, reject, CRC, expiration, eviction, injection and UART-write error deltas are all zero.
+
+Any missing statistics response is a failed gate, not an inconclusive successful send. `PROBE` still never writes RTCM to UM220.
 
 ## Capacity Gate
 

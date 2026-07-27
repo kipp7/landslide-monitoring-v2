@@ -46,6 +46,11 @@ int XL01_SendPlatformCommandAck(const char *data, int len);
 int XL01_SendPlatformCommand(const char *data, int len);
 
 /**
+ * Send a binary control payload toward the shared link.
+ */
+int XL01_SendControlPayload(const void *data, int len);
+
+/**
  * Poll UART for received data (call from high-priority task)
  */
 void XL01_PollReceive(void);

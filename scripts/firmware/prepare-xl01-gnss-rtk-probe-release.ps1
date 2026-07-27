@@ -2,7 +2,7 @@
 param(
   [string]$SdkRoot = "F:\2\openharmony\txsmartropenharmony",
   [string]$ContainerName = "openharmony-dev",
-  [string]$ReleaseDirectory = "F:\2\openharmony\rk2206_firmware_releases\xl01_gnss_rtk_v31_probe_20260726",
+  [string]$ReleaseDirectory = "F:\2\openharmony\rk2206_firmware_releases\xl01_gnss_rtk_v31_probe_stats_20260727",
   [string]$RollbackDirectory = "F:\2\openharmony\rk2206_firmware_releases\xl01_one_second_poll_v2_20260719"
 )
 
@@ -157,9 +157,9 @@ Directory layout:
 - manifest.json and SHA256SUMS.txt: identity and integrity evidence.
 
 Flash order:
-1. Flash node A only and complete the single-node PROBE gate.
-2. Keep B and C on the current stable firmware until A passes.
-3. Flash B and C only for the approved three-node PROBE gate.
+1. Flash A/B/C from their matching directories in one maintenance operation.
+2. Power all three nodes and verify their identities remain A/B/C.
+3. Run the RK3568 closed-loop gate against A first, then B and C.
 
 Important:
 - Use the same proven HiBurn image/address procedure as the previous release.
@@ -176,7 +176,7 @@ $sourceCommit
   Write-Utf8NoBom -Path (Join-Path $releaseRoot "README.txt") -Text ($readme + [Environment]::NewLine)
 
   Write-Host "PROBE release ready: $releaseRoot"
-  Write-Host "Flash node A first; B/C remain rollback-safe until A passes."
+  Write-Host "Flash A/B/C from their matching directories, then run the RK3568 gate A -> B -> C."
 } catch {
   if (Test-Path -LiteralPath $releaseRoot -PathType Container) {
     $releasePath = [System.IO.Path]::GetFullPath($releaseRoot)
