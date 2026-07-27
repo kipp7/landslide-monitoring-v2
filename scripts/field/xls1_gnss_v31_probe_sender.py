@@ -519,16 +519,21 @@ def build_packet_rate_schedule(
 
 
 def build_um220_shaped_schedule(
-    duration_seconds: float, include_qzss: bool = True
+    duration_seconds: float,
+    include_qzss: bool = True,
+    qzss_rate_hz: float = 1.0,
 ) -> list[tuple[float, int, int]]:
     schedule: list[tuple[float, int, int]] = []
     for second in range(math.ceil(duration_seconds)):
-        events = [
-            event for event in UM220_SHAPED_EVENTS if include_qzss or event[1] != 1114
-        ]
-        if second % 10 == 0:
-            events.append((0.20, 1005, 100))
+        events = [event for event in UM220_SHAPED_EVENTS if event[1] != 1114]
+        qzss_due = include_qzss and (
+            qzss_rate_hz == 1.0 or (qzss_rate_hz == 0.5 and second % 2 == 0)
+        )
+        if qzss_due:
+            events.append((0.80, 1114, 90))
         if second % 10 == 5:
+            events.append((0.20, 1005, 100))
+        if second % 10 == 9:
             events.append((0.20, 1033, 100))
         for offset, message_type, frame_bytes in events:
             due = second + offset
@@ -547,7 +552,9 @@ def build_schedule(args: argparse.Namespace) -> list[tuple[float, int, int]]:
         )
     if args.profile == "um220-shaped":
         return build_um220_shaped_schedule(
-            args.duration_seconds, include_qzss=args.um220_include_qzss
+            args.duration_seconds,
+            include_qzss=args.um220_include_qzss,
+            qzss_rate_hz=args.um220_qzss_rate_hz,
         )
     return build_measured_mix_schedule(args.duration_seconds)
 
@@ -764,6 +771,12 @@ def self_test() -> None:
     assert Counter(item[1] for item in um220_schedule) == Counter(
         {1124: 10, 1074: 10, 1094: 10, 1114: 10, 1005: 1, 1033: 1}
     )
+    um220_half_qzss_schedule = build_um220_shaped_schedule(10.0, qzss_rate_hz=0.5)
+    assert len(um220_half_qzss_schedule) == 37
+    assert sum(item[2] for item in um220_half_qzss_schedule) == 4950
+    assert Counter(item[1] for item in um220_half_qzss_schedule) == Counter(
+        {1124: 10, 1074: 10, 1094: 10, 1114: 5, 1005: 1, 1033: 1}
+    )
     um220_essential_schedule = build_um220_shaped_schedule(10.0, include_qzss=False)
     assert len(um220_essential_schedule) == 32
     assert sum(item[2] for item in um220_essential_schedule) == 4500
@@ -791,6 +804,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--packet-message-type", type=int, default=1124)
     parser.add_argument(
         "--um220-include-qzss", action=argparse.BooleanOptionalAction, default=True
+    )
+    parser.add_argument(
+        "--um220-qzss-rate-hz", type=float, choices=(0.0, 0.5, 1.0), default=1.0
     )
     parser.add_argument("--fragment-data-bytes", type=int, default=160)
     parser.add_argument("--chunk-bytes", type=int, default=32)
@@ -883,6 +899,9 @@ def main() -> int:
             ),
             "um220IncludeQzss": (
                 args.um220_include_qzss if args.profile == "um220-shaped" else None
+            ),
+            "um220QzssRateHz": (
+                args.um220_qzss_rate_hz if args.profile == "um220-shaped" else None
             ),
             "fragmentDataBytes": args.fragment_data_bytes,
             "chunkBytes": args.chunk_bytes,
