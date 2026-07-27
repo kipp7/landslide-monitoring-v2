@@ -37,18 +37,21 @@ status: active
 - 2026-07-27 已实现 RK3568-only 闭环统计协议：`command=2` 携带 `G3Q + A/B/C + 8 hex nonce`，目标 RK2206 在 DataProcessTask 中取计数快照并以 `control=4` 回传 92 字节 `G3S` 二进制响应。接收回调只入队，不发送；所有模式均可报告自身模式，`PROBE` 路径仍不写 UM220。
 - Python 发送器已升级为前后快照门禁，使用 COBS/CRC32 接收解码和 uint32 wrap-safe 差值，严格核对本轮分片、完整帧、排队帧、PROBE 帧/字节，并要求 CRC、拒绝、淘汰、注入和 UART 写入错误为 0。缺少响应或模式不是 PROBE 均直接失败，不再依赖 PC 调试 UART。
 - C99 主机测试、Python 3.14 自检、field-gateway 10 项测试/lint，以及 A 节点 `DISABLED/PROBE/LIVE` 三种 OpenHarmony 全量交叉编译均通过。三个模式只做构建证明，未烧录或启用 `LIVE`；共享 SDK 样例已恢复原版本。
+- 源码提交 `50c3ec3becf35a79279ddb0100a621e226c8944a` 已推送并与远端 `feat/gnss-rtk-v31-transport` 一致。基于该提交独立全量构建 A/B/C，发布目录为 `F:\2\openharmony\rk2206_firmware_releases\xl01_gnss_rtk_v31_probe_stats_20260727`；未覆盖 2026-07-26 旧包或回滚包。
+- 发布清单固定 `probe`、固件标记 `fw-gnss-rtk-v31-probe-stats-20260727`，9 个二进制独立 SHA256 复算全部匹配。A/B/C `Firmware.img` SHA256 分别为 `263407126151346ce1ac57661c66849adb0ac185a81b4b931dbbe3420b77f941`、`306c60207476524f2de15f00b29bae427482a87df3697d412c313d3e08dd4a55`、`e90103cf03c1bbecd79616a173bc98af1278c03527628f7e5337ad786a470a31`；各节点 liteos 只包含自身 UUID/安装标签，loader 三份哈希一致。
+- 新版闭环发送器已部署到 RK3568 `192.168.124.179` 的 `/usr/local/bin/xls1_gnss_v31_probe_sender.py`。RK3568 Python 3.10 自检通过，部署文件与本地 SHA256 一致，`lsmv2-field-gateway.service` 仍为 active；未对尚未烧录的新固件执行硬件门禁流量。
 - 本 checkpoint 和提交均不包含 CORS 主机、账号、密码、真实坐标或现场原始日志。
 
 ## In Progress
 
-- 软件边界、离线容量初筛、旧 A/B/C PROBE 烧录、RK3568 到 A 的发送基线和新闭环统计软件均已完成。当前节点仍是 2026-07-26 旧包，必须先统一刷入待生成的 2026-07-27 PROBE-stats A/B/C 包；在此之前旧固件不会响应统计查询，单节点硬件门禁仍未通过。
+- 软件边界、离线容量初筛、RK3568 到 A 的旧发送基线、新闭环统计软件、A/B/C 发布包和 RK3568 部署均已完成。当前节点仍是 2026-07-26 旧包，必须先统一刷入已生成的 2026-07-27 PROBE-stats A/B/C 包；在此之前旧固件不会响应统计查询，单节点硬件门禁仍未通过。
 - RK2206 当前没有独立可信的 Unix 时钟。节点可执行 1500 ms 重组超时和最多 3000 ms 本地队列龄，但绝对生成时间 TTL 只能计为 `ttl_unverified`，由 RK3568 先做绝对新鲜度过滤。
 - 现有 GPS 驱动已阻止 RMC 状态错误设置 Fixed，并公开原始 GGA quality；完整 GGA/GSA/GST/GSV/RMC/ZDA 定点解析和 `GNSS_CORE` 1 Hz 上送尚未实现。
 
 ## Next Actions
 
 - 保留本地报告 `docs/reports/xls1-gnss-v31-capacity-20260726.json` 作为可再生证据；原始 RTCM 抓包降为可选精化，不再作为进入单节点 `PROBE` 的阻塞项。
-- 从已提交源码生成不覆盖旧包的 `xl01_gnss_rtk_v31_probe_stats_20260727` A/B/C 发布目录，核验各节点 UUID、安装标签、固件标记、PROBE 字符串和 9 个二进制 SHA256，再由用户一次维护操作统一烧录 A/B/C。
+- 由用户从 `xl01_gnss_rtk_v31_probe_stats_20260727` 的 A/B/C 对应目录执行一次维护操作统一烧录；不要混用三个节点的 `Firmware.img`/`liteos.bin`。
 - 烧录后无需接电脑调试 UART。SSH RK3568，部署新版发送器并对 A 执行 `32B/15ms`；脚本应自动核对本轮理论值 `accepted=100`、`complete=76`、`probe=76`、`probe_bytes=10720`、`ttl_unverified=100`，以及所有拒绝/CRC/淘汰/注入/写错误为 0。
 - A 的 `32B/15ms` 闭环通过后测试 `64B/5ms`，然后按相同方式验证 B/C。不得因为节点在线或 RK3568 写串口成功而跳过节点计数门禁。
 - 硬件扫参按 `32B/15ms -> 64B/5ms -> 128B/0ms` 顺序，后一个候选只在前一个没有帧损坏、旧队列或控制延迟时进入。

@@ -22,7 +22,8 @@ status: active
 - `4ed2ce5b` 已完成 V3.1 `GNSS_CORE`/RTCM 有界协议；`e00107ed` 已完成默认关闭的 RK2206 重组、队列、CRC、统计和单任务 GNSS UART 注入边界。
 - 主机测试、field-gateway 10 项回归/lint 及 `DISABLED/PROBE/LIVE` 三模式固件交叉编译均通过；A/B/C 当前仍运行 2026-07-26 的旧 `PROBE` 包并在 RK3568 健康文件中在线。
 - 已实现 RK3568-only 闭环计数：RK3568 以定向 nonce 查询节点，RK2206 在任务上下文通过 `control=4` 回传固定 92 字节统计快照；发送器以前后快照的 uint32 差值自动核对 accepted/completed/PROBE/bytes、队列、CRC 和注入错误。该路径不使用 PC 调试 UART，且 `PROBE` 不写 UM220。
-- RK3568 旧发送器已向 A 发送 12 s 的 `32B/15ms` 基线（76 帧/100 分片）且网关自动恢复，但旧固件不能回传计数，所以该结果仍不是硬件门禁通过。带统计回传的新 A/B/C `PROBE` 包待生成、统一烧录和闭环复测；三节点 60 分钟混合负载和 `LIVE` 门禁也未完成。
+- RK3568 旧发送器已向 A 发送 12 s 的 `32B/15ms` 基线（76 帧/100 分片）且网关自动恢复，但旧固件不能回传计数，所以该结果仍不是硬件门禁通过。
+- 新 A/B/C `PROBE-stats` 包已由提交 `50c3ec3b` 独立全量构建到 `F:\2\openharmony\rk2206_firmware_releases\xl01_gnss_rtk_v31_probe_stats_20260727`，9 个二进制哈希、三节点身份、固件标记和 PROBE 模式均通过复核。闭环发送器已部署到 RK3568 `/usr/local/bin/xls1_gnss_v31_probe_sender.py` 并自检通过；当前只待用户统一烧录 A/B/C 后复测。三节点 60 分钟混合负载和 `LIVE` 门禁仍未完成。
 - GNSS 常规链路采用 98 字节核心摘要，不连续上传原始 NMEA/逐星明细；专业 ECEF/ENU/Hampel/Kalman 位移链统一由 RK3568 计算。
 
 ## Constraints
@@ -37,7 +38,7 @@ status: active
 ## Plan
 
 - 捕获至少 60 s 无凭据原始 RTCM，运行 capture-driven 容量报告。
-- 生成并核验带统计回传的 A/B/C `PROBE` 包，统一烧录后只从 RK3568 `/dev/ttyS3` 依次查询和验证 A/B/C；电脑调试 UART 仅保留为底层故障诊断手段。
+- 用户从 `xl01_gnss_rtk_v31_probe_stats_20260727` 的 A/B/C 对应目录统一烧录；上电后只从 RK3568 `/dev/ttyS3` 依次查询和验证 A/B/C，电脑调试 UART 仅保留为底层故障诊断手段。
 - 按 32B/15ms、64B/5ms、128B/0ms 顺序扫参，加入 3 个 1 Hz `GNSS_CORE`、compact 环境遥测和控制命令。
 - 至少运行 60 分钟三节点门禁，目标 correction age P95 <=3 s、max <=5 s、无旧 session 注入且 Fixed 连续。
 - 通过后才启用 `LIVE`，随后实现定点 GNSS 解析、RK3568 ECEF/ENU/Hampel/Kalman、服务器 CEEMDAN 和 UI/profile。
