@@ -1,6 +1,6 @@
 # Field Node CAD
 
-Status: `CAD-R0.7 / RETAINED ROUND HARNESS + STRUCTURAL CONNECTION DETAILS / REVIEW REQUIRED`
+Status: `CAD-R0.8 / CONTEXT-RICH CONNECTION DETAILS + A3 SECTION REVIEW / NOT FOR MANUFACTURE`
 
 This directory contains the reproducible SOLIDWORKS 2022 automation setup and
 the field-node mechanical reference models. Native models are tracked with Git
@@ -145,6 +145,27 @@ the pinned R0.6 internal and external-structure assemblies:
   enclosure/panel holes, fastener grades, tube wall, cable/connector geometry,
   P-clips and GNSS/XLS1 interfaces remain `PENDING`.
 
+`models/CAD-R0.8/` is the current connection-review package. It complements the
+R0.7 integrated master by isolating four interfaces:
+
+- `FN-ASM-007A`: enclosure rear section coupon, load-distribution strap,
+  nominal M6 stack and common crossmember;
+- `FN-ASM-007B`: transparent 35 degree panel, back rails, edge clamps and
+  pivot envelopes;
+- `FN-ASM-007C`: central mast, nominal four-hole base, symmetric braces,
+  platform and GNSS envelopes;
+- `FN-ASM-007D`: perforated lower wall, RF bulkheads, M16 glands, four native
+  round cable sweeps, drip bends, P-clips and strain-relief bar.
+
+Each assembly has SLDASM/STEP, front/right/isometric PNG views and an A3
+SLDDRW/PDF/PNG sheet. `FN-DRW-008_connection-detail-review-package_R0.8.pdf`
+combines all four pages. The section coupons and nominal fasteners remain review
+geometry, not manufacturing definitions.
+
+R0.8 packages every reused R0.6/R0.7 SLDPRT into its own directory before
+opening it. SW2022 can rewrite binary view/cache data despite read-only opens,
+so assemblies must reference these revision-local copies.
+
 ## Automation
 
 The setup reuses the architecture from `jianjwu/codex_to_solidworks`, but runs
@@ -193,6 +214,28 @@ Rebuild the current structural details and retained external harness:
 ```powershell
 & "$env:LOCALAPPDATA\Codex\SolidWorksMCP\source\.venv\Scripts\python.exe" hardware/field-node/cad/automation/build_detail_assembly_r07.py
 ```
+
+Build R0.8 as isolated phases, restarting SOLIDWORKS between commands:
+
+```powershell
+$python = "$env:LOCALAPPDATA\Codex\SolidWorksMCP\source\.venv\Scripts\python.exe"
+
+0..3 | ForEach-Object {
+  Get-Process SLDWORKS -ErrorAction SilentlyContinue | Stop-Process -Force
+  & $python hardware/field-node/cad/automation/build_review_details_r08.py --assembly-index $_
+}
+
+0..3 | ForEach-Object {
+  Get-Process SLDWORKS -ErrorAction SilentlyContinue | Stop-Process -Force
+  & $python hardware/field-node/cad/automation/build_review_details_r08.py --drawing-index $_
+}
+
+Get-Process SLDWORKS -ErrorAction SilentlyContinue | Stop-Process -Force
+& $python hardware/field-node/cad/automation/build_review_details_r08.py --finalize-only
+```
+
+Do not call `CloseAllDocuments(True)` on an assembly containing released
+references. `--manifest-only` refreshes hashes without opening SOLIDWORKS.
 
 The labeled PNG is rasterized by the workstation `magick` executable from
 ImageMagick; the SVG remains the editable source overlay.

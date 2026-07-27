@@ -86,3 +86,8 @@ ASM-R07-PANEL-RAIL,CAD-R0.7 external,panel back rail envelope,320;25;20,mm,DESIG
 ASM-R07-PANEL-OFFSET,CAD-R0.7 external,panel rail normal offset from panel mid-plane,18.5,mm,DERIVED,8.5 mm panel half-thickness plus 10 mm rail half-thickness,physical frame clearance pending
 ASM-R07-CABLE-CLIPS,CAD-R0.7 harness,external cable retention points,8,count,DESIGN,P-clip envelopes attached to rails mast panel rail and lower bar,clip sizes fasteners and cable OD pending
 ASM-R07-MASTER,CAD-R0.7 assembly,master resolved component count,124,count,DERIVED,four top-level subassemblies with two pinned CAD-R0.6 dependencies,engineering review only
+ASM-R08-DETAILS,CAD-R0.8 connection review,isolated detail assemblies,4,count,DESIGN,enclosure solar GNSS and through-wall interfaces,not for manufacture
+ASM-R08-SECTIONS,CAD-R0.8 connection review,perforated section context parts,3,count,DESIGN,transparent review coupons and nominal mast base,not for manufacture
+ASM-R08-WALL-HARNESS,CAD-R0.8 connection review,native round through-wall cable sweeps,4,count,DESIGN,W7 W8 W6 W1 local connection details,actual cable and connectors pending
+ASM-R08-MAST-HOLES,CAD-R0.8 GNSS detail,nominal mast base clearance hole pattern,-32;-25;8.5|32;-25;8.5|-32;25;8.5|32;25;8.5,mm,NOMINAL,review geometry only load and interface survey pending,do not drill
+ASM-R08-PACKAGE,CAD-R0.8 drawing,A3 connection review pages,4,count,DERIVED,rendered and visually checked four-page PDF,not fabrication drawings

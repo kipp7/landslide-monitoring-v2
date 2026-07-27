@@ -7,10 +7,10 @@
 | Integrated field node | `FIELD-NODE-HW-EVT0.2-DRAFT` | Engineering reference set | Not released |
 | Existing carrier board | `R1.2` | As-built reference | Gerber exists; source documents conflict |
 | Carrier-board improvement | `R1.3-DRAFT` | Requirements | Not routed or released |
-| Competition enclosure | `MECH-R0.7-DRAFT` | 5 mm rectangular FR4, retained round harness, detailed symmetric frame interfaces and central braced GNSS mast | Physical fit, interfaces, loads and purchased samples pending |
+| Competition enclosure | `MECH-R0.8-DRAFT` | 5 mm rectangular FR4, retained round harness, symmetric frame plus four context-rich connection reviews | Physical fit, interfaces, loads and purchased samples pending |
 | Solar subsystem | `PWR-R0.1` | Candidate architecture | Charger and energy budget unqualified |
 | Prototype procurement | `BOM-R0.5` | 5 mm FR4, sample cable glands/RF bulkheads and W1-W8 purchase gates | Not a production AVL |
-| Mechanical CAD | `CAD-R0.7` | R0.6 base plus 18 detail parts, three assemblies, retained external harness and 124-component integrated master | Engineering concept; no drilling or frame fabrication release |
+| Mechanical CAD | `CAD-R0.8` | Four isolated connection-detail assemblies, seven new native parts, packaged dependencies and four-page A3 review set | Engineering review; no drilling or frame fabrication release |
 
 ## Change History
 
@@ -121,6 +121,21 @@
   The delta release contains 18 SLDPRT, three SLDASM, 21 valid STEP and 27
   nonblank PNG files; 69 manifest artifact hashes are tracked separately from
   two pinned R0.6 assembly dependencies.
+
+### 2026-07-27 - `CAD-R0.8`
+
+- Added four isolated connection assemblies: enclosure rear strap/crossmember,
+  solar panel/back rail/clamp/pivot, GNSS mast/base/brace, and lower-wall
+  bulkhead/gland/drip-loop retention.
+- Added three perforated section-review parts and four native round swept wall
+  detail cables. The lower-wall detail shows cables passing through actual
+  nominal openings and bending outside the wall.
+- Generated four native A3 SLDDRW/PDF/PNG sheets and a four-page merged review
+  PDF. Render review corrected page clipping and view-title overlap.
+- Packaged 23 R0.6/R0.7 part dependencies inside CAD-R0.8 before opening them,
+  preventing SW2022 view/cache writes from changing released source revisions.
+- Verified 77 hash-tracked artifacts, 11 valid STEP files, 23 nonblank PNGs and
+  four A3 pages. All nominal holes and fasteners remain not for manufacture.
 
 ## Versioning Rules
 
