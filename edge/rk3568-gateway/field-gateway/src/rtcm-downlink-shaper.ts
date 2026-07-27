@@ -9,6 +9,7 @@ const RTCM3_PREAMBLE = 0xd3;
 const RTCM3_MIN_FRAME_BYTES = 8;
 
 export const UM220_IV_NK_RTCM_TYPES = new Set([1005, 1033, 1074, 1094, 1114, 1124]);
+export const UM220_IV_NK_ESSENTIAL_RTCM_TYPES = new Set([1005, 1033, 1074, 1094, 1124]);
 
 export type RtcmStreamDecoderStats = {
   chunks: number;
@@ -143,7 +144,7 @@ export class Um220RtcmShaper {
     this.observationIntervalMs = config.observationIntervalMs ?? 1000;
     this.observationTtlMs = config.observationTtlMs ?? 3000;
     this.referenceTtlMs = config.referenceTtlMs ?? 600_000;
-    this.supportedTypes = config.supportedTypes ?? UM220_IV_NK_RTCM_TYPES;
+    this.supportedTypes = config.supportedTypes ?? UM220_IV_NK_ESSENTIAL_RTCM_TYPES;
     for (const value of [this.observationIntervalMs, this.observationTtlMs, this.referenceTtlMs]) {
       if (!Number.isSafeInteger(value) || value <= 0) {
         throw new Error("RTCM shaper intervals and TTLs must be positive safe integers");

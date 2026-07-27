@@ -45,12 +45,13 @@ test("RTCM stream decoder handles chunking, junk and CRC failures", () => {
   });
 });
 
-test("UM220 shaper rejects GLONASS and keeps the newest frame per type", () => {
+test("UM220 shaper rejects non-essential constellations and keeps the newest frame per type", () => {
   const shaper = new Um220RtcmShaper();
   const oldBds = rtcmFrame(1124, 250, 1);
   const newBds = rtcmFrame(1124, 250, 2);
 
   assert.equal(shaper.offer(rtcmFrame(1084, 90), 1000), "unsupported");
+  assert.equal(shaper.offer(rtcmFrame(1114, 90), 1000), "unsupported");
   assert.equal(shaper.offer(oldBds, 1000), "accepted");
   assert.equal(shaper.offer(newBds, 1200), "accepted");
   const selected = shaper.takeNext(1200);
@@ -61,7 +62,7 @@ test("UM220 shaper rejects GLONASS and keeps the newest frame per type", () => {
   assert.deepEqual(shaper.stats(), {
     acceptedFrames: 2,
     invalidFrames: 0,
-    unsupportedFrames: 1,
+    unsupportedFrames: 2,
     supersededFrames: 1,
     expiredFrames: 0,
     emittedFrames: 1,

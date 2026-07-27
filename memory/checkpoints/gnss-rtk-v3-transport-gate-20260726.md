@@ -45,13 +45,14 @@ status: active
 - 新增不改变原混合流默认行为的 `packet-rate` profile 并部署到 RK3568。A 的 90 B 单帧门禁结果为 2/3/4/5/6/7/7.5 Hz 全部无损，8 Hz 仅 80/96；160 B 单帧 4 Hz 为 48/48，5 Hz 为 59/60，6 Hz 为 48/72；120 B/6 Hz 为 61/72，250 B/6 Hz 为 19/72。CRC/reject/injection/write error 始终为 0，证明边界同时受包率和帧长影响。
 - UM220-IV NK 官方产品页说明支持 GPS L1、BDS B1、Galileo E1、QZSS，不含 GLONASS。基于该支持集新增 `um220-shaped`：过滤 1084，将 1124 从输入的 2 Hz 限为 newest-only 1 Hz，保留 1005/1033、1074/1094/1114/1124，并以 160 ms 最小包间隔平滑两个 1124 分片及其他帧。
 - A 的 `um220-shaped` 先通过 12 s（63/63 分片、51/51 帧），再通过 60 s（312/312 分片、252/252 帧、32400/32400 字节）。该轮净 RTCM 540 B/s、field-link 852 B/s、0 次迟到、最大迟到 4.365 ms、接收解码错误 0，节点端 CRC/重组/队列/注入错误全为 0；服务自动恢复 active。
-- B 的候选复测在基线查询阶段失败，未发送 RTCM。随后 field-gateway compact 日志确认仅 A 回传，B/C 当前离线；因此不能把该轮算作链路失败或 B 通过，C 的 180 B/s 预留也不取消。
+- B 恢复后健康文件确认 `FIELD-NODE-B` 在线且遥测新鲜，但 PROBE 控制响应需要把查询窗口从 3 s 扩到 6 s。四星座 12 s 为 63/63 分片、51/51 帧并通过；四星座 60 s 为 310/312、250/252，失败；改成 180 ms 后为 304/312、244/252，并新增重组超时和队列淘汰。因此 B 不接受含持续 QZSS 的生产默认负载。
+- 关闭可选 QZSS 1114 后，B 的三核心星座 profile 在 160 ms 下 60 s 严格通过：252/252 分片、192/192 帧、27000/27000 B，CRC/拒绝/重组/队列/注入/UART 错误全为 0。该共同候选为 GPS 1074、BDS 1124、Galileo 1094、1005/1033，净 RTCM 450 B/s、field-link 702 B/s；A 已通过包含它和额外 QZSS 的更高负载。
 - field-gateway 新增独立 `rtcm-downlink-shaper.ts` 生产核心和 4 项专项测试：有界流解包、CRC/垃圾字节处理、支持集过滤、per-type newest-only、1 Hz 观测限频、TTL 过期和参考帧优先均已覆盖。全包 14 项测试、TypeScript build 和 lint 通过。该模块尚未接入 NTRIP、端口命令链或串口发送，因而不能被视为 LIVE 或部署完成。
 - 本 checkpoint 和提交均不包含 CORS 主机、账号、密码、真实坐标或现场原始日志。
 
 ## In Progress
 
-- 软件边界、离线容量模型、新闭环统计、A/B/C 发布包和 RK3568 部署均已完成。A 的 UM220 支持集整形 profile 已通过 60 s 合成 PROBE；B/C 当前离线，真实 NTRIP 和三节点混合负载仍未通过，不能进入 LIVE。
+- 软件边界、离线容量模型、新闭环统计、A/B/C 发布包和 RK3568 部署均已完成。A/B 已通过三核心星座共同候选的 60 s 合成 PROBE；C 当前离线，真实 NTRIP 和三节点混合负载仍未通过，不能进入 LIVE。
 - RK2206 当前没有独立可信的 Unix 时钟。节点可执行 1500 ms 重组超时和最多 3000 ms 本地队列龄，但绝对生成时间 TTL 只能计为 `ttl_unverified`，由 RK3568 先做绝对新鲜度过滤。
 - 现有 GPS 驱动已阻止 RMC 状态错误设置 Fixed，并公开原始 GGA quality；完整 GGA/GSA/GST/GSV/RMC/ZDA 定点解析和 `GNSS_CORE` 1 Hz 上送尚未实现。
 
@@ -60,7 +61,7 @@ status: active
 - 保留本地报告 `docs/reports/xls1-gnss-v31-capacity-20260726.json` 作为可再生证据；原始 RTCM 抓包降为可选精化，不再作为进入单节点 `PROBE` 的阻塞项。
 - 保持 C 为离线/不可用状态，不伪造遥测，但在所有容量报告中固定预留 180 B/s；A/B 的实测结论与 C 的估算必须分栏展示。
 - 保留分级包率报告作为链路证据；不采用 250 B 大包批处理，因为 6 Hz 仅接收 19/72。将现有 shaper 接入 field-gateway 唯一端口发送所有权；生产路径采用接收机支持集过滤、per-type newest-only 队列、1124 1 Hz、160 B 分片和 160 ms 平滑调度，并暴露过滤/替换/过期/队列统计。接入前保持无副作用。
-- B 恢复后先补 `um220-shaped` 12 s/60 s PROBE；C 恢复后做同一门禁。只有 A/B/C 都通过 accepted/completed/bytes 精确门禁，才进入真实 NTRIP 混合负载。
+- C 恢复后补三核心星座 `um220-shaped` 12 s/60 s PROBE。只有 A/B/C 都通过 accepted/completed/bytes 精确门禁，才进入真实 NTRIP 混合负载。
 - 真实门禁负载包含 RTCM、3 个 1 Hz `GNSS_CORE`、compact 环境遥测和控制命令；记录每节点 correction age P50/P95/max、Fixed 连续性、CRC、重组、队列、注入、旧 session 和命令延迟。
 - 至少运行 60 分钟；初始通过条件为 correction age P95 <= 3 s、max <= 5 s、没有旧 session 注入且 Fixed 连续。未通过前保持 `LIVE` 关闭。
 - 传输通过后再完成 RK2206 定点 GNSS 解析与上送、RK3568 ECEF/ENU/Hampel/Kalman、服务器 CEEMDAN 和 UI/profile 集成。
@@ -78,4 +79,4 @@ status: active
 
 ## Resume Prompt
 
-继续 V3.1 传输门禁：A 的 `um220-shaped` 已通过 60 s（312/312 分片、252/252 帧），B/C 当前离线且 C 继续预留 180 B/s。field-gateway shaper 核心已实现但未接线；先在 B/C 恢复后补同一 12 s/60 s PROBE，再把它接入唯一端口调度器，加入 160 B 分片、160 ms 包间隔、持久 session epoch 和状态计数。随后做真实 NTRIP + 3 个 GNSS_CORE + compact 遥测 + 控制命令混合门禁；保持 LIVE 关闭。
+继续 V3.1 传输门禁：A/B 已通过三核心星座共同候选；B 的 60 s 证据为 252/252 分片、192/192 帧，A 已通过包含额外 QZSS 的更高负载。C 离线并继续预留 180 B/s。field-gateway shaper 默认关闭 QZSS 且尚未接线；先等 C 恢复补 12 s/60 s PROBE，再接入唯一端口调度器，加入 160 B 分片、160 ms 包间隔、持久 session epoch 和状态计数。随后做真实 NTRIP + 3 个 GNSS_CORE + compact 遥测 + 控制命令混合门禁；保持 LIVE 关闭。

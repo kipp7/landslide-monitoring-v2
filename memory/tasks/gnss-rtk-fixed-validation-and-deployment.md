@@ -28,7 +28,8 @@ status: active
 - 2026-07-27 分级真机测试已定位空口边界：A 的 90 B 单帧在 7.5 Hz 为 90/90，通过；8 Hz 为 80/96，失败。160 B 单帧在 4 Hz 为 48/48，通过；5 Hz 为 59/60，失败；250 B 单帧在 6 Hz 仅 19/72。限制同时受包率和帧长影响，不能用 115200 UART 占用或大包批处理替代真机门禁。
 - 和芯星通 UM220-IV NK 官方产品页确认其支持 GPS L1、BDS B1、Galileo E1 和 QZSS，不支持 GLONASS。新增 `um220-shaped` 候选：丢弃无效的 RTCM 1084、1124 仅保留最新 1 Hz，并以 160 ms 最小包间隔平滑发送；保留 1005/1033、1074/1094/1114/1124。
 - A 节点 `um220-shaped` 已先通过 12 s，再通过 60 s 严格 PROBE：312/312 分片、252/252 完整帧、32400/32400 RTCM 字节，CRC/重组/队列/注入错误均为 0；净 RTCM 540 B/s、field-link 852 B/s、0 次调度迟到、最大迟到 4.365 ms。测试后网关恢复 active。
-- B 在候选 profile 复测前掉线，基线统计查询失败且网关 compact 遥测只收到 A；该轮未发送 RTCM，不记为 profile 失败。当前 A 在线，B/C 离线；C 的完整容量预留保持不变。
+- B 恢复后健康快照确认身份和遥测在线，但控制响应慢于原 3 s 查询窗口，闭环改用 6 s/5 次重试。四星座 profile 的 12 s 为 63/63、51/51，通过；60 s 为 310/312、250/252，失败；180 ms 复测降至 304/312、244/252 且出现重组超时/队列淘汰，证明拉长包间隔本身不能消除 B 的空口波动。
+- 共同生产候选默认关闭可选 QZSS 1114，保留 GPS 1074、BDS 1124、Galileo 1094 和 1005/1033。B 在 160 ms 下 60 s 严格通过：252/252 分片、192/192 帧、27000/27000 B，全部异常计数为 0；净 RTCM 450 B/s、field-link 702 B/s。A 已通过包含该负载及额外 QZSS 的严格超集。当前 A/B 在线、C 离线，C 的完整容量预留保持不变。
 - field-gateway 已新增未启用的生产核心 `rtcm-downlink-shaper.ts`：有界 RTCM3 流解析/CRC、UM220 支持集白名单、per-type newest-only、1 Hz 观测限频、观测/参考 TTL、过期淘汰和可审计计数。14 项 field-gateway 测试、TypeScript build/lint 全通过；尚未接 NTRIP、串口调度或 LIVE，不会与现有命令/compact 轮询争用端口。
 - 容量工具已支持 `active=2 + reserved=1`。按历史 881.84 B/s RTCM 数据，A/B 活跃估算为 1768.08 B/s（15.35% UART），C 完整预留 180 B/s，三节点总预算仍为 1948.08 B/s（16.91% UART）。历史 compact 三节点曾连续完成 541/541 批次、1623/1623 遥测，证明 compact 时隙可行，但不代表 RTCM 已通过。
 - GNSS 常规链路采用 98 字节核心摘要，不连续上传原始 NMEA/逐星明细；专业 ECEF/ENU/Hampel/Kalman 位移链统一由 RK3568 计算。
@@ -45,7 +46,7 @@ status: active
 ## Plan
 
 - 捕获至少 60 s 无凭据原始 RTCM，运行 capture-driven 容量报告。
-- 保持离线节点显式不可用且 C 预留 180 B/s；B 恢复后先以同一 `um220-shaped` profile 补做 12 s 和 60 s PROBE，C 恢复后执行相同门禁。
+- 保持 C 显式不可用且预留 180 B/s；C 恢复后以三核心星座 `um220-shaped` profile 执行 12 s 和 60 s PROBE。
 - 将已实现的 RTCM shaper 接入 RK3568 统一端口所有权调度器，补齐 160 B 分片、160 ms 包间隔、持久 session epoch、绝对 TTL 和运行状态；队列过载时丢弃旧改正数而不是延迟发送。
 - A/B 节点计数均通过后，再加入 3 个 1 Hz `GNSS_CORE`、compact 环境遥测和控制命令，执行真实 NTRIP 混合负载；不把合成 PROBE 通过等同于 RTK Fixed 通过。
 - 至少运行 60 分钟三节点门禁，目标 correction age P95 <=3 s、max <=5 s、无旧 session 注入且 Fixed 连续。
@@ -53,7 +54,7 @@ status: active
 
 ## Open Questions
 
-- A 的 540 B/s 候选在 B/C 和真实 RTCM、三节点上行混合负载下，空口广播行为、Fixed 连续性和旧队列风险是否仍满足门禁？
+- A/B 已通过的 450 B/s 共同候选在 C 和真实 RTCM、三节点上行混合负载下，空口广播行为、Fixed 连续性和旧队列风险是否仍满足门禁？
 - RK2206 无可信绝对 Unix 时钟时，是否接受网关绝对 TTL + 节点单调队列龄的双层策略，或需要补充可信时间同步？
 - 单条修正流供同一现场 3 台 rover 使用是否满足服务商授权与空间范围？
 

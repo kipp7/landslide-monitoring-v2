@@ -172,13 +172,16 @@ The stepped-rate profile then separated packet-rate and frame-size effects. On n
 The vendor product page for UM220-IV NK lists GPS L1, BDS B1, Galileo E1 and QZSS support, but not GLONASS. The hardware candidate profile therefore:
 
 - rejects RTCM 1084 before the radio because the receiver cannot use it;
-- keeps the newest 1074, 1094, 1114 and 1124 observation per type;
-- limits 1124 to 1 Hz while keeping the other supported observation types at 1 Hz;
+- keeps the newest 1074, 1094 and 1124 observation per type;
+- limits 1124 to 1 Hz while keeping GPS and Galileo observations at 1 Hz;
+- treats supported QZSS 1114 as optional and disabled by default until mixed-load headroom is proven;
 - preserves 1005/1033 reference messages and absolute generation/TTL evidence;
 - uses 160-byte fragmentation and at least 160 ms between field-link RTCM packets;
 - drops superseded or expired corrections instead of building latency in a FIFO.
 
 This profile models 540 B/s of RTCM and 852 B/s after field-link framing. Node A passed a 60-second synthetic PROBE with 312/312 accepted fragments, 252/252 completed and PROBE-validated RTCM frames, and 32400/32400 validated bytes. It had no CRC, reassembly, queue, decode, injection or UART-write errors, no late events, and 4.365 ms maximum schedule lateness. The gateway service was restored after the test. Node B went offline before its matching run and node C remains offline, so the result is an A-only candidate gate, not a three-node or RTK Fixed acceptance.
+
+After B returned, the same four-constellation profile passed for 12 seconds but lost two 90-byte frames in 60 seconds (310/312 fragments and 250/252 frames). Increasing packet spacing to 180 ms performed worse and introduced reassembly expiration and queue eviction. With optional QZSS 1114 disabled, B then passed 60 seconds exactly: 252/252 fragments, 192/192 frames and 27000/27000 validated bytes with every error delta at zero. The common A/B production candidate is therefore 450 B/s raw RTCM and 702 B/s field-link, carrying 1005/1033/1074/1094/1124. A already passed a strict superset containing the same traffic plus QZSS. C and real mixed-load evidence remain outstanding.
 
 The field-gateway now contains an inactive production shaper core with bounded RTCM3 stream parsing, CRC validation, the UM220 message allow-list, per-type newest-only replacement, 1 Hz observation throttling, TTL expiry and counters. It is intentionally not connected to NTRIP, the serial-port command chain or `LIVE` firmware yet. Integration must preserve the gateway's single port owner, add 160-byte fragmentation and 160 ms packet pacing, and expose shaper and node counters before any real correction is transmitted.
 
