@@ -6,13 +6,22 @@
 | --- | --- | --- | --- |
 | Integrated field node | `FIELD-NODE-HW-EVT0.2-DRAFT` | Engineering reference set | Not released |
 | Existing carrier board | `R1.2` | As-built reference | Gerber exists; source documents conflict |
-| Carrier-board improvement | `R1.3-DRAFT` | Requirements | Not routed or released |
+| Carrier-board improvement | `R1.3-ORDERED-PROTOTYPE` | Five-board fabrication order submitted 2026-07-28 | Order archive exists; source reconciliation and EVT pending |
 | Competition enclosure | `MECH-R0.8-DRAFT` | 5 mm rectangular FR4, retained round harness, symmetric frame plus four context-rich connection reviews | Physical fit, interfaces, loads and purchased samples pending |
 | Solar subsystem | `PWR-R0.1` | Candidate architecture | Charger and energy budget unqualified |
 | Prototype procurement | `BOM-R0.5` | 5 mm FR4, sample cable glands/RF bulkheads and W1-W8 purchase gates | Not a production AVL |
 | Mechanical CAD | `CAD-R0.8` | Four isolated connection-detail assemblies, seven new native parts, packaged dependencies and four-page A3 review set | Engineering review; no drilling or frame fabrication release |
 
 ## Change History
+
+### 2026-07-28 - `R1.3-ORDERED-PROTOTYPE`
+
+- Archived the exact five-board Gerber order package and BOM with SHA-256 hashes.
+- Verified the final flying-probe netlist, two `ISO_GND -> GND` changes, board outline, drill counts, mask openings and Gerber/Excellon termination.
+- Recorded the implemented RS485 TVS, per-channel resettable fuses, PC0 battery divider/clamp and duplicated eight-position RS485 terminal interfaces.
+- Recorded intentional omissions: no DL-XLS1 load switch, no separate input reverse protection, no independent test points and no `SW2`.
+- Marked galvanic isolation as bypassed because both RS485 field-side grounds are tied to system ground.
+- Kept the revision out of EVT release: the final editable EasyEDA source and schematic must be re-exported after the last ground edits, and the ordinary-silkscreen production proof must confirm whether the Logo is present.
 
 ### 2026-07-24 - `FIELD-NODE-HW-EVT0.1`
 

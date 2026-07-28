@@ -1,5 +1,5 @@
 # Field Node Electrical
 
-[`carrier-board-r1.3-spec.zh-CN.md`](carrier-board-r1.3-spec.zh-CN.md) defines the next carrier-board requirements. Existing R1.2 production exports remain under [`hardware/carrier-board`](../../carrier-board/).
+[`carrier-board-r1.3-spec.zh-CN.md`](carrier-board-r1.3-spec.zh-CN.md) defines the carrier-board requirements and records the deviations in the prototype ordered on 2026-07-28. Existing R1.2 exports and the immutable V1.3 order archive are under [`hardware/carrier-board`](../../carrier-board/).
 
-R1.3 is not a manufacturing package. It must preserve the verified firmware interfaces and reconcile the module-based physical board with the stale discrete schematic/BOM before layout release.
+The V1.3 Gerber is a prototype fabrication package, not an as-built release. It preserves the verified firmware interfaces, but the final editable project and schematic still need to be re-exported after the last RS485 ground edits and reconciled with the order Gerber.
