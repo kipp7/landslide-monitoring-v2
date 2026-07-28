@@ -53,12 +53,16 @@ status: active
 - 实现提交 `c0eff2a3fe3a82d13a251fcdb093c71ecbf547a5` 已推送。A/B/C V2 PROBE 发布包位于 `F:\2\openharmony\rk2206_firmware_releases\xl01_gnss_rtk_v31_probe_stats_v2_20260727`，manifest 指向该提交；9/9 二进制哈希复算匹配，A/B/C `Firmware.img` SHA-256 分别为 `2f5995a3dfb8bbd864923405053e8927cc3a1db351aba2d799d20d2e5dbcb15c`、`7a4d86d512551cebbce817aaae07b222bab953de9f790a1388fd47613f4a3777`、`cee103b959bee76b14f1a54da9d6ad9b8eda0987f59beb51f0273daa9b02be54`；每个 liteos 只含自身 UUID、PROBE 标记和 V2 固件标记，loader 三份一致。兼容 V1/V2 的探针已部署到 RK3568，SHA-256 为 `c63b5499731ddb480d86dec9bb5af11d80c34869a1c18087f6cbb074f035de6c`，自检通过且服务保持 active。
 - V2 烧录后 A/B 的 12 s 三核心星座均完整：50/50 分片、38/38 帧、5360/5360 B。B 首轮仅因共享多发送者的全局 sequence gap/reset 误报失败；门禁现只把这三项作为诊断，仍严格核对 decoded RTCM、按类型、CRC、重组、队列和 FIFO。
 - 当前链路的 60 s 无重传复测真实失败：`160 B + 128 B/0 ms` 时 A 200/252、B 249/252；`32 B/15 ms` 更差，`320 B` 在 A 短测也更差。全量 V2 统计逐秒查询虽能最终补齐 A 的 38/38 帧，但造成重组超时和严重调度漂移，不能作为 ACK。
-- 已实现 24 B `G3A` ACK V1，bit 0..15 表示最高序号向前 16 个完成帧。查询/响应 nonce 定向，响应只在 DataProcessTask 发送；复用现有完成缓存，没有扩大 5616 B 重组器或 4116 B RTCM 队列。Python 选择性补发按精确序列重发，并以 3 s 恢复、500 ms 最大调度迟到、25% 补发比例作为硬门禁。C99、Python、TypeScript 16 项测试/lint 和三模式 A 全量构建已通过；尚未烧录。
+- 已实现 24 B `G3A` ACK V1，bit 0..15 表示最高序号向前 16 个完成帧。查询/响应 nonce 定向，响应只在 DataProcessTask 发送；复用现有完成缓存，没有扩大 5616 B 重组器或 4116 B RTCM 队列。Python 选择性补发按精确序列重发，并以 3 s 恢复、500 ms 最大调度迟到、25% 补发比例作为硬门禁。C99、Python、TypeScript 16 项测试/lint 和三模式 A 全量构建已通过；ACK V1 包尚未实际烧录。
+- ACK V1 发布包位于 `F:\2\openharmony\rk2206_firmware_releases\xl01_gnss_rtk_v31_probe_ack_v1_20260728`，对应源提交 `a43318206a84f09841517a9d5f3a2ae7c5d1ac95`。A/B/C `Firmware.img` SHA-256 为 `1c60b42ccfdc0f90f30f576cfe7236cf911577734f5dfa1ddf5db56fbafcc79d`、`6cd2b71edc3219c28f5c6b9a8b85ebf67c32ed0edd4c658beefcff29639bec29`、`9ef0916d85a27a4743e4a5b99b8954aceb8c0733b15c9bbcec425943204679a6`。RK3568 已部署匹配探针，SHA-256 `6f0e5a866a0de337aa6379b583cad1e8cc71509f2acb39213deb7f890056b1e4`，自检通过。
+- 2026-07-28 用户报告重新烧录上电后，A/B 的 `G3S` V2 统计均能返回且模式为 `PROBE`，但两次 12 s 选择性补发均在第一个窗口失败：节点在 3 次、每次 1 s 的查询内没有返回匹配 `G3A` ACK。失败报告为 RK3568 `/var/lib/lsmv2/experiments/xls1-gnss-v31-probe-20260727-011707.json` 和 `...-011800.json`；文件名日期受板端错误系统时间影响。
+- 为排除发送器过滤或短超时，网关运行时屏蔽后直接向 A/B 各发送一个 30 B ACK 查询线帧并抓取 6 s：两者均为 `controls=0`、`decode_errors=0`。随后 A 的非选择性 1 s 闭环仍正常返回前后 V2 统计并以 4/4 分片、3/3 完整帧、430/430 B 通过，报告为 `...-012308.json`。这排除了 RK3568 解码故障和 ACK 调用导致 DataProcessTask 锁死。Windows 最近文件记录确认 18:56-18:58 实际打开的是旧 `xl01_gnss_rtk_v31_probe_stats_v2_20260727\A/B/C`，而 ACK V1 包在 19:54-19:55 才生成，因此当前节点确定仍运行旧 V2。
+- 当前节点状态仍为 A/B `online`、C `configured`，测试后 `lsmv2-field-gateway.service` 已恢复 `active`。RK3568 返回时间为 2026-07-27，真实 correction-age 和可追溯存储门禁前必须修复 NTP/RTC；本轮合成门禁使用单调时钟，现有短测结论仍有效。
 - 本 checkpoint 和提交均不包含 CORS 主机、账号、密码、真实坐标或现场原始日志。
 
 ## In Progress
 
-- 软件边界、离线容量模型、V2 闭环统计、A/B/C V2 烧录和 RK3568 探针部署均已完成。A/B 的 V2 短测通过但当前 60 s 链路不稳定；ACK V1 尚未烧录，C 当前离线，真实 NTRIP 和三节点混合负载仍未通过，不能进入 LIVE。
+- 软件边界、离线容量模型、V2 闭环统计、A/B/C V2 烧录和 RK3568 探针部署均已完成。A/B 的 V2 短测通过但当前 60 s 链路不稳定；ACK V1 待从新目录重新烧录，C 当前离线，真实 NTRIP 和三节点混合负载仍未通过，不能进入 LIVE。
 - RK2206 当前没有独立可信的 Unix 时钟。节点可执行 1500 ms 重组超时和最多 3000 ms 本地队列龄，但绝对生成时间 TTL 只能计为 `ttl_unverified`，由 RK3568 先做绝对新鲜度过滤。
 - 现有 GPS 驱动已阻止 RMC 状态错误设置 Fixed，并公开原始 GGA quality；完整 GGA/GSA/GST/GSV/RMC/ZDA 定点解析和 `GNSS_CORE` 1 Hz 上送尚未实现。
 
@@ -85,4 +89,4 @@ status: active
 
 ## Resume Prompt
 
-继续 V3.1 传输门禁：生成并统一烧录 ACK V1 的 A/B/C 对应目录，确认启动标记 `fw-gnss-rtk-v31-probe-ack-v1-20260728` 和 `PROBE (no GNSS UART writes)`。部署匹配探针后先对 A/B 执行三核心星座 12 s，带 `--require-stats-version 2 --selective-retry`，要求完整计数、恢复 <= 3 s、调度迟到 <= 500 ms、补发 <= 25%；短测通过再做 60 s。C 离线时继续预留 180 B/s 且不伪造结果。保持 field-gateway shaper 未接线、LIVE 关闭，三节点通过后再做真实 NTRIP + GNSS_CORE + compact 遥测 + 控制命令混合门禁。
+继续 V3.1 传输门禁：从 `xl01_gnss_rtk_v31_probe_ack_v1_20260728` 的 A/B/C 对应目录重新烧录 `Firmware.img`，确认启动标记 `fw-gnss-rtk-v31-probe-ack-v1-20260728`，再做独立 `G3A` 能力检查。能力检查通过后，对 A/B 执行三核心星座 12 s，带 `--require-stats-version 2 --selective-retry`，要求完整计数、恢复 <= 3 s、调度迟到 <= 500 ms、补发 <= 25%；短测通过再做 60 s。C 离线时继续预留 180 B/s 且不伪造结果。修复 RK3568 NTP/RTC 后才进入真实 correction-age 证据；保持 field-gateway shaper 未接线、LIVE 关闭，三节点通过后再做真实 NTRIP + GNSS_CORE + compact 遥测 + 控制命令混合门禁。

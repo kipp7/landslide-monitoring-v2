@@ -35,8 +35,11 @@ status: active
 - 针对 B 的低频丢包已实现并烧录 PROBE stats V2：RK2206 队列由 2 增至 4（新增约 2058 B 静态帧区），统计 6 类 RTCM 完整帧和 field-link 有效帧/RTCM 帧/解码错误/序号缺口、重复、重启及 RX FIFO 丢弃；Python 与 TypeScript 均兼容 V1/V2，发布门禁可强制要求 V2。C99 主机测试、Python 自检、field-gateway 15 项测试/lint 和 A 节点 `DISABLED/PROBE/LIVE` 全量交叉编译通过；现场结果见后续条目。
 - A/B 已刷入 V2 并分别通过 12 s 三核心星座（50/50 分片、38/38 帧、5360/5360 B）。共享总线的全局 sequence gap/duplicate/reset 会混合独立发送者序号空间，已降为信息型诊断；RTCM 精确计数、按类型计数、decode/FIFO/CRC/重组/队列错误仍为硬门禁。
 - 后续 60 s 复测在当前链路条件下真实失败：`128 B/0 ms` 时 A 为 200/252 分片、140/192 帧，B 为 249/252、189/192；`320 B` 大包在 A 的 12 s 仅 28/38。参数调优不能提供生产可靠性，必须加入确认与补发。
-- 已实现待烧录的 24 B `G3A` ACK V1：返回会话、最高序号和最近 16 帧完成位图，RK3568 按 1 s 窗口只补发缺失序列，复用 RK2206 现有 16 帧完成缓存。C99 主机测试、Python 自检、field-gateway 16 项测试/lint，以及 A 的 `DISABLED/PROBE/LIVE` 三模式全量构建均通过；固件标记为 `fw-gnss-rtk-v31-probe-ack-v1-20260728`，尚未烧录，不能声称选择性补发已通过现场门禁。
-- V2 源提交 `c0eff2a3` 已推送；A/B/C 独立全量构建的只读发布包位于 `F:\2\openharmony\rk2206_firmware_releases\xl01_gnss_rtk_v31_probe_stats_v2_20260727`。9/9 二进制 SHA-256 复算匹配，A/B/C `Firmware.img` 分别为 `2f5995a3...cb15c`、`7a4d86d5...a3777`、`cee103b9...2be54`，节点身份均只命中自身，三份 loader 一致。V2 节点已烧录；ACK V1 是下一次待烧录版本。
+- 已实现 24 B `G3A` ACK V1：返回会话、最高序号和最近 16 帧完成位图，RK3568 按 1 s 窗口只补发缺失序列，复用 RK2206 现有 16 帧完成缓存。C99 主机测试、Python 自检、field-gateway 16 项测试/lint，以及 A 的 `DISABLED/PROBE/LIVE` 三模式全量构建均通过；固件标记为 `fw-gnss-rtk-v31-probe-ack-v1-20260728`。ACK V1 包尚未实际烧录，不能声称选择性补发已通过现场门禁。
+- ACK V1 的 A/B/C 独立发布包已生成到 `F:\2\openharmony\rk2206_firmware_releases\xl01_gnss_rtk_v31_probe_ack_v1_20260728`，源提交为 `a43318206a84f09841517a9d5f3a2ae7c5d1ac95`。9/9 文件哈希复算匹配；A/B/C `Firmware.img` SHA-256 分别为 `1c60b42ccfdc0f90f30f576cfe7236cf911577734f5dfa1ddf5db56fbafcc79d`、`6cd2b71edc3219c28f5c6b9a8b85ebf67c32ed0edd4c658beefcff29639bec29`、`9ef0916d85a27a4743e4a5b99b8954aceb8c0733b15c9bbcec425943204679a6`。匹配探针已部署到 RK3568 `/usr/local/bin/xls1_gnss_v31_probe_sender.py`，SHA-256 为 `6f0e5a866a0de337aa6379b583cad1e8cc71509f2acb39213deb7f890056b1e4`，板端自检通过。
+- 2026-07-28 用户报告完成烧录并上电后，RK3568 闭环发现 A/B 均能返回 V2 `PROBE` 统计，但在三核心星座 12 s 选择性补发的第一个窗口中，`G3A` ACK 连续 3 次、每次 1 s 均无响应。随后绕过门禁直接抓取 A/B 各 6 s，控制响应数均为 0 且 RK3568 解码错误为 0；ACK 查询后 A 的非选择性 1 s 门禁仍以 4/4 分片、3/3 帧、430/430 B 通过，排除了 DataProcessTask 被 ACK 处理锁死。Windows 最近文件记录随后确认 18:56-18:58 实际打开的是旧 `xl01_gnss_rtk_v31_probe_stats_v2_20260727\A/B/C`，而 ACK V1 包在 19:54-19:55 才生成；所以当前节点确定仍是旧 V2，不属于 ACK V1 真机实现故障。
+- 同次基线确认 A/B 在线、C 仅为 `configured`；RK3568 系统时间仍显示 2026-07-27，落后当前项目日期。合成 PROBE 的恢复时延和调度迟到使用单调时钟，不因此失效，但在真实 NTRIP、correction age、日志和跨设备存储门禁前必须恢复可信 NTP/RTC 时间。
+- V2 源提交 `c0eff2a3` 已推送；A/B/C 独立全量构建的只读发布包位于 `F:\2\openharmony\rk2206_firmware_releases\xl01_gnss_rtk_v31_probe_stats_v2_20260727`。9/9 二进制 SHA-256 复算匹配，A/B/C `Firmware.img` 分别为 `2f5995a3...cb15c`、`7a4d86d5...a3777`、`cee103b9...2be54`，节点身份均只命中自身，三份 loader 一致。该 V2 包是当前 A/B 实际运行版本；ACK V1 待重新烧录。
 - 容量工具已支持 `active=2 + reserved=1`。按历史 881.84 B/s RTCM 数据，A/B 活跃估算为 1768.08 B/s（15.35% UART），C 完整预留 180 B/s，三节点总预算仍为 1948.08 B/s（16.91% UART）。历史 compact 三节点曾连续完成 541/541 批次、1623/1623 遥测，证明 compact 时隙可行，但不代表 RTCM 已通过。
 - GNSS 常规链路采用 98 字节核心摘要，不连续上传原始 NMEA/逐星明细；专业 ECEF/ENU/Hampel/Kalman 位移链统一由 RK3568 计算。
 
@@ -56,7 +59,7 @@ status: active
 - 将已实现的 RTCM shaper 接入 RK3568 统一端口所有权调度器，补齐 160 B 分片、160 ms 包间隔、持久 session epoch、绝对 TTL 和运行状态；队列过载时丢弃旧改正数而不是延迟发送。
 - 在恢复 QZSS 前设计并门禁低频累计确认/选择性重传或等价的有界可靠机制；不能用无限队列、逐帧三节点 ACK 或盲目全量重复换取表面零丢包。机制必须保持 correction age 有界，并实测三节点反向确认不会与 compact 遥测争用半双工链路。
 - A/B 节点计数均通过后，再加入 3 个 1 Hz `GNSS_CORE`、compact 环境遥测和控制命令，执行真实 NTRIP 混合负载；不把合成 PROBE 通过等同于 RTK Fixed 通过。
-- 下一步统一烧录 ACK V1 的 A/B/C 包；先验证 A/B 12 s，要求恢复 <= 3 s、调度最大迟到 <= 500 ms、补发比例 <= 25%，再做 60 s。C 离线时只保留容量，不伪造通过；三节点 ACK 和混合负载通过前保持 `LIVE` 关闭。
+- 从 `xl01_gnss_rtk_v31_probe_ack_v1_20260728` 的 A/B/C 对应目录重新烧录 `Firmware.img`；只有独立 `G3A` 能力检查通过后才重跑 A/B 12 s，要求恢复 <= 3 s、调度最大迟到 <= 500 ms、补发比例 <= 25%，再做 60 s。C 离线时只保留容量，不伪造通过；三节点 ACK 和混合负载通过前保持 `LIVE` 关闭。
 - 至少运行 60 分钟三节点门禁，目标 correction age P95 <=3 s、max <=5 s、无旧 session 注入且 Fixed 连续。
 - 通过后才启用 `LIVE`，随后实现定点 GNSS 解析、RK3568 ECEF/ENU/Hampel/Kalman、服务器 CEEMDAN 和 UI/profile。
 
