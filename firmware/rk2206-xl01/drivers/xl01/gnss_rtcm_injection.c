@@ -295,6 +295,35 @@ void GnssRtcmInjection_GetStats(GnssRtcmInjectionStats *stats)
     Unlock();
 }
 
+void GnssRtcmInjection_GetAckWindow(GnssRtcmAckWindow *window)
+{
+    uint8_t index;
+
+    if (window == NULL) {
+        return;
+    }
+    memset(window, 0, sizeof(*window));
+    if (g_ready == 0U) {
+        return;
+    }
+
+    Lock();
+    if (g_reassembler.has_active_session != 0U &&
+        g_reassembler.has_highest_sequence != 0U) {
+        window->session_valid = 1U;
+        window->session_epoch = g_reassembler.active_session_epoch;
+        window->highest_sequence = g_reassembler.highest_sequence;
+        for (index = 0U; index < g_reassembler.completed_sequence_count; ++index) {
+            uint32_t delta = window->highest_sequence -
+                             g_reassembler.completed_sequences[index];
+            if (delta < GNSS_RTCM_V3_RECENT_COMPLETED) {
+                window->completed_bitmap |= (uint16_t)(1U << delta);
+            }
+        }
+    }
+    Unlock();
+}
+
 #else
 
 int GnssRtcmInjection_Init(uint8_t local_node)
@@ -335,6 +364,13 @@ void GnssRtcmInjection_GetStats(GnssRtcmInjectionStats *stats)
 {
     if (stats != NULL) {
         memset(stats, 0, sizeof(*stats));
+    }
+}
+
+void GnssRtcmInjection_GetAckWindow(GnssRtcmAckWindow *window)
+{
+    if (window != NULL) {
+        memset(window, 0, sizeof(*window));
     }
 }
 

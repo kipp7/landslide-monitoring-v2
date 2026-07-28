@@ -143,7 +143,7 @@ The node returns a fixed binary payload as field-link `control=4`. V1 is 92 byte
 
 Counter order is: accepted, duplicate, rejected, completed, CRC errors, expired assemblies, capacity evictions, TTL-unverified fragments, queued frames, queue evictions, queue-expired frames, PROBE-validated frames, PROBE-validated bytes, injected frames, injected bytes, UART write errors, UART partial writes and injection drops.
 
-V2 field-link counter order is: decoded frames, decoded RTCM frames, decode errors, sequence gaps, sequence duplicates, sequence resets, RX FIFO dropped bytes and RX FIFO drop events. Sequence tracking treats a backward sender restart separately from a forward gap, so a new bounded experiment does not fabricate packet loss.
+V2 field-link counter order is: decoded frames, decoded RTCM frames, decode errors, sequence gaps, sequence duplicates, sequence resets, RX FIFO dropped bytes and RX FIFO drop events. The sequence counters observe the aggregate field-link stream. RK3568 and each RK2206 have independent sequence spaces, so switching between valid senders can appear as a gap, duplicate or reset. These three counters remain visible for diagnosis but are not loss gates unless the protocol later exposes per-sender sequence tracking.
 
 The RK3568 tool queries once before traffic and once after the drain interval. It computes uint32 wrap-safe deltas, so old accumulated counters do not require a node reboot. A PROBE run passes only when:
 
@@ -153,9 +153,41 @@ The RK3568 tool queries once before traffic and once after the drain interval. I
 - PROBE-validated byte delta exactly equals raw RTCM bytes;
 - baseline and final queue depth are zero;
 - duplicate, reject, CRC, expiration, eviction, injection and UART-write error deltas are all zero.
-- when V2 is required, each tracked RTCM type delta matches the generated schedule, decoded RTCM packets match sent fragments, and field-link decode/gap/duplicate/reset/FIFO-drop deltas are zero.
+- when V2 is required, each tracked RTCM type delta matches the generated schedule, decoded RTCM packets match sent fragments, and field-link decode/FIFO-drop deltas are zero.
+
+The aggregate field-link sequence gap, duplicate and reset deltas are reported but do not affect PASS/FAIL. A non-zero value is not accepted as proof of RTCM integrity: integrity is established independently by exact decoded-RTCM, accepted-fragment, completed-frame, per-message-type and byte counts plus zero decode, CRC, reassembly, queue and FIFO errors.
 
 Any missing statistics response is a failed gate, not an inconclusive successful send. `PROBE` still never writes RTCM to UM220.
+
+## Bounded Selective Retry ACK
+
+The full 148-byte V2 statistics response is a diagnostic snapshot, not a per-second reliability ACK. The RK2206 ACK-capable build adds a fixed 12-byte field-link `command=2` query:
+
+```text
+G3A + node letter A/B/C + 8 uppercase hexadecimal nonce
+```
+
+The addressed node answers in task context as field-link `control=4`; the UART receive callback still never transmits. The response is 24 bytes:
+
+| Offset | Bytes | Field |
+| ---: | ---: | --- |
+| 0 | 3 | ASCII `G3A` |
+| 3 | 1 | response version `1` |
+| 4 | 1 | node number A/B/C = `1/2/3` |
+| 5 | 1 | injection mode `DISABLED/PROBE/LIVE = 0/1/2` |
+| 6 | 1 | bit 0: session state valid |
+| 7 | 1 | reserved, zero |
+| 8 | 4 | echoed nonce |
+| 12 | 4 | active RTCM session epoch |
+| 16 | 4 | highest observed RTCM sequence |
+| 20 | 2 | recent completed-sequence bitmap |
+| 22 | 2 | reserved, zero |
+
+Bitmap bit 0 represents `highest_sequence`, bit 1 represents `highest_sequence - 1`, and so on through bit 15, using uint32 wrap semantics. The gateway retains every frame in the current one-second window, queries the addressed node, and retransmits only sequences not marked complete. Retransmissions preserve session epoch, sequence, generation time and fragment metadata; the existing 16-frame completion cache makes already completed fragments duplicates instead of new corrections.
+
+The bounded reliability gate requires all windows recovered, final unique accepted/completed/type/byte counts exact, zero CRC/reassembly-timeout/capacity/queue/FIFO errors, recovery latency no more than 3000 ms, schedule lateness no more than 500 ms and retransmitted fragments no more than 25% of unique fragments. Raw field-link decode errors and duplicate fragments remain visible but may be tolerated only when the end-to-end gate and all time/overhead bounds pass.
+
+The 24-byte ACK implementation has C99 and TypeScript golden-vector coverage, and `DISABLED/PROBE/LIVE` builds pass. It has not yet been flashed or measured on A/B/C, so it is not production evidence.
 
 ## Capacity Gate
 
@@ -189,6 +221,10 @@ This profile models 540 B/s of RTCM and 852 B/s after field-link framing. Node A
 After B returned, the same four-constellation profile passed for 12 seconds but lost two 90-byte frames in 60 seconds (310/312 fragments and 250/252 frames). Increasing packet spacing to 180 ms performed worse and introduced reassembly expiration and queue eviction. With optional QZSS 1114 disabled, B then passed 60 seconds exactly: 252/252 fragments, 192/192 frames and 27000/27000 validated bytes with every error delta at zero. The common A/B production candidate is therefore 450 B/s raw RTCM and 702 B/s field-link, carrying 1005/1033/1074/1094/1124. A already passed a strict superset containing the same traffic plus QZSS. C and real mixed-load evidence remain outstanding.
 
 A follow-up reduced QZSS 1114 to 0.5 Hz. B still lost 2/282 fragments at both `160-byte/160-ms` and `160-byte/200-ms`; 200 ms removed queue eviction but did not remove link loss. Raising the fragment-data bound to 320 bytes let each 250-byte 1124 frame use one field-link packet. That profile passed 12 seconds at 44/44, reduced the 60-second loss to 1/222, and lowered field-link traffic to about 717 B/s, but still failed the zero-delta gate. The old `250-byte frame at 6 Hz` result used 160-byte fragmentation and therefore exercised 12 field-link packets per second; it must not be cited as evidence that a 250-byte single packet is intrinsically unsupported. The 0.5 Hz QZSS mode remains experimental. Restoring it in production requires a bounded cumulative-ack/selective-retry design or equivalent reliability mechanism, with explicit three-node half-duplex and correction-age gates.
+
+After A/B were flashed with PROBE V2, both passed the 12-second three-core-constellation gate at 50/50 fragments and 38/38 frames. A later 60-second rerun under changed link conditions received only 200/252 fragments on A and 249/252 on B even with the previously successful `128-byte/0-ms` UART write pattern. The `320-byte` variant was worse on A. This rejects parameter tuning as a production reliability mechanism and motivates the bounded ACK protocol above.
+
+An intermediate experiment reused the 148-byte statistics response once per second. It eventually recovered A to 38/38 frames, but stretched the nominal 12-second stream to about 202 seconds because the query helper waited for its entire timeout after already receiving a match. The helper now returns immediately, yet a full diagnostic response each second still produced 3.1 seconds of schedule drift in a later no-loss run. Full statistics therefore remain start/end diagnostics; the 24-byte ACK is the only current selective-retry candidate.
 
 The field-gateway now contains an inactive production shaper core with bounded RTCM3 stream parsing, CRC validation, the UM220 message allow-list, per-type newest-only replacement, 1 Hz observation throttling, TTL expiry and counters. It is intentionally not connected to NTRIP, the serial-port command chain or `LIVE` firmware yet. Integration must preserve the gateway's single port owner, add 160-byte fragmentation and 160 ms packet pacing, and expose shaper and node counters before any real correction is transmitted.
 

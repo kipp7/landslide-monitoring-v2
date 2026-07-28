@@ -15,6 +15,7 @@ const {
   decodeGnssProbeStatsResponse,
   decodeGnssProbeStatsResponseV1,
   decodeGnssProbeStatsResponseV2,
+  decodeGnssRtcmAckResponseV1,
   RtcmReassemblerV3,
   crc24q,
   decodeGnssCoreV3,
@@ -22,8 +23,10 @@ const {
   defaultRtcmTtlMs,
   encodeGnssCoreV3,
   encodeGnssProbeStatsQueryV1,
+  encodeGnssRtcmAckQueryV1,
   encodeRtcmFragmentV3,
   fragmentRtcmFrameV3,
+  gnssRtcmAckReportsCompleted,
   inspectRtcm3Frame,
   maxRtcmTtlMs
 } = require("../dist/gnss-transport-v3.js");
@@ -149,6 +152,28 @@ test("GNSS PROBE V2 exposes per-type and field-link diagnostics", () => {
   const result = createCobsCrcFieldLinkAssembler().push(wire);
   assert.deepEqual(result.errors, []);
   assert.deepEqual(decodeGnssProbeStatsResponseV2(result.payloads[0].rawPayloadBytes), decoded);
+});
+
+test("RTCM ACK V1 reports the recent completed-sequence bitmap", () => {
+  const query = encodeGnssRtcmAckQueryV1(2, 0x89abcdef);
+  assert.equal(query.toString("ascii"), "G3AB89ABCDEF");
+  assert.throws(() => encodeGnssRtcmAckQueryV1(2, 0), /nonce/);
+
+  const payload = Buffer.alloc(24);
+  payload.write("G3A", 0, "ascii");
+  payload.writeUInt8(1, 3);
+  payload.writeUInt8(2, 4);
+  payload.writeUInt8(1, 5);
+  payload.writeUInt8(1, 6);
+  payload.writeUInt32BE(0x89abcdef, 8);
+  payload.writeUInt32BE(0x10203040, 12);
+  payload.writeUInt32BE(117, 16);
+  payload.writeUInt16BE(0xa55a, 20);
+
+  const decoded = decodeGnssRtcmAckResponseV1(payload);
+  assert.equal(decoded.completedBitmap, 0xa55a);
+  assert.equal(gnssRtcmAckReportsCompleted(decoded, 0x10203040, 116), true);
+  assert.equal(gnssRtcmAckReportsCompleted(decoded, 0x10203040, 117), false);
 });
 
 test("GNSS_CORE V3 preserves nanodegrees and survives the binary field-link", () => {

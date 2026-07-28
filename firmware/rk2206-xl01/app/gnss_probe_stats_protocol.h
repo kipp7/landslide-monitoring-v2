@@ -13,6 +13,8 @@ extern "C" {
 #define GNSS_PROBE_STATS_QUERY_V1_BYTES 12
 #define GNSS_PROBE_STATS_RESPONSE_V1_BYTES 92
 #define GNSS_PROBE_STATS_RESPONSE_V2_BYTES 148
+#define GNSS_RTCM_ACK_QUERY_V1_BYTES 12
+#define GNSS_RTCM_ACK_RESPONSE_V1_BYTES 24
 
 int GnssProbeStatsQueryV1_Decode(
     const char *payload,
@@ -38,6 +40,22 @@ int GnssProbeStatsResponseV2_Encode(
     uint8_t injection_mode,
     uint32_t nonce,
     uint32_t snapshot_uptime_s,
+    uint8_t *output,
+    int output_size
+);
+
+int GnssRtcmAckQueryV1_Decode(
+    const char *payload,
+    int payload_bytes,
+    uint8_t *target_node,
+    uint32_t *nonce
+);
+
+int GnssRtcmAckResponseV1_Encode(
+    const GnssRtcmAckWindow *window,
+    uint8_t node_number,
+    uint8_t injection_mode,
+    uint32_t nonce,
     uint8_t *output,
     int output_size
 );

@@ -573,6 +573,9 @@ static void HandleFieldLinkMessage(const FieldLinkFrameMessage *message, Statist
             CompactPollCommand_IsValid(message->payload, message->payload_len) ||
             GnssProbeStatsQueryV1_Decode(
                 message->payload, message->payload_len, NULL, NULL
+            ) == 0 ||
+            GnssRtcmAckQueryV1_Decode(
+                message->payload, message->payload_len, NULL, NULL
             ) == 0) {
             if (EnqueuePlatformCommandPayload(message->payload, message->payload_len, stats) > 0) {
 #if PLATFORM_COMMAND_RX_LOG_MODE

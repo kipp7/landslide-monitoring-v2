@@ -30,6 +30,7 @@ FIELD_LINK_TYPE_CONTROL = 4
 FIELD_LINK_TYPE_RTCM = 6
 RTCM_FRAGMENT_HEADER_BYTES = 42
 GNSS_PROBE_STATS_RESPONSE_BYTES = {1: 92, 2: 148}
+GNSS_RTCM_ACK_RESPONSE_BYTES = 24
 TARGET_MASKS = {"A": 0x01, "B": 0x02, "C": 0x04, "all": 0x07}
 NODE_NUMBERS = {"A": 1, "B": 2, "C": 3}
 PROBE_COUNTER_NAMES = (
@@ -207,6 +208,50 @@ def encode_probe_stats_query(target: str, nonce: int) -> bytes:
     return f"G3Q{target}{nonce:08X}".encode("ascii")
 
 
+def encode_rtcm_ack_query(target: str, nonce: int) -> bytes:
+    if target not in NODE_NUMBERS or not 1 <= nonce <= 0xFFFFFFFF:
+        raise ValueError("RTCM ACK query requires node A/B/C and a non-zero uint32 nonce")
+    return f"G3A{target}{nonce:08X}".encode("ascii")
+
+
+def decode_rtcm_ack_response(payload: bytes) -> dict[str, Any]:
+    if len(payload) != GNSS_RTCM_ACK_RESPONSE_BYTES or payload[:4] != b"G3A\x01":
+        raise ValueError("RTCM ACK response magic, version or length is invalid")
+    node_number = payload[4]
+    injection_mode = payload[5]
+    flags = payload[6]
+    if node_number not in (1, 2, 3) or injection_mode not in (0, 1, 2):
+        raise ValueError("RTCM ACK node or injection mode is invalid")
+    if flags & ~0x01 or payload[7] != 0 or payload[22:24] != b"\x00\x00":
+        raise ValueError("RTCM ACK flags or reserved bytes are invalid")
+    nonce, session_epoch, highest_sequence = struct.unpack_from(">III", payload, 8)
+    completed_bitmap = struct.unpack_from(">H", payload, 20)[0]
+    if nonce == 0:
+        raise ValueError("RTCM ACK nonce is zero")
+    session_valid = bool(flags & 0x01)
+    if session_valid and session_epoch == 0:
+        raise ValueError("RTCM ACK valid session has a zero epoch")
+    if not session_valid and (session_epoch != 0 or highest_sequence != 0 or completed_bitmap != 0):
+        raise ValueError("RTCM ACK invalid session carries state")
+    return {
+        "responseVersion": 1,
+        "nodeNumber": node_number,
+        "injectionMode": injection_mode,
+        "nonce": nonce,
+        "sessionValid": session_valid,
+        "sessionEpoch": session_epoch,
+        "highestSequence": highest_sequence,
+        "completedBitmap": completed_bitmap,
+    }
+
+
+def ack_reports_completed(ack: dict[str, Any], session_epoch: int, sequence: int) -> bool:
+    if not ack["sessionValid"] or ack["sessionEpoch"] != session_epoch:
+        return False
+    delta = (ack["highestSequence"] - sequence) & 0xFFFFFFFF
+    return delta < 16 and bool(ack["completedBitmap"] & (1 << delta))
+
+
 def decode_probe_stats_response(payload: bytes) -> dict[str, Any]:
     if len(payload) < 4 or payload[:3] != b"G3S":
         raise ValueError("GNSS PROBE stats magic or version mismatch")
@@ -376,26 +421,6 @@ def write_chunked(fd: int, payload: bytes, chunk_bytes: int, chunk_delay_ms: int
             time.sleep(chunk_delay_ms / 1000.0)
 
 
-def read_field_link_frames(
-    fd: int, decoder: FieldLinkStreamDecoder, timeout_seconds: float
-) -> list[tuple[int, int, bytes]]:
-    frames: list[tuple[int, int, bytes]] = []
-    deadline = time.monotonic() + timeout_seconds
-    while True:
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            return frames
-        readable, _, _ = select.select([fd], [], [], remaining)
-        if not readable:
-            return frames
-        try:
-            chunk = os.read(fd, 4096)
-        except BlockingIOError:
-            continue
-        if chunk:
-            frames.extend(decoder.feed(chunk))
-
-
 def query_probe_stats(
     fd: int,
     decoder: FieldLinkStreamDecoder,
@@ -420,24 +445,93 @@ def query_probe_stats(
         if next_sequence == 0:
             next_sequence = 1
 
-        for frame_type, _sequence, payload in read_field_link_frames(
-            fd, decoder, timeout_seconds
-        ):
-            if frame_type != FIELD_LINK_TYPE_CONTROL or not payload.startswith(b"G3S"):
-                continue
+        deadline = time.monotonic() + timeout_seconds
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            readable, _, _ = select.select([fd], [], [], remaining)
+            if not readable:
+                break
             try:
-                response = decode_probe_stats_response(payload)
-            except ValueError:
-                payload_errors += 1
+                chunk = os.read(fd, 4096)
+            except BlockingIOError:
                 continue
-            if response["nonce"] != nonce or response["nodeNumber"] != NODE_NUMBERS[target]:
+            if not chunk:
                 continue
-            response["queryAttempts"] = _attempt + 1
-            response["payloadDecodeErrorsBeforeMatch"] = payload_errors
-            return response, next_sequence
+            for frame_type, _sequence, payload in decoder.feed(chunk):
+                if frame_type != FIELD_LINK_TYPE_CONTROL or not payload.startswith(b"G3S"):
+                    continue
+                try:
+                    response = decode_probe_stats_response(payload)
+                except ValueError:
+                    payload_errors += 1
+                    continue
+                if response["nonce"] != nonce or response["nodeNumber"] != NODE_NUMBERS[target]:
+                    continue
+                response["queryAttempts"] = _attempt + 1
+                response["payloadDecodeErrorsBeforeMatch"] = payload_errors
+                return response, next_sequence
 
     raise TimeoutError(
         f"node {target} did not return a matching PROBE stats response after {retries} attempts"
+    )
+
+
+def query_rtcm_ack(
+    fd: int,
+    decoder: FieldLinkStreamDecoder,
+    target: str,
+    field_sequence: int,
+    chunk_bytes: int,
+    chunk_delay_ms: int,
+    timeout_seconds: float,
+    retries: int,
+) -> tuple[dict[str, Any], int]:
+    nonce = (time.time_ns() ^ (os.getpid() << 8) ^ field_sequence) & 0xFFFFFFFF
+    if nonce == 0:
+        nonce = 1
+    query = encode_rtcm_ack_query(target, nonce)
+    next_sequence = field_sequence
+    payload_errors = 0
+
+    for attempt in range(retries):
+        wire = encode_field_link(next_sequence, query, FIELD_LINK_TYPE_COMMAND)
+        write_chunked(fd, wire, chunk_bytes, chunk_delay_ms)
+        next_sequence = (next_sequence + 1) & 0xFFFFFFFF
+        if next_sequence == 0:
+            next_sequence = 1
+
+        deadline = time.monotonic() + timeout_seconds
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            readable, _, _ = select.select([fd], [], [], remaining)
+            if not readable:
+                break
+            try:
+                chunk = os.read(fd, 4096)
+            except BlockingIOError:
+                continue
+            if not chunk:
+                continue
+            for frame_type, _sequence, payload in decoder.feed(chunk):
+                if frame_type != FIELD_LINK_TYPE_CONTROL or not payload.startswith(b"G3A"):
+                    continue
+                try:
+                    response = decode_rtcm_ack_response(payload)
+                except ValueError:
+                    payload_errors += 1
+                    continue
+                if response["nonce"] != nonce or response["nodeNumber"] != NODE_NUMBERS[target]:
+                    continue
+                response["queryAttempts"] = attempt + 1
+                response["payloadDecodeErrorsBeforeMatch"] = payload_errors
+                return response, next_sequence
+
+    raise TimeoutError(
+        f"node {target} did not return a matching RTCM ACK after {retries} attempts"
     )
 
 
@@ -449,6 +543,7 @@ def evaluate_probe_gate(
     expected_rtcm_bytes: int,
     expected_message_counts: Counter[int],
     required_stats_version: int,
+    reliability: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     before_stats = baseline["stats"]
     after_stats = final["stats"]
@@ -472,6 +567,14 @@ def evaluate_probe_gate(
             "expected": f">= {expected}",
             "actual": actual,
             "passed": actual >= expected,
+        })
+
+    def at_most(name: str, actual: int | float, expected: int | float) -> None:
+        checks.append({
+            "name": name,
+            "expected": f"<= {expected}",
+            "actual": actual,
+            "passed": actual <= expected,
         })
 
     exact("baselineInjectionMode", baseline["injectionMode"], 1)
@@ -498,8 +601,7 @@ def evaluate_probe_gate(
     exact("probeValidatedFramesDelta", deltas["probeValidatedFrames"], expected_frames)
     exact("probeValidatedBytesDelta", deltas["probeValidatedBytes"], expected_rtcm_bytes)
 
-    for name in (
-        "duplicateFragments",
+    zero_delta_counters = [
         "rejectedFragments",
         "crcErrors",
         "expiredAssemblies",
@@ -511,7 +613,10 @@ def evaluate_probe_gate(
         "uartWriteErrors",
         "uartPartialWrites",
         "injectionDroppedFrames",
-    ):
+    ]
+    if reliability is None:
+        zero_delta_counters.insert(0, "duplicateFragments")
+    for name in zero_delta_counters:
         exact(f"{name}Delta", deltas[name], 0)
 
     type_deltas: dict[str, int] | None = None
@@ -535,16 +640,35 @@ def evaluate_probe_gate(
             name: uint32_delta(final["linkStats"][name], baseline["linkStats"][name])
             for name in PROBE_LINK_COUNTER_NAMES
         }
-        exact("decodedRtcmFramesDelta", link_deltas["decodedRtcmFrames"], expected_fragments)
+        if reliability is None:
+            exact("decodedRtcmFramesDelta", link_deltas["decodedRtcmFrames"], expected_fragments)
+        else:
+            at_least("decodedRtcmFramesDelta", link_deltas["decodedRtcmFrames"], expected_fragments)
         for name in (
-            "decodeErrors",
-            "sequenceGaps",
-            "sequenceDuplicates",
-            "sequenceResets",
             "fifoDroppedBytes",
             "fifoDropEvents",
         ):
             exact(f"{name}Delta", link_deltas[name], 0)
+        if reliability is None:
+            exact("decodeErrorsDelta", link_deltas["decodeErrors"], 0)
+
+    if reliability is not None:
+        exact("reliabilityFailedWindows", reliability["failedWindows"], 0)
+        at_most(
+            "reliabilityMaxRecoveryLatencyMs",
+            reliability["maxRecoveryLatencyMs"],
+            reliability["maxRecoveryAgeMs"],
+        )
+        at_most(
+            "reliabilityRetransmitRatio",
+            reliability["retransmitRatio"],
+            reliability["maxRetransmitRatio"],
+        )
+        at_most(
+            "reliabilityMaxScheduleLatenessMs",
+            reliability["maxScheduleLatenessMs"],
+            reliability["maxAllowedScheduleLatenessMs"],
+        )
 
     failed = [check["name"] for check in checks if not check["passed"]]
     return {
@@ -553,6 +677,7 @@ def evaluate_probe_gate(
         "deltas": deltas,
         "typeDeltas": type_deltas,
         "linkDeltas": link_deltas,
+        "reliability": reliability,
         "checks": checks,
     }
 
@@ -641,6 +766,10 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
     raw_bytes = 0
     wire_bytes = 0
     fragment_count = 0
+    transmitted_fragment_count = 0
+    retransmitted_frame_count = 0
+    retransmitted_fragment_count = 0
+    retransmitted_wire_bytes = 0
     late_events = 0
     max_lateness_ms = 0.0
     packet_pacing_waits = 0
@@ -652,6 +781,33 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
     baseline_stats: dict[str, Any]
     final_stats: dict[str, Any]
     counter_gate: dict[str, Any]
+    reliability: dict[str, Any] | None = None
+
+    schedule_windows: list[tuple[int, list[tuple[float, int, int]]]] = []
+    for event in schedule:
+        window_second = int(event[0])
+        if not schedule_windows or schedule_windows[-1][0] != window_second:
+            schedule_windows.append((window_second, []))
+        schedule_windows[-1][1].append(event)
+    if args.selective_retry:
+        reliability = {
+            "mode": "per-second-completed-sequence-bitmap-selective-retry",
+            "windowCount": len(schedule_windows),
+            "recoveredWindows": 0,
+            "failedWindows": 0,
+            "ackQueryAttempts": 0,
+            "retransmitRounds": 0,
+            "retransmittedFrames": 0,
+            "retransmittedFragments": 0,
+            "retransmittedWireBytes": 0,
+            "maxRecoveryLatencyMs": 0.0,
+            "maxRecoveryAgeMs": args.max_recovery_age_ms,
+            "maxScheduleLatenessMs": 0.0,
+            "maxAllowedScheduleLatenessMs": args.max_schedule_lateness_ms,
+            "retransmitRatio": 0.0,
+            "maxRetransmitRatio": args.max_retransmit_ratio,
+            "windows": [],
+        }
 
     fd = os.open(args.serial_device, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
     try:
@@ -684,27 +840,11 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
         started_mono = time.monotonic()
         last_progress_second = -1
 
-        for due, message_type, frame_bytes in schedule:
-            deadline = started_mono + due
-            remaining = deadline - time.monotonic()
-            if remaining > 0:
-                time.sleep(remaining)
-            lateness_ms = max(0.0, (time.monotonic() - deadline) * 1000.0)
-            if lateness_ms > args.late_threshold_ms:
-                late_events += 1
-            max_lateness_ms = max(max_lateness_ms, lateness_ms)
-
-            generated_unix_ms = int(time.time() * 1000)
-            frame = build_rtcm_frame(message_type, frame_bytes, transport_sequence)
-            payloads = fragment_rtcm_frame(
-                frame,
-                message_type,
-                session_epoch,
-                transport_sequence,
-                generated_unix_ms,
-                TARGET_MASKS[args.target],
-                args.fragment_data_bytes,
-            )
+        def send_payloads(payloads: list[bytes], retransmit: bool) -> None:
+            nonlocal field_sequence
+            nonlocal fragment_count, transmitted_fragment_count
+            nonlocal wire_bytes, retransmitted_fragment_count, retransmitted_wire_bytes
+            nonlocal last_packet_write_mono, packet_pacing_waits, packet_pacing_wait_ms
             for payload in payloads:
                 if last_packet_write_mono is not None and args.min_packet_interval_ms > 0:
                     packet_deadline = (
@@ -719,20 +859,127 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
                 write_chunked(fd, wire_frame, args.chunk_bytes, args.chunk_delay_ms)
                 last_packet_write_mono = time.monotonic()
                 wire_bytes += len(wire_frame)
-                fragment_count += 1
+                transmitted_fragment_count += 1
+                if retransmit:
+                    retransmitted_fragment_count += 1
+                    retransmitted_wire_bytes += len(wire_frame)
+                else:
+                    fragment_count += 1
                 field_sequence = (field_sequence + 1) & 0xFFFFFFFF
-            raw_bytes += len(frame)
-            message_counts[message_type] += 1
-            transport_sequence = (transport_sequence + 1) & 0xFFFFFFFF
 
-            elapsed_second = int(time.monotonic() - started_mono)
-            if elapsed_second >= last_progress_second + 5:
-                last_progress_second = elapsed_second
-                print(
-                    f"PROGRESS elapsed={elapsed_second}s frames={sum(message_counts.values())} "
-                    f"fragments={fragment_count} raw_bytes={raw_bytes} wire_bytes={wire_bytes}",
-                    flush=True,
+        for window_second, events in schedule_windows:
+            window_started_mono = time.monotonic()
+            window_frames: list[dict[str, Any]] = []
+            window_expected_counts: Counter[int] = Counter()
+
+            for due, message_type, frame_bytes in events:
+                deadline = started_mono + due
+                remaining = deadline - time.monotonic()
+                if remaining > 0:
+                    time.sleep(remaining)
+                lateness_ms = max(0.0, (time.monotonic() - deadline) * 1000.0)
+                if lateness_ms > args.late_threshold_ms:
+                    late_events += 1
+                max_lateness_ms = max(max_lateness_ms, lateness_ms)
+
+                generated_unix_ms = int(time.time() * 1000)
+                frame = build_rtcm_frame(message_type, frame_bytes, transport_sequence)
+                payloads = fragment_rtcm_frame(
+                    frame,
+                    message_type,
+                    session_epoch,
+                    transport_sequence,
+                    generated_unix_ms,
+                    TARGET_MASKS[args.target],
+                    args.fragment_data_bytes,
                 )
+                send_payloads(payloads, retransmit=False)
+                window_frames.append({
+                    "messageType": message_type,
+                    "sequence": transport_sequence,
+                    "payloads": payloads,
+                })
+                window_expected_counts[message_type] += 1
+                raw_bytes += len(frame)
+                message_counts[message_type] += 1
+                transport_sequence = (transport_sequence + 1) & 0xFFFFFFFF
+
+                elapsed_second = int(time.monotonic() - started_mono)
+                if elapsed_second >= last_progress_second + 5:
+                    last_progress_second = elapsed_second
+                    print(
+                        f"PROGRESS elapsed={elapsed_second}s frames={sum(message_counts.values())} "
+                        f"fragments={fragment_count} transmissions={transmitted_fragment_count} "
+                        f"raw_bytes={raw_bytes} wire_bytes={wire_bytes}",
+                        flush=True,
+                    )
+
+            if reliability is not None:
+                window_result: dict[str, Any] = {
+                    "windowSecond": window_second,
+                    "expectedTypeCounts": {
+                        str(key): value for key, value in sorted(window_expected_counts.items())
+                    },
+                    "rounds": [],
+                    "recovered": False,
+                }
+                for round_index in range(args.max_retransmit_rounds + 1):
+                    termios.tcdrain(fd)
+                    ack, field_sequence = query_rtcm_ack(
+                        fd,
+                        decoder,
+                        args.target,
+                        field_sequence,
+                        args.chunk_bytes,
+                        args.chunk_delay_ms,
+                        args.ack_timeout_seconds,
+                        args.ack_retries,
+                    )
+                    reliability["ackQueryAttempts"] += ack["queryAttempts"]
+                    if ack["injectionMode"] != 1:
+                        raise RuntimeError(
+                            f"node {args.target} ACK reports injection mode {ack['injectionMode']}"
+                        )
+                    missing_frames = [
+                        frame_info for frame_info in window_frames
+                        if not ack_reports_completed(
+                            ack, session_epoch, frame_info["sequence"]
+                        )
+                    ]
+                    round_result = {
+                        "round": round_index,
+                        "ackSessionValid": ack["sessionValid"],
+                        "ackSessionEpoch": ack["sessionEpoch"],
+                        "ackHighestSequence": ack["highestSequence"],
+                        "ackCompletedBitmap": f"{ack['completedBitmap']:04X}",
+                        "missingSequences": [
+                            frame_info["sequence"] for frame_info in missing_frames
+                        ],
+                        "missingMessageTypes": [
+                            frame_info["messageType"] for frame_info in missing_frames
+                        ],
+                        "queryAttempts": ack["queryAttempts"],
+                    }
+                    window_result["rounds"].append(round_result)
+                    if not missing_frames:
+                        window_result["recovered"] = True
+                        reliability["recoveredWindows"] += 1
+                        break
+                    if round_index >= args.max_retransmit_rounds:
+                        reliability["failedWindows"] += 1
+                        break
+
+                    reliability["retransmitRounds"] += 1
+                    for frame_info in missing_frames:
+                        send_payloads(frame_info["payloads"], retransmit=True)
+                        retransmitted_frame_count += 1
+
+                recovery_latency_ms = (time.monotonic() - window_started_mono) * 1000.0
+                window_result["recoveryLatencyMs"] = round(recovery_latency_ms, 3)
+                reliability["maxRecoveryLatencyMs"] = max(
+                    reliability["maxRecoveryLatencyMs"], recovery_latency_ms
+                )
+                reliability["windows"].append(window_result)
 
         termios.tcdrain(fd)
         if args.drain_ms > 0:
@@ -747,6 +994,18 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
             args.stats_timeout_seconds,
             args.stats_retries,
         )
+        if reliability is not None:
+            reliability["retransmittedFrames"] = retransmitted_frame_count
+            reliability["retransmittedFragments"] = retransmitted_fragment_count
+            reliability["retransmittedWireBytes"] = retransmitted_wire_bytes
+            reliability["retransmitRatio"] = round(
+                retransmitted_fragment_count / fragment_count if fragment_count else 0.0,
+                6,
+            )
+            reliability["maxRecoveryLatencyMs"] = round(
+                reliability["maxRecoveryLatencyMs"], 3
+            )
+            reliability["maxScheduleLatenessMs"] = round(max_lateness_ms, 3)
         counter_gate = evaluate_probe_gate(
             baseline_stats,
             final_stats,
@@ -755,6 +1014,7 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
             raw_bytes,
             message_counts,
             args.require_stats_version,
+            reliability,
         )
         print(
             f"STATS_FINAL node={args.target} mode={final_stats['injectionMode']} "
@@ -776,8 +1036,12 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
         "profile": args.profile,
         "framesSent": sum(message_counts.values()),
         "fragmentsSent": fragment_count,
+        "fragmentTransmissions": transmitted_fragment_count,
+        "retransmittedFrames": retransmitted_frame_count,
+        "retransmittedFragments": retransmitted_fragment_count,
         "rtcmRawBytes": raw_bytes,
         "fieldLinkWireBytes": wire_bytes,
+        "retransmittedWireBytes": retransmitted_wire_bytes,
         "rtcmRawBytesPerSecond": round(raw_bytes / args.duration_seconds, 2),
         "fieldLinkWireBytesPerSecond": round(wire_bytes / args.duration_seconds, 2),
         "elapsedSecondsIncludingDrain": round(elapsed_seconds, 3),
@@ -791,6 +1055,7 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
         "fieldLinkRxDecodeErrors": decoder.decode_errors,
         "baselineStats": baseline_stats,
         "finalStats": final_stats,
+        "reliability": reliability,
         "counterGate": counter_gate,
         "nodeCounterGate": "passed" if counter_gate["passed"] else "failed",
         "hardwareGatePassed": counter_gate["passed"],
@@ -809,6 +1074,18 @@ def self_test() -> None:
     assert all(item.endswith(b"\x00") for item in wire_frames)
     query = encode_probe_stats_query("B", 0x89ABCDEF)
     assert query == b"G3QB89ABCDEF"
+    assert encode_rtcm_ack_query("B", 0x89ABCDEF) == b"G3AB89ABCDEF"
+    ack_payload = (
+        b"G3A"
+        + bytes((1, 2, 1, 1, 0))
+        + struct.pack(">IIIH", 0x89ABCDEF, 0x10203040, 117, 0xA55A)
+        + b"\x00\x00"
+    )
+    decoded_ack = decode_rtcm_ack_response(ack_payload)
+    assert decoded_ack["sessionValid"]
+    assert decoded_ack["completedBitmap"] == 0xA55A
+    assert ack_reports_completed(decoded_ack, 0x10203040, 116)
+    assert not ack_reports_completed(decoded_ack, 0x10203040, 117)
     response_payload = (
         b"G3S"
         + bytes((1, 2, 1, 0, 0))
@@ -825,7 +1102,9 @@ def self_test() -> None:
     )
     final_counters = [1, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 1, 90, 0, 0, 0, 0, 0]
     final_types = [0, 0, 1, 0, 0, 0]
-    final_link = [2, 1, 0, 0, 0, 0, 0, 0]
+    # Sequence counters cover a shared multi-sender bus. They remain diagnostic
+    # because switching sender sequence spaces can look like gaps or resets.
+    final_link = [10, 1, 0, 93, 4, 2, 0, 0]
     final_v2_payload = (
         b"G3S"
         + bytes((2, 2, 1, 0, 0))
@@ -845,7 +1124,7 @@ def self_test() -> None:
     assert baseline_v2["responseVersion"] == 2
     assert final_v2["completedTypeCounts"]["1074"] == 1
     assert final_v2["linkStats"]["decodedRtcmFrames"] == 1
-    assert evaluate_probe_gate(
+    v2_gate = evaluate_probe_gate(
         baseline_v2,
         final_v2,
         1,
@@ -853,7 +1132,49 @@ def self_test() -> None:
         90,
         Counter({1074: 1}),
         2,
-    )["passed"]
+    )
+    assert v2_gate["passed"]
+    assert v2_gate["linkDeltas"]["sequenceGaps"] == 93
+    assert v2_gate["linkDeltas"]["sequenceDuplicates"] == 4
+    assert v2_gate["linkDeltas"]["sequenceResets"] == 2
+    reliable_counters = final_counters.copy()
+    reliable_counters[1] = 1
+    reliable_link = [10, 2, 3, 93, 4, 2, 0, 0]
+    reliable_v2_payload = (
+        b"G3S"
+        + bytes((2, 2, 1, 0, 0))
+        + struct.pack(
+            ">II18IHH6I8I",
+            2,
+            101,
+            *reliable_counters,
+            1,
+            0,
+            *final_types,
+            *reliable_link,
+        )
+    )
+    reliable_gate = evaluate_probe_gate(
+        baseline_v2,
+        decode_probe_stats_response(reliable_v2_payload),
+        1,
+        1,
+        90,
+        Counter({1074: 1}),
+        2,
+        {
+            "failedWindows": 0,
+            "maxRecoveryLatencyMs": 900.0,
+            "maxRecoveryAgeMs": 3000.0,
+            "retransmitRatio": 1.0,
+            "maxRetransmitRatio": 1.0,
+            "maxScheduleLatenessMs": 100.0,
+            "maxAllowedScheduleLatenessMs": 500.0,
+        },
+    )
+    assert reliable_gate["passed"]
+    assert reliable_gate["deltas"]["duplicateFragments"] == 1
+    assert reliable_gate["linkDeltas"]["decodeErrors"] == 3
     response_wire = encode_field_link(99, response_payload, FIELD_LINK_TYPE_CONTROL)
     stream_decoder = FieldLinkStreamDecoder()
     decoded_frames = stream_decoder.feed(response_wire[:11])
@@ -919,14 +1240,21 @@ def parse_args() -> argparse.Namespace:
         "--um220-qzss-rate-hz", type=float, choices=(0.0, 0.5, 1.0), default=1.0
     )
     parser.add_argument("--fragment-data-bytes", type=int, default=160)
-    parser.add_argument("--chunk-bytes", type=int, default=32)
-    parser.add_argument("--chunk-delay-ms", type=int, default=15)
+    parser.add_argument("--chunk-bytes", type=int, default=128)
+    parser.add_argument("--chunk-delay-ms", type=int, default=0)
     parser.add_argument("--min-packet-interval-ms", type=int)
     parser.add_argument("--settle-ms", type=int, default=1000)
     parser.add_argument("--drain-ms", type=int, default=2000)
     parser.add_argument("--stats-timeout-seconds", type=float, default=3.0)
     parser.add_argument("--stats-retries", type=int, default=3)
     parser.add_argument("--require-stats-version", type=int, choices=(1, 2), default=1)
+    parser.add_argument("--selective-retry", action="store_true")
+    parser.add_argument("--max-retransmit-rounds", type=int, default=2)
+    parser.add_argument("--ack-timeout-seconds", type=float, default=1.0)
+    parser.add_argument("--ack-retries", type=int, default=3)
+    parser.add_argument("--max-recovery-age-ms", type=float, default=3000.0)
+    parser.add_argument("--max-retransmit-ratio", type=float, default=0.25)
+    parser.add_argument("--max-schedule-lateness-ms", type=float, default=500.0)
     parser.add_argument("--late-threshold-ms", type=float, default=50.0)
     parser.add_argument("--service", default="lsmv2-field-gateway.service")
     parser.add_argument(
@@ -944,8 +1272,18 @@ def parse_args() -> argparse.Namespace:
         or args.packet_rate_hz <= 0
     ):
         parser.error("duration, baud and stats timeout must be positive")
-    if args.stats_retries <= 0:
-        parser.error("stats retries must be positive")
+    if args.stats_retries <= 0 or args.ack_retries <= 0:
+        parser.error("stats and ACK retries must be positive")
+    if args.max_retransmit_rounds < 0:
+        parser.error("max retransmit rounds must be non-negative")
+    if args.max_recovery_age_ms <= 0 or args.ack_timeout_seconds <= 0:
+        parser.error("max recovery age and ACK timeout must be positive")
+    if args.max_schedule_lateness_ms < 0:
+        parser.error("max schedule lateness must be non-negative")
+    if not 0.0 <= args.max_retransmit_ratio <= 1.0:
+        parser.error("max retransmit ratio must be in [0, 1]")
+    if args.selective_retry and args.require_stats_version != 2:
+        parser.error("selective retry requires --require-stats-version 2")
     if not 32 <= args.fragment_data_bytes <= 512:
         parser.error("fragment data bytes must be in [32, 512]")
     if not 8 <= args.packet_frame_bytes <= 512:
@@ -1023,6 +1361,13 @@ def main() -> int:
             "statsTimeoutSeconds": args.stats_timeout_seconds,
             "statsRetries": args.stats_retries,
             "requiredStatsVersion": args.require_stats_version,
+            "selectiveRetry": args.selective_retry,
+            "maxRetransmitRounds": args.max_retransmit_rounds,
+            "ackTimeoutSeconds": args.ack_timeout_seconds,
+            "ackRetries": args.ack_retries,
+            "maxRecoveryAgeMs": args.max_recovery_age_ms,
+            "maxRetransmitRatio": args.max_retransmit_ratio,
+            "maxScheduleLatenessMs": args.max_schedule_lateness_ms,
         },
     }
 

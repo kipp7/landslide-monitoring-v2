@@ -121,7 +121,7 @@ static char g_last_trusted_time_ts[40] = "";
 static char g_last_trusted_time_source[32] = "";
 static volatile uint32_t g_last_platform_command_tick = 0;
 static volatile int g_field_link_recovery_requested = 0;
-#define FW_RX_DIAG_MARKER "fw-gnss-rtk-v31-probe-stats-v2-20260727"
+#define FW_RX_DIAG_MARKER "fw-gnss-rtk-v31-probe-ack-v1-20260728"
 bool g_cloud_motor_enabled = false;
 int g_cloud_motor_speed = 0;
 MotorDirection g_cloud_motor_direction = MOTOR_DIRECTION_STOP;
@@ -741,6 +741,54 @@ static int HandleGnssProbeStatsQuery(const char *command)
         (unsigned int)local_node,
         (unsigned int)nonce,
         response_len,
+        send_ret
+    );
+    return 1;
+}
+
+static int HandleGnssRtcmAckQuery(const char *command)
+{
+    GnssRtcmAckWindow window;
+    uint8_t response[GNSS_RTCM_ACK_RESPONSE_V1_BYTES];
+    uint8_t target_node = 0U;
+    uint8_t local_node;
+    uint32_t nonce = 0U;
+    int response_len;
+    int send_ret;
+
+    if (command == NULL || GnssRtcmAckQueryV1_Decode(
+            command, (int)strlen(command), &target_node, &nonce
+        ) != 0) {
+        return 0;
+    }
+
+    local_node = LocalNodeNumber();
+    if (local_node == 0U || target_node != local_node) {
+        return 1;
+    }
+
+    GnssRtcmInjection_GetAckWindow(&window);
+    response_len = GnssRtcmAckResponseV1_Encode(
+        &window,
+        local_node,
+        (uint8_t)GNSS_RTCM_INJECTION_MODE,
+        nonce,
+        response,
+        sizeof(response)
+    );
+    if (response_len != GNSS_RTCM_ACK_RESPONSE_V1_BYTES) {
+        printf("[RTCM ACK] encode failed node=%u\n", (unsigned int)local_node);
+        return 1;
+    }
+
+    send_ret = XL01_SendControlPayload(response, response_len);
+    printf(
+        "[RTCM ACK] node=%u nonce=%08X session=%08X highest=%u bitmap=%04X send=%d\n",
+        (unsigned int)local_node,
+        (unsigned int)nonce,
+        (unsigned int)window.session_epoch,
+        (unsigned int)window.highest_sequence,
+        (unsigned int)window.completed_bitmap,
         send_ret
     );
     return 1;
@@ -1437,7 +1485,8 @@ static void* DataProcessTask(const char* arg)
         int processed = XL01_ProcessReceivedData(&g_stats);
 
         while (XL01_TryDequeuePlatformCommand(g_process_command_json, sizeof(g_process_command_json)) > 0) {
-            if (!HandleGnssProbeStatsQuery(g_process_command_json)) {
+            if (!HandleGnssRtcmAckQuery(g_process_command_json) &&
+                !HandleGnssProbeStatsQuery(g_process_command_json)) {
                 HandlePlatformCommand(g_process_command_json);
             }
             processed = 1;

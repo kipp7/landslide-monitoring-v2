@@ -6,6 +6,8 @@ export const RTCM3_MAX_FRAME_BYTES = 1029;
 export const GNSS_PROBE_STATS_QUERY_V1_BYTES = 12;
 export const GNSS_PROBE_STATS_RESPONSE_V1_BYTES = 92;
 export const GNSS_PROBE_STATS_RESPONSE_V2_BYTES = 148;
+export const GNSS_RTCM_ACK_QUERY_V1_BYTES = 12;
+export const GNSS_RTCM_ACK_RESPONSE_V1_BYTES = 24;
 
 export const GNSS_V3_TARGET_GATEWAY = 0;
 export const GNSS_V3_TARGET_NODE_A = 1 << 0;
@@ -136,6 +138,17 @@ export type GnssProbeStatsResponseV2 = {
   };
 };
 
+export type GnssRtcmAckResponseV1 = {
+  responseVersion: 1;
+  nodeNumber: 1 | 2 | 3;
+  injectionMode: 0 | 1 | 2;
+  nonce: number;
+  sessionValid: boolean;
+  sessionEpoch: number;
+  highestSequence: number;
+  completedBitmap: number;
+};
+
 const UINT8_MAX = 0xff;
 const UINT16_MAX = 0xffff;
 const UINT32_MAX = 0xffffffff;
@@ -161,6 +174,69 @@ export function encodeGnssProbeStatsQueryV1(nodeNumber: 1 | 2 | 3, nonce: number
   const nodeLabel = String.fromCharCode(0x40 + nodeNumber);
   const nonceHex = (nonce >>> 0).toString(16).toUpperCase().padStart(8, "0");
   return Buffer.from(`G3Q${nodeLabel}${nonceHex}`, "ascii");
+}
+
+export function encodeGnssRtcmAckQueryV1(nodeNumber: 1 | 2 | 3, nonce: number): Buffer {
+  assertIntegerRange("nodeNumber", nodeNumber, 1, 3);
+  assertIntegerRange("nonce", nonce, 1, UINT32_MAX);
+  const nodeLabel = String.fromCharCode(0x40 + nodeNumber);
+  const nonceHex = (nonce >>> 0).toString(16).toUpperCase().padStart(8, "0");
+  return Buffer.from(`G3A${nodeLabel}${nonceHex}`, "ascii");
+}
+
+export function decodeGnssRtcmAckResponseV1(input: Buffer): GnssRtcmAckResponseV1 {
+  if (
+    input.length !== GNSS_RTCM_ACK_RESPONSE_V1_BYTES ||
+    input.subarray(0, 3).toString("ascii") !== "G3A" ||
+    input.readUInt8(3) !== 1
+  ) {
+    throw new Error("RTCM ACK response magic, version or length is invalid");
+  }
+  const nodeNumber = input.readUInt8(4);
+  const injectionMode = input.readUInt8(5);
+  const flags = input.readUInt8(6);
+  if (nodeNumber < 1 || nodeNumber > 3 || injectionMode > 2) {
+    throw new Error("RTCM ACK node or injection mode is invalid");
+  }
+  if ((flags & ~0x01) !== 0 || input.readUInt8(7) !== 0 || input.readUInt16BE(22) !== 0) {
+    throw new Error("RTCM ACK flags or reserved bytes are invalid");
+  }
+  const nonce = input.readUInt32BE(8);
+  const sessionEpoch = input.readUInt32BE(12);
+  const highestSequence = input.readUInt32BE(16);
+  const completedBitmap = input.readUInt16BE(20);
+  const sessionValid = (flags & 0x01) !== 0;
+  if (nonce === 0) {
+    throw new Error("RTCM ACK nonce must be non-zero");
+  }
+  if (sessionValid && sessionEpoch === 0) {
+    throw new Error("RTCM ACK valid session has a zero epoch");
+  }
+  if (!sessionValid && (sessionEpoch !== 0 || highestSequence !== 0 || completedBitmap !== 0)) {
+    throw new Error("RTCM ACK invalid session carries state");
+  }
+  return {
+    responseVersion: 1,
+    nodeNumber: nodeNumber as 1 | 2 | 3,
+    injectionMode: injectionMode as 0 | 1 | 2,
+    nonce,
+    sessionValid,
+    sessionEpoch,
+    highestSequence,
+    completedBitmap
+  };
+}
+
+export function gnssRtcmAckReportsCompleted(
+  ack: GnssRtcmAckResponseV1,
+  sessionEpoch: number,
+  sequence: number
+): boolean {
+  assertIntegerRange("sessionEpoch", sessionEpoch, 1, UINT32_MAX);
+  assertIntegerRange("sequence", sequence, 0, UINT32_MAX);
+  if (!ack.sessionValid || ack.sessionEpoch !== sessionEpoch) return false;
+  const delta = (ack.highestSequence - sequence) >>> 0;
+  return delta < 16 && (ack.completedBitmap & (1 << delta)) !== 0;
 }
 
 export function decodeGnssProbeStatsResponse(

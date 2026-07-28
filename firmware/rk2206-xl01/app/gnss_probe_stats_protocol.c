@@ -30,9 +30,10 @@ static void WriteUint32Be(uint8_t *output, uint32_t value)
     output[3] = (uint8_t)(value & 0xFFU);
 }
 
-int GnssProbeStatsQueryV1_Decode(
+static int DecodeQuery(
     const char *payload,
     int payload_bytes,
+    char query_kind,
     uint8_t *target_node,
     uint32_t *nonce
 )
@@ -42,7 +43,7 @@ int GnssProbeStatsQueryV1_Decode(
     int index;
 
     if (payload == NULL || payload_bytes != GNSS_PROBE_STATS_QUERY_V1_BYTES ||
-        payload[0] != 'G' || payload[1] != '3' || payload[2] != 'Q') {
+        payload[0] != 'G' || payload[1] != '3' || payload[2] != query_kind) {
         return -1;
     }
     if (payload[3] < 'A' || payload[3] > 'C') {
@@ -66,6 +67,16 @@ int GnssProbeStatsQueryV1_Decode(
         *nonce = parsed_nonce;
     }
     return 0;
+}
+
+int GnssProbeStatsQueryV1_Decode(
+    const char *payload,
+    int payload_bytes,
+    uint8_t *target_node,
+    uint32_t *nonce
+)
+{
+    return DecodeQuery(payload, payload_bytes, 'Q', target_node, nonce);
 }
 
 int GnssProbeStatsResponseV1_Encode(
@@ -176,4 +187,48 @@ int GnssProbeStatsResponseV2_Encode(
         WriteUint32Be(output + 116U + index * 4U, link_counters[index]);
     }
     return GNSS_PROBE_STATS_RESPONSE_V2_BYTES;
+}
+
+int GnssRtcmAckQueryV1_Decode(
+    const char *payload,
+    int payload_bytes,
+    uint8_t *target_node,
+    uint32_t *nonce
+)
+{
+    return DecodeQuery(payload, payload_bytes, 'A', target_node, nonce);
+}
+
+int GnssRtcmAckResponseV1_Encode(
+    const GnssRtcmAckWindow *window,
+    uint8_t node_number,
+    uint8_t injection_mode,
+    uint32_t nonce,
+    uint8_t *output,
+    int output_size
+)
+{
+    if (output == NULL || output_size < GNSS_RTCM_ACK_RESPONSE_V1_BYTES ||
+        node_number < 1U || node_number > 3U || injection_mode > 2U || nonce == 0U) {
+        return -1;
+    }
+    if (window != NULL && window->session_valid != 0U && window->session_epoch == 0U) {
+        return -1;
+    }
+
+    memset(output, 0, GNSS_RTCM_ACK_RESPONSE_V1_BYTES);
+    output[0] = 'G';
+    output[1] = '3';
+    output[2] = 'A';
+    output[3] = 1U;
+    output[4] = node_number;
+    output[5] = injection_mode;
+    output[6] = window != NULL && window->session_valid != 0U ? 1U : 0U;
+    WriteUint32Be(output + 8, nonce);
+    if (window != NULL && window->session_valid != 0U) {
+        WriteUint32Be(output + 12, window->session_epoch);
+        WriteUint32Be(output + 16, window->highest_sequence);
+        WriteUint16Be(output + 20, window->completed_bitmap);
+    }
+    return GNSS_RTCM_ACK_RESPONSE_V1_BYTES;
 }

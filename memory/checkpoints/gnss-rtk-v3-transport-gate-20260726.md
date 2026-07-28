@@ -49,13 +49,16 @@ status: active
 - QZSS 1114 降到 0.5 Hz 后，B 的 `160 B/160 ms` 60 s 仍丢 2/282 分片并触发 2 次队列淘汰；改成 200 ms 后队列压力消失，但仍丢 2/282 且有重组超时。把分片上限改为 320 B 后，250 B 的 1124 从两包变成一包，12 s 44/44 通过，60 s 丢失降到 1/222，线上负载约 717 B/s。该证据说明降低空口包率有效，但不能消除 B 的低频丢包，0.5 Hz QZSS 不得推广到生产。
 - 关闭可选 QZSS 1114 后，B 的三核心星座 profile 在 160 ms 下 60 s 严格通过：252/252 分片、192/192 帧、27000/27000 B，CRC/拒绝/重组/队列/注入/UART 错误全为 0。该共同候选为 GPS 1074、BDS 1124、Galileo 1094、1005/1033，净 RTCM 450 B/s、field-link 702 B/s；A 已通过包含它和额外 QZSS 的更高负载。
 - field-gateway 新增独立 `rtcm-downlink-shaper.ts` 生产核心和 4 项专项测试：有界流解包、CRC/垃圾字节处理、支持集过滤、per-type newest-only、1 Hz 观测限频、TTL 过期和参考帧优先均已覆盖。全包 14 项测试、TypeScript build 和 lint 通过。该模块尚未接入 NTRIP、端口命令链或串口发送，因而不能被视为 LIVE 或部署完成。
-- 已完成待烧录的 PROBE stats V2：RTCM 新鲜度队列从 2 帧增至 4 帧，增加约 2058 B 静态帧存储；148 字节响应在 V1 的 92 字节基础上追加 1005/1033/1074/1094/1114/1124 完整帧计数，以及 field-link 解码帧、RTCM 帧、解码错误、序号缺口/重复/重启和 RX FIFO 丢弃。Python 门禁可用 `--require-stats-version 2` 强制按类型和链路零增量核对，TypeScript 协议库保持 V1/V2 双栈。C99 主机测试显示重组器 5616 B、队列帧区 4116 B；field-gateway 15 项测试/lint 和 A 的 `DISABLED/PROBE/LIVE` 三模式全量构建通过。该固件尚未烧录，不能替代 A/B/C 真机证据。
+- 已完成并烧录 PROBE stats V2：RTCM 新鲜度队列从 2 帧增至 4 帧，增加约 2058 B 静态帧存储；148 字节响应在 V1 的 92 字节基础上追加 1005/1033/1074/1094/1114/1124 完整帧计数，以及 field-link 解码帧、RTCM 帧、解码错误、序号缺口/重复/重启和 RX FIFO 丢弃。Python 门禁可用 `--require-stats-version 2` 强制按类型和链路核对，TypeScript 协议库保持 V1/V2 双栈。C99 主机测试显示重组器 5616 B、队列帧区 4116 B；现场结果见后续条目。
 - 实现提交 `c0eff2a3fe3a82d13a251fcdb093c71ecbf547a5` 已推送。A/B/C V2 PROBE 发布包位于 `F:\2\openharmony\rk2206_firmware_releases\xl01_gnss_rtk_v31_probe_stats_v2_20260727`，manifest 指向该提交；9/9 二进制哈希复算匹配，A/B/C `Firmware.img` SHA-256 分别为 `2f5995a3dfb8bbd864923405053e8927cc3a1db351aba2d799d20d2e5dbcb15c`、`7a4d86d512551cebbce817aaae07b222bab953de9f790a1388fd47613f4a3777`、`cee103b959bee76b14f1a54da9d6ad9b8eda0987f59beb51f0273daa9b02be54`；每个 liteos 只含自身 UUID、PROBE 标记和 V2 固件标记，loader 三份一致。兼容 V1/V2 的探针已部署到 RK3568，SHA-256 为 `c63b5499731ddb480d86dec9bb5af11d80c34869a1c18087f6cbb074f035de6c`，自检通过且服务保持 active。
+- V2 烧录后 A/B 的 12 s 三核心星座均完整：50/50 分片、38/38 帧、5360/5360 B。B 首轮仅因共享多发送者的全局 sequence gap/reset 误报失败；门禁现只把这三项作为诊断，仍严格核对 decoded RTCM、按类型、CRC、重组、队列和 FIFO。
+- 当前链路的 60 s 无重传复测真实失败：`160 B + 128 B/0 ms` 时 A 200/252、B 249/252；`32 B/15 ms` 更差，`320 B` 在 A 短测也更差。全量 V2 统计逐秒查询虽能最终补齐 A 的 38/38 帧，但造成重组超时和严重调度漂移，不能作为 ACK。
+- 已实现 24 B `G3A` ACK V1，bit 0..15 表示最高序号向前 16 个完成帧。查询/响应 nonce 定向，响应只在 DataProcessTask 发送；复用现有完成缓存，没有扩大 5616 B 重组器或 4116 B RTCM 队列。Python 选择性补发按精确序列重发，并以 3 s 恢复、500 ms 最大调度迟到、25% 补发比例作为硬门禁。C99、Python、TypeScript 16 项测试/lint 和三模式 A 全量构建已通过；尚未烧录。
 - 本 checkpoint 和提交均不包含 CORS 主机、账号、密码、真实坐标或现场原始日志。
 
 ## In Progress
 
-- 软件边界、离线容量模型、V2 闭环统计、A/B/C V2 发布包和 RK3568 探针部署均已完成。节点仍运行旧 V1 PROBE，必须统一烧录 V2 后重新验证；A/B 旧 V1 已通过三核心星座共同候选的 60 s 合成 PROBE，C 当前离线，真实 NTRIP 和三节点混合负载仍未通过，不能进入 LIVE。
+- 软件边界、离线容量模型、V2 闭环统计、A/B/C V2 烧录和 RK3568 探针部署均已完成。A/B 的 V2 短测通过但当前 60 s 链路不稳定；ACK V1 尚未烧录，C 当前离线，真实 NTRIP 和三节点混合负载仍未通过，不能进入 LIVE。
 - RK2206 当前没有独立可信的 Unix 时钟。节点可执行 1500 ms 重组超时和最多 3000 ms 本地队列龄，但绝对生成时间 TTL 只能计为 `ttl_unverified`，由 RK3568 先做绝对新鲜度过滤。
 - 现有 GPS 驱动已阻止 RMC 状态错误设置 Fixed，并公开原始 GGA quality；完整 GGA/GSA/GST/GSV/RMC/ZDA 定点解析和 `GNSS_CORE` 1 Hz 上送尚未实现。
 
@@ -82,4 +85,4 @@ status: active
 
 ## Resume Prompt
 
-继续 V3.1 传输门禁：从 `F:\2\openharmony\rk2206_firmware_releases\xl01_gnss_rtk_v31_probe_stats_v2_20260727` 统一烧录 A/B/C 对应目录，确认启动标记 `fw-gnss-rtk-v31-probe-stats-v2-20260727` 和 `PROBE (no GNSS UART writes)`。然后用 RK3568 探针对 A、B 执行三核心星座 12 s/60 s，并加 `--require-stats-version 2`；再复测 0.5 Hz QZSS，以按类型计数、field-link sequence gap/decode/FIFO 数据定位丢包层级。C 离线时继续预留 180 B/s 且不伪造结果，恢复后补同样门禁。保持 field-gateway shaper 未接线、LIVE 关闭，三节点通过后再做真实 NTRIP + GNSS_CORE + compact 遥测 + 控制命令混合门禁。
+继续 V3.1 传输门禁：生成并统一烧录 ACK V1 的 A/B/C 对应目录，确认启动标记 `fw-gnss-rtk-v31-probe-ack-v1-20260728` 和 `PROBE (no GNSS UART writes)`。部署匹配探针后先对 A/B 执行三核心星座 12 s，带 `--require-stats-version 2 --selective-retry`，要求完整计数、恢复 <= 3 s、调度迟到 <= 500 ms、补发 <= 25%；短测通过再做 60 s。C 离线时继续预留 180 B/s 且不伪造结果。保持 field-gateway shaper 未接线、LIVE 关闭，三节点通过后再做真实 NTRIP + GNSS_CORE + compact 遥测 + 控制命令混合门禁。

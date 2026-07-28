@@ -41,9 +41,12 @@ static void TestFieldLinkRxStats(void)
 int main(void)
 {
     const char query[] = "G3QB89ABCDEF";
+    const char ack_query[] = "G3AB89ABCDEF";
     GnssRtcmInjectionStats stats;
+    GnssRtcmAckWindow ack_window;
     FieldLinkRxStats link_stats;
     uint8_t payload[GNSS_PROBE_STATS_RESPONSE_V2_BYTES];
+    uint8_t ack_payload[GNSS_RTCM_ACK_RESPONSE_V1_BYTES];
     uint8_t target = 0U;
     uint32_t nonce = 0U;
     uint32_t *counter = &stats.accepted_fragments;
@@ -56,6 +59,9 @@ int main(void)
     assert(GnssProbeStatsQueryV1_Decode("G3QD89ABCDEF", 12, NULL, NULL) == -1);
     assert(GnssProbeStatsQueryV1_Decode("G3QA00000000", 12, NULL, NULL) == -1);
     assert(GnssProbeStatsQueryV1_Decode("G3QA89ABCDEZ", 12, NULL, NULL) == -1);
+    assert(GnssRtcmAckQueryV1_Decode(ack_query, 12, &target, &nonce) == 0);
+    assert(target == 2U && nonce == 0x89ABCDEFU);
+    assert(GnssRtcmAckQueryV1_Decode("G3AQ89ABCDEF", 12, NULL, NULL) == -1);
 
     memset(&stats, 0, sizeof(stats));
     for (index = 0U; index < 18U; ++index) {
@@ -98,6 +104,23 @@ int main(void)
     for (index = 0U; index < 8U; ++index) {
         assert(ReadUint32Be(payload + 116U + index * 4U) == index + 31U);
     }
+    memset(&ack_window, 0, sizeof(ack_window));
+    ack_window.session_valid = 1U;
+    ack_window.session_epoch = 0x10203040U;
+    ack_window.highest_sequence = 117U;
+    ack_window.completed_bitmap = 0xA55AU;
+    assert(GnssRtcmAckResponseV1_Encode(
+        &ack_window, 2U, GNSS_RTCM_INJECTION_PROBE, nonce,
+        ack_payload, sizeof(ack_payload)
+    ) == GNSS_RTCM_ACK_RESPONSE_V1_BYTES);
+    assert(memcmp(ack_payload, "G3A", 3) == 0);
+    assert(ack_payload[3] == 1U && ack_payload[4] == 2U && ack_payload[5] == 1U);
+    assert(ack_payload[6] == 1U && ack_payload[7] == 0U);
+    assert(ReadUint32Be(ack_payload + 8) == nonce);
+    assert(ReadUint32Be(ack_payload + 12) == 0x10203040U);
+    assert(ReadUint32Be(ack_payload + 16) == 117U);
+    assert(ReadUint16Be(ack_payload + 20) == 0xA55AU);
+    assert(ReadUint16Be(ack_payload + 22) == 0U);
     printf("gnss_probe_stats_protocol_host_test passed payload_bytes=%u\n",
            (unsigned int)sizeof(payload));
     return 0;

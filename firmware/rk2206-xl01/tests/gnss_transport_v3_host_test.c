@@ -296,6 +296,7 @@ static void TestBoundedInjectionQueue(void)
     uint16_t dequeued_bytes = 0U;
     uint16_t message_type = 0U;
     GnssRtcmInjectionStats stats;
+    GnssRtcmAckWindow ack_window;
 
     BuildRtcm(frame);
     assert(GNSS_RTCM_QUEUE_DEPTH == 4U);
@@ -315,6 +316,11 @@ static void TestBoundedInjectionQueue(void)
     assert(stats.queue_evictions == 1U);
     assert(stats.ttl_unverified_fragments == 25U);
     assert(stats.completed_type_1124 == 5U);
+    GnssRtcmInjection_GetAckWindow(&ack_window);
+    assert(ack_window.session_valid == 1U);
+    assert(ack_window.session_epoch == 51U);
+    assert(ack_window.highest_sequence == 5U);
+    assert(ack_window.completed_bitmap == 0x001FU);
 
     assert(GnssRtcmInjection_TryDequeue(
         1100U, dequeued, sizeof(dequeued), &dequeued_bytes, &message_type

@@ -39,6 +39,13 @@ typedef struct {
     uint16_t queue_pending;
 } GnssRtcmInjectionStats;
 
+typedef struct {
+    uint8_t session_valid;
+    uint32_t session_epoch;
+    uint32_t highest_sequence;
+    uint16_t completed_bitmap;
+} GnssRtcmAckWindow;
+
 int GnssRtcmInjection_Init(uint8_t local_node);
 
 GnssRtcmReassemblyStatusV3 GnssRtcmInjection_AcceptFragment(
@@ -60,6 +67,7 @@ void GnssRtcmInjection_RecordInjected(uint16_t frame_bytes);
 void GnssRtcmInjection_RecordWriteError(uint8_t partial_write);
 void GnssRtcmInjection_RecordInjectionDrop(void);
 void GnssRtcmInjection_GetStats(GnssRtcmInjectionStats *stats);
+void GnssRtcmInjection_GetAckWindow(GnssRtcmAckWindow *window);
 
 #ifdef __cplusplus
 }
