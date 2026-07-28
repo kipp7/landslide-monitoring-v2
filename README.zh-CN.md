@@ -5,7 +5,7 @@
 [![Windows](https://img.shields.io/badge/platform-Windows-0078D4.svg)](apps/windows-shell)
 [![Edge](https://img.shields.io/badge/edge-RK3568-2E7D32.svg)](edge/rk3568-gateway)
 [![Firmware](https://img.shields.io/badge/firmware-RK2206-7952B3.svg)](firmware/rk2206-xl01)
-[![Hardware](https://img.shields.io/badge/hardware-carrier%20board-455A64.svg)](hardware/carrier-board)
+[![Hardware](https://img.shields.io/badge/hardware-field%20node-455A64.svg)](hardware/)
 
 [English](README.md) | 简体中文
 
@@ -13,9 +13,9 @@
   <img src="docs/assets/branding/social-preview.png" alt="山体滑坡监测 V2 端到端系统预览" width="100%" />
 </p>
 
-山体滑坡监测 V2 是一个端到端开源山体滑坡监测系统。仓库同时包含 Windows 操作员客户端、云端后端服务、RK3568 边缘网关服务、RK2206 现场节点固件，以及载板硬件交付资料。
+山体滑坡监测 V2 是一个端到端开源山体滑坡监测系统。仓库同时包含 Windows 操作员客户端、云端后端服务、RK3568 边缘网关服务、RK2206 现场节点固件，以及现场节点硬件设计资料。
 
-仓库围绕五个产品面组织：桌面端操作、云端后端服务、边缘网关服务、现场固件和载板硬件资料。
+仓库围绕五个产品面组织：桌面端操作、云端后端服务、边缘网关服务、现场固件和现场节点硬件资料。
 
 ## 系统概览
 
@@ -32,7 +32,7 @@ RK2206 现场节点
 - 云端后端包含 REST API、PostgreSQL、ClickHouse、EMQX、Kafka、遥测采集、规则和设备命令 Worker。
 - RK3568 边缘服务覆盖串口遥测、MQTT 转发、本地健康摘要、监督服务和声光报警执行。
 - RK2206 XL01 现场固件包覆盖传感采集、遥测封包、指令确认、看门狗和板级工具。
-- 载板硬件交付包包含原理图、PCB 预览、Gerber、BOM、坐标文件和 LCEDA 源工程包。
+- 现场节点硬件包覆盖现有载板、外壳、内安装结构、太阳能供电、采购清单和下一版载板要求。
 - 提供中英文文档、Issue 模板、维护者说明、安全策略、CI 和 MIT License。
 
 ## 仓库结构
@@ -45,7 +45,7 @@ RK2206 现场节点
 | `infra/compose/` | 单机后端基础设施与应用部署。 |
 | `edge/rk3568-gateway/` | RK3568 网关、链路监测、监督服务和声光报警执行服务。 |
 | `firmware/rk2206-xl01/` | RK2206 XL01 现场节点固件包和引脚说明。 |
-| `hardware/carrier-board/` | 载板公开设计和打板交付资料。 |
+| `hardware/` | 现场节点硬件索引、载板交付、外壳、太阳能供电、采购和版本记录。 |
 | `packages/`、`libs/` | 边缘与后端服务共用的 TypeScript 包。 |
 | `scripts/desktop/` | Windows 桌面端开发、打包和验证脚本。 |
 | `docs/` | 架构、范围、发布、系统、维护和中英文文档。 |
@@ -58,7 +58,8 @@ RK2206 现场节点
 | 云端后端 | 持续维护 | [Docker Compose 部署](infra/compose/README.md) |
 | RK3568 边缘网关 | 持续维护 | [边缘网关](edge/rk3568-gateway/README.md) |
 | RK2206 现场固件 | 作为公开固件包维护 | [固件说明](firmware/rk2206-xl01/README.md) |
-| 载板硬件交付资料 | 作为公开设计包维护 | [硬件说明](hardware/carrier-board/README.md) |
+| 现有载板交付资料 | 作为带已知源文件冲突的实物基线维护 | [载板说明](hardware/carrier-board/README.md) |
+| 现场节点外壳与供电设计 | EVT0.1 设计输入，尚未放行制造 | [硬件总览](hardware/README.md) |
 | Web / 移动端应用 | 不包含在公开树中 | [项目范围](docs/zh-CN/PROJECT_SCOPE.md) |
 
 ## 技术栈
@@ -71,7 +72,7 @@ RK2206 现场节点
 | 云端后端 | Node.js 20、Fastify、PostgreSQL、ClickHouse、EMQX、Kafka |
 | 边缘服务 | Node.js 20、TypeScript、MQTT、serialport、systemd 部署模板 |
 | 现场固件 | OpenHarmony/RK2206 应用包 |
-| 硬件交付 | 原理图、PCB 预览、Gerber、BOM、坐标文件、LCEDA 工程包 |
+| 硬件交付 | 载板源文件、外壳与安装规格、太阳能供电要求、采购和版本记录 |
 | 工程化 | npm workspaces、ESLint、Prettier、GitHub Actions |
 
 ## 快速开始
@@ -140,7 +141,7 @@ npm run desktop:publish
 
 ## 仓库范围
 
-仓库包含公开源码、文档、示例、部署模板、RK2206 固件包和载板硬件交付资料。运行密钥、本地日志、生成产物和现场特定配置应保留在 Git 之外。
+仓库包含公开源码、文档、示例、部署模板、RK2206 固件包和现场节点硬件设计资料。运行密钥、本地日志、生成产物、商家聊天截图和现场特定配置应保留在 Git 之外。
 
 ## 贡献
 

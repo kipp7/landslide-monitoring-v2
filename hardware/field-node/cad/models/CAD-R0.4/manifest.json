@@ -1,0 +1,1166 @@
+{
+  "revision": "CAD-R0.4",
+  "scope": "measured-envelope internal layout with nominal anchors and concept harness",
+  "manufacturing_status": "LAYOUT REVIEW ONLY / NOT FOR MANUFACTURE",
+  "solidworks": "2022 SP5.0",
+  "generated_parts": [
+    {
+      "part": "FN-ENC-003_open-tray-layout-reference_R0.4",
+      "status": "NOMINAL_LAYOUT_REFERENCE",
+      "expected_volume_mm3": 2127398.843,
+      "actual_volume_mm3": 2127398.843
+    },
+    {
+      "part": "FN-PLT-004_fr4-rect_8HOLE-NOMINAL_R0.4",
+      "status": "NOMINAL_8HOLE_VERIFY_PHYSICAL",
+      "native_bytes": 92086,
+      "step_bytes": 58267,
+      "preview_bytes": 227934,
+      "expected_volume_mm3": 157257.093,
+      "actual_volume_mm3": 157257.093
+    },
+    {
+      "part": "FN-PCB-003_carrier_ROTATED-CCW_4HOLE_R0.4",
+      "status": "VERIFIED_XY_HOLES_NOMINAL_Z",
+      "native_bytes": 85880,
+      "step_bytes": 37104,
+      "preview_bytes": 218076,
+      "expected_volume_mm3": 31228.528,
+      "actual_volume_mm3": 31228.528
+    },
+    {
+      "part": "FN-ENV-001_carrier-installed-height_R0.4",
+      "status": "USER_ALLOWANCE_INSTALLED_HEIGHT",
+      "native_bytes": 84665,
+      "step_bytes": 15939,
+      "preview_bytes": 211916,
+      "expected_volume_mm3": 684250.0,
+      "actual_volume_mm3": 684250.0
+    },
+    {
+      "part": "FN-BAT-002_battery-envelope_USER-MEASURED_R0.4",
+      "status": "USER_MEASURED_WITH_ALLOWANCE",
+      "native_bytes": 77196,
+      "step_bytes": 15962,
+      "preview_bytes": 207343,
+      "expected_volume_mm3": 161040.0,
+      "actual_volume_mm3": 161040.0
+    },
+    {
+      "part": "FN-HLD-001_battery-tray-zone_R0.4",
+      "status": "CONCEPT_TRAY_BASE",
+      "native_bytes": 80459,
+      "step_bytes": 15905,
+      "preview_bytes": 220510,
+      "expected_volume_mm3": 14472.0,
+      "actual_volume_mm3": 14472.0
+    },
+    {
+      "part": "FN-PWR-001_cn3791-module-envelope_R0.4",
+      "status": "USER_MEASURED_WITH_ALLOWANCE_NO_HOLES",
+      "native_bytes": 82690,
+      "step_bytes": 15930,
+      "preview_bytes": 229758,
+      "expected_volume_mm3": 9660.0,
+      "actual_volume_mm3": 9660.0
+    },
+    {
+      "part": "FN-HLD-002_cn3791-clip-zone_R0.4",
+      "status": "CONCEPT_CLIP_BASE",
+      "native_bytes": 78840,
+      "step_bytes": 15898,
+      "preview_bytes": 230750,
+      "expected_volume_mm3": 5208.0,
+      "actual_volume_mm3": 5208.0
+    },
+    {
+      "part": "FN-ZON-002_fuse-service-disconnect_R0.4",
+      "status": "REQUIRED_RESERVED_ZONE",
+      "native_bytes": 77261,
+      "step_bytes": 15928,
+      "preview_bytes": 218247,
+      "expected_volume_mm3": 10260.0,
+      "actual_volume_mm3": 10260.0
+    },
+    {
+      "part": "FN-SUP-001_edge-support-pad_DRAFT_R0.4",
+      "status": "OPTIONAL_EDGE_SUPPORT_DRAFT",
+      "native_bytes": 81135,
+      "step_bytes": 15930,
+      "preview_bytes": 210368,
+      "expected_volume_mm3": 864.0,
+      "actual_volume_mm3": 864.0
+    },
+    {
+      "part": "FN-HAR-001_pv-input-route_R0.4",
+      "status": "CONCEPT_ENTRY_PENDING",
+      "segments": 1,
+      "centerline_length_mm": 17.0,
+      "expected_volume_mm3": 179.375,
+      "actual_volume_mm3": 179.375
+    },
+    {
+      "part": "FN-HAR-002_battery-charge-route_R0.4",
+      "status": "CONCEPT_CONNECTOR_ASSIGNMENT_PENDING",
+      "segments": 3,
+      "centerline_length_mm": 32.0,
+      "expected_volume_mm3": 310.625,
+      "actual_volume_mm3": 310.625
+    },
+    {
+      "part": "FN-HAR-003_battery-load-to-fuse_R0.4",
+      "status": "CONCEPT_FUSE_REQUIRED",
+      "segments": 3,
+      "centerline_length_mm": 34.0,
+      "expected_volume_mm3": 380.0,
+      "actual_volume_mm3": 380.0
+    },
+    {
+      "part": "FN-HAR-004_fuse-to-dc5521_R0.4",
+      "status": "CONCEPT_FUSE_REQUIRED",
+      "segments": 3,
+      "centerline_length_mm": 44.5,
+      "expected_volume_mm3": 485.0,
+      "actual_volume_mm3": 485.0
+    },
+    {
+      "part": "FN-HAR-005_tilt-rs485-route_R0.4",
+      "status": "CONCEPT_SENSOR_EXIT_PENDING",
+      "segments": 3,
+      "centerline_length_mm": 55.5,
+      "expected_volume_mm3": 595.0,
+      "actual_volume_mm3": 595.0
+    },
+    {
+      "part": "FN-HAR-006_soil-rs485-entry-route_R0.4",
+      "status": "CONCEPT_GLAND_PENDING",
+      "segments": 2,
+      "centerline_length_mm": 156.5,
+      "expected_volume_mm3": 1605.0,
+      "actual_volume_mm3": 1605.0
+    },
+    {
+      "part": "FN-HAR-007_gnss-coax-exit_R0.4",
+      "status": "CONCEPT_BULKHEAD_PENDING",
+      "segments": 1,
+      "centerline_length_mm": 5.5,
+      "expected_volume_mm3": 50.0,
+      "actual_volume_mm3": 50.0
+    },
+    {
+      "part": "FN-HAR-008_xls1-rf-exit_R0.4",
+      "status": "CONCEPT_BULKHEAD_PENDING",
+      "segments": 1,
+      "centerline_length_mm": 5.5,
+      "expected_volume_mm3": 50.0,
+      "actual_volume_mm3": 50.0
+    }
+  ],
+  "packaged_reference_parts": [
+    {
+      "source_revision": "CAD-R0.1",
+      "source_name": "FN-SEN-001_tilt-transmitter-envelope_R0.1.SLDPRT",
+      "packaged_name": "FN-SEN-001_tilt-transmitter-envelope_R0.1.SLDPRT",
+      "source_sha256": "26c0b8f944cfa674183573d8f6753c3feb5e11f484649adace7ccf305af939a2"
+    },
+    {
+      "source_revision": "CAD-R0.2",
+      "source_name": "FN-SUB-002_tilt-reference-plate_M3_R0.2.SLDPRT",
+      "packaged_name": "FN-SUB-002_tilt-reference-plate_M3_R0.2.SLDPRT",
+      "source_sha256": "911c8a0a487338de0d7c4370d2e3cda2e980d6570c408137515f377c8c5f5e58"
+    }
+  ],
+  "assembly": {
+    "name": "FN-ASM-002_internal-layout-harness_R0.4",
+    "component_count": 23,
+    "native_bytes": 179608,
+    "step_bytes": 528779,
+    "isometric_preview_bytes": 213417,
+    "top_preview_bytes": 244135
+  },
+  "drawing": {
+    "drawing_bytes": 127099,
+    "pdf_bytes": 23410,
+    "drawing_preview_bytes": 29326
+  },
+  "layout_validation": {
+    "plate_nominal_clearance_per_side_mm": [
+      2.0327,
+      2.0
+    ],
+    "minimum_planar_clearance_mm": 4.0,
+    "pair_clearances_mm": {
+      "pcb_envelope:battery_tray": 71.5,
+      "pcb_envelope:charger_holder": 83.5,
+      "pcb_envelope:fuse_zone": 24.5,
+      "pcb_envelope:subplate": 23.5,
+      "battery_tray:charger_holder": 4.0,
+      "battery_tray:fuse_zone": 9.0,
+      "battery_tray:subplate": 39.0,
+      "charger_holder:fuse_zone": 30.054,
+      "charger_holder:subplate": 4.0,
+      "fuse_zone:subplate": 56.5
+    },
+    "highest_component_z_mm": 57.0,
+    "nominal_rim_clearance_mm": 34.1
+  },
+  "labeled_top_view": {
+    "svg": "FN-ASM-002_internal-layout-harness_R0.4_labeled-top.svg",
+    "png": "FN-ASM-002_internal-layout-harness_R0.4_labeled-top.png",
+    "canvas_px": [
+      2800,
+      1800
+    ],
+    "geometry_scale_px_per_mm": 4.35
+  },
+  "plate": {
+    "size_mm": [
+      272.0,
+      193.0,
+      3.0
+    ],
+    "bottom_z_from_enclosure_outer_bottom_mm": 9.0,
+    "support_top_from_inner_floor_mm": 6.0,
+    "anchor_holes": {
+      "count": 8,
+      "diameter_mm": 3.5,
+      "centered_xy_mm": [
+        [
+          -60.15,
+          80.0
+        ],
+        [
+          60.15,
+          80.0
+        ],
+        [
+          -60.15,
+          30.6
+        ],
+        [
+          60.15,
+          30.6
+        ],
+        [
+          -60.15,
+          -30.6
+        ],
+        [
+          60.15,
+          -30.6
+        ],
+        [
+          -60.15,
+          -80.0
+        ],
+        [
+          60.15,
+          -80.0
+        ]
+      ],
+      "status": "NOMINAL_VERIFY_PHYSICAL_NO_DXF"
+    }
+  },
+  "placements": [
+    {
+      "key": "tray",
+      "instance": "ENCLOSURE_TRAY_REFERENCE",
+      "reference": "FN-ENC-003_open-tray-layout-reference_R0.4.SLDPRT",
+      "center_xy_mm": [
+        0.0,
+        0.0
+      ],
+      "bottom_z_mm": 0.0,
+      "size_mm": [
+        317.9,
+        238.9,
+        91.1
+      ],
+      "status": "NOMINAL"
+    },
+    {
+      "key": "edge_pad_1",
+      "instance": "EDGE_SUPPORT_LEFT_UPPER",
+      "reference": "FN-SUP-001_edge-support-pad_DRAFT_R0.4.SLDPRT",
+      "center_xy_mm": [
+        -126.0,
+        45.0
+      ],
+      "bottom_z_mm": 3.0,
+      "size_mm": [
+        12.0,
+        12.0,
+        6.0
+      ],
+      "status": "OPTIONAL_DRAFT"
+    },
+    {
+      "key": "edge_pad_2",
+      "instance": "EDGE_SUPPORT_LEFT_LOWER",
+      "reference": "FN-SUP-001_edge-support-pad_DRAFT_R0.4.SLDPRT",
+      "center_xy_mm": [
+        -126.0,
+        -45.0
+      ],
+      "bottom_z_mm": 3.0,
+      "size_mm": [
+        12.0,
+        12.0,
+        6.0
+      ],
+      "status": "OPTIONAL_DRAFT"
+    },
+    {
+      "key": "edge_pad_3",
+      "instance": "EDGE_SUPPORT_RIGHT_UPPER",
+      "reference": "FN-SUP-001_edge-support-pad_DRAFT_R0.4.SLDPRT",
+      "center_xy_mm": [
+        126.0,
+        45.0
+      ],
+      "bottom_z_mm": 3.0,
+      "size_mm": [
+        12.0,
+        12.0,
+        6.0
+      ],
+      "status": "OPTIONAL_DRAFT"
+    },
+    {
+      "key": "edge_pad_4",
+      "instance": "EDGE_SUPPORT_RIGHT_LOWER",
+      "reference": "FN-SUP-001_edge-support-pad_DRAFT_R0.4.SLDPRT",
+      "center_xy_mm": [
+        126.0,
+        -45.0
+      ],
+      "bottom_z_mm": 3.0,
+      "size_mm": [
+        12.0,
+        12.0,
+        6.0
+      ],
+      "status": "OPTIONAL_DRAFT"
+    },
+    {
+      "key": "plate",
+      "instance": "FR4_RECT_8HOLE_NOMINAL",
+      "reference": "FN-PLT-004_fr4-rect_8HOLE-NOMINAL_R0.4.SLDPRT",
+      "center_xy_mm": [
+        0.0,
+        0.0
+      ],
+      "bottom_z_mm": 9.0,
+      "size_mm": [
+        272.0,
+        193.0,
+        3.0
+      ],
+      "status": "NOMINAL_VERIFY_PHYSICAL"
+    },
+    {
+      "key": "pcb",
+      "instance": "CARRIER_BOARD_ROTATED_CCW",
+      "reference": "FN-PCB-003_carrier_ROTATED-CCW_4HOLE_R0.4.SLDPRT",
+      "center_xy_mm": [
+        -73.0,
+        0.0
+      ],
+      "bottom_z_mm": 18.0,
+      "size_mm": [
+        115.0,
+        170.0,
+        1.6
+      ],
+      "status": "VERIFIED_XY_HOLES"
+    },
+    {
+      "key": "pcb_envelope",
+      "instance": "CARRIER_INSTALLED_HEIGHT_ENVELOPE",
+      "reference": "FN-ENV-001_carrier-installed-height_R0.4.SLDPRT",
+      "center_xy_mm": [
+        -73.0,
+        0.0
+      ],
+      "bottom_z_mm": 18.0,
+      "size_mm": [
+        115.0,
+        170.0,
+        35.0
+      ],
+      "status": "USER_ALLOWANCE"
+    },
+    {
+      "key": "battery_tray",
+      "instance": "BATTERY_TRAY_CONCEPT",
+      "reference": "FN-HLD-001_battery-tray-zone_R0.4.SLDPRT",
+      "center_xy_mm": [
+        92.0,
+        -62.0
+      ],
+      "bottom_z_mm": 12.0,
+      "size_mm": [
+        72.0,
+        67.0,
+        3.0
+      ],
+      "status": "CONCEPT"
+    },
+    {
+      "key": "battery",
+      "instance": "BATTERY_USER_MEASURED",
+      "reference": "FN-BAT-002_battery-envelope_USER-MEASURED_R0.4.SLDPRT",
+      "center_xy_mm": [
+        92.0,
+        -62.0
+      ],
+      "bottom_z_mm": 15.0,
+      "size_mm": [
+        66.0,
+        61.0,
+        40.0
+      ],
+      "status": "USER_MEASURED_WITH_ALLOWANCE"
+    },
+    {
+      "key": "charger_holder",
+      "instance": "CN3791_CLIP_ZONE",
+      "reference": "FN-HLD-002_cn3791-clip-zone_R0.4.SLDPRT",
+      "center_xy_mm": [
+        96.0,
+        -9.0
+      ],
+      "bottom_z_mm": 12.0,
+      "size_mm": [
+        56.0,
+        31.0,
+        3.0
+      ],
+      "status": "CONCEPT"
+    },
+    {
+      "key": "charger",
+      "instance": "CN3791_MODULE",
+      "reference": "FN-PWR-001_cn3791-module-envelope_R0.4.SLDPRT",
+      "center_xy_mm": [
+        96.0,
+        -9.0
+      ],
+      "bottom_z_mm": 15.0,
+      "size_mm": [
+        46.0,
+        21.0,
+        10.0
+      ],
+      "status": "USER_MEASURED_WITH_ALLOWANCE_NO_HOLES"
+    },
+    {
+      "key": "fuse_zone",
+      "instance": "FUSE_SERVICE_DISCONNECT_ZONE",
+      "reference": "FN-ZON-002_fuse-service-disconnect_R0.4.SLDPRT",
+      "center_xy_mm": [
+        28.0,
+        -55.0
+      ],
+      "bottom_z_mm": 12.0,
+      "size_mm": [
+        38.0,
+        18.0,
+        15.0
+      ],
+      "status": "REQUIRED_COMPONENT_SELECTION_PENDING"
+    },
+    {
+      "key": "subplate",
+      "instance": "TILT_REFERENCE_PLATE",
+      "reference": "FN-SUB-002_tilt-reference-plate_M3_R0.2.SLDPRT",
+      "center_xy_mm": [
+        68.0,
+        53.0
+      ],
+      "bottom_z_mm": 18.0,
+      "size_mm": [
+        120.0,
+        85.0,
+        3.0
+      ],
+      "status": "DESIGN_M3_TAPPED"
+    },
+    {
+      "key": "sensor",
+      "instance": "TILT_TRANSMITTER",
+      "reference": "FN-SEN-001_tilt-transmitter-envelope_R0.1.SLDPRT",
+      "center_xy_mm": [
+        68.0,
+        53.0
+      ],
+      "bottom_z_mm": 21.0,
+      "size_mm": [
+        90.0,
+        58.0,
+        36.0
+      ],
+      "status": "VERIFIED"
+    },
+    {
+      "key": "route_pv",
+      "instance": "PV_INPUT_ROUTE",
+      "reference": "FN-HAR-001_pv-input-route_R0.4.SLDPRT",
+      "center_xy_mm": [
+        127.5,
+        -9.0
+      ],
+      "bottom_z_mm": 16.0,
+      "size_mm": [
+        20.5,
+        3.5,
+        2.5
+      ],
+      "status": "CONCEPT_ENTRY_PENDING"
+    },
+    {
+      "key": "route_charge",
+      "instance": "BATTERY_CHARGE_ROUTE",
+      "reference": "FN-HAR-002_battery-charge-route_R0.4.SLDPRT",
+      "center_xy_mm": [
+        66.5,
+        -18.5
+      ],
+      "bottom_z_mm": 16.0,
+      "size_mm": [
+        16.5,
+        22.5,
+        2.5
+      ],
+      "status": "CONCEPT_CONNECTOR_ASSIGNMENT_PENDING"
+    },
+    {
+      "key": "route_load_in",
+      "instance": "BATTERY_LOAD_TO_FUSE",
+      "reference": "FN-HAR-003_battery-load-to-fuse_R0.4.SLDPRT",
+      "center_xy_mm": [
+        53.5,
+        -44.5
+      ],
+      "bottom_z_mm": 16.0,
+      "size_mm": [
+        17.0,
+        25.0,
+        2.5
+      ],
+      "status": "CONCEPT_FUSE_REQUIRED"
+    },
+    {
+      "key": "route_load_out",
+      "instance": "FUSE_TO_PCB_DC5521",
+      "reference": "FN-HAR-004_fuse-to-dc5521_R0.4.SLDPRT",
+      "center_xy_mm": [
+        -3.25,
+        -65.0
+      ],
+      "bottom_z_mm": 16.0,
+      "size_mm": [
+        28.5,
+        24.0,
+        2.5
+      ],
+      "status": "CONCEPT_FUSE_REQUIRED"
+    },
+    {
+      "key": "route_tilt",
+      "instance": "TILT_RS485_ROUTE",
+      "reference": "FN-HAR-005_tilt-rs485-route_R0.4.SLDPRT",
+      "center_xy_mm": [
+        3.75,
+        61.5
+      ],
+      "bottom_z_mm": 16.0,
+      "size_mm": [
+        42.5,
+        21.0,
+        2.5
+      ],
+      "status": "CONCEPT_SENSOR_EXIT_PENDING"
+    },
+    {
+      "key": "route_soil",
+      "instance": "SOIL_RS485_ENTRY_ROUTE",
+      "reference": "FN-HAR-006_soil-rs485-entry-route_R0.4.SLDPRT",
+      "center_xy_mm": [
+        -7.75,
+        -25.5
+      ],
+      "bottom_z_mm": 16.0,
+      "size_mm": [
+        19.5,
+        145.0,
+        2.5
+      ],
+      "status": "CONCEPT_GLAND_PENDING"
+    },
+    {
+      "key": "route_gnss",
+      "instance": "GNSS_COAX_EXIT",
+      "reference": "FN-HAR-007_gnss-coax-exit_R0.4.SLDPRT",
+      "center_xy_mm": [
+        -133.25,
+        -75.0
+      ],
+      "bottom_z_mm": 16.0,
+      "size_mm": [
+        8.0,
+        2.5,
+        2.5
+      ],
+      "status": "CONCEPT_BULKHEAD_PENDING"
+    },
+    {
+      "key": "route_xls1",
+      "instance": "XLS1_RF_EXIT",
+      "reference": "FN-HAR-008_xls1-rf-exit_R0.4.SLDPRT",
+      "center_xy_mm": [
+        -133.25,
+        0.0
+      ],
+      "bottom_z_mm": 16.0,
+      "size_mm": [
+        8.0,
+        2.5,
+        2.5
+      ],
+      "status": "CONCEPT_BULKHEAD_PENDING"
+    }
+  ],
+  "blocked_inputs": [
+    "H1-H8 physical boss coordinates from one datum",
+    "H1-H8 hole diameter, depth, blind state, and top coplanarity",
+    "battery tray details and strap geometry",
+    "CN3791 connector clearance and final clip geometry",
+    "plate-to-FR4 four support holes",
+    "cable outer diameters, gland threads, RF bulkheads, and minimum bend radii"
+  ],
+  "warnings": [
+    "The CN3791 envelope is user measured with allowance; it has no mounting holes.",
+    "The battery envelope is user measured with allowance; verify with calipers before tray release.",
+    "The eight FR4 holes are modeled from annotated supplier dimensions, not a physical coordinate survey.",
+    "Harness parts are route envelopes, not production round-wire geometry.",
+    "Anchor screw heads lie below module footprints; fasten FR4 before modules and provide underside relief.",
+    "The enclosure tray omits scallops, ribs, lid geometry, and fastener bosses.",
+    "No FR4 DXF is generated in CAD-R0.4."
+  ],
+  "harness": [
+    {
+      "key": "route_pv",
+      "instance": "PV_INPUT_ROUTE",
+      "points_xy_mm": [
+        [
+          136.0,
+          -9.0
+        ],
+        [
+          119.0,
+          -9.0
+        ]
+      ],
+      "width_mm": 3.5,
+      "height_mm": 2.5,
+      "centerline_length_mm": 17.0,
+      "status": "CONCEPT_ENTRY_PENDING"
+    },
+    {
+      "key": "route_charge",
+      "instance": "BATTERY_CHARGE_ROUTE",
+      "points_xy_mm": [
+        [
+          60.0,
+          -28.0
+        ],
+        [
+          60.0,
+          -24.0
+        ],
+        [
+          73.0,
+          -24.0
+        ],
+        [
+          73.0,
+          -9.0
+        ]
+      ],
+      "width_mm": 3.5,
+      "height_mm": 2.5,
+      "centerline_length_mm": 32.0,
+      "status": "CONCEPT_CONNECTOR_ASSIGNMENT_PENDING"
+    },
+    {
+      "key": "route_load_in",
+      "instance": "BATTERY_LOAD_TO_FUSE",
+      "points_xy_mm": [
+        [
+          60.0,
+          -34.0
+        ],
+        [
+          52.0,
+          -34.0
+        ],
+        [
+          52.0,
+          -55.0
+        ],
+        [
+          47.0,
+          -55.0
+        ]
+      ],
+      "width_mm": 4.0,
+      "height_mm": 2.5,
+      "centerline_length_mm": 34.0,
+      "status": "CONCEPT_FUSE_REQUIRED"
+    },
+    {
+      "key": "route_load_out",
+      "instance": "FUSE_TO_PCB_DC5521",
+      "points_xy_mm": [
+        [
+          9.0,
+          -55.0
+        ],
+        [
+          -2.0,
+          -55.0
+        ],
+        [
+          -2.0,
+          -75.0
+        ],
+        [
+          -15.5,
+          -75.0
+        ]
+      ],
+      "width_mm": 4.0,
+      "height_mm": 2.5,
+      "centerline_length_mm": 44.5,
+      "status": "CONCEPT_FUSE_REQUIRED"
+    },
+    {
+      "key": "route_tilt",
+      "instance": "TILT_RS485_ROUTE",
+      "points_xy_mm": [
+        [
+          23.0,
+          53.0
+        ],
+        [
+          4.0,
+          53.0
+        ],
+        [
+          4.0,
+          70.0
+        ],
+        [
+          -15.5,
+          70.0
+        ]
+      ],
+      "width_mm": 4.0,
+      "height_mm": 2.5,
+      "centerline_length_mm": 55.5,
+      "status": "CONCEPT_SENSOR_EXIT_PENDING"
+    },
+    {
+      "key": "route_soil",
+      "instance": "SOIL_RS485_ENTRY_ROUTE",
+      "points_xy_mm": [
+        [
+          0.0,
+          -96.0
+        ],
+        [
+          0.0,
+          45.0
+        ],
+        [
+          -15.5,
+          45.0
+        ]
+      ],
+      "width_mm": 4.0,
+      "height_mm": 2.5,
+      "centerline_length_mm": 156.5,
+      "status": "CONCEPT_GLAND_PENDING"
+    },
+    {
+      "key": "route_gnss",
+      "instance": "GNSS_COAX_EXIT",
+      "points_xy_mm": [
+        [
+          -136.0,
+          -75.0
+        ],
+        [
+          -130.5,
+          -75.0
+        ]
+      ],
+      "width_mm": 2.5,
+      "height_mm": 2.5,
+      "centerline_length_mm": 5.5,
+      "status": "CONCEPT_BULKHEAD_PENDING"
+    },
+    {
+      "key": "route_xls1",
+      "instance": "XLS1_RF_EXIT",
+      "points_xy_mm": [
+        [
+          -136.0,
+          0.0
+        ],
+        [
+          -130.5,
+          0.0
+        ]
+      ],
+      "width_mm": 2.5,
+      "height_mm": 2.5,
+      "centerline_length_mm": 5.5,
+      "status": "CONCEPT_BULKHEAD_PENDING"
+    }
+  ],
+  "artifacts": [
+    {
+      "name": "FN-ASM-002_internal-layout-harness_R0.4.pdf",
+      "bytes": 23410,
+      "sha256": "a4373790469f5dce0358a08eaec429f471d1828582f8b3e2b118f0d2a26978da"
+    },
+    {
+      "name": "FN-ASM-002_internal-layout-harness_R0.4.SLDASM",
+      "bytes": 179608,
+      "sha256": "0f490c1c0ec483779a62948f2ff7f2960e8c4a3f33f12dd04c370e7ccd7a563d"
+    },
+    {
+      "name": "FN-ASM-002_internal-layout-harness_R0.4.SLDDRW",
+      "bytes": 127099,
+      "sha256": "14869052b06eb82f881ee2c3bef5d2fd1e1b049497da5aa0797373e88948ab62"
+    },
+    {
+      "name": "FN-ASM-002_internal-layout-harness_R0.4.STEP",
+      "bytes": 528779,
+      "sha256": "ed10ffd588588229a7f91bc39b584150ba5917d7247bb6fd428fb8075f5b31df"
+    },
+    {
+      "name": "FN-ASM-002_internal-layout-harness_R0.4_drawing.png",
+      "bytes": 29326,
+      "sha256": "2873cbd261f8d35fccee18a3d3cf9c2d97868fea86770ae44f6af93e27c32de1"
+    },
+    {
+      "name": "FN-ASM-002_internal-layout-harness_R0.4_exploded-reference.png",
+      "bytes": 286593,
+      "sha256": "fb7a7cefe3afbb1020993629ce0ccf70ec1d1082acf5e376b4f2aa955da83767"
+    },
+    {
+      "name": "FN-ASM-002_internal-layout-harness_R0.4_isometric.png",
+      "bytes": 213417,
+      "sha256": "33e6976dfc990b9158c6b8c8d1c04033e75d4f73cb4a358e8e02b2826d394570"
+    },
+    {
+      "name": "FN-ASM-002_internal-layout-harness_R0.4_labeled-top.png",
+      "bytes": 215120,
+      "sha256": "2a22f778e4075e26ddb5398884c4ebc986c3597ab859a45bdff7a82762514574"
+    },
+    {
+      "name": "FN-ASM-002_internal-layout-harness_R0.4_labeled-top.svg",
+      "bytes": 15654,
+      "sha256": "bbb7eb9c1ee4b296973564a0bc19d9a7c993dbb45fe57d7e5a0f475263a20bbf"
+    },
+    {
+      "name": "FN-ASM-002_internal-layout-harness_R0.4_top.png",
+      "bytes": 244135,
+      "sha256": "a6e6232b130d4e91a567c4bc510cdc39857e891e31359249ffb82d5723a430e6"
+    },
+    {
+      "name": "FN-BAT-002_battery-envelope_USER-MEASURED_R0.4.png",
+      "bytes": 207343,
+      "sha256": "71b5246af0824eb9fa80fccdda2151468af8190809d6898567c7f9c105a82146"
+    },
+    {
+      "name": "FN-BAT-002_battery-envelope_USER-MEASURED_R0.4.SLDPRT",
+      "bytes": 76324,
+      "sha256": "be6e84512af880255ebf98d297884718107fd17373e62d58e3383ad1b460fe47"
+    },
+    {
+      "name": "FN-BAT-002_battery-envelope_USER-MEASURED_R0.4.STEP",
+      "bytes": 15708,
+      "sha256": "140de286fa0dc749352e6f14e0d6000ab0fcbfb0636b56ce2ce0a51aebeb3347"
+    },
+    {
+      "name": "FN-ENC-003_open-tray-layout-reference_R0.4.png",
+      "bytes": 234495,
+      "sha256": "3668a540c22e9b0c68a84ad14e96f3cde26d0d83ef159474e2a5afca2a2f100d"
+    },
+    {
+      "name": "FN-ENC-003_open-tray-layout-reference_R0.4.SLDPRT",
+      "bytes": 94976,
+      "sha256": "ab7de5b0bab3e2b30726344dbee71cad9e9c7ab08c591fedbbf961f3ff3913d7"
+    },
+    {
+      "name": "FN-ENC-003_open-tray-layout-reference_R0.4.STEP",
+      "bytes": 25311,
+      "sha256": "383b1fcd203dd73a72356a54fb470b2a49bfa1160da06b9eb2efcaa4198c1882"
+    },
+    {
+      "name": "FN-ENV-001_carrier-installed-height_R0.4.png",
+      "bytes": 211916,
+      "sha256": "750889b518af003dfb502b026f6bb03e0b13f613523122b7251c9bb71c0a5965"
+    },
+    {
+      "name": "FN-ENV-001_carrier-installed-height_R0.4.SLDPRT",
+      "bytes": 84881,
+      "sha256": "1f50b9729bc87abf182d69059cade234365c5ad496989b190d5afcccafeb3ea9"
+    },
+    {
+      "name": "FN-ENV-001_carrier-installed-height_R0.4.STEP",
+      "bytes": 15685,
+      "sha256": "3725a1966c04f02668218e1bb8db85eed077c117e1b07fdfa5cafe6f769b9837"
+    },
+    {
+      "name": "FN-HAR-001_pv-input-route_R0.4.png",
+      "bytes": 135330,
+      "sha256": "d54ae178fa8ef858a49084a5ee006cc4b15334664f0bf0ffe154d7ac4738cb78"
+    },
+    {
+      "name": "FN-HAR-001_pv-input-route_R0.4.SLDPRT",
+      "bytes": 73320,
+      "sha256": "0cb8e8fad4ed345a33da823467973fabb57c6761ea6899d2d5755e94de402037"
+    },
+    {
+      "name": "FN-HAR-001_pv-input-route_R0.4.STEP",
+      "bytes": 15637,
+      "sha256": "e8c917e3a323ac20670cd96d2416d186b7345f6a858c645a7789ce6102a2ecb7"
+    },
+    {
+      "name": "FN-HAR-002_battery-charge-route_R0.4.png",
+      "bytes": 148096,
+      "sha256": "3512f57874b548144074874a98bcca05907c1172b5d5bc0474190344280c3845"
+    },
+    {
+      "name": "FN-HAR-002_battery-charge-route_R0.4.SLDPRT",
+      "bytes": 78681,
+      "sha256": "5dcea4fe49fcbbd0ef822c5f0642b54346249da504d279ae43792f55b0db1c55"
+    },
+    {
+      "name": "FN-HAR-002_battery-charge-route_R0.4.STEP",
+      "bytes": 24667,
+      "sha256": "b4fcf6d46baeb0237279f94b444076bdf4e808ce1f7081e34268490875c35d4a"
+    },
+    {
+      "name": "FN-HAR-003_battery-load-to-fuse_R0.4.png",
+      "bytes": 144014,
+      "sha256": "dec17cf2fe606f3cc05847ef0a797e0ba3ffc0a66bcc251bdf8311aec861232d"
+    },
+    {
+      "name": "FN-HAR-003_battery-load-to-fuse_R0.4.SLDPRT",
+      "bytes": 79730,
+      "sha256": "497b047f7f08d95310f1833c0839011d3245e83e7da829916fba31cf2da93a8a"
+    },
+    {
+      "name": "FN-HAR-003_battery-load-to-fuse_R0.4.STEP",
+      "bytes": 24683,
+      "sha256": "dad9a4b5ef20cc3a8b73cec9254f92bb407df8d44be699a0cd5521abf2555bec"
+    },
+    {
+      "name": "FN-HAR-004_fuse-to-dc5521_R0.4.png",
+      "bytes": 137062,
+      "sha256": "1e654cf1aa152fb11a136a03e75c936993376223e3b04513c1eac0d6bb018a93"
+    },
+    {
+      "name": "FN-HAR-004_fuse-to-dc5521_R0.4.SLDPRT",
+      "bytes": 75598,
+      "sha256": "447e82e9bea71c7cdff87711e63068c7411971cc1e14ebb3d641c5df21efb3b8"
+    },
+    {
+      "name": "FN-HAR-004_fuse-to-dc5521_R0.4.STEP",
+      "bytes": 24654,
+      "sha256": "7622b05a7c0f67eb6e1269f45cf97d7d32e97f493dd2a5fcd1c3a9a1bf1f8a61"
+    },
+    {
+      "name": "FN-HAR-005_tilt-rs485-route_R0.4.png",
+      "bytes": 143404,
+      "sha256": "386be9e0f5fa1110e1560839f84f6f21af895ad57fec1b59eb0571afc58582a2"
+    },
+    {
+      "name": "FN-HAR-005_tilt-rs485-route_R0.4.SLDPRT",
+      "bytes": 72024,
+      "sha256": "bd5fd806ca95d23e96b06b8f16a307188712e16680d758b7f4b2216443bf9641"
+    },
+    {
+      "name": "FN-HAR-005_tilt-rs485-route_R0.4.STEP",
+      "bytes": 24660,
+      "sha256": "650979a947cb452bf289602b5affe6e25fe4ebf8c6a12988579ae9b5ff940855"
+    },
+    {
+      "name": "FN-HAR-006_soil-rs485-entry-route_R0.4.png",
+      "bytes": 144412,
+      "sha256": "70df3d0446dda54b206d1b715750975fc33e88d5f8bb4e8117ff349cd49d8f37"
+    },
+    {
+      "name": "FN-HAR-006_soil-rs485-entry-route_R0.4.SLDPRT",
+      "bytes": 62054,
+      "sha256": "f276032a0100e642d2b7ab244b008d9afef6e1315a245d17c1f7a6a480d5d398"
+    },
+    {
+      "name": "FN-HAR-006_soil-rs485-entry-route_R0.4.STEP",
+      "bytes": 20167,
+      "sha256": "77aa43b192d701ea424e5fce9c4dc2f7e2d6834c12d650a5668c704d4c49ddec"
+    },
+    {
+      "name": "FN-HAR-007_gnss-coax-exit_R0.4.png",
+      "bytes": 130486,
+      "sha256": "9ace748991d6d1d9e56214fcb397275ce74ca6c85474b105749ce085d9e39ecd"
+    },
+    {
+      "name": "FN-HAR-007_gnss-coax-exit_R0.4.SLDPRT",
+      "bytes": 75858,
+      "sha256": "951151dd8c951a7daf9e6762b38835ed2b8b6916ca98b6a2cf2373241afcacd0"
+    },
+    {
+      "name": "FN-HAR-007_gnss-coax-exit_R0.4.STEP",
+      "bytes": 15629,
+      "sha256": "e9ed832415151275be9c62e027e5a6037200c2a0a6a421caa0e7e805e05dad4a"
+    },
+    {
+      "name": "FN-HAR-008_xls1-rf-exit_R0.4.png",
+      "bytes": 130486,
+      "sha256": "e7f51acbfc332e4f894ee289aeee980994429af35291f4f7555e1a6dfd1f0484"
+    },
+    {
+      "name": "FN-HAR-008_xls1-rf-exit_R0.4.SLDPRT",
+      "bytes": 75606,
+      "sha256": "6d2c65e53632af034a87c14251b7935af7e7381089a9ba3b6bfa62f7a3ce8f3f"
+    },
+    {
+      "name": "FN-HAR-008_xls1-rf-exit_R0.4.STEP",
+      "bytes": 15636,
+      "sha256": "3f388d4b477c169ca5268bb141fc68d7c9a658a6a76acc05acb4e39312d75e9e"
+    },
+    {
+      "name": "FN-HLD-001_battery-tray-zone_R0.4.png",
+      "bytes": 220510,
+      "sha256": "0f16c8528d0c5bc71b16d3f0037128808837729da3b7945063a7ee52b3ad143c"
+    },
+    {
+      "name": "FN-HLD-001_battery-tray-zone_R0.4.SLDPRT",
+      "bytes": 80788,
+      "sha256": "68815492d39c9cfd9584c6e0acccd04247d9bc6201af2a2a164a2ec5434480f9"
+    },
+    {
+      "name": "FN-HLD-001_battery-tray-zone_R0.4.STEP",
+      "bytes": 15651,
+      "sha256": "47e4f00d248c953e7f6cc247c7fb61e269e1202c6103cde25ad3a1b8632a1cc3"
+    },
+    {
+      "name": "FN-HLD-002_cn3791-clip-zone_R0.4.png",
+      "bytes": 230750,
+      "sha256": "9b2b4d5264be2da99b73c686f5f1024b9681de4eacfd8fb185f19b66048b8865"
+    },
+    {
+      "name": "FN-HLD-002_cn3791-clip-zone_R0.4.SLDPRT",
+      "bytes": 78953,
+      "sha256": "0bdee2791d7c793399bf4f762a9faf55371c18f241ca0e4484d6f2579ddbbf72"
+    },
+    {
+      "name": "FN-HLD-002_cn3791-clip-zone_R0.4.STEP",
+      "bytes": 15644,
+      "sha256": "bffc43b8f98922655a4b7098ab9f45f6dcb136d18f4930bc178e784e314b2e03"
+    },
+    {
+      "name": "FN-PCB-003_carrier_ROTATED-CCW_4HOLE_R0.4.png",
+      "bytes": 218076,
+      "sha256": "609844f3d872c7dd94aa76d12e72875ac867587c5cd8aedd4063d695475ed69a"
+    },
+    {
+      "name": "FN-PCB-003_carrier_ROTATED-CCW_4HOLE_R0.4.SLDPRT",
+      "bytes": 85569,
+      "sha256": "cc9e719b8f8e3bd40808f2c05585e536e16f1a9d2d696c24417f6c938c2ca760"
+    },
+    {
+      "name": "FN-PCB-003_carrier_ROTATED-CCW_4HOLE_R0.4.STEP",
+      "bytes": 36554,
+      "sha256": "cdee048cce9db67f64dd5722a0efd6edd62ddff830fc8f52f2ef023f2cb86291"
+    },
+    {
+      "name": "FN-PLT-004_fr4-rect_8HOLE-NOMINAL_R0.4.png",
+      "bytes": 227934,
+      "sha256": "823832e92b810d1df7ecbab38c2050d2843d6639621770c22f290b4ba1016c8e"
+    },
+    {
+      "name": "FN-PLT-004_fr4-rect_8HOLE-NOMINAL_R0.4.SLDPRT",
+      "bytes": 92057,
+      "sha256": "01074e585d076699fa755f704fafebd9150844895b1694465c3c7cfea45cf981"
+    },
+    {
+      "name": "FN-PLT-004_fr4-rect_8HOLE-NOMINAL_R0.4.STEP",
+      "bytes": 57421,
+      "sha256": "27755e0016c0f7cf8d09b35a687f27a754832784a53020a7edf552ee28b16201"
+    },
+    {
+      "name": "FN-PWR-001_cn3791-module-envelope_R0.4.png",
+      "bytes": 229758,
+      "sha256": "0ece734380a06f266761970d9f75f0550197f7596605cfbd1391781f0104c8bc"
+    },
+    {
+      "name": "FN-PWR-001_cn3791-module-envelope_R0.4.SLDPRT",
+      "bytes": 83488,
+      "sha256": "24073d6e0eb49e3811aef8946746eea59fe454fef058a98c711d06ac254ff4e1"
+    },
+    {
+      "name": "FN-PWR-001_cn3791-module-envelope_R0.4.STEP",
+      "bytes": 15676,
+      "sha256": "6a1b79f9f3f8556dfbfe8459a11b6f7160ea5f87bbc54026320154e4d5b5f431"
+    },
+    {
+      "name": "FN-SEN-001_tilt-transmitter-envelope_R0.1.SLDPRT",
+      "bytes": 89991,
+      "sha256": "db683a476e7b8fb7aedcc022ec368350d74c6d3da56eac51e0a219a919b402d7"
+    },
+    {
+      "name": "FN-SUB-002_tilt-reference-plate_M3_R0.2.SLDPRT",
+      "bytes": 87953,
+      "sha256": "e74fa120150f61366eccd0d086fd8c272954bf2c7c541ce9efbdf185a27d4e4c"
+    },
+    {
+      "name": "FN-SUP-001_edge-support-pad_DRAFT_R0.4.png",
+      "bytes": 210368,
+      "sha256": "9ef375c698ba5979b84cd228231ed7358e84878c7abc3c08933b52fd0f488f34"
+    },
+    {
+      "name": "FN-SUP-001_edge-support-pad_DRAFT_R0.4.SLDPRT",
+      "bytes": 80916,
+      "sha256": "127c5c0f1c9c32b3ad612ef9bc3134e43e6ca72661933a1bd35dc55531e22fbb"
+    },
+    {
+      "name": "FN-SUP-001_edge-support-pad_DRAFT_R0.4.STEP",
+      "bytes": 15676,
+      "sha256": "e807d51543680211721013d2414af232063d545e3d3db64be8032a5244114b40"
+    },
+    {
+      "name": "FN-ZON-002_fuse-service-disconnect_R0.4.png",
+      "bytes": 218247,
+      "sha256": "6675d11f2317295b541c6b696bfa3e17ee0ec4e2a4f0116f4ec2432b4fc0806b"
+    },
+    {
+      "name": "FN-ZON-002_fuse-service-disconnect_R0.4.SLDPRT",
+      "bytes": 77359,
+      "sha256": "32e7d171d64ed322109f9bead3f51f6ef669b1a544db81f3b8692d755c29040a"
+    },
+    {
+      "name": "FN-ZON-002_fuse-service-disconnect_R0.4.STEP",
+      "bytes": 15674,
+      "sha256": "d1dbefbbf3105a0cd30dafb888f3fea4f143ee6db6f9acc4e166c2d21cfc343e"
+    }
+  ],
+  "exploded_preview": "FN-ASM-002_internal-layout-harness_R0.4_exploded-reference.png"
+}

@@ -1,0 +1,71 @@
+{
+  "revision": "CAD-R0.1",
+  "manufacturing_status": "NOT FOR MANUFACTURE",
+  "solidworks": "2022 SP5.0",
+  "upstream_commit": "0de875502281df298695ef4733cae03fd11e450f",
+  "parts": [
+    {
+      "part": "FN-ENC-001_enclosure-outer-envelope_R0.1",
+      "status": "NOMINAL",
+      "native_bytes": 78532,
+      "step_bytes": 15925,
+      "preview_bytes": 159672,
+      "expected_volume_mm3": 10981836.426,
+      "actual_volume_mm3": 10981836.426
+    },
+    {
+      "part": "FN-PLT-001_fr4-max-envelope_R0.1",
+      "status": "NOMINAL",
+      "native_bytes": 77450,
+      "step_bytes": 15895,
+      "preview_bytes": 160360,
+      "expected_volume_mm3": 147075.0,
+      "actual_volume_mm3": 147075.0
+    },
+    {
+      "part": "FN-SUB-001_tilt-reference-plate_R0.1",
+      "status": "VERIFIED",
+      "native_bytes": 87233,
+      "step_bytes": 37077,
+      "preview_bytes": 163596,
+      "expected_volume_mm3": 30477.855,
+      "actual_volume_mm3": 30477.855
+    },
+    {
+      "part": "FN-PCB-001_carrier-board-envelope_R0.1",
+      "status": "VERIFIED_XY_NOMINAL_Z",
+      "native_bytes": 76665,
+      "step_bytes": 15904,
+      "preview_bytes": 160338,
+      "expected_volume_mm3": 31280.0,
+      "actual_volume_mm3": 31280.0
+    },
+    {
+      "part": "FN-SEN-001_tilt-transmitter-envelope_R0.1",
+      "status": "VERIFIED",
+      "native_bytes": 90570,
+      "step_bytes": 37083,
+      "preview_bytes": 165310,
+      "expected_volume_mm3": 186454.259,
+      "actual_volume_mm3": 186454.259
+    },
+    {
+      "part": "FN-BAT-001_battery-envelope_ESTIMATED_R0.1",
+      "status": "ESTIMATED",
+      "native_bytes": 75616,
+      "step_bytes": 15919,
+      "preview_bytes": 155614,
+      "expected_volume_mm3": 154000.0,
+      "actual_volume_mm3": 154000.0
+    },
+    {
+      "part": "FN-SOL-001_swm10w-panel-envelope_R0.1",
+      "status": "VERIFIED",
+      "native_bytes": 80331,
+      "step_bytes": 15911,
+      "preview_bytes": 161992,
+      "expected_volume_mm3": 1183200.0,
+      "actual_volume_mm3": 1183200.0
+    }
+  ]
+}

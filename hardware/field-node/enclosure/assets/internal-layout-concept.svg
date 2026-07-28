@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="980" viewBox="0 0 1400 980">
+  <defs>
+    <marker id="arrow2" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto-start-reverse">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#344054"/>
+    </marker>
+    <style>
+      text { font-family: "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; fill: #172033; letter-spacing: 0; }
+      .title { font-size: 32px; font-weight: 700; }
+      .sub { font-size: 17px; fill: #475467; }
+      .head { font-size: 20px; font-weight: 700; }
+      .label { font-size: 17px; font-weight: 600; }
+      .small { font-size: 15px; fill: #475467; }
+      .inverse { fill: #ffffff; }
+      .dim { stroke: #344054; stroke-width: 1.5; marker-start: url(#arrow2); marker-end: url(#arrow2); }
+      .guide { stroke: #98a2b3; stroke-width: 1; stroke-dasharray: 5 5; }
+    </style>
+  </defs>
+
+  <rect width="1400" height="980" fill="#f7f8fa"/>
+  <text x="60" y="58" class="title">现场节点箱内布局概念图</text>
+  <text x="60" y="92" class="sub">安装板最大外包络 265 x 185 mm；四侧避让槽、孔位和电池尺寸待实物转印，图中不是加工尺寸。</text>
+
+  <rect x="80" y="150" width="828" height="591" rx="24" fill="#e9edf2" stroke="#667085" stroke-width="4"/>
+  <text x="494" y="785" text-anchor="middle" class="small">箱体内部参考轮廓约 276 x 197（含义需实物确认）</text>
+
+  <path d="M120 168 H455 C455 184 462 194 474 194 C486 194 493 184 493 168 H867 Q891 168 891 192 V410 C878 410 869 420 869 434 C869 448 878 458 891 458 V699 Q891 723 867 723 H515 C515 707 505 697 493 697 C481 697 471 707 471 723 H120 Q96 723 96 699 V470 C109 470 119 460 119 446 C119 432 109 422 96 422 V192 Q96 168 120 168 Z" fill="#fbfcfd" stroke="#344054" stroke-width="3"/>
+  <text x="494" y="202" text-anchor="middle" class="head">FR4/G10 异形安装板，外包络 265 x 185 x 3</text>
+
+  <rect x="111" y="225" width="240" height="174" rx="8" fill="#d7e8ff" stroke="#175cd3" stroke-width="3"/>
+  <text x="231" y="283" text-anchor="middle" class="label">电池托架预留区</text>
+  <text x="231" y="312" text-anchor="middle" class="small">按电池实测尺寸调整</text>
+  <text x="231" y="341" text-anchor="middle" class="small">两条机械绑带 + 阻燃缓冲</text>
+
+  <rect x="111" y="423" width="240" height="174" rx="8" fill="#ffe8cc" stroke="#b54708" stroke-width="3"/>
+  <text x="231" y="481" text-anchor="middle" class="label">比赛版倾角金属基准板</text>
+  <text x="231" y="510" text-anchor="middle" class="small">约 120 x 85 x 3 mm 304</text>
+  <text x="231" y="539" text-anchor="middle" class="small">小板四点固定 + 下方四点支撑</text>
+
+  <rect x="111" y="619" width="150" height="84" rx="8" fill="#f0e6ff" stroke="#6941c6" stroke-width="3"/>
+  <text x="186" y="655" text-anchor="middle" class="label">3S 充电管理</text>
+  <text x="186" y="680" text-anchor="middle" class="small">远离 RF 区</text>
+
+  <rect x="279" y="619" width="72" height="84" rx="6" fill="#e6f4ea" stroke="#027a48" stroke-width="3"/>
+  <text x="315" y="652" text-anchor="middle" class="small">XT30</text>
+  <text x="315" y="678" text-anchor="middle" class="small">保险</text>
+
+  <rect x="372" y="330" width="510" height="345" rx="8" fill="#dff2e5" stroke="#027a48" stroke-width="4"/>
+  <text x="627" y="371" text-anchor="middle" class="head">现场节点 PCB 170 x 115</text>
+  <rect x="402" y="402" width="115" height="95" rx="6" fill="#8cc4a1" stroke="#027a48" stroke-width="2"/>
+  <text x="459" y="452" text-anchor="middle" class="small">电源模块</text>
+  <rect x="552" y="399" width="180" height="120" rx="6" fill="#7fbf95" stroke="#027a48" stroke-width="2"/>
+  <text x="642" y="459" text-anchor="middle" class="small">RK2206</text>
+  <rect x="746" y="402" width="105" height="78" rx="6" fill="#abdbc0" stroke="#027a48" stroke-width="2"/>
+  <text x="798" y="443" text-anchor="middle" class="small">SC16</text>
+  <rect x="746" y="513" width="105" height="63" rx="6" fill="#abdbc0" stroke="#027a48" stroke-width="2"/>
+  <text x="798" y="551" text-anchor="middle" class="small">RS485</text>
+  <rect x="538" y="586" width="195" height="70" rx="4" fill="#fff2cc" stroke="#b7791f" stroke-width="2" stroke-dasharray="7 5"/>
+  <text x="635" y="617" text-anchor="middle" class="small">DL-XLS1 / GPS 天线净空</text>
+  <text x="635" y="642" text-anchor="middle" class="small">禁止电池、金属板和线束覆盖</text>
+
+  <rect x="354" y="225" width="18" height="450" fill="#d0d5dd" stroke="#667085" stroke-width="2"/>
+  <text x="346" y="455" text-anchor="middle" class="small" transform="rotate(-90 346 455)">15 x 15 线槽</text>
+
+  <g fill="#ffffff" stroke="#667085" stroke-width="3" stroke-dasharray="4 3">
+    <circle cx="125" cy="194" r="9"/><circle cx="862" cy="194" r="9"/>
+    <circle cx="125" cy="697" r="9"/><circle cx="862" cy="697" r="9"/>
+    <circle cx="493" cy="240" r="9"/><circle cx="493" cy="697" r="9"/>
+  </g>
+  <text x="935" y="205" class="small">异形边缘和虚线孔均为示意</text>
+  <text x="935" y="230" class="small">实物转印后生成 DXF；M3 自攻固定</text>
+
+  <line x1="96" y1="825" x2="891" y2="825" class="dim"/>
+  <line x1="96" y1="725" x2="96" y2="838" class="guide"/>
+  <line x1="891" y1="725" x2="891" y2="838" class="guide"/>
+  <text x="494" y="855" text-anchor="middle" class="label">265</text>
+  <line x1="40" y1="168" x2="40" y2="723" class="dim"/>
+  <line x1="42" y1="168" x2="96" y2="168" class="guide"/>
+  <line x1="42" y1="723" x2="96" y2="723" class="guide"/>
+  <text x="18" y="450" text-anchor="middle" class="label" transform="rotate(-90 18 450)">185</text>
+
+  <rect x="930" y="290" width="410" height="390" rx="8" fill="#ffffff" stroke="#d0d5dd" stroke-width="2"/>
+  <text x="962" y="333" class="head">装配顺序</text>
+  <text x="962" y="378" class="label">1. 纸板样件转印 6 个箱内孔</text>
+  <text x="962" y="422" class="label">2. 加工 FR4 安装板和孔位</text>
+  <text x="962" y="466" class="label">3. 固定 PCB 支柱和线槽</text>
+  <text x="962" y="510" class="label">4. 安装电池托架、充电板、XT30</text>
+  <text x="962" y="554" class="label">5. 底部开格兰头并完成线束</text>
+  <text x="962" y="598" class="label">6. 合盖检查高度、天线和拉力</text>
+  <text x="962" y="642" class="label">7. 执行 IP65 喷水和 7 天运行测试</text>
+
+  <g transform="translate(930 720)">
+    <rect width="410" height="130" rx="8" fill="#fff8e7" stroke="#f0b429" stroke-width="2"/>
+    <text x="25" y="38" class="head">关键原则</text>
+    <text x="25" y="73" class="small">不在箱底新增普通贯通孔；不靠胶带固定电池；</text>
+    <text x="25" y="101" class="small">充电板远离天线；倾角使用独立金属小基准板。</text>
+  </g>
+
+  <text x="60" y="940" class="sub">DRAFT：电池、孔位、线径和端子方向实测后，生成正式 DXF、孔表和装配图。</text>
+</svg>

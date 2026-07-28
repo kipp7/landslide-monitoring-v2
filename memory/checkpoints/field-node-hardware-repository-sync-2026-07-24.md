@@ -1,0 +1,58 @@
+---
+title: field-node-hardware-repository-sync-2026-07-24
+type: note
+tags:
+  - checkpoint
+  - hardware
+  - repository
+status: complete
+---
+
+# Checkpoint: field-node-hardware-repository-sync-2026-07-24
+
+## Objective
+
+把现场节点外壳、内安装结构、倾角基准、太阳能供电、PCB 改版输入和采购建议整理为可审查、可追溯的仓库资料，并同步到独立远端分支，避免污染本地主工作区。
+
+## Last Confirmed State
+
+- 硬件入口统一为 `hardware/README.md`，现场节点资料位于 `hardware/field-node/`。
+- 当前集成版本为 `FIELD-NODE-HW-EVT0.1`，外壳、供电和采购均未放行制造。
+- 比赛版继续使用 `320 x 240 x 145 mm` 防水箱、异形 3 mm FR4/G10 主安装板和 `120 x 85 x 3 mm` 304 倾角小基准板。
+- 已记录生产 Gerber 的真实 PCB 外形为 `170 x 115 mm`，并标明现有原理图、BOM 与模块版实物不一致。
+- 持久任务和结构决策分别记录在 `memory/tasks/2026-07-23-hardware-productization.md` 与 `memory/decisions/2026-07-24-field-node-competition-enclosure.md`。
+- 本次公开资料不包含聊天截图、第三方手册、临时 Gerber 解压目录、PDF 页面渲染或本机运行状态。
+- 仓库同步分支为 `docs/hardware-field-node-evt0-1`；提交和推送完成后，以远端分支状态为准。
+
+## In Progress
+
+- 硬件产品化任务仍处于尺寸采集和样机验证阶段，并非制造冻结。
+- FR4 最终异形轮廓、箱体支撑孔坐标、倾角小板到 FR4 的四点支撑孔、电池尺寸和线缆直径尚未实测冻结。
+- `CN3791` 3S 12.6 V 成品充电模块仍是样机采购候选，需要台架验证后才能确定。
+- 2026-07-25 已加入七张工程参考 SVG/PNG；外部 Image 2 4K 渲染已通过结构关系检查。内部开箱渲染因虚构模块和载板结构被否决，不纳入 Git 资产。
+- 2026-07-25 提交 `fe0b38b5` 已推送到远端 `docs/hardware-field-node-evt0-1`，PR #352 已更新为 EVT0.2 工程参考包；本检查点的仓库同步动作完成。
+- 2026-07-25 新增 `IMAGE2-R0.1` 三张已验收 4K Image 2 核心图；生成与验收规则记录在 `hardware/field-node/enclosure/assets/renderings/image2-set/README.md`。
+- 旧泛化 AI 外观图已明确否决，不纳入 `hardware/field-node/enclosure/assets/` 设计基线。
+- 2026-07-25 外壳推进到 `MECH-R0.2-DRAFT`：已在实物照片上冻结 P1-P6 六个低位塑料柱，并新增定位图与 M3/FR4/隔离套/塑料柱切面。照片不作为加工坐标来源。
+- 采购清单推进到 `BOM-R0.2`：记录电池约 `70 x 55 x 40 mm` 的照片估算，并补入 BT-760、BT-M87SF、3 m 50 Ω TNC-J → SMA-J 非 RP-SMA 馈线样品项。
+- `IMAGE2-R0.2` 已把三张 4K 原图与三张工程标注版、三份可编辑 SVG 标注层纳入同一版本目录；工程标注不改变原始 Image 2 输出，也不替代制造图。
+
+## Next Actions
+
+- 用 PET/PP 模板转印箱体内轮廓；只测 P1-P6 的坐标、柱高/共面性、孔径、深度和盲孔状态。
+- 补齐电池外形、BMS、线缆外径和太阳能板边框孔位。
+- 生成 FR4 主板和倾角基准板 DXF，并在首件装配后回写实际版本。
+- 完成充电模块的终止电压、夜间反灌、温升和 24 小时功耗测试。
+- 从 V1.2 实物重建模块版原理图和完整 BOM，再启动 R1.3 PCB 设计。
+- 检查工程图 XML、PNG 尺寸、链接、发布风险后，提交并推送 EVT0.2-DRAFT 资料。
+
+## Risks
+
+- 商家给出的箱体轮廓尺寸不能代替实物孔位，直接下单矩形 FR4 可能无法装入。
+- 箱内倾角方案用于比赛一致性，但箱体与外部支架未验证前不能视为长期现场测量基准。
+- 候选太阳能充电模块的商品页参数不一致，必须按实物测试放行。
+- 现有 carrier-board 资料内部不一致，禁止直接复投生产。
+
+## Resume Prompt
+
+继续现场节点硬件产品化：先检查 `hardware/field-node/enclosure/assets/` 的工程图与 Image 2 参考渲染，再核对远端 `docs/hardware-field-node-evt0-1` 分支状态；从箱体与电池实测尺寸开始推进，不把 EVT0.2-DRAFT 或任何 AI 渲染当作制造图。

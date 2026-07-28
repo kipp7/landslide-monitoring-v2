@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+ <defs><style>
+ text{font-family:"Microsoft YaHei","Noto Sans SC",sans-serif;fill:#172033;letter-spacing:0}.title{font-size:34px;font-weight:700}.sub{font-size:17px;fill:#516078}.h{font-size:21px;font-weight:700}.b{font-size:15px;font-weight:650}.s{font-size:13px;fill:#45536a}.xs{font-size:12px;fill:#65738a}.dim{font-size:13px;fill:#26364c}.panel{fill:#fff;stroke:#cbd3df;stroke-width:2}.fr4{fill:#f8fbff;stroke:#315f9b;stroke-width:4}.pcb{fill:#dff3e7;stroke:#147a55;stroke-width:3}.tilt{fill:#ffe7c2;stroke:#bc6410;stroke-width:3}.metal{fill:#d9dee6;stroke:#56667c;stroke-width:3}.tbd{fill:#fff9e9;stroke:#d08a13;stroke-width:2;stroke-dasharray:8 6}.rf{fill:#f4eeff;stroke:#7450c6;stroke-width:2;stroke-dasharray:6 4}.d{fill:none;stroke:#344154;stroke-width:2;marker-start:url(#a);marker-end:url(#a)}.ext{stroke:#9ba8b9;stroke-width:1.3;stroke-dasharray:5 4}
+ </style><marker id="a" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0 4L8 0V8Z" fill="#344154"/></marker></defs>
+ <rect width="1600" height="900" fill="#f4f6f8"/><text x="54" y="60" class="title">箱内已知件 1:2 比例装入研究</text><text x="54" y="92" class="sub">目的：证明已知件的几何关系，并暴露电池、孔位和接口尺寸缺口；不是最终布板或加工图</text>
+ <rect x="50" y="125" width="980" height="710" rx="6" class="panel"/><text x="78" y="165" class="h">FR4/G10 最大外包络 265 × 185 × 3 mm（图上 2 px/mm）</text>
+ <path d="M130 220H650V250Q650 272 672 272Q694 272 694 250V220H870V320H842Q820 320 820 342Q820 364 842 364H870V565H810V543Q810 521 788 521Q766 521 766 543V590H160V525H182Q204 525 204 503Q204 481 182 481H130V365H158Q180 365 180 343Q180 321 158 321H130Z" class="fr4"/>
+ <text x="510" y="204" class="xs">弧槽/台阶仅表示必须避让；准确轮廓需实物转印</text>
+ <!-- known exact rectangles -->
+ <rect x="170" y="270" width="170" height="240" rx="3" class="metal"/><text x="197" y="296" class="b">304 基准板</text><text x="193" y="318" class="s">85 × 120（旋转）</text>
+ <rect x="197" y="300" width="116" height="180" rx="5" class="tilt"/><text x="217" y="369" class="b">倾角传感器</text><text x="218" y="393" class="s">58 × 90（旋转）</text><text x="225" y="417" class="s">高 36 mm</text>
+ <circle cx="216" cy="312" r="4" fill="#fff" stroke="#bc6410"/><circle cx="294" cy="312" r="4" fill="#fff" stroke="#bc6410"/><circle cx="216" cy="468" r="4" fill="#fff" stroke="#bc6410"/><circle cx="294" cy="468" r="4" fill="#fff" stroke="#bc6410"/>
+ <rect x="360" y="270" width="340" height="230" rx="7" class="pcb"/><text x="466" y="296" class="b">现场节点 PCB 170 × 115</text>
+ <rect x="382" y="320" width="132" height="98" rx="4" fill="#b7dfc7" stroke="#147a55"/><text x="414" y="374" class="b">RK2206</text>
+ <rect x="536" y="320" width="74" height="54" rx="4" fill="#eaf2fb" stroke="#2f6eb5"/><text x="548" y="343" class="s">SC16</text><text x="546" y="360" class="s">IS752</text>
+ <rect x="620" y="320" width="60" height="54" rx="4" fill="#eaf2fb" stroke="#2f6eb5"/><text x="631" y="351" class="s">RS485-1</text>
+ <rect x="620" y="388" width="60" height="54" rx="4" fill="#eaf2fb" stroke="#2f6eb5"/><text x="631" y="419" class="s">RS485-2</text>
+ <rect x="536" y="388" width="74" height="54" rx="4" class="rf"/><text x="546" y="411" class="s">DL-XLS1</text><text x="550" y="429" class="s">+ GPS</text>
+ <rect x="155" y="525" width="570" height="54" rx="3" class="tbd"/><text x="174" y="548" class="b">剩余候选带：电池托盘 + CN3791 + 保险 + XT30 + 线槽</text><text x="174" y="568" class="s">仅约 60 mm 深；电池外形未测，当前不能证明全部器件可装入</text>
+ <rect x="720" y="270" width="110" height="230" rx="3" class="rf"/><text x="743" y="342" class="b">RF / 线弯</text><text x="740" y="367" class="s">保持净空</text><text x="739" y="392" class="s">端子朝下</text><text x="738" y="417" class="s">禁电池覆盖</text>
+ <path d="M130 635H870" class="d"/><path d="M130 590V645M870 590V645" class="ext"/><text x="476" y="627" class="dim">265 mm 最大包络</text>
+ <path d="M95 220V590" class="d"/><path d="M95 220H125M95 590H125" class="ext"/><text x="75" y="438" class="dim" transform="rotate(-90 75 438)">185 mm 最大包络</text>
+ <rect x="78" y="685" width="920" height="115" rx="5" fill="#fff7e6" stroke="#d88a13" stroke-width="2"/><text x="100" y="718" class="b">装入结论</text><text x="100" y="744" class="s">已知的 PCB 与旋转后的倾角基准板能在包络内并排，且不需要整块钢底板。</text><text x="100" y="768" class="s">但电池长宽高、CN3791 成品板尺寸和端子弯曲半径未测，因此整机装入仍是 OPEN，不能下单最终 FR4。</text>
+
+ <rect x="1065" y="125" width="485" height="710" rx="6" class="panel"/><text x="1095" y="165" class="h">空间与装配约束</text>
+ <text x="1095" y="215" class="b">已冻结</text><text x="1095" y="244" class="s">• PCB：170 × 115 mm，4 × Ø3.2</text><text x="1095" y="270" class="s">• 倾角：90 × 58 × 36 mm</text><text x="1095" y="296" class="s">• 基准板：120 × 85 × 3 mm</text><text x="1095" y="322" class="s">• FR4 最大包络：265 × 185 × 3 mm</text>
+ <text x="1095" y="372" class="b">必须实测</text><text x="1095" y="401" class="s">• 电池长 × 宽 × 高、重量、出线方向</text><text x="1095" y="427" class="s">• CN3791 成品模块外形、孔位、端子高度</text><text x="1095" y="453" class="s">• 6 个箱体孔中心、孔深、是否贯通</text><text x="1095" y="479" class="s">• 四侧弧槽真实轮廓和可装入路径</text><text x="1095" y="505" class="s">• 格兰头数量、线径与孔位</text>
+ <rect x="1095" y="550" width="425" height="135" rx="5" fill="#fff1f0" stroke="#c4453c" stroke-width="2"/><text x="1118" y="584" class="b">禁止直接加工</text><text x="1118" y="612" class="s">图中模块位置是空间占位，不是孔表。</text><text x="1118" y="638" class="s">不得把 265 × 185 当成完整矩形板下单。</text><text x="1118" y="664" class="s">不得用估算孔位钻箱体或加工 FR4。</text>
+ <text x="1095" y="735" class="b">建议下一件实物工作</text><text x="1095" y="764" class="s">用 265 × 185 mm 透明 PET 片转印轮廓与孔位，</text><text x="1095" y="790" class="s">同时用卡尺记录电池和 CN3791 模块包络。</text>
+ <text x="54" y="865" class="xs">MECH-R0.2 · PACKING STUDY / NOT FOR FABRICATION · 所有虚线区域均未冻结</text>
+</svg>

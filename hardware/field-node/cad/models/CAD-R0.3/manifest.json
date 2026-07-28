@@ -1,0 +1,365 @@
+{
+  "revision": "CAD-R0.3",
+  "scope": "first controlled internal layout assembly",
+  "manufacturing_status": "LAYOUT REVIEW ONLY / NOT FOR MANUFACTURE",
+  "solidworks": "2022 SP5.0",
+  "generated_parts": [
+    {
+      "part": "FN-ENC-002_open-tray-layout-reference_R0.3",
+      "status": "NOMINAL_LAYOUT_REFERENCE",
+      "expected_volume_mm3": 2127398.843,
+      "actual_volume_mm3": 2127398.843
+    },
+    {
+      "part": "FN-PLT-003_fr4-rect-fit_NO-HOLES_R0.3",
+      "status": "DESIGN_FIT_TRIAL_NO_ANCHOR_HOLES",
+      "native_bytes": 77362,
+      "step_bytes": 15897,
+      "preview_bytes": 157739,
+      "expected_volume_mm3": 157488.0,
+      "actual_volume_mm3": 157488.0
+    },
+    {
+      "part": "FN-PCB-002_carrier-envelope_ROTATED_R0.3",
+      "status": "VERIFIED_XY_ROTATED_NOMINAL_Z",
+      "native_bytes": 76400,
+      "step_bytes": 15922,
+      "preview_bytes": 154995,
+      "expected_volume_mm3": 31280.0,
+      "actual_volume_mm3": 31280.0
+    },
+    {
+      "part": "FN-ZON-001_cn3791-reserved-zone_R0.3",
+      "status": "DESIGN_RESERVED_ZONE_NOT_MODULE_SIZE",
+      "native_bytes": 77273,
+      "step_bytes": 15915,
+      "preview_bytes": 159151,
+      "expected_volume_mm3": 2100.0,
+      "actual_volume_mm3": 2100.0
+    }
+  ],
+  "packaged_reference_parts": [
+    {
+      "source_revision": "CAD-R0.1",
+      "source_name": "FN-BAT-001_battery-envelope_ESTIMATED_R0.1.SLDPRT",
+      "packaged_name": "FN-BAT-001_battery-envelope_ESTIMATED_R0.1.SLDPRT",
+      "source_sha256": "eeec65727b0eab90377b12bfa2693bd0300c1c2584f3f994d5281ddc6f9eebbf"
+    },
+    {
+      "source_revision": "CAD-R0.1",
+      "source_name": "FN-SEN-001_tilt-transmitter-envelope_R0.1.SLDPRT",
+      "packaged_name": "FN-SEN-001_tilt-transmitter-envelope_R0.1.SLDPRT",
+      "source_sha256": "26c0b8f944cfa674183573d8f6753c3feb5e11f484649adace7ccf305af939a2"
+    },
+    {
+      "source_revision": "CAD-R0.2",
+      "source_name": "FN-SUB-002_tilt-reference-plate_M3_R0.2.SLDPRT",
+      "packaged_name": "FN-SUB-002_tilt-reference-plate_M3_R0.2.SLDPRT",
+      "source_sha256": "911c8a0a487338de0d7c4370d2e3cda2e980d6570c408137515f377c8c5f5e58"
+    }
+  ],
+  "assembly": {
+    "name": "FN-ASM-001_internal-layout_R0.3",
+    "component_count": 7,
+    "native_bytes": 126904,
+    "step_bytes": 182717,
+    "isometric_preview_bytes": 148053,
+    "top_preview_bytes": 88639
+  },
+  "drawing": {
+    "drawing_bytes": 87485,
+    "pdf_bytes": 20956,
+    "drawing_preview_bytes": 19684
+  },
+  "layout_validation": {
+    "plate_nominal_clearance_per_side_mm": [
+      2.0327,
+      2.0
+    ],
+    "minimum_planar_clearance_mm": 6.0,
+    "pair_clearances_mm": {
+      "pcb:battery": 38.0,
+      "pcb:charger_zone": 76.0,
+      "pcb:subplate": 26.0,
+      "battery:charger_zone": 8.0,
+      "battery:subplate": 49.0,
+      "charger_zone:subplate": 6.0
+    },
+    "highest_component_z_mm": 52.0,
+    "nominal_rim_clearance_mm": 39.1
+  },
+  "labeled_top_view": {
+    "svg": "FN-ASM-001_internal-layout_R0.3_labeled-top.svg",
+    "png": "FN-ASM-001_internal-layout_R0.3_labeled-top.png",
+    "canvas_px": [
+      2400,
+      1600
+    ],
+    "geometry_scale_px_per_mm": 4.2
+  },
+  "plate": {
+    "size_mm": [
+      272.0,
+      193.0,
+      3.0
+    ],
+    "bottom_z_from_enclosure_outer_bottom_mm": 9.0,
+    "support_top_from_inner_floor_mm": 6.0,
+    "anchor_holes": "ABSENT_PENDING_R1_R6_MEASUREMENT"
+  },
+  "placements": [
+    {
+      "key": "tray",
+      "instance": "ENCLOSURE_TRAY_REFERENCE",
+      "reference": "FN-ENC-002_open-tray-layout-reference_R0.3.SLDPRT",
+      "center_xy_mm": [
+        0.0,
+        0.0
+      ],
+      "bottom_z_mm": 0.0,
+      "size_mm": [
+        317.9,
+        238.9,
+        91.1
+      ],
+      "status": "NOMINAL"
+    },
+    {
+      "key": "plate",
+      "instance": "FR4_RECT_FIT_NO_HOLES",
+      "reference": "FN-PLT-003_fr4-rect-fit_NO-HOLES_R0.3.SLDPRT",
+      "center_xy_mm": [
+        0.0,
+        0.0
+      ],
+      "bottom_z_mm": 9.0,
+      "size_mm": [
+        272.0,
+        193.0,
+        3.0
+      ],
+      "status": "DESIGN"
+    },
+    {
+      "key": "pcb",
+      "instance": "CARRIER_BOARD_ROTATED_90",
+      "reference": "FN-PCB-002_carrier-envelope_ROTATED_R0.3.SLDPRT",
+      "center_xy_mm": [
+        -72.5,
+        0.0
+      ],
+      "bottom_z_mm": 22.0,
+      "size_mm": [
+        115.0,
+        170.0,
+        1.6
+      ],
+      "status": "VERIFIED_XY"
+    },
+    {
+      "key": "battery",
+      "instance": "BATTERY_ESTIMATED",
+      "reference": "FN-BAT-001_battery-envelope_ESTIMATED_R0.1.SLDPRT",
+      "center_xy_mm": [
+        58.0,
+        -68.0
+      ],
+      "bottom_z_mm": 12.0,
+      "size_mm": [
+        70.0,
+        55.0,
+        40.0
+      ],
+      "status": "ESTIMATED"
+    },
+    {
+      "key": "charger_zone",
+      "instance": "CN3791_RESERVED_ZONE",
+      "reference": "FN-ZON-001_cn3791-reserved-zone_R0.3.SLDPRT",
+      "center_xy_mm": [
+        91.0,
+        -15.0
+      ],
+      "bottom_z_mm": 12.0,
+      "size_mm": [
+        60.0,
+        35.0,
+        1.0
+      ],
+      "status": "DESIGN_ZONE"
+    },
+    {
+      "key": "subplate",
+      "instance": "TILT_REFERENCE_PLATE",
+      "reference": "FN-SUB-002_tilt-reference-plate_M3_R0.2.SLDPRT",
+      "center_xy_mm": [
+        71.0,
+        51.0
+      ],
+      "bottom_z_mm": 12.0,
+      "size_mm": [
+        120.0,
+        85.0,
+        3.0
+      ],
+      "status": "DESIGN_M3_TAPPED"
+    },
+    {
+      "key": "sensor",
+      "instance": "TILT_TRANSMITTER",
+      "reference": "FN-SEN-001_tilt-transmitter-envelope_R0.1.SLDPRT",
+      "center_xy_mm": [
+        71.0,
+        51.0
+      ],
+      "bottom_z_mm": 15.0,
+      "size_mm": [
+        90.0,
+        58.0,
+        36.0
+      ],
+      "status": "VERIFIED"
+    }
+  ],
+  "blocked_inputs": [
+    "R1-R6 physical boss identities and XY coordinates",
+    "R1-R6 hole diameter, depth, and blind state",
+    "battery measured envelope and cable exit",
+    "CN3791 module measured envelope and mounting holes",
+    "plate-to-FR4 four support holes"
+  ],
+  "warnings": [
+    "The 60 x 35 mm CN3791 object is a reserved layout zone, not a module measurement.",
+    "The 70 x 55 x 40 mm battery is photo-estimated.",
+    "The enclosure tray omits scallops, ribs, lid geometry, and fastener bosses.",
+    "No FR4 DXF is generated in CAD-R0.3."
+  ],
+  "artifacts": [
+    {
+      "name": "FN-ASM-001_internal-layout_R0.3.pdf",
+      "bytes": 20956,
+      "sha256": "fed75618c15520a040063b0c32da8e9cc4fdf56c2ff74fcef25a6e8fc6e724eb"
+    },
+    {
+      "name": "FN-ASM-001_internal-layout_R0.3.SLDASM",
+      "bytes": 126904,
+      "sha256": "c173cd360d51c90f1f12acb6220b3348f7a6fa9018dbaaa81188ca5f31b604ef"
+    },
+    {
+      "name": "FN-ASM-001_internal-layout_R0.3.SLDDRW",
+      "bytes": 87485,
+      "sha256": "d359a604f37e17c31199ae50f6f7a0b98e6b627edf1e416ee7b9d97a1a1b9910"
+    },
+    {
+      "name": "FN-ASM-001_internal-layout_R0.3.STEP",
+      "bytes": 182717,
+      "sha256": "08d09023f9f20d9f63ccb5d45d81587d07b45fecf961a23f908f27ce914be45f"
+    },
+    {
+      "name": "FN-ASM-001_internal-layout_R0.3_drawing.png",
+      "bytes": 19684,
+      "sha256": "e204e810d56294ff6e5740e07004b3313c0b5f99308ed443648ba2a6cd60bef5"
+    },
+    {
+      "name": "FN-ASM-001_internal-layout_R0.3_exploded-reference.png",
+      "bytes": 148196,
+      "sha256": "dd26853066b001f8ce8066fd0bf0b4d2a743f951fc1ca478d15f481f0f545528"
+    },
+    {
+      "name": "FN-ASM-001_internal-layout_R0.3_isometric.png",
+      "bytes": 148053,
+      "sha256": "74fbd3152eaadec9efe03eb4349055c20e74b827f9f5510f77c9a66df3f05183"
+    },
+    {
+      "name": "FN-ASM-001_internal-layout_R0.3_labeled-top.png",
+      "bytes": 152831,
+      "sha256": "751542fe6bbd61fc66cf6a61b84bdfb72b2a39663e91ea68944b05efd03d97e5"
+    },
+    {
+      "name": "FN-ASM-001_internal-layout_R0.3_labeled-top.svg",
+      "bytes": 9119,
+      "sha256": "83e6f0f7dbfda0bc3517d6d38515f1480ae50e30366afbe4edc1df138457be33"
+    },
+    {
+      "name": "FN-ASM-001_internal-layout_R0.3_top.png",
+      "bytes": 88639,
+      "sha256": "121f2c1c2d947c4f85d1a0009f91859423ff512c2a7d257d450ae478fe941d25"
+    },
+    {
+      "name": "FN-BAT-001_battery-envelope_ESTIMATED_R0.1.SLDPRT",
+      "bytes": 69459,
+      "sha256": "6464a47832b785609a3315ede9ad56ba2ad441ed0553adc3d17e8e50337f5fde"
+    },
+    {
+      "name": "FN-ENC-002_open-tray-layout-reference_R0.3.png",
+      "bytes": 167416,
+      "sha256": "20890fc14ce6b08ce2190257f9529e9eef8b5659548714d2a45f788b301cb72b"
+    },
+    {
+      "name": "FN-ENC-002_open-tray-layout-reference_R0.3.SLDPRT",
+      "bytes": 85553,
+      "sha256": "0785f01648fdf9b9327f9707abbbb75cc58a290d4f8289612996f09766b0b95b"
+    },
+    {
+      "name": "FN-ENC-002_open-tray-layout-reference_R0.3.STEP",
+      "bytes": 25313,
+      "sha256": "6d07a2678f1019d6c6824bc3926310bb551cd36386387fc72e0eb780b7d5f4d9"
+    },
+    {
+      "name": "FN-PCB-002_carrier-envelope_ROTATED_R0.3.png",
+      "bytes": 154995,
+      "sha256": "8df552862abd9498dd9d2448df437b240aba5fa15116ccef38affaeb62b7ed12"
+    },
+    {
+      "name": "FN-PCB-002_carrier-envelope_ROTATED_R0.3.SLDPRT",
+      "bytes": 67151,
+      "sha256": "b37dad5a56170fdbdf1120bbfedfbc3c090074d081885155919ee0e3b3ebf690"
+    },
+    {
+      "name": "FN-PCB-002_carrier-envelope_ROTATED_R0.3.STEP",
+      "bytes": 15668,
+      "sha256": "82938dab6c7e497851ce7f990cdb808dc7517fa7f601a50d8e83f22855dcb4cb"
+    },
+    {
+      "name": "FN-PLT-003_fr4-rect-fit_NO-HOLES_R0.3.png",
+      "bytes": 157739,
+      "sha256": "094dc54f903aa79d469cc921141678ab7db782c2fe47b5fafc88946f83236ba7"
+    },
+    {
+      "name": "FN-PLT-003_fr4-rect-fit_NO-HOLES_R0.3.SLDPRT",
+      "bytes": 69076,
+      "sha256": "1a8e4a2c80e536ec65df96b4f430c3c65553cba8223c3e6d24b2a7bc29d53984"
+    },
+    {
+      "name": "FN-PLT-003_fr4-rect-fit_NO-HOLES_R0.3.STEP",
+      "bytes": 15643,
+      "sha256": "d9fe10a25fc2150553d198f8b6800253282ea8359e3228d6fd6390f7ffc98894"
+    },
+    {
+      "name": "FN-SEN-001_tilt-transmitter-envelope_R0.1.SLDPRT",
+      "bytes": 82301,
+      "sha256": "091fe2f3e6a5fd4bfb79ae8cf06173225051e7357aa7fc0651b258e3be2e7a47"
+    },
+    {
+      "name": "FN-SUB-002_tilt-reference-plate_M3_R0.2.SLDPRT",
+      "bytes": 78166,
+      "sha256": "e570df54cb34a5e56ffe4312df1c3a5d758a833df86805a1fe4986f76df45bdf"
+    },
+    {
+      "name": "FN-ZON-001_cn3791-reserved-zone_R0.3.png",
+      "bytes": 159151,
+      "sha256": "51dfbd448278250060c3f5e914091406df3e64147869d5138bc327ad209b7433"
+    },
+    {
+      "name": "FN-ZON-001_cn3791-reserved-zone_R0.3.SLDPRT",
+      "bytes": 67890,
+      "sha256": "bdb7cb2310927f7530949acca9cfb300b9c38c4addf289c921f739b48955fbc5"
+    },
+    {
+      "name": "FN-ZON-001_cn3791-reserved-zone_R0.3.STEP",
+      "bytes": 15661,
+      "sha256": "e0b9783b0264e8151a1e48fdd34dc4ab984a9b688952084c27c0f3bf85a39eaa"
+    }
+  ],
+  "exploded_preview": "FN-ASM-001_internal-layout_R0.3_exploded-reference.png"
+}
