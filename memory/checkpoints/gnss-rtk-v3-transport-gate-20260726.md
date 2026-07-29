@@ -70,10 +70,11 @@ status: active
 - V4 正式 PROBE 包为 `F:\2\openharmony\rk2206_firmware_releases\xl01_gnss_rtk_v31_probe_sensor_diag_v4_20260729`，manifest 来源 `b8cdd26c9f4706dc5937c09a6d4ffd72dbd60ab3`。9/9 哈希和 A/B/C 身份复核通过；A/B/C `Firmware.img` SHA-256 为 `8093162cf3a0ce3a748b8b96d4d2948034bbc65f5b25ebaea45a89b9b91f2b91`、`6c02590545153da68b909a2cea8e094a3c02023e12748e347bb130228160be52`、`7dec8c46f17c370a52459dd128c83a5c128b34121e171a071b6b64cb10243d23`。RK3568 已部署匹配脚本，SHA-256 `3963c1f263b2a4ca44ed9ee796ae06ad487395971a2c94aaa834831c0daacd41`，自检通过。
 - 2026-07-29 V4 真机诊断完成。A 的 U4 `0x4D`、双通道 scratchpad/内部 loopback/UART 全通过，loopback 各收 4 字节，`LSR=0x60`；只读扫描 2/2 命中两个配置查询形状，双通道有持续 RX，三条 RS485 传感器路径有效。B/C 均能返回正确身份的 V4 控制响应，但双通道 scratchpad 为 `[-2,-2]`、loopback 为 `[-2,-2]`、`LSR=0x00`；每节点 48 个扫描组合零命中，全部 Modbus 请求都在写入 U4 UART 阶段失败且 RX 为 0。`scratch=-2` 是测试值读回不一致，`loopback=-2` 是 FIFO 写不完整，并非外部探头无响应。因此 B/C 首查 U4 模块/版本/晶振、3.3 V、插座和主板 I2C，不先更换传感器。查询后 field-gateway 为 `active/running`、`NRestarts=0`。
 - B 核心板交叉试验已完成：A 核心板在 B 位置连续两次为 scratchpad/loopback/UART 全 0、`LSR=0x60`，土壤/EC/倾角有效；原 B 核心板在 A 位置仍为 scratchpad/loopback `[-2,-2]`、`LSR=0x00`，全部 Modbus 请求停在 U4 UART 写阶段。故障随 B 核心板而非位置侧载板/U4/RS485/探头移动，B 应查 EI2C0_M0 PB4/PB5、排针接触/焊点和核心板 I2C/3.3 V，或直接更换核心板。两次查询后 field-gateway 均恢复 active/running。
+- C 核心板在同一已知正常的 A 位置也保持 scratchpad/loopback `[-2,-2]`、`LSR=0x00`、48 个扫描组合零命中和双通道零 RX，证明 C 故障同样跟随核心板。至此交叉矩阵完整：A 核心板在 B 位置工作，B/C 核心板在 A 位置均失败；位置侧 U4、RS485、线束和探头不是当前首要更换对象。查询后 field-gateway 为 active/running、`NRestarts=0`。
 
 ## In Progress
 
-- 软件边界、容量模型、V4 底层诊断和 A/B/C 现场读取均已完成。A 证明同版固件和诊断链正常；B/C 已收敛到 U4 模块或其主板侧供电/I2C/接触层，外部 RS485 和探头尚未真正进入收发阶段。真实 NTRIP 和三节点混合负载仍未通过，不能进入 LIVE。
+- 软件边界、容量模型、V4 底层诊断和 A/B/C 核心板/位置交叉试验均已完成。A 证明同版固件、两个位置侧链路和诊断链正常；B/C 故障均跟随各自 RK2206 核心板，外部 RS485 和探头尚未真正进入收发阶段。真实 NTRIP 和三节点混合负载仍未通过，不能进入 LIVE。
 - RK2206 当前没有独立可信的 Unix 时钟。节点可执行 1500 ms 重组超时和最多 3000 ms 本地队列龄，但绝对生成时间 TTL 只能计为 `ttl_unverified`，由 RK3568 先做绝对新鲜度过滤。
 - 现有 GPS 驱动已阻止 RMC 状态错误设置 Fixed，并公开原始 GGA quality；完整 GGA/GSA/GST/GSV/RMC/ZDA 定点解析和 `GNSS_CORE` 1 Hz 上送尚未实现。
 
@@ -82,7 +83,7 @@ status: active
 - 保留本地报告 `docs/reports/xls1-gnss-v31-capacity-20260726.json` 作为可再生证据；原始 RTCM 抓包降为可选精化，不再作为进入单节点 `PROBE` 的阻塞项。
 - 保持 C 为离线/不可用状态，不伪造遥测，但在所有容量报告中固定预留 180 B/s；A/B 的实测结论与 C 的估算必须分栏展示。
 - 保留分级包率报告作为链路证据。旧 `250 B/6 Hz` 试验仍使用 160 B 分片，实际形成 12 个 field-link 包/秒；它证明高包率失败，不能单独证明 250 B 单包不可用。320 B 单包虽把 0.5 Hz QZSS 的丢失从 2 包降到 1 包，仍未过严格门禁，因此生产路径暂沿用已通过的三核心星座、160 B 分片和 160 ms 平滑调度。恢复 QZSS 前先设计有界累计确认/选择性重传，并验证三节点确认时隙、correction age 和 compact 遥测共存。
-- B 已定位到核心板。断电后将 C 核心板放到已知正常的 A 位置，A 核心板继续留在已验证正常的 B 位置，上电约 20 秒后查询 `target=C`。若 C 的 scratchpad/loopback/LSR 异常随核心板移动，C 也应检查 PB4/PB5、排针/焊点或直接更换核心板；只有 U4 自检通过后才进入位置侧 RS485/探头诊断。
+- B/C 均已定位到核心板侧。以 A 核心板为基准，在同一正常载板上测量 SDA/SCL 空闲高电平；断电后比较 PB4/PB5 到排针连续性、对 3.3 V/GND 阻值，并检查弯针、虚焊和污染。比赛优先方案是更换两块异常核心板、分别烧录 B/C V4 身份固件，然后重新执行三节点 diagnostics-only。只有 U4 自检全 0、`LSR=0x60` 后才继续外部链和 RTCM 门禁。
 - 真实门禁负载包含 RTCM、3 个 1 Hz `GNSS_CORE`、compact 环境遥测和控制命令；记录每节点 correction age P50/P95/max、Fixed 连续性、CRC、重组、队列、注入、旧 session 和命令延迟。
 - 至少运行 60 分钟；初始通过条件为 correction age P95 <= 3 s、max <= 5 s、没有旧 session 注入且 Fixed 连续。未通过前保持 `LIVE` 关闭。
 - 传输通过后再完成 RK2206 定点 GNSS 解析与上送、RK3568 ECEF/ENU/Hampel/Kalman、服务器 CEEMDAN 和 UI/profile 集成。
@@ -101,4 +102,4 @@ status: active
 
 ## Resume Prompt
 
-继续 V3.1 底层诊断：A 核心板在 B 位置正常，原 B 核心板在 A 位置仍复现 U4 scratchpad/loopback `[-2,-2]` 和 `LSR=0x00`，故障已确认跟随 B 核心板，应查 EI2C0_M0 PB4/PB5、排针/焊点或换板。下一步断电，把 C 核心板放到 A 位置、A 继续留在 B，查询 `target=C` 完成同类交叉试验。保持 LIVE 关闭；三节点 U4 和传感器恢复后才继续累计 ACK 与真实混合负载。
+继续 V3.1 底层诊断：交叉试验已完成，A 核心板在 B 位置正常，B/C 核心板在同一已知正常的 A 位置均复现 U4 scratchpad/loopback `[-2,-2]` 和 `LSR=0x00`，故障分别跟随 B/C 核心板。先比较 PB4/PB5 的 SDA/SCL 空闲电压、连续性、对电源/地阻值和排针/焊点；比赛优先直接更换 B/C 核心板并烧录对应 V4 身份固件。保持 LIVE 关闭；三节点 U4 与传感器恢复后才继续累计 ACK 和真实混合负载。
