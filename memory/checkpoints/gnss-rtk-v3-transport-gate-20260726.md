@@ -71,6 +71,7 @@ status: active
 - 2026-07-29 V4 真机诊断完成。A 的 U4 `0x4D`、双通道 scratchpad/内部 loopback/UART 全通过，loopback 各收 4 字节，`LSR=0x60`；只读扫描 2/2 命中两个配置查询形状，双通道有持续 RX，三条 RS485 传感器路径有效。B/C 均能返回正确身份的 V4 控制响应，但双通道 scratchpad 为 `[-2,-2]`、loopback 为 `[-2,-2]`、`LSR=0x00`；每节点 48 个扫描组合零命中，全部 Modbus 请求都在写入 U4 UART 阶段失败且 RX 为 0。`scratch=-2` 是测试值读回不一致，`loopback=-2` 是 FIFO 写不完整，并非外部探头无响应。因此 B/C 首查 U4 模块/版本/晶振、3.3 V、插座和主板 I2C，不先更换传感器。查询后 field-gateway 为 `active/running`、`NRestarts=0`。
 - B 核心板交叉试验已完成：A 核心板在 B 位置连续两次为 scratchpad/loopback/UART 全 0、`LSR=0x60`，土壤/EC/倾角有效；原 B 核心板在 A 位置仍为 scratchpad/loopback `[-2,-2]`、`LSR=0x00`，全部 Modbus 请求停在 U4 UART 写阶段。故障随 B 核心板而非位置侧载板/U4/RS485/探头移动，B 应查 EI2C0_M0 PB4/PB5、排针接触/焊点和核心板 I2C/3.3 V，或直接更换核心板。两次查询后 field-gateway 均恢复 active/running。
 - C 核心板在同一已知正常的 A 位置也保持 scratchpad/loopback `[-2,-2]`、`LSR=0x00`、48 个扫描组合零命中和双通道零 RX，证明 C 故障同样跟随核心板。至此交叉矩阵完整：A 核心板在 B 位置工作，B/C 核心板在 A 位置均失败；位置侧 U4、RS485、线束和探头不是当前首要更换对象。查询后 field-gateway 为 active/running、`NRestarts=0`。
+- A 核心板最终放回 A 位置后再次通过：U4 scratchpad/loopback/UART 全 0、`LSR=0x60`，土壤/EC/倾角均为 current valid。倾角 74 次请求中累计 5 次 no-response，但当前 fail streak 为 0 且无 CRC/帧错误，后续长测观察；室内 GNSS 未定位导致整体 degraded，不影响本次 RS485 基准回归。field-gateway 仍为 active/running、`NRestarts=0`。
 
 ## In Progress
 
