@@ -54,7 +54,10 @@ status: active
 - `b8cdd26c` 已实现向后兼容的 384 B `G3S` V4。前 204 B 完整保留 V3；追加 U4 实际 I2C 地址、双通道 scratchpad/内部 loopback/UART 初始化状态，双通道 Modbus 写/TX/I2C读/无响应/短帧/地址/CRC/异常/功能码/字节数分类计数，以及只读有界扫描。扫描只对地址 1 发 `0x03/0x04` 读请求，覆盖双通道、4800/9600 和 1.8432/14.7456 MHz 假设，最坏约 15 秒并逐次喂狗；结束后恢复 1.8432 MHz、4800 8N1。查询组合命中不等于传感器型号识别。
 - 构建脚本已补齐此前遗漏的 `field_sensors_rs485`、`rs485_modbus` 和 `sc16is752_driver` 六个源/头文件同步，避免仓库修改未进入 OpenHarmony SDK。C99 主机测试、Python 自检、field-gateway 18 项测试/lint、节点 A 预构建及正式 A/B/C 三次 `hb build -f` 全部通过。
 - V4 A/B/C 正式 PROBE 包位于 `F:\2\openharmony\rk2206_firmware_releases\xl01_gnss_rtk_v31_probe_sensor_diag_v4_20260729`，manifest 来源为 `b8cdd26c9f4706dc5937c09a6d4ffd72dbd60ab3`。9/9 二进制独立复算匹配、节点 UUID/安装标签唯一、三份 loader SHA-256 同为 `761d90888aa376156d562abf267dfe324b96c4397f7a601f6b4c64d0ea3bf977`；A/B/C `Firmware.img` SHA-256 分别为 `8093162cf3a0ce3a748b8b96d4d2948034bbc65f5b25ebaea45a89b9b91f2b91`、`6c02590545153da68b909a2cea8e094a3c02023e12748e347bb130228160be52`、`7dec8c46f17c370a52459dd128c83a5c128b34121e171a071b6b64cb10243d23`。该包仍为 PROBE，不向 UM220 写 RTCM。
-- 向后兼容 V4 的查询脚本已部署到 RK3568 `/usr/local/bin/xls1_gnss_v31_probe_sender.py`，本地/板端 SHA-256 均为 `3963c1f263b2a4ca44ed9ee796ae06ad487395971a2c94aaa834831c0daacd41`，Python 3.10 自检通过且 field-gateway 保持 `active`。节点尚未刷 V4，因此没有提前强制执行 V4 查询。
+- 向后兼容 V4 的查询脚本已部署到 RK3568 `/usr/local/bin/xls1_gnss_v31_probe_sender.py`，本地/板端 SHA-256 均为 `3963c1f263b2a4ca44ed9ee796ae06ad487395971a2c94aaa834831c0daacd41`，Python 3.10 自检通过。
+- 2026-07-29 用户统一烧录 V4 并上电后，RK3568 按 A -> B -> C 完成定向只读诊断。A 为健康对照：U4 在 `0x4D`，init、双通道 scratchpad、内部 loopback 和 UART 初始化均为 0，loopback 各回收 4 字节，空闲 `LSR=0x60`；扫描 2/2 命中两个配置查询形状，双通道累计收到 1401/935 字节，土壤基础、EC 和倾角当前均有效，只有室内 GNSS 无有效定位。
+- B/C 的节点身份和 XLS1 双向控制链均在线，但呈现相同 U4 异常：`0x4D` 可应答、init 和 UART 初始化记为 0，双通道 scratchpad 均为 `-2`（写入测试值后读回不一致），内部 loopback 均为 `-2`（FIFO 未能写入完整测试字节），`LSR=0x00`。各自 48 个只读扫描组合全部失败；B 两通道 76/76 个请求、C 两通道约 84/84 个请求均在 U4 UART 写阶段失败，RX 字节为 0，尚未到 RS485 总线等待传感器响应的阶段。因此当前不能把 B/C 归因于探头、A/B 极性或寄存器配置，首要故障域是 U4 模块本体/版本/晶振、3.3 V 供电、插座接触或主板 I2C 路径。
+- 三次查询后 `lsmv2-field-gateway.service` 已恢复 `active/running`，`NRestarts=0`。本记录不保存现场原始日志、真实坐标或凭据；RK3568 错误系统日期生成的报告文件名不作为时间证据。
 
 ## Constraints
 
@@ -72,7 +75,7 @@ status: active
 - 将已实现的 RTCM shaper 接入 RK3568 统一端口所有权调度器，补齐 160 B 分片、160 ms 包间隔、持久 session epoch、绝对 TTL 和运行状态；队列过载时丢弃旧改正数而不是延迟发送。
 - 在恢复 QZSS 前设计并门禁低频累计确认/选择性重传或等价的有界可靠机制；不能用无限队列、逐帧三节点 ACK 或盲目全量重复换取表面零丢包。机制必须保持 correction age 有界，并实测三节点反向确认不会与 compact 遥测争用半双工链路。
 - A/B 节点计数均通过后，再加入 3 个 1 Hz `GNSS_CORE`、compact 环境遥测和控制命令，执行真实 NTRIP 混合负载；不把合成 PROBE 通过等同于 RTK Fixed 通过。
-- 暂停累计 ACK 和 12 s/60 s RTCM 门禁。统一烧录 V4 A/B/C 匹配目录并等待启动扫描完成，然后从 RK3568 按 A -> B -> C 执行 `--diagnostics-only --require-stats-version 4 --stats-timeout-seconds 8 --stats-retries 5`。先用 A 的已知良好结果校验诊断链，再根据 B/C 的 U4 自检、每通道 RX 字节和分类错误决定检查核心板/U4、隔离收发器、供电/GND、A/B 极性、线束或传感器。三节点传感器路径恢复前保持 `LIVE` 关闭。
+- 暂停累计 ACK 和 12 s/60 s RTCM 门禁。先断电，用 A 的已知良好 U4 模块依次替换 B、C 的 U4，并保持各节点主板、位置、线束和传感器不变；每次上电后重复 V4 diagnostics-only 查询。若自检随 A 的 U4 恢复，则原 B/C U4 模块或其版本/晶振异常；若仍为 scratch/loopback `-2` 和 `LSR=0x00`，则测 U4 插座 3.3 V/GND、I2C SDA/SCL 上拉/连续性和焊接。只有 U4 自检恢复为全 0 后，才根据 RX/no-response/CRC 分类继续检查隔离 RS485、A/B 极性、线束和探头。三节点传感器路径恢复前保持 `LIVE` 关闭。
 - 至少运行 60 分钟三节点门禁，目标 correction age P95 <=3 s、max <=5 s、无旧 session 注入且 Fixed 连续。
 - 通过后才启用 `LIVE`，随后实现定点 GNSS 解析、RK3568 ECEF/ENU/Hampel/Kalman、服务器 CEEMDAN 和 UI/profile。
 

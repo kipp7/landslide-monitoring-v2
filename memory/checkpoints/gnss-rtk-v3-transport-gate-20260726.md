@@ -67,11 +67,12 @@ status: active
 - 本 checkpoint 和提交均不包含 CORS 主机、账号、密码、真实坐标或现场原始日志。
 - 后续统一重刷 V3 后，A/B/C 均能返回定向控制响应。A 的 RS485 三条路径正常；B 连续 47 周期、C 连续 53 周期所有路径 `ever=0`，且停止 field-gateway 35 秒不改变失败事实，排除 RK3568 丢失已生成数据。B 核心板在 C 位置能读土壤/EC而回 B 位置失败；C 核心板烧 A 固件仍失败，而 A/B 核心板在 C 位置能读土壤。故障已分为 B 位置外部链、C 核心板/U4/接触，以及 C 倾角外部链，不能归因于节点身份或通用 V3 固件。
 - `b8cdd26c` 新增 384 B `G3S` V4，只追加底层诊断并完整保留 V1/V2/V3 前缀及 compact 遥测。它结构化上报 U4 地址与双通道自检、13 类每通道 Modbus 计数，并在启动时做一次地址 1、`0x03/0x04`、双通道、4800/9600、1.8432/14.7456 MHz 的只读有界扫描，随后恢复 1.8432 MHz/4800。扫描不写传感器配置，组合命中也不作为型号身份证据。
-- V4 正式 PROBE 包为 `F:\2\openharmony\rk2206_firmware_releases\xl01_gnss_rtk_v31_probe_sensor_diag_v4_20260729`，manifest 来源 `b8cdd26c9f4706dc5937c09a6d4ffd72dbd60ab3`。9/9 哈希和 A/B/C 身份复核通过；A/B/C `Firmware.img` SHA-256 为 `8093162cf3a0ce3a748b8b96d4d2948034bbc65f5b25ebaea45a89b9b91f2b91`、`6c02590545153da68b909a2cea8e094a3c02023e12748e347bb130228160be52`、`7dec8c46f17c370a52459dd128c83a5c128b34121e171a071b6b64cb10243d23`。RK3568 已部署匹配脚本，SHA-256 `3963c1f263b2a4ca44ed9ee796ae06ad487395971a2c94aaa834831c0daacd41`，自检通过且服务 active；节点尚未刷 V4，所以未强制查询。
+- V4 正式 PROBE 包为 `F:\2\openharmony\rk2206_firmware_releases\xl01_gnss_rtk_v31_probe_sensor_diag_v4_20260729`，manifest 来源 `b8cdd26c9f4706dc5937c09a6d4ffd72dbd60ab3`。9/9 哈希和 A/B/C 身份复核通过；A/B/C `Firmware.img` SHA-256 为 `8093162cf3a0ce3a748b8b96d4d2948034bbc65f5b25ebaea45a89b9b91f2b91`、`6c02590545153da68b909a2cea8e094a3c02023e12748e347bb130228160be52`、`7dec8c46f17c370a52459dd128c83a5c128b34121e171a071b6b64cb10243d23`。RK3568 已部署匹配脚本，SHA-256 `3963c1f263b2a4ca44ed9ee796ae06ad487395971a2c94aaa834831c0daacd41`，自检通过。
+- 2026-07-29 V4 真机诊断完成。A 的 U4 `0x4D`、双通道 scratchpad/内部 loopback/UART 全通过，loopback 各收 4 字节，`LSR=0x60`；只读扫描 2/2 命中两个配置查询形状，双通道有持续 RX，三条 RS485 传感器路径有效。B/C 均能返回正确身份的 V4 控制响应，但双通道 scratchpad 为 `[-2,-2]`、loopback 为 `[-2,-2]`、`LSR=0x00`；每节点 48 个扫描组合零命中，全部 Modbus 请求都在写入 U4 UART 阶段失败且 RX 为 0。`scratch=-2` 是测试值读回不一致，`loopback=-2` 是 FIFO 写不完整，并非外部探头无响应。因此 B/C 首查 U4 模块/版本/晶振、3.3 V、插座和主板 I2C，不先更换传感器。查询后 field-gateway 为 `active/running`、`NRestarts=0`。
 
 ## In Progress
 
-- 软件边界、容量模型和 V4 底层只读诊断包均已完成；当前节点仍运行 V3。A 传感器正常，B/C 控制链在线但本地传感器路径从未成功。下一步是统一刷 V4 并读取 U4/双 UART/Modbus 分类证据；真实 NTRIP 和三节点混合负载仍未通过，不能进入 LIVE。
+- 软件边界、容量模型、V4 底层诊断和 A/B/C 现场读取均已完成。A 证明同版固件和诊断链正常；B/C 已收敛到 U4 模块或其主板侧供电/I2C/接触层，外部 RS485 和探头尚未真正进入收发阶段。真实 NTRIP 和三节点混合负载仍未通过，不能进入 LIVE。
 - RK2206 当前没有独立可信的 Unix 时钟。节点可执行 1500 ms 重组超时和最多 3000 ms 本地队列龄，但绝对生成时间 TTL 只能计为 `ttl_unverified`，由 RK3568 先做绝对新鲜度过滤。
 - 现有 GPS 驱动已阻止 RMC 状态错误设置 Fixed，并公开原始 GGA quality；完整 GGA/GSA/GST/GSV/RMC/ZDA 定点解析和 `GNSS_CORE` 1 Hz 上送尚未实现。
 
@@ -80,7 +81,7 @@ status: active
 - 保留本地报告 `docs/reports/xls1-gnss-v31-capacity-20260726.json` 作为可再生证据；原始 RTCM 抓包降为可选精化，不再作为进入单节点 `PROBE` 的阻塞项。
 - 保持 C 为离线/不可用状态，不伪造遥测，但在所有容量报告中固定预留 180 B/s；A/B 的实测结论与 C 的估算必须分栏展示。
 - 保留分级包率报告作为链路证据。旧 `250 B/6 Hz` 试验仍使用 160 B 分片，实际形成 12 个 field-link 包/秒；它证明高包率失败，不能单独证明 250 B 单包不可用。320 B 单包虽把 0.5 Hz QZSS 的丢失从 2 包降到 1 包，仍未过严格门禁，因此生产路径暂沿用已通过的三核心星座、160 B 分片和 160 ms 平滑调度。恢复 QZSS 前先设计有界累计确认/选择性重传，并验证三节点确认时隙、correction age 和 compact 遥测共存。
-- 从 V4 发布目录统一烧录 A/B/C，等待最坏约 15 秒的启动只读扫描完成，再在 RK3568 依次执行 `python3 /usr/local/bin/xls1_gnss_v31_probe_sender.py --target A|B|C --diagnostics-only --require-stats-version 4 --stats-timeout-seconds 8 --stats-retries 5`。先以 A 的正常链验证 U4、自检、扫描和恢复标志，再比较 B/C。控制响应只证明 link online；组合命中不证明传感器型号，仍需结合换位和外部硬件隔离。
+- 断电后先将 A 的已知良好 U4 模块换到 B，保持 B 主板/位置/线束/探头不变，上电等待约 20 秒并重复 V4 diagnostics-only；再以同法测试 C。若诊断随 U4 恢复，替换原 U4 模块；若仍失败，测 U4 插座 3.3 V/GND、SDA/SCL 上拉与连续性并检查方向/焊点。必须先看到 scratchpad、loopback、UART 均为 0 和 `LSR=0x60`，之后才根据 Modbus RX/no-response/CRC 分类检查隔离收发器、A/B、线束和探头。
 - 真实门禁负载包含 RTCM、3 个 1 Hz `GNSS_CORE`、compact 环境遥测和控制命令；记录每节点 correction age P50/P95/max、Fixed 连续性、CRC、重组、队列、注入、旧 session 和命令延迟。
 - 至少运行 60 分钟；初始通过条件为 correction age P95 <= 3 s、max <= 5 s、没有旧 session 注入且 Fixed 连续。未通过前保持 `LIVE` 关闭。
 - 传输通过后再完成 RK2206 定点 GNSS 解析与上送、RK3568 ECEF/ENU/Hampel/Kalman、服务器 CEEMDAN 和 UI/profile 集成。
@@ -99,4 +100,4 @@ status: active
 
 ## Resume Prompt
 
-继续 V3.1 底层诊断：A 传感器正常，B/C 控制链在线但所有传感器路径从未成功；换位证据指向 B 位置外部链、C 核心板/U4/接触和 C 倾角链。V4 PROBE 包已在 `F:\2\openharmony\rk2206_firmware_releases\xl01_gnss_rtk_v31_probe_sensor_diag_v4_20260729` 准备好。先统一烧录匹配 A/B/C 目录，等待约 15 秒，然后在 RK3568 按 A -> B -> C 执行 `python3 /usr/local/bin/xls1_gnss_v31_probe_sender.py --target X --diagnostics-only --require-stats-version 4 --stats-timeout-seconds 8 --stats-retries 5`，比较 U4/self-test/scan/Modbus 分类。保持 LIVE 关闭；传感器恢复后才继续累计 ACK 和真实混合负载。
+继续 V3.1 底层诊断：V4 已统一烧录并从 RK3568 读取。A 的 U4 双通道自检、扫描和三条 RS485 传感器路径正常；B/C 身份和无线控制在线，但 U4 双通道 scratchpad/loopback 均为 `-2`、`LSR=0x00`，所有 Modbus 请求在 U4 UART 写阶段失败，未到外部 RS485/探头。下一步断电，用 A 的已知良好 U4 依次替换 B/C 并重复 diagnostics-only；结果随模块恢复则换 U4，不恢复则查插座 3.3 V/GND、SDA/SCL/焊接。保持 LIVE 关闭；U4 和传感器路径恢复后才继续累计 ACK 与真实混合负载。
