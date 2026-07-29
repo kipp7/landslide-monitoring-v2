@@ -49,6 +49,12 @@ status: active
 - 提交 `b9fc4d64` 的现场脚本已部署到 RK3568 `/usr/local/bin/xls1_gnss_v31_probe_sender.py`，本地/板端 SHA-256 均为 `189f1e65e00428ca14055a26c72378ad6d880f28c807dbd905065c2151705ef6`，Python 3.10 自检通过，`lsmv2-field-gateway.service` 保持 `active`。旧固件尚不支持 G3S V3，因此部署后没有提前查询，等待统一烧录。
 - 2026-07-29 用户完成 V3 诊断包烧录并上电后的真机复核：A 返回 `version=3 mode=1`，`enabled/init=0x0F`、`current/ever=0x0E`，RS-ECTH 基础、EC 和 RS-DIP 均连续有效，只有室内 UM220 暂无有效定位；普通 compact 遥测恢复为 online。C 同样返回 `version=3 mode=1`，证明新固件和 XLS1 双向控制链生效，但两次查询均为 `current/ever=0x00`，第二次四条路径 `samples=126`、`fail_streak=126`、`last_ok=0`，证明采集任务在运行而 UM220、RS-ECTH 基础/EC、RS-DIP 从未获得一次有效数据。A 的同固件对照排除共性固件故障，C 应优先检查共同供电/GND、J6/J7、RS485 A/B 极性和板端 SC16IS752/隔离收发器，并用 A 的已知良好传感器线束交叉验证。B 连续 5 次定向查询无响应且无普通遥测，当前固件身份未能确认，按链路离线处理。
 - 诊断结束后 RK3568 的 field-gateway 已恢复 `active`，`/dev/ttyS3` 和 MQTT 正常；A 遥测新鲜，B/C 仍无 compact 遥测，`schemaRejected=0`、`rejectedWriteFailures=0`、`interleavingSuspected=0`。板端系统日期仍错误，报告文件名中的 2026-07-26 不作为真实采集时间证据。
+- 后续统一重刷 V3 并上电后的最终对照修正了“B 离线”旧状态：A 为 `current/ever=0x0E`，土壤基础、EC、倾角正常；B 控制链在线但连续 47 个采集周期所有路径 `current/ever=0`；C 控制链在线但连续 53 个采集周期所有路径 `current/ever=0`。RK3568 同期无 schema reject、串口写失败或交织错误。停止 field-gateway 35 秒时 RK2206 采集计数仍增长而 B/C `ever=0`，因此不是 RK3568 丢弃已生成的传感器数据。
+- 换位证据进一步分离了故障域：B 核心板放到 C 位置时能读取土壤基础/EC，回原 B 位置后全失败，说明 B 固件/核心板可工作而 B 位置的供电、线束、隔离收发器或探头链可疑；C 核心板即使烧录 A 固件仍全失败，而真正的 A/B 核心板在 C 位置能读取土壤，说明身份固件和 XLS1 配对不是 C 无数据原因，C 核心板/U4/焊接接触仍可疑。C 位置倾角链始终失败，是独立外部链故障候选。
+- `b8cdd26c` 已实现向后兼容的 384 B `G3S` V4。前 204 B 完整保留 V3；追加 U4 实际 I2C 地址、双通道 scratchpad/内部 loopback/UART 初始化状态，双通道 Modbus 写/TX/I2C读/无响应/短帧/地址/CRC/异常/功能码/字节数分类计数，以及只读有界扫描。扫描只对地址 1 发 `0x03/0x04` 读请求，覆盖双通道、4800/9600 和 1.8432/14.7456 MHz 假设，最坏约 15 秒并逐次喂狗；结束后恢复 1.8432 MHz、4800 8N1。查询组合命中不等于传感器型号识别。
+- 构建脚本已补齐此前遗漏的 `field_sensors_rs485`、`rs485_modbus` 和 `sc16is752_driver` 六个源/头文件同步，避免仓库修改未进入 OpenHarmony SDK。C99 主机测试、Python 自检、field-gateway 18 项测试/lint、节点 A 预构建及正式 A/B/C 三次 `hb build -f` 全部通过。
+- V4 A/B/C 正式 PROBE 包位于 `F:\2\openharmony\rk2206_firmware_releases\xl01_gnss_rtk_v31_probe_sensor_diag_v4_20260729`，manifest 来源为 `b8cdd26c9f4706dc5937c09a6d4ffd72dbd60ab3`。9/9 二进制独立复算匹配、节点 UUID/安装标签唯一、三份 loader SHA-256 同为 `761d90888aa376156d562abf267dfe324b96c4397f7a601f6b4c64d0ea3bf977`；A/B/C `Firmware.img` SHA-256 分别为 `8093162cf3a0ce3a748b8b96d4d2948034bbc65f5b25ebaea45a89b9b91f2b91`、`6c02590545153da68b909a2cea8e094a3c02023e12748e347bb130228160be52`、`7dec8c46f17c370a52459dd128c83a5c128b34121e171a071b6b64cb10243d23`。该包仍为 PROBE，不向 UM220 写 RTCM。
+- 向后兼容 V4 的查询脚本已部署到 RK3568 `/usr/local/bin/xls1_gnss_v31_probe_sender.py`，本地/板端 SHA-256 均为 `3963c1f263b2a4ca44ed9ee796ae06ad487395971a2c94aaa834831c0daacd41`，Python 3.10 自检通过且 field-gateway 保持 `active`。节点尚未刷 V4，因此没有提前强制执行 V4 查询。
 
 ## Constraints
 
@@ -66,7 +72,7 @@ status: active
 - 将已实现的 RTCM shaper 接入 RK3568 统一端口所有权调度器，补齐 160 B 分片、160 ms 包间隔、持久 session epoch、绝对 TTL 和运行状态；队列过载时丢弃旧改正数而不是延迟发送。
 - 在恢复 QZSS 前设计并门禁低频累计确认/选择性重传或等价的有界可靠机制；不能用无限队列、逐帧三节点 ACK 或盲目全量重复换取表面零丢包。机制必须保持 correction age 有界，并实测三节点反向确认不会与 compact 遥测争用半双工链路。
 - A/B 节点计数均通过后，再加入 3 个 1 Hz `GNSS_CORE`、compact 环境遥测和控制命令，执行真实 NTRIP 混合负载；不把合成 PROBE 通过等同于 RTK Fixed 通过。
-- 暂停累计 ACK 和 12 s/60 s RTCM 门禁。先用 A 的已知良好 RS-ECTH、RS-DIP 及线束在 C 上做交叉验证；若 C 仍为 `ever=0`，检查 C 的共同供电/GND、J6/J7、A/B 极性及 SC16IS752/隔离收发器。并单独恢复 B 供电/无线链路，直到 B 可返回 V3 诊断且普通遥测在线。三节点传感器路径恢复前保持 `LIVE` 关闭。
+- 暂停累计 ACK 和 12 s/60 s RTCM 门禁。统一烧录 V4 A/B/C 匹配目录并等待启动扫描完成，然后从 RK3568 按 A -> B -> C 执行 `--diagnostics-only --require-stats-version 4 --stats-timeout-seconds 8 --stats-retries 5`。先用 A 的已知良好结果校验诊断链，再根据 B/C 的 U4 自检、每通道 RX 字节和分类错误决定检查核心板/U4、隔离收发器、供电/GND、A/B 极性、线束或传感器。三节点传感器路径恢复前保持 `LIVE` 关闭。
 - 至少运行 60 分钟三节点门禁，目标 correction age P95 <=3 s、max <=5 s、无旧 session 注入且 Fixed 连续。
 - 通过后才启用 `LIVE`，随后实现定点 GNSS 解析、RK3568 ECEF/ENU/Hampel/Kalman、服务器 CEEMDAN 和 UI/profile。
 
