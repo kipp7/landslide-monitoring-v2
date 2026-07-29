@@ -57,6 +57,7 @@ status: active
 - 向后兼容 V4 的查询脚本已部署到 RK3568 `/usr/local/bin/xls1_gnss_v31_probe_sender.py`，本地/板端 SHA-256 均为 `3963c1f263b2a4ca44ed9ee796ae06ad487395971a2c94aaa834831c0daacd41`，Python 3.10 自检通过。
 - 2026-07-29 用户统一烧录 V4 并上电后，RK3568 按 A -> B -> C 完成定向只读诊断。A 为健康对照：U4 在 `0x4D`，init、双通道 scratchpad、内部 loopback 和 UART 初始化均为 0，loopback 各回收 4 字节，空闲 `LSR=0x60`；扫描 2/2 命中两个配置查询形状，双通道累计收到 1401/935 字节，土壤基础、EC 和倾角当前均有效，只有室内 GNSS 无有效定位。
 - B/C 的节点身份和 XLS1 双向控制链均在线，但呈现相同 U4 异常：`0x4D` 可应答、init 和 UART 初始化记为 0，双通道 scratchpad 均为 `-2`（写入测试值后读回不一致），内部 loopback 均为 `-2`（FIFO 未能写入完整测试字节），`LSR=0x00`。各自 48 个只读扫描组合全部失败；B 两通道 76/76 个请求、C 两通道约 84/84 个请求均在 U4 UART 写阶段失败，RX 字节为 0，尚未到 RS485 总线等待传感器响应的阶段。因此当前不能把 B/C 归因于探头、A/B 极性或寄存器配置，首要故障域是 U4 模块本体/版本/晶振、3.3 V 供电、插座接触或主板 I2C 路径。
+- 随后的 RK2206 核心板交叉试验进一步定位 B：A 核心板移到 B 位置后连续两次仍为 U4 全自检通过、`LSR=0x60`，且土壤基础、EC、倾角均有效；原 B 核心板移到已知正常的 A 位置后仍稳定复现 scratchpad/loopback `[-2,-2]`、`LSR=0x00`、扫描零命中和 U4 UART 写失败。故障明确随 B 核心板移动，排除 A/B 两处位置侧 U4、RS485、线束和探头，优先检查或更换 B 核心板的 EI2C0_M0 PB4/PB5、排针/焊点及板载 3.3 V/I2C 电气路径。该结论以交叉时仅移动 RK2206 核心板、位置侧载板和外设不随动为前提。
 - 三次查询后 `lsmv2-field-gateway.service` 已恢复 `active/running`，`NRestarts=0`。本记录不保存现场原始日志、真实坐标或凭据；RK3568 错误系统日期生成的报告文件名不作为时间证据。
 
 ## Constraints
@@ -75,7 +76,7 @@ status: active
 - 将已实现的 RTCM shaper 接入 RK3568 统一端口所有权调度器，补齐 160 B 分片、160 ms 包间隔、持久 session epoch、绝对 TTL 和运行状态；队列过载时丢弃旧改正数而不是延迟发送。
 - 在恢复 QZSS 前设计并门禁低频累计确认/选择性重传或等价的有界可靠机制；不能用无限队列、逐帧三节点 ACK 或盲目全量重复换取表面零丢包。机制必须保持 correction age 有界，并实测三节点反向确认不会与 compact 遥测争用半双工链路。
 - A/B 节点计数均通过后，再加入 3 个 1 Hz `GNSS_CORE`、compact 环境遥测和控制命令，执行真实 NTRIP 混合负载；不把合成 PROBE 通过等同于 RTK Fixed 通过。
-- 暂停累计 ACK 和 12 s/60 s RTCM 门禁。先断电，用 A 的已知良好 U4 模块依次替换 B、C 的 U4，并保持各节点主板、位置、线束和传感器不变；每次上电后重复 V4 diagnostics-only 查询。若自检随 A 的 U4 恢复，则原 B/C U4 模块或其版本/晶振异常；若仍为 scratch/loopback `-2` 和 `LSR=0x00`，则测 U4 插座 3.3 V/GND、I2C SDA/SCL 上拉/连续性和焊接。只有 U4 自检恢复为全 0 后，才根据 RX/no-response/CRC 分类继续检查隔离 RS485、A/B 极性、线束和探头。三节点传感器路径恢复前保持 `LIVE` 关闭。
+- 暂停累计 ACK 和 12 s/60 s RTCM 门禁。B 已通过核心板交叉试验定位，先保留故障板并检查 PB4/PB5、排针/焊点和 I2C 电气路径，比赛时间紧时直接用已知良好核心板替换。下一步断电，将 C 核心板放到已知正常的 A 位置并保持 A 核心板在 B 位置，重复 V4 diagnostics-only；若异常随 C 核心板移动，则 C 同样进入核心板维修/替换路径。只有三节点 U4 自检恢复为全 0 后，才根据 RX/no-response/CRC 分类继续检查位置侧隔离 RS485、A/B 极性、线束和探头。三节点传感器路径恢复前保持 `LIVE` 关闭。
 - 至少运行 60 分钟三节点门禁，目标 correction age P95 <=3 s、max <=5 s、无旧 session 注入且 Fixed 连续。
 - 通过后才启用 `LIVE`，随后实现定点 GNSS 解析、RK3568 ECEF/ENU/Hampel/Kalman、服务器 CEEMDAN 和 UI/profile。
 

@@ -69,6 +69,7 @@ status: active
 - `b8cdd26c` 新增 384 B `G3S` V4，只追加底层诊断并完整保留 V1/V2/V3 前缀及 compact 遥测。它结构化上报 U4 地址与双通道自检、13 类每通道 Modbus 计数，并在启动时做一次地址 1、`0x03/0x04`、双通道、4800/9600、1.8432/14.7456 MHz 的只读有界扫描，随后恢复 1.8432 MHz/4800。扫描不写传感器配置，组合命中也不作为型号身份证据。
 - V4 正式 PROBE 包为 `F:\2\openharmony\rk2206_firmware_releases\xl01_gnss_rtk_v31_probe_sensor_diag_v4_20260729`，manifest 来源 `b8cdd26c9f4706dc5937c09a6d4ffd72dbd60ab3`。9/9 哈希和 A/B/C 身份复核通过；A/B/C `Firmware.img` SHA-256 为 `8093162cf3a0ce3a748b8b96d4d2948034bbc65f5b25ebaea45a89b9b91f2b91`、`6c02590545153da68b909a2cea8e094a3c02023e12748e347bb130228160be52`、`7dec8c46f17c370a52459dd128c83a5c128b34121e171a071b6b64cb10243d23`。RK3568 已部署匹配脚本，SHA-256 `3963c1f263b2a4ca44ed9ee796ae06ad487395971a2c94aaa834831c0daacd41`，自检通过。
 - 2026-07-29 V4 真机诊断完成。A 的 U4 `0x4D`、双通道 scratchpad/内部 loopback/UART 全通过，loopback 各收 4 字节，`LSR=0x60`；只读扫描 2/2 命中两个配置查询形状，双通道有持续 RX，三条 RS485 传感器路径有效。B/C 均能返回正确身份的 V4 控制响应，但双通道 scratchpad 为 `[-2,-2]`、loopback 为 `[-2,-2]`、`LSR=0x00`；每节点 48 个扫描组合零命中，全部 Modbus 请求都在写入 U4 UART 阶段失败且 RX 为 0。`scratch=-2` 是测试值读回不一致，`loopback=-2` 是 FIFO 写不完整，并非外部探头无响应。因此 B/C 首查 U4 模块/版本/晶振、3.3 V、插座和主板 I2C，不先更换传感器。查询后 field-gateway 为 `active/running`、`NRestarts=0`。
+- B 核心板交叉试验已完成：A 核心板在 B 位置连续两次为 scratchpad/loopback/UART 全 0、`LSR=0x60`，土壤/EC/倾角有效；原 B 核心板在 A 位置仍为 scratchpad/loopback `[-2,-2]`、`LSR=0x00`，全部 Modbus 请求停在 U4 UART 写阶段。故障随 B 核心板而非位置侧载板/U4/RS485/探头移动，B 应查 EI2C0_M0 PB4/PB5、排针接触/焊点和核心板 I2C/3.3 V，或直接更换核心板。两次查询后 field-gateway 均恢复 active/running。
 
 ## In Progress
 
@@ -81,7 +82,7 @@ status: active
 - 保留本地报告 `docs/reports/xls1-gnss-v31-capacity-20260726.json` 作为可再生证据；原始 RTCM 抓包降为可选精化，不再作为进入单节点 `PROBE` 的阻塞项。
 - 保持 C 为离线/不可用状态，不伪造遥测，但在所有容量报告中固定预留 180 B/s；A/B 的实测结论与 C 的估算必须分栏展示。
 - 保留分级包率报告作为链路证据。旧 `250 B/6 Hz` 试验仍使用 160 B 分片，实际形成 12 个 field-link 包/秒；它证明高包率失败，不能单独证明 250 B 单包不可用。320 B 单包虽把 0.5 Hz QZSS 的丢失从 2 包降到 1 包，仍未过严格门禁，因此生产路径暂沿用已通过的三核心星座、160 B 分片和 160 ms 平滑调度。恢复 QZSS 前先设计有界累计确认/选择性重传，并验证三节点确认时隙、correction age 和 compact 遥测共存。
-- 断电后先将 A 的已知良好 U4 模块换到 B，保持 B 主板/位置/线束/探头不变，上电等待约 20 秒并重复 V4 diagnostics-only；再以同法测试 C。若诊断随 U4 恢复，替换原 U4 模块；若仍失败，测 U4 插座 3.3 V/GND、SDA/SCL 上拉与连续性并检查方向/焊点。必须先看到 scratchpad、loopback、UART 均为 0 和 `LSR=0x60`，之后才根据 Modbus RX/no-response/CRC 分类检查隔离收发器、A/B、线束和探头。
+- B 已定位到核心板。断电后将 C 核心板放到已知正常的 A 位置，A 核心板继续留在已验证正常的 B 位置，上电约 20 秒后查询 `target=C`。若 C 的 scratchpad/loopback/LSR 异常随核心板移动，C 也应检查 PB4/PB5、排针/焊点或直接更换核心板；只有 U4 自检通过后才进入位置侧 RS485/探头诊断。
 - 真实门禁负载包含 RTCM、3 个 1 Hz `GNSS_CORE`、compact 环境遥测和控制命令；记录每节点 correction age P50/P95/max、Fixed 连续性、CRC、重组、队列、注入、旧 session 和命令延迟。
 - 至少运行 60 分钟；初始通过条件为 correction age P95 <= 3 s、max <= 5 s、没有旧 session 注入且 Fixed 连续。未通过前保持 `LIVE` 关闭。
 - 传输通过后再完成 RK2206 定点 GNSS 解析与上送、RK3568 ECEF/ENU/Hampel/Kalman、服务器 CEEMDAN 和 UI/profile 集成。
@@ -100,4 +101,4 @@ status: active
 
 ## Resume Prompt
 
-继续 V3.1 底层诊断：V4 已统一烧录并从 RK3568 读取。A 的 U4 双通道自检、扫描和三条 RS485 传感器路径正常；B/C 身份和无线控制在线，但 U4 双通道 scratchpad/loopback 均为 `-2`、`LSR=0x00`，所有 Modbus 请求在 U4 UART 写阶段失败，未到外部 RS485/探头。下一步断电，用 A 的已知良好 U4 依次替换 B/C 并重复 diagnostics-only；结果随模块恢复则换 U4，不恢复则查插座 3.3 V/GND、SDA/SCL/焊接。保持 LIVE 关闭；U4 和传感器路径恢复后才继续累计 ACK 与真实混合负载。
+继续 V3.1 底层诊断：A 核心板在 B 位置正常，原 B 核心板在 A 位置仍复现 U4 scratchpad/loopback `[-2,-2]` 和 `LSR=0x00`，故障已确认跟随 B 核心板，应查 EI2C0_M0 PB4/PB5、排针/焊点或换板。下一步断电，把 C 核心板放到 A 位置、A 继续留在 B，查询 `target=C` 完成同类交叉试验。保持 LIVE 关闭；三节点 U4 和传感器恢复后才继续累计 ACK 与真实混合负载。
