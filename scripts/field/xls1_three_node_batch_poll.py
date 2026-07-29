@@ -28,6 +28,7 @@ except ImportError:
 FIELD_LINK_VERSION = 1
 FIELD_LINK_TYPE_TELEMETRY = 1
 FIELD_LINK_TYPE_COMMAND = 2
+FIELD_LINK_TYPE_ACK = 3
 COMPACT_PAYLOAD_BYTES = 46
 COMPACT_VALID_TEMP = 1 << 0
 COMPACT_VALID_SOIL = 1 << 1
@@ -275,6 +276,7 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
     error_samples: list[dict[str, Any]] = []
     unmatched_samples: list[dict[str, Any]] = []
     duplicate_samples: list[dict[str, Any]] = []
+    ack_samples: list[dict[str, Any]] = []
     valid_frame_types: Counter[str] = Counter()
     unmatched_telemetry = 0
     duplicate_telemetry = 0
@@ -330,6 +332,14 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
                 continue
 
             valid_frame_types[str(frame_type)] += 1
+            if frame_type == FIELD_LINK_TYPE_ACK:
+                try:
+                    ack = json.loads(payload.decode("utf-8"))
+                    if len(ack_samples) < 100:
+                        ack_samples.append({"at": utc_now(), "payload": ack})
+                except Exception as exc:
+                    errors[f"ack payload decode failed: {exc}"] += 1
+                continue
             if frame_type != FIELD_LINK_TYPE_TELEMETRY:
                 continue
             try:
@@ -639,6 +649,7 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
         "errorSamples": error_samples,
         "unmatchedSamples": unmatched_samples,
         "duplicateSamples": duplicate_samples,
+        "ackSamples": ack_samples,
     }
 
 

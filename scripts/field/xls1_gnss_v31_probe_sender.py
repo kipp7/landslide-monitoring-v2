@@ -12,11 +12,13 @@ import select
 import signal
 import struct
 import subprocess
+import threading
 import time
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from queue import Empty, Queue
+from typing import Any, Callable
 
 try:
     import termios
@@ -29,7 +31,7 @@ FIELD_LINK_TYPE_COMMAND = 2
 FIELD_LINK_TYPE_CONTROL = 4
 FIELD_LINK_TYPE_RTCM = 6
 RTCM_FRAGMENT_HEADER_BYTES = 42
-GNSS_PROBE_STATS_RESPONSE_BYTES = {1: 92, 2: 148}
+GNSS_PROBE_STATS_RESPONSE_BYTES = {1: 92, 2: 148, 3: 204}
 GNSS_RTCM_ACK_RESPONSE_BYTES = 24
 TARGET_MASKS = {"A": 0x01, "B": 0x02, "C": 0x04, "all": 0x07}
 NODE_NUMBERS = {"A": 1, "B": 2, "C": 3}
@@ -63,6 +65,12 @@ PROBE_LINK_COUNTER_NAMES = (
     "sequenceResets",
     "fifoDroppedBytes",
     "fifoDropEvents",
+)
+SENSOR_DIAGNOSTIC_NAMES = (
+    "um220Gnss",
+    "rsEcthSoil",
+    "rsEcthEc",
+    "rsDipTilt",
 )
 
 # The schedule reproduces the July 26 PC capture at about 880 B/s without
@@ -293,7 +301,77 @@ def decode_probe_stats_response(payload: bytes) -> dict[str, Any]:
         response["linkStats"] = dict(
             zip(PROBE_LINK_COUNTER_NAMES, link_values, strict=True)
         )
+    if response_version >= 3:
+        enabled_mask, initialization_success_mask, current_valid_mask, ever_success_mask = (
+            payload[148:152]
+        )
+        sensor_count = payload[152]
+        if sensor_count != len(SENSOR_DIAGNOSTIC_NAMES) or payload[153:156] != b"\x00\x00\x00":
+            raise ValueError("GNSS PROBE sensor diagnostic count or reserved bytes are invalid")
+        all_sensor_mask = (1 << sensor_count) - 1
+        masks = (
+            enabled_mask,
+            initialization_success_mask,
+            current_valid_mask,
+            ever_success_mask,
+        )
+        if (
+            any(mask & ~all_sensor_mask for mask in masks)
+            or initialization_success_mask & ~enabled_mask
+            or current_valid_mask & ~enabled_mask
+            or ever_success_mask & ~enabled_mask
+            or current_valid_mask & ~ever_success_mask
+        ):
+            raise ValueError("GNSS PROBE sensor diagnostic masks are inconsistent")
+        sample_counts = struct.unpack_from(">4I", payload, 156)
+        last_success_uptime_s = struct.unpack_from(">4I", payload, 172)
+        consecutive_failures = struct.unpack_from(">4I", payload, 188)
+        response["sensorDiagnostics"] = {
+            "enabledMask": enabled_mask,
+            "initializationSuccessMask": initialization_success_mask,
+            "currentValidMask": current_valid_mask,
+            "everSuccessMask": ever_success_mask,
+            "sensors": {
+                name: {
+                    "index": index,
+                    "mask": 1 << index,
+                    "enabled": bool(enabled_mask & (1 << index)),
+                    "initializationSucceeded": bool(
+                        initialization_success_mask & (1 << index)
+                    ),
+                    "currentValid": bool(current_valid_mask & (1 << index)),
+                    "everSucceeded": bool(ever_success_mask & (1 << index)),
+                    "sampleCount": sample_counts[index],
+                    "lastSuccessUptimeS": last_success_uptime_s[index],
+                    "consecutiveFailures": consecutive_failures[index],
+                }
+                for index, name in enumerate(SENSOR_DIAGNOSTIC_NAMES)
+            },
+        }
     return response
+
+
+def print_sensor_diagnostics(prefix: str, response: dict[str, Any]) -> None:
+    diagnostics = response.get("sensorDiagnostics")
+    if diagnostics is None:
+        return
+    print(
+        f"{prefix}_SENSOR_MASKS enabled=0x{diagnostics['enabledMask']:02X} "
+        f"init=0x{diagnostics['initializationSuccessMask']:02X} "
+        f"current=0x{diagnostics['currentValidMask']:02X} "
+        f"ever=0x{diagnostics['everSuccessMask']:02X}",
+        flush=True,
+    )
+    for name, sensor in diagnostics["sensors"].items():
+        if not sensor["enabled"]:
+            continue
+        print(
+            f"{prefix}_SENSOR path={name} init={int(sensor['initializationSucceeded'])} "
+            f"valid={int(sensor['currentValid'])} ever={int(sensor['everSucceeded'])} "
+            f"samples={sensor['sampleCount']} last_ok_uptime={sensor['lastSuccessUptimeS']} "
+            f"fail_streak={sensor['consecutiveFailures']}",
+            flush=True,
+        )
 
 
 def uint32_delta(after: int, before: int) -> int:
@@ -487,6 +565,8 @@ def query_rtcm_ack(
     chunk_delay_ms: int,
     timeout_seconds: float,
     retries: int,
+    write_lock: Any | None = None,
+    sequence_supplier: Callable[[], int] | None = None,
 ) -> tuple[dict[str, Any], int]:
     nonce = (time.time_ns() ^ (os.getpid() << 8) ^ field_sequence) & 0xFFFFFFFF
     if nonce == 0:
@@ -496,11 +576,19 @@ def query_rtcm_ack(
     payload_errors = 0
 
     for attempt in range(retries):
-        wire = encode_field_link(next_sequence, query, FIELD_LINK_TYPE_COMMAND)
-        write_chunked(fd, wire, chunk_bytes, chunk_delay_ms)
-        next_sequence = (next_sequence + 1) & 0xFFFFFFFF
-        if next_sequence == 0:
-            next_sequence = 1
+        if sequence_supplier is None:
+            query_sequence = next_sequence
+            next_sequence = (next_sequence + 1) & 0xFFFFFFFF
+            if next_sequence == 0:
+                next_sequence = 1
+        else:
+            query_sequence = sequence_supplier()
+        wire = encode_field_link(query_sequence, query, FIELD_LINK_TYPE_COMMAND)
+        if write_lock is None:
+            write_chunked(fd, wire, chunk_bytes, chunk_delay_ms)
+        else:
+            with write_lock:
+                write_chunked(fd, wire, chunk_bytes, chunk_delay_ms)
 
         deadline = time.monotonic() + timeout_seconds
         while True:
@@ -654,10 +742,24 @@ def evaluate_probe_gate(
 
     if reliability is not None:
         exact("reliabilityFailedWindows", reliability["failedWindows"], 0)
+        exact(
+            "reliabilityRecoveredWindows",
+            reliability["recoveredWindows"],
+            reliability["windowCount"],
+        )
         at_most(
             "reliabilityMaxRecoveryLatencyMs",
             reliability["maxRecoveryLatencyMs"],
             reliability["maxRecoveryAgeMs"],
+        )
+        at_most(
+            "reliabilityMaxOldestPendingAgeMs",
+            reliability["maxOldestPendingAgeMs"],
+            reliability["maxRecoveryAgeMs"],
+        )
+        at_most("reliabilityMaxPendingFrames", reliability["maxPendingFrames"], 16)
+        at_least(
+            "reliabilityMinBitmapHeadroom", reliability["minBitmapHeadroom"], 0
         )
         at_most(
             "reliabilityRetransmitRatio",
@@ -791,10 +893,19 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
         schedule_windows[-1][1].append(event)
     if args.selective_retry:
         reliability = {
-            "mode": "per-second-completed-sequence-bitmap-selective-retry",
+            "mode": "cumulative-completed-sequence-bitmap-selective-retry",
+            "scheduler": "absolute-time-producer-plus-batched-ack-worker",
             "windowCount": len(schedule_windows),
             "recoveredWindows": 0,
             "failedWindows": 0,
+            "maxAckBacklog": 0,
+            "ackBatchCount": 0,
+            "ackNoResponseBatches": 0,
+            "maxAckBatchSize": 0,
+            "maxPendingFrames": 0,
+            "maxPendingWindows": 0,
+            "maxOldestPendingAgeMs": 0.0,
+            "minBitmapHeadroom": 16,
             "ackQueryAttempts": 0,
             "retransmitRounds": 0,
             "retransmittedFrames": 0,
@@ -806,6 +917,7 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
             "maxAllowedScheduleLatenessMs": args.max_schedule_lateness_ms,
             "retransmitRatio": 0.0,
             "maxRetransmitRatio": args.max_retransmit_ratio,
+            "batches": [],
             "windows": [],
         }
 
@@ -837,149 +949,424 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
             f"queue={baseline_stats['stats']['queuePending']}",
             flush=True,
         )
+        print_sensor_diagnostics("BASELINE", baseline_stats)
         started_mono = time.monotonic()
         last_progress_second = -1
+        link_slot_lock = threading.Lock()
+        field_sequence_lock = threading.Lock()
+        rtcm_pacing_lock = threading.Lock()
+        counter_lock = threading.Lock()
+
+        def allocate_field_sequence() -> int:
+            nonlocal field_sequence
+            with field_sequence_lock:
+                allocated = field_sequence
+                field_sequence = (field_sequence + 1) & 0xFFFFFFFF
+                if field_sequence == 0:
+                    field_sequence = 1
+                return allocated
 
         def send_payloads(payloads: list[bytes], retransmit: bool) -> None:
-            nonlocal field_sequence
             nonlocal fragment_count, transmitted_fragment_count
             nonlocal wire_bytes, retransmitted_fragment_count, retransmitted_wire_bytes
             nonlocal last_packet_write_mono, packet_pacing_waits, packet_pacing_wait_ms
             for payload in payloads:
-                if last_packet_write_mono is not None and args.min_packet_interval_ms > 0:
-                    packet_deadline = (
-                        last_packet_write_mono + args.min_packet_interval_ms / 1000.0
-                    )
-                    packet_wait_seconds = packet_deadline - time.monotonic()
-                    if packet_wait_seconds > 0:
-                        time.sleep(packet_wait_seconds)
-                        packet_pacing_waits += 1
-                        packet_pacing_wait_ms += packet_wait_seconds * 1000.0
-                wire_frame = encode_field_link(field_sequence, payload)
-                write_chunked(fd, wire_frame, args.chunk_bytes, args.chunk_delay_ms)
-                last_packet_write_mono = time.monotonic()
-                wire_bytes += len(wire_frame)
-                transmitted_fragment_count += 1
-                if retransmit:
-                    retransmitted_fragment_count += 1
-                    retransmitted_wire_bytes += len(wire_frame)
-                else:
-                    fragment_count += 1
-                field_sequence = (field_sequence + 1) & 0xFFFFFFFF
+                with rtcm_pacing_lock:
+                    if last_packet_write_mono is not None and args.min_packet_interval_ms > 0:
+                        packet_deadline = (
+                            last_packet_write_mono + args.min_packet_interval_ms / 1000.0
+                        )
+                        packet_wait_seconds = packet_deadline - time.monotonic()
+                        if packet_wait_seconds > 0:
+                            time.sleep(packet_wait_seconds)
+                            with counter_lock:
+                                packet_pacing_waits += 1
+                                packet_pacing_wait_ms += packet_wait_seconds * 1000.0
+                    wire_frame = encode_field_link(allocate_field_sequence(), payload)
+                    # The lock covers the whole write slot. The ACK worker holds
+                    # the same lock while waiting for a response, so RTCM cannot
+                    # collide with the half-duplex return path.
+                    with link_slot_lock:
+                        write_chunked(fd, wire_frame, args.chunk_bytes, args.chunk_delay_ms)
+                    last_packet_write_mono = time.monotonic()
+                    with counter_lock:
+                        wire_bytes += len(wire_frame)
+                        transmitted_fragment_count += 1
+                        if retransmit:
+                            retransmitted_fragment_count += 1
+                            retransmitted_wire_bytes += len(wire_frame)
+                        else:
+                            fragment_count += 1
 
-        for window_second, events in schedule_windows:
-            window_started_mono = time.monotonic()
-            window_frames: list[dict[str, Any]] = []
-            window_expected_counts: Counter[int] = Counter()
+        ack_jobs: Queue[dict[str, Any] | None] | None = None
+        ack_thread: threading.Thread | None = None
+        ack_abort = threading.Event()
+        ack_errors: list[BaseException] = []
 
-            for due, message_type, frame_bytes in events:
-                deadline = started_mono + due
-                remaining = deadline - time.monotonic()
-                if remaining > 0:
-                    time.sleep(remaining)
-                lateness_ms = max(0.0, (time.monotonic() - deadline) * 1000.0)
-                if lateness_ms > args.late_threshold_ms:
-                    late_events += 1
-                max_lateness_ms = max(max_lateness_ms, lateness_ms)
+        def run_ack_worker() -> None:
+            nonlocal retransmitted_frame_count
+            assert ack_jobs is not None
+            assert reliability is not None
+            pending_frames: dict[int, dict[str, Any]] = {}
+            confirmed_sequences: set[int] = set()
+            failed_sequences: dict[int, str] = {}
+            window_results: dict[int, dict[str, Any]] = {}
+            window_started: dict[int, float] = {}
 
-                generated_unix_ms = int(time.time() * 1000)
-                frame = build_rtcm_frame(message_type, frame_bytes, transport_sequence)
-                payloads = fragment_rtcm_frame(
-                    frame,
-                    message_type,
-                    session_epoch,
-                    transport_sequence,
-                    generated_unix_ms,
-                    TARGET_MASKS[args.target],
-                    args.fragment_data_bytes,
-                )
-                send_payloads(payloads, retransmit=False)
-                window_frames.append({
-                    "messageType": message_type,
-                    "sequence": transport_sequence,
-                    "payloads": payloads,
-                })
-                window_expected_counts[message_type] += 1
-                raw_bytes += len(frame)
-                message_counts[message_type] += 1
-                transport_sequence = (transport_sequence + 1) & 0xFFFFFFFF
-
-                elapsed_second = int(time.monotonic() - started_mono)
-                if elapsed_second >= last_progress_second + 5:
-                    last_progress_second = elapsed_second
-                    print(
-                        f"PROGRESS elapsed={elapsed_second}s frames={sum(message_counts.values())} "
-                        f"fragments={fragment_count} transmissions={transmitted_fragment_count} "
-                        f"raw_bytes={raw_bytes} wire_bytes={wire_bytes}",
-                        flush=True,
-                    )
-
-            if reliability is not None:
-                window_result: dict[str, Any] = {
+            def ingest(job: dict[str, Any]) -> None:
+                window_second = job["windowSecond"]
+                window_started[window_second] = job["windowStartedMonotonic"]
+                result = {
                     "windowSecond": window_second,
-                    "expectedTypeCounts": {
-                        str(key): value for key, value in sorted(window_expected_counts.items())
-                    },
-                    "rounds": [],
+                    "expectedTypeCounts": job["expectedTypeCounts"],
+                    "frameSequences": [frame["sequence"] for frame in job["frames"]],
+                    "batchIndices": [],
                     "recovered": False,
+                    "failed": False,
                 }
-                for round_index in range(args.max_retransmit_rounds + 1):
-                    termios.tcdrain(fd)
-                    ack, field_sequence = query_rtcm_ack(
-                        fd,
-                        decoder,
-                        args.target,
-                        field_sequence,
-                        args.chunk_bytes,
-                        args.chunk_delay_ms,
-                        args.ack_timeout_seconds,
-                        args.ack_retries,
-                    )
-                    reliability["ackQueryAttempts"] += ack["queryAttempts"]
+                window_results[window_second] = result
+                reliability["windows"].append(result)
+                for frame in job["frames"]:
+                    frame["windowSecond"] = window_second
+                    frame["windowStartedMonotonic"] = job["windowStartedMonotonic"]
+                    frame["retransmitRounds"] = 0
+                    pending_frames[frame["sequence"]] = frame
+
+            def pending_metrics(now: float) -> dict[str, Any]:
+                if not pending_frames:
+                    return {
+                        "pendingFrames": 0,
+                        "pendingWindows": 0,
+                        "oldestPendingAgeMs": 0.0,
+                        "sequenceSpan": 0,
+                        "bitmapHeadroom": 16,
+                    }
+                frames = list(pending_frames.values())
+                pending_windows = {frame["windowSecond"] for frame in frames}
+                oldest_age_ms = max(
+                    0.0,
+                    (now - min(frame["windowStartedMonotonic"] for frame in frames))
+                    * 1000.0,
+                )
+                sequence_span = (
+                    (frames[-1]["sequence"] - frames[0]["sequence"]) & 0xFFFFFFFF
+                ) + 1
+                bitmap_headroom = 16 - sequence_span
+                reliability["maxAckBacklog"] = max(
+                    reliability["maxAckBacklog"], len(pending_windows)
+                )
+                reliability["maxPendingWindows"] = max(
+                    reliability["maxPendingWindows"], len(pending_windows)
+                )
+                reliability["maxPendingFrames"] = max(
+                    reliability["maxPendingFrames"], len(frames)
+                )
+                reliability["maxOldestPendingAgeMs"] = max(
+                    reliability["maxOldestPendingAgeMs"], oldest_age_ms
+                )
+                reliability["minBitmapHeadroom"] = min(
+                    reliability["minBitmapHeadroom"], bitmap_headroom
+                )
+                return {
+                    "pendingFrames": len(frames),
+                    "pendingWindows": len(pending_windows),
+                    "oldestPendingAgeMs": round(oldest_age_ms, 3),
+                    "sequenceSpan": sequence_span,
+                    "bitmapHeadroom": bitmap_headroom,
+                }
+
+            def resolve_windows(now: float) -> None:
+                for window_second, result in window_results.items():
+                    if result["recovered"] or result["failed"]:
+                        continue
+                    sequences = result["frameSequences"]
+                    if all(sequence in confirmed_sequences for sequence in sequences):
+                        latency_ms = (now - window_started[window_second]) * 1000.0
+                        result["recovered"] = True
+                        result["recoveryLatencyMs"] = round(latency_ms, 3)
+                        reliability["recoveredWindows"] += 1
+                        reliability["maxRecoveryLatencyMs"] = max(
+                            reliability["maxRecoveryLatencyMs"], latency_ms
+                        )
+                    elif any(sequence in failed_sequences for sequence in sequences):
+                        result["failed"] = True
+                        result["failureReasons"] = sorted({
+                            failed_sequences[sequence]
+                            for sequence in sequences
+                            if sequence in failed_sequences
+                        })
+                        result["failureLatencyMs"] = round(
+                            (now - window_started[window_second]) * 1000.0, 3
+                        )
+                        reliability["failedWindows"] += 1
+
+            def fail_frames(frames: list[dict[str, Any]], reason: str) -> None:
+                for frame in frames:
+                    sequence = frame["sequence"]
+                    pending_frames.pop(sequence, None)
+                    failed_sequences[sequence] = reason
+
+            def expire_old_pending(now: float) -> None:
+                expired = [
+                    frame
+                    for frame in pending_frames.values()
+                    if (now - frame["windowStartedMonotonic"]) * 1000.0
+                    > args.max_recovery_age_ms
+                ]
+                if expired:
+                    fail_frames(expired, "recovery-age-exceeded")
+
+            def process_ack_batch(finalizing: bool = False) -> None:
+                if not pending_frames:
+                    return
+                batch_started = time.monotonic()
+                metrics_before = pending_metrics(batch_started)
+                batch_index = len(reliability["batches"])
+                frames_before = list(pending_frames.values())
+                affected_windows = sorted({frame["windowSecond"] for frame in frames_before})
+                for window_second in affected_windows:
+                    window_results[window_second]["batchIndices"].append(batch_index)
+                batch: dict[str, Any] = {
+                    "batchIndex": batch_index,
+                    "finalizing": finalizing,
+                    "windowSeconds": affected_windows,
+                    "pendingSequences": [frame["sequence"] for frame in frames_before],
+                    "batchSize": len(frames_before),
+                    **metrics_before,
+                }
+                reliability["ackBatchCount"] += 1
+                reliability["maxAckBatchSize"] = max(
+                    reliability["maxAckBatchSize"], len(frames_before)
+                )
+                reliability["ackQueryAttempts"] += 1
+
+                ack: dict[str, Any] | None = None
+                try:
+                    with link_slot_lock:
+                        ack, _unused_sequence = query_rtcm_ack(
+                            fd,
+                            decoder,
+                            args.target,
+                            1,
+                            args.chunk_bytes,
+                            args.chunk_delay_ms,
+                            args.ack_timeout_seconds,
+                            1,
+                            sequence_supplier=allocate_field_sequence,
+                        )
+                except TimeoutError:
+                    reliability["ackNoResponseBatches"] += 1
+                    batch["status"] = "no-response"
+
+                if ack is not None:
                     if ack["injectionMode"] != 1:
                         raise RuntimeError(
-                            f"node {args.target} ACK reports injection mode {ack['injectionMode']}"
+                            f"node {args.target} ACK reports injection mode "
+                            f"{ack['injectionMode']}"
                         )
-                    missing_frames = [
-                        frame_info for frame_info in window_frames
-                        if not ack_reports_completed(
-                            ack, session_epoch, frame_info["sequence"]
+                    if not ack["sessionValid"] or ack["sessionEpoch"] != session_epoch:
+                        raise RuntimeError(
+                            f"node {args.target} ACK reports a different or invalid RTCM session"
                         )
-                    ]
-                    round_result = {
-                        "round": round_index,
-                        "ackSessionValid": ack["sessionValid"],
-                        "ackSessionEpoch": ack["sessionEpoch"],
+                    batch.update({
+                        "status": "response",
                         "ackHighestSequence": ack["highestSequence"],
                         "ackCompletedBitmap": f"{ack['completedBitmap']:04X}",
-                        "missingSequences": [
-                            frame_info["sequence"] for frame_info in missing_frames
+                        "payloadDecodeErrorsBeforeMatch": ack[
+                            "payloadDecodeErrorsBeforeMatch"
                         ],
-                        "missingMessageTypes": [
-                            frame_info["messageType"] for frame_info in missing_frames
-                        ],
-                        "queryAttempts": ack["queryAttempts"],
-                    }
-                    window_result["rounds"].append(round_result)
-                    if not missing_frames:
-                        window_result["recovered"] = True
-                        reliability["recoveredWindows"] += 1
-                        break
-                    if round_index >= args.max_retransmit_rounds:
-                        reliability["failedWindows"] += 1
-                        break
+                    })
+                    confirmed_now: list[dict[str, Any]] = []
+                    missing_now: list[dict[str, Any]] = []
+                    overflow_now: list[dict[str, Any]] = []
+                    for frame in list(pending_frames.values()):
+                        sequence = frame["sequence"]
+                        age = (ack["highestSequence"] - sequence) & 0xFFFFFFFF
+                        if age < 16:
+                            if ack["completedBitmap"] & (1 << age):
+                                confirmed_now.append(frame)
+                            else:
+                                missing_now.append(frame)
+                            continue
+                        ahead = (sequence - ack["highestSequence"]) & 0xFFFFFFFF
+                        if 0 < ahead < 0x80000000:
+                            missing_now.append(frame)
+                        else:
+                            overflow_now.append(frame)
 
-                    reliability["retransmitRounds"] += 1
-                    for frame_info in missing_frames:
-                        send_payloads(frame_info["payloads"], retransmit=True)
-                        retransmitted_frame_count += 1
+                    for frame in confirmed_now:
+                        sequence = frame["sequence"]
+                        pending_frames.pop(sequence, None)
+                        confirmed_sequences.add(sequence)
+                    if overflow_now:
+                        fail_frames(overflow_now, "ack-bitmap-overflow")
 
-                recovery_latency_ms = (time.monotonic() - window_started_mono) * 1000.0
-                window_result["recoveryLatencyMs"] = round(recovery_latency_ms, 3)
-                reliability["maxRecoveryLatencyMs"] = max(
-                    reliability["maxRecoveryLatencyMs"], recovery_latency_ms
-                )
-                reliability["windows"].append(window_result)
+                    retransmit_now: list[dict[str, Any]] = []
+                    retry_exhausted: list[dict[str, Any]] = []
+                    for frame in missing_now:
+                        if frame["retransmitRounds"] >= args.max_retransmit_rounds:
+                            retry_exhausted.append(frame)
+                        else:
+                            retransmit_now.append(frame)
+                    if retry_exhausted:
+                        fail_frames(retry_exhausted, "retransmit-rounds-exhausted")
+                    if retransmit_now:
+                        reliability["retransmitRounds"] += 1
+                        for frame in retransmit_now:
+                            frame["retransmitRounds"] += 1
+                            send_payloads(frame["payloads"], retransmit=True)
+                            with counter_lock:
+                                retransmitted_frame_count += 1
+
+                    batch["confirmedSequences"] = [
+                        frame["sequence"] for frame in confirmed_now
+                    ]
+                    batch["missingSequences"] = [
+                        frame["sequence"] for frame in missing_now
+                    ]
+                    batch["retransmittedSequences"] = [
+                        frame["sequence"] for frame in retransmit_now
+                    ]
+                    batch["outOfWindowSequences"] = [
+                        frame["sequence"] for frame in overflow_now
+                    ]
+                    batch["retryExhaustedSequences"] = [
+                        frame["sequence"] for frame in retry_exhausted
+                    ]
+
+                finished = time.monotonic()
+                expire_old_pending(finished)
+                resolve_windows(finished)
+                batch["slotDurationMs"] = round((finished - batch_started) * 1000.0, 3)
+                batch["after"] = pending_metrics(finished)
+                reliability["batches"].append(batch)
+
+            finalize_requested = False
+            while not finalize_requested:
+                job = ack_jobs.get()
+                consumed = [job]
+                try:
+                    if job is None:
+                        finalize_requested = True
+                    elif not ack_abort.is_set():
+                        ingest(job)
+
+                    while not finalize_requested:
+                        try:
+                            queued = ack_jobs.get_nowait()
+                        except Empty:
+                            break
+                        consumed.append(queued)
+                        if queued is None:
+                            finalize_requested = True
+                        elif not ack_abort.is_set():
+                            ingest(queued)
+
+                    if not ack_abort.is_set() and pending_frames:
+                        process_ack_batch(finalizing=finalize_requested)
+                except BaseException as exc:
+                    ack_errors.append(exc)
+                    ack_abort.set()
+                finally:
+                    for _item in consumed:
+                        ack_jobs.task_done()
+
+            if not ack_abort.is_set():
+                final_slots = 0
+                max_final_slots = max(args.ack_retries, args.max_retransmit_rounds + 1)
+                while pending_frames and final_slots < max_final_slots:
+                    process_ack_batch(finalizing=True)
+                    final_slots += 1
+                if pending_frames:
+                    fail_frames(list(pending_frames.values()), "final-ack-unconfirmed")
+                    resolve_windows(time.monotonic())
+
+        if reliability is not None:
+            ack_jobs = Queue()
+            ack_thread = threading.Thread(
+                target=run_ack_worker,
+                name=f"gnss-ack-{args.target}",
+                daemon=True,
+            )
+            ack_thread.start()
+
+        try:
+            for window_second, events in schedule_windows:
+                if ack_errors:
+                    raise RuntimeError(f"ACK worker failed: {ack_errors[0]}") from ack_errors[0]
+                window_frames: list[dict[str, Any]] = []
+                window_expected_counts: Counter[int] = Counter()
+
+                for due, message_type, frame_bytes in events:
+                    if ack_errors:
+                        raise RuntimeError(f"ACK worker failed: {ack_errors[0]}") from ack_errors[0]
+                    deadline = started_mono + due
+                    remaining = deadline - time.monotonic()
+                    if remaining > 0:
+                        time.sleep(remaining)
+                    lateness_ms = max(0.0, (time.monotonic() - deadline) * 1000.0)
+                    if lateness_ms > args.late_threshold_ms:
+                        late_events += 1
+                    max_lateness_ms = max(max_lateness_ms, lateness_ms)
+
+                    generated_unix_ms = int(time.time() * 1000)
+                    frame = build_rtcm_frame(message_type, frame_bytes, transport_sequence)
+                    payloads = fragment_rtcm_frame(
+                        frame,
+                        message_type,
+                        session_epoch,
+                        transport_sequence,
+                        generated_unix_ms,
+                        TARGET_MASKS[args.target],
+                        args.fragment_data_bytes,
+                    )
+                    send_payloads(payloads, retransmit=False)
+                    window_frames.append({
+                        "messageType": message_type,
+                        "sequence": transport_sequence,
+                        "payloads": payloads,
+                    })
+                    window_expected_counts[message_type] += 1
+                    raw_bytes += len(frame)
+                    message_counts[message_type] += 1
+                    transport_sequence = (transport_sequence + 1) & 0xFFFFFFFF
+
+                    elapsed_second = int(time.monotonic() - started_mono)
+                    if elapsed_second >= last_progress_second + 5:
+                        last_progress_second = elapsed_second
+                        with counter_lock:
+                            progress_fragments = fragment_count
+                            progress_transmissions = transmitted_fragment_count
+                            progress_wire_bytes = wire_bytes
+                        print(
+                            f"PROGRESS elapsed={elapsed_second}s frames={sum(message_counts.values())} "
+                            f"fragments={progress_fragments} transmissions={progress_transmissions} "
+                            f"raw_bytes={raw_bytes} wire_bytes={progress_wire_bytes}",
+                            flush=True,
+                        )
+
+                if reliability is not None:
+                    assert ack_jobs is not None
+                    ack_jobs.put({
+                        "windowSecond": window_second,
+                        "windowStartedMonotonic": started_mono + window_second,
+                        "frames": window_frames,
+                        "expectedTypeCounts": {
+                            str(key): value
+                            for key, value in sorted(window_expected_counts.items())
+                        },
+                    })
+        except BaseException:
+            ack_abort.set()
+            raise
+        finally:
+            if ack_jobs is not None and ack_thread is not None:
+                ack_jobs.put(None)
+                ack_jobs.join()
+                ack_thread.join()
+
+        if ack_errors:
+            raise RuntimeError(f"ACK worker failed: {ack_errors[0]}") from ack_errors[0]
 
         termios.tcdrain(fd)
         if args.drain_ms > 0:
@@ -1005,6 +1392,9 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
             reliability["maxRecoveryLatencyMs"] = round(
                 reliability["maxRecoveryLatencyMs"], 3
             )
+            reliability["maxOldestPendingAgeMs"] = round(
+                reliability["maxOldestPendingAgeMs"], 3
+            )
             reliability["maxScheduleLatenessMs"] = round(max_lateness_ms, 3)
         counter_gate = evaluate_probe_gate(
             baseline_stats,
@@ -1025,6 +1415,7 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
             f"gate={'PASS' if counter_gate['passed'] else 'FAIL'}",
             flush=True,
         )
+        print_sensor_diagnostics("FINAL", final_stats)
     finally:
         os.close(fd)
 
@@ -1059,6 +1450,71 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
         "counterGate": counter_gate,
         "nodeCounterGate": "passed" if counter_gate["passed"] else "failed",
         "hardwareGatePassed": counter_gate["passed"],
+    }
+
+
+def run_diagnostics_query(args: argparse.Namespace) -> dict[str, Any]:
+    decoder = FieldLinkStreamDecoder()
+    field_sequence = int(time.time_ns() & 0xFFFFFFFF) or 1
+    fd = os.open(args.serial_device, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
+    try:
+        configure_serial(fd, args.baud)
+        settle_deadline = time.monotonic() + args.settle_ms / 1000.0
+        while time.monotonic() < settle_deadline:
+            readable, _, _ = select.select([fd], [], [], 0.05)
+            if readable:
+                try:
+                    os.read(fd, 4096)
+                except BlockingIOError:
+                    pass
+        termios.tcflush(fd, termios.TCIOFLUSH)
+        snapshot, _ = query_probe_stats(
+            fd,
+            decoder,
+            args.target,
+            field_sequence,
+            args.chunk_bytes,
+            args.chunk_delay_ms,
+            args.stats_timeout_seconds,
+            args.stats_retries,
+        )
+    finally:
+        os.close(fd)
+
+    if snapshot["responseVersion"] < args.require_stats_version:
+        raise RuntimeError(
+            f"diagnostic response version {snapshot['responseVersion']} is below required "
+            f"version {args.require_stats_version}"
+        )
+    diagnostics = snapshot.get("sensorDiagnostics")
+    if args.require_stats_version >= 3 and diagnostics is None:
+        raise RuntimeError("G3S V3 sensor diagnostics are missing")
+    print(
+        f"DIAGNOSTICS node={args.target} version={snapshot['responseVersion']} "
+        f"mode={snapshot['injectionMode']} uptime={snapshot['snapshotUptimeS']}",
+        flush=True,
+    )
+    print_sensor_diagnostics("DIAGNOSTIC", snapshot)
+    sensor_degraded = None
+    if diagnostics is not None:
+        sensor_degraded = bool(
+            diagnostics["enabledMask"] & ~diagnostics["currentValidMask"]
+        )
+    print(
+        "DIAGNOSTIC_HEALTH link_online=1 telemetry_online=unknown "
+        f"sensor_degraded={str(sensor_degraded).lower() if sensor_degraded is not None else 'unknown'}",
+        flush=True,
+    )
+    return {
+        "target": args.target,
+        "framesSent": 0,
+        "fragmentsSent": 0,
+        "diagnosticQueryPassed": True,
+        "hardwareGatePassed": True,
+        "linkOnline": True,
+        "telemetryOnline": None,
+        "sensorDegraded": sensor_degraded,
+        "snapshot": snapshot,
     }
 
 
@@ -1124,6 +1580,26 @@ def self_test() -> None:
     assert baseline_v2["responseVersion"] == 2
     assert final_v2["completedTypeCounts"]["1074"] == 1
     assert final_v2["linkStats"]["decodedRtcmFrames"] == 1
+    v3_payload = bytearray(204)
+    v3_payload[:148] = baseline_v2_payload
+    v3_payload[3] = 3
+    v3_payload[148:153] = bytes((0x0F, 0x0F, 0x05, 0x0F, 4))
+    struct.pack_into(">4I", v3_payload, 156, 41, 42, 43, 44)
+    struct.pack_into(">4I", v3_payload, 172, 51, 52, 53, 54)
+    struct.pack_into(">4I", v3_payload, 188, 61, 62, 63, 64)
+    decoded_v3 = decode_probe_stats_response(bytes(v3_payload))
+    assert decoded_v3["responseVersion"] == 3
+    assert decoded_v3["sensorDiagnostics"]["sensors"]["um220Gnss"]["currentValid"]
+    assert not decoded_v3["sensorDiagnostics"]["sensors"]["rsEcthSoil"]["currentValid"]
+    assert decoded_v3["sensorDiagnostics"]["sensors"]["rsEcthEc"]["sampleCount"] == 43
+    assert decoded_v3["sensorDiagnostics"]["sensors"]["rsDipTilt"]["consecutiveFailures"] == 64
+    inconsistent_v3 = bytearray(v3_payload)
+    inconsistent_v3[151] = 0x01
+    try:
+        decode_probe_stats_response(bytes(inconsistent_v3))
+        raise AssertionError("inconsistent sensor masks were accepted")
+    except ValueError as exc:
+        assert "masks are inconsistent" in str(exc)
     v2_gate = evaluate_probe_gate(
         baseline_v2,
         final_v2,
@@ -1163,9 +1639,14 @@ def self_test() -> None:
         Counter({1074: 1}),
         2,
         {
+            "windowCount": 1,
+            "recoveredWindows": 1,
             "failedWindows": 0,
             "maxRecoveryLatencyMs": 900.0,
             "maxRecoveryAgeMs": 3000.0,
+            "maxOldestPendingAgeMs": 800.0,
+            "maxPendingFrames": 1,
+            "minBitmapHeadroom": 15,
             "retransmitRatio": 1.0,
             "maxRetransmitRatio": 1.0,
             "maxScheduleLatenessMs": 100.0,
@@ -1225,6 +1706,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--baud", type=int, default=115200)
     parser.add_argument("--target", choices=tuple(NODE_NUMBERS), default="A")
     parser.add_argument("--duration-seconds", type=float, default=12.0)
+    parser.add_argument("--diagnostics-only", action="store_true")
     parser.add_argument(
         "--profile",
         choices=("measured-mix", "packet-rate", "um220-shaped"),
@@ -1247,10 +1729,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--drain-ms", type=int, default=2000)
     parser.add_argument("--stats-timeout-seconds", type=float, default=3.0)
     parser.add_argument("--stats-retries", type=int, default=3)
-    parser.add_argument("--require-stats-version", type=int, choices=(1, 2), default=1)
+    parser.add_argument("--require-stats-version", type=int, choices=(1, 2, 3), default=1)
     parser.add_argument("--selective-retry", action="store_true")
     parser.add_argument("--max-retransmit-rounds", type=int, default=2)
-    parser.add_argument("--ack-timeout-seconds", type=float, default=1.0)
+    parser.add_argument("--ack-timeout-seconds", type=float, default=0.65)
     parser.add_argument("--ack-retries", type=int, default=3)
     parser.add_argument("--max-recovery-age-ms", type=float, default=3000.0)
     parser.add_argument("--max-retransmit-ratio", type=float, default=0.25)
@@ -1282,8 +1764,10 @@ def parse_args() -> argparse.Namespace:
         parser.error("max schedule lateness must be non-negative")
     if not 0.0 <= args.max_retransmit_ratio <= 1.0:
         parser.error("max retransmit ratio must be in [0, 1]")
-    if args.selective_retry and args.require_stats_version != 2:
-        parser.error("selective retry requires --require-stats-version 2")
+    if args.selective_retry and args.require_stats_version < 2:
+        parser.error("selective retry requires --require-stats-version 2 or 3")
+    if args.diagnostics_only and args.selective_retry:
+        parser.error("diagnostics-only mode cannot use selective retry")
     if not 32 <= args.fragment_data_bytes <= 512:
         parser.error("fragment data bytes must be in [32, 512]")
     if not 8 <= args.packet_frame_bytes <= 512:
@@ -1323,7 +1807,11 @@ def main() -> int:
     }
     report: dict[str, Any] = {
         "schemaVersion": 3,
-        "experiment": "xls1-gnss-v31-probe-closed-loop",
+        "experiment": (
+            "xls1-rk2206-sensor-diagnostics"
+            if args.diagnostics_only
+            else "xls1-gnss-v31-probe-closed-loop"
+        ),
         "startedAt": utc_now(),
         "source": {
             "mode": "credential-free-synthetic-from-measured-summary",
@@ -1337,6 +1825,7 @@ def main() -> int:
             "serialDevice": args.serial_device,
             "baud": args.baud,
             "target": args.target,
+            "diagnosticsOnly": args.diagnostics_only,
             "durationSeconds": args.duration_seconds,
             "profile": args.profile,
             "packetRateHz": args.packet_rate_hz if args.profile == "packet-rate" else None,
@@ -1389,7 +1878,9 @@ def main() -> int:
                 recovery["serviceRuntimeMasked"] = True
             else:
                 subprocess.run(["systemctl", "stop", args.service], check=True)
-        report["result"] = run_probe(args)
+        report["result"] = (
+            run_diagnostics_query(args) if args.diagnostics_only else run_probe(args)
+        )
     except Exception as exc:
         report["fatalError"] = str(exc)
     finally:
@@ -1426,6 +1917,10 @@ def main() -> int:
         "framesSent": result.get("framesSent"),
         "fragmentsSent": result.get("fragmentsSent"),
         "hardwareGatePassed": result.get("hardwareGatePassed", False),
+        "diagnosticQueryPassed": result.get("diagnosticQueryPassed"),
+        "linkOnline": result.get("linkOnline"),
+        "telemetryOnline": result.get("telemetryOnline"),
+        "sensorDegraded": result.get("sensorDegraded"),
         "failedChecks": result.get("counterGate", {}).get("failedChecks", []),
         **recovery,
     }
