@@ -15,6 +15,7 @@ const {
   decodeGnssProbeStatsResponse,
   decodeGnssProbeStatsResponseV1,
   decodeGnssProbeStatsResponseV2,
+  decodeGnssProbeStatsResponseV3,
   decodeGnssRtcmAckResponseV1,
   RtcmReassemblerV3,
   crc24q,
@@ -152,6 +153,39 @@ test("GNSS PROBE V2 exposes per-type and field-link diagnostics", () => {
   const result = createCobsCrcFieldLinkAssembler().push(wire);
   assert.deepEqual(result.errors, []);
   assert.deepEqual(decodeGnssProbeStatsResponseV2(result.payloads[0].rawPayloadBytes), decoded);
+});
+
+test("GNSS PROBE V3 exposes only the deployed RK2206 sensor paths", () => {
+  const payload = Buffer.alloc(204);
+  payload.write("G3S", 0, "ascii");
+  payload.writeUInt8(3, 3);
+  payload.writeUInt8(3, 4);
+  payload.writeUInt8(1, 5);
+  payload.writeUInt32BE(0x89abcdef, 8);
+  payload.writeUInt32BE(1234, 12);
+  payload.writeUInt8(0x0f, 148);
+  payload.writeUInt8(0x0f, 149);
+  payload.writeUInt8(0x05, 150);
+  payload.writeUInt8(0x0f, 151);
+  payload.writeUInt8(4, 152);
+  for (let index = 0; index < 4; index += 1) {
+    payload.writeUInt32BE(index + 41, 156 + index * 4);
+    payload.writeUInt32BE(index + 51, 172 + index * 4);
+    payload.writeUInt32BE(index + 61, 188 + index * 4);
+  }
+
+  const decoded = decodeGnssProbeStatsResponseV3(payload);
+  assert.equal(decoded.responseVersion, 3);
+  assert.equal(decoded.sensorDiagnostics.sensors.um220Gnss.currentValid, true);
+  assert.equal(decoded.sensorDiagnostics.sensors.rsEcthSoil.currentValid, false);
+  assert.equal(decoded.sensorDiagnostics.sensors.rsEcthEc.sampleCount, 43);
+  assert.equal(decoded.sensorDiagnostics.sensors.rsDipTilt.consecutiveFailures, 64);
+  assert.deepEqual(decodeGnssProbeStatsResponse(payload), decoded);
+  assert.throws(() => decodeGnssProbeStatsResponseV2(payload), /not V2/);
+
+  const inconsistent = Buffer.from(payload);
+  inconsistent.writeUInt8(0x01, 151);
+  assert.throws(() => decodeGnssProbeStatsResponse(inconsistent), /masks are inconsistent/);
 });
 
 test("RTCM ACK V1 reports the recent completed-sequence bitmap", () => {

@@ -6,6 +6,8 @@ export const RTCM3_MAX_FRAME_BYTES = 1029;
 export const GNSS_PROBE_STATS_QUERY_V1_BYTES = 12;
 export const GNSS_PROBE_STATS_RESPONSE_V1_BYTES = 92;
 export const GNSS_PROBE_STATS_RESPONSE_V2_BYTES = 148;
+export const GNSS_PROBE_STATS_RESPONSE_V3_BYTES = 204;
+export const GNSS_SENSOR_DIAGNOSTIC_COUNT = 4;
 export const GNSS_RTCM_ACK_QUERY_V1_BYTES = 12;
 export const GNSS_RTCM_ACK_RESPONSE_V1_BYTES = 24;
 
@@ -138,6 +140,38 @@ export type GnssProbeStatsResponseV2 = {
   };
 };
 
+export const GNSS_SENSOR_DIAGNOSTIC_NAMES = [
+  "um220Gnss",
+  "rsEcthSoil",
+  "rsEcthEc",
+  "rsDipTilt"
+] as const;
+
+export type GnssSensorDiagnosticName = (typeof GNSS_SENSOR_DIAGNOSTIC_NAMES)[number];
+
+export type GnssSensorDiagnostic = {
+  index: number;
+  mask: number;
+  enabled: boolean;
+  initializationSucceeded: boolean;
+  currentValid: boolean;
+  everSucceeded: boolean;
+  sampleCount: number;
+  lastSuccessUptimeS: number;
+  consecutiveFailures: number;
+};
+
+export type GnssProbeStatsResponseV3 = Omit<GnssProbeStatsResponseV2, "responseVersion"> & {
+  responseVersion: 3;
+  sensorDiagnostics: {
+    enabledMask: number;
+    initializationSuccessMask: number;
+    currentValidMask: number;
+    everSuccessMask: number;
+    sensors: Record<GnssSensorDiagnosticName, GnssSensorDiagnostic>;
+  };
+};
+
 export type GnssRtcmAckResponseV1 = {
   responseVersion: 1;
   nodeNumber: 1 | 2 | 3;
@@ -241,7 +275,7 @@ export function gnssRtcmAckReportsCompleted(
 
 export function decodeGnssProbeStatsResponse(
   input: Buffer
-): GnssProbeStatsResponseV1 | GnssProbeStatsResponseV2 {
+): GnssProbeStatsResponseV1 | GnssProbeStatsResponseV2 | GnssProbeStatsResponseV3 {
   if (input.length < 4 || input.subarray(0, 3).toString("ascii") !== "G3S") {
     throw new Error("GNSS PROBE stats magic or version mismatch");
   }
@@ -251,7 +285,9 @@ export function decodeGnssProbeStatsResponse(
       ? GNSS_PROBE_STATS_RESPONSE_V1_BYTES
       : responseVersion === 2
         ? GNSS_PROBE_STATS_RESPONSE_V2_BYTES
-        : null;
+        : responseVersion === 3
+          ? GNSS_PROBE_STATS_RESPONSE_V3_BYTES
+          : null;
   if (expectedBytes === null) {
     throw new Error("GNSS PROBE stats version is unsupported");
   }
@@ -307,8 +343,7 @@ export function decodeGnssProbeStatsResponse(
     "fifoDroppedBytes",
     "fifoDropEvents"
   ] as const;
-  return {
-    responseVersion: 2,
+  const extended = {
     ...common,
     completedTypeCounts: Object.fromEntries(
       typeKeys.map((key, index) => [key, input.readUInt32BE(92 + index * 4)])
@@ -316,6 +351,63 @@ export function decodeGnssProbeStatsResponse(
     linkStats: Object.fromEntries(
       linkKeys.map((key, index) => [key, input.readUInt32BE(116 + index * 4)])
     ) as GnssProbeStatsResponseV2["linkStats"]
+  };
+  if (responseVersion === 2) {
+    return { responseVersion: 2, ...extended };
+  }
+
+  const enabledMask = input.readUInt8(148);
+  const initializationSuccessMask = input.readUInt8(149);
+  const currentValidMask = input.readUInt8(150);
+  const everSuccessMask = input.readUInt8(151);
+  const sensorCount = input.readUInt8(152);
+  const allSensorMask = (1 << GNSS_SENSOR_DIAGNOSTIC_COUNT) - 1;
+  if (
+    sensorCount !== GNSS_SENSOR_DIAGNOSTIC_COUNT ||
+    input.readUInt8(153) !== 0 ||
+    input.readUInt8(154) !== 0 ||
+    input.readUInt8(155) !== 0
+  ) {
+    throw new Error("GNSS PROBE sensor diagnostic count or reserved bytes are invalid");
+  }
+  if (
+    ((enabledMask | initializationSuccessMask | currentValidMask | everSuccessMask) & ~allSensorMask) !== 0 ||
+    (initializationSuccessMask & ~enabledMask) !== 0 ||
+    (currentValidMask & ~enabledMask) !== 0 ||
+    (everSuccessMask & ~enabledMask) !== 0 ||
+    (currentValidMask & ~everSuccessMask) !== 0
+  ) {
+    throw new Error("GNSS PROBE sensor diagnostic masks are inconsistent");
+  }
+  const sensors = Object.fromEntries(
+    GNSS_SENSOR_DIAGNOSTIC_NAMES.map((name, index) => {
+      const mask = 1 << index;
+      return [
+        name,
+        {
+          index,
+          mask,
+          enabled: (enabledMask & mask) !== 0,
+          initializationSucceeded: (initializationSuccessMask & mask) !== 0,
+          currentValid: (currentValidMask & mask) !== 0,
+          everSucceeded: (everSuccessMask & mask) !== 0,
+          sampleCount: input.readUInt32BE(156 + index * 4),
+          lastSuccessUptimeS: input.readUInt32BE(172 + index * 4),
+          consecutiveFailures: input.readUInt32BE(188 + index * 4)
+        }
+      ];
+    })
+  ) as Record<GnssSensorDiagnosticName, GnssSensorDiagnostic>;
+  return {
+    responseVersion: 3,
+    ...extended,
+    sensorDiagnostics: {
+      enabledMask,
+      initializationSuccessMask,
+      currentValidMask,
+      everSuccessMask,
+      sensors
+    }
   };
 }
 
@@ -331,6 +423,14 @@ export function decodeGnssProbeStatsResponseV2(input: Buffer): GnssProbeStatsRes
   const decoded = decodeGnssProbeStatsResponse(input);
   if (decoded.responseVersion !== 2) {
     throw new Error("GNSS PROBE stats response is not V2");
+  }
+  return decoded;
+}
+
+export function decodeGnssProbeStatsResponseV3(input: Buffer): GnssProbeStatsResponseV3 {
+  const decoded = decodeGnssProbeStatsResponse(input);
+  if (decoded.responseVersion !== 3) {
+    throw new Error("GNSS PROBE stats response is not V3");
   }
   return decoded;
 }
