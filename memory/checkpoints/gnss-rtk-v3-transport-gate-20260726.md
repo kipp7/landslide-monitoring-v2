@@ -62,11 +62,13 @@ status: active
 - `ed803b0e` 新增向后兼容的 204 B `G3S` V3 传感器诊断，记录 4 条实际采集路径的 enabled/init/current/ever 位、采集周期数、最后成功单调 uptime 和连续失败数。RS-ECTH 基础寄存器与 EC 寄存器分开统计，以识别 EC-only 故障；init 位仅表示本地 UART 或 SC16IS752/Modbus 初始化成功。C99、Python、field-gateway 17 项测试/lint 以及 A 节点完整 OpenHarmony 构建通过。
 - A/B/C PROBE 诊断发布包为 `F:\2\openharmony\rk2206_firmware_releases\xl01_gnss_rtk_v31_probe_sensor_diag_v3_20260729`。9/9 哈希、节点身份、固件标记、RS-ECTH 型号、PROBE 模式和 loader 一致性均复核通过；A/B/C `Firmware.img` SHA-256 为 `363bb6841354d6aa92fab4e006b1b018f838bc190d1e5888d3a6c36f5b0e1c00`、`ad5080526d443ad4095a7592466953ee88cb7dea7374584e13ce622f2136d7f3`、`7a768f53b4f4161b4582c3f7059b07512b68fff63e401ec9b55031750b78611e`。该包仍不向 UM220 写 RTCM。
 - 当前探针已部署到 RK3568 `/usr/local/bin/xls1_gnss_v31_probe_sender.py`，板端和本地 SHA-256 均为 `189f1e65e00428ca14055a26c72378ad6d880f28c807dbd905065c2151705ef6`，自检通过且 field-gateway 为 `active`。板端保留旧脚本备份；统一烧录前未在旧固件上强行执行 V3 查询。
+- 2026-07-29 V3 包烧录后的 RK3568 真机复核已完成。A 为 `version=3 mode=1`，`enabled/init=0x0F`、`current/ever=0x0E`，RS-ECTH 基础、EC、RS-DIP 三条 RS485 路径均有效；UM220 暂无有效定位。C 为 `version=3 mode=1` 且控制链双向在线，但连续两次均为 `current/ever=0x00`，第二次四路径均 `samples=126`、`last_ok_uptime=0`、`fail_streak=126`，证明采集循环运行但本地所有传感器路径从未成功。A 的同固件对照将 C 故障收敛到共同供电/GND、接线、两路 RS485/SC16IS752 或 C 板硬件，不能再归因于通用固件或 XLS1 配对。B 连续 5 次定向查询无响应，且 compact 遥测为零，当前按链路离线且固件身份未确认。
+- 查询结束后 field-gateway 自动恢复 `active`，串口和 MQTT 均在线；等待十余秒后 A 恢复 online（seq 345），B/C 仍为 configured/no-node-activity，协议拒绝、写失败和交织计数均为 0。板端时钟仍错误，现场报告路径中的 `20260726` 仅为错误系统时间生成的文件名。
 - 本 checkpoint 和提交均不包含 CORS 主机、账号、密码、真实坐标或现场原始日志。
 
 ## In Progress
 
-- 软件边界、容量模型、V3 传感器诊断固件和只查询工具均已完成。当前等待用户统一烧录新 A/B/C 包；烧录后先读取 C 四条采集路径，不先跑 60 秒 RTCM。累计 ACK 的 60 秒门禁、真实 NTRIP 和三节点混合负载仍未通过，不能进入 LIVE。
+- 软件边界、容量模型、V3 传感器诊断固件和只查询工具均已完成；A/C 已确认运行 V3。当前阻塞为 C 所有本地采集路径从未成功，以及 B 无链路响应。先做 A/C 传感器及线束交叉验证并恢复 B，再执行累计 ACK 的 12 s/60 s 门禁；真实 NTRIP 和三节点混合负载仍未通过，不能进入 LIVE。
 - RK2206 当前没有独立可信的 Unix 时钟。节点可执行 1500 ms 重组超时和最多 3000 ms 本地队列龄，但绝对生成时间 TTL 只能计为 `ttl_unverified`，由 RK3568 先做绝对新鲜度过滤。
 - 现有 GPS 驱动已阻止 RMC 状态错误设置 Fixed，并公开原始 GGA quality；完整 GGA/GSA/GST/GSV/RMC/ZDA 定点解析和 `GNSS_CORE` 1 Hz 上送尚未实现。
 
@@ -93,4 +95,4 @@ status: active
 
 ## Resume Prompt
 
-继续 V3.1：从 `F:\2\openharmony\rk2206_firmware_releases\xl01_gnss_rtk_v31_probe_sensor_diag_v3_20260729` 的 A/B/C 对应目录统一烧录 `Firmware.img`，确认标记 `fw-gnss-rtk-v31-probe-sensor-diag-v3-20260729`。在 RK3568 部署提交 `b9fc4d64` 的探针后，先对 C 运行 `python3 /usr/local/bin/xls1_gnss_v31_probe_sender.py --target C --diagnostics-only --require-stats-version 3 --stats-timeout-seconds 6 --stats-retries 5`，记录 UM220、RS-ECTH 基础、RS-ECTH EC、RS-DIP 四条路径的 init/valid/ever/samples/last_ok/fail_streak。修复传感器路径并恢复 compact 遥测后，才执行三核心星座累计 ACK 12 s/60 s 门禁。保持 LIVE 关闭；RK3568 NTP/RTC 修复后才进入真实 correction-age 与三节点混合负载。
+继续 V3.1：A/C 已确认运行 `fw-gnss-rtk-v31-probe-sensor-diag-v3-20260729`；A 的 RS-ECTH 基础/EC、RS-DIP 正常，C 四条路径均从未成功，B 无响应。先将 A 上已知良好的 RS-ECTH、RS-DIP 及线束换到 C 做交叉验证，复跑 `python3 /usr/local/bin/xls1_gnss_v31_probe_sender.py --target C --diagnostics-only --require-stats-version 3 --stats-timeout-seconds 6 --stats-retries 5`；如果仍为 `ever=0`，定位 C 的共同供电/GND、J6/J7、RS485 A/B 和 SC16IS752/隔离收发器。恢复 B 并确认 V3 后，才执行三核心星座累计 ACK 12 s/60 s 门禁。保持 LIVE 关闭；RK3568 NTP/RTC 修复后才进入真实 correction-age 与三节点混合负载。
