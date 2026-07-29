@@ -57,12 +57,16 @@ status: active
 - ACK V1 发布包位于 `F:\2\openharmony\rk2206_firmware_releases\xl01_gnss_rtk_v31_probe_ack_v1_20260728`，对应源提交 `a43318206a84f09841517a9d5f3a2ae7c5d1ac95`。A/B/C `Firmware.img` SHA-256 为 `1c60b42ccfdc0f90f30f576cfe7236cf911577734f5dfa1ddf5db56fbafcc79d`、`6cd2b71edc3219c28f5c6b9a8b85ebf67c32ed0edd4c658beefcff29639bec29`、`9ef0916d85a27a4743e4a5b99b8954aceb8c0733b15c9bbcec425943204679a6`。RK3568 已部署匹配探针，SHA-256 `6f0e5a866a0de337aa6379b583cad1e8cc71509f2acb39213deb7f890056b1e4`，自检通过。
 - 2026-07-28 用户报告重新烧录上电后，A/B 的 `G3S` V2 统计均能返回且模式为 `PROBE`，但两次 12 s 选择性补发均在第一个窗口失败：节点在 3 次、每次 1 s 的查询内没有返回匹配 `G3A` ACK。失败报告为 RK3568 `/var/lib/lsmv2/experiments/xls1-gnss-v31-probe-20260727-011707.json` 和 `...-011800.json`；文件名日期受板端错误系统时间影响。
 - 为排除发送器过滤或短超时，网关运行时屏蔽后直接向 A/B 各发送一个 30 B ACK 查询线帧并抓取 6 s：两者均为 `controls=0`、`decode_errors=0`。随后 A 的非选择性 1 s 闭环仍正常返回前后 V2 统计并以 4/4 分片、3/3 完整帧、430/430 B 通过，报告为 `...-012308.json`。这排除了 RK3568 解码故障和 ACK 调用导致 DataProcessTask 锁死。Windows 最近文件记录确认 18:56-18:58 实际打开的是旧 `xl01_gnss_rtk_v31_probe_stats_v2_20260727\A/B/C`，而 ACK V1 包在 19:54-19:55 才生成，因此当前节点确定仍运行旧 V2。
-- 当前节点状态仍为 A/B `online`、C `configured`，测试后 `lsmv2-field-gateway.service` 已恢复 `active`。RK3568 返回时间为 2026-07-27，真实 correction-age 和可追溯存储门禁前必须修复 NTP/RTC；本轮合成门禁使用单调时钟，现有短测结论仍有效。
+- C 后续已通过定向 `G3S` V2、`G3A` ACK V1、普通轮询 ACK 和 1 秒 4/4 分片、3/3 帧闭环，身份正确为 `...0003`，因此 XLS1 双向控制链在线。C 的 `telemetryMessages=0`、`latestTelemetry=null`、`lastTelemetryTs=null` 仍成立，问题是传感器采样或 compact 遥测生成异常，不是 XLS1 基本配对失败。B 是用户主动下电。测试后 `lsmv2-field-gateway.service` 已恢复 `active`。RK3568 板端绝对时间仍不可信，合成门禁继续只使用单调时钟。
+- 2026-07-29 用户确认土壤探头使用三合一。远端 `feat/gnss-rtk-v31-transport` 生产配置确认实际硬件路径为 UM220-IV NK、RS-ECTH-N01-TR-1 温湿度/EC 和 RS-DIP-N01-1 三轴倾角；SHT30、MPU6050 是关闭的遗留样例，雨量关闭。不得再从遗留驱动文件存在推断安装了 MPU6050。
+- `ed803b0e` 新增向后兼容的 204 B `G3S` V3 传感器诊断，记录 4 条实际采集路径的 enabled/init/current/ever 位、采集周期数、最后成功单调 uptime 和连续失败数。RS-ECTH 基础寄存器与 EC 寄存器分开统计，以识别 EC-only 故障；init 位仅表示本地 UART 或 SC16IS752/Modbus 初始化成功。C99、Python、field-gateway 17 项测试/lint 以及 A 节点完整 OpenHarmony 构建通过。
+- A/B/C PROBE 诊断发布包为 `F:\2\openharmony\rk2206_firmware_releases\xl01_gnss_rtk_v31_probe_sensor_diag_v3_20260729`。9/9 哈希、节点身份、固件标记、RS-ECTH 型号、PROBE 模式和 loader 一致性均复核通过；A/B/C `Firmware.img` SHA-256 为 `363bb6841354d6aa92fab4e006b1b018f838bc190d1e5888d3a6c36f5b0e1c00`、`ad5080526d443ad4095a7592466953ee88cb7dea7374584e13ce622f2136d7f3`、`7a768f53b4f4161b4582c3f7059b07512b68fff63e401ec9b55031750b78611e`。该包仍不向 UM220 写 RTCM。
+- 当前探针已部署到 RK3568 `/usr/local/bin/xls1_gnss_v31_probe_sender.py`，板端和本地 SHA-256 均为 `189f1e65e00428ca14055a26c72378ad6d880f28c807dbd905065c2151705ef6`，自检通过且 field-gateway 为 `active`。板端保留旧脚本备份；统一烧录前未在旧固件上强行执行 V3 查询。
 - 本 checkpoint 和提交均不包含 CORS 主机、账号、密码、真实坐标或现场原始日志。
 
 ## In Progress
 
-- 软件边界、离线容量模型、V2 闭环统计、A/B/C V2 烧录和 RK3568 探针部署均已完成。A/B 的 V2 短测通过但当前 60 s 链路不稳定；ACK V1 待从新目录重新烧录，C 当前离线，真实 NTRIP 和三节点混合负载仍未通过，不能进入 LIVE。
+- 软件边界、容量模型、V3 传感器诊断固件和只查询工具均已完成。当前等待用户统一烧录新 A/B/C 包；烧录后先读取 C 四条采集路径，不先跑 60 秒 RTCM。累计 ACK 的 60 秒门禁、真实 NTRIP 和三节点混合负载仍未通过，不能进入 LIVE。
 - RK2206 当前没有独立可信的 Unix 时钟。节点可执行 1500 ms 重组超时和最多 3000 ms 本地队列龄，但绝对生成时间 TTL 只能计为 `ttl_unverified`，由 RK3568 先做绝对新鲜度过滤。
 - 现有 GPS 驱动已阻止 RMC 状态错误设置 Fixed，并公开原始 GGA quality；完整 GGA/GSA/GST/GSV/RMC/ZDA 定点解析和 `GNSS_CORE` 1 Hz 上送尚未实现。
 
@@ -71,7 +75,7 @@ status: active
 - 保留本地报告 `docs/reports/xls1-gnss-v31-capacity-20260726.json` 作为可再生证据；原始 RTCM 抓包降为可选精化，不再作为进入单节点 `PROBE` 的阻塞项。
 - 保持 C 为离线/不可用状态，不伪造遥测，但在所有容量报告中固定预留 180 B/s；A/B 的实测结论与 C 的估算必须分栏展示。
 - 保留分级包率报告作为链路证据。旧 `250 B/6 Hz` 试验仍使用 160 B 分片，实际形成 12 个 field-link 包/秒；它证明高包率失败，不能单独证明 250 B 单包不可用。320 B 单包虽把 0.5 Hz QZSS 的丢失从 2 包降到 1 包，仍未过严格门禁，因此生产路径暂沿用已通过的三核心星座、160 B 分片和 160 ms 平滑调度。恢复 QZSS 前先设计有界累计确认/选择性重传，并验证三节点确认时隙、correction age 和 compact 遥测共存。
-- C 恢复后补三核心星座 `um220-shaped` 12 s/60 s PROBE。只有 A/B/C 都通过 accepted/completed/bytes 精确门禁，才进入真实 NTRIP 混合负载。
+- 烧录 G3S V3 后先在 RK3568 部署当前 `xls1_gnss_v31_probe_sender.py`，对 C 执行 `--diagnostics-only --require-stats-version 3`。只根据 enabled/init/current/ever、samples、last_ok_uptime、fail_streak 定位故障；控制响应只证明 link online，不能把 `telemetry_online` 写成 true。C 传感器路径恢复后，再补三核心星座 `um220-shaped` 12 s/60 s PROBE。
 - 真实门禁负载包含 RTCM、3 个 1 Hz `GNSS_CORE`、compact 环境遥测和控制命令；记录每节点 correction age P50/P95/max、Fixed 连续性、CRC、重组、队列、注入、旧 session 和命令延迟。
 - 至少运行 60 分钟；初始通过条件为 correction age P95 <= 3 s、max <= 5 s、没有旧 session 注入且 Fixed 连续。未通过前保持 `LIVE` 关闭。
 - 传输通过后再完成 RK2206 定点 GNSS 解析与上送、RK3568 ECEF/ENU/Hampel/Kalman、服务器 CEEMDAN 和 UI/profile 集成。
@@ -85,8 +89,8 @@ status: active
 - 单 NTRIP 流供 3 台 rover 使用仍需确认服务商授权和同站点空间范围。
 - 汇总日志证明平均输入负载，但不能证明 RTCM 单帧尺寸分布或亚秒级突发；不得用 16.91% UART 估算替代 XLS1 节点端完整率和 correction-age 证据。
 - 过滤 1084 与 1124 限频有明确的接收机支持集和链路容量依据，但合成 PROBE 不能证明真实 Fixed 连续性；必须在 LIVE 前用真实 CORS 输入和节点 GGA/correction-age 证据验证，失败时回滚为关闭而非偷偷放宽门禁。
-- C 离线不会减少生产容量预算，但会让三节点在线、三节点混合负载和最终厘米级系统验收保持未完成；不得以历史在线证据替代当前 C 复测。
+- C 控制链在线但传感器遥测为空不会减少生产容量预算；它仍使三节点传感器在线、三节点混合负载和最终厘米级系统验收保持未完成。不得以 ACK/G3S 响应替代当前传感器有效位和 compact 遥测证据。
 
 ## Resume Prompt
 
-继续 V3.1 传输门禁：从 `xl01_gnss_rtk_v31_probe_ack_v1_20260728` 的 A/B/C 对应目录重新烧录 `Firmware.img`，确认启动标记 `fw-gnss-rtk-v31-probe-ack-v1-20260728`，再做独立 `G3A` 能力检查。能力检查通过后，对 A/B 执行三核心星座 12 s，带 `--require-stats-version 2 --selective-retry`，要求完整计数、恢复 <= 3 s、调度迟到 <= 500 ms、补发 <= 25%；短测通过再做 60 s。C 离线时继续预留 180 B/s 且不伪造结果。修复 RK3568 NTP/RTC 后才进入真实 correction-age 证据；保持 field-gateway shaper 未接线、LIVE 关闭，三节点通过后再做真实 NTRIP + GNSS_CORE + compact 遥测 + 控制命令混合门禁。
+继续 V3.1：从 `F:\2\openharmony\rk2206_firmware_releases\xl01_gnss_rtk_v31_probe_sensor_diag_v3_20260729` 的 A/B/C 对应目录统一烧录 `Firmware.img`，确认标记 `fw-gnss-rtk-v31-probe-sensor-diag-v3-20260729`。在 RK3568 部署提交 `b9fc4d64` 的探针后，先对 C 运行 `python3 /usr/local/bin/xls1_gnss_v31_probe_sender.py --target C --diagnostics-only --require-stats-version 3 --stats-timeout-seconds 6 --stats-retries 5`，记录 UM220、RS-ECTH 基础、RS-ECTH EC、RS-DIP 四条路径的 init/valid/ever/samples/last_ok/fail_streak。修复传感器路径并恢复 compact 遥测后，才执行三核心星座累计 ACK 12 s/60 s 门禁。保持 LIVE 关闭；RK3568 NTP/RTC 修复后才进入真实 correction-age 与三节点混合负载。
