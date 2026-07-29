@@ -16,6 +16,37 @@ extern "C" {
 #define RS485_MODBUS_ERR_CRC           -6
 #define RS485_MODBUS_ERR_EXCEPTION     -7
 #define RS485_MODBUS_ERR_ECHO          -8
+#define RS485_MODBUS_ERR_SHORT         -9
+#define RS485_MODBUS_ERR_FUNCTION      -10
+#define RS485_MODBUS_ERR_BYTE_COUNT    -11
+#define RS485_MODBUS_ERR_READ          -12
+
+#define RS485_MODBUS_DIAGNOSTIC_CHANNELS 2
+
+typedef struct {
+    uint32_t requests;
+    uint32_t successes;
+    uint32_t write_errors;
+    uint32_t tx_done_errors;
+    uint32_t read_errors;
+    uint32_t no_responses;
+    uint32_t short_responses;
+    uint32_t address_errors;
+    uint32_t crc_errors;
+    uint32_t exception_responses;
+    uint32_t function_errors;
+    uint32_t byte_count_errors;
+    uint32_t rx_bytes;
+    int8_t last_status;
+    uint16_t last_rx_bytes;
+    uint8_t last_response_addr;
+    uint8_t last_response_function;
+    uint8_t last_exception_code;
+} Rs485ModbusChannelDiagnostics;
+
+typedef struct {
+    Rs485ModbusChannelDiagnostics channels[RS485_MODBUS_DIAGNOSTIC_CHANNELS];
+} Rs485ModbusDiagnostics;
 
 int RS485_ModbusInit(void);
 int RS485_ModbusReadRegistersWithTimeoutOnChannel(
@@ -77,6 +108,7 @@ const char *RS485_ModbusStatusName(int code);
 uint8_t RS485_ModbusGetLastWriteResponseAddr(void);
 unsigned int RS485_ModbusGetLastWriteResponseBytes(void);
 unsigned int RS485_ModbusGetLastWriteResponse(uint8_t *out, unsigned int out_capacity);
+void RS485_ModbusGetDiagnostics(Rs485ModbusDiagnostics *snapshot);
 
 #ifdef __cplusplus
 }

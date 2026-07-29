@@ -18,6 +18,29 @@ static uint32_t ReadUint32Be(const uint8_t *input)
            input[3];
 }
 
+static void FillModbusChannel(Rs485ModbusChannelDiagnostics *diag, uint32_t base)
+{
+    memset(diag, 0, sizeof(*diag));
+    diag->requests = base + 0U;
+    diag->successes = base + 1U;
+    diag->write_errors = base + 2U;
+    diag->tx_done_errors = base + 3U;
+    diag->read_errors = base + 4U;
+    diag->no_responses = base + 5U;
+    diag->short_responses = base + 6U;
+    diag->address_errors = base + 7U;
+    diag->crc_errors = base + 8U;
+    diag->exception_responses = base + 9U;
+    diag->function_errors = base + 10U;
+    diag->byte_count_errors = base + 11U;
+    diag->rx_bytes = base + 12U;
+    diag->last_status = (int8_t)(base == 100U ? RS485_MODBUS_ERR_TIMEOUT : RS485_MODBUS_OK);
+    diag->last_rx_bytes = (uint16_t)(base + 13U);
+    diag->last_response_addr = (uint8_t)(base == 100U ? 1U : 2U);
+    diag->last_response_function = (uint8_t)(base == 100U ? 3U : 4U);
+    diag->last_exception_code = (uint8_t)(base == 100U ? 0U : 2U);
+}
+
 static void TestFieldLinkRxStats(void)
 {
     FieldLinkRxStats stats;
@@ -46,7 +69,10 @@ int main(void)
     GnssRtcmAckWindow ack_window;
     FieldLinkRxStats link_stats;
     GnssSensorDiagnostics sensor_diagnostics;
-    uint8_t payload[GNSS_PROBE_STATS_RESPONSE_V3_BYTES];
+    Sc16is752Diagnostics sc16is752_diagnostics;
+    FieldRs485Diagnostics field_rs485_diagnostics;
+    Rs485ModbusDiagnostics modbus_diagnostics;
+    uint8_t payload[GNSS_PROBE_STATS_RESPONSE_V4_BYTES];
     uint8_t ack_payload[GNSS_RTCM_ACK_RESPONSE_V1_BYTES];
     uint8_t target = 0U;
     uint32_t nonce = 0U;
@@ -132,6 +158,67 @@ int main(void)
         assert(ReadUint32Be(payload + 172U + index * 4U) == index + 51U);
         assert(ReadUint32Be(payload + 188U + index * 4U) == index + 61U);
     }
+
+    memset(&sc16is752_diagnostics, 0, sizeof(sc16is752_diagnostics));
+    sc16is752_diagnostics.configured_i2c_addr = 0x4DU;
+    sc16is752_diagnostics.detected_i2c_addr = 0x4DU;
+    sc16is752_diagnostics.address_found = 1U;
+    sc16is752_diagnostics.detected_lsr = 0x60U;
+    sc16is752_diagnostics.init_status = 0;
+    sc16is752_diagnostics.scratchpad_status[0] = 0;
+    sc16is752_diagnostics.scratchpad_status[1] = -2;
+    sc16is752_diagnostics.internal_loopback_status[0] = 0;
+    sc16is752_diagnostics.internal_loopback_status[1] = -3;
+    sc16is752_diagnostics.uart_init_status[0] = 0;
+    sc16is752_diagnostics.uart_init_status[1] = -4;
+    sc16is752_diagnostics.internal_loopback_rx_bytes[0] = 4U;
+    sc16is752_diagnostics.internal_loopback_rx_bytes[1] = 2U;
+    memset(&field_rs485_diagnostics, 0, sizeof(field_rs485_diagnostics));
+    field_rs485_diagnostics.scan_started = 1U;
+    field_rs485_diagnostics.scan_completed = 1U;
+    field_rs485_diagnostics.restore_ok = 1U;
+    field_rs485_diagnostics.match_mask = FIELD_RS485_DIAG_SOIL_MATCH;
+    field_rs485_diagnostics.attempts = 27U;
+    field_rs485_diagnostics.successful_probes = 1U;
+    field_rs485_diagnostics.duration_ms = 8123U;
+    field_rs485_diagnostics.soil.found = 1U;
+    field_rs485_diagnostics.soil.channel = 0U;
+    field_rs485_diagnostics.soil.function_code = 3U;
+    field_rs485_diagnostics.soil.slave_addr = 1U;
+    field_rs485_diagnostics.soil.start_reg = 0U;
+    field_rs485_diagnostics.soil.reg_count = 2U;
+    field_rs485_diagnostics.soil.baudrate = 4800U;
+    field_rs485_diagnostics.soil.xtal_hz = 1843200U;
+    FillModbusChannel(&modbus_diagnostics.channels[0], 100U);
+    FillModbusChannel(&modbus_diagnostics.channels[1], 200U);
+    assert(GnssProbeStatsResponseV4_Encode(
+        &stats, &link_stats, &sensor_diagnostics,
+        &sc16is752_diagnostics, &field_rs485_diagnostics, &modbus_diagnostics,
+        2U, GNSS_RTCM_INJECTION_PROBE, nonce, 1234U,
+        payload, sizeof(payload)
+    ) == GNSS_PROBE_STATS_RESPONSE_V4_BYTES);
+    assert(payload[3] == 4U && payload[204] == 1U && payload[220] == 1U);
+    assert(payload[205] == 0x4DU && payload[206] == 0x4DU && payload[207] == 1U);
+    assert((int8_t)payload[210] == -2 && (int8_t)payload[212] == -3);
+    assert((int8_t)payload[214] == -4 && payload[215] == 4U && payload[216] == 2U);
+    assert(payload[217] == 0x60U && payload[218] == 0U && payload[219] == 0U);
+    assert(payload[221] == 0x07U && payload[222] == FIELD_RS485_DIAG_SOIL_MATCH);
+    assert(payload[223] == 0U && ReadUint16Be(payload + 224) == 27U);
+    assert(ReadUint16Be(payload + 226) == 1U && ReadUint32Be(payload + 228) == 8123U);
+    assert(payload[232] == 1U && payload[233] == 0U && payload[234] == 3U && payload[235] == 1U);
+    assert(ReadUint16Be(payload + 236) == 0U && ReadUint16Be(payload + 238) == 2U);
+    assert(ReadUint32Be(payload + 240) == 4800U && ReadUint32Be(payload + 244) == 1843200U);
+    assert(payload[248] == 0U && ReadUint32Be(payload + 264) == 100U);
+    assert(ReadUint32Be(payload + 264U + 12U * 4U) == 112U);
+    assert(ReadUint32Be(payload + 316) == 200U);
+    assert(ReadUint32Be(payload + 316U + 12U * 4U) == 212U);
+    assert((int8_t)payload[368] == RS485_MODBUS_ERR_TIMEOUT);
+    assert((int8_t)payload[369] == RS485_MODBUS_OK);
+    assert(ReadUint16Be(payload + 370) == 113U && ReadUint16Be(payload + 372) == 213U);
+    assert(payload[374] == 1U && payload[375] == 2U);
+    assert(payload[376] == 3U && payload[377] == 4U);
+    assert(payload[378] == 0U && payload[379] == 2U);
+    assert(payload[380] == 0U && payload[383] == 0U);
     memset(&ack_window, 0, sizeof(ack_window));
     ack_window.session_valid = 1U;
     ack_window.session_epoch = 0x10203040U;
@@ -149,7 +236,7 @@ int main(void)
     assert(ReadUint32Be(ack_payload + 16) == 117U);
     assert(ReadUint16Be(ack_payload + 20) == 0xA55AU);
     assert(ReadUint16Be(ack_payload + 22) == 0U);
-    printf("gnss_probe_stats_protocol_host_test passed v3_payload_bytes=%u\n",
+    printf("gnss_probe_stats_protocol_host_test passed v4_payload_bytes=%u\n",
            (unsigned int)sizeof(payload));
     return 0;
 }

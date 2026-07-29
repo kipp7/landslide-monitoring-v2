@@ -44,7 +44,13 @@ $syncFiles = @(
   "app\compact_poll_command.c",
   "app\compact_poll_command.h",
   "app\gnss_probe_stats_protocol.c",
-  "app\gnss_probe_stats_protocol.h"
+  "app\gnss_probe_stats_protocol.h",
+  "drivers\sensors\field_sensors_rs485.c",
+  "drivers\sensors\field_sensors_rs485.h",
+  "drivers\sensors\rs485_modbus.c",
+  "drivers\sensors\rs485_modbus.h",
+  "drivers\sensors\sc16is752_driver.c",
+  "drivers\sensors\sc16is752_driver.h"
 )
 
 $nodes = @(

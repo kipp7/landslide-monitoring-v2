@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "los_task.h"
+#include "los_tick.h"
 #include "../../config/app_config.h"
 #include "../../utils/watchdog_mgr.h"
 #include "rs485_modbus.h"
@@ -39,6 +40,18 @@
 #define RS485_SENSOR_RESULT_LOG 1
 #endif
 
+#ifndef RS485_STRUCTURED_DIAG
+#define RS485_STRUCTURED_DIAG 0
+#endif
+
+#ifndef RS485_DIAGNOSTIC_PROBE_TIMEOUT_MS
+#define RS485_DIAGNOSTIC_PROBE_TIMEOUT_MS 300U
+#endif
+
+#ifndef RS485_DIAGNOSTIC_PROBE_GAP_MS
+#define RS485_DIAGNOSTIC_PROBE_GAP_MS 20U
+#endif
+
 #ifndef SC16IS752_ALT_XTAL_HZ
 #define SC16IS752_ALT_XTAL_HZ 14745600UL
 #endif
@@ -50,6 +63,8 @@ typedef struct {
     unsigned int baudrate;
     unsigned long xtal_hz;
 } Rs485ProbeUartConfig;
+
+static FieldRs485Diagnostics g_field_rs485_diagnostics = {0};
 
 static float SignedRegisterToScaledFloat(uint16_t value, float scale)
 {
@@ -129,6 +144,146 @@ static int ReconfigureRs485ChannelWithClock(uint8_t channel, unsigned int baudra
     (void)xtal_hz;
 #endif
     return ReconfigureRs485Channel(channel, baudrate);
+}
+
+static int ProbeReadOnlyPath(
+    uint8_t preferred_channel,
+    const uint16_t *registers,
+    const uint16_t *register_counts,
+    unsigned int register_option_count,
+    FieldRs485ProbeMatch *match)
+{
+    static const Rs485ProbeUartConfig uart_configs[] = {
+        {4800U, SC16IS752_XTAL_HZ},
+        {9600U, SC16IS752_XTAL_HZ},
+        {4800U, SC16IS752_ALT_XTAL_HZ},
+        {9600U, SC16IS752_ALT_XTAL_HZ},
+    };
+    static const uint8_t function_codes[] = {
+        MODBUS_FC_READ_HOLDING_REGISTERS,
+        MODBUS_FC_READ_INPUT_REGISTERS,
+    };
+    uint8_t channels[2];
+    unsigned int uart_index;
+    unsigned int channel_index;
+    unsigned int function_index;
+    unsigned int register_index;
+
+    if (registers == NULL || register_counts == NULL || register_option_count == 0U || match == NULL) {
+        return RS485_MODBUS_ERR_INVALID;
+    }
+    channels[0] = preferred_channel;
+    channels[1] = preferred_channel == RS485_CHANNEL_1 ? RS485_CHANNEL_2 : RS485_CHANNEL_1;
+
+    for (uart_index = 0U; uart_index < sizeof(uart_configs) / sizeof(uart_configs[0]); ++uart_index) {
+        for (channel_index = 0U; channel_index < sizeof(channels) / sizeof(channels[0]); ++channel_index) {
+            uint8_t channel = channels[channel_index];
+            int uart_status = ReconfigureRs485ChannelWithClock(
+                channel,
+                uart_configs[uart_index].baudrate,
+                uart_configs[uart_index].xtal_hz);
+            if (uart_status != 0) {
+                continue;
+            }
+
+            for (function_index = 0U;
+                 function_index < sizeof(function_codes) / sizeof(function_codes[0]);
+                 ++function_index) {
+                for (register_index = 0U; register_index < register_option_count; ++register_index) {
+                    uint16_t regs[3] = {0};
+                    uint16_t reg_count = register_counts[register_index];
+                    int status;
+
+                    if (reg_count == 0U || reg_count > sizeof(regs) / sizeof(regs[0])) {
+                        continue;
+                    }
+                    Watchdog_Feed();
+                    if (g_field_rs485_diagnostics.attempts != UINT16_MAX) {
+                        g_field_rs485_diagnostics.attempts++;
+                    }
+                    status = RS485_ModbusReadRegistersWithTimeoutOnChannel(
+                        channel,
+                        function_codes[function_index],
+                        1U,
+                        registers[register_index],
+                        reg_count,
+                        regs,
+                        sizeof(regs) / sizeof(regs[0]),
+                        RS485_DIAGNOSTIC_PROBE_TIMEOUT_MS);
+                    if (status == RS485_MODBUS_OK) {
+                        if (g_field_rs485_diagnostics.successful_probes != UINT16_MAX) {
+                            g_field_rs485_diagnostics.successful_probes++;
+                        }
+                        match->found = 1U;
+                        match->channel = channel;
+                        match->function_code = function_codes[function_index];
+                        match->slave_addr = 1U;
+                        match->start_reg = registers[register_index];
+                        match->reg_count = reg_count;
+                        match->baudrate = uart_configs[uart_index].baudrate;
+                        match->xtal_hz = (uint32_t)uart_configs[uart_index].xtal_hz;
+                        return RS485_MODBUS_OK;
+                    }
+                    LOS_Msleep(RS485_DIAGNOSTIC_PROBE_GAP_MS);
+                }
+            }
+        }
+    }
+    return RS485_MODBUS_ERR_TIMEOUT;
+}
+
+static void RunReadOnlyDiagnostics(void)
+{
+    static const uint16_t soil_registers[] = {RS485_SOIL_REG_START};
+    static const uint16_t soil_register_counts[] = {RS485_SOIL_REG_COUNT};
+    static const uint16_t tilt_registers[] = {RS485_TILT_REG_START, 0x00C8U};
+    static const uint16_t tilt_register_counts[] = {RS485_TILT_REG_COUNT, 1U};
+    uint32_t start_tick = (uint32_t)LOS_TickCountGet();
+    uint32_t elapsed_ticks;
+    uint32_t ticks_per_second;
+    int restore_a;
+    int restore_b;
+
+    memset(&g_field_rs485_diagnostics, 0, sizeof(g_field_rs485_diagnostics));
+    g_field_rs485_diagnostics.scan_started = 1U;
+
+    if (ProbeReadOnlyPath(
+            RS485_SOIL_CHANNEL,
+            soil_registers,
+            soil_register_counts,
+            sizeof(soil_registers) / sizeof(soil_registers[0]),
+            &g_field_rs485_diagnostics.soil) == RS485_MODBUS_OK) {
+        g_field_rs485_diagnostics.match_mask |= FIELD_RS485_DIAG_SOIL_MATCH;
+    }
+    if (ProbeReadOnlyPath(
+            RS485_TILT_CHANNEL,
+            tilt_registers,
+            tilt_register_counts,
+            sizeof(tilt_registers) / sizeof(tilt_registers[0]),
+            &g_field_rs485_diagnostics.tilt) == RS485_MODBUS_OK) {
+        g_field_rs485_diagnostics.match_mask |= FIELD_RS485_DIAG_TILT_MATCH;
+    }
+
+#if RS485_TRANSPORT_SC16IS752
+    SC16IS752_SetClockHz(SC16IS752_XTAL_HZ);
+#endif
+    restore_a = ReconfigureRs485Channel(RS485_CHANNEL_1, RS485_BAUDRATE);
+    restore_b = ReconfigureRs485Channel(RS485_CHANNEL_2, RS485_BAUDRATE);
+    g_field_rs485_diagnostics.restore_ok = restore_a == 0 && restore_b == 0 ? 1U : 0U;
+    g_field_rs485_diagnostics.scan_completed = 1U;
+
+    elapsed_ticks = (uint32_t)LOS_TickCountGet() - start_tick;
+    ticks_per_second = LOS_MS2Tick(1000U);
+    if (ticks_per_second == 0U) {
+        ticks_per_second = 1U;
+    }
+    g_field_rs485_diagnostics.duration_ms =
+        (uint32_t)(((uint64_t)elapsed_ticks * 1000U) / ticks_per_second);
+    printf("[RS485-DIAG] read-only scan complete attempts=%u matches=0x%02X restore=%u duration_ms=%u\n",
+           g_field_rs485_diagnostics.attempts,
+           g_field_rs485_diagnostics.match_mask,
+           g_field_rs485_diagnostics.restore_ok,
+           g_field_rs485_diagnostics.duration_ms);
 }
 
 static int ProbeTiltSensor(
@@ -247,7 +402,17 @@ static int ProbeTiltSensor(
 
 int FieldRs485_Init(void)
 {
-    return RS485_ModbusInit();
+    int status;
+
+    memset(&g_field_rs485_diagnostics, 0, sizeof(g_field_rs485_diagnostics));
+    status = RS485_ModbusInit();
+    if (status != 0) {
+        return status;
+    }
+#if RS485_STRUCTURED_DIAG
+    RunReadOnlyDiagnostics();
+#endif
+    return 0;
 }
 
 int FieldRs485_Read(FieldRs485Readings *out)
@@ -444,4 +609,12 @@ int FieldRs485_Read(FieldRs485Readings *out)
 #endif
 
     return any_valid ? 0 : -1;
+}
+
+void FieldRs485_GetDiagnostics(FieldRs485Diagnostics *snapshot)
+{
+    if (snapshot == NULL) {
+        return;
+    }
+    memcpy(snapshot, &g_field_rs485_diagnostics, sizeof(*snapshot));
 }

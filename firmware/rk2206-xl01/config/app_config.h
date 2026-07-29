@@ -179,6 +179,10 @@
 #define RS485_SENSOR_RESULT_LOG 0          // Production: telemetry carries values; serial keeps only state/errors
 #define SC16IS752_SELF_TEST_DIAG 0         // Hide scratchpad/internal loopback diagnostics
 #define SC16IS752_UART_CONFIG_LOG 0        // Hide repeated channel divisor logs
+#define SC16IS752_STRUCTURED_DIAG 1        // One-time U4 scratchpad/loopback results in PROBE V4
+#define RS485_STRUCTURED_DIAG 1             // One-time bounded, read-only Modbus parameter scan
+#define RS485_DIAGNOSTIC_PROBE_TIMEOUT_MS 300U
+#define RS485_DIAGNOSTIC_PROBE_GAP_MS 20U
 #define RS485_UART_ROUTE_NAME  "SC16IS752 over EI2C0_M0 PB4/PB5"
 #endif
 

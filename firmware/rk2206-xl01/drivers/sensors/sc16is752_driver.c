@@ -56,12 +56,25 @@
 #define SC16IS752_SELF_TEST_DIAG 0
 #endif
 
+#ifndef SC16IS752_STRUCTURED_DIAG
+#define SC16IS752_STRUCTURED_DIAG 0
+#endif
+
 #ifndef SC16IS752_UART_CONFIG_LOG
 #define SC16IS752_UART_CONFIG_LOG 0
 #endif
 
 static uint8_t g_sc16is752_i2c_addr = SC16IS752_I2C_ADDR;
 static unsigned long g_sc16is752_xtal_hz = SC16IS752_XTAL_HZ;
+static Sc16is752Diagnostics g_sc16is752_diagnostics = {0};
+
+static int Sc16is752_RecordUartInitStatus(Sc16is752Channel channel, int status)
+{
+    if (channel == SC16IS752_CHANNEL_A || channel == SC16IS752_CHANNEL_B) {
+        g_sc16is752_diagnostics.uart_init_status[(unsigned int)channel] = (int8_t)status;
+    }
+    return status;
+}
 
 #if SC16IS752_I2C_BUS_SCAN_DIAG
 typedef struct {
@@ -271,6 +284,8 @@ static int Sc16is752_InternalLoopbackTest(Sc16is752Channel channel)
     unsigned int received = 0;
     int written;
 
+    g_sc16is752_diagnostics.internal_loopback_rx_bytes[(unsigned int)channel] = 0U;
+
     if (Sc16is752_WriteReg(channel, SC16IS752_REG_FCR, SC16IS752_FCR_ENABLE_AND_RESET) != 0 ||
         Sc16is752_WriteReg(channel, SC16IS752_REG_MCR, SC16IS752_MCR_LOOPBACK) != 0) {
         printf("[SC16IS752-DIAG] byte-fifo internal loopback setup failed channel=%c\n",
@@ -297,6 +312,8 @@ static int Sc16is752_InternalLoopbackTest(Sc16is752Channel channel)
         len = SC16IS752_Read(channel, rx + received, sizeof(rx) - received);
         if (len > 0) {
             received += (unsigned int)len;
+            g_sc16is752_diagnostics.internal_loopback_rx_bytes[(unsigned int)channel] =
+                (uint8_t)received;
         }
         if (received >= sizeof(pattern)) {
             break;
@@ -333,24 +350,28 @@ int SC16IS752_UartInit(Sc16is752Channel channel, unsigned int baudrate)
 {
     unsigned int divisor = Sc16is752_CalcDivisor(baudrate);
 
+    if (channel != SC16IS752_CHANNEL_A && channel != SC16IS752_CHANNEL_B) {
+        return -7;
+    }
+
     if (Sc16is752_WriteReg(channel, SC16IS752_REG_IER, 0x00) != 0) {
-        return -1;
+        return Sc16is752_RecordUartInitStatus(channel, -1);
     }
     if (Sc16is752_WriteReg(channel, SC16IS752_REG_LCR, SC16IS752_LCR_DLAB) != 0) {
-        return -2;
+        return Sc16is752_RecordUartInitStatus(channel, -2);
     }
     if (Sc16is752_WriteReg(channel, SC16IS752_REG_DLL, (uint8_t)(divisor & 0xFFU)) != 0 ||
         Sc16is752_WriteReg(channel, SC16IS752_REG_DLH, (uint8_t)((divisor >> 8) & 0xFFU)) != 0) {
-        return -3;
+        return Sc16is752_RecordUartInitStatus(channel, -3);
     }
     if (Sc16is752_WriteReg(channel, SC16IS752_REG_LCR, SC16IS752_LCR_8N1) != 0) {
-        return -4;
+        return Sc16is752_RecordUartInitStatus(channel, -4);
     }
     if (Sc16is752_WriteReg(channel, SC16IS752_REG_FCR, SC16IS752_FCR_ENABLE_AND_RESET) != 0) {
-        return -5;
+        return Sc16is752_RecordUartInitStatus(channel, -5);
     }
     if (Sc16is752_WriteReg(channel, SC16IS752_REG_MCR, 0x00) != 0) {
-        return -6;
+        return Sc16is752_RecordUartInitStatus(channel, -6);
     }
 
 #if SC16IS752_UART_CONFIG_LOG
@@ -360,13 +381,24 @@ int SC16IS752_UartInit(Sc16is752Channel channel, unsigned int baudrate)
            g_sc16is752_xtal_hz,
            divisor);
 #endif
-    return 0;
+    return Sc16is752_RecordUartInitStatus(channel, 0);
 }
 
 int SC16IS752_Init(void)
 {
     uint8_t lsr = 0;
     unsigned int ret;
+
+    memset(&g_sc16is752_diagnostics, 0, sizeof(g_sc16is752_diagnostics));
+    g_sc16is752_i2c_addr = SC16IS752_I2C_ADDR;
+    g_sc16is752_diagnostics.configured_i2c_addr = SC16IS752_I2C_ADDR;
+    g_sc16is752_diagnostics.init_status = SC16IS752_DIAG_NOT_RUN;
+    g_sc16is752_diagnostics.scratchpad_status[0] = SC16IS752_DIAG_NOT_RUN;
+    g_sc16is752_diagnostics.scratchpad_status[1] = SC16IS752_DIAG_NOT_RUN;
+    g_sc16is752_diagnostics.internal_loopback_status[0] = SC16IS752_DIAG_NOT_RUN;
+    g_sc16is752_diagnostics.internal_loopback_status[1] = SC16IS752_DIAG_NOT_RUN;
+    g_sc16is752_diagnostics.uart_init_status[0] = SC16IS752_DIAG_NOT_RUN;
+    g_sc16is752_diagnostics.uart_init_status[1] = SC16IS752_DIAG_NOT_RUN;
 
     printf("[SC16IS752] Initializing I2C idx=%d configured_addr=0x%02X xtal=%lu...\n",
            I2C_IDX,
@@ -380,35 +412,48 @@ int SC16IS752_Init(void)
     ret = IoTI2cInit(I2C_IDX, I2C_BAUDRATE);
     if (ret != IOT_SUCCESS) {
         printf("[SC16IS752] I2C init failed ret=%u\n", ret);
+        g_sc16is752_diagnostics.init_status = -1;
         return -1;
     }
 
     if (Sc16is752_FindAddress(&lsr) != 0) {
         printf("[SC16IS752] probe failed; no device found in 0x48..0x57\n");
+        g_sc16is752_diagnostics.init_status = -2;
         return -2;
     }
+    g_sc16is752_diagnostics.address_found = 1U;
+    g_sc16is752_diagnostics.detected_i2c_addr = g_sc16is752_i2c_addr;
+    g_sc16is752_diagnostics.detected_lsr = lsr;
 
     (void)Sc16is752_WriteReg(SC16IS752_CHANNEL_A, SC16IS752_REG_IOCTRL, SC16IS752_IOCTRL_RESET);
     LOS_Msleep(10);
 
     if (Sc16is752_ReadReg(SC16IS752_CHANNEL_A, SC16IS752_REG_LSR, &lsr) != 0) {
         printf("[SC16IS752] probe failed after reset at addr=0x%02X\n", g_sc16is752_i2c_addr);
+        g_sc16is752_diagnostics.init_status = -2;
         return -2;
     }
+    g_sc16is752_diagnostics.detected_lsr = lsr;
 
     if (SC16IS752_UartInit(SC16IS752_CHANNEL_A, RS485_BAUDRATE) != 0 ||
         SC16IS752_UartInit(SC16IS752_CHANNEL_B, RS485_BAUDRATE) != 0) {
         printf("[SC16IS752] UART channel init failed\n");
+        g_sc16is752_diagnostics.init_status = -3;
         return -3;
     }
 
-#if SC16IS752_SELF_TEST_DIAG
-    (void)Sc16is752_ScratchpadTest(SC16IS752_CHANNEL_A);
-    (void)Sc16is752_ScratchpadTest(SC16IS752_CHANNEL_B);
-    (void)Sc16is752_InternalLoopbackTest(SC16IS752_CHANNEL_A);
-    (void)Sc16is752_InternalLoopbackTest(SC16IS752_CHANNEL_B);
+#if SC16IS752_SELF_TEST_DIAG || SC16IS752_STRUCTURED_DIAG
+    g_sc16is752_diagnostics.scratchpad_status[0] =
+        (int8_t)Sc16is752_ScratchpadTest(SC16IS752_CHANNEL_A);
+    g_sc16is752_diagnostics.scratchpad_status[1] =
+        (int8_t)Sc16is752_ScratchpadTest(SC16IS752_CHANNEL_B);
+    g_sc16is752_diagnostics.internal_loopback_status[0] =
+        (int8_t)Sc16is752_InternalLoopbackTest(SC16IS752_CHANNEL_A);
+    g_sc16is752_diagnostics.internal_loopback_status[1] =
+        (int8_t)Sc16is752_InternalLoopbackTest(SC16IS752_CHANNEL_B);
 #endif
 
+    g_sc16is752_diagnostics.init_status = 0;
     printf("[OK] SC16IS752 ready addr=0x%02X lsr=0x%02X\n", g_sc16is752_i2c_addr, lsr);
     return 0;
 }
@@ -524,4 +569,12 @@ void SC16IS752_DrainRx(Sc16is752Channel channel)
         }
         guard++;
     }
+}
+
+void SC16IS752_GetDiagnostics(Sc16is752Diagnostics *snapshot)
+{
+    if (snapshot == NULL) {
+        return;
+    }
+    memcpy(snapshot, &g_sc16is752_diagnostics, sizeof(*snapshot));
 }

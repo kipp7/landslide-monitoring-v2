@@ -7,6 +7,7 @@ export const GNSS_PROBE_STATS_QUERY_V1_BYTES = 12;
 export const GNSS_PROBE_STATS_RESPONSE_V1_BYTES = 92;
 export const GNSS_PROBE_STATS_RESPONSE_V2_BYTES = 148;
 export const GNSS_PROBE_STATS_RESPONSE_V3_BYTES = 204;
+export const GNSS_PROBE_STATS_RESPONSE_V4_BYTES = 384;
 export const GNSS_SENSOR_DIAGNOSTIC_COUNT = 4;
 export const GNSS_RTCM_ACK_QUERY_V1_BYTES = 12;
 export const GNSS_RTCM_ACK_RESPONSE_V1_BYTES = 24;
@@ -172,6 +173,68 @@ export type GnssProbeStatsResponseV3 = Omit<GnssProbeStatsResponseV2, "responseV
   };
 };
 
+export type GnssRs485ProbeMatch = {
+  found: boolean;
+  channel: number;
+  functionCode: number;
+  slaveAddress: number;
+  startRegister: number;
+  registerCount: number;
+  baudrate: number;
+  xtalHz: number;
+};
+
+export type GnssModbusChannelDiagnostics = {
+  channel: number;
+  requests: number;
+  successes: number;
+  writeErrors: number;
+  txDoneErrors: number;
+  readErrors: number;
+  noResponses: number;
+  shortResponses: number;
+  addressErrors: number;
+  crcErrors: number;
+  exceptionResponses: number;
+  functionErrors: number;
+  byteCountErrors: number;
+  rxBytes: number;
+  lastStatus: number;
+  lastRxBytes: number;
+  lastResponseAddress: number;
+  lastResponseFunction: number;
+  lastExceptionCode: number;
+};
+
+export type GnssProbeStatsResponseV4 = Omit<GnssProbeStatsResponseV3, "responseVersion"> & {
+  responseVersion: 4;
+  hardwareDiagnostics: {
+    sc16is752: {
+      configuredI2cAddress: number;
+      detectedI2cAddress: number;
+      addressFound: boolean;
+      initStatus: number;
+      scratchpadStatus: [number, number];
+      internalLoopbackStatus: [number, number];
+      uartInitStatus: [number, number];
+      internalLoopbackRxBytes: [number, number];
+      detectedLsr: number;
+    };
+    readOnlyScan: {
+      started: boolean;
+      completed: boolean;
+      restoreOk: boolean;
+      matchMask: number;
+      attempts: number;
+      successfulProbes: number;
+      durationMs: number;
+      soilQuery: GnssRs485ProbeMatch;
+      tiltQuery: GnssRs485ProbeMatch;
+    };
+    modbusChannels: [GnssModbusChannelDiagnostics, GnssModbusChannelDiagnostics];
+  };
+};
+
 export type GnssRtcmAckResponseV1 = {
   responseVersion: 1;
   nodeNumber: 1 | 2 | 3;
@@ -275,7 +338,7 @@ export function gnssRtcmAckReportsCompleted(
 
 export function decodeGnssProbeStatsResponse(
   input: Buffer
-): GnssProbeStatsResponseV1 | GnssProbeStatsResponseV2 | GnssProbeStatsResponseV3 {
+): GnssProbeStatsResponseV1 | GnssProbeStatsResponseV2 | GnssProbeStatsResponseV3 | GnssProbeStatsResponseV4 {
   if (input.length < 4 || input.subarray(0, 3).toString("ascii") !== "G3S") {
     throw new Error("GNSS PROBE stats magic or version mismatch");
   }
@@ -287,7 +350,9 @@ export function decodeGnssProbeStatsResponse(
         ? GNSS_PROBE_STATS_RESPONSE_V2_BYTES
         : responseVersion === 3
           ? GNSS_PROBE_STATS_RESPONSE_V3_BYTES
-          : null;
+          : responseVersion === 4
+            ? GNSS_PROBE_STATS_RESPONSE_V4_BYTES
+            : null;
   if (expectedBytes === null) {
     throw new Error("GNSS PROBE stats version is unsupported");
   }
@@ -398,8 +463,7 @@ export function decodeGnssProbeStatsResponse(
       ];
     })
   ) as Record<GnssSensorDiagnosticName, GnssSensorDiagnostic>;
-  return {
-    responseVersion: 3,
+  const v3Extended = {
     ...extended,
     sensorDiagnostics: {
       enabledMask,
@@ -407,6 +471,118 @@ export function decodeGnssProbeStatsResponse(
       currentValidMask,
       everSuccessMask,
       sensors
+    }
+  };
+  if (responseVersion === 3) {
+    return { responseVersion: 3, ...v3Extended };
+  }
+
+  if (input.readUInt8(204) !== 1 || input.readUInt16BE(218) !== 0) {
+    throw new Error("GNSS PROBE SC16IS752 diagnostic schema or reserved bytes are invalid");
+  }
+  const addressFound = input.readUInt8(207);
+  if (addressFound > 1) {
+    throw new Error("GNSS PROBE SC16IS752 address-found flag is invalid");
+  }
+  const scanFlags = input.readUInt8(221);
+  const matchMask = input.readUInt8(222);
+  if (
+    input.readUInt8(220) !== 1 ||
+    (scanFlags & ~0x07) !== 0 ||
+    (matchMask & ~0x03) !== 0 ||
+    input.readUInt8(223) !== 0
+  ) {
+    throw new Error("GNSS PROBE RS485 scan schema, flags or match mask are invalid");
+  }
+  const decodeProbeMatch = (offset: number): GnssRs485ProbeMatch => {
+    const foundValue = input.readUInt8(offset);
+    const match: GnssRs485ProbeMatch = {
+      found: foundValue === 1,
+      channel: input.readUInt8(offset + 1),
+      functionCode: input.readUInt8(offset + 2),
+      slaveAddress: input.readUInt8(offset + 3),
+      startRegister: input.readUInt16BE(offset + 4),
+      registerCount: input.readUInt16BE(offset + 6),
+      baudrate: input.readUInt32BE(offset + 8),
+      xtalHz: input.readUInt32BE(offset + 12)
+    };
+    if (foundValue > 1) {
+      throw new Error("GNSS PROBE RS485 match found flag is invalid");
+    }
+    if (
+      match.found &&
+      (match.channel > 1 ||
+        (match.functionCode !== 3 && match.functionCode !== 4) ||
+        match.slaveAddress === 0 ||
+        match.registerCount === 0 ||
+        match.baudrate === 0 ||
+        match.xtalHz === 0)
+    ) {
+      throw new Error("GNSS PROBE RS485 match parameters are invalid");
+    }
+    if (!match.found && input.subarray(offset, offset + 16).some((value) => value !== 0)) {
+      throw new Error("GNSS PROBE absent RS485 match carries non-zero parameters");
+    }
+    return match;
+  };
+  const soilQuery = decodeProbeMatch(232);
+  const tiltQuery = decodeProbeMatch(248);
+  const expectedMatchMask = Number(soilQuery.found) | (Number(tiltQuery.found) << 1);
+  if (matchMask !== expectedMatchMask) {
+    throw new Error("GNSS PROBE RS485 match mask is inconsistent");
+  }
+  const scanStarted = (scanFlags & 0x01) !== 0;
+  const scanCompleted = (scanFlags & 0x02) !== 0;
+  const restoreOk = (scanFlags & 0x04) !== 0;
+  if ((scanCompleted && !scanStarted) || (restoreOk && !scanCompleted)) {
+    throw new Error("GNSS PROBE RS485 scan lifecycle flags are inconsistent");
+  }
+  const modbusCounterNames = [
+    "requests", "successes", "writeErrors", "txDoneErrors", "readErrors",
+    "noResponses", "shortResponses", "addressErrors", "crcErrors",
+    "exceptionResponses", "functionErrors", "byteCountErrors", "rxBytes"
+  ] as const;
+  const modbusChannels = [0, 1].map((channel) => ({
+    channel,
+    ...Object.fromEntries(
+      modbusCounterNames.map((name, index) => [name, input.readUInt32BE(264 + channel * 52 + index * 4)])
+    ),
+    lastStatus: input.readInt8(368 + channel),
+    lastRxBytes: input.readUInt16BE(370 + channel * 2),
+    lastResponseAddress: input.readUInt8(374 + channel),
+    lastResponseFunction: input.readUInt8(376 + channel),
+    lastExceptionCode: input.readUInt8(378 + channel)
+  })) as [GnssModbusChannelDiagnostics, GnssModbusChannelDiagnostics];
+  if (input.readUInt32BE(380) !== 0) {
+    throw new Error("GNSS PROBE Modbus diagnostic reserved bytes are non-zero");
+  }
+  return {
+    responseVersion: 4,
+    ...v3Extended,
+    hardwareDiagnostics: {
+      sc16is752: {
+        configuredI2cAddress: input.readUInt8(205),
+        detectedI2cAddress: input.readUInt8(206),
+        addressFound: addressFound === 1,
+        initStatus: input.readInt8(208),
+        scratchpadStatus: [input.readInt8(209), input.readInt8(210)],
+        internalLoopbackStatus: [input.readInt8(211), input.readInt8(212)],
+        uartInitStatus: [input.readInt8(213), input.readInt8(214)],
+        internalLoopbackRxBytes: [input.readUInt8(215), input.readUInt8(216)],
+        detectedLsr: input.readUInt8(217)
+      },
+      readOnlyScan: {
+        started: scanStarted,
+        completed: scanCompleted,
+        restoreOk,
+        matchMask,
+        attempts: input.readUInt16BE(224),
+        successfulProbes: input.readUInt16BE(226),
+        durationMs: input.readUInt32BE(228),
+        soilQuery,
+        tiltQuery
+      },
+      modbusChannels
     }
   };
 }
@@ -431,6 +607,14 @@ export function decodeGnssProbeStatsResponseV3(input: Buffer): GnssProbeStatsRes
   const decoded = decodeGnssProbeStatsResponse(input);
   if (decoded.responseVersion !== 3) {
     throw new Error("GNSS PROBE stats response is not V3");
+  }
+  return decoded;
+}
+
+export function decodeGnssProbeStatsResponseV4(input: Buffer): GnssProbeStatsResponseV4 {
+  const decoded = decodeGnssProbeStatsResponse(input);
+  if (decoded.responseVersion !== 4) {
+    throw new Error("GNSS PROBE stats response is not V4");
   }
   return decoded;
 }

@@ -249,6 +249,134 @@ int GnssProbeStatsResponseV3_Encode(
     return GNSS_PROBE_STATS_RESPONSE_V3_BYTES;
 }
 
+static void EncodeFieldProbeMatch(uint8_t *output, const FieldRs485ProbeMatch *match)
+{
+    if (output == NULL || match == NULL) {
+        return;
+    }
+    output[0] = match->found;
+    output[1] = match->channel;
+    output[2] = match->function_code;
+    output[3] = match->slave_addr;
+    WriteUint16Be(output + 4, match->start_reg);
+    WriteUint16Be(output + 6, match->reg_count);
+    WriteUint32Be(output + 8, match->baudrate);
+    WriteUint32Be(output + 12, match->xtal_hz);
+}
+
+static void EncodeModbusChannelCounters(
+    uint8_t *output,
+    const Rs485ModbusChannelDiagnostics *diagnostics)
+{
+    const uint32_t counters[] = {
+        diagnostics != NULL ? diagnostics->requests : 0U,
+        diagnostics != NULL ? diagnostics->successes : 0U,
+        diagnostics != NULL ? diagnostics->write_errors : 0U,
+        diagnostics != NULL ? diagnostics->tx_done_errors : 0U,
+        diagnostics != NULL ? diagnostics->read_errors : 0U,
+        diagnostics != NULL ? diagnostics->no_responses : 0U,
+        diagnostics != NULL ? diagnostics->short_responses : 0U,
+        diagnostics != NULL ? diagnostics->address_errors : 0U,
+        diagnostics != NULL ? diagnostics->crc_errors : 0U,
+        diagnostics != NULL ? diagnostics->exception_responses : 0U,
+        diagnostics != NULL ? diagnostics->function_errors : 0U,
+        diagnostics != NULL ? diagnostics->byte_count_errors : 0U,
+        diagnostics != NULL ? diagnostics->rx_bytes : 0U,
+    };
+    unsigned int index;
+
+    for (index = 0U; index < sizeof(counters) / sizeof(counters[0]); ++index) {
+        WriteUint32Be(output + index * 4U, counters[index]);
+    }
+}
+
+int GnssProbeStatsResponseV4_Encode(
+    const GnssRtcmInjectionStats *stats,
+    const FieldLinkRxStats *link_stats,
+    const GnssSensorDiagnostics *sensor_diagnostics,
+    const Sc16is752Diagnostics *sc16is752_diagnostics,
+    const FieldRs485Diagnostics *field_rs485_diagnostics,
+    const Rs485ModbusDiagnostics *modbus_diagnostics,
+    uint8_t node_number,
+    uint8_t injection_mode,
+    uint32_t nonce,
+    uint32_t snapshot_uptime_s,
+    uint8_t *output,
+    int output_size
+)
+{
+    unsigned int channel;
+
+    if (output == NULL || output_size < GNSS_PROBE_STATS_RESPONSE_V4_BYTES) {
+        return -1;
+    }
+    if (GnssProbeStatsResponseV3_Encode(
+            stats,
+            link_stats,
+            sensor_diagnostics,
+            node_number,
+            injection_mode,
+            nonce,
+            snapshot_uptime_s,
+            output,
+            output_size
+        ) != GNSS_PROBE_STATS_RESPONSE_V3_BYTES) {
+        return -1;
+    }
+
+    memset(
+        output + GNSS_PROBE_STATS_RESPONSE_V3_BYTES,
+        0,
+        GNSS_PROBE_STATS_RESPONSE_V4_BYTES - GNSS_PROBE_STATS_RESPONSE_V3_BYTES
+    );
+    output[3] = 4U;
+
+    output[204] = 1U;
+    if (sc16is752_diagnostics != NULL) {
+        output[205] = sc16is752_diagnostics->configured_i2c_addr;
+        output[206] = sc16is752_diagnostics->detected_i2c_addr;
+        output[207] = sc16is752_diagnostics->address_found;
+        output[208] = (uint8_t)sc16is752_diagnostics->init_status;
+        output[209] = (uint8_t)sc16is752_diagnostics->scratchpad_status[0];
+        output[210] = (uint8_t)sc16is752_diagnostics->scratchpad_status[1];
+        output[211] = (uint8_t)sc16is752_diagnostics->internal_loopback_status[0];
+        output[212] = (uint8_t)sc16is752_diagnostics->internal_loopback_status[1];
+        output[213] = (uint8_t)sc16is752_diagnostics->uart_init_status[0];
+        output[214] = (uint8_t)sc16is752_diagnostics->uart_init_status[1];
+        output[215] = sc16is752_diagnostics->internal_loopback_rx_bytes[0];
+        output[216] = sc16is752_diagnostics->internal_loopback_rx_bytes[1];
+        output[217] = sc16is752_diagnostics->detected_lsr;
+    }
+
+    output[220] = 1U;
+    if (field_rs485_diagnostics != NULL) {
+        output[221] =
+            (field_rs485_diagnostics->scan_started ? 1U : 0U) |
+            (field_rs485_diagnostics->scan_completed ? 2U : 0U) |
+            (field_rs485_diagnostics->restore_ok ? 4U : 0U);
+        output[222] = field_rs485_diagnostics->match_mask;
+        WriteUint16Be(output + 224, field_rs485_diagnostics->attempts);
+        WriteUint16Be(output + 226, field_rs485_diagnostics->successful_probes);
+        WriteUint32Be(output + 228, field_rs485_diagnostics->duration_ms);
+        EncodeFieldProbeMatch(output + 232, &field_rs485_diagnostics->soil);
+        EncodeFieldProbeMatch(output + 248, &field_rs485_diagnostics->tilt);
+    }
+
+    for (channel = 0U; channel < RS485_MODBUS_DIAGNOSTIC_CHANNELS; ++channel) {
+        const Rs485ModbusChannelDiagnostics *channel_diagnostics =
+            modbus_diagnostics != NULL ? &modbus_diagnostics->channels[channel] : NULL;
+        EncodeModbusChannelCounters(output + 264U + channel * 52U, channel_diagnostics);
+        if (channel_diagnostics != NULL) {
+            output[368U + channel] = (uint8_t)channel_diagnostics->last_status;
+            WriteUint16Be(output + 370U + channel * 2U, channel_diagnostics->last_rx_bytes);
+            output[374U + channel] = channel_diagnostics->last_response_addr;
+            output[376U + channel] = channel_diagnostics->last_response_function;
+            output[378U + channel] = channel_diagnostics->last_exception_code;
+        }
+    }
+    return GNSS_PROBE_STATS_RESPONSE_V4_BYTES;
+}
+
 int GnssRtcmAckQueryV1_Decode(
     const char *payload,
     int payload_bytes,

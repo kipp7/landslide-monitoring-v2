@@ -48,6 +48,92 @@
 static uint8_t g_last_write_response_addr = 0U;
 static unsigned int g_last_write_response_bytes = 0U;
 static uint8_t g_last_write_response[8] = {0};
+static Rs485ModbusDiagnostics g_modbus_diagnostics = {0};
+
+static void IncrementCounter(uint32_t *counter)
+{
+    if (counter != NULL && *counter != UINT32_MAX) {
+        (*counter)++;
+    }
+}
+
+static void AddCounter(uint32_t *counter, unsigned int value)
+{
+    if (counter == NULL || value == 0U || *counter == UINT32_MAX) {
+        return;
+    }
+    if (value > UINT32_MAX - *counter) {
+        *counter = UINT32_MAX;
+    } else {
+        *counter += value;
+    }
+}
+
+static Rs485ModbusChannelDiagnostics *ChannelDiagnostics(uint8_t channel)
+{
+    if (channel >= RS485_MODBUS_DIAGNOSTIC_CHANNELS) {
+        return NULL;
+    }
+    return &g_modbus_diagnostics.channels[channel];
+}
+
+static int RecordReadResult(
+    uint8_t channel,
+    int status,
+    const uint8_t *response,
+    unsigned int received)
+{
+    Rs485ModbusChannelDiagnostics *diag = ChannelDiagnostics(channel);
+
+    if (diag == NULL) {
+        return status;
+    }
+    diag->last_status = (int8_t)status;
+    diag->last_rx_bytes = received > UINT16_MAX ? UINT16_MAX : (uint16_t)received;
+    diag->last_response_addr = received >= 1U && response != NULL ? response[0] : 0U;
+    diag->last_response_function = received >= 2U && response != NULL ? response[1] : 0U;
+    diag->last_exception_code =
+        received >= 3U && response != NULL && (response[1] & 0x80U) != 0U ? response[2] : 0U;
+    AddCounter(&diag->rx_bytes, received);
+
+    switch (status) {
+        case RS485_MODBUS_OK:
+            IncrementCounter(&diag->successes);
+            break;
+        case RS485_MODBUS_ERR_WRITE:
+            IncrementCounter(&diag->write_errors);
+            break;
+        case RS485_MODBUS_ERR_TX_DONE:
+            IncrementCounter(&diag->tx_done_errors);
+            break;
+        case RS485_MODBUS_ERR_READ:
+            break;
+        case RS485_MODBUS_ERR_TIMEOUT:
+            IncrementCounter(&diag->no_responses);
+            break;
+        case RS485_MODBUS_ERR_SHORT:
+            IncrementCounter(&diag->short_responses);
+            break;
+        case RS485_MODBUS_ERR_ADDR:
+            IncrementCounter(&diag->address_errors);
+            break;
+        case RS485_MODBUS_ERR_CRC:
+            IncrementCounter(&diag->crc_errors);
+            break;
+        case RS485_MODBUS_ERR_EXCEPTION:
+            IncrementCounter(&diag->exception_responses);
+            break;
+        case RS485_MODBUS_ERR_FUNCTION:
+            IncrementCounter(&diag->function_errors);
+            break;
+        case RS485_MODBUS_ERR_BYTE_COUNT:
+            IncrementCounter(&diag->byte_count_errors);
+            break;
+        default:
+            break;
+    }
+    return status;
+}
 
 const char *RS485_ModbusStatusName(int code)
 {
@@ -70,6 +156,14 @@ const char *RS485_ModbusStatusName(int code)
             return "modbus_exception";
         case RS485_MODBUS_ERR_ECHO:
             return "malformed_echo";
+        case RS485_MODBUS_ERR_SHORT:
+            return "short_response";
+        case RS485_MODBUS_ERR_FUNCTION:
+            return "unexpected_function";
+        case RS485_MODBUS_ERR_BYTE_COUNT:
+            return "unexpected_byte_count";
+        case RS485_MODBUS_ERR_READ:
+            return "read_failed";
         default:
             return "unknown";
     }
@@ -252,6 +346,7 @@ static void Rs485ExternalLoopbackDiag(void)
 
 int RS485_ModbusInit(void)
 {
+    memset(&g_modbus_diagnostics, 0, sizeof(g_modbus_diagnostics));
 #if RS485_TRANSPORT_SC16IS752
     printf("[RS485] Initializing Modbus via SC16IS752 baud=%u...\n", RS485_BAUDRATE);
     if (SC16IS752_Init() != 0) {
@@ -309,16 +404,22 @@ int RS485_ModbusReadRegistersWithTimeoutOnChannel(
     unsigned int expected_len;
     unsigned int received = 0;
     unsigned int i;
+    int read_error_seen = 0;
+    Rs485ModbusChannelDiagnostics *diag;
 
     if ((function_code != MODBUS_READ_HOLDING_REGISTERS && function_code != MODBUS_READ_INPUT_REGISTERS) ||
-        slave_addr == 0U || reg_count == 0U || out_regs == NULL || out_reg_capacity < reg_count) {
-        return -1;
+        channel >= RS485_MODBUS_DIAGNOSTIC_CHANNELS || slave_addr == 0U || reg_count == 0U ||
+        out_regs == NULL || out_reg_capacity < reg_count) {
+        return RS485_MODBUS_ERR_INVALID;
     }
 
     expected_len = 5U + ((unsigned int)reg_count * 2U);
     if (expected_len > sizeof(response)) {
-        return -1;
+        return RS485_MODBUS_ERR_INVALID;
     }
+
+    diag = ChannelDiagnostics(channel);
+    IncrementCounter(&diag->requests);
 
     request[0] = slave_addr;
     request[1] = function_code;
@@ -346,14 +447,14 @@ int RS485_ModbusReadRegistersWithTimeoutOnChannel(
         if (written != (int)sizeof(request)) {
             printf("[RS485] write failed ch=%u slave=%u reg=0x%04X count=%u written=%d\n",
                    channel, slave_addr, start_reg, reg_count, written);
-            return -1;
+            return RecordReadResult(channel, RS485_MODBUS_ERR_WRITE, NULL, 0U);
         }
     }
 
     if (WaitPortTxDone(channel, 50U) != 0) {
         printf("[RS485] tx not completed ch=%u slave=%u reg=0x%04X count=%u\n",
                channel, slave_addr, start_reg, reg_count);
-        return -1;
+        return RecordReadResult(channel, RS485_MODBUS_ERR_TX_DONE, NULL, 0U);
     }
 
     memset(response, 0, sizeof(response));
@@ -381,6 +482,12 @@ int RS485_ModbusReadRegistersWithTimeoutOnChannel(
             }
             continue;
         }
+        if (len < 0) {
+            if (!read_error_seen) {
+                IncrementCounter(&diag->read_errors);
+            }
+            read_error_seen = 1;
+        }
 
         LOS_Msleep(5);
     }
@@ -395,38 +502,54 @@ int RS485_ModbusReadRegistersWithTimeoutOnChannel(
 #endif
     }
 
-    if (received < 5U) {
+    if (received == 0U) {
 #if RS485_RAW_DIAG_MODE
         printf("[RS485] timeout/no response ch=%u fc=0x%02X slave=%u reg=0x%04X count=%u bytes=%u\n",
                channel, function_code, slave_addr, start_reg, reg_count, received);
 #endif
-        return -1;
+        return RecordReadResult(
+            channel,
+            read_error_seen ? RS485_MODBUS_ERR_READ : RS485_MODBUS_ERR_TIMEOUT,
+            response,
+            received);
+    }
+
+    if (received < 5U) {
+        return RecordReadResult(channel, RS485_MODBUS_ERR_SHORT, response, received);
     }
 
     if (response[0] != slave_addr) {
         printf("[RS485] unexpected slave addr got=%u expected=%u\n", response[0], slave_addr);
-        return -1;
+        return RecordReadResult(channel, RS485_MODBUS_ERR_ADDR, response, received);
+    }
+
+    if ((response[1] & 0x80U) == 0U && received < expected_len) {
+        return RecordReadResult(channel, RS485_MODBUS_ERR_SHORT, response, received);
     }
 
     crc = ModbusCrc16(response, received - 2U);
     if (response[received - 2U] != (uint8_t)(crc & 0xFFU) ||
         response[received - 1U] != (uint8_t)(crc >> 8)) {
         printf("[RS485] CRC mismatch slave=%u bytes=%u\n", slave_addr, received);
-        return -1;
+        return RecordReadResult(channel, RS485_MODBUS_ERR_CRC, response, received);
     }
 
     if ((response[1] & 0x80U) != 0U) {
         printf("[RS485] Modbus exception slave=%u func=0x%02X code=0x%02X\n",
                slave_addr, response[1], response[2]);
-        return -1;
+        return RecordReadResult(channel, RS485_MODBUS_ERR_EXCEPTION, response, received);
     }
 
-    if (response[1] != function_code ||
-        response[2] != (uint8_t)(reg_count * 2U) ||
-        received < expected_len) {
+    if (response[1] != function_code) {
+        printf("[RS485] unexpected function slave=%u got=0x%02X expected=0x%02X\n",
+               slave_addr, response[1], function_code);
+        return RecordReadResult(channel, RS485_MODBUS_ERR_FUNCTION, response, received);
+    }
+
+    if (response[2] != (uint8_t)(reg_count * 2U)) {
         printf("[RS485] malformed response slave=%u func=0x%02X byte_count=%u bytes=%u\n",
                slave_addr, response[1], response[2], received);
-        return -1;
+        return RecordReadResult(channel, RS485_MODBUS_ERR_BYTE_COUNT, response, received);
     }
 
     for (i = 0; i < reg_count; ++i) {
@@ -434,7 +557,7 @@ int RS485_ModbusReadRegistersWithTimeoutOnChannel(
         out_regs[i] = (uint16_t)(((uint16_t)response[offset] << 8) | response[offset + 1U]);
     }
 
-    return 0;
+    return RecordReadResult(channel, RS485_MODBUS_OK, response, received);
 }
 
 int RS485_ModbusReadHoldingRegistersOnChannel(
@@ -686,4 +809,12 @@ int RS485_ModbusRawWriteOnChannel(
     }
 
     return RS485_MODBUS_OK;
+}
+
+void RS485_ModbusGetDiagnostics(Rs485ModbusDiagnostics *snapshot)
+{
+    if (snapshot == NULL) {
+        return;
+    }
+    memcpy(snapshot, &g_modbus_diagnostics, sizeof(*snapshot));
 }

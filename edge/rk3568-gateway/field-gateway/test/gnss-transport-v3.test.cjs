@@ -16,6 +16,7 @@ const {
   decodeGnssProbeStatsResponseV1,
   decodeGnssProbeStatsResponseV2,
   decodeGnssProbeStatsResponseV3,
+  decodeGnssProbeStatsResponseV4,
   decodeGnssRtcmAckResponseV1,
   RtcmReassemblerV3,
   crc24q,
@@ -186,6 +187,74 @@ test("GNSS PROBE V3 exposes only the deployed RK2206 sensor paths", () => {
   const inconsistent = Buffer.from(payload);
   inconsistent.writeUInt8(0x01, 151);
   assert.throws(() => decodeGnssProbeStatsResponse(inconsistent), /masks are inconsistent/);
+});
+
+test("GNSS PROBE V4 exposes U4, read-only scan and classified Modbus diagnostics", () => {
+  const payload = Buffer.alloc(384);
+  payload.write("G3S", 0, "ascii");
+  payload.writeUInt8(4, 3);
+  payload.writeUInt8(2, 4);
+  payload.writeUInt8(1, 5);
+  payload.writeUInt32BE(0x89abcdef, 8);
+  payload.writeUInt32BE(1234, 12);
+  payload.writeUInt8(0x0f, 148);
+  payload.writeUInt8(0x0f, 149);
+  payload.writeUInt8(0x05, 150);
+  payload.writeUInt8(0x0f, 151);
+  payload.writeUInt8(4, 152);
+  payload.writeUInt8(1, 204);
+  payload.writeUInt8(0x4d, 205);
+  payload.writeUInt8(0x4d, 206);
+  payload.writeUInt8(1, 207);
+  payload.writeInt8(0, 208);
+  payload.writeInt8(0, 209);
+  payload.writeInt8(-2, 210);
+  payload.writeInt8(0, 211);
+  payload.writeInt8(-3, 212);
+  payload.writeInt8(0, 213);
+  payload.writeInt8(-4, 214);
+  payload.writeUInt8(4, 215);
+  payload.writeUInt8(2, 216);
+  payload.writeUInt8(0x60, 217);
+  payload.writeUInt8(1, 220);
+  payload.writeUInt8(0x07, 221);
+  payload.writeUInt8(0x01, 222);
+  payload.writeUInt16BE(27, 224);
+  payload.writeUInt16BE(1, 226);
+  payload.writeUInt32BE(8123, 228);
+  payload.writeUInt8(1, 232);
+  payload.writeUInt8(0, 233);
+  payload.writeUInt8(3, 234);
+  payload.writeUInt8(1, 235);
+  payload.writeUInt16BE(0, 236);
+  payload.writeUInt16BE(2, 238);
+  payload.writeUInt32BE(4800, 240);
+  payload.writeUInt32BE(1843200, 244);
+  for (let index = 0; index < 13; index += 1) {
+    payload.writeUInt32BE(100 + index, 264 + index * 4);
+    payload.writeUInt32BE(200 + index, 316 + index * 4);
+  }
+  payload.writeInt8(-4, 368);
+  payload.writeInt8(0, 369);
+  payload.writeUInt16BE(113, 370);
+  payload.writeUInt16BE(213, 372);
+  payload.set([1, 2, 3, 4, 0, 2], 374);
+
+  const decoded = decodeGnssProbeStatsResponseV4(payload);
+  assert.equal(decoded.responseVersion, 4);
+  assert.equal(decoded.hardwareDiagnostics.sc16is752.addressFound, true);
+  assert.deepEqual(decoded.hardwareDiagnostics.sc16is752.scratchpadStatus, [0, -2]);
+  assert.equal(decoded.hardwareDiagnostics.readOnlyScan.restoreOk, true);
+  assert.equal(decoded.hardwareDiagnostics.readOnlyScan.soilQuery.baudrate, 4800);
+  assert.equal(decoded.hardwareDiagnostics.readOnlyScan.tiltQuery.found, false);
+  assert.equal(decoded.hardwareDiagnostics.modbusChannels[0].noResponses, 105);
+  assert.equal(decoded.hardwareDiagnostics.modbusChannels[1].lastExceptionCode, 2);
+  assert.deepEqual(decodeGnssProbeStatsResponse(payload), decoded);
+  assert.throws(() => decodeGnssProbeStatsResponseV3(payload), /not V3/);
+
+  const inconsistent = Buffer.from(payload);
+  inconsistent.writeUInt8(0x03, 222);
+  assert.throws(() => decodeGnssProbeStatsResponse(inconsistent), /match mask is inconsistent/);
 });
 
 test("RTCM ACK V1 reports the recent completed-sequence bitmap", () => {

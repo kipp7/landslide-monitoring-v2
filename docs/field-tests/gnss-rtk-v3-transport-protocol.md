@@ -112,7 +112,7 @@ Only the existing GPS poll task accesses the GNSS UART. The XL01 receive path ca
 
 The current RK2206 build has monotonic time but no independently trusted absolute Unix clock. It therefore enforces reassembly and local queue age while incrementing `ttl_unverified_fragments`; the gateway remains responsible for absolute generated-time filtering. `LIVE` must not be field-enabled until this limitation and the mixed-load gate are explicitly accepted.
 
-Exposed counters include accepted/completed/duplicate/rejected fragments, CRC errors, expired assemblies, capacity evictions, TTL-unverified fragments, queue depth/high-water/eviction/expiration, probe-validated frames, injected bytes, partial writes and injection drops. PROBE V2 also reports completed-frame counts for 1005/1033/1074/1094/1114/1124 plus field-link decoded frames, decoded RTCM frames, decode failures, sequence gaps/duplicates/resets and UART RX FIFO drops. PROBE V3 appends diagnostic state for the deployed UM220-IV NK, RS-ECTH-N01-TR-1 and RS-DIP-N01-1 acquisition paths; disabled legacy drivers are not reported as installed sensors.
+Exposed counters include accepted/completed/duplicate/rejected fragments, CRC errors, expired assemblies, capacity evictions, TTL-unverified fragments, queue depth/high-water/eviction/expiration, probe-validated frames, injected bytes, partial writes and injection drops. PROBE V2 also reports completed-frame counts for 1005/1033/1074/1094/1114/1124 plus field-link decoded frames, decoded RTCM frames, decode failures, sequence gaps/duplicates/resets and UART RX FIFO drops. PROBE V3 appends diagnostic state for the deployed UM220-IV NK, RS-ECTH-N01-TR-1 and RS-DIP-N01-1 acquisition paths; disabled legacy drivers are not reported as installed sensors. PROBE V4 appends one-time U4 self-tests, a bounded read-only parameter scan and categorized per-channel Modbus failures. It does not alter compact telemetry or enable RTCM injection.
 
 ## RK3568 Closed-Loop PROBE Statistics
 
@@ -124,12 +124,12 @@ G3Q + node letter A/B/C + 8 uppercase hexadecimal nonce
 
 For example, `G3QB89ABCDEF` asks node B for a snapshot. The nonce must be non-zero. All nodes receive the command, but only the addressed node responds. A valid query is first queued by the XL01 receive path and is handled by the normal data-processing task; the UART receive callback never transmits a response.
 
-The node returns a fixed binary payload as field-link `control=4`. V1 is 92 bytes, V2 is 148 bytes, and the current V3 is 204 bytes. Every version retains the complete preceding layout before appending fields. The outer COBS/CRC32 frame protects the whole response:
+The node returns a fixed binary payload as field-link `control=4`. V1 is 92 bytes, V2 is 148 bytes, V3 is 204 bytes, and the current diagnostic V4 is 384 bytes. Every version retains the complete preceding layout before appending fields. The outer COBS/CRC32 frame protects the whole response:
 
 | Offset | Bytes | Field |
 | ---: | ---: | --- |
 | 0 | 3 | ASCII `G3S` |
-| 3 | 1 | response version `1`, `2` or `3` |
+| 3 | 1 | response version `1`, `2`, `3` or `4` |
 | 4 | 1 | node number A/B/C = `1/2/3` |
 | 5 | 1 | injection mode `DISABLED/PROBE/LIVE = 0/1/2` |
 | 6 | 2 | reserved, zero |
@@ -149,6 +149,25 @@ The node returns a fixed binary payload as field-link `control=4`. V1 is 92 byte
 | 156 | 16 | V3 only: four big-endian uint32 collection-cycle counters |
 | 172 | 16 | V3 only: four big-endian uint32 last-success monotonic uptime values |
 | 188 | 16 | V3 only: four big-endian uint32 consecutive failed collection-cycle counters |
+| 204 | 1 | V4 only: SC16IS752 diagnostic schema, fixed at `1` |
+| 205 | 3 | V4 only: configured I2C address, detected address, address-found flag |
+| 208 | 7 | V4 only: signed init, channel A/B scratchpad, loopback and latest UART-init statuses |
+| 215 | 3 | V4 only: channel A/B loopback RX byte counts and detected LSR |
+| 218 | 2 | V4 only: reserved, zero |
+| 220 | 1 | V4 only: read-only scan schema, fixed at `1` |
+| 221 | 1 | V4 only: scan started/completed/production-restore flags |
+| 222 | 1 | V4 only: query-match mask, soil bit 0 and tilt bit 1 |
+| 223 | 1 | V4 only: reserved, zero |
+| 224 | 2 | V4 only: bounded scan attempt count |
+| 226 | 2 | V4 only: successful query count |
+| 228 | 4 | V4 only: scan duration in milliseconds |
+| 232 | 16 | V4 only: first soil-query match tuple |
+| 248 | 16 | V4 only: first tilt-query match tuple |
+| 264 | 104 | V4 only: 13 big-endian uint32 Modbus counters for channel A, then channel B |
+| 368 | 2 | V4 only: signed last Modbus status for channel A/B |
+| 370 | 4 | V4 only: last RX byte count for channel A/B |
+| 374 | 6 | V4 only: last response address, function and exception code for channel A/B |
+| 380 | 4 | V4 only: reserved, zero |
 
 Counter order is: accepted, duplicate, rejected, completed, CRC errors, expired assemblies, capacity evictions, TTL-unverified fragments, queued frames, queue evictions, queue-expired frames, PROBE-validated frames, PROBE-validated bytes, injected frames, injected bytes, UART write errors, UART partial writes and injection drops.
 
@@ -162,6 +181,10 @@ V3 acquisition-path order is:
 4. RS-DIP-N01-1 three-axis tilt register path.
 
 The two RS-ECTH entries represent one physical three-in-one probe and intentionally separate base registers from EC so an EC-only failure cannot hide valid temperature/moisture. `initialization-success` means the required local driver/transport initialized: UM220 UART for GNSS and SC16IS752/Modbus for RS485 paths. It is not proof that the remote sensor answered. Endpoint health comes from current/ever valid state and consecutive failures. A sample count is the number of enabled collection cycles in which the path was evaluated, not the number of raw Modbus transactions. Last-success time uses RK2206 monotonic uptime; it never relies on the board's untrusted wall clock.
+
+V4 runs once during RS485 initialization. U4 records the detected `0x48..0x57` address plus scratchpad and internal UART loopback results for both channels. The scan tries only Modbus reads at slave address 1 across channels A/B, function codes `0x03/0x04`, baud rates 4800/9600 and 1.8432/14.7456 MHz clock hypotheses. The soil query reads the configured base-register shape; the tilt query reads the configured three-register shape and the manual's `0x00C8` alternative. It never writes an address, baud rate or sensor configuration register. It always attempts to restore both UARTs to 1.8432 MHz, 4800 8N1 before normal collection starts.
+
+Each 16-byte match tuple is `found, channel, function, slave, start-register, register-count, baud, crystal`. A query match proves that a valid Modbus response was received for that combination; it does not by itself identify the physical sensor model, because different address-1 devices can expose overlapping registers. Per-channel counter order is requests, successes, write errors, TX-completion errors, I2C/UART read errors, no response, short response, unexpected address, CRC error, Modbus exception, unexpected function, unexpected byte count and total RX bytes. This distinction separates an internal U4 failure from an externally silent RS485 chain and from a noisy or misconfigured responding bus.
 
 The RK3568 tool queries once before traffic and once after the drain interval. It computes uint32 wrap-safe deltas, so old accumulated counters do not require a node reboot. A PROBE run passes only when:
 

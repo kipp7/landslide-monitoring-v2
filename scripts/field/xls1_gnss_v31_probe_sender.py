@@ -31,7 +31,7 @@ FIELD_LINK_TYPE_COMMAND = 2
 FIELD_LINK_TYPE_CONTROL = 4
 FIELD_LINK_TYPE_RTCM = 6
 RTCM_FRAGMENT_HEADER_BYTES = 42
-GNSS_PROBE_STATS_RESPONSE_BYTES = {1: 92, 2: 148, 3: 204}
+GNSS_PROBE_STATS_RESPONSE_BYTES = {1: 92, 2: 148, 3: 204, 4: 384}
 GNSS_RTCM_ACK_RESPONSE_BYTES = 24
 TARGET_MASKS = {"A": 0x01, "B": 0x02, "C": 0x04, "all": 0x07}
 NODE_NUMBERS = {"A": 1, "B": 2, "C": 3}
@@ -71,6 +71,21 @@ SENSOR_DIAGNOSTIC_NAMES = (
     "rsEcthSoil",
     "rsEcthEc",
     "rsDipTilt",
+)
+MODBUS_DIAGNOSTIC_COUNTER_NAMES = (
+    "requests",
+    "successes",
+    "writeErrors",
+    "txDoneErrors",
+    "readErrors",
+    "noResponses",
+    "shortResponses",
+    "addressErrors",
+    "crcErrors",
+    "exceptionResponses",
+    "functionErrors",
+    "byteCountErrors",
+    "rxBytes",
 )
 
 # The schedule reproduces the July 26 PC capture at about 880 B/s without
@@ -348,6 +363,118 @@ def decode_probe_stats_response(payload: bytes) -> dict[str, Any]:
                 for index, name in enumerate(SENSOR_DIAGNOSTIC_NAMES)
             },
         }
+    if response_version >= 4:
+        if payload[204] != 1 or payload[218:220] != b"\x00\x00":
+            raise ValueError("GNSS PROBE SC16IS752 diagnostic schema or reserved bytes are invalid")
+        sc16is752 = {
+            "configuredI2cAddress": payload[205],
+            "detectedI2cAddress": payload[206],
+            "addressFound": bool(payload[207]),
+            "initStatus": struct.unpack_from("b", payload, 208)[0],
+            "scratchpadStatus": [
+                struct.unpack_from("b", payload, 209)[0],
+                struct.unpack_from("b", payload, 210)[0],
+            ],
+            "internalLoopbackStatus": [
+                struct.unpack_from("b", payload, 211)[0],
+                struct.unpack_from("b", payload, 212)[0],
+            ],
+            "uartInitStatus": [
+                struct.unpack_from("b", payload, 213)[0],
+                struct.unpack_from("b", payload, 214)[0],
+            ],
+            "internalLoopbackRxBytes": [payload[215], payload[216]],
+            "detectedLsr": payload[217],
+        }
+        if payload[207] not in (0, 1):
+            raise ValueError("GNSS PROBE SC16IS752 address-found flag is invalid")
+
+        scan_flags = payload[221]
+        match_mask = payload[222]
+        if (
+            payload[220] != 1
+            or scan_flags & ~0x07
+            or match_mask & ~0x03
+            or payload[223] != 0
+        ):
+            raise ValueError("GNSS PROBE RS485 scan schema, flags or match mask are invalid")
+
+        def decode_probe_match(offset: int) -> dict[str, Any]:
+            found, channel, function_code, slave_addr = payload[offset : offset + 4]
+            start_reg, reg_count = struct.unpack_from(">HH", payload, offset + 4)
+            baudrate, xtal_hz = struct.unpack_from(">II", payload, offset + 8)
+            if found not in (0, 1):
+                raise ValueError("GNSS PROBE RS485 match found flag is invalid")
+            if found and (
+                channel not in (0, 1)
+                or function_code not in (3, 4)
+                or slave_addr == 0
+                or reg_count == 0
+                or baudrate == 0
+                or xtal_hz == 0
+            ):
+                raise ValueError("GNSS PROBE RS485 match parameters are invalid")
+            if not found and any(payload[offset : offset + 16]):
+                raise ValueError("GNSS PROBE absent RS485 match carries non-zero parameters")
+            return {
+                "found": bool(found),
+                "channel": channel,
+                "functionCode": function_code,
+                "slaveAddress": slave_addr,
+                "startRegister": start_reg,
+                "registerCount": reg_count,
+                "baudrate": baudrate,
+                "xtalHz": xtal_hz,
+            }
+
+        soil_match = decode_probe_match(232)
+        tilt_match = decode_probe_match(248)
+        expected_match_mask = int(soil_match["found"]) | (int(tilt_match["found"]) << 1)
+        if match_mask != expected_match_mask:
+            raise ValueError("GNSS PROBE RS485 match mask is inconsistent")
+        scan_started = bool(scan_flags & 0x01)
+        scan_completed = bool(scan_flags & 0x02)
+        restore_ok = bool(scan_flags & 0x04)
+        if (scan_completed and not scan_started) or (restore_ok and not scan_completed):
+            raise ValueError("GNSS PROBE RS485 scan lifecycle flags are inconsistent")
+
+        modbus_channels: list[dict[str, Any]] = []
+        for channel in range(2):
+            counter_values = struct.unpack_from(">13I", payload, 264 + channel * 52)
+            modbus_channels.append(
+                {
+                    "channel": channel,
+                    **dict(
+                        zip(
+                            MODBUS_DIAGNOSTIC_COUNTER_NAMES,
+                            counter_values,
+                            strict=True,
+                        )
+                    ),
+                    "lastStatus": struct.unpack_from("b", payload, 368 + channel)[0],
+                    "lastRxBytes": struct.unpack_from(">H", payload, 370 + channel * 2)[0],
+                    "lastResponseAddress": payload[374 + channel],
+                    "lastResponseFunction": payload[376 + channel],
+                    "lastExceptionCode": payload[378 + channel],
+                }
+            )
+        if payload[380:384] != b"\x00\x00\x00\x00":
+            raise ValueError("GNSS PROBE Modbus diagnostic reserved bytes are non-zero")
+        response["hardwareDiagnostics"] = {
+            "sc16is752": sc16is752,
+            "readOnlyScan": {
+                "started": scan_started,
+                "completed": scan_completed,
+                "restoreOk": restore_ok,
+                "matchMask": match_mask,
+                "attempts": struct.unpack_from(">H", payload, 224)[0],
+                "successfulProbes": struct.unpack_from(">H", payload, 226)[0],
+                "durationMs": struct.unpack_from(">I", payload, 228)[0],
+                "soilQuery": soil_match,
+                "tiltQuery": tilt_match,
+            },
+            "modbusChannels": modbus_channels,
+        }
     return response
 
 
@@ -372,6 +499,99 @@ def print_sensor_diagnostics(prefix: str, response: dict[str, Any]) -> None:
             f"fail_streak={sensor['consecutiveFailures']}",
             flush=True,
         )
+
+
+def print_hardware_diagnostics(prefix: str, response: dict[str, Any]) -> None:
+    diagnostics = response.get("hardwareDiagnostics")
+    if diagnostics is None:
+        return
+    sc16 = diagnostics["sc16is752"]
+    print(
+        f"{prefix}_U4 configured=0x{sc16['configuredI2cAddress']:02X} "
+        f"detected=0x{sc16['detectedI2cAddress']:02X} found={int(sc16['addressFound'])} "
+        f"init={sc16['initStatus']} scratch={sc16['scratchpadStatus']} "
+        f"loopback={sc16['internalLoopbackStatus']} uart={sc16['uartInitStatus']} "
+        f"loop_rx={sc16['internalLoopbackRxBytes']} lsr=0x{sc16['detectedLsr']:02X}",
+        flush=True,
+    )
+    scan = diagnostics["readOnlyScan"]
+    print(
+        f"{prefix}_SCAN started={int(scan['started'])} completed={int(scan['completed'])} "
+        f"restore={int(scan['restoreOk'])} attempts={scan['attempts']} "
+        f"successes={scan['successfulProbes']} duration_ms={scan['durationMs']} "
+        f"matches=0x{scan['matchMask']:02X}",
+        flush=True,
+    )
+    for path_name in ("soilQuery", "tiltQuery"):
+        match = scan[path_name]
+        print(
+            f"{prefix}_MATCH path={path_name} found={int(match['found'])} "
+            f"ch={match['channel']} fc=0x{match['functionCode']:02X} "
+            f"addr={match['slaveAddress']} reg=0x{match['startRegister']:04X} "
+            f"count={match['registerCount']} baud={match['baudrate']} xtal={match['xtalHz']}",
+            flush=True,
+        )
+    for channel in diagnostics["modbusChannels"]:
+        print(
+            f"{prefix}_MODBUS ch={channel['channel']} req={channel['requests']} "
+            f"ok={channel['successes']} write={channel['writeErrors']} "
+            f"tx={channel['txDoneErrors']} read={channel['readErrors']} "
+            f"none={channel['noResponses']} short={channel['shortResponses']} "
+            f"addr={channel['addressErrors']} crc={channel['crcErrors']} "
+            f"exception={channel['exceptionResponses']} function={channel['functionErrors']} "
+            f"byte_count={channel['byteCountErrors']} rx_bytes={channel['rxBytes']} "
+            f"last={channel['lastStatus']} last_rx={channel['lastRxBytes']}",
+            flush=True,
+        )
+    channels = diagnostics["modbusChannels"]
+    transport_errors = sum(
+        channel["writeErrors"] + channel["txDoneErrors"] + channel["readErrors"]
+        for channel in channels
+    )
+    rx_bytes = sum(channel["rxBytes"] for channel in channels)
+    framing_errors = sum(
+        channel["shortResponses"]
+        + channel["addressErrors"]
+        + channel["crcErrors"]
+        + channel["functionErrors"]
+        + channel["byteCountErrors"]
+        for channel in channels
+    )
+    exceptions = sum(channel["exceptionResponses"] for channel in channels)
+    self_test_failures = [
+        status
+        for status in (
+            *sc16["scratchpadStatus"],
+            *sc16["internalLoopbackStatus"],
+            *sc16["uartInitStatus"],
+        )
+        if status not in (0, 127)
+    ]
+    if not sc16["addressFound"] or sc16["initStatus"] != 0:
+        conclusion = "u4_i2c_or_initialization_failure"
+    elif self_test_failures:
+        conclusion = "u4_internal_uart_or_register_failure"
+    elif not scan["completed"] or not scan["restoreOk"]:
+        conclusion = "diagnostic_scan_or_production_restore_failure"
+    elif scan["matchMask"] == 0x03:
+        conclusion = "both_configured_query_paths_responded"
+    elif scan["matchMask"] != 0:
+        conclusion = "only_one_configured_query_path_responded"
+    elif transport_errors:
+        conclusion = "u4_uart_transport_failure_during_modbus"
+    elif rx_bytes == 0:
+        conclusion = "external_rs485_no_response_check_power_ground_ab_transceiver_and_sensor"
+    elif framing_errors:
+        conclusion = "rs485_bytes_received_but_framing_crc_or_uart_parameters_do_not_match"
+    elif exceptions:
+        conclusion = "modbus_device_responded_but_query_is_not_supported"
+    else:
+        conclusion = "no_valid_modbus_match_requires_external_chain_isolation"
+    print(
+        f"{prefix}_CONCLUSION code={conclusion} "
+        "scope=query-combination-match-not-sensor-model-identification",
+        flush=True,
+    )
 
 
 def uint32_delta(after: int, before: int) -> int:
@@ -950,6 +1170,7 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
             flush=True,
         )
         print_sensor_diagnostics("BASELINE", baseline_stats)
+        print_hardware_diagnostics("BASELINE", baseline_stats)
         started_mono = time.monotonic()
         last_progress_second = -1
         link_slot_lock = threading.Lock()
@@ -1416,6 +1637,7 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
             flush=True,
         )
         print_sensor_diagnostics("FINAL", final_stats)
+        print_hardware_diagnostics("FINAL", final_stats)
     finally:
         os.close(fd)
 
@@ -1495,6 +1717,7 @@ def run_diagnostics_query(args: argparse.Namespace) -> dict[str, Any]:
         flush=True,
     )
     print_sensor_diagnostics("DIAGNOSTIC", snapshot)
+    print_hardware_diagnostics("DIAGNOSTIC", snapshot)
     sensor_degraded = None
     if diagnostics is not None:
         sensor_degraded = bool(
@@ -1600,6 +1823,28 @@ def self_test() -> None:
         raise AssertionError("inconsistent sensor masks were accepted")
     except ValueError as exc:
         assert "masks are inconsistent" in str(exc)
+    v4_payload = bytearray(384)
+    v4_payload[:204] = v3_payload
+    v4_payload[3] = 4
+    v4_payload[204:218] = bytes(
+        (1, 0x4D, 0x4D, 1, 0, 0, 0xFE, 0, 0xFD, 0, 0xFC, 4, 2, 0x60)
+    )
+    v4_payload[220:224] = bytes((1, 0x07, 0x01, 0))
+    struct.pack_into(">HHI", v4_payload, 224, 27, 1, 8123)
+    struct.pack_into(">BBBBHHII", v4_payload, 232, 1, 0, 3, 1, 0, 2, 4800, 1843200)
+    struct.pack_into(">13I", v4_payload, 264, *range(100, 113))
+    struct.pack_into(">13I", v4_payload, 316, *range(200, 213))
+    struct.pack_into("bb", v4_payload, 368, -4, 0)
+    struct.pack_into(">HH", v4_payload, 370, 113, 213)
+    v4_payload[374:380] = bytes((1, 2, 3, 4, 0, 2))
+    decoded_v4 = decode_probe_stats_response(bytes(v4_payload))
+    assert decoded_v4["responseVersion"] == 4
+    assert decoded_v4["hardwareDiagnostics"]["sc16is752"]["addressFound"]
+    assert decoded_v4["hardwareDiagnostics"]["sc16is752"]["scratchpadStatus"][1] == -2
+    assert decoded_v4["hardwareDiagnostics"]["readOnlyScan"]["restoreOk"]
+    assert decoded_v4["hardwareDiagnostics"]["readOnlyScan"]["soilQuery"]["baudrate"] == 4800
+    assert decoded_v4["hardwareDiagnostics"]["modbusChannels"][0]["noResponses"] == 105
+    assert decoded_v4["hardwareDiagnostics"]["modbusChannels"][1]["lastExceptionCode"] == 2
     v2_gate = evaluate_probe_gate(
         baseline_v2,
         final_v2,
@@ -1729,7 +1974,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--drain-ms", type=int, default=2000)
     parser.add_argument("--stats-timeout-seconds", type=float, default=3.0)
     parser.add_argument("--stats-retries", type=int, default=3)
-    parser.add_argument("--require-stats-version", type=int, choices=(1, 2, 3), default=1)
+    parser.add_argument("--require-stats-version", type=int, choices=(1, 2, 3, 4), default=1)
     parser.add_argument("--selective-retry", action="store_true")
     parser.add_argument("--max-retransmit-rounds", type=int, default=2)
     parser.add_argument("--ack-timeout-seconds", type=float, default=0.65)
@@ -1765,7 +2010,7 @@ def parse_args() -> argparse.Namespace:
     if not 0.0 <= args.max_retransmit_ratio <= 1.0:
         parser.error("max retransmit ratio must be in [0, 1]")
     if args.selective_retry and args.require_stats_version < 2:
-        parser.error("selective retry requires --require-stats-version 2 or 3")
+        parser.error("selective retry requires --require-stats-version 2, 3 or 4")
     if args.diagnostics_only and args.selective_retry:
         parser.error("diagnostics-only mode cannot use selective retry")
     if not 32 <= args.fragment_data_bytes <= 512:

@@ -123,7 +123,7 @@ static char g_last_trusted_time_ts[40] = "";
 static char g_last_trusted_time_source[32] = "";
 static volatile uint32_t g_last_platform_command_tick = 0;
 static volatile int g_field_link_recovery_requested = 0;
-#define FW_RX_DIAG_MARKER "fw-gnss-rtk-v31-probe-sensor-diag-v3-20260729"
+#define FW_RX_DIAG_MARKER "fw-gnss-rtk-v31-probe-sensor-diag-v4-20260729"
 bool g_cloud_motor_enabled = false;
 int g_cloud_motor_speed = 0;
 MotorDirection g_cloud_motor_direction = MOTOR_DIRECTION_STOP;
@@ -799,7 +799,10 @@ static int HandleGnssProbeStatsQuery(const char *command)
     GnssRtcmInjectionStats stats;
     FieldLinkRxStats link_stats;
     GnssSensorDiagnostics sensor_diagnostics;
-    uint8_t response[GNSS_PROBE_STATS_RESPONSE_V3_BYTES];
+    Sc16is752Diagnostics sc16is752_diagnostics;
+    FieldRs485Diagnostics field_rs485_diagnostics;
+    Rs485ModbusDiagnostics modbus_diagnostics;
+    uint8_t response[GNSS_PROBE_STATS_RESPONSE_V4_BYTES];
     uint8_t target_node = 0U;
     uint8_t local_node;
     uint32_t nonce = 0U;
@@ -820,10 +823,23 @@ static int HandleGnssProbeStatsQuery(const char *command)
     GnssRtcmInjection_GetStats(&stats);
     XL01_GetFieldLinkRxStats(&link_stats);
     SensorDiagnostics_CopySnapshot(&sensor_diagnostics);
-    response_len = GnssProbeStatsResponseV3_Encode(
+    memset(&sc16is752_diagnostics, 0, sizeof(sc16is752_diagnostics));
+    memset(&field_rs485_diagnostics, 0, sizeof(field_rs485_diagnostics));
+    memset(&modbus_diagnostics, 0, sizeof(modbus_diagnostics));
+#if ENABLE_RS485_BUS
+    FieldRs485_GetDiagnostics(&field_rs485_diagnostics);
+    RS485_ModbusGetDiagnostics(&modbus_diagnostics);
+#if RS485_TRANSPORT_SC16IS752
+    SC16IS752_GetDiagnostics(&sc16is752_diagnostics);
+#endif
+#endif
+    response_len = GnssProbeStatsResponseV4_Encode(
         &stats,
         &link_stats,
         &sensor_diagnostics,
+        &sc16is752_diagnostics,
+        &field_rs485_diagnostics,
+        &modbus_diagnostics,
         local_node,
         (uint8_t)GNSS_RTCM_INJECTION_MODE,
         nonce,
@@ -831,7 +847,7 @@ static int HandleGnssProbeStatsQuery(const char *command)
         response,
         sizeof(response)
     );
-    if (response_len != GNSS_PROBE_STATS_RESPONSE_V3_BYTES) {
+    if (response_len != GNSS_PROBE_STATS_RESPONSE_V4_BYTES) {
         printf("[RTCM STATS] encode failed node=%u\n", (unsigned int)local_node);
         return 1;
     }
