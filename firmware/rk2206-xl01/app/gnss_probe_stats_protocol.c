@@ -189,6 +189,66 @@ int GnssProbeStatsResponseV2_Encode(
     return GNSS_PROBE_STATS_RESPONSE_V2_BYTES;
 }
 
+int GnssProbeStatsResponseV3_Encode(
+    const GnssRtcmInjectionStats *stats,
+    const FieldLinkRxStats *link_stats,
+    const GnssSensorDiagnostics *sensor_diagnostics,
+    uint8_t node_number,
+    uint8_t injection_mode,
+    uint32_t nonce,
+    uint32_t snapshot_uptime_s,
+    uint8_t *output,
+    int output_size
+)
+{
+    unsigned int index;
+
+    if (output == NULL || output_size < GNSS_PROBE_STATS_RESPONSE_V3_BYTES) {
+        return -1;
+    }
+    if (GnssProbeStatsResponseV2_Encode(
+            stats,
+            link_stats,
+            node_number,
+            injection_mode,
+            nonce,
+            snapshot_uptime_s,
+            output,
+            output_size
+        ) != GNSS_PROBE_STATS_RESPONSE_V2_BYTES) {
+        return -1;
+    }
+
+    memset(
+        output + GNSS_PROBE_STATS_RESPONSE_V2_BYTES,
+        0,
+        GNSS_PROBE_STATS_RESPONSE_V3_BYTES - GNSS_PROBE_STATS_RESPONSE_V2_BYTES
+    );
+    output[3] = 3U;
+    if (sensor_diagnostics != NULL) {
+        output[148] = sensor_diagnostics->enabled_mask & GNSS_SENSOR_ALL_MASK;
+        output[149] = sensor_diagnostics->initialization_success_mask & GNSS_SENSOR_ALL_MASK;
+        output[150] = sensor_diagnostics->current_valid_mask & GNSS_SENSOR_ALL_MASK;
+        output[151] = sensor_diagnostics->ever_success_mask & GNSS_SENSOR_ALL_MASK;
+    }
+    output[152] = GNSS_SENSOR_DIAGNOSTIC_COUNT;
+    for (index = 0U; index < GNSS_SENSOR_DIAGNOSTIC_COUNT; ++index) {
+        WriteUint32Be(
+            output + 156U + index * 4U,
+            sensor_diagnostics != NULL ? sensor_diagnostics->sample_counts[index] : 0U
+        );
+        WriteUint32Be(
+            output + 172U + index * 4U,
+            sensor_diagnostics != NULL ? sensor_diagnostics->last_success_uptime_s[index] : 0U
+        );
+        WriteUint32Be(
+            output + 188U + index * 4U,
+            sensor_diagnostics != NULL ? sensor_diagnostics->consecutive_failures[index] : 0U
+        );
+    }
+    return GNSS_PROBE_STATS_RESPONSE_V3_BYTES;
+}
+
 int GnssRtcmAckQueryV1_Decode(
     const char *payload,
     int payload_bytes,

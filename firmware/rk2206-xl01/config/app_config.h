@@ -104,7 +104,7 @@
 // SC16IS752 over I2C, so UART1 stays available for debug logs.
 #define ENABLE_GPS                 1    // UM220-IV NK on EUART0_M0 (PB6/PB7)
 #define ENABLE_RS485_BUS           1    // SC16IS752 + isolated auto-direction TTL-RS485 modules
-#define ENABLE_RS485_SOIL_SENSOR   (ENABLE_RS485_BUS && 1) // RS-WS/RS-ECTH soil sensor on RS485 channel 1
+#define ENABLE_RS485_SOIL_SENSOR   (ENABLE_RS485_BUS && 1) // RS-ECTH-N01-TR-1 three-in-one soil sensor on channel 1
 #define ENABLE_RS485_TILT_SENSOR   (ENABLE_RS485_BUS && 1) // RS485 tilt sensor on shared channel 2
 #define ENABLE_RS485_RAIN_SENSOR   (ENABLE_RS485_BUS && 0) // Enable after confirming rain-gauge register map
 #define ENABLE_SHT30               0    // Legacy I2C sensor disabled in v1.1
@@ -189,11 +189,12 @@
 #define RS485_RAIN_ADDR        3
 #define RS485_ALARM_ADDR       1
 
-// RS-WS-N01-TR-1 and RS-ECTH-N01-TR-1: factory address 1, 4800 8N1.
+// Deployed RS-ECTH-N01-TR-1 three-in-one probe: factory address 1, 4800 8N1.
 // Current field wiring after YX75R diagnostics: soil uses channel 1.
-// Both models expose moisture/temperature at 0x0000/0x0001, scaled by 10.
-// RS-ECTH additionally exposes EC at 0x0002 as the raw uS/cm value. Read EC
-// separately so a two-parameter RS-WS sensor cannot invalidate the base sample.
+// Moisture/temperature are at 0x0000/0x0001, scaled by 10. EC is at 0x0002
+// as raw uS/cm and is read separately so its failure cannot invalidate the
+// base temperature/moisture sample.
+#define RS485_SOIL_SENSOR_MODEL "RS-ECTH-N01-TR-1"
 #define RS485_SOIL_REG_START   0x0000
 #define RS485_SOIL_REG_COUNT   2
 #define RS485_SOIL_MOISTURE_REG_INDEX 0

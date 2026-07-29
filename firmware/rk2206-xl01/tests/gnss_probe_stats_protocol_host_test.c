@@ -45,7 +45,8 @@ int main(void)
     GnssRtcmInjectionStats stats;
     GnssRtcmAckWindow ack_window;
     FieldLinkRxStats link_stats;
-    uint8_t payload[GNSS_PROBE_STATS_RESPONSE_V2_BYTES];
+    GnssSensorDiagnostics sensor_diagnostics;
+    uint8_t payload[GNSS_PROBE_STATS_RESPONSE_V3_BYTES];
     uint8_t ack_payload[GNSS_RTCM_ACK_RESPONSE_V1_BYTES];
     uint8_t target = 0U;
     uint32_t nonce = 0U;
@@ -104,6 +105,33 @@ int main(void)
     for (index = 0U; index < 8U; ++index) {
         assert(ReadUint32Be(payload + 116U + index * 4U) == index + 31U);
     }
+    memset(&sensor_diagnostics, 0, sizeof(sensor_diagnostics));
+    sensor_diagnostics.enabled_mask = GNSS_SENSOR_UM220_MASK | GNSS_SENSOR_SOIL_MASK |
+                                      GNSS_SENSOR_SOIL_EC_MASK | GNSS_SENSOR_TILT_MASK;
+    sensor_diagnostics.initialization_success_mask = sensor_diagnostics.enabled_mask;
+    sensor_diagnostics.current_valid_mask = GNSS_SENSOR_UM220_MASK;
+    sensor_diagnostics.ever_success_mask = GNSS_SENSOR_SOIL_MASK | GNSS_SENSOR_UM220_MASK;
+    for (index = 0U; index < GNSS_SENSOR_DIAGNOSTIC_COUNT; ++index) {
+        sensor_diagnostics.sample_counts[index] = index + 41U;
+        sensor_diagnostics.last_success_uptime_s[index] = index + 51U;
+        sensor_diagnostics.consecutive_failures[index] = index + 61U;
+    }
+    assert(GnssProbeStatsResponseV3_Encode(
+        &stats, &link_stats, &sensor_diagnostics,
+        2U, GNSS_RTCM_INJECTION_PROBE, nonce, 1234U,
+        payload, sizeof(payload)
+    ) == GNSS_PROBE_STATS_RESPONSE_V3_BYTES);
+    assert(payload[3] == 3U && payload[152] == GNSS_SENSOR_DIAGNOSTIC_COUNT);
+    assert(payload[148] == sensor_diagnostics.enabled_mask);
+    assert(payload[149] == sensor_diagnostics.initialization_success_mask);
+    assert(payload[150] == sensor_diagnostics.current_valid_mask);
+    assert(payload[151] == sensor_diagnostics.ever_success_mask);
+    assert(payload[153] == 0U && payload[154] == 0U && payload[155] == 0U);
+    for (index = 0U; index < GNSS_SENSOR_DIAGNOSTIC_COUNT; ++index) {
+        assert(ReadUint32Be(payload + 156U + index * 4U) == index + 41U);
+        assert(ReadUint32Be(payload + 172U + index * 4U) == index + 51U);
+        assert(ReadUint32Be(payload + 188U + index * 4U) == index + 61U);
+    }
     memset(&ack_window, 0, sizeof(ack_window));
     ack_window.session_valid = 1U;
     ack_window.session_epoch = 0x10203040U;
@@ -121,7 +149,7 @@ int main(void)
     assert(ReadUint32Be(ack_payload + 16) == 117U);
     assert(ReadUint16Be(ack_payload + 20) == 0xA55AU);
     assert(ReadUint16Be(ack_payload + 22) == 0U);
-    printf("gnss_probe_stats_protocol_host_test passed payload_bytes=%u\n",
+    printf("gnss_probe_stats_protocol_host_test passed v3_payload_bytes=%u\n",
            (unsigned int)sizeof(payload));
     return 0;
 }

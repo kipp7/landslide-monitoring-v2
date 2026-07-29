@@ -115,6 +115,8 @@ int XL01_ProcessReceivedData(Statistics *stats);     // 处理接收数据
 
 #### 2.3.2 传感器驱动 (`drivers/sensors/`)
 
+> 生产硬件真值以 `config/app_config.h` 为准。当前节点安装 UM220-IV NK、RS-ECTH-N01-TR-1 三合一土壤探头和 RS-DIP-N01-1 三轴倾角计。SHT30、MPU6050 仅保留为遗留样例驱动，生产配置关闭，不能据其源码存在推断现场安装了对应硬件。
+
 **SHT30温湿度传感器** (`sht30_driver.h/.c`)
 ```c
 int SHT30_Init(void);

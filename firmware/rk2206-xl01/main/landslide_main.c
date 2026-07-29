@@ -99,6 +99,7 @@ typedef enum {
 // ==================== Global State ====================
 
 static SensorData g_sensor_data = {0};
+static GnssSensorDiagnostics g_sensor_diagnostics = {0};
 static osMutexId_t g_sensor_data_mutex = NULL;
 static Statistics g_stats = {0};
 // Keep the platform command staging buffer off the ProcessTask stack.
@@ -108,6 +109,7 @@ static int g_i2c_ready = 0;
 static int g_sht30_ready = 0;
 static int g_mpu6050_ready = 0;
 static int g_rs485_ready = 0;
+static int g_gps_ready = 0;
 static unsigned int g_runtime_sampling_interval_ms = 1000;
 static unsigned int g_runtime_report_interval_ms = UPLOAD_INTERVAL_MS;
 static int g_platform_uplink_enabled = 1;
@@ -121,7 +123,7 @@ static char g_last_trusted_time_ts[40] = "";
 static char g_last_trusted_time_source[32] = "";
 static volatile uint32_t g_last_platform_command_tick = 0;
 static volatile int g_field_link_recovery_requested = 0;
-#define FW_RX_DIAG_MARKER "fw-gnss-rtk-v31-probe-ack-v1-20260728"
+#define FW_RX_DIAG_MARKER "fw-gnss-rtk-v31-probe-sensor-diag-v3-20260729"
 bool g_cloud_motor_enabled = false;
 int g_cloud_motor_speed = 0;
 MotorDirection g_cloud_motor_direction = MOTOR_DIRECTION_STOP;
@@ -206,6 +208,102 @@ static unsigned int SensorData_GetUptimeSnapshot(void)
     uptime = g_sensor_data.uptime;
     SensorData_Unlock();
     return uptime;
+}
+
+static uint8_t SensorDiagnostics_EnabledMask(void)
+{
+    uint8_t mask = 0U;
+
+#if !ENABLE_VIRTUAL
+#if ENABLE_GPS
+    mask |= GNSS_SENSOR_UM220_MASK;
+#endif
+#if ENABLE_RS485_SOIL_SENSOR
+    mask |= GNSS_SENSOR_SOIL_MASK;
+#if RS485_SOIL_HAS_EC
+    mask |= GNSS_SENSOR_SOIL_EC_MASK;
+#endif
+#endif
+#if ENABLE_RS485_TILT_SENSOR
+    mask |= GNSS_SENSOR_TILT_MASK;
+#endif
+#endif
+    return mask;
+}
+
+static uint8_t SensorDiagnostics_InitializationSuccessMask(void)
+{
+    uint8_t mask = 0U;
+
+#if !ENABLE_VIRTUAL
+#if ENABLE_GPS
+    if (g_gps_ready) {
+        mask |= GNSS_SENSOR_UM220_MASK;
+    }
+#endif
+#if ENABLE_RS485_SOIL_SENSOR
+    if (g_rs485_ready) {
+        mask |= GNSS_SENSOR_SOIL_MASK;
+#if RS485_SOIL_HAS_EC
+        mask |= GNSS_SENSOR_SOIL_EC_MASK;
+#endif
+    }
+#endif
+#if ENABLE_RS485_TILT_SENSOR
+    if (g_rs485_ready) {
+        mask |= GNSS_SENSOR_TILT_MASK;
+    }
+#endif
+#endif
+    return mask;
+}
+
+static void SensorDiagnostics_RecordCycle(uint8_t success_mask, uint32_t uptime_s)
+{
+    uint8_t enabled_mask = SensorDiagnostics_EnabledMask();
+    unsigned int index;
+
+    success_mask &= enabled_mask;
+    SensorData_Lock();
+    g_sensor_diagnostics.enabled_mask = enabled_mask;
+    g_sensor_diagnostics.initialization_success_mask =
+        SensorDiagnostics_InitializationSuccessMask() & enabled_mask;
+    g_sensor_diagnostics.current_valid_mask = success_mask;
+    g_sensor_diagnostics.ever_success_mask |= success_mask;
+    for (index = 0U; index < GNSS_SENSOR_DIAGNOSTIC_COUNT; ++index) {
+        uint8_t bit = (uint8_t)(1U << index);
+        if ((enabled_mask & bit) == 0U) {
+            continue;
+        }
+        if (g_sensor_diagnostics.sample_counts[index] != 0xFFFFFFFFU) {
+            g_sensor_diagnostics.sample_counts[index]++;
+        }
+        if ((success_mask & bit) != 0U) {
+            g_sensor_diagnostics.last_success_uptime_s[index] = uptime_s;
+            g_sensor_diagnostics.consecutive_failures[index] = 0U;
+        } else if (g_sensor_diagnostics.consecutive_failures[index] != 0xFFFFFFFFU) {
+            g_sensor_diagnostics.consecutive_failures[index]++;
+        }
+    }
+    SensorData_Unlock();
+}
+
+static void SensorDiagnostics_CopySnapshot(GnssSensorDiagnostics *snapshot)
+{
+    uint8_t enabled_mask;
+
+    if (snapshot == NULL) {
+        return;
+    }
+    enabled_mask = SensorDiagnostics_EnabledMask();
+    SensorData_Lock();
+    memcpy(snapshot, &g_sensor_diagnostics, sizeof(*snapshot));
+    SensorData_Unlock();
+    snapshot->enabled_mask = enabled_mask;
+    snapshot->initialization_success_mask =
+        SensorDiagnostics_InitializationSuccessMask() & enabled_mask;
+    snapshot->current_valid_mask &= enabled_mask;
+    snapshot->ever_success_mask &= enabled_mask;
 }
 
 static int TryInitMpu6050WithRetry(const char *phase_tag)
@@ -700,7 +798,8 @@ static int HandleGnssProbeStatsQuery(const char *command)
 {
     GnssRtcmInjectionStats stats;
     FieldLinkRxStats link_stats;
-    uint8_t response[GNSS_PROBE_STATS_RESPONSE_V2_BYTES];
+    GnssSensorDiagnostics sensor_diagnostics;
+    uint8_t response[GNSS_PROBE_STATS_RESPONSE_V3_BYTES];
     uint8_t target_node = 0U;
     uint8_t local_node;
     uint32_t nonce = 0U;
@@ -720,9 +819,11 @@ static int HandleGnssProbeStatsQuery(const char *command)
 
     GnssRtcmInjection_GetStats(&stats);
     XL01_GetFieldLinkRxStats(&link_stats);
-    response_len = GnssProbeStatsResponseV2_Encode(
+    SensorDiagnostics_CopySnapshot(&sensor_diagnostics);
+    response_len = GnssProbeStatsResponseV3_Encode(
         &stats,
         &link_stats,
+        &sensor_diagnostics,
         local_node,
         (uint8_t)GNSS_RTCM_INJECTION_MODE,
         nonce,
@@ -730,7 +831,7 @@ static int HandleGnssProbeStatsQuery(const char *command)
         response,
         sizeof(response)
     );
-    if (response_len != GNSS_PROBE_STATS_RESPONSE_V2_BYTES) {
+    if (response_len != GNSS_PROBE_STATS_RESPONSE_V3_BYTES) {
         printf("[RTCM STATS] encode failed node=%u\n", (unsigned int)local_node);
         return 1;
     }
@@ -1278,6 +1379,7 @@ static void* SensorCollectionTask(const char* arg)
 {
     (void)arg;
     SensorData next_sample;
+    uint8_t diagnostic_success_mask;
     uint32_t last_mpu_reinit_tick = 0;
     unsigned int mpu_read_fail_streak = 0;
 #if ENABLE_RS485_BUS
@@ -1289,7 +1391,8 @@ static void* SensorCollectionTask(const char* arg)
     
     while (1) {
         // Read all enabled sensors
-        
+        diagnostic_success_mask = 0U;
+
 #if ENABLE_VIRTUAL
         SensorData_CopySnapshot(&next_sample);
         VirtualSensor_Read(&next_sample);
@@ -1375,13 +1478,15 @@ static void* SensorCollectionTask(const char* arg)
 #endif
 
 #if ENABLE_RS485_BUS
-        if (g_rs485_ready && FieldRs485_Read(&rs485_readings) == 0) {
+        if (g_rs485_ready) {
+            (void)FieldRs485_Read(&rs485_readings);
             if (rs485_readings.soil_valid) {
                 next_sample.soil_temperature = rs485_readings.soil_temperature_c;
                 next_sample.soil_moisture = rs485_readings.soil_moisture_pct;
                 next_sample.soil_ec = rs485_readings.soil_ec_us_cm;
                 next_sample.soil_ec_valid = rs485_readings.soil_ec_valid;
                 next_sample.soil_valid = 1;
+                diagnostic_success_mask |= GNSS_SENSOR_SOIL_MASK;
 
                 // Keep legacy temp/humidity fields useful for the current platform UI:
                 // temperature = soil temperature, humidity = soil moisture.
@@ -1390,11 +1495,16 @@ static void* SensorCollectionTask(const char* arg)
                 next_sample.temp_valid = 1;
             }
 
+            if (rs485_readings.soil_ec_valid) {
+                diagnostic_success_mask |= GNSS_SENSOR_SOIL_EC_MASK;
+            }
+
             if (rs485_readings.tilt_valid) {
                 next_sample.angle_x = rs485_readings.tilt_x_deg;
                 next_sample.angle_y = rs485_readings.tilt_y_deg;
                 next_sample.angle_z = rs485_readings.tilt_z_deg;
                 next_sample.tilt_valid = 1;
+                diagnostic_success_mask |= GNSS_SENSOR_TILT_MASK;
             }
 
             if (rs485_readings.rain_valid) {
@@ -1413,6 +1523,9 @@ static void* SensorCollectionTask(const char* arg)
         
         // 只有当GPS返回成功时，才标记为有效
         next_sample.gps_valid = (gps_ret == 0) ? 1 : 0;
+        if (next_sample.gps_valid) {
+            diagnostic_success_mask |= GNSS_SENSOR_UM220_MASK;
+        }
 #endif
 
         // Check warnings
@@ -1425,6 +1538,7 @@ static void* SensorCollectionTask(const char* arg)
             }
         }
 #endif
+        SensorDiagnostics_RecordCycle(diagnostic_success_mask, (uint32_t)g_stats.uptime_sec);
         SensorData_StoreSnapshot(&next_sample);
         
         // Feed watchdog
@@ -1569,23 +1683,24 @@ static void* DataUploadTask(const char* arg)
            ENABLE_RS485_BUS ? "ON" : "OFF",
            g_rs485_ready ? "yes" : "no");
 #if ENABLE_RS485_BUS
-    printf("      - Soil: %s ch=%d addr=%d optional_ec=%s\n",
+    printf("      - Soil: %s model=%s ch=%d addr=%d ec=%s\n",
            ENABLE_RS485_SOIL_SENSOR ? "ON" : "OFF",
+           RS485_SOIL_SENSOR_MODEL,
            RS485_SOIL_CHANNEL,
            RS485_SOIL_ADDR,
-           RS485_SOIL_HAS_EC ? "probe" : "off");
+           RS485_SOIL_HAS_EC ? "enabled" : "off");
     printf("      - Tilt: %s ch=%d addr=%d\n",
            ENABLE_RS485_TILT_SENSOR ? "ON" : "OFF",
            RS485_TILT_CHANNEL,
            RS485_TILT_ADDR);
     printf("      - Rain: %s addr=%d\n", ENABLE_RS485_RAIN_SENSOR ? "ON" : "OFF", RS485_RAIN_ADDR);
 #endif
-    printf("    - SHT30: %s ready=%s\n",
-           ENABLE_SHT30 ? "ON" : "OFF",
-           g_sht30_ready ? "yes" : "no");
-    printf("    - MPU6050: %s ready=%s\n",
-           ENABLE_MPU6050 ? "ON" : "OFF",
-           g_mpu6050_ready ? "yes" : "no");
+#if ENABLE_SHT30
+    printf("    - SHT30: ON ready=%s\n", g_sht30_ready ? "yes" : "no");
+#endif
+#if ENABLE_MPU6050
+    printf("    - MPU6050: ON ready=%s\n", g_mpu6050_ready ? "yes" : "no");
+#endif
     printf("========================================\n\n");
     
     while (1) {
@@ -1965,7 +2080,10 @@ static void App_SystemInit(void)
     
     // Initialize enabled sensors
 #if ENABLE_GPS
-    if (GPS_Init() != 0) {
+    if (GPS_Init() == 0) {
+        g_gps_ready = 1;
+    } else {
+        g_gps_ready = 0;
         printf("[WARN] GPS init failed; GPS metrics will stay sparse until the driver reports a valid fix\n");
     }
 #endif

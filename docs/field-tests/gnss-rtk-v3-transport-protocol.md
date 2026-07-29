@@ -112,7 +112,7 @@ Only the existing GPS poll task accesses the GNSS UART. The XL01 receive path ca
 
 The current RK2206 build has monotonic time but no independently trusted absolute Unix clock. It therefore enforces reassembly and local queue age while incrementing `ttl_unverified_fragments`; the gateway remains responsible for absolute generated-time filtering. `LIVE` must not be field-enabled until this limitation and the mixed-load gate are explicitly accepted.
 
-Exposed counters include accepted/completed/duplicate/rejected fragments, CRC errors, expired assemblies, capacity evictions, TTL-unverified fragments, queue depth/high-water/eviction/expiration, probe-validated frames, injected bytes, partial writes and injection drops. PROBE V2 also reports completed-frame counts for 1005/1033/1074/1094/1114/1124 plus field-link decoded frames, decoded RTCM frames, decode failures, sequence gaps/duplicates/resets and UART RX FIFO drops.
+Exposed counters include accepted/completed/duplicate/rejected fragments, CRC errors, expired assemblies, capacity evictions, TTL-unverified fragments, queue depth/high-water/eviction/expiration, probe-validated frames, injected bytes, partial writes and injection drops. PROBE V2 also reports completed-frame counts for 1005/1033/1074/1094/1114/1124 plus field-link decoded frames, decoded RTCM frames, decode failures, sequence gaps/duplicates/resets and UART RX FIFO drops. PROBE V3 appends diagnostic state for the deployed UM220-IV NK, RS-ECTH-N01-TR-1 and RS-DIP-N01-1 acquisition paths; disabled legacy drivers are not reported as installed sensors.
 
 ## RK3568 Closed-Loop PROBE Statistics
 
@@ -124,12 +124,12 @@ G3Q + node letter A/B/C + 8 uppercase hexadecimal nonce
 
 For example, `G3QB89ABCDEF` asks node B for a snapshot. The nonce must be non-zero. All nodes receive the command, but only the addressed node responds. A valid query is first queued by the XL01 receive path and is handled by the normal data-processing task; the UART receive callback never transmits a response.
 
-The node returns a fixed binary payload as field-link `control=4`. V1 is 92 bytes; the current V2 is 148 bytes and retains the first 92-byte layout before appending diagnostics. The outer COBS/CRC32 frame protects the whole response:
+The node returns a fixed binary payload as field-link `control=4`. V1 is 92 bytes, V2 is 148 bytes, and the current V3 is 204 bytes. Every version retains the complete preceding layout before appending fields. The outer COBS/CRC32 frame protects the whole response:
 
 | Offset | Bytes | Field |
 | ---: | ---: | --- |
 | 0 | 3 | ASCII `G3S` |
-| 3 | 1 | response version `1` or `2` |
+| 3 | 1 | response version `1`, `2` or `3` |
 | 4 | 1 | node number A/B/C = `1/2/3` |
 | 5 | 1 | injection mode `DISABLED/PROBE/LIVE = 0/1/2` |
 | 6 | 2 | reserved, zero |
@@ -140,10 +140,28 @@ The node returns a fixed binary payload as field-link `control=4`. V1 is 92 byte
 | 90 | 2 | current queue depth |
 | 92 | 24 | V2 only: six completed-frame counters for 1005/1033/1074/1094/1114/1124 |
 | 116 | 32 | V2 only: eight field-link counters in the order below |
+| 148 | 1 | V3 only: enabled acquisition-path mask |
+| 149 | 1 | V3 only: low-level initialization-success mask |
+| 150 | 1 | V3 only: current-valid mask from the latest collection cycle |
+| 151 | 1 | V3 only: ever-succeeded mask since boot |
+| 152 | 1 | V3 only: acquisition-path count, fixed at `4` |
+| 153 | 3 | V3 only: reserved, zero |
+| 156 | 16 | V3 only: four big-endian uint32 collection-cycle counters |
+| 172 | 16 | V3 only: four big-endian uint32 last-success monotonic uptime values |
+| 188 | 16 | V3 only: four big-endian uint32 consecutive failed collection-cycle counters |
 
 Counter order is: accepted, duplicate, rejected, completed, CRC errors, expired assemblies, capacity evictions, TTL-unverified fragments, queued frames, queue evictions, queue-expired frames, PROBE-validated frames, PROBE-validated bytes, injected frames, injected bytes, UART write errors, UART partial writes and injection drops.
 
 V2 field-link counter order is: decoded frames, decoded RTCM frames, decode errors, sequence gaps, sequence duplicates, sequence resets, RX FIFO dropped bytes and RX FIFO drop events. The sequence counters observe the aggregate field-link stream. RK3568 and each RK2206 have independent sequence spaces, so switching between valid senders can appear as a gap, duplicate or reset. These three counters remain visible for diagnosis but are not loss gates unless the protocol later exposes per-sender sequence tracking.
+
+V3 acquisition-path order is:
+
+1. UM220-IV NK GNSS fix path;
+2. RS-ECTH-N01-TR-1 temperature/moisture register path;
+3. the same RS-ECTH-N01-TR-1 probe's independent EC register path;
+4. RS-DIP-N01-1 three-axis tilt register path.
+
+The two RS-ECTH entries represent one physical three-in-one probe and intentionally separate base registers from EC so an EC-only failure cannot hide valid temperature/moisture. `initialization-success` means the required local driver/transport initialized: UM220 UART for GNSS and SC16IS752/Modbus for RS485 paths. It is not proof that the remote sensor answered. Endpoint health comes from current/ever valid state and consecutive failures. A sample count is the number of enabled collection cycles in which the path was evaluated, not the number of raw Modbus transactions. Last-success time uses RK2206 monotonic uptime; it never relies on the board's untrusted wall clock.
 
 The RK3568 tool queries once before traffic and once after the drain interval. It computes uint32 wrap-safe deltas, so old accumulated counters do not require a node reboot. A PROBE run passes only when:
 

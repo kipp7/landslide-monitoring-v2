@@ -52,12 +52,15 @@ xl01_landslide_monitor/
 ## 核心功能
 
 ### 1. 模块化传感器支持
-每个传感器可独立启用/禁用（在 `config/app_config.h` 中配置）：
+生产硬件由 `config/app_config.h` 明确配置。当前部署的是 UM220-IV NK、RS-ECTH-N01-TR-1 三合一土壤探头和 RS-DIP-N01-1 三轴倾角计：
 ```c
-#define ENABLE_GPS          0    // GPS定位模块
-#define ENABLE_SHT30        0    // 温湿度传感器
-#define ENABLE_MPU6050      0    // 加速度/陀螺仪
-#define ENABLE_VIRTUAL      1    // 虚拟数据（测试用）✓
+#define ENABLE_GPS                 1
+#define ENABLE_RS485_SOIL_SENSOR   1
+#define ENABLE_RS485_TILT_SENSOR   1
+#define ENABLE_RS485_RAIN_SENSOR   0
+#define ENABLE_SHT30               0    // 遗留驱动，当前硬件未安装
+#define ENABLE_MPU6050             0    // 遗留驱动，当前硬件未安装
+#define ENABLE_VIRTUAL             0
 ```
 
 ### 2. ACK确认机制

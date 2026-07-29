@@ -2,7 +2,7 @@
 param(
   [string]$SdkRoot = "F:\2\openharmony\txsmartropenharmony",
   [string]$ContainerName = "openharmony-dev",
-  [string]$ReleaseDirectory = "F:\2\openharmony\rk2206_firmware_releases\xl01_gnss_rtk_v31_probe_ack_v1_20260728",
+  [string]$ReleaseDirectory = "F:\2\openharmony\rk2206_firmware_releases\xl01_gnss_rtk_v31_probe_sensor_diag_v3_20260729",
   [string]$RollbackDirectory = "F:\2\openharmony\rk2206_firmware_releases\xl01_one_second_poll_v2_20260719"
 )
 
@@ -122,7 +122,7 @@ try {
   }
   $releaseManifest = [ordered]@{
     schemaVersion = 1
-    profile = "rk2206-xl01-gnss-rtk-v31-probe-ack-v1"
+    profile = "rk2206-xl01-gnss-rtk-v31-probe-sensor-diag-v3"
     sourceCommit = $sourceCommit
     gnssRtcmInjectionMode = "probe"
     firmwareMarker = $buildManifest.firmwareMarker
@@ -149,9 +149,12 @@ RK2206 A/B/C GNSS RTK V3.1 PROBE release
 Purpose:
 - Validate XL01 RTCM receive, fragmentation, reassembly, CRC24Q and bounded queues.
 - Report PROBE V2 per-message-type and field-link loss diagnostics.
+- Report PROBE V3 diagnostics for the deployed UM220-IV NK, RS-ECTH-N01-TR-1
+  base/EC paths and RS-DIP-N01-1 tilt path.
 - Return a 24-byte recent-completion bitmap ACK for bounded selective retry.
 - Absorb short scheduler stalls with a four-frame newest-first RTCM queue.
 - PROBE never writes RTCM to the UM220 GNSS UART.
+- SHT30, MPU6050 and rain are not installed/enabled production sensor paths.
 
 Directory layout:
 - A/B/C/Firmware.img: packaged image from that node's full hb build -f run.
