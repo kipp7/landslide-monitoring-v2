@@ -28,9 +28,19 @@ and alarm-isolation baseline.
 - PR #355 advanced public `main` to `1e04268`; PR #356 merged the chat-first
   HarmonyOS UI into public `main` as `0f6300c`.
 - PR [#357](https://github.com/kipp7/landslide-monitoring-v2/pull/357)
-  carries code revision `a07460ac2f423251ff925b8bb65a7cebd0e37729`.
+  carries the reachability baseline plus server-model planner implementation
+  commit `7a0e0462bf8219ccef12f9b86508cf8e2413981a`.
   It separates RK3568 reachability from risk-data availability and preserves
   task order after conversation restoration.
+- The API now has a replaceable OpenAI-compatible Hermes planner with a strict
+  JSON schema, the same three-action allowlist, protected-intent precheck,
+  bounded history, timeout/retry, a 30-second failure circuit, audit metadata,
+  and deterministic fallback. No model endpoint, model name, or credential is
+  committed, so production behavior remains deterministic until explicitly
+  configured.
+- The App labels replies as `模型规划` or `规则保障`. A phone-to-server send
+  failure keeps the intent in an explicit retry panel and states that no task
+  ran; it is not queued for delayed execution.
 - PostgreSQL migration `23-hermes-agent.sql`, the cloud API, and RK3568
   release `hermes-edge-supervisor-3332a19f` are production-live.
 - The previous production API baseline image, retained for rollback, is
@@ -56,7 +66,9 @@ and alarm-isolation baseline.
   runs revision `a07460a` with restart count `0`. The rollout changed only the
   API container; every non-API container retained its ID and restart count.
 - The latest signed emulator HAP SHA256 is
-  `C892754ED0DDFB849DA6BE8DAF66F90C7AB4766DFB96041D9DA143090E6E093B`.
+  `B5592A5937CCCF5E6756095DB4096B370969FD1202E75FE3882D27F6587B789D`.
+  It was built from a hash-verified ASCII-path copy, installed, and launched on
+  the HarmonyOS `5.0.1(13)` emulator.
   It passed single-task, ordered three-task, protected-intent, history restore,
   station map, device detail, alert/map, and foreground alert-SSE regression.
 - Detailed evidence and rollback identifiers are in
@@ -74,6 +86,11 @@ and alarm-isolation baseline.
 
 - Review and merge PR #357, retaining the signed emulator and production
   rollback evidence.
+- Select an OpenAI-compatible provider after checking production server
+  resources. If no suitable local runtime exists, use a cloud API; keep the
+  provider secret only in the production environment. The available local SSH
+  identities did not authenticate to the cloud host during this checkpoint, so
+  no unverified local model was installed and no production service was changed.
 - Complete an explicit forced-offline cache test when the emulator permits
   network control; its shell currently rejects `ifconfig eth0 down`. Normal
   force-stop/relaunch restoration passed with the network available.
@@ -87,7 +104,9 @@ and alarm-isolation baseline.
 ## Open Questions
 
 - Which server-side model, timeout budget, and fallback policy will be used for
-  the later open-ended conversational planner?
+  production? Code defaults are 6-second attempts, at most two attempts, and a
+  30-second circuit cooldown; provider/model selection and credentials remain
+  intentionally unconfigured.
 - Why do A/B/C currently provide no serial replies even though the port is open
   and MQTT is connected?
 

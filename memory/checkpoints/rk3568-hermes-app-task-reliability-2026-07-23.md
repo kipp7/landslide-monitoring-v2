@@ -123,6 +123,22 @@ telemetry, rule-engine, or physical alarm authority.
   threshold rejection, history restoration with stable task order, station
   map, device detail, alert empty state, Tianditu map, and persistent alert SSE.
   The SSE connection was observed inside the API container network namespace.
+- Commit `7a0e0462bf8219ccef12f9b86508cf8e2413981a` adds the replaceable
+  server-side OpenAI-compatible planner. Model plans are accepted only after a
+  strict JSON schema and the existing three-action allowlist. Protected intents
+  are rejected before the model call. Network, timeout, HTTP, or invalid output
+  falls back to deterministic Chinese planning; a 30-second circuit prevents
+  repeated delay while the model is down.
+- All 15 Hermes API tests, targeted ESLint, API TypeScript build, Compose config,
+  and `git diff --check` pass. Tests cover valid model planning, invalid action
+  rejection, two-attempt network fallback, circuit-open fast fallback, and
+  protected intent without any model or RK3568 call.
+- The signed HAP at
+  `E:/codex-build/hermes-llm-planner-20260731/entry/build/default/outputs/default/entry-default-signed.hap`
+  has SHA256
+  `B5592A5937CCCF5E6756095DB4096B370969FD1202E75FE3882D27F6587B789D`.
+  It clean-built, installed, launched, and restored the existing monitoring
+  overview on the HarmonyOS `5.0.1(13)` emulator.
 
 ## In Progress
 
@@ -133,10 +149,18 @@ telemetry, rule-engine, or physical alarm authority.
   shell rejects interface changes. Normal force-stop/relaunch restoration and
   the reachable-but-unavailable cache code path are verified without changing
   production services.
+- Model integration is code-complete but intentionally inactive in production:
+  no model endpoint/name/credential is configured. Available local SSH keys did
+  not authenticate to the cloud server for the planned read-only resource
+  check, so no production container, environment, or model runtime changed.
 
 ## Next Actions
 
 - Review and merge PR #357.
+- Choose a production OpenAI-compatible provider, restore authorized cloud-host
+  access, inspect CPU/RAM/GPU, and then configure the API environment. Prefer a
+  cloud model when the host cannot run a local model without affecting the
+  monitoring stack.
 - Run an explicit forced-offline cache acceptance when emulator network control
   is available; do not stop production API merely to simulate this condition.
 - Keep physical vibration, real GPS, vendor Push, and background survival out
@@ -159,11 +183,16 @@ telemetry, rule-engine, or physical alarm authority.
 - A future LLM must produce a structured allowlisted plan through the server;
   direct shell, serial, MQTT control, device control, or alarm authority is
   prohibited.
+- The first request during a model outage can spend up to two 6-second attempts
+  before deterministic fallback. The following requests use the 30-second fast
+  fallback circuit. Provider latency must be measured before production enablement.
 
 ## Resume Prompt
 
-Review and merge PR #357. Preserve the API and HAP rollback evidence, then run
-a forced-offline cache check when simulator
+Review and merge PR #357, including commit `7a0e046`. Select the model provider
+only after an authorized production resource check; then configure and canary
+the server planner while preserving deterministic fallback. Preserve the API
+and HAP rollback evidence, then run a forced-offline cache check when simulator
 network control is available. Treat real GPS, physical vibration, vendor Push,
 and background survival as hardware-only gaps. Power-cycle RK3568 to verify
 time retention. Do not add unrestricted device control or claim A/B/C online
