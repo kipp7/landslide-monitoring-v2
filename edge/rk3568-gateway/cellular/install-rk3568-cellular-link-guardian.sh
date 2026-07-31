@@ -162,9 +162,11 @@ route_cloud_via_lan() {
 
 restart_edge_services() {
   if systemctl is-enabled --quiet "${REVERSE_TUNNEL_SERVICE}"; then
-    systemctl restart "${REVERSE_TUNNEL_SERVICE}" || true
+    systemctl --no-block try-restart "${REVERSE_TUNNEL_SERVICE}" || true
   fi
-  systemctl restart "${FIELD_GATEWAY_SERVICE}" || true
+  # A dependent service may be ordered After this oneshot. Queueing the
+  # restart lets the guardian exit before systemd starts that service again.
+  systemctl --no-block try-restart "${FIELD_GATEWAY_SERVICE}" || true
 }
 
 if ! ip link show "${USB_DEVICE}" >/dev/null 2>&1; then
@@ -197,7 +199,7 @@ fi
 
 if [[ "${prev}" != "False:cloud_unreachable_via_4g" ]]; then
   if systemctl is-enabled --quiet "${REVERSE_TUNNEL_SERVICE}"; then
-    systemctl restart "${REVERSE_TUNNEL_SERVICE}" || true
+    systemctl --no-block try-restart "${REVERSE_TUNNEL_SERVICE}" || true
   fi
 fi
 write_status false "cloud_unreachable_via_4g" "${USB_DEVICE}" "${usb_route}; ${tcp_output}"
@@ -216,6 +218,7 @@ Wants=network-online.target
 Type=oneshot
 EnvironmentFile=-/etc/lsmv2/rk3568-cellular-link-guardian.env
 ExecStart=/usr/local/sbin/lsmv2-rk3568-cellular-link-guardian.sh
+TimeoutStartSec=75
 EOF
 
 cat >/etc/systemd/system/lsmv2-rk3568-cellular-link-guardian.timer <<'EOF'
