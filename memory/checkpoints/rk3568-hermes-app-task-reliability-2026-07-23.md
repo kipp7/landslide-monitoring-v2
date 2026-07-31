@@ -29,8 +29,9 @@ telemetry, rule-engine, or physical alarm authority.
   public `main` as `36cb444679f6f4a2e9b4b257fba7bf36c21a0778`.
 - PR #355 advanced public `main` to
   `1e04268b3a39a2658409c637738cc57f58aa7b54`; PR #356 merged the HarmonyOS
-  chat-first UI as `0f6300c`. The reachability follow-up is at
-  `a07460ac2f423251ff925b8bb65a7cebd0e37729`.
+  chat-first UI as `0f6300c`. PR
+  [#357](https://github.com/kipp7/landslide-monitoring-v2/pull/357) carries
+  reachability code revision `a07460ac2f423251ff925b8bb65a7cebd0e37729`.
 - PostgreSQL 16 has `hermes_conversations`, `hermes_messages`, and
   `hermes_tasks` plus four indexes. PostgreSQL and ClickHouse remain the only
   server business sources; no App-specific database was introduced.
@@ -135,7 +136,7 @@ telemetry, rule-engine, or physical alarm authority.
 
 ## Next Actions
 
-- Open, review, and merge the focused reachability follow-up PR.
+- Review and merge PR #357.
 - Run an explicit forced-offline cache acceptance when emulator network control
   is available; do not stop production API merely to simulate this condition.
 - Keep physical vibration, real GPS, vendor Push, and background survival out
@@ -161,8 +162,8 @@ telemetry, rule-engine, or physical alarm authority.
 
 ## Resume Prompt
 
-Review and merge the reachability follow-up at `a07460a`. Preserve the API and
-HAP rollback evidence, then run a forced-offline cache check when simulator
+Review and merge PR #357. Preserve the API and HAP rollback evidence, then run
+a forced-offline cache check when simulator
 network control is available. Treat real GPS, physical vibration, vendor Push,
 and background survival as hardware-only gaps. Power-cycle RK3568 to verify
 time retention. Do not add unrestricted device control or claim A/B/C online

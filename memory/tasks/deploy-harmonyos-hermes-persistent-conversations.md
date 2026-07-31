@@ -27,10 +27,10 @@ and alarm-isolation baseline.
   public `main` as `36cb444`.
 - PR #355 advanced public `main` to `1e04268`; PR #356 merged the chat-first
   HarmonyOS UI into public `main` as `0f6300c`.
-- The follow-up branch `fix/harmonyos-hermes-reachability-20260731` at
-  `a07460ac2f423251ff925b8bb65a7cebd0e37729` separates RK3568 reachability
-  from risk-data availability and preserves task order after conversation
-  restoration.
+- PR [#357](https://github.com/kipp7/landslide-monitoring-v2/pull/357)
+  carries code revision `a07460ac2f423251ff925b8bb65a7cebd0e37729`.
+  It separates RK3568 reachability from risk-data availability and preserves
+  task order after conversation restoration.
 - PostgreSQL migration `23-hermes-agent.sql`, the cloud API, and RK3568
   release `hermes-edge-supervisor-3332a19f` are production-live.
 - The previous production API baseline image, retained for rollback, is
@@ -72,8 +72,8 @@ and alarm-isolation baseline.
 
 ## Plan
 
-- Open, review, and merge the focused reachability follow-up PR, retaining the
-  signed emulator and production rollback evidence.
+- Review and merge PR #357, retaining the signed emulator and production
+  rollback evidence.
 - Complete an explicit forced-offline cache test when the emulator permits
   network control; its shell currently rejects `ifconfig eth0 down`. Normal
   force-stop/relaunch restoration passed with the network available.
