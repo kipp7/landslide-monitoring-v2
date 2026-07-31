@@ -32,8 +32,12 @@ built from DevEco Studio or with its bundled `hvigorw` command after setting
   risk (`重新研判`), collect diagnostic evidence (`诊断链路`), and generate a
   situation report (`生成报告`). A message may contain several safe actions;
   the server creates an auditable plan and dispatches them to RK3568 in spoken
-  order. The App shows the real conversation and each server task rather than
-  treating an action log as chat history.
+  order. When an OpenAI-compatible planner is configured, it interprets natural
+  conversation through a strict JSON plan. Missing, timed-out, disconnected, or
+  invalid model responses fall back to the deterministic Chinese intent parser.
+  The App labels replies as `模型规划` or `规则保障` and shows the real
+  conversation and each server task rather than treating an action log as chat
+  history.
 - Protected requests such as restarting services, changing networks or alarm
   thresholds, controlling devices, writing serial data, and triggering or
   clearing physical alarms are blocked before RK3568 is called. Physical alarm
@@ -41,6 +45,9 @@ built from DevEco Studio or with its bundled `hvigorw` command after setting
 - Edge AI is loaded independently from the monitoring dashboard. If RK3568
   Hermes is unavailable, the App keeps the last cached AI snapshot and all
   original monitoring pages continue to refresh normally.
+- A phone-to-server send failure is never queued for delayed automatic
+  execution. The App retains the failed intent, states that no task ran, and
+  offers an explicit retry after connectivity returns.
 - Successful summary, station, device, and latest-state responses are cached
   with TTLs. The app renders stale data immediately and refreshes in the
   background.

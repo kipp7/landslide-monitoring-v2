@@ -14,6 +14,11 @@ import {
   type HermesExecutedTask,
   type SafeHermesAction,
 } from "../hermes-agent";
+import {
+  planHermesWithFallback,
+  type HermesPlannerMessage,
+  type HermesPlanningResult,
+} from "../hermes-planner";
 
 const actionSchema = z
   .object({
@@ -266,6 +271,15 @@ function taskDto(row: HermesTaskRow): JsonObject {
   };
 }
 
+function plannerDto(result: HermesPlanningResult): JsonObject {
+  return {
+    source: result.source,
+    model: result.model,
+    fallback: result.fallbackReason !== null,
+    fallbackReason: result.fallbackReason,
+  };
+}
+
 const CONVERSATION_COLUMNS = `
   conversation_id,
   title,
@@ -451,6 +465,25 @@ async function loadPreviousPlan(pg: PgPool, conversationId: string): Promise<Saf
     else if (value === "generate_report") actions.push("generate_report");
   }
   return actions;
+}
+
+async function loadPlannerHistory(
+  pg: PgPool,
+  conversationId: string
+): Promise<HermesPlannerMessage[]> {
+  const rows = await withPgClient(pg, async (client) =>
+    client.query<{ role: "user" | "assistant"; content: string }>(
+      `
+        SELECT role, content
+        FROM hermes_messages
+        WHERE conversation_id=$1 AND role IN ('user', 'assistant')
+        ORDER BY created_at DESC
+        LIMIT 12
+      `,
+      [conversationId]
+    )
+  );
+  return rows.rows.reverse();
 }
 
 export function registerEdgeAiRoutes(
@@ -663,8 +696,17 @@ export function registerEdgeAiRoutes(
       "user",
       parsed.data.message
     );
-    const previousPlan = await loadPreviousPlan(pg, conversation.conversation_id);
-    const plan = planHermesMessage(parsed.data.message, previousPlan);
+    const [previousPlan, plannerHistory] = await Promise.all([
+      loadPreviousPlan(pg, conversation.conversation_id),
+      loadPlannerHistory(pg, conversation.conversation_id),
+    ]);
+    const planning = await planHermesWithFallback(
+      config,
+      parsed.data.message,
+      previousPlan,
+      plannerHistory
+    );
+    const plan = planning.plan;
     const completedRows: HermesTaskRow[] = [];
     const executedTasks: HermesExecutedTask[] = [];
 
@@ -715,6 +757,9 @@ export function registerEdgeAiRoutes(
         plan: plan.actions,
         taskIds: completedRows.map((task) => task.task_id),
         safetyBoundary: "read_only_or_sidecar_only",
+        plannerSource: planning.source,
+        plannerModel: planning.model,
+        plannerFallbackReason: planning.fallbackReason,
       }
     );
     conversation = await withPgClient(pg, async (client) => {
@@ -734,8 +779,12 @@ export function registerEdgeAiRoutes(
       status: executedTasks.some((task) => task.status === "failed") ? "fail" : "success",
       targetType: "hermes_conversation",
       targetId: conversation.conversation_id,
-      requestData: { message: parsed.data.message, plan },
-      responseData: { taskIds: completedRows.map((task) => task.task_id), blocked: plan.blocked },
+      requestData: { message: parsed.data.message, plan, planner: plannerDto(planning) },
+      responseData: {
+        taskIds: completedRows.map((task) => task.task_id),
+        blocked: plan.blocked,
+        planner: plannerDto(planning),
+      },
     });
 
     ok(
@@ -746,6 +795,7 @@ export function registerEdgeAiRoutes(
         tasks: completedRows.map(taskDto),
         blocked: plan.blocked,
         suggestions: plan.suggestions,
+        planner: plannerDto(planning),
       },
       traceId
     );

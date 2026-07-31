@@ -380,6 +380,9 @@ export type HermesMessageRole = 'user' | 'assistant' | 'system';
 export interface HermesMessageMetadata {
   blocked?: boolean;
   safetyBoundary?: string;
+  plannerSource?: 'model' | 'deterministic';
+  plannerModel?: string;
+  plannerFallbackReason?: string;
 }
 
 export interface HermesMessage {
@@ -417,12 +420,20 @@ export interface HermesConversationHistory {
   tasks: Array<HermesAgentTask>;
 }
 
+export interface HermesPlannerStatus {
+  source: 'model' | 'deterministic';
+  model?: string;
+  fallback: boolean;
+  fallbackReason?: string;
+}
+
 export interface HermesChatResponse {
   conversation: HermesConversation;
   messages: Array<HermesMessage>;
   tasks: Array<HermesAgentTask>;
   blocked: boolean;
   suggestions: Array<EdgeAiActionName>;
+  planner: HermesPlannerStatus;
 }
 
 export interface EdgeRiskModelStatus {

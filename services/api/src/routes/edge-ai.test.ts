@@ -3,6 +3,7 @@ import test from "node:test";
 import Fastify from "fastify";
 import { loadConfigFromEnv } from "../config";
 import { buildHermesAssistantReply, planHermesMessage } from "../hermes-agent";
+import { planHermesWithFallback } from "../hermes-planner";
 import { registerEdgeAiRoutes, resolveEdgeAiIntent, type EdgeAiIntentResolution } from "./edge-ai";
 
 type EdgeAiEnvelope = {
@@ -18,6 +19,11 @@ type EdgeAiEnvelope = {
 function fetchUrl(input: string | URL | Request): string {
   if (typeof input === "string") return input;
   return input instanceof URL ? input.href : input.url;
+}
+
+function testJsonObject(value: unknown): Record<string, unknown> {
+  assert.ok(typeof value === "object" && value !== null && !Array.isArray(value));
+  return value as Record<string, unknown>;
 }
 
 void test("status degrades to unavailable when Hermes is not configured", async () => {
@@ -134,6 +140,146 @@ void test("chat reply is grounded in completed edge task results", () => {
   ]);
   assert.match(reply, /采集 6 项只读证据/u);
   assert.match(reply, /未接管告警、串口或 MQTT 主链路/u);
+});
+
+void test("Hermes uses a validated OpenAI-compatible structured plan", async (context) => {
+  let requestUrl = "";
+  let requestBody: Record<string, unknown> = {};
+  context.mock.method(globalThis, "fetch", async (input: string | URL | Request, init?: RequestInit) => {
+    requestUrl = fetchUrl(input);
+    assert.equal(new Headers(init?.headers).get("authorization"), "Bearer test-key");
+    const parsed: unknown = JSON.parse(typeof init?.body === "string" ? init.body : "{}") as unknown;
+    requestBody = testJsonObject(parsed);
+    await Promise.resolve();
+    return new Response(
+      JSON.stringify({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                blocked: false,
+                reason: "我会先检查链路，再生成态势报告。",
+                actions: ["collect_logs", "generate_report"],
+                suggestions: [],
+              }),
+            },
+          },
+        ],
+      }),
+      { status: 200, headers: { "content-type": "application/json" } }
+    );
+  });
+  const config = loadConfigFromEnv({
+    CLICKHOUSE_URL: "http://127.0.0.1:8123",
+    HERMES_LLM_BASE_URL: "http://127.0.0.1:11434/v1/",
+    HERMES_LLM_API_KEY: "test-key",
+    HERMES_LLM_MODEL: "qwen-test",
+    HERMES_LLM_MAX_ATTEMPTS: "1",
+  });
+
+  const result = await planHermesWithFallback(config, "检查一下并给我一份汇报", [], [
+    { role: "user", content: "检查一下并给我一份汇报" },
+  ]);
+
+  assert.equal(requestUrl, "http://127.0.0.1:11434/v1/chat/completions");
+  assert.equal(result.source, "model");
+  assert.equal(result.model, "qwen-test");
+  assert.equal(result.fallbackReason, null);
+  assert.deepEqual(result.plan.actions, ["collect_logs", "generate_report"]);
+  const responseFormat = testJsonObject(requestBody.response_format);
+  assert.equal(responseFormat.type, "json_schema");
+  const jsonSchema = testJsonObject(responseFormat.json_schema);
+  assert.equal(jsonSchema.name, "hermes_safe_task_plan");
+});
+
+void test("Hermes rejects invalid model actions and falls back to deterministic planning", async (context) => {
+  context.mock.method(globalThis, "fetch", async () => {
+    await Promise.resolve();
+    return new Response(
+      JSON.stringify({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                blocked: false,
+                reason: "执行重启。",
+                actions: ["restart_gateway"],
+                suggestions: [],
+              }),
+            },
+          },
+        ],
+      }),
+      { status: 200, headers: { "content-type": "application/json" } }
+    );
+  });
+  const config = loadConfigFromEnv({
+    CLICKHOUSE_URL: "http://127.0.0.1:8123",
+    HERMES_LLM_BASE_URL: "http://127.0.0.1:11434/v1",
+    HERMES_LLM_MODEL: "unsafe-test",
+    HERMES_LLM_MAX_ATTEMPTS: "1",
+  });
+
+  const result = await planHermesWithFallback(config, "生成当前态势报告", [], [
+    { role: "user", content: "生成当前态势报告" },
+  ]);
+
+  assert.equal(result.source, "deterministic");
+  assert.equal(result.fallbackReason, "invalid_response");
+  assert.deepEqual(result.plan.actions, ["generate_report"]);
+});
+
+void test("Hermes retries a disconnected model and keeps offline-safe rules available", async (context) => {
+  let calls = 0;
+  context.mock.method(globalThis, "fetch", async () => {
+    calls += 1;
+    await Promise.resolve();
+    throw new Error("model network unavailable");
+  });
+  const config = loadConfigFromEnv({
+    CLICKHOUSE_URL: "http://127.0.0.1:8123",
+    HERMES_LLM_BASE_URL: "http://127.0.0.1:11434/v1",
+    HERMES_LLM_MODEL: "offline-test",
+    HERMES_LLM_MAX_ATTEMPTS: "2",
+    HERMES_LLM_COOLDOWN_MS: "30000",
+  });
+
+  const result = await planHermesWithFallback(config, "重新研判当前风险", [], [
+    { role: "user", content: "重新研判当前风险" },
+  ]);
+
+  assert.equal(calls, 2);
+  assert.equal(result.source, "deterministic");
+  assert.equal(result.fallbackReason, "network_error");
+  assert.deepEqual(result.plan.actions, ["recheck"]);
+
+  const immediateFallback = await planHermesWithFallback(config, "生成当前态势报告", [], [
+    { role: "user", content: "生成当前态势报告" },
+  ]);
+  assert.equal(calls, 2);
+  assert.equal(immediateFallback.source, "deterministic");
+  assert.equal(immediateFallback.fallbackReason, "circuit_open");
+  assert.deepEqual(immediateFallback.plan.actions, ["generate_report"]);
+});
+
+void test("protected intents are blocked before the configured model is called", async (context) => {
+  let calls = 0;
+  context.mock.method(globalThis, "fetch", () => {
+    calls += 1;
+    return Promise.resolve(new Response("{}", { status: 200 }));
+  });
+  const config = loadConfigFromEnv({
+    CLICKHOUSE_URL: "http://127.0.0.1:8123",
+    HERMES_LLM_BASE_URL: "http://127.0.0.1:11434/v1",
+    HERMES_LLM_MODEL: "should-not-run",
+  });
+
+  const result = await planHermesWithFallback(config, "重启网关并修改告警阈值");
+
+  assert.equal(calls, 0);
+  assert.equal(result.source, "deterministic");
+  assert.equal(result.plan.blocked, true);
+  assert.deepEqual(result.plan.actions, []);
 });
 
 void test("protected natural-language intents are blocked without a board call", async () => {

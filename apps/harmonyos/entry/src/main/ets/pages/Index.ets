@@ -133,6 +133,7 @@ struct Index {
   @State private edgeAiMessages: Array<HermesMessage> = [];
   @State private edgeAiConversationTasks: Array<HermesAgentTask> = [];
   @State private edgeAiChatLoading: boolean = false;
+  @State private edgeAiFailedIntent: string = '';
   @State private overviewTrends: Array<DeviceMonitoringTrend> = [];
   @State private stations: Array<Station> = [];
   @State private devices: Array<Device> = [];
@@ -821,6 +822,7 @@ struct Index {
   private async openHermesConversation(conversationId: string): Promise<void> {
     if (!this.repository || this.edgeAiChatLoading || conversationId.length === 0) return;
     this.edgeAiChatLoading = true;
+    this.edgeAiFailedIntent = '';
     try {
       const history = await (this.repository as MonitoringRepository).hermesConversation(conversationId);
       this.edgeAiConversationId = history.conversation.conversationId;
@@ -840,6 +842,7 @@ struct Index {
     this.edgeAiMessages = [];
     this.edgeAiConversationTasks = [];
     this.edgeAiIntentResolution = null;
+    this.edgeAiFailedIntent = '';
   }
 
   private async recheckEdgeAi(): Promise<void> {
@@ -889,6 +892,7 @@ struct Index {
   private async sendHermesMessage(intent: string): Promise<void> {
     if (!this.repository || this.edgeAiActionBusy || intent.trim().length === 0) return;
     this.edgeAiActionBusy = true;
+    this.edgeAiFailedIntent = '';
     const localMessageId = `local-${Date.now()}`;
     const localMessage: HermesMessage = {
       messageId: localMessageId,
@@ -946,6 +950,7 @@ struct Index {
         if (this.edgeAiMessages[index].messageId !== localMessageId) restoredMessages.push(this.edgeAiMessages[index]);
       }
       this.edgeAiMessages = restoredMessages;
+      this.edgeAiFailedIntent = intent.trim();
       this.errorMessage = this.errorText(error);
     } finally {
       this.edgeAiActionBusy = false;
@@ -1594,6 +1599,7 @@ struct Index {
               conversationId: this.edgeAiConversationId,
               messages: this.edgeAiMessages,
               conversationTasks: this.edgeAiConversationTasks,
+              failedIntent: this.edgeAiFailedIntent,
               chatLoading: this.edgeAiChatLoading,
               refreshing: this.edgeAiRefreshing || this.edgeAiActionBusy,
               executing: this.edgeAiActionBusy,
@@ -2227,6 +2233,7 @@ struct AiPane {
   @Prop conversationId: string;
   @Prop messages: Array<HermesMessage>;
   @Prop conversationTasks: Array<HermesAgentTask>;
+  @Prop failedIntent: string;
   @Prop chatLoading: boolean;
   @Prop refreshing: boolean;
   @Prop executing: boolean;
@@ -2333,6 +2340,7 @@ struct AiPane {
           messages: this.messages,
           tasks: this.conversationTasks,
           loading: this.chatLoading,
+          failedIntent: this.failedIntent,
           onAction: (action: EdgeAiActionName) => this.onAction(action),
           onIntent: (intent: string) => this.onIntent(intent)
         });
@@ -2577,6 +2585,7 @@ struct HermesCommandPanel {
   @Prop messages: Array<HermesMessage>;
   @Prop tasks: Array<HermesAgentTask>;
   @Prop loading: boolean;
+  @Prop failedIntent: string;
   @State private intentText: string = '';
   @State private toolsExpanded: boolean = false;
   private chatScroller: Scroller = new Scroller();
@@ -2684,6 +2693,40 @@ struct HermesCommandPanel {
             }
             .padding({ left: 12, right: 12, top: 11, bottom: 11 })
             .backgroundColor('#F8EAE6')
+            .borderRadius(8)
+            .width('100%')
+          }
+
+          if (this.failedIntent.length > 0) {
+            Column({ space: 8 }) {
+              Row({ space: 9 }) {
+                SymbolGlyph($r('sys.symbol.exclamationmark_triangle'))
+                  .fontSize(18)
+                  .fontColor([UI_COLOR_MUTED])
+                Text('消息未送达，任务没有执行')
+                  .fontSize(13)
+                  .fontWeight(FontWeight.Medium)
+                  .fontColor(UI_COLOR_TEXT)
+                  .layoutWeight(1)
+                Button('重试')
+                  .height(36)
+                  .fontSize(13)
+                  .fontColor('#F7FAF8')
+                  .backgroundColor(UI_COLOR_HERMES)
+                  .borderRadius(18)
+                  .enabled(!this.executing)
+                  .onClick(() => this.onIntent(this.failedIntent))
+              }
+              .width('100%')
+              Text(this.failedIntent)
+                .fontSize(12)
+                .fontColor(UI_COLOR_MUTED)
+                .maxLines(2)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+                .width('100%')
+            }
+            .padding(12)
+            .backgroundColor('#F0F3F2')
             .borderRadius(8)
             .width('100%')
           }
@@ -2854,6 +2897,12 @@ struct HermesMessageRow {
             .fontColor(UI_COLOR_TEXT)
             .lineHeight(23)
             .width('100%')
+          if (this.message.metadata.plannerSource) {
+            Text(this.message.metadata.plannerSource === 'model' ? '模型规划' : '规则保障')
+              .fontSize(11)
+              .fontColor(UI_COLOR_SUBTLE)
+              .margin({ top: 5 })
+          }
         }
         .padding({ top: 3 })
         .alignItems(HorizontalAlign.Start)
