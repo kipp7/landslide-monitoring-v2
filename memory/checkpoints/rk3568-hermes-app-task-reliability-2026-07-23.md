@@ -28,9 +28,8 @@ telemetry, rule-engine, or physical alarm authority.
   merged the rollout follow-up fixes and current production checkpoint into
   public `main` as `36cb444679f6f4a2e9b4b257fba7bf36c21a0778`.
 - PR #355 advanced public `main` to
-  `1e04268b3a39a2658409c637738cc57f58aa7b54`. PR #356 is open with the
-  HarmonyOS chat-first UI commit
-  `aa07995977e2b1929e2181ba7a89fbbc6306d04a`.
+  `1e04268b3a39a2658409c637738cc57f58aa7b54`. PR #356 remains open with
+  the HarmonyOS chat-first UI and its second-round simulator refinements.
 - PostgreSQL 16 has `hermes_conversations`, `hermes_messages`, and
   `hermes_tasks` plus four indexes. PostgreSQL and ClickHouse remain the only
   server business sources; no App-specific database was introduced.
@@ -79,22 +78,34 @@ telemetry, rule-engine, or physical alarm authority.
 - App acceptance now targets the DevEco Studio phone emulator rather than a
   physical phone. HarmonyOS `5.0.1(13)` is connected through HDC at
   `127.0.0.1:5555`.
-- The signed PR #356 HAP built at
+- The latest signed PR #356 HAP built at
   `E:/codex-build/hermes-chat-ui-20260731/entry/build/default/outputs/default/entry-default-signed.hap`
   has SHA256
-  `4131E34BF2A4C2EB7D8CBDF6803DA0320217F75EF46258E7598EF8A8741EC540`.
+  `8F2D815CAABEE5BEBD4FD4DAD7FE59FC11DAB2E40F2674678810718200EA726D`.
   It installed and launched successfully on the emulator.
-- The chat-first Hermes screen, history empty state, fixed composer, and
-  software-keyboard layout passed screenshot inspection. The previous signed
-  HAP remains the rollback copy at
+- The second UI pass replaces the three-button header with history, centered
+  connection state, and new conversation; hides quick tasks behind the composer
+  tool button; removes the unrelated global task result from chat; keeps user
+  bubbles content-sized; and removes repeated assistant labels and timestamps.
+- The chat screen, content-sized short-message bubbles, hidden and expanded task
+  tools, fixed composer, and software-keyboard layout passed HarmonyOS 5.0.1(13)
+  simulator inspection. The clean system snapshot is
+  `E:/codex-build/hermes-chat-ui-20260731/hermes-chat-final-v2.jpeg` with SHA256
+  `C8A3E493B02C184486995A8DF53768B67E33184DAF4628D6C957EC323E5716DD`.
+- The first rebuild attempt exposed a stale-HAP hazard: the source copy command
+  had timed out before copying, while Hvigor reported old packaging tasks as
+  `UP-TO-DATE`. Future out-of-tree builds must verify source and build-copy
+  SHA256 values, then run `hvigorw clean` before `assembleHap`.
+- The previous signed HAP remains the rollback copy at
   `_private-production-backup/hermes-pr349-20260731-150457/entry-default-pr349-signed.hap`.
 
 ## In Progress
 
 - PostgreSQL, API, RK3568, conversations, and bounded task execution are
-  production-live. The latest signed HAP is installed on the emulator. Full
+  production-live. The refined signed HAP is installed on the emulator. Full
   emulator-originated task and alarm regression remains pending because the
-  App reported RK3568 unavailable during the UI pass.
+  App reports RK3568 unavailable; the UI deliberately displays that server
+  state instead of fabricating availability.
 
 ## Next Actions
 

@@ -1587,7 +1587,6 @@ struct Index {
               status: this.edgeAiStatus,
               devices: this.devices,
               actions: this.edgeAiActions,
-              lastAction: this.edgeAiLastAction,
               intentResolution: this.edgeAiIntentResolution,
               conversations: this.edgeAiConversations,
               conversationId: this.edgeAiConversationId,
@@ -2221,7 +2220,6 @@ struct AiPane {
   @Prop status: EdgeAiStatus | null;
   @Prop devices: Array<Device>;
   @Prop actions: Array<HermesAction>;
-  @Prop lastAction: HermesAction | null;
   @Prop intentResolution: EdgeAiIntentResolution | null;
   @Prop conversations: Array<HermesConversation>;
   @Prop conversationId: string;
@@ -2249,15 +2247,6 @@ struct AiPane {
     return this.status.available ? UI_COLOR_SUCCESS : UI_COLOR_DANGER;
   }
 
-  private activeTitle(): string {
-    for (let index = 0; index < this.conversations.length; index++) {
-      if (this.conversations[index].conversationId === this.conversationId) {
-        return this.conversations[index].title;
-      }
-    }
-    return '新对话';
-  }
-
   private startNewConversation(): void {
     this.showingHistory = false;
     this.onNewConversation();
@@ -2271,51 +2260,40 @@ struct AiPane {
   build() {
     Column() {
       Row({ space: 10 }) {
-        Column({ space: 4 }) {
-          Text('Hermes')
-            .fontSize(21)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(UI_COLOR_TEXT)
-          Row({ space: 6 }) {
-            Circle({ width: 7, height: 7 }).fill(this.connectionColor())
-            Text(this.showingHistory ? '历史对话' : `${this.connectionText()} · ${this.activeTitle()}`)
-              .fontSize(12)
-              .fontColor(UI_COLOR_MUTED)
-              .maxLines(1)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
-          }
-          .width('100%')
-        }
-        .alignItems(HorizontalAlign.Start)
-        .layoutWeight(1)
-
-        Button({ type: ButtonType.Circle }) {
-          if (this.refreshing) {
-            LoadingProgress().width(18).height(18).color(UI_COLOR_HERMES)
-          } else {
-            SymbolGlyph($r('sys.symbol.arrow_clockwise'))
-              .fontSize(19)
-              .fontColor([UI_COLOR_TEXT])
-          }
-        }
-        .width(44)
-        .height(44)
-        .backgroundColor('#F0F3F1')
-        .enabled(!this.refreshing)
-        .accessibilityText('刷新 Hermes 状态')
-        .onClick(() => this.onRefresh())
-
         Button({ type: ButtonType.Circle }) {
           Text(this.showingHistory ? '×' : '☰')
-            .fontSize(this.showingHistory ? 24 : 20)
+            .fontSize(this.showingHistory ? 23 : 19)
             .fontWeight(FontWeight.Medium)
             .fontColor(UI_COLOR_TEXT)
         }
         .width(44)
         .height(44)
-        .backgroundColor(this.showingHistory ? UI_COLOR_HERMES_SOFT : '#F0F3F1')
+        .backgroundColor('#F2F4F3')
         .accessibilityText(this.showingHistory ? '关闭历史对话' : '查看历史对话')
         .onClick(() => this.showingHistory = !this.showingHistory)
+
+        Column({ space: 3 }) {
+          Text(this.showingHistory ? '历史对话' : 'Hermes')
+            .fontSize(18)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(UI_COLOR_TEXT)
+          Row({ space: 5 }) {
+            if (this.refreshing) {
+              LoadingProgress().width(12).height(12).color(UI_COLOR_HERMES)
+            } else {
+              Circle({ width: 6, height: 6 }).fill(this.connectionColor())
+            }
+            Text(this.showingHistory ? `${this.conversations.length} 个会话` : this.connectionText())
+              .fontSize(11)
+              .fontColor(UI_COLOR_MUTED)
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+          }
+        }
+        .alignItems(HorizontalAlign.Center)
+        .layoutWeight(1)
+        .accessibilityText(`${this.connectionText()}，点击刷新`)
+        .onClick(() => this.onRefresh())
 
         Button({ type: ButtonType.Circle }) {
           Text('＋')
@@ -2330,8 +2308,8 @@ struct AiPane {
         .accessibilityText('新建对话')
         .onClick(() => this.startNewConversation())
       }
-      .height(68)
-      .padding({ left: 16, right: 12, top: 8, bottom: 8 })
+      .height(64)
+      .padding({ left: 12, right: 12, top: 6, bottom: 6 })
       .backgroundColor(UI_COLOR_SURFACE)
       .border({ width: { bottom: 1 }, color: '#E6EBE8' })
       .width('100%')
@@ -2349,7 +2327,6 @@ struct AiPane {
           status: this.status,
           executing: this.executing,
           resolution: this.intentResolution,
-          lastAction: this.lastAction,
           messages: this.messages,
           tasks: this.conversationTasks,
           loading: this.chatLoading,
@@ -2374,7 +2351,7 @@ struct HermesHistoryPane {
   build() {
     Column({ space: 0 }) {
       Row() {
-        Text('历史对话')
+        Text('最近对话')
           .fontSize(15)
           .fontWeight(FontWeight.Bold)
           .fontColor(UI_COLOR_TEXT)
@@ -2594,11 +2571,11 @@ struct HermesCommandPanel {
   @Prop status: EdgeAiStatus | null;
   @Prop executing: boolean;
   @Prop resolution: EdgeAiIntentResolution | null;
-  @Prop lastAction: HermesAction | null;
   @Prop messages: Array<HermesMessage>;
   @Prop tasks: Array<HermesAgentTask>;
   @Prop loading: boolean;
   @State private intentText: string = '';
+  @State private toolsExpanded: boolean = false;
   private chatScroller: Scroller = new Scroller();
   onAction: (action: EdgeAiActionName) => void = () => {};
   onIntent: (intent: string) => void = () => {};
@@ -2607,6 +2584,7 @@ struct HermesCommandPanel {
     const value = this.intentText.trim();
     if (value.length === 0 || this.executing) return;
     this.intentText = '';
+    this.toolsExpanded = false;
     this.onIntent(value);
   }
 
@@ -2728,22 +2706,6 @@ struct HermesCommandPanel {
             .backgroundColor('#F0F4F2')
             .borderRadius(8)
             .width('100%')
-          } else if (this.lastAction && this.messages.length > 0) {
-            Column({ space: 5 }) {
-              Text(hermesActionSummary(this.lastAction))
-                .fontSize(13)
-                .fontWeight(FontWeight.Medium)
-                .fontColor(UI_COLOR_TEXT)
-              Text(this.lastAction.status === 'completed' ? '任务已完成并写入审计记录' :
-                this.lastAction.status === 'failed' ? '执行失败，监测主链路未受影响' : '任务正在独立队列中处理')
-                .fontSize(12)
-                .fontColor(this.lastAction.status === 'failed' ? UI_COLOR_DANGER : UI_COLOR_MUTED)
-            }
-            .alignItems(HorizontalAlign.Start)
-            .padding(12)
-            .backgroundColor('#F0F4F2')
-            .borderRadius(8)
-            .width('100%')
           }
         }
         .padding({ left: 16, right: 16, top: 12, bottom: 20 })
@@ -2757,29 +2719,53 @@ struct HermesCommandPanel {
       .align(Alignment.TopStart)
 
       Column({ space: 10 }) {
-        Row({ space: 8 }) {
-          HermesQuickAction({
-            label: '重新研判',
-            action: 'recheck',
-            actionEnabled: !this.executing,
-            onAction: (action: EdgeAiActionName) => this.onAction(action)
-          });
-          HermesQuickAction({
-            label: '生成报告',
-            action: 'generate_report',
-            actionEnabled: !this.executing,
-            onAction: (action: EdgeAiActionName) => this.onAction(action)
-          });
-          HermesQuickAction({
-            label: '诊断链路',
-            action: 'collect_logs',
-            actionEnabled: !this.executing,
-            onAction: (action: EdgeAiActionName) => this.onAction(action)
-          });
+        if (this.toolsExpanded) {
+          Row({ space: 8 }) {
+            HermesQuickAction({
+              label: '重新研判',
+              action: 'recheck',
+              actionEnabled: !this.executing,
+              onAction: (action: EdgeAiActionName) => {
+                this.toolsExpanded = false;
+                this.onAction(action);
+              }
+            });
+            HermesQuickAction({
+              label: '生成报告',
+              action: 'generate_report',
+              actionEnabled: !this.executing,
+              onAction: (action: EdgeAiActionName) => {
+                this.toolsExpanded = false;
+                this.onAction(action);
+              }
+            });
+            HermesQuickAction({
+              label: '诊断链路',
+              action: 'collect_logs',
+              actionEnabled: !this.executing,
+              onAction: (action: EdgeAiActionName) => {
+                this.toolsExpanded = false;
+                this.onAction(action);
+              }
+            });
+          }
+          .width('100%')
         }
-        .width('100%')
 
         Row({ space: 4 }) {
+          Button({ type: ButtonType.Circle }) {
+            Text(this.toolsExpanded ? '×' : '＋')
+              .fontSize(this.toolsExpanded ? 21 : 19)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(UI_COLOR_TEXT)
+          }
+          .width(42)
+          .height(42)
+          .backgroundColor(this.toolsExpanded ? '#E2E8E4' : '#00000000')
+          .enabled(!this.executing)
+          .accessibilityText(this.toolsExpanded ? '收起任务工具' : '打开任务工具')
+          .onClick(() => this.toolsExpanded = !this.toolsExpanded)
+
           TextInput({ text: this.intentText, placeholder: '给 Hermes 发消息' })
             .height(48)
             .fontSize(15)
@@ -2787,7 +2773,7 @@ struct HermesCommandPanel {
             .placeholderColor(UI_COLOR_SUBTLE)
             .caretColor(UI_COLOR_HERMES)
             .backgroundColor('#00000000')
-            .padding({ left: 12, right: 6 })
+            .padding({ left: 4, right: 6 })
             .onChange((value: string) => this.intentText = value)
             .enabled(!this.executing)
             .layoutWeight(1)
@@ -2808,9 +2794,9 @@ struct HermesCommandPanel {
           .onClick(() => this.submitIntent())
         }
         .height(52)
-        .padding({ left: 2, right: 4 })
-        .backgroundColor(UI_COLOR_SURFACE)
-        .border({ width: 1, color: '#D4DDD8' })
+        .padding({ left: 4, right: 4 })
+        .backgroundColor('#F3F5F4')
+        .border({ width: 1, color: '#E0E5E2' })
         .borderRadius(26)
         .width('100%')
       }
@@ -2832,22 +2818,16 @@ struct HermesMessageRow {
     if (this.message.role === 'user') {
       Row() {
         Blank().layoutWeight(1)
-        Column({ space: 5 }) {
+        Column() {
           Text(this.message.content)
             .fontSize(15)
             .fontColor('#F7FAF8')
             .lineHeight(22)
-            .width('100%')
-          Text(shortTime(this.message.createdAt))
-            .fontSize(10)
-            .fontColor('#BCD0C6')
-            .textAlign(TextAlign.End)
-            .width('100%')
         }
-        .padding({ left: 14, right: 14, top: 11, bottom: 9 })
+        .padding({ left: 14, right: 14, top: 10, bottom: 10 })
         .backgroundColor(UI_COLOR_HERMES)
         .borderRadius(18)
-        .constraintSize({ maxWidth: '84%' })
+        .constraintSize({ maxWidth: '82%' })
       }
       .width('100%')
       .alignItems(VerticalAlign.Top)
@@ -2862,18 +2842,7 @@ struct HermesMessageRow {
         }
         .width(30)
         .height(30)
-        Column({ space: 6 }) {
-          Row() {
-            Text('Hermes')
-              .fontSize(12)
-              .fontWeight(FontWeight.Bold)
-              .fontColor(UI_COLOR_HERMES)
-              .layoutWeight(1)
-            Text(shortTime(this.message.createdAt))
-              .fontSize(10)
-              .fontColor(UI_COLOR_SUBTLE)
-          }
-          .width('100%')
+        Column() {
           Text(this.message.content)
             .fontSize(15)
             .fontColor(UI_COLOR_TEXT)
@@ -2881,6 +2850,7 @@ struct HermesMessageRow {
             .width('100%')
         }
         .padding({ top: 3 })
+        .alignItems(HorizontalAlign.Start)
         .layoutWeight(1)
       }
       .width('100%')
