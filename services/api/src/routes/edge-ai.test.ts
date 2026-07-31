@@ -70,6 +70,12 @@ void test("chat planner dispatches multiple safe tasks in spoken order", () => {
   assert.deepEqual(plan.actions, ["collect_logs", "recheck", "generate_report"]);
 });
 
+void test("chat planner accepts natural Chinese variants observed in production", () => {
+  const plan = planHermesMessage("先检查当前链路，再收集诊断日志，然后生成报告");
+  assert.equal(plan.blocked, false);
+  assert.deepEqual(plan.actions, ["collect_logs", "generate_report"]);
+});
+
 void test("chat planner can continue the previous audited task plan", () => {
   const plan = planHermesMessage("按刚才的再来一次", ["collect_logs", "generate_report"]);
   assert.deepEqual(plan.actions, ["collect_logs", "generate_report"]);
