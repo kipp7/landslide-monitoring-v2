@@ -27,6 +27,9 @@ telemetry, rule-engine, or physical alarm authority.
 - PR [#354](https://github.com/kipp7/landslide-monitoring-v2/pull/354)
   merged the rollout follow-up fixes and current production checkpoint into
   public `main` as `36cb444679f6f4a2e9b4b257fba7bf36c21a0778`.
+- PR #355 advanced public `main` to
+  `1e04268b3a39a2658409c637738cc57f58aa7b54`. PR #356 remains open with
+  the HarmonyOS chat-first UI and its second-round simulator refinements.
 - PostgreSQL 16 has `hermes_conversations`, `hermes_messages`, and
   `hermes_tasks` plus four indexes. PostgreSQL and ClickHouse remain the only
   server business sources; no App-specific database was introduced.
@@ -72,32 +75,54 @@ telemetry, rule-engine, or physical alarm authority.
   cycle instead of claiming network NTP is fixed.
 - A/B/C currently have no serial replies. The serial port is open and MQTT is
   connected, but all nodes must remain `configured`, not falsely online.
-- Latest confirmed signed HAP SHA256 remains
-  `94B0731DD7D977C70954E1CC15281720616B94DCA8D78A7930F18C0950E94BA9`.
-  The NOVA 15 Ultra runs HarmonyOS `6.1.0.125 SP10`, but this HAP is not
-  installed because `hdc list targets` returns `[Empty]`.
-- The signed HAP rollback copy is
+- App acceptance now targets the DevEco Studio phone emulator rather than a
+  physical phone. HarmonyOS `5.0.1(13)` is connected through HDC at
+  `127.0.0.1:5555`.
+- The latest signed PR #356 HAP built at
+  `E:/codex-build/hermes-chat-ui-20260731/entry/build/default/outputs/default/entry-default-signed.hap`
+  has SHA256
+  `8F2D815CAABEE5BEBD4FD4DAD7FE59FC11DAB2E40F2674678810718200EA726D`.
+  It installed and launched successfully on the emulator.
+- The second UI pass replaces the three-button header with history, centered
+  connection state, and new conversation; hides quick tasks behind the composer
+  tool button; removes the unrelated global task result from chat; keeps user
+  bubbles content-sized; and removes repeated assistant labels and timestamps.
+- The chat screen, content-sized short-message bubbles, hidden and expanded task
+  tools, fixed composer, and software-keyboard layout passed HarmonyOS 5.0.1(13)
+  simulator inspection. The clean system snapshot is
+  `E:/codex-build/hermes-chat-ui-20260731/hermes-chat-final-v2.jpeg` with SHA256
+  `C8A3E493B02C184486995A8DF53768B67E33184DAF4628D6C957EC323E5716DD`.
+- The first rebuild attempt exposed a stale-HAP hazard: the source copy command
+  had timed out before copying, while Hvigor reported old packaging tasks as
+  `UP-TO-DATE`. Future out-of-tree builds must verify source and build-copy
+  SHA256 values, then run `hvigorw clean` before `assembleHap`.
+- The previous signed HAP remains the rollback copy at
   `_private-production-backup/hermes-pr349-20260731-150457/entry-default-pr349-signed.hap`.
 
 ## In Progress
 
 - PostgreSQL, API, RK3568, conversations, and bounded task execution are
-  production-live. The latest signed HAP and phone-originated full regression
-  remain pending on a connected and authorized HDC target.
+  production-live. The refined signed HAP is installed on the emulator. Full
+  emulator-originated task and alarm regression remains pending because the
+  App reports RK3568 unavailable; the UI deliberately displays that server
+  state instead of fabricating availability.
 
 ## Next Actions
 
-- Connect the NOVA 15 Ultra through HDC and install the matching HAP.
-- Run phone-originated single-task, ordered multi-task, context repetition,
+- Merge PR #356 after review.
+- Investigate why the emulator App reports RK3568 unavailable, then run
+  emulator-originated single-task, ordered multi-task, context repetition,
   retry idempotency, restart recovery, protected-intent rejection, and full
   monitoring/alarm regression.
+- Keep physical vibration, real GPS, vendor Push, and background survival out
+  of emulator acceptance; verify them only when hardware testing is requested.
 - Power-cycle RK3568 and confirm time retention, reverse tunnel, supervisor,
   and protected-service recovery.
 
 ## Risks
 
-- Phone version alignment and alarm regression are not proven until HDC sees
-  the NOVA 15 Ultra.
+- Emulator installation and UI alignment are proven. Physical vibration, real
+  GPS, vendor Push, and background survival are not provable on the emulator.
 - RK3568 receives no NTP replies; a long power loss may re-create timestamp
   drift if the corrected clock is not retained.
 - A/B/C serial silence is a field-link condition, not evidence that Hermes is
@@ -110,7 +135,8 @@ telemetry, rule-engine, or physical alarm authority.
 
 ## Resume Prompt
 
-Merge the follow-up branch, connect the NOVA 15 Ultra through HDC, install the
-signed PR #349 HAP, and run phone-originated Hermes plus alarm/map/SSE/Push/cache
-regression. Then power-cycle RK3568 to verify time retention. Do not add
-unrestricted device control or claim A/B/C online without serial evidence.
+Merge PR #356, investigate the emulator's RK3568-unavailable state, and run
+emulator-originated Hermes plus in-App alarm/map/SSE/cache regression. Treat
+real GPS, physical vibration, vendor Push, and background survival as
+hardware-only gaps. Then power-cycle RK3568 to verify time retention. Do not
+add unrestricted device control or claim A/B/C online without serial evidence.

@@ -15,8 +15,9 @@ permalink: landslide-monitoring-v2-mainline/memory/tasks/deploy-harmonyos-hermes
 ## Goal
 
 Deploy PR #349 persistent conversations and ordered safe tasks to PostgreSQL,
-the cloud API, RK3568, and the NOVA 15 Ultra while retaining the accepted PR
-#348 reliability and alarm-isolation baseline.
+the cloud API, RK3568, and the HarmonyOS App, using the DevEco Studio phone
+emulator for App acceptance while retaining the accepted PR #348 reliability
+and alarm-isolation baseline.
 
 ## Current State
 
@@ -24,6 +25,9 @@ the cloud API, RK3568, and the NOVA 15 Ultra while retaining the accepted PR
   `e3b36473` with the original rollout memory.
 - PR #354 merged the production follow-up fixes and this checkpoint into
   public `main` as `36cb444`.
+- PR #355 advanced public `main` to `1e04268` with the completed rollout
+  memory. PR #356 is the open chat-first HarmonyOS UI follow-up at
+  `aa07995977e2b1929e2181ba7a89fbbc6306d04a`.
 - PostgreSQL migration `23-hermes-agent.sql`, the cloud API, and RK3568
   release `hermes-edge-supervisor-3332a19f` are production-live.
 - The production API follow-up image is
@@ -35,8 +39,13 @@ the cloud API, RK3568, and the NOVA 15 Ultra while retaining the accepted PR
 - Ordered tasks, history restore, task polling, repeat-context behavior,
   idempotency, HTTP `409` conflicts, protected-intent rejection, artifact
   permissions, redaction, and user isolation have production evidence.
-- The signed PR #349 HAP is built but not installed on the NOVA 15 Ultra in
-  this rollout because `hdc list targets` still returns `[Empty]`.
+- The acceptance target is the DevEco Studio phone emulator, not a physical
+  phone. HarmonyOS `5.0.1(13)` is connected at `127.0.0.1:5555`; the signed
+  PR #356 HAP was built, installed, and launched successfully. Its SHA256 is
+  `4131E34BF2A4C2EB7D8CBDF6803DA0320217F75EF46258E7598EF8A8741EC540`.
+- The chat-first Hermes screen, history empty state, fixed composer, and
+  software-keyboard layout were visually verified with emulator screenshots.
+  No API, task allowlist, audit, or RK3568 dispatch contract changed.
 - Detailed evidence and rollback identifiers are in
   `memory/checkpoints/rk3568-hermes-app-task-reliability-2026-07-23.md`.
 
@@ -50,10 +59,12 @@ the cloud API, RK3568, and the NOVA 15 Ultra while retaining the accepted PR
 
 ## Plan
 
-- Install the matching signed HAP on the NOVA 15 Ultra.
-- Run phone-originated conversation history, ordered tasks, alert sound,
-  vibration, map jump, SSE, Push, cache, offline degradation, and physical
-  alarm isolation regression.
+- Merge PR #356 after review and retain the signed emulator build evidence.
+- Run emulator-originated conversation history, ordered tasks, map jump, SSE,
+  cache, offline degradation, and in-App alarm regression when the App reports
+  RK3568 available again.
+- Treat physical vibration, real GPS, vendor Push, and background survival as
+  hardware-specific gaps; the emulator cannot prove them.
 - Power-cycle RK3568 and verify that the corrected clock persists; UDP NTP is
   currently unreachable from all tested public servers.
 - Keep A/B/C as `configured` until serial replies resume; do not fabricate
@@ -61,8 +72,8 @@ the cloud API, RK3568, and the NOVA 15 Ultra while retaining the accepted PR
 
 ## Open Questions
 
-- When will the NOVA 15 Ultra be connected with USB debugging authorization so
-  the signed HAP and full phone alarm regression can be completed?
+- Why did the emulator session report `RK3568 暂时离线` during the PR #356
+  visual pass even though the production Hermes rollout previously passed?
 - Which server-side model, timeout budget, and fallback policy will be used for
   the later open-ended conversational planner?
 - Why do A/B/C currently provide no serial replies even though the port is open
@@ -70,11 +81,12 @@ the cloud API, RK3568, and the NOVA 15 Ultra while retaining the accepted PR
 
 ## Done When
 
-- Database, API, RK3568, and phone run one recorded compatible version; phone
-  alignment remains the only unconfirmed deployment item.
+- Database, API, RK3568, and the emulator App run one recorded compatible
+  version; hardware-only behaviors remain explicitly outside emulator proof.
 - A logged-in user can create, continue, and restore conversations and inspect
   every task result without cross-user leakage.
 - Duplicate requests do not duplicate execution, restart recovery fails closed,
   and protected instructions never reach RK3568.
 - RK3568 or Hermes failure does not degrade monitoring or physical alarms.
-- Phone/alarm regression evidence and rollback verification are saved to memory.
+- Emulator App/alarm regression evidence and rollback verification are saved to
+  memory without claiming real GPS, vibration, vendor Push, or background proof.
