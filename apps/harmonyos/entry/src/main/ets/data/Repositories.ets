@@ -135,7 +135,9 @@ export class MonitoringRepository {
 
   private async fetchEdgeAiStatus(): Promise<EdgeAiStatus> {
     const value = await this.api.edgeAiStatus();
-    if (value.available) await this.cache.write(this.cache.key('/edge-ai/status'), value);
+    if ((value.reachable ?? value.available) || value.available) {
+      await this.cache.write(this.cache.key('/edge-ai/status'), value);
+    }
     return value;
   }
 

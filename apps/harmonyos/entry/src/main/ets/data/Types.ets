@@ -435,6 +435,7 @@ export interface EdgeRiskModelStatus {
 }
 
 export interface EdgeAiStatus {
+  reachable?: boolean;
   available: boolean;
   mode: string;
   generatedAt: string;

@@ -776,7 +776,7 @@ struct Index {
       const cached = await repository.cachedEdgeAiStatus();
       if (cached) this.edgeAiStatus = cached.value;
       const status = await repository.edgeAiStatus();
-      if (status.available || !cached) this.edgeAiStatus = status;
+      this.edgeAiStatus = status;
     } catch {
       // AI is an optional sidecar; keep its last snapshot without affecting monitoring pages.
     }
@@ -852,7 +852,7 @@ struct Index {
 
   private async refreshEdgeAiAfterAction(repository: MonitoringRepository): Promise<void> {
     const status = await repository.edgeAiStatus();
-    if (status.available || !this.edgeAiStatus?.available) this.edgeAiStatus = status;
+    this.edgeAiStatus = status;
     try {
       const history = await repository.edgeAiActions();
       this.edgeAiActions = history.actions ?? [];
@@ -2238,13 +2238,14 @@ struct AiPane {
 
   private connectionText(): string {
     if (!this.status) return '正在连接 RK3568 边缘智能';
-    if (!this.status.available) return 'RK3568 暂时离线';
+    if (!(this.status.reachable ?? this.status.available)) return 'RK3568 暂时离线';
+    if (!this.status.available) return 'RK3568 在线 · 等待节点数据';
     return `RK3568 在线 · ${this.status.devices.length} 个节点`;
   }
 
   private connectionColor(): string {
     if (!this.status) return UI_COLOR_MUTED;
-    return this.status.available ? UI_COLOR_SUCCESS : UI_COLOR_DANGER;
+    return (this.status.reachable ?? this.status.available) ? UI_COLOR_SUCCESS : UI_COLOR_DANGER;
   }
 
   private startNewConversation(): void {
@@ -2596,7 +2597,10 @@ struct HermesCommandPanel {
 
   private welcomeText(): string {
     if (!this.status) return '正在连接边缘智能，稍后即可开始对话。';
-    if (!this.status.available) return '边缘端暂时离线，你仍可查看已保存的对话与执行记录。';
+    if (!(this.status.reachable ?? this.status.available)) {
+      return '边缘端暂时离线，你仍可查看已保存的对话与执行记录。';
+    }
+    if (!this.status.available) return 'RK3568 已连接。节点数据恢复前，仍可对话并安排安全只读任务。';
     return '可以询问当前风险，也可以直接安排一组安全只读任务。';
   }
 

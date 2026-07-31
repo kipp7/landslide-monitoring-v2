@@ -8,6 +8,7 @@ import { registerEdgeAiRoutes, resolveEdgeAiIntent, type EdgeAiIntentResolution 
 type EdgeAiEnvelope = {
   success: boolean;
   data?: {
+    reachable?: boolean;
     available?: boolean;
     overallRiskLevel?: string;
     devices?: unknown[];
@@ -34,6 +35,44 @@ void test("status degrades to unavailable when Hermes is not configured", async 
   assert.equal(body.success, true);
   const data = body.data;
   assert.ok(data);
+  assert.equal(data.reachable, false);
+  assert.equal(data.available, false);
+  assert.equal(data.overallRiskLevel, "unavailable");
+  assert.deepEqual(data.devices, []);
+  await app.close();
+});
+
+void test("status keeps RK3568 reachable when edge risk data is unavailable", async (context) => {
+  context.mock.method(globalThis, "fetch", async (input: string | URL | Request) => {
+    assert.equal(fetchUrl(input), "http://127.0.0.1:18082/v1/edge-risk");
+    await Promise.resolve();
+    return new Response(
+      JSON.stringify({
+        available: false,
+        mode: "hermes-edge-risk-agent",
+        overallRiskLevel: "unavailable",
+        devices: [],
+      }),
+      { status: 200, headers: { "content-type": "application/json" } }
+    );
+  });
+
+  const app = Fastify({ logger: false });
+  app.decorateRequest("traceId", "edge-ai-test");
+  const config = loadConfigFromEnv({
+    CLICKHOUSE_URL: "http://127.0.0.1:8123",
+    AUTH_REQUIRED: "false",
+    RK3568_HERMES_EDGE_SUPERVISOR_URL: "http://127.0.0.1:18082",
+  });
+  registerEdgeAiRoutes(app, config, null);
+
+  const response = await app.inject({ method: "GET", url: "/edge-ai/status" });
+  const body = response.json<EdgeAiEnvelope>();
+  assert.equal(response.statusCode, 200);
+  assert.equal(body.success, true);
+  const data = body.data;
+  assert.ok(data);
+  assert.equal(data.reachable, true);
   assert.equal(data.available, false);
   assert.equal(data.overallRiskLevel, "unavailable");
   assert.deepEqual(data.devices, []);

@@ -469,7 +469,11 @@ export function registerEdgeAiRoutes(
 
     const direct = await callHermes(config, "/v1/edge-risk", { method: "GET" });
     if (direct.ok) {
-      ok(reply, { ...direct.body, available: direct.body.available === true }, traceId);
+      ok(
+        reply,
+        { ...direct.body, reachable: true, available: direct.body.available === true },
+        traceId
+      );
       return;
     }
 
@@ -481,13 +485,18 @@ export function registerEdgeAiRoutes(
       ? supervision.body.edgeRiskAgent
       : null;
     if (supervision.ok && edgeRiskAgent) {
-      ok(reply, { ...edgeRiskAgent, available: edgeRiskAgent.available === true }, traceId);
+      ok(
+        reply,
+        { ...edgeRiskAgent, reachable: true, available: edgeRiskAgent.available === true },
+        traceId
+      );
       return;
     }
 
     ok(
       reply,
       {
+        reachable: false,
         available: false,
         mode: "hermes-edge-risk-agent",
         generatedAt: new Date().toISOString(),
