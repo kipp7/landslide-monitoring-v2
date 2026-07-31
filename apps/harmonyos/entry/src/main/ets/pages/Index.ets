@@ -2236,64 +2236,238 @@ struct AiPane {
   onSelectConversation: (conversationId: string) => void = () => {};
   onNewConversation: () => void = () => {};
   onOpenDevice: (deviceId: string) => void = () => {};
+  @State private showingHistory: boolean = false;
 
-  private subtitle(): string {
+  private connectionText(): string {
     if (!this.status) return '正在连接 RK3568 边缘智能';
-    if (!this.status.available) return '边缘智能暂不可用 · 保留最近任务';
-    return `安全执行 · ${this.status.devices.length} 个节点 · ${shortTime(this.status.generatedAt)}`;
+    if (!this.status.available) return 'RK3568 暂时离线';
+    return `RK3568 在线 · ${this.status.devices.length} 个节点`;
+  }
+
+  private connectionColor(): string {
+    if (!this.status) return UI_COLOR_MUTED;
+    return this.status.available ? UI_COLOR_SUCCESS : UI_COLOR_DANGER;
+  }
+
+  private activeTitle(): string {
+    for (let index = 0; index < this.conversations.length; index++) {
+      if (this.conversations[index].conversationId === this.conversationId) {
+        return this.conversations[index].title;
+      }
+    }
+    return '新对话';
+  }
+
+  private startNewConversation(): void {
+    this.showingHistory = false;
+    this.onNewConversation();
+  }
+
+  private selectConversation(conversationId: string): void {
+    this.showingHistory = false;
+    this.onSelectConversation(conversationId);
   }
 
   build() {
     Column() {
-      PageHeader({
-        title: 'Hermes 智能',
-        subtitle: this.subtitle(),
-        offline: this.status !== null && !this.status.available,
-        refreshing: this.refreshing,
-        onRefresh: () => this.onRefresh()
-      });
-      Scroll() {
-        Column({ space: 18 }) {
-          HermesSituationPanel({
-            status: this.status,
-            devices: this.devices,
-            onOpenDevice: (deviceId: string) => this.onOpenDevice(deviceId)
-          });
-          HermesCommandPanel({
-            executing: this.executing,
-            resolution: this.intentResolution,
-            lastAction: this.lastAction,
-            conversations: this.conversations,
-            conversationId: this.conversationId,
-            messages: this.messages,
-            tasks: this.conversationTasks,
-            loading: this.chatLoading,
-            onAction: (action: EdgeAiActionName) => this.onAction(action),
-            onIntent: (intent: string) => this.onIntent(intent),
-            onSelectConversation: (conversationId: string) => this.onSelectConversation(conversationId),
-            onNewConversation: () => this.onNewConversation()
-          });
-          HermesNodeSection({
-            status: this.status,
-            devices: this.devices,
-            onOpenDevice: (deviceId: string) => this.onOpenDevice(deviceId)
-          });
-          HermesTaskSection({
-            tasks: this.conversationTasks,
-            actions: this.actions,
-            fallbackTasks: this.status?.tasks ?? []
-          });
-          HermesRuntimeStrip({ status: this.status });
+      Row({ space: 10 }) {
+        Column({ space: 4 }) {
+          Text('Hermes')
+            .fontSize(21)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(UI_COLOR_TEXT)
+          Row({ space: 6 }) {
+            Circle({ width: 7, height: 7 }).fill(this.connectionColor())
+            Text(this.showingHistory ? '历史对话' : `${this.connectionText()} · ${this.activeTitle()}`)
+              .fontSize(12)
+              .fontColor(UI_COLOR_MUTED)
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+          }
+          .width('100%')
         }
-        .padding({ left: 16, right: 16, bottom: 24 })
-        .width('100%')
+        .alignItems(HorizontalAlign.Start)
+        .layoutWeight(1)
+
+        Button({ type: ButtonType.Circle }) {
+          if (this.refreshing) {
+            LoadingProgress().width(18).height(18).color(UI_COLOR_HERMES)
+          } else {
+            SymbolGlyph($r('sys.symbol.arrow_clockwise'))
+              .fontSize(19)
+              .fontColor([UI_COLOR_TEXT])
+          }
+        }
+        .width(44)
+        .height(44)
+        .backgroundColor('#F0F3F1')
+        .enabled(!this.refreshing)
+        .accessibilityText('刷新 Hermes 状态')
+        .onClick(() => this.onRefresh())
+
+        Button({ type: ButtonType.Circle }) {
+          Text(this.showingHistory ? '×' : '☰')
+            .fontSize(this.showingHistory ? 24 : 20)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(UI_COLOR_TEXT)
+        }
+        .width(44)
+        .height(44)
+        .backgroundColor(this.showingHistory ? UI_COLOR_HERMES_SOFT : '#F0F3F1')
+        .accessibilityText(this.showingHistory ? '关闭历史对话' : '查看历史对话')
+        .onClick(() => this.showingHistory = !this.showingHistory)
+
+        Button({ type: ButtonType.Circle }) {
+          Text('＋')
+            .fontSize(24)
+            .fontWeight(FontWeight.Medium)
+            .fontColor('#F7FAF8')
+        }
+        .width(44)
+        .height(44)
+        .backgroundColor(UI_COLOR_HERMES)
+        .enabled(!this.executing)
+        .accessibilityText('新建对话')
+        .onClick(() => this.startNewConversation())
       }
-      .layoutWeight(1)
-      .scrollBar(BarState.Off)
-      .align(Alignment.TopStart)
+      .height(68)
+      .padding({ left: 16, right: 12, top: 8, bottom: 8 })
+      .backgroundColor(UI_COLOR_SURFACE)
+      .border({ width: { bottom: 1 }, color: '#E6EBE8' })
+      .width('100%')
+
+      if (this.showingHistory) {
+        HermesHistoryPane({
+          conversations: this.conversations,
+          conversationId: this.conversationId,
+          loading: this.chatLoading,
+          onSelect: (conversationId: string) => this.selectConversation(conversationId),
+          onNew: () => this.startNewConversation()
+        });
+      } else {
+        HermesCommandPanel({
+          status: this.status,
+          executing: this.executing,
+          resolution: this.intentResolution,
+          lastAction: this.lastAction,
+          messages: this.messages,
+          tasks: this.conversationTasks,
+          loading: this.chatLoading,
+          onAction: (action: EdgeAiActionName) => this.onAction(action),
+          onIntent: (intent: string) => this.onIntent(intent)
+        });
+      }
     }
     .layoutWeight(1)
-    .backgroundColor('#F5F7F6')
+    .backgroundColor('#F8FAF9')
+  }
+}
+
+@Component
+struct HermesHistoryPane {
+  @Prop conversations: Array<HermesConversation>;
+  @Prop conversationId: string;
+  @Prop loading: boolean;
+  onSelect: (conversationId: string) => void = () => {};
+  onNew: () => void = () => {};
+
+  build() {
+    Column({ space: 0 }) {
+      Row() {
+        Text('历史对话')
+          .fontSize(15)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(UI_COLOR_TEXT)
+          .layoutWeight(1)
+        Text(`${this.conversations.length} 个会话`)
+          .fontSize(12)
+          .fontColor(UI_COLOR_MUTED)
+      }
+      .height(52)
+      .padding({ left: 18, right: 18 })
+      .width('100%')
+
+      if (this.loading && this.conversations.length === 0) {
+        Row({ space: 9 }) {
+          LoadingProgress().width(18).height(18).color(UI_COLOR_HERMES)
+          Text('正在读取对话记录')
+            .fontSize(13)
+            .fontColor(UI_COLOR_MUTED)
+        }
+        .layoutWeight(1)
+        .justifyContent(FlexAlign.Center)
+        .width('100%')
+      } else if (this.conversations.length === 0) {
+        Column({ space: 14 }) {
+          Text('还没有历史对话')
+            .fontSize(18)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(UI_COLOR_TEXT)
+          Text('创建对话后，任务、回复和执行记录会保存在这里。')
+            .fontSize(13)
+            .fontColor(UI_COLOR_MUTED)
+            .textAlign(TextAlign.Center)
+          Button('开始新对话')
+            .height(44)
+            .fontSize(13)
+            .fontColor('#F7FAF8')
+            .backgroundColor(UI_COLOR_HERMES)
+            .borderRadius(22)
+            .onClick(() => this.onNew())
+        }
+        .layoutWeight(1)
+        .padding({ left: 36, right: 36 })
+        .justifyContent(FlexAlign.Center)
+        .width('100%')
+      } else {
+        Scroll() {
+          Column() {
+            ForEach(this.conversations, (conversation: HermesConversation, index: number) => {
+              Row({ space: 12 }) {
+                Stack({ alignContent: Alignment.Center }) {
+                  Circle({ width: 36, height: 36 })
+                    .fill(conversation.conversationId === this.conversationId ? UI_COLOR_HERMES : '#EDF1EF')
+                  Text('H')
+                    .fontSize(14)
+                    .fontWeight(FontWeight.Bold)
+                    .fontColor(conversation.conversationId === this.conversationId ? '#F7FAF8' : UI_COLOR_HERMES)
+                }
+                .width(36)
+                .height(36)
+                Column({ space: 4 }) {
+                  Text(conversation.title)
+                    .fontSize(15)
+                    .fontWeight(conversation.conversationId === this.conversationId ? FontWeight.Bold : FontWeight.Medium)
+                    .fontColor(UI_COLOR_TEXT)
+                    .maxLines(1)
+                    .textOverflow({ overflow: TextOverflow.Ellipsis })
+                  Text(relativeTime(conversation.updatedAt))
+                    .fontSize(12)
+                    .fontColor(UI_COLOR_MUTED)
+                }
+                .alignItems(HorizontalAlign.Start)
+                .layoutWeight(1)
+                SymbolGlyph($r('sys.symbol.chevron_right'))
+                  .fontSize(16)
+                  .fontColor([UI_COLOR_SUBTLE])
+              }
+              .height(68)
+              .padding({ left: 18, right: 16 })
+              .width('100%')
+              .border({ width: { bottom: index === this.conversations.length - 1 ? 0 : 1 }, color: '#E6EBE8' })
+              .accessibilityText(`打开历史对话：${conversation.title}`)
+              .onClick(() => this.onSelect(conversation.conversationId))
+            }, (conversation: HermesConversation) => conversation.conversationId)
+          }
+          .width('100%')
+        }
+        .layoutWeight(1)
+        .scrollBar(BarState.Off)
+      }
+    }
+    .layoutWeight(1)
+    .width('100%')
+    .backgroundColor(UI_COLOR_SURFACE)
   }
 }
 
@@ -2417,19 +2591,17 @@ struct HermesSituationPanel {
 
 @Component
 struct HermesCommandPanel {
+  @Prop status: EdgeAiStatus | null;
   @Prop executing: boolean;
   @Prop resolution: EdgeAiIntentResolution | null;
   @Prop lastAction: HermesAction | null;
-  @Prop conversations: Array<HermesConversation>;
-  @Prop conversationId: string;
   @Prop messages: Array<HermesMessage>;
   @Prop tasks: Array<HermesAgentTask>;
   @Prop loading: boolean;
   @State private intentText: string = '';
+  private chatScroller: Scroller = new Scroller();
   onAction: (action: EdgeAiActionName) => void = () => {};
   onIntent: (intent: string) => void = () => {};
-  onSelectConversation: (conversationId: string) => void = () => {};
-  onNewConversation: () => void = () => {};
 
   private submitIntent(): void {
     const value = this.intentText.trim();
@@ -2444,234 +2616,210 @@ struct HermesCommandPanel {
     return '#A06A18';
   }
 
-  private actionPlan(): Array<string> {
-    const source = this.lastAction?.result.recommendedPlan ?? [];
-    const result: Array<string> = [];
-    for (let index = 0; index < source.length; index++) {
-      result.push(localizedHermesText(source[index]));
-    }
-    return result;
-  }
-
-  private activeTitle(): string {
-    for (let index = 0; index < this.conversations.length; index++) {
-      if (this.conversations[index].conversationId === this.conversationId) return this.conversations[index].title;
-    }
-    return '新的研判任务';
+  private welcomeText(): string {
+    if (!this.status) return '正在连接边缘智能，稍后即可开始对话。';
+    if (!this.status.available) return '边缘端暂时离线，你仍可查看已保存的对话与执行记录。';
+    return '可以询问当前风险，也可以直接安排一组安全只读任务。';
   }
 
   build() {
-    Column({ space: 12 }) {
-      Row() {
-        Column({ space: 2 }) {
-          Text('Hermes 对话')
-            .fontSize(18)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(UI_COLOR_TEXT)
-          Text(this.conversationId.length > 0 ? this.activeTitle() : '首次发送后自动保存')
-            .fontSize(12)
-            .fontColor(UI_COLOR_MUTED)
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-        }
-        .layoutWeight(1)
-        Button('新对话')
-          .height(44)
-          .fontSize(12)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(UI_COLOR_HERMES)
-          .backgroundColor(UI_COLOR_HERMES_SOFT)
-          .borderRadius(6)
-          .enabled(!this.executing)
-          .onClick(() => this.onNewConversation())
-      }
-      .width('100%')
-
-      if (this.conversations.length > 0) {
-        Column() {
-          ForEach(this.conversations.slice(0, 3), (conversation: HermesConversation, index: number) => {
-            Row({ space: 10 }) {
-              Circle({ width: 7, height: 7 })
-                .fill(conversation.conversationId === this.conversationId ? UI_COLOR_HERMES : '#C6CECA')
-              Text(conversation.title)
+    Column() {
+      Scroll(this.chatScroller) {
+        Column({ space: 18 }) {
+          if (this.loading && this.messages.length === 0) {
+            Row({ space: 9 }) {
+              LoadingProgress().width(19).height(19).color(UI_COLOR_HERMES)
+              Text('正在读取对话')
                 .fontSize(13)
-                .fontWeight(conversation.conversationId === this.conversationId ? FontWeight.Medium : FontWeight.Regular)
-                .fontColor(UI_COLOR_TEXT)
-                .maxLines(1)
-                .textOverflow({ overflow: TextOverflow.Ellipsis })
-                .layoutWeight(1)
-              Text(relativeTime(conversation.updatedAt))
-                .fontSize(11)
                 .fontColor(UI_COLOR_MUTED)
-              SymbolGlyph($r('sys.symbol.chevron_right'))
-                .fontSize(15)
-                .fontColor([UI_COLOR_SUBTLE])
             }
-            .height(44)
-            .padding({ left: 10, right: 8 })
+            .height(80)
+            .justifyContent(FlexAlign.Center)
             .width('100%')
-            .border({ width: { bottom: index === Math.min(2, this.conversations.length - 1) ? 0 : 1 }, color: '#E1E7E3' })
-            .accessibilityText(`打开历史对话：${conversation.title}`)
-            .onClick(() => this.onSelectConversation(conversation.conversationId))
-          }, (conversation: HermesConversation) => conversation.conversationId)
-        }
-        .backgroundColor('#F0F4F2')
-        .borderRadius(7)
-        .width('100%')
-      }
-
-      if (this.loading) {
-        Row({ space: 8 }) {
-          LoadingProgress().width(18).height(18).color(UI_COLOR_HERMES)
-          Text('正在读取对话记录').fontSize(12).fontColor(UI_COLOR_MUTED)
-        }
-        .height(44)
-      } else if (this.messages.length === 0) {
-        Column({ space: 5 }) {
-          Text('可以直接安排连续任务')
-            .fontSize(14)
-            .fontWeight(FontWeight.Medium)
-            .fontColor(UI_COLOR_TEXT)
-          Text('例如：先诊断链路，再重新研判，最后生成报告。Hermes 会按顺序执行并回传结果。')
-            .fontSize(13)
-            .fontColor(UI_COLOR_MUTED)
-            .lineHeight(20)
-        }
-        .padding(12)
-        .backgroundColor('#EDF3EF')
-        .borderRadius(7)
-        .width('100%')
-      } else {
-        Column({ space: 10 }) {
-          ForEach(this.messages.slice(Math.max(0, this.messages.length - 10)), (message: HermesMessage) => {
-            HermesMessageRow({ message: message });
-          }, (message: HermesMessage) => message.messageId)
-        }
-        .width('100%')
-      }
-
-      if (this.executing) {
-        Row({ space: 8 }) {
-          LoadingProgress().width(18).height(18).color(UI_COLOR_ACCENT)
-          Text('正在规划并执行 RK3568 安全任务')
-            .fontSize(12)
-            .fontColor(UI_COLOR_ACCENT)
-        }
-        .height(36)
-        .width('100%')
-      }
-
-      Row({ space: 8 }) {
-        TextInput({ text: this.intentText, placeholder: '继续追问，或下发一项任务' })
-          .height(48)
-          .fontSize(14)
-          .fontColor(UI_COLOR_TEXT)
-          .placeholderColor(UI_COLOR_SUBTLE)
-          .caretColor(UI_COLOR_HERMES)
-          .backgroundColor(UI_COLOR_SURFACE)
-          .border({ width: 1, color: UI_COLOR_HERMES_LINE })
-          .borderRadius(7)
-          .padding({ left: 12, right: 12 })
-          .onChange((value: string) => this.intentText = value)
-          .enabled(!this.executing)
-          .layoutWeight(1)
-        Button({ type: ButtonType.Circle }) {
-          if (this.executing) {
-            LoadingProgress().width(18).height(18).color('#FFFFFF')
-          } else {
-            SymbolGlyph($r('sys.symbol.chevron_right'))
-              .fontSize(19)
-              .fontColor(['#FFFFFF'])
-          }
-        }
-        .width(48)
-        .height(48)
-        .backgroundColor(UI_COLOR_HERMES)
-        .enabled(!this.executing && this.intentText.trim().length > 0)
-        .accessibilityText('发送给 Hermes')
-        .onClick(() => this.submitIntent())
-      }
-      .width('100%')
-
-      Row({ space: 7 }) {
-        HermesQuickAction({
-          label: '重新研判',
-          action: 'recheck',
-          actionEnabled: !this.executing,
-          onAction: (action: EdgeAiActionName) => this.onAction(action)
-        });
-        HermesQuickAction({
-          label: '生成报告',
-          action: 'generate_report',
-          actionEnabled: !this.executing,
-          onAction: (action: EdgeAiActionName) => this.onAction(action)
-        });
-        HermesQuickAction({
-          label: '诊断链路',
-          action: 'collect_logs',
-          actionEnabled: !this.executing,
-          onAction: (action: EdgeAiActionName) => this.onAction(action)
-        });
-      }
-      .width('100%')
-
-      if (this.resolution?.blocked) {
-        Row({ space: 8 }) {
-          Circle({ width: 8, height: 8 }).fill(this.feedbackColor())
-          Text('受保护操作未执行，请前往对应功能页人工确认')
-            .fontSize(12)
-            .fontColor(this.feedbackColor())
-            .layoutWeight(1)
-        }
-        .padding({ left: 11, right: 11, top: 9, bottom: 9 })
-        .backgroundColor(this.resolution?.blocked ? '#F8EAE6' : '#F1F5F2')
-        .borderRadius(7)
-        .width('100%')
-      }
-
-      if (this.lastAction) {
-        Column({ space: 7 }) {
-          Row() {
-            Text(this.lastAction ? hermesActionSummary(this.lastAction) : '')
-              .fontSize(12)
-              .fontWeight(FontWeight.Medium)
-              .fontColor(UI_COLOR_TEXT)
-              .layoutWeight(1)
-            Text(shortTime(this.lastAction?.createdAt ?? ''))
-              .fontSize(9)
-              .fontColor(UI_COLOR_SUBTLE)
-          }
-          .width('100%')
-          if (this.actionPlan().length > 0) {
-            ForEach(this.actionPlan().slice(0, 3), (item: string) => {
-              Row({ space: 7 }) {
-                Circle({ width: 5, height: 5 }).fill(UI_COLOR_HERMES)
-                Text(item)
-                  .fontSize(10)
-                  .fontColor(UI_COLOR_MUTED)
-                  .layoutWeight(1)
+          } else if (this.messages.length === 0) {
+            Column({ space: 14 }) {
+              Stack({ alignContent: Alignment.Center }) {
+                Circle({ width: 54, height: 54 }).fill(UI_COLOR_HERMES)
+                Text('H')
+                  .fontSize(22)
+                  .fontWeight(FontWeight.Bold)
+                  .fontColor('#F7FAF8')
               }
-            })
-          } else if (this.lastAction?.result.note) {
-            Text(localizedHermesText(this.lastAction.result.note))
-              .fontSize(10)
-              .fontColor(UI_COLOR_MUTED)
-              .width('100%')
-          }
-          Text(this.lastAction.status === 'completed' ? '已执行 · 已记录 · 未触碰网关核心' :
-            this.lastAction.status === 'failed' ? '执行失败 · 主链路未受影响' : '任务已记录 · 正在独立队列中处理')
-            .fontSize(9)
-            .fontColor(this.lastAction.status === 'failed' ? UI_COLOR_DANGER :
-              this.lastAction.status === 'completed' ? UI_COLOR_SUCCESS : UI_COLOR_ACCENT)
+              .width(54)
+              .height(54)
+              Text('有什么需要我处理？')
+                .fontSize(21)
+                .fontWeight(FontWeight.Bold)
+                .fontColor(UI_COLOR_TEXT)
+              Text(this.welcomeText())
+                .fontSize(14)
+                .fontColor(UI_COLOR_MUTED)
+                .lineHeight(21)
+                .textAlign(TextAlign.Center)
+                .width('100%')
+            }
+            .padding({ left: 20, right: 20, top: 54, bottom: 34 })
             .width('100%')
+          } else {
+            ForEach(this.messages.slice(Math.max(0, this.messages.length - 40)), (message: HermesMessage) => {
+              HermesMessageRow({ message: message });
+            }, (message: HermesMessage) => message.messageId)
+          }
+
+          if (this.executing) {
+            Row({ space: 10 }) {
+              Stack({ alignContent: Alignment.Center }) {
+                Circle({ width: 30, height: 30 }).fill(UI_COLOR_HERMES)
+                Text('H')
+                  .fontSize(12)
+                  .fontWeight(FontWeight.Bold)
+                  .fontColor('#F7FAF8')
+              }
+              .width(30)
+              .height(30)
+              Row({ space: 8 }) {
+                LoadingProgress().width(17).height(17).color(UI_COLOR_HERMES)
+                Text('正在规划并执行安全任务')
+                  .fontSize(13)
+                  .fontColor(UI_COLOR_MUTED)
+              }
+              .layoutWeight(1)
+            }
+            .width('100%')
+          }
+
+          if (this.resolution?.blocked) {
+            Row({ space: 9 }) {
+              SymbolGlyph($r('sys.symbol.exclamationmark_triangle'))
+                .fontSize(18)
+                .fontColor([this.feedbackColor()])
+              Text('受保护操作未执行，请前往对应功能页人工确认')
+                .fontSize(13)
+                .fontColor(this.feedbackColor())
+                .layoutWeight(1)
+            }
+            .padding({ left: 12, right: 12, top: 11, bottom: 11 })
+            .backgroundColor('#F8EAE6')
+            .borderRadius(8)
+            .width('100%')
+          }
+
+          if (this.tasks.length > 0) {
+            Column({ space: 10 }) {
+              Row() {
+                Text('执行过程')
+                  .fontSize(13)
+                  .fontWeight(FontWeight.Bold)
+                  .fontColor(UI_COLOR_TEXT)
+                  .layoutWeight(1)
+                Text(`${this.tasks.length} 项任务`)
+                  .fontSize(11)
+                  .fontColor(UI_COLOR_MUTED)
+              }
+              .width('100%')
+              ForEach(this.tasks.slice(0, 6), (task: HermesAgentTask, index: number) => {
+                HermesAgentTaskTimelineRow({
+                  task: task,
+                  last: index === Math.min(this.tasks.length, 6) - 1
+                });
+              }, (task: HermesAgentTask) => task.taskId)
+            }
+            .padding(14)
+            .backgroundColor('#F0F4F2')
+            .borderRadius(8)
+            .width('100%')
+          } else if (this.lastAction && this.messages.length > 0) {
+            Column({ space: 5 }) {
+              Text(hermesActionSummary(this.lastAction))
+                .fontSize(13)
+                .fontWeight(FontWeight.Medium)
+                .fontColor(UI_COLOR_TEXT)
+              Text(this.lastAction.status === 'completed' ? '任务已完成并写入审计记录' :
+                this.lastAction.status === 'failed' ? '执行失败，监测主链路未受影响' : '任务正在独立队列中处理')
+                .fontSize(12)
+                .fontColor(this.lastAction.status === 'failed' ? UI_COLOR_DANGER : UI_COLOR_MUTED)
+            }
+            .alignItems(HorizontalAlign.Start)
+            .padding(12)
+            .backgroundColor('#F0F4F2')
+            .borderRadius(8)
+            .width('100%')
+          }
         }
-        .padding(12)
+        .padding({ left: 16, right: 16, top: 12, bottom: 20 })
+        .width('100%')
+        .onAreaChange((oldValue: Area, newValue: Area) => {
+          if (oldValue.height !== newValue.height) this.chatScroller.scrollEdge(Edge.Bottom);
+        })
+      }
+      .layoutWeight(1)
+      .scrollBar(BarState.Off)
+      .align(Alignment.TopStart)
+
+      Column({ space: 10 }) {
+        Row({ space: 8 }) {
+          HermesQuickAction({
+            label: '重新研判',
+            action: 'recheck',
+            actionEnabled: !this.executing,
+            onAction: (action: EdgeAiActionName) => this.onAction(action)
+          });
+          HermesQuickAction({
+            label: '生成报告',
+            action: 'generate_report',
+            actionEnabled: !this.executing,
+            onAction: (action: EdgeAiActionName) => this.onAction(action)
+          });
+          HermesQuickAction({
+            label: '诊断链路',
+            action: 'collect_logs',
+            actionEnabled: !this.executing,
+            onAction: (action: EdgeAiActionName) => this.onAction(action)
+          });
+        }
+        .width('100%')
+
+        Row({ space: 4 }) {
+          TextInput({ text: this.intentText, placeholder: '给 Hermes 发消息' })
+            .height(48)
+            .fontSize(15)
+            .fontColor(UI_COLOR_TEXT)
+            .placeholderColor(UI_COLOR_SUBTLE)
+            .caretColor(UI_COLOR_HERMES)
+            .backgroundColor('#00000000')
+            .padding({ left: 12, right: 6 })
+            .onChange((value: string) => this.intentText = value)
+            .enabled(!this.executing)
+            .layoutWeight(1)
+          Button({ type: ButtonType.Circle }) {
+            if (this.executing) {
+              LoadingProgress().width(17).height(17).color('#F7FAF8')
+            } else {
+              SymbolGlyph($r('sys.symbol.chevron_right'))
+                .fontSize(18)
+                .fontColor(['#F7FAF8'])
+            }
+          }
+          .width(42)
+          .height(42)
+          .backgroundColor(!this.executing && this.intentText.trim().length > 0 ? UI_COLOR_HERMES : '#BFC9C4')
+          .enabled(!this.executing && this.intentText.trim().length > 0)
+          .accessibilityText('发送给 Hermes')
+          .onClick(() => this.submitIntent())
+        }
+        .height(52)
+        .padding({ left: 2, right: 4 })
         .backgroundColor(UI_COLOR_SURFACE)
-        .borderRadius(8)
+        .border({ width: 1, color: '#D4DDD8' })
+        .borderRadius(26)
         .width('100%')
       }
+      .padding({ left: 14, right: 14, top: 10, bottom: 10 })
+      .backgroundColor(UI_COLOR_SURFACE)
+      .border({ width: { top: 1 }, color: '#E6EBE8' })
+      .width('100%')
     }
-    .padding({ top: 2 })
+    .layoutWeight(1)
     .width('100%')
   }
 }
@@ -2681,38 +2829,63 @@ struct HermesMessageRow {
   @Prop message: HermesMessage;
 
   build() {
-    Row() {
-      if (this.message.role === 'user') {
+    if (this.message.role === 'user') {
+      Row() {
         Blank().layoutWeight(1)
-      }
-      Column({ space: 5 }) {
-        Row() {
-          Text(this.message.role === 'user' ? '我' : 'Hermes')
-            .fontSize(11)
-            .fontWeight(FontWeight.Medium)
-            .fontColor(this.message.role === 'user' ? '#DDE9E3' : UI_COLOR_HERMES)
-            .layoutWeight(1)
+        Column({ space: 5 }) {
+          Text(this.message.content)
+            .fontSize(15)
+            .fontColor('#F7FAF8')
+            .lineHeight(22)
+            .width('100%')
           Text(shortTime(this.message.createdAt))
             .fontSize(10)
-            .fontColor(this.message.role === 'user' ? '#B9CEC4' : UI_COLOR_SUBTLE)
+            .fontColor('#BCD0C6')
+            .textAlign(TextAlign.End)
+            .width('100%')
         }
-        .width('100%')
-        Text(this.message.content)
-          .fontSize(14)
-          .fontColor(this.message.role === 'user' ? '#F5F8F6' : UI_COLOR_TEXT)
-          .lineHeight(21)
+        .padding({ left: 14, right: 14, top: 11, bottom: 9 })
+        .backgroundColor(UI_COLOR_HERMES)
+        .borderRadius(18)
+        .constraintSize({ maxWidth: '84%' })
+      }
+      .width('100%')
+      .alignItems(VerticalAlign.Top)
+    } else {
+      Row({ space: 10 }) {
+        Stack({ alignContent: Alignment.Center }) {
+          Circle({ width: 30, height: 30 }).fill(UI_COLOR_HERMES)
+          Text('H')
+            .fontSize(12)
+            .fontWeight(FontWeight.Bold)
+            .fontColor('#F7FAF8')
+        }
+        .width(30)
+        .height(30)
+        Column({ space: 6 }) {
+          Row() {
+            Text('Hermes')
+              .fontSize(12)
+              .fontWeight(FontWeight.Bold)
+              .fontColor(UI_COLOR_HERMES)
+              .layoutWeight(1)
+            Text(shortTime(this.message.createdAt))
+              .fontSize(10)
+              .fontColor(UI_COLOR_SUBTLE)
+          }
           .width('100%')
+          Text(this.message.content)
+            .fontSize(15)
+            .fontColor(UI_COLOR_TEXT)
+            .lineHeight(23)
+            .width('100%')
+        }
+        .padding({ top: 3 })
+        .layoutWeight(1)
       }
-      .padding({ left: 12, right: 12, top: 10, bottom: 10 })
-      .backgroundColor(this.message.role === 'user' ? UI_COLOR_HERMES : '#EDF2EF')
-      .borderRadius(7)
-      .width('86%')
-      if (this.message.role !== 'user') {
-        Blank().layoutWeight(1)
-      }
+      .width('100%')
+      .alignItems(VerticalAlign.Top)
     }
-    .width('100%')
-    .alignItems(VerticalAlign.Top)
   }
 }
 
@@ -2725,12 +2898,13 @@ struct HermesQuickAction {
 
   build() {
     Button(this.label)
-      .height(44)
+      .height(38)
       .fontSize(12)
       .fontWeight(FontWeight.Medium)
       .fontColor(UI_COLOR_HERMES)
-      .backgroundColor(UI_COLOR_HERMES_SOFT)
-      .borderRadius(6)
+      .backgroundColor('#F0F4F2')
+      .border({ width: 1, color: '#DFE6E2' })
+      .borderRadius(19)
       .enabled(this.actionEnabled)
       .layoutWeight(1)
       .onClick(() => this.onAction(this.action))
