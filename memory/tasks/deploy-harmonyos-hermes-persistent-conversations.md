@@ -22,6 +22,8 @@ the cloud API, RK3568, and the NOVA 15 Ultra while retaining the accepted PR
 
 - PR #349 is merged as `3332a19f`; PR #351 advanced public `main` to
   `e3b36473` with the original rollout memory.
+- PR #354 merged the production follow-up fixes and this checkpoint into
+  public `main` as `36cb444`.
 - PostgreSQL migration `23-hermes-agent.sql`, the cloud API, and RK3568
   release `hermes-edge-supervisor-3332a19f` are production-live.
 - The production API follow-up image is
@@ -48,8 +50,6 @@ the cloud API, RK3568, and the NOVA 15 Ultra while retaining the accepted PR
 
 ## Plan
 
-- Merge the follow-up branch containing the proven guardian deadlock defense,
-  Chinese intent variants, and this rollout memory.
 - Install the matching signed HAP on the NOVA 15 Ultra.
 - Run phone-originated conversation history, ordered tasks, alert sound,
   vibration, map jump, SSE, Push, cache, offline degradation, and physical

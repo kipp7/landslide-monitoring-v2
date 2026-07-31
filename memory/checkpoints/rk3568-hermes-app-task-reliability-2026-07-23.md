@@ -24,6 +24,9 @@ telemetry, rule-engine, or physical alarm authority.
 - PR [#349](https://github.com/kipp7/landslide-monitoring-v2/pull/349) is merged
   as `3332a19f58c42c55c6e490e7f40b7150a38475e8`; PR #351 advanced public
   `main` to `e3b36473b959f550f2007efddb0d52705433db13` with rollout memory only.
+- PR [#354](https://github.com/kipp7/landslide-monitoring-v2/pull/354)
+  merged the rollout follow-up fixes and current production checkpoint into
+  public `main` as `36cb444679f6f4a2e9b4b257fba7bf36c21a0778`.
 - PostgreSQL 16 has `hermes_conversations`, `hermes_messages`, and
   `hermes_tasks` plus four indexes. PostgreSQL and ClickHouse remain the only
   server business sources; no App-specific database was introduced.
@@ -81,12 +84,9 @@ telemetry, rule-engine, or physical alarm authority.
 - PostgreSQL, API, RK3568, conversations, and bounded task execution are
   production-live. The latest signed HAP and phone-originated full regression
   remain pending on a connected and authorized HDC target.
-- The follow-up branch must be merged so repository source and deployed API
-  image remain aligned.
 
 ## Next Actions
 
-- Merge the follow-up branch and preserve the recorded image and release IDs.
 - Connect the NOVA 15 Ultra through HDC and install the matching HAP.
 - Run phone-originated single-task, ordered multi-task, context repetition,
   retry idempotency, restart recovery, protected-intent rejection, and full
