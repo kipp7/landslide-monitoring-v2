@@ -809,6 +809,7 @@ struct Index {
         this.edgeAiConversationId = history.conversation.conversationId;
         this.edgeAiMessages = history.messages ?? [];
         this.edgeAiConversationTasks = history.tasks ?? [];
+        this.edgeAiIntentResolution = null;
       }
     } catch {
       // The conversation service is optional during a rolling server upgrade.
@@ -825,6 +826,7 @@ struct Index {
       this.edgeAiConversationId = history.conversation.conversationId;
       this.edgeAiMessages = history.messages ?? [];
       this.edgeAiConversationTasks = history.tasks ?? [];
+      this.edgeAiIntentResolution = null;
     } catch (error) {
       this.errorMessage = this.errorText(error);
     } finally {

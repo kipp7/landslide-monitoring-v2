@@ -589,7 +589,7 @@ export function registerEdgeAiRoutes(
           [conversation.conversation_id]
         ),
         client.query<HermesTaskRow>(
-          `SELECT ${TASK_COLUMNS} FROM hermes_tasks WHERE conversation_id=$1 ORDER BY created_at DESC LIMIT 100`,
+          `SELECT ${TASK_COLUMNS} FROM hermes_tasks WHERE conversation_id=$1 ORDER BY created_at ASC LIMIT 100`,
           [conversation.conversation_id]
         ),
       ]);
