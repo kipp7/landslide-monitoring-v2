@@ -25,12 +25,15 @@ and alarm-isolation baseline.
   `e3b36473` with the original rollout memory.
 - PR #354 merged the production follow-up fixes and this checkpoint into
   public `main` as `36cb444`.
-- PR #355 advanced public `main` to `1e04268` with the completed rollout
-  memory. PR #356 is the open chat-first HarmonyOS UI follow-up at
-  `aa07995977e2b1929e2181ba7a89fbbc6306d04a`.
+- PR #355 advanced public `main` to `1e04268`; PR #356 merged the chat-first
+  HarmonyOS UI into public `main` as `0f6300c`.
+- The follow-up branch `fix/harmonyos-hermes-reachability-20260731` at
+  `a07460ac2f423251ff925b8bb65a7cebd0e37729` separates RK3568 reachability
+  from risk-data availability and preserves task order after conversation
+  restoration.
 - PostgreSQL migration `23-hermes-agent.sql`, the cloud API, and RK3568
   release `hermes-edge-supervisor-3332a19f` are production-live.
-- The production API follow-up image is
+- The previous production API baseline image, retained for rollback, is
   `sha256:ca3522dff1151651e07cbefba0184a749fe697194bd16262a28ecd74b883efbd`
   from `60ee7b7`; it covers the natural Chinese variants observed during
   rollout while retaining the deterministic safety boundary.
@@ -45,7 +48,17 @@ and alarm-isolation baseline.
   `4131E34BF2A4C2EB7D8CBDF6803DA0320217F75EF46258E7598EF8A8741EC540`.
 - The chat-first Hermes screen, history empty state, fixed composer, and
   software-keyboard layout were visually verified with emulator screenshots.
-  No API, task allowlist, audit, or RK3568 dispatch contract changed.
+  The follow-up now correctly shows `RK3568 在线 · 等待节点数据` when Hermes is
+  reachable but A/B/C data is insufficient; it does not claim those nodes are
+  online. No task allowlist, audit, or RK3568 dispatch contract changed.
+- Production API image
+  `sha256:6a89be41abbd83ed9474fbd333bf7147426bfd7ebc888edf40ee2603003d25c2`
+  runs revision `a07460a` with restart count `0`. The rollout changed only the
+  API container; every non-API container retained its ID and restart count.
+- The latest signed emulator HAP SHA256 is
+  `C892754ED0DDFB849DA6BE8DAF66F90C7AB4766DFB96041D9DA143090E6E093B`.
+  It passed single-task, ordered three-task, protected-intent, history restore,
+  station map, device detail, alert/map, and foreground alert-SSE regression.
 - Detailed evidence and rollback identifiers are in
   `memory/checkpoints/rk3568-hermes-app-task-reliability-2026-07-23.md`.
 
@@ -59,10 +72,11 @@ and alarm-isolation baseline.
 
 ## Plan
 
-- Merge PR #356 after review and retain the signed emulator build evidence.
-- Run emulator-originated conversation history, ordered tasks, map jump, SSE,
-  cache, offline degradation, and in-App alarm regression when the App reports
-  RK3568 available again.
+- Open, review, and merge the focused reachability follow-up PR, retaining the
+  signed emulator and production rollback evidence.
+- Complete an explicit forced-offline cache test when the emulator permits
+  network control; its shell currently rejects `ifconfig eth0 down`. Normal
+  force-stop/relaunch restoration passed with the network available.
 - Treat physical vibration, real GPS, vendor Push, and background survival as
   hardware-specific gaps; the emulator cannot prove them.
 - Power-cycle RK3568 and verify that the corrected clock persists; UDP NTP is
@@ -72,8 +86,6 @@ and alarm-isolation baseline.
 
 ## Open Questions
 
-- Why did the emulator session report `RK3568 暂时离线` during the PR #356
-  visual pass even though the production Hermes rollout previously passed?
 - Which server-side model, timeout budget, and fallback policy will be used for
   the later open-ended conversational planner?
 - Why do A/B/C currently provide no serial replies even though the port is open

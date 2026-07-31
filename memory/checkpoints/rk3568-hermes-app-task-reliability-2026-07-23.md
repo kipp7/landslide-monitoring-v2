@@ -28,15 +28,15 @@ telemetry, rule-engine, or physical alarm authority.
   merged the rollout follow-up fixes and current production checkpoint into
   public `main` as `36cb444679f6f4a2e9b4b257fba7bf36c21a0778`.
 - PR #355 advanced public `main` to
-  `1e04268b3a39a2658409c637738cc57f58aa7b54`. PR #356 remains open with
-  the HarmonyOS chat-first UI and its second-round simulator refinements.
+  `1e04268b3a39a2658409c637738cc57f58aa7b54`; PR #356 merged the HarmonyOS
+  chat-first UI as `0f6300c`. The reachability follow-up is at
+  `a07460ac2f423251ff925b8bb65a7cebd0e37729`.
 - PostgreSQL 16 has `hermes_conversations`, `hermes_messages`, and
   `hermes_tasks` plus four indexes. PostgreSQL and ClickHouse remain the only
   server business sources; no App-specific database was introduced.
-- The production API image is
+- The previous production API baseline image, retained for rollback, is
   `sha256:ca3522dff1151651e07cbefba0184a749fe697194bd16262a28ecd74b883efbd`,
-  labelled revision `60ee7b76136477c0bf4ca0a3ad2554e5829afa64`, with restart count `0`.
-  All non-API containers retained their existing uptime during the API switch.
+  labelled revision `60ee7b76136477c0bf4ca0a3ad2554e5829afa64`.
 - Cloud rollback data is under
   `/opt/lsmv2-production/backups/hermes-pr349-20260731-150457`; the original
   PostgreSQL dump SHA256 is
@@ -98,22 +98,46 @@ telemetry, rule-engine, or physical alarm authority.
   SHA256 values, then run `hvigorw clean` before `assembleHap`.
 - The previous signed HAP remains the rollback copy at
   `_private-production-backup/hermes-pr349-20260731-150457/entry-default-pr349-signed.hap`.
+- Production checks confirmed that reverse tunnels `22079`, `28081`, `28082`,
+  and `28087`, Hermes `/healthz`, supervision, MQTT, and the bounded task API
+  are reachable. `/v1/edge-risk` reports `available=false` because node data
+  is insufficient, not because RK3568 is disconnected.
+- `/api/v1/edge-ai/status` now returns `reachable` separately from `available`.
+  Production API image
+  `sha256:6a89be41abbd83ed9474fbd333bf7147426bfd7ebc888edf40ee2603003d25c2`
+  runs revision `a07460a` with restart count `0`.
+- API rollback evidence is under
+  `/opt/lsmv2-production/backups/hermes-reachability-20260731-183317` and
+  `/opt/lsmv2-production/backups/hermes-history-order-20260731-184909`.
+  Rollback tags retain both the original `60ee7b7` API and the intermediate
+  `8e51d76` reachability image. All non-API container IDs and restart counts
+  remained unchanged during both switches.
+- The signed follow-up HAP at
+  `E:/codex-build/hermes-reachability-20260731/entry/build/default/outputs/default/entry-default-signed.hap`
+  has SHA256
+  `C892754ED0DDFB849DA6BE8DAF66F90C7AB4766DFB96041D9DA143090E6E093B`
+  and is installed on HarmonyOS `5.0.1(13)` at `127.0.0.1:5555`.
+- Emulator acceptance passed `RK3568 在线 · 等待节点数据`, one safe task,
+  ordered `collect_logs -> recheck -> generate_report`, protected restart and
+  threshold rejection, history restoration with stable task order, station
+  map, device detail, alert empty state, Tianditu map, and persistent alert SSE.
+  The SSE connection was observed inside the API container network namespace.
 
 ## In Progress
 
 - PostgreSQL, API, RK3568, conversations, and bounded task execution are
-  production-live. The refined signed HAP is installed on the emulator. Full
-  emulator-originated task and alarm regression remains pending because the
-  App reports RK3568 unavailable; the UI deliberately displays that server
-  state instead of fabricating availability.
+  production-live. The corrected signed HAP is installed on the emulator and
+  the App no longer equates insufficient node data with RK3568 disconnection.
+- Explicit forced-offline cache proof remains pending because the emulator
+  shell rejects interface changes. Normal force-stop/relaunch restoration and
+  the reachable-but-unavailable cache code path are verified without changing
+  production services.
 
 ## Next Actions
 
-- Merge PR #356 after review.
-- Investigate why the emulator App reports RK3568 unavailable, then run
-  emulator-originated single-task, ordered multi-task, context repetition,
-  retry idempotency, restart recovery, protected-intent rejection, and full
-  monitoring/alarm regression.
+- Open, review, and merge the focused reachability follow-up PR.
+- Run an explicit forced-offline cache acceptance when emulator network control
+  is available; do not stop production API merely to simulate this condition.
 - Keep physical vibration, real GPS, vendor Push, and background survival out
   of emulator acceptance; verify them only when hardware testing is requested.
 - Power-cycle RK3568 and confirm time retention, reverse tunnel, supervisor,
@@ -127,16 +151,19 @@ telemetry, rule-engine, or physical alarm authority.
   drift if the corrected clock is not retained.
 - A/B/C serial silence is a field-link condition, not evidence that Hermes is
   consuming CPU or that fresh telemetry exists.
+- The emulator does not grant permission for `ifconfig eth0 down`, so this run
+  does not claim a forced-network-loss cache test.
 - Full API lint reports 74 pre-existing errors outside the changed Hermes
-  files; targeted lint and all 10 Hermes API tests pass.
+  files; targeted lint and all 11 Hermes API tests pass.
 - A future LLM must produce a structured allowlisted plan through the server;
   direct shell, serial, MQTT control, device control, or alarm authority is
   prohibited.
 
 ## Resume Prompt
 
-Merge PR #356, investigate the emulator's RK3568-unavailable state, and run
-emulator-originated Hermes plus in-App alarm/map/SSE/cache regression. Treat
-real GPS, physical vibration, vendor Push, and background survival as
-hardware-only gaps. Then power-cycle RK3568 to verify time retention. Do not
-add unrestricted device control or claim A/B/C online without serial evidence.
+Review and merge the reachability follow-up at `a07460a`. Preserve the API and
+HAP rollback evidence, then run a forced-offline cache check when simulator
+network control is available. Treat real GPS, physical vibration, vendor Push,
+and background survival as hardware-only gaps. Power-cycle RK3568 to verify
+time retention. Do not add unrestricted device control or claim A/B/C online
+without serial evidence.
