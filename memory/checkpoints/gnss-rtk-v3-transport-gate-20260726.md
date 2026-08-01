@@ -76,22 +76,30 @@ status: active
 - 代码差异确认稳定 compact `6d448134` 到 V3 `ed803b0e` 未修改三份 U4/Modbus/现场传感器驱动；V4 才追加自检和只读扫描，但 B 传感器停止早于 V4 包生成。RK3568 服务停止 35 秒时 B/C 本地失败计数仍增长，也已排除“RK3568 丢掉已生成传感器数据”为当前 U4 故障根因。后续采用同硬件、同位置、单侧版本变化的旧稳定 B -> V4 B 对照，不同时回退网关。
 - A 核心板移到 C 位置后的最新试验中，A/C 两种目标身份均无控制响应，普通 compact 接收也从 1 节点降为 0；当前 C 位置需先恢复 XLS1/TTL、供电或插接链，尚不能据此判断传感器状态。
 - 2026-07-30 用户确认 A 先前上线依赖接回 XLS1 天线，之后同一根天线与 A 核心板均移到 C。RK3568 此时仍每秒成功写 compact 广播轮询，但健康计数从最后一帧后完全停止接收，且连续 3 次定向 `target=A` V4 查询无匹配响应；服务测试后恢复 `active`、`NRestarts=0`。这把当前问题收敛到 C 位置的 XLS1/TTL 本地链、供电/地、天线端口、持久无线/UART 参数或 XLS1 上行发射，不支持“RK3568 收到后丢包”，也不能据此评价 A 核心板的 U4/传感器。
+- 2026-08-01 新 RK2206 已到、DL-XLS1 网络已由用户配置完成，但 SC16IS752/RS485 接口元件尚未到。手册与代码再次确认 `101` 是固定 USR 配置端口而不是射频信道，信道由 `103:/C` 管理；RK2206 只通过 `EUART2_M1 PB2/PB3 @ 115200` 发送业务数据，不在启动时改地址、PANID、信道或 `/D` 路由。
+- 新增安全的 `FIELD_SENSOR_SOURCE_SIMULATED` 构建配置：只生成土壤温度、含水率、EC 和三轴倾角，真实 UM220 GNSS 与真实 PC0 电池采样保持启用；模拟数据在 compact v2 状态位中明确标记。该配置下四个 RS485 实现文件编译为空单元，最终 `.bin` 不含 `SC16IS752`、`[RS485]` 或 `EI2C0_M0 PB4/PB5` 字符串，PB4/PB5 不会被初始化。
+- Compact Telemetry v2 仍保持 46 字节 payload、64 字节完整 COBS/CRC 线上帧；新增 PC0 电池电压、百分比、估算质量和 RS485 模拟标志。RK3568 field-gateway 保持 v1/v2 双栈并可区分 `field_sensor_source=simulated/hardware`，19 项测试、TypeScript build 和 lint 均通过。
+- 电池按用户当前提供的 `3S2P / 5000 mAh / 11.1 V / 55.5 Wh` 规格记录，并联数与容量仍需以电池标签或规格书最终确认。RK2206 SARADC 为 10 位 `0x3FF`，PC0 使用 16 次采样、至少 12 次有效、两端各裁 2 点、100k/27k 分压换算、单点增益/偏移校准、IIR 和细化的 3S 锂离子 OCV 曲线。正式包仍标记 `default-calibration`；未用万用表对每块板单点校准前，不宣称剩余 mAh、续航或百分比为实验室精度。
+- C99 `-Wall -Wextra -Werror` 主机测试通过：RTCM 重组/队列、G3S V4、电池估算和 compact v2/64 字节线上帧全部通过。静态引脚门禁结果为 `XLS1=PB2/PB3 GPS=PB6/PB7 BATTERY=PC0-input RS485=PB4/PB5-hardware-only`。模拟版和真实 RS485 版 A 节点都完成 OpenHarmony `hb build -f`，证明明日只切构建参数即可恢复硬件采集。
+- 可复现源码提交 `340d3a68316ebcefa2139f1b9e2b46079ef0e5a3` 已推送到远端 `feat/gnss-rtk-v31-transport`。正式 A/B/C 模拟链路测试包位于 `F:\2\openharmony\rk2206_firmware_releases\xls1_link_rehearsal_battery_simulated_20260801`，manifest 为 `sourceDirty=false`、RTCM injection disabled、RS485 hardware initialized false。
+- 正式包的 A/B/C `.img` SHA-256 分别为 `f4ac0a5b321558b80f1294912795a4fbf6e1f5cd8f43451458b353a0160fee9f`、`feb040047f74b63b5a32719ea59696c112a9686ae74884069ad256210d3b0ad2`、`dc4311cf467a1d6d67c34dac6524219ec351b8b40329ed78986eb9e14bcdd66e`。7 个 manifest 二进制哈希独立复算无差异，三个 `.bin` 均只包含自身 UUID/安装标签和 `SIMULATED (RS485 values only)` 标记。
 
 ## In Progress
 
-- 软件边界、容量模型、V4 底层诊断、交叉试验和服务器历史核验均已完成。当前 V4 异常随 B/C 核心板复现，但历史证明 B 在 C 故障后长期具备真实双通道采集，故障不能再直接定性为永久核心板损坏；需通过旧稳定固件与 V4 的单变量同位置对照区分近期接触/电气变化和版本回归。真实 NTRIP 和三节点混合负载仍未通过，不能进入 LIVE。
-- RK2206 当前没有独立可信的 Unix 时钟。节点可执行 1500 ms 重组超时和最多 3000 ms 本地队列龄，但绝对生成时间 TTL 只能计为 `ttl_unverified`，由 RK3568 先做绝对新鲜度过滤。
-- 现有 GPS 驱动已阻止 RMC 状态错误设置 Fixed，并公开原始 GGA quality；完整 GGA/GSA/GST/GSV/RMC/ZDA 定点解析和 `GNSS_CORE` 1 Hz 上送尚未实现。
+- 正式模拟包已经生成但尚未烧录到新 A/B/C RK2206；下一步是用户按节点标签烧录并上电，然后由 RK3568 做“稳定优先”的三节点轮询基线与参数扫描。
+- 当前默认保持已验证的 46/64 字节 compact v2、`32 B/15 ms` UART 分块和 340 ms 节点时隙。不得在基线未通过时同时修改包格式、轮询时隙、分块和 XLS1 模块参数。
+- RS485 元件未到期间，模拟包故意不初始化 PB4/PB5。接口到货、焊接与断电电气检查完成后，使用同一构建脚本把 `-FieldSensorMode simulated` 切成 `hardware`，不可手工删除模拟函数或修改 XLS1 驱动。
+- RTCM injection 仍保持 disabled；本轮先建立纯 compact 传感器数据的三节点稳定/延迟基线，再恢复真实 GNSS/RTCM 混合负载门禁。
 
 ## Next Actions
 
-- 保留本地报告 `docs/reports/xls1-gnss-v31-capacity-20260726.json` 作为可再生证据；原始 RTCM 抓包降为可选精化，不再作为进入单节点 `PROBE` 的阻塞项。
-- 保持 C 为离线/不可用状态，不伪造遥测，但在所有容量报告中固定预留 180 B/s；A/B 的实测结论与 C 的估算必须分栏展示。
-- 保留分级包率报告作为链路证据。旧 `250 B/6 Hz` 试验仍使用 160 B 分片，实际形成 12 个 field-link 包/秒；它证明高包率失败，不能单独证明 250 B 单包不可用。320 B 单包虽把 0.5 Hz QZSS 的丢失从 2 包降到 1 包，仍未过严格门禁，因此生产路径暂沿用已通过的三核心星座、160 B 分片和 160 ms 平滑调度。恢复 QZSS 前先设计有界累计确认/选择性重传，并验证三节点确认时隙、correction age 和 compact 遥测共存。
-- 先冻结当前 V4/RK3568 哈希和运行配置。恢复 A 位置后，保持 RK3568 当前版本不变，在同一已知正常 A 载板上用 B 核心板依次测试 `xl01_one_second_poll_v2_20260719/B` 与 V4 B；旧固件用独立轮询读取 compact validity/value，V4 用 diagnostics-only。若旧版成功、V4 失败，二分 V4 启动自检/扫描；若都失败，测 PB4/PB5、排针和 I2C 电气。节点采集恢复后才独立比较 RK3568 新旧版本的无线丢包。
-- 真实门禁负载包含 RTCM、3 个 1 Hz `GNSS_CORE`、compact 环境遥测和控制命令；记录每节点 correction age P50/P95/max、Fixed 连续性、CRC、重组、队列、注入、旧 session 和命令延迟。
-- 至少运行 60 分钟；初始通过条件为 correction age P95 <= 3 s、max <= 5 s、没有旧 session 注入且 Fixed 连续。未通过前保持 `LIVE` 关闭。
-- 传输通过后再完成 RK2206 定点 GNSS 解析与上送、RK3568 ECEF/ENU/Hampel/Kalman、服务器 CEEMDAN 和 UI/profile 集成。
+1. 将正式目录中 A/B/C 对应的 `.img` 分别烧录到物理 A/B/C；不要互换身份，不要使用 `_verification_*` 目录。缺少 RS485 接口时保持 PB4/PB5 外设断开，XLS1 模块配置不改。
+2. 三节点上电后先核对串口启动信息：自身 UUID/`FIELD-NODE-*`、`Field Sensor Source: SIMULATED`、`RS485 Bus: OFF`、PC0 battery ready；任何节点出现 `SC16IS752` 或 `[RS485]` 立即停止测试并复核镜像。
+3. 通过 RK3568 记录每节点应答数、序号连续性、超时、重复、CRC/COBS 错误、P50/P95/max 延迟和公平性。先跑当前 340 ms/`32 B+15 ms` 10 分钟基线，再跑 60 分钟稳定门禁；基线不为零丢失时不提速。
+4. 基线稳定后才按单变量顺序测试更高吞吐：先缩短 UART chunk delay，再比较 64 B chunk，最后才缩短节点时隙。每轮只改一个参数，测试后恢复服务并保存原始报告；最优方案首先要求零丢失和无节点饥饿，其次才比较延迟/吞吐。
+5. 每个节点用万用表测电池包电压，并与平台 `battery_v` 同时记录。按 `gain_ppm = measured_mv / reported_mv * 1000000` 分别重建对应节点，校准后再评价电量百分比；2P/5000 mAh 不改变电压曲线，只影响容量和续航。
+6. RS485 接口到货后先断电做方向、短路、3.3 V、PB4/PB5 上拉和模块型号检查，再执行 `build-xl01-compact-broadcast-v2.ps1 -FieldSensorMode hardware -GnssRtcmInjectionMode disabled` 生成真实采集版；硬件版必须重新跑引脚门禁和 A/B/C 身份/哈希核验。
+7. 真实传感器链稳定后再恢复 RTCM PROBE/LIVE 的既有门禁，最终混合负载仍需覆盖 RTCM、3 个 GNSS_CORE、compact 遥测和控制命令。
 
 ## Risks
 
@@ -107,4 +115,4 @@ status: active
 
 ## Resume Prompt
 
-继续 V3.1 底层诊断：数据库证明 C 的现场传感器于 2026-07-26 19:02:59 UTC 停止，而 B 此后仍有约 12.6 万组变化的倾角和 12.9 万组土壤记录，B 不能直接判为永久坏板。当前 V4 的 B/C U4 自检失败仍是真实本地证据，RK3568 丢包不能制造这些计数。先恢复 A 到 A，并在真实 A 断电时把 B 核心板放 A 位置；保持 RK3568 不变，依次刷旧稳定 `xl01_one_second_poll_v2_20260719/B` 和 V4 B 做单变量对照。另需先恢复 C 位置的 XLS1/TTL 控制链。保持 LIVE 关闭。
+继续 2026-08-01 XLS1 三节点链路排参：从 `F:\2\openharmony\rk2206_firmware_releases\xls1_link_rehearsal_battery_simulated_20260801` 按标签烧录 A/B/C。源码和远端均为 `340d3a68316ebcefa2139f1b9e2b46079ef0e5a3`；模拟包只模拟 RS485，真实 UM220 和 PC0 电池保留，PB4/PB5 不初始化，RTCM disabled。上电后先从 RK3568 验证三节点身份和 340 ms/32 B/15 ms 零丢失基线，再按单变量提速。电池为 3S2P 5000 mAh，未逐板万用表校准前只能把百分比视为电压估算。接口到货后只用 `-FieldSensorMode hardware` 切回真实 RS485，不改 XLS1 模块或驱动。
