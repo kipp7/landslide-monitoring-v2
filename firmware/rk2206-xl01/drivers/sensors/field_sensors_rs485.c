@@ -1,3 +1,7 @@
+#include "../../config/app_config.h"
+
+#if ENABLE_RS485_BUS
+
 #include "field_sensors_rs485.h"
 
 #include <stdint.h>
@@ -5,7 +9,6 @@
 #include <string.h>
 #include "los_task.h"
 #include "los_tick.h"
-#include "../../config/app_config.h"
 #include "../../utils/watchdog_mgr.h"
 #include "rs485_modbus.h"
 #if RS485_TRANSPORT_SC16IS752
@@ -618,3 +621,5 @@ void FieldRs485_GetDiagnostics(FieldRs485Diagnostics *snapshot)
     }
     memcpy(snapshot, &g_field_rs485_diagnostics, sizeof(*snapshot));
 }
+
+#endif /* ENABLE_RS485_BUS */

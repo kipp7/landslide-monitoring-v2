@@ -1,3 +1,7 @@
+#include "../../config/app_config.h"
+
+#if ENABLE_RS485_BUS
+
 #include "sc16is752_driver.h"
 
 #include <stdio.h>
@@ -5,7 +9,6 @@
 #include "iot_errno.h"
 #include "iot_i2c.h"
 #include "los_task.h"
-#include "../../config/app_config.h"
 
 #ifndef SC16IS752_I2C_ADDR
 #define SC16IS752_I2C_ADDR 0x48
@@ -578,3 +581,5 @@ void SC16IS752_GetDiagnostics(Sc16is752Diagnostics *snapshot)
     }
     memcpy(snapshot, &g_sc16is752_diagnostics, sizeof(*snapshot));
 }
+
+#endif /* ENABLE_RS485_BUS */

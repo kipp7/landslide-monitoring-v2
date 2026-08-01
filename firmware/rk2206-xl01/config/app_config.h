@@ -51,9 +51,10 @@
 #define FIELD_LINK_MAX_PAYLOAD_BYTES 1024
 #define TELEMETRY_PAYLOAD_FORMAT_JSON_V1 0
 #define TELEMETRY_PAYLOAD_FORMAT_COMPACT_V1 1
+#define TELEMETRY_PAYLOAD_FORMAT_COMPACT_V2 2
 // Experimental single-radio-packet profile. A 46-byte payload becomes exactly
 // 64 bytes after the existing field-link header, CRC32, COBS and delimiter.
-#define TELEMETRY_PAYLOAD_FORMAT TELEMETRY_PAYLOAD_FORMAT_COMPACT_V1
+#define TELEMETRY_PAYLOAD_FORMAT TELEMETRY_PAYLOAD_FORMAT_COMPACT_V2
 #define XL01_UART_TX_CHUNK_SIZE 32     // Long transparent payloads are more stable when split into small UART bursts
 #define XL01_UART_TX_CHUNK_DELAY_MS 15 // Validated compact baseline; higher-rate profiles remain hardware sweep candidates
 #define PLATFORM_POST_ACK_QUIET_MS 1200 // Hold telemetry briefly after any command ACK to keep the shared XL01 stream separable
@@ -91,25 +92,46 @@
 #define SLEEP_AFTER_SEND    0           // Sleep after each send (low power)
 
 // Version marker
-#define FIRMWARE_SAMPLE_VERSION "v1.1-um220-rs485-compact-v2"
-#define FIELD_BUILD_PROFILE_PRODUCTION 1
+#define FIRMWARE_SAMPLE_VERSION "v1.2-um220-rs485-battery-compact-v2"
 
 // Bring-up diagnostic mode:
 // 1 = only print a boot heartbeat on the debug UART; do not initialize sensors or XL01.
 // Use this to separate "firmware did not start / debug UART wrong" from sensor-driver issues.
 #define BOOT_SERIAL_DIAG_MODE 0
 
+// Field sensor source is a build-time profile. The simulated profile replaces
+// only RS485 readings and therefore never initializes EI2C0 PB4/PB5 or a missing
+// SC16IS752/RS485 interface. GPS and PC0 battery readings remain real.
+#define FIELD_SENSOR_SOURCE_HARDWARE 0
+#define FIELD_SENSOR_SOURCE_SIMULATED 1
+#ifndef FIELD_SENSOR_SOURCE
+#define FIELD_SENSOR_SOURCE FIELD_SENSOR_SOURCE_HARDWARE
+#endif
+
+#define FIELD_BUILD_PROFILE_PRODUCTION \
+    (FIELD_SENSOR_SOURCE == FIELD_SENSOR_SOURCE_HARDWARE)
+
+#if FIELD_SENSOR_SOURCE != FIELD_SENSOR_SOURCE_HARDWARE && \
+    FIELD_SENSOR_SOURCE != FIELD_SENSOR_SOURCE_SIMULATED
+#error "FIELD_SENSOR_SOURCE must be HARDWARE or SIMULATED"
+#endif
+
 // Sensor Enable Flags
-// v1.1 keeps the confirmed UM220 GPS path. The new PCB routes RS485 through
-// SC16IS752 over I2C, so UART1 stays available for debug logs.
 #define ENABLE_GPS                 1    // UM220-IV NK on EUART0_M0 (PB6/PB7)
-#define ENABLE_RS485_BUS           1    // SC16IS752 + isolated auto-direction TTL-RS485 modules
+#define ENABLE_RS485_BUS           (FIELD_SENSOR_SOURCE == FIELD_SENSOR_SOURCE_HARDWARE)
 #define ENABLE_RS485_SOIL_SENSOR   (ENABLE_RS485_BUS && 1) // RS-ECTH-N01-TR-1 three-in-one soil sensor on channel 1
 #define ENABLE_RS485_TILT_SENSOR   (ENABLE_RS485_BUS && 1) // RS485 tilt sensor on shared channel 2
 #define ENABLE_RS485_RAIN_SENSOR   (ENABLE_RS485_BUS && 0) // Enable after confirming rain-gauge register map
 #define ENABLE_SHT30               0    // Legacy I2C sensor disabled in v1.1
 #define ENABLE_MPU6050             0    // Legacy I2C IMU disabled in v1.1
-#define ENABLE_VIRTUAL             0    // Disable rehearsal-only virtual data
+#define ENABLE_SIMULATED_FIELD_SENSORS \
+    (FIELD_SENSOR_SOURCE == FIELD_SENSOR_SOURCE_SIMULATED)
+#define ENABLE_VIRTUAL             0    // Deprecated whole-node virtual mode remains forbidden
+#define ENABLE_BATTERY_MONITOR     1    // PC0/SARADC channel 0, input only
+
+#if ENABLE_VIRTUAL
+#error "Whole-node virtual mode is forbidden; use FIELD_SENSOR_SOURCE_SIMULATED"
+#endif
 
 // Watchdog Configuration
 #define ENABLE_WATCHDOG     1           // Enable watchdog for system stability
@@ -160,6 +182,38 @@
 #define GNSS_RTCM_MAX_QUEUE_AGE_MS 3000U
 #define GNSS_RTCM_UART_CHUNK_SIZE 64U
 #define GNSS_RTCM_STATUS_LOG_INTERVAL_MS 10000U
+#endif
+
+#if ENABLE_BATTERY_MONITOR
+// V1.3 carrier: VBAT_SW -> 100k -> sense -> 27k -> GND, followed by 1k
+// series protection, 100nF filtering and BAT54S clamps. RK2206 BSP maps
+// IoTAdc channel 0 to PC0 and configures it as an analog input.
+#define BATTERY_ADC_CHANNEL             0U
+#define BATTERY_ADC_REFERENCE_MV        3300U
+#define BATTERY_ADC_FULL_SCALE_COUNTS   1024U
+#define BATTERY_DIVIDER_TOP_OHMS        100000U
+#define BATTERY_DIVIDER_BOTTOM_OHMS     27000U
+#define BATTERY_ADC_SAMPLE_COUNT        16U
+#define BATTERY_ADC_MIN_VALID_SAMPLES   12U
+#define BATTERY_ADC_TRIM_EACH_SIDE      2U
+#define BATTERY_ADC_SAMPLE_DELAY_MS     2U
+#define BATTERY_FILTER_SHIFT            3U
+#define BATTERY_VALID_MIN_MV            8000U
+#define BATTERY_VALID_MAX_MV            13500U
+// Per-node one-point calibration: measured_pack_mv / reported_pack_mv * 1e6.
+// Defaults are deliberately neutral until each assembled divider is measured.
+#define BATTERY_CALIBRATION_GAIN_PPM    1000000U
+#define BATTERY_CALIBRATION_OFFSET_MV   0
+
+#if BATTERY_ADC_CHANNEL != 0U
+#error "V1.3 battery divider is physically connected to PC0 / ADC channel 0"
+#endif
+#if BATTERY_ADC_SAMPLE_COUNT > 32U || BATTERY_ADC_SAMPLE_COUNT < 4U
+#error "Battery estimator supports 4..32 samples"
+#endif
+#if BATTERY_ADC_TRIM_EACH_SIDE * 2U >= BATTERY_ADC_MIN_VALID_SAMPLES
+#error "Battery ADC trim removes every minimum-valid sample"
+#endif
 #endif
 
 #if ENABLE_RS485_BUS

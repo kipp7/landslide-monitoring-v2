@@ -193,8 +193,10 @@ int BuildTelemetryEnvelopeV1(
         }
     }
 
-    if (data->battery_level >= 1 && data->battery_level <= 100) {
+    if (data->battery_valid) {
         if (BeginJsonField(output, output_size, &len, &metric_count) < 0 ||
+            AppendJsonChunk(output, output_size, &len, "\"battery_v\":%.3f", data->battery_voltage_mv / 1000.0f) < 0 ||
+            BeginJsonField(output, output_size, &len, &metric_count) < 0 ||
             AppendJsonChunk(output, output_size, &len, "\"battery_pct\":%d", data->battery_level) < 0) {
             output[0] = '\0';
             return -1;
@@ -216,13 +218,16 @@ int BuildTelemetryEnvelopeV1(
         AppendJsonChunk(output, output_size, &len, "\"last_command_uptime_s\":%u,", last_command_uptime_s) < 0 ||
         AppendJsonChunk(output, output_size, &len, "\"upload_trigger\":\"%s\",", upload_trigger) < 0 ||
         AppendJsonChunk(output, output_size, &len, "\"time_source\":\"%s\",", time_source) < 0 ||
+        AppendJsonChunk(output, output_size, &len, "\"field_sensor_source\":\"%s\",", data->simulated_field_data ? "simulated" : "hardware") < 0 ||
+        AppendJsonChunk(output, output_size, &len, "\"battery_estimate_quality\":%d,", data->battery_estimate_quality) < 0 ||
         AppendJsonChunk(output, output_size, &len, "\"legacy_valid_flags\":{") < 0 ||
         AppendJsonChunk(output, output_size, &len, "\"temp_ok\":%d,", data->temp_valid) < 0 ||
         AppendJsonChunk(output, output_size, &len, "\"imu_ok\":%d,", data->imu_valid) < 0 ||
         AppendJsonChunk(output, output_size, &len, "\"gps_ok\":%d,", data->gps_valid) < 0 ||
         AppendJsonChunk(output, output_size, &len, "\"soil_ok\":%d,", data->soil_valid) < 0 ||
         AppendJsonChunk(output, output_size, &len, "\"tilt_ok\":%d,", data->tilt_valid) < 0 ||
-        AppendJsonChunk(output, output_size, &len, "\"rain_ok\":%d", data->rain_valid) < 0 ||
+        AppendJsonChunk(output, output_size, &len, "\"rain_ok\":%d,", data->rain_valid) < 0 ||
+        AppendJsonChunk(output, output_size, &len, "\"battery_ok\":%d", data->battery_valid) < 0 ||
         AppendJsonChunk(output, output_size, &len, "}") < 0 ||
         AppendJsonChunk(output, output_size, &len, "}") < 0 ||
         AppendJsonChunk(output, output_size, &len, "}\n") < 0) {

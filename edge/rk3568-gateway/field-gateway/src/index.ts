@@ -10,8 +10,8 @@ import { loadAndCompileSchema } from "@lsmv2/validation";
 import { loadConfigFromEnv, type AppConfig } from "./config";
 import {
   buildCompactBroadcastPollCommand,
-  decodeCompactTelemetryV1,
-  isCompactTelemetryV1
+  decodeCompactTelemetry,
+  isCompactTelemetry
 } from "./compact-telemetry";
 import {
   createCobsCrcFieldLinkAssembler,
@@ -1383,9 +1383,9 @@ class GatewayRuntime {
   }
 
   private async handlePayload(input: FieldLinkInboundPayload, sourcePort: string): Promise<void> {
-    if (input.frameType === "telemetry" && isCompactTelemetryV1(input.rawPayloadBytes)) {
+    if (input.frameType === "telemetry" && isCompactTelemetry(input.rawPayloadBytes)) {
       try {
-        const envelope = decodeCompactTelemetryV1(input.rawPayloadBytes);
+        const envelope = decodeCompactTelemetry(input.rawPayloadBytes);
         await this.handlePayloadCandidate(JSON.stringify(envelope), sourcePort, input.frameType, input.sequence);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

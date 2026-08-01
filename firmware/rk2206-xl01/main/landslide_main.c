@@ -64,6 +64,12 @@
 #include "../drivers/sensors/field_sensors_rs485.h"
 #include "../drivers/sensors/field_alarm_rs485.h"
 #endif
+#if ENABLE_BATTERY_MONITOR
+#include "../drivers/sensors/battery_monitor.h"
+#endif
+#if ENABLE_SIMULATED_FIELD_SENSORS
+#include "../drivers/sensors/simulated_field_sensors.h"
+#endif
 
 // Application
 #include "../app/sensor_data.h"
@@ -110,6 +116,7 @@ static int g_sht30_ready = 0;
 static int g_mpu6050_ready = 0;
 static int g_rs485_ready = 0;
 static int g_gps_ready = 0;
+static int g_battery_ready = 0;
 static unsigned int g_runtime_sampling_interval_ms = 1000;
 static unsigned int g_runtime_report_interval_ms = UPLOAD_INTERVAL_MS;
 static int g_platform_uplink_enabled = 1;
@@ -123,7 +130,7 @@ static char g_last_trusted_time_ts[40] = "";
 static char g_last_trusted_time_source[32] = "";
 static volatile uint32_t g_last_platform_command_tick = 0;
 static volatile int g_field_link_recovery_requested = 0;
-#define FW_RX_DIAG_MARKER "fw-gnss-rtk-v31-probe-sensor-diag-v4-20260729"
+#define FW_RX_DIAG_MARKER "fw-rk2206-battery-compact-v2-20260801"
 bool g_cloud_motor_enabled = false;
 int g_cloud_motor_speed = 0;
 MotorDirection g_cloud_motor_direction = MOTOR_DIRECTION_STOP;
@@ -214,7 +221,6 @@ static uint8_t SensorDiagnostics_EnabledMask(void)
 {
     uint8_t mask = 0U;
 
-#if !ENABLE_VIRTUAL
 #if ENABLE_GPS
     mask |= GNSS_SENSOR_UM220_MASK;
 #endif
@@ -227,7 +233,6 @@ static uint8_t SensorDiagnostics_EnabledMask(void)
 #if ENABLE_RS485_TILT_SENSOR
     mask |= GNSS_SENSOR_TILT_MASK;
 #endif
-#endif
     return mask;
 }
 
@@ -235,7 +240,6 @@ static uint8_t SensorDiagnostics_InitializationSuccessMask(void)
 {
     uint8_t mask = 0U;
 
-#if !ENABLE_VIRTUAL
 #if ENABLE_GPS
     if (g_gps_ready) {
         mask |= GNSS_SENSOR_UM220_MASK;
@@ -253,7 +257,6 @@ static uint8_t SensorDiagnostics_InitializationSuccessMask(void)
     if (g_rs485_ready) {
         mask |= GNSS_SENSOR_TILT_MASK;
     }
-#endif
 #endif
     return mask;
 }
@@ -1326,7 +1329,7 @@ static void PrintSparseMetricsDiagnostic(const SensorData *data, const char *upl
     last_sparse_diag_tick = now;
 
     printf(
-        "[UPLOAD SKIP DETAIL] trigger=%s temp_ok=%d soil_ok=%d imu_ok=%d tilt_ok=%d rain_ok=%d gps_ok=%d i2c_ready=%d rs485_ready=%d sht30_ready=%d mpu6050_ready=%d lat=%.6f lon=%.6f uptime=%u\n",
+        "[UPLOAD SKIP DETAIL] trigger=%s temp_ok=%d soil_ok=%d imu_ok=%d tilt_ok=%d rain_ok=%d gps_ok=%d battery_ok=%d simulated=%d i2c_ready=%d rs485_ready=%d battery_ready=%d sht30_ready=%d mpu6050_ready=%d lat=%.6f lon=%.6f uptime=%u\n",
         upload_trigger != NULL ? upload_trigger : "(null)",
         data->temp_valid,
         data->soil_valid,
@@ -1334,8 +1337,11 @@ static void PrintSparseMetricsDiagnostic(const SensorData *data, const char *upl
         data->tilt_valid,
         data->rain_valid,
         data->gps_valid,
+        data->battery_valid,
+        data->simulated_field_data,
         g_i2c_ready,
         g_rs485_ready,
+        g_battery_ready,
         g_sht30_ready,
         g_mpu6050_ready,
         data->latitude,
@@ -1348,47 +1354,6 @@ static void PrintSparseMetricsDiagnostic(const SensorData *data, const char *upl
 #endif
 }
 
-// ==================== Virtual Sensor (for testing) ====================
-
-#if ENABLE_VIRTUAL
-#include <math.h>
-
-static void VirtualSensor_Read(SensorData *data)
-{
-    static float temp_base = 25.0f;
-    static float angle_base = 0.0f;
-    
-    // Temperature: 25°C ± 5°C
-    data->temperature = temp_base + 5.0f * sinf(data->seq * 0.1f);
-    data->humidity = 60.0f + 10.0f * cosf(data->seq * 0.15f);
-    data->temp_valid = 1;
-    
-    // GPS: Fixed location (example)
-    data->latitude = 22.5430f + data->seq * 0.00001f;
-    data->longitude = 114.0579f + data->seq * 0.00001f;
-    data->gps_valid = 1;
-    
-    // Accelerometer: Simulate tilt
-    angle_base += 0.05f;
-    data->angle_x = angle_base + 0.5f * sinf(data->seq * 0.2f);
-    data->angle_y = angle_base * 0.6f + 0.3f * cosf(data->seq * 0.25f);
-    data->accel_x = sinf(data->angle_x * 3.14159f / 180.0f);
-    data->accel_y = sinf(data->angle_y * 3.14159f / 180.0f);
-    data->accel_z = 1.0f;
-    data->gyro_x = 0.5f;
-    data->gyro_y = -0.3f;
-    data->gyro_z = 0.1f;
-    data->imu_valid = 1;
-    
-    // Warning: tilt exceeds configured field threshold.
-    data->warning = (fabs(data->angle_x) > RS485_TILT_WARNING_DEG ||
-                     fabs(data->angle_y) > RS485_TILT_WARNING_DEG) ? 1 : 0;
-    
-    // Battery: Simulate discharge
-    data->battery_level = 100 - (data->seq % 100);
-}
-#endif
-
 // ==================== Task 1: Sensor Collection ====================
 
 static void* SensorCollectionTask(const char* arg)
@@ -1396,10 +1361,15 @@ static void* SensorCollectionTask(const char* arg)
     (void)arg;
     SensorData next_sample;
     uint8_t diagnostic_success_mask;
+#if ENABLE_MPU6050
     uint32_t last_mpu_reinit_tick = 0;
     unsigned int mpu_read_fail_streak = 0;
+#endif
 #if ENABLE_RS485_BUS
     FieldRs485Readings rs485_readings;
+#endif
+#if ENABLE_BATTERY_MONITOR
+    BatteryReading battery_reading;
 #endif
     
     LOS_Msleep(1000);
@@ -1409,10 +1379,6 @@ static void* SensorCollectionTask(const char* arg)
         // Read all enabled sensors
         diagnostic_success_mask = 0U;
 
-#if ENABLE_VIRTUAL
-        SensorData_CopySnapshot(&next_sample);
-        VirtualSensor_Read(&next_sample);
-#else
         SensorData_CopySnapshot(&next_sample);
         next_sample.temperature = 0.0f;
         next_sample.humidity = 0.0f;
@@ -1439,12 +1405,25 @@ static void* SensorCollectionTask(const char* arg)
         next_sample.rain_total = 0.0f;
         next_sample.rain_valid = 0;
         next_sample.warning = 0;
+        next_sample.battery_level = 0;
+        next_sample.battery_voltage_mv = 0U;
+        next_sample.battery_valid = 0;
+        next_sample.battery_estimate_quality = 0;
+        next_sample.simulated_field_data = 0;
         
 #if ENABLE_SHT30
         if (g_i2c_ready && g_sht30_ready &&
             SHT30_Read(&next_sample.temperature, &next_sample.humidity) == 0) {
             next_sample.temp_valid = 1;
         }
+#endif
+
+#if ENABLE_SIMULATED_FIELD_SENSORS
+        SimulatedFieldSensors_Read(
+            &next_sample,
+            (unsigned int)g_stats.uptime_sec,
+            LEGACY_NODE_LABEL[0]
+        );
 #endif
 
 #if ENABLE_MPU6050
@@ -1490,6 +1469,15 @@ static void* SensorCollectionTask(const char* arg)
                     mpu_read_fail_streak = 0;
                 }
             }
+        }
+#endif
+
+#if ENABLE_BATTERY_MONITOR
+        if (g_battery_ready && BatteryMonitor_Read(&battery_reading) == 0) {
+            next_sample.battery_level = (int)battery_reading.percentage;
+            next_sample.battery_voltage_mv = battery_reading.pack_voltage_mv;
+            next_sample.battery_estimate_quality = (int)battery_reading.estimate_quality;
+            next_sample.battery_valid = 1;
         }
 #endif
 
@@ -1553,7 +1541,6 @@ static void* SensorCollectionTask(const char* arg)
                 next_sample.warning = 1;
             }
         }
-#endif
         SensorDiagnostics_RecordCycle(diagnostic_success_mask, (uint32_t)g_stats.uptime_sec);
         SensorData_StoreSnapshot(&next_sample);
         
@@ -1633,8 +1620,9 @@ static void* DataProcessTask(const char* arg)
 static void* DataUploadTask(const char* arg)
 {
     (void)arg;
-#if TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V1
-    unsigned char compact_payload[COMPACT_TELEMETRY_V1_PAYLOAD_BYTES];
+#if TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V1 || \
+    TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V2
+    unsigned char compact_payload[COMPACT_TELEMETRY_PAYLOAD_BYTES];
 #else
     char json[FIELD_LINK_MAX_PAYLOAD_BYTES + 1];
 #endif
@@ -1670,7 +1658,10 @@ static void* DataUploadTask(const char* arg)
     printf("  Poll Request Check: %d ms\n", POLL_REQUEST_CHECK_INTERVAL_MS);
     printf("  Edge Uplink Mode: %s\n", EDGE_UPLINK_MODE == EDGE_UPLINK_MODE_POLLED ? "Polled" : "Periodic");
     printf("  Telemetry Payload: %s\n",
-           TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V1 ? "Compact v1 (46-byte payload)" : "JSON v1");
+           TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V2 ? "Compact v2 (46-byte payload)" :
+           (TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V1 ? "Compact v1 (46-byte payload)" : "JSON v1"));
+    printf("  Field Sensor Source: %s\n",
+           ENABLE_SIMULATED_FIELD_SENSORS ? "SIMULATED (RS485 values only)" : "HARDWARE");
     printf("  Max Retries: %d\n", MAX_RETRY_COUNT);
     printf("  ACK Check: %s\n", ENABLE_ACK_CHECK ? "Enabled" : "Disabled");
     printf("  ACK Timeout: %d ms\n", ACK_TIMEOUT_MS);
@@ -1681,7 +1672,6 @@ static void* DataUploadTask(const char* arg)
            (unsigned int)FIELD_LINK_STALE_REBOOT_MS);
     printf("----------------------------------------\n");
     printf("  Sensors:\n");
-    printf("    - Virtual: %s\n", ENABLE_VIRTUAL ? "ON" : "OFF");
     printf("    - GPS: %s\n", ENABLE_GPS ? "ON" : "OFF");
 #if ENABLE_GPS
     printf("    - RTCM Injection: %s queue=%u max_queue_age=%u ms\n",
@@ -1694,6 +1684,14 @@ static void* DataUploadTask(const char* arg)
 #endif
            (unsigned int)GNSS_RTCM_QUEUE_DEPTH,
            (unsigned int)GNSS_RTCM_MAX_QUEUE_AGE_MS);
+#endif
+#if ENABLE_BATTERY_MONITOR
+    printf("    - Battery: ON ready=%s route=PC0/SARADC-ch0 input-only calibration=%s\n",
+           g_battery_ready ? "yes" : "no",
+           (BATTERY_CALIBRATION_GAIN_PPM != 1000000U || BATTERY_CALIBRATION_OFFSET_MV != 0) ?
+               "field" : "default");
+#else
+    printf("    - Battery: OFF\n");
 #endif
     printf("    - RS485 Bus: %s ready=%s\n",
            ENABLE_RS485_BUS ? "ON" : "OFF",
@@ -1821,9 +1819,14 @@ static void* DataUploadTask(const char* arg)
         }
 
         SensorData_TakeUploadSnapshot(&telemetry_snapshot);
-#if TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V1
+#if TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V1 || \
+    TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V2
         memset(compact_payload, 0, sizeof(compact_payload));
+#if TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V2
+        len = BuildCompactTelemetryV2(
+#else
         len = BuildCompactTelemetryV1(
+#endif
             &telemetry_snapshot,
             DeviceIdentity_Get()->legacy_node_label,
             g_last_platform_command_id,
@@ -2101,6 +2104,16 @@ static void App_SystemInit(void)
     } else {
         g_gps_ready = 0;
         printf("[WARN] GPS init failed; GPS metrics will stay sparse until the driver reports a valid fix\n");
+    }
+#endif
+
+#if ENABLE_BATTERY_MONITOR
+    if (BatteryMonitor_Init() == 0) {
+        g_battery_ready = 1;
+        printf("[OK] Battery monitor initialized (PC0/SARADC channel 0 input-only)\n");
+    } else {
+        g_battery_ready = 0;
+        printf("[WARN] Battery monitor init failed; battery metrics will stay sparse\n");
     }
 #endif
 

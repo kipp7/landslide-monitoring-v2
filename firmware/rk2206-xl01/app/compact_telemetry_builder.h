@@ -8,6 +8,8 @@ extern "C" {
 #endif
 
 #define COMPACT_TELEMETRY_V1_PAYLOAD_BYTES 46
+#define COMPACT_TELEMETRY_V2_PAYLOAD_BYTES 46
+#define COMPACT_TELEMETRY_PAYLOAD_BYTES 46
 #define COMPACT_TELEMETRY_ERR_EMPTY_METRICS (-2)
 
 enum {
@@ -24,12 +26,27 @@ enum {
     COMPACT_TELEMETRY_VALID_TILT = 1U << 3,
     COMPACT_TELEMETRY_VALID_GPS = 1U << 4,
     COMPACT_TELEMETRY_VALID_RAIN = 1U << 5,
-    COMPACT_TELEMETRY_VALID_IMU = 1U << 6
+    COMPACT_TELEMETRY_VALID_IMU = 1U << 6,
+    COMPACT_TELEMETRY_VALID_BATTERY = 1U << 7
+};
+
+enum {
+    COMPACT_TELEMETRY_STATUS_WARNING = 1U << 0,
+    COMPACT_TELEMETRY_STATUS_FIELD_SENSORS_SIMULATED = 1U << 1
 };
 
 unsigned int CompactTelemetry_CommandTag(const char *command_id);
 
 int BuildCompactTelemetryV1(
+    const SensorData *data,
+    const char *legacy_node_label,
+    const char *last_command_id,
+    const char *upload_trigger,
+    unsigned char *output,
+    int output_size
+);
+
+int BuildCompactTelemetryV2(
     const SensorData *data,
     const char *legacy_node_label,
     const char *last_command_id,

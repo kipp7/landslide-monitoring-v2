@@ -21,12 +21,30 @@ $probeProtocolTest = Join-Path $repoRoot "firmware\rk2206-xl01\tests\gnss_probe_
 $fieldSensorsHeader = Join-Path $repoRoot "firmware\rk2206-xl01\drivers\sensors\field_sensors_rs485.h"
 $modbusHeader = Join-Path $repoRoot "firmware\rk2206-xl01\drivers\sensors\rs485_modbus.h"
 $sc16is752Header = Join-Path $repoRoot "firmware\rk2206-xl01\drivers\sensors\sc16is752_driver.h"
+$batteryEstimatorHeader = Join-Path $repoRoot "firmware\rk2206-xl01\app\battery_estimator.h"
+$batteryEstimatorImplementation = Join-Path $repoRoot "firmware\rk2206-xl01\app\battery_estimator.c"
+$batteryEstimatorTest = Join-Path $repoRoot "firmware\rk2206-xl01\tests\battery_estimator_host_test.c"
+$compactBuilderHeader = Join-Path $repoRoot "firmware\rk2206-xl01\app\compact_telemetry_builder.h"
+$compactBuilderImplementation = Join-Path $repoRoot "firmware\rk2206-xl01\app\compact_telemetry_builder.c"
+$compactPollHeader = Join-Path $repoRoot "firmware\rk2206-xl01\app\compact_poll_command.h"
+$compactPollImplementation = Join-Path $repoRoot "firmware\rk2206-xl01\app\compact_poll_command.c"
+$sensorDataHeader = Join-Path $repoRoot "firmware\rk2206-xl01\app\sensor_data.h"
+$fieldLinkFrameHeader = Join-Path $repoRoot "firmware\rk2206-xl01\drivers\xl01\field_link_frame.h"
+$fieldLinkFrameImplementation = Join-Path $repoRoot "firmware\rk2206-xl01\drivers\xl01\field_link_frame.c"
+$simulatedFieldSensorsHeader = Join-Path $repoRoot "firmware\rk2206-xl01\drivers\sensors\simulated_field_sensors.h"
+$simulatedFieldSensorsImplementation = Join-Path $repoRoot "firmware\rk2206-xl01\drivers\sensors\simulated_field_sensors.c"
+$compactBuilderTest = Join-Path $repoRoot "firmware\rk2206-xl01\tests\compact_telemetry_builder_host_test.c"
 
 foreach ($required in @(
   $sourceHeader, $sourceImplementation, $injectionHeader, $injectionImplementation,
   $appConfig, $sourceTest, $probeProtocolHeader, $probeProtocolImplementation,
   $fieldLinkStatsHeader, $fieldLinkStatsImplementation, $probeProtocolTest,
-  $fieldSensorsHeader, $modbusHeader, $sc16is752Header
+  $fieldSensorsHeader, $modbusHeader, $sc16is752Header,
+  $batteryEstimatorHeader, $batteryEstimatorImplementation, $batteryEstimatorTest,
+  $compactBuilderHeader, $compactBuilderImplementation, $compactPollHeader,
+  $compactPollImplementation, $sensorDataHeader, $fieldLinkFrameHeader,
+  $fieldLinkFrameImplementation, $simulatedFieldSensorsHeader,
+  $simulatedFieldSensorsImplementation, $compactBuilderTest
 )) {
   if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
     throw "Required GNSS transport source is missing: $required"
@@ -57,6 +75,19 @@ docker cp $probeProtocolTest "${ContainerName}:${containerRoot}/tests/gnss_probe
 docker cp $fieldSensorsHeader "${ContainerName}:${containerRoot}/drivers/sensors/field_sensors_rs485.h"
 docker cp $modbusHeader "${ContainerName}:${containerRoot}/drivers/sensors/rs485_modbus.h"
 docker cp $sc16is752Header "${ContainerName}:${containerRoot}/drivers/sensors/sc16is752_driver.h"
+docker cp $batteryEstimatorHeader "${ContainerName}:${containerRoot}/app/battery_estimator.h"
+docker cp $batteryEstimatorImplementation "${ContainerName}:${containerRoot}/app/battery_estimator.c"
+docker cp $batteryEstimatorTest "${ContainerName}:${containerRoot}/tests/battery_estimator_host_test.c"
+docker cp $compactBuilderHeader "${ContainerName}:${containerRoot}/app/compact_telemetry_builder.h"
+docker cp $compactBuilderImplementation "${ContainerName}:${containerRoot}/app/compact_telemetry_builder.c"
+docker cp $compactPollHeader "${ContainerName}:${containerRoot}/app/compact_poll_command.h"
+docker cp $compactPollImplementation "${ContainerName}:${containerRoot}/app/compact_poll_command.c"
+docker cp $sensorDataHeader "${ContainerName}:${containerRoot}/app/sensor_data.h"
+docker cp $fieldLinkFrameHeader "${ContainerName}:${containerRoot}/drivers/xl01/field_link_frame.h"
+docker cp $fieldLinkFrameImplementation "${ContainerName}:${containerRoot}/drivers/xl01/field_link_frame.c"
+docker cp $simulatedFieldSensorsHeader "${ContainerName}:${containerRoot}/drivers/sensors/simulated_field_sensors.h"
+docker cp $simulatedFieldSensorsImplementation "${ContainerName}:${containerRoot}/drivers/sensors/simulated_field_sensors.c"
+docker cp $compactBuilderTest "${ContainerName}:${containerRoot}/tests/compact_telemetry_builder_host_test.c"
 if ($LASTEXITCODE -ne 0) {
   throw "Failed to copy GNSS transport sources into the container"
 }
@@ -79,6 +110,19 @@ gcc -std=c99 -Wall -Wextra -Werror -O2 \
   tests/gnss_probe_stats_protocol_host_test.c \
   -o gnss_probe_stats_protocol_host_test
 ./gnss_probe_stats_protocol_host_test
+gcc -std=c99 -Wall -Wextra -Werror -O2 \
+  app/battery_estimator.c \
+  tests/battery_estimator_host_test.c \
+  -o battery_estimator_host_test
+./battery_estimator_host_test
+gcc -std=c99 -Wall -Wextra -Werror -O2 \
+  app/compact_telemetry_builder.c \
+  app/compact_poll_command.c \
+  drivers/xl01/field_link_frame.c \
+  drivers/sensors/simulated_field_sensors.c \
+  tests/compact_telemetry_builder_host_test.c \
+  -o compact_telemetry_builder_host_test
+./compact_telemetry_builder_host_test
 "@
 
 docker exec $ContainerName bash -lc $compile

@@ -5,6 +5,12 @@ param(
   [string]$ArtifactDirectory = "",
   [ValidateSet("disabled", "probe", "live")]
   [string]$GnssRtcmInjectionMode = "disabled",
+  [ValidateSet("hardware", "simulated")]
+  [string]$FieldSensorMode = "hardware",
+  [ValidateRange(800000, 1200000)]
+  [int]$BatteryCalibrationGainPpm = 1000000,
+  [ValidateRange(-2000, 2000)]
+  [int]$BatteryCalibrationOffsetMv = 0,
   [ValidateSet("A", "B", "C")]
   [string[]]$NodeLabels = @("A", "B", "C"),
   [switch]$KeepSdkExperimentSource
@@ -18,10 +24,15 @@ $sampleRelative = "vendor\isoftstone\rk2206\samples\xl01_landslide_monitor_v1.1"
 $sampleRoot = Join-Path $SdkRoot $sampleRelative
 $productOut = Join-Path $SdkRoot "out\rk2206\isoftstone-rk2206"
 if (-not $ArtifactDirectory) {
-  $ArtifactDirectory = Join-Path $repoRoot "artifacts\firmware\rk2206-xl01-compact-broadcast-v2"
+  $ArtifactDirectory = Join-Path $repoRoot ("artifacts\firmware\rk2206-xl01-compact-v2-{0}" -f $FieldSensorMode)
 }
 $artifactRoot = [System.IO.Path]::GetFullPath($ArtifactDirectory)
 $backupRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("xls1-compact-sdk-backup-" + [guid]::NewGuid().ToString("N"))
+$sourceCommit = (& git -C $repoRoot rev-parse HEAD).Trim()
+if ($LASTEXITCODE -ne 0 -or -not $sourceCommit) {
+  throw "Cannot resolve the source commit for the firmware manifest"
+}
+$sourceDirty = @(& git -C $repoRoot status --porcelain --untracked-files=normal).Count -gt 0
 
 $syncFiles = @(
   "BUILD.gn",
@@ -39,14 +50,25 @@ $syncFiles = @(
   "drivers\xl01\xl01_driver.h",
   "drivers\sensors\gps_driver.c",
   "drivers\sensors\gps_driver.h",
+  "drivers\sensors\battery_monitor.c",
+  "drivers\sensors\battery_monitor.h",
+  "drivers\sensors\simulated_field_sensors.c",
+  "drivers\sensors\simulated_field_sensors.h",
+  "app\sensor_data.h",
+  "app\battery_estimator.c",
+  "app\battery_estimator.h",
   "app\compact_telemetry_builder.c",
   "app\compact_telemetry_builder.h",
+  "app\telemetry_envelope_builder.c",
+  "app\telemetry_envelope_builder.h",
   "app\compact_poll_command.c",
   "app\compact_poll_command.h",
   "app\gnss_probe_stats_protocol.c",
   "app\gnss_probe_stats_protocol.h",
   "drivers\sensors\field_sensors_rs485.c",
   "drivers\sensors\field_sensors_rs485.h",
+  "drivers\sensors\field_alarm_rs485.c",
+  "drivers\sensors\field_alarm_rs485.h",
   "drivers\sensors\rs485_modbus.c",
   "drivers\sensors\rs485_modbus.h",
   "drivers\sensors\sc16is752_driver.c",
@@ -116,6 +138,25 @@ function Set-GnssRtcmInjectionMode {
   [System.IO.File]::WriteAllText($configPath, $text, [System.Text.UTF8Encoding]::new($false))
 }
 
+function Set-FieldSensorMode {
+  $modeToken = switch ($FieldSensorMode) {
+    "hardware" { "FIELD_SENSOR_SOURCE_HARDWARE" }
+    "simulated" { "FIELD_SENSOR_SOURCE_SIMULATED" }
+  }
+  $configPath = Join-Path $sampleRoot "config\app_config.h"
+  $text = [System.IO.File]::ReadAllText($configPath)
+  $text = Set-SingleTokenMacro -Text $text -Macro "FIELD_SENSOR_SOURCE" -Value $modeToken
+  [System.IO.File]::WriteAllText($configPath, $text, [System.Text.UTF8Encoding]::new($false))
+}
+
+function Set-BatteryCalibration {
+  $configPath = Join-Path $sampleRoot "config\app_config.h"
+  $text = [System.IO.File]::ReadAllText($configPath)
+  $text = Set-SingleTokenMacro -Text $text -Macro "BATTERY_CALIBRATION_GAIN_PPM" -Value ([string]$BatteryCalibrationGainPpm)
+  $text = Set-SingleTokenMacro -Text $text -Macro "BATTERY_CALIBRATION_OFFSET_MV" -Value ([string]$BatteryCalibrationOffsetMv)
+  [System.IO.File]::WriteAllText($configPath, $text, [System.Text.UTF8Encoding]::new($false))
+}
+
 function Set-NodeIdentity {
   param([hashtable]$Node)
 
@@ -139,8 +180,8 @@ function Copy-BuildOutputs {
     }
   }
 
-  $imageTarget = Join-Path $artifactRoot ("rk2206-node-{0}-xls1-compact-broadcast-v2.img" -f $Node.Label)
-  $liteOsTarget = Join-Path $artifactRoot ("rk2206-node-{0}-xls1-compact-broadcast-v2.bin" -f $Node.Label)
+  $imageTarget = Join-Path $artifactRoot ("rk2206-node-{0}-xls1-compact-v2-{1}.img" -f $Node.Label, $FieldSensorMode)
+  $liteOsTarget = Join-Path $artifactRoot ("rk2206-node-{0}-xls1-compact-v2-{1}.bin" -f $Node.Label, $FieldSensorMode)
   Copy-Item -LiteralPath $imageSource -Destination $imageTarget -Force
   Copy-Item -LiteralPath $liteOsSource -Destination $liteOsTarget -Force
   if (Test-Path -LiteralPath $loaderSource -PathType Leaf) {
@@ -178,6 +219,8 @@ try {
   }
 
   Set-GnssRtcmInjectionMode
+  Set-FieldSensorMode
+  Set-BatteryCalibration
 
   foreach ($node in $nodes | Where-Object { $_.Label -in $NodeLabels }) {
     Set-NodeIdentity -Node $node
@@ -194,8 +237,20 @@ try {
     Sort-Object Name
   $manifest = [ordered]@{
     schemaVersion = 1
-    profile = "rk2206-xl01-compact-broadcast-v2"
+    profile = "rk2206-xl01-compact-v2-$FieldSensorMode"
+    sourceCommit = $sourceCommit
+    sourceDirty = $sourceDirty
     gnssRtcmInjectionMode = $GnssRtcmInjectionMode
+    fieldSensorMode = $FieldSensorMode
+    fieldSensorTruth = if ($FieldSensorMode -eq "simulated") { "RS485 values simulated; GPS and battery are real" } else { "RS485, GPS and battery are real" }
+    rs485HardwareInitialized = $FieldSensorMode -eq "hardware"
+    battery = [ordered]@{
+      adcRoute = "PC0/SARADC channel 0 input-only"
+      dividerOhms = "100000/27000"
+      calibrationGainPpm = $BatteryCalibrationGainPpm
+      calibrationOffsetMv = $BatteryCalibrationOffsetMv
+      socMethod = "trimmed ADC mean + calibrated voltage + IIR + 3S voltage curve"
+    }
     firmwareMarker = Get-QuotedMacroValue -Path (Join-Path $sourceRoot "main\landslide_main.c") -Macro "FW_RX_DIAG_MARKER"
     sampleVersion = Get-QuotedMacroValue -Path (Join-Path $sourceRoot "config\app_config.h") -Macro "FIRMWARE_SAMPLE_VERSION"
     compactPayloadBytes = 46

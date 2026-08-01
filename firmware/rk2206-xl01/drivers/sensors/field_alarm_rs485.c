@@ -1,10 +1,13 @@
+#include "../../config/app_config.h"
+
+#if ENABLE_RS485_BUS
+
 #include "field_alarm_rs485.h"
 
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include "los_task.h"
-#include "../../config/app_config.h"
 #include "rs485_modbus.h"
 
 #if ENABLE_RS485_ALARM && RS485_TRANSPORT_SC16IS752
@@ -443,3 +446,5 @@ int FieldAlarmRs485_SendRawDiagnostic(int enabled)
 
     return (primary_ret == 0 || alternate_ret == 0) ? 0 : g_last_alarm_diag.final_ret;
 }
+
+#endif /* ENABLE_RS485_BUS */

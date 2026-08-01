@@ -1,4 +1,5 @@
 export const COMPACT_TELEMETRY_V1_BYTES = 46;
+export const COMPACT_TELEMETRY_V2_BYTES = 46;
 
 const VALID_TEMPERATURE = 1 << 0;
 const VALID_SOIL = 1 << 1;
@@ -7,6 +8,10 @@ const VALID_TILT = 1 << 3;
 const VALID_GPS = 1 << 4;
 const VALID_RAIN = 1 << 5;
 const VALID_IMU = 1 << 6;
+const VALID_BATTERY = 1 << 7;
+
+const STATUS_WARNING = 1 << 0;
+const STATUS_FIELD_SENSORS_SIMULATED = 1 << 1;
 
 const DEVICE_IDS = [
   "",
@@ -25,6 +30,8 @@ export type CompactTelemetryV1 = {
     last_command_tag: number;
   };
 };
+
+export type CompactTelemetry = CompactTelemetryV1;
 
 export function compactCommandTag(command: string): number {
   let value = 2166136261;
@@ -51,6 +58,15 @@ export function isCompactTelemetryV1(payload: Buffer): boolean {
     payload.readUInt8(0) === 0x4c &&
     payload.readUInt8(1) === 0x53 &&
     payload.readUInt8(2) === 0x01
+  );
+}
+
+export function isCompactTelemetry(payload: Buffer): boolean {
+  return (
+    payload.length === COMPACT_TELEMETRY_V1_BYTES &&
+    payload.readUInt8(0) === 0x4c &&
+    payload.readUInt8(1) === 0x53 &&
+    (payload.readUInt8(2) === 0x01 || payload.readUInt8(2) === 0x02)
   );
 }
 
@@ -122,6 +138,96 @@ export function decodeCompactTelemetryV1(payload: Buffer): CompactTelemetryV1 {
         soil_ec_ok: Number((valid & VALID_SOIL_EC) !== 0),
         tilt_ok: Number((valid & VALID_TILT) !== 0),
         rain_ok: Number((valid & VALID_RAIN) !== 0)
+      }
+    }
+  };
+}
+
+export function decodeCompactTelemetry(payload: Buffer): CompactTelemetry {
+  if (!isCompactTelemetry(payload)) {
+    throw new Error(
+      `compact telemetry signature mismatch: expected=${String(COMPACT_TELEMETRY_V1_BYTES)} bytes and version 1 or 2`
+    );
+  }
+  if (payload.readUInt8(2) === 1) {
+    return decodeCompactTelemetryV1(payload);
+  }
+
+  const nodeNumber = payload.readUInt8(3);
+  const deviceId = DEVICE_IDS[nodeNumber];
+  if (!deviceId) {
+    throw new Error(`compact telemetry node out of range: ${String(nodeNumber)}`);
+  }
+
+  const nodeLabel = String.fromCharCode("A".charCodeAt(0) + nodeNumber - 1);
+  const statusFlags = payload.readUInt8(4);
+  const triggerCode = payload.readUInt8(5);
+  const valid = payload.readUInt16BE(6);
+  const metrics: Record<string, number | boolean> = {};
+
+  if ((valid & VALID_BATTERY) !== 0) {
+    metrics.battery_v = payload.readUInt16BE(20) / 1000;
+    metrics.battery_pct = payload.readUInt8(22);
+  }
+  if ((valid & VALID_SOIL) !== 0) {
+    metrics.soil_temperature_c = payload.readInt16BE(24) / 100;
+    metrics.soil_moisture_pct = payload.readUInt16BE(26) / 100;
+  }
+  if ((valid & VALID_SOIL_EC) !== 0) {
+    metrics.electrical_conductivity_us_cm = payload.readUInt16BE(28);
+  }
+  if ((valid & VALID_TILT) !== 0) {
+    metrics.tilt_x_deg = payload.readInt16BE(30) / 100;
+    metrics.tilt_y_deg = payload.readInt16BE(32) / 100;
+    metrics.tilt_z_deg = payload.readInt16BE(34) / 100;
+    metrics.warning_flag = (statusFlags & STATUS_WARNING) !== 0;
+  }
+  if ((valid & VALID_GPS) !== 0) {
+    metrics.gps_latitude = payload.readInt32BE(36) / 1_000_000;
+    metrics.gps_longitude = payload.readInt32BE(40) / 1_000_000;
+  }
+  if ((valid & VALID_RAIN) !== 0) {
+    metrics.rain_total_mm = payload.readUInt16BE(44) / 10;
+  }
+
+  const triggerCodeValue =
+    triggerCode === 1 ? "periodic" : triggerCode === 2 ? "manual_collect" : triggerCode === 3 ? "scheduler_poll" : "unknown";
+  const batteryQualityCode = payload.readUInt8(23);
+  const batteryQuality =
+    batteryQualityCode === 1
+      ? "default-calibration"
+      : batteryQualityCode === 2
+        ? "field-calibrated"
+        : batteryQualityCode === 0
+          ? "unavailable"
+          : "unknown";
+  const simulated = (statusFlags & STATUS_FIELD_SENSORS_SIMULATED) !== 0;
+
+  return {
+    schema_version: 1,
+    device_id: deviceId,
+    event_ts: null,
+    seq: payload.readUInt32BE(8),
+    metrics,
+    meta: {
+      install_label: `FIELD-NODE-${nodeLabel}`,
+      legacy_node: nodeLabel,
+      uptime_s: payload.readUInt32BE(12),
+      last_command_tag: payload.readUInt32BE(16),
+      upload_trigger: triggerCodeValue,
+      compact_payload_version: 2,
+      field_sensor_source: simulated ? "simulated" : "hardware",
+      battery_estimate_quality: batteryQuality,
+      battery_estimate_quality_code: batteryQualityCode,
+      legacy_valid_flags: {
+        temp_ok: 0,
+        imu_ok: Number((valid & VALID_IMU) !== 0),
+        gps_ok: Number((valid & VALID_GPS) !== 0),
+        soil_ok: Number((valid & VALID_SOIL) !== 0),
+        soil_ec_ok: Number((valid & VALID_SOIL_EC) !== 0),
+        tilt_ok: Number((valid & VALID_TILT) !== 0),
+        rain_ok: Number((valid & VALID_RAIN) !== 0),
+        battery_ok: Number((valid & VALID_BATTERY) !== 0)
       }
     }
   };

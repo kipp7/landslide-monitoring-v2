@@ -14,6 +14,7 @@ static_library("xl01_landslide_monitor") {
         "app/command_ack_builder.c",
         "app/gnss_probe_stats_protocol.c",
         "app/shared_port_scheduler.c",
+        "app/battery_estimator.c",
         
         # Utilities
         "utils/fifo.c",
@@ -34,6 +35,8 @@ static_library("xl01_landslide_monitor") {
         "drivers/sensors/rs485_modbus.c",
         "drivers/sensors/field_sensors_rs485.c",
         "drivers/sensors/field_alarm_rs485.c",
+        "drivers/sensors/battery_monitor.c",
+        "drivers/sensors/simulated_field_sensors.c",
     ]
 
     include_dirs = [

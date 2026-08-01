@@ -28,7 +28,9 @@ enum {
 };
 
 typedef char CompactTelemetryPayloadSizeCheck[
-    COMPACT_TELEMETRY_V1_PAYLOAD_BYTES == 46 ? 1 : -1
+    COMPACT_TELEMETRY_V1_PAYLOAD_BYTES == 46 &&
+    COMPACT_TELEMETRY_V2_PAYLOAD_BYTES == 46 &&
+    COMPACT_TELEMETRY_PAYLOAD_BYTES == 46 ? 1 : -1
 ];
 
 static void WriteUint16Be(unsigned char *output, unsigned int offset, unsigned int value)
@@ -184,7 +186,7 @@ int BuildCompactTelemetryV1(
     output[OFFSET_MAGIC_1] = 'S';
     output[OFFSET_VERSION] = 1U;
     output[OFFSET_NODE] = node_number;
-    output[OFFSET_FLAGS] = data->warning ? 1U : 0U;
+    output[OFFSET_FLAGS] = data->warning ? COMPACT_TELEMETRY_STATUS_WARNING : 0U;
     output[OFFSET_TRIGGER] = UploadTriggerCode(upload_trigger);
     WriteUint16Be(output, OFFSET_VALID, valid_flags);
     WriteUint32Be(output, OFFSET_SEQ, data->seq);
@@ -216,4 +218,103 @@ int BuildCompactTelemetryV1(
     }
 
     return COMPACT_TELEMETRY_V1_PAYLOAD_BYTES;
+}
+
+int BuildCompactTelemetryV2(
+    const SensorData *data,
+    const char *legacy_node_label,
+    const char *last_command_id,
+    const char *upload_trigger,
+    unsigned char *output,
+    int output_size
+)
+{
+    unsigned int valid_flags = 0U;
+    unsigned int status_flags = 0U;
+    unsigned char node_number;
+
+    if (data == NULL || output == NULL || output_size < COMPACT_TELEMETRY_V2_PAYLOAD_BYTES) {
+        return -1;
+    }
+
+    node_number = NodeNumber(legacy_node_label);
+    if (node_number == 0U) {
+        return -1;
+    }
+
+    if (data->soil_valid) {
+        valid_flags |= COMPACT_TELEMETRY_VALID_SOIL;
+    }
+    if (data->soil_ec_valid) {
+        valid_flags |= COMPACT_TELEMETRY_VALID_SOIL_EC;
+    }
+    if (data->tilt_valid || data->imu_valid) {
+        valid_flags |= COMPACT_TELEMETRY_VALID_TILT;
+    }
+    if (data->gps_valid) {
+        valid_flags |= COMPACT_TELEMETRY_VALID_GPS;
+    }
+    if (data->rain_valid) {
+        valid_flags |= COMPACT_TELEMETRY_VALID_RAIN;
+    }
+    if (data->imu_valid) {
+        valid_flags |= COMPACT_TELEMETRY_VALID_IMU;
+    }
+    if (data->battery_valid) {
+        valid_flags |= COMPACT_TELEMETRY_VALID_BATTERY;
+    }
+    if (valid_flags == 0U) {
+        return COMPACT_TELEMETRY_ERR_EMPTY_METRICS;
+    }
+
+    if (data->warning) {
+        status_flags |= COMPACT_TELEMETRY_STATUS_WARNING;
+    }
+    if (data->simulated_field_data) {
+        status_flags |= COMPACT_TELEMETRY_STATUS_FIELD_SENSORS_SIMULATED;
+    }
+
+    memset(output, 0, COMPACT_TELEMETRY_V2_PAYLOAD_BYTES);
+    output[OFFSET_MAGIC_0] = 'L';
+    output[OFFSET_MAGIC_1] = 'S';
+    output[OFFSET_VERSION] = 2U;
+    output[OFFSET_NODE] = node_number;
+    output[OFFSET_FLAGS] = (unsigned char)status_flags;
+    output[OFFSET_TRIGGER] = UploadTriggerCode(upload_trigger);
+    WriteUint16Be(output, OFFSET_VALID, valid_flags);
+    WriteUint32Be(output, OFFSET_SEQ, data->seq);
+    WriteUint32Be(output, OFFSET_UPTIME, data->uptime);
+    WriteUint32Be(output, OFFSET_COMMAND_TAG, CompactTelemetry_CommandTag(last_command_id));
+
+    if (data->battery_valid) {
+        WriteUint16Be(output, OFFSET_TEMPERATURE,
+                      data->battery_voltage_mv > USHRT_MAX ? USHRT_MAX : data->battery_voltage_mv);
+        output[OFFSET_HUMIDITY] =
+            (unsigned char)(data->battery_level < 0 ? 0 :
+                            (data->battery_level > 100 ? 100 : data->battery_level));
+        output[OFFSET_HUMIDITY + 1U] =
+            (unsigned char)(data->battery_estimate_quality < 0 ? 0 :
+                            (data->battery_estimate_quality > 255 ? 255 : data->battery_estimate_quality));
+    }
+    if (data->soil_valid) {
+        WriteInt16Be(output, OFFSET_SOIL_TEMPERATURE, ScaleSigned(data->soil_temperature, 100.0f, SHRT_MIN + 1, SHRT_MAX));
+        WriteUint16Be(output, OFFSET_SOIL_MOISTURE, ScaleUnsigned(data->soil_moisture, 100.0f, USHRT_MAX - 1U));
+    }
+    if (data->soil_ec_valid) {
+        WriteUint16Be(output, OFFSET_SOIL_EC, ScaleUnsigned(data->soil_ec, 1.0f, USHRT_MAX - 1U));
+    }
+    if (data->tilt_valid || data->imu_valid) {
+        WriteInt16Be(output, OFFSET_TILT_X, ScaleSigned(data->angle_x, 100.0f, SHRT_MIN + 1, SHRT_MAX));
+        WriteInt16Be(output, OFFSET_TILT_Y, ScaleSigned(data->angle_y, 100.0f, SHRT_MIN + 1, SHRT_MAX));
+        WriteInt16Be(output, OFFSET_TILT_Z, ScaleSigned(data->angle_z, 100.0f, SHRT_MIN + 1, SHRT_MAX));
+    }
+    if (data->gps_valid) {
+        WriteInt32Be(output, OFFSET_GPS_LATITUDE, ScaleSigned(data->latitude, 1000000.0f, INT_MIN + 1, INT_MAX));
+        WriteInt32Be(output, OFFSET_GPS_LONGITUDE, ScaleSigned(data->longitude, 1000000.0f, INT_MIN + 1, INT_MAX));
+    }
+    if (data->rain_valid) {
+        WriteUint16Be(output, OFFSET_RAIN_TOTAL, ScaleUnsigned(data->rain_total, 10.0f, USHRT_MAX - 1U));
+    }
+
+    return COMPACT_TELEMETRY_V2_PAYLOAD_BYTES;
 }

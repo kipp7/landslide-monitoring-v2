@@ -4,6 +4,7 @@ const test = require("node:test");
 const {
   buildCompactBroadcastPollCommand,
   compactCommandTag,
+  decodeCompactTelemetry,
   decodeCompactTelemetryV1
 } = require("../dist/compact-telemetry.js");
 const { createCobsCrcFieldLinkAssembler, encodeFieldLinkFrame } = require("../dist/field-link.js");
@@ -63,4 +64,51 @@ test("compact telemetry survives binary COBS/CRC framing and preserves every fie
     gps_longitude: 118.123456,
     rain_total_mm: 12.5
   });
+});
+
+test("compact telemetry v2 carries real battery data and labels simulated RS485 values", () => {
+  const payload = Buffer.alloc(46);
+  payload.write("LS", 0, "ascii");
+  payload.writeUInt8(2, 2);
+  payload.writeUInt8(3, 3);
+  payload.writeUInt8(0x03, 4);
+  payload.writeUInt8(3, 5);
+  payload.writeUInt16BE(0x009e, 6);
+  payload.writeUInt32BE(77, 8);
+  payload.writeUInt32BE(900, 12);
+  payload.writeUInt32BE(0x9664c12a, 16);
+  payload.writeUInt16BE(12123, 20);
+  payload.writeUInt8(83, 22);
+  payload.writeUInt8(2, 23);
+  payload.writeInt16BE(2310, 24);
+  payload.writeUInt16BE(4875, 26);
+  payload.writeUInt16BE(645, 28);
+  payload.writeInt16BE(134, 30);
+  payload.writeInt16BE(-27, 32);
+  payload.writeInt16BE(5, 34);
+  payload.writeInt32BE(24612345, 36);
+  payload.writeInt32BE(118123456, 40);
+
+  const decoded = decodeCompactTelemetry(payload);
+  assert.equal(decoded.device_id, "00000000-0000-0000-0000-000000000003");
+  assert.equal(decoded.seq, 77);
+  assert.deepEqual(decoded.metrics, {
+    battery_v: 12.123,
+    battery_pct: 83,
+    soil_temperature_c: 23.1,
+    soil_moisture_pct: 48.75,
+    electrical_conductivity_us_cm: 645,
+    tilt_x_deg: 1.34,
+    tilt_y_deg: -0.27,
+    tilt_z_deg: 0.05,
+    warning_flag: true,
+    gps_latitude: 24.612345,
+    gps_longitude: 118.123456
+  });
+  assert.equal(decoded.meta.compact_payload_version, 2);
+  assert.equal(decoded.meta.field_sensor_source, "simulated");
+  assert.equal(decoded.meta.battery_estimate_quality, "field-calibrated");
+  assert.equal(decoded.meta.battery_estimate_quality_code, 2);
+  assert.equal(decoded.meta.legacy_valid_flags.battery_ok, 1);
+  assert.equal(decoded.meta.legacy_valid_flags.temp_ok, 0);
 });

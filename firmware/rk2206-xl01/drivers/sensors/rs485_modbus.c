@@ -1,3 +1,7 @@
+#include "../../config/app_config.h"
+
+#if ENABLE_RS485_BUS
+
 #include "rs485_modbus.h"
 
 #include <stdio.h>
@@ -6,7 +10,6 @@
 #include "iot_uart.h"
 #include "los_task.h"
 #include "los_tick.h"
-#include "../../config/app_config.h"
 
 #ifndef RS485_TRANSPORT_SC16IS752
 #define RS485_TRANSPORT_SC16IS752 0
@@ -818,3 +821,5 @@ void RS485_ModbusGetDiagnostics(Rs485ModbusDiagnostics *snapshot)
     }
     memcpy(snapshot, &g_modbus_diagnostics, sizeof(*snapshot));
 }
+
+#endif /* ENABLE_RS485_BUS */

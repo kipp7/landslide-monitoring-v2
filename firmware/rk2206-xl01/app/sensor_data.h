@@ -44,6 +44,10 @@ typedef struct {
     // Status
     int warning;                // Warning flag
     int battery_level;          // Battery level (%)
+    unsigned int battery_voltage_mv; // Filtered 3S pack voltage
+    int battery_valid;          // 0=invalid, 1=valid
+    int battery_estimate_quality; // 1=default calibration, 2=field calibrated
+    int simulated_field_data;   // 1=RS485 values are generated for link rehearsal
 } SensorData;
 
 typedef struct {
