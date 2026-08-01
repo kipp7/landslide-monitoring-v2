@@ -18,6 +18,18 @@ status: active
 
 ## Current State
 
+### Authoritative Latest State (2026-08-02)
+
+- A/B/C 已烧录节点专属 `xls1_link_rehearsal_battery_simulated_20260801` 镜像并同时在线。当前只模拟 RS485 土壤/EC/倾角；UM220 GNSS、PC0 电池和 XLS1 传输链为真实硬件，RTCM injection 为 disabled。
+- field-gateway 已改为每串口单广播在途，5000 ms 响应窗口，完成后 1000 ms 冷却，全节点空响应时 2000..30000 ms 指数退避；调度和延迟使用单调时钟。24/24 测试、TypeScript build/lint 和差异检查通过。
+- 600 秒严格门禁完成 310 轮、930/930 帧，A/B/C 各 310/310，序号 570..879 全连续，零重复、回退、未匹配、残帧、解码和 profile 错误。报告仅保留在 RK3568 `/var/lib/lsmv2/experiments/xls1-three-node-batch-poll-20260802-004710.json`，SHA-256 `a1341efba950f8cd36e04b627078ec1741a559f41b78e1705fe4160ad2916a63`；A/B/C 最大命令延迟为 315.6/641.7/955.1 ms。
+- RK3568 重新上电后又连续观测 93 轮：新增 279 帧，严格等于 `93 x 3`，三节点序号各前进 93；最后一轮 3/3，所有空轮、重复、未匹配、解析拒绝和交织计数仍为 0。`lsmv2-field-gateway.service` 为 enabled、active/running、`Restart=always`、`NRestarts=0`。
+- 最终网关与门禁脚本 SHA-256 分别为 `f66d5ed7165c8810248df4cd4bb7ba4f3e09a01ea96f7781893594ceae6bc3d8` 和 `d4094733f8d363bb8d85e565e3779604df6a8ba08d460ec6e1363581011e8e9d`。测试 hold 使用 `/run` drop-in 并已验证必定恢复服务。
+- 当前约 1.94 秒完成一轮，因为 1000 ms 是会话关闭后的冷却，不是固定 1 Hz。当前基线追求零丢帧，不为比赛显示伪称每秒三节点齐采。
+- 电池约为 A 11.04 V、B 11.03 V、C 11.82 V，仍属 `default-calibration`；先做逐节点万用表校准，再解释百分比或续航。RS485 硬件到位后只通过构建参数切回 hardware，并重新做完整门禁。
+
+### Prior Engineering Evidence
+
 - PC NTRIP、RTCM3 CRC、原始串口注入和 BT-760 RTK Fixed 已验证，3 套 BT-760 已到货。
 - `4ed2ce5b` 已完成 V3.1 `GNSS_CORE`/RTCM 有界协议；`e00107ed` 已完成默认关闭的 RK2206 重组、队列、CRC、统计和单任务 GNSS UART 注入边界。
 - 主机测试、field-gateway 回归/lint 及固件交叉编译均通过。A/B 有正常遥测；2026-07-28 C 已通过定向 `G3S` V2、`G3A` ACK V1、普通轮询 ACK 和 1 秒 4/4 分片、3/3 帧闭环，身份为 `...0003`，证明 XLS1 双向控制链在线。C 仍没有 compact 遥测，问题已收敛到 RK2206 传感器采样/遥测生成路径，不能再表述为 XLS1 未配对或节点无线离线。
@@ -77,12 +89,13 @@ status: active
 
 ## Plan
 
-- 捕获至少 60 s 无凭据原始 RTCM，运行 capture-driven 容量报告。
-- 保持 C 显式不可用且预留 180 B/s；C 恢复后以三核心星座 `um220-shaped` profile 执行 12 s 和 60 s PROBE。
+- 先完成 A/B/C PC0 电池逐节点万用表校准；当前默认校准电压只用于趋势，百分比不作为准确剩余容量。
+- RS485 接口到货后只切 `-FieldSensorMode hardware -GnssRtcmInjectionMode disabled` 重建 A/B/C，重新执行身份、二进制哈希、真实传感器有效位和至少 600 秒三节点通信门禁。
+- 捕获至少 60 s 不含凭据的原始 RTCM，运行 capture-driven 容量报告；原始报告与真实坐标不进入 Git。
 - 将已实现的 RTCM shaper 接入 RK3568 统一端口所有权调度器，补齐 160 B 分片、160 ms 包间隔、持久 session epoch、绝对 TTL 和运行状态；队列过载时丢弃旧改正数而不是延迟发送。
 - 在恢复 QZSS 前设计并门禁低频累计确认/选择性重传或等价的有界可靠机制；不能用无限队列、逐帧三节点 ACK 或盲目全量重复换取表面零丢包。机制必须保持 correction age 有界，并实测三节点反向确认不会与 compact 遥测争用半双工链路。
 - A/B 节点计数均通过后，再加入 3 个 1 Hz `GNSS_CORE`、compact 环境遥测和控制命令，执行真实 NTRIP 混合负载；不把合成 PROBE 通过等同于 RTK Fixed 通过。
-- 暂停累计 ACK 和 12 s/60 s RTCM 门禁。保留当前 Git 提交、V4 发布包及 RK3568 部署哈希作为回滚点，不同时回退 RK2206 和 RK3568。先恢复 A 到 A 位置；真实 A 断电以避免身份冲突，将 B 核心板放在已知正常的 A 位置，先刷 `xl01_one_second_poll_v2_20260719/B` 并用当前 RK3568 的独立轮询工具读取 compact 有效位，再在完全相同硬件/位置刷回 V4 B 对照。旧版成功而 V4 失败才进入固件回归二分；两版均失败则优先查接触/I2C 电气。只有节点本地采集有效后，才单独比较新旧 RK3568 程序的空口丢包，禁止两端同时回退导致无法归因。
+- 保留当前三节点模拟 compact 基线、V4 诊断包和 RK3568 回滚目录。后续每次只改变一个层级：先 hardware 传感器，再 RTCM PROBE，最后 LIVE；不同时回退 RK2206 和 RK3568。
 - 至少运行 60 分钟三节点门禁，目标 correction age P95 <=3 s、max <=5 s、无旧 session 注入且 Fixed 连续。
 - 通过后才启用 `LIVE`，随后实现定点 GNSS 解析、RK3568 ECEF/ENU/Hampel/Kalman、服务器 CEEMDAN 和 UI/profile。
 

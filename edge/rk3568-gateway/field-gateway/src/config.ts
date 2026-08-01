@@ -60,12 +60,14 @@ const configSchema = z
     southboundPollingMode: z.enum(["round-robin-json", "compact-broadcast-v1"]).default("round-robin-json"),
     southboundPollingCommandType: z.string().min(1).default("poll_latest_telemetry"),
     southboundPollingIntervalMs: z.coerce.number().int().positive().default(1000),
-    southboundPollingSessionTimeoutMs: z.coerce.number().int().positive().default(1500),
+    southboundPollingSessionTimeoutMs: z.coerce.number().int().positive().default(5000),
     southboundPollingPrewriteQuietMs: z.coerce.number().int().nonnegative().default(100),
     southboundPollingPrewriteMaxWaitMs: z.coerce.number().int().nonnegative().default(250),
     southboundPollingCommandChunkBytes: z.coerce.number().int().nonnegative().default(64),
     southboundPollingCommandChunkDelayMs: z.coerce.number().int().nonnegative().default(10),
     southboundPollingSuppressAckPublish: envBoolean(true),
+    southboundPollingEmptyBackoffInitialMs: z.coerce.number().int().positive().default(2000),
+    southboundPollingEmptyBackoffMaxMs: z.coerce.number().int().positive().default(30000),
     replayIntervalMs: z.coerce.number().int().positive().default(5000),
     healthEmitIntervalMs: z.coerce.number().int().positive().default(5000),
     serialReconnectBaseDelayMs: z.coerce.number().int().positive().default(5000),
@@ -111,6 +113,15 @@ const configSchema = z
         code: z.ZodIssueCode.custom,
         path: ["serialReconnectMaxDelayMs"],
         message: "SERIAL_RECONNECT_MAX_DELAY_MS must be greater than or equal to SERIAL_RECONNECT_BASE_DELAY_MS"
+      });
+    }
+
+    if (data.southboundPollingEmptyBackoffMaxMs < data.southboundPollingEmptyBackoffInitialMs) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["southboundPollingEmptyBackoffMaxMs"],
+        message:
+          "SOUTHBOUND_POLLING_EMPTY_BACKOFF_MAX_MS must be greater than or equal to SOUTHBOUND_POLLING_EMPTY_BACKOFF_INITIAL_MS"
       });
     }
 
@@ -177,6 +188,8 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
     southboundPollingCommandChunkBytes: env.SOUTHBOUND_POLLING_COMMAND_CHUNK_BYTES,
     southboundPollingCommandChunkDelayMs: env.SOUTHBOUND_POLLING_COMMAND_CHUNK_DELAY_MS,
     southboundPollingSuppressAckPublish: env.SOUTHBOUND_POLLING_SUPPRESS_ACK_PUBLISH,
+    southboundPollingEmptyBackoffInitialMs: env.SOUTHBOUND_POLLING_EMPTY_BACKOFF_INITIAL_MS,
+    southboundPollingEmptyBackoffMaxMs: env.SOUTHBOUND_POLLING_EMPTY_BACKOFF_MAX_MS,
     replayIntervalMs: env.REPLAY_INTERVAL_MS,
     healthEmitIntervalMs: env.HEALTH_EMIT_INTERVAL_MS,
     serialReconnectBaseDelayMs: env.SERIAL_RECONNECT_BASE_DELAY_MS,

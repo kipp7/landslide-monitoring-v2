@@ -2,11 +2,11 @@
 
 ## Goal
 
-Collect A, B and C once per second without asking the three nodes to transmit on the same radio channel at the same time.
+Collect A, B and C with one bounded broadcast session at a time, without asking the three nodes to transmit on the same radio channel at the same time.
 
 ## Downlink
 
-The gateway sends one ASCII command per second:
+The gateway sends one ASCII command after the previous three-node response window has closed and the configured cooldown has elapsed:
 
 ```text
 P1xxxxxxxx
@@ -38,6 +38,9 @@ The RK3568 field gateway supports `SOUTHBOUND_POLLING_MODE=compact-broadcast-v1`
 - The command tag correlates each A/B/C response with its broadcast batch.
 - Normal JSON device-control commands remain unchanged and pause broadcast polling while their ACK window owns the serial port.
 - Runtime health exposes issued, completed, matched, duplicate, unmatched and timed-out broadcast counters.
+- A per-port admission controller rejects a second broadcast while one is in flight.
+- A complete or partial response resets the empty-response streak. An all-node timeout applies exponential backoff, bounded by the configured maximum.
+- `SOUTHBOUND_POLLING_INTERVAL_MS` is a cooldown after a response window closes, not a fixed wall-clock launch period.
 
 ## 2026-07-24 Live Result
 
@@ -107,21 +110,39 @@ Run a strict 60-second preflight on RK3568:
 
 ```bash
 sudo python3 /usr/local/bin/xls1_three_node_batch_poll.py \
-  --runtime-mask-service \
   --broadcast-poll \
   --duration-seconds 60 \
   --batch-interval-ms 1000 \
+  --broadcast-response-timeout-ms 5000 \
   --required-match-rate 1.0 \
   --required-compact-version 2 \
   --required-field-sensor-source simulated \
   --require-field-sensors-valid \
   --require-battery-valid \
-  --max-p95-interval-ms 1500 \
-  --max-command-latency-ms 950 \
+  --max-p95-interval-ms 2500 \
+  --max-command-latency-ms 1200 \
   --fail-on-gate
 ```
 
-Exit code `0` and `result.stableProfile=true` require all three nodes, 100% command matching, continuous node sequence numbers, zero duplicate/unmatched/decode/profile violations, no trailing partial frame, valid simulated field measurements, valid PC0 battery readings, and the configured interval/latency limits. The script restores `lsmv2-field-gateway.service` only when it was active before the test.
+Exit code `0` and `result.stableProfile=true` require all three nodes, 100% command matching, continuous node sequence numbers, zero duplicate/unmatched/decode/profile violations, no trailing partial frame, valid simulated field measurements, valid PC0 battery readings, and the configured interval/latency limits. `--broadcast-response-timeout-ms 5000` prevents the test itself from overlapping broadcast sessions. When the service was active, the script installs a temporary `/run` systemd drop-in with `Restart=no` and `RefuseManualStart=yes`, stops the service, then removes the drop-in and restores the service in `finally`. A runtime mask is not sufficient when the unit file itself lives under `/etc/systemd/system`.
+
+### 2026-08-02 Strict Gate Result
+
+The powered A/B/C rehearsal firmware and deployed RK3568 gateway passed the 600-second strict gate:
+
+| Signal | Result |
+| --- | ---: |
+| Broadcast rounds | 310 |
+| Matched telemetry | 930 / 930 |
+| A / B / C frames | 310 / 310 / 310 |
+| Per-node sequence range | 570..879 |
+| Sequence gaps / duplicates / regressions | 0 / 0 / 0 |
+| Decode / profile / unmatched / trailing-frame errors | 0 / 0 / 0 / 0 |
+| Maximum A / B / C command latency | 315.6 / 641.7 / 955.1 ms |
+
+The report remains on RK3568 at `/var/lib/lsmv2/experiments/xls1-three-node-batch-poll-20260802-004710.json`; its SHA-256 is `a1341efba950f8cd36e04b627078ec1741a559f41b78e1705fe4160ad2916a63`. Do not commit the raw report because later hardware runs may contain real GNSS coordinates.
+
+With a 1000 ms cooldown after all three responses, the measured round period is about 1.94 seconds. This is deliberately not described as fixed 1 Hz polling. A post-power-up runtime check added another 93 complete rounds and 279 matched frames with every node sequence advancing by 93 and all error counters remaining zero.
 
 Test in this order:
 

@@ -182,6 +182,44 @@ def set_service_state(service_name: str, action: str) -> None:
     subprocess.run(["systemctl", action, service_name], check=True)
 
 
+def runtime_service_hold_path(service_name: str) -> Path:
+    if Path(service_name).name != service_name or not service_name.endswith(".service"):
+        raise ValueError(f"invalid systemd service name: {service_name}")
+    return Path("/run/systemd/system") / f"{service_name}.d" / "zz-lsmv2-field-test-hold.conf"
+
+
+def install_runtime_service_hold(service_name: str) -> Path:
+    hold_path = runtime_service_hold_path(service_name)
+    hold_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = hold_path.with_suffix(hold_path.suffix + ".tmp")
+    temporary_path.write_text(
+        "[Unit]\nRefuseManualStart=yes\n\n[Service]\nRestart=no\n",
+        encoding="ascii",
+    )
+    os.chmod(temporary_path, 0o644)
+    os.replace(temporary_path, hold_path)
+    subprocess.run(["systemctl", "daemon-reload"], check=True)
+    set_service_state(service_name, "stop")
+    deadline = time.monotonic() + 20.0
+    while time.monotonic() < deadline and service_is_active(service_name):
+        time.sleep(0.2)
+    if service_is_active(service_name):
+        raise RuntimeError(f"service remained active after runtime hold: {service_name}")
+    return hold_path
+
+
+def remove_runtime_service_hold(service_name: str, hold_path: Path) -> None:
+    expected_path = runtime_service_hold_path(service_name)
+    if hold_path != expected_path:
+        raise ValueError(f"unexpected runtime hold path: {hold_path}")
+    hold_path.unlink(missing_ok=True)
+    try:
+        hold_path.parent.rmdir()
+    except OSError:
+        pass
+    subprocess.run(["systemctl", "daemon-reload"], check=True)
+
+
 def build_command(node_id: str, command_id: str) -> bytes:
     issued_ts = utc_now()
     command = {
@@ -611,6 +649,7 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
                 order = order[rotation:] + order[:rotation]
                 batch_number = batches_sent + 1
                 if args.broadcast_poll:
+                    batch_record_ids: list[str] = []
                     poll_command = f"P1{uuid.uuid4().hex[:8].upper()}"
                     tag = command_tag(poll_command)
                     while any((tag, label) in send_records_by_tag for label in NODES):
@@ -633,8 +672,16 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
                         }
                         send_records[record_id] = send_record
                         send_records_by_tag[(tag, label)] = send_record
+                        batch_record_ids.append(record_id)
                     write_chunked(fd, frame, args.command_chunk_bytes, args.command_chunk_delay_ms)
                     bytes_written += len(frame)
+                    if args.broadcast_response_timeout_ms > 0:
+                        response_deadline = time.monotonic() + args.broadcast_response_timeout_ms / 1000.0
+                        while (
+                            not all(record_id in received_command_ids for record_id in batch_record_ids)
+                            and time.monotonic() < response_deadline
+                        ):
+                            receive_once(fd, min(0.05, response_deadline - time.monotonic()))
                 else:
                     for position, (label, device_id) in enumerate(order):
                         command_id = str(uuid.uuid4())
@@ -668,7 +715,10 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
                             while time.monotonic() < gap_deadline:
                                 receive_once(fd, min(0.05, gap_deadline - time.monotonic()))
                 batches_sent += 1
-                next_batch_at = first_batch_at + batches_sent * args.batch_interval_ms / 1000.0
+                if args.broadcast_poll and args.broadcast_response_timeout_ms > 0:
+                    next_batch_at = time.monotonic() + args.batch_interval_ms / 1000.0
+                else:
+                    next_batch_at = first_batch_at + batches_sent * args.batch_interval_ms / 1000.0
                 now = time.monotonic()
 
             if now >= send_deadline and drain_deadline is None:
@@ -786,6 +836,7 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
             "interCommandGapMs": args.inter_command_gap_ms,
             "responseWaitMs": args.response_wait_ms,
             "broadcastPoll": args.broadcast_poll,
+            "broadcastResponseTimeoutMs": args.broadcast_response_timeout_ms,
             "commandChunkBytes": args.command_chunk_bytes,
             "commandChunkDelayMs": args.command_chunk_delay_ms,
             "drainSeconds": args.drain_seconds,
@@ -832,6 +883,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--inter-command-gap-ms", type=int, default=0)
     parser.add_argument("--response-wait-ms", type=int, default=0)
     parser.add_argument("--broadcast-poll", action="store_true")
+    parser.add_argument("--broadcast-response-timeout-ms", type=int, default=0)
     parser.add_argument("--command-chunk-bytes", type=int, default=32)
     parser.add_argument("--command-chunk-delay-ms", type=int, default=15)
     parser.add_argument("--settle-ms", type=int, default=2000)
@@ -839,7 +891,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--warmup-seconds", type=float, default=0.0)
     parser.add_argument("--drain-seconds", type=float, default=5.0)
     parser.add_argument("--service", default="lsmv2-field-gateway.service")
-    parser.add_argument("--runtime-mask-service", action="store_true")
+    parser.add_argument(
+        "--runtime-mask-service",
+        action="store_true",
+        help="deprecated compatibility flag; an effective runtime service hold is now always used",
+    )
     parser.add_argument("--report-path", default="")
     parser.add_argument("--required-match-rate", type=float, default=1.0)
     parser.add_argument("--max-p95-interval-ms", type=float, default=1500.0)
@@ -864,6 +920,10 @@ def parse_args() -> argparse.Namespace:
         parser.error("--inter-command-gap-ms must be non-negative")
     if args.response_wait_ms < 0:
         parser.error("--response-wait-ms must be non-negative")
+    if args.broadcast_response_timeout_ms < 0:
+        parser.error("--broadcast-response-timeout-ms must be non-negative")
+    if args.broadcast_response_timeout_ms > 0 and not args.broadcast_poll:
+        parser.error("--broadcast-response-timeout-ms requires --broadcast-poll")
     if args.command_chunk_bytes <= 0:
         parser.error("--command-chunk-bytes must be positive")
     if args.command_chunk_delay_ms < 0:
@@ -887,10 +947,13 @@ def main() -> int:
         f"/var/lib/lsmv2/experiments/xls1-three-node-batch-poll-{datetime.now().strftime('%Y%m%d-%H%M%S')}.json"
     )
     service_was_active = service_is_active(args.service)
-    service_was_masked = False
+    service_hold_path: Path | None = None
+    service_hold_candidate: Path | None = None
+    service_hold_preexisting = False
     recovery: dict[str, Any] = {
         "serviceWasActive": service_was_active,
         "serviceRuntimeMasked": False,
+        "serviceRuntimeHeld": False,
         "serviceRestored": not service_was_active,
     }
     report: dict[str, Any]
@@ -902,13 +965,13 @@ def main() -> int:
     signal.signal(signal.SIGTERM, interrupt_handler)
 
     try:
+        service_hold_candidate = runtime_service_hold_path(args.service)
+        service_hold_preexisting = service_hold_candidate.exists()
+        if service_hold_preexisting:
+            raise RuntimeError(f"runtime service hold already exists: {service_hold_candidate}")
         if service_was_active:
-            if args.runtime_mask_service:
-                subprocess.run(["systemctl", "mask", "--runtime", "--now", args.service], check=True)
-                service_was_masked = True
-                recovery["serviceRuntimeMasked"] = True
-            else:
-                set_service_state(args.service, "stop")
+            service_hold_path = install_runtime_service_hold(args.service)
+            recovery["serviceRuntimeHeld"] = True
         report = run_experiment(args)
     except Exception as exc:
         report = {
@@ -921,11 +984,19 @@ def main() -> int:
     finally:
         if service_was_active:
             restore_errors: list[str] = []
-            if service_was_masked:
+            hold_to_remove = service_hold_path
+            if (
+                hold_to_remove is None
+                and not service_hold_preexisting
+                and service_hold_candidate is not None
+                and service_hold_candidate.exists()
+            ):
+                hold_to_remove = service_hold_candidate
+            if hold_to_remove is not None:
                 try:
-                    subprocess.run(["systemctl", "unmask", "--runtime", args.service], check=True)
+                    remove_runtime_service_hold(args.service, hold_to_remove)
                 except Exception as exc:
-                    restore_errors.append(f"runtime unmask failed: {exc}")
+                    restore_errors.append(f"runtime hold removal failed: {exc}")
             try:
                 set_service_state(args.service, "start")
                 deadline = time.monotonic() + 20.0
