@@ -37,6 +37,9 @@ COMPACT_VALID_TILT = 1 << 3
 COMPACT_VALID_GPS = 1 << 4
 COMPACT_VALID_RAIN = 1 << 5
 COMPACT_VALID_IMU = 1 << 6
+COMPACT_VALID_BATTERY = 1 << 7
+COMPACT_STATUS_WARNING = 1 << 0
+COMPACT_STATUS_FIELD_SENSORS_SIMULATED = 1 << 1
 NODES = {
     "A": "00000000-0000-0000-0000-000000000001",
     "B": "00000000-0000-0000-0000-000000000002",
@@ -194,9 +197,10 @@ def build_command(node_id: str, command_id: str) -> bytes:
 def decode_compact_telemetry(payload: bytes) -> dict[str, Any]:
     if len(payload) != COMPACT_PAYLOAD_BYTES:
         raise ValueError(f"compact telemetry length mismatch: expected={COMPACT_PAYLOAD_BYTES} actual={len(payload)}")
-    if payload[:3] != b"LS\x01":
+    if payload[:2] != b"LS" or payload[2] not in (1, 2):
         raise ValueError("compact telemetry magic or version mismatch")
 
+    compact_version = payload[2]
     compact_node = payload[3]
     if compact_node not in (1, 2, 3):
         raise ValueError(f"compact telemetry node out of range: {compact_node}")
@@ -207,9 +211,12 @@ def decode_compact_telemetry(payload: bytes) -> dict[str, Any]:
     last_command_tag = struct.unpack(">I", payload[16:20])[0]
     metrics: dict[str, Any] = {}
 
-    if valid & COMPACT_VALID_TEMP:
+    if compact_version == 1 and valid & COMPACT_VALID_TEMP:
         metrics["temperature_c"] = struct.unpack(">h", payload[20:22])[0] / 100.0
         metrics["humidity_pct"] = struct.unpack(">H", payload[22:24])[0] / 100.0
+    if compact_version == 2 and valid & COMPACT_VALID_BATTERY:
+        metrics["battery_v"] = struct.unpack(">H", payload[20:22])[0] / 1000.0
+        metrics["battery_pct"] = payload[22]
     if valid & COMPACT_VALID_SOIL:
         metrics["soil_temperature_c"] = struct.unpack(">h", payload[24:26])[0] / 100.0
         metrics["soil_moisture_pct"] = struct.unpack(">H", payload[26:28])[0] / 100.0
@@ -219,7 +226,7 @@ def decode_compact_telemetry(payload: bytes) -> dict[str, Any]:
         metrics["tilt_x_deg"] = struct.unpack(">h", payload[30:32])[0] / 100.0
         metrics["tilt_y_deg"] = struct.unpack(">h", payload[32:34])[0] / 100.0
         metrics["tilt_z_deg"] = struct.unpack(">h", payload[34:36])[0] / 100.0
-        metrics["warning_flag"] = bool(payload[4] & 1)
+        metrics["warning_flag"] = bool(payload[4] & COMPACT_STATUS_WARNING)
     if valid & COMPACT_VALID_GPS:
         metrics["gps_latitude"] = struct.unpack(">i", payload[36:40])[0] / 1_000_000.0
         metrics["gps_longitude"] = struct.unpack(">i", payload[40:44])[0] / 1_000_000.0
@@ -231,6 +238,17 @@ def decode_compact_telemetry(payload: bytes) -> dict[str, Any]:
         2: "manual_collect",
         3: "scheduler_poll",
     }.get(payload[5], "unknown")
+    battery_quality_code = payload[23] if compact_version == 2 else 0
+    battery_quality = {
+        0: "unavailable",
+        1: "default-calibration",
+        2: "field-calibrated",
+    }.get(battery_quality_code, "unknown")
+    field_sensor_source = (
+        "simulated"
+        if compact_version == 2 and payload[4] & COMPACT_STATUS_FIELD_SENSORS_SIMULATED
+        else "hardware" if compact_version == 2 else "unknown"
+    )
     return {
         "schema_version": 1,
         "device_id": NODES[label],
@@ -243,17 +261,65 @@ def decode_compact_telemetry(payload: bytes) -> dict[str, Any]:
             "uptime_s": uptime,
             "last_command_tag": last_command_tag,
             "upload_trigger": trigger,
-            "compact_payload_version": 1,
+            "compact_payload_version": compact_version,
+            "field_sensor_source": field_sensor_source,
+            "battery_estimate_quality": battery_quality,
+            "battery_estimate_quality_code": battery_quality_code,
             "legacy_valid_flags": {
-                "temp_ok": int(bool(valid & COMPACT_VALID_TEMP)),
+                "temp_ok": int(compact_version == 1 and bool(valid & COMPACT_VALID_TEMP)),
                 "imu_ok": int(bool(valid & COMPACT_VALID_IMU)),
                 "gps_ok": int(bool(valid & COMPACT_VALID_GPS)),
                 "soil_ok": int(bool(valid & COMPACT_VALID_SOIL)),
+                "soil_ec_ok": int(bool(valid & COMPACT_VALID_SOIL_EC)),
                 "tilt_ok": int(bool(valid & COMPACT_VALID_TILT)),
                 "rain_ok": int(bool(valid & COMPACT_VALID_RAIN)),
+                "battery_ok": int(bool(valid & COMPACT_VALID_BATTERY)),
             },
         },
     }
+
+
+def telemetry_profile_errors(
+    telemetry: dict[str, Any],
+    required_compact_version: int = 0,
+    required_field_sensor_source: str = "any",
+    require_battery_valid: bool = False,
+    require_field_sensors_valid: bool = False,
+) -> list[str]:
+    errors: list[str] = []
+    meta = telemetry.get("meta")
+    metrics = telemetry.get("metrics")
+    if not isinstance(meta, dict) or not isinstance(metrics, dict):
+        return ["telemetry-meta-or-metrics-missing"]
+
+    compact_version = meta.get("compact_payload_version")
+    if required_compact_version and compact_version != required_compact_version:
+        errors.append(f"compact-version-{compact_version}-expected-{required_compact_version}")
+
+    field_sensor_source = meta.get("field_sensor_source", "unknown")
+    if required_field_sensor_source != "any" and field_sensor_source != required_field_sensor_source:
+        errors.append(f"field-source-{field_sensor_source}-expected-{required_field_sensor_source}")
+
+    valid_flags = meta.get("legacy_valid_flags")
+    if not isinstance(valid_flags, dict):
+        errors.append("valid-flags-missing")
+        return errors
+
+    if require_field_sensors_valid:
+        for key in ("soil_ok", "soil_ec_ok", "tilt_ok"):
+            if valid_flags.get(key) != 1:
+                errors.append(f"{key}-not-valid")
+
+    if require_battery_valid:
+        battery_v = metrics.get("battery_v")
+        battery_pct = metrics.get("battery_pct")
+        if valid_flags.get("battery_ok") != 1:
+            errors.append("battery-not-valid")
+        elif not isinstance(battery_v, (int, float)) or not 8.0 <= float(battery_v) <= 13.5:
+            errors.append("battery-voltage-out-of-range")
+        elif not isinstance(battery_pct, (int, float)) or not 0 <= float(battery_pct) <= 100:
+            errors.append("battery-percent-out-of-range")
+    return errors
 
 
 def node_label(device_id: str) -> str | None:
@@ -261,6 +327,41 @@ def node_label(device_id: str) -> str | None:
         if device_id == configured_id:
             return label
     return None
+
+
+def evaluate_stability_gate(
+    *,
+    matched_rate: float,
+    required_match_rate: float,
+    decode_error_count: int,
+    unmatched_telemetry: int,
+    duplicate_telemetry: int,
+    profile_violation_count: int,
+    trailing_undelimited_bytes: int,
+    node_results: dict[str, Any],
+    max_p95_interval_ms: float,
+    max_command_latency_ms: float,
+) -> bool:
+    if set(node_results) != set(NODES):
+        return False
+    return (
+        matched_rate >= required_match_rate
+        and decode_error_count == 0
+        and unmatched_telemetry == 0
+        and duplicate_telemetry == 0
+        and profile_violation_count == 0
+        and trailing_undelimited_bytes == 0
+        and all(
+            result["expected"] > 0
+            and result["matched"] > 0
+            and result["sequence"]["nonUnitGaps"] == 0
+            and result["arrivalIntervalMs"]["p95"] is not None
+            and result["arrivalIntervalMs"]["p95"] <= max_p95_interval_ms
+            and result["commandToTelemetryLatencyMs"]["max"] is not None
+            and result["commandToTelemetryLatencyMs"]["max"] <= max_command_latency_ms
+            for result in node_results.values()
+        )
+    )
 
 
 def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
@@ -272,6 +373,11 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
     arrivals_by_node: dict[str, list[float]] = defaultdict(list)
     latencies_by_node: dict[str, list[float]] = defaultdict(list)
     seq_by_node: dict[str, list[int]] = defaultdict(list)
+    compact_versions_by_node: dict[str, Counter[int]] = defaultdict(Counter)
+    field_sources_by_node: dict[str, Counter[str]] = defaultdict(Counter)
+    profile_violations_by_node: dict[str, Counter[str]] = defaultdict(Counter)
+    battery_voltages_by_node: dict[str, list[float]] = defaultdict(list)
+    last_telemetry_by_node: dict[str, dict[str, Any]] = {}
     errors: Counter[str] = Counter()
     error_samples: list[dict[str, Any]] = []
     unmatched_samples: list[dict[str, Any]] = []
@@ -343,7 +449,7 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
             if frame_type != FIELD_LINK_TYPE_TELEMETRY:
                 continue
             try:
-                if len(payload) == COMPACT_PAYLOAD_BYTES and payload[:3] == b"LS\x01":
+                if len(payload) == COMPACT_PAYLOAD_BYTES and payload[:2] == b"LS" and payload[2] in (1, 2):
                     telemetry = decode_compact_telemetry(payload)
                 else:
                     telemetry = json.loads(payload.decode("utf-8"))
@@ -359,11 +465,30 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
             if label is None:
                 errors["telemetry from unknown device"] += 1
                 continue
+            meta = telemetry.get("meta")
+            metrics = telemetry.get("metrics")
+            if isinstance(meta, dict):
+                compact_version = meta.get("compact_payload_version")
+                field_source = meta.get("field_sensor_source", "unknown")
+                if isinstance(compact_version, int):
+                    compact_versions_by_node[label][compact_version] += 1
+                if isinstance(field_source, str):
+                    field_sources_by_node[label][field_source] += 1
+            for profile_error in telemetry_profile_errors(
+                telemetry,
+                required_compact_version=args.required_compact_version,
+                required_field_sensor_source=args.required_field_sensor_source,
+                require_battery_valid=args.require_battery_valid,
+                require_field_sensors_valid=args.require_field_sensors_valid,
+            ):
+                profile_violations_by_node[label][profile_error] += 1
+            if isinstance(metrics, dict) and isinstance(metrics.get("battery_v"), (int, float)):
+                battery_voltages_by_node[label].append(float(metrics["battery_v"]))
+            last_telemetry_by_node[label] = telemetry
             arrivals_by_node[label].append(received_mono)
             seq = telemetry.get("seq")
             if isinstance(seq, int):
                 seq_by_node[label].append(seq)
-            meta = telemetry.get("meta")
             command_id = meta.get("last_command_id") if isinstance(meta, dict) else None
             last_command_tag = meta.get("last_command_tag") if isinstance(meta, dict) else None
             if isinstance(command_id, str):
@@ -564,9 +689,16 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
         intervals_ms = [(right - left) * 1000.0 for left, right in zip(arrivals, arrivals[1:])]
         latencies = latencies_by_node[label]
         sequences = seq_by_node[label]
-        sequence_gaps = [right - left for left, right in zip(sequences, sequences[1:])]
+        sequence_steps = [(right - left) & 0xFFFFFFFF for left, right in zip(sequences, sequences[1:])]
+        forward_missing = sum(step - 1 for step in sequence_steps if 1 < step < 0x80000000)
+        backward_or_reset = sum(1 for step in sequence_steps if step >= 0x80000000)
+        sequence_duplicates = sum(1 for step in sequence_steps if step == 0)
         expected = expected_by_node[label]
         matched = received_by_node[label]
+        battery_voltages = battery_voltages_by_node[label]
+        latest_telemetry = last_telemetry_by_node.get(label, {})
+        latest_meta = latest_telemetry.get("meta") if isinstance(latest_telemetry, dict) else None
+        latest_metrics = latest_telemetry.get("metrics") if isinstance(latest_telemetry, dict) else None
         node_results[label] = {
             "expected": expected,
             "matched": matched,
@@ -585,8 +717,28 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
             "sequence": {
                 "first": sequences[0] if sequences else None,
                 "last": sequences[-1] if sequences else None,
-                "nonUnitGaps": sum(1 for gap in sequence_gaps if gap != 1),
-                "maxGap": max(sequence_gaps) if sequence_gaps else None,
+                "nonUnitGaps": sum(1 for step in sequence_steps if step != 1),
+                "forwardMissing": forward_missing,
+                "duplicates": sequence_duplicates,
+                "backwardOrReset": backward_or_reset,
+                "maxForwardStep": max((step for step in sequence_steps if step < 0x80000000), default=None),
+            },
+            "observedCompactVersions": dict(compact_versions_by_node[label]),
+            "observedFieldSensorSources": dict(field_sources_by_node[label]),
+            "profileViolations": dict(profile_violations_by_node[label]),
+            "battery": {
+                "samples": len(battery_voltages),
+                "voltageMin": round(min(battery_voltages), 3) if battery_voltages else None,
+                "voltageMax": round(max(battery_voltages), 3) if battery_voltages else None,
+                "voltageLast": (
+                    latest_metrics.get("battery_v") if isinstance(latest_metrics, dict) else None
+                ),
+                "percentLast": (
+                    latest_metrics.get("battery_pct") if isinstance(latest_metrics, dict) else None
+                ),
+                "estimateQuality": (
+                    latest_meta.get("battery_estimate_quality") if isinstance(latest_meta, dict) else None
+                ),
             },
         }
 
@@ -594,14 +746,20 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
     matched_total = len(received_command_ids)
     matched_rate = matched_total / expected_total if expected_total else 0.0
     error_count = sum(errors.values())
-    stable_one_second = (
-        matched_rate >= args.required_match_rate
-        and error_count == 0
-        and all(
-            result["arrivalIntervalMs"]["p95"] is not None
-            and result["arrivalIntervalMs"]["p95"] <= args.max_p95_interval_ms
-            for result in node_results.values()
-        )
+    profile_violation_count = sum(
+        sum(violations.values()) for violations in profile_violations_by_node.values()
+    )
+    stable_one_second = evaluate_stability_gate(
+        matched_rate=matched_rate,
+        required_match_rate=args.required_match_rate,
+        decode_error_count=error_count,
+        unmatched_telemetry=unmatched_telemetry,
+        duplicate_telemetry=duplicate_telemetry,
+        profile_violation_count=profile_violation_count,
+        trailing_undelimited_bytes=len(receive_buffer),
+        node_results=node_results,
+        max_p95_interval_ms=args.max_p95_interval_ms,
+        max_command_latency_ms=args.max_command_latency_ms,
     )
 
     return {
@@ -627,9 +785,16 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
             "commandChunkBytes": args.command_chunk_bytes,
             "commandChunkDelayMs": args.command_chunk_delay_ms,
             "drainSeconds": args.drain_seconds,
-            "nodeOrderPolicy": "rotating-A-B-C",
+            "nodeOrderPolicy": "fixed-A-B-C-slots" if args.broadcast_poll else "rotating-A-B-C",
+            "requiredCompactVersion": args.required_compact_version,
+            "requiredFieldSensorSource": args.required_field_sensor_source,
+            "requireBatteryValid": args.require_battery_valid,
+            "requireFieldSensorsValid": args.require_field_sensors_valid,
+            "maxCommandLatencyMs": args.max_command_latency_ms,
         },
         "result": {
+            "stableProfile": stable_one_second,
+            # Kept for compatibility with reports produced by the original 1 Hz tool.
             "stableOneSecondProfile": stable_one_second,
             "expectedTelemetry": expected_total,
             "matchedTelemetry": matched_total,
@@ -637,6 +802,7 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
             "matchedRate": round(matched_rate, 4),
             "batchesSent": batches_sent,
             "decodeOrJsonErrors": error_count,
+            "profileViolations": profile_violation_count,
             "unmatchedTelemetry": unmatched_telemetry,
             "duplicateTelemetry": duplicate_telemetry,
             "bytesWritten": bytes_written,
@@ -662,8 +828,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--inter-command-gap-ms", type=int, default=0)
     parser.add_argument("--response-wait-ms", type=int, default=0)
     parser.add_argument("--broadcast-poll", action="store_true")
-    parser.add_argument("--command-chunk-bytes", type=int, default=64)
-    parser.add_argument("--command-chunk-delay-ms", type=int, default=10)
+    parser.add_argument("--command-chunk-bytes", type=int, default=32)
+    parser.add_argument("--command-chunk-delay-ms", type=int, default=15)
     parser.add_argument("--settle-ms", type=int, default=2000)
     parser.add_argument("--settle-quiet-ms", type=int, default=0)
     parser.add_argument("--warmup-seconds", type=float, default=0.0)
@@ -671,9 +837,44 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--service", default="lsmv2-field-gateway.service")
     parser.add_argument("--runtime-mask-service", action="store_true")
     parser.add_argument("--report-path", default="")
-    parser.add_argument("--required-match-rate", type=float, default=0.99)
+    parser.add_argument("--required-match-rate", type=float, default=1.0)
     parser.add_argument("--max-p95-interval-ms", type=float, default=1500.0)
-    return parser.parse_args()
+    parser.add_argument("--max-command-latency-ms", type=float, default=950.0)
+    parser.add_argument("--required-compact-version", type=int, choices=(0, 1, 2), default=0)
+    parser.add_argument(
+        "--required-field-sensor-source",
+        choices=("any", "simulated", "hardware"),
+        default="any",
+    )
+    parser.add_argument("--require-battery-valid", action="store_true")
+    parser.add_argument("--require-field-sensors-valid", action="store_true")
+    parser.add_argument("--fail-on-gate", action="store_true")
+    args = parser.parse_args()
+    if args.baud <= 0:
+        parser.error("--baud must be positive")
+    if args.duration_seconds <= 0:
+        parser.error("--duration-seconds must be positive")
+    if args.batch_interval_ms <= 0:
+        parser.error("--batch-interval-ms must be positive")
+    if args.inter_command_gap_ms < 0:
+        parser.error("--inter-command-gap-ms must be non-negative")
+    if args.response_wait_ms < 0:
+        parser.error("--response-wait-ms must be non-negative")
+    if args.command_chunk_bytes <= 0:
+        parser.error("--command-chunk-bytes must be positive")
+    if args.command_chunk_delay_ms < 0:
+        parser.error("--command-chunk-delay-ms must be non-negative")
+    if args.settle_ms < 0 or args.settle_quiet_ms < 0:
+        parser.error("settle durations must be non-negative")
+    if args.warmup_seconds < 0 or args.drain_seconds < 0:
+        parser.error("warm-up and drain durations must be non-negative")
+    if args.warmup_seconds > 0 and not args.broadcast_poll:
+        parser.error("--warmup-seconds requires --broadcast-poll")
+    if not 0.0 <= args.required_match_rate <= 1.0:
+        parser.error("--required-match-rate must be between 0 and 1")
+    if args.max_p95_interval_ms <= 0 or args.max_command_latency_ms <= 0:
+        parser.error("latency limits must be positive")
+    return args
 
 
 def main() -> int:
@@ -686,7 +887,7 @@ def main() -> int:
     recovery: dict[str, Any] = {
         "serviceWasActive": service_was_active,
         "serviceRuntimeMasked": False,
-        "serviceRestored": False,
+        "serviceRestored": not service_was_active,
     }
     report: dict[str, Any]
 
@@ -738,7 +939,11 @@ def main() -> int:
     temporary_path.write_text(json.dumps(report, ensure_ascii=True, indent=2) + "\n", encoding="utf-8")
     os.replace(temporary_path, report_path)
     print(json.dumps({"reportPath": str(report_path), **report.get("result", {}), **recovery}, separators=(",", ":")))
-    return 0 if recovery.get("serviceRestored") and "fatalError" not in report else 1
+    if not recovery.get("serviceRestored") or "fatalError" in report:
+        return 1
+    if args.fail_on_gate and not report.get("result", {}).get("stableProfile", False):
+        return 2
+    return 0
 
 
 if __name__ == "__main__":

@@ -83,11 +83,12 @@ status: active
 - C99 `-Wall -Wextra -Werror` 主机测试通过：RTCM 重组/队列、G3S V4、电池估算和 compact v2/64 字节线上帧全部通过。静态引脚门禁结果为 `XLS1=PB2/PB3 GPS=PB6/PB7 BATTERY=PC0-input RS485=PB4/PB5-hardware-only`。模拟版和真实 RS485 版 A 节点都完成 OpenHarmony `hb build -f`，证明明日只切构建参数即可恢复硬件采集。
 - 可复现源码提交 `340d3a68316ebcefa2139f1b9e2b46079ef0e5a3` 已推送到远端 `feat/gnss-rtk-v31-transport`。正式 A/B/C 模拟链路测试包位于 `F:\2\openharmony\rk2206_firmware_releases\xls1_link_rehearsal_battery_simulated_20260801`，manifest 为 `sourceDirty=false`、RTCM injection disabled、RS485 hardware initialized false。
 - 正式包的 A/B/C `.img` SHA-256 分别为 `f4ac0a5b321558b80f1294912795a4fbf6e1f5cd8f43451458b353a0160fee9f`、`feb040047f74b63b5a32719ea59696c112a9686ae74884069ad256210d3b0ad2`、`dc4311cf467a1d6d67c34dac6524219ec351b8b40329ed78986eb9e14bcdd66e`。7 个 manifest 二进制哈希独立复算无差异，三个 `.bin` 均只包含自身 UUID/安装标签和 `SIMULATED (RS485 values only)` 标记。
+- RK3568 批量轮询工具已补齐 compact v1/v2 双栈、电池与模拟源解码、三节点严格 profile 校验、32 位序号回绕诊断和独立稳定性门禁。严格门禁要求 100% 命令匹配、三节点序号连续、零重复/未匹配/解码/profile 错误、无残留半帧、有效电池/模拟传感器数据及 P95/最大命令延迟达标；Python 语法、C/Python 金向量及正反门禁用例通过。该工具尚未部署到 RK3568，不能据此宣称真机链路通过。
 
 ## In Progress
 
 - 正式模拟包已经生成但尚未烧录到新 A/B/C RK2206；下一步是用户按节点标签烧录并上电，然后由 RK3568 做“稳定优先”的三节点轮询基线与参数扫描。
-- 当前默认保持已验证的 46/64 字节 compact v2、`32 B/15 ms` UART 分块和 340 ms 节点时隙。不得在基线未通过时同时修改包格式、轮询时隙、分块和 XLS1 模块参数。
+- 当前默认保持已验证的 46/64 字节 compact v2、`32 B/15 ms` UART 分块和 340 ms 节点时隙。RK3568 严格门禁工具已在本机完成测试，但需等设备可达后部署并实测；不得在基线未通过时同时修改包格式、轮询时隙、分块和 XLS1 模块参数。
 - RS485 元件未到期间，模拟包故意不初始化 PB4/PB5。接口到货、焊接与断电电气检查完成后，使用同一构建脚本把 `-FieldSensorMode simulated` 切成 `hardware`，不可手工删除模拟函数或修改 XLS1 驱动。
 - RTCM injection 仍保持 disabled；本轮先建立纯 compact 传感器数据的三节点稳定/延迟基线，再恢复真实 GNSS/RTCM 混合负载门禁。
 
@@ -95,8 +96,8 @@ status: active
 
 1. 将正式目录中 A/B/C 对应的 `.img` 分别烧录到物理 A/B/C；不要互换身份，不要使用 `_verification_*` 目录。缺少 RS485 接口时保持 PB4/PB5 外设断开，XLS1 模块配置不改。
 2. 三节点上电后先核对串口启动信息：自身 UUID/`FIELD-NODE-*`、`Field Sensor Source: SIMULATED`、`RS485 Bus: OFF`、PC0 battery ready；任何节点出现 `SC16IS752` 或 `[RS485]` 立即停止测试并复核镜像。
-3. 通过 RK3568 记录每节点应答数、序号连续性、超时、重复、CRC/COBS 错误、P50/P95/max 延迟和公平性。先跑当前 340 ms/`32 B+15 ms` 10 分钟基线，再跑 60 分钟稳定门禁；基线不为零丢失时不提速。
-4. 基线稳定后才按单变量顺序测试更高吞吐：先缩短 UART chunk delay，再比较 64 B chunk，最后才缩短节点时隙。每轮只改一个参数，测试后恢复服务并保存原始报告；最优方案首先要求零丢失和无节点饥饿，其次才比较延迟/吞吐。
+3. 将更新后的 `xls1_three_node_batch_poll.py` 与编解码自检部署到 RK3568，先运行 60 秒严格预检，再以同一参数运行 600 秒零丢包基线。记录每节点应答数、序号连续性、超时、重复、CRC/COBS 错误、P50/P95/max 延迟、公平性、电池和 profile 证据；任一门禁失败时不提速。
+4. 两轮基线通过后只改变 `--batch-interval-ms`，依次测试 950、900、850、800 ms，在第一次失败时停止。最快通过值至少复核 1800 秒；此轮不得同时修改 UART chunk、节点时隙实现或 XLS1 模块参数。
 5. 每个节点用万用表测电池包电压，并与平台 `battery_v` 同时记录。按 `gain_ppm = measured_mv / reported_mv * 1000000` 分别重建对应节点，校准后再评价电量百分比；2P/5000 mAh 不改变电压曲线，只影响容量和续航。
 6. RS485 接口到货后先断电做方向、短路、3.3 V、PB4/PB5 上拉和模块型号检查，再执行 `build-xl01-compact-broadcast-v2.ps1 -FieldSensorMode hardware -GnssRtcmInjectionMode disabled` 生成真实采集版；硬件版必须重新跑引脚门禁和 A/B/C 身份/哈希核验。
 7. 真实传感器链稳定后再恢复 RTCM PROBE/LIVE 的既有门禁，最终混合负载仍需覆盖 RTCM、3 个 GNSS_CORE、compact 遥测和控制命令。
@@ -115,4 +116,4 @@ status: active
 
 ## Resume Prompt
 
-继续 2026-08-01 XLS1 三节点链路排参：从 `F:\2\openharmony\rk2206_firmware_releases\xls1_link_rehearsal_battery_simulated_20260801` 按标签烧录 A/B/C。源码和远端均为 `340d3a68316ebcefa2139f1b9e2b46079ef0e5a3`；模拟包只模拟 RS485，真实 UM220 和 PC0 电池保留，PB4/PB5 不初始化，RTCM disabled。上电后先从 RK3568 验证三节点身份和 340 ms/32 B/15 ms 零丢失基线，再按单变量提速。电池为 3S2P 5000 mAh，未逐板万用表校准前只能把百分比视为电压估算。接口到货后只用 `-FieldSensorMode hardware` 切回真实 RS485，不改 XLS1 模块或驱动。
+继续 2026-08-01 XLS1 三节点链路排参：从 `F:\2\openharmony\rk2206_firmware_releases\xls1_link_rehearsal_battery_simulated_20260801` 按标签烧录 A/B/C。固件源码提交为 `340d3a68316ebcefa2139f1b9e2b46079ef0e5a3`；模拟包只模拟 RS485，真实 UM220 和 PC0 电池保留，PB4/PB5 不初始化，RTCM disabled。上电后将严格门禁脚本部署到 RK3568，按 60 秒预检、600 秒零丢包基线、950/900/850/800 ms 单变量扫描和最快通过值 1800 秒复核执行。电池暂按整包 3S2P 5000 mAh，未核对标签和逐板万用表校准前只能把百分比视为电压估算。接口到货后只用 `-FieldSensorMode hardware` 切回真实 RS485，不改 XLS1 模块或驱动。

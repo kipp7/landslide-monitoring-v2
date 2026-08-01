@@ -92,3 +92,42 @@ The expected one-sample-per-second rate is therefore present at the database, no
 - Serial link: `/dev/ttyS3`, `115200`, `cobs-crc-v1`
 - Pre-deployment rollback: `/var/lib/lsmv2/backups/field-gateway-pre-compact-v1-20260724-2145`
 - Stable firmware rollback remains in the `competition-suite-20260723` release assets.
+
+## 2026-08-01 Three-Node Rehearsal Profile
+
+The temporary rehearsal firmware simulates only the unavailable RS485 soil, EC and tilt inputs. UM220 GNSS and the PC0 battery measurement remain real. The simulated build must report compact payload version 2 and `field_sensor_source=simulated`; it must never initialize PB4/PB5 or SC16IS752.
+
+Flash the node-specific images from:
+
+```text
+F:\2\openharmony\rk2206_firmware_releases\xls1_link_rehearsal_battery_simulated_20260801
+```
+
+Run a strict 60-second preflight on RK3568:
+
+```bash
+sudo python3 /usr/local/bin/xls1_three_node_batch_poll.py \
+  --runtime-mask-service \
+  --broadcast-poll \
+  --duration-seconds 60 \
+  --batch-interval-ms 1000 \
+  --required-match-rate 1.0 \
+  --required-compact-version 2 \
+  --required-field-sensor-source simulated \
+  --require-field-sensors-valid \
+  --require-battery-valid \
+  --max-p95-interval-ms 1500 \
+  --max-command-latency-ms 950 \
+  --fail-on-gate
+```
+
+Exit code `0` and `result.stableProfile=true` require all three nodes, 100% command matching, continuous node sequence numbers, zero duplicate/unmatched/decode/profile violations, no trailing partial frame, valid simulated field measurements, valid PC0 battery readings, and the configured interval/latency limits. The script restores `lsmv2-field-gateway.service` only when it was active before the test.
+
+Test in this order:
+
+1. Run the strict 60-second preflight at 1000 ms.
+2. Run the same profile for 600 seconds to establish the zero-loss baseline.
+3. If both pass, change only `--batch-interval-ms`: test 950, 900, 850 and 800 ms, stopping at the first failure.
+4. Confirm the fastest passing candidate for at least 1800 seconds.
+
+Do not change the node slots, UART chunk size, UART chunk delay or XLS1 module parameters during the interval sweep. When the RS485 interface parts arrive, rebuild with `-FieldSensorMode hardware -GnssRtcmInjectionMode disabled`; do not hand-edit the simulator or XLS1 driver.
