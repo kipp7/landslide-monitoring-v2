@@ -126,6 +126,21 @@ function Get-QuotedMacroValue {
   return $matches[0].Groups[1].Value
 }
 
+function Get-UnsignedMacroValue {
+  param(
+    [string]$Path,
+    [string]$Macro
+  )
+
+  $text = [System.IO.File]::ReadAllText($Path)
+  $pattern = '(?m)^#define\s+' + [regex]::Escape($Macro) + '\s+([0-9]+)U?\s*(?://.*)?$'
+  $matches = [regex]::Matches($text, $pattern)
+  if ($matches.Count -ne 1) {
+    throw "Expected one unsigned $Macro definition in $Path, found $($matches.Count)"
+  }
+  return [uint32]$matches[0].Groups[1].Value
+}
+
 function Set-GnssRtcmInjectionMode {
   $modeToken = switch ($GnssRtcmInjectionMode) {
     "disabled" { "GNSS_RTCM_INJECTION_DISABLED" }
@@ -235,6 +250,11 @@ try {
   $files = Get-ChildItem -LiteralPath $artifactRoot -File |
     Where-Object Extension -in ".bin", ".img" |
     Sort-Object Name
+  $sourceConfigPath = Join-Path $sourceRoot "config\app_config.h"
+  $batterySeriesCells = Get-UnsignedMacroValue -Path $sourceConfigPath -Macro "BATTERY_SERIES_CELLS"
+  $batteryParallelStrings = Get-UnsignedMacroValue -Path $sourceConfigPath -Macro "BATTERY_PARALLEL_STRINGS"
+  $batteryCapacityMah = Get-UnsignedMacroValue -Path $sourceConfigPath -Macro "BATTERY_NOMINAL_CAPACITY_MAH"
+  $batteryNominalVoltageMv = Get-UnsignedMacroValue -Path $sourceConfigPath -Macro "BATTERY_NOMINAL_VOLTAGE_MV"
   $manifest = [ordered]@{
     schemaVersion = 1
     profile = "rk2206-xl01-compact-v2-$FieldSensorMode"
@@ -245,6 +265,10 @@ try {
     fieldSensorTruth = if ($FieldSensorMode -eq "simulated") { "RS485 values simulated; GPS and battery are real" } else { "RS485, GPS and battery are real" }
     rs485HardwareInitialized = $FieldSensorMode -eq "hardware"
     battery = [ordered]@{
+      topology = "${batterySeriesCells}S${batteryParallelStrings}P"
+      nominalCapacityMah = $batteryCapacityMah
+      nominalVoltageMv = $batteryNominalVoltageMv
+      nominalEnergyWh = [math]::Round(($batteryCapacityMah * $batteryNominalVoltageMv) / 1000000.0, 1)
       adcRoute = "PC0/SARADC channel 0 input-only"
       dividerOhms = "100000/27000"
       calibrationGainPpm = $BatteryCalibrationGainPpm

@@ -200,6 +200,10 @@
 #define BATTERY_FILTER_SHIFT            3U
 #define BATTERY_VALID_MIN_MV            8000U
 #define BATTERY_VALID_MAX_MV            13500U
+#define BATTERY_SERIES_CELLS            3U
+#define BATTERY_PARALLEL_STRINGS        2U
+#define BATTERY_NOMINAL_CAPACITY_MAH    5000U
+#define BATTERY_NOMINAL_VOLTAGE_MV      11100U
 // Per-node one-point calibration: measured_pack_mv / reported_pack_mv * 1e6.
 // Defaults are deliberately neutral until each assembled divider is measured.
 #define BATTERY_CALIBRATION_GAIN_PPM    1000000U
@@ -207,6 +211,9 @@
 
 #if BATTERY_ADC_CHANNEL != 0U
 #error "V1.3 battery divider is physically connected to PC0 / ADC channel 0"
+#endif
+#if BATTERY_SERIES_CELLS != 3U
+#error "The voltage/SOC curve is defined only for the deployed 3S Li-ion pack"
 #endif
 #if BATTERY_ADC_SAMPLE_COUNT > 32U || BATTERY_ADC_SAMPLE_COUNT < 4U
 #error "Battery estimator supports 4..32 samples"
