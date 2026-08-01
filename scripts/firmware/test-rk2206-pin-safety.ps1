@@ -32,6 +32,8 @@ Assert-Matches $config '(?m)^#define\s+GPS_UART_ID\s+EUART0_M0\b' `
   "UM220 GNSS must stay on EUART0_M0 / PB6-PB7"
 Assert-Matches $config '(?m)^#define\s+BATTERY_ADC_CHANNEL\s+0U\s*$' `
   "Battery sampling must stay on PC0 / ADC channel 0"
+Assert-Matches $config '(?m)^#define\s+BATTERY_CALIBRATION_VERIFIED\s+0\s*$' `
+  "Repository default battery calibration must remain unverified"
 Assert-Matches $config '(?m)^#define\s+FIELD_SENSOR_SOURCE\s+FIELD_SENSOR_SOURCE_HARDWARE\s*$' `
   "Repository default must remain hardware so tomorrow's build cannot inherit simulation"
 Assert-Matches $config '(?m)^#define\s+ENABLE_RS485_BUS\s+\(FIELD_SENSOR_SOURCE\s+==\s+FIELD_SENSOR_SOURCE_HARDWARE\)\s*$' `
@@ -43,6 +45,8 @@ Assert-Matches $battery 'IoTAdcInit\s*\(\s*BATTERY_ADC_CHANNEL\s*\)' `
   "Battery monitor must initialize the BSP ADC route"
 Assert-Matches $battery 'IoTAdcGetVal\s*\(\s*BATTERY_ADC_CHANNEL\s*,' `
   "Battery monitor must read the configured ADC channel"
+Assert-Matches $battery 'BATTERY_CALIBRATION_VERIFIED\s*\?' `
+  "Battery telemetry quality must use the explicit calibration verification flag"
 Assert-NotMatches $battery '\b(?:IoTGpio|LzGpio|IoTPwm|IoTI2c|IoTUart|IoTSpi)[A-Za-z0-9_]*\s*\(' `
   "Battery monitor contains a non-ADC hardware call and could drive PC0 incorrectly"
 Assert-NotMatches $simulator '\b(?:IoT|Lz)[A-Za-z0-9_]*\s*\(' `
@@ -52,6 +56,8 @@ Assert-Matches $main '(?s)#if\s+ENABLE_SIMULATED_FIELD_SENSORS\s+SimulatedFieldS
   "Simulated RS485 data must remain behind its build-time guard"
 Assert-Matches $main '(?s)#if\s+ENABLE_RS485_BUS\s+if\s*\(\s*FieldRs485_Init\s*\(' `
   "RS485 initialization must remain behind ENABLE_RS485_BUS"
+Assert-Matches $main 'BATTERY_CALIBRATION_VERIFIED\s*\?\s*"field"\s*:\s*"default"' `
+  "Battery startup status must use the explicit calibration verification flag"
 Assert-NotMatches $main '(?s)GPIO0_PC0.*?(?:DIR_OUT|SetOutput|SetDir)' `
   "Application source appears to configure PC0 as an output"
 

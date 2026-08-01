@@ -84,6 +84,9 @@ status: active
 - 可复现源码提交 `340d3a68316ebcefa2139f1b9e2b46079ef0e5a3` 已推送到远端 `feat/gnss-rtk-v31-transport`。正式 A/B/C 模拟链路测试包位于 `F:\2\openharmony\rk2206_firmware_releases\xls1_link_rehearsal_battery_simulated_20260801`，manifest 为 `sourceDirty=false`、RTCM injection disabled、RS485 hardware initialized false。
 - 正式包的 A/B/C `.img` SHA-256 分别为 `f4ac0a5b321558b80f1294912795a4fbf6e1f5cd8f43451458b353a0160fee9f`、`feb040047f74b63b5a32719ea59696c112a9686ae74884069ad256210d3b0ad2`、`dc4311cf467a1d6d67c34dac6524219ec351b8b40329ed78986eb9e14bcdd66e`。7 个 manifest 二进制哈希独立复算无差异，三个 `.bin` 均只包含自身 UUID/安装标签和 `SIMULATED (RS485 values only)` 标记。
 - RK3568 批量轮询工具已补齐 compact v1/v2 双栈、电池与模拟源解码、三节点严格 profile 校验、32 位序号回绕诊断和独立稳定性门禁。严格门禁要求 100% 命令匹配、三节点序号连续、零重复/未匹配/解码/profile 错误、无残留半帧、有效电池/模拟传感器数据及 P95/最大命令延迟达标；Python 语法、C/Python 金向量及正反门禁用例通过。该工具尚未部署到 RK3568，不能据此宣称真机链路通过。
+- PC0 校准链已支持 A/B/C 独立参数：严格报告新增电压中位数，`new-rk2206-battery-calibration.ps1` 只接受通信门禁通过、每节点至少 30 个电池样本、默认校准且采样期间波动不超过 150 mV 的报告，再结合三次同时万用表读数生成带来源哈希的校准文件。构建器逐节点写入 gain/offset/verified，manifest 保存映射并复制原始校准文件；即使增益恰为 `1000000`，已验证节点也正确报告 `field-calibrated`。
+- 逐节点校准流程已用金值与失败路径测试，并用测试映射完成 A/B/C 全量 OpenHarmony 构建；随后同目录只构建 B，确认旧 A/C 产物被清理。B 验证包仅含自身 UUID，模拟标记存在，`SC16IS752`/`[RS485]`/`EI2C0_M0 PB4/PB5` 均不存在，固件与校准来源哈希零差异；SDK 临时备份已清理并恢复，`_verification` 产物也已删除，正式烧录包未改动。
+- 校准改动后又只切 `-FieldSensorMode hardware` 完成 A 节点 OpenHarmony 全量构建；manifest 为 `fieldSensorMode=hardware`、`rs485HardwareInitialized=true`、默认校准未验证，二进制包含 A 身份及 SC16IS752/RS485 标记且不含模拟标记，manifest 哈希零差异。SDK 恢复、临时目录清理完成，证明接口到货后仍可通过单一构建参数回到真实采集。
 
 ## In Progress
 
@@ -98,7 +101,7 @@ status: active
 2. 三节点上电后先核对串口启动信息：自身 UUID/`FIELD-NODE-*`、`Field Sensor Source: SIMULATED`、`RS485 Bus: OFF`、PC0 battery ready；任何节点出现 `SC16IS752` 或 `[RS485]` 立即停止测试并复核镜像。
 3. 将更新后的 `xls1_three_node_batch_poll.py` 与编解码自检部署到 RK3568，先运行 60 秒严格预检，再以同一参数运行 600 秒零丢包基线。记录每节点应答数、序号连续性、超时、重复、CRC/COBS 错误、P50/P95/max 延迟、公平性、电池和 profile 证据；任一门禁失败时不提速。
 4. 两轮基线通过后只改变 `--batch-interval-ms`，依次测试 950、900、850、800 ms，在第一次失败时停止。最快通过值至少复核 1800 秒；此轮不得同时修改 UART chunk、节点时隙实现或 XLS1 模块参数。
-5. 每个节点用万用表测电池包电压，并与平台 `battery_v` 同时记录。按 `gain_ppm = measured_mv / reported_mv * 1000000` 分别重建对应节点，校准后再评价电量百分比；2P/5000 mAh 不改变电压曲线，只影响容量和续航。
+5. 60 秒严格预检通过且电池 IIR 稳定后，同时用万用表测 A/B/C 电池端电压，用 `new-rk2206-battery-calibration.ps1` 从报告中位数生成逐节点校准文件，再通过 `-BatteryCalibrationFile` 一次重建三节点。复测要求每节点中位电压与万用表差值不超过 60 mV 且质量为 `field-calibrated`；2P/5000 mAh 不改变电压曲线，只影响容量和续航。
 6. RS485 接口到货后先断电做方向、短路、3.3 V、PB4/PB5 上拉和模块型号检查，再执行 `build-xl01-compact-broadcast-v2.ps1 -FieldSensorMode hardware -GnssRtcmInjectionMode disabled` 生成真实采集版；硬件版必须重新跑引脚门禁和 A/B/C 身份/哈希核验。
 7. 真实传感器链稳定后再恢复 RTCM PROBE/LIVE 的既有门禁，最终混合负载仍需覆盖 RTCM、3 个 GNSS_CORE、compact 遥测和控制命令。
 
@@ -116,4 +119,4 @@ status: active
 
 ## Resume Prompt
 
-继续 2026-08-01 XLS1 三节点链路排参：从 `F:\2\openharmony\rk2206_firmware_releases\xls1_link_rehearsal_battery_simulated_20260801` 按标签烧录 A/B/C。固件源码提交为 `340d3a68316ebcefa2139f1b9e2b46079ef0e5a3`；模拟包只模拟 RS485，真实 UM220 和 PC0 电池保留，PB4/PB5 不初始化，RTCM disabled。上电后将严格门禁脚本部署到 RK3568，按 60 秒预检、600 秒零丢包基线、950/900/850/800 ms 单变量扫描和最快通过值 1800 秒复核执行。电池暂按整包 3S2P 5000 mAh，未核对标签和逐板万用表校准前只能把百分比视为电压估算。接口到货后只用 `-FieldSensorMode hardware` 切回真实 RS485，不改 XLS1 模块或驱动。
+继续 2026-08-01 XLS1 三节点链路排参：从 `F:\2\openharmony\rk2206_firmware_releases\xls1_link_rehearsal_battery_simulated_20260801` 按标签烧录 A/B/C。固件源码提交为 `340d3a68316ebcefa2139f1b9e2b46079ef0e5a3`；模拟包只模拟 RS485，真实 UM220 和 PC0 电池保留，PB4/PB5 不初始化，RTCM disabled。上电后将严格门禁脚本部署到 RK3568，按 60 秒预检、600 秒零丢包基线、950/900/850/800 ms 单变量扫描和最快通过值 1800 秒复核执行。60 秒预检通过后同步万用表读数，用 `new-rk2206-battery-calibration.ps1` 和 `-BatteryCalibrationFile` 生成逐节点校准包；复测误差门限 60 mV。电池暂按整包 3S2P 5000 mAh，未核对标签前仍不宣称剩余 mAh/续航。接口到货后只用 `-FieldSensorMode hardware` 切回真实 RS485，不改 XLS1 模块或驱动。

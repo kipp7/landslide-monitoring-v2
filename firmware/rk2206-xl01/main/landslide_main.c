@@ -1691,8 +1691,7 @@ static void* DataUploadTask(const char* arg)
            (unsigned int)BATTERY_SERIES_CELLS,
            (unsigned int)BATTERY_PARALLEL_STRINGS,
            (unsigned int)BATTERY_NOMINAL_CAPACITY_MAH,
-           (BATTERY_CALIBRATION_GAIN_PPM != 1000000U || BATTERY_CALIBRATION_OFFSET_MV != 0) ?
-               "field" : "default");
+           BATTERY_CALIBRATION_VERIFIED ? "field" : "default");
 #else
     printf("    - Battery: OFF\n");
 #endif

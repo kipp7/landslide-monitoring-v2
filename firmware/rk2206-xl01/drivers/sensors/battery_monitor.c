@@ -73,8 +73,7 @@ int BatteryMonitor_Read(BatteryReading *reading)
     reading->raw_adc = mean_raw;
     reading->pack_voltage_mv = g_filtered_pack_mv;
     reading->percentage = BatteryEstimator_PercentFromPackMv(g_filtered_pack_mv);
-    reading->estimate_quality =
-        (BATTERY_CALIBRATION_GAIN_PPM != 1000000U || BATTERY_CALIBRATION_OFFSET_MV != 0) ?
+    reading->estimate_quality = BATTERY_CALIBRATION_VERIFIED ?
         BATTERY_ESTIMATE_QUALITY_FIELD_CALIBRATED :
         BATTERY_ESTIMATE_QUALITY_DEFAULT_CALIBRATION;
     return 0;

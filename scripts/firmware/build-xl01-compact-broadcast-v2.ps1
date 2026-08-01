@@ -11,6 +11,7 @@ param(
   [int]$BatteryCalibrationGainPpm = 1000000,
   [ValidateRange(-2000, 2000)]
   [int]$BatteryCalibrationOffsetMv = 0,
+  [string]$BatteryCalibrationFile = "",
   [ValidateSet("A", "B", "C")]
   [string[]]$NodeLabels = @("A", "B", "C"),
   [switch]$KeepSdkExperimentSource
@@ -80,6 +81,53 @@ $nodes = @(
   @{ Label = "B"; Suffix = "0002"; DeviceId = "00000000-0000-0000-0000-000000000002"; InstallLabel = "FIELD-NODE-B" },
   @{ Label = "C"; Suffix = "0003"; DeviceId = "00000000-0000-0000-0000-000000000003"; InstallLabel = "FIELD-NODE-C" }
 )
+
+$resolvedBatteryCalibrationFile = $null
+$batteryCalibrationFileSha256 = $null
+$batteryCalibrationDocument = $null
+if ($BatteryCalibrationFile) {
+  $resolvedBatteryCalibrationFile = (Resolve-Path -LiteralPath $BatteryCalibrationFile -ErrorAction Stop).Path
+  $batteryCalibrationDocument = Get-Content -LiteralPath $resolvedBatteryCalibrationFile -Raw | ConvertFrom-Json
+  if ($batteryCalibrationDocument.schemaVersion -ne 1 -or $null -eq $batteryCalibrationDocument.nodes) {
+    throw "Battery calibration file must use schemaVersion 1 and contain a nodes object"
+  }
+  $batteryCalibrationFileSha256 =
+    (Get-FileHash -LiteralPath $resolvedBatteryCalibrationFile -Algorithm SHA256).Hash.ToLowerInvariant()
+}
+
+$nodeBatteryCalibrations = [ordered]@{}
+foreach ($node in $nodes | Where-Object { $_.Label -in $NodeLabels }) {
+  if ($null -eq $batteryCalibrationDocument) {
+    $nodeBatteryCalibrations[$node.Label] = [ordered]@{
+      gainPpm = $BatteryCalibrationGainPpm
+      offsetMv = $BatteryCalibrationOffsetMv
+      verified = ($BatteryCalibrationGainPpm -ne 1000000 -or $BatteryCalibrationOffsetMv -ne 0)
+    }
+    continue
+  }
+
+  $nodeProperty = $batteryCalibrationDocument.nodes.PSObject.Properties[$node.Label]
+  if ($null -eq $nodeProperty) {
+    throw "Battery calibration file is missing node $($node.Label)"
+  }
+  $entry = $nodeProperty.Value
+  if ([string]$entry.gainPpm -notmatch '^[0-9]+$' -or
+      [string]$entry.offsetMv -notmatch '^-?[0-9]+$' -or
+      $entry.verified -isnot [bool]) {
+    throw "Battery calibration for node $($node.Label) has invalid gainPpm, offsetMv or verified"
+  }
+  $gainPpm = [int]$entry.gainPpm
+  $offsetMv = [int]$entry.offsetMv
+  if ($gainPpm -lt 800000 -or $gainPpm -gt 1200000 -or
+      $offsetMv -lt -2000 -or $offsetMv -gt 2000) {
+    throw "Battery calibration for node $($node.Label) is outside the supported range"
+  }
+  $nodeBatteryCalibrations[$node.Label] = [ordered]@{
+    gainPpm = $gainPpm
+    offsetMv = $offsetMv
+    verified = [bool]$entry.verified
+  }
+}
 
 function Set-SingleMacro {
   param(
@@ -165,10 +213,18 @@ function Set-FieldSensorMode {
 }
 
 function Set-BatteryCalibration {
+  param(
+    [int]$GainPpm,
+    [int]$OffsetMv,
+    [bool]$Verified
+  )
+
   $configPath = Join-Path $sampleRoot "config\app_config.h"
   $text = [System.IO.File]::ReadAllText($configPath)
-  $text = Set-SingleTokenMacro -Text $text -Macro "BATTERY_CALIBRATION_GAIN_PPM" -Value ([string]$BatteryCalibrationGainPpm)
-  $text = Set-SingleTokenMacro -Text $text -Macro "BATTERY_CALIBRATION_OFFSET_MV" -Value ([string]$BatteryCalibrationOffsetMv)
+  $text = Set-SingleTokenMacro -Text $text -Macro "BATTERY_CALIBRATION_GAIN_PPM" -Value ([string]$GainPpm)
+  $text = Set-SingleTokenMacro -Text $text -Macro "BATTERY_CALIBRATION_OFFSET_MV" -Value ([string]$OffsetMv)
+  $verifiedToken = if ($Verified) { "1" } else { "0" }
+  $text = Set-SingleTokenMacro -Text $text -Macro "BATTERY_CALIBRATION_VERIFIED" -Value $verifiedToken
   [System.IO.File]::WriteAllText($configPath, $text, [System.Text.UTF8Encoding]::new($false))
 }
 
@@ -212,6 +268,24 @@ if (-not (docker inspect $ContainerName 2>$null)) {
 }
 
 New-Item -ItemType Directory -Force -Path $backupRoot, $artifactRoot | Out-Null
+foreach ($pattern in @(
+    "rk2206-node-*-xls1-compact-v2-*.bin",
+    "rk2206-node-*-xls1-compact-v2-*.img",
+    "rk2206_db_loader.bin",
+    "manifest.json"
+  )) {
+  Get-ChildItem -LiteralPath $artifactRoot -File -Filter $pattern -ErrorAction SilentlyContinue |
+    Remove-Item -Force
+}
+$artifactCalibrationPath = Join-Path $artifactRoot "battery-calibration.json"
+if ($resolvedBatteryCalibrationFile) {
+  if ([System.IO.Path]::GetFullPath($resolvedBatteryCalibrationFile) -ne
+      [System.IO.Path]::GetFullPath($artifactCalibrationPath)) {
+    Copy-Item -LiteralPath $resolvedBatteryCalibrationFile -Destination $artifactCalibrationPath -Force
+  }
+} elseif (Test-Path -LiteralPath $artifactCalibrationPath -PathType Leaf) {
+  Remove-Item -LiteralPath $artifactCalibrationPath -Force
+}
 $originalFiles = @{}
 
 try {
@@ -235,9 +309,13 @@ try {
 
   Set-GnssRtcmInjectionMode
   Set-FieldSensorMode
-  Set-BatteryCalibration
 
   foreach ($node in $nodes | Where-Object { $_.Label -in $NodeLabels }) {
+    $nodeCalibration = $nodeBatteryCalibrations[$node.Label]
+    Set-BatteryCalibration `
+      -GainPpm $nodeCalibration.gainPpm `
+      -OffsetMv $nodeCalibration.offsetMv `
+      -Verified $nodeCalibration.verified
     Set-NodeIdentity -Node $node
     Write-Host ("Building compact XLS1 firmware for node {0} ({1})" -f $node.Label, $node.DeviceId)
     docker exec $ContainerName bash -lc "cd /root/workspace/txsmartropenharmony && hb build -f"
@@ -255,6 +333,17 @@ try {
   $batteryParallelStrings = Get-UnsignedMacroValue -Path $sourceConfigPath -Macro "BATTERY_PARALLEL_STRINGS"
   $batteryCapacityMah = Get-UnsignedMacroValue -Path $sourceConfigPath -Macro "BATTERY_NOMINAL_CAPACITY_MAH"
   $batteryNominalVoltageMv = Get-UnsignedMacroValue -Path $sourceConfigPath -Macro "BATTERY_NOMINAL_VOLTAGE_MV"
+  $calibrationManifest = [ordered]@{}
+  foreach ($node in $nodes | Where-Object { $_.Label -in $NodeLabels }) {
+    $nodeCalibration = $nodeBatteryCalibrations[$node.Label]
+    $calibrationManifest[$node.Label] = [ordered]@{
+      gainPpm = $nodeCalibration.gainPpm
+      offsetMv = $nodeCalibration.offsetMv
+      verified = $nodeCalibration.verified
+    }
+  }
+  $globalCalibrationGainPpm = if ($resolvedBatteryCalibrationFile) { $null } else { $BatteryCalibrationGainPpm }
+  $globalCalibrationOffsetMv = if ($resolvedBatteryCalibrationFile) { $null } else { $BatteryCalibrationOffsetMv }
   $manifest = [ordered]@{
     schemaVersion = 1
     profile = "rk2206-xl01-compact-v2-$FieldSensorMode"
@@ -271,8 +360,10 @@ try {
       nominalEnergyWh = [math]::Round(($batteryCapacityMah * $batteryNominalVoltageMv) / 1000000.0, 1)
       adcRoute = "PC0/SARADC channel 0 input-only"
       dividerOhms = "100000/27000"
-      calibrationGainPpm = $BatteryCalibrationGainPpm
-      calibrationOffsetMv = $BatteryCalibrationOffsetMv
+      calibrationGainPpm = $globalCalibrationGainPpm
+      calibrationOffsetMv = $globalCalibrationOffsetMv
+      calibrationSourceSha256 = $batteryCalibrationFileSha256
+      calibrationByNode = $calibrationManifest
       socMethod = "trimmed ADC mean + calibrated voltage + IIR + 3S voltage curve"
     }
     firmwareMarker = Get-QuotedMacroValue -Path (Join-Path $sourceRoot "main\landslide_main.c") -Macro "FW_RX_DIAG_MARKER"

@@ -208,6 +208,7 @@
 // Defaults are deliberately neutral until each assembled divider is measured.
 #define BATTERY_CALIBRATION_GAIN_PPM    1000000U
 #define BATTERY_CALIBRATION_OFFSET_MV   0
+#define BATTERY_CALIBRATION_VERIFIED    0
 
 #if BATTERY_ADC_CHANNEL != 0U
 #error "V1.3 battery divider is physically connected to PC0 / ADC channel 0"
@@ -220,6 +221,9 @@
 #endif
 #if BATTERY_ADC_TRIM_EACH_SIDE * 2U >= BATTERY_ADC_MIN_VALID_SAMPLES
 #error "Battery ADC trim removes every minimum-valid sample"
+#endif
+#if BATTERY_CALIBRATION_VERIFIED != 0 && BATTERY_CALIBRATION_VERIFIED != 1
+#error "BATTERY_CALIBRATION_VERIFIED must be 0 or 1"
 #endif
 #endif
 

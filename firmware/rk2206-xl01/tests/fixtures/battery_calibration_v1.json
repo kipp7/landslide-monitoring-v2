@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "method": "one-point-multiplicative",
+  "nodes": {
+    "A": {
+      "gainPpm": 1005000,
+      "offsetMv": 0,
+      "verified": true
+    },
+    "B": {
+      "gainPpm": 1000000,
+      "offsetMv": 0,
+      "verified": true
+    },
+    "C": {
+      "gainPpm": 994959,
+      "offsetMv": 0,
+      "verified": true
+    }
+  }
+}

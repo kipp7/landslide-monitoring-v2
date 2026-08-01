@@ -10,6 +10,7 @@ import math
 import os
 import select
 import signal
+import statistics
 import struct
 import subprocess
 import time
@@ -730,6 +731,9 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
                 "samples": len(battery_voltages),
                 "voltageMin": round(min(battery_voltages), 3) if battery_voltages else None,
                 "voltageMax": round(max(battery_voltages), 3) if battery_voltages else None,
+                "voltageMedian": (
+                    round(statistics.median(battery_voltages), 3) if battery_voltages else None
+                ),
                 "voltageLast": (
                     latest_metrics.get("battery_v") if isinstance(latest_metrics, dict) else None
                 ),

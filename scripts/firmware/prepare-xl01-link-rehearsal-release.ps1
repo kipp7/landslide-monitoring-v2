@@ -7,6 +7,7 @@ param(
   [int]$BatteryCalibrationGainPpm = 1000000,
   [ValidateRange(-2000, 2000)]
   [int]$BatteryCalibrationOffsetMv = 0,
+  [string]$BatteryCalibrationFile = "",
   [ValidateSet("A", "B", "C")]
   [string[]]$NodeLabels = @("A", "B", "C")
 )
@@ -35,6 +36,7 @@ if (-not (Test-Path -LiteralPath $builder -PathType Leaf)) {
   -FieldSensorMode simulated `
   -BatteryCalibrationGainPpm $BatteryCalibrationGainPpm `
   -BatteryCalibrationOffsetMv $BatteryCalibrationOffsetMv `
+  -BatteryCalibrationFile $BatteryCalibrationFile `
   -NodeLabels $NodeLabels
 
 if ($LASTEXITCODE -ne 0) {
@@ -56,6 +58,28 @@ if ($manifest.fieldSensorMode -ne "simulated" -or
 $headCommit = (& git -C $repoRoot rev-parse HEAD).Trim()
 if ($LASTEXITCODE -ne 0 -or $manifest.sourceCommit -ne $headCommit) {
   throw "Release manifest source commit does not match repository HEAD"
+}
+
+$expectedCalibrationVerified = [bool]$BatteryCalibrationFile -or
+  $BatteryCalibrationGainPpm -ne 1000000 -or
+  $BatteryCalibrationOffsetMv -ne 0
+foreach ($node in $NodeLabels) {
+  $calibrationProperty = $manifest.battery.calibrationByNode.PSObject.Properties[$node]
+  if ($null -eq $calibrationProperty -or
+      $calibrationProperty.Value.verified -ne $expectedCalibrationVerified) {
+    throw "Release manifest is missing the expected battery calibration state for node $node"
+  }
+}
+if ($BatteryCalibrationFile) {
+  $artifactCalibrationPath = Join-Path $ArtifactDirectory "battery-calibration.json"
+  if (-not (Test-Path -LiteralPath $artifactCalibrationPath -PathType Leaf)) {
+    throw "Calibrated release is missing battery-calibration.json"
+  }
+  $artifactCalibrationSha256 =
+    (Get-FileHash -LiteralPath $artifactCalibrationPath -Algorithm SHA256).Hash.ToLowerInvariant()
+  if ($manifest.battery.calibrationSourceSha256 -ne $artifactCalibrationSha256) {
+    throw "Battery calibration source hash does not match the release manifest"
+  }
 }
 
 $expectedFiles = @("rk2206_db_loader.bin")
@@ -112,11 +136,19 @@ foreach ($node in $NodeLabels) {
   }
 }
 
+$calibrationDescription = if ($BatteryCalibrationFile) {
+  "per-node field-calibrated; see battery-calibration.json and manifest.json"
+} elseif ($expectedCalibrationVerified) {
+  "shared manual field calibration; see manifest.json"
+} else {
+  "neutral default calibration; verify each node against a multimeter before precision claims"
+}
 $instructions = @"
 XLS1 link rehearsal firmware - 2026-08-01
 
 Profile: simulated RS485 values; real UM220 GNSS; real PC0 battery; RTCM injection disabled.
 XLS1 module configuration is preserved. The firmware only uses EUART2_M1 PB2/PB3 for data.
+Battery calibration: $calibrationDescription.
 Burn the .img matching the physical node label. Do not interchange A/B/C images.
 Source commit: $headCommit
 

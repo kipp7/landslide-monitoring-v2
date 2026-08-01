@@ -131,3 +131,5 @@ Test in this order:
 4. Confirm the fastest passing candidate for at least 1800 seconds.
 
 Do not change the node slots, UART chunk size, UART chunk delay or XLS1 module parameters during the interval sweep. When the RS485 interface parts arrive, rebuild with `-FieldSensorMode hardware -GnssRtcmInjectionMode disabled`; do not hand-edit the simulator or XLS1 driver.
+
+After the neutral firmware passes the 60-second strict preflight, use the separate [RK2206 PC0 battery calibration procedure](rk2206-pc0-battery-calibration.md) to generate independent A/B/C gain values from simultaneous multimeter readings. Calibration and communication tuning are separate experiments; do not flash calibrated images during an interval sweep already in progress.
