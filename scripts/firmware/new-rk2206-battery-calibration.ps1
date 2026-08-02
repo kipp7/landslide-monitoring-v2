@@ -1,7 +1,13 @@
 [CmdletBinding()]
 param(
-  [Parameter(Mandatory = $true)]
+  [Parameter(Mandatory = $true, ParameterSetName = "SharedReport")]
   [string]$ReportPath,
+  [Parameter(Mandatory = $true, ParameterSetName = "PerNodeReports")]
+  [string]$ReportPathA,
+  [Parameter(Mandatory = $true, ParameterSetName = "PerNodeReports")]
+  [string]$ReportPathB,
+  [Parameter(Mandatory = $true, ParameterSetName = "PerNodeReports")]
+  [string]$ReportPathC,
   [Parameter(Mandatory = $true)]
   [ValidateRange(8000, 13500)]
   [int]$MeasuredAMv,
@@ -18,18 +24,18 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$resolvedReportPath = (Resolve-Path -LiteralPath $ReportPath -ErrorAction Stop).Path
-$report = Get-Content -LiteralPath $resolvedReportPath -Raw | ConvertFrom-Json
-if ($null -eq $report.result -or $null -eq $report.nodes) {
-  throw "The input is not an XLS1 three-node report"
-}
-
-$stable = $report.result.stableProfile
-if ($null -eq $stable) {
-  $stable = $report.result.stableOneSecondProfile
-}
-if ($stable -ne $true) {
-  throw "Battery calibration requires a report that passed the strict stability gate"
+if ($PSCmdlet.ParameterSetName -eq "SharedReport") {
+  $reportPathByNode = [ordered]@{
+    A = $ReportPath
+    B = $ReportPath
+    C = $ReportPath
+  }
+} else {
+  $reportPathByNode = [ordered]@{
+    A = $ReportPathA
+    B = $ReportPathB
+    C = $ReportPathC
+  }
 }
 
 $measuredByNode = @{
@@ -38,8 +44,23 @@ $measuredByNode = @{
   C = $MeasuredCMv
 }
 $calibrationNodes = [ordered]@{}
+$sourceReportsByNode = [ordered]@{}
 
 foreach ($label in @("A", "B", "C")) {
+  $resolvedReportPath = (Resolve-Path -LiteralPath $reportPathByNode[$label] -ErrorAction Stop).Path
+  $report = Get-Content -LiteralPath $resolvedReportPath -Raw | ConvertFrom-Json
+  if ($null -eq $report.result -or $null -eq $report.nodes) {
+    throw "The input for node $label is not an XLS1 three-node report"
+  }
+
+  $stable = $report.result.stableProfile
+  if ($null -eq $stable) {
+    $stable = $report.result.stableOneSecondProfile
+  }
+  if ($stable -ne $true) {
+    throw "Battery calibration requires a report that passed the strict stability gate for node $label"
+  }
+
   $nodeProperty = $report.nodes.PSObject.Properties[$label]
   if ($null -eq $nodeProperty -or $null -eq $nodeProperty.Value.battery) {
     throw "Report is missing node $label battery evidence"
@@ -82,11 +103,21 @@ foreach ($label in @("A", "B", "C")) {
     offsetMv = 0
     verified = $true
   }
+  $sourceReportsByNode[$label] = [ordered]@{
+    path = $resolvedReportPath
+    sha256 = (Get-FileHash -LiteralPath $resolvedReportPath -Algorithm SHA256).Hash.ToLowerInvariant()
+  }
 }
 
 if (-not $OutputPath) {
+  $defaultReportPath = if ($PSCmdlet.ParameterSetName -eq "SharedReport") {
+    $ReportPath
+  } else {
+    $ReportPathA
+  }
+  $resolvedDefaultReportPath = (Resolve-Path -LiteralPath $defaultReportPath -ErrorAction Stop).Path
   $OutputPath = Join-Path (
-    Split-Path -Parent $resolvedReportPath
+    Split-Path -Parent $resolvedDefaultReportPath
   ) ("battery-calibration-{0}.json" -f (Get-Date -Format "yyyyMMdd-HHmmss"))
 }
 $resolvedOutputPath = [System.IO.Path]::GetFullPath($OutputPath)
@@ -99,9 +130,12 @@ $calibration = [ordered]@{
   schemaVersion = 1
   method = "one-point-multiplicative"
   generatedAt = (Get-Date).ToUniversalTime().ToString("o")
-  sourceReport = $resolvedReportPath
-  sourceReportSha256 = (Get-FileHash -LiteralPath $resolvedReportPath -Algorithm SHA256).Hash.ToLowerInvariant()
+  sourceReportsByNode = $sourceReportsByNode
   nodes = $calibrationNodes
+}
+if ($PSCmdlet.ParameterSetName -eq "SharedReport") {
+  $calibration["sourceReport"] = $sourceReportsByNode.A.path
+  $calibration["sourceReportSha256"] = $sourceReportsByNode.A.sha256
 }
 $temporaryPath = "$resolvedOutputPath.tmp"
 [System.IO.File]::WriteAllText(

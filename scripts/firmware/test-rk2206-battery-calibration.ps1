@@ -3,6 +3,9 @@ $ErrorActionPreference = "Stop"
 $generator = Join-Path $PSScriptRoot "new-rk2206-battery-calibration.ps1"
 $testRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("rk2206-battery-calibration-test-" + [guid]::NewGuid().ToString("N"))
 $reportPath = Join-Path $testRoot "report.json"
+$reportPathA = Join-Path $testRoot "report-a.json"
+$reportPathB = Join-Path $testRoot "report-b.json"
+$reportPathC = Join-Path $testRoot "report-c.json"
 $outputPath = Join-Path $testRoot "calibration.json"
 
 function New-TestReport {
@@ -54,8 +57,31 @@ try {
       $calibration.nodes.A.gainPpm -ne 1005000 -or
       $calibration.nodes.B.gainPpm -ne 1000000 -or
       $calibration.nodes.C.gainPpm -ne 994959 -or
-      $calibration.nodes.B.verified -ne $true) {
+      $calibration.nodes.B.verified -ne $true -or
+      $calibration.sourceReportsByNode.A.sha256 -ne $calibration.sourceReportSha256) {
     throw "Generated per-node battery calibration did not match the golden values"
+  }
+
+  Copy-Item -LiteralPath $reportPath -Destination $reportPathA
+  Copy-Item -LiteralPath $reportPath -Destination $reportPathB
+  Copy-Item -LiteralPath $reportPath -Destination $reportPathC
+  $perNodeOutputPath = Join-Path $testRoot "calibration-per-node.json"
+  & $generator `
+    -ReportPathA $reportPathA `
+    -ReportPathB $reportPathB `
+    -ReportPathC $reportPathC `
+    -MeasuredAMv 12060 `
+    -MeasuredBMv 11900 `
+    -MeasuredCMv 12039 `
+    -OutputPath $perNodeOutputPath | Out-Null
+
+  $perNodeCalibration = Get-Content -LiteralPath $perNodeOutputPath -Raw | ConvertFrom-Json
+  if ($perNodeCalibration.nodes.A.gainPpm -ne 1005000 -or
+      $perNodeCalibration.nodes.B.gainPpm -ne 1000000 -or
+      $perNodeCalibration.nodes.C.gainPpm -ne 994959 -or
+      $null -ne $perNodeCalibration.sourceReport -or
+      $perNodeCalibration.sourceReportsByNode.B.path -ne (Resolve-Path -LiteralPath $reportPathB).Path) {
+    throw "Per-node report calibration did not match the golden values"
   }
 
   [System.IO.File]::WriteAllText(
@@ -78,7 +104,29 @@ try {
     throw "Calibration generator accepted a report that failed the stability gate"
   }
 
-  Write-Host "BATTERY_CALIBRATION_TEST_OK per-node gains and unstable-report rejection passed"
+  [System.IO.File]::WriteAllText(
+    $reportPathC,
+    ((New-TestReport -Stable $false | ConvertTo-Json -Depth 8) + [Environment]::NewLine),
+    [System.Text.UTF8Encoding]::new($false)
+  )
+  $perNodeRejected = $false
+  try {
+    & $generator `
+      -ReportPathA $reportPathA `
+      -ReportPathB $reportPathB `
+      -ReportPathC $reportPathC `
+      -MeasuredAMv 12060 `
+      -MeasuredBMv 11900 `
+      -MeasuredCMv 12039 `
+      -OutputPath (Join-Path $testRoot "per-node-must-not-exist.json") | Out-Null
+  } catch {
+    $perNodeRejected = $true
+  }
+  if (-not $perNodeRejected) {
+    throw "Calibration generator accepted an unstable per-node report"
+  }
+
+  Write-Host "BATTERY_CALIBRATION_TEST_OK shared/per-node gains and unstable-report rejection passed"
 } finally {
   if (Test-Path -LiteralPath $testRoot -PathType Container) {
     Remove-Item -LiteralPath $testRoot -Recurse -Force
