@@ -52,9 +52,9 @@
 #define TELEMETRY_PAYLOAD_FORMAT_JSON_V1 0
 #define TELEMETRY_PAYLOAD_FORMAT_COMPACT_V1 1
 #define TELEMETRY_PAYLOAD_FORMAT_COMPACT_V2 2
-// Experimental single-radio-packet profile. A 46-byte payload becomes exactly
-// 64 bytes after the existing field-link header, CRC32, COBS and delimiter.
-#define TELEMETRY_PAYLOAD_FORMAT TELEMETRY_PAYLOAD_FORMAT_COMPACT_V2
+#define TELEMETRY_PAYLOAD_FORMAT_COMPACT_V3 3
+// Combined field + professional RTK summary: one response per node per poll.
+#define TELEMETRY_PAYLOAD_FORMAT TELEMETRY_PAYLOAD_FORMAT_COMPACT_V3
 #define XL01_UART_TX_CHUNK_SIZE 32     // Long transparent payloads are more stable when split into small UART bursts
 #define XL01_UART_TX_CHUNK_DELAY_MS 15 // Validated compact baseline; higher-rate profiles remain hardware sweep candidates
 #define PLATFORM_POST_ACK_QUIET_MS 1200 // Hold telemetry briefly after any command ACK to keep the shared XL01 stream separable
@@ -92,7 +92,7 @@
 #define SLEEP_AFTER_SEND    0           // Sleep after each send (low power)
 
 // Version marker
-#define FIRMWARE_SAMPLE_VERSION "v1.2-um220-rs485-battery-compact-v2"
+#define FIRMWARE_SAMPLE_VERSION "v1.3-um220-rs485-rtk-compact-v3"
 
 // Bring-up diagnostic mode:
 // 1 = only print a boot heartbeat on the debug UART; do not initialize sensors or XL01.
@@ -122,8 +122,6 @@
 #define ENABLE_RS485_SOIL_SENSOR   (ENABLE_RS485_BUS && 1) // RS-ECTH-N01-TR-1 three-in-one soil sensor on channel 1
 #define ENABLE_RS485_TILT_SENSOR   (ENABLE_RS485_BUS && 1) // RS485 tilt sensor on shared channel 2
 #define ENABLE_RS485_RAIN_SENSOR   (ENABLE_RS485_BUS && 0) // Enable after confirming rain-gauge register map
-#define ENABLE_SHT30               0    // Legacy I2C sensor disabled in v1.1
-#define ENABLE_MPU6050             0    // Legacy I2C IMU disabled in v1.1
 #define ENABLE_SIMULATED_FIELD_SENSORS \
     (FIELD_SENSOR_SOURCE == FIELD_SENSOR_SOURCE_SIMULATED)
 #define ENABLE_VIRTUAL             0    // Deprecated whole-node virtual mode remains forbidden
@@ -168,6 +166,7 @@
 // ✓ MPU6050已移至PB4/PB5，PB6/PB7现在可用于GPS
 #define GPS_UART_ID         EUART0_M0    // PB6(RX), PB7(TX) - RK2206 UART0_M0
 #define GPS_BAUDRATE        115200       // UM220-IV NK EVK config.ini WorkBaudrate defaults to 115200
+#define GNSS_COORDINATE_FRAME 1U         // 1=CGCS2000 (Qianxun port 8003), 2=WGS84 (port 8002)
 #define GPS_UART_PROBE_LOG_MODE 0        // 0=GPS UART confirmed; keep only parsed NMEA/fix logs
 #define GPS_VERBOSE_NMEA_LOG 0           // 0=hide raw GGA/RMC sentences; summary upload line shows GPS status
 // RTCM downlink remains compile-disabled until the mixed-load XLS1 gate passes.
@@ -327,15 +326,10 @@
 #define RS485_RAIN_REG_COUNT   1
 #define RS485_RAIN_TOTAL_SCALE 0.1f
 
-#if ENABLE_RS485_BUS || ENABLE_SHT30 || ENABLE_MPU6050
+#if ENABLE_RS485_BUS
 // I2C Bus - EI2C0_M0 (PB4=SDA, PB5=SCL) ✓ 修正：释放PB6/PB7给GPS
 #define I2C_IDX             EI2C0_M0         // ← 改为PB4/PB5
 #define I2C_BAUDRATE        EI2C_FRE_100K    // 100kHz (枚举值，不是数字)
-#endif
-
-#if ENABLE_SHT30 || ENABLE_MPU6050
-#define SHT30_I2C_ADDR      0x44
-#define MPU6050_I2C_ADDR    0x68
 #endif
 
 #endif // CONFIG_APP_CONFIG_H

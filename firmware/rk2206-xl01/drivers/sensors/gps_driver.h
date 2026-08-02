@@ -12,6 +12,8 @@
 #ifndef DRIVERS_SENSORS_GPS_DRIVER_H
 #define DRIVERS_SENSORS_GPS_DRIVER_H
 
+#include "gnss_solution_parser.h"
+
 /**
  * Initialize GPS module
  * @return 0 on success, negative on error
@@ -23,13 +25,8 @@ int GPS_Init(void);
  */
 void GPS_Poll(void);
 
-/**
- * Read GPS coordinates
- * @param lat Output: latitude in decimal degrees
- * @param lon Output: longitude in decimal degrees
- * @return 0 if GPS has fix, negative if no fix yet
- */
-int GPS_Read(float *lat, float *lon);
+/* Read the latest fixed-point GNSS solution and refresh solution_age_ms. */
+int GPS_ReadSolution(GnssSolutionSnapshot *solution);
 
 /**
  * Return the latest checksum-valid GGA quality code (0/1/2/4/5...).

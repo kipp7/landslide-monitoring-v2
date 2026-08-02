@@ -47,7 +47,7 @@ offset_mv = 0
 Build all three node-specific images with that file:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/firmware/build-xl01-compact-broadcast-v2.ps1 `
+powershell -ExecutionPolicy Bypass -File scripts/firmware/build-xl01-compact-v3.ps1 `
   -FieldSensorMode simulated `
   -GnssRtcmInjectionMode disabled `
   -BatteryCalibrationFile C:\path\to\battery-calibration.json `

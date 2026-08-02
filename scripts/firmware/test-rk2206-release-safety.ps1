@@ -102,7 +102,7 @@ function New-TestRelease {
   }
 
   $firmwareMarker = "fw-release-safety-fixture"
-  $sampleVersion = "v-test-compact-v2"
+  $sampleVersion = "v-test-compact-v3"
   $sensorMarkers = if ($Mode -eq "hardware") {
     "HARDWARE SC16IS752 over EI2C0_M0 PB4/PB5 RS-ECTH-N01-TR-1 [RS485]"
   } else {
@@ -120,13 +120,13 @@ function New-TestRelease {
       $sampleVersion,
       "EUART2_M1 PB2/PB3",
       "PC0/SARADC-ch0 input-only",
-      "Compact v2 (46-byte payload)",
+      "Compact v3 (95-byte field + RTK payload)",
       $sensorMarkers,
       "DISABLED"
     ) -join "`0"
     foreach ($extension in @("bin", "img")) {
       [System.IO.File]::WriteAllBytes(
-        (Join-Path $Path "rk2206-node-$node-xls1-compact-v2-$Mode.$extension"),
+        (Join-Path $Path "rk2206-node-$node-xls1-compact-v3-$Mode.$extension"),
         [System.Text.Encoding]::ASCII.GetBytes($content)
       )
     }
@@ -146,7 +146,7 @@ function New-TestRelease {
   )
   $manifest = [ordered]@{
     schemaVersion = 1
-    profile = "rk2206-xl01-compact-v2-$Mode"
+    profile = "rk2206-xl01-compact-v3-$Mode"
     sourceCommit = $sourceCommit
     sourceDirty = $false
     gnssRtcmInjectionMode = "disabled"
@@ -171,8 +171,8 @@ function New-TestRelease {
     }
     firmwareMarker = $firmwareMarker
     sampleVersion = $sampleVersion
-    compactPayloadBytes = 46
-    fieldLinkWireBytes = 64
+    compactPayloadBytes = 95
+    fieldLinkWireBytes = 113
     compactPollCommandBytes = 10
     compactPollWireBytes = 28
     nodeSlotMs = 340
@@ -208,7 +208,7 @@ try {
     -ExpectedSourceCommit $sourceCommit | Out-Null
 
   [System.IO.File]::AppendAllText(
-    (Join-Path $simulatedRoot "rk2206-node-A-xls1-compact-v2-simulated.img"),
+    (Join-Path $simulatedRoot "rk2206-node-A-xls1-compact-v3-simulated.img"),
     "tampered"
   )
   Assert-Rejected -Reason "tampered image hash" -Action {
@@ -221,7 +221,7 @@ try {
 
   Remove-Item -LiteralPath $simulatedRoot -Recurse -Force
   New-TestRelease -Path $simulatedRoot -Mode simulated -BatteryState default-calibration
-  $aBin = Join-Path $simulatedRoot "rk2206-node-A-xls1-compact-v2-simulated.bin"
+  $aBin = Join-Path $simulatedRoot "rk2206-node-A-xls1-compact-v3-simulated.bin"
   [System.IO.File]::AppendAllText($aBin, $nodeIds.B)
   $manifestPath = Join-Path $simulatedRoot "manifest.json"
   $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json

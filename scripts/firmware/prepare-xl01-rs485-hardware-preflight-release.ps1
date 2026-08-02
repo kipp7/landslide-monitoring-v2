@@ -27,7 +27,7 @@ $headCommit = (& git -C $repoRoot rev-parse HEAD).Trim()
 if ($LASTEXITCODE -ne 0 -or -not $headCommit) {
   throw "Cannot resolve repository HEAD"
 }
-$builder = Join-Path $PSScriptRoot "build-xl01-compact-broadcast-v2.ps1"
+$builder = Join-Path $PSScriptRoot "build-xl01-compact-v3.ps1"
 $verifier = Join-Path $PSScriptRoot "verify-rk2206-release-safety.ps1"
 foreach ($requiredTool in @($builder, $verifier)) {
   if (-not (Test-Path -LiteralPath $requiredTool -PathType Leaf)) {

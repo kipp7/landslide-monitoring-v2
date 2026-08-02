@@ -297,6 +297,8 @@ const FIELD_METRIC_KEYS = new Set([
   "accel_y_g",
   "accel_z_g",
   "battery_pct",
+  "battery_v",
+  "electrical_conductivity_us_cm",
   "gps_latitude",
   "gps_longitude",
   "gyro_x_dps",
@@ -304,8 +306,19 @@ const FIELD_METRIC_KEYS = new Set([
   "gyro_z_dps",
   "humidity_pct",
   "temperature_c",
+  "soil_moisture_pct",
+  "soil_temperature_c",
   "tilt_x_deg",
   "tilt_y_deg",
+  "tilt_z_deg",
+  "rtk_latitude_deg",
+  "rtk_longitude_deg",
+  "rtk_altitude_msl_m",
+  "rtk_ellipsoid_height_m",
+  "rtk_gga_quality",
+  "rtk_trusted",
+  "rtk_correction_age_ms",
+  "rtk_solution_age_ms",
   "warning_flag"
 ]);
 

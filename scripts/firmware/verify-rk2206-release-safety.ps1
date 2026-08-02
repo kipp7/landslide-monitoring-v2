@@ -105,7 +105,7 @@ foreach ($property in @(
 Assert-ReleaseCondition -Condition ($manifest.schemaVersion -eq 1) `
   -Message "Unsupported release manifest schemaVersion: $($manifest.schemaVersion)"
 Assert-ReleaseCondition `
-  -Condition ($manifest.profile -eq "rk2206-xl01-compact-v2-$ExpectedFieldSensorMode") `
+  -Condition ($manifest.profile -eq "rk2206-xl01-compact-v3-$ExpectedFieldSensorMode") `
   -Message "Release profile does not match expected field sensor mode"
 Assert-ReleaseCondition -Condition ($manifest.sourceCommit -match '^[0-9a-f]{40}$') `
   -Message "Release sourceCommit is not a full lowercase Git commit"
@@ -131,8 +131,8 @@ Assert-ReleaseCondition `
   -Message "rs485HardwareInitialized is inconsistent with fieldSensorMode"
 
 foreach ($fixedField in @(
-    @{ Name = "compactPayloadBytes"; Value = 46 },
-    @{ Name = "fieldLinkWireBytes"; Value = 64 },
+    @{ Name = "compactPayloadBytes"; Value = 95 },
+    @{ Name = "fieldLinkWireBytes"; Value = 113 },
     @{ Name = "compactPollCommandBytes"; Value = 10 },
     @{ Name = "compactPollWireBytes"; Value = 28 },
     @{ Name = "nodeSlotMs"; Value = 340 }
@@ -366,8 +366,8 @@ if ($expectCalibrated) {
 
 $expectedFiles = @("rk2206_db_loader.bin")
 foreach ($node in $NodeLabels) {
-  $expectedFiles += "rk2206-node-$node-xls1-compact-v2-$ExpectedFieldSensorMode.bin"
-  $expectedFiles += "rk2206-node-$node-xls1-compact-v2-$ExpectedFieldSensorMode.img"
+  $expectedFiles += "rk2206-node-$node-xls1-compact-v3-$ExpectedFieldSensorMode.bin"
+  $expectedFiles += "rk2206-node-$node-xls1-compact-v3-$ExpectedFieldSensorMode.img"
 }
 $manifestEntries = @($manifest.files)
 $manifestNames = @($manifestEntries | ForEach-Object { [string]$_.name })
@@ -424,7 +424,7 @@ $modeForbidden = if ($expectHardware) {
 
 foreach ($node in $NodeLabels) {
   foreach ($extension in @("bin", "img")) {
-    $path = Join-Path $artifactRoot "rk2206-node-$node-xls1-compact-v2-$ExpectedFieldSensorMode.$extension"
+    $path = Join-Path $artifactRoot "rk2206-node-$node-xls1-compact-v3-$ExpectedFieldSensorMode.$extension"
     $required = @(
       $nodeIds[$node],
       "FIELD-NODE-$node",
@@ -432,7 +432,7 @@ foreach ($node in $NodeLabels) {
       $manifest.sampleVersion,
       "EUART2_M1 PB2/PB3",
       "PC0/SARADC-ch0 input-only",
-      "Compact v2 (46-byte payload)",
+      "Compact v3 (95-byte field + RTK payload)",
       $sensorMarker,
       $rtcmMarker
     ) + $modeRequired

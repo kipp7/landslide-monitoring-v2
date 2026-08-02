@@ -9,7 +9,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
-$buildScript = Join-Path $PSScriptRoot "build-xl01-compact-broadcast-v2.ps1"
+$buildScript = Join-Path $PSScriptRoot "build-xl01-compact-v3.ps1"
 $releaseRoot = [System.IO.Path]::GetFullPath($ReleaseDirectory)
 $temporaryRoot = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath())
 $stagingRoot = [System.IO.Path]::GetFullPath(
@@ -75,8 +75,8 @@ try {
   }
 
   foreach ($node in $nodes) {
-    $sourceBin = Join-Path $stagingRoot ("rk2206-node-{0}-xls1-compact-broadcast-v2.bin" -f $node.Label)
-    $sourceImage = Join-Path $stagingRoot ("rk2206-node-{0}-xls1-compact-broadcast-v2.img" -f $node.Label)
+    $sourceBin = Join-Path $stagingRoot ("rk2206-node-{0}-xls1-compact-v3-hardware.bin" -f $node.Label)
+    $sourceImage = Join-Path $stagingRoot ("rk2206-node-{0}-xls1-compact-v3-hardware.img" -f $node.Label)
     foreach ($required in @($sourceBin, $sourceImage, (Join-Path $stagingRoot "rk2206_db_loader.bin"))) {
       if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
         throw "Required build output is missing: $required"
@@ -96,10 +96,10 @@ try {
     $nodeRoot = Join-Path $releaseRoot $node.Label
     New-Item -ItemType Directory -Path $nodeRoot | Out-Null
     Copy-Item -LiteralPath (
-      Join-Path $stagingRoot ("rk2206-node-{0}-xls1-compact-broadcast-v2.img" -f $node.Label)
+      Join-Path $stagingRoot ("rk2206-node-{0}-xls1-compact-v3-hardware.img" -f $node.Label)
     ) -Destination (Join-Path $nodeRoot "Firmware.img")
     Copy-Item -LiteralPath (
-      Join-Path $stagingRoot ("rk2206-node-{0}-xls1-compact-broadcast-v2.bin" -f $node.Label)
+      Join-Path $stagingRoot ("rk2206-node-{0}-xls1-compact-v3-hardware.bin" -f $node.Label)
     ) -Destination (Join-Path $nodeRoot "liteos.bin")
     Copy-Item -LiteralPath (Join-Path $stagingRoot "rk2206_db_loader.bin") `
       -Destination (Join-Path $nodeRoot "rk2206_db_loader.bin")

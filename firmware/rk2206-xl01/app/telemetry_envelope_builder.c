@@ -108,16 +108,6 @@ int BuildTelemetryEnvelopeV1(
         return -1;
     }
 
-    if (data->temp_valid) {
-        if (BeginJsonField(output, output_size, &len, &metric_count) < 0 ||
-            AppendJsonChunk(output, output_size, &len, "\"temperature_c\":%.1f", data->temperature) < 0 ||
-            BeginJsonField(output, output_size, &len, &metric_count) < 0 ||
-            AppendJsonChunk(output, output_size, &len, "\"humidity_pct\":%.1f", data->humidity) < 0) {
-            output[0] = '\0';
-            return -1;
-        }
-    }
-
     if (data->soil_valid) {
         if (BeginJsonField(output, output_size, &len, &metric_count) < 0 ||
             AppendJsonChunk(output, output_size, &len, "\"soil_temperature_c\":%.*f", RS485_SOIL_TEMPERATURE_DECIMALS, data->soil_temperature) < 0 ||
@@ -137,31 +127,7 @@ int BuildTelemetryEnvelopeV1(
 #endif
     }
 
-    if (data->imu_valid) {
-        if (BeginJsonField(output, output_size, &len, &metric_count) < 0 ||
-            AppendJsonChunk(output, output_size, &len, "\"accel_x_g\":%.2f", data->accel_x) < 0 ||
-            BeginJsonField(output, output_size, &len, &metric_count) < 0 ||
-            AppendJsonChunk(output, output_size, &len, "\"accel_y_g\":%.2f", data->accel_y) < 0 ||
-            BeginJsonField(output, output_size, &len, &metric_count) < 0 ||
-            AppendJsonChunk(output, output_size, &len, "\"accel_z_g\":%.2f", data->accel_z) < 0 ||
-            BeginJsonField(output, output_size, &len, &metric_count) < 0 ||
-            AppendJsonChunk(output, output_size, &len, "\"gyro_x_dps\":%.1f", data->gyro_x) < 0 ||
-            BeginJsonField(output, output_size, &len, &metric_count) < 0 ||
-            AppendJsonChunk(output, output_size, &len, "\"gyro_y_dps\":%.1f", data->gyro_y) < 0 ||
-            BeginJsonField(output, output_size, &len, &metric_count) < 0 ||
-            AppendJsonChunk(output, output_size, &len, "\"gyro_z_dps\":%.1f", data->gyro_z) < 0 ||
-            BeginJsonField(output, output_size, &len, &metric_count) < 0 ||
-            AppendJsonChunk(output, output_size, &len, "\"tilt_x_deg\":%.*f", RS485_TILT_DECIMALS, data->angle_x) < 0 ||
-            BeginJsonField(output, output_size, &len, &metric_count) < 0 ||
-            AppendJsonChunk(output, output_size, &len, "\"tilt_y_deg\":%.*f", RS485_TILT_DECIMALS, data->angle_y) < 0 ||
-            BeginJsonField(output, output_size, &len, &metric_count) < 0 ||
-            AppendJsonChunk(output, output_size, &len, "\"warning_flag\":%s", data->warning ? "true" : "false") < 0) {
-            output[0] = '\0';
-            return -1;
-        }
-    }
-
-    if (!data->imu_valid && data->tilt_valid) {
+    if (data->tilt_valid) {
         if (BeginJsonField(output, output_size, &len, &metric_count) < 0 ||
             AppendJsonChunk(output, output_size, &len, "\"tilt_x_deg\":%.*f", RS485_TILT_DECIMALS, data->angle_x) < 0 ||
             BeginJsonField(output, output_size, &len, &metric_count) < 0 ||
@@ -183,11 +149,13 @@ int BuildTelemetryEnvelopeV1(
         }
     }
 
-    if (data->gps_valid) {
+    if (data->gnss_status_valid && data->gnss.position_valid) {
         if (BeginJsonField(output, output_size, &len, &metric_count) < 0 ||
-            AppendJsonChunk(output, output_size, &len, "\"gps_latitude\":%.6f", data->latitude) < 0 ||
+            AppendJsonChunk(output, output_size, &len, "\"rtk_latitude_e9\":%lld", (long long)data->gnss.latitude_e9) < 0 ||
             BeginJsonField(output, output_size, &len, &metric_count) < 0 ||
-            AppendJsonChunk(output, output_size, &len, "\"gps_longitude\":%.6f", data->longitude) < 0) {
+            AppendJsonChunk(output, output_size, &len, "\"rtk_longitude_e9\":%lld", (long long)data->gnss.longitude_e9) < 0 ||
+            BeginJsonField(output, output_size, &len, &metric_count) < 0 ||
+            AppendJsonChunk(output, output_size, &len, "\"rtk_gga_quality\":%u", data->gnss.gga_quality) < 0) {
             output[0] = '\0';
             return -1;
         }
@@ -221,9 +189,8 @@ int BuildTelemetryEnvelopeV1(
         AppendJsonChunk(output, output_size, &len, "\"field_sensor_source\":\"%s\",", data->simulated_field_data ? "simulated" : "hardware") < 0 ||
         AppendJsonChunk(output, output_size, &len, "\"battery_estimate_quality\":%d,", data->battery_estimate_quality) < 0 ||
         AppendJsonChunk(output, output_size, &len, "\"legacy_valid_flags\":{") < 0 ||
-        AppendJsonChunk(output, output_size, &len, "\"temp_ok\":%d,", data->temp_valid) < 0 ||
-        AppendJsonChunk(output, output_size, &len, "\"imu_ok\":%d,", data->imu_valid) < 0 ||
-        AppendJsonChunk(output, output_size, &len, "\"gps_ok\":%d,", data->gps_valid) < 0 ||
+        AppendJsonChunk(output, output_size, &len, "\"gnss_status_ok\":%d,", data->gnss_status_valid) < 0 ||
+        AppendJsonChunk(output, output_size, &len, "\"gnss_position_ok\":%u,", data->gnss.position_valid) < 0 ||
         AppendJsonChunk(output, output_size, &len, "\"soil_ok\":%d,", data->soil_valid) < 0 ||
         AppendJsonChunk(output, output_size, &len, "\"tilt_ok\":%d,", data->tilt_valid) < 0 ||
         AppendJsonChunk(output, output_size, &len, "\"rain_ok\":%d,", data->rain_valid) < 0 ||

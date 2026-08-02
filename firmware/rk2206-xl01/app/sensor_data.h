@@ -6,6 +6,8 @@
 #ifndef APP_SENSOR_DATA_H
 #define APP_SENSOR_DATA_H
 
+#include "../drivers/sensors/gnss_solution_parser.h"
+
 // ==================== Data Structures ====================
 
 typedef struct {
@@ -13,11 +15,6 @@ typedef struct {
     unsigned int seq;           // Packet sequence number
     unsigned int uptime;        // System uptime (seconds)
     
-    // Temperature & Humidity (SHT30)
-    float temperature;          // °C
-    float humidity;             // %
-    int temp_valid;             // 0=invalid, 1=valid
-
     // RS485 soil sensor
     float soil_temperature;      // °C
     float soil_moisture;         // %
@@ -25,18 +22,12 @@ typedef struct {
     int soil_ec_valid;           // 0=unsupported/read failed, 1=valid
     int soil_valid;              // 0=invalid, 1=valid
     
-    // GPS
-    float latitude;             // Decimal degrees
-    float longitude;            // Decimal degrees
-    int gps_valid;              // 0=invalid, 1=valid
-    
-    // Accelerometer & Gyroscope (MPU6050)
-    float accel_x, accel_y, accel_z;    // g
-    float gyro_x, gyro_y, gyro_z;       // °/s
-    float angle_x, angle_y, angle_z;    // Tilt angle (°)
-    int imu_valid;                      // 0=invalid, 1=valid
+    // Professional GNSS solution. RK3568 converts trusted RTK Fixed epochs to ECEF/ENU.
+    GnssSolutionSnapshot gnss;
+    int gnss_status_valid;
 
     // RS485 tilt/rain sensors
+    float angle_x, angle_y, angle_z;     // RS-DIP-N01-1 tilt angle (°)
     int tilt_valid;                      // 0=invalid, 1=valid
     float rain_total;                    // mm
     int rain_valid;                      // 0=invalid, 1=valid

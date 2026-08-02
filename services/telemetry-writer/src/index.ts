@@ -6,6 +6,8 @@ import { Kafka, logLevel } from "kafkajs";
 import { Pool } from "pg";
 import path from "node:path";
 import { loadConfigFromEnv } from "./config";
+import { mergeFieldProfileMetrics, sanitizeFieldProfileMetrics } from "./field-profile-shadow";
+import { commitResolvedOffsets } from "./kafka-offsets";
 import { evaluateSequenceReset, shouldDiscardSyntheticShadow } from "./sequence-policy";
 
 type TelemetryRawV1 = {
@@ -55,40 +57,13 @@ type ShadowState = {
   meta: Record<string, unknown>;
 };
 
-const FIELD_PROFILE_METRIC_KEYS = new Set<string>([
-  "temperature_c",
-  "humidity_pct",
-  "accel_x_g",
-  "accel_y_g",
-  "accel_z_g",
-  "gyro_x_dps",
-  "gyro_y_dps",
-  "gyro_z_dps",
-  "tilt_x_deg",
-  "tilt_y_deg",
-  "gps_latitude",
-  "gps_longitude",
-  "gps_altitude",
-  "battery_pct",
-  "battery_v",
-  "warning_flag",
-  "rainfall_mm",
-  "rainfall_intensity_mm_h",
-  "soil_moisture_pct",
-  "illumination",
-  "rssi_dbm",
-  "snr_db",
-  "packet_loss_pct",
-  "displacement_mm",
-  "vibration_g"
-]);
-
 const FIELD_PROFILE_META_KEYS = new Set<string>([
   "_writer",
   "install_label",
   "legacy_node",
   "uptime_s",
   "upload_trigger",
+  "last_command_tag",
   "legacy_valid_flags",
   "last_command_type",
   "last_command_id",
@@ -101,7 +76,16 @@ const FIELD_PROFILE_META_KEYS = new Set<string>([
   "gateway_received_ts",
   "replay_kind",
   "replay_source",
-  "time_jump_ms"
+  "time_jump_ms",
+  "compact_payload_version",
+  "field_sensor_source",
+  "battery_estimate_quality_code",
+  "rtk_coordinate_frame",
+  "rtk_coordinate_frame_code",
+  "rtk_fix_type",
+  "rtk_fix_flags",
+  "rtk_displacement_eligible",
+  "v3_valid_flags"
 ]);
 
 const FIELD_PROFILE_IDENTITY_META_KEYS = ["install_label", "legacy_node", "upload_trigger", "last_command_id", "last_command_type"];
@@ -253,7 +237,7 @@ function isFieldProfileMetaRecord(meta: Record<string, unknown> | null | undefin
 
 function sanitizeFieldProfileShadowState(state: ShadowState): ShadowState {
   return {
-    metrics: sanitizeRecordByAllowedKeys(state.metrics, FIELD_PROFILE_METRIC_KEYS),
+    metrics: sanitizeFieldProfileMetrics(state.metrics),
     meta: sanitizeRecordByAllowedKeys(state.meta, FIELD_PROFILE_META_KEYS)
   };
 }
@@ -268,28 +252,31 @@ function buildShadowState(payload: TelemetryRawV1, previousState: unknown): Shad
     isFieldProfileMetaRecord(payloadMeta) || isFieldProfileMetaRecord(previousRaw.meta);
   const previous = useFieldProfileSanitizer ? sanitizeFieldProfileShadowState(previousRaw) : previousRaw;
   const nextMetrics = useFieldProfileSanitizer
-    ? sanitizeRecordByAllowedKeys(payload.metrics, FIELD_PROFILE_METRIC_KEYS)
+    ? sanitizeFieldProfileMetrics(payload.metrics)
     : payload.metrics;
+  const mergedMetrics = useFieldProfileSanitizer
+    ? mergeFieldProfileMetrics(previous.metrics, payload.metrics)
+    : { ...previous.metrics, ...payload.metrics };
   const nextPayloadMeta = useFieldProfileSanitizer
     ? sanitizeRecordByAllowedKeys(payloadMeta, FIELD_PROFILE_META_KEYS)
     : payloadMeta;
+  const replaceFieldSnapshot = payloadMeta.compact_payload_version === 3;
   const meta: Record<string, unknown> = {
-    ...previous.meta,
+    ...(replaceFieldSnapshot ? {} : previous.meta),
     ...nextPayloadMeta
   };
 
   const writerMeta: Record<string, unknown> =
-    meta._writer && typeof meta._writer === "object" ? { ...(meta._writer as Record<string, unknown>) } : {};
+    previous.meta._writer && typeof previous.meta._writer === "object"
+      ? { ...(previous.meta._writer as Record<string, unknown>) }
+      : {};
 
   if (payload.seq != null) writerMeta.last_seq = payload.seq;
   writerMeta.last_received_ts = payload.received_ts;
   meta._writer = writerMeta;
 
   return {
-    metrics: {
-      ...previous.metrics,
-      ...nextMetrics
-    },
+    metrics: replaceFieldSnapshot ? { ...nextMetrics } : mergedMetrics,
     meta
   };
 }
@@ -622,7 +609,7 @@ async function main(): Promise<void> {
           deviceStateByDeviceId.clear();
           latestSeqByDeviceId.clear();
           latestShadowStateByDeviceId.clear();
-          await ctx.commitOffsetsIfNecessary();
+          await commitResolvedOffsets(ctx);
           return;
         } catch (err) {
           if (isClickhouseUnavailableError(err)) {
@@ -698,7 +685,7 @@ async function main(): Promise<void> {
           deviceStateByDeviceId.clear();
           latestSeqByDeviceId.clear();
           latestShadowStateByDeviceId.clear();
-          await ctx.commitOffsetsIfNecessary();
+          await commitResolvedOffsets(ctx);
           return;
         }
       };
@@ -907,7 +894,7 @@ async function main(): Promise<void> {
         await flush("batch_end");
         pendingRowsCount = 0;
         await ctx.heartbeat();
-        await ctx.commitOffsetsIfNecessary();
+        await commitResolvedOffsets(ctx);
       } catch (err) {
         if (isClickhouseUnavailableError(err)) {
           // cooldown already applied; do not resolve offsets so we can retry later
@@ -932,4 +919,8 @@ async function main(): Promise<void> {
   process.on("SIGTERM", () => void shutdown("SIGTERM"));
 }
 
-void main();
+export const telemetryWriterTestHooks = { buildShadowState };
+
+if (require.main === module) {
+  void main();
+}

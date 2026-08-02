@@ -25,7 +25,7 @@ $sampleRelative = "vendor\isoftstone\rk2206\samples\xl01_landslide_monitor_v1.1"
 $sampleRoot = Join-Path $SdkRoot $sampleRelative
 $productOut = Join-Path $SdkRoot "out\rk2206\isoftstone-rk2206"
 if (-not $ArtifactDirectory) {
-  $ArtifactDirectory = Join-Path $repoRoot ("artifacts\firmware\rk2206-xl01-compact-v2-{0}" -f $FieldSensorMode)
+  $ArtifactDirectory = Join-Path $repoRoot ("artifacts\firmware\rk2206-xl01-compact-v3-{0}" -f $FieldSensorMode)
 }
 $artifactRoot = [System.IO.Path]::GetFullPath($ArtifactDirectory)
 $backupRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("xls1-compact-sdk-backup-" + [guid]::NewGuid().ToString("N"))
@@ -51,6 +51,8 @@ $syncFiles = @(
   "drivers\xl01\xl01_driver.h",
   "drivers\sensors\gps_driver.c",
   "drivers\sensors\gps_driver.h",
+  "drivers\sensors\gnss_solution_parser.c",
+  "drivers\sensors\gnss_solution_parser.h",
   "drivers\sensors\battery_monitor.c",
   "drivers\sensors\battery_monitor.h",
   "drivers\sensors\simulated_field_sensors.c",
@@ -251,8 +253,8 @@ function Copy-BuildOutputs {
     }
   }
 
-  $imageTarget = Join-Path $artifactRoot ("rk2206-node-{0}-xls1-compact-v2-{1}.img" -f $Node.Label, $FieldSensorMode)
-  $liteOsTarget = Join-Path $artifactRoot ("rk2206-node-{0}-xls1-compact-v2-{1}.bin" -f $Node.Label, $FieldSensorMode)
+  $imageTarget = Join-Path $artifactRoot ("rk2206-node-{0}-xls1-compact-v3-{1}.img" -f $Node.Label, $FieldSensorMode)
+  $liteOsTarget = Join-Path $artifactRoot ("rk2206-node-{0}-xls1-compact-v3-{1}.bin" -f $Node.Label, $FieldSensorMode)
   Copy-Item -LiteralPath $imageSource -Destination $imageTarget -Force
   Copy-Item -LiteralPath $liteOsSource -Destination $liteOsTarget -Force
   if (Test-Path -LiteralPath $loaderSource -PathType Leaf) {
@@ -271,6 +273,8 @@ New-Item -ItemType Directory -Force -Path $backupRoot, $artifactRoot | Out-Null
 foreach ($pattern in @(
     "rk2206-node-*-xls1-compact-v2-*.bin",
     "rk2206-node-*-xls1-compact-v2-*.img",
+    "rk2206-node-*-xls1-compact-v3-*.bin",
+    "rk2206-node-*-xls1-compact-v3-*.img",
     "rk2206_db_loader.bin",
     "manifest.json"
   )) {
@@ -346,7 +350,7 @@ try {
   $globalCalibrationOffsetMv = if ($resolvedBatteryCalibrationFile) { $null } else { $BatteryCalibrationOffsetMv }
   $manifest = [ordered]@{
     schemaVersion = 1
-    profile = "rk2206-xl01-compact-v2-$FieldSensorMode"
+    profile = "rk2206-xl01-compact-v3-$FieldSensorMode"
     sourceCommit = $sourceCommit
     sourceDirty = $sourceDirty
     gnssRtcmInjectionMode = $GnssRtcmInjectionMode
@@ -368,8 +372,8 @@ try {
     }
     firmwareMarker = Get-QuotedMacroValue -Path (Join-Path $sourceRoot "main\landslide_main.c") -Macro "FW_RX_DIAG_MARKER"
     sampleVersion = Get-QuotedMacroValue -Path (Join-Path $sourceRoot "config\app_config.h") -Macro "FIRMWARE_SAMPLE_VERSION"
-    compactPayloadBytes = 46
-    fieldLinkWireBytes = 64
+    compactPayloadBytes = 95
+    fieldLinkWireBytes = 113
     compactPollCommandBytes = 10
     compactPollWireBytes = 28
     nodeSlotMs = 340

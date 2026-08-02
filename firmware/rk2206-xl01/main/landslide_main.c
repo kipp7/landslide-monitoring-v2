@@ -51,12 +51,6 @@
 
 // Drivers
 #include "../drivers/xl01/xl01_driver.h"
-#if ENABLE_SHT30
-#include "../drivers/sensors/sht30_driver.h"
-#endif
-#if ENABLE_MPU6050
-#include "../drivers/sensors/mpu6050_driver.h"
-#endif
 #if ENABLE_GPS
 #include "../drivers/sensors/gps_driver.h"
 #endif
@@ -112,8 +106,6 @@ static Statistics g_stats = {0};
 static char g_process_command_json[FIELD_LINK_MAX_PAYLOAD_BYTES + 1] = {0};
 static int g_system_ready = 0;
 static int g_i2c_ready = 0;
-static int g_sht30_ready = 0;
-static int g_mpu6050_ready = 0;
 static int g_rs485_ready = 0;
 static int g_gps_ready = 0;
 static int g_battery_ready = 0;
@@ -130,7 +122,7 @@ static char g_last_trusted_time_ts[40] = "";
 static char g_last_trusted_time_source[32] = "";
 static volatile uint32_t g_last_platform_command_tick = 0;
 static volatile int g_field_link_recovery_requested = 0;
-#define FW_RX_DIAG_MARKER "fw-rk2206-battery-compact-v2-20260801"
+#define FW_RX_DIAG_MARKER "fw-rk2206-rtk-compact-v3-20260802"
 bool g_cloud_motor_enabled = false;
 int g_cloud_motor_speed = 0;
 MotorDirection g_cloud_motor_direction = MOTOR_DIRECTION_STOP;
@@ -148,10 +140,6 @@ int g_cloud_rgb_blue = 0;
 #define COMMAND_INTERVAL_MIN_SECONDS 1
 #define COMMAND_INTERVAL_MAX_SECONDS 3600
 #define COMMAND_REBOOT_DELAY_MS 1000U
-#define SENSOR_I2C_SETTLE_MS 50U
-#define MPU6050_INIT_RETRY_COUNT 3
-#define MPU6050_INIT_RETRY_DELAY_MS 150U
-#define SENSOR_REINIT_RETRY_MS 5000U
 
 static void SensorData_Lock(void)
 {
@@ -307,30 +295,6 @@ static void SensorDiagnostics_CopySnapshot(GnssSensorDiagnostics *snapshot)
         SensorDiagnostics_InitializationSuccessMask() & enabled_mask;
     snapshot->current_valid_mask &= enabled_mask;
     snapshot->ever_success_mask &= enabled_mask;
-}
-
-static int TryInitMpu6050WithRetry(const char *phase_tag)
-{
-    int attempt;
-
-    for (attempt = 1; attempt <= MPU6050_INIT_RETRY_COUNT; ++attempt) {
-        if (attempt > 1) {
-            printf(
-                "[WARN] MPU6050 init retry %d/%d phase=%s after %u ms\n",
-                attempt,
-                MPU6050_INIT_RETRY_COUNT,
-                phase_tag != NULL ? phase_tag : "unknown",
-                MPU6050_INIT_RETRY_DELAY_MS
-            );
-            LOS_Msleep(MPU6050_INIT_RETRY_DELAY_MS);
-        }
-
-        if (MPU6050_Init() == 0) {
-            return 0;
-        }
-    }
-
-    return -1;
 }
 
 static int FormatUnixTimeAsBeijingIso8601(time_t unix_seconds, char *output, int output_size)
@@ -1276,7 +1240,7 @@ static void PrintTelemetryPreTxDiagnostic(const char *json, int len)
 
     printf("[TELEMETRY PRETX JSON] len=%d %s\n", len, json);
 
-    start_ptr = strstr(json, "\"gyro_z_dps\"");
+    start_ptr = strstr(json, "\"rtk_gga_quality\"");
     if (start_ptr == NULL) {
         start_ptr = strstr(json, "\"tilt_x_deg\"");
     }
@@ -1329,23 +1293,19 @@ static void PrintSparseMetricsDiagnostic(const SensorData *data, const char *upl
     last_sparse_diag_tick = now;
 
     printf(
-        "[UPLOAD SKIP DETAIL] trigger=%s temp_ok=%d soil_ok=%d imu_ok=%d tilt_ok=%d rain_ok=%d gps_ok=%d battery_ok=%d simulated=%d i2c_ready=%d rs485_ready=%d battery_ready=%d sht30_ready=%d mpu6050_ready=%d lat=%.6f lon=%.6f uptime=%u\n",
+        "[UPLOAD SKIP DETAIL] trigger=%s soil_ok=%d tilt_ok=%d rain_ok=%d gnss_status_ok=%d gnss_position_ok=%u gga_quality=%u battery_ok=%d simulated=%d i2c_ready=%d rs485_ready=%d battery_ready=%d uptime=%u\n",
         upload_trigger != NULL ? upload_trigger : "(null)",
-        data->temp_valid,
         data->soil_valid,
-        data->imu_valid,
         data->tilt_valid,
         data->rain_valid,
-        data->gps_valid,
+        data->gnss_status_valid,
+        data->gnss.position_valid,
+        data->gnss.gga_quality,
         data->battery_valid,
         data->simulated_field_data,
         g_i2c_ready,
         g_rs485_ready,
         g_battery_ready,
-        g_sht30_ready,
-        g_mpu6050_ready,
-        data->latitude,
-        data->longitude,
         data->uptime
     );
 #else
@@ -1361,10 +1321,6 @@ static void* SensorCollectionTask(const char* arg)
     (void)arg;
     SensorData next_sample;
     uint8_t diagnostic_success_mask;
-#if ENABLE_MPU6050
-    uint32_t last_mpu_reinit_tick = 0;
-    unsigned int mpu_read_fail_streak = 0;
-#endif
 #if ENABLE_RS485_BUS
     FieldRs485Readings rs485_readings;
 #endif
@@ -1380,27 +1336,16 @@ static void* SensorCollectionTask(const char* arg)
         diagnostic_success_mask = 0U;
 
         SensorData_CopySnapshot(&next_sample);
-        next_sample.temperature = 0.0f;
-        next_sample.humidity = 0.0f;
-        next_sample.temp_valid = 0;
         next_sample.soil_temperature = 0.0f;
         next_sample.soil_moisture = 0.0f;
         next_sample.soil_ec = 0.0f;
         next_sample.soil_ec_valid = 0;
         next_sample.soil_valid = 0;
-        next_sample.latitude = 0.0f;
-        next_sample.longitude = 0.0f;
-        next_sample.gps_valid = 0;
-        next_sample.accel_x = 0.0f;
-        next_sample.accel_y = 0.0f;
-        next_sample.accel_z = 0.0f;
-        next_sample.gyro_x = 0.0f;
-        next_sample.gyro_y = 0.0f;
-        next_sample.gyro_z = 0.0f;
+        memset(&next_sample.gnss, 0, sizeof(next_sample.gnss));
+        next_sample.gnss_status_valid = 0;
         next_sample.angle_x = 0.0f;
         next_sample.angle_y = 0.0f;
         next_sample.angle_z = 0.0f;
-        next_sample.imu_valid = 0;
         next_sample.tilt_valid = 0;
         next_sample.rain_total = 0.0f;
         next_sample.rain_valid = 0;
@@ -1411,65 +1356,12 @@ static void* SensorCollectionTask(const char* arg)
         next_sample.battery_estimate_quality = 0;
         next_sample.simulated_field_data = 0;
         
-#if ENABLE_SHT30
-        if (g_i2c_ready && g_sht30_ready &&
-            SHT30_Read(&next_sample.temperature, &next_sample.humidity) == 0) {
-            next_sample.temp_valid = 1;
-        }
-#endif
-
 #if ENABLE_SIMULATED_FIELD_SENSORS
         SimulatedFieldSensors_Read(
             &next_sample,
             (unsigned int)g_stats.uptime_sec,
             LEGACY_NODE_LABEL[0]
         );
-#endif
-
-#if ENABLE_MPU6050
-        if (g_i2c_ready && !g_mpu6050_ready) {
-            uint32_t now_tick = LOS_TickCountGet();
-            uint32_t retry_ticks = LOS_MS2Tick(SENSOR_REINIT_RETRY_MS);
-
-            if (last_mpu_reinit_tick == 0U || (now_tick - last_mpu_reinit_tick) >= retry_ticks) {
-                last_mpu_reinit_tick = now_tick;
-                if (TryInitMpu6050WithRetry("runtime") == 0) {
-                    g_mpu6050_ready = 1;
-                    mpu_read_fail_streak = 0;
-                    printf("[OK] MPU6050 recovered during runtime\n");
-                } else {
-                    printf("[WARN] MPU6050 runtime reinit failed; retry in %u ms\n", SENSOR_REINIT_RETRY_MS);
-                }
-            }
-        }
-
-        float ax, ay, az, gx, gy, gz;
-        if (g_i2c_ready && g_mpu6050_ready) {
-            if (MPU6050_Read(&ax, &ay, &az, &gx, &gy, &gz) == 0) {
-                mpu_read_fail_streak = 0;
-                next_sample.accel_x = ax;
-                next_sample.accel_y = ay;
-                next_sample.accel_z = az;
-                next_sample.gyro_x = gx;
-                next_sample.gyro_y = gy;
-                next_sample.gyro_z = gz;
-
-                // Calculate tilt angles
-                next_sample.angle_x = atan2(ay, sqrt(ax*ax + az*az)) * 180.0f / 3.14159f;
-                next_sample.angle_y = atan2(-ax, sqrt(ay*ay + az*az)) * 180.0f / 3.14159f;
-                next_sample.angle_z = 0.0f;
-
-                next_sample.imu_valid = 1;
-            } else {
-                mpu_read_fail_streak++;
-                if (mpu_read_fail_streak >= 3U) {
-                    g_mpu6050_ready = 0;
-                    last_mpu_reinit_tick = LOS_TickCountGet();
-                    printf("[WARN] MPU6050 marked offline after %u consecutive read failures\n", mpu_read_fail_streak);
-                    mpu_read_fail_streak = 0;
-                }
-            }
-        }
 #endif
 
 #if ENABLE_BATTERY_MONITOR
@@ -1492,11 +1384,6 @@ static void* SensorCollectionTask(const char* arg)
                 next_sample.soil_valid = 1;
                 diagnostic_success_mask |= GNSS_SENSOR_SOIL_MASK;
 
-                // Keep legacy temp/humidity fields useful for the current platform UI:
-                // temperature = soil temperature, humidity = soil moisture.
-                next_sample.temperature = rs485_readings.soil_temperature_c;
-                next_sample.humidity = rs485_readings.soil_moisture_pct;
-                next_sample.temp_valid = 1;
             }
 
             if (rs485_readings.soil_ec_valid) {
@@ -1519,22 +1406,16 @@ static void* SensorCollectionTask(const char* arg)
 #endif
 
 #if ENABLE_GPS
-        // GPS使用中断接收，这里只需要处理缓冲区数据
-        GPS_Poll();  // 处理中断接收到的数据
-        
-        // 读取最新的GPS坐标（无论fix状态如何，都更新坐标）
-        int gps_ret = GPS_Read(&next_sample.latitude, &next_sample.longitude);
-        
-        // 只有当GPS返回成功时，才标记为有效
-        next_sample.gps_valid = (gps_ret == 0) ? 1 : 0;
-        if (next_sample.gps_valid) {
+        GPS_Poll();
+        next_sample.gnss_status_valid = GPS_ReadSolution(&next_sample.gnss) == 0 ? 1 : 0;
+        if (next_sample.gnss_status_valid && next_sample.gnss.position_valid) {
             diagnostic_success_mask |= GNSS_SENSOR_UM220_MASK;
         }
 #endif
 
         // Check warnings
         next_sample.warning = 0;
-        if (next_sample.imu_valid || next_sample.tilt_valid) {
+        if (next_sample.tilt_valid) {
             if (fabs(next_sample.angle_x) > RS485_TILT_WARNING_DEG ||
                 fabs(next_sample.angle_y) > RS485_TILT_WARNING_DEG ||
                 fabs(next_sample.angle_z) > RS485_TILT_WARNING_DEG) {
@@ -1621,7 +1502,8 @@ static void* DataUploadTask(const char* arg)
 {
     (void)arg;
 #if TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V1 || \
-    TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V2
+    TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V2 || \
+    TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V3
     unsigned char compact_payload[COMPACT_TELEMETRY_PAYLOAD_BYTES];
 #else
     char json[FIELD_LINK_MAX_PAYLOAD_BYTES + 1];
@@ -1658,8 +1540,9 @@ static void* DataUploadTask(const char* arg)
     printf("  Poll Request Check: %d ms\n", POLL_REQUEST_CHECK_INTERVAL_MS);
     printf("  Edge Uplink Mode: %s\n", EDGE_UPLINK_MODE == EDGE_UPLINK_MODE_POLLED ? "Polled" : "Periodic");
     printf("  Telemetry Payload: %s\n",
-           TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V2 ? "Compact v2 (46-byte payload)" :
-           (TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V1 ? "Compact v1 (46-byte payload)" : "JSON v1"));
+           TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V3 ? "Compact v3 (95-byte field + RTK payload)" :
+           (TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V2 ? "Compact v2 (46-byte payload)" :
+           (TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V1 ? "Compact v1 (46-byte payload)" : "JSON v1")));
     printf("  Field Sensor Source: %s\n",
            ENABLE_SIMULATED_FIELD_SENSORS ? "SIMULATED (RS485 values only)" : "HARDWARE");
     printf("  Max Retries: %d\n", MAX_RETRY_COUNT);
@@ -1710,12 +1593,6 @@ static void* DataUploadTask(const char* arg)
            RS485_TILT_CHANNEL,
            RS485_TILT_ADDR);
     printf("      - Rain: %s addr=%d\n", ENABLE_RS485_RAIN_SENSOR ? "ON" : "OFF", RS485_RAIN_ADDR);
-#endif
-#if ENABLE_SHT30
-    printf("    - SHT30: ON ready=%s\n", g_sht30_ready ? "yes" : "no");
-#endif
-#if ENABLE_MPU6050
-    printf("    - MPU6050: ON ready=%s\n", g_mpu6050_ready ? "yes" : "no");
 #endif
     printf("========================================\n\n");
     
@@ -1821,10 +1698,17 @@ static void* DataUploadTask(const char* arg)
         }
 
         SensorData_TakeUploadSnapshot(&telemetry_snapshot);
+#if ENABLE_GPS
+        telemetry_snapshot.gnss_status_valid =
+            GPS_ReadSolution(&telemetry_snapshot.gnss) == 0 ? 1 : 0;
+#endif
 #if TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V1 || \
-    TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V2
+    TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V2 || \
+    TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V3
         memset(compact_payload, 0, sizeof(compact_payload));
-#if TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V2
+#if TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V3
+        len = BuildCompactTelemetryV3(
+#elif TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V2
         len = BuildCompactTelemetryV2(
 #else
         len = BuildCompactTelemetryV1(
@@ -1911,23 +1795,22 @@ static void* DataUploadTask(const char* arg)
         }
 #endif
         
-        // 显示GPS坐标而不只是状态（删除电池显示）
+        // Keep production logs compact and avoid printing field coordinates.
         {
-            char temp_buf[24];
-            char humi_buf[24];
+            char battery_buf[32];
             char tilt_buf[48];
             char soil_buf[64];
             char rain_buf[24];
 
-            if (telemetry_snapshot.temp_valid) {
-                snprintf(temp_buf, sizeof(temp_buf), "%.1fC", telemetry_snapshot.temperature);
-                snprintf(humi_buf, sizeof(humi_buf), "%.1f%%", telemetry_snapshot.humidity);
+            if (telemetry_snapshot.battery_valid) {
+                snprintf(battery_buf, sizeof(battery_buf), "%.3fV/%d%%",
+                         telemetry_snapshot.battery_voltage_mv / 1000.0f,
+                         telemetry_snapshot.battery_level);
             } else {
-                snprintf(temp_buf, sizeof(temp_buf), "N/A");
-                snprintf(humi_buf, sizeof(humi_buf), "N/A");
+                snprintf(battery_buf, sizeof(battery_buf), "N/A");
             }
 
-            if (telemetry_snapshot.imu_valid || telemetry_snapshot.tilt_valid) {
+            if (telemetry_snapshot.tilt_valid) {
                 snprintf(
                     tilt_buf,
                     sizeof(tilt_buf),
@@ -1976,22 +1859,19 @@ static void* DataUploadTask(const char* arg)
                 snprintf(rain_buf, sizeof(rain_buf), "N/A");
             }
 
-            if (telemetry_snapshot.gps_valid &&
-                (telemetry_snapshot.latitude != 0.0f || telemetry_snapshot.longitude != 0.0f)) {
-                printf(
-                    "  Temp:%s Humi:%s Soil:%s Tilt:%s Rain:%s GPS:(%.6f,%.6f)\n",
-                    temp_buf,
-                    humi_buf,
-                    soil_buf,
-                    tilt_buf,
-                    rain_buf,
-                    telemetry_snapshot.latitude,
-                    telemetry_snapshot.longitude
-                );
+            if (telemetry_snapshot.gnss_status_valid) {
+                printf("  Battery:%s Soil:%s Tilt:%s Rain:%s GNSS:q=%u trusted=%s sats=%u age=%ums\n",
+                       battery_buf,
+                       soil_buf,
+                       tilt_buf,
+                       rain_buf,
+                       telemetry_snapshot.gnss.gga_quality,
+                       (telemetry_snapshot.gnss.fix_flags & GNSS_FIX_TRUSTED) != 0U ? "yes" : "no",
+                       telemetry_snapshot.gnss.satellites_used,
+                       telemetry_snapshot.gnss.solution_age_ms);
             } else {
-                printf("  Temp:%s Humi:%s Soil:%s Tilt:%s Rain:%s GPS:NO\n",
-                       temp_buf,
-                       humi_buf,
+                printf("  Battery:%s Soil:%s Tilt:%s Rain:%s GNSS:NO\n",
+                       battery_buf,
                        soil_buf,
                        tilt_buf,
                        rain_buf);
@@ -2129,18 +2009,6 @@ static void App_SystemInit(void)
     }
 #endif
 
-#if ENABLE_SHT30 || ENABLE_MPU6050
-    // Initialize I2C bus
-    if (IoTI2cInit(I2C_IDX, I2C_BAUDRATE) == 0) {
-        g_i2c_ready = 1;
-        printf("[OK] I2C initialized\n");
-        LOS_Msleep(SENSOR_I2C_SETTLE_MS);
-    } else {
-        g_i2c_ready = 0;
-        printf("[ERROR] I2C init failed; I2C sensor metrics will stay sparse\n");
-    }
-#endif
-
     if (g_sensor_data_mutex == NULL) {
         g_sensor_data_mutex = osMutexNew(NULL);
         if (g_sensor_data_mutex == NULL) {
@@ -2148,22 +2016,6 @@ static void App_SystemInit(void)
         }
     }
 
-#if ENABLE_SHT30
-    if (g_i2c_ready && SHT30_Init() == 0) {
-        g_sht30_ready = 1;
-    } else if (g_i2c_ready) {
-        printf("[WARN] SHT30 init failed; temperature/humidity metrics will be omitted until reads recover\n");
-    }
-#endif
-
-#if ENABLE_MPU6050
-    if (g_i2c_ready && TryInitMpu6050WithRetry("boot") == 0) {
-        g_mpu6050_ready = 1;
-    } else if (g_i2c_ready) {
-        printf("[WARN] MPU6050 init failed; IMU metrics will be omitted until runtime reinit succeeds\n");
-    }
-#endif
-    
     printf("--- Initialization Complete ---\n\n");
     
     g_system_ready = 1;

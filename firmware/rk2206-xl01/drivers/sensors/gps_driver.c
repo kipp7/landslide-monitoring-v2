@@ -14,7 +14,6 @@
 
 #include "gps_driver.h"
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
 #include "iot_uart.h"
@@ -27,7 +26,7 @@
 #include "../xl01/gnss_rtcm_injection.h"
 
 // GPS UART Configuration (moved from config to avoid dependency)
-// ✓ 最终方案：MPU6050移至PB4/PB5，GPS使用板子标注的UART口
+// UM220-IV NK uses the carrier's dedicated PB6/PB7 UART route.
 #ifndef GPS_UART_ID
 #define GPS_UART_ID         EUART0_M0    // PB6/PB7 - 板子标注的UART_TX/UART_RX
 #endif
@@ -39,7 +38,6 @@
 #define GPS_RECV_BUF_SIZE   512
 #define GPS_LINE_BUF_SIZE   256  // Increased for longer NMEA sentences
 #define GPS_POLL_DRAIN_BUDGET_BYTES FIFO_SIZE
-#define GPS_FIX_STALE_TIMEOUT_MS 15000U
 #define GPS_FIFO_STATUS_LOG_INTERVAL_MS 10000U
 
 #ifndef GPS_VERBOSE_NMEA_LOG
@@ -54,13 +52,9 @@
 #define GPS_UART_PROBE_RX_LOG_INTERVAL_MS 1000U
 #define GPS_UART_PROBE_PREVIEW_BYTES 24
 
-// GPS global data
-static float g_gps_latitude = 0.0f;
-static float g_gps_longitude = 0.0f;
-static bool g_gps_valid = false;
-static bool g_gps_has_position_fix = false;
-static unsigned char g_gps_gga_quality = 0U;
-static uint32_t g_gps_last_fix_tick = 0;
+static GnssSolutionParser g_gnss_parser;
+static osMutexId_t g_gnss_parser_mutex = NULL;
+static unsigned char g_last_logged_gga_quality = 0U;
 
 // NMEA parsing buffer
 static char g_line_buffer[GPS_LINE_BUF_SIZE];
@@ -96,50 +90,24 @@ static void StartGpsLineState(void)
     g_line_buffer[g_line_pos++] = '$';
 }
 
-static int HexCharValue(char c)
+static uint64_t GpsMonotonicMs(void)
 {
-    if (c >= '0' && c <= '9') {
-        return c - '0';
-    }
-    if (c >= 'A' && c <= 'F') {
-        return c - 'A' + 10;
-    }
-    if (c >= 'a' && c <= 'f') {
-        return c - 'a' + 10;
-    }
-    return -1;
+    uint64_t ticks = (uint64_t)LOS_TickCountGet();
+    uint64_t ticks_per_second = (uint64_t)g_ticksPerSec;
+
+    if (ticks_per_second == 0U) return ticks;
+    return (ticks / ticks_per_second) * 1000U +
+           ((ticks % ticks_per_second) * 1000U) / ticks_per_second;
 }
 
-static bool IsNmeaChecksumValid(const char *line)
+static void GnssParserLock(void)
 {
-    const char *star;
-    unsigned char checksum = 0;
-    unsigned char expected;
-    int hi;
-    int lo;
-    const char *p;
+    if (g_gnss_parser_mutex != NULL) osMutexAcquire(g_gnss_parser_mutex, osWaitForever);
+}
 
-    if (line == NULL || line[0] != '$') {
-        return false;
-    }
-
-    star = strchr(line, '*');
-    if (star == NULL || star <= line + 1 || star[1] == '\0' || star[2] == '\0') {
-        return false;
-    }
-
-    for (p = line + 1; p < star; ++p) {
-        checksum ^= (unsigned char)(*p);
-    }
-
-    hi = HexCharValue(star[1]);
-    lo = HexCharValue(star[2]);
-    if (hi < 0 || lo < 0) {
-        return false;
-    }
-
-    expected = (unsigned char)((hi << 4) | lo);
-    return checksum == expected;
+static void GnssParserUnlock(void)
+{
+    if (g_gnss_parser_mutex != NULL) osMutexRelease(g_gnss_parser_mutex);
 }
 
 static void PrintGpsUartProbeChunk(const unsigned char *data, int len)
@@ -179,197 +147,7 @@ static void PrintGpsUartProbeChunk(const unsigned char *data, int len)
 #endif
 }
 
-// Convert NMEA format (DDMM.MMMM) to decimal degrees (DD.DDDDDD)
-static double ConvertToDegrees(const char* data)
-{
-    if (!data || strlen(data) < 4) {
-        return 0.0;
-    }
-    
-    double temp = atof(data);
-    int degree = (int)(temp / 100);
-    double minutes = temp - degree * 100.0;
-    return degree + minutes / 60.0;
-}
-
-static bool IsNmeaSentenceType(const char *line, const char *sentence_type)
-{
-    size_t type_len;
-
-    if (line == NULL || sentence_type == NULL || line[0] != '$') {
-        return false;
-    }
-
-    type_len = strlen(sentence_type);
-    if (type_len == 0U) {
-        return false;
-    }
-
-    // NMEA talker IDs vary by GNSS constellation: GP/GN/GB/BD/GA/GL...
-    // The sentence formatter is always the last 3 chars after the 2-char talker.
-    return strlen(line) >= (1U + 2U + type_len) &&
-           strncmp(line + 3, sentence_type, type_len) == 0;
-}
-
-// Parse GGA sentence from any GNSS talker, for example $GPGGA/$GNGGA/$GBGGA.
-static void ParseGGA(const char* line)
-{
-    if (!line) return;
-    bool had_fix = g_gps_has_position_fix;
-    
-    // Make a copy for strtok_r
-    char copy[GPS_LINE_BUF_SIZE];
-    strncpy(copy, line, GPS_LINE_BUF_SIZE - 1);
-    copy[GPS_LINE_BUF_SIZE - 1] = '\0';
-    
-    char latitude_str[16] = {0};
-    char longitude_str[16] = {0};
-    char ns = 0, ew = 0;
-    char fix_quality[2] = {0};
-    
-    int field_index = 0;
-    char *token;
-    char *saveptr;
-    char *p = copy;
-    
-    while ((token = strtok_r(p, ",", &saveptr)) != NULL) {
-        p = NULL;
-        field_index++;
-        
-        switch (field_index) {
-            case 3:  // Latitude (DDMM.MMMM)
-                strncpy(latitude_str, token, sizeof(latitude_str) - 1);
-                break;
-            case 4:  // N/S
-                ns = token[0];
-                break;
-            case 5:  // Longitude (DDDMM.MMMM)
-                strncpy(longitude_str, token, sizeof(longitude_str) - 1);
-                break;
-            case 6:  // E/W
-                ew = token[0];
-                break;
-            case 7:  // Fix quality (0=invalid, 1=GPS fix, 2=DGPS fix)
-                fix_quality[0] = token[0];
-                break;
-            default:
-                break;
-        }
-    }
-    
-    // GGA fix quality:
-    // 1=GPS fix, 2=DGPS fix, 4=RTK fixed, 5=RTK float.
-    bool is_position_fix =
-        fix_quality[0] == '1' ||
-        fix_quality[0] == '2' ||
-        fix_quality[0] == '4' ||
-        fix_quality[0] == '5';
-
-    // Check if we have valid data
-    if (latitude_str[0] && longitude_str[0] && is_position_fix) {
-        double lat = ConvertToDegrees(latitude_str);
-        double lon = ConvertToDegrees(longitude_str);
-        
-        if (ns == 'S' || ns == 's') {
-            lat = -lat;
-        }
-        if (ew == 'W' || ew == 'w') {
-            lon = -lon;
-        }
-        
-        // Update global data
-        g_gps_latitude = (float)lat;
-        g_gps_longitude = (float)lon;
-        g_gps_valid = true;
-        g_gps_has_position_fix = true;
-        g_gps_gga_quality = (unsigned char)(fix_quality[0] - '0');
-        g_gps_last_fix_tick = LOS_TickCountGet();
-
-        if (!had_fix) {
-            printf("[GPS] Position fix acquired (GGA q=%c): lat=%.6f lon=%.6f\n", fix_quality[0], lat, lon);
-        }
-    } else if (fix_quality[0] == '0') {
-        if (had_fix) {
-            printf("[GPS] Fix lost (GGA)\n");
-        }
-        g_gps_has_position_fix = false;
-        g_gps_gga_quality = 0U;
-        g_gps_last_fix_tick = 0;
-    }
-}
-
-// Parse RMC sentence from any GNSS talker, for example $GPRMC/$GNRMC/$GBRMC.
-// Format: $GNRMC,time,status,lat,N/S,lon,E/W,speed,course,date,mag_var,mag_dir*checksum
-static void ParseRMC(const char* line)
-{
-    if (!line) return;
-    
-    // Make a copy for strtok_r
-    char copy[GPS_LINE_BUF_SIZE];
-    strncpy(copy, line, GPS_LINE_BUF_SIZE - 1);
-    copy[GPS_LINE_BUF_SIZE - 1] = '\0';
-    
-    char latitude_str[16] = {0};
-    char longitude_str[16] = {0};
-    char ns = 0, ew = 0;
-    char status = 0;
-    
-    int field_index = 0;
-    char *token;
-    char *saveptr;
-    char *p = copy;
-    
-    while ((token = strtok_r(p, ",", &saveptr)) != NULL) {
-        p = NULL;
-        field_index++;
-        
-        switch (field_index) {
-            case 3:  // Status (A=valid, V=invalid)
-                status = token[0];
-                break;
-            case 4:  // Latitude (DDMM.MMMM)
-                strncpy(latitude_str, token, sizeof(latitude_str) - 1);
-                break;
-            case 5:  // N/S
-                ns = token[0];
-                break;
-            case 6:  // Longitude (DDDMM.MMMM)
-                strncpy(longitude_str, token, sizeof(longitude_str) - 1);
-                break;
-            case 7:  // E/W
-                ew = token[0];
-                break;
-            default:
-                break;
-        }
-    }
-    
-    // RMC status A means a valid navigation solution, not RTK Fixed. GGA is
-    // the only source of fix quality; RMC must not acquire or sustain Fixed.
-    if (latitude_str[0] && longitude_str[0] && (status == 'A' || status == 'a')) {
-        (void)ns;
-        (void)ew;
-    } else {
-        // 数据不完整的警告
-        if (GPS_VERBOSE_NMEA_LOG && status == 'A' && (!latitude_str[0] || !longitude_str[0])) {
-            printf("[GPS] WARN RMC data incomplete: lat=%s lon=%s\n", latitude_str, longitude_str);
-        }
-    }
-}
-
 #if GNSS_RTCM_INJECTION_MODE != GNSS_RTCM_INJECTION_DISABLED
-static uint64_t GpsMonotonicMs(void)
-{
-    uint64_t ticks = (uint64_t)LOS_TickCountGet();
-    uint64_t ticks_per_second = (uint64_t)g_ticksPerSec;
-
-    if (ticks_per_second == 0U) {
-        return ticks;
-    }
-    return (ticks / ticks_per_second) * 1000U +
-           ((ticks % ticks_per_second) * 1000U) / ticks_per_second;
-}
-
 static int GPS_WriteRtcmFrame(const unsigned char *frame, uint16_t frame_bytes)
 {
     uint16_t offset = 0U;
@@ -562,24 +340,34 @@ static void ProcessGPSData(const unsigned char* data, int len)
             if (g_line_collecting && g_line_pos > 6) {  // 至少需要"$XXXXX"
                 g_line_buffer[g_line_pos] = '\0';
 
-                // 只处理关键的NMEA语句（RMC和GGA），兼容 GP/GN/GB 等 talker。
-                bool is_useful = false;
-                if (!IsNmeaChecksumValid(g_line_buffer)) {
-                    ResetGpsLineState();
-                    continue;
-                }
+                int parse_result;
+                GnssSolutionSnapshot snapshot;
 
-                if (IsNmeaSentenceType(g_line_buffer, "GGA")) {
-                    is_useful = true;
-                    ParseGGA(g_line_buffer);
+                GnssParserLock();
+                parse_result = GnssSolutionParser_PushNmea(
+                    &g_gnss_parser,
+                    g_line_buffer,
+                    (uint32_t)GpsMonotonicMs()
+                );
+                if (parse_result > 0 &&
+                    GnssSolutionParser_GetSnapshot(
+                        &g_gnss_parser,
+                        (uint32_t)GpsMonotonicMs(),
+                        &snapshot
+                    ) == 0 && snapshot.gga_quality != g_last_logged_gga_quality) {
+                    g_last_logged_gga_quality = snapshot.gga_quality;
+                    printf(
+                        "[GNSS] GGA quality=%u trusted=%s satellites=%u correction_age_ms=%u\n",
+                        snapshot.gga_quality,
+                        (snapshot.fix_flags & GNSS_FIX_TRUSTED) != 0U ? "yes" : "no",
+                        snapshot.satellites_used,
+                        snapshot.correction_age_ms
+                    );
                 }
-                else if (IsNmeaSentenceType(g_line_buffer, "RMC")) {
-                    is_useful = true;
-                    ParseRMC(g_line_buffer);
-                }
+                GnssParserUnlock();
                 
                 // 只打印有用的语句（减少输出噪音）
-                if (GPS_VERBOSE_NMEA_LOG && is_useful) {
+                if (GPS_VERBOSE_NMEA_LOG && parse_result > 0) {
                     printf("[GPS RAW] %s\n", g_line_buffer);
                 }
                 
@@ -614,6 +402,12 @@ int GPS_Init(void)
         return -1;
     }
     printf("[GPS] FIFO initialized (1024 bytes)\n");
+    GnssSolutionParser_Init(&g_gnss_parser, GNSS_COORDINATE_FRAME);
+    g_gnss_parser_mutex = osMutexNew(NULL);
+    if (g_gnss_parser_mutex == NULL) {
+        printf("[GPS] ERROR: GNSS solution mutex init failed\n");
+        return -1;
+    }
     
     IotUartAttribute uart_attr = {
         .baudRate = GPS_BAUDRATE,
@@ -650,8 +444,6 @@ int GPS_Init(void)
     }
     
     printf("[OK] GPS initialized with NMEA parsing + polling task\n");
-    g_gps_valid = true;  // UART is valid, waiting for fix
-    
     return 0;
 }
 
@@ -720,39 +512,24 @@ void GPS_Poll(void)
         }
     }
 
-    if (g_gps_has_position_fix && g_gps_last_fix_tick != 0U) {
-        uint32_t now = LOS_TickCountGet();
-        uint32_t stale_timeout_ticks = LOS_MS2Tick(GPS_FIX_STALE_TIMEOUT_MS);
-
-        if (stale_timeout_ticks == 0U) {
-            stale_timeout_ticks = 1U;
-        }
-
-        if ((now - g_gps_last_fix_tick) > stale_timeout_ticks) {
-            g_gps_has_position_fix = false;
-            g_gps_gga_quality = 0U;
-            g_gps_last_fix_tick = 0U;
-            printf("[GPS] Fix expired after %u ms without fresh valid sentence\n", GPS_FIX_STALE_TIMEOUT_MS);
-        }
-    }
 }
 
-int GPS_Read(float *lat, float *lon)
+int GPS_ReadSolution(GnssSolutionSnapshot *solution)
 {
-    if (!g_gps_valid) {
-        return -1;
-    }
-    
-    // 总是更新坐标值（即使fix状态为false）
-    *lat = g_gps_latitude;
-    *lon = g_gps_longitude;
-    
-    // 返回值表示GPS是否有有效定位
-    // 但坐标值已经被更新（可能是最后一次有效定位的坐标）
-    return g_gps_has_position_fix ? 0 : -1;
+    int result;
+    if (solution == NULL) return -1;
+    GnssParserLock();
+    result = GnssSolutionParser_GetSnapshot(
+        &g_gnss_parser,
+        (uint32_t)GpsMonotonicMs(),
+        solution
+    );
+    GnssParserUnlock();
+    return result;
 }
 
 int GPS_GetGgaQuality(void)
 {
-    return (int)g_gps_gga_quality;
+    GnssSolutionSnapshot snapshot;
+    return GPS_ReadSolution(&snapshot) == 0 ? (int)snapshot.gga_quality : 0;
 }

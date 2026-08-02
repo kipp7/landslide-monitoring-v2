@@ -34,6 +34,9 @@ $fieldLinkFrameImplementation = Join-Path $repoRoot "firmware\rk2206-xl01\driver
 $simulatedFieldSensorsHeader = Join-Path $repoRoot "firmware\rk2206-xl01\drivers\sensors\simulated_field_sensors.h"
 $simulatedFieldSensorsImplementation = Join-Path $repoRoot "firmware\rk2206-xl01\drivers\sensors\simulated_field_sensors.c"
 $compactBuilderTest = Join-Path $repoRoot "firmware\rk2206-xl01\tests\compact_telemetry_builder_host_test.c"
+$gnssSolutionHeader = Join-Path $repoRoot "firmware\rk2206-xl01\drivers\sensors\gnss_solution_parser.h"
+$gnssSolutionImplementation = Join-Path $repoRoot "firmware\rk2206-xl01\drivers\sensors\gnss_solution_parser.c"
+$gnssSolutionTest = Join-Path $repoRoot "firmware\rk2206-xl01\tests\gnss_solution_parser_host_test.c"
 
 foreach ($required in @(
   $sourceHeader, $sourceImplementation, $injectionHeader, $injectionImplementation,
@@ -44,7 +47,8 @@ foreach ($required in @(
   $compactBuilderHeader, $compactBuilderImplementation, $compactPollHeader,
   $compactPollImplementation, $sensorDataHeader, $fieldLinkFrameHeader,
   $fieldLinkFrameImplementation, $simulatedFieldSensorsHeader,
-  $simulatedFieldSensorsImplementation, $compactBuilderTest
+  $simulatedFieldSensorsImplementation, $compactBuilderTest,
+  $gnssSolutionHeader, $gnssSolutionImplementation, $gnssSolutionTest
 )) {
   if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
     throw "Required GNSS transport source is missing: $required"
@@ -88,6 +92,9 @@ docker cp $fieldLinkFrameImplementation "${ContainerName}:${containerRoot}/drive
 docker cp $simulatedFieldSensorsHeader "${ContainerName}:${containerRoot}/drivers/sensors/simulated_field_sensors.h"
 docker cp $simulatedFieldSensorsImplementation "${ContainerName}:${containerRoot}/drivers/sensors/simulated_field_sensors.c"
 docker cp $compactBuilderTest "${ContainerName}:${containerRoot}/tests/compact_telemetry_builder_host_test.c"
+docker cp $gnssSolutionHeader "${ContainerName}:${containerRoot}/drivers/sensors/gnss_solution_parser.h"
+docker cp $gnssSolutionImplementation "${ContainerName}:${containerRoot}/drivers/sensors/gnss_solution_parser.c"
+docker cp $gnssSolutionTest "${ContainerName}:${containerRoot}/tests/gnss_solution_parser_host_test.c"
 if ($LASTEXITCODE -ne 0) {
   throw "Failed to copy GNSS transport sources into the container"
 }
@@ -123,6 +130,11 @@ gcc -std=c99 -Wall -Wextra -Werror -O2 \
   tests/compact_telemetry_builder_host_test.c \
   -o compact_telemetry_builder_host_test
 ./compact_telemetry_builder_host_test
+gcc -std=c99 -Wall -Wextra -Werror -O2 \
+  drivers/sensors/gnss_solution_parser.c \
+  tests/gnss_solution_parser_host_test.c \
+  -o gnss_solution_parser_host_test
+./gnss_solution_parser_host_test
 "@
 
 docker exec $ContainerName bash -lc $compile

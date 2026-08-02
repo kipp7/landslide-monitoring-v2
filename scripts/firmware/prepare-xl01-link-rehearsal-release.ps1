@@ -23,7 +23,7 @@ if ($dirty.Count -ne 0) {
   throw "Refusing to create an official firmware release from uncommitted source"
 }
 
-$builder = Join-Path $PSScriptRoot "build-xl01-compact-broadcast-v2.ps1"
+$builder = Join-Path $PSScriptRoot "build-xl01-compact-v3.ps1"
 if (-not (Test-Path -LiteralPath $builder -PathType Leaf)) {
   throw "Firmware builder is missing: $builder"
 }
@@ -89,8 +89,8 @@ $nodeIds = @{
   C = "00000000-0000-0000-0000-000000000003"
 }
 foreach ($node in $NodeLabels) {
-  $expectedFiles += "rk2206-node-$node-xls1-compact-v2-simulated.bin"
-  $expectedFiles += "rk2206-node-$node-xls1-compact-v2-simulated.img"
+  $expectedFiles += "rk2206-node-$node-xls1-compact-v3-simulated.bin"
+  $expectedFiles += "rk2206-node-$node-xls1-compact-v3-simulated.img"
 }
 $actualFiles = @($manifest.files | ForEach-Object { $_.name })
 $fileDifference = @(Compare-Object ($expectedFiles | Sort-Object) ($actualFiles | Sort-Object))
@@ -111,7 +111,7 @@ foreach ($entry in $manifest.files) {
 }
 
 foreach ($node in $NodeLabels) {
-  $path = Join-Path $ArtifactDirectory "rk2206-node-$node-xls1-compact-v2-simulated.bin"
+  $path = Join-Path $ArtifactDirectory "rk2206-node-$node-xls1-compact-v3-simulated.bin"
   $ascii = [System.Text.Encoding]::ASCII.GetString([System.IO.File]::ReadAllBytes($path))
   foreach ($required in @(
       $nodeIds[$node],
@@ -144,6 +144,11 @@ $calibrationDescription = if ($BatteryCalibrationFile) {
   "neutral default calibration; verify each node against a multimeter before precision claims"
 }
 $releaseDate = Get-Date -Format "yyyy-MM-dd"
+$expectedBatteryState = if ($expectedCalibrationVerified) {
+  "field-calibrated"
+} else {
+  "default-calibration"
+}
 $finalAcceptanceFlag = if ($expectedCalibrationVerified) {
   " -RequireFinalBatteryAcceptance"
 } else {
@@ -159,7 +164,7 @@ Burn the .img matching the physical node label. Do not interchange A/B/C images.
 Source commit: $headCommit
 
 After the SC16IS752/RS485 interface is installed and passes the power-off gate, build the hardware profile with:
-  powershell -ExecutionPolicy Bypass -File scripts/firmware/build-xl01-compact-broadcast-v2.ps1 -FieldSensorMode hardware -GnssRtcmInjectionMode disabled
+  powershell -ExecutionPolicy Bypass -File scripts/firmware/build-xl01-compact-v3.ps1 -FieldSensorMode hardware -GnssRtcmInjectionMode disabled
 
 Release verification:
   powershell -ExecutionPolicy Bypass -File scripts/firmware/verify-rk2206-release-safety.ps1 -ArtifactDirectory "$ArtifactDirectory" -ExpectedFieldSensorMode simulated -ExpectedGnssRtcmInjectionMode disabled -ExpectedBatteryCalibrationState $expectedBatteryState -ExpectedSourceCommit $headCommit$finalAcceptanceFlag
@@ -173,11 +178,6 @@ Release verification:
 $verifier = Join-Path $PSScriptRoot "verify-rk2206-release-safety.ps1"
 if (-not (Test-Path -LiteralPath $verifier -PathType Leaf)) {
   throw "Release safety verifier is missing: $verifier"
-}
-$expectedBatteryState = if ($expectedCalibrationVerified) {
-  "field-calibrated"
-} else {
-  "default-calibration"
 }
 & $verifier `
   -ArtifactDirectory $ArtifactDirectory `
