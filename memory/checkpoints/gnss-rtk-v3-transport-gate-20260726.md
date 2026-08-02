@@ -115,19 +115,21 @@ status: active
 - 逐节点校准流程已用金值与失败路径测试，并用测试映射完成 A/B/C 全量 OpenHarmony 构建；随后同目录只构建 B，确认旧 A/C 产物被清理。B 验证包仅含自身 UUID，模拟标记存在，`SC16IS752`/`[RS485]`/`EI2C0_M0 PB4/PB5` 均不存在，固件与校准来源哈希零差异；SDK 临时备份已清理并恢复，`_verification` 产物也已删除，正式烧录包未改动。
 - 校准改动后又只切 `-FieldSensorMode hardware` 完成 A 节点 OpenHarmony 全量构建；manifest 为 `fieldSensorMode=hardware`、`rs485HardwareInitialized=true`、默认校准未验证，二进制包含 A 身份及 SC16IS752/RS485 标记且不含模拟标记，manifest 哈希零差异。SDK 恢复、临时目录清理完成，证明接口到货后仍可通过单一构建参数回到真实采集。
 - 2026-08-02 新增可复用发布安全验证器及自包含测试。验证器对 manifest 字段、文件集合/长度/SHA-256、A/B/C 的 `.bin` 与 `.img` 身份、跨节点污染、传感器源、RTCM 模式、PC0 输入路径和校准状态做强校验；测试证明可拒绝篡改镜像、重新计算清单哈希后混入错误节点身份、以及模式伪装。正式模拟包 `xls1_link_rehearsal_battery_simulated_20260801` 已以 `sourceCommit=cc5757e0...`、`simulated/disabled/default-calibration` 重新通过，主机四组测试、PC0 引脚门禁和校准生成器测试均通过。
+- 2026-08-02 19:44..20:10 CST 完成 A/B/C 三个独立 PC0 同步窗口，均为 100% 完整三节点轮次和零协议错误。万用表 `VBAT_SW` 真值 A/B/C 为 `11440/11520/11520 mV`，中性固件中位数为 `10931/10906/11706 mV`，生成增益 `1046565/1056299/984111 ppm`。三份原始报告只保留在 RK3568 和非 Git `output/`，校准文件 SHA-256 为 `678f7c36e160e1e4259367ea40690dd4e87369b9c36ee77ac918d32f4192a87b`。
+- 已从干净提交 `b084f10a...` 构建 `F:\2\openharmony\rk2206_firmware_releases\xls1_link_rehearsal_battery_calibrated_20260802`。包保持 RS485 simulated、RTCM disabled、PB4/PB5 不初始化，A/B/C manifest 均为 `field-calibrated`；三个 `.img` 哈希分别为 `92af5fde...bbd10a`、`d10a4b3a...a1dfff`、`25d2184c...732434`，发布安全、引脚和校准回归通过。下一步按身份烧录后复跑同步电压验收，误差必须不超过 60 mV。
 - 同日从完全干净的 detached worktree `50890f9e...` 构建三节点硬件预检包 `F:\2\openharmony\rk2206_firmware_releases\xls1_rs485_hardware_preflight_uncalibrated_20260802`，SDK 构建后已恢复且 worktree 仍 clean。manifest 明确为 hardware、RS485 initialized、RTCM disabled、默认校准；A/B/C `.img` 哈希为 `a4973220...2b5f`、`011f1e42...04bd6`、`696ac5d4...8ec96`。`cc5757e0...` 与 `50890f9e...` 的 `firmware/rk2206-xl01` Git tree 均为 `f866a8b24b1e51eee0c798c59e7043419a3b3bb6`，因此硬件包只改变构建参数，不含临时源码改动。该包设有 `DO-NOT-FLASH` 门禁，接口未安装和电气检查未完成前禁止烧录。
 
 ## In Progress
 
 - 三节点模拟 compact v2 的 interval 扫参、无重发 1000 ms 对照和有界重发三级门禁均已完成。生产保持 1000 ms 冷却、46/64 字节 compact v2、340 ms 节点时隙和单广播在途，并启用 1200 ms 后同标签最多重发一次、2500 ms 总时限；继续观察生产重发率与重发后时延，不再做 interval 微调。
 - 现场网络固定 4G 主用，网线即使插着也只有局域网路由，Wi-Fi 仅自动备用，不再人工切换公网出口。本轮 field-gateway 两次受控重启、Hermes 和反向 SSH 均保持在线，公网路由始终为 `usb0`。
-- 下一项现场工作是 A/B/C 的 PC0 电池逐节点万用表校准。当前默认校准电压可用于趋势，百分比不能作为准确剩余容量。
+- A/B/C 中性固件校准采集和校准模拟包构建已完成；下一项现场工作是按身份烧录后同步复测，要求每节点误差不超过 60 mV 且质量为 `field-calibrated`。百分比仍只是 3S OCV 估算，不宣称剩余 mAh 或续航。
 - RS485 元件未到期间，模拟包故意不初始化 PB4/PB5。未校准 hardware 预检包已提前生成但设为 `DO-NOT-FLASH`；接口到货、焊接与断电电气检查完成后才允许用于首次识别验证，最终包仍由同一构建脚本结合逐节点电池校准文件生成，不可手工删除模拟函数或修改 XLS1 驱动。
 - RTCM injection 仍保持 disabled；本轮先建立纯 compact 传感器数据的三节点稳定/延迟基线，再恢复真实 GNSS/RTCM 混合负载门禁。
 
 ## Next Actions
 
-1. 在当前三节点仍在线且电池 IIR 稳定时，同时读取门禁报告中的 A/B/C 电压中位数并用万用表测三块电池端电压；通过 `new-rk2206-battery-calibration.ps1` 生成逐节点校准文件。重建后要求每节点中位电压与万用表差值不超过 60 mV，质量变为 `field-calibrated`。
+1. 按物理身份烧录 `xls1_link_rehearsal_battery_calibrated_20260802` 的 A/B/C `.img`，上电并让 IIR 稳定至少 1 分钟；随后重新运行逐节点严格窗口并同步测量 `VBAT_SW`。只有三节点质量均为 `field-calibrated` 且中位数与万用表差值均不超过 60 mV，才接受本轮校准。
 2. 通过脱敏健康摘要持续核对 `compactBroadcastRetryRate <= 0.02`、重发写失败为 0、逻辑总响应不超过 2500 ms，并同时确认 `usb0` 默认路由、反向 SSH、Hermes 和 MQTT 在线；不再通过插拔网线制造常规切换。
 3. 不把模拟 compact 门禁或预编译成功等同于真实传感器门禁。RS485 接口到货后先断电检查方向、针脚偏移、短路、连续性和模块型号，上电后检查 PB4/PB5 约 3.3 V 及 `0x4D` 识别；通过后才烧录匹配身份的 hardware 预检包，并完整复跑真实有效位、身份、哈希和至少 600 秒三节点通信门禁。
 4. 真实传感器链稳定后恢复 RTCM PROBE，再执行三节点真实 NTRIP 混合负载门禁；最终覆盖 RTCM、3 个 GNSS_CORE、compact 遥测和控制命令，并以 correction age 和 Fixed 连续性作为生产依据。
@@ -148,4 +150,4 @@ status: active
 
 ## Resume Prompt
 
-继续 2026-08-02 XLS1/RTK 链路任务：RK3568 固定 4G `usb0` 为公网出口，网线只保留局域网路由，不人工切换。无重发的 800 ms 与 1000 ms 长测都出现低频部分轮次，现已部署 1000 ms 冷却、1200 ms 首响应窗、同标签最多重发一次、2500 ms 总会话；600 秒真实门禁成功补齐 1 个 A 响应，1800 秒最终门禁 2787/2787、零错误。先观察生产重发率不超过 2% 和时延不超过 2500 ms，再等用户提供同一窗口 A/B/C 万用表 mV 值完成 PC0 校准。RS485 接口到货后只用 `-FieldSensorMode hardware -GnssRtcmInjectionMode disabled` 切回真实采集并复跑门禁，之后才恢复 RTCM PROBE/真实 NTRIP；原始报告、坐标和凭据不进入 Git。
+继续 2026-08-02 XLS1/RTK 链路任务：生产链保持 1000 ms 冷却、1200 ms 首响应窗、部分响应时同标签最多重发一次和 2500 ms 总会话；最终 1800 秒为 2787/2787、零错误。A/B/C 的 `VBAT_SW` 中性采集和逐节点校准已完成，增益为 `1046565/1056299/984111 ppm`；校准模拟包在 `F:\2\openharmony\rk2206_firmware_releases\xls1_link_rehearsal_battery_calibrated_20260802`，先按身份烧录并复测每节点误差不超过 60 mV、质量为 `field-calibrated`。RS485 接口到货后再断电预检并切 `-FieldSensorMode hardware -GnssRtcmInjectionMode disabled`，之后才恢复 RTCM PROBE/真实 NTRIP；原始报告、坐标和凭据不进入 Git。
