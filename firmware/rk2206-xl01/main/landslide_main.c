@@ -1611,9 +1611,8 @@ static void* DataUploadTask(const char* arg)
     printf("  Sensors:\n");
     printf("    - GPS: %s\n", ENABLE_GPS ? "ON" : "OFF");
 #if ENABLE_GPS
-    printf("    - RTCM Injection: boot=DISABLED capability=%s runtime-lease=yes queue=%u max_queue_age=%u ms\n",
-           GNSS_RTCM_INJECTION_CAPABILITY == GNSS_RTCM_INJECTION_LIVE ? "LIVE" :
-           (GNSS_RTCM_INJECTION_CAPABILITY == GNSS_RTCM_INJECTION_PROBE ? "PROBE" : "DISABLED"),
+    printf("    - RTCM Injection: %s runtime-lease=yes queue=%u max_queue_age=%u ms\n",
+           GNSS_RTCM_CAPABILITY_MARKER,
            (unsigned int)GNSS_RTCM_QUEUE_DEPTH,
            (unsigned int)GNSS_RTCM_MAX_QUEUE_AGE_MS);
 #endif

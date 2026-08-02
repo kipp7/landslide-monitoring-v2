@@ -199,9 +199,15 @@ function Set-GnssRtcmInjectionMode {
     "probe" { "GNSS_RTCM_INJECTION_PROBE" }
     "live" { "GNSS_RTCM_INJECTION_LIVE" }
   }
+  $capabilityMarker = switch ($GnssRtcmInjectionMode) {
+    "disabled" { "boot=DISABLED capability=DISABLED" }
+    "probe" { "boot=DISABLED capability=PROBE" }
+    "live" { "boot=DISABLED capability=LIVE" }
+  }
   $configPath = Join-Path $sampleRoot "config\app_config.h"
   $text = [System.IO.File]::ReadAllText($configPath)
   $text = Set-SingleTokenMacro -Text $text -Macro "GNSS_RTCM_INJECTION_MODE" -Value $modeToken
+  $text = Set-SingleMacro -Text $text -Macro "GNSS_RTCM_CAPABILITY_MARKER" -Value $capabilityMarker
   [System.IO.File]::WriteAllText($configPath, $text, [System.Text.UTF8Encoding]::new($false))
 }
 
