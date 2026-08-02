@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
 from xls1_three_node_batch_poll import (
     analyze_batch_completeness,
     command_tag,
@@ -11,6 +14,7 @@ from xls1_three_node_batch_poll import (
     should_retry_broadcast_poll,
     telemetry_profile_errors,
 )
+from xls1_compact_v4_acceptance import require_ntrip_disabled
 
 
 PAYLOAD_HEX = (
@@ -22,9 +26,33 @@ PAYLOAD_V2_HEX = (
     "4c5302030303009e0000004d000003849664c12a2f5b5302092e12eb02a1008c"
     "ffe0000301778df8070a6bc00000"
 )
+PAYLOAD_V3_HEX = (
+    "4c53030303031fff0000004d000003849664c12a2f5b5302092e12eb02a1008cffe0"
+    "000300000005bb02974e0000001b80b4e91500003039fffff6d7000007d00000007f"
+    "075bcd15097e04017e6f1f003400060007000f004703d700020052"
+)
+PAYLOAD_V4_HEX = (
+    "4c53040303031fff0000004d000003849664c12a2f5b5302092e12eb02a1008cffe0"
+    "000300000005bb02974e0000001b80b4e91500003039fffff6d7000007d00000007f"
+    "075bcd15097e04017e6f1f003400060007000f004703d700020052023f0104123456"
+    "780000e6f30000007b000000ea00000159000004d2000001c8000001c20002000100"
+    "0c0006"
+)
 
 
 def main() -> None:
+    with TemporaryDirectory() as temporary_directory:
+        environment_file = Path(temporary_directory) / "field-gateway.env"
+        environment_file.write_text("NTRIP_ENABLED=false\n", encoding="ascii")
+        require_ntrip_disabled(environment_file)
+        environment_file.write_text("NTRIP_ENABLED=true\n", encoding="ascii")
+        try:
+            require_ntrip_disabled(environment_file)
+        except RuntimeError as exc:
+            assert "requires NTRIP_ENABLED=false" in str(exc)
+        else:
+            raise AssertionError("pure telemetry gate accepted enabled NTRIP")
+
     assert should_retry_broadcast_poll(0, 3, 0, 1) is False
     assert should_retry_broadcast_poll(2, 3, 0, 1) is True
     assert should_retry_broadcast_poll(2, 3, 1, 1) is False
@@ -80,6 +108,92 @@ def main() -> None:
         required_compact_version=2,
         required_field_sensor_source="hardware",
     )
+
+    telemetry_v3 = decode_compact_telemetry(bytes.fromhex(PAYLOAD_V3_HEX))
+    assert telemetry_v3["meta"]["compact_payload_version"] == 3
+    assert telemetry_v3["metrics"]["rtk_latitude_deg"] == 24.612345678
+    assert telemetry_v3["metrics"]["rtk_longitude_deg"] == 118.123456789
+    assert telemetry_v3["metrics"]["rtk_trusted"] is True
+    assert telemetry_v3["metrics"]["rtk_fixed_ratio_1m_pct"] == 98.3
+
+    telemetry_v4_live = decode_compact_telemetry(bytes.fromhex(PAYLOAD_V4_HEX))
+    assert telemetry_v4_live["meta"]["compact_payload_version"] == 4
+    assert telemetry_v4_live["meta"]["rtcm_injection_mode"] == "live"
+    assert telemetry_v4_live["metrics"]["rtcm_session_epoch"] == 0x12345678
+    assert telemetry_v4_live["metrics"]["rtcm_lease_remaining_ms"] == 59123
+    assert telemetry_v4_live["metrics"]["rtcm_crc_errors_total"] == 1
+
+    disabled_v4 = bytearray.fromhex(PAYLOAD_V4_HEX)
+    disabled_v4[4] &= ~0x02
+    disabled_v4[95] = 0
+    disabled_v4[96] = 0x01
+    disabled_v4[97] = 0
+    disabled_v4[98] = 0
+    disabled_v4[99:107] = bytes(8)
+    disabled_v4[107:119] = bytes.fromhex("ffffffffffffffffffffffff")
+    disabled_v4[119:139] = bytes(20)
+    telemetry_v4_disabled = decode_compact_telemetry(bytes(disabled_v4))
+    disabled_frame = encode_frame(1, 10, bytes(disabled_v4))
+    assert len(disabled_v4) == 139
+    assert len(disabled_frame) == 157
+    assert telemetry_v4_disabled["meta"]["field_sensor_source"] == "hardware"
+    assert telemetry_v4_disabled["meta"]["rtcm_injection_mode"] == "disabled"
+    assert telemetry_v4_disabled["metrics"]["rtcm_session_epoch"] == 0
+    assert telemetry_profile_errors(
+        telemetry_v4_disabled,
+        required_compact_version=4,
+        required_field_sensor_source="hardware",
+        require_battery_valid=True,
+        require_field_sensors_valid=True,
+        require_field_calibrated_battery=True,
+        required_rtcm_mode="disabled",
+        require_rtcm_clean=True,
+    ) == []
+
+    dirty_disabled_v4 = bytearray(disabled_v4)
+    dirty_disabled_v4[102] = 1
+    try:
+        decode_compact_telemetry(bytes(dirty_disabled_v4))
+    except ValueError as exc:
+        assert "disabled RTCM state is not fail-closed" in str(exc)
+    else:
+        raise AssertionError("dirty disabled V4 state was accepted")
+
+    dirty_counter_v4 = bytearray(disabled_v4)
+    dirty_counter_v4[134] = 1
+    dirty_counter_telemetry = decode_compact_telemetry(bytes(dirty_counter_v4))
+    assert "rtcm_crc_errors_total-not-zero" in telemetry_profile_errors(
+        dirty_counter_telemetry,
+        required_rtcm_mode="disabled",
+        require_rtcm_clean=True,
+    )
+
+    prior_rtcm_activity_v4 = bytearray(disabled_v4)
+    prior_rtcm_activity_v4[122] = 1
+    prior_rtcm_telemetry = decode_compact_telemetry(bytes(prior_rtcm_activity_v4))
+    assert "rtcm_accepted_fragments_total-not-zero" in telemetry_profile_errors(
+        prior_rtcm_telemetry,
+        required_rtcm_mode="disabled",
+        require_rtcm_clean=True,
+    )
+
+    prior_rtcm_age_v4 = bytearray(disabled_v4)
+    prior_rtcm_age_v4[107:111] = bytes.fromhex("00000001")
+    prior_rtcm_age_telemetry = decode_compact_telemetry(bytes(prior_rtcm_age_v4))
+    assert "rtcm_last_fragment_age_ms-unexpected" in telemetry_profile_errors(
+        prior_rtcm_age_telemetry,
+        required_rtcm_mode="disabled",
+        require_rtcm_clean=True,
+    )
+
+    active_without_lease = bytearray.fromhex(PAYLOAD_V4_HEX)
+    active_without_lease[103:107] = bytes(4)
+    try:
+        decode_compact_telemetry(bytes(active_without_lease))
+    except ValueError as exc:
+        assert "lacks a valid session lease" in str(exc)
+    else:
+        raise AssertionError("active V4 state without a lease was accepted")
     healthy_nodes = {
         label: {
             "expected": 60,

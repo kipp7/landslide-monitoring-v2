@@ -30,7 +30,7 @@ FIELD_LINK_VERSION = 1
 FIELD_LINK_TYPE_TELEMETRY = 1
 FIELD_LINK_TYPE_COMMAND = 2
 FIELD_LINK_TYPE_ACK = 3
-COMPACT_PAYLOAD_BYTES = 46
+COMPACT_PAYLOAD_BYTES_BY_VERSION = {1: 46, 2: 46, 3: 95, 4: 139}
 COMPACT_VALID_TEMP = 1 << 0
 COMPACT_VALID_SOIL = 1 << 1
 COMPACT_VALID_SOIL_EC = 1 << 2
@@ -41,6 +41,37 @@ COMPACT_VALID_IMU = 1 << 6
 COMPACT_VALID_BATTERY = 1 << 7
 COMPACT_STATUS_WARNING = 1 << 0
 COMPACT_STATUS_FIELD_SENSORS_SIMULATED = 1 << 1
+V3_VALID_BATTERY = 1 << 0
+V3_VALID_SOIL = 1 << 1
+V3_VALID_SOIL_EC = 1 << 2
+V3_VALID_TILT = 1 << 3
+V3_VALID_GNSS_STATUS = 1 << 4
+V3_VALID_GNSS_POSITION = 1 << 5
+V3_VALID_GNSS_ALTITUDE = 1 << 6
+V3_VALID_GNSS_TIME = 1 << 7
+V3_VALID_CORRECTION_AGE = 1 << 8
+V3_VALID_HDOP = 1 << 9
+V3_VALID_GST = 1 << 10
+V3_VALID_FIXED_STATS = 1 << 11
+V3_VALID_STATION = 1 << 12
+V3_KNOWN_VALID_MASK = (1 << 13) - 1
+GNSS_FIX_TRUSTED = 1 << 1
+GNSS_FIX_TIME_VALID = 1 << 2
+GNSS_FIX_GST_VALID = 1 << 3
+GNSS_FIX_CORRECTION_AGE_VALID = 1 << 5
+GNSS_FIX_HDOP_VALID = 1 << 6
+GNSS_FIX_ALTITUDE_VALID = 1 << 9
+GNSS_FIX_GEOID_VALID = 1 << 10
+GNSS_FIX_STATION_VALID = 1 << 11
+GNSS_FIX_POSITION_VALID = 1 << 12
+GNSS_FIX_FIXED_STATS_VALID = 1 << 13
+GNSS_FIX_COORDINATE_FRAME_VALID = 1 << 14
+V4_RTCM_MODE_DISABLED = 0
+V4_RTCM_STATE_READY = 1 << 0
+V4_RTCM_STATE_SESSION_ARMED = 1 << 1
+V4_RTCM_STATE_LEASE_VALID = 1 << 2
+V4_RTCM_KNOWN_STATE_MASK = 0x3F
+V4_AGE_UNAVAILABLE = 0xFFFFFFFF
 NODES = {
     "A": "00000000-0000-0000-0000-000000000001",
     "B": "00000000-0000-0000-0000-000000000002",
@@ -252,12 +283,16 @@ def build_command(node_id: str, command_id: str) -> bytes:
 
 
 def decode_compact_telemetry(payload: bytes) -> dict[str, Any]:
-    if len(payload) != COMPACT_PAYLOAD_BYTES:
-        raise ValueError(f"compact telemetry length mismatch: expected={COMPACT_PAYLOAD_BYTES} actual={len(payload)}")
-    if payload[:2] != b"LS" or payload[2] not in (1, 2):
+    if len(payload) < 3 or payload[:2] != b"LS" or payload[2] not in COMPACT_PAYLOAD_BYTES_BY_VERSION:
         raise ValueError("compact telemetry magic or version mismatch")
 
     compact_version = payload[2]
+    expected_bytes = COMPACT_PAYLOAD_BYTES_BY_VERSION[compact_version]
+    if len(payload) != expected_bytes:
+        raise ValueError(
+            f"compact telemetry length mismatch: version={compact_version} "
+            f"expected={expected_bytes} actual={len(payload)}"
+        )
     compact_node = payload[3]
     if compact_node not in (1, 2, 3):
         raise ValueError(f"compact telemetry node out of range: {compact_node}")
@@ -267,6 +302,9 @@ def decode_compact_telemetry(payload: bytes) -> dict[str, Any]:
     uptime = struct.unpack(">I", payload[12:16])[0]
     last_command_tag = struct.unpack(">I", payload[16:20])[0]
     metrics: dict[str, Any] = {}
+
+    if compact_version in (3, 4):
+        return decode_compact_telemetry_v3_v4(payload)
 
     if compact_version == 1 and valid & COMPACT_VALID_TEMP:
         metrics["temperature_c"] = struct.unpack(">h", payload[20:22])[0] / 100.0
@@ -336,12 +374,236 @@ def decode_compact_telemetry(payload: bytes) -> dict[str, Any]:
     }
 
 
+def decode_compact_telemetry_v3_v4(payload: bytes) -> dict[str, Any]:
+    compact_version = payload[2]
+    compact_node = payload[3]
+    if compact_version not in (3, 4) or compact_node not in (1, 2, 3):
+        raise ValueError("compact telemetry v3/v4 header mismatch")
+    label = chr(ord("A") + compact_node - 1)
+    status_flags = payload[4]
+    valid = struct.unpack(">H", payload[6:8])[0]
+    fix_flags = struct.unpack(">H", payload[76:78])[0]
+    if status_flags & ~0x03 or valid & ~V3_KNOWN_VALID_MASK:
+        raise ValueError("compact telemetry v3/v4 status or validity flags contain reserved bits")
+
+    gnss_status_valid = bool(valid & V3_VALID_GNSS_STATUS)
+
+    def flag_matches(valid_mask: int, fix_mask: int) -> bool:
+        return bool(valid & valid_mask) == bool(fix_flags & fix_mask)
+
+    if not gnss_status_valid and ((valid & 0x1FF0) or fix_flags):
+        raise ValueError("compact telemetry v3/v4 carries GNSS evidence without a valid GNSS status")
+    if gnss_status_valid and not all(
+        (
+            flag_matches(V3_VALID_GNSS_POSITION, GNSS_FIX_POSITION_VALID),
+            flag_matches(V3_VALID_GNSS_TIME, GNSS_FIX_TIME_VALID),
+            flag_matches(V3_VALID_CORRECTION_AGE, GNSS_FIX_CORRECTION_AGE_VALID),
+            flag_matches(V3_VALID_HDOP, GNSS_FIX_HDOP_VALID),
+            flag_matches(V3_VALID_GST, GNSS_FIX_GST_VALID),
+            flag_matches(V3_VALID_FIXED_STATS, GNSS_FIX_FIXED_STATS_VALID),
+            flag_matches(V3_VALID_STATION, GNSS_FIX_STATION_VALID),
+            bool(valid & V3_VALID_GNSS_ALTITUDE)
+            == bool(fix_flags & (GNSS_FIX_ALTITUDE_VALID | GNSS_FIX_GEOID_VALID)),
+        )
+    ):
+        raise ValueError("compact telemetry v3/v4 GNSS validity bitmap contradicts its fix flags")
+
+    coordinate_frame_code = payload[75]
+    coordinate_frame_valid = bool(fix_flags & GNSS_FIX_COORDINATE_FRAME_VALID)
+    if gnss_status_valid and (
+        (coordinate_frame_valid and coordinate_frame_code not in (1, 2))
+        or (not coordinate_frame_valid and coordinate_frame_code != 0)
+    ):
+        raise ValueError("compact telemetry v3/v4 coordinate-frame code contradicts its validity flag")
+
+    gga_quality = payload[74]
+    correction_age_ms = struct.unpack(">I", payload[60:64])[0]
+    solution_age_ms = struct.unpack(">I", payload[64:68])[0]
+    trusted = bool(fix_flags & GNSS_FIX_TRUSTED)
+    if trusted and (
+        gga_quality != 4
+        or not valid & V3_VALID_GNSS_POSITION
+        or not valid & V3_VALID_CORRECTION_AGE
+        or not coordinate_frame_valid
+        or correction_age_ms > 5000
+        or solution_age_ms > 2000
+    ):
+        raise ValueError("compact telemetry v3/v4 trusted RTK evidence violates the production gate")
+    fixed_ratio_permille = struct.unpack(">H", payload[89:91])[0]
+    if valid & V3_VALID_FIXED_STATS and fixed_ratio_permille > 1000:
+        raise ValueError("compact telemetry v3/v4 Fixed ratio exceeds 1000 permille")
+
+    metrics: dict[str, Any] = {}
+    if valid & V3_VALID_BATTERY:
+        metrics["battery_v"] = struct.unpack(">H", payload[20:22])[0] / 1000.0
+        metrics["battery_pct"] = payload[22]
+    if valid & V3_VALID_SOIL:
+        metrics["soil_temperature_c"] = struct.unpack(">h", payload[24:26])[0] / 100.0
+        metrics["soil_moisture_pct"] = struct.unpack(">H", payload[26:28])[0] / 100.0
+    if valid & V3_VALID_SOIL_EC:
+        metrics["electrical_conductivity_us_cm"] = struct.unpack(">H", payload[28:30])[0]
+    if valid & V3_VALID_TILT:
+        metrics["tilt_x_deg"] = struct.unpack(">h", payload[30:32])[0] / 100.0
+        metrics["tilt_y_deg"] = struct.unpack(">h", payload[32:34])[0] / 100.0
+        metrics["tilt_z_deg"] = struct.unpack(">h", payload[34:36])[0] / 100.0
+        metrics["warning_flag"] = bool(status_flags & COMPACT_STATUS_WARNING)
+    if gnss_status_valid:
+        metrics["rtk_gga_quality"] = gga_quality
+        metrics["rtk_trusted"] = trusted
+        metrics["rtk_satellites_used"] = payload[78]
+        metrics["rtk_solution_age_ms"] = solution_age_ms
+    if valid & V3_VALID_GNSS_POSITION:
+        latitude_e9 = struct.unpack(">q", payload[36:44])[0]
+        longitude_e9 = struct.unpack(">q", payload[44:52])[0]
+        if not -90_000_000_000 <= latitude_e9 <= 90_000_000_000:
+            raise ValueError("compact telemetry v3/v4 RTK latitude is out of range")
+        if not -180_000_000_000 <= longitude_e9 <= 180_000_000_000:
+            raise ValueError("compact telemetry v3/v4 RTK longitude is out of range")
+        metrics["rtk_latitude_deg"] = latitude_e9 / 1_000_000_000.0
+        metrics["rtk_longitude_deg"] = longitude_e9 / 1_000_000_000.0
+    if valid & V3_VALID_GNSS_ALTITUDE:
+        altitude_mm = struct.unpack(">i", payload[52:56])[0]
+        geoid_mm = struct.unpack(">i", payload[56:60])[0]
+        if fix_flags & GNSS_FIX_ALTITUDE_VALID:
+            metrics["rtk_altitude_msl_m"] = altitude_mm / 1000.0
+        if fix_flags & GNSS_FIX_GEOID_VALID:
+            metrics["rtk_geoid_separation_m"] = geoid_mm / 1000.0
+        if fix_flags & GNSS_FIX_ALTITUDE_VALID and fix_flags & GNSS_FIX_GEOID_VALID:
+            metrics["rtk_ellipsoid_height_m"] = (altitude_mm + geoid_mm) / 1000.0
+    if valid & V3_VALID_CORRECTION_AGE:
+        metrics["rtk_correction_age_ms"] = correction_age_ms
+    if valid & V3_VALID_GNSS_TIME:
+        metrics["rtk_tow_ms"] = struct.unpack(">I", payload[68:72])[0]
+        metrics["rtk_gnss_week"] = struct.unpack(">H", payload[72:74])[0]
+    if valid & V3_VALID_HDOP:
+        metrics["rtk_hdop"] = struct.unpack(">H", payload[79:81])[0] / 100.0
+    if valid & V3_VALID_GST:
+        metrics["rtk_gst_sigma_lat_mm"] = struct.unpack(">H", payload[81:83])[0]
+        metrics["rtk_gst_sigma_lon_mm"] = struct.unpack(">H", payload[83:85])[0]
+        metrics["rtk_gst_sigma_alt_mm"] = struct.unpack(">H", payload[85:87])[0]
+    if valid & V3_VALID_FIXED_STATS:
+        metrics["rtk_fixed_streak_s"] = struct.unpack(">H", payload[87:89])[0]
+        metrics["rtk_fixed_ratio_1m_pct"] = fixed_ratio_permille / 10.0
+        metrics["rtk_fix_drop_count"] = struct.unpack(">H", payload[91:93])[0]
+    if valid & V3_VALID_STATION:
+        metrics["rtk_reference_station_id"] = struct.unpack(">H", payload[93:95])[0]
+
+    rtcm_mode = 0
+    rtcm_state_flags = 0
+    if compact_version == 4:
+        rtcm_mode = payload[95]
+        rtcm_state_flags = payload[96]
+        queue_pending = payload[97]
+        queue_high_watermark = payload[98]
+        session_epoch = struct.unpack(">I", payload[99:103])[0]
+        lease_remaining_ms = struct.unpack(">I", payload[103:107])[0]
+        session_armed = bool(rtcm_state_flags & V4_RTCM_STATE_SESSION_ARMED)
+        lease_valid = bool(rtcm_state_flags & V4_RTCM_STATE_LEASE_VALID)
+        if (
+            rtcm_mode > 2
+            or rtcm_state_flags & ~V4_RTCM_KNOWN_STATE_MASK
+            or not rtcm_state_flags & V4_RTCM_STATE_READY
+            or queue_pending > queue_high_watermark
+        ):
+            raise ValueError("compact telemetry v4 RTCM runtime state is malformed")
+        if rtcm_mode == V4_RTCM_MODE_DISABLED:
+            if session_epoch or lease_remaining_ms or session_armed or lease_valid or queue_pending:
+                raise ValueError("compact telemetry v4 disabled RTCM state is not fail-closed")
+        elif not session_epoch or not lease_remaining_ms or not session_armed or not lease_valid:
+            raise ValueError("compact telemetry v4 active RTCM state lacks a valid session lease")
+
+        metrics.update(
+            {
+                "rtcm_injection_mode_code": rtcm_mode,
+                "rtcm_session_epoch": session_epoch,
+                "rtcm_lease_remaining_ms": lease_remaining_ms,
+                "rtcm_queue_pending": queue_pending,
+                "rtcm_queue_high_watermark": queue_high_watermark,
+                "rtcm_accepted_fragments_total": struct.unpack(">I", payload[119:123])[0],
+                "rtcm_completed_frames_total": struct.unpack(">I", payload[123:127])[0],
+                "rtcm_injected_frames_total": struct.unpack(">I", payload[127:131])[0],
+                "rtcm_rejected_fragments_total": struct.unpack(">H", payload[131:133])[0],
+                "rtcm_crc_errors_total": struct.unpack(">H", payload[133:135])[0],
+                "rtcm_queue_drops_total": struct.unpack(">H", payload[135:137])[0],
+                "rtcm_uart_errors_total": struct.unpack(">H", payload[137:139])[0],
+            }
+        )
+        for name, start in (
+            ("rtcm_last_fragment_age_ms", 107),
+            ("rtcm_last_completed_frame_age_ms", 111),
+            ("rtcm_last_action_age_ms", 115),
+        ):
+            age = struct.unpack(">I", payload[start : start + 4])[0]
+            if age != V4_AGE_UNAVAILABLE:
+                metrics[name] = age
+
+    trigger = {1: "periodic", 2: "manual_collect", 3: "scheduler_poll"}.get(payload[5], "unknown")
+    battery_quality_code = payload[23]
+    battery_quality = {
+        0: "unavailable",
+        1: "default-calibration",
+        2: "field-calibrated",
+    }.get(battery_quality_code, "unknown")
+    simulated = bool(status_flags & COMPACT_STATUS_FIELD_SENSORS_SIMULATED)
+    coordinate_frame = {1: "CGCS2000", 2: "WGS84"}.get(coordinate_frame_code, "unknown")
+    fix_type = {0: "invalid", 1: "single", 2: "dgps", 4: "rtk_fixed", 5: "rtk_float"}.get(
+        gga_quality, "other"
+    )
+    valid_flags = {
+        "temp_ok": 0,
+        "imu_ok": 0,
+        "gps_ok": int(gnss_status_valid),
+        "soil_ok": int(bool(valid & V3_VALID_SOIL)),
+        "soil_ec_ok": int(bool(valid & V3_VALID_SOIL_EC)),
+        "tilt_ok": int(bool(valid & V3_VALID_TILT)),
+        "rain_ok": 0,
+        "battery_ok": int(bool(valid & V3_VALID_BATTERY)),
+    }
+    return {
+        "schema_version": 1,
+        "device_id": NODES[label],
+        "event_ts": None,
+        "seq": struct.unpack(">I", payload[8:12])[0],
+        "metrics": metrics,
+        "meta": {
+            "install_label": f"FIELD-NODE-{label}",
+            "legacy_node": label,
+            "uptime_s": struct.unpack(">I", payload[12:16])[0],
+            "last_command_tag": struct.unpack(">I", payload[16:20])[0],
+            "upload_trigger": trigger,
+            "compact_payload_version": compact_version,
+            "field_sensor_source": "simulated" if simulated else "hardware",
+            "battery_estimate_quality": battery_quality,
+            "battery_estimate_quality_code": battery_quality_code,
+            "legacy_valid_flags": valid_flags,
+            "v3_valid_flags": valid,
+            "rtk_coordinate_frame": coordinate_frame,
+            "rtk_coordinate_frame_code": coordinate_frame_code,
+            "rtk_fix_type": fix_type,
+            "rtk_fix_flags": fix_flags,
+            "rtk_displacement_eligible": trusted and coordinate_frame_code != 0,
+            **(
+                {
+                    "v4_valid_flags": valid,
+                    "rtcm_injection_mode": {0: "disabled", 1: "probe", 2: "live"}[rtcm_mode],
+                    "rtcm_state_flags": rtcm_state_flags,
+                }
+                if compact_version == 4
+                else {}
+            ),
+        },
+    }
+
+
 def telemetry_profile_errors(
     telemetry: dict[str, Any],
     required_compact_version: int = 0,
     required_field_sensor_source: str = "any",
     require_battery_valid: bool = False,
     require_field_sensors_valid: bool = False,
+    require_field_calibrated_battery: bool = False,
+    required_rtcm_mode: str = "any",
+    require_rtcm_clean: bool = False,
 ) -> list[str]:
     errors: list[str] = []
     meta = telemetry.get("meta")
@@ -366,6 +628,18 @@ def telemetry_profile_errors(
         for key in ("soil_ok", "soil_ec_ok", "tilt_ok"):
             if valid_flags.get(key) != 1:
                 errors.append(f"{key}-not-valid")
+        field_ranges = {
+            "soil_temperature_c": (-50.0, 125.0),
+            "soil_moisture_pct": (0.0, 100.0),
+            "electrical_conductivity_us_cm": (0.0, 65534.0),
+            "tilt_x_deg": (-180.0, 180.0),
+            "tilt_y_deg": (-180.0, 180.0),
+            "tilt_z_deg": (-180.0, 180.0),
+        }
+        for key, (minimum, maximum) in field_ranges.items():
+            value = metrics.get(key)
+            if not isinstance(value, (int, float)) or not minimum <= float(value) <= maximum:
+                errors.append(f"{key}-out-of-range")
 
     if require_battery_valid:
         battery_v = metrics.get("battery_v")
@@ -376,6 +650,36 @@ def telemetry_profile_errors(
             errors.append("battery-voltage-out-of-range")
         elif not isinstance(battery_pct, (int, float)) or not 0 <= float(battery_pct) <= 100:
             errors.append("battery-percent-out-of-range")
+    if require_field_calibrated_battery and meta.get("battery_estimate_quality") != "field-calibrated":
+        errors.append("battery-estimate-not-field-calibrated")
+
+    rtcm_mode = meta.get("rtcm_injection_mode", "unavailable")
+    if required_rtcm_mode != "any" and rtcm_mode != required_rtcm_mode:
+        errors.append(f"rtcm-mode-{rtcm_mode}-expected-{required_rtcm_mode}")
+    if require_rtcm_clean:
+        if compact_version != 4:
+            errors.append("rtcm-evidence-requires-compact-v4")
+        if required_rtcm_mode == "disabled" and meta.get("rtcm_state_flags") != V4_RTCM_STATE_READY:
+            errors.append("rtcm-disabled-state-not-ready-only")
+        for key in (
+            "rtcm_queue_high_watermark",
+            "rtcm_accepted_fragments_total",
+            "rtcm_completed_frames_total",
+            "rtcm_injected_frames_total",
+            "rtcm_rejected_fragments_total",
+            "rtcm_crc_errors_total",
+            "rtcm_queue_drops_total",
+            "rtcm_uart_errors_total",
+        ):
+            if metrics.get(key) != 0:
+                errors.append(f"{key}-not-zero")
+        for key in (
+            "rtcm_last_fragment_age_ms",
+            "rtcm_last_completed_frame_age_ms",
+            "rtcm_last_action_age_ms",
+        ):
+            if key in metrics:
+                errors.append(f"{key}-unexpected")
     return errors
 
 
@@ -591,7 +895,7 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
             if frame_type != FIELD_LINK_TYPE_TELEMETRY:
                 continue
             try:
-                if len(payload) == COMPACT_PAYLOAD_BYTES and payload[:2] == b"LS" and payload[2] in (1, 2):
+                if len(payload) >= 3 and payload[:2] == b"LS" and payload[2] in COMPACT_PAYLOAD_BYTES_BY_VERSION:
                     telemetry = decode_compact_telemetry(payload)
                 else:
                     telemetry = json.loads(payload.decode("utf-8"))
@@ -622,6 +926,9 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
                 required_field_sensor_source=args.required_field_sensor_source,
                 require_battery_valid=args.require_battery_valid,
                 require_field_sensors_valid=args.require_field_sensors_valid,
+                require_field_calibrated_battery=args.require_field_calibrated_battery,
+                required_rtcm_mode=args.required_rtcm_mode,
+                require_rtcm_clean=args.require_rtcm_clean,
             ):
                 profile_violations_by_node[label][profile_error] += 1
             if isinstance(metrics, dict) and isinstance(metrics.get("battery_v"), (int, float)):
@@ -938,6 +1245,7 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
         latest_telemetry = last_telemetry_by_node.get(label, {})
         latest_meta = latest_telemetry.get("meta") if isinstance(latest_telemetry, dict) else None
         latest_metrics = latest_telemetry.get("metrics") if isinstance(latest_telemetry, dict) else None
+        latest_metrics = latest_metrics if isinstance(latest_metrics, dict) else {}
         node_results[label] = {
             "expected": expected,
             "matched": matched,
@@ -987,6 +1295,51 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
                 "estimateQuality": (
                     latest_meta.get("battery_estimate_quality") if isinstance(latest_meta, dict) else None
                 ),
+            },
+            "latestFieldSnapshot": {
+                key: latest_metrics.get(key)
+                for key in (
+                    "soil_temperature_c",
+                    "soil_moisture_pct",
+                    "electrical_conductivity_us_cm",
+                    "tilt_x_deg",
+                    "tilt_y_deg",
+                    "tilt_z_deg",
+                )
+            },
+            "latestGnssHealth": {
+                key: latest_metrics.get(key)
+                for key in (
+                    "rtk_gga_quality",
+                    "rtk_trusted",
+                    "rtk_satellites_used",
+                    "rtk_hdop",
+                    "rtk_correction_age_ms",
+                    "rtk_solution_age_ms",
+                    "rtk_fixed_streak_s",
+                    "rtk_fixed_ratio_1m_pct",
+                    "rtk_fix_drop_count",
+                    "rtk_reference_station_id",
+                )
+            },
+            "latestRtcmHealth": {
+                "mode": latest_meta.get("rtcm_injection_mode") if isinstance(latest_meta, dict) else None,
+                **{
+                    key: latest_metrics.get(key)
+                    for key in (
+                        "rtcm_session_epoch",
+                        "rtcm_lease_remaining_ms",
+                        "rtcm_queue_pending",
+                        "rtcm_queue_high_watermark",
+                        "rtcm_accepted_fragments_total",
+                        "rtcm_completed_frames_total",
+                        "rtcm_injected_frames_total",
+                        "rtcm_rejected_fragments_total",
+                        "rtcm_crc_errors_total",
+                        "rtcm_queue_drops_total",
+                        "rtcm_uart_errors_total",
+                    )
+                },
             },
         }
 
@@ -1047,6 +1400,9 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
             "requiredFieldSensorSource": args.required_field_sensor_source,
             "requireBatteryValid": args.require_battery_valid,
             "requireFieldSensorsValid": args.require_field_sensors_valid,
+            "requireFieldCalibratedBattery": args.require_field_calibrated_battery,
+            "requiredRtcmMode": args.required_rtcm_mode,
+            "requireRtcmClean": args.require_rtcm_clean,
             "maxP95IntervalMs": args.max_p95_interval_ms,
             "maxCommandLatencyMs": args.max_command_latency_ms,
         },
@@ -1117,7 +1473,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--required-match-rate", type=float, default=1.0)
     parser.add_argument("--max-p95-interval-ms", type=float, default=1500.0)
     parser.add_argument("--max-command-latency-ms", type=float, default=950.0)
-    parser.add_argument("--required-compact-version", type=int, choices=(0, 1, 2), default=0)
+    parser.add_argument("--required-compact-version", type=int, choices=(0, 1, 2, 3, 4), default=0)
     parser.add_argument(
         "--required-field-sensor-source",
         choices=("any", "simulated", "hardware"),
@@ -1125,6 +1481,13 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--require-battery-valid", action="store_true")
     parser.add_argument("--require-field-sensors-valid", action="store_true")
+    parser.add_argument("--require-field-calibrated-battery", action="store_true")
+    parser.add_argument(
+        "--required-rtcm-mode",
+        choices=("any", "disabled", "probe", "live"),
+        default="any",
+    )
+    parser.add_argument("--require-rtcm-clean", action="store_true")
     parser.add_argument("--fail-on-gate", action="store_true")
     args = parser.parse_args()
     if args.baud <= 0:
