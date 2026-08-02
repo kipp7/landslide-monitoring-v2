@@ -90,6 +90,8 @@ ACK result（示例）：
 
 v2 首期建议只预留命令名与字段，不强制实现完整 OTA 平台：
 
+> 2026-08-02 RK2206 只读审计结论：当前板级 HOTA HAL 为占位实现，生产镜像为单槽，A/B/C 禁止 OTA。`ota_prepare` 在 A/B 引导链和掉电回滚门禁通过前必须返回 `unsupported`。详细证据和迁移方案见 `docs/integrations/firmware/rk2206-ota-readiness-audit-20260802.md`。
+
 ### 3.1 `ota_prepare`（预留）
 
 payload（示例）：
