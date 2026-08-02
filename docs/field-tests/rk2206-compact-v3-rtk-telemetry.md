@@ -126,9 +126,10 @@ professional ECEF/ENU displacement pipeline.
 ## Pin And Bring-Up Safety
 
 For `FieldSensorMode=simulated`, RK2206 generates only realistic soil/EC/tilt
-values. Real UM220 GNSS, XLS1, and PC0 battery sampling remain active, while the
-SC16IS752 path is not built or initialized. PB4/PB5 therefore remain untouched
-until the explicit hardware build is selected.
+values. Real UM220 GNSS, XLS1, and PC0 battery sampling remain active. The RS485
+sources compile to empty units behind `ENABLE_RS485_BUS` and never initialize
+SC16IS752, so PB4/PB5 remain untouched until the explicit hardware build is
+selected.
 
 The hardware build restores SC16IS752 over EI2C0_M0 PB4/PB5 and must not be
 flashed until the interface components, continuity, supply, direction, and

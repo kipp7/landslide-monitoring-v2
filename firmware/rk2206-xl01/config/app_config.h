@@ -164,7 +164,7 @@
 
 #if ENABLE_GPS
 // GPS Module (UART0_M0) - 板子上标注的UART_TX/UART_RX
-// ✓ MPU6050已移至PB4/PB5，PB6/PB7现在可用于GPS
+// PB4/PB5 are reserved for SC16IS752 I2C; legacy MPU6050 is not installed or compiled.
 #define GPS_UART_ID         EUART0_M0    // PB6(RX), PB7(TX) - RK2206 UART0_M0
 #define GPS_BAUDRATE        115200       // UM220-IV NK EVK config.ini WorkBaudrate defaults to 115200
 #define GNSS_COORDINATE_FRAME 1U         // 1=CGCS2000 (Qianxun port 8003), 2=WGS84 (port 8002)

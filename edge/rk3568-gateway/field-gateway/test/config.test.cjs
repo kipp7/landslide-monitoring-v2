@@ -1,5 +1,8 @@
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 const test = require("node:test");
+const dotenv = require("dotenv");
 
 const { loadConfigFromEnv } = require("../dist/config.js");
 
@@ -11,6 +14,18 @@ test("compact polling stability defaults allow slow three-node responses", () =>
   assert.equal(config.southboundPollingRetryAfterMs, 1200);
   assert.equal(config.southboundPollingEmptyBackoffInitialMs, 2000);
   assert.equal(config.southboundPollingEmptyBackoffMaxMs, 30000);
+});
+
+test("RK3568 deployment example pins the field-validated recovery profile", () => {
+  const envPath = path.join(__dirname, "../deploy/field-gateway.env.rk3568.example");
+  const config = loadConfigFromEnv(dotenv.parse(fs.readFileSync(envPath)));
+
+  assert.equal(config.southboundPollingEnabled, true);
+  assert.equal(config.southboundPollingMode, "compact-broadcast-v1");
+  assert.equal(config.southboundPollingIntervalMs, 1000);
+  assert.equal(config.southboundPollingSessionTimeoutMs, 2500);
+  assert.equal(config.southboundPollingPartialRetries, 1);
+  assert.equal(config.southboundPollingRetryAfterMs, 1200);
 });
 
 test("compact polling bounds retry count and requires a complete retry window", () => {

@@ -28,13 +28,13 @@ Common variables:
 - `SOUTHBOUND_POLLING_ENABLED` - enables gateway-managed polling on shared links.
 - `SOUTHBOUND_POLLING_MODE` - `round-robin-json` for the rollback firmware or `compact-broadcast-v1` for one serialized A/B/C collection batch.
 - `SOUTHBOUND_POLLING_INTERVAL_MS` - cooldown after a compact broadcast session closes; `1000` is not a fixed one-batch-per-second start cadence.
-- `SOUTHBOUND_POLLING_SESSION_TIMEOUT_MS` - total command-to-telemetry session limit; a missing node cannot hold the shared link indefinitely.
-- `SOUTHBOUND_POLLING_PARTIAL_RETRIES` - `0` or `1`; default `0` preserves no-retry behavior.
-- `SOUTHBOUND_POLLING_RETRY_AFTER_MS` - per-attempt response window used when the single partial retry is enabled.
+- `SOUTHBOUND_POLLING_SESSION_TIMEOUT_MS` - total command-to-telemetry session limit; production uses `2500` so a missing node cannot hold the shared link indefinitely.
+- `SOUTHBOUND_POLLING_PARTIAL_RETRIES` - `0` or `1`; the conservative default is `0`, while the accepted three-node deployment uses `1` only for a partial response window.
+- `SOUTHBOUND_POLLING_RETRY_AFTER_MS` - per-attempt response window; production uses `1200` with the single partial retry.
 - `SOUTHBOUND_POLLING_PREWRITE_QUIET_MS` / `SOUTHBOUND_POLLING_PREWRITE_MAX_WAIT_MS` - poll-only quiet guard before a serial write.
 - `SOUTHBOUND_POLLING_COMMAND_CHUNK_BYTES` / `SOUTHBOUND_POLLING_COMMAND_CHUNK_DELAY_MS` - poll-only downlink pacing. Normal control commands keep the conservative `COMMAND_SERIAL_*` pacing.
 
-In `compact-broadcast-v1` mode the gateway sends one 28-byte field-link command per second. A/B/C receive that same command and return 64-byte frames in fixed `0/340/680 ms` slots. The gateway expands each binary response back into the unchanged telemetry JSON contract before MQTT publishing. Externally issued control commands remain JSON, keep their command ACKs, and temporarily pause broadcast polling while their quiet window is active.
+In `compact-broadcast-v1` mode the gateway sends one 28-byte field-link command per serialized session. A/B/C receive that command and reply in fixed `0/340/680 ms` slots. Complete response sizes are versioned: 64 bytes for V1/V2, 113 bytes for V3, and 157 bytes for V4. With all three responses and the accepted 1000 ms post-session cooldown, the observed round period is about 1.94 seconds; this is deliberately not described as fixed 1 Hz polling. The gateway expands each binary response back into the telemetry JSON contract before MQTT publishing. Externally issued control commands remain JSON, keep their command ACKs, and temporarily pause broadcast polling while their quiet window is active.
 
 ## Local Development
 
