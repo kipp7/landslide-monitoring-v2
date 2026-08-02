@@ -659,27 +659,28 @@ def telemetry_profile_errors(
     if require_rtcm_clean:
         if compact_version != 4:
             errors.append("rtcm-evidence-requires-compact-v4")
-        if required_rtcm_mode == "disabled" and meta.get("rtcm_state_flags") != V4_RTCM_STATE_READY:
-            errors.append("rtcm-disabled-state-not-ready-only")
-        for key in (
-            "rtcm_queue_high_watermark",
-            "rtcm_accepted_fragments_total",
-            "rtcm_completed_frames_total",
-            "rtcm_injected_frames_total",
-            "rtcm_rejected_fragments_total",
-            "rtcm_crc_errors_total",
-            "rtcm_queue_drops_total",
-            "rtcm_uart_errors_total",
-        ):
-            if metrics.get(key) != 0:
-                errors.append(f"{key}-not-zero")
-        for key in (
-            "rtcm_last_fragment_age_ms",
-            "rtcm_last_completed_frame_age_ms",
-            "rtcm_last_action_age_ms",
-        ):
-            if key in metrics:
-                errors.append(f"{key}-unexpected")
+        else:
+            if required_rtcm_mode == "disabled" and meta.get("rtcm_state_flags") != V4_RTCM_STATE_READY:
+                errors.append("rtcm-disabled-state-not-ready-only")
+            for key in (
+                "rtcm_queue_high_watermark",
+                "rtcm_accepted_fragments_total",
+                "rtcm_completed_frames_total",
+                "rtcm_injected_frames_total",
+                "rtcm_rejected_fragments_total",
+                "rtcm_crc_errors_total",
+                "rtcm_queue_drops_total",
+                "rtcm_uart_errors_total",
+            ):
+                if metrics.get(key) != 0:
+                    errors.append(f"{key}-not-zero")
+            for key in (
+                "rtcm_last_fragment_age_ms",
+                "rtcm_last_completed_frame_age_ms",
+                "rtcm_last_action_age_ms",
+            ):
+                if key in metrics:
+                    errors.append(f"{key}-unexpected")
     return errors
 
 

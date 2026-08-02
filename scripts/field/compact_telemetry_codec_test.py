@@ -108,6 +108,15 @@ def main() -> None:
         required_compact_version=2,
         required_field_sensor_source="hardware",
     )
+    legacy_rtcm_errors = telemetry_profile_errors(
+        telemetry_v2,
+        required_rtcm_mode="disabled",
+        require_rtcm_clean=True,
+    )
+    assert legacy_rtcm_errors == [
+        "rtcm-mode-unavailable-expected-disabled",
+        "rtcm-evidence-requires-compact-v4",
+    ]
 
     telemetry_v3 = decode_compact_telemetry(bytes.fromhex(PAYLOAD_V3_HEX))
     assert telemetry_v3["meta"]["compact_payload_version"] == 3
