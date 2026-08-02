@@ -20,6 +20,15 @@ status: active
 
 ### Current Verified Baseline (2026-08-03)
 
+#### V4 Production Software Checkpoint
+
+- V4 跨端实现已由 `ac78919e20fa6a4cbcdfdb864d73290b0522270a` 推送到 `origin/feat/gnss-rtk-v31-transport`。离线门禁为 field-gateway 44/44、telemetry-writer 13/13、API 10/10、Windows production build、RK2206 C99 主机协议与发布安全测试全部通过；差异扫描不含 CORS 密码、私钥或真实坐标。
+- 正式三节点固件目录为 `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v4_hardware_live_20260803`，manifest SHA-256 `d1f1e53a729f198fe4811cbdf835405f96b87eacf2add716142f3b8f930a09b7`。A/B/C `.img` SHA-256 为 `884482c4...a699c`、`e3e342df...a387`、`c49d54ba...68f4`；完整值见同目录 manifest。独立验证确认唯一身份、hardware RS485、最终电池校准 `1046565/1048458/993702 ppm`、139 B payload、157 B wire、LIVE capability、boot DISABLED 和有限 runtime lease control。
+- RK3568 已部署 V4 解码/NTRIP/RTCM 控制器但显式保持 `NTRIP_ENABLED=false`；回滚目录为 `/home/linaro/lsmv2-backups/field-gateway-pre-compact-v4-20260803-021718`。服务 active、`NRestarts=0`、串口 open，所有 RTCM 写入计数为 0。C 仍持续上报旧 V2，A/B 无新帧，故现场并非真正三节点全下电；该事实不作为 V4 验收。
+- 生产服务器回滚目录为 `/opt/lsmv2-production/backups/server-pre-rtk-v4-20260803-0230`。V4 writer/API 镜像分别为 `sha256:b3f744437ded557f11902b05f32e327f65df61adb1d044c1aeafa06596809534`、`sha256:2d1ea4dea9a836974aec2739d3c1fe2e1d82848f92869b184c6d2de30da6da7c`；两者 running、`RestartCount=0`，ClickHouse 持续写入和 API health 均正常。现网 Kafka offset 显式提交与有效 GPS 保留热修复已保留。
+- Windows 包 `artifacts/windows/portable-rtk-v4-20260803` 已通过原生壳 ready handshake 和 15 秒静置无错误门禁；exe SHA-256 `e7e538946f18faf5166474a1466e2e6e3311ec4ee97c608e56fd4c7b2ac285a7`。
+- 明天的唯一推进顺序：核对 C 独立供电并按标签烧录 A/B/C -> NTRIP 仍关闭跑 V4 60/600/1800 秒纯遥测 -> 确认三节点同 session lease -> PROBE -> LIVE + 真实 CORS -> 室外 `GGA=4`、correction age、Fixed 连续性与厘米级 ENU 证据。任一前置失败都不得跳级，也不得把当前软件部署写成厘米级完成。
+
 - `49eb7544` 已将常规上行升级为单个 95 字节 Compact V3 快照，完整 COBS/CRC 帧为 113 字节；移除 SHT30 和 MPU6050 字段，保留模拟 RS485 土壤/EC/独立三轴倾角、真实 UM220 GNSS、XLS1 与 PC0 电池。`deb0929d` 连同该实现已推送到远端 `feat/gnss-rtk-v31-transport`。
 - 正式烧录包位于 `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v3_final_simulated_20260803`，从干净提交 `deb0929dfc3f7412b665272a6424fc2dad35c5c2` 全量构建。manifest SHA-256 `fd917730d17bf4da4437df17c60f785780d4f1e79f55a9d9058c3427e4b49fab`；A/B/C `.img` SHA-256 为 `b71e130e...97afd`、`d3b9cee3...bcc5c`、`b306bb56...5eea`。发布验证和引脚门禁均通过：`sourceDirty=false`、7 个固件文件、唯一身份、最终校准 `1046565/1048458/993702 ppm`、RS485 simulated、`rs485HardwareInitialized=false`、RTCM disabled、PB4/PB5 hardware-only。
 - RK3568 已部署 Compact V3 解码并以旧 V2 物理节点完成 25/25 轮向后兼容门禁；生产 telemetry-writer 已部署 V3 完整快照替换语义且持续写入正常。两者尚不能替代新 V3 镜像烧录后的 60/600/1800 秒真机门禁。
@@ -134,19 +143,18 @@ status: active
 
 ## In Progress
 
-- Compact V3 正式 simulated 镜像已完成离线构建与安全门禁，等待按 A/B/C 物理标签烧录。生产继续保持 1000 ms 冷却、340 ms 节点时隙和单广播在途，并启用 1200 ms 后同标签最多重发一次、2500 ms 总时限；烧录后依次执行 60/600/1800 秒真机门禁，不再做 interval 微调。
-- 现场网络固定 4G 主用，网线即使插着也只有局域网路由，Wi-Fi 仅自动备用，不再人工切换公网出口。本轮 field-gateway 两次受控重启、Hermes 和反向 SSH 均保持在线，公网路由始终为 `usb0`。
-- A/B/C 已分别以 `+9/+7/最坏 9 mV` 误差通过并接受 `1046565/1048458/993702 ppm`，不再重刷或重复校准；百分比仍只是 3S OCV 估算，不宣称剩余 mAh 或续航。
-- RS485 元件未到期间，最终 simulated 包故意不初始化 PB4/PB5；最终 hardware 预检包已离线构建但继续禁烧。接口到货、焊接与断电/首次上电电气检查完成后才允许按物理身份使用锁定哈希的 hardware `.img`，不可手工删除模拟函数、修改 XLS1 驱动或绕过包内检查顺序。
+- Compact V4 正式 hardware/LIVE-capable 镜像已完成离线构建与安全门禁，等待明天按 A/B/C 物理标签烧录。生产继续保持 1000 ms 冷却、340 ms 节点时隙和单广播在途，并启用 1200 ms 后同标签最多重发一次、2500 ms 总时限；烧录后依次执行 60/600/1800 秒真机门禁，不再做 interval 微调。
+- RK3568、服务器和 Windows 字段链已部署，但 RK3568 明确保持 `NTRIP_ENABLED=false`。C 仍在持续发旧 V2，说明它没有真正断电或存在独立供电；明天烧录前先处理该事实，不能把今晚兼容遥测计为 V4 验收。
+- A/B/C 已接受 `1046565/1048458/993702 ppm` 最终 PC0 校准；V4 manifest 将其绑定为 field-calibrated。百分比仍只是 3S OCV 估算，不宣称剩余 mAh 或续航。
 - OTA 当前只允许离线设计和可恢复备用板验证；现场 A/B/C 的 `ota_prepare/apply` 必须返回 `unsupported`。
-- RTCM injection 仍保持 disabled；本轮先建立纯 compact 传感器数据的三节点稳定/延迟基线，再恢复真实 GNSS/RTCM 混合负载门禁。
+- RTCM runtime 当前保持 disabled；先建立 V4 hardware 纯遥测三节点稳定/延迟基线，再按 PROBE -> LIVE -> 室外 Fixed 顺序推进。
 
 ## Next Actions
 
-1. 按 A/B/C 物理标签烧录 `xls1_compact_v3_final_simulated_20260803` 中对应 `.img`；随后以当前生产时序依次跑 60、600、1800 秒三节点门禁，核对 V3 profile、完整轮次、序号连续、解码/schema/重试/重复/未匹配/残帧错误和时延。三段完成前保持 RS485 simulated、RTCM disabled。
+1. 先确认 C 的独立供电，再按 A/B/C 物理标签烧录 `xls1_compact_v4_hardware_live_20260803` 中对应 `.img`；保持 NTRIP 关闭，核对 V4 profile、RTCM fail-closed、三套真实 RS485 传感器与 PC0 校准，然后依次跑 60、600、1800 秒三节点门禁。
 2. 通过脱敏健康摘要持续核对 `compactBroadcastRetryRate <= 0.02`、重发写失败为 0、逻辑总响应不超过 2500 ms，并同时确认 `usb0` 默认路由、反向 SSH、Hermes 和 MQTT 在线；不再通过插拔网线制造常规切换。
-3. 不把模拟 compact 门禁或预编译成功等同于真实传感器门禁。RS485 接口到货后先断电检查方向、针脚偏移、短路、连续性和模块型号，上电后检查 PB4/PB5 约 3.3 V 及 `0x4D` 识别；通过后才烧录匹配身份的 hardware 预检包，并完整复跑真实有效位、身份、哈希和至少 600 秒三节点通信门禁。
-4. 真实传感器链稳定后恢复 RTCM PROBE，再执行三节点真实 NTRIP 混合负载门禁；最终覆盖 RTCM、3 个 GNSS_CORE、compact 遥测和控制命令，并以 correction age 和 Fixed 连续性作为生产依据。
+3. 纯遥测 1800 秒通过后，才把 CORS 参数写入 RK3568 本地 600 权限环境文件并启用 PROBE。验证三节点相同 session/lease、RTCM 类型、分片、队列、CRC 和 UART 证据后，才允许切 LIVE。
+4. LIVE 后执行三节点真实 NTRIP 混合负载和室外 `GGA=4` 门禁，以 correction age、Fixed 连续性和可信坐标作为依据；再完成 ECEF/ENU、Hampel/Kalman、CEEMDAN 的算法验收。
 5. OTA 只在可有线救援备用板启动：先证明 loader 可手动启动 FW1/FW2，再实现 fail-closed Flash HAL、签名、冗余原子元数据、pending/confirm/rollback 和掉电注入测试；所有门禁通过前不修改现场节点。
 
 ## Risks
@@ -165,4 +173,4 @@ status: active
 
 ## Resume Prompt
 
-继续 2026-08-03 XLS1/RTK 链路任务：Compact V3 正式 simulated 包已从干净且已推送的 `deb0929d...` 构建到 `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v3_final_simulated_20260803`，manifest `fd917730...b49fab`，A/B/C `.img` 为 `b71e130e...97afd`、`d3b9cee3...bcc5c`、`b306bb56...5eea`；发布与引脚门禁均通过。下一步按物理标签烧录 A/B/C，然后以 1000 ms 冷却、1200 ms 首响应窗、部分响应最多重发一次、2500 ms 总会话依次跑 60/600/1800 秒真机门禁。三段通过前保持 RS485 simulated、RTCM disabled；之后才进入硬件 RS485 电气门禁，再恢复 RTCM PROBE/真实 NTRIP。OTA 仍禁止用于现场 A/B/C，原始报告、坐标和凭据不进入 Git。
+继续 2026-08-03 XLS1/RTK V4 链路任务：源码 `ac78919e...` 已推送；正式包 `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v4_hardware_live_20260803` 已通过 `sourceDirty=false`、身份、139/157 B、hardware、最终电池校准、LIVE capability 与 boot DISABLED 门禁。RK3568/服务器/Windows 已部署且 NTRIP 保持关闭。先确认 C 为何仍发旧 V2，再按物理标签烧录 A/B/C；随后以 1000 ms 冷却、1200 ms 首响应窗、部分响应最多重发一次、2500 ms 总会话依次跑 60/600/1800 秒 V4 hardware 纯遥测门禁。通过后再依次启用 PROBE、LIVE、室外 Fixed 和专业位移算法验收。OTA 仍禁止用于现场 A/B/C，原始报告、坐标和凭据不进入 Git。

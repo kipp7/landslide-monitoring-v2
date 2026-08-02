@@ -23,9 +23,13 @@ status: active
 - 用户已将 A/B/C 全部下电；本轮只做 RK3568、服务器、Windows 桌面端和离线固件发布包，禁止把离线软件测试误记为三节点真实链路或厘米级验收。明天烧录后仍需依次完成 V4 纯遥测、RTCM 会话确认、真实 CORS LIVE 和室外 `GGA=4` 门禁。
 - RK2206 已形成 compact V4：139 字节 payload、157 字节完整 COBS/CRC 帧，前 95 字节与 V3 字段兼容，新增 44 字节为 RTCM 启动模式、运行时会话/租约、队列、最近动作年龄和累计错误证据。固件具备 LIVE capability，但开机强制 `DISABLED`；只有 RK3568 发送带目标掩码、非零会话号和有限租约的 19 字节控制命令后才允许 RTCM，重启或租约超时自动禁用。
 - RK3568 已接入 NTRIP、GGA、RTCM3 解码/筛选、单份广播分片和三节点同会话确认。NTRIP 客户端新增兼容只有 `ICY 200 OK\r\n` 后直接输出 RTCM 的 v1 caster；密码不进入统计、健康文件或日志。串口写失败的 RTCM 分片会放回有界队列头部，利用节点端幂等分片处理重试，避免瞬时写失败必然造成整帧缺片；当前网关 44/44 测试通过。
-- 服务器 `telemetry-writer` 已在本地修正：compact V4 与 V3 一样执行完整快照替换，清除旧空气温湿度、MPU6050 和过期 RTK 字段；V4 RTCM 指标与元数据已加入白名单，不再被丢弃。当前 13/13 测试通过。
+- 服务器 `telemetry-writer` 已在生产部署：compact V4 与 V3 一样执行完整快照替换，清除旧空气温湿度、MPU6050 和过期 RTK 字段；V4 RTCM 指标与元数据已加入白名单，不再被丢弃。现网 offset 显式提交和有效 GPS 保留两项热修复均已保留；当前 13/13 测试通过，生产运行时 hook 也已证明 V4 替换语义。
 - RK2206 主机协议金值通过：`compact_v4_payload_bytes=139`、`field_link_wire_bytes=157`；V3/V4 发布验证器正向与篡改/身份/模式/运行时启动状态拒绝路径通过，引脚门禁为 `XLS1=PB2/PB3`、`GPS=PB6/PB7`、`BATTERY=PC0-input`、`RS485=PB4/PB5-hardware-only`。
-- Windows 桌面端字段契约已完成本地复核和生产构建：位移页只使用同历元 `rtk_trusted=true` 的 RTK 坐标，保留 9 位小数并显示 Fixed/Float、可信门禁、卫星、HDOP、差分龄、解算龄、Fixed 连续性、基站、坐标系和 RTCM 错误摘要；空气温湿度与 MPU6050 已从该链路和页面移除。服务器/API、telemetry-writer、RK2206 主机协议与发布安全门禁均已重新通过。当前尚未完成：RK3568/服务器实际部署、干净提交与正式 A/B/C V4 包构建。生产轮询仍保持已通过 1800 秒门禁的 1000 ms + 部分响应一次有界重发；139 B 不是当前瓶颈，未经 1800 秒实机长测不得下调生产冷却。
+- Windows 桌面端字段契约已完成本地复核和生产构建：位移页只使用同历元 `rtk_trusted=true` 的 RTK 坐标，保留 9 位小数并显示 Fixed/Float、可信门禁、卫星、HDOP、差分龄、解算龄、Fixed 连续性、基站、坐标系和 RTCM 错误摘要；空气温湿度与 MPU6050 已从该链路和页面移除。服务器/API、telemetry-writer、RK2206 主机协议与发布安全门禁均已重新通过。RK3568、服务器、Windows 包和正式 A/B/C V4 包现已完成；剩余工作是真实三节点与室外 Fixed 验收，以及在可信 Fixed 样本成立后完成 ECEF/ENU、Hampel/Kalman 和服务器 CEEMDAN 的长周期算法门禁。生产轮询仍保持已通过 1800 秒门禁的 1000 ms + 部分响应一次有界重发；139 B 不是当前瓶颈，未经 1800 秒实机长测不得下调生产冷却。
+- 最终源码提交为 `ac78919e20fa6a4cbcdfdb864d73290b0522270a`，已推送到 `origin/feat/gnss-rtk-v31-transport`。正式 A/B/C V4 hardware 包位于 `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v4_hardware_live_20260803`，manifest SHA-256 为 `d1f1e53a729f198fe4811cbdf835405f96b87eacf2add716142f3b8f930a09b7`；A/B/C `.img` SHA-256 分别为 `884482c4c7608de9f9a63e8f7ca32e75f195cf41b56369cc558e5f8c1d5a699c`、`e3e342df18c3b1e18a29860f9ca18eaf6695f4f547c48ae599197550e860a387`、`c49d54bacfe280c54259b3ed325b70f115b3da26b034752f40214af909a768f4`。发布验证为 `sourceDirty=false`、V4 139/157 B、hardware、最终校准、LIVE capability、boot DISABLED、runtime lease control 全部通过。
+- RK3568 V4 网关已备份并部署，回滚目录 `/home/linaro/lsmv2-backups/field-gateway-pre-compact-v4-20260803-021718`。`dist/index.js` 与 `dist/compact-telemetry.js` SHA-256 为 `535a850d9cbb980e6f57930153fdfbda9774297ed90597f8ba09fbf7404a08b6`、`331d2b2f58b2d18ec97f2fbebab89af3be2d14976d5d7c3b083aa0ded0d223c3`；环境文件保持 `600 root:root` 并显式设置 `NTRIP_ENABLED=false`。服务 active、`NRestarts=0`、串口 open，schema/写入/RTCM 错误均为 0。健康文件显示 C 仍在持续发旧 compact V2，A/B 无新帧，因此用户所述 A/B/C 全下电与实际状态不一致；该段不计作 V4 真机验收。
+- 生产服务器备份位于 `/opt/lsmv2-production/backups/server-pre-rtk-v4-20260803-0230`。写入器镜像 `sha256:b3f744437ded557f11902b05f32e327f65df61adb1d044c1aeafa06596809534`，API 镜像 `sha256:2d1ea4dea9a836974aec2739d3c1fe2e1d82848f92869b184c6d2de30da6da7c`；回滚标签分别为 `rollback-compact-v4-20260803-0230`、`rollback-rtk-v4-20260803-0230`。两容器 running、`RestartCount=0`，写入器持续成功写 ClickHouse，API `/health` 正常，最近 error/fatal 为 0。
+- Windows 便携包位于 `artifacts/windows/portable-rtk-v4-20260803`，`LandslideDesk.Win.exe` SHA-256 为 `e7e538946f18faf5166474a1466e2e6e3311ec4ee97c608e56fd4c7b2ac285a7`。原生壳 ready handshake 通过，静置 15 秒无前端 runtime error，验证后测试进程已停止。
 
 ### Authoritative Latest State (2026-08-03)
 
@@ -138,18 +142,16 @@ status: active
 
 ## Plan
 
-- 正式 simulated V3 包已生成并完成离线发布门禁；下一步只按物理标签烧录 `xls1_compact_v3_final_simulated_20260803` 中 A/B/C 对应 `.img`，不得混刷节点身份或使用旧 dirty 候选。
-- 烧录后按现有生产参数先跑 60 秒，再跑 600 秒和 1800 秒三节点真机门禁：1000 ms cooldown、2500 ms session timeout，仅部分响应时同标签最多重发一次、1200 ms retry window。三段全部通过前不启用 hardware RS485、RTCM PROBE/LIVE，也不把 RK3568 的 V2 兼容门禁表述为 V3 真机通过。
+- 明天先核对 C 的独立供电来源，再按物理标签烧录 `xls1_compact_v4_hardware_live_20260803` 中 A/B/C 对应 `.img`；不得混刷身份，也不得使用任何早期 rejected/dirty 候选。
+- 保持 `NTRIP_ENABLED=false`，先确认三节点均为 compact V4、RTCM `disabled`、session/lease 为 0、RS485 三合一土壤/EC和独立三轴倾角有效、PC0 校准质量为 field-calibrated；随后按现有生产参数依次跑 60/600/1800 秒纯遥测门禁：1000 ms cooldown、2500 ms session timeout，仅部分响应时同标签最多重发一次、1200 ms retry window。
 - A/B/C 已分别以 `+9/+7/最坏 9 mV` 通过电池同步验收并接受 `1046565/1048458/993702 ppm`，最终校准文件及 simulated/hardware 发布包均已生成并通过 final-acceptance、身份、哈希、模式和引脚门禁；百分比仍只是受负载、温度和老化影响的 3S OCV 估算，不能作为准确剩余 mAh 或续航。
 - 保持 4G 主用、1000 ms 冷却和已部署的单次有界重发；持续观察生产重发率不高于 2%、总逻辑响应不高于 2500 ms，网线只保留局域网路由，不再通过人工插拔切换公网链路。
-- RS485 接口到货且源码未变化时，使用已锁定 manifest/hash 的最终 hardware 预检包；先完成断电电气门禁和无传感器首次上电，再按物理身份烧录 A/B/C，随后执行 `0x4D`、真实传感器有效位和至少 600 秒三节点通信门禁。若源码提交或校准哈希变化，必须废止该包并从干净提交重建。
-- 捕获至少 60 s 不含凭据的原始 RTCM，运行 capture-driven 容量报告；原始报告与真实坐标不进入 Git。
-- 将已实现的 RTCM shaper 接入 RK3568 统一端口所有权调度器，补齐 160 B 分片、160 ms 包间隔、持久 session epoch、绝对 TTL 和运行状态；队列过载时丢弃旧改正数而不是延迟发送。
+- 纯遥测 1800 秒通过后，才把 CORS 参数写入 RK3568 本地 `600 root:root` 环境文件；密码不进入 Git、memory、日志或健康 JSON。先设置 `RTCM_RUNTIME_MODE=probe`，验证三节点确认同一非零 session/有限 lease、160 B 分片、160 ms 调度、RTCM 类型筛选、队列/CRC/UART 错误为 0，再进入 LIVE。
+- 捕获至少 60 s 不含凭据的实际 RTCM 与脱敏容量汇总；原始差分流和真实坐标不进入 Git。已部署 shaper 只保留 1005/1033/1074/1094/1124，过滤 UM220 不支持的 1114/1084，并以最新帧优先和 TTL 控制 correction age。
 - 在恢复 QZSS 前设计并门禁低频累计确认/选择性重传或等价的有界可靠机制；不能用无限队列、逐帧三节点 ACK 或盲目全量重复换取表面零丢包。机制必须保持 correction age 有界，并实测三节点反向确认不会与 compact 遥测争用半双工链路。
-- A/B 节点计数均通过后，再加入 3 个 1 Hz `GNSS_CORE`、compact 环境遥测和控制命令，执行真实 NTRIP 混合负载；不把合成 PROBE 通过等同于 RTK Fixed 通过。
-- 保留当前三节点模拟 compact 基线、V4 诊断包和 RK3568 回滚目录。后续每次只改变一个层级：先 hardware 传感器，再 RTCM PROBE，最后 LIVE；不同时回退 RK2206 和 RK3568。
+- PROBE 通过后执行真实 NTRIP 混合负载；不把合成/PROBE 通过等同于 RTK Fixed。每次只改变一个层级：hardware 纯遥测 -> PROBE -> LIVE -> 室外 Fixed；不同时回退 RK2206 和 RK3568。
 - 至少运行 60 分钟三节点门禁，目标 correction age P95 <=3 s、max <=5 s、无旧 session 注入且 Fixed 连续。
-- 通过后才启用 `LIVE`，随后实现定点 GNSS 解析、RK3568 ECEF/ENU/Hampel/Kalman、服务器 CEEMDAN 和 UI/profile。
+- 室外 `GGA=4` 与可信门禁通过后，才用这些样本建立基线并完成 RK3568 ECEF/ENU、Hampel/Kalman、服务器 CEEMDAN 和 UI/profile 的算法验收；当前 API 的可信 RTK 筛选与高精度显示不能替代该算法门禁。
 - OTA 只在可有线救援备用板推进：先证明 loader 可手动启动 FW1/FW2，再实现 fail-closed Flash HAL、签名、冗余原子元数据、pending/confirm/rollback 和掉电注入测试。所有门禁通过前，现场 A/B/C 的 `ota_prepare/apply` 必须返回 `unsupported`。
 
 ## Open Questions
