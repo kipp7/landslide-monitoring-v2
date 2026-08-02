@@ -27,6 +27,9 @@ status: active
 - 最终网关与门禁脚本 SHA-256 分别为 `f66d5ed7165c8810248df4cd4bb7ba4f3e09a01ea96f7781893594ceae6bc3d8` 和 `d4094733f8d363bb8d85e565e3779604df6a8ba08d460ec6e1363581011e8e9d`。测试 hold 使用 `/run` drop-in 并已验证必定恢复服务。
 - 当前约 1.94 秒完成一轮，因为 1000 ms 是会话关闭后的冷却，不是固定 1 Hz。当前基线追求零丢帧，不为比赛显示伪称每秒三节点齐采。
 - 电池约为 A 11.04 V、B 11.03 V、C 11.82 V，仍属 `default-calibration`；先做逐节点万用表校准，再解释百分比或续航。RS485 硬件到位后只通过构建参数切回 hardware，并重新做完整门禁。
+- RK3568 已恢复并固定以 4G `usb0` 为主链路，默认路由 metric 50；`wlan0` 仅作为 metric 600 的自动备用，不再人工切换网线。云端反向端口、MQTT、Hermes 和告警链路均已验证经蜂窝出口在线。
+- 4G 上 950 ms 的 600 秒严格门禁为 310/310 完整轮、930/930 帧且零错误；900/850/800 ms 均通过 60 秒预检。但 800 ms 的 1800 秒最终门禁仅 1014/1021 完整轮、3056/3063 帧，A/B/C 分别缺 6/1/0，故 800 ms 被拒绝。报告 SHA-256 为 `9330bcddd2127d302a86783f5dfcb1b794ea3dcdd9c7d036c970b48ca97281bc`，生产保持 1000 ms，不部署 950 ms 的边际提速。
+- 800 ms 失败中三节点已接收序号仍连续，且重复、回退、未匹配、解码、profile、残帧错误均为 0；问题表现为长测下零星轮次无应答，不是 4G 中断。门禁退出后 field-gateway 自动恢复，复核 118 轮、354 帧、0 timeout、最近一轮 3/3，MQTT connected。
 
 ### Prior Engineering Evidence
 
@@ -90,6 +93,7 @@ status: active
 ## Plan
 
 - 先完成 A/B/C PC0 电池逐节点万用表校准；当前默认校准电压只用于趋势，百分比不作为准确剩余容量。
+- 保持 4G 主用和 1000 ms 生产参数。先补齐路由改变后 field-gateway、Hermes、反向 SSH 全部长连接的受控重建与测试；修复前不通过人工插拔网线做常规验证。
 - RS485 接口到货后只切 `-FieldSensorMode hardware -GnssRtcmInjectionMode disabled` 重建 A/B/C，重新执行身份、二进制哈希、真实传感器有效位和至少 600 秒三节点通信门禁。
 - 捕获至少 60 s 不含凭据的原始 RTCM，运行 capture-driven 容量报告；原始报告与真实坐标不进入 Git。
 - 将已实现的 RTCM shaper 接入 RK3568 统一端口所有权调度器，补齐 160 B 分片、160 ms 包间隔、持久 session epoch、绝对 TTL 和运行状态；队列过载时丢弃旧改正数而不是延迟发送。
