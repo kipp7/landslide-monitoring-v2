@@ -7,7 +7,7 @@ tags:
   - rtk
   - xls1
   - transport
-status: active
+status: blocked
 ---
 
 # Checkpoint: gnss-rtk-v3-transport-gate-20260726
@@ -31,6 +31,7 @@ status: active
 - Windows 字段契约已统一到设备页、详情和 CSV：使用土壤温度/湿度/EC、三轴倾角、可信 RTK 与专业位移，删除空气温湿度、MPU6050 和旧 6 位坐标；仅 `rtk_trusted=true` 时显示 9 位 RTK 坐标，缺失值不再伪造为 0。便携包 `artifacts/windows/portable-rtk-v4-fields-20260803` 已通过原生壳 ready handshake 和 15 秒静置无错误门禁；exe SHA-256 `26c2c609755e0ab68188a4a7bec6333d9d47a10f20472c6069014c4ea6c683d8`。
 - `c742b846` 删除了 `app_config.h` 中错误声称 MPU6050 使用 PB4/PB5 的历史注释，并将 RK3568 生产部署模板固定为已通过长测的 `1000/2500/1/1200 ms` 恢复配置；新增测试直接解析该模板并断言参数，网关回归由 44 增至 45 项。二进制抽查再次确认 simulated V3 含模拟标记但不含 SC16IS752/I2C 路径，hardware V4 `r2` 含硬件路径且不含模拟标记。全部引脚、负例、发布、电池及协议门禁重跑通过；这些后续修正不改变 `r2` 固件哈希。
 - 从干净提交 `4b12eaab1483ac0883e2e87bd963ceedbe565476` 生成了同构 Compact V4 simulated 演练包 `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v4_simulated_rehearsal_20260803`，manifest SHA-256 `771510d10093e2d85ad65b6d21fc9af44f67fd8348182725a4660aa94495b281`，A/B/C 镜像 SHA-256 为 `3a5c39d4...39ba1`、`c60f54c6...63907`、`24156b7b...b0ccc`。发布安全确认三节点唯一身份、field-calibrated PC0、139/157 B、LIVE capability 但 boot DISABLED，且 `rs485HardwareInitialized=false`；逐节点二进制均无 SC16IS752/PB4/PB5 路径。它与 hardware `r2` 共用相同 loader 和 Compact V4/RTCM runtime 契约，只允许在 RS485 接口未安装时做链路演练，不能作为真实传感器验收包。
+- 当前检查点为现场阻断：所有仍可离线证明的原始目标项已经复核，但正式 Compact V4 hardware `r2` 尚未实际烧录到 A/B/C 并完成 60/600/1800 秒真实 RS485 门禁。解除条件只有三个：确认 C 不再由独立路径供电、按物理标签烧录 `r2` A/B/C 对应镜像、三节点同时上电；随后从 `--check-prerequisites` 恢复。没有这些现场动作，继续增加模拟或单元测试不能证明真实 157 B 链路稳定性。
 - 明天的唯一推进顺序：核对 C 独立供电并按标签烧录 A/B/C -> NTRIP 仍关闭跑 V4 60/600/1800 秒纯遥测 -> 确认三节点同 session lease -> PROBE -> LIVE + 真实 CORS -> 室外 `GGA=4`、correction age、Fixed 连续性与厘米级 ENU 证据。任一前置失败都不得跳级，也不得把当前软件部署写成厘米级完成。
 
 - `49eb7544` 已将常规上行升级为单个 95 字节 Compact V3 快照，完整 COBS/CRC 帧为 113 字节；移除 SHT30 和 MPU6050 字段，保留模拟 RS485 土壤/EC/独立三轴倾角、真实 UM220 GNSS、XLS1 与 PC0 电池。`deb0929d` 连同该实现已推送到远端 `feat/gnss-rtk-v31-transport`。
