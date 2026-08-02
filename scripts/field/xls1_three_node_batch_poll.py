@@ -60,6 +60,24 @@ def percentile(values: list[float], fraction: float) -> float | None:
     return round(ordered[index], 1)
 
 
+def should_retry_broadcast_poll(
+    received_count: int,
+    expected_count: int,
+    retries_used: int,
+    max_retries: int,
+) -> bool:
+    return 0 < received_count < expected_count and retries_used < max_retries
+
+
+def classify_repeated_broadcast_telemetry(
+    attempts: int,
+    retry_copy_already_observed: bool,
+) -> str:
+    if attempts > 1 and not retry_copy_already_observed:
+        return "redundant-retry"
+    return "duplicate"
+
+
 def command_tag(command_id: str) -> int:
     value = 2166136261
     for byte in command_id.encode("ascii"):
@@ -380,6 +398,9 @@ def evaluate_stability_gate(
     node_results: dict[str, Any],
     max_p95_interval_ms: float,
     max_command_latency_ms: float,
+    broadcast_retry_rate: float = 0.0,
+    max_broadcast_retry_rate: float = 1.0,
+    max_logical_response_latency_ms: float = 5000.0,
 ) -> bool:
     if set(node_results) != set(NODES):
         return False
@@ -390,6 +411,7 @@ def evaluate_stability_gate(
         and duplicate_telemetry == 0
         and profile_violation_count == 0
         and trailing_undelimited_bytes == 0
+        and broadcast_retry_rate <= max_broadcast_retry_rate
         and all(
             result["expected"] > 0
             and result["matched"] > 0
@@ -398,6 +420,16 @@ def evaluate_stability_gate(
             and result["arrivalIntervalMs"]["p95"] <= max_p95_interval_ms
             and result["commandToTelemetryLatencyMs"]["max"] is not None
             and result["commandToTelemetryLatencyMs"]["max"] <= max_command_latency_ms
+            and result.get(
+                "logicalCommandToTelemetryLatencyMs",
+                result["commandToTelemetryLatencyMs"],
+            )["max"]
+            is not None
+            and result.get(
+                "logicalCommandToTelemetryLatencyMs",
+                result["commandToTelemetryLatencyMs"],
+            )["max"]
+            <= max_logical_response_latency_ms
             for result in node_results.values()
         )
     )
@@ -471,22 +503,31 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
     send_records: dict[str, dict[str, Any]] = {}
     send_records_by_tag: dict[tuple[int, str], dict[str, Any]] = {}
     received_command_ids: set[str] = set()
+    redundant_retry_command_ids: set[str] = set()
     arrivals_by_node: dict[str, list[float]] = defaultdict(list)
     latencies_by_node: dict[str, list[float]] = defaultdict(list)
+    logical_latencies_by_node: dict[str, list[float]] = defaultdict(list)
     seq_by_node: dict[str, list[int]] = defaultdict(list)
     compact_versions_by_node: dict[str, Counter[int]] = defaultdict(Counter)
     field_sources_by_node: dict[str, Counter[str]] = defaultdict(Counter)
     profile_violations_by_node: dict[str, Counter[str]] = defaultdict(Counter)
     battery_voltages_by_node: dict[str, list[float]] = defaultdict(list)
+    matched_after_retry_dispatch_by_node: Counter[str] = Counter()
     last_telemetry_by_node: dict[str, dict[str, Any]] = {}
     errors: Counter[str] = Counter()
     error_samples: list[dict[str, Any]] = []
     unmatched_samples: list[dict[str, Any]] = []
     duplicate_samples: list[dict[str, Any]] = []
+    post_retry_match_samples: list[dict[str, Any]] = []
+    redundant_retry_samples: list[dict[str, Any]] = []
     ack_samples: list[dict[str, Any]] = []
     valid_frame_types: Counter[str] = Counter()
     unmatched_telemetry = 0
     duplicate_telemetry = 0
+    redundant_retry_telemetry = 0
+    broadcast_retry_commands = 0
+    broadcast_retry_rounds = 0
+    broadcast_retry_bytes = 0
     serial_sequence = 0
     batches_sent = 0
     bytes_read = 0
@@ -498,7 +539,7 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
     warmup_bytes_written = 0
 
     def receive_once(fd: int, timeout: float) -> None:
-        nonlocal bytes_read, unmatched_telemetry, duplicate_telemetry
+        nonlocal bytes_read, unmatched_telemetry, duplicate_telemetry, redundant_retry_telemetry
 
         readable, _, _ = select.select([fd], [], [], max(0.0, timeout))
         if not readable:
@@ -613,6 +654,26 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
                     )
                 continue
             if command_id in received_command_ids:
+                repeated_classification = classify_repeated_broadcast_telemetry(
+                    int(send_record.get("attempts", 1)),
+                    command_id in redundant_retry_command_ids,
+                )
+                if repeated_classification == "redundant-retry":
+                    redundant_retry_command_ids.add(command_id)
+                    redundant_retry_telemetry += 1
+                    if len(redundant_retry_samples) < 50:
+                        redundant_retry_samples.append(
+                            {
+                                "at": utc_now(),
+                                "elapsedMs": round((received_mono - started_mono) * 1000.0, 1),
+                                "node": label,
+                                "sequence": seq,
+                                "commandTag": last_command_tag,
+                                "batch": send_record["batch"],
+                                "attempts": send_record["attempts"],
+                            }
+                        )
+                    continue
                 duplicate_telemetry += 1
                 if len(duplicate_samples) < 50:
                     duplicate_samples.append(
@@ -627,8 +688,26 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
                     )
                 continue
             received_command_ids.add(command_id)
-            latency_ms = (received_mono - float(send_record["sentMono"])) * 1000.0
+            latency_ms = (received_mono - float(send_record["lastAttemptSentMono"])) * 1000.0
             latencies_by_node[label].append(latency_ms)
+            logical_latency_ms = (received_mono - float(send_record["sentMono"])) * 1000.0
+            logical_latencies_by_node[label].append(logical_latency_ms)
+            if int(send_record.get("attempts", 1)) > 1:
+                matched_after_retry_dispatch_by_node[label] += 1
+                if len(post_retry_match_samples) < 50:
+                    post_retry_match_samples.append(
+                        {
+                            "at": utc_now(),
+                            "elapsedMs": round((received_mono - started_mono) * 1000.0, 1),
+                            "node": label,
+                            "sequence": seq,
+                            "commandTag": last_command_tag,
+                            "batch": send_record["batch"],
+                            "attempts": send_record["attempts"],
+                            "attemptLatencyMs": round(latency_ms, 1),
+                            "logicalLatencyMs": round(logical_latency_ms, 1),
+                        }
+                    )
 
         if len(receive_buffer) > 65536:
             errors["field-link assembler buffer overflow"] += 1
@@ -731,6 +810,8 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
                             "position": position,
                             "sentAt": utc_now(),
                             "sentMono": sent_mono,
+                            "lastAttemptSentMono": sent_mono,
+                            "attempts": 1,
                         }
                         send_records[record_id] = send_record
                         send_records_by_tag[(tag, label)] = send_record
@@ -744,6 +825,48 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
                             and time.monotonic() < response_deadline
                         ):
                             receive_once(fd, min(0.05, response_deadline - time.monotonic()))
+                        retries_used = 0
+                        while (
+                            should_retry_broadcast_poll(
+                                sum(
+                                    record_id in received_command_ids
+                                    for record_id in batch_record_ids
+                                ),
+                                len(batch_record_ids),
+                                retries_used,
+                                args.broadcast_partial_retries,
+                            )
+                        ):
+                            retries_used += 1
+                            broadcast_retry_commands += 1
+                            if retries_used == 1:
+                                broadcast_retry_rounds += 1
+                            retry_sent_mono = time.monotonic()
+                            for record_id in batch_record_ids:
+                                send_records[record_id]["attempts"] = retries_used + 1
+                                send_records[record_id]["lastAttemptSentMono"] = retry_sent_mono
+                            retry_frame = encode_frame(
+                                FIELD_LINK_TYPE_COMMAND,
+                                serial_sequence,
+                                poll_command.encode("ascii"),
+                            )
+                            serial_sequence = (serial_sequence + 1) & 0xFFFFFFFF
+                            write_chunked(
+                                fd,
+                                retry_frame,
+                                args.command_chunk_bytes,
+                                args.command_chunk_delay_ms,
+                            )
+                            bytes_written += len(retry_frame)
+                            broadcast_retry_bytes += len(retry_frame)
+                            response_deadline = (
+                                time.monotonic() + args.broadcast_response_timeout_ms / 1000.0
+                            )
+                            while (
+                                not all(record_id in received_command_ids for record_id in batch_record_ids)
+                                and time.monotonic() < response_deadline
+                            ):
+                                receive_once(fd, min(0.05, response_deadline - time.monotonic()))
                 else:
                     for position, (label, device_id) in enumerate(order):
                         command_id = str(uuid.uuid4())
@@ -763,6 +886,8 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
                             "position": position,
                             "sentAt": utc_now(),
                             "sentMono": sent_mono,
+                            "lastAttemptSentMono": sent_mono,
+                            "attempts": 1,
                         }
                         send_records[command_id] = send_record
                         send_records_by_tag[(tag, label)] = send_record
@@ -801,6 +926,7 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
         arrivals = arrivals_by_node[label]
         intervals_ms = [(right - left) * 1000.0 for left, right in zip(arrivals, arrivals[1:])]
         latencies = latencies_by_node[label]
+        logical_latencies = logical_latencies_by_node[label]
         sequences = seq_by_node[label]
         sequence_steps = [(right - left) & 0xFFFFFFFF for left, right in zip(sequences, sequences[1:])]
         forward_missing = sum(step - 1 for step in sequence_steps if 1 < step < 0x80000000)
@@ -827,6 +953,12 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
                 "p95": percentile(latencies, 0.95),
                 "max": round(max(latencies), 1) if latencies else None,
             },
+            "logicalCommandToTelemetryLatencyMs": {
+                "p50": percentile(logical_latencies, 0.50),
+                "p95": percentile(logical_latencies, 0.95),
+                "max": round(max(logical_latencies), 1) if logical_latencies else None,
+            },
+            "matchedAfterBroadcastRetryDispatch": matched_after_retry_dispatch_by_node[label],
             "sequence": {
                 "first": sequences[0] if sequences else None,
                 "last": sequences[-1] if sequences else None,
@@ -861,6 +993,7 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
     expected_total = len(send_records)
     matched_total = len(received_command_ids)
     matched_rate = matched_total / expected_total if expected_total else 0.0
+    broadcast_retry_rate = broadcast_retry_rounds / batches_sent if batches_sent else 0.0
     error_count = sum(errors.values())
     profile_violation_count = sum(
         sum(violations.values()) for violations in profile_violations_by_node.values()
@@ -877,6 +1010,9 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
         node_results=node_results,
         max_p95_interval_ms=args.max_p95_interval_ms,
         max_command_latency_ms=args.max_command_latency_ms,
+        broadcast_retry_rate=broadcast_retry_rate,
+        max_broadcast_retry_rate=args.max_broadcast_retry_rate,
+        max_logical_response_latency_ms=args.max_logical_response_latency_ms,
     )
 
     return {
@@ -900,6 +1036,9 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
             "responseWaitMs": args.response_wait_ms,
             "broadcastPoll": args.broadcast_poll,
             "broadcastResponseTimeoutMs": args.broadcast_response_timeout_ms,
+            "broadcastPartialRetries": args.broadcast_partial_retries,
+            "maxBroadcastRetryRate": args.max_broadcast_retry_rate,
+            "maxLogicalResponseLatencyMs": args.max_logical_response_latency_ms,
             "commandChunkBytes": args.command_chunk_bytes,
             "commandChunkDelayMs": args.command_chunk_delay_ms,
             "drainSeconds": args.drain_seconds,
@@ -926,6 +1065,14 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
             "bytesWritten": bytes_written,
             "bytesRead": bytes_read,
             "trailingUndelimitedBytes": len(receive_buffer),
+            "broadcastRetryCommands": broadcast_retry_commands,
+            "broadcastRetryRounds": broadcast_retry_rounds,
+            "broadcastRetryRate": round(broadcast_retry_rate, 6),
+            "broadcastRetryBytes": broadcast_retry_bytes,
+            "broadcastMatchedAfterRetryDispatch": sum(
+                matched_after_retry_dispatch_by_node.values()
+            ),
+            "redundantRetryTelemetry": redundant_retry_telemetry,
             "batchCompleteness": batch_completeness,
         },
         "nodes": node_results,
@@ -934,6 +1081,8 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
         "errorSamples": error_samples,
         "unmatchedSamples": unmatched_samples,
         "duplicateSamples": duplicate_samples,
+        "postRetryMatchSamples": post_retry_match_samples,
+        "redundantRetrySamples": redundant_retry_samples,
         "ackSamples": ack_samples,
     }
 
@@ -948,6 +1097,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--response-wait-ms", type=int, default=0)
     parser.add_argument("--broadcast-poll", action="store_true")
     parser.add_argument("--broadcast-response-timeout-ms", type=int, default=0)
+    parser.add_argument("--broadcast-partial-retries", type=int, default=0)
+    parser.add_argument("--max-broadcast-retry-rate", type=float, default=1.0)
+    parser.add_argument("--max-logical-response-latency-ms", type=float, default=5000.0)
     parser.add_argument("--command-chunk-bytes", type=int, default=32)
     parser.add_argument("--command-chunk-delay-ms", type=int, default=15)
     parser.add_argument("--settle-ms", type=int, default=2000)
@@ -988,6 +1140,18 @@ def parse_args() -> argparse.Namespace:
         parser.error("--broadcast-response-timeout-ms must be non-negative")
     if args.broadcast_response_timeout_ms > 0 and not args.broadcast_poll:
         parser.error("--broadcast-response-timeout-ms requires --broadcast-poll")
+    if args.broadcast_partial_retries not in (0, 1):
+        parser.error("--broadcast-partial-retries must be 0 or 1")
+    if args.broadcast_partial_retries > 0 and (
+        not args.broadcast_poll or args.broadcast_response_timeout_ms <= 0
+    ):
+        parser.error(
+            "--broadcast-partial-retries requires --broadcast-poll and a positive response timeout"
+        )
+    if not 0.0 <= args.max_broadcast_retry_rate <= 1.0:
+        parser.error("--max-broadcast-retry-rate must be between 0 and 1")
+    if args.max_logical_response_latency_ms <= 0:
+        parser.error("--max-logical-response-latency-ms must be positive")
     if args.command_chunk_bytes <= 0:
         parser.error("--command-chunk-bytes must be positive")
     if args.command_chunk_delay_ms < 0:

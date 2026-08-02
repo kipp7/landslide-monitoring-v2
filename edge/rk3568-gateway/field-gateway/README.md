@@ -26,9 +26,11 @@ Common variables:
 - `SPOOL_ROOT_DIR` - local spool root.
 - `HEALTH_FILE_PATH` - runtime health JSON output path.
 - `SOUTHBOUND_POLLING_ENABLED` - enables gateway-managed polling on shared links.
-- `SOUTHBOUND_POLLING_MODE` - `round-robin-json` for the rollback firmware or `compact-broadcast-v1` for one A/B/C collection batch per second.
-- `SOUTHBOUND_POLLING_INTERVAL_MS` - poll start cadence; compact production uses `1000` for one broadcast batch per second.
-- `SOUTHBOUND_POLLING_SESSION_TIMEOUT_MS` - command-to-telemetry timeout; a missing node cannot hold the shared link indefinitely.
+- `SOUTHBOUND_POLLING_MODE` - `round-robin-json` for the rollback firmware or `compact-broadcast-v1` for one serialized A/B/C collection batch.
+- `SOUTHBOUND_POLLING_INTERVAL_MS` - cooldown after a compact broadcast session closes; `1000` is not a fixed one-batch-per-second start cadence.
+- `SOUTHBOUND_POLLING_SESSION_TIMEOUT_MS` - total command-to-telemetry session limit; a missing node cannot hold the shared link indefinitely.
+- `SOUTHBOUND_POLLING_PARTIAL_RETRIES` - `0` or `1`; default `0` preserves no-retry behavior.
+- `SOUTHBOUND_POLLING_RETRY_AFTER_MS` - per-attempt response window used when the single partial retry is enabled.
 - `SOUTHBOUND_POLLING_PREWRITE_QUIET_MS` / `SOUTHBOUND_POLLING_PREWRITE_MAX_WAIT_MS` - poll-only quiet guard before a serial write.
 - `SOUTHBOUND_POLLING_COMMAND_CHUNK_BYTES` / `SOUTHBOUND_POLLING_COMMAND_CHUNK_DELAY_MS` - poll-only downlink pacing. Normal control commands keep the conservative `COMMAND_SERIAL_*` pacing.
 

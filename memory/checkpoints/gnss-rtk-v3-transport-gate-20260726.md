@@ -21,21 +21,25 @@ status: active
 ### Current Verified Baseline (2026-08-02)
 
 - A/B/C 已分别烧录 `xls1_link_rehearsal_battery_simulated_20260801` 对应身份镜像并同时上电。该包只模拟 RS485 土壤/EC/倾角，UM220 GNSS 与 PC0 电池采样保持真实；RTCM injection 仍为 disabled。
-- RK3568 批量轮询工具已部署并修复广播重叠：同一串口最多一个广播会话在途，响应窗口为 5000 ms；完整/部分响应后冷却 1000 ms，全节点空响应才执行 2000..30000 ms 指数退避。调度与延迟统计使用 `performance.now()` 单调时钟。
+- RK3568 批量轮询与生产网关均保证同一串口最多一个广播会话在途。当前首响应窗 1200 ms，部分响应时同标签最多重发一次，总会话上限 2500 ms；会话关闭后冷却 1000 ms，全节点空响应才执行 2000..30000 ms 指数退避。调度与延迟统计使用单调时钟。
 - 2026-08-02 600 秒严格门禁通过。报告保留在 RK3568 `/var/lib/lsmv2/experiments/xls1-three-node-batch-poll-20260802-004710.json`，SHA-256 为 `a1341efba950f8cd36e04b627078ec1741a559f41b78e1705fe4160ad2916a63`；共 310 轮、930/930 帧，A/B/C 各 310/310，三节点序号均连续覆盖 570..879，零跳号、零重复、零回退、零解码/profile/未匹配/残帧错误。A/B/C 最大命令延迟分别为 315.6/641.7/955.1 ms。
 - 门禁通过 `/run` systemd drop-in 临时设置 `Restart=no`、`RefuseManualStart=yes`，并在 `finally` 删除覆盖、恢复服务；预存 hold 文件不会被误删。最终 `lsmv2-field-gateway.service` 为 enabled、active/running、`Restart=always`、`RefuseManualStart=no`、`NRestarts=0`。
 - 最终 RK3568 `dist/index.js` SHA-256 为 `f66d5ed7165c8810248df4cd4bb7ba4f3e09a01ea96f7781893594ceae6bc3d8`；门禁脚本 SHA-256 为 `d4094733f8d363bb8d85e565e3779604df6a8ba08d460ec6e1363581011e8e9d`。主要回滚目录为 `/home/linaro/lsmv2-backups/field-gateway-pre-backpressure-20260802-002324` 和 `/home/linaro/lsmv2-backups/field-gateway-pre-monotonic-20260802-004521`。
 - 重新上电后的在线复核同样通过：从健康快照 92 -> 185 个广播命令期间新增 93 轮、279 帧，恰为 `93 x 3`；A/B/C 序号各前进 93，最后一轮 3/3，空轮、重复、未匹配、解析拒绝和交织错误均为 0。
 - 当前 `SOUTHBOUND_POLLING_INTERVAL_MS=1000` 表示上一轮关闭后的冷却时间，不是固定 1 Hz 启动周期；现场完整轮次约 1.94 秒。不得把当前结果表述为“严格每秒一轮”，也不得为了演示数字恢复重叠广播。
-- 当前电池读数约为 A 11.04 V/9%、B 11.03 V/9%、C 11.82 V/69%，但三节点均为 `default-calibration`。百分比仅供趋势展示；下一阶段需在同一采样窗口用万用表逐节点校准。
+- 最终 1800 秒报告每节点均有 929 个电池样本：A 固定 10.997 V，B 为 10.967..10.982 V（中位数 10.971 V），C 为 11.770..11.771 V（中位数 11.770 V）。采样噪声已经足够低，但三节点均为 `default-calibration`；百分比仅供趋势展示，下一阶段仍需在同一采样窗口用万用表逐节点校准。
 - 原始门禁报告不提交 Git，后续真实 GNSS 报告可能包含现场坐标；memory 与仓库只记录脱敏汇总、报告路径和哈希。
 - 2026-08-02 尝试将完成后冷却从 1000 ms 单独降到 950 ms。报告 `/var/lib/lsmv2/experiments/xls1-three-node-batch-poll-20260802-011328.json` 为 15 轮、23/45 帧，A/B/C 分别收到 8/8/7 帧；三个节点所有已观测序号均连续，响应集中在早期连续通信阶段，随后三节点共同静默。脚本成功恢复正式服务后，网关又连续 4 轮为 0/3，随后 RK3568 `192.168.124.179:22` 本身从局域网离线；同网段扫描仅路由器开放 SSH。因此该轮被判为外部全链路中断污染，不能用于接受或拒绝 950 ms 参数，也不能继续测试 900/850/800 ms。
 - 为防止同类误判，门禁报告新增 `batchCompleteness`：完整/部分/空轮、最长与尾部连续空轮、最后完整/最后有响应轮，以及 `simultaneousSilenceAfterHealthyTraffic` 事实标志。该标志不自动归因；候选参数失败后仍必须先复跑 1000 ms 基线并核对 RK3568 可达性。
 - 4G 新卡于 2026-08-02 13:25 CST 完成注册、附着和 `cmnet` 建链。RK3568 到云服务器的主机路由及默认路由均已确认走 `usb0`（默认 metric 50），`wlan0` 仅保留 metric 600 的自动备用，未保留以太网默认路由；用户决定后续现场测试和正常运行固定以 4G 为主，不再人工在网线与 4G 之间反复切换。
 - 云端反向入口 `127.0.0.1:22079/28081/28082/28087` 全部在线，云服务器观测到蜂窝公网出口会话。`field-gateway`、Hermes、反向 SSH 在测试结束后均为 active/running，MQTT connected；cellular guardian 状态为 `cloud_reachable_via_4g`，云端 `1883/8080` 的绑定设备 TCP 探测通过。
-- 最新三节点门禁脚本 `/usr/local/bin/xls1_three_node_batch_poll.py` SHA-256 为 `d184c55aa3e8d8a55bab1bc5c0a4fa3ebec60bbe1a939b0ddde837346a6a4685`。1000 ms 的 600 秒门禁为 310/310 完整轮、930/930 帧；4G 上 950 ms 的 60 秒和 600 秒门禁分别为 31/31、93/93 与 310/310、930/930，均为零错误。900/850/800 ms 的 60 秒预检也各自通过。首轮受换卡/重启污染的 950 ms 失败不作为参数证据。
+- 最新三节点门禁脚本 `/usr/local/bin/xls1_three_node_batch_poll.py` SHA-256 为 `86200419bb8d5f8efc535015523c594af0e62d28b07e0412cf86354aa79b3ba0`，默认仍为不重发，显式参数只允许 `0/1` 次。历史 1000/950/900/850/800 ms 结果用于定位；当前生产依据改为后续 1000 ms 有界重发三级门禁。
 - 800 ms 的 1800 秒 4G 最终门禁真实失败：1021 轮中 1014 完整、7 部分、0 空轮，3056/3063 帧，匹配率 99.77%；A/B/C 分别缺 6/1/0 帧。三节点已接收序号仍完全连续，且重复、回退、未匹配、解码、profile 和残帧错误均为 0；A/B/C 最大命令延迟为 524.5/884.6/1010.6 ms。报告路径为 RK3568 `/var/lib/lsmv2/experiments/xls1-three-node-batch-poll-20260802-4g-800-final-1800s.json`，SHA-256 `9330bcddd2127d302a86783f5dfcb1b794ea3dcdd9c7d036c970b48ca97281bc`。因此 800 ms 被拒绝，生产保持 `SOUTHBOUND_POLLING_INTERVAL_MS=1000`，不为约 2.5% 的理论提速把 950 ms 推入生产。
 - 800 ms 门禁退出后正式网关自动恢复。14:29 CST 健康快照已累计 118 轮、354 个三节点匹配帧，轮询超时 0，最近一轮 3/3，串口 open、MQTT connected；这证明服务恢复和 4G 业务链均正常，但不替代后续真实传感器/RTCM 门禁。
+- 随后的 1000 ms、无重发 1800 秒对照仍出现 6 个低频逻辑缺帧：917 轮中 911 完整、6 部分，A/B/C 缺 `4/2/0`；三节点已收序号完全连续，协议/解码/profile/重复/未匹配/残帧错误均为 0，报告 SHA-256 `ba8315faa13e645647a87ded8cdb42ed193c1d64a7acb3ca5353f9d75620b7b1`。这排除了“只要恢复 1000 ms 就必然零丢帧”的假设。
+- 同标签单次有界重发已完成强制、600 秒真实和 1800 秒最终三级门禁。500 ms 强制窗为 11/11 轮、33/33 逻辑帧；1200 ms 真实 600 秒为 310/310 轮、930/930 帧，1 轮重发（0.3226%）在重发发出后匹配缺失 A，最大逻辑时延 1503.8 ms，两个预期冗余帧独立归类；最终 1800 秒为 929/929 轮、2787/2787 帧、零错误且本轮不需重发。600/1800 秒报告 SHA-256 分别为 `fff4792c3b0f28ba4d5b09222ede60e0f8dc1d60107cd600f042ad6643ca2ceb`、`0cc143af8102924d80de0823ce99d3cbe072db2e288e52880f7c368bda66998a`。
+- RK3568 生产网关已两阶段部署：先以默认重发关闭验证新构建正常，再原子启用 `SOUTHBOUND_POLLING_SESSION_TIMEOUT_MS=2500`、`SOUTHBOUND_POLLING_PARTIAL_RETRIES=1`、`SOUTHBOUND_POLLING_RETRY_AFTER_MS=1200`。对抗性复核后又收紧为空窗口不重发、每节点最多一个预期冗余副本；当前回滚目录为 `/home/linaro/lsmv2-backups/field-gateway-pre-empty-retry-boundary-20260802-163637`，`index.js/config.js/compact-poll-retry.js` 哈希为 `849f0365...c15a67`、`903ffbb9...24f36`、`320f0b14...2a52a71b`。修正版重启后已重新累计 61/61 轮、183/183 帧，重发/重发写失败/超时/重复/未匹配/解析拒绝/spool 均为 0；串口 open、MQTT connected、A/B/C online，field-gateway/Hermes/反向 SSH active，4G `usb0` 仍为公网出口。
+- 部署后累计复核到 536/536 个生产轮次、1608/1608 个逻辑匹配帧；A/B/C 各 536 帧且均为 online。重发、超时、重复、未匹配和解析拒绝均为 0，spool pending 亦为 0，串口与 MQTT 在线。该段证明生产集成未引入回归，不替代 600 秒门禁中已发生的自然补帧证据。
 
 ### Historical Engineering Evidence
 
@@ -111,8 +115,8 @@ status: active
 
 ## In Progress
 
-- 三节点模拟 compact v2 的 600 秒基线、4G 单变量扫参和 800 ms 的 1800 秒最终门禁已经完成。800 ms 因 7 个零星缺帧被拒绝；生产继续使用 1000 ms 冷却、46/64 字节 compact v2、`32 B/15 ms` UART 分块、340 ms 节点时隙和单广播在途策略。
-- 现场网络固定 4G 主用，Wi-Fi 仅自动备用，不再人工切换以太网。路由变化后长连接是否全部重建仍需在不占用 XLS1 串口的独立维护窗口修复和验证，尤其是 field-gateway、Hermes 与反向 SSH 三类连接。
+- 三节点模拟 compact v2 的 interval 扫参、无重发 1000 ms 对照和有界重发三级门禁均已完成。生产保持 1000 ms 冷却、46/64 字节 compact v2、340 ms 节点时隙和单广播在途，并启用 1200 ms 后同标签最多重发一次、2500 ms 总时限；继续观察生产重发率与重发后时延，不再做 interval 微调。
+- 现场网络固定 4G 主用，网线即使插着也只有局域网路由，Wi-Fi 仅自动备用，不再人工切换公网出口。本轮 field-gateway 两次受控重启、Hermes 和反向 SSH 均保持在线，公网路由始终为 `usb0`。
 - 下一项现场工作是 A/B/C 的 PC0 电池逐节点万用表校准。当前默认校准电压可用于趋势，百分比不能作为准确剩余容量。
 - RS485 元件未到期间，模拟包故意不初始化 PB4/PB5。接口到货、焊接与断电电气检查完成后，使用同一构建脚本把 `-FieldSensorMode simulated` 切成 `hardware`，不可手工删除模拟函数或修改 XLS1 驱动。
 - RTCM injection 仍保持 disabled；本轮先建立纯 compact 传感器数据的三节点稳定/延迟基线，再恢复真实 GNSS/RTCM 混合负载门禁。
@@ -120,7 +124,7 @@ status: active
 ## Next Actions
 
 1. 在当前三节点仍在线且电池 IIR 稳定时，同时读取门禁报告中的 A/B/C 电压中位数并用万用表测三块电池端电压；通过 `new-rk2206-battery-calibration.ps1` 生成逐节点校准文件。重建后要求每节点中位电压与万用表差值不超过 60 mV，质量变为 `field-calibrated`。
-2. 从当前 RK3568 现场脚本反向核对 authoritative cellular guardian 源码，补齐路由变化后 field-gateway、Hermes 和反向 SSH 的受控重连及 shell/static 测试；生产仍固定 4G 主用，禁止通过人工反复插拔网线做常规切换测试。
+2. 通过脱敏健康摘要持续核对 `compactBroadcastRetryRate <= 0.02`、重发写失败为 0、逻辑总响应不超过 2500 ms，并同时确认 `usb0` 默认路由、反向 SSH、Hermes 和 MQTT 在线；不再通过插拔网线制造常规切换。
 3. 不把模拟 compact 门禁等同于真实传感器或 RTK 门禁。RS485 接口到货后先断电检查方向、短路、3.3 V、PB4/PB5 上拉和模块型号，再只切换 `-FieldSensorMode hardware -GnssRtcmInjectionMode disabled` 重建 A/B/C，并完整复跑身份、哈希和通信门禁。
 4. 真实传感器链稳定后恢复 RTCM PROBE，再执行三节点真实 NTRIP 混合负载门禁；最终覆盖 RTCM、3 个 GNSS_CORE、compact 遥测和控制命令，并以 correction age 和 Fixed 连续性作为生产依据。
 
@@ -140,4 +144,4 @@ status: active
 
 ## Resume Prompt
 
-继续 2026-08-02 XLS1/RTK 链路任务：RK3568 现场网络固定 4G 主用，`usb0` 默认 metric 50，Wi-Fi 只作自动备用，不人工切网线。模拟 compact v2 的 1000 ms/600 秒与 950 ms/600 秒门禁均零丢帧；800 ms 虽通过 60 秒预检，但 1800 秒仅 3056/3063，A/B/C 缺 6/1/0 帧，已拒绝并保持生产 `SOUTHBOUND_POLLING_INTERVAL_MS=1000`。先核对并修复 authoritative cellular guardian 的全服务长连接重建，再等用户提供同一窗口 A/B/C 万用表 mV 值完成 PC0 逐节点校准。RS485 接口到货后只用 `-FieldSensorMode hardware -GnssRtcmInjectionMode disabled` 切回真实采集并复跑门禁，之后才恢复 RTCM PROBE/真实 NTRIP；原始报告、坐标和凭据不进入 Git。
+继续 2026-08-02 XLS1/RTK 链路任务：RK3568 固定 4G `usb0` 为公网出口，网线只保留局域网路由，不人工切换。无重发的 800 ms 与 1000 ms 长测都出现低频部分轮次，现已部署 1000 ms 冷却、1200 ms 首响应窗、同标签最多重发一次、2500 ms 总会话；600 秒真实门禁成功补齐 1 个 A 响应，1800 秒最终门禁 2787/2787、零错误。先观察生产重发率不超过 2% 和时延不超过 2500 ms，再等用户提供同一窗口 A/B/C 万用表 mV 值完成 PC0 校准。RS485 接口到货后只用 `-FieldSensorMode hardware -GnssRtcmInjectionMode disabled` 切回真实采集并复跑门禁，之后才恢复 RTCM PROBE/真实 NTRIP；原始报告、坐标和凭据不进入 Git。

@@ -7,6 +7,8 @@ from xls1_three_node_batch_poll import (
     decode_frame,
     encode_frame,
     evaluate_stability_gate,
+    classify_repeated_broadcast_telemetry,
+    should_retry_broadcast_poll,
     telemetry_profile_errors,
 )
 
@@ -23,6 +25,12 @@ PAYLOAD_V2_HEX = (
 
 
 def main() -> None:
+    assert should_retry_broadcast_poll(0, 3, 0, 1) is False
+    assert should_retry_broadcast_poll(2, 3, 0, 1) is True
+    assert should_retry_broadcast_poll(2, 3, 1, 1) is False
+    assert classify_repeated_broadcast_telemetry(2, False) == "redundant-retry"
+    assert classify_repeated_broadcast_telemetry(2, True) == "duplicate"
+
     payload = bytes.fromhex(PAYLOAD_HEX)
     telemetry = decode_compact_telemetry(payload)
     frame = encode_frame(1, 7, payload)
@@ -79,6 +87,7 @@ def main() -> None:
             "sequence": {"nonUnitGaps": 0},
             "arrivalIntervalMs": {"p95": 1002.0},
             "commandToTelemetryLatencyMs": {"max": 730.0},
+            "logicalCommandToTelemetryLatencyMs": {"max": 730.0},
         }
         for label in ("A", "B", "C")
     }
@@ -93,11 +102,30 @@ def main() -> None:
         "node_results": healthy_nodes,
         "max_p95_interval_ms": 1500.0,
         "max_command_latency_ms": 950.0,
+        "broadcast_retry_rate": 0.01,
+        "max_broadcast_retry_rate": 0.02,
+        "max_logical_response_latency_ms": 3000.0,
     }
     assert evaluate_stability_gate(**gate_args) is True
+    legacy_nodes = {
+        label: {
+            key: value
+            for key, value in result.items()
+            if key != "logicalCommandToTelemetryLatencyMs"
+        }
+        for label, result in healthy_nodes.items()
+    }
+    assert evaluate_stability_gate(**{**gate_args, "node_results": legacy_nodes}) is True
     assert evaluate_stability_gate(**{**gate_args, "matched_rate": 0.999}) is False
     assert evaluate_stability_gate(**{**gate_args, "duplicate_telemetry": 1}) is False
     assert evaluate_stability_gate(**{**gate_args, "profile_violation_count": 1}) is False
+    assert evaluate_stability_gate(**{**gate_args, "broadcast_retry_rate": 0.021}) is False
+    slow_response_nodes = {label: dict(value) for label, value in healthy_nodes.items()}
+    slow_response_nodes["A"] = {
+        **slow_response_nodes["A"],
+        "logicalCommandToTelemetryLatencyMs": {"max": 3000.1},
+    }
+    assert evaluate_stability_gate(**{**gate_args, "node_results": slow_response_nodes}) is False
     broken_nodes = {label: dict(value) for label, value in healthy_nodes.items()}
     broken_nodes["B"] = {**broken_nodes["B"], "sequence": {"nonUnitGaps": 1}}
     assert evaluate_stability_gate(**{**gate_args, "node_results": broken_nodes}) is False

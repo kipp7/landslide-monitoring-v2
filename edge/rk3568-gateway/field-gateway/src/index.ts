@@ -19,6 +19,10 @@ import {
   type CompactPollCloseOutcome
 } from "./compact-poll-admission";
 import {
+  classifyCompactPollTelemetry,
+  decideCompactPollTimer
+} from "./compact-poll-retry";
+import {
   createCobsCrcFieldLinkAssembler,
   encodeFieldLinkFrame,
   type FieldLinkFrameType,
@@ -133,6 +137,11 @@ type PortRuntimeState = {
   pollTelemetryMatches: number;
   pollAckSuppressions: number;
   pollSessionTimeouts: number;
+  pollRetryCommands: number;
+  pollMatchedAfterRetryDispatch: number;
+  pollRedundantRetryTelemetry: number;
+  lastPollRetryResponseMs: number | null;
+  maxPollRetryResponseMs: number;
   lastPollRoundTripMs: number | null;
   averagePollRoundTripMs: number | null;
   maxPollRoundTripMs: number;
@@ -199,6 +208,12 @@ type RuntimeStats = {
   compactBroadcastPollTimeouts: number;
   compactBroadcastEmptyTimeouts: number;
   compactBroadcastAdmissionDeferrals: number;
+  compactBroadcastRetryCommands: number;
+  compactBroadcastRetryWriteFailures: number;
+  compactBroadcastMatchedAfterRetryDispatch: number;
+  compactBroadcastRedundantRetryTelemetry: number;
+  lastCompactBroadcastRetryResponseMs: number | null;
+  maxCompactBroadcastRetryResponseMs: number;
   spoolPending: number;
   lastSerialReadTs: string | null;
   lastParsedMessageTs: string | null;
@@ -255,6 +270,10 @@ type ActiveCompactBroadcastPollWindow = {
   portPath: string;
   expectedDeviceIds: Set<string>;
   receivedDeviceIds: Set<string>;
+  redundantRetryDeviceIds: Set<string>;
+  missingAtRetryDispatch: Set<string>;
+  retriesSent: number;
+  retryDispatchedAtMs: number | null;
   startedTs: string;
   startedAtMs: number;
   timer: NodeJS.Timeout;
@@ -1048,6 +1067,12 @@ class GatewayRuntime {
     compactBroadcastPollTimeouts: 0,
     compactBroadcastEmptyTimeouts: 0,
     compactBroadcastAdmissionDeferrals: 0,
+    compactBroadcastRetryCommands: 0,
+    compactBroadcastRetryWriteFailures: 0,
+    compactBroadcastMatchedAfterRetryDispatch: 0,
+    compactBroadcastRedundantRetryTelemetry: 0,
+    lastCompactBroadcastRetryResponseMs: null,
+    maxCompactBroadcastRetryResponseMs: 0,
     spoolPending: 0,
     lastSerialReadTs: null,
     lastParsedMessageTs: null,
@@ -1927,15 +1952,23 @@ class GatewayRuntime {
     const portState = this.ensurePortRuntimeState(portPath);
     const startedTs = isoNow();
     const startedAtMs = performance.now();
+    const initialResponseWindowMs =
+      this.config.southboundPollingPartialRetries > 0
+        ? this.config.southboundPollingRetryAfterMs
+        : this.config.southboundPollingSessionTimeoutMs;
     const timer = setTimeout(() => {
-      this.closeCompactBroadcastPollWindow(windowKey, "timeout");
-    }, this.config.southboundPollingSessionTimeoutMs);
+      void this.handleCompactBroadcastPollTimer(windowKey);
+    }, initialResponseWindowMs);
     const window: ActiveCompactBroadcastPollWindow = {
       command: compactPoll.command,
       commandTag: compactPoll.commandTag,
       portPath,
       expectedDeviceIds,
       receivedDeviceIds: new Set<string>(),
+      redundantRetryDeviceIds: new Set<string>(),
+      missingAtRetryDispatch: new Set<string>(),
+      retriesSent: 0,
+      retryDispatchedAtMs: null,
       startedTs,
       startedAtMs,
       timer
@@ -1996,6 +2029,123 @@ class GatewayRuntime {
         frameBytes: serialFrame.length
       },
       "field gateway compact broadcast poll forwarded to serial"
+    );
+  }
+
+  private async handleCompactBroadcastPollTimer(windowKey: string): Promise<void> {
+    try {
+      const window = this.activeCompactBroadcastPollWindows.get(windowKey);
+      if (!window) return;
+
+      const decision = decideCompactPollTimer({
+        receivedNodes: window.receivedDeviceIds.size,
+        expectedNodes: window.expectedDeviceIds.size,
+        retriesSent: window.retriesSent,
+        maxRetries: this.config.southboundPollingPartialRetries
+      });
+      if (decision === "complete") {
+        this.closeCompactBroadcastPollWindow(windowKey, "telemetry");
+        return;
+      }
+      if (decision === "timeout") {
+        this.closeCompactBroadcastPollWindow(windowKey, "timeout");
+        return;
+      }
+
+      await this.retryCompactBroadcastPoll(windowKey);
+    } catch (err) {
+      this.stats.lastError = err instanceof Error ? err.message : String(err);
+      this.closeCompactBroadcastPollWindow(windowKey, "failed");
+      this.logger.error({ err, windowKey }, "field gateway compact broadcast timer failed");
+    }
+  }
+
+  private async retryCompactBroadcastPoll(windowKey: string): Promise<void> {
+    const window = this.activeCompactBroadcastPollWindows.get(windowKey);
+    if (!window || window.retriesSent >= this.config.southboundPollingPartialRetries) return;
+
+    const portState = this.ensurePortRuntimeState(window.portPath);
+    const serialPort = this.serialPorts.get(window.portPath);
+    if (!serialPort?.isOpen) {
+      this.stats.commandWriteFailures += 1;
+      this.stats.compactBroadcastRetryWriteFailures += 1;
+      this.stats.lastError = `serial port is not open: ${window.portPath}`;
+      portState.lastError = this.stats.lastError;
+      this.closeCompactBroadcastPollWindow(windowKey, "failed");
+      this.logger.error(
+        { serialDevice: window.portPath, commandTag: window.commandTag },
+        "field gateway compact broadcast retry skipped because the serial port is closed"
+      );
+      return;
+    }
+
+    window.missingAtRetryDispatch = new Set(
+      Array.from(window.expectedDeviceIds).filter((deviceId) => !window.receivedDeviceIds.has(deviceId))
+    );
+    window.retriesSent += 1;
+    window.retryDispatchedAtMs = performance.now();
+    portState.sendOwnerState = "writing-command";
+    const serialFrame = encodeFieldLinkFrame({
+      frameType: "command",
+      sequence: this.nextFieldLinkTxSequence(),
+      payloadText: window.command
+    });
+
+    try {
+      await this.writeSerialFrame(
+        serialPort,
+        serialFrame,
+        this.config.southboundPollingCommandChunkBytes,
+        this.config.southboundPollingCommandChunkDelayMs
+      );
+    } catch (err) {
+      this.stats.commandWriteFailures += 1;
+      this.stats.compactBroadcastRetryWriteFailures += 1;
+      this.stats.lastError = err instanceof Error ? err.message : String(err);
+      portState.lastError = this.stats.lastError;
+      this.closeCompactBroadcastPollWindow(windowKey, "failed");
+      this.logger.error(
+        {
+          err,
+          serialDevice: window.portPath,
+          commandTag: window.commandTag,
+          retryNumber: window.retriesSent
+        },
+        "field gateway compact broadcast retry write failed"
+      );
+      return;
+    }
+
+    if (this.activeCompactBroadcastPollWindows.get(windowKey) !== window) return;
+    const retryTs = isoNow();
+    this.stats.commandsForwarded += 1;
+    this.stats.compactBroadcastRetryCommands += 1;
+    this.stats.lastCommandForwardedTs = retryTs;
+    portState.commandWrites += 1;
+    portState.pollRetryCommands += 1;
+    portState.lastCommandTs = retryTs;
+    portState.lastPollCommandTs = retryTs;
+    portState.sendOwnerState = "waiting-for-poll-telemetry";
+
+    const remainingSessionMs =
+      window.startedAtMs + this.config.southboundPollingSessionTimeoutMs - performance.now();
+    if (remainingSessionMs <= 0) {
+      this.closeCompactBroadcastPollWindow(windowKey, "timeout");
+      return;
+    }
+    clearTimeout(window.timer);
+    window.timer = setTimeout(() => {
+      void this.handleCompactBroadcastPollTimer(windowKey);
+    }, Math.min(this.config.southboundPollingRetryAfterMs, remainingSessionMs));
+    this.logger.warn(
+      {
+        serialDevice: window.portPath,
+        commandTag: window.commandTag,
+        retryNumber: window.retriesSent,
+        missingDeviceIds: Array.from(window.missingAtRetryDispatch),
+        responseWindowMs: this.config.southboundPollingRetryAfterMs
+      },
+      "field gateway compact broadcast poll retried after a partial response window"
     );
   }
 
@@ -2484,19 +2634,45 @@ class GatewayRuntime {
   ): void {
     const windowKey = this.compactBroadcastPollWindowKey(portPath, commandTag);
     const window = this.activeCompactBroadcastPollWindows.get(windowKey);
-    if (!window?.expectedDeviceIds.has(deviceId)) {
+    const classification = classifyCompactPollTelemetry({
+      expected: window?.expectedDeviceIds.has(deviceId) === true,
+      alreadyReceived: window?.receivedDeviceIds.has(deviceId) === true,
+      retryDispatched: (window?.retriesSent ?? 0) > 0,
+      retryResponseAlreadyObserved: window?.redundantRetryDeviceIds.has(deviceId) === true,
+      missingAtRetryDispatch: window?.missingAtRetryDispatch.has(deviceId) === true
+    });
+    if (classification === "unmatched" || !window) {
       this.stats.compactBroadcastUnmatchedTelemetry += 1;
       return;
     }
-
-    if (window.receivedDeviceIds.has(deviceId)) {
+    const portState = this.ensurePortRuntimeState(portPath);
+    if (classification === "redundant-retry") {
+      window.redundantRetryDeviceIds.add(deviceId);
+      this.stats.compactBroadcastRedundantRetryTelemetry += 1;
+      portState.pollRedundantRetryTelemetry += 1;
+      return;
+    }
+    if (classification === "duplicate") {
       this.stats.compactBroadcastDuplicateTelemetry += 1;
       return;
     }
 
     window.receivedDeviceIds.add(deviceId);
+    if (classification === "matched-after-retry-dispatch") {
+      this.stats.compactBroadcastMatchedAfterRetryDispatch += 1;
+      portState.pollMatchedAfterRetryDispatch += 1;
+      if (window.retryDispatchedAtMs !== null) {
+        const retryResponseMs = Math.max(0, performance.now() - window.retryDispatchedAtMs);
+        this.stats.lastCompactBroadcastRetryResponseMs = retryResponseMs;
+        this.stats.maxCompactBroadcastRetryResponseMs = Math.max(
+          this.stats.maxCompactBroadcastRetryResponseMs,
+          retryResponseMs
+        );
+        portState.lastPollRetryResponseMs = retryResponseMs;
+        portState.maxPollRetryResponseMs = Math.max(portState.maxPollRetryResponseMs, retryResponseMs);
+      }
+    }
     const roundTripMs = Math.max(0, performance.now() - window.startedAtMs);
-    const portState = this.ensurePortRuntimeState(portPath);
     const previousMatches = portState.pollTelemetryMatches;
     const previousAverage = portState.averagePollRoundTripMs ?? 0;
     portState.lastPollRoundTripMs = roundTripMs;
@@ -2510,7 +2686,7 @@ class GatewayRuntime {
     this.stats.compactBroadcastTelemetryMatches += 1;
     this.stats.lastInternalPollTelemetryTs = receivedTs;
 
-    if (window.receivedDeviceIds.size === window.expectedDeviceIds.size) {
+    if (window.receivedDeviceIds.size === window.expectedDeviceIds.size && window.retriesSent === 0) {
       this.closeCompactBroadcastPollWindow(windowKey, "telemetry");
     }
   }
@@ -2947,6 +3123,8 @@ class GatewayRuntime {
             : "matching-command-id-telemetry",
         pollingIntervalMs: this.config.southboundPollingIntervalMs,
         pollingSessionTimeoutMs: this.config.southboundPollingSessionTimeoutMs,
+        pollingPartialRetries: this.config.southboundPollingPartialRetries,
+        pollingRetryAfterMs: this.config.southboundPollingRetryAfterMs,
         pollingEmptyBackoffInitialMs: this.config.southboundPollingEmptyBackoffInitialMs,
         pollingEmptyBackoffMaxMs: this.config.southboundPollingEmptyBackoffMaxMs,
         pollingCommandChunkBytes: this.config.southboundPollingCommandChunkBytes,
@@ -2957,7 +3135,13 @@ class GatewayRuntime {
         ports,
         nodes
       },
-      stats: this.stats
+      stats: {
+        ...this.stats,
+        compactBroadcastRetryRate:
+          this.stats.compactBroadcastPollsIssued > 0
+            ? this.stats.compactBroadcastRetryCommands / this.stats.compactBroadcastPollsIssued
+            : 0
+      }
     });
   }
 
@@ -3032,6 +3216,11 @@ class GatewayRuntime {
       pollTelemetryMatches: 0,
       pollAckSuppressions: 0,
       pollSessionTimeouts: 0,
+      pollRetryCommands: 0,
+      pollMatchedAfterRetryDispatch: 0,
+      pollRedundantRetryTelemetry: 0,
+      lastPollRetryResponseMs: null,
+      maxPollRetryResponseMs: 0,
       lastPollRoundTripMs: null,
       averagePollRoundTripMs: null,
       maxPollRoundTripMs: 0,

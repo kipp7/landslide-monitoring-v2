@@ -37,10 +37,11 @@ The RK3568 field gateway supports `SOUTHBOUND_POLLING_MODE=compact-broadcast-v1`
 - RK3568 expands each 46-byte telemetry payload into the existing telemetry JSON contract before MQTT publishing.
 - The command tag correlates each A/B/C response with its broadcast batch.
 - Normal JSON device-control commands remain unchanged and pause broadcast polling while their ACK window owns the serial port.
-- Runtime health exposes issued, completed, matched, duplicate, unmatched and timed-out broadcast counters.
+- Runtime health exposes issued, completed, matched, duplicate, unmatched, timed-out and bounded-retry counters.
 - A per-port admission controller rejects a second broadcast while one is in flight.
 - A complete or partial response resets the empty-response streak. An all-node timeout applies exponential backoff, bounded by the configured maximum.
 - `SOUTHBOUND_POLLING_INTERVAL_MS` is a cooldown after a response window closes, not a fixed wall-clock launch period.
+- Optional partial recovery rebroadcasts the same `P1` tag at most once. Normal complete rounds add no wire traffic. A response observed after retry dispatch is reported as such; the gateway does not claim the second command caused it because a delayed first response is indistinguishable on this link.
 
 ## 2026-07-24 Live Result
 
@@ -145,6 +146,32 @@ The powered A/B/C rehearsal firmware and deployed RK3568 gateway passed the 600-
 The report remains on RK3568 at `/var/lib/lsmv2/experiments/xls1-three-node-batch-poll-20260802-004710.json`; its SHA-256 is `a1341efba950f8cd36e04b627078ec1741a559f41b78e1705fe4160ad2916a63`. Do not commit the raw report because later hardware runs may contain real GNSS coordinates.
 
 With a 1000 ms cooldown after all three responses, the measured round period is about 1.94 seconds. This is deliberately not described as fixed 1 Hz polling. A post-power-up runtime check added another 93 complete rounds and 279 matched frames with every node sequence advancing by 93 and all error counters remaining zero.
+
+### 2026-08-02 Bounded Partial Retry
+
+A later no-retry 1000 ms cooldown baseline proved that interval tuning alone was not the root fix. Its 1800-second result contained 917 rounds, of which 911 were complete and 6 were partial. A/B/C missed `4/2/0` logical responses while every received node sequence remained continuous and decode, profile, duplicate, unmatched and trailing-frame errors stayed zero. The report SHA-256 is `ba8315faa13e645647a87ded8cdb42ed193c1d64a7acb3ca5353f9d75620b7b1`.
+
+The accepted recovery profile keeps the 1000 ms post-session cooldown and adds these hard bounds:
+
+- Initial response window: 1200 ms.
+- Partial retries: at most one rebroadcast of the same `P1` command and tag.
+- Total logical session limit: 2500 ms.
+- Acceptance limits: retry rounds at most 2%, logical response latency at most 2500 ms, 100% logical matching and all existing strict protocol gates.
+- One retry response per node is classified as expected retry redundancy. Any additional same-node response remains a real duplicate error.
+
+Evidence was collected in three steps:
+
+| Gate | Result |
+| --- | --- |
+| Forced 500 ms window, 20 s | 11/11 complete rounds and 33/33 logical frames while every round exercised one retry; sequence and protocol gates stayed clean. |
+| Real 1200 ms window, 600 s | 310/310 complete rounds and 930/930 frames; one retry round (`0.3226%`) matched the missing A response after retry dispatch, with 1503.8 ms maximum logical latency and two expected redundant responses. |
+| Final 1200 ms window, 1800 s | 929/929 complete rounds and 2787/2787 frames; no retry was needed, all three sequences were continuous and every protocol/error counter remained zero. |
+
+The 600-second and final 1800-second report SHA-256 values are `fff4792c3b0f28ba4d5b09222ede60e0f8dc1d60107cd600f042ad6643ca2ceb` and `0cc143af8102924d80de0823ce99d3cbe072db2e288e52880f7c368bda66998a`. Raw reports remain outside Git.
+
+Production uses `SOUTHBOUND_POLLING_SESSION_TIMEOUT_MS=2500`, `SOUTHBOUND_POLLING_PARTIAL_RETRIES=1` and `SOUTHBOUND_POLLING_RETRY_AFTER_MS=1200`. An adversarial follow-up made the name and behavior exact: an empty response window closes into the existing exponential backoff without a retry, and only a `1..N-1` partial response can consume the single retry. Each node may contribute at most one expected redundant retry response; later copies are ordinary duplicate errors. The current rollback directory is `/home/linaro/lsmv2-backups/field-gateway-pre-empty-retry-boundary-20260802-163637`. Deployed `index.js`, `config.js` and `compact-poll-retry.js` SHA-256 values are `849f03659ed4ee8d890687ed4eb02a6d188255a5d1805ec91e60d64173c15a67`, `903ffbb9dcdd09a5feccdecaf590741c04b42edcc6c79fde2a4a4deb35724f36` and `320f0b148ea4b60accf42a9d38314acc1e0fb0d8257316200323a7aa2a52a71b`. After the controlled restart, the corrected build reached 61/61 complete rounds and 183/183 frames with zero retry, retry-write, timeout, duplicate, unmatched, rejected or spool-pending counters; field-gateway, Hermes and the reverse tunnel were active and the cloud route still used 4G `usb0`.
+
+A 2026-08-02 16:23 CST production snapshot extended the post-deployment observation to 536/536 completed rounds and 1608/1608 matched A/B/C frames. The three nodes were online, serial and MQTT were connected, and retry, timeout, duplicate, unmatched, rejected and spool-pending counters were all zero. The final 1800-second report also provided 929 battery samples per node under neutral calibration: A stayed at 10.997 V, B spanned 10.967..10.982 V with a 10.971 V median, and C spanned 11.770..11.771 V with an 11.770 V median. This proves low sampling noise but not absolute accuracy; all three remain `default-calibration` until simultaneous multimeter readings produce per-node gains.
 
 Test in this order:
 

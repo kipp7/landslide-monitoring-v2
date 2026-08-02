@@ -61,6 +61,8 @@ const configSchema = z
     southboundPollingCommandType: z.string().min(1).default("poll_latest_telemetry"),
     southboundPollingIntervalMs: z.coerce.number().int().positive().default(1000),
     southboundPollingSessionTimeoutMs: z.coerce.number().int().positive().default(5000),
+    southboundPollingPartialRetries: z.coerce.number().int().min(0).max(1).default(0),
+    southboundPollingRetryAfterMs: z.coerce.number().int().positive().default(1200),
     southboundPollingPrewriteQuietMs: z.coerce.number().int().nonnegative().default(100),
     southboundPollingPrewriteMaxWaitMs: z.coerce.number().int().nonnegative().default(250),
     southboundPollingCommandChunkBytes: z.coerce.number().int().nonnegative().default(64),
@@ -133,6 +135,30 @@ const configSchema = z
       });
     }
 
+    const requiredRetryWindowMs =
+      data.southboundPollingRetryAfterMs * (data.southboundPollingPartialRetries + 1);
+    if (
+      data.southboundPollingPartialRetries > 0 &&
+      data.southboundPollingMode !== "compact-broadcast-v1"
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["southboundPollingPartialRetries"],
+        message: "SOUTHBOUND_POLLING_PARTIAL_RETRIES requires compact-broadcast-v1"
+      });
+    }
+    if (
+      data.southboundPollingPartialRetries > 0 &&
+      data.southboundPollingSessionTimeoutMs < requiredRetryWindowMs
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["southboundPollingSessionTimeoutMs"],
+        message:
+          "SOUTHBOUND_POLLING_SESSION_TIMEOUT_MS must cover every bounded compact broadcast response window"
+      });
+    }
+
     const deviceIds = new Set<string>();
     const fieldNodeIds = new Set<string>();
     for (const [index, node] of data.southboundNodes.entries()) {
@@ -183,6 +209,8 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
     southboundPollingCommandType: env.SOUTHBOUND_POLLING_COMMAND_TYPE,
     southboundPollingIntervalMs: env.SOUTHBOUND_POLLING_INTERVAL_MS,
     southboundPollingSessionTimeoutMs: env.SOUTHBOUND_POLLING_SESSION_TIMEOUT_MS,
+    southboundPollingPartialRetries: env.SOUTHBOUND_POLLING_PARTIAL_RETRIES,
+    southboundPollingRetryAfterMs: env.SOUTHBOUND_POLLING_RETRY_AFTER_MS,
     southboundPollingPrewriteQuietMs: env.SOUTHBOUND_POLLING_PREWRITE_QUIET_MS,
     southboundPollingPrewriteMaxWaitMs: env.SOUTHBOUND_POLLING_PREWRITE_MAX_WAIT_MS,
     southboundPollingCommandChunkBytes: env.SOUTHBOUND_POLLING_COMMAND_CHUNK_BYTES,
