@@ -124,19 +124,22 @@ status: active
 - C 修正候选包从干净提交 `a7cf9fbb...` 构建在 `F:\2\openharmony\rk2206_firmware_releases\xls1_link_rehearsal_battery_refined_C_candidate_20260802`；C `.img` SHA-256 `b3b57903e68c5b1ff417e1b184b6cd95d2ae5a2babc0db74edc39003360979f7`，包为 simulated、RTCM disabled、PB4/PB5 不初始化并通过独立发布安全校验。烧录后严格窗口 31/31 轮、93/93 帧、零错误；C 样本 `11490..11492 mV`、中位数 `11491 mV`，万用表末值在 `11490..11500 mV` 间跳动，最坏绝对误差 `9 mV`，正式接受 C 增益 `993702 ppm`。报告 `/var/lib/lsmv2/experiments/xls1-three-node-battery-C-refined-verify-20260802.json` 已按 SHA-256 `055c62cc044136271901c82b7006825e3704efd426407f315433eb9eb84b26ff` 下载到非 Git `output/`。该阶段仅 A 尚未同步复测，下一条已完成验收。
 - A 当前 `1046565 ppm` 固件最终同步验收为 31/31 完整轮、93/93 帧，零缺失、重发、解码、profile、未匹配、重复和残帧错误；A 中位数 `11429 mV`，同步万用表 `11420 mV`，误差 `+9 mV`，满足 `<=60 mV`。报告 `output/rk2206-battery-calibration-20260802/xls1-three-node-battery-A-verify-20260802.json` SHA-256 为 `7895dc62cda455607b6ec503e2f41e92e89d7c32451c9ae13ecd7e1d4ff185f7`。A/B/C 最终接受增益为 `1046565/1048458/993702 ppm`，三节点均通过。
 - RK2206 OTA 只读审计确认当前板级 HOTA HAL 的写入、启动切换、重启、回滚和元数据接口为空操作或假成功，分区表/公钥为空，应用未链接 HOTA，现有镜像只有单 `liteos` 槽。现场 A/B/C 禁止 OTA，审计未写入或烧录任何节点；先在可有线救援备用板验证 A/B 引导链、签名、原子元数据、健康确认和掉电回滚，正式节点随后各需最后一次有线迁移。迁移后常规 OTA 通过软件重启，不需要人工下电。
+- 正式电池验收文件 `output/rk2206-battery-calibration-20260802/battery-calibration-final-accepted-20260802.json` SHA-256 为 `73807fd83bd38cd132a680ab59421afe08817af78bfc7d3ebaf13f3c97841a3c`，绑定 A/B/C 各自最终 `31/31` 轮、`93/93` 帧、零错误报告、烧录包 manifest 和万用表端点。提交 `6025fa89bdb73d35bbd3c902e14927ac8f2e69ca` 新增 finalizer、算术复核及拒绝路径，并让两套官方 calibrated 打包脚本强制 `RequireFinalBatteryAcceptance`。
+- 从该干净提交生成最终 simulated 包 `F:\2\openharmony\rk2206_firmware_releases\xls1_link_rehearsal_battery_final_20260802`，manifest SHA-256 `2dd57ca0a2c44f9fa35768a216621f962cc5c9fb031f9db4c8f4d72fc1e824ca`，A/B/C `.img` SHA-256 为 `b2048c5f...bea1d`、`078d742b...81f82`、`548a2dc7...680f8`；profile 为 simulated、RTCM disabled、PB4/PB5 不初始化。
+- 同提交生成 hardware 预检包 `F:\2\openharmony\rk2206_firmware_releases\xls1_rs485_hardware_preflight_final_20260802`，manifest SHA-256 `bb71c9a6e4d86c1b62be9a8c3806d2a300af1a942283086554696f08ca2d2427`，A/B/C `.img` SHA-256 为 `0c0ce5a9...bbea6`、`8d3cc381...0ab48`、`736d8ce9...7c08f`；它包含 PB4/PB5 SC16IS752/RS485 路径并带强制 `DO-NOT-FLASH` 文件。两包独立复验、交叉模式拒绝、最终校准哈希和 loader 一致性均通过；共同 loader SHA-256 `761d90888aa376156d562abf267dfe324b96c4397f7a601f6b4c64d0ea3bf977`，构建工作树 clean。
 
 ## In Progress
 
 - 三节点模拟 compact v2 的 interval 扫参、无重发 1000 ms 对照和有界重发三级门禁均已完成。生产保持 1000 ms 冷却、46/64 字节 compact v2、340 ms 节点时隙和单广播在途，并启用 1200 ms 后同标签最多重发一次、2500 ms 总时限；继续观察生产重发率与重发后时延，不再做 interval 微调。
 - 现场网络固定 4G 主用，网线即使插着也只有局域网路由，Wi-Fi 仅自动备用，不再人工切换公网出口。本轮 field-gateway 两次受控重启、Hermes 和反向 SSH 均保持在线，公网路由始终为 `usb0`。
 - A/B/C 已分别以 `+9/+7/最坏 9 mV` 误差通过并接受 `1046565/1048458/993702 ppm`，不再重刷或重复校准；百分比仍只是 3S OCV 估算，不宣称剩余 mAh 或续航。
-- RS485 元件未到期间，simulated 包故意不初始化 PB4/PB5。现有 hardware 包因保留旧 B/C 校准而过期并继续禁烧；现在应使用最终三节点增益重建 simulated/hardware 包，接口到货、焊接与断电/首次上电电气检查完成后才允许按物理身份烧录，不可手工删除模拟函数、修改 XLS1 驱动或绕过包内检查顺序。
+- RS485 元件未到期间，最终 simulated 包故意不初始化 PB4/PB5；最终 hardware 预检包已离线构建但继续禁烧。接口到货、焊接与断电/首次上电电气检查完成后才允许按物理身份使用锁定哈希的 hardware `.img`，不可手工删除模拟函数、修改 XLS1 驱动或绕过包内检查顺序。
 - OTA 当前只允许离线设计和可恢复备用板验证；现场 A/B/C 的 `ota_prepare/apply` 必须返回 `unsupported`。
 - RTCM injection 仍保持 disabled；本轮先建立纯 compact 传感器数据的三节点稳定/延迟基线，再恢复真实 GNSS/RTCM 混合负载门禁。
 
 ## Next Actions
 
-1. A/B/C 校准已全部通过。用最终 `1046565/1048458/993702 ppm` 重建 simulated/hardware 发布包，运行发布安全、身份、哈希、模式、PC0 输入和校准来源门禁；旧 hardware 包继续 `DO-NOT-FLASH`。
+1. 校准和两套最终发布包已完成，不再重复构建或重刷 simulated。RS485 接口到货后先断电确认方向、针脚无偏移、3.3 V/GND 无短路、PB4->SDA、PB5->SCL 和地址绑带；无传感器首次上电确认 3.3 V 与 PB4/PB5 空闲高电平后，才按锁定 manifest/hash 烧录 hardware A/B/C。
 2. 通过脱敏健康摘要持续核对 `compactBroadcastRetryRate <= 0.02`、重发写失败为 0、逻辑总响应不超过 2500 ms，并同时确认 `usb0` 默认路由、反向 SSH、Hermes 和 MQTT 在线；不再通过插拔网线制造常规切换。
 3. 不把模拟 compact 门禁或预编译成功等同于真实传感器门禁。RS485 接口到货后先断电检查方向、针脚偏移、短路、连续性和模块型号，上电后检查 PB4/PB5 约 3.3 V 及 `0x4D` 识别；通过后才烧录匹配身份的 hardware 预检包，并完整复跑真实有效位、身份、哈希和至少 600 秒三节点通信门禁。
 4. 真实传感器链稳定后恢复 RTCM PROBE，再执行三节点真实 NTRIP 混合负载门禁；最终覆盖 RTCM、3 个 GNSS_CORE、compact 遥测和控制命令，并以 correction age 和 Fixed 连续性作为生产依据。
@@ -158,4 +161,4 @@ status: active
 
 ## Resume Prompt
 
-继续 2026-08-02 XLS1/RTK 链路任务：生产链保持 1000 ms 冷却、1200 ms 首响应窗、部分响应时同标签最多重发一次和 2500 ms 总会话；最终 1800 秒为 2787/2787、零错误。A/B/C 已分别以 `+9/+7/最坏 9 mV` 通过，接受 `1046565/1048458/993702 ppm`；下一步用最终值重建 simulated/hardware 发布包，旧 hardware 包继续禁止烧录，真实传感器门禁通过后才恢复 RTCM PROBE/真实 NTRIP。OTA 只读审计确认当前 HAL 假成功、单槽且应用未接入，现场 A/B/C 禁止 OTA；先在可有线救援备用板建立 A/B、签名、原子元数据和掉电回滚闭环，随后正式节点各做最后一次有线迁移。原始报告、坐标和凭据不进入 Git。
+继续 2026-08-02 XLS1/RTK 链路任务：生产链保持 1000 ms 冷却、1200 ms 首响应窗、部分响应时同标签最多重发一次和 2500 ms 总会话；最终 1800 秒为 2787/2787、零错误。A/B/C 已以 `+9/+7/最坏 9 mV` 通过，正式校准哈希 `73807fd8...1a3c`；最终 simulated/hardware 包已从 `6025fa89...` 构建并通过 final acceptance、身份、哈希、模式、引脚和交叉拒绝。下一步不是重建，而是 RS485 到货后的断电/首次上电门禁，再按 hardware manifest `bb71c9a6...d2427` 烧录 A/B/C 并做真实传感器 600 秒门禁；通过后才恢复 RTCM PROBE/真实 NTRIP。OTA 当前 HAL 假成功且单槽，现场 A/B/C 禁止 OTA；先在可有线救援备用板建立 A/B、签名、原子元数据和掉电回滚。原始报告、坐标和凭据不进入 Git。
