@@ -23,7 +23,8 @@ status: active
 - `49eb7544` 已完成 `compact v3` 合并快照：RK2206 以 95 字节 payload、113 字节完整 COBS/CRC 帧同时发送 PC0 电池、RS485 土壤/EC、独立 RS485 三轴倾角和专业 RTK 证据。活跃构建、采集结构和 payload 已移除 SHT30、MPU6050 加速度/角速度/姿态；RS-DIP-N01-1 `tilt_x/y/z` 保留。常规链路不再另发第二个高频 GNSS 包，完整字节契约见 `docs/field-tests/rk2206-compact-v3-rtk-telemetry.md`。
 - GNSS 解析使用有符号纳度、毫米和毫秒定点值；仅当前 checksum-valid `GGA=4`、坐标/坐标系有效、差分龄 `<=5000 ms`、解算龄 `<=2000 ms` 时设置 `trusted`。RMC 日期必须不旧于 2.5 秒才可与当前 GGA 组合生成 GNSS week/TOW，GST 也在 2.5 秒后独立失效，避免旧辅助证据污染当前历元。
 - `FieldSensorMode=simulated` 只模拟 RS485 土壤/EC/倾角，真实 UM220、XLS1 和 PC0 保持启用；SC16IS752 不进入模拟二进制且 PB4/PB5 不初始化。静态门禁再次通过：`XLS1=PB2/PB3`、`GPS=PB6/PB7`、`BATTERY=PC0-input`、`RS485=PB4/PB5-hardware-only`。RTCM injection 仍为 disabled。
-- RK2206 C99 主机测试、GNSS 解析、95/113 字节金值、发布包篡改/身份/模式/最终电池验收拒绝路径、电池生成/修正/finalization 全通过；field-gateway 31/31 测试、TypeScript build/lint 通过。当前代码提交后仍未生成正式 A/B/C 烧录包；此前 `rtk_compact_v3_simulated_candidate_abc_20260802` 为 dirty 且早于最新 GNSS 时效修复，继续禁止作为最终包。
+- RK2206 C99 主机测试、GNSS 解析、95/113 字节金值、发布包篡改/身份/模式/最终电池验收拒绝路径、电池生成/修正/finalization 全通过；field-gateway 31/31 测试、TypeScript build/lint 通过。`49eb7544` 与记忆提交 `deb0929d` 已推送到远端 `feat/gnss-rtk-v31-transport`。
+- 正式 A/B/C simulated V3 包已从干净且已推送的 `deb0929dfc3f7412b665272a6424fc2dad35c5c2` 全量构建到 `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v3_final_simulated_20260803`。manifest SHA-256 为 `fd917730d17bf4da4437df17c60f785780d4f1e79f55a9d9058c3427e4b49fab`；A/B/C `.img` SHA-256 分别为 `b71e130e03bdf7fc81bdd571bc005b278611ae48c8b4506b4b6830a505997afd`、`d3b9cee3a58a4ef66ab089794e7b56abe438dd6cf6004f582d9eb1d6ce0bcc5c`、`b306bb56d21fbc9d27ba9208d8c2123a857cfdf47542376984658e6b21a95eea`。独立验证为 `sourceDirty=false`、95 字节 payload、113 字节完整帧、精确 7 个固件文件、A/B/C 唯一身份、RS485 simulated、`rs485HardwareInitialized=false`、RTCM disabled、最终电池校准已验收，并通过 `PIN_SAFETY_OK`；此前 dirty 候选继续禁止使用。
 - RK3568 field-gateway 已部署 v3 解码器：`index.js` SHA-256 `8827e5bd1e034d38dfcded845de0c28743783d02f957aa699b50f62d5a5ebd91`，`compact-telemetry.js` SHA-256 `b47266eb9e80315597b351543ee53530bc07bf5ad1b7f21225a2a6702754b126`，回滚目录 `/home/linaro/lsmv2-backups/field-gateway-pre-compact-v3-20260802-235641`。部署后 25/25 完整轮、75/75 帧，A/B/C 各 25，零 timeout/retry/duplicate/unmatched/schema reject/interleaving/spool pending；当前物理节点仍运行旧 compact v2，因此这只是向后兼容门禁，不是 v3 真机验收。
 - 生产服务器 `telemetry-writer` 已部署镜像 `sha256:42f7f668c712117c3f31d92e305d446bc14921518fc3623f17d64496aad723ae`，标签 `lsmv2/telemetry-writer:compact-v3-20260803-001633`；旧镜像保留为 `rollback-compact-v3-20260803-001633`，源码/容器备份位于 `/opt/lsmv2-production/backups/telemetry-writer-pre-compact-v3-20260803-001633`。容器保持 running、`RestartCount=0`，持续消费 Kafka 并成功写 ClickHouse，无 error/fatal/DLQ 日志。
 - 服务器部署合并并回流了两项不能丢失的生产热修复：关闭 Kafka auto-commit 时显式提交 resolved offsets；无效旧 GPS 样本不覆盖最后有效坐标。候选 builder 和本地均为 12/12 测试通过。实际运行镜像 hook 已证明 v3 完整快照会清除旧 `accel_*`、空气温度和过期 RTK 坐标，而 v1/v2 继续稀疏合并。
@@ -128,8 +129,8 @@ status: active
 
 ## Plan
 
-- 从包含 `49eb7544` 及本任务记忆的干净提交，使用最终验收校准文件 `F:\2\openharmony\rk2206_firmware_releases\xls1_link_rehearsal_battery_final_20260802\battery-calibration.json` 重建 A/B/C simulated 正式包；manifest 必须为 `sourceDirty=false`、95-byte v3、simulated、RTCM disabled、`rs485HardwareInitialized=false`，并再次验证唯一身份、精确七文件集合和 PB4/PB5 标记零命中。
-- 用户烧录后按现有生产参数先跑 60 秒，再跑 600 秒和 1800 秒三节点门禁：1000 ms cooldown、2500 ms session timeout，仅部分响应时同标签最多重发一次、1200 ms retry window。三段全部通过前不启用 hardware RS485 或 RTCM LIVE。
+- 正式 simulated V3 包已生成并完成离线发布门禁；下一步只按物理标签烧录 `xls1_compact_v3_final_simulated_20260803` 中 A/B/C 对应 `.img`，不得混刷节点身份或使用旧 dirty 候选。
+- 烧录后按现有生产参数先跑 60 秒，再跑 600 秒和 1800 秒三节点真机门禁：1000 ms cooldown、2500 ms session timeout，仅部分响应时同标签最多重发一次、1200 ms retry window。三段全部通过前不启用 hardware RS485、RTCM PROBE/LIVE，也不把 RK3568 的 V2 兼容门禁表述为 V3 真机通过。
 - A/B/C 已分别以 `+9/+7/最坏 9 mV` 通过电池同步验收并接受 `1046565/1048458/993702 ppm`，最终校准文件及 simulated/hardware 发布包均已生成并通过 final-acceptance、身份、哈希、模式和引脚门禁；百分比仍只是受负载、温度和老化影响的 3S OCV 估算，不能作为准确剩余 mAh 或续航。
 - 保持 4G 主用、1000 ms 冷却和已部署的单次有界重发；持续观察生产重发率不高于 2%、总逻辑响应不高于 2500 ms，网线只保留局域网路由，不再通过人工插拔切换公网链路。
 - RS485 接口到货且源码未变化时，使用已锁定 manifest/hash 的最终 hardware 预检包；先完成断电电气门禁和无传感器首次上电，再按物理身份烧录 A/B/C，随后执行 `0x4D`、真实传感器有效位和至少 600 秒三节点通信门禁。若源码提交或校准哈希变化，必须废止该包并从干净提交重建。
