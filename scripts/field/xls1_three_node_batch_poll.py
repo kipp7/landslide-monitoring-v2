@@ -1047,6 +1047,7 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
             "requiredFieldSensorSource": args.required_field_sensor_source,
             "requireBatteryValid": args.require_battery_valid,
             "requireFieldSensorsValid": args.require_field_sensors_valid,
+            "maxP95IntervalMs": args.max_p95_interval_ms,
             "maxCommandLatencyMs": args.max_command_latency_ms,
         },
         "result": {
