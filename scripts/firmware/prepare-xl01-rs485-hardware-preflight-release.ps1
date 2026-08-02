@@ -101,12 +101,7 @@ Post-flash gate
   4. Keep RTCM disabled until the real-sensor gate passes.
 
 Release verification
-  powershell -ExecutionPolicy Bypass -File scripts/firmware/verify-rk2206-release-safety.ps1 `
-    -ArtifactDirectory $ArtifactDirectory `
-    -ExpectedFieldSensorMode hardware `
-    -ExpectedGnssRtcmInjectionMode disabled `
-    -ExpectedBatteryCalibrationState field-calibrated `
-    -ExpectedSourceCommit $headCommit
+  powershell -ExecutionPolicy Bypass -File scripts/firmware/verify-rk2206-release-safety.ps1 -ArtifactDirectory "$ArtifactDirectory" -ExpectedFieldSensorMode hardware -ExpectedGnssRtcmInjectionMode disabled -ExpectedBatteryCalibrationState field-calibrated -ExpectedSourceCommit $headCommit
 "@
 [System.IO.File]::WriteAllText(
   $guardPath,
