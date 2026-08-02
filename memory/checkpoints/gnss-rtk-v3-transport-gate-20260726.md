@@ -32,6 +32,7 @@ status: active
 - 2026-08-02 尝试将完成后冷却从 1000 ms 单独降到 950 ms。报告 `/var/lib/lsmv2/experiments/xls1-three-node-batch-poll-20260802-011328.json` 为 15 轮、23/45 帧，A/B/C 分别收到 8/8/7 帧；三个节点所有已观测序号均连续，响应集中在早期连续通信阶段，随后三节点共同静默。脚本成功恢复正式服务后，网关又连续 4 轮为 0/3，随后 RK3568 `192.168.124.179:22` 本身从局域网离线；同网段扫描仅路由器开放 SSH。因此该轮被判为外部全链路中断污染，不能用于接受或拒绝 950 ms 参数，也不能继续测试 900/850/800 ms。
 - 为防止同类误判，门禁报告新增 `batchCompleteness`：完整/部分/空轮、最长与尾部连续空轮、最后完整/最后有响应轮，以及 `simultaneousSilenceAfterHealthyTraffic` 事实标志。该标志不自动归因；候选参数失败后仍必须先复跑 1000 ms 基线并核对 RK3568 可达性。
 - 4G 新卡于 2026-08-02 13:25 CST 完成注册、附着和 `cmnet` 建链。RK3568 到云服务器的主机路由及默认路由均已确认走 `usb0`（默认 metric 50），`wlan0` 仅保留 metric 600 的自动备用，未保留以太网默认路由；用户决定后续现场测试和正常运行固定以 4G 为主，不再人工在网线与 4G 之间反复切换。
+- 2026-08-02 16:48 CST 更换大流量 SIM 后再次通过云端反向链路核验：蜂窝状态为 `modem_ready`，SIM/注册/附着/APN 均通过，RSSI 31；默认路由、云端主机路由、反向 SSH 和两条 MQTT 会话全部明确使用 `usb0` 的 `192.168.43.100`。`eth0` 保持 `never-default=yes` 和 metric 200，仅有本地网段路由；相关 timer/service 均已启用，后续禁止用人工插拔或反复修改默认路由进行常规测试。
 - 云端反向入口 `127.0.0.1:22079/28081/28082/28087` 全部在线，云服务器观测到蜂窝公网出口会话。`field-gateway`、Hermes、反向 SSH 在测试结束后均为 active/running，MQTT connected；cellular guardian 状态为 `cloud_reachable_via_4g`，云端 `1883/8080` 的绑定设备 TCP 探测通过。
 - 最新三节点门禁脚本 `/usr/local/bin/xls1_three_node_batch_poll.py` SHA-256 为 `86200419bb8d5f8efc535015523c594af0e62d28b07e0412cf86354aa79b3ba0`，默认仍为不重发，显式参数只允许 `0/1` 次。历史 1000/950/900/850/800 ms 结果用于定位；当前生产依据改为后续 1000 ms 有界重发三级门禁。
 - 800 ms 的 1800 秒 4G 最终门禁真实失败：1021 轮中 1014 完整、7 部分、0 空轮，3056/3063 帧，匹配率 99.77%；A/B/C 分别缺 6/1/0 帧。三节点已接收序号仍完全连续，且重复、回退、未匹配、解码、profile 和残帧错误均为 0；A/B/C 最大命令延迟为 524.5/884.6/1010.6 ms。报告路径为 RK3568 `/var/lib/lsmv2/experiments/xls1-three-node-batch-poll-20260802-4g-800-final-1800s.json`，SHA-256 `9330bcddd2127d302a86783f5dfcb1b794ea3dcdd9c7d036c970b48ca97281bc`。因此 800 ms 被拒绝，生产保持 `SOUTHBOUND_POLLING_INTERVAL_MS=1000`，不为约 2.5% 的理论提速把 950 ms 推入生产。
@@ -113,20 +114,22 @@ status: active
 - PC0 校准链已支持 A/B/C 独立参数：严格报告新增电压中位数，`new-rk2206-battery-calibration.ps1` 只接受通信门禁通过、每节点至少 30 个电池样本、默认校准且采样期间波动不超过 150 mV 的报告，再结合三次同时万用表读数生成带来源哈希的校准文件。构建器逐节点写入 gain/offset/verified，manifest 保存映射并复制原始校准文件；即使增益恰为 `1000000`，已验证节点也正确报告 `field-calibrated`。
 - 逐节点校准流程已用金值与失败路径测试，并用测试映射完成 A/B/C 全量 OpenHarmony 构建；随后同目录只构建 B，确认旧 A/C 产物被清理。B 验证包仅含自身 UUID，模拟标记存在，`SC16IS752`/`[RS485]`/`EI2C0_M0 PB4/PB5` 均不存在，固件与校准来源哈希零差异；SDK 临时备份已清理并恢复，`_verification` 产物也已删除，正式烧录包未改动。
 - 校准改动后又只切 `-FieldSensorMode hardware` 完成 A 节点 OpenHarmony 全量构建；manifest 为 `fieldSensorMode=hardware`、`rs485HardwareInitialized=true`、默认校准未验证，二进制包含 A 身份及 SC16IS752/RS485 标记且不含模拟标记，manifest 哈希零差异。SDK 恢复、临时目录清理完成，证明接口到货后仍可通过单一构建参数回到真实采集。
+- 2026-08-02 新增可复用发布安全验证器及自包含测试。验证器对 manifest 字段、文件集合/长度/SHA-256、A/B/C 的 `.bin` 与 `.img` 身份、跨节点污染、传感器源、RTCM 模式、PC0 输入路径和校准状态做强校验；测试证明可拒绝篡改镜像、重新计算清单哈希后混入错误节点身份、以及模式伪装。正式模拟包 `xls1_link_rehearsal_battery_simulated_20260801` 已以 `sourceCommit=cc5757e0...`、`simulated/disabled/default-calibration` 重新通过，主机四组测试、PC0 引脚门禁和校准生成器测试均通过。
+- 同日从完全干净的 detached worktree `50890f9e...` 构建三节点硬件预检包 `F:\2\openharmony\rk2206_firmware_releases\xls1_rs485_hardware_preflight_uncalibrated_20260802`，SDK 构建后已恢复且 worktree 仍 clean。manifest 明确为 hardware、RS485 initialized、RTCM disabled、默认校准；A/B/C `.img` 哈希为 `a4973220...2b5f`、`011f1e42...04bd6`、`696ac5d4...8ec96`。`cc5757e0...` 与 `50890f9e...` 的 `firmware/rk2206-xl01` Git tree 均为 `f866a8b24b1e51eee0c798c59e7043419a3b3bb6`，因此硬件包只改变构建参数，不含临时源码改动。该包设有 `DO-NOT-FLASH` 门禁，接口未安装和电气检查未完成前禁止烧录。
 
 ## In Progress
 
 - 三节点模拟 compact v2 的 interval 扫参、无重发 1000 ms 对照和有界重发三级门禁均已完成。生产保持 1000 ms 冷却、46/64 字节 compact v2、340 ms 节点时隙和单广播在途，并启用 1200 ms 后同标签最多重发一次、2500 ms 总时限；继续观察生产重发率与重发后时延，不再做 interval 微调。
 - 现场网络固定 4G 主用，网线即使插着也只有局域网路由，Wi-Fi 仅自动备用，不再人工切换公网出口。本轮 field-gateway 两次受控重启、Hermes 和反向 SSH 均保持在线，公网路由始终为 `usb0`。
 - 下一项现场工作是 A/B/C 的 PC0 电池逐节点万用表校准。当前默认校准电压可用于趋势，百分比不能作为准确剩余容量。
-- RS485 元件未到期间，模拟包故意不初始化 PB4/PB5。接口到货、焊接与断电电气检查完成后，使用同一构建脚本把 `-FieldSensorMode simulated` 切成 `hardware`，不可手工删除模拟函数或修改 XLS1 驱动。
+- RS485 元件未到期间，模拟包故意不初始化 PB4/PB5。未校准 hardware 预检包已提前生成但设为 `DO-NOT-FLASH`；接口到货、焊接与断电电气检查完成后才允许用于首次识别验证，最终包仍由同一构建脚本结合逐节点电池校准文件生成，不可手工删除模拟函数或修改 XLS1 驱动。
 - RTCM injection 仍保持 disabled；本轮先建立纯 compact 传感器数据的三节点稳定/延迟基线，再恢复真实 GNSS/RTCM 混合负载门禁。
 
 ## Next Actions
 
 1. 在当前三节点仍在线且电池 IIR 稳定时，同时读取门禁报告中的 A/B/C 电压中位数并用万用表测三块电池端电压；通过 `new-rk2206-battery-calibration.ps1` 生成逐节点校准文件。重建后要求每节点中位电压与万用表差值不超过 60 mV，质量变为 `field-calibrated`。
 2. 通过脱敏健康摘要持续核对 `compactBroadcastRetryRate <= 0.02`、重发写失败为 0、逻辑总响应不超过 2500 ms，并同时确认 `usb0` 默认路由、反向 SSH、Hermes 和 MQTT 在线；不再通过插拔网线制造常规切换。
-3. 不把模拟 compact 门禁等同于真实传感器或 RTK 门禁。RS485 接口到货后先断电检查方向、短路、3.3 V、PB4/PB5 上拉和模块型号，再只切换 `-FieldSensorMode hardware -GnssRtcmInjectionMode disabled` 重建 A/B/C，并完整复跑身份、哈希和通信门禁。
+3. 不把模拟 compact 门禁或预编译成功等同于真实传感器门禁。RS485 接口到货后先断电检查方向、针脚偏移、短路、连续性和模块型号，上电后检查 PB4/PB5 约 3.3 V 及 `0x4D` 识别；通过后才烧录匹配身份的 hardware 预检包，并完整复跑真实有效位、身份、哈希和至少 600 秒三节点通信门禁。
 4. 真实传感器链稳定后恢复 RTCM PROBE，再执行三节点真实 NTRIP 混合负载门禁；最终覆盖 RTCM、3 个 GNSS_CORE、compact 遥测和控制命令，并以 correction age 和 Fixed 连续性作为生产依据。
 
 ## Risks

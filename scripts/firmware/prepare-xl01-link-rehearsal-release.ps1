@@ -161,5 +161,24 @@ Tomorrow, after the SC16IS752/RS485 interface is installed, build the hardware p
   [System.Text.UTF8Encoding]::new($false)
 )
 
+$verifier = Join-Path $PSScriptRoot "verify-rk2206-release-safety.ps1"
+if (-not (Test-Path -LiteralPath $verifier -PathType Leaf)) {
+  throw "Release safety verifier is missing: $verifier"
+}
+$expectedBatteryState = if ($expectedCalibrationVerified) {
+  "field-calibrated"
+} else {
+  "default-calibration"
+}
+& $verifier `
+  -ArtifactDirectory $ArtifactDirectory `
+  -ExpectedFieldSensorMode simulated `
+  -ExpectedGnssRtcmInjectionMode disabled `
+  -ExpectedBatteryCalibrationState $expectedBatteryState `
+  -ExpectedSourceCommit $headCommit
+if ($LASTEXITCODE -ne 0) {
+  throw "Safe rehearsal package failed the release safety verifier"
+}
+
 Write-Host "Safe rehearsal package: $ArtifactDirectory"
 Write-Host "RS485 values: simulated; GPS: real; PC0 battery: real; RTCM injection: disabled"

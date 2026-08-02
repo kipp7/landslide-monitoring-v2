@@ -28,6 +28,7 @@ status: active
 - 当前约 1.94 秒完成一轮，因为 1000 ms 是会话关闭后的冷却，不是固定 1 Hz。当前基线追求零丢帧，不为比赛显示伪称每秒三节点齐采。
 - 最终 1800 秒报告每节点均有 929 个电池样本：A 固定 10.997 V，B 为 10.967..10.982 V（中位数 10.971 V），C 为 11.770..11.771 V（中位数 11.770 V），采样噪声满足一点评估增益条件；三节点仍属 `default-calibration`，必须结合同时万用表值再解释百分比或续航。RS485 硬件到位后只通过构建参数切回 hardware，并重新做完整门禁。
 - RK3568 已恢复并固定以 4G `usb0` 为主链路，默认路由 metric 50；`wlan0` 仅作为 metric 600 的自动备用，不再人工切换网线。云端反向端口、MQTT、Hermes 和告警链路均已验证经蜂窝出口在线。
+- 2026-08-02 16:48 CST 在用户更换大流量 SIM 后经云端反向 SSH 复核：SIM/注册/附着/`cmnet` 均正常，`usb0=192.168.43.100/24`、RSSI 31；默认路由和云端主机路由均走 `usb0`，反向 SSH 及两条 MQTT 长连接的源地址也都是 `192.168.43.100`。`eth0` 即使插线也保持 `ipv4.never-default=yes`、metric 200，只提供 `192.168.124.0/24` 局域网路由。蜂窝检测、链路守护、反向隧道、field-gateway 与 Hermes 均为 enabled/active；后续不再为测试人工切换公网出口。
 - 4G 上 950 ms 的 600 秒严格门禁为 310/310 完整轮、930/930 帧且零错误；900/850/800 ms 均通过 60 秒预检。但 800 ms 的 1800 秒最终门禁仅 1014/1021 完整轮、3056/3063 帧，A/B/C 分别缺 6/1/0，故 800 ms 被拒绝。报告 SHA-256 为 `9330bcddd2127d302a86783f5dfcb1b794ea3dcdd9c7d036c970b48ca97281bc`，生产保持 1000 ms，不部署 950 ms 的边际提速。
 - 800 ms 失败中三节点已接收序号仍连续，且重复、回退、未匹配、解码、profile、残帧错误均为 0；问题表现为长测下零星轮次无应答，不是 4G 中断。门禁退出后 field-gateway 自动恢复，复核 118 轮、354 帧、0 timeout、最近一轮 3/3，MQTT connected。
 - 1000 ms 无重发的 1800 秒基线同样真实失败：917 轮中 911 完整、6 部分，A/B/C 缺 `4/2/0` 帧；已收序号仍全部连续且协议错误为 0。报告 SHA-256 `ba8315faa13e645647a87ded8cdb42ed193c1d64a7acb3ca5353f9d75620b7b1`。因此问题不是单纯冷却过短，继续调大/调小 interval 不能消除低频空口无应答。
@@ -36,6 +37,8 @@ status: active
 - 部署后生产健康快照已累计到 536/536 轮、1608/1608 三节点匹配帧，A/B/C online；重发、超时、重复、未匹配和解析拒绝均为 0，spool pending 为 0，串口与 MQTT 在线。该快照证明部署无回归；自然重发成功仍由独立 600 秒严格门禁提供证据。
 - 空窗口/冗余边界修正版受控重启后重新累计 61/61 轮、183/183 帧；重发、重发写失败、超时、重复、未匹配、解析拒绝和 spool 均为 0。field-gateway、Hermes、反向 SSH 均 active，公网到云服务器仍明确走 4G `usb0`。
 - 有界重发实现、现场门禁工具、测试、部署证据与本 task/checkpoint 已作为 `06749252ac251f482498e099884140adbbc79ddb` 推送到远端 `feat/gnss-rtk-v31-transport`；提交内容已扫描确认不含 CORS 凭据、私钥、真实坐标或原始报告。
+- 新增 `verify-rk2206-release-safety.ps1`，同时验证 manifest schema/profile、完整文件集合和 SHA-256、A/B/C `.bin` 与实际烧录 `.img` 身份、模拟/硬件标记、RTCM 模式、PC0 输入路径以及默认/现场电池校准状态。回归测试已覆盖模拟与硬件正向包，以及 `.img` 篡改、同步改清单哈希后的跨节点身份污染、硬件包冒充模拟包三类拒绝路径。当前正式模拟包已由该验证器通过，PC0 静态引脚门禁和电池校准生成器测试也再次通过。
+- 已从干净提交 `50890f9ec1f9a685d08e34aa574373bb7f9f34c8` 构建暂不烧录的 A/B/C 硬件预检包：`F:\2\openharmony\rk2206_firmware_releases\xls1_rs485_hardware_preflight_uncalibrated_20260802`。manifest 为 `sourceDirty=false`、`fieldSensorMode=hardware`、`rs485HardwareInitialized=true`、RTCM disabled、PC0 默认未校准；A/B/C `.img` SHA-256 分别为 `a49732206bc67d042b4edcf56085762dfa811bcea7059598327855c695d62b5f`、`011f1e428129a82b6e00791d9d77e54147d593691c4205ce2f58a861e7a04bd6`、`696ac5d4de4c7492c95c0a44b754e700f2b0d7a3b7b5f670b545e0ad20a8ec96`。包内 `DO-NOT-FLASH-UNTIL-RS485-INSTALLED.txt` 明确要求接口安装、断电方向/短路/连续性和上电 3.3 V/0x4D 检查通过后才可按节点烧录；构建成功不替代实物 RS485 验收。
 
 ### Prior Engineering Evidence
 
