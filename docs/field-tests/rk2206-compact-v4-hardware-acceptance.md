@@ -10,13 +10,16 @@ This gate validates the three real A/B/C sensor nodes before NTRIP or RTCM injec
 
 ## Locked Inputs
 
-- Release: `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v4_hardware_live_20260803`
-- Manifest SHA-256: `d1f1e53a729f198fe4811cbdf835405f96b87eacf2add716142f3b8f930a09b7`
+- Source commit: `47cbddce3aab1d478087e45f95ff477f4a235d44` (confirmed on `origin/feat/gnss-rtk-v31-transport`).
+- Release: `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v4_hardware_live_20260803_r2`
+- Manifest SHA-256: `1ee3a5f8402cb64c9bcf5997cfbe53e4b7c4bf430765b98e90a498189c672e7d`
+- Node image SHA-256: A `7b5e775e72e4f3f5a29c8c0810d53aaf0a3bbba99ca8c07de7fa4eb4c2f7b70a`; B `a1ed7806ee3d2237097c61586783d5b757234099427f83660f6a8f2dd48bfa00`; C `eb6a744306c09832ee4c6012232eb7bcc7d82b78664ef3fa39f95d7538054773`.
+- Loader SHA-256: `761d90888aa376156d562abf267dfe324b96c4397f7a601f6b4c64d0ea3bf977`.
 - Payload: Compact V4, 139 bytes; complete COBS/CRC field-link frame: 157 bytes.
 - Production timing baseline: 1000 ms cooldown, 1200 ms response window, one partial-only retry, 2500 ms total logical-session limit.
 - RK3568 must keep `NTRIP_ENABLED=false` throughout this gate.
 
-Use only the image whose node label matches the physical A/B/C location. Do not use an earlier rejected candidate or a V3 simulated image.
+Use only the image whose node label matches the physical A/B/C location. The non-`r2` V4 directory, earlier rejected candidates, and V3 simulated images are superseded and must not be flashed for this gate.
 
 ## Electrical and Pin Gate
 
