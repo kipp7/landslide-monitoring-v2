@@ -19,7 +19,14 @@ param(
   [ValidateRange(1, 100000)]
   [int]$ExpectedBatteryCapacityMah = 5000,
   [ValidateRange(1000, 100000)]
-  [int]$ExpectedBatteryNominalVoltageMv = 11100
+  [int]$ExpectedBatteryNominalVoltageMv = 11100,
+  [switch]$RequireFinalBatteryAcceptance,
+  [ValidateRange(1, 500)]
+  [int]$MaxAcceptedBatteryErrorMv = 60,
+  [ValidateRange(0, 500)]
+  [int]$MaxAcceptedBatteryMeterSpanMv = 50,
+  [ValidateRange(1, 1000)]
+  [int]$MaxAcceptedBatteryObservedSpanMv = 150
 )
 
 $ErrorActionPreference = "Stop"
@@ -229,7 +236,124 @@ if ($expectCalibrated) {
         $fileEntry.verified -eq $true
       ) -Message "Battery calibration file and manifest disagree for node $node"
   }
+  if ($RequireFinalBatteryAcceptance) {
+    foreach ($property in @("finalAcceptance", "acceptanceByNode")) {
+      Assert-ObjectProperty -Object $calibration -Name $property `
+        -Context "Final battery calibration"
+    }
+    $finalAcceptance = $calibration.finalAcceptance
+    foreach ($property in @(
+        "schemaVersion", "allNodesAccepted", "maxAllowedAbsErrorMv",
+        "maxAllowedMeterSpanMv", "maxAllowedObservedSpanMv",
+        "minimumSamplesPerNode", "strictCommunicationRequired", "evidenceBinding"
+      )) {
+      Assert-ObjectProperty -Object $finalAcceptance -Name $property `
+        -Context "Final battery acceptance"
+    }
+    Assert-ReleaseCondition -Condition ($finalAcceptance.schemaVersion -eq 1) `
+      -Message "Unsupported final battery acceptance schemaVersion"
+    Assert-ReleaseCondition -Condition (
+        $finalAcceptance.allNodesAccepted -is [bool] -and
+        $finalAcceptance.allNodesAccepted -eq $true -and
+        $finalAcceptance.strictCommunicationRequired -is [bool] -and
+        $finalAcceptance.strictCommunicationRequired -eq $true
+      ) -Message "Final battery acceptance is not complete and strict"
+    Assert-ReleaseCondition -Condition (
+        [int]$finalAcceptance.maxAllowedAbsErrorMv -gt 0 -and
+        [int]$finalAcceptance.maxAllowedAbsErrorMv -le $MaxAcceptedBatteryErrorMv
+      ) -Message "Final battery error gate is weaker than the release policy"
+    Assert-ReleaseCondition -Condition (
+        [int]$finalAcceptance.maxAllowedMeterSpanMv -ge 0 -and
+        [int]$finalAcceptance.maxAllowedMeterSpanMv -le $MaxAcceptedBatteryMeterSpanMv
+      ) -Message "Final battery meter-span gate is weaker than the release policy"
+    Assert-ReleaseCondition -Condition (
+        [int]$finalAcceptance.maxAllowedObservedSpanMv -gt 0 -and
+        [int]$finalAcceptance.maxAllowedObservedSpanMv -le $MaxAcceptedBatteryObservedSpanMv
+      ) -Message "Final battery observed-span gate is weaker than the release policy"
+    Assert-ReleaseCondition -Condition ([int]$finalAcceptance.minimumSamplesPerNode -ge 30) `
+      -Message "Final battery acceptance used fewer than 30 samples per node"
+    Assert-ReleaseCondition -Condition (
+        [string]$finalAcceptance.evidenceBinding -eq
+          "operator-supplied release manifests + strict reports + synchronous meter endpoints"
+      ) -Message "Final battery evidence binding is not the reviewed workflow"
+
+    foreach ($node in $NodeLabels) {
+      $acceptanceProperty = $calibration.acceptanceByNode.PSObject.Properties[$node]
+      Assert-ReleaseCondition -Condition ($null -ne $acceptanceProperty) `
+        -Message "Final battery acceptance is missing node $node"
+      $accepted = $acceptanceProperty.Value
+      foreach ($property in @(
+          "accepted", "acceptedGainPpm", "acceptedOffsetMv", "reportName",
+          "reportSha256", "releaseManifestName", "releaseManifestSha256",
+          "releaseSourceCommit", "verificationFieldSensorMode",
+          "verificationGnssRtcmInjectionMode", "measuredStartMv", "measuredEndMv",
+          "meterSpanMv", "reportedMedianMv", "observedSpanMv", "errorAtStartMv",
+          "errorAtEndMv", "maxAbsErrorMv", "batterySamples", "reportStable",
+          "expectedTelemetry", "matchedTelemetry", "completeBatches",
+          "communicationErrorCount"
+        )) {
+        Assert-ObjectProperty -Object $accepted -Name $property `
+          -Context "Final battery acceptance for node $node"
+      }
+      $calibrationNode = $calibration.nodes.PSObject.Properties[$node].Value
+      Assert-ReleaseCondition -Condition (
+          $accepted.accepted -is [bool] -and $accepted.accepted -eq $true -and
+          [int]$accepted.acceptedGainPpm -eq [int]$calibrationNode.gainPpm -and
+          [int]$accepted.acceptedOffsetMv -eq [int]$calibrationNode.offsetMv
+        ) -Message "Final battery acceptance does not bind the active calibration for node $node"
+      Assert-ReleaseCondition -Condition (
+          [string]$accepted.reportName -eq [System.IO.Path]::GetFileName([string]$accepted.reportName) -and
+          [string]$accepted.releaseManifestName -eq
+            [System.IO.Path]::GetFileName([string]$accepted.releaseManifestName)
+        ) -Message "Final battery evidence names are not safe leaf names for node $node"
+      Assert-ReleaseCondition -Condition (
+          [string]$accepted.reportSha256 -match '^[0-9a-f]{64}$' -and
+          [string]$accepted.releaseManifestSha256 -match '^[0-9a-f]{64}$' -and
+          [string]$accepted.releaseSourceCommit -match '^[0-9a-f]{40}$'
+        ) -Message "Final battery evidence hashes are malformed for node $node"
+      Assert-ReleaseCondition -Condition (
+          [string]$accepted.verificationFieldSensorMode -in @("simulated", "hardware") -and
+          [string]$accepted.verificationGnssRtcmInjectionMode -eq "disabled"
+        ) -Message "Final battery verification profile is invalid for node $node"
+
+      $measuredStartMv = [int]$accepted.measuredStartMv
+      $measuredEndMv = [int]$accepted.measuredEndMv
+      $reportedMedianMv = [int]$accepted.reportedMedianMv
+      $calculatedMeterSpanMv = [math]::Abs($measuredEndMv - $measuredStartMv)
+      $calculatedErrorAtStartMv = $reportedMedianMv - $measuredStartMv
+      $calculatedErrorAtEndMv = $reportedMedianMv - $measuredEndMv
+      $calculatedMaxAbsErrorMv = [math]::Max(
+        [math]::Abs($calculatedErrorAtStartMv),
+        [math]::Abs($calculatedErrorAtEndMv)
+      )
+      Assert-ReleaseCondition -Condition (
+          $measuredStartMv -ge 8000 -and $measuredStartMv -le 13500 -and
+          $measuredEndMv -ge 8000 -and $measuredEndMv -le 13500 -and
+          $reportedMedianMv -ge 8000 -and $reportedMedianMv -le 13500 -and
+          [int]$accepted.meterSpanMv -eq $calculatedMeterSpanMv -and
+          [int]$accepted.errorAtStartMv -eq $calculatedErrorAtStartMv -and
+          [int]$accepted.errorAtEndMv -eq $calculatedErrorAtEndMv -and
+          [int]$accepted.maxAbsErrorMv -eq $calculatedMaxAbsErrorMv
+        ) -Message "Final battery voltage arithmetic is inconsistent for node $node"
+      Assert-ReleaseCondition -Condition (
+          $calculatedMeterSpanMv -le $MaxAcceptedBatteryMeterSpanMv -and
+          [int]$accepted.observedSpanMv -ge 0 -and
+          [int]$accepted.observedSpanMv -le $MaxAcceptedBatteryObservedSpanMv -and
+          $calculatedMaxAbsErrorMv -le $MaxAcceptedBatteryErrorMv
+        ) -Message "Final battery voltage gate failed for node $node"
+      Assert-ReleaseCondition -Condition (
+          [int]$accepted.batterySamples -ge 30 -and
+          $accepted.reportStable -is [bool] -and $accepted.reportStable -eq $true -and
+          [int]$accepted.expectedTelemetry -gt 0 -and
+          [int]$accepted.matchedTelemetry -eq [int]$accepted.expectedTelemetry -and
+          [int]$accepted.completeBatches -gt 0 -and
+          [int]$accepted.communicationErrorCount -eq 0
+        ) -Message "Final battery strict report evidence failed for node $node"
+    }
+  }
 } else {
+  Assert-ReleaseCondition -Condition (-not $RequireFinalBatteryAcceptance) `
+    -Message "Final battery acceptance cannot be required for a default-calibration release"
   Assert-ReleaseCondition -Condition ($null -eq $battery.calibrationSourceSha256) `
     -Message "Default-calibration release unexpectedly references a calibration source"
   Assert-ReleaseCondition -Condition (
@@ -322,12 +446,13 @@ foreach ($node in $NodeLabels) {
 }
 
 Write-Host (
-  "RELEASE_SAFETY_OK path={0} nodes={1} sensor_mode={2} rtcm={3} battery={4} source={5} files={6}" -f `
+  "RELEASE_SAFETY_OK path={0} nodes={1} sensor_mode={2} rtcm={3} battery={4} final_acceptance={5} source={6} files={7}" -f `
     $artifactRoot,
     ($NodeLabels -join ","),
     $ExpectedFieldSensorMode,
     $ExpectedGnssRtcmInjectionMode,
     $ExpectedBatteryCalibrationState,
+    [bool]$RequireFinalBatteryAcceptance,
     $manifest.sourceCommit,
     $manifestEntries.Count
 )

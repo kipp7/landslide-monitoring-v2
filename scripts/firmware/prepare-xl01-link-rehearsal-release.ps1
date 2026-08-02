@@ -137,14 +137,20 @@ foreach ($node in $NodeLabels) {
 }
 
 $calibrationDescription = if ($BatteryCalibrationFile) {
-  "per-node field-calibrated; see battery-calibration.json and manifest.json"
+  "per-node field-calibrated with final acceptance; see battery-calibration.json and manifest.json"
 } elseif ($expectedCalibrationVerified) {
   "shared manual field calibration; see manifest.json"
 } else {
   "neutral default calibration; verify each node against a multimeter before precision claims"
 }
+$releaseDate = Get-Date -Format "yyyy-MM-dd"
+$finalAcceptanceFlag = if ($expectedCalibrationVerified) {
+  " -RequireFinalBatteryAcceptance"
+} else {
+  ""
+}
 $instructions = @"
-XLS1 link rehearsal firmware - 2026-08-01
+XLS1 link rehearsal firmware - $releaseDate
 
 Profile: simulated RS485 values; real UM220 GNSS; real PC0 battery; RTCM injection disabled.
 XLS1 module configuration is preserved. The firmware only uses EUART2_M1 PB2/PB3 for data.
@@ -152,8 +158,11 @@ Battery calibration: $calibrationDescription.
 Burn the .img matching the physical node label. Do not interchange A/B/C images.
 Source commit: $headCommit
 
-Tomorrow, after the SC16IS752/RS485 interface is installed, build the hardware profile with:
+After the SC16IS752/RS485 interface is installed and passes the power-off gate, build the hardware profile with:
   powershell -ExecutionPolicy Bypass -File scripts/firmware/build-xl01-compact-broadcast-v2.ps1 -FieldSensorMode hardware -GnssRtcmInjectionMode disabled
+
+Release verification:
+  powershell -ExecutionPolicy Bypass -File scripts/firmware/verify-rk2206-release-safety.ps1 -ArtifactDirectory "$ArtifactDirectory" -ExpectedFieldSensorMode simulated -ExpectedGnssRtcmInjectionMode disabled -ExpectedBatteryCalibrationState $expectedBatteryState -ExpectedSourceCommit $headCommit$finalAcceptanceFlag
 "@
 [System.IO.File]::WriteAllText(
   (Join-Path $ArtifactDirectory "FLASHING-INSTRUCTIONS.txt"),
@@ -175,7 +184,8 @@ $expectedBatteryState = if ($expectedCalibrationVerified) {
   -ExpectedFieldSensorMode simulated `
   -ExpectedGnssRtcmInjectionMode disabled `
   -ExpectedBatteryCalibrationState $expectedBatteryState `
-  -ExpectedSourceCommit $headCommit
+  -ExpectedSourceCommit $headCommit `
+  -RequireFinalBatteryAcceptance:$expectedCalibrationVerified
 if ($LASTEXITCODE -ne 0) {
   throw "Safe rehearsal package failed the release safety verifier"
 }

@@ -30,7 +30,8 @@ function New-TestRelease {
     [ValidateSet("hardware", "simulated")]
     [string]$Mode,
     [ValidateSet("default-calibration", "field-calibrated")]
-    [string]$BatteryState
+    [string]$BatteryState,
+    [switch]$FinalAcceptance
   )
 
   New-Item -ItemType Directory -Force -Path $Path | Out-Null
@@ -50,6 +51,48 @@ function New-TestRelease {
       schemaVersion = 1
       method = "one-point-multiplicative"
       nodes = $calibrationByNode
+    }
+    if ($FinalAcceptance) {
+      $acceptanceByNode = [ordered]@{}
+      foreach ($node in @("A", "B", "C")) {
+        $acceptanceByNode[$node] = [ordered]@{
+          accepted = $true
+          acceptedGainPpm = $calibrationByNode[$node].gainPpm
+          acceptedOffsetMv = 0
+          reportName = "report-$node.json"
+          reportSha256 = "a" * 64
+          releaseManifestName = "manifest.json"
+          releaseManifestSha256 = "b" * 64
+          releaseSourceCommit = $sourceCommit
+          verificationFieldSensorMode = "simulated"
+          verificationGnssRtcmInjectionMode = "disabled"
+          measuredStartMv = 11500
+          measuredEndMv = 11500
+          meterSpanMv = 0
+          reportedMedianMv = 11500
+          observedSpanMv = 1
+          errorAtStartMv = 0
+          errorAtEndMv = 0
+          maxAbsErrorMv = 0
+          batterySamples = 31
+          reportStable = $true
+          expectedTelemetry = 93
+          matchedTelemetry = 93
+          completeBatches = 31
+          communicationErrorCount = 0
+        }
+      }
+      $calibration["finalAcceptance"] = [ordered]@{
+        schemaVersion = 1
+        allNodesAccepted = $true
+        maxAllowedAbsErrorMv = 60
+        maxAllowedMeterSpanMv = 50
+        maxAllowedObservedSpanMv = 150
+        minimumSamplesPerNode = 30
+        strictCommunicationRequired = $true
+        evidenceBinding = "operator-supplied release manifests + strict reports + synchronous meter endpoints"
+      }
+      $calibration["acceptanceByNode"] = $acceptanceByNode
     }
     $calibrationPath = Join-Path $Path "battery-calibration.json"
     Write-Utf8Json -Path $calibrationPath -Value $calibration
@@ -195,13 +238,59 @@ try {
   }
 
   $hardwareRoot = Join-Path $testRoot "hardware"
-  New-TestRelease -Path $hardwareRoot -Mode hardware -BatteryState field-calibrated
+  New-TestRelease `
+    -Path $hardwareRoot `
+    -Mode hardware `
+    -BatteryState field-calibrated `
+    -FinalAcceptance
   & $verifier `
     -ArtifactDirectory $hardwareRoot `
     -ExpectedFieldSensorMode hardware `
     -ExpectedGnssRtcmInjectionMode disabled `
     -ExpectedBatteryCalibrationState field-calibrated `
+    -RequireFinalBatteryAcceptance `
     -RequireCurrentHead | Out-Null
+
+  $hardwareWithoutAcceptanceRoot = Join-Path $testRoot "hardware-no-final-acceptance"
+  New-TestRelease `
+    -Path $hardwareWithoutAcceptanceRoot `
+    -Mode hardware `
+    -BatteryState field-calibrated
+  Assert-Rejected -Reason "field calibration without final acceptance evidence" -Action {
+    & $verifier `
+      -ArtifactDirectory $hardwareWithoutAcceptanceRoot `
+      -ExpectedFieldSensorMode hardware `
+      -ExpectedGnssRtcmInjectionMode disabled `
+      -ExpectedBatteryCalibrationState field-calibrated `
+      -RequireFinalBatteryAcceptance | Out-Null
+  }
+
+  $hardwareCalibrationPath = Join-Path $hardwareRoot "battery-calibration.json"
+  $hardwareManifestPath = Join-Path $hardwareRoot "manifest.json"
+  $hardwareCalibration =
+    Get-Content -LiteralPath $hardwareCalibrationPath -Raw | ConvertFrom-Json
+  $hardwareCalibration.acceptanceByNode.A.maxAbsErrorMv = 61
+  Write-Utf8Json -Path $hardwareCalibrationPath -Value $hardwareCalibration
+  $hardwareManifest = Get-Content -LiteralPath $hardwareManifestPath -Raw | ConvertFrom-Json
+  $hardwareManifest.battery.calibrationSourceSha256 = (
+    Get-FileHash -LiteralPath $hardwareCalibrationPath -Algorithm SHA256
+  ).Hash.ToLowerInvariant()
+  Write-Utf8Json -Path $hardwareManifestPath -Value $hardwareManifest
+  Assert-Rejected -Reason "hash-consistent final acceptance with invalid error arithmetic" -Action {
+    & $verifier `
+      -ArtifactDirectory $hardwareRoot `
+      -ExpectedFieldSensorMode hardware `
+      -ExpectedGnssRtcmInjectionMode disabled `
+      -ExpectedBatteryCalibrationState field-calibrated `
+      -RequireFinalBatteryAcceptance | Out-Null
+  }
+
+  Remove-Item -LiteralPath $hardwareRoot -Recurse -Force
+  New-TestRelease `
+    -Path $hardwareRoot `
+    -Mode hardware `
+    -BatteryState field-calibrated `
+    -FinalAcceptance
 
   Assert-Rejected -Reason "hardware release presented as simulated" -Action {
     & $verifier `
@@ -211,7 +300,7 @@ try {
       -ExpectedBatteryCalibrationState field-calibrated | Out-Null
   }
 
-  Write-Host "RELEASE_SAFETY_TEST_OK simulated/hardware positives and tamper/identity/mode negatives passed"
+  Write-Host "RELEASE_SAFETY_TEST_OK simulated/hardware/final-acceptance positives and tamper/identity/mode/acceptance negatives passed"
 } finally {
   if (Test-Path -LiteralPath $testRoot -PathType Container) {
     Remove-Item -LiteralPath $testRoot -Recurse -Force
