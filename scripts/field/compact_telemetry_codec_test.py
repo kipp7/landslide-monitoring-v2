@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 from xls1_three_node_batch_poll import (
+    analyze_batch_completeness,
     command_tag,
     decode_compact_telemetry,
     decode_frame,
@@ -100,6 +101,50 @@ def main() -> None:
     broken_nodes = {label: dict(value) for label, value in healthy_nodes.items()}
     broken_nodes["B"] = {**broken_nodes["B"], "sequence": {"nonUnitGaps": 1}}
     assert evaluate_stability_gate(**{**gate_args, "node_results": broken_nodes}) is False
+
+    def batch_records(batch_count: int) -> dict[str, dict[str, int | str]]:
+        return {
+            f"{batch}:{node}": {"batch": batch, "node": node}
+            for batch in range(1, batch_count + 1)
+            for node in ("A", "B", "C")
+        }
+
+    all_records = batch_records(5)
+    all_received = set(all_records)
+    complete_summary = analyze_batch_completeness(all_records, all_received)
+    assert complete_summary == {
+        "completeBatches": 5,
+        "partialBatches": 0,
+        "emptyBatches": 0,
+        "longestConsecutiveEmptyBatches": 0,
+        "trailingConsecutiveEmptyBatches": 0,
+        "lastCompleteBatch": 5,
+        "lastMatchedBatch": 5,
+        "simultaneousSilenceAfterHealthyTraffic": False,
+    }
+
+    partial_received = all_received - {"2:C", "4:B"}
+    partial_summary = analyze_batch_completeness(all_records, partial_received)
+    assert partial_summary["completeBatches"] == 3
+    assert partial_summary["partialBatches"] == 2
+    assert partial_summary["emptyBatches"] == 0
+    assert partial_summary["simultaneousSilenceAfterHealthyTraffic"] is False
+
+    outage_records = batch_records(15)
+    outage_received = {
+        command_id
+        for command_id, record in outage_records.items()
+        if int(record["batch"]) <= 8
+    }
+    outage_summary = analyze_batch_completeness(outage_records, outage_received)
+    assert outage_summary["completeBatches"] == 8
+    assert outage_summary["emptyBatches"] == 7
+    assert outage_summary["longestConsecutiveEmptyBatches"] == 7
+    assert outage_summary["trailingConsecutiveEmptyBatches"] == 7
+    assert outage_summary["lastCompleteBatch"] == 8
+    assert outage_summary["lastMatchedBatch"] == 8
+    assert outage_summary["simultaneousSilenceAfterHealthyTraffic"] is True
+
     poll_command = b"P112345678"
     poll_frame = encode_frame(2, 8, poll_command)
     assert len(poll_command) == 10

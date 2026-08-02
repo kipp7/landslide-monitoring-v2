@@ -126,6 +126,8 @@ sudo python3 /usr/local/bin/xls1_three_node_batch_poll.py \
 
 Exit code `0` and `result.stableProfile=true` require all three nodes, 100% command matching, continuous node sequence numbers, zero duplicate/unmatched/decode/profile violations, no trailing partial frame, valid simulated field measurements, valid PC0 battery readings, and the configured interval/latency limits. `--broadcast-response-timeout-ms 5000` prevents the test itself from overlapping broadcast sessions. When the service was active, the script installs a temporary `/run` systemd drop-in with `Restart=no` and `RefuseManualStart=yes`, stops the service, then removes the drop-in and restores the service in `finally`. A runtime mask is not sufficient when the unit file itself lives under `/etc/systemd/system`.
 
+`result.batchCompleteness` separates complete, partial and empty rounds and records the longest and trailing empty-round streaks. `simultaneousSilenceAfterHealthyTraffic=true` is a factual diagnostic for at least three complete rounds followed by at least three trailing rounds with no A/B/C response. It does not identify the cause by itself; confirm the original baseline and RK3568/network availability before attributing the failure to a candidate timing parameter.
+
 ### 2026-08-02 Strict Gate Result
 
 The powered A/B/C rehearsal firmware and deployed RK3568 gateway passed the 600-second strict gate:

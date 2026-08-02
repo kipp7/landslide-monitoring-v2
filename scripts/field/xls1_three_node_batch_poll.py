@@ -403,6 +403,68 @@ def evaluate_stability_gate(
     )
 
 
+def analyze_batch_completeness(
+    send_records: dict[str, dict[str, Any]],
+    received_command_ids: set[str],
+) -> dict[str, Any]:
+    batches: dict[int, dict[str, int]] = defaultdict(lambda: {"expected": 0, "matched": 0})
+    for command_id, record in send_records.items():
+        batch = int(record["batch"])
+        batches[batch]["expected"] += 1
+        if command_id in received_command_ids:
+            batches[batch]["matched"] += 1
+
+    ordered = [
+        {"batch": batch, **batches[batch]}
+        for batch in sorted(batches)
+    ]
+    complete_batches = sum(row["matched"] == row["expected"] for row in ordered)
+    partial_batches = sum(0 < row["matched"] < row["expected"] for row in ordered)
+    empty_batches = sum(row["matched"] == 0 for row in ordered)
+
+    longest_empty_streak = 0
+    current_empty_streak = 0
+    for row in ordered:
+        if row["matched"] == 0:
+            current_empty_streak += 1
+            longest_empty_streak = max(longest_empty_streak, current_empty_streak)
+        else:
+            current_empty_streak = 0
+
+    trailing_empty_batches = 0
+    for row in reversed(ordered):
+        if row["matched"] != 0:
+            break
+        trailing_empty_batches += 1
+
+    rows_before_trailing_silence = (
+        ordered[:-trailing_empty_batches] if trailing_empty_batches else ordered
+    )
+    complete_before_trailing_silence = sum(
+        row["matched"] == row["expected"] for row in rows_before_trailing_silence
+    )
+    simultaneous_silence_after_healthy_traffic = (
+        trailing_empty_batches >= 3 and complete_before_trailing_silence >= 3
+    )
+
+    return {
+        "completeBatches": complete_batches,
+        "partialBatches": partial_batches,
+        "emptyBatches": empty_batches,
+        "longestConsecutiveEmptyBatches": longest_empty_streak,
+        "trailingConsecutiveEmptyBatches": trailing_empty_batches,
+        "lastCompleteBatch": max(
+            (row["batch"] for row in ordered if row["matched"] == row["expected"]),
+            default=None,
+        ),
+        "lastMatchedBatch": max(
+            (row["batch"] for row in ordered if row["matched"] > 0),
+            default=None,
+        ),
+        "simultaneousSilenceAfterHealthyTraffic": simultaneous_silence_after_healthy_traffic,
+    }
+
+
 def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
     started_at = utc_now()
     started_mono = time.monotonic()
@@ -803,6 +865,7 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
     profile_violation_count = sum(
         sum(violations.values()) for violations in profile_violations_by_node.values()
     )
+    batch_completeness = analyze_batch_completeness(send_records, received_command_ids)
     stable_one_second = evaluate_stability_gate(
         matched_rate=matched_rate,
         required_match_rate=args.required_match_rate,
@@ -863,6 +926,7 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
             "bytesWritten": bytes_written,
             "bytesRead": bytes_read,
             "trailingUndelimitedBytes": len(receive_buffer),
+            "batchCompleteness": batch_completeness,
         },
         "nodes": node_results,
         "validFrameTypes": dict(valid_frame_types),
