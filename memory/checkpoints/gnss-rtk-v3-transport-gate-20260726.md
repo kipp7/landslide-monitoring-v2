@@ -121,18 +121,19 @@ status: active
 - 2026-08-02 B 烧录首轮校准包后的修正版严格窗口为 31/31 完整轮、93/93 帧，零缺失、重发、解码、profile、重复、未匹配和残帧错误，`stableProfile=true`，服务自动恢复；报告保留在 RK3568 `/var/lib/lsmv2/experiments/xls1-three-node-battery-B-postflash-rerun-20260802.json`，SHA-256 `5cd603a251494125624e01e3e9b0d66508286aa6c7ebab2d5feb0068eb559085`。B 为 `field-calibrated`，31 个样本 `11584..11586 mV`、中位数 `11586 mV`；万用表首尾均为 `11500 mV`，误差 `+86 mV`，通信通过但电压精度拒绝。迭代工具从旧增益 `1056299` 计算 B 候选 `1048458 ppm`，候选校准 SHA-256 `ae7638c8e20efedbbbfb6c3bf1f2a6b20c36fefee892e91d0946c192d8536726`。干净提交 `f78aab76...` 的 simulated 候选包在 `F:\2\openharmony\rk2206_firmware_releases\xls1_link_rehearsal_battery_refined_B_candidate_20260802`，A/B/C 增益为 `1046565/1048458/984111 ppm`，B `.img` SHA-256 `5136225519aa6336a8cb979270214ff9c826c45265f9134874b18b7c9267b0f2`；包为 simulated、RTCM disabled、PB4/PB5 不初始化并通过 `RELEASE_SAFETY_OK`。RK3568 门禁报告现保存 `maxP95IntervalMs`，部署脚本 SHA-256 `099e6b197849c7e7db52ae6e2b83bda500e5710fbdec02b1f1da4dbef0a56ad2`，备份为 `/home/linaro/lsmv2-backups/xls1-three-node-batch-poll-pre-report-config-20260802-205256.py`。
 - B 修正候选最终同步验收通过：严格窗口 31/31 轮、93/93 帧，`stableProfile=true`，所有通信错误计数为 0；B 的 31 个样本固定为 `11507 mV`，质量为 `field-calibrated`，同步万用表首尾均为 `11500 mV`，误差 `+7 mV`，满足 `<=60 mV`。接受 B 增益 `1048458 ppm`。RK3568 原始报告 `/var/lib/lsmv2/experiments/xls1-three-node-battery-B-refined-verify-20260802.json` 已下载到非 Git `output/rk2206-battery-calibration-20260802/`，两端 SHA-256 为 `a4fce627cdc1e371cedb217fa688191695f2afdd3db44309a720fbcbb35fc05e`。A/C 仍需当前同步复测；旧 hardware 包继续 `DO-NOT-FLASH`。
 - C 当前固件同步复测为 31/31 轮、93/93 帧、零通信错误，C 样本固定为 `11389 mV`，同步万用表首尾为 `11500/11500 mV`，误差 `-111 mV`，故精度拒绝。原始报告 `/var/lib/lsmv2/experiments/xls1-three-node-battery-C-verify-20260802.json` 已下载到非 Git `output/`，SHA-256 `bd8dfe5ce1dd50f6c3134831df99ca15d96843f231a29a6b8f79ce17cf277183`。迭代候选 C 增益为 `993702 ppm`，候选校准 SHA-256 `e0ee946dcf1a2ef11c113cf201106ae845d590036b3b6b1306b39aa1356eadb4`；只有重刷 C 并再次满足 `<=60 mV` 后才能接受。
+- C 修正候选包从干净提交 `a7cf9fbb...` 构建在 `F:\2\openharmony\rk2206_firmware_releases\xls1_link_rehearsal_battery_refined_C_candidate_20260802`；C `.img` SHA-256 `b3b57903e68c5b1ff417e1b184b6cd95d2ae5a2babc0db74edc39003360979f7`，包为 simulated、RTCM disabled、PB4/PB5 不初始化并通过独立发布安全校验。烧录后严格窗口 31/31 轮、93/93 帧、零错误；C 样本 `11490..11492 mV`、中位数 `11491 mV`，万用表末值在 `11490..11500 mV` 间跳动，最坏绝对误差 `9 mV`，正式接受 C 增益 `993702 ppm`。报告 `/var/lib/lsmv2/experiments/xls1-three-node-battery-C-refined-verify-20260802.json` 已按 SHA-256 `055c62cc044136271901c82b7006825e3704efd426407f315433eb9eb84b26ff` 下载到非 Git `output/`。B/C 均已通过，剩余 A。
 
 ## In Progress
 
 - 三节点模拟 compact v2 的 interval 扫参、无重发 1000 ms 对照和有界重发三级门禁均已完成。生产保持 1000 ms 冷却、46/64 字节 compact v2、340 ms 节点时隙和单广播在途，并启用 1200 ms 后同标签最多重发一次、2500 ms 总时限；继续观察生产重发率与重发后时延，不再做 interval 微调。
 - 现场网络固定 4G 主用，网线即使插着也只有局域网路由，Wi-Fi 仅自动备用，不再人工切换公网出口。本轮 field-gateway 两次受控重启、Hermes 和反向 SSH 均保持在线，公网路由始终为 `usb0`。
-- B 修正候选已以 `+7 mV` 通过同步验收，不再重刷或重复校准。C 当前系数以 `-111 mV` 被拒绝，下一项是构建并只烧 C 的 `993702 ppm` simulated 候选，复测通过后再处理 A；百分比仍只是 3S OCV 估算，不宣称剩余 mAh 或续航。
+- B/C 已分别以最坏 `7/9 mV` 误差通过并接受 `1048458/993702 ppm`，不再重刷或重复校准。下一项是对 A 当前 `1046565 ppm` 做同步复测；百分比仍只是 3S OCV 估算，不宣称剩余 mAh 或续航。
 - RS485 元件未到期间，simulated 包故意不初始化 PB4/PB5。现有 hardware 包因保留旧 B 增益而过期并继续禁烧；最终 A/B/C 电池现场验收完成后才重建 hardware 包，接口到货、焊接与断电/首次上电电气检查完成后才允许按物理身份烧录，不可手工删除模拟函数、修改 XLS1 驱动或绕过包内检查顺序。
 - RTCM injection 仍保持 disabled；本轮先建立纯 compact 传感器数据的三节点稳定/延迟基线，再恢复真实 GNSS/RTCM 混合负载门禁。
 
 ## Next Actions
 
-1. B 已通过，不再烧录。用候选校准文件构建 simulated/RTCM-disabled 包后只烧 C 镜像，IIR 稳定至少 1 分钟，再对 C 执行同步严格窗口；C 绝对误差 `<=60 mV` 后再对 A 当前系数复测。A/B/C 全部通过后才生成最终三节点发布包。
+1. B/C 已通过，不再烧录。让 A 保持当前 simulated/RTCM-disabled 固件，上电稳定至少 1 分钟后执行同步严格窗口；若 A 绝对误差超过 `60 mV`，按相同迭代流程只刷 A 候选并复测。三节点全部通过后才生成最终 simulated/hardware 发布包。
 2. 通过脱敏健康摘要持续核对 `compactBroadcastRetryRate <= 0.02`、重发写失败为 0、逻辑总响应不超过 2500 ms，并同时确认 `usb0` 默认路由、反向 SSH、Hermes 和 MQTT 在线；不再通过插拔网线制造常规切换。
 3. 不把模拟 compact 门禁或预编译成功等同于真实传感器门禁。RS485 接口到货后先断电检查方向、针脚偏移、短路、连续性和模块型号，上电后检查 PB4/PB5 约 3.3 V 及 `0x4D` 识别；通过后才烧录匹配身份的 hardware 预检包，并完整复跑真实有效位、身份、哈希和至少 600 秒三节点通信门禁。
 4. 真实传感器链稳定后恢复 RTCM PROBE，再执行三节点真实 NTRIP 混合负载门禁；最终覆盖 RTCM、3 个 GNSS_CORE、compact 遥测和控制命令，并以 correction age 和 Fixed 连续性作为生产依据。
@@ -153,4 +154,4 @@ status: active
 
 ## Resume Prompt
 
-继续 2026-08-02 XLS1/RTK 链路任务：生产链保持 1000 ms 冷却、1200 ms 首响应窗、部分响应时同标签最多重发一次和 2500 ms 总会话；最终 1800 秒为 2787/2787、零错误。B 以板端 11507 mV 对表值 11500 mV、误差 +7 mV 正式通过，接受 `1048458 ppm`。C 当前严格窗口也是 93/93、零错误，但板端 11389 mV 对表值 11500 mV、误差 -111 mV，被精度门槛拒绝；候选 C 增益为 `993702 ppm`，候选校准 SHA-256 `e0ee946d...6eadb4`。下一步从干净提交构建并只烧 C simulated 候选，复测通过后处理 A，最后重建三节点 simulated/hardware 包。旧 hardware 包继续禁止烧录；真实传感器门禁通过后才恢复 RTCM PROBE/真实 NTRIP。原始报告、坐标和凭据不进入 Git。
+继续 2026-08-02 XLS1/RTK 链路任务：生产链保持 1000 ms 冷却、1200 ms 首响应窗、部分响应时同标签最多重发一次和 2500 ms 总会话；最终 1800 秒为 2787/2787、零错误。B 以 +7 mV 通过并接受 `1048458 ppm`；C 修正候选包的 C `.img` SHA-256 为 `b3b57903...0979f7`，烧录后以 31/31 轮、93/93 帧、零错误通过，板端中位数 11491 mV 对万用表 11490..11500 mV，最坏误差 9 mV，接受 `993702 ppm`。下一步只验收 A 当前 `1046565 ppm`，必要时迭代 A；三节点全通过后重建最终 simulated/hardware 包。旧 hardware 包继续禁止烧录；真实传感器门禁通过后才恢复 RTCM PROBE/真实 NTRIP。原始报告、坐标和凭据不进入 Git。
