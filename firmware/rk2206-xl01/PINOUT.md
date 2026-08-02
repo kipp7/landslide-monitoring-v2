@@ -1,96 +1,61 @@
-# RK2206 滑坡监测系统 - 当前引脚真值
+# RK2206 现场节点引脚真值
 
 ## 适用范围
 
-本文件只记录**当前工程应采用的单一引脚真值**。
+本文记录 compact V4 生产固件的唯一引脚真值。若历史文档与本文冲突，以当前 `BUILD.gn`、`app_config.h` 和 RK2206 SDK HAL 为准。
 
-如果其他 GPS / UART 方案文档与本文件冲突：
+## 接口分配
 
-- 以本文件为准
-- 以当前编译代码为准
-
-## 1. 当前接口分配
-
-| 模块 | 接口 | 引脚 | GPIO | 当前状态 |
+| 功能 | BSP 接口 | RK2206 引脚 | 参数 | 生产状态 |
 | --- | --- | --- | --- | --- |
-| XL01 | `EUART2_M1` | `PB2 / PB3` | `GPIO0_PB2 / GPIO0_PB3` | 已测试 |
-| GPS | `EUART0_M0` | `PB6 / PB7` | `GPIO0_PB6 / GPIO0_PB7` | 当前代码真值，待真机复验 |
-| MPU6050 / SHT30 | `EI2C0_M0` | `PB4 / PB5` | `GPIO0_PB4 / GPIO0_PB5` | 当前代码真值 |
+| XLS1 无线链路 | `EUART2_M1` | `PB2=RX`、`PB3=TX` | 115200 bit/s | 启用 |
+| UM220-IV NK GNSS | `EUART0_M0` | `PB6=RX`、`PB7=TX` | 115200 bit/s | 启用 |
+| SC16IS752 双路 UART | `EI2C0_M0` | `PB4=SDA`、`PB5=SCL` | 100 kHz，地址 `0x4D` | 启用 |
+| 电池采样 | SARADC channel 0 | `PC0` | 模拟输入 | 启用 |
 
-## 2. 当前代码宏
+SC16IS752 的 UART A 接三合一土壤探头，UART B 接 RS-DIP-N01-1 三轴倾角传感器。PB4/PB5 不再连接或编译 MPU6050、SHT30；空气温湿度和 MPU6050 数据不属于 compact V4 遥测契约。
+
+## 接线方向
+
+```text
+XLS1 TX  -> PB2 (RK2206 RX)
+XLS1 RX  -> PB3 (RK2206 TX)
+
+UM220 TX -> PB6 (RK2206 RX)
+UM220 RX -> PB7 (RK2206 TX)
+
+SC16IS752 SDA -> PB4
+SC16IS752 SCL -> PB5
+
+电池分压输出 -> PC0
+```
+
+所有模块必须共地。XLS1 和 UM220 的 UART 为交叉连接；PB4/PB5 为 I2C，不得作为普通 GPIO、PWM、SPI 或另一组 UART 使用；PC0 只允许走 SDK 的 ADC 输入路径。
+
+## 固件真值
 
 ```c
 #define XL01_UART_ID        EUART2_M1
 #define XL01_BAUDRATE       115200
 
 #define GPS_UART_ID         EUART0_M0
-#define GPS_BAUDRATE        9600
+#define GPS_BAUDRATE        115200
 
 #define I2C_IDX             EI2C0_M0
 #define I2C_BAUDRATE        EI2C_FRE_100K
+
+#define BATTERY_ADC_CHANNEL 0U
 ```
 
-## 3. 接线真值
+生产 `BUILD.gn` 必须包含真实 `gps_driver.c`、SC16IS752/RS485 驱动和 `battery_monitor.c`，不得编译 `mpu6050_driver.c`、`sht30_driver.c`、旧 `gps_module.c` 或旧聚合 `sensors.c`。
 
-### XL01
+## 自动门禁
 
-```text
-XL01 RX -> PB2
-XL01 TX -> PB3
-XL01 VCC -> 3.3V
-XL01 GND -> GND
+构建或发布前运行：
+
+```powershell
+pwsh -File scripts/firmware/test-rk2206-pin-safety.ps1
+pwsh -File scripts/firmware/test-rk2206-pin-safety-negative.ps1
 ```
 
-### GPS
-
-```text
-GPS TX -> PB6
-GPS RX -> PB7
-GPS VCC -> 3.3V
-GPS GND -> GND
-```
-
-### MPU6050 / SHT30
-
-```text
-SDA -> PB4
-SCL -> PB5
-VCC -> 3.3V
-GND -> GND
-```
-
-## 4. 重要说明
-
-### 4.1 当前为什么不是 A6 / A7 或 C6 / C7
-
-当前并不是说 `A6/A7` 或 `C6/C7` 永远不可能使用，而是：
-
-- 它们没有成为当前实际编译代码的统一真值
-- 当前阶段不再按这些早期候选方案接线
-
-### 4.2 当前为什么先以代码真值为准
-
-当前真实参与编译的代码里：
-
-- I2C 已迁到 `PB4 / PB5`
-- GPS 当前写成 `PB6 / PB7`
-
-因此当前工程真值应先统一到：
-
-- GPS `PB6 / PB7`
-- I2C `PB4 / PB5`
-
-而不是继续保留多套候选文档。
-
-## 5. 当前用途
-
-本文件用于：
-
-- 现场接线
-- 代码修改前核对
-- 真机 smoke 前确认
-
-不再用于：
-
-- 保留多个 GPS 候选方案
-- 继续讨论早期引脚试配记录
+门禁同时检查应用配置、实际编译源、SDK UART/I2C/ADC 复用和方向；任何引脚、复用功能或退役传感器源漂移都会失败。

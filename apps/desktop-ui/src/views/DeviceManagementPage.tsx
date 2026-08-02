@@ -42,10 +42,12 @@ const CENTER_NODE_SELECTION_ID = "__rk3568_center_node__";
 type SensorRow = {
   id: string;
   time: string;
-  temperature: number;
-  humidity: number;
-  dispMm: number;
-  rainMm: number;
+  soilTemperatureC: number | null;
+  soilMoisturePct: number | null;
+  soilEcUsCm: number | null;
+  tiltXDeg: number | null;
+  tiltYDeg: number | null;
+  displacementMm: number | null;
 };
 
 type ControlLogRow = {
@@ -374,16 +376,20 @@ export function DeviceManagementPage() {
   const deviceStateSummary = useMemo(() => {
     const metrics = deviceState?.metrics ?? {};
     const meta = deviceState?.meta ?? {};
+    const rtkTrusted = readMetricBoolean(metrics, "rtk_trusted") === true;
     return {
       updatedAt: deviceState?.updatedAt ?? null,
       todayDataCount: readMetricNumber(meta, "todayDataCount") ?? readMetricNumber(meta, "today_data_count"),
-      temperatureC: readMetricNumber(metrics, "temperature_c"),
-      humidityPct: readMetricNumber(metrics, "humidity_pct"),
       batteryPct: readMetricNumber(metrics, "battery_pct"),
+      soilTemperatureC: readMetricNumber(metrics, "soil_temperature_c"),
+      soilMoisturePct: readMetricNumber(metrics, "soil_moisture_pct"),
+      soilEcUsCm: readMetricNumber(metrics, "electrical_conductivity_us_cm"),
       tiltXDeg: readMetricNumber(metrics, "tilt_x_deg"),
       tiltYDeg: readMetricNumber(metrics, "tilt_y_deg"),
-      gpsLatitude: readMetricNumber(metrics, "gps_latitude"),
-      gpsLongitude: readMetricNumber(metrics, "gps_longitude"),
+      tiltZDeg: readMetricNumber(metrics, "tilt_z_deg"),
+      rtkTrusted,
+      rtkLatitude: rtkTrusted ? readMetricNumber(metrics, "rtk_latitude_deg") : null,
+      rtkLongitude: rtkTrusted ? readMetricNumber(metrics, "rtk_longitude_deg") : null,
       warningFlag: readMetricBoolean(metrics, "warning_flag")
     };
   }, [deviceState]);
@@ -398,10 +404,13 @@ export function DeviceManagementPage() {
         baselineEstablished: false,
         stateUpdatedAt: null as string | null,
         warningFlag: null as boolean | null,
-        temperatureC: null as number | null,
-        humidityPct: null as number | null,
+        soilTemperatureC: null as number | null,
+        soilMoisturePct: null as number | null,
+        soilEcUsCm: null as number | null,
         tiltXDeg: null as number | null,
-        tiltYDeg: null as number | null
+        tiltYDeg: null as number | null,
+        tiltZDeg: null as number | null,
+        rtkTrusted: false
       };
     }
     const health = deviceExpert?.result.health?.score ?? 0;
@@ -417,10 +426,13 @@ export function DeviceManagementPage() {
       baselineEstablished,
       stateUpdatedAt: deviceStateSummary.updatedAt,
       warningFlag: deviceStateSummary.warningFlag,
-      temperatureC: deviceStateSummary.temperatureC,
-      humidityPct: deviceStateSummary.humidityPct,
+      soilTemperatureC: deviceStateSummary.soilTemperatureC,
+      soilMoisturePct: deviceStateSummary.soilMoisturePct,
+      soilEcUsCm: deviceStateSummary.soilEcUsCm,
       tiltXDeg: deviceStateSummary.tiltXDeg,
-      tiltYDeg: deviceStateSummary.tiltYDeg
+      tiltYDeg: deviceStateSummary.tiltYDeg,
+      tiltZDeg: deviceStateSummary.tiltZDeg,
+      rtkTrusted: deviceStateSummary.rtkTrusted
     };
   }, [baselineByDeviceId, deviceExpert, deviceStateSummary, selectedDevice]);
 
@@ -655,10 +667,12 @@ export function DeviceManagementPage() {
         start.setHours(start.getHours() - 24);
         const startTime = start.toISOString();
 
-        const [temperature, humidity, rain, gps] = await Promise.all([
-          api.telemetry.getSeries({ deviceId: selectedDevice.id, sensorKey: "temperature_c", startTime, endTime, interval: "1h" }),
-          api.telemetry.getSeries({ deviceId: selectedDevice.id, sensorKey: "humidity_pct", startTime, endTime, interval: "1h" }),
-          api.telemetry.getSeries({ deviceId: selectedDevice.id, sensorKey: "rainfall_mm", startTime, endTime, interval: "1h" }),
+        const [soilTemperature, soilMoisture, soilEc, tiltX, tiltY, gps] = await Promise.all([
+          api.telemetry.getSeries({ deviceId: selectedDevice.id, sensorKey: "soil_temperature_c", startTime, endTime, interval: "1h" }),
+          api.telemetry.getSeries({ deviceId: selectedDevice.id, sensorKey: "soil_moisture_pct", startTime, endTime, interval: "1h" }),
+          api.telemetry.getSeries({ deviceId: selectedDevice.id, sensorKey: "electrical_conductivity_us_cm", startTime, endTime, interval: "1h" }),
+          api.telemetry.getSeries({ deviceId: selectedDevice.id, sensorKey: "tilt_x_deg", startTime, endTime, interval: "1h" }),
+          api.telemetry.getSeries({ deviceId: selectedDevice.id, sensorKey: "tilt_y_deg", startTime, endTime, interval: "1h" }),
           baselineByDeviceId.get(selectedDevice.id)
             ? api.gps.getSeries({ deviceId: selectedDevice.id, days: 7 })
             : Promise.resolve(null)
@@ -672,26 +686,34 @@ export function DeviceManagementPage() {
           const created: SensorRow = {
             id: ts,
             time: new Date(ts).toLocaleTimeString("zh-CN"),
-            temperature: 0,
-            humidity: 0,
-            dispMm: 0,
-            rainMm: 0
+            soilTemperatureC: null,
+            soilMoisturePct: null,
+            soilEcUsCm: null,
+            tiltXDeg: null,
+            tiltYDeg: null,
+            displacementMm: null
           };
           rows.set(ts, created);
           return created;
         };
 
-        for (const point of temperature) {
-          upsert(point.ts).temperature = Number(point.value.toFixed(1));
+        for (const point of soilTemperature) {
+          upsert(point.ts).soilTemperatureC = Number(point.value.toFixed(2));
         }
-        for (const point of humidity) {
-          upsert(point.ts).humidity = Number(point.value.toFixed(0));
+        for (const point of soilMoisture) {
+          upsert(point.ts).soilMoisturePct = Number(point.value.toFixed(2));
         }
-        for (const point of rain) {
-          upsert(point.ts).rainMm = Number(point.value.toFixed(0));
+        for (const point of soilEc) {
+          upsert(point.ts).soilEcUsCm = Number(point.value.toFixed(0));
+        }
+        for (const point of tiltX) {
+          upsert(point.ts).tiltXDeg = Number(point.value.toFixed(2));
+        }
+        for (const point of tiltY) {
+          upsert(point.ts).tiltYDeg = Number(point.value.toFixed(2));
         }
         for (const point of gps?.points ?? []) {
-          upsert(point.ts).dispMm = Number(point.dispMm.toFixed(2));
+          upsert(point.ts).displacementMm = Number(point.dispMm.toFixed(2));
         }
 
         const ordered = Array.from(rows.values())
@@ -1161,8 +1183,9 @@ export function DeviceManagementPage() {
                       : ""}
                   </div>
                   <div className="desk-dm-muted" style={{ marginTop: 8 }}>
-                    状态快照: 温度 {formatMetricNumber(deviceMetrics.temperatureC)}°C · 湿度 {formatMetricNumber(deviceMetrics.humidityPct, 0)}% · 倾角 X/Y{" "}
-                    {formatMetricNumber(deviceMetrics.tiltXDeg, 2)}/{formatMetricNumber(deviceMetrics.tiltYDeg, 2)}°
+                    状态快照: 土温 {formatMetricNumber(deviceMetrics.soilTemperatureC)}°C · 土壤水分 {formatMetricNumber(deviceMetrics.soilMoisturePct)}% · EC{" "}
+                    {formatMetricNumber(deviceMetrics.soilEcUsCm, 0)} μS/cm · 倾角 X/Y/Z {formatMetricNumber(deviceMetrics.tiltXDeg, 2)}/
+                    {formatMetricNumber(deviceMetrics.tiltYDeg, 2)}/{formatMetricNumber(deviceMetrics.tiltZDeg, 2)}°
                   </div>
                   {deviceMetrics.warningFlag ? (
                     <Alert
@@ -1525,8 +1548,8 @@ export function DeviceManagementPage() {
               <div className="desk-dm-stack-item">
                 <BaseCard title="实时传感器数据" className="desk-dm-stack-card">
                   <div className="desk-dm-muted" style={{ marginBottom: 10 }}>
-                    当前快照：电池 {formatMetricNumber(deviceStateSummary.batteryPct, 0)}% · 定位{" "}
-                    {formatMetricNumber(deviceStateSummary.gpsLatitude, 6)}, {formatMetricNumber(deviceStateSummary.gpsLongitude, 6)} · 更新时间{" "}
+                    当前快照：电池 {formatMetricNumber(deviceStateSummary.batteryPct, 0)}% · 可信 RTK{" "}
+                    {deviceStateSummary.rtkTrusted ? "通过" : "未通过"} · 坐标 {formatMetricNumber(deviceStateSummary.rtkLatitude, 9)}, {formatMetricNumber(deviceStateSummary.rtkLongitude, 9)} · 更新时间{" "}
                     {deviceStateSummary.updatedAt ? new Date(deviceStateSummary.updatedAt).toLocaleString("zh-CN") : "--"}
                   </div>
                   <div className="desk-dark-table" style={{ height: "100%", overflow: "auto" }}>
@@ -1534,10 +1557,11 @@ export function DeviceManagementPage() {
                       <thead>
                         <tr>
                           <th>时间</th>
-                          <th>温度（°C）</th>
-                          <th>湿度（%）</th>
+                          <th>土温（°C）</th>
+                          <th>土壤水分（%）</th>
+                          <th>EC（μS/cm）</th>
+                          <th>倾角 X/Y（°）</th>
                           <th>位移（mm）</th>
-                          <th>雨量（mm）</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1545,16 +1569,17 @@ export function DeviceManagementPage() {
                           sensorRows.map((r) => (
                             <tr key={r.id}>
                               <td>{r.time}</td>
-                              <td>{r.temperature}</td>
-                              <td>{r.humidity}</td>
-                              <td>{r.dispMm}</td>
-                              <td>{r.rainMm}</td>
+                              <td>{formatMetricNumber(r.soilTemperatureC, 2)}</td>
+                              <td>{formatMetricNumber(r.soilMoisturePct, 2)}</td>
+                              <td>{formatMetricNumber(r.soilEcUsCm, 0)}</td>
+                              <td>{formatMetricNumber(r.tiltXDeg, 2)}/{formatMetricNumber(r.tiltYDeg, 2)}</td>
+                              <td>{formatMetricNumber(r.displacementMm, 2)}</td>
                             </tr>
                           ))
                         ) : (
                           <tr>
-                            <td colSpan={5} style={{ color: "rgba(148,163,184,0.9)" }}>
-                              暂无趋势数据，当前页面已切到状态快照主读路径。
+                            <td colSpan={6} style={{ color: "rgba(148,163,184,0.9)" }}>
+                              暂无最近 24 小时数据
                             </td>
                           </tr>
                         )}
@@ -1800,20 +1825,20 @@ export function DeviceManagementPage() {
               <div className="desk-dm-detail-title">状态快照</div>
               <div className="desk-dm-detail-grid" style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))" }}>
                 <div className="desk-dm-detail-item">
-                  <span className="desk-dm-detail-k">温度</span>
-                  <span className="desk-dm-detail-v">{formatMetricNumber(deviceMetrics.temperatureC)}°C</span>
+                  <span className="desk-dm-detail-k">土壤温度</span>
+                  <span className="desk-dm-detail-v">{formatMetricNumber(deviceMetrics.soilTemperatureC)}°C</span>
                 </div>
                 <div className="desk-dm-detail-item">
-                  <span className="desk-dm-detail-k">湿度</span>
-                  <span className="desk-dm-detail-v">{formatMetricNumber(deviceMetrics.humidityPct, 0)}%</span>
+                  <span className="desk-dm-detail-k">土壤水分</span>
+                  <span className="desk-dm-detail-v">{formatMetricNumber(deviceMetrics.soilMoisturePct)}%</span>
                 </div>
                 <div className="desk-dm-detail-item">
-                  <span className="desk-dm-detail-k">倾角 X</span>
-                  <span className="desk-dm-detail-v">{formatMetricNumber(deviceMetrics.tiltXDeg, 2)}°</span>
+                  <span className="desk-dm-detail-k">土壤 EC</span>
+                  <span className="desk-dm-detail-v">{formatMetricNumber(deviceMetrics.soilEcUsCm, 0)} μS/cm</span>
                 </div>
                 <div className="desk-dm-detail-item">
-                  <span className="desk-dm-detail-k">倾角 Y</span>
-                  <span className="desk-dm-detail-v">{formatMetricNumber(deviceMetrics.tiltYDeg, 2)}°</span>
+                  <span className="desk-dm-detail-k">倾角 X/Y/Z</span>
+                  <span className="desk-dm-detail-v">{formatMetricNumber(deviceMetrics.tiltXDeg, 2)}/{formatMetricNumber(deviceMetrics.tiltYDeg, 2)}/{formatMetricNumber(deviceMetrics.tiltZDeg, 2)}°</span>
                 </div>
               </div>
             </div>

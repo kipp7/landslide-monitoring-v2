@@ -9,10 +9,12 @@ import {
 export type DeviceManagementSensorRow = {
   id: string;
   time: string;
-  temperature: number;
-  humidity: number;
-  dispMm: number;
-  rainMm: number;
+  soilTemperatureC: number | null;
+  soilMoisturePct: number | null;
+  soilEcUsCm: number | null;
+  tiltXDeg: number | null;
+  tiltYDeg: number | null;
+  displacementMm: number | null;
 };
 
 export type PreparedExport = {
@@ -32,10 +34,13 @@ export type DeviceDetailCopyInput = {
     baselineEstablished: boolean;
     stateUpdatedAt?: string | null;
     warningFlag?: boolean | null;
-    temperatureC?: number | null;
-    humidityPct?: number | null;
+    soilTemperatureC?: number | null;
+    soilMoisturePct?: number | null;
+    soilEcUsCm?: number | null;
     tiltXDeg?: number | null;
     tiltYDeg?: number | null;
+    tiltZDeg?: number | null;
+    rtkTrusted?: boolean;
   };
 };
 
@@ -113,8 +118,16 @@ export function buildBaselinesExport(baselines: Baseline[]): PreparedExport {
 
 export function buildSensorExport(rows: DeviceManagementSensorRow[]): PreparedExport {
   const csvRows = [
-    ["时间", "温度", "湿度", "位移(mm)", "雨量(mm)"],
-    ...rows.map((row) => [row.time, row.temperature, row.humidity, row.dispMm, row.rainMm])
+    ["时间", "土壤温度(°C)", "土壤水分(%)", "电导率(μS/cm)", "倾角X(°)", "倾角Y(°)", "可信RTK位移(mm)"],
+    ...rows.map((row) => [
+      row.time,
+      row.soilTemperatureC ?? "",
+      row.soilMoisturePct ?? "",
+      row.soilEcUsCm ?? "",
+      row.tiltXDeg ?? "",
+      row.tiltYDeg ?? "",
+      row.displacementMm ?? ""
+    ])
   ];
   return {
     filename: "desk-device-sensor.csv",
@@ -150,9 +163,11 @@ export function buildDeviceDetailText(input: DeviceDetailCopyInput): string {
     `今日数据: ${metrics.todayCount} 条`,
     `基线状态: ${metrics.baselineEstablished ? "已建立" : "待建立"}`,
     `状态更新时间: ${metrics.stateUpdatedAt ? new Date(metrics.stateUpdatedAt).toLocaleString("zh-CN") : "-"}`,
-    `温度: ${metrics.temperatureC == null ? "-" : `${metrics.temperatureC.toFixed(1)}°C`}`,
-    `湿度: ${metrics.humidityPct == null ? "-" : `${metrics.humidityPct.toFixed(0)}%`}`,
-    `倾角 X/Y: ${metrics.tiltXDeg == null || metrics.tiltYDeg == null ? "-" : `${metrics.tiltXDeg.toFixed(2)} / ${metrics.tiltYDeg.toFixed(2)}°`}`,
+    `土壤温度: ${metrics.soilTemperatureC == null ? "-" : `${metrics.soilTemperatureC.toFixed(2)}°C`}`,
+    `土壤水分: ${metrics.soilMoisturePct == null ? "-" : `${metrics.soilMoisturePct.toFixed(2)}%`}`,
+    `土壤电导率: ${metrics.soilEcUsCm == null ? "-" : `${metrics.soilEcUsCm.toFixed(0)} μS/cm`}`,
+    `倾角 X/Y/Z: ${metrics.tiltXDeg == null || metrics.tiltYDeg == null || metrics.tiltZDeg == null ? "-" : `${metrics.tiltXDeg.toFixed(2)} / ${metrics.tiltYDeg.toFixed(2)} / ${metrics.tiltZDeg.toFixed(2)}°`}`,
+    `可信 RTK: ${metrics.rtkTrusted ? "通过" : "未通过"}`,
     `预警状态: ${formatWarningFlagDisplay(metrics.warningFlag, "-")}`
   ].join("\r\n");
 }

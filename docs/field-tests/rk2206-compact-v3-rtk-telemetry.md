@@ -1,10 +1,10 @@
-# RK2206 Compact V3 RTK Telemetry Contract
+# RK2206 Compact V3/V4 RTK Telemetry Contract
 
 ## Purpose
 
-`compact v3` is the normal RK2206-to-RK3568 telemetry response for the three
-field nodes. It combines field sensors, PC0 battery evidence, and the latest
-structured GNSS solution into one fixed binary snapshot.
+`compact v4` is the production RK2206-to-RK3568 telemetry response for the
+three field nodes. It keeps the complete 95-byte V3 sensor/GNSS prefix and adds
+auditable RTCM runtime evidence. V3 remains documented as the rollback format.
 
 The design priorities are:
 
@@ -16,14 +16,14 @@ The design priorities are:
 
 ## Wire Size
 
-- Compact payload: 95 bytes.
-- Complete COBS/CRC field-link frame: 113 bytes.
+- Compact V3 payload: 95 bytes; complete COBS/CRC frame: 113 bytes.
+- Compact V4 payload: 139 bytes; complete COBS/CRC frame: 157 bytes.
 - The payload is one fixed snapshot. GNSS is not sent as a second frequent
   packet.
 
-At 115200 baud, a 113-byte 8N1 serial frame occupies about 9.8 ms. Three nodes
-at one response per second use about 339 B/s of payload framing; the production
-poll scheduler remains slower and prioritizes zero missing rounds.
+At 115200 baud, a 157-byte V4 8N1 serial frame occupies about 13.6 ms. Three
+nodes at one response per second use 471 B/s of field-link framing; the
+production poll scheduler remains slower and prioritizes zero missing rounds.
 
 ## Payload Layout
 
@@ -68,6 +68,32 @@ poll scheduler remains slower and prioritizes zero missing rounds.
 | 91 | 2 | Fixed-to-non-Fixed transition count |
 | 93 | 2 | reference station ID |
 
+## V4 RTCM Extension
+
+| Offset | Bytes | Metric/meta projection |
+| --- | ---: | --- |
+| 95 | 1 | `rtcm_injection_mode_code`: 0 disabled, 1 probe, 2 live |
+| 96 | 1 | `rtcm_state_flags` in metadata |
+| 97 | 1 | `rtcm_queue_pending` |
+| 98 | 1 | `rtcm_queue_high_watermark` |
+| 99 | 4 | `rtcm_session_epoch` |
+| 103 | 4 | `rtcm_lease_remaining_ms` |
+| 107 | 4 | `rtcm_last_fragment_age_ms` |
+| 111 | 4 | `rtcm_last_completed_frame_age_ms` |
+| 115 | 4 | `rtcm_last_action_age_ms` |
+| 119 | 4 | `rtcm_accepted_fragments_total` |
+| 123 | 4 | `rtcm_completed_frames_total` |
+| 127 | 4 | `rtcm_injected_frames_total` |
+| 131 | 2 | `rtcm_rejected_fragments_total` |
+| 133 | 2 | `rtcm_crc_errors_total` |
+| 135 | 2 | `rtcm_queue_drops_total` |
+| 137 | 2 | `rtcm_uart_errors_total` |
+
+An unavailable age is encoded as `UINT32_MAX` and omitted by RK3568 rather
+than exposed as a plausible measurement. State flags report ready, armed
+session, valid lease, recent fragment, recent completed frame, and recent
+action evidence.
+
 The validity bitmap is authoritative. A zero-filled fixed-width slot is not a
 measurement unless its corresponding validity bit is set.
 
@@ -88,8 +114,8 @@ professional ECEF/ENU displacement pipeline.
 
 ## Snapshot And Compatibility Rules
 
-- `compact v3` replaces the complete field-device shadow. Missing values in a
-  current v3 snapshot purge stale legacy, MPU6050, SHT30, and old RTK values.
+- `compact v3/v4` replaces the complete field-device shadow. Missing values in
+  a current snapshot purge stale legacy, MPU6050, SHT30, and old RTK values.
 - `compact v1/v2` keeps sparse merge behavior so the deployed rollback firmware
   remains compatible.
 - RK3568 does not create ordinary `gps_latitude/gps_longitude` aliases from v3;
@@ -106,5 +132,10 @@ until the explicit hardware build is selected.
 
 The hardware build restores SC16IS752 over EI2C0_M0 PB4/PB5 and must not be
 flashed until the interface components, continuity, supply, direction, and
-I2C-address gates have passed. RTCM injection remains disabled in both builds
-until the separate mixed-load gate is complete.
+I2C-address gates have passed.
+
+The V4 production image contains LIVE RTCM capability but every boot is
+fail-closed in `DISABLED`. RK3568 must explicitly arm a non-zero session epoch,
+target mask, mode, and 15..300 second lease. Reboot, lease expiry, invalid
+session state, or an explicit disable command returns the node to `DISABLED`.
+No RTCM is sent while `NTRIP_ENABLED=false` on RK3568.

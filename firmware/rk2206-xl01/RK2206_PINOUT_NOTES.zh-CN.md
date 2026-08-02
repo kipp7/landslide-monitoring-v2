@@ -1,188 +1,61 @@
-# RK2206 v5.0 当前引脚配置（小凌派板）
+# RK2206 现场节点引脚核对说明
 
-## 版本信息
-- **版本**: v5.0 GPS数据清洁优化版
-- **日期**: 2025-10-24
-- **固件**: 本地构建产物，保留在公开仓库之外
+## 当前硬件架构
 
----
+compact V4 现场节点只使用四条外设路径：
 
-## 实际使用的引脚配置
+| 路径 | 引脚 | 设备 | 说明 |
+| --- | --- | --- | --- |
+| `EUART2_M1` | PB2/PB3 | XLS1 | 115200 bit/s，承载轮询遥测和有限 RTCM 会话 |
+| `EUART0_M0` | PB6/PB7 | UM220-IV NK | 115200 bit/s，解析 NMEA 并按受控会话注入 RTCM |
+| `EI2C0_M0` | PB4/PB5 | SC16IS752 | 100 kHz，将两路 RS485 传感器接入 RK2206 |
+| SARADC0 | PC0 | 电池分压 | 只读模拟输入，按节点使用已验收校准参数 |
 
-| 模块 | 接口类型 | 引脚 | GPIO | I2C/UART地址 | 状态 |
-|------|---------|------|------|--------------|------|
-| **XL01无线** | UART2_M1 | PB2(RX), PB3(TX) | GPIO0_PB2/3 | 115200波特率 | ✅ 已测试 |
-| **MPU6050加速度** | I2C0_M0 | PB4(SDA), PB5(SCL) | GPIO0_PB4/5 | 0x68 @ 100kHz | ✅ 已测试 |
-| **GPS定位** | UART0_M0 | PB6(TX), PB7(RX) | GPIO0_PB6/7 | 9600波特率 | ✅ 已测试 |
-| **SHT30温湿度** | I2C0_M0 | PB4(SDA), PB5(SCL) | GPIO0_PB4/5 | 0x44 @ 100kHz | ⚠️ 未启用 |
+PB4/PB5 上的设备不是 MPU6050 或 SHT30。当前载板通过 SC16IS752 扩展两路 UART：
 
----
+- channel A：RS-ECTH-N01-TR-1 三合一土壤温度、水分、电导率探头；
+- channel B：RS-DIP-N01-1 三轴倾角传感器。
 
-## 详细接线图
+旧 MPU6050、SHT30、ATGM336H 和 9600 bit/s GPS 说明均属于历史方案，不得据此接线或恢复编译。
 
-### 1️⃣ XL01 无线通信模块
-```
-小凌派RK2206              XL01模块
-┌─────────┐             ┌──────┐
-│ PB3(TX) ├─────────────┤ RX   │  (白线) - 交叉连接
-│ PB2(RX) ├─────────────┤ TX   │  (绿线) - 交叉连接
-│ 3.3V    ├─────────────┤ VCC  │  (红线)
-│ GND     ├─────────────┤ GND  │  (黑线)
-└─────────┘             └──────┘
-               天线 → 必须连接！
-```
-**代码配置**:
-```c
-#define XL01_UART_ID    EUART2_M1
-#define XL01_BAUDRATE   115200
-```
+## SDK 复用真值
 
----
+当前 RK2206 SDK HAL 必须满足：
 
-### 2️⃣ MPU6050 加速度/陀螺仪传感器
-```
-小凌派RK2206              MPU6050
-┌─────────┐             ┌──────┐
-│ PB4(SDA)├─────────────┤ SDA  │  - I2C数据线
-│ PB5(SCL)├─────────────┤ SCL  │  - I2C时钟线
-│ 3.3V    ├─────────────┤ VCC  │  
-│ GND     ├─────┬───────┤ GND  │
-└─────────┘     └───────┤ AD0  │  ← AD0接GND (地址0x68)
-                        └──────┘
-```
-**代码配置**:
-```c
-#define I2C_IDX             EI2C0_M0    // PB4/PB5
-#define I2C_BAUDRATE        EI2C_FRE_100K
-#define MPU6050_I2C_ADDR    0x68
-```
-**注意**: AD0引脚必须接GND，设置地址为0x68
+- `EUART2_M1`：RX PB2、TX PB3、`MUX_FUNC3`、UART2/M1；
+- `EUART0_M0`：RX PB6、TX PB7、`MUX_FUNC2`、UART0/M0；
+- `EI2C0_M0`：SCL PB5、SDA PB4、`MUX_FUNC4`、I2C0/M0、方向保持；
+- ADC channel 0：PC0、`MUX_FUNC1`、输入方向。
 
----
+固件不得绕过这些 BSP 路径直接控制 PB2..PB7 或 PC0。
 
-### 3️⃣ GPS 定位模块 (ATGM336H)
-```
-小凌派RK2206              GPS模块
-┌─────────┐             ┌──────┐
-│ PB7(RX) ├─────────────┤ TX   │  (橙色) - 交叉连接
-│ PB6(TX) ├─────────────┤ RX   │  (白色) - 交叉连接
-│ 3.3V    ├─────────────┤ VCC  │  (红色)
-│ GND     ├─────────────┤ GND  │  (黑色)
-└─────────┘             └──────┘
-              天线 → 放室外定位！
-```
-**代码配置**:
-```c
-#define GPS_UART_ID     EUART0_M0   // PB6/PB7 (板子标注的UART口)
-#define GPS_BAUDRATE    9600
-```
-**板子标注**: PB6/PB7在小凌派上标注为 **UART_TX / UART_RX**
+## 上电前检查
 
----
+1. 断电状态下确认 RK2206 插针没有横向或纵向错位。
+2. 确认 XLS1、UM220、SC16IS752 和 RK2206 共地。
+3. 确认 PB4 到 SC16IS752 SDA、PB5 到 SCL 导通，且没有对地短路。
+4. 确认 PC0 只连接电池分压输出，没有外部推挽信号。
+5. 接通载板后，PB4/PB5 的 I2C 空闲电平应接近 3.3 V；异常时立即断电排查。
 
-### 4️⃣ SHT30 温湿度传感器 (共享I2C总线)
-```
-小凌派RK2206              SHT30
-┌─────────┐             ┌──────┐
-│ PB4(SDA)├─────────────┤ SDA  │  - 与MPU6050共享
-│ PB5(SCL)├─────────────┤ SCL  │  - 与MPU6050共享
-│ 3.3V    ├─────────────┤ VCC  │  
-│ GND     ├─────┬───────┤ GND  │
-└─────────┘     └───────┤ ADDR │  ← ADDR接GND (地址0x44)
-                        └──────┘
-```
-**代码配置**:
-```c
-#define I2C_IDX             EI2C0_M0    // 与MPU6050共享
-#define SHT30_I2C_ADDR      0x44
-#define ENABLE_SHT30        0           // 当前未启用
+## 启动日志判据
+
+正确的 V4 hardware 固件启动日志应同时表明：
+
+- XLS1：`EUART2_M1 PB2/PB3`；
+- GNSS：`EUART0_M0 PB6/PB7`、115200；
+- RS485：`SC16IS752 over EI2C0_M0 PB4/PB5`；
+- field sensor source：`HARDWARE`；
+- battery：`PC0/SARADC-ch0 input-only`、`field-calibrated`；
+- RTCM capability：LIVE，但启动状态必须为 `DISABLED`。
+
+启动成功本身不等于传感器验收通过。明天烧录后仍需检查 A/B/C 身份、硬件土壤/EC/三轴倾角、电池质量、V4 139 B payload，并依次完成 60/600/1800 秒门禁。
+
+## 自动校验
+
+```powershell
+pwsh -File scripts/firmware/test-rk2206-pin-safety.ps1
+pwsh -File scripts/firmware/test-rk2206-pin-safety-negative.ps1
+pwsh -File scripts/firmware/verify-rk2206-release-safety.ps1 -ReleaseDirectory <发布目录>
 ```
 
----
-
-## ⚙️ **当前系统配置 (app_config.h)**
-
-```c
-// 节点配置
-#define NODE_ID             "A"
-
-// 上传配置
-#define UPLOAD_INTERVAL_MS  5000        // 5秒上传一次
-#define MAX_RETRY_COUNT     3
-#define ENABLE_ACK_CHECK    1
-
-// 传感器启用状态
-#define ENABLE_GPS          1           // ✓ 已启用
-#define ENABLE_MPU6050      1           // ✓ 已启用
-#define ENABLE_SHT30        0           // ✗ 未启用
-#define ENABLE_VIRTUAL      0           // ✗ 禁用虚拟数据
-
-// 看门狗
-#define ENABLE_WATCHDOG     1
-#define WATCHDOG_TIMEOUT    10          // 10秒
-```
-
----
-
-## 🔧 **引脚复用说明**
-
-### I2C总线共享
-- **PB4/PB5** 作为I2C0_M0总线，可同时连接：
-  - MPU6050 (地址 0x68)
-  - SHT30 (地址 0x44)
-  - 两者地址不同，不会冲突 ✅
-
-### UART引脚
-- **PB2/PB3**: UART2_M1 → XL01通信
-- **PB6/PB7**: UART0_M0 → GPS接收（板子标注口）
-
----
-
-## ✅ **测试状态**
-
-| 功能 | 状态 | 备注 |
-|------|------|------|
-| XL01发送数据 | ✅ | 透传模式正常 |
-| MPU6050读取 | ✅ | 加速度/陀螺仪数据正常 |
-| GPS定位 | ✅ | GNRMC/GNGGA解析成功 |
-| 倾角计算 | ✅ | 基于MPU6050计算 |
-| 数据上传 | ⚠️ | 中心节点未收到ACK |
-
----
-
-## 📋 **串口输出示例**
-
-```
-[OK] XL01 initialized (Baudrate: 115200)
-[GPS] Initializing UART0 (Baudrate: 9600)...
-[OK] GPS initialized with NMEA parsing
-[OK] I2C initialized
-[OK] MPU6050 initialized successfully!
-
-📡 GPS: $GNRMC,065453.000,A,2240.89491,N,11011.72413,E...
-✓✓✓ GPS定位成功(RMC): 纬度=22.681582° 经度=110.195402° ✓✓✓
-
-[SEND #3] 228 bytes ✗ FAILED ⚠️ WARNING!
-  Temp:0.0°C Humi:0.0% Tilt:61.13°/15.61° GPS:(22.681581,110.195404) Bat:0%
-```
-
----
-
-## 已知问题
-
-1. **GPS数据偶尔混乱** - v5.0已优化UART缓冲逻辑，过滤乱码
-2. **中心节点不返回ACK** - 需检查中心节点配置或改为单向传输
-3. **SHT30未启用** - 温湿度数据显示0.0
-
----
-
-## 本地交付文件
-
-1. **固件**: 本地构建产物，保留在公开仓库之外
-2. **说明**: 以仓库内 README 和引脚文档为准
-3. **引脚配置**: 本文件
-4. **版本记录**: `VERSION.txt`（如本地工程提供）
-
----
-
-**更新时间**: 2025-10-24
+这三道检查分别防止 SDK 引脚漂移、负向门禁失效和发布包身份/模式/哈希不一致。
