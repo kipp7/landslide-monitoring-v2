@@ -18,6 +18,16 @@ status: active
 
 ## Current State
 
+### Authoritative Latest State (2026-08-03)
+
+- `49eb7544` 已完成 `compact v3` 合并快照：RK2206 以 95 字节 payload、113 字节完整 COBS/CRC 帧同时发送 PC0 电池、RS485 土壤/EC、独立 RS485 三轴倾角和专业 RTK 证据。活跃构建、采集结构和 payload 已移除 SHT30、MPU6050 加速度/角速度/姿态；RS-DIP-N01-1 `tilt_x/y/z` 保留。常规链路不再另发第二个高频 GNSS 包，完整字节契约见 `docs/field-tests/rk2206-compact-v3-rtk-telemetry.md`。
+- GNSS 解析使用有符号纳度、毫米和毫秒定点值；仅当前 checksum-valid `GGA=4`、坐标/坐标系有效、差分龄 `<=5000 ms`、解算龄 `<=2000 ms` 时设置 `trusted`。RMC 日期必须不旧于 2.5 秒才可与当前 GGA 组合生成 GNSS week/TOW，GST 也在 2.5 秒后独立失效，避免旧辅助证据污染当前历元。
+- `FieldSensorMode=simulated` 只模拟 RS485 土壤/EC/倾角，真实 UM220、XLS1 和 PC0 保持启用；SC16IS752 不进入模拟二进制且 PB4/PB5 不初始化。静态门禁再次通过：`XLS1=PB2/PB3`、`GPS=PB6/PB7`、`BATTERY=PC0-input`、`RS485=PB4/PB5-hardware-only`。RTCM injection 仍为 disabled。
+- RK2206 C99 主机测试、GNSS 解析、95/113 字节金值、发布包篡改/身份/模式/最终电池验收拒绝路径、电池生成/修正/finalization 全通过；field-gateway 31/31 测试、TypeScript build/lint 通过。当前代码提交后仍未生成正式 A/B/C 烧录包；此前 `rtk_compact_v3_simulated_candidate_abc_20260802` 为 dirty 且早于最新 GNSS 时效修复，继续禁止作为最终包。
+- RK3568 field-gateway 已部署 v3 解码器：`index.js` SHA-256 `8827e5bd1e034d38dfcded845de0c28743783d02f957aa699b50f62d5a5ebd91`，`compact-telemetry.js` SHA-256 `b47266eb9e80315597b351543ee53530bc07bf5ad1b7f21225a2a6702754b126`，回滚目录 `/home/linaro/lsmv2-backups/field-gateway-pre-compact-v3-20260802-235641`。部署后 25/25 完整轮、75/75 帧，A/B/C 各 25，零 timeout/retry/duplicate/unmatched/schema reject/interleaving/spool pending；当前物理节点仍运行旧 compact v2，因此这只是向后兼容门禁，不是 v3 真机验收。
+- 生产服务器 `telemetry-writer` 已部署镜像 `sha256:42f7f668c712117c3f31d92e305d446bc14921518fc3623f17d64496aad723ae`，标签 `lsmv2/telemetry-writer:compact-v3-20260803-001633`；旧镜像保留为 `rollback-compact-v3-20260803-001633`，源码/容器备份位于 `/opt/lsmv2-production/backups/telemetry-writer-pre-compact-v3-20260803-001633`。容器保持 running、`RestartCount=0`，持续消费 Kafka 并成功写 ClickHouse，无 error/fatal/DLQ 日志。
+- 服务器部署合并并回流了两项不能丢失的生产热修复：关闭 Kafka auto-commit 时显式提交 resolved offsets；无效旧 GPS 样本不覆盖最后有效坐标。候选 builder 和本地均为 12/12 测试通过。实际运行镜像 hook 已证明 v3 完整快照会清除旧 `accel_*`、空气温度和过期 RTK 坐标，而 v1/v2 继续稀疏合并。
+
 ### Authoritative Latest State (2026-08-02)
 
 - A/B/C 已烧录节点专属 `xls1_link_rehearsal_battery_simulated_20260801` 镜像并同时在线。当前只模拟 RS485 土壤/EC/倾角；UM220 GNSS、PC0 电池和 XLS1 传输链为真实硬件，RTCM injection 为 disabled。
@@ -82,7 +92,7 @@ status: active
 - 同次基线确认 A/B 在线、C 仅为 `configured`；RK3568 系统时间仍显示 2026-07-27，落后当前项目日期。合成 PROBE 的恢复时延和调度迟到使用单调时钟，不因此失效，但在真实 NTRIP、correction age、日志和跨设备存储门禁前必须恢复可信 NTP/RTC 时间。
 - V2 源提交 `c0eff2a3` 已推送；A/B/C 独立全量构建的只读发布包位于 `F:\2\openharmony\rk2206_firmware_releases\xl01_gnss_rtk_v31_probe_stats_v2_20260727`。9/9 二进制 SHA-256 复算匹配，A/B/C `Firmware.img` 分别为 `2f5995a3...cb15c`、`7a4d86d5...a3777`、`cee103b9...2be54`，节点身份均只命中自身，三份 loader 一致。该 V2 包是当前 A/B 实际运行版本；ACK V1 待重新烧录。
 - 容量工具已支持 `active=2 + reserved=1`。按历史 881.84 B/s RTCM 数据，A/B 活跃估算为 1768.08 B/s（15.35% UART），C 完整预留 180 B/s，三节点总预算仍为 1948.08 B/s（16.91% UART）。历史 compact 三节点曾连续完成 541/541 批次、1623/1623 遥测，证明 compact 时隙可行，但不代表 RTCM 已通过。
-- GNSS 常规链路采用 98 字节核心摘要，不连续上传原始 NMEA/逐星明细；专业 ECEF/ENU/Hampel/Kalman 位移链统一由 RK3568 计算。
+- 早期 `GNSS_CORE` 设计为 98 字节独立摘要；自 `49eb7544` 起，常规上行改为 95 字节 `compact v3` 单快照，不再另发高频 GNSS 包。原始 NMEA/逐星明细仍不连续上传，专业 ECEF/ENU/Hampel/Kalman 位移链继续统一由 RK3568 计算。
 - 生产硬件真值已按远端源码和用户确认纠正：每节点为 UM220-IV NK、RS-ECTH-N01-TR-1 三合一土壤探头、RS-DIP-N01-1 三轴倾角计；SHT30/MPU6050 是关闭的遗留样例驱动，雨量型号未确认且关闭。三合一探头在诊断中分为温湿度基础寄存器和 EC 独立寄存器两条路径，但仍是一个物理探头。
 - `ed803b0e` 已实现 204 B `G3S` V3：保留 V1/V2 前缀并追加 4 条实际采集路径的 enabled/init/current/ever 位、采集周期数、最后成功单调 uptime 和连续失败数。RS485 init 位只证明 SC16IS752/Modbus 路径初始化，不伪称探头应答；终端健康由 valid/ever/fail streak 判断。C99、Python 自检、field-gateway 17 项测试/lint和 A 完整 `hb build -f` 均通过。
 - A/B/C 诊断固件发布包位于 `F:\2\openharmony\rk2206_firmware_releases\xl01_gnss_rtk_v31_probe_sensor_diag_v3_20260729`，manifest 源提交为 `ed803b0e9d74a62ca8901428919c5a93f2969edb`，9/9 哈希复算匹配、节点身份唯一、loader 一致。A/B/C `Firmware.img` SHA-256 分别为 `363bb6841354d6aa92fab4e006b1b018f838bc190d1e5888d3a6c36f5b0e1c00`、`ad5080526d443ad4095a7592466953ee88cb7dea7374584e13ce622f2136d7f3`、`7a768f53b4f4161b4582c3f7059b07512b68fff63e401ec9b55031750b78611e`。包仍是 PROBE，绝不写 UM220 RTCM UART。
@@ -118,6 +128,8 @@ status: active
 
 ## Plan
 
+- 从包含 `49eb7544` 及本任务记忆的干净提交，使用最终验收校准文件 `F:\2\openharmony\rk2206_firmware_releases\xls1_link_rehearsal_battery_final_20260802\battery-calibration.json` 重建 A/B/C simulated 正式包；manifest 必须为 `sourceDirty=false`、95-byte v3、simulated、RTCM disabled、`rs485HardwareInitialized=false`，并再次验证唯一身份、精确七文件集合和 PB4/PB5 标记零命中。
+- 用户烧录后按现有生产参数先跑 60 秒，再跑 600 秒和 1800 秒三节点门禁：1000 ms cooldown、2500 ms session timeout，仅部分响应时同标签最多重发一次、1200 ms retry window。三段全部通过前不启用 hardware RS485 或 RTCM LIVE。
 - A/B/C 已分别以 `+9/+7/最坏 9 mV` 通过电池同步验收并接受 `1046565/1048458/993702 ppm`，最终校准文件及 simulated/hardware 发布包均已生成并通过 final-acceptance、身份、哈希、模式和引脚门禁；百分比仍只是受负载、温度和老化影响的 3S OCV 估算，不能作为准确剩余 mAh 或续航。
 - 保持 4G 主用、1000 ms 冷却和已部署的单次有界重发；持续观察生产重发率不高于 2%、总逻辑响应不高于 2500 ms，网线只保留局域网路由，不再通过人工插拔切换公网链路。
 - RS485 接口到货且源码未变化时，使用已锁定 manifest/hash 的最终 hardware 预检包；先完成断电电气门禁和无传感器首次上电，再按物理身份烧录 A/B/C，随后执行 `0x4D`、真实传感器有效位和至少 600 秒三节点通信门禁。若源码提交或校准哈希变化，必须废止该包并从干净提交重建。
