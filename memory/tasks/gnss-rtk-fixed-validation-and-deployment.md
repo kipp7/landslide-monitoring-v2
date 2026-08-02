@@ -18,6 +18,15 @@ status: active
 
 ## Current State
 
+### In-Progress V4 Runtime Integration (2026-08-03)
+
+- 用户已将 A/B/C 全部下电；本轮只做 RK3568、服务器、Windows 桌面端和离线固件发布包，禁止把离线软件测试误记为三节点真实链路或厘米级验收。明天烧录后仍需依次完成 V4 纯遥测、RTCM 会话确认、真实 CORS LIVE 和室外 `GGA=4` 门禁。
+- RK2206 已形成 compact V4：139 字节 payload、157 字节完整 COBS/CRC 帧，前 95 字节与 V3 字段兼容，新增 44 字节为 RTCM 启动模式、运行时会话/租约、队列、最近动作年龄和累计错误证据。固件具备 LIVE capability，但开机强制 `DISABLED`；只有 RK3568 发送带目标掩码、非零会话号和有限租约的 19 字节控制命令后才允许 RTCM，重启或租约超时自动禁用。
+- RK3568 已接入 NTRIP、GGA、RTCM3 解码/筛选、单份广播分片和三节点同会话确认。NTRIP 客户端新增兼容只有 `ICY 200 OK\r\n` 后直接输出 RTCM 的 v1 caster；密码不进入统计、健康文件或日志。串口写失败的 RTCM 分片会放回有界队列头部，利用节点端幂等分片处理重试，避免瞬时写失败必然造成整帧缺片；当前网关 44/44 测试通过。
+- 服务器 `telemetry-writer` 已在本地修正：compact V4 与 V3 一样执行完整快照替换，清除旧空气温湿度、MPU6050 和过期 RTK 字段；V4 RTCM 指标与元数据已加入白名单，不再被丢弃。当前 13/13 测试通过。
+- RK2206 主机协议金值通过：`compact_v4_payload_bytes=139`、`field_link_wire_bytes=157`；V3/V4 发布验证器正向与篡改/身份/模式/运行时启动状态拒绝路径通过，引脚门禁为 `XLS1=PB2/PB3`、`GPS=PB6/PB7`、`BATTERY=PC0-input`、`RS485=PB4/PB5-hardware-only`。
+- Windows 桌面端字段契约已完成本地复核和生产构建：位移页只使用同历元 `rtk_trusted=true` 的 RTK 坐标，保留 9 位小数并显示 Fixed/Float、可信门禁、卫星、HDOP、差分龄、解算龄、Fixed 连续性、基站、坐标系和 RTCM 错误摘要；空气温湿度与 MPU6050 已从该链路和页面移除。服务器/API、telemetry-writer、RK2206 主机协议与发布安全门禁均已重新通过。当前尚未完成：RK3568/服务器实际部署、干净提交与正式 A/B/C V4 包构建。生产轮询仍保持已通过 1800 秒门禁的 1000 ms + 部分响应一次有界重发；139 B 不是当前瓶颈，未经 1800 秒实机长测不得下调生产冷却。
+
 ### Authoritative Latest State (2026-08-03)
 
 - `49eb7544` 已完成 `compact v3` 合并快照：RK2206 以 95 字节 payload、113 字节完整 COBS/CRC 帧同时发送 PC0 电池、RS485 土壤/EC、独立 RS485 三轴倾角和专业 RTK 证据。活跃构建、采集结构和 payload 已移除 SHT30、MPU6050 加速度/角速度/姿态；RS-DIP-N01-1 `tilt_x/y/z` 保留。常规链路不再另发第二个高频 GNSS 包，完整字节契约见 `docs/field-tests/rk2206-compact-v3-rtk-telemetry.md`。

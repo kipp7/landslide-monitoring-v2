@@ -85,7 +85,10 @@ const FIELD_PROFILE_META_KEYS = new Set<string>([
   "rtk_fix_type",
   "rtk_fix_flags",
   "rtk_displacement_eligible",
-  "v3_valid_flags"
+  "v3_valid_flags",
+  "v4_valid_flags",
+  "rtcm_injection_mode",
+  "rtcm_state_flags"
 ]);
 
 const FIELD_PROFILE_IDENTITY_META_KEYS = ["install_label", "legacy_node", "upload_trigger", "last_command_id", "last_command_type"];
@@ -260,7 +263,8 @@ function buildShadowState(payload: TelemetryRawV1, previousState: unknown): Shad
   const nextPayloadMeta = useFieldProfileSanitizer
     ? sanitizeRecordByAllowedKeys(payloadMeta, FIELD_PROFILE_META_KEYS)
     : payloadMeta;
-  const replaceFieldSnapshot = payloadMeta.compact_payload_version === 3;
+  const replaceFieldSnapshot =
+    payloadMeta.compact_payload_version === 3 || payloadMeta.compact_payload_version === 4;
   const meta: Record<string, unknown> = {
     ...(replaceFieldSnapshot ? {} : previous.meta),
     ...nextPayloadMeta

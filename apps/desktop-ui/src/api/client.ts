@@ -331,6 +331,8 @@ export type GpsSeries = {
   deviceId: string;
   deviceName: string;
   points: GpsPoint[];
+  positionProfile?: "rtk-fixed" | "custom" | "legacy";
+  trustedOnly?: boolean;
 };
 
 export type GpsDerivedAnalysis = {

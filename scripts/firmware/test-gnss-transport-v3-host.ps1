@@ -104,7 +104,7 @@ set -eu
 cd '$containerRoot'
 gcc -std=c99 -Wall -Wextra -Werror -O2 \
   -DGNSS_RTCM_INJECTION_HOST_TEST=1 \
-  -DGNSS_RTCM_INJECTION_MODE=GNSS_RTCM_INJECTION_PROBE \
+  -DGNSS_RTCM_INJECTION_CAPABILITY=GNSS_RTCM_INJECTION_LIVE \
   drivers/xl01/gnss_transport_v3.c \
   drivers/xl01/gnss_rtcm_injection.c \
   tests/gnss_transport_v3_host_test.c \

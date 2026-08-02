@@ -9,6 +9,10 @@ import { SerialPort } from "serialport";
 import { createLogger, newTraceId } from "@lsmv2/observability";
 import { loadAndCompileSchema } from "@lsmv2/validation";
 import { loadConfigFromEnv, type AppConfig } from "./config";
+import { NtripClient } from "./ntrip-client";
+import { buildNtripGga } from "./ntrip-gga";
+import { encodeGnssRtcmModeCommandV1 } from "./gnss-transport-v3";
+import { RtcmDownlinkController } from "./rtcm-downlink-controller";
 import {
   buildCompactBroadcastPollCommand,
   decodeCompactTelemetry,
@@ -90,6 +94,7 @@ type NodeRuntimeState = {
     eventTs: string | null;
     seq: number | null;
     metrics: Record<string, number | string | boolean | null>;
+    meta: Record<string, unknown>;
   } | null;
 };
 
@@ -97,7 +102,13 @@ type PortRuntimeState = {
   serialDevice: string;
   open: boolean;
   reconnectScheduled: boolean;
-  sendOwnerState: "idle" | "writing-command" | "waiting-for-ack" | "waiting-for-poll-telemetry";
+  sendOwnerState:
+    | "idle"
+    | "writing-command"
+    | "waiting-for-ack"
+    | "waiting-for-poll-telemetry"
+    | "writing-rtcm-control"
+    | "writing-rtcm";
   mappedNodeCount: number;
   enabledNodeCount: number;
   mappedDeviceIds: string[];
@@ -214,6 +225,12 @@ type RuntimeStats = {
   compactBroadcastRedundantRetryTelemetry: number;
   lastCompactBroadcastRetryResponseMs: number | null;
   maxCompactBroadcastRetryResponseMs: number;
+  rtcmControlWrites: number;
+  rtcmFragmentWrites: number;
+  rtcmWriteDeferrals: number;
+  rtcmWriteFailures: number;
+  lastRtcmControlTs: string | null;
+  lastRtcmFragmentTs: string | null;
   spoolPending: number;
   lastSerialReadTs: string | null;
   lastParsedMessageTs: string | null;
@@ -1048,6 +1065,9 @@ class GatewayRuntime {
   private readonly compactPollAdmission: CompactPollAdmissionController;
   private readonly portPollNodeCursor = new Map<string, number>();
   private readonly portLastReadAtMs = new Map<string, number>();
+  private readonly rtcmWriteInFlightPorts = new Set<string>();
+  private readonly rtcmController: RtcmDownlinkController | null;
+  private readonly ntripClient: NtripClient | null;
   private fieldLinkTxSequence = 0;
   private readonly stats: RuntimeStats = {
     serialChunks: 0,
@@ -1086,6 +1106,12 @@ class GatewayRuntime {
     compactBroadcastRedundantRetryTelemetry: 0,
     lastCompactBroadcastRetryResponseMs: null,
     maxCompactBroadcastRetryResponseMs: 0,
+    rtcmControlWrites: 0,
+    rtcmFragmentWrites: 0,
+    rtcmWriteDeferrals: 0,
+    rtcmWriteFailures: 0,
+    lastRtcmControlTs: null,
+    lastRtcmFragmentTs: null,
     spoolPending: 0,
     lastSerialReadTs: null,
     lastParsedMessageTs: null,
@@ -1103,6 +1129,9 @@ class GatewayRuntime {
   private replayTimer: NodeJS.Timeout | null = null;
   private healthTimer: NodeJS.Timeout | null = null;
   private pollerTimer: NodeJS.Timeout | null = null;
+  private rtcmModeTimer: NodeJS.Timeout | null = null;
+  private rtcmDispatchTimer: NodeJS.Timeout | null = null;
+  private rtcmNextModeRefreshAtMs = 0;
   private pollerDueAtMs: number | null = null;
   private replayRunning = false;
   private mqttConnected = false;
@@ -1126,6 +1155,43 @@ class GatewayRuntime {
     }
     for (const portPath of this.getConfiguredPortPaths()) {
       this.portState.set(portPath, this.createPortRuntimeState(portPath));
+    }
+    if (config.ntripEnabled) {
+      this.rtcmController = new RtcmDownlinkController({
+        mode: config.rtcmRuntimeMode,
+        targetMask: config.rtcmTargetMask,
+        leaseSeconds: config.rtcmSessionLeaseSeconds,
+        maxFragmentDataBytes: config.rtcmFragmentDataBytes,
+        observationIntervalMs: config.rtcmObservationIntervalMs
+      });
+      this.ntripClient = new NtripClient({
+        host: config.ntripHost ?? "",
+        port: config.ntripPort,
+        mountpoint: config.ntripMountpoint ?? "",
+        username: config.ntripUsername ?? "",
+        password: config.ntripPassword ?? "",
+        ggaIntervalMs: config.ntripGgaIntervalMs,
+        connectTimeoutMs: config.ntripConnectTimeoutMs,
+        reconnectBaseDelayMs: config.ntripReconnectBaseDelayMs,
+        reconnectMaxDelayMs: config.ntripReconnectMaxDelayMs
+      }, {
+        getGga: () => this.buildCurrentNtripGga(),
+        onData: (chunk) => this.rtcmController?.offerNtripChunk(chunk, Date.now()),
+        onState: (state) => {
+          this.logger.info(
+            {
+              state: state.state,
+              statusLine: state.lastStatusLine,
+              receivedBytes: state.receivedBytes,
+              lastError: state.lastError
+            },
+            "field gateway NTRIP state changed"
+          );
+        }
+      });
+    } else {
+      this.rtcmController = null;
+      this.ntripClient = null;
     }
   }
 
@@ -1187,15 +1253,44 @@ class GatewayRuntime {
       this.scheduleSouthboundPolling(this.config.southboundPollingIntervalMs);
     }
 
+    if (this.ntripClient && this.rtcmController) {
+      this.ntripClient.start();
+      this.rtcmNextModeRefreshAtMs = 0;
+      this.rtcmModeTimer = setInterval(() => {
+        void this.tickRtcmModeLease();
+      }, 1000);
+      this.rtcmDispatchTimer = setInterval(() => {
+        void this.tickRtcmDispatch();
+      }, this.config.rtcmDispatchIntervalMs);
+      void this.tickRtcmModeLease();
+    }
+
     await this.emitHealth();
   }
 
   async stop(signal: string): Promise<void> {
+    if (!this.stopping && this.rtcmController) {
+      await this.writeRtcmFieldLinkPayload(
+        "command",
+        encodeGnssRtcmModeCommandV1({
+          targetMask: this.config.rtcmTargetMask,
+          mode: 0,
+          sessionEpoch: 0,
+          leaseSeconds: 0
+        }),
+        "control"
+      );
+    }
     this.stopping = true;
     this.logger.info({ signal }, "field gateway shutting down");
     if (this.replayTimer) clearInterval(this.replayTimer);
     if (this.healthTimer) clearInterval(this.healthTimer);
     if (this.pollerTimer) clearTimeout(this.pollerTimer);
+    if (this.rtcmModeTimer) clearInterval(this.rtcmModeTimer);
+    if (this.rtcmDispatchTimer) clearInterval(this.rtcmDispatchTimer);
+    this.rtcmModeTimer = null;
+    this.rtcmDispatchTimer = null;
+    this.ntripClient?.stop();
     this.pollerTimer = null;
     this.pollerDueAtMs = null;
     for (const timer of this.serialReconnectTimers.values()) {
@@ -1699,8 +1794,28 @@ class GatewayRuntime {
       receivedTs,
       eventTs: envelope.event_ts ?? null,
       seq: envelope.seq ?? null,
-      metrics: { ...envelope.metrics }
+      metrics: { ...envelope.metrics },
+      meta: { ...(envelope.meta ?? {}) }
     };
+    const rtcmNodeLabel = envelope.meta && typeof envelope.meta.legacy_node === "string"
+      ? envelope.meta.legacy_node
+      : null;
+    const rtcmMode = envelope.metrics.rtcm_injection_mode_code;
+    const rtcmSessionEpoch = envelope.metrics.rtcm_session_epoch;
+    const rtcmLeaseRemainingMs = envelope.metrics.rtcm_lease_remaining_ms;
+    if (this.rtcmController &&
+        (rtcmNodeLabel === "A" || rtcmNodeLabel === "B" || rtcmNodeLabel === "C") &&
+        typeof rtcmMode === "number" && Number.isInteger(rtcmMode) &&
+        typeof rtcmSessionEpoch === "number" && Number.isInteger(rtcmSessionEpoch) &&
+        typeof rtcmLeaseRemainingMs === "number" && Number.isInteger(rtcmLeaseRemainingMs)) {
+      this.rtcmController.observeNode({
+        nodeLabel: rtcmNodeLabel,
+        mode: rtcmMode,
+        sessionEpoch: rtcmSessionEpoch,
+        leaseRemainingMs: rtcmLeaseRemainingMs,
+        observedUnixMs: Date.parse(receivedTs)
+      });
+    }
     portState.telemetryMessages += 1;
 
     const record: SpoolRecord = {
@@ -1843,6 +1958,10 @@ class GatewayRuntime {
         busy = true;
         continue;
       }
+      if (this.rtcmWriteInFlightPorts.has(portPath)) {
+        busy = true;
+        continue;
+      }
 
       const serialPort = this.serialPorts.get(portPath);
       if (!serialPort?.isOpen) {
@@ -1875,6 +1994,7 @@ class GatewayRuntime {
       if (
         this.pendingCommandWindows.has(portPath) ||
         this.portCommandChains.has(portPath) ||
+        this.rtcmWriteInFlightPorts.has(portPath) ||
         this.hasActiveCompactBroadcastPollWindowForPort(portPath) ||
         this.compactPollAdmission.isInFlight(portPath)
       ) {
@@ -3098,6 +3218,112 @@ class GatewayRuntime {
     });
   }
 
+  private buildCurrentNtripGga(): string | null {
+    const sourceLabel = this.config.ntripGgaSourceNode;
+    const source = Array.from(this.nodeState.values()).find((node) => {
+      if (node.installLabel?.toUpperCase().endsWith(`-${sourceLabel}`)) return true;
+      if (node.fieldNodeId.toUpperCase() === sourceLabel ||
+          node.fieldNodeId.toUpperCase().endsWith(`-${sourceLabel}`)) return true;
+      return node.deviceId.endsWith(sourceLabel === "A" ? "1" : sourceLabel === "B" ? "2" : "3");
+    });
+    const latest = source?.latestTelemetry;
+    if (!latest) return null;
+    const coordinateFrame = latest.meta.rtk_coordinate_frame;
+    if (typeof coordinateFrame === "string" && coordinateFrame !== "unknown" &&
+        coordinateFrame !== this.config.ntripCoordinateFrame) {
+      this.stats.lastError = `NTRIP GGA coordinate frame mismatch: telemetry=${coordinateFrame} caster=${this.config.ntripCoordinateFrame}`;
+      return null;
+    }
+    return buildNtripGga(latest.metrics, new Date());
+  }
+
+  private rtcmPortAvailable(portPath: string): boolean {
+    const serialPort = this.serialPorts.get(portPath);
+    if (!serialPort?.isOpen || this.stopping || this.rtcmWriteInFlightPorts.has(portPath) ||
+        this.pendingCommandWindows.has(portPath) || this.portCommandChains.has(portPath) ||
+        this.activePollTelemetryWindows.has(portPath) ||
+        this.hasActiveCompactBroadcastPollWindowForPort(portPath) ||
+        this.compactPollAdmission.isInFlight(portPath)) {
+      return false;
+    }
+    const lastReadAt = this.portLastReadAtMs.get(portPath);
+    return lastReadAt === undefined ||
+      Date.now() - lastReadAt >= this.config.southboundPollingPrewriteQuietMs;
+  }
+
+  private async writeRtcmFieldLinkPayload(
+    frameType: "command" | "rtcm",
+    payload: Buffer,
+    owner: "control" | "fragment"
+  ): Promise<boolean> {
+    const portPath = this.config.serialDevice;
+    if (!this.rtcmPortAvailable(portPath)) {
+      this.stats.rtcmWriteDeferrals += 1;
+      return false;
+    }
+    const serialPort = this.serialPorts.get(portPath);
+    if (!serialPort?.isOpen) return false;
+    this.rtcmWriteInFlightPorts.add(portPath);
+    const portState = this.ensurePortRuntimeState(portPath);
+    portState.sendOwnerState = owner === "control" ? "writing-rtcm-control" : "writing-rtcm";
+    const serialFrame = encodeFieldLinkFrame({
+      frameType,
+      sequence: this.nextFieldLinkTxSequence(),
+      payloadBytes: payload
+    });
+
+    try {
+      await this.writeSerialFrame(
+        serialPort,
+        serialFrame,
+        this.config.southboundPollingCommandChunkBytes,
+        this.config.southboundPollingCommandChunkDelayMs
+      );
+      const timestamp = isoNow();
+      if (owner === "control") {
+        this.stats.rtcmControlWrites += 1;
+        this.stats.lastRtcmControlTs = timestamp;
+      } else {
+        this.stats.rtcmFragmentWrites += 1;
+        this.stats.lastRtcmFragmentTs = timestamp;
+      }
+      return true;
+    } catch (err) {
+      this.stats.rtcmWriteFailures += 1;
+      this.stats.lastError = err instanceof Error ? err.message : String(err);
+      portState.lastError = this.stats.lastError;
+      this.logger.error(
+        { err, serialDevice: portPath, owner, frameBytes: serialFrame.length },
+        "field gateway RTCM serial write failed"
+      );
+      return false;
+    } finally {
+      this.rtcmWriteInFlightPorts.delete(portPath);
+      if (!this.pendingCommandWindows.has(portPath) &&
+          !this.activePollTelemetryWindows.has(portPath) &&
+          !this.hasActiveCompactBroadcastPollWindowForPort(portPath)) {
+        portState.sendOwnerState = "idle";
+      }
+      this.scheduleSouthboundPolling(this.config.southboundPollingIntervalMs);
+    }
+  }
+
+  private async tickRtcmModeLease(): Promise<void> {
+    const controller = this.rtcmController;
+    if (!controller || this.stopping || Date.now() < this.rtcmNextModeRefreshAtMs) return;
+    const written = await this.writeRtcmFieldLinkPayload("command", controller.buildModeCommand(), "control");
+    if (written) this.rtcmNextModeRefreshAtMs = Date.now() + this.config.rtcmSessionRefreshMs;
+  }
+
+  private async tickRtcmDispatch(): Promise<void> {
+    const controller = this.rtcmController;
+    if (!controller || this.stopping || !this.rtcmPortAvailable(this.config.serialDevice)) return;
+    const fragment = controller.takeNextFragment(Date.now());
+    if (!fragment) return;
+    const written = await this.writeRtcmFieldLinkPayload("rtcm", fragment, "fragment");
+    if (!written) controller.returnFragment(fragment);
+  }
+
   private nextFieldLinkTxSequence(): number {
     this.fieldLinkTxSequence = (this.fieldLinkTxSequence + 1) >>> 0;
     return this.fieldLinkTxSequence;
@@ -3147,6 +3373,21 @@ class GatewayRuntime {
         activeSerialDevice: this.config.serialDevice,
         ports,
         nodes
+      },
+      ntrip: {
+        enabled: this.config.ntripEnabled,
+        caster: this.config.ntripEnabled
+          ? {
+              host: this.config.ntripHost,
+              port: this.config.ntripPort,
+              mountpoint: this.config.ntripMountpoint,
+              coordinateFrame: this.config.ntripCoordinateFrame,
+              account: this.config.ntripUsername,
+              ggaSourceNode: this.config.ntripGgaSourceNode
+            }
+          : null,
+        connection: this.ntripClient?.stats() ?? null,
+        downlink: this.rtcmController?.stats(nowMs) ?? null
       },
       stats: {
         ...this.stats,

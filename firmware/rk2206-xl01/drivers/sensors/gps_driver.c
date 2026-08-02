@@ -68,7 +68,7 @@ static uint32_t g_uart_last_rx_probe_tick = 0;
 static uint32_t g_uart_total_rx_bytes = 0;
 static bool g_line_collecting = false;
 
-#if GNSS_RTCM_INJECTION_MODE != GNSS_RTCM_INJECTION_DISABLED
+#if GNSS_RTCM_INJECTION_CAPABILITY != GNSS_RTCM_INJECTION_DISABLED
 static unsigned char g_rtcm_uart_frame[GNSS_RTCM_V3_MAX_FRAME_BYTES];
 static uint32_t g_rtcm_last_status_log_tick = 0U;
 #endif
@@ -147,7 +147,7 @@ static void PrintGpsUartProbeChunk(const unsigned char *data, int len)
 #endif
 }
 
-#if GNSS_RTCM_INJECTION_MODE != GNSS_RTCM_INJECTION_DISABLED
+#if GNSS_RTCM_INJECTION_CAPABILITY != GNSS_RTCM_INJECTION_DISABLED
 static int GPS_WriteRtcmFrame(const unsigned char *frame, uint16_t frame_bytes)
 {
     uint16_t offset = 0U;
@@ -166,16 +166,18 @@ static int GPS_WriteRtcmFrame(const unsigned char *frame, uint16_t frame_bytes)
         offset = (uint16_t)(offset + chunk);
     }
 
-    GnssRtcmInjection_RecordInjected(frame_bytes);
+    GnssRtcmInjection_RecordInjected(frame_bytes, GpsMonotonicMs());
     return 0;
 }
 
 static void GPS_ProcessRtcmQueue(void)
 {
+    GnssRtcmRuntimeStatus runtime;
+    uint64_t now_ms = GpsMonotonicMs();
     uint16_t frame_bytes = 0U;
     uint16_t message_type = 0U;
     int dequeue_ret = GnssRtcmInjection_TryDequeue(
-        GpsMonotonicMs(),
+        now_ms,
         g_rtcm_uart_frame,
         sizeof(g_rtcm_uart_frame),
         &frame_bytes,
@@ -187,13 +189,13 @@ static void GPS_ProcessRtcmQueue(void)
         return;
     }
 
-#if GNSS_RTCM_INJECTION_MODE == GNSS_RTCM_INJECTION_PROBE
-    GnssRtcmInjection_RecordProbe(frame_bytes);
-#elif GNSS_RTCM_INJECTION_MODE == GNSS_RTCM_INJECTION_LIVE
-    if (GPS_WriteRtcmFrame(g_rtcm_uart_frame, frame_bytes) != 0) {
+    GnssRtcmInjection_GetRuntimeStatus(now_ms, &runtime);
+    if (runtime.mode == GNSS_RTCM_INJECTION_PROBE) {
+        GnssRtcmInjection_RecordProbe(frame_bytes, now_ms);
+    } else if (runtime.mode == GNSS_RTCM_INJECTION_LIVE &&
+               GPS_WriteRtcmFrame(g_rtcm_uart_frame, frame_bytes) != 0) {
         GnssRtcmInjection_RecordInjectionDrop();
     }
-#endif
 }
 
 static void GPS_LogRtcmStatus(void)
@@ -201,6 +203,7 @@ static void GPS_LogRtcmStatus(void)
     uint32_t now = (uint32_t)LOS_TickCountGet();
     uint32_t interval = LOS_MS2Tick(GNSS_RTCM_STATUS_LOG_INTERVAL_MS);
     GnssRtcmInjectionStats stats;
+    GnssRtcmRuntimeStatus runtime;
 
     if (interval == 0U) {
         interval = 1U;
@@ -211,6 +214,7 @@ static void GPS_LogRtcmStatus(void)
     }
     g_rtcm_last_status_log_tick = now;
     GnssRtcmInjection_GetStats(&stats);
+    GnssRtcmInjection_GetRuntimeStatus(GpsMonotonicMs(), &runtime);
     if (stats.accepted_fragments == 0U && stats.rejected_fragments == 0U) {
         return;
     }
@@ -218,7 +222,7 @@ static void GPS_LogRtcmStatus(void)
         "[RTCM] mode=%d accepted=%u complete=%u duplicate=%u rejected=%u crc=%u "
         "expired=%u ttl_unverified=%u queue=%u/%u queue_evict=%u queue_expired=%u "
         "probe=%u injected=%u bytes=%u write_err=%u partial=%u drop=%u\n",
-        GNSS_RTCM_INJECTION_MODE,
+        runtime.mode,
         stats.accepted_fragments,
         stats.completed_frames,
         stats.duplicate_fragments,
@@ -251,7 +255,7 @@ static void GPS_UartPollTask(void)
 #endif
     
     while (1) {
-#if GNSS_RTCM_INJECTION_MODE != GNSS_RTCM_INJECTION_DISABLED
+#if GNSS_RTCM_INJECTION_CAPABILITY != GNSS_RTCM_INJECTION_DISABLED
         // This task exclusively owns GNSS UART I/O. Queue producers never call
         // IoTUartWrite, so NMEA reads and RTCM writes cannot race in the HAL.
         GPS_ProcessRtcmQueue();
@@ -415,7 +419,7 @@ int GPS_Init(void)
         .stopBits = IOT_UART_STOP_BIT_1,
         .parity = IOT_UART_PARITY_NONE,
         .rxBlock = IOT_UART_BLOCK_STATE_NONE_BLOCK,
-#if GNSS_RTCM_INJECTION_MODE == GNSS_RTCM_INJECTION_LIVE
+#if GNSS_RTCM_INJECTION_CAPABILITY == GNSS_RTCM_INJECTION_LIVE
         .txBlock = IOT_UART_BLOCK_STATE_BLOCK,
 #else
         .txBlock = IOT_UART_BLOCK_STATE_NONE_BLOCK,

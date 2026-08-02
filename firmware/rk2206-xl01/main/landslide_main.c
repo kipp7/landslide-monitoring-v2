@@ -15,6 +15,7 @@
 #include <stdbool.h>
 #include <time.h>
 #include "los_task.h"
+#include "los_tick.h"
 #include "ohos_init.h"
 #include "cmsis_os.h"
 #include "iot_i2c.h"
@@ -122,7 +123,7 @@ static char g_last_trusted_time_ts[40] = "";
 static char g_last_trusted_time_source[32] = "";
 static volatile uint32_t g_last_platform_command_tick = 0;
 static volatile int g_field_link_recovery_requested = 0;
-#define FW_RX_DIAG_MARKER "fw-rk2206-rtk-compact-v3-20260802"
+#define FW_RX_DIAG_MARKER "fw-rk2206-rtk-compact-v4-runtime-20260803"
 bool g_cloud_motor_enabled = false;
 int g_cloud_motor_speed = 0;
 MotorDirection g_cloud_motor_direction = MOTOR_DIRECTION_STOP;
@@ -153,6 +154,16 @@ static void SensorData_Unlock(void)
     if (g_sensor_data_mutex != NULL) {
         osMutexRelease(g_sensor_data_mutex);
     }
+}
+
+static uint64_t MainMonotonicMs(void)
+{
+    uint64_t ticks = (uint64_t)LOS_TickCountGet();
+    uint64_t ticks_per_second = (uint64_t)g_ticksPerSec;
+
+    if (ticks_per_second == 0U) return ticks;
+    return (ticks / ticks_per_second) * 1000U +
+           ((ticks % ticks_per_second) * 1000U) / ticks_per_second;
 }
 
 static void SensorData_CopySnapshot(SensorData *snapshot)
@@ -761,6 +772,40 @@ static uint8_t LocalNodeNumber(void)
     return 0U;
 }
 
+static int HandleGnssRtcmModeCommand(const char *command)
+{
+    GnssRtcmModeCommand mode_command;
+    GnssRtcmRuntimeStatus runtime;
+    int configure_ret;
+
+    if (command == NULL || GnssRtcmModeCommand_Decode(
+            command, (int)strlen(command), &mode_command
+        ) != 0) {
+        return 0;
+    }
+
+    configure_ret = GnssRtcmInjection_ConfigureRuntime(
+        &mode_command, MainMonotonicMs()
+    );
+    if (configure_ret < 0) {
+        printf("[RTCM MODE] rejected target=%02X mode=%u session=%08X lease=%us\n",
+               (unsigned int)mode_command.target_mask,
+               (unsigned int)mode_command.mode,
+               (unsigned int)mode_command.session_epoch,
+               (unsigned int)mode_command.lease_seconds);
+        return 1;
+    }
+    if (configure_ret == 0) {
+        GnssRtcmInjection_GetRuntimeStatus(MainMonotonicMs(), &runtime);
+        printf("[RTCM MODE] applied node=%u mode=%u session=%08X lease_remaining=%ums\n",
+               (unsigned int)LocalNodeNumber(),
+               (unsigned int)runtime.mode,
+               (unsigned int)runtime.session_epoch,
+               (unsigned int)runtime.lease_remaining_ms);
+    }
+    return 1;
+}
+
 static int HandleGnssProbeStatsQuery(const char *command)
 {
     GnssRtcmInjectionStats stats;
@@ -769,6 +814,7 @@ static int HandleGnssProbeStatsQuery(const char *command)
     Sc16is752Diagnostics sc16is752_diagnostics;
     FieldRs485Diagnostics field_rs485_diagnostics;
     Rs485ModbusDiagnostics modbus_diagnostics;
+    GnssRtcmRuntimeStatus runtime;
     uint8_t response[GNSS_PROBE_STATS_RESPONSE_V4_BYTES];
     uint8_t target_node = 0U;
     uint8_t local_node;
@@ -788,6 +834,7 @@ static int HandleGnssProbeStatsQuery(const char *command)
     }
 
     GnssRtcmInjection_GetStats(&stats);
+    GnssRtcmInjection_GetRuntimeStatus(MainMonotonicMs(), &runtime);
     XL01_GetFieldLinkRxStats(&link_stats);
     SensorDiagnostics_CopySnapshot(&sensor_diagnostics);
     memset(&sc16is752_diagnostics, 0, sizeof(sc16is752_diagnostics));
@@ -808,7 +855,7 @@ static int HandleGnssProbeStatsQuery(const char *command)
         &field_rs485_diagnostics,
         &modbus_diagnostics,
         local_node,
-        (uint8_t)GNSS_RTCM_INJECTION_MODE,
+        runtime.mode,
         nonce,
         (uint32_t)SensorData_GetUptimeSnapshot(),
         response,
@@ -833,6 +880,7 @@ static int HandleGnssProbeStatsQuery(const char *command)
 static int HandleGnssRtcmAckQuery(const char *command)
 {
     GnssRtcmAckWindow window;
+    GnssRtcmRuntimeStatus runtime;
     uint8_t response[GNSS_RTCM_ACK_RESPONSE_V1_BYTES];
     uint8_t target_node = 0U;
     uint8_t local_node;
@@ -852,10 +900,11 @@ static int HandleGnssRtcmAckQuery(const char *command)
     }
 
     GnssRtcmInjection_GetAckWindow(&window);
+    GnssRtcmInjection_GetRuntimeStatus(MainMonotonicMs(), &runtime);
     response_len = GnssRtcmAckResponseV1_Encode(
         &window,
         local_node,
-        (uint8_t)GNSS_RTCM_INJECTION_MODE,
+        runtime.mode,
         nonce,
         response,
         sizeof(response)
@@ -1483,7 +1532,8 @@ static void* DataProcessTask(const char* arg)
         int processed = XL01_ProcessReceivedData(&g_stats);
 
         while (XL01_TryDequeuePlatformCommand(g_process_command_json, sizeof(g_process_command_json)) > 0) {
-            if (!HandleGnssRtcmAckQuery(g_process_command_json) &&
+            if (!HandleGnssRtcmModeCommand(g_process_command_json) &&
+                !HandleGnssRtcmAckQuery(g_process_command_json) &&
                 !HandleGnssProbeStatsQuery(g_process_command_json)) {
                 HandlePlatformCommand(g_process_command_json);
             }
@@ -1503,13 +1553,16 @@ static void* DataUploadTask(const char* arg)
     (void)arg;
 #if TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V1 || \
     TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V2 || \
-    TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V3
+    TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V3 || \
+    TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V4
     unsigned char compact_payload[COMPACT_TELEMETRY_PAYLOAD_BYTES];
 #else
     char json[FIELD_LINK_MAX_PAYLOAD_BYTES + 1];
 #endif
     const char *telemetry_payload;
     SensorData telemetry_snapshot;
+    GnssRtcmInjectionStats rtcm_stats;
+    GnssRtcmRuntimeStatus rtcm_runtime;
     int len;
     unsigned int elapsed_since_upload_ms = UPLOAD_INTERVAL_MS;
     
@@ -1540,9 +1593,10 @@ static void* DataUploadTask(const char* arg)
     printf("  Poll Request Check: %d ms\n", POLL_REQUEST_CHECK_INTERVAL_MS);
     printf("  Edge Uplink Mode: %s\n", EDGE_UPLINK_MODE == EDGE_UPLINK_MODE_POLLED ? "Polled" : "Periodic");
     printf("  Telemetry Payload: %s\n",
-           TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V3 ? "Compact v3 (95-byte field + RTK payload)" :
+           TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V4 ? "Compact v4 (139-byte field + RTK + injection evidence)" :
+           (TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V3 ? "Compact v3 (95-byte field + RTK payload)" :
            (TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V2 ? "Compact v2 (46-byte payload)" :
-           (TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V1 ? "Compact v1 (46-byte payload)" : "JSON v1")));
+           (TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V1 ? "Compact v1 (46-byte payload)" : "JSON v1"))));
     printf("  Field Sensor Source: %s\n",
            ENABLE_SIMULATED_FIELD_SENSORS ? "SIMULATED (RS485 values only)" : "HARDWARE");
     printf("  Max Retries: %d\n", MAX_RETRY_COUNT);
@@ -1557,14 +1611,9 @@ static void* DataUploadTask(const char* arg)
     printf("  Sensors:\n");
     printf("    - GPS: %s\n", ENABLE_GPS ? "ON" : "OFF");
 #if ENABLE_GPS
-    printf("    - RTCM Injection: %s queue=%u max_queue_age=%u ms\n",
-#if GNSS_RTCM_INJECTION_MODE == GNSS_RTCM_INJECTION_LIVE
-           "LIVE",
-#elif GNSS_RTCM_INJECTION_MODE == GNSS_RTCM_INJECTION_PROBE
-           "PROBE (no GNSS UART writes)",
-#else
-           "DISABLED",
-#endif
+    printf("    - RTCM Injection: boot=DISABLED capability=%s runtime-lease=yes queue=%u max_queue_age=%u ms\n",
+           GNSS_RTCM_INJECTION_CAPABILITY == GNSS_RTCM_INJECTION_LIVE ? "LIVE" :
+           (GNSS_RTCM_INJECTION_CAPABILITY == GNSS_RTCM_INJECTION_PROBE ? "PROBE" : "DISABLED"),
            (unsigned int)GNSS_RTCM_QUEUE_DEPTH,
            (unsigned int)GNSS_RTCM_MAX_QUEUE_AGE_MS);
 #endif
@@ -1704,8 +1753,23 @@ static void* DataUploadTask(const char* arg)
 #endif
 #if TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V1 || \
     TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V2 || \
-    TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V3
+    TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V3 || \
+    TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V4
         memset(compact_payload, 0, sizeof(compact_payload));
+#if TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V4
+        GnssRtcmInjection_GetStats(&rtcm_stats);
+        GnssRtcmInjection_GetRuntimeStatus(MainMonotonicMs(), &rtcm_runtime);
+        len = BuildCompactTelemetryV4(
+            &telemetry_snapshot,
+            &rtcm_stats,
+            &rtcm_runtime,
+            DeviceIdentity_Get()->legacy_node_label,
+            g_last_platform_command_id,
+            upload_trigger,
+            compact_payload,
+            sizeof(compact_payload)
+        );
+#else
 #if TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V3
         len = BuildCompactTelemetryV3(
 #elif TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V2
@@ -1720,6 +1784,7 @@ static void* DataUploadTask(const char* arg)
             compact_payload,
             sizeof(compact_payload)
         );
+#endif
         telemetry_payload = (const char *)compact_payload;
 #else
         memset(json, 0, sizeof(json));

@@ -2,6 +2,7 @@
 #define APP_COMPACT_TELEMETRY_BUILDER_H
 
 #include "sensor_data.h"
+#include "../drivers/xl01/gnss_rtcm_injection.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -10,7 +11,8 @@ extern "C" {
 #define COMPACT_TELEMETRY_V1_PAYLOAD_BYTES 46
 #define COMPACT_TELEMETRY_V2_PAYLOAD_BYTES 46
 #define COMPACT_TELEMETRY_V3_PAYLOAD_BYTES 95
-#define COMPACT_TELEMETRY_PAYLOAD_BYTES COMPACT_TELEMETRY_V3_PAYLOAD_BYTES
+#define COMPACT_TELEMETRY_V4_PAYLOAD_BYTES 139
+#define COMPACT_TELEMETRY_PAYLOAD_BYTES COMPACT_TELEMETRY_V4_PAYLOAD_BYTES
 #define COMPACT_TELEMETRY_ERR_EMPTY_METRICS (-2)
 
 enum {
@@ -74,6 +76,17 @@ int BuildCompactTelemetryV2(
 
 int BuildCompactTelemetryV3(
     const SensorData *data,
+    const char *legacy_node_label,
+    const char *last_command_id,
+    const char *upload_trigger,
+    unsigned char *output,
+    int output_size
+);
+
+int BuildCompactTelemetryV4(
+    const SensorData *data,
+    const GnssRtcmInjectionStats *rtcm_stats,
+    const GnssRtcmRuntimeStatus *rtcm_runtime,
     const char *legacy_node_label,
     const char *last_command_id,
     const char *upload_trigger,

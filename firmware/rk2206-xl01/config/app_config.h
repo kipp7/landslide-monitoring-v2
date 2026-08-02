@@ -53,8 +53,9 @@
 #define TELEMETRY_PAYLOAD_FORMAT_COMPACT_V1 1
 #define TELEMETRY_PAYLOAD_FORMAT_COMPACT_V2 2
 #define TELEMETRY_PAYLOAD_FORMAT_COMPACT_V3 3
+#define TELEMETRY_PAYLOAD_FORMAT_COMPACT_V4 4
 // Combined field + professional RTK summary: one response per node per poll.
-#define TELEMETRY_PAYLOAD_FORMAT TELEMETRY_PAYLOAD_FORMAT_COMPACT_V3
+#define TELEMETRY_PAYLOAD_FORMAT TELEMETRY_PAYLOAD_FORMAT_COMPACT_V4
 #define XL01_UART_TX_CHUNK_SIZE 32     // Long transparent payloads are more stable when split into small UART bursts
 #define XL01_UART_TX_CHUNK_DELAY_MS 15 // Validated compact baseline; higher-rate profiles remain hardware sweep candidates
 #define PLATFORM_POST_ACK_QUIET_MS 1200 // Hold telemetry briefly after any command ACK to keep the shared XL01 stream separable
@@ -92,7 +93,7 @@
 #define SLEEP_AFTER_SEND    0           // Sleep after each send (low power)
 
 // Version marker
-#define FIRMWARE_SAMPLE_VERSION "v1.3-um220-rs485-rtk-compact-v3"
+#define FIRMWARE_SAMPLE_VERSION "v1.3-um220-rs485-rtk-compact-v4"
 
 // Bring-up diagnostic mode:
 // 1 = only print a boot heartbeat on the debug UART; do not initialize sensors or XL01.
@@ -169,14 +170,20 @@
 #define GNSS_COORDINATE_FRAME 1U         // 1=CGCS2000 (Qianxun port 8003), 2=WGS84 (port 8002)
 #define GPS_UART_PROBE_LOG_MODE 0        // 0=GPS UART confirmed; keep only parsed NMEA/fix logs
 #define GPS_VERBOSE_NMEA_LOG 0           // 0=hide raw GGA/RMC sentences; summary upload line shows GPS status
-// RTCM downlink remains compile-disabled until the mixed-load XLS1 gate passes.
-// PROBE validates receive/reassembly/queueing without writing the GNSS UART.
+// The image contains LIVE capability, but every boot starts fail-closed. The
+// gateway must arm a fresh session with a bounded lease before RTCM is accepted.
 #define GNSS_RTCM_INJECTION_DISABLED 0
 #define GNSS_RTCM_INJECTION_PROBE    1
 #define GNSS_RTCM_INJECTION_LIVE     2
 #ifndef GNSS_RTCM_INJECTION_MODE
-#define GNSS_RTCM_INJECTION_MODE GNSS_RTCM_INJECTION_DISABLED
+#define GNSS_RTCM_INJECTION_MODE GNSS_RTCM_INJECTION_LIVE
 #endif
+#ifndef GNSS_RTCM_INJECTION_CAPABILITY
+#define GNSS_RTCM_INJECTION_CAPABILITY GNSS_RTCM_INJECTION_MODE
+#endif
+#define GNSS_RTCM_BOOT_MODE GNSS_RTCM_INJECTION_DISABLED
+#define GNSS_RTCM_MIN_LEASE_SECONDS 15U
+#define GNSS_RTCM_MAX_LEASE_SECONDS 300U
 #define GNSS_RTCM_QUEUE_DEPTH 4
 #define GNSS_RTCM_MAX_QUEUE_AGE_MS 3000U
 #define GNSS_RTCM_UART_CHUNK_SIZE 64U

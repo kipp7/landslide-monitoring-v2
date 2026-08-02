@@ -1,6 +1,7 @@
 export const COMPACT_TELEMETRY_V1_BYTES = 46;
 export const COMPACT_TELEMETRY_V2_BYTES = 46;
 export const COMPACT_TELEMETRY_V3_BYTES = 95;
+export const COMPACT_TELEMETRY_V4_BYTES = 139;
 
 const VALID_TEMPERATURE = 1 << 0;
 const VALID_SOIL = 1 << 1;
@@ -40,6 +41,12 @@ const GNSS_FIX_POSITION_VALID = 1 << 12;
 const GNSS_FIX_FIXED_STATS_VALID = 1 << 13;
 const GNSS_FIX_COORDINATE_FRAME_VALID = 1 << 14;
 const V3_KNOWN_VALID_MASK = (1 << 13) - 1;
+const V4_RTCM_KNOWN_STATE_MASK = 0x3f;
+const V4_RTCM_MODE_DISABLED = 0;
+const V4_RTCM_STATE_READY = 1 << 0;
+const V4_RTCM_STATE_SESSION_ARMED = 1 << 1;
+const V4_RTCM_STATE_LEASE_VALID = 1 << 2;
+const V4_AGE_UNAVAILABLE = 0xffff_ffff;
 
 const DEVICE_IDS = [
   "",
@@ -94,7 +101,8 @@ export function isCompactTelemetry(payload: Buffer): boolean {
   const version = payload.readUInt8(2);
   return (version === 1 && payload.length === COMPACT_TELEMETRY_V1_BYTES) ||
     (version === 2 && payload.length === COMPACT_TELEMETRY_V2_BYTES) ||
-    (version === 3 && payload.length === COMPACT_TELEMETRY_V3_BYTES);
+    (version === 3 && payload.length === COMPACT_TELEMETRY_V3_BYTES) ||
+    (version === 4 && payload.length === COMPACT_TELEMETRY_V4_BYTES);
 }
 
 function decodeNode(payload: Buffer): { deviceId: string; nodeLabel: string } {
@@ -213,14 +221,16 @@ export function decodeCompactTelemetryV1(payload: Buffer): CompactTelemetryV1 {
 export function decodeCompactTelemetry(payload: Buffer): CompactTelemetry {
   if (!isCompactTelemetry(payload)) {
     throw new Error(
-      `compact telemetry signature mismatch: expected a valid v1, v2 or v3 payload`
+      `compact telemetry signature mismatch: expected a valid v1, v2, v3 or v4 payload`
     );
   }
   if (payload.readUInt8(2) === 1) {
     return decodeCompactTelemetryV1(payload);
   }
 
-  if (payload.readUInt8(2) === 3) {
+  if (payload.readUInt8(2) === 3 || payload.readUInt8(2) === 4) {
+    const compactVersion = payload.readUInt8(2);
+    const versionLabel = compactVersion === 4 ? "v4" : "v3";
     const { deviceId, nodeLabel } = decodeNode(payload);
     const statusFlags = payload.readUInt8(4);
     const valid = payload.readUInt16BE(6);
@@ -228,13 +238,13 @@ export function decodeCompactTelemetry(payload: Buffer): CompactTelemetry {
     const metrics: Record<string, number | boolean> = {};
 
     if ((statusFlags & ~0x03) !== 0 || (valid & ~V3_KNOWN_VALID_MASK) !== 0) {
-      throw new Error("compact telemetry v3 status or validity flags contain reserved bits");
+      throw new Error(`compact telemetry ${versionLabel} status or validity flags contain reserved bits`);
     }
     const gnssStatusValid = (valid & V3_VALID_GNSS_STATUS) !== 0;
     const flagMatches = (validMask: number, fixMask: number): boolean =>
       (valid & validMask) !== 0 === ((fixFlags & fixMask) !== 0);
     if (!gnssStatusValid && ((valid & 0x1ff0) !== 0 || fixFlags !== 0)) {
-      throw new Error("compact telemetry v3 carries GNSS evidence without a valid GNSS status");
+      throw new Error(`compact telemetry ${versionLabel} carries GNSS evidence without a valid GNSS status`);
     }
     if (gnssStatusValid && (
       !flagMatches(V3_VALID_GNSS_POSITION, GNSS_FIX_POSITION_VALID) ||
@@ -247,7 +257,7 @@ export function decodeCompactTelemetry(payload: Buffer): CompactTelemetry {
       ((valid & V3_VALID_GNSS_ALTITUDE) !== 0) !==
         ((fixFlags & (GNSS_FIX_ALTITUDE_VALID | GNSS_FIX_GEOID_VALID)) !== 0)
     )) {
-      throw new Error("compact telemetry v3 GNSS validity bitmap contradicts its fix flags");
+      throw new Error(`compact telemetry ${versionLabel} GNSS validity bitmap contradicts its fix flags`);
     }
 
     if ((valid & V3_VALID_BATTERY) !== 0) {
@@ -276,7 +286,7 @@ export function decodeCompactTelemetry(payload: Buffer): CompactTelemetry {
         ? coordinateFrameCode !== 1 && coordinateFrameCode !== 2
         : coordinateFrameCode !== 0)
     )) {
-      throw new Error("compact telemetry v3 coordinate-frame code contradicts its validity flag");
+      throw new Error(`compact telemetry ${versionLabel} coordinate-frame code contradicts its validity flag`);
     }
     if (trusted && (
       ggaQuality !== 4 ||
@@ -286,10 +296,10 @@ export function decodeCompactTelemetry(payload: Buffer): CompactTelemetry {
       payload.readUInt32BE(60) > 5000 ||
       payload.readUInt32BE(64) > 2000
     )) {
-      throw new Error("compact telemetry v3 trusted RTK evidence violates the production gate");
+      throw new Error(`compact telemetry ${versionLabel} trusted RTK evidence violates the production gate`);
     }
     if ((valid & V3_VALID_FIXED_STATS) !== 0 && payload.readUInt16BE(89) > 1000) {
-      throw new Error("compact telemetry v3 Fixed ratio exceeds 1000 permille");
+      throw new Error(`compact telemetry ${versionLabel} Fixed ratio exceeds 1000 permille`);
     }
     if ((valid & V3_VALID_GNSS_STATUS) !== 0) {
       metrics.rtk_gga_quality = ggaQuality;
@@ -302,7 +312,7 @@ export function decodeCompactTelemetry(payload: Buffer): CompactTelemetry {
       const longitudeE9 = readSafeInt64(payload, 44, "rtk longitude");
       if (latitudeE9 < -90_000_000_000 || latitudeE9 > 90_000_000_000 ||
           longitudeE9 < -180_000_000_000 || longitudeE9 > 180_000_000_000) {
-        throw new Error("compact telemetry v3 RTK coordinates are out of range");
+        throw new Error(`compact telemetry ${versionLabel} RTK coordinates are out of range`);
       }
       metrics.rtk_latitude_deg = latitudeE9 / 1_000_000_000;
       metrics.rtk_longitude_deg = longitudeE9 / 1_000_000_000;
@@ -338,6 +348,51 @@ export function decodeCompactTelemetry(payload: Buffer): CompactTelemetry {
       metrics.rtk_reference_station_id = payload.readUInt16BE(93);
     }
 
+    let rtcmMode = 0;
+    let rtcmStateFlags = 0;
+    if (compactVersion === 4) {
+      rtcmMode = payload.readUInt8(95);
+      rtcmStateFlags = payload.readUInt8(96);
+      const queuePending = payload.readUInt8(97);
+      const queueHighWatermark = payload.readUInt8(98);
+      const sessionEpoch = payload.readUInt32BE(99);
+      const leaseRemainingMs = payload.readUInt32BE(103);
+      const sessionArmed = (rtcmStateFlags & V4_RTCM_STATE_SESSION_ARMED) !== 0;
+      const leaseValid = (rtcmStateFlags & V4_RTCM_STATE_LEASE_VALID) !== 0;
+      if (rtcmMode > 2 || (rtcmStateFlags & ~V4_RTCM_KNOWN_STATE_MASK) !== 0 ||
+          (rtcmStateFlags & V4_RTCM_STATE_READY) === 0 || queuePending > queueHighWatermark) {
+        throw new Error("compact telemetry v4 RTCM runtime state is malformed");
+      }
+      if (rtcmMode === V4_RTCM_MODE_DISABLED) {
+        if (sessionEpoch !== 0 || leaseRemainingMs !== 0 || sessionArmed || leaseValid || queuePending !== 0) {
+          throw new Error("compact telemetry v4 disabled RTCM state is not fail-closed");
+        }
+      } else if (sessionEpoch === 0 || leaseRemainingMs === 0 || !sessionArmed || !leaseValid) {
+        throw new Error("compact telemetry v4 active RTCM state lacks a valid session lease");
+      }
+
+      metrics.rtcm_injection_mode_code = rtcmMode;
+      metrics.rtcm_session_epoch = sessionEpoch;
+      metrics.rtcm_lease_remaining_ms = leaseRemainingMs;
+      metrics.rtcm_queue_pending = queuePending;
+      metrics.rtcm_queue_high_watermark = queueHighWatermark;
+      const ageFields = [
+        ["rtcm_last_fragment_age_ms", payload.readUInt32BE(107)],
+        ["rtcm_last_completed_frame_age_ms", payload.readUInt32BE(111)],
+        ["rtcm_last_action_age_ms", payload.readUInt32BE(115)]
+      ] as const;
+      for (const [name, age] of ageFields) {
+        if (age !== V4_AGE_UNAVAILABLE) metrics[name] = age;
+      }
+      metrics.rtcm_accepted_fragments_total = payload.readUInt32BE(119);
+      metrics.rtcm_completed_frames_total = payload.readUInt32BE(123);
+      metrics.rtcm_injected_frames_total = payload.readUInt32BE(127);
+      metrics.rtcm_rejected_fragments_total = payload.readUInt16BE(131);
+      metrics.rtcm_crc_errors_total = payload.readUInt16BE(133);
+      metrics.rtcm_queue_drops_total = payload.readUInt16BE(135);
+      metrics.rtcm_uart_errors_total = payload.readUInt16BE(137);
+    }
+
     const batteryQualityCode = payload.readUInt8(23);
     const simulated = (statusFlags & STATUS_FIELD_SENSORS_SIMULATED) !== 0;
     return {
@@ -352,7 +407,7 @@ export function decodeCompactTelemetry(payload: Buffer): CompactTelemetry {
         uptime_s: payload.readUInt32BE(12),
         last_command_tag: payload.readUInt32BE(16),
         upload_trigger: uploadTriggerName(payload.readUInt8(5)),
-        compact_payload_version: 3,
+        compact_payload_version: compactVersion,
         field_sensor_source: simulated ? "simulated" : "hardware",
         battery_estimate_quality_code: batteryQualityCode,
         rtk_coordinate_frame: coordinateFrameName(coordinateFrameCode),
@@ -360,7 +415,14 @@ export function decodeCompactTelemetry(payload: Buffer): CompactTelemetry {
         rtk_fix_type: ggaFixType(ggaQuality),
         rtk_fix_flags: fixFlags,
         rtk_displacement_eligible: trusted && coordinateFrameCode !== 0,
-        v3_valid_flags: valid
+        v3_valid_flags: valid,
+        ...(compactVersion === 4
+          ? {
+              v4_valid_flags: valid,
+              rtcm_injection_mode: rtcmMode === 2 ? "live" : rtcmMode === 1 ? "probe" : "disabled",
+              rtcm_state_flags: rtcmStateFlags
+            }
+          : {})
       }
     };
   }

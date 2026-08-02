@@ -46,7 +46,54 @@ typedef struct {
     uint16_t completed_bitmap;
 } GnssRtcmAckWindow;
 
+#define GNSS_RTCM_MODE_COMMAND_BYTES 19
+#define GNSS_RTCM_AGE_UNAVAILABLE UINT32_MAX
+
+enum {
+    GNSS_RTCM_STATE_READY = 1U << 0,
+    GNSS_RTCM_STATE_SESSION_ARMED = 1U << 1,
+    GNSS_RTCM_STATE_LEASE_VALID = 1U << 2,
+    GNSS_RTCM_STATE_FRAGMENT_RECENT = 1U << 3,
+    GNSS_RTCM_STATE_FRAME_RECENT = 1U << 4,
+    GNSS_RTCM_STATE_ACTION_RECENT = 1U << 5
+};
+
+typedef struct {
+    uint8_t target_mask;
+    uint8_t mode;
+    uint32_t session_epoch;
+    uint16_t lease_seconds;
+} GnssRtcmModeCommand;
+
+typedef struct {
+    uint8_t mode;
+    uint8_t state_flags;
+    uint8_t queue_pending;
+    uint8_t queue_high_watermark;
+    uint32_t session_epoch;
+    uint32_t lease_remaining_ms;
+    uint32_t last_fragment_age_ms;
+    uint32_t last_completed_frame_age_ms;
+    uint32_t last_action_age_ms;
+} GnssRtcmRuntimeStatus;
+
 int GnssRtcmInjection_Init(uint8_t local_node);
+
+int GnssRtcmModeCommand_Decode(
+    const char *payload,
+    int payload_bytes,
+    GnssRtcmModeCommand *command
+);
+
+int GnssRtcmInjection_ConfigureRuntime(
+    const GnssRtcmModeCommand *command,
+    uint64_t monotonic_ms
+);
+
+void GnssRtcmInjection_GetRuntimeStatus(
+    uint64_t monotonic_ms,
+    GnssRtcmRuntimeStatus *status
+);
 
 GnssRtcmReassemblyStatusV3 GnssRtcmInjection_AcceptFragment(
     const uint8_t *payload,
@@ -62,8 +109,8 @@ int GnssRtcmInjection_TryDequeue(
     uint16_t *message_type
 );
 
-void GnssRtcmInjection_RecordProbe(uint16_t frame_bytes);
-void GnssRtcmInjection_RecordInjected(uint16_t frame_bytes);
+void GnssRtcmInjection_RecordProbe(uint16_t frame_bytes, uint64_t monotonic_ms);
+void GnssRtcmInjection_RecordInjected(uint16_t frame_bytes, uint64_t monotonic_ms);
 void GnssRtcmInjection_RecordWriteError(uint8_t partial_write);
 void GnssRtcmInjection_RecordInjectionDrop(void);
 void GnssRtcmInjection_GetStats(GnssRtcmInjectionStats *stats);

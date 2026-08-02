@@ -7,6 +7,7 @@ import type { AppConfig } from "../config";
 import { fail, ok } from "../http";
 import type { PgPool } from "../postgres";
 import { queryOne, withPgClient } from "../postgres";
+import { isProfessionalRtkPosition, PROFESSIONAL_RTK_POSITION_KEYS } from "./gps-position-profile";
 
 const deviceIdSchema = z.string().uuid();
 
@@ -23,9 +24,9 @@ const seriesQuerySchema = z.object({
   startTime: z.string().datetime(),
   endTime: z.string().datetime(),
   interval: z.enum(["1m", "5m", "1h", "1d"]).default("1h"),
-  latKey: z.string().min(1).default("gps_latitude"),
-  lonKey: z.string().min(1).default("gps_longitude"),
-  altKey: z.string().min(1).optional(),
+  latKey: z.string().min(1).default(PROFESSIONAL_RTK_POSITION_KEYS.latitude),
+  lonKey: z.string().min(1).default(PROFESSIONAL_RTK_POSITION_KEYS.longitude),
+  altKey: z.string().min(1).optional().default(PROFESSIONAL_RTK_POSITION_KEYS.altitude),
   limit: z.coerce.number().int().positive().max(200000).default(20000)
 });
 
@@ -454,6 +455,18 @@ export function registerGpsDeformationRoutes(
 
     const bucketSeconds = intervalSeconds(interval);
     const sensorKeys = altKey ? [latKey, lonKey, altKey] : [latKey, lonKey];
+    const trustedOnly = isProfessionalRtkPosition({ latKey, lonKey });
+    const trustedTimestampClause = trustedOnly
+      ? `AND received_ts IN (
+          SELECT received_ts
+          FROM ${config.clickhouseDatabase}.${config.clickhouseTable}
+          WHERE device_id = {deviceId:String}
+            AND sensor_key = {trustedKey:String}
+            AND value_bool = 1
+            AND received_ts >= {start:DateTime64(3, 'UTC')}
+            AND received_ts <= {end:DateTime64(3, 'UTC')}
+        )`
+      : "";
 
     type Row = {
       ts: string;
@@ -479,6 +492,7 @@ export function registerGpsDeformationRoutes(
         AND sensor_key IN {sensorKeys:Array(String)}
         AND received_ts >= {start:DateTime64(3, 'UTC')}
         AND received_ts <= {end:DateTime64(3, 'UTC')}
+        ${trustedTimestampClause}
       GROUP BY ts
       ORDER BY ts ASC
       LIMIT {limit:UInt32}
@@ -493,6 +507,7 @@ export function registerGpsDeformationRoutes(
         latKey,
         lonKey,
         altKey: altKey ?? "__no_alt_key__",
+        trustedKey: PROFESSIONAL_RTK_POSITION_KEYS.trusted,
         start: toClickhouseDateTime64Utc(start),
         end: toClickhouseDateTime64Utc(end),
         limit
@@ -530,6 +545,8 @@ export function registerGpsDeformationRoutes(
         deviceId,
         interval,
         keys: { latKey, lonKey, altKey: altKey ?? null },
+        positionProfile: trustedOnly ? "rtk-fixed" : "custom",
+        trustedOnly,
         baseline: { ...baseline, method: baselineRow.method, pointsCount: baselineRow.points_count, computedAt: baselineRow.computed_at },
         points
       }
@@ -596,7 +613,16 @@ export function registerGpsDeformationRoutes(
       return;
     }
 
-    const built = await buildSeriesData(deviceId, range.start, range.end, "1h", "gps_latitude", "gps_longitude", "gps_altitude", limit);
+    const built = await buildSeriesData(
+      deviceId,
+      range.start,
+      range.end,
+      "1h",
+      PROFESSIONAL_RTK_POSITION_KEYS.latitude,
+      PROFESSIONAL_RTK_POSITION_KEYS.longitude,
+      PROFESSIONAL_RTK_POSITION_KEYS.altitude,
+      limit
+    );
     if ("error" in built) {
       fail(reply, built.error.code, built.error.message, traceId, { field: "deviceId", issues: built.error.details });
       return;
@@ -610,8 +636,8 @@ export function registerGpsDeformationRoutes(
     const prediction = computeGpsDerivedPrediction(displacementMm, timesIso, { hasBaseline: true, qualityScore });
     const trendDiagnostics = computeGpsTrendDiagnostics(displacementMm, timesIso);
     const thresholdForecast = computeGpsPredictionThresholdForecast(
-      prediction?.shortTerm ?? [],
-      prediction?.longTerm ?? [],
+      prediction.shortTerm,
+      prediction.longTerm,
       await loadGpsThresholdConfig(pg),
       timesIso.at(-1) ?? new Date().toISOString()
     );
@@ -624,15 +650,13 @@ export function registerGpsDeformationRoutes(
         qualityScore,
         trendDiagnostics,
         ceemd,
-        prediction: prediction
-          ? {
-              confidence: prediction.confidence,
-              shortTerm: prediction.shortTerm,
-              longTerm: prediction.longTerm,
-              confidenceIntervals: prediction.confidenceIntervals ?? null,
-              thresholdForecast
-            }
-          : null
+        prediction: {
+          confidence: prediction.confidence,
+          shortTerm: prediction.shortTerm,
+          longTerm: prediction.longTerm,
+          confidenceIntervals: prediction.confidenceIntervals,
+          thresholdForecast
+        }
       },
       traceId
     );

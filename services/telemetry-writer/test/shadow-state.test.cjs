@@ -76,3 +76,43 @@ test("compact v2 keeps sparse merge semantics for rollback compatibility", () =>
 
   assert.deepEqual(state.metrics, { tilt_x_deg: 1.2, battery_v: 11.4 });
 });
+
+test("compact v4 replaces stale fields while preserving RTCM runtime evidence", () => {
+  const payload = {
+    schema_version: 1,
+    device_id: "00000000-0000-0000-0000-000000000001",
+    received_ts: "2026-08-03T00:00:02.000Z",
+    seq: 101,
+    metrics: {
+      battery_v: 11.5,
+      rtcm_injection_mode_code: 2,
+      rtcm_session_epoch: 0x12345678,
+      rtcm_lease_remaining_ms: 89999,
+      rtcm_queue_pending: 1,
+      rtcm_queue_high_watermark: 2,
+      rtcm_completed_frames_total: 42,
+      rtcm_injected_frames_total: 41,
+      rtcm_crc_errors_total: 0,
+    },
+    meta: {
+      install_label: "FIELD-NODE-A",
+      legacy_node: "A",
+      compact_payload_version: 4,
+      v4_valid_flags: 0x1fff,
+      rtcm_injection_mode: "live",
+      rtcm_state_flags: 0x07,
+    },
+  };
+
+  const state = telemetryWriterTestHooks.buildShadowState(payload, {
+    metrics: { temperature_c: 25, accel_x_g: 0.1, battery_v: 11.4 },
+    meta: { compact_payload_version: 2, legacy_valid_flags: { imu_ok: 1 } },
+  });
+
+  assert.deepEqual(state.metrics, payload.metrics);
+  assert.equal(state.metrics.temperature_c, undefined);
+  assert.equal(state.metrics.accel_x_g, undefined);
+  assert.equal(state.meta.rtcm_injection_mode, "live");
+  assert.equal(state.meta.rtcm_state_flags, 0x07);
+  assert.equal(state.meta.legacy_valid_flags, undefined);
+});

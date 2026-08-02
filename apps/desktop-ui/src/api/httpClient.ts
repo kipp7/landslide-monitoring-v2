@@ -90,6 +90,8 @@ type V1ListResponse<T> = {
 
 type V1GpsDeformationResponse = {
   deviceId: string;
+  positionProfile?: "rtk-fixed" | "custom";
+  trustedOnly?: boolean;
   points: Array<{
     ts: string;
     distanceMeters: number;
@@ -1055,11 +1057,13 @@ export function createHttpClient(options: HttpClientOptions): ApiClient {
         const days = input.days ?? 7;
         const range = computeTimeRange(days);
         const res = await transport.requestV1<V1GpsDeformationResponse>(
-          `/api/v1/gps/deformations/${encodeURIComponent(input.deviceId)}/series?startTime=${encodeURIComponent(range.startTime)}&endTime=${encodeURIComponent(range.endTime)}&interval=${encodeURIComponent(range.interval)}`
+          `/api/v1/gps/deformations/${encodeURIComponent(input.deviceId)}/series?startTime=${encodeURIComponent(range.startTime)}&endTime=${encodeURIComponent(range.endTime)}&interval=${encodeURIComponent(range.interval)}&latKey=rtk_latitude_deg&lonKey=rtk_longitude_deg&altKey=rtk_altitude_msl_m`
         );
         return {
           deviceId: res.deviceId,
           deviceName: input.deviceId,
+          positionProfile: res.positionProfile ?? "rtk-fixed",
+          trustedOnly: res.trustedOnly ?? true,
           points: res.points.map((point) => ({
             ts: point.ts,
             dispMm: Number((point.distanceMeters * 1000).toFixed(2)),
@@ -1070,10 +1074,10 @@ export function createHttpClient(options: HttpClientOptions): ApiClient {
               ? { verticalMm: Number((point.verticalMeters * 1000).toFixed(2)) }
               : {}),
             ...(typeof point.latitude === "number"
-              ? { latitude: Number(point.latitude.toFixed(6)) }
+              ? { latitude: Number(point.latitude.toFixed(9)) }
               : {}),
             ...(typeof point.longitude === "number"
-              ? { longitude: Number(point.longitude.toFixed(6)) }
+              ? { longitude: Number(point.longitude.toFixed(9)) }
               : {}),
           })),
         };
@@ -1494,9 +1498,9 @@ export function createHttpClient(options: HttpClientOptions): ApiClient {
             body: JSON.stringify({
               pointsCount: 20,
               lookbackDays: 30,
-              latKey: "gps_latitude",
-              lonKey: "gps_longitude",
-              altKey: "gps_altitude",
+              latKey: "rtk_latitude_deg",
+              lonKey: "rtk_longitude_deg",
+              altKey: "rtk_altitude_msl_m",
               ...(input.persist === undefined ? {} : { persist: input.persist }),
             }),
           })

@@ -7,6 +7,8 @@ param(
   [string]$GnssRtcmInjectionMode = "disabled",
   [ValidateSet("hardware", "simulated")]
   [string]$FieldSensorMode = "hardware",
+  [ValidateSet(3, 4)]
+  [int]$CompactVersion = 3,
   [ValidateRange(800000, 1200000)]
   [int]$BatteryCalibrationGainPpm = 1000000,
   [ValidateRange(-2000, 2000)]
@@ -25,7 +27,7 @@ $sampleRelative = "vendor\isoftstone\rk2206\samples\xl01_landslide_monitor_v1.1"
 $sampleRoot = Join-Path $SdkRoot $sampleRelative
 $productOut = Join-Path $SdkRoot "out\rk2206\isoftstone-rk2206"
 if (-not $ArtifactDirectory) {
-  $ArtifactDirectory = Join-Path $repoRoot ("artifacts\firmware\rk2206-xl01-compact-v3-{0}" -f $FieldSensorMode)
+  $ArtifactDirectory = Join-Path $repoRoot ("artifacts\firmware\rk2206-xl01-compact-v{0}-{1}" -f $CompactVersion, $FieldSensorMode)
 }
 $artifactRoot = [System.IO.Path]::GetFullPath($ArtifactDirectory)
 $backupRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("xls1-compact-sdk-backup-" + [guid]::NewGuid().ToString("N"))
@@ -203,6 +205,28 @@ function Set-GnssRtcmInjectionMode {
   [System.IO.File]::WriteAllText($configPath, $text, [System.Text.UTF8Encoding]::new($false))
 }
 
+function Set-CompactTelemetryVersion {
+  $configPath = Join-Path $sampleRoot "config\app_config.h"
+  $text = [System.IO.File]::ReadAllText($configPath)
+  $text = Set-SingleTokenMacro `
+    -Text $text `
+    -Macro "TELEMETRY_PAYLOAD_FORMAT" `
+    -Value ("TELEMETRY_PAYLOAD_FORMAT_COMPACT_V{0}" -f $CompactVersion)
+  $text = Set-SingleMacro `
+    -Text $text `
+    -Macro "FIRMWARE_SAMPLE_VERSION" `
+    -Value ("v1.3-um220-rs485-rtk-compact-v{0}" -f $CompactVersion)
+  [System.IO.File]::WriteAllText($configPath, $text, [System.Text.UTF8Encoding]::new($false))
+
+  $mainPath = Join-Path $sampleRoot "main\landslide_main.c"
+  $mainText = [System.IO.File]::ReadAllText($mainPath)
+  $mainText = Set-SingleMacro `
+    -Text $mainText `
+    -Macro "FW_RX_DIAG_MARKER" `
+    -Value ("fw-rk2206-rtk-compact-v{0}-runtime-20260803" -f $CompactVersion)
+  [System.IO.File]::WriteAllText($mainPath, $mainText, [System.Text.UTF8Encoding]::new($false))
+}
+
 function Set-FieldSensorMode {
   $modeToken = switch ($FieldSensorMode) {
     "hardware" { "FIELD_SENSOR_SOURCE_HARDWARE" }
@@ -253,8 +277,8 @@ function Copy-BuildOutputs {
     }
   }
 
-  $imageTarget = Join-Path $artifactRoot ("rk2206-node-{0}-xls1-compact-v3-{1}.img" -f $Node.Label, $FieldSensorMode)
-  $liteOsTarget = Join-Path $artifactRoot ("rk2206-node-{0}-xls1-compact-v3-{1}.bin" -f $Node.Label, $FieldSensorMode)
+  $imageTarget = Join-Path $artifactRoot ("rk2206-node-{0}-xls1-compact-v{1}-{2}.img" -f $Node.Label, $CompactVersion, $FieldSensorMode)
+  $liteOsTarget = Join-Path $artifactRoot ("rk2206-node-{0}-xls1-compact-v{1}-{2}.bin" -f $Node.Label, $CompactVersion, $FieldSensorMode)
   Copy-Item -LiteralPath $imageSource -Destination $imageTarget -Force
   Copy-Item -LiteralPath $liteOsSource -Destination $liteOsTarget -Force
   if (Test-Path -LiteralPath $loaderSource -PathType Leaf) {
@@ -275,6 +299,8 @@ foreach ($pattern in @(
     "rk2206-node-*-xls1-compact-v2-*.img",
     "rk2206-node-*-xls1-compact-v3-*.bin",
     "rk2206-node-*-xls1-compact-v3-*.img",
+    "rk2206-node-*-xls1-compact-v4-*.bin",
+    "rk2206-node-*-xls1-compact-v4-*.img",
     "rk2206_db_loader.bin",
     "manifest.json"
   )) {
@@ -312,6 +338,7 @@ try {
   }
 
   Set-GnssRtcmInjectionMode
+  Set-CompactTelemetryVersion
   Set-FieldSensorMode
 
   foreach ($node in $nodes | Where-Object { $_.Label -in $NodeLabels }) {
@@ -350,10 +377,13 @@ try {
   $globalCalibrationOffsetMv = if ($resolvedBatteryCalibrationFile) { $null } else { $BatteryCalibrationOffsetMv }
   $manifest = [ordered]@{
     schemaVersion = 1
-    profile = "rk2206-xl01-compact-v3-$FieldSensorMode"
+    profile = "rk2206-xl01-compact-v$CompactVersion-$FieldSensorMode"
+    compactVersion = $CompactVersion
     sourceCommit = $sourceCommit
     sourceDirty = $sourceDirty
     gnssRtcmInjectionMode = $GnssRtcmInjectionMode
+    rtcmRuntimeBootMode = "disabled"
+    rtcmRuntimeControlEnabled = $GnssRtcmInjectionMode -ne "disabled"
     fieldSensorMode = $FieldSensorMode
     fieldSensorTruth = if ($FieldSensorMode -eq "simulated") { "RS485 values simulated; GPS and battery are real" } else { "RS485, GPS and battery are real" }
     rs485HardwareInitialized = $FieldSensorMode -eq "hardware"
@@ -370,10 +400,10 @@ try {
       calibrationByNode = $calibrationManifest
       socMethod = "trimmed ADC mean + calibrated voltage + IIR + 3S voltage curve"
     }
-    firmwareMarker = Get-QuotedMacroValue -Path (Join-Path $sourceRoot "main\landslide_main.c") -Macro "FW_RX_DIAG_MARKER"
-    sampleVersion = Get-QuotedMacroValue -Path (Join-Path $sourceRoot "config\app_config.h") -Macro "FIRMWARE_SAMPLE_VERSION"
-    compactPayloadBytes = 95
-    fieldLinkWireBytes = 113
+    firmwareMarker = Get-QuotedMacroValue -Path (Join-Path $sampleRoot "main\landslide_main.c") -Macro "FW_RX_DIAG_MARKER"
+    sampleVersion = Get-QuotedMacroValue -Path (Join-Path $sampleRoot "config\app_config.h") -Macro "FIRMWARE_SAMPLE_VERSION"
+    compactPayloadBytes = if ($CompactVersion -eq 4) { 139 } else { 95 }
+    fieldLinkWireBytes = if ($CompactVersion -eq 4) { 157 } else { 113 }
     compactPollCommandBytes = 10
     compactPollWireBytes = 28
     nodeSlotMs = 340

@@ -289,6 +289,55 @@ static GnssRtcmReassemblyStatusV3 FeedInjectionFrame(
     return status;
 }
 
+static void ArmInjection(uint8_t mode, uint32_t session_epoch, uint64_t now_ms)
+{
+    GnssRtcmModeCommand command;
+    memset(&command, 0, sizeof(command));
+    command.target_mask = GNSS_V3_TARGET_ALL_NODES;
+    command.mode = mode;
+    command.session_epoch = session_epoch;
+    command.lease_seconds = 90U;
+    assert(GnssRtcmInjection_ConfigureRuntime(&command, now_ms) == 0);
+}
+
+static void TestRuntimeModeProtocol(void)
+{
+    GnssRtcmModeCommand command;
+    GnssRtcmRuntimeStatus runtime;
+
+    assert(GnssRtcmModeCommand_Decode(
+        "G3M107212345678005A", GNSS_RTCM_MODE_COMMAND_BYTES, &command
+    ) == 0);
+    assert(command.target_mask == GNSS_V3_TARGET_ALL_NODES);
+    assert(command.mode == GNSS_RTCM_INJECTION_LIVE);
+    assert(command.session_epoch == 0x12345678U);
+    assert(command.lease_seconds == 90U);
+    assert(GnssRtcmModeCommand_Decode(
+        "G3M1072123456780001", GNSS_RTCM_MODE_COMMAND_BYTES, NULL
+    ) == -1);
+    assert(GnssRtcmModeCommand_Decode(
+        "G3M107312345678005A", GNSS_RTCM_MODE_COMMAND_BYTES, NULL
+    ) == -1);
+
+    assert(GnssRtcmInjection_Init(1U) == 0);
+    GnssRtcmInjection_GetRuntimeStatus(1000U, &runtime);
+    assert(runtime.mode == GNSS_RTCM_INJECTION_DISABLED);
+    assert(runtime.session_epoch == 0U && runtime.lease_remaining_ms == 0U);
+    assert((runtime.state_flags & GNSS_RTCM_STATE_READY) != 0U);
+
+    ArmInjection(GNSS_RTCM_INJECTION_PROBE, 0x12345678U, 1000U);
+    GnssRtcmInjection_GetRuntimeStatus(1500U, &runtime);
+    assert(runtime.mode == GNSS_RTCM_INJECTION_PROBE);
+    assert(runtime.session_epoch == 0x12345678U);
+    assert(runtime.lease_remaining_ms == 89500U);
+    assert((runtime.state_flags & (GNSS_RTCM_STATE_SESSION_ARMED |
+            GNSS_RTCM_STATE_LEASE_VALID)) != 0U);
+
+    GnssRtcmInjection_GetRuntimeStatus(91000U, &runtime);
+    assert(runtime.mode == GNSS_RTCM_INJECTION_DISABLED);
+    assert(runtime.session_epoch == 0U);
+}
+
 static void TestBoundedInjectionQueue(void)
 {
     uint8_t frame[RTCM_FRAME_BYTES];
@@ -302,6 +351,8 @@ static void TestBoundedInjectionQueue(void)
     assert(GNSS_RTCM_QUEUE_DEPTH == 4U);
     assert(GnssRtcmInjection_Init(0U) == -1);
     assert(GnssRtcmInjection_Init(1U) == 0);
+    assert(FeedInjectionFrame(frame, 51U, 1U, 900U, -1) == GNSS_RTCM_REASSEMBLY_REJECTED);
+    ArmInjection(GNSS_RTCM_INJECTION_PROBE, 51U, 950U);
     assert(FeedInjectionFrame(frame, 51U, 1U, 1000U, -1) == GNSS_RTCM_REASSEMBLY_COMPLETE);
     assert(FeedInjectionFrame(frame, 51U, 2U, 1010U, -1) == GNSS_RTCM_REASSEMBLY_COMPLETE);
     assert(FeedInjectionFrame(frame, 51U, 3U, 1020U, -1) == GNSS_RTCM_REASSEMBLY_COMPLETE);
@@ -328,7 +379,7 @@ static void TestBoundedInjectionQueue(void)
     assert(dequeued_bytes == RTCM_FRAME_BYTES);
     assert(message_type == 1124U);
     assert(memcmp(dequeued, frame, RTCM_FRAME_BYTES) == 0);
-    GnssRtcmInjection_RecordProbe(dequeued_bytes);
+    GnssRtcmInjection_RecordProbe(dequeued_bytes, 1100U);
 
     assert(GnssRtcmInjection_TryDequeue(
         1100U, dequeued, sizeof(dequeued), &dequeued_bytes, &message_type
@@ -360,6 +411,7 @@ static void TestInjectionCrcCounter(void)
 
     BuildRtcm(frame);
     assert(GnssRtcmInjection_Init(1U) == 0);
+    ArmInjection(GNSS_RTCM_INJECTION_PROBE, 61U, 1900U);
     assert(FeedInjectionFrame(frame, 61U, 1U, 2000U, 2) == GNSS_RTCM_REASSEMBLY_REJECTED);
     GnssRtcmInjection_GetStats(&stats);
     assert(stats.completed_frames == 0U);
@@ -373,6 +425,7 @@ int main(void)
     TestCoreGoldenVector();
     TestRtcmReassembly();
     TestFreshnessAndSessionRejection();
+    TestRuntimeModeProtocol();
     TestBoundedInjectionQueue();
     TestInjectionCrcCounter();
     printf("gnss_transport_v3_host_test passed reassembler_bytes=%u queue_bytes=%u\n",

@@ -55,3 +55,50 @@ test("compact polling rejects an inverted empty-response backoff range", () => {
     /SOUTHBOUND_POLLING_EMPTY_BACKOFF_MAX_MS/
   );
 });
+
+test("NTRIP requires complete credentials and framed field transport", () => {
+  assert.throws(
+    () =>
+      loadConfigFromEnv({
+        MQTT_URL: "mqtt://127.0.0.1:1883",
+        NTRIP_ENABLED: "true",
+        NTRIP_HOST: "203.0.113.1",
+        NTRIP_MOUNTPOINT: "AUTO",
+        NTRIP_USERNAME: "user"
+      }),
+    /ntripPassword/u
+  );
+  assert.throws(
+    () =>
+      loadConfigFromEnv({
+        MQTT_URL: "mqtt://127.0.0.1:1883",
+        NTRIP_ENABLED: "true",
+        NTRIP_HOST: "203.0.113.1",
+        NTRIP_MOUNTPOINT: "AUTO",
+        NTRIP_USERNAME: "user",
+        NTRIP_PASSWORD: "password",
+        FIELD_LINK_MODE: "raw-json"
+      }),
+    /FIELD_LINK_MODE=cobs-crc-v1/u
+  );
+});
+
+test("NTRIP validates coordinate frame and reconnect delay range", () => {
+  assert.throws(
+    () =>
+      loadConfigFromEnv({
+        MQTT_URL: "mqtt://127.0.0.1:1883",
+        NTRIP_COORDINATE_FRAME: "GCJ02"
+      }),
+    /ntripCoordinateFrame/u
+  );
+  assert.throws(
+    () =>
+      loadConfigFromEnv({
+        MQTT_URL: "mqtt://127.0.0.1:1883",
+        NTRIP_RECONNECT_BASE_DELAY_MS: "5000",
+        NTRIP_RECONNECT_MAX_DELAY_MS: "1000"
+      }),
+    /NTRIP_RECONNECT_MAX_DELAY_MS/u
+  );
+});

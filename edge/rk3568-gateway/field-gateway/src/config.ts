@@ -70,6 +70,25 @@ const configSchema = z
     southboundPollingSuppressAckPublish: envBoolean(true),
     southboundPollingEmptyBackoffInitialMs: z.coerce.number().int().positive().default(2000),
     southboundPollingEmptyBackoffMaxMs: z.coerce.number().int().positive().default(30000),
+    ntripEnabled: envBoolean(false),
+    ntripHost: optionalNonEmptyString(),
+    ntripPort: z.coerce.number().int().min(1).max(65535).default(8003),
+    ntripMountpoint: optionalNonEmptyString(),
+    ntripUsername: optionalNonEmptyString(),
+    ntripPassword: optionalNonEmptyString(),
+    ntripCoordinateFrame: z.enum(["CGCS2000", "WGS84"]).default("CGCS2000"),
+    ntripGgaSourceNode: z.enum(["A", "B", "C"]).default("A"),
+    ntripGgaIntervalMs: z.coerce.number().int().min(1000).max(60000).default(10000),
+    ntripConnectTimeoutMs: z.coerce.number().int().min(1000).max(60000).default(10000),
+    ntripReconnectBaseDelayMs: z.coerce.number().int().min(250).max(60000).default(1000),
+    ntripReconnectMaxDelayMs: z.coerce.number().int().min(1000).max(300000).default(30000),
+    rtcmRuntimeMode: z.enum(["probe", "live"]).default("live"),
+    rtcmTargetMask: z.coerce.number().int().min(1).max(7).default(7),
+    rtcmSessionLeaseSeconds: z.coerce.number().int().min(15).max(300).default(90),
+    rtcmSessionRefreshMs: z.coerce.number().int().min(5000).max(120000).default(30000),
+    rtcmDispatchIntervalMs: z.coerce.number().int().min(50).max(2000).default(160),
+    rtcmFragmentDataBytes: z.coerce.number().int().min(64).max(512).default(160),
+    rtcmObservationIntervalMs: z.coerce.number().int().min(500).max(5000).default(1000),
     replayIntervalMs: z.coerce.number().int().positive().default(5000),
     healthEmitIntervalMs: z.coerce.number().int().positive().default(5000),
     serialReconnectBaseDelayMs: z.coerce.number().int().positive().default(5000),
@@ -125,6 +144,46 @@ const configSchema = z
         message:
           "SOUTHBOUND_POLLING_EMPTY_BACKOFF_MAX_MS must be greater than or equal to SOUTHBOUND_POLLING_EMPTY_BACKOFF_INITIAL_MS"
       });
+    }
+
+    if (data.ntripReconnectMaxDelayMs < data.ntripReconnectBaseDelayMs) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["ntripReconnectMaxDelayMs"],
+        message: "NTRIP_RECONNECT_MAX_DELAY_MS must be greater than or equal to NTRIP_RECONNECT_BASE_DELAY_MS"
+      });
+    }
+
+    if (data.rtcmSessionRefreshMs >= data.rtcmSessionLeaseSeconds * 1000) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["rtcmSessionRefreshMs"],
+        message: "RTCM_SESSION_REFRESH_MS must be shorter than the session lease"
+      });
+    }
+
+    if (data.ntripEnabled) {
+      for (const [field, value] of [
+        ["ntripHost", data.ntripHost],
+        ["ntripMountpoint", data.ntripMountpoint],
+        ["ntripUsername", data.ntripUsername],
+        ["ntripPassword", data.ntripPassword]
+      ] as const) {
+        if (!value) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [field],
+            message: `${field} is required when NTRIP_ENABLED=true`
+          });
+        }
+      }
+      if (data.fieldLinkMode !== "cobs-crc-v1") {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["fieldLinkMode"],
+          message: "NTRIP RTCM downlink requires FIELD_LINK_MODE=cobs-crc-v1"
+        });
+      }
     }
 
     if (data.southboundPollingMode === "compact-broadcast-v1" && data.fieldLinkMode !== "cobs-crc-v1") {
@@ -218,6 +277,25 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
     southboundPollingSuppressAckPublish: env.SOUTHBOUND_POLLING_SUPPRESS_ACK_PUBLISH,
     southboundPollingEmptyBackoffInitialMs: env.SOUTHBOUND_POLLING_EMPTY_BACKOFF_INITIAL_MS,
     southboundPollingEmptyBackoffMaxMs: env.SOUTHBOUND_POLLING_EMPTY_BACKOFF_MAX_MS,
+    ntripEnabled: env.NTRIP_ENABLED,
+    ntripHost: env.NTRIP_HOST,
+    ntripPort: env.NTRIP_PORT,
+    ntripMountpoint: env.NTRIP_MOUNTPOINT,
+    ntripUsername: env.NTRIP_USERNAME,
+    ntripPassword: env.NTRIP_PASSWORD,
+    ntripCoordinateFrame: env.NTRIP_COORDINATE_FRAME,
+    ntripGgaSourceNode: env.NTRIP_GGA_SOURCE_NODE,
+    ntripGgaIntervalMs: env.NTRIP_GGA_INTERVAL_MS,
+    ntripConnectTimeoutMs: env.NTRIP_CONNECT_TIMEOUT_MS,
+    ntripReconnectBaseDelayMs: env.NTRIP_RECONNECT_BASE_DELAY_MS,
+    ntripReconnectMaxDelayMs: env.NTRIP_RECONNECT_MAX_DELAY_MS,
+    rtcmRuntimeMode: env.RTCM_RUNTIME_MODE,
+    rtcmTargetMask: env.RTCM_TARGET_MASK,
+    rtcmSessionLeaseSeconds: env.RTCM_SESSION_LEASE_SECONDS,
+    rtcmSessionRefreshMs: env.RTCM_SESSION_REFRESH_MS,
+    rtcmDispatchIntervalMs: env.RTCM_DISPATCH_INTERVAL_MS,
+    rtcmFragmentDataBytes: env.RTCM_FRAGMENT_DATA_BYTES,
+    rtcmObservationIntervalMs: env.RTCM_OBSERVATION_INTERVAL_MS,
     replayIntervalMs: env.REPLAY_INTERVAL_MS,
     healthEmitIntervalMs: env.HEALTH_EMIT_INTERVAL_MS,
     serialReconnectBaseDelayMs: env.SERIAL_RECONNECT_BASE_DELAY_MS,

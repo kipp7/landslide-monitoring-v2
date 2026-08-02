@@ -7,6 +7,7 @@ import type { AppConfig } from "../config";
 import { fail, ok } from "../http";
 import type { PgPool } from "../postgres";
 import { queryOne, withPgClient } from "../postgres";
+import { isProfessionalRtkPosition, PROFESSIONAL_RTK_POSITION_KEYS } from "./gps-position-profile";
 
 const deviceIdSchema = z.string().uuid();
 
@@ -14,9 +15,9 @@ const autoEstablishBodySchema = z
   .object({
     pointsCount: z.number().int().positive().max(5000).default(20),
     lookbackDays: z.number().int().positive().max(365).default(30),
-    latKey: z.string().min(1).default("gps_latitude"),
-    lonKey: z.string().min(1).default("gps_longitude"),
-    altKey: z.string().min(1).optional(),
+    latKey: z.string().min(1).default(PROFESSIONAL_RTK_POSITION_KEYS.latitude),
+    lonKey: z.string().min(1).default(PROFESSIONAL_RTK_POSITION_KEYS.longitude),
+    altKey: z.string().min(1).optional().default(PROFESSIONAL_RTK_POSITION_KEYS.altitude),
     persist: z.boolean().default(true)
   })
   .strict()
@@ -25,15 +26,15 @@ const autoEstablishBodySchema = z
 const qualityCheckQuerySchema = z.object({
   pointsCount: z.coerce.number().int().positive().max(5000).default(200),
   lookbackDays: z.coerce.number().int().positive().max(365).default(30),
-  latKey: z.string().min(1).default("gps_latitude"),
-  lonKey: z.string().min(1).default("gps_longitude"),
-  altKey: z.string().min(1).optional()
+  latKey: z.string().min(1).default(PROFESSIONAL_RTK_POSITION_KEYS.latitude),
+  lonKey: z.string().min(1).default(PROFESSIONAL_RTK_POSITION_KEYS.longitude),
+  altKey: z.string().min(1).optional().default(PROFESSIONAL_RTK_POSITION_KEYS.altitude)
 });
 
 const availableDevicesQuerySchema = z.object({
   lookbackDays: z.coerce.number().int().positive().max(365).default(30),
-  latKey: z.string().min(1).default("gps_latitude"),
-  lonKey: z.string().min(1).default("gps_longitude"),
+  latKey: z.string().min(1).default(PROFESSIONAL_RTK_POSITION_KEYS.latitude),
+  lonKey: z.string().min(1).default(PROFESSIONAL_RTK_POSITION_KEYS.longitude),
   limit: z.coerce.number().int().positive().max(50000).default(10000)
 });
 
@@ -310,6 +311,18 @@ async function fetchLatestGpsPoints(
   const end = new Date();
   const start = new Date(Date.now() - lookbackDays * 86400 * 1000);
   const sensorKeys = keys.altKey ? [keys.latKey, keys.lonKey, keys.altKey] : [keys.latKey, keys.lonKey];
+  const trustedOnly = isProfessionalRtkPosition(keys);
+  const trustedTimestampClause = trustedOnly
+    ? `AND received_ts IN (
+        SELECT received_ts
+        FROM ${config.clickhouseDatabase}.${config.clickhouseTable}
+        WHERE device_id = {deviceId:String}
+          AND sensor_key = {trustedKey:String}
+          AND value_bool = 1
+          AND received_ts >= {start:DateTime64(3, 'UTC')}
+          AND received_ts <= {end:DateTime64(3, 'UTC')}
+      )`
+    : "";
 
   type Row = { ts: string; lat: number | null; lon: number | null; alt: number | null };
 
@@ -324,6 +337,7 @@ async function fetchLatestGpsPoints(
       AND sensor_key IN {sensorKeys:Array(String)}
       AND received_ts >= {start:DateTime64(3, 'UTC')}
       AND received_ts <= {end:DateTime64(3, 'UTC')}
+      ${trustedTimestampClause}
     GROUP BY received_ts
     HAVING isNotNull(lat) AND isNotNull(lon)
     ORDER BY received_ts DESC
@@ -338,6 +352,7 @@ async function fetchLatestGpsPoints(
       latKey: keys.latKey,
       lonKey: keys.lonKey,
       altKey: keys.altKey ?? "__no_alt_key__",
+      trustedKey: PROFESSIONAL_RTK_POSITION_KEYS.trusted,
       start: toClickhouseDateTime64Utc(start),
       end: toClickhouseDateTime64Utc(end),
       limit
@@ -584,7 +599,7 @@ async function handleAutoEstablish(
       pointsUsed: points.length,
       persisted: body.persist,
       lookbackDays: body.lookbackDays,
-      keys: { latKey: body.latKey, lonKey: body.lonKey, altKey: body.altKey ?? null },
+      keys: { latKey: body.latKey, lonKey: body.lonKey, altKey: body.altKey },
       baseline,
       statistics: {
         latStdDeg: latStd,
@@ -709,7 +724,7 @@ async function handleQualityCheck(
     {
       deviceId,
       lookbackDays: q.lookbackDays,
-      keys: { latKey: q.latKey, lonKey: q.lonKey, altKey: q.altKey ?? null },
+      keys: { latKey: q.latKey, lonKey: q.lonKey, altKey: q.altKey },
       baseline: {
         ...baseline,
         method: baselineRow.method,

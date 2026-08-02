@@ -8,6 +8,8 @@ param(
   [Parameter(Mandatory = $true)]
   [ValidateSet("disabled", "probe", "live")]
   [string]$ExpectedGnssRtcmInjectionMode,
+  [ValidateSet(3, 4)]
+  [int]$ExpectedCompactVersion = 3,
   [Parameter(Mandatory = $true)]
   [ValidateSet("default-calibration", "field-calibrated")]
   [string]$ExpectedBatteryCalibrationState,
@@ -93,8 +95,9 @@ try {
 }
 
 foreach ($property in @(
-    "schemaVersion", "profile", "sourceCommit", "sourceDirty",
+    "schemaVersion", "profile", "compactVersion", "sourceCommit", "sourceDirty",
     "gnssRtcmInjectionMode", "fieldSensorMode", "fieldSensorTruth",
+    "rtcmRuntimeBootMode", "rtcmRuntimeControlEnabled",
     "rs485HardwareInitialized", "battery", "firmwareMarker",
     "sampleVersion", "compactPayloadBytes", "fieldLinkWireBytes",
     "compactPollCommandBytes", "compactPollWireBytes", "nodeSlotMs", "files"
@@ -105,8 +108,10 @@ foreach ($property in @(
 Assert-ReleaseCondition -Condition ($manifest.schemaVersion -eq 1) `
   -Message "Unsupported release manifest schemaVersion: $($manifest.schemaVersion)"
 Assert-ReleaseCondition `
-  -Condition ($manifest.profile -eq "rk2206-xl01-compact-v3-$ExpectedFieldSensorMode") `
+  -Condition ($manifest.profile -eq "rk2206-xl01-compact-v$ExpectedCompactVersion-$ExpectedFieldSensorMode") `
   -Message "Release profile does not match expected field sensor mode"
+Assert-ReleaseCondition -Condition ($manifest.compactVersion -eq $ExpectedCompactVersion) `
+  -Message "Compact telemetry version mismatch: expected $ExpectedCompactVersion, found $($manifest.compactVersion)"
 Assert-ReleaseCondition -Condition ($manifest.sourceCommit -match '^[0-9a-f]{40}$') `
   -Message "Release sourceCommit is not a full lowercase Git commit"
 Assert-ReleaseCondition -Condition ($manifest.sourceDirty -is [bool] -and -not $manifest.sourceDirty) `
@@ -114,6 +119,13 @@ Assert-ReleaseCondition -Condition ($manifest.sourceDirty -is [bool] -and -not $
 Assert-ReleaseCondition `
   -Condition ($manifest.gnssRtcmInjectionMode -eq $ExpectedGnssRtcmInjectionMode) `
   -Message "RTCM mode mismatch: expected $ExpectedGnssRtcmInjectionMode, found $($manifest.gnssRtcmInjectionMode)"
+Assert-ReleaseCondition -Condition ($manifest.rtcmRuntimeBootMode -eq "disabled") `
+  -Message "RTCM runtime must start disabled on every boot"
+$expectRuntimeControl = $ExpectedGnssRtcmInjectionMode -ne "disabled"
+Assert-ReleaseCondition -Condition (
+    $manifest.rtcmRuntimeControlEnabled -is [bool] -and
+    $manifest.rtcmRuntimeControlEnabled -eq $expectRuntimeControl
+  ) -Message "RTCM runtime control capability is inconsistent with the compiled mode"
 Assert-ReleaseCondition -Condition ($manifest.fieldSensorMode -eq $ExpectedFieldSensorMode) `
   -Message "Field sensor mode mismatch: expected $ExpectedFieldSensorMode, found $($manifest.fieldSensorMode)"
 
@@ -130,9 +142,11 @@ Assert-ReleaseCondition `
     $manifest.rs485HardwareInitialized -eq $expectHardware) `
   -Message "rs485HardwareInitialized is inconsistent with fieldSensorMode"
 
+$expectedPayloadBytes = if ($ExpectedCompactVersion -eq 4) { 139 } else { 95 }
+$expectedWireBytes = if ($ExpectedCompactVersion -eq 4) { 157 } else { 113 }
 foreach ($fixedField in @(
-    @{ Name = "compactPayloadBytes"; Value = 95 },
-    @{ Name = "fieldLinkWireBytes"; Value = 113 },
+    @{ Name = "compactPayloadBytes"; Value = $expectedPayloadBytes },
+    @{ Name = "fieldLinkWireBytes"; Value = $expectedWireBytes },
     @{ Name = "compactPollCommandBytes"; Value = 10 },
     @{ Name = "compactPollWireBytes"; Value = 28 },
     @{ Name = "nodeSlotMs"; Value = 340 }
@@ -366,8 +380,8 @@ if ($expectCalibrated) {
 
 $expectedFiles = @("rk2206_db_loader.bin")
 foreach ($node in $NodeLabels) {
-  $expectedFiles += "rk2206-node-$node-xls1-compact-v3-$ExpectedFieldSensorMode.bin"
-  $expectedFiles += "rk2206-node-$node-xls1-compact-v3-$ExpectedFieldSensorMode.img"
+  $expectedFiles += "rk2206-node-$node-xls1-compact-v$ExpectedCompactVersion-$ExpectedFieldSensorMode.bin"
+  $expectedFiles += "rk2206-node-$node-xls1-compact-v$ExpectedCompactVersion-$ExpectedFieldSensorMode.img"
 }
 $manifestEntries = @($manifest.files)
 $manifestNames = @($manifestEntries | ForEach-Object { [string]$_.name })
@@ -424,7 +438,17 @@ $modeForbidden = if ($expectHardware) {
 
 foreach ($node in $NodeLabels) {
   foreach ($extension in @("bin", "img")) {
-    $path = Join-Path $artifactRoot "rk2206-node-$node-xls1-compact-v3-$ExpectedFieldSensorMode.$extension"
+    $path = Join-Path $artifactRoot "rk2206-node-$node-xls1-compact-v$ExpectedCompactVersion-$ExpectedFieldSensorMode.$extension"
+    $compactMarker = if ($ExpectedCompactVersion -eq 4) {
+      "Compact v4 (139-byte field + RTK + injection evidence)"
+    } else {
+      "Compact v3 (95-byte field + RTK payload)"
+    }
+    $capabilityMarker = switch ($ExpectedGnssRtcmInjectionMode) {
+      "disabled" { "boot=DISABLED capability=DISABLED" }
+      "probe" { "boot=DISABLED capability=PROBE" }
+      "live" { "boot=DISABLED capability=LIVE" }
+    }
     $required = @(
       $nodeIds[$node],
       "FIELD-NODE-$node",
@@ -432,9 +456,10 @@ foreach ($node in $NodeLabels) {
       $manifest.sampleVersion,
       "EUART2_M1 PB2/PB3",
       "PC0/SARADC-ch0 input-only",
-      "Compact v3 (95-byte field + RTK payload)",
+      $compactMarker,
       $sensorMarker,
-      $rtcmMarker
+      $rtcmMarker,
+      $capabilityMarker
     ) + $modeRequired
     $forbidden = @($modeForbidden)
     foreach ($otherNode in @("A", "B", "C") | Where-Object { $_ -ne $node }) {
@@ -446,9 +471,10 @@ foreach ($node in $NodeLabels) {
 }
 
 Write-Host (
-  "RELEASE_SAFETY_OK path={0} nodes={1} sensor_mode={2} rtcm={3} battery={4} final_acceptance={5} source={6} files={7}" -f `
+  "RELEASE_SAFETY_OK path={0} nodes={1} compact=v{2} sensor_mode={3} rtcm={4} battery={5} final_acceptance={6} source={7} files={8}" -f `
     $artifactRoot,
     ($NodeLabels -join ","),
+    $ExpectedCompactVersion,
     $ExpectedFieldSensorMode,
     $ExpectedGnssRtcmInjectionMode,
     $ExpectedBatteryCalibrationState,

@@ -26,6 +26,7 @@ const {
   encodeGnssCoreV3,
   encodeGnssProbeStatsQueryV1,
   encodeGnssRtcmAckQueryV1,
+  encodeGnssRtcmModeCommandV1,
   encodeRtcmFragmentV3,
   fragmentRtcmFrameV3,
   gnssRtcmAckReportsCompleted,
@@ -277,6 +278,29 @@ test("RTCM ACK V1 reports the recent completed-sequence bitmap", () => {
   assert.equal(decoded.completedBitmap, 0xa55a);
   assert.equal(gnssRtcmAckReportsCompleted(decoded, 0x10203040, 116), true);
   assert.equal(gnssRtcmAckReportsCompleted(decoded, 0x10203040, 117), false);
+});
+
+test("RTCM runtime command arms one broadcast session with a bounded lease", () => {
+  const command = encodeGnssRtcmModeCommandV1({
+    targetMask: GNSS_V3_TARGET_ALL_NODES,
+    mode: 2,
+    sessionEpoch: 0x12345678,
+    leaseSeconds: 90
+  });
+  assert.equal(command.length, 19);
+  assert.equal(command.toString("ascii"), "G3M107212345678005A");
+  assert.equal(
+    encodeGnssRtcmModeCommandV1({ targetMask: 7, mode: 0, sessionEpoch: 0, leaseSeconds: 0 }).toString("ascii"),
+    "G3M1070000000000000"
+  );
+  assert.throws(
+    () => encodeGnssRtcmModeCommandV1({ targetMask: 7, mode: 2, sessionEpoch: 0, leaseSeconds: 90 }),
+    /non-zero session/u
+  );
+  assert.throws(
+    () => encodeGnssRtcmModeCommandV1({ targetMask: 7, mode: 2, sessionEpoch: 1, leaseSeconds: 14 }),
+    /15\.\.300/u
+  );
 });
 
 test("GNSS_CORE V3 preserves nanodegrees and survives the binary field-link", () => {

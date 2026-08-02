@@ -49,7 +49,7 @@ static FieldLinkFrameDecoder g_field_link_decoder = {0};
 static FieldLinkRxStats g_field_link_rx_stats = {0};
 static unsigned int g_field_link_tx_sequence = 0;
 
-#if ENABLE_GPS && GNSS_RTCM_INJECTION_MODE != GNSS_RTCM_INJECTION_DISABLED
+#if ENABLE_GPS && GNSS_RTCM_INJECTION_CAPABILITY != GNSS_RTCM_INJECTION_DISABLED
 static uint8_t XL01_LocalNodeNumber(void)
 {
     const DeviceIdentity *identity = DeviceIdentity_Get();
@@ -558,7 +558,7 @@ static void HandleFieldLinkMessage(const FieldLinkFrameMessage *message, Statist
 #endif
 
     if (message->type == FIELD_LINK_FRAME_TYPE_RTCM) {
-#if ENABLE_GPS && GNSS_RTCM_INJECTION_MODE != GNSS_RTCM_INJECTION_DISABLED
+#if ENABLE_GPS && GNSS_RTCM_INJECTION_CAPABILITY != GNSS_RTCM_INJECTION_DISABLED
         GnssRtcmInjection_AcceptFragment(
             (const uint8_t *)message->payload,
             (uint16_t)message->payload_len,
@@ -576,6 +576,9 @@ static void HandleFieldLinkMessage(const FieldLinkFrameMessage *message, Statist
             ) == 0 ||
             GnssRtcmAckQueryV1_Decode(
                 message->payload, message->payload_len, NULL, NULL
+            ) == 0 ||
+            GnssRtcmModeCommand_Decode(
+                message->payload, message->payload_len, NULL
             ) == 0) {
             if (EnqueuePlatformCommandPayload(message->payload, message->payload_len, stats) > 0) {
 #if PLATFORM_COMMAND_RX_LOG_MODE
@@ -770,7 +773,7 @@ void XL01_Init(void)
     ResetPlatformCommandAssembly();
     FieldLinkFrameDecoder_Init(&g_field_link_decoder);
     FieldLinkRxStats_Init(&g_field_link_rx_stats);
-#if ENABLE_GPS && GNSS_RTCM_INJECTION_MODE != GNSS_RTCM_INJECTION_DISABLED
+#if ENABLE_GPS && GNSS_RTCM_INJECTION_CAPABILITY != GNSS_RTCM_INJECTION_DISABLED
     if (GnssRtcmInjection_Init(XL01_LocalNodeNumber()) != 0) {
         printf("[ERROR] RTCM injection queue init failed; corrections stay disabled\n");
     }

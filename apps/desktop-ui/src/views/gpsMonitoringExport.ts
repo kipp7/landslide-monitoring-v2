@@ -6,8 +6,6 @@ export type GpsMonitoringExportRow = {
   horizontal: number;
   vertical: number | null;
   velocityMmH: number;
-  temperature: number | null;
-  humidity: number | null;
   confidence: number | null;
   riskLevel: number;
   lat: number | null;
@@ -47,15 +45,13 @@ function csvCell(value: string | number | null | undefined): string | number {
 
 export function buildGpsCsvExport(rows: GpsMonitoringExportRow[]): PreparedExport {
   const csvRows = [
-    ["time", "displacement", "horizontal", "vertical", "velocityMmH", "temperature", "humidity", "confidence", "riskLevel", "lat", "lng"],
+    ["time", "displacement", "horizontal", "vertical", "velocityMmH", "confidence", "riskLevel", "lat", "lng"],
     ...rows.map((row) => [
       row.time,
       csvCell(row.displacement),
       csvCell(row.horizontal),
       csvCell(row.vertical),
       csvCell(row.velocityMmH),
-      csvCell(row.temperature),
-      csvCell(row.humidity),
       csvCell(row.confidence),
       csvCell(row.riskLevel),
       csvCell(row.lat),

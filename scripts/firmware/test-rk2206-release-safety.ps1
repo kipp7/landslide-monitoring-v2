@@ -27,8 +27,12 @@ function Write-Utf8Json {
 function New-TestRelease {
   param(
     [string]$Path,
+    [ValidateSet(3, 4)]
+    [int]$CompactVersion = 3,
     [ValidateSet("hardware", "simulated")]
     [string]$Mode,
+    [ValidateSet("disabled", "probe", "live")]
+    [string]$RtcmMode = "disabled",
     [ValidateSet("default-calibration", "field-calibrated")]
     [string]$BatteryState,
     [switch]$FinalAcceptance
@@ -102,7 +106,15 @@ function New-TestRelease {
   }
 
   $firmwareMarker = "fw-release-safety-fixture"
-  $sampleVersion = "v-test-compact-v3"
+  $sampleVersion = "v-test-compact-v$CompactVersion"
+  $compactPayloadBytes = if ($CompactVersion -eq 4) { 139 } else { 95 }
+  $fieldLinkWireBytes = if ($CompactVersion -eq 4) { 157 } else { 113 }
+  $compactMarker = if ($CompactVersion -eq 4) {
+    "Compact v4 (139-byte field + RTK + injection evidence)"
+  } else {
+    "Compact v3 (95-byte field + RTK payload)"
+  }
+  $capabilityMarker = "boot=DISABLED capability=$($RtcmMode.ToUpperInvariant())"
   $sensorMarkers = if ($Mode -eq "hardware") {
     "HARDWARE SC16IS752 over EI2C0_M0 PB4/PB5 RS-ECTH-N01-TR-1 [RS485]"
   } else {
@@ -120,13 +132,13 @@ function New-TestRelease {
       $sampleVersion,
       "EUART2_M1 PB2/PB3",
       "PC0/SARADC-ch0 input-only",
-      "Compact v3 (95-byte field + RTK payload)",
+      $compactMarker,
       $sensorMarkers,
-      "DISABLED"
+      $capabilityMarker
     ) -join "`0"
     foreach ($extension in @("bin", "img")) {
       [System.IO.File]::WriteAllBytes(
-        (Join-Path $Path "rk2206-node-$node-xls1-compact-v3-$Mode.$extension"),
+        (Join-Path $Path "rk2206-node-$node-xls1-compact-v$CompactVersion-$Mode.$extension"),
         [System.Text.Encoding]::ASCII.GetBytes($content)
       )
     }
@@ -146,10 +158,13 @@ function New-TestRelease {
   )
   $manifest = [ordered]@{
     schemaVersion = 1
-    profile = "rk2206-xl01-compact-v3-$Mode"
+    profile = "rk2206-xl01-compact-v$CompactVersion-$Mode"
+    compactVersion = $CompactVersion
     sourceCommit = $sourceCommit
     sourceDirty = $false
-    gnssRtcmInjectionMode = "disabled"
+    gnssRtcmInjectionMode = $RtcmMode
+    rtcmRuntimeBootMode = "disabled"
+    rtcmRuntimeControlEnabled = $RtcmMode -ne "disabled"
     fieldSensorMode = $Mode
     fieldSensorTruth = if ($Mode -eq "hardware") {
       "RS485, GPS and battery are real"
@@ -171,8 +186,8 @@ function New-TestRelease {
     }
     firmwareMarker = $firmwareMarker
     sampleVersion = $sampleVersion
-    compactPayloadBytes = 95
-    fieldLinkWireBytes = 113
+    compactPayloadBytes = $compactPayloadBytes
+    fieldLinkWireBytes = $fieldLinkWireBytes
     compactPollCommandBytes = 10
     compactPollWireBytes = 28
     nodeSlotMs = 340
@@ -206,6 +221,34 @@ try {
     -ExpectedGnssRtcmInjectionMode disabled `
     -ExpectedBatteryCalibrationState default-calibration `
     -ExpectedSourceCommit $sourceCommit | Out-Null
+
+  $v4Root = Join-Path $testRoot "v4-live"
+  New-TestRelease `
+    -Path $v4Root `
+    -CompactVersion 4 `
+    -Mode simulated `
+    -RtcmMode live `
+    -BatteryState default-calibration
+  & $verifier `
+    -ArtifactDirectory $v4Root `
+    -ExpectedCompactVersion 4 `
+    -ExpectedFieldSensorMode simulated `
+    -ExpectedGnssRtcmInjectionMode live `
+    -ExpectedBatteryCalibrationState default-calibration `
+    -ExpectedSourceCommit $sourceCommit | Out-Null
+
+  $v4ManifestPath = Join-Path $v4Root "manifest.json"
+  $v4Manifest = Get-Content -LiteralPath $v4ManifestPath -Raw | ConvertFrom-Json
+  $v4Manifest.rtcmRuntimeBootMode = "live"
+  Write-Utf8Json -Path $v4ManifestPath -Value $v4Manifest
+  Assert-Rejected -Reason "V4 LIVE release that does not boot fail-closed" -Action {
+    & $verifier `
+      -ArtifactDirectory $v4Root `
+      -ExpectedCompactVersion 4 `
+      -ExpectedFieldSensorMode simulated `
+      -ExpectedGnssRtcmInjectionMode live `
+      -ExpectedBatteryCalibrationState default-calibration | Out-Null
+  }
 
   [System.IO.File]::AppendAllText(
     (Join-Path $simulatedRoot "rk2206-node-A-xls1-compact-v3-simulated.img"),
@@ -300,7 +343,7 @@ try {
       -ExpectedBatteryCalibrationState field-calibrated | Out-Null
   }
 
-  Write-Host "RELEASE_SAFETY_TEST_OK simulated/hardware/final-acceptance positives and tamper/identity/mode/acceptance negatives passed"
+  Write-Host "RELEASE_SAFETY_TEST_OK V3/V4 simulated/hardware/final-acceptance positives and tamper/identity/mode/runtime/acceptance negatives passed"
 } finally {
   if (Test-Path -LiteralPath $testRoot -PathType Container) {
     Remove-Item -LiteralPath $testRoot -Recurse -Force

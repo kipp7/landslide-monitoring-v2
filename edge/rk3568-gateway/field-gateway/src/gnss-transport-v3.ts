@@ -11,6 +11,7 @@ export const GNSS_PROBE_STATS_RESPONSE_V4_BYTES = 384;
 export const GNSS_SENSOR_DIAGNOSTIC_COUNT = 4;
 export const GNSS_RTCM_ACK_QUERY_V1_BYTES = 12;
 export const GNSS_RTCM_ACK_RESPONSE_V1_BYTES = 24;
+export const GNSS_RTCM_MODE_COMMAND_V1_BYTES = 19;
 
 export const GNSS_V3_TARGET_GATEWAY = 0;
 export const GNSS_V3_TARGET_NODE_A = 1 << 0;
@@ -279,6 +280,31 @@ export function encodeGnssRtcmAckQueryV1(nodeNumber: 1 | 2 | 3, nonce: number): 
   const nodeLabel = String.fromCharCode(0x40 + nodeNumber);
   const nonceHex = (nonce >>> 0).toString(16).toUpperCase().padStart(8, "0");
   return Buffer.from(`G3A${nodeLabel}${nonceHex}`, "ascii");
+}
+
+export function encodeGnssRtcmModeCommandV1(params: {
+  targetMask: number;
+  mode: 0 | 1 | 2;
+  sessionEpoch: number;
+  leaseSeconds: number;
+}): Buffer {
+  assertIntegerRange("targetMask", params.targetMask, 1, GNSS_V3_TARGET_ALL_NODES);
+  assertIntegerRange("mode", params.mode, 0, 2);
+  assertIntegerRange("sessionEpoch", params.sessionEpoch, 0, UINT32_MAX);
+  assertIntegerRange("leaseSeconds", params.leaseSeconds, 0, 300);
+  if (params.mode === 0) {
+    if (params.leaseSeconds !== 0) throw new Error("disabled RTCM mode requires a zero lease");
+  } else if (params.sessionEpoch === 0 || params.leaseSeconds < 15) {
+    throw new Error("active RTCM mode requires a non-zero session and a 15..300 second lease");
+  }
+  const target = params.targetMask.toString(16).toUpperCase().padStart(2, "0");
+  const session = (params.sessionEpoch >>> 0).toString(16).toUpperCase().padStart(8, "0");
+  const lease = params.leaseSeconds.toString(16).toUpperCase().padStart(4, "0");
+  const output = Buffer.from(`G3M1${target}${String(params.mode)}${session}${lease}`, "ascii");
+  if (output.length !== GNSS_RTCM_MODE_COMMAND_V1_BYTES) {
+    throw new Error("RTCM mode command length invariant failed");
+  }
+  return output;
 }
 
 export function decodeGnssRtcmAckResponseV1(input: Buffer): GnssRtcmAckResponseV1 {

@@ -171,6 +171,61 @@ test("compact telemetry v3 decodes the RK2206 golden vector without losing RTK p
   assert.equal(decoded.metrics.temperature_c, undefined);
 });
 
+test("compact telemetry v4 preserves all sensors and reports auditable RTCM runtime evidence", () => {
+  const payload = Buffer.from(
+    "4c53040303031fff0000004d000003849664c12a2f5b5302092e12eb02a1008cffe0" +
+      "000300000005bb02974e0000001b80b4e91500003039fffff6d7000007d00000007f" +
+      "075bcd15097e04017e6f1f003400060007000f004703d700020052023f0104123456" +
+      "780000e6f30000007b000000ea00000159000004d2000001c8000001c20002000100" +
+      "0c0006",
+    "hex"
+  );
+  assert.equal(payload.length, 139);
+  const frame = encodeFieldLinkFrame({ frameType: "telemetry", sequence: 10, payloadBytes: payload });
+  assert.equal(frame.length, 157);
+
+  const decoded = decodeCompactTelemetry(payload);
+  assert.equal(decoded.meta.compact_payload_version, 4);
+  assert.equal(decoded.meta.rtcm_injection_mode, "live");
+  assert.equal(decoded.meta.rtcm_state_flags, 0x3f);
+  assert.equal(decoded.metrics.battery_v, 12.123);
+  assert.equal(decoded.metrics.soil_moisture_pct, 48.43);
+  assert.equal(decoded.metrics.tilt_x_deg, 1.4);
+  assert.equal(decoded.metrics.rtk_latitude_deg, 24.612345678);
+  assert.equal(decoded.metrics.rtk_trusted, true);
+  assert.equal(decoded.metrics.rtcm_injection_mode_code, 2);
+  assert.equal(decoded.metrics.rtcm_session_epoch, 0x12345678);
+  assert.equal(decoded.metrics.rtcm_lease_remaining_ms, 59123);
+  assert.equal(decoded.metrics.rtcm_last_fragment_age_ms, 123);
+  assert.equal(decoded.metrics.rtcm_last_completed_frame_age_ms, 234);
+  assert.equal(decoded.metrics.rtcm_last_action_age_ms, 345);
+  assert.equal(decoded.metrics.rtcm_accepted_fragments_total, 1234);
+  assert.equal(decoded.metrics.rtcm_completed_frames_total, 456);
+  assert.equal(decoded.metrics.rtcm_injected_frames_total, 450);
+  assert.equal(decoded.metrics.rtcm_rejected_fragments_total, 2);
+  assert.equal(decoded.metrics.rtcm_crc_errors_total, 1);
+  assert.equal(decoded.metrics.rtcm_queue_drops_total, 12);
+  assert.equal(decoded.metrics.rtcm_uart_errors_total, 6);
+});
+
+test("compact telemetry v4 rejects active RTCM without a lease and dirty disabled state", () => {
+  const base = Buffer.from(
+    "4c53040303031fff0000004d000003849664c12a2f5b5302092e12eb02a1008cffe0" +
+      "000300000005bb02974e0000001b80b4e91500003039fffff6d7000007d00000007f" +
+      "075bcd15097e04017e6f1f003400060007000f004703d700020052023f0104123456" +
+      "780000e6f30000007b000000ea00000159000004d2000001c8000001c20002000100" +
+      "0c0006",
+    "hex"
+  );
+  const activeWithoutLease = Buffer.from(base);
+  activeWithoutLease.writeUInt32BE(0, 103);
+  assert.throws(() => decodeCompactTelemetry(activeWithoutLease), /lacks a valid session lease/u);
+
+  const dirtyDisabled = Buffer.from(base);
+  dirtyDisabled.writeUInt8(0, 95);
+  assert.throws(() => decodeCompactTelemetry(dirtyDisabled), /disabled RTCM state is not fail-closed/u);
+});
+
 test("compact telemetry rejects a truncated v3 packet", () => {
   const payload = Buffer.alloc(94);
   payload.write("LS", 0, "ascii");

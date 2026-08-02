@@ -23,7 +23,7 @@ import dayjs from "dayjs";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
-import type { AiPrediction, Baseline, Device, GpsDerivedAnalysis, GpsSeries, TelemetrySeriesPoint } from "../api/client";
+import type { AiPrediction, Baseline, Device, DeviceStateSnapshot, GpsDerivedAnalysis, GpsSeries, TelemetrySeriesPoint } from "../api/client";
 import { useApi } from "../api/ApiProvider";
 import { BaseCard } from "../components/BaseCard";
 import { formatBeijingDateTime, formatBeijingMonthDay, formatBeijingMonthDayTime, formatBeijingTime } from "../utils/beijingTime";
@@ -36,6 +36,24 @@ type Thresholds = { blue: number; yellow: number; red: number };
 type GpsReferencePoint = { lat: number; lng: number; source: "baseline" | "temporary"; label: string };
 type GpsTrendDirection = NonNullable<GpsDerivedAnalysis["trendDiagnostics"]>["direction"];
 type GpsThresholdForecastPoint = NonNullable<NonNullable<GpsDerivedAnalysis["prediction"]>["thresholdForecast"]>["longTerm"]["red"];
+type RtkSolutionSnapshot = {
+  updatedAt: string;
+  fresh: boolean;
+  trusted: boolean;
+  fixType: string;
+  coordinateFrame: string;
+  satellites: number | null;
+  hdop: number | null;
+  correctionAgeMs: number | null;
+  solutionAgeMs: number | null;
+  fixedStreakS: number | null;
+  fixedRatioPct: number | null;
+  stationId: number | null;
+  rtcmMode: string;
+  crcErrors: number | null;
+  queueDrops: number | null;
+  uartErrors: number | null;
+};
 
 const GPS_THRESHOLD_BLUE_KEY = "gps.displacement_threshold_blue_mm";
 const GPS_THRESHOLD_YELLOW_KEY = "gps.displacement_threshold_yellow_mm";
@@ -58,8 +76,6 @@ type GpsChartRow = {
   horizontal: number;
   vertical: number | null;
   velocityMmH: number;
-  temperature: number | null;
-  humidity: number | null;
   confidence: number | null;
   riskLevel: number;
   lat: number | null;
@@ -103,12 +119,6 @@ function computeTelemetryWindow(range: TimeRange): { startTime: string; endTime:
   return { startTime: start.toISOString(), endTime: end.toISOString(), interval };
 }
 
-function bucketKey(ts: string, range: TimeRange): string {
-  if (range === "1h" || range === "6h") return formatBeijingDateTime(ts, { includeSeconds: false });
-  if (range === "24h" || range === "7d") return formatBeijingMonthDayTime(ts, { includeMinutes: false });
-  return formatBeijingMonthDay(ts);
-}
-
 function readOptionalNumber(value: number | null | undefined, digits = 2): number | null {
   if (typeof value !== "number" || !Number.isFinite(value)) return null;
   return Number(value.toFixed(digits));
@@ -117,6 +127,50 @@ function readOptionalNumber(value: number | null | undefined, digits = 2): numbe
 function formatOptionalNumber(value: number | null | undefined, digits = 2): string {
   if (typeof value !== "number" || !Number.isFinite(value)) return "—";
   return value.toFixed(digits);
+}
+
+function metricNumber(snapshot: DeviceStateSnapshot, key: string): number | null {
+  const value = snapshot.metrics[key];
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function metricBoolean(snapshot: DeviceStateSnapshot, key: string): boolean {
+  const value = snapshot.metrics[key];
+  return value === true || value === 1 || value === "1" || value === "true";
+}
+
+function metaText(snapshot: DeviceStateSnapshot, key: string, fallback: string): string {
+  const value = snapshot.meta[key];
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}
+
+function buildRtkSolutionSnapshot(snapshot: DeviceStateSnapshot | null): RtkSolutionSnapshot | null {
+  if (!snapshot) return null;
+  const updatedMs = Date.parse(snapshot.updatedAt);
+  const fresh = Number.isFinite(updatedMs) && Date.now() - updatedMs <= 30_000;
+  return {
+    updatedAt: snapshot.updatedAt,
+    fresh,
+    trusted: fresh && metricBoolean(snapshot, "rtk_trusted"),
+    fixType: metaText(snapshot, "rtk_fix_type", "unknown"),
+    coordinateFrame: metaText(snapshot, "rtk_coordinate_frame", "unknown"),
+    satellites: metricNumber(snapshot, "rtk_satellites_used"),
+    hdop: metricNumber(snapshot, "rtk_hdop"),
+    correctionAgeMs: metricNumber(snapshot, "rtk_correction_age_ms"),
+    solutionAgeMs: metricNumber(snapshot, "rtk_solution_age_ms"),
+    fixedStreakS: metricNumber(snapshot, "rtk_fixed_streak_s"),
+    fixedRatioPct: metricNumber(snapshot, "rtk_fixed_ratio_1m_pct"),
+    stationId: metricNumber(snapshot, "rtk_reference_station_id"),
+    rtcmMode: metaText(snapshot, "rtcm_injection_mode", "disabled"),
+    crcErrors: metricNumber(snapshot, "rtcm_crc_errors_total"),
+    queueDrops: metricNumber(snapshot, "rtcm_queue_drops_total"),
+    uartErrors: metricNumber(snapshot, "rtcm_uart_errors_total")
+  };
 }
 
 function riskFromDispMm(dispMm: number, thresholds: Thresholds) {
@@ -245,9 +299,10 @@ function formatGpsAxisTime(ts: string, range: TimeRange): string {
 function buildRawGpsSeriesFromTelemetry(
   deviceId: string,
   latSeries: TelemetrySeriesPoint[],
-  lngSeries: TelemetrySeriesPoint[]
+  lngSeries: TelemetrySeriesPoint[],
+  trustedSeries: TelemetrySeriesPoint[]
 ): { series: GpsSeries; referencePoint: GpsReferencePoint | null } {
-  const rows = new Map<string, { lat?: number; lng?: number }>();
+  const rows = new Map<string, { lat?: number; lng?: number; trusted?: boolean }>();
 
   for (const point of latSeries) {
     const entry = rows.get(point.ts) ?? {};
@@ -261,10 +316,17 @@ function buildRawGpsSeriesFromTelemetry(
     rows.set(point.ts, entry);
   }
 
+  for (const point of trustedSeries) {
+    const entry = rows.get(point.ts) ?? {};
+    entry.trusted = point.value >= 0.5;
+    rows.set(point.ts, entry);
+  }
+
   const ordered = Array.from(rows.entries())
-    .filter((entry): entry is [string, { lat: number; lng: number }] => {
+    .filter((entry): entry is [string, { lat: number; lng: number; trusted: true }] => {
       const value = entry[1];
-      return typeof value.lat === "number" && Number.isFinite(value.lat) && typeof value.lng === "number" && Number.isFinite(value.lng);
+      return value.trusted === true && typeof value.lat === "number" && Number.isFinite(value.lat) &&
+        typeof value.lng === "number" && Number.isFinite(value.lng);
     })
     .sort((a, b) => Date.parse(a[0]) - Date.parse(b[0]));
 
@@ -279,8 +341,8 @@ function buildRawGpsSeriesFromTelemetry(
   const referenceLat = referenceSeed.reduce((sum, entry) => sum + entry[1].lat, 0) / referenceSeed.length;
   const referenceLng = referenceSeed.reduce((sum, entry) => sum + entry[1].lng, 0) / referenceSeed.length;
   const referencePoint: GpsReferencePoint = {
-    lat: Number(referenceLat.toFixed(6)),
-    lng: Number(referenceLng.toFixed(6)),
+    lat: Number(referenceLat.toFixed(9)),
+    lng: Number(referenceLng.toFixed(9)),
     source: "temporary",
     label: "临时参考点"
   };
@@ -289,6 +351,8 @@ function buildRawGpsSeriesFromTelemetry(
     series: {
       deviceId,
       deviceName: deviceId,
+      positionProfile: "rtk-fixed",
+      trustedOnly: true,
       points: ordered.map(([ts, coords]) => {
         const horizontalMeters = haversineMeters(referenceLat, referenceLng, coords.lat, coords.lng);
         const horizontalMm = Number((horizontalMeters * 1000).toFixed(2));
@@ -296,8 +360,8 @@ function buildRawGpsSeriesFromTelemetry(
           ts,
           dispMm: horizontalMm,
           horizontalMm,
-          latitude: Number(coords.lat.toFixed(6)),
-          longitude: Number(coords.lng.toFixed(6))
+          latitude: Number(coords.lat.toFixed(9)),
+          longitude: Number(coords.lng.toFixed(9))
         };
       })
     },
@@ -321,8 +385,7 @@ export function GpsMonitoringPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [series, setSeries] = useState<GpsSeries | null>(null);
   const [derivedAnalysis, setDerivedAnalysis] = useState<GpsDerivedAnalysis | null>(null);
-  const [temperatureSeries, setTemperatureSeries] = useState<TelemetrySeriesPoint[]>([]);
-  const [humiditySeries, setHumiditySeries] = useState<TelemetrySeriesPoint[]>([]);
+  const [rtkSolution, setRtkSolution] = useState<RtkSolutionSnapshot | null>(null);
   const [lastUpdateTime, setLastUpdateTime] = useState<string>("");
   const [nowTime, setNowTime] = useState<string>(formatBeijingTime(new Date()));
   const [temporaryReferencePoint, setTemporaryReferencePoint] = useState<GpsReferencePoint | null>(null);
@@ -450,6 +513,7 @@ export function GpsMonitoringPage() {
       let nextDerivedAnalysis: GpsDerivedAnalysis | null = null;
       let nextTemporaryReferencePoint: GpsReferencePoint | null = null;
       let nextNotice: string | null = null;
+      const statePromise = api.devices.getState({ deviceId: selectedDeviceId }).catch(() => null);
 
       try {
         nextSeries = await api.gps.getSeries({ deviceId: selectedDeviceId, days });
@@ -465,50 +529,40 @@ export function GpsMonitoringPage() {
           throw seriesError;
         }
 
-        const [latSeries, lngSeries] = await Promise.all([
+        const [latSeries, lngSeries, trustedSeries] = await Promise.all([
           api.telemetry.getSeries({
             deviceId: selectedDeviceId,
-            sensorKey: "gps_latitude",
+            sensorKey: "rtk_latitude_deg",
             startTime: telemetryWindow.startTime,
             endTime: telemetryWindow.endTime,
             interval: telemetryWindow.interval
           }),
           api.telemetry.getSeries({
             deviceId: selectedDeviceId,
-            sensorKey: "gps_longitude",
+            sensorKey: "rtk_longitude_deg",
+            startTime: telemetryWindow.startTime,
+            endTime: telemetryWindow.endTime,
+            interval: telemetryWindow.interval
+          }),
+          api.telemetry.getSeries({
+            deviceId: selectedDeviceId,
+            sensorKey: "rtk_trusted",
             startTime: telemetryWindow.startTime,
             endTime: telemetryWindow.endTime,
             interval: telemetryWindow.interval
           })
         ]);
 
-        const rawGps = buildRawGpsSeriesFromTelemetry(selectedDeviceId, latSeries, lngSeries);
+        const rawGps = buildRawGpsSeriesFromTelemetry(selectedDeviceId, latSeries, lngSeries, trustedSeries);
         nextSeries = rawGps.series;
         nextTemporaryReferencePoint = rawGps.referencePoint;
         nextNotice = rawGps.referencePoint
-          ? "当前设备尚未建立持久基线，页面已按实时坐标自动生成临时参考点，仅用于当前窗口查看。"
-          : "当前设备尚未建立持久基线，且当前窗口没有可用定位坐标数据。";
+          ? "当前设备尚未建立持久基线，页面已仅使用可信 RTK Fixed 坐标生成临时参考点。"
+          : "当前设备尚未建立持久基线，且当前窗口没有可信 RTK Fixed 坐标。";
       }
 
-      const [temperature, humidity, aiPredictionResult] = await Promise.all([
-        api.telemetry
-          .getSeries({
-            deviceId: selectedDeviceId,
-            sensorKey: "temperature_c",
-            startTime: telemetryWindow.startTime,
-            endTime: telemetryWindow.endTime,
-            interval: telemetryWindow.interval
-          })
-          .catch(() => []),
-        api.telemetry
-          .getSeries({
-            deviceId: selectedDeviceId,
-            sensorKey: "humidity_pct",
-            startTime: telemetryWindow.startTime,
-            endTime: telemetryWindow.endTime,
-            interval: telemetryWindow.interval
-          })
-          .catch(() => []),
+      const [deviceState, aiPredictionResult] = await Promise.all([
+        statePromise,
         api.aiPredictions
           .list({
             page: 1,
@@ -519,8 +573,7 @@ export function GpsMonitoringPage() {
       ]);
       setSeries(nextSeries);
       setDerivedAnalysis(nextDerivedAnalysis);
-      setTemperatureSeries(temperature);
-      setHumiditySeries(humidity);
+      setRtkSolution(buildRtkSolutionSnapshot(deviceState));
       setLatestAiPrediction(aiPredictionResult?.list[0] ?? null);
       setTemporaryReferencePoint(nextTemporaryReferencePoint);
       setGpsNotice(nextNotice);
@@ -561,21 +614,12 @@ export function GpsMonitoringPage() {
   const pts = series?.points ?? [];
 
   const chartData: GpsChartRow[] = useMemo(() => {
-    const temperatureByBucket = new Map<string, number>();
-    const humidityByBucket = new Map<string, number>();
-    for (const point of temperatureSeries) {
-      temperatureByBucket.set(bucketKey(point.ts, timeRange), point.value);
-    }
-    for (const point of humiditySeries) {
-      humidityByBucket.set(bucketKey(point.ts, timeRange), point.value);
-    }
     const rows: GpsChartRow[] = [];
 
     for (let i = 0; i < pts.length; i += 1) {
       const p = pts[i]!;
       const prev = i > 0 ? pts[i - 1]! : null;
       const disp = p.dispMm;
-      const rowBucket = bucketKey(p.ts, timeRange);
       const horizontal = readOptionalNumber(p.horizontalMm ?? disp, 2) ?? disp;
       const vertical = readOptionalNumber(p.verticalMm, 2);
 
@@ -583,8 +627,8 @@ export function GpsMonitoringPage() {
       const velocityMmH = prev ? Number(((disp - prev.dispMm) / dtHours).toFixed(3)) : 0;
       const riskLevel = riskFromDispMm(disp, thresholds);
       const confidence = readOptionalNumber(derivedAnalysis?.prediction?.confidence ?? derivedAnalysis?.qualityScore, 2);
-      const lat = readOptionalNumber(p.latitude, 6);
-      const lng = readOptionalNumber(p.longitude, 6);
+      const lat = readOptionalNumber(p.latitude, 9);
+      const lng = readOptionalNumber(p.longitude, 9);
 
       rows.push({
         key: `${p.ts}-${i}`,
@@ -594,8 +638,6 @@ export function GpsMonitoringPage() {
         horizontal,
         vertical,
         velocityMmH,
-        temperature: readOptionalNumber(temperatureByBucket.get(rowBucket), 1),
-        humidity: readOptionalNumber(humidityByBucket.get(rowBucket), 0),
         confidence,
         riskLevel,
         lat,
@@ -604,12 +646,11 @@ export function GpsMonitoringPage() {
     }
 
     return rows.slice(-dataLimit);
-  }, [dataLimit, derivedAnalysis?.prediction?.confidence, derivedAnalysis?.qualityScore, humiditySeries, pts, temperatureSeries, thresholds, timeRange]);
+  }, [dataLimit, derivedAnalysis?.prediction?.confidence, derivedAnalysis?.qualityScore, pts, thresholds, timeRange]);
 
   const latest = chartData.at(-1) ?? null;
   const predictionConfidencePct = derivedAnalysis?.prediction ? Math.round(derivedAnalysis.prediction.confidence * 100) : null;
   const longRedForecast = derivedAnalysis?.prediction?.thresholdForecast?.longTerm.red ?? null;
-  const hasEnvData = useMemo(() => chartData.some((row) => row.temperature != null || row.humidity != null), [chartData]);
   const hasCoordData = useMemo(() => chartData.some((row) => row.lat != null && row.lng != null), [chartData]);
   const hasCeemdData = Boolean(derivedAnalysis?.ceemd?.imfs?.length && derivedAnalysis?.ceemd?.residue?.length);
   const hasShortPrediction = Boolean(derivedAnalysis?.prediction?.shortTerm?.length && chartData.length);
@@ -651,6 +692,18 @@ export function GpsMonitoringPage() {
     const score = expected > 0 ? Math.min(1, pts.length / expected) : 0;
     return { score, pct: Number((score * 100).toFixed(1)) };
   }, [pts.length, timeRange]);
+  const rtkFixLabel = !rtkSolution
+    ? "无遥测"
+    : !rtkSolution.fresh
+      ? "遥测过期"
+      : rtkSolution.fixType === "rtk_fixed"
+        ? "RTK Fixed"
+        : rtkSolution.fixType === "rtk_float"
+          ? "RTK Float"
+          : rtkSolution.fixType;
+  const rtkErrorSummary = rtkSolution
+    ? [rtkSolution.crcErrors ?? 0, rtkSolution.queueDrops ?? 0, rtkSolution.uartErrors ?? 0].join("/")
+    : "--";
 
   const displacementOption = useMemo(() => {
     return {
@@ -724,47 +777,6 @@ export function GpsMonitoringPage() {
     };
   }, [chartData]);
 
-  const envOption = useMemo(() => {
-    return {
-      backgroundColor: "transparent",
-      textStyle: { color: "rgba(226, 232, 240, 0.9)" },
-      tooltip: { trigger: "axis" },
-      legend: {
-        data: ["温度", "湿度"],
-        top: 10,
-        textStyle: { color: "rgba(226, 232, 240, 0.85)", fontSize: 12 }
-      },
-      grid: { left: 54, right: 54, top: 44, bottom: 54 },
-      xAxis: { type: "category", data: chartData.map((x) => x.time), ...axisTheme() },
-      yAxis: [
-        { type: "value", name: "°C", ...axisTheme() },
-        { type: "value", name: "%", ...axisTheme() }
-      ],
-      series: [
-        {
-          name: "温度",
-          type: "line",
-          smooth: true,
-          showSymbol: false,
-          data: chartData.map((x) => x.temperature),
-          yAxisIndex: 0,
-          lineStyle: { width: 2.5, color: "#fbbf24" },
-          areaStyle: { color: "rgba(251, 191, 36, 0.10)" }
-        },
-        {
-          name: "湿度",
-          type: "line",
-          smooth: true,
-          showSymbol: false,
-          data: chartData.map((x) => x.humidity),
-          yAxisIndex: 1,
-          lineStyle: { width: 2.5, color: "#60a5fa" },
-          areaStyle: { color: "rgba(96, 165, 250, 0.10)" }
-        }
-      ]
-    };
-  }, [chartData]);
-
   const coordOption = useMemo(() => {
     const baseLat = referencePoint?.lat ?? latest?.lat ?? chartData[0]?.lat ?? 22.684674;
     const baseLng = referencePoint?.lng ?? latest?.lng ?? chartData[0]?.lng ?? 110.189371;
@@ -806,7 +818,7 @@ export function GpsMonitoringPage() {
         textStyle: { color: "rgba(226, 232, 240, 0.92)" },
         formatter: (p: { data: { name: string; value: [number, number] } }) => {
           const [lng, lat] = p.data.value;
-          return `${p.data.name}<br/>纬度：${lat.toFixed(6)}<br/>经度：${lng.toFixed(6)}`;
+          return `${p.data.name}<br/>纬度：${lat.toFixed(9)}<br/>经度：${lng.toFixed(9)}`;
         }
       },
       grid: { left: 10, right: 10, top: 10, bottom: 10 },
@@ -1305,13 +1317,24 @@ export function GpsMonitoringPage() {
                     </BaseCard>
                   </Col>
                   <Col xs={24} lg={12}>
-                    <BaseCard title="环境因素">
+                    <BaseCard title="RTK 解算质量">
                       {loading ? (
                         <div className="desk-loading">加载中…</div>
-                      ) : hasEnvData ? (
-                        <ReactECharts option={envOption} style={{ height: 320 }} />
                       ) : (
-                        <div className="desk-dm-empty">当前时间窗口内暂无温湿度序列数据。</div>
+                        <div className="desk-gps-rtk-grid">
+                          <div className="desk-gps-rtk-item"><span>解算</span><strong>{rtkFixLabel}</strong></div>
+                          <div className="desk-gps-rtk-item"><span>可信门禁</span><strong>{rtkSolution?.trusted ? "通过" : "未通过"}</strong></div>
+                          <div className="desk-gps-rtk-item"><span>使用卫星</span><strong>{rtkSolution?.satellites ?? "--"}</strong></div>
+                          <div className="desk-gps-rtk-item"><span>HDOP</span><strong>{rtkSolution?.hdop?.toFixed(2) ?? "--"}</strong></div>
+                          <div className="desk-gps-rtk-item"><span>差分龄</span><strong>{rtkSolution?.correctionAgeMs == null ? "--" : `${(rtkSolution.correctionAgeMs / 1000).toFixed(1)} s`}</strong></div>
+                          <div className="desk-gps-rtk-item"><span>解算龄</span><strong>{rtkSolution?.solutionAgeMs == null ? "--" : `${(rtkSolution.solutionAgeMs / 1000).toFixed(1)} s`}</strong></div>
+                          <div className="desk-gps-rtk-item"><span>Fixed 连续</span><strong>{rtkSolution?.fixedStreakS == null ? "--" : `${String(rtkSolution.fixedStreakS)} s`}</strong></div>
+                          <div className="desk-gps-rtk-item"><span>1 分钟 Fixed</span><strong>{rtkSolution?.fixedRatioPct == null ? "--" : `${rtkSolution.fixedRatioPct.toFixed(1)}%`}</strong></div>
+                          <div className="desk-gps-rtk-item"><span>基准站</span><strong>{rtkSolution?.stationId ?? "--"}</strong></div>
+                          <div className="desk-gps-rtk-item"><span>坐标系</span><strong>{rtkSolution?.coordinateFrame ?? "--"}</strong></div>
+                          <div className="desk-gps-rtk-item"><span>RTCM</span><strong>{rtkSolution?.rtcmMode ?? "--"}</strong></div>
+                          <div className="desk-gps-rtk-item"><span>CRC/队列/UART</span><strong>{rtkErrorSummary}</strong></div>
+                        </div>
                       )}
                     </BaseCard>
                   </Col>
@@ -1355,7 +1378,7 @@ export function GpsMonitoringPage() {
                             <span className="desk-gps-coord-v">
                               {referencePoint ? (
                                 <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}>
-                                  {referencePoint.lat.toFixed(6)}, {referencePoint.lng.toFixed(6)}
+                                  {referencePoint.lat.toFixed(9)}, {referencePoint.lng.toFixed(9)}
                                 </span>
                               ) : (
                                 <span style={{ color: "rgba(148,163,184,0.9)" }}>未建立</span>
@@ -1367,7 +1390,7 @@ export function GpsMonitoringPage() {
                             <span className="desk-gps-coord-v">
                               {latest?.lat != null && latest?.lng != null ? (
                                 <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}>
-                                  {latest.lat.toFixed(6)}, {latest.lng.toFixed(6)}
+                                  {latest.lat.toFixed(9)}, {latest.lng.toFixed(9)}
                                 </span>
                               ) : (
                                 <span style={{ color: "rgba(148,163,184,0.9)" }}>--</span>
@@ -1731,10 +1754,8 @@ export function GpsMonitoringPage() {
                         { title: "垂直(mm)", dataIndex: "vertical", width: 110, render: (v: number | null) => formatOptionalNumber(v, 2) },
                         { title: "速度(mm/h)", dataIndex: "velocityMmH", width: 120, render: (v: number) => formatOptionalNumber(v, 3) },
                         { title: "置信度", dataIndex: "confidence", width: 110, render: (v: number | null) => formatOptionalNumber(v, 2) },
-                        { title: "温度(°C)", dataIndex: "temperature", width: 110, render: (v: number | null) => formatOptionalNumber(v, 1) },
-                        { title: "湿度(%)", dataIndex: "humidity", width: 100, render: (v: number | null) => formatOptionalNumber(v, 0) },
-                        { title: "纬度", dataIndex: "lat", width: 120, render: (v: number | null) => formatOptionalNumber(v, 6) },
-                        { title: "经度", dataIndex: "lng", width: 120, render: (v: number | null) => formatOptionalNumber(v, 6) }
+                        { title: "纬度", dataIndex: "lat", width: 150, render: (v: number | null) => formatOptionalNumber(v, 9) },
+                        { title: "经度", dataIndex: "lng", width: 150, render: (v: number | null) => formatOptionalNumber(v, 9) }
                       ]}
                     />
                   </div>

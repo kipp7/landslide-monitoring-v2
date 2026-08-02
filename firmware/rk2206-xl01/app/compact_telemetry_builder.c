@@ -46,13 +46,30 @@ enum {
     OFFSET_V3_FIX_STREAK_S = 87,
     OFFSET_V3_FIXED_RATIO_PERMILLE = 89,
     OFFSET_V3_FIX_DROP_COUNT = 91,
-    OFFSET_V3_REFERENCE_STATION_ID = 93
+    OFFSET_V3_REFERENCE_STATION_ID = 93,
+    OFFSET_V4_RTCM_MODE = 95,
+    OFFSET_V4_RTCM_STATE_FLAGS = 96,
+    OFFSET_V4_QUEUE_PENDING = 97,
+    OFFSET_V4_QUEUE_HIGH_WATERMARK = 98,
+    OFFSET_V4_SESSION_EPOCH = 99,
+    OFFSET_V4_LEASE_REMAINING_MS = 103,
+    OFFSET_V4_LAST_FRAGMENT_AGE_MS = 107,
+    OFFSET_V4_LAST_COMPLETED_AGE_MS = 111,
+    OFFSET_V4_LAST_ACTION_AGE_MS = 115,
+    OFFSET_V4_ACCEPTED_FRAGMENTS = 119,
+    OFFSET_V4_COMPLETED_FRAMES = 123,
+    OFFSET_V4_INJECTED_FRAMES = 127,
+    OFFSET_V4_REJECTED_FRAGMENTS = 131,
+    OFFSET_V4_CRC_ERRORS = 133,
+    OFFSET_V4_QUEUE_DROPS = 135,
+    OFFSET_V4_UART_ERRORS = 137
 };
 
 typedef char CompactTelemetryPayloadSizeCheck[
     COMPACT_TELEMETRY_V1_PAYLOAD_BYTES == 46 &&
     COMPACT_TELEMETRY_V2_PAYLOAD_BYTES == 46 &&
-    COMPACT_TELEMETRY_V3_PAYLOAD_BYTES == 95 ? 1 : -1
+    COMPACT_TELEMETRY_V3_PAYLOAD_BYTES == 95 &&
+    COMPACT_TELEMETRY_V4_PAYLOAD_BYTES == 139 ? 1 : -1
 ];
 
 static void WriteUint16Be(unsigned char *output, unsigned int offset, unsigned int value)
@@ -86,6 +103,11 @@ static void WriteInt64Be(unsigned char *output, unsigned int offset, int64_t val
     for (index = 0U; index < 8U; ++index) {
         output[offset + index] = (unsigned char)(bits >> (56U - index * 8U));
     }
+}
+
+static uint16_t SaturateUint16(uint32_t value)
+{
+    return value > USHRT_MAX ? USHRT_MAX : (uint16_t)value;
 }
 
 static int ScaleSigned(float value, float scale, int minimum, int maximum)
@@ -306,4 +328,58 @@ int BuildCompactTelemetryV3(
     }
     if ((fix_flags & GNSS_FIX_STATION_VALID) != 0U) WriteUint16Be(output, OFFSET_V3_REFERENCE_STATION_ID, data->gnss.reference_station_id);
     return COMPACT_TELEMETRY_V3_PAYLOAD_BYTES;
+}
+
+int BuildCompactTelemetryV4(
+    const SensorData *data,
+    const GnssRtcmInjectionStats *rtcm_stats,
+    const GnssRtcmRuntimeStatus *rtcm_runtime,
+    const char *legacy_node_label,
+    const char *last_command_id,
+    const char *upload_trigger,
+    unsigned char *output,
+    int output_size)
+{
+    uint32_t queue_drops;
+    int base_len;
+
+    if (data == NULL || rtcm_stats == NULL || rtcm_runtime == NULL ||
+        output == NULL || output_size < COMPACT_TELEMETRY_V4_PAYLOAD_BYTES) {
+        return -1;
+    }
+    base_len = BuildCompactTelemetryV3(
+        data, legacy_node_label, last_command_id, upload_trigger,
+        output, output_size
+    );
+    if (base_len != COMPACT_TELEMETRY_V3_PAYLOAD_BYTES) return base_len;
+
+    memset(output + COMPACT_TELEMETRY_V3_PAYLOAD_BYTES, 0,
+           COMPACT_TELEMETRY_V4_PAYLOAD_BYTES - COMPACT_TELEMETRY_V3_PAYLOAD_BYTES);
+    output[OFFSET_VERSION] = 4U;
+    output[OFFSET_V4_RTCM_MODE] = rtcm_runtime->mode;
+    output[OFFSET_V4_RTCM_STATE_FLAGS] = rtcm_runtime->state_flags;
+    output[OFFSET_V4_QUEUE_PENDING] = rtcm_runtime->queue_pending;
+    output[OFFSET_V4_QUEUE_HIGH_WATERMARK] = rtcm_runtime->queue_high_watermark;
+    WriteUint32Be(output, OFFSET_V4_SESSION_EPOCH, rtcm_runtime->session_epoch);
+    WriteUint32Be(output, OFFSET_V4_LEASE_REMAINING_MS, rtcm_runtime->lease_remaining_ms);
+    WriteUint32Be(output, OFFSET_V4_LAST_FRAGMENT_AGE_MS, rtcm_runtime->last_fragment_age_ms);
+    WriteUint32Be(output, OFFSET_V4_LAST_COMPLETED_AGE_MS, rtcm_runtime->last_completed_frame_age_ms);
+    WriteUint32Be(output, OFFSET_V4_LAST_ACTION_AGE_MS, rtcm_runtime->last_action_age_ms);
+    WriteUint32Be(output, OFFSET_V4_ACCEPTED_FRAGMENTS, rtcm_stats->accepted_fragments);
+    WriteUint32Be(output, OFFSET_V4_COMPLETED_FRAMES, rtcm_stats->completed_frames);
+    WriteUint32Be(output, OFFSET_V4_INJECTED_FRAMES, rtcm_stats->injected_frames);
+    WriteUint16Be(output, OFFSET_V4_REJECTED_FRAGMENTS,
+                  SaturateUint16(rtcm_stats->rejected_fragments));
+    WriteUint16Be(output, OFFSET_V4_CRC_ERRORS,
+                  SaturateUint16(rtcm_stats->crc_errors));
+    queue_drops = rtcm_stats->queue_evictions + rtcm_stats->queue_expired_frames;
+    if (UINT32_MAX - queue_drops < rtcm_stats->injection_dropped_frames) {
+        queue_drops = UINT32_MAX;
+    } else {
+        queue_drops += rtcm_stats->injection_dropped_frames;
+    }
+    WriteUint16Be(output, OFFSET_V4_QUEUE_DROPS, SaturateUint16(queue_drops));
+    WriteUint16Be(output, OFFSET_V4_UART_ERRORS,
+                  SaturateUint16(rtcm_stats->uart_write_errors));
+    return COMPACT_TELEMETRY_V4_PAYLOAD_BYTES;
 }
