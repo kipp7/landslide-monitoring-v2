@@ -25,6 +25,7 @@ status: active
 - V4 跨端实现已由 `ac78919e20fa6a4cbcdfdb864d73290b0522270a` 推送到 `origin/feat/gnss-rtk-v31-transport`。离线门禁为 field-gateway 44/44、telemetry-writer 13/13、API 10/10、Windows production build、RK2206 C99 主机协议与发布安全测试全部通过；差异扫描不含 CORS 密码、私钥或真实坐标。
 - 正式三节点固件目录为 `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v4_hardware_live_20260803`，manifest SHA-256 `d1f1e53a729f198fe4811cbdf835405f96b87eacf2add716142f3b8f930a09b7`。A/B/C `.img` SHA-256 为 `884482c4...a699c`、`e3e342df...a387`、`c49d54ba...68f4`；完整值见同目录 manifest。独立验证确认唯一身份、hardware RS485、最终电池校准 `1046565/1048458/993702 ppm`、139 B payload、157 B wire、LIVE capability、boot DISABLED 和有限 runtime lease control。
 - RK3568 已部署 V4 解码/NTRIP/RTCM 控制器但显式保持 `NTRIP_ENABLED=false`；回滚目录为 `/home/linaro/lsmv2-backups/field-gateway-pre-compact-v4-20260803-021718`。服务 active、`NRestarts=0`、串口 open，所有 RTCM 写入计数为 0。C 仍持续上报旧 V2，A/B 无新帧，故现场并非真正三节点全下电；该事实不作为 V4 验收。
+- 现场门禁缺口已在 `97473b62` 修复：批量轮询器现支持 V3/V4 与严格硬件/电池/RTCM 证据，新增 V4 60/600/1800 秒失败即停编排器。RK3568 部署的批量轮询器/编排器 SHA-256 为 `5ca27b11...5e5`、`d29b5171...a7ba`，回滚目录 `/home/linaro/lsmv2-backups/field-test-scripts-97473b62-20260803-031211`；无发送前置检查确认环境 `0600 root:root`、NTRIP false、串口字符设备和 active/零重启服务。
 - 生产服务器回滚目录为 `/opt/lsmv2-production/backups/server-pre-rtk-v4-20260803-0230`。V4 writer/API 镜像分别为 `sha256:b3f744437ded557f11902b05f32e327f65df61adb1d044c1aeafa06596809534`、`sha256:2d1ea4dea9a836974aec2739d3c1fe2e1d82848f92869b184c6d2de30da6da7c`；两者 running、`RestartCount=0`，ClickHouse 持续写入和 API health 均正常。现网 Kafka offset 显式提交与有效 GPS 保留热修复已保留。
 - Windows 包 `artifacts/windows/portable-rtk-v4-20260803` 已通过原生壳 ready handshake 和 15 秒静置无错误门禁；exe SHA-256 `e7e538946f18faf5166474a1466e2e6e3311ec4ee97c608e56fd4c7b2ac285a7`。
 - 明天的唯一推进顺序：核对 C 独立供电并按标签烧录 A/B/C -> NTRIP 仍关闭跑 V4 60/600/1800 秒纯遥测 -> 确认三节点同 session lease -> PROBE -> LIVE + 真实 CORS -> 室外 `GGA=4`、correction age、Fixed 连续性与厘米级 ENU 证据。任一前置失败都不得跳级，也不得把当前软件部署写成厘米级完成。
@@ -144,6 +145,7 @@ status: active
 ## In Progress
 
 - Compact V4 正式 hardware/LIVE-capable 镜像已完成离线构建与安全门禁，等待明天按 A/B/C 物理标签烧录。生产继续保持 1000 ms 冷却、340 ms 节点时隙和单广播在途，并启用 1200 ms 后同标签最多重发一次、2500 ms 总时限；烧录后依次执行 60/600/1800 秒真机门禁，不再做 interval 微调。
+- V4 专用现场编排器已部署并通过 dry-run/无发送 prerequisites；它会一次持有并最终恢复网关服务，要求 V4 hardware、真实土壤/EC/三轴倾角、field-calibrated PC0、RTCM disabled/READY-only 且全部 RTCM 历史活动和错误计数为 0，再按 60/600/1800 秒逐级推进。
 - RK3568、服务器和 Windows 字段链已部署，但 RK3568 明确保持 `NTRIP_ENABLED=false`。C 仍在持续发旧 V2，说明它没有真正断电或存在独立供电；明天烧录前先处理该事实，不能把今晚兼容遥测计为 V4 验收。
 - A/B/C 已接受 `1046565/1048458/993702 ppm` 最终 PC0 校准；V4 manifest 将其绑定为 field-calibrated。百分比仍只是 3S OCV 估算，不宣称剩余 mAh 或续航。
 - OTA 当前只允许离线设计和可恢复备用板验证；现场 A/B/C 的 `ota_prepare/apply` 必须返回 `unsupported`。
@@ -151,7 +153,7 @@ status: active
 
 ## Next Actions
 
-1. 先确认 C 的独立供电，再按 A/B/C 物理标签烧录 `xls1_compact_v4_hardware_live_20260803` 中对应 `.img`；保持 NTRIP 关闭，核对 V4 profile、RTCM fail-closed、三套真实 RS485 传感器与 PC0 校准，然后依次跑 60、600、1800 秒三节点门禁。
+1. 先确认 C 的独立供电，再按 A/B/C 物理标签烧录 `xls1_compact_v4_hardware_live_20260803` 中对应 `.img`；保持 NTRIP 关闭，先执行 `sudo python3 /usr/local/bin/xls1_compact_v4_acceptance.py --check-prerequisites`，再执行不带参数的同一脚本自动完成 60/600/1800 秒门禁。任一阶段失败不进入下一阶段。
 2. 通过脱敏健康摘要持续核对 `compactBroadcastRetryRate <= 0.02`、重发写失败为 0、逻辑总响应不超过 2500 ms，并同时确认 `usb0` 默认路由、反向 SSH、Hermes 和 MQTT 在线；不再通过插拔网线制造常规切换。
 3. 纯遥测 1800 秒通过后，才把 CORS 参数写入 RK3568 本地 600 权限环境文件并启用 PROBE。验证三节点相同 session/lease、RTCM 类型、分片、队列、CRC 和 UART 证据后，才允许切 LIVE。
 4. LIVE 后执行三节点真实 NTRIP 混合负载和室外 `GGA=4` 门禁，以 correction age、Fixed 连续性和可信坐标作为依据；再完成 ECEF/ENU、Hampel/Kalman、CEEMDAN 的算法验收。
@@ -173,4 +175,4 @@ status: active
 
 ## Resume Prompt
 
-继续 2026-08-03 XLS1/RTK V4 链路任务：源码 `ac78919e...` 已推送；正式包 `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v4_hardware_live_20260803` 已通过 `sourceDirty=false`、身份、139/157 B、hardware、最终电池校准、LIVE capability 与 boot DISABLED 门禁。RK3568/服务器/Windows 已部署且 NTRIP 保持关闭。先确认 C 为何仍发旧 V2，再按物理标签烧录 A/B/C；随后以 1000 ms 冷却、1200 ms 首响应窗、部分响应最多重发一次、2500 ms 总会话依次跑 60/600/1800 秒 V4 hardware 纯遥测门禁。通过后再依次启用 PROBE、LIVE、室外 Fixed 和专业位移算法验收。OTA 仍禁止用于现场 A/B/C，原始报告、坐标和凭据不进入 Git。
+继续 2026-08-03 XLS1/RTK V4 链路任务：固件源码 `ac78919e...`、现场门禁 `97473b62...` 已推送；正式包 `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v4_hardware_live_20260803` 已通过 `sourceDirty=false`、身份、139/157 B、hardware、最终电池校准、LIVE capability 与 boot DISABLED 门禁。RK3568/服务器/Windows 已部署且 NTRIP 保持关闭。先确认 C 为何仍发旧 V2，再按物理标签烧录 A/B/C；运行已部署的 `xls1_compact_v4_acceptance.py --check-prerequisites`，通过后不带参数运行，脚本会以 1000 ms 冷却、1200 ms 首响应窗、部分响应最多重发一次、2500 ms 总会话失败即停地执行 60/600/1800 秒 V4 hardware 纯遥测门禁。通过后再依次启用 PROBE、LIVE、室外 Fixed 和专业位移算法验收。OTA 仍禁止用于现场 A/B/C，原始报告、坐标和凭据不进入 Git。
