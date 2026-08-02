@@ -40,6 +40,7 @@ status: active
 - 同标签单次有界重发已完成强制、600 秒真实和 1800 秒最终三级门禁。500 ms 强制窗为 11/11 轮、33/33 逻辑帧；1200 ms 真实 600 秒为 310/310 轮、930/930 帧，1 轮重发（0.3226%）在重发发出后匹配缺失 A，最大逻辑时延 1503.8 ms，两个预期冗余帧独立归类；最终 1800 秒为 929/929 轮、2787/2787 帧、零错误且本轮不需重发。600/1800 秒报告 SHA-256 分别为 `fff4792c3b0f28ba4d5b09222ede60e0f8dc1d60107cd600f042ad6643ca2ceb`、`0cc143af8102924d80de0823ce99d3cbe072db2e288e52880f7c368bda66998a`。
 - RK3568 生产网关已两阶段部署：先以默认重发关闭验证新构建正常，再原子启用 `SOUTHBOUND_POLLING_SESSION_TIMEOUT_MS=2500`、`SOUTHBOUND_POLLING_PARTIAL_RETRIES=1`、`SOUTHBOUND_POLLING_RETRY_AFTER_MS=1200`。对抗性复核后又收紧为空窗口不重发、每节点最多一个预期冗余副本；当前回滚目录为 `/home/linaro/lsmv2-backups/field-gateway-pre-empty-retry-boundary-20260802-163637`，`index.js/config.js/compact-poll-retry.js` 哈希为 `849f0365...c15a67`、`903ffbb9...24f36`、`320f0b14...2a52a71b`。修正版重启后已重新累计 61/61 轮、183/183 帧，重发/重发写失败/超时/重复/未匹配/解析拒绝/spool 均为 0；串口 open、MQTT connected、A/B/C online，field-gateway/Hermes/反向 SSH active，4G `usb0` 仍为公网出口。
 - 部署后累计复核到 536/536 个生产轮次、1608/1608 个逻辑匹配帧；A/B/C 各 536 帧且均为 online。重发、超时、重复、未匹配和解析拒绝均为 0，spool pending 亦为 0，串口与 MQTT 在线。该段证明生产集成未引入回归，不替代 600 秒门禁中已发生的自然补帧证据。
+- 有界重发实现、Python 门禁、测试和上述部署证据已由 `06749252ac251f482498e099884140adbbc79ddb` 推送到远端 `feat/gnss-rtk-v31-transport`；敏感信息扫描未发现 CORS 凭据、私钥、真实坐标或原始报告。
 
 ### Historical Engineering Evidence
 

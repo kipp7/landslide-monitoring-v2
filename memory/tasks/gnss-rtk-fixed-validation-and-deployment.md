@@ -35,6 +35,7 @@ status: active
 - 生产网关已启用 `SESSION_TIMEOUT=2500`、`PARTIAL_RETRIES=1`、`RETRY_AFTER=1200`，并新增重发命令/写失败/重发后匹配/每节点一次冗余/重发率及单调时延健康指标；默认配置仍为重发关闭，避免其他部署静默改变行为。对抗性复核进一步限定只有 `1..N-1` 部分响应才重发，全空窗口直接进入原指数退避；每节点只豁免一个预期重发副本，后续副本仍算真实重复。当前 RK3568 回滚目录为 `/home/linaro/lsmv2-backups/field-gateway-pre-empty-retry-boundary-20260802-163637`，部署 `index.js/config.js/compact-poll-retry.js` 哈希分别为 `849f0365...c15a67`、`903ffbb9...24f36`、`320f0b14...2a52a71b`。
 - 部署后生产健康快照已累计到 536/536 轮、1608/1608 三节点匹配帧，A/B/C online；重发、超时、重复、未匹配和解析拒绝均为 0，spool pending 为 0，串口与 MQTT 在线。该快照证明部署无回归；自然重发成功仍由独立 600 秒严格门禁提供证据。
 - 空窗口/冗余边界修正版受控重启后重新累计 61/61 轮、183/183 帧；重发、重发写失败、超时、重复、未匹配、解析拒绝和 spool 均为 0。field-gateway、Hermes、反向 SSH 均 active，公网到云服务器仍明确走 4G `usb0`。
+- 有界重发实现、现场门禁工具、测试、部署证据与本 task/checkpoint 已作为 `06749252ac251f482498e099884140adbbc79ddb` 推送到远端 `feat/gnss-rtk-v31-transport`；提交内容已扫描确认不含 CORS 凭据、私钥、真实坐标或原始报告。
 
 ### Prior Engineering Evidence
 
