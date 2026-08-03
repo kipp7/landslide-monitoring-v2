@@ -41,7 +41,7 @@ calibration, unique A/B/C identities, RTCM disabled, and `sourceDirty=false`.
 Flash only the image matching the physical node label.
 
 The firmware marker for this diagnostic build is
-`fw-rk2206-rtk-compact-v4-rs485-diag-v5-r2-20260803`. Normal telemetry remains
+`fw-rk2206-rtk-compact-v4-rs485-diag-v5-r3-20260803`. Normal telemetry remains
 139/157 bytes. The separate 552-byte G3S V5 response is requested only while
 isolating a fault and must not be used as periodic telemetry.
 

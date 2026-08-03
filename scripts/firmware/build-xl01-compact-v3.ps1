@@ -233,7 +233,7 @@ function Set-CompactTelemetryVersion {
   $mainText = Set-SingleMacro `
     -Text $mainText `
     -Macro "FW_RX_DIAG_MARKER" `
-    -Value ("fw-rk2206-rtk-compact-v{0}-rs485-diag-v5-r2-20260803" -f $CompactVersion)
+    -Value ("fw-rk2206-rtk-compact-v{0}-rs485-diag-v5-r3-20260803" -f $CompactVersion)
   [System.IO.File]::WriteAllText($mainPath, $mainText, [System.Text.UTF8Encoding]::new($false))
 }
 

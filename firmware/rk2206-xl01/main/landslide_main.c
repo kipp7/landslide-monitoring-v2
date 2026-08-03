@@ -129,7 +129,7 @@ static char g_last_trusted_time_ts[40] = "";
 static char g_last_trusted_time_source[32] = "";
 static volatile uint32_t g_last_platform_command_tick = 0;
 static volatile int g_field_link_recovery_requested = 0;
-#define FW_RX_DIAG_MARKER "fw-rk2206-rtk-compact-v4-rs485-diag-v5-r2-20260803"
+#define FW_RX_DIAG_MARKER "fw-rk2206-rtk-compact-v4-rs485-diag-v5-r3-20260803"
 bool g_cloud_motor_enabled = false;
 int g_cloud_motor_speed = 0;
 MotorDirection g_cloud_motor_direction = MOTOR_DIRECTION_STOP;

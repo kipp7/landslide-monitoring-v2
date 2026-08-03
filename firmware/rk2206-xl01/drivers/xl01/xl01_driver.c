@@ -100,16 +100,26 @@ static unsigned int XL01_GetHardwareUartId(void)
 #endif
 }
 
-static int XL01_WriteChunked(const unsigned char *data, int len)
+static void XL01_TxLock(void)
+{
+    if (g_uart_tx_mutex != NULL) {
+        osMutexAcquire(g_uart_tx_mutex, osWaitForever);
+    }
+}
+
+static void XL01_TxUnlock(void)
+{
+    if (g_uart_tx_mutex != NULL) {
+        osMutexRelease(g_uart_tx_mutex);
+    }
+}
+
+static int XL01_WriteChunkedUnlocked(const unsigned char *data, int len)
 {
     int total_written = 0;
 
     if (data == NULL || len <= 0) {
         return -1;
-    }
-
-    if (g_uart_tx_mutex != NULL) {
-        osMutexAcquire(g_uart_tx_mutex, osWaitForever);
     }
 
 #if XL01_UART_TX_CHUNK_SIZE > 0
@@ -119,9 +129,6 @@ static int XL01_WriteChunked(const unsigned char *data, int len)
         int write_ret = IoTUartWrite(XL01_UART_ID, (unsigned char *)(data + total_written), (unsigned int)chunk_len);
         if (write_ret != chunk_len) {
             printf("\n[UART TX ERROR] ret=%d len=%d offset=%d", write_ret, chunk_len, total_written);
-            if (g_uart_tx_mutex != NULL) {
-                osMutexRelease(g_uart_tx_mutex);
-            }
             return total_written > 0 ? total_written : -1;
         }
         total_written += chunk_len;
@@ -131,17 +138,21 @@ static int XL01_WriteChunked(const unsigned char *data, int len)
         }
 #endif
     }
-    if (g_uart_tx_mutex != NULL) {
-        osMutexRelease(g_uart_tx_mutex);
-    }
     return total_written;
 #else
     total_written = IoTUartWrite(XL01_UART_ID, (unsigned char *)data, (unsigned int)len);
-    if (g_uart_tx_mutex != NULL) {
-        osMutexRelease(g_uart_tx_mutex);
-    }
     return total_written;
 #endif
+}
+
+static int XL01_WriteChunked(const unsigned char *data, int len)
+{
+    int written;
+
+    XL01_TxLock();
+    written = XL01_WriteChunkedUnlocked(data, len);
+    XL01_TxUnlock();
+    return written;
 }
 
 static unsigned int XL01_NextFieldLinkTxSequence(void)
@@ -377,9 +388,13 @@ static int XL01_SendTypedPayload(FieldLinkFrameType type, const char *data, int 
     int encoded_len;
     int written_len;
 
+    /* Sequence allocation and wire transmission must share one lock. Otherwise
+     * two sender tasks can put sequence N+1 on the wire before sequence N. */
+    XL01_TxLock();
     sequence = XL01_NextFieldLinkTxSequence();
     encoded_len = FieldLinkFrame_Encode(type, sequence, data, len, encoded, sizeof(encoded));
     if (encoded_len <= 0) {
+        XL01_TxUnlock();
         printf("\n[FIELD LINK ENCODE FAIL] type=%s len=%d", FieldLinkFrameTypeName(type), len);
         return -1;
     }
@@ -388,7 +403,8 @@ static int XL01_SendTypedPayload(FieldLinkFrameType type, const char *data, int 
     PrintFieldLinkLoopbackDiagnostic(type, sequence, data, len, encoded, encoded_len);
 #endif
 
-    written_len = XL01_WriteChunked(encoded, encoded_len);
+    written_len = XL01_WriteChunkedUnlocked(encoded, encoded_len);
+    XL01_TxUnlock();
     if (written_len != encoded_len) {
         return written_len;
     }

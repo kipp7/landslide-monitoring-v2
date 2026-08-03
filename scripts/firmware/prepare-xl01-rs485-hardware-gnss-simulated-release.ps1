@@ -2,7 +2,7 @@
 param(
   [string]$SdkRoot = "F:\2\openharmony\txsmartropenharmony",
   [string]$ContainerName = "openharmony-dev",
-  [string]$ReleaseDirectory = "F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v4_rs485_diag_v5_r2_gnss_simulated_20260803",
+  [string]$ReleaseDirectory = "F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v4_rs485_diag_v5_r3_gnss_simulated_20260803",
   [string]$BatteryCalibrationFile = "",
   [ValidateSet("A", "B", "C")]
   [string[]]$NodeLabels = @("A", "B", "C")
@@ -22,9 +22,11 @@ $stagingRoot = Join-Path ([System.IO.Path]::GetTempPath()) `
 $builder = Join-Path $PSScriptRoot "build-xl01-compact-v4.ps1"
 $verifier = Join-Path $PSScriptRoot "verify-rk2206-release-safety.ps1"
 $startupSafety = Join-Path $PSScriptRoot "test-rk2206-rs485-startup-safety.ps1"
-$expectedFirmwareMarker = "fw-rk2206-rtk-compact-v4-rs485-diag-v5-r2-20260803"
+$txOrderSafety = Join-Path $PSScriptRoot "test-rk2206-field-link-tx-order-safety.ps1"
+$expectedFirmwareMarker = "fw-rk2206-rtk-compact-v4-rs485-diag-v5-r3-20260803"
 
 & $startupSafety
+& $txOrderSafety
 
 $dirty = @(& git -C $repoRoot status --porcelain --untracked-files=normal)
 if ($LASTEXITCODE -ne 0 -or $dirty.Count -ne 0) {

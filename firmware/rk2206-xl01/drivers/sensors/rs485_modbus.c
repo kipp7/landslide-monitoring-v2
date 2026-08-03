@@ -351,8 +351,11 @@ int RS485_ModbusInit(void)
 {
     memset(&g_modbus_diagnostics, 0, sizeof(g_modbus_diagnostics));
 #if RS485_TRANSPORT_SC16IS752
+    int sc16is752_init_status;
+
     printf("[RS485] Initializing Modbus via SC16IS752 baud=%u...\n", RS485_BAUDRATE);
-    if (SC16IS752_Init() != 0) {
+    sc16is752_init_status = SC16IS752_Init();
+    if (sc16is752_init_status < 0) {
         printf("[RS485] SC16IS752 init failed\n");
         return -1;
     }
@@ -361,7 +364,11 @@ int RS485_ModbusInit(void)
 #if RS485_EXTERNAL_LOOPBACK_DIAG
     Rs485ExternalLoopbackDiag();
 #endif
-    printf("[OK] RS485 Modbus initialized via SC16IS752\n");
+    if (sc16is752_init_status > 0) {
+        printf("[WARN] RS485 Modbus state=DEGRADED; transport enabled for path isolation\n");
+    } else {
+        printf("[OK] RS485 Modbus initialized via SC16IS752\n");
+    }
     return 0;
 #else
     IotUartAttribute uart_attr = {

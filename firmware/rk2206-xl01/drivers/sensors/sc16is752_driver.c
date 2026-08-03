@@ -526,7 +526,7 @@ int SC16IS752_Init(void)
         printf("[WARN] SC16IS752 state=DEGRADED addr=0x%02X lsr=0x%02X; self-test failed, continuing for path isolation\n",
                g_sc16is752_i2c_addr,
                lsr);
-        return 0;
+        return 1;
     }
 #endif
     printf("[OK] SC16IS752 ready addr=0x%02X lsr=0x%02X\n", g_sc16is752_i2c_addr, lsr);
