@@ -26,6 +26,7 @@ status: active
 - A/B/C dirty 候选 OpenHarmony 全量构建成功，manifest 正确报告 `fieldSensorMode=hardware`、`rs485HardwareInitialized=true`、`gnssSourceMode=simulated`、`gnssHardwareInitialized=false`、RTCM disabled 和 A/B/C 最终校准。最终二进制包含真实 RS485 标记、无 GPS UART 初始化标记且身份唯一；由于 `sourceDirty=true`，候选严格禁止烧录。待源码干净提交并推送后再生成正式发布目录与哈希。
 - 正式打包的第一轮安全验证拒绝了“disabled capability + 遗留 LIVE 显示标记”的矛盾，未生成最终目录。`baf7e8ecfc052cbb57bcdc83902c16c7ed29ac5b` 将 capability marker 改为由编译宏派生并移除打包器对字符串的二次改写；单节点及三节点 OpenHarmony 全量重建均通过，二进制明确含 `boot=DISABLED capability=DISABLED`、模拟 GNSS、SC16IS752/RS485，且不含 GPS UART 初始化或 PROBE/LIVE capability 标记。
 - 可烧录正式包为 `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v4_rs485_hardware_gnss_simulated_20260803`，绑定已推送提交 `baf7e8ecfc052cbb57bcdc83902c16c7ed29ac5b`。manifest SHA-256 `cf18a8b9c86457f47ccd692150ae2d64a87125cb3181082657f504f6884a38b5`；A/B/C `.img` SHA-256 为 `256d5072...5f636`、`7d19be25...3ff31`、`beba41f1...4010c`。最终目录独立通过 `sourceDirty=false`、唯一身份、hardware RS485、simulated GNSS、RTCM disabled/无 runtime control、field-calibrated PC0 和 final acceptance 门禁。尚未烧录或运行真实 A/B/C 60/600/1800 秒，因此当前只完成“可开始调试”的发布准备。
+- RK3568 当前地址为 `192.168.124.179`。field-gateway 的 `dist/index.js` SHA-256 与本地最新构建一致，现场验收脚本已在备份 `/opt/lsmv2/backups/indoor-rs485-predeploy-20260803-170053` 后原子更新。前置门禁确认 `/etc/lsmv2/field-gateway.env` 为 `root:root 0600`、`NTRIP_ENABLED=false`、`/dev/ttyS3` 存在且网关 active；前置检查不抢占串口，检查后服务仍 active。当前日志尚无 A/B/C 响应，符合“尚未烧录/上电正式室内包”的未验收状态，不能表述为真实 RS485 已通过。
 
 ### Current Verified Baseline (2026-08-03)
 
