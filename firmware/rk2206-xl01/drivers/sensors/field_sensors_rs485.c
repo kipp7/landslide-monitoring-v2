@@ -412,10 +412,14 @@ int FieldRs485_Init(void)
     if (status != 0) {
         return status;
     }
+    return 0;
+}
+
+void FieldRs485_RunDiagnostics(void)
+{
 #if RS485_STRUCTURED_DIAG
     RunReadOnlyDiagnostics();
 #endif
-    return 0;
 }
 
 int FieldRs485_Read(FieldRs485Readings *out)

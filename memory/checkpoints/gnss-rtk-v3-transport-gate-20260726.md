@@ -18,6 +18,14 @@ status: active
 
 ## Last Confirmed State
 
+### Deferred RS485 Startup Diagnostics Fix (2026-08-03 21:15 CST)
+
+- B 在重新烧录 `r2` 的正确 V4/B 镜像后，调试串口确认版本已为 `v1.3-um220-rs485-rtk-compact-v4`，SC16IS752 地址 `0x4D`、A/B scratchpad 和双通道内部 FIFO loopback 全部通过，但输出固定停在 `[OK] RS485 Modbus initialized via SC16IS752`，没有 `--- Initialization Complete ---`、任务启动或 `[FW MARK]`。RK3568 同期持续正确发送 `P2B`，数分钟内 `...0002` 回包仍为 0；A/C 可继续发布，因此不是 RK3568 串口、P2 单飞或 B 供电问题。
+- 根因是 `FieldRs485_Init()` 在 `SYS_RUN(MainEntry)` 的调度器启动前调用 `RunReadOnlyDiagnostics()`。诊断读超时依赖 `LOS_TickCountGet()` 和 `LOS_Msleep()`；此时 LiteOS tick 尚未运行，无响应的第一个外部 Modbus 请求会永久等待。SC16IS752 内部自检通过只证明 U4/I2C/FIFO，不能保证外部探头会立即响应，因此该启动顺序违反 fail-open 要求。
+- 源码修复将 `FieldRs485_Init()` 收敛为纯硬件初始化，并新增 `FieldRs485_RunDiagnostics()`；传感器任务在调度器启动并保存首个正常快照后只调用一次扫描。即使两路 RS485 探头均断开，UART RX、命令处理和上传任务也能先启动，B 仍可用真实电池与明确标记的室内模拟 GNSS 响应 `P2B`，扫描继续使用原有有界超时并最终恢复 4800 baud/默认时钟。
+- 新增发布门禁 `scripts/firmware/test-rk2206-rs485-startup-safety.ps1`，强制初始化函数不得调用扫描、扫描入口必须保留 read-only probe、调用位置必须在 `SensorData_StoreSnapshot()` 之后且不得位于 `App_SystemInit()`。主机 GNSS/Compact V4 测试、PB 引脚安全门禁和新启动安全门禁均通过；B 的完整 OpenHarmony `hardware RS485 + simulated GNSS + RTCM disabled` 编译通过。编译验证目录 `output/rk2206-b-startup-fix-compile-20260803` 来自 dirty source，只用于编译证明，禁止烧录。
+- 下一门禁是提交并推送修复，从干净提交生成新的 immutable A/B/C 同源发布目录。现场先只重刷新包的 B 验证其能打印 `Initialization Complete`、`FW MARK` 并回复 `P2B`；B 通过后再统一 A/C，重新从严格 60 秒开始，不能沿用修复前的门禁结果。
+
 ### Compact Targeted Singleflight Checkpoint (2026-08-03)
 
 - A/B/C 旧 Compact V4 室内镜像在真实共享 XLS1 上完成了两轮诊断，但未通过验收。60 秒报告 `/var/lib/lsmv2/experiments/xls1-compact-v4-0060s-20260803-190546.json` 的 SHA-256 为 `882f4d02405167cae11e4e03d1d87f035cabad6ee85bdb4c65c3c7205335d1e9`，28 轮应有 84 帧、实际匹配 0、解码错误 62。30 秒报告 `/var/lib/lsmv2/experiments/xls1-compact-v4-0030s-20260803-191221.json` 的 SHA-256 为 `7ab2baa4ce99b46965ef3b7e64eb38a7a5c6fa7b7b53462f081d0671a2c90694`，观察到 26 个完整 157 B 帧和 4 组 `236 B + 78 B = 314 B` 的两节点分块交织。该证据确认身份、139 B payload 和模拟 GNSS 标志正确，同时证明 P1 广播下多个 RK2206 的 32 B UART 分块会互相穿插；继续增大固定时隙不能从机制上保证不交织。

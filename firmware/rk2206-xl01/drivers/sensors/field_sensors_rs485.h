@@ -46,6 +46,8 @@ typedef struct {
 } FieldRs485Diagnostics;
 
 int FieldRs485_Init(void);
+/* Timeout-based diagnostics require the scheduler tick to be running. */
+void FieldRs485_RunDiagnostics(void);
 int FieldRs485_Read(FieldRs485Readings *out);
 void FieldRs485_GetDiagnostics(FieldRs485Diagnostics *snapshot);
 

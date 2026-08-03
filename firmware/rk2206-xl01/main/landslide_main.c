@@ -1380,6 +1380,7 @@ static void* SensorCollectionTask(const char* arg)
     uint8_t diagnostic_success_mask;
 #if ENABLE_RS485_BUS
     FieldRs485Readings rs485_readings;
+    int rs485_diagnostics_pending = 1;
 #endif
 #if ENABLE_BATTERY_MONITOR
     BatteryReading battery_reading;
@@ -1490,6 +1491,13 @@ static void* SensorCollectionTask(const char* arg)
         }
         SensorDiagnostics_RecordCycle(diagnostic_success_mask, (uint32_t)g_stats.uptime_sec);
         SensorData_StoreSnapshot(&next_sample);
+
+#if ENABLE_RS485_BUS
+        if (rs485_diagnostics_pending) {
+            rs485_diagnostics_pending = 0;
+            FieldRs485_RunDiagnostics();
+        }
+#endif
         
         // Feed watchdog
         Watchdog_Feed();

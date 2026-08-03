@@ -21,6 +21,9 @@ $stagingRoot = Join-Path ([System.IO.Path]::GetTempPath()) `
   ("rk2206-rs485-hardware-gnss-simulated-" + [guid]::NewGuid().ToString("N"))
 $builder = Join-Path $PSScriptRoot "build-xl01-compact-v4.ps1"
 $verifier = Join-Path $PSScriptRoot "verify-rk2206-release-safety.ps1"
+$startupSafety = Join-Path $PSScriptRoot "test-rk2206-rs485-startup-safety.ps1"
+
+& $startupSafety
 
 $dirty = @(& git -C $repoRoot status --porcelain --untracked-files=normal)
 if ($LASTEXITCODE -ne 0 -or $dirty.Count -ne 0) {
