@@ -13,12 +13,15 @@
  */
 
 #include "gps_driver.h"
+#include "../../config/app_config.h"
+
+#if ENABLE_GPS
+
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
 #include "iot_uart.h"
 #include "iot_errno.h"
-#include "../../config/app_config.h"
 #include "utils/fifo.h"  // 使用项目FIFO模块
 #include "los_tick.h"  // For LOS_TickCountGet
 #include "los_task.h"  // For LOS_TaskCreate
@@ -537,3 +540,5 @@ int GPS_GetGgaQuality(void)
     GnssSolutionSnapshot snapshot;
     return GPS_ReadSolution(&snapshot) == 0 ? (int)snapshot.gga_quality : 0;
 }
+
+#endif // ENABLE_GPS

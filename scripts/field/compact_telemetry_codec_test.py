@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import struct
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -120,6 +121,7 @@ def main() -> None:
 
     telemetry_v3 = decode_compact_telemetry(bytes.fromhex(PAYLOAD_V3_HEX))
     assert telemetry_v3["meta"]["compact_payload_version"] == 3
+    assert telemetry_v3["meta"]["gnss_source"] == "hardware"
     assert telemetry_v3["metrics"]["rtk_latitude_deg"] == 24.612345678
     assert telemetry_v3["metrics"]["rtk_longitude_deg"] == 118.123456789
     assert telemetry_v3["metrics"]["rtk_trusted"] is True
@@ -152,12 +154,43 @@ def main() -> None:
         telemetry_v4_disabled,
         required_compact_version=4,
         required_field_sensor_source="hardware",
+        required_gnss_source="hardware",
         require_battery_valid=True,
         require_field_sensors_valid=True,
         require_field_calibrated_battery=True,
         required_rtcm_mode="disabled",
         require_rtcm_clean=True,
     ) == []
+
+    hybrid_v4 = bytearray(disabled_v4)
+    hybrid_v4[4] = (hybrid_v4[4] & ~0x02) | 0x04
+    hybrid_v4[76:78] = struct.pack(">H", struct.unpack(">H", hybrid_v4[76:78])[0] & ~(1 << 1))
+    hybrid_telemetry = decode_compact_telemetry(bytes(hybrid_v4))
+    assert hybrid_telemetry["meta"]["field_sensor_source"] == "hardware"
+    assert hybrid_telemetry["meta"]["gnss_source"] == "simulated"
+    assert hybrid_telemetry["metrics"]["rtk_trusted"] is False
+    assert hybrid_telemetry["meta"]["rtk_displacement_eligible"] is False
+    assert telemetry_profile_errors(
+        hybrid_telemetry,
+        required_compact_version=4,
+        required_field_sensor_source="hardware",
+        required_gnss_source="simulated",
+        require_battery_valid=True,
+        require_field_sensors_valid=True,
+        require_field_calibrated_battery=True,
+        required_rtcm_mode="disabled",
+        require_rtcm_clean=True,
+    ) == []
+    contradictory_hybrid_v4 = bytearray(hybrid_v4)
+    contradictory_hybrid_v4[76:78] = struct.pack(
+        ">H", struct.unpack(">H", contradictory_hybrid_v4[76:78])[0] | (1 << 1)
+    )
+    try:
+        decode_compact_telemetry(bytes(contradictory_hybrid_v4))
+    except ValueError as exc:
+        assert "simulated GNSS cannot be trusted" in str(exc)
+    else:
+        raise AssertionError("simulated GNSS with trusted RTK evidence was accepted")
 
     dirty_disabled_v4 = bytearray(disabled_v4)
     dirty_disabled_v4[102] = 1

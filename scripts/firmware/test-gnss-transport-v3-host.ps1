@@ -13,6 +13,7 @@ $injectionHeader = Join-Path $repoRoot "firmware\rk2206-xl01\drivers\xl01\gnss_r
 $injectionImplementation = Join-Path $repoRoot "firmware\rk2206-xl01\drivers\xl01\gnss_rtcm_injection.c"
 $appConfig = Join-Path $repoRoot "firmware\rk2206-xl01\config\app_config.h"
 $sourceTest = Join-Path $repoRoot "firmware\rk2206-xl01\tests\gnss_transport_v3_host_test.c"
+$disabledInjectionTest = Join-Path $repoRoot "firmware\rk2206-xl01\tests\gnss_rtcm_disabled_host_test.c"
 $probeProtocolHeader = Join-Path $repoRoot "firmware\rk2206-xl01\app\gnss_probe_stats_protocol.h"
 $probeProtocolImplementation = Join-Path $repoRoot "firmware\rk2206-xl01\app\gnss_probe_stats_protocol.c"
 $fieldLinkStatsHeader = Join-Path $repoRoot "firmware\rk2206-xl01\drivers\xl01\field_link_rx_stats.h"
@@ -33,6 +34,8 @@ $fieldLinkFrameHeader = Join-Path $repoRoot "firmware\rk2206-xl01\drivers\xl01\f
 $fieldLinkFrameImplementation = Join-Path $repoRoot "firmware\rk2206-xl01\drivers\xl01\field_link_frame.c"
 $simulatedFieldSensorsHeader = Join-Path $repoRoot "firmware\rk2206-xl01\drivers\sensors\simulated_field_sensors.h"
 $simulatedFieldSensorsImplementation = Join-Path $repoRoot "firmware\rk2206-xl01\drivers\sensors\simulated_field_sensors.c"
+$simulatedGnssHeader = Join-Path $repoRoot "firmware\rk2206-xl01\drivers\sensors\simulated_gnss.h"
+$simulatedGnssImplementation = Join-Path $repoRoot "firmware\rk2206-xl01\drivers\sensors\simulated_gnss.c"
 $compactBuilderTest = Join-Path $repoRoot "firmware\rk2206-xl01\tests\compact_telemetry_builder_host_test.c"
 $gnssSolutionHeader = Join-Path $repoRoot "firmware\rk2206-xl01\drivers\sensors\gnss_solution_parser.h"
 $gnssSolutionImplementation = Join-Path $repoRoot "firmware\rk2206-xl01\drivers\sensors\gnss_solution_parser.c"
@@ -40,14 +43,15 @@ $gnssSolutionTest = Join-Path $repoRoot "firmware\rk2206-xl01\tests\gnss_solutio
 
 foreach ($required in @(
   $sourceHeader, $sourceImplementation, $injectionHeader, $injectionImplementation,
-  $appConfig, $sourceTest, $probeProtocolHeader, $probeProtocolImplementation,
+  $appConfig, $sourceTest, $disabledInjectionTest, $probeProtocolHeader, $probeProtocolImplementation,
   $fieldLinkStatsHeader, $fieldLinkStatsImplementation, $probeProtocolTest,
   $fieldSensorsHeader, $modbusHeader, $sc16is752Header,
   $batteryEstimatorHeader, $batteryEstimatorImplementation, $batteryEstimatorTest,
   $compactBuilderHeader, $compactBuilderImplementation, $compactPollHeader,
   $compactPollImplementation, $sensorDataHeader, $fieldLinkFrameHeader,
   $fieldLinkFrameImplementation, $simulatedFieldSensorsHeader,
-  $simulatedFieldSensorsImplementation, $compactBuilderTest,
+  $simulatedFieldSensorsImplementation, $simulatedGnssHeader,
+  $simulatedGnssImplementation, $compactBuilderTest,
   $gnssSolutionHeader, $gnssSolutionImplementation, $gnssSolutionTest
 )) {
   if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
@@ -71,6 +75,7 @@ docker cp $injectionHeader "${ContainerName}:${containerRoot}/drivers/xl01/gnss_
 docker cp $injectionImplementation "${ContainerName}:${containerRoot}/drivers/xl01/gnss_rtcm_injection.c"
 docker cp $appConfig "${ContainerName}:${containerRoot}/config/app_config.h"
 docker cp $sourceTest "${ContainerName}:${containerRoot}/tests/gnss_transport_v3_host_test.c"
+docker cp $disabledInjectionTest "${ContainerName}:${containerRoot}/tests/gnss_rtcm_disabled_host_test.c"
 docker cp $probeProtocolHeader "${ContainerName}:${containerRoot}/app/gnss_probe_stats_protocol.h"
 docker cp $probeProtocolImplementation "${ContainerName}:${containerRoot}/app/gnss_probe_stats_protocol.c"
 docker cp $fieldLinkStatsHeader "${ContainerName}:${containerRoot}/drivers/xl01/field_link_rx_stats.h"
@@ -91,6 +96,8 @@ docker cp $fieldLinkFrameHeader "${ContainerName}:${containerRoot}/drivers/xl01/
 docker cp $fieldLinkFrameImplementation "${ContainerName}:${containerRoot}/drivers/xl01/field_link_frame.c"
 docker cp $simulatedFieldSensorsHeader "${ContainerName}:${containerRoot}/drivers/sensors/simulated_field_sensors.h"
 docker cp $simulatedFieldSensorsImplementation "${ContainerName}:${containerRoot}/drivers/sensors/simulated_field_sensors.c"
+docker cp $simulatedGnssHeader "${ContainerName}:${containerRoot}/drivers/sensors/simulated_gnss.h"
+docker cp $simulatedGnssImplementation "${ContainerName}:${containerRoot}/drivers/sensors/simulated_gnss.c"
 docker cp $compactBuilderTest "${ContainerName}:${containerRoot}/tests/compact_telemetry_builder_host_test.c"
 docker cp $gnssSolutionHeader "${ContainerName}:${containerRoot}/drivers/sensors/gnss_solution_parser.h"
 docker cp $gnssSolutionImplementation "${ContainerName}:${containerRoot}/drivers/sensors/gnss_solution_parser.c"
@@ -111,6 +118,15 @@ gcc -std=c99 -Wall -Wextra -Werror -O2 \
   -o gnss_transport_v3_host_test
 ./gnss_transport_v3_host_test
 gcc -std=c99 -Wall -Wextra -Werror -O2 \
+  -DGNSS_RTCM_INJECTION_HOST_TEST=1 \
+  -DGNSS_SOURCE=GNSS_SOURCE_SIMULATED \
+  -DGNSS_RTCM_INJECTION_MODE=GNSS_RTCM_INJECTION_DISABLED \
+  -DGNSS_RTCM_INJECTION_CAPABILITY=GNSS_RTCM_INJECTION_DISABLED \
+  drivers/xl01/gnss_rtcm_injection.c \
+  tests/gnss_rtcm_disabled_host_test.c \
+  -o gnss_rtcm_disabled_host_test
+./gnss_rtcm_disabled_host_test
+gcc -std=c99 -Wall -Wextra -Werror -O2 \
   -DGNSS_RTCM_INJECTION_MODE=GNSS_RTCM_INJECTION_PROBE \
   drivers/xl01/field_link_rx_stats.c \
   app/gnss_probe_stats_protocol.c \
@@ -127,6 +143,7 @@ gcc -std=c99 -Wall -Wextra -Werror -O2 \
   app/compact_poll_command.c \
   drivers/xl01/field_link_frame.c \
   drivers/sensors/simulated_field_sensors.c \
+  drivers/sensors/simulated_gnss.c \
   tests/compact_telemetry_builder_host_test.c \
   -o compact_telemetry_builder_host_test
 ./compact_telemetry_builder_host_test

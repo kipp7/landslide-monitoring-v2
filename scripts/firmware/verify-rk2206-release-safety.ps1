@@ -5,6 +5,8 @@ param(
   [Parameter(Mandatory = $true)]
   [ValidateSet("hardware", "simulated")]
   [string]$ExpectedFieldSensorMode,
+  [ValidateSet("hardware", "simulated")]
+  [string]$ExpectedGnssSourceMode = "hardware",
   [Parameter(Mandatory = $true)]
   [ValidateSet("disabled", "probe", "live")]
   [string]$ExpectedGnssRtcmInjectionMode,
@@ -105,10 +107,21 @@ foreach ($property in @(
   Assert-ObjectProperty -Object $manifest -Name $property -Context "Release manifest"
 }
 
-Assert-ReleaseCondition -Condition ($manifest.schemaVersion -eq 1) `
+Assert-ReleaseCondition -Condition ($manifest.schemaVersion -in @(1, 2)) `
   -Message "Unsupported release manifest schemaVersion: $($manifest.schemaVersion)"
+$isGnssSourceAwareManifest = $manifest.schemaVersion -ge 2
+if ($isGnssSourceAwareManifest) {
+  foreach ($property in @("gnssSourceMode", "gnssTruth", "gnssHardwareInitialized")) {
+    Assert-ObjectProperty -Object $manifest -Name $property -Context "Release manifest"
+  }
+}
+$expectedProfile = if ($isGnssSourceAwareManifest) {
+  "rk2206-xl01-compact-v$ExpectedCompactVersion-$ExpectedFieldSensorMode-gnss-$ExpectedGnssSourceMode"
+} else {
+  "rk2206-xl01-compact-v$ExpectedCompactVersion-$ExpectedFieldSensorMode"
+}
 Assert-ReleaseCondition `
-  -Condition ($manifest.profile -eq "rk2206-xl01-compact-v$ExpectedCompactVersion-$ExpectedFieldSensorMode") `
+  -Condition ($manifest.profile -eq $expectedProfile) `
   -Message "Release profile does not match expected field sensor mode"
 Assert-ReleaseCondition -Condition ($manifest.compactVersion -eq $ExpectedCompactVersion) `
   -Message "Compact telemetry version mismatch: expected $ExpectedCompactVersion, found $($manifest.compactVersion)"
@@ -130,7 +143,11 @@ Assert-ReleaseCondition -Condition ($manifest.fieldSensorMode -eq $ExpectedField
   -Message "Field sensor mode mismatch: expected $ExpectedFieldSensorMode, found $($manifest.fieldSensorMode)"
 
 $expectHardware = $ExpectedFieldSensorMode -eq "hardware"
-$expectedSensorTruth = if ($expectHardware) {
+$expectedSensorTruth = if ($isGnssSourceAwareManifest -and $expectHardware) {
+  "RS485 and battery are real"
+} elseif ($isGnssSourceAwareManifest) {
+  "RS485 values simulated; battery is real"
+} elseif ($expectHardware) {
   "RS485, GPS and battery are real"
 } else {
   "RS485 values simulated; GPS and battery are real"
@@ -141,6 +158,29 @@ Assert-ReleaseCondition `
   -Condition ($manifest.rs485HardwareInitialized -is [bool] -and
     $manifest.rs485HardwareInitialized -eq $expectHardware) `
   -Message "rs485HardwareInitialized is inconsistent with fieldSensorMode"
+
+$expectGnssHardware = $ExpectedGnssSourceMode -eq "hardware"
+if ($isGnssSourceAwareManifest) {
+  $expectedGnssTruth = if ($expectGnssHardware) {
+    "UM220-IV NK on PB6/PB7 UART is real"
+  } else {
+    "Synthetic GNSS snapshot; UM220 PB6/PB7 UART is not initialized"
+  }
+  Assert-ReleaseCondition -Condition ($manifest.gnssSourceMode -eq $ExpectedGnssSourceMode) `
+    -Message "GNSS source mismatch: expected $ExpectedGnssSourceMode, found $($manifest.gnssSourceMode)"
+  Assert-ReleaseCondition -Condition ($manifest.gnssTruth -eq $expectedGnssTruth) `
+    -Message "GNSS truth statement is inconsistent with the requested profile"
+  Assert-ReleaseCondition -Condition (
+      $manifest.gnssHardwareInitialized -is [bool] -and
+      $manifest.gnssHardwareInitialized -eq $expectGnssHardware
+    ) -Message "gnssHardwareInitialized is inconsistent with gnssSourceMode"
+  Assert-ReleaseCondition -Condition (
+      $expectGnssHardware -or $ExpectedGnssRtcmInjectionMode -eq "disabled"
+    ) -Message "Simulated GNSS release cannot enable RTCM injection"
+} else {
+  Assert-ReleaseCondition -Condition $expectGnssHardware `
+    -Message "Schema v1 releases implicitly use hardware GNSS"
+}
 
 $expectedPayloadBytes = if ($ExpectedCompactVersion -eq 4) { 139 } else { 95 }
 $expectedWireBytes = if ($ExpectedCompactVersion -eq 4) { 157 } else { 113 }
@@ -435,6 +475,19 @@ $modeForbidden = if ($expectHardware) {
 } else {
   @("SC16IS752", "[RS485]", "EI2C0_M0 PB4/PB5", "Field Sensor Source: HARDWARE")
 }
+$gnssMarker = if ($expectGnssHardware) {
+  "GNSS Source: HARDWARE (UM220-IV NK on PB6/PB7)"
+} else {
+  "GNSS Source: SIMULATED (no PB6/PB7 UART)"
+}
+$gnssForbidden = if ($expectGnssHardware) {
+  @("GNSS Source: SIMULATED (no PB6/PB7 UART)")
+} else {
+  @(
+    "GNSS Source: HARDWARE (UM220-IV NK on PB6/PB7)",
+    "[GPS] Initializing UART"
+  )
+}
 
 foreach ($node in $NodeLabels) {
   foreach ($extension in @("bin", "img")) {
@@ -462,6 +515,10 @@ foreach ($node in $NodeLabels) {
       $capabilityMarker
     ) + $modeRequired
     $forbidden = @($modeForbidden)
+    if ($isGnssSourceAwareManifest) {
+      $required += $gnssMarker
+      $forbidden += $gnssForbidden
+    }
     foreach ($otherNode in @("A", "B", "C") | Where-Object { $_ -ne $node }) {
       $forbidden += $nodeIds[$otherNode]
       $forbidden += "FIELD-NODE-$otherNode"
@@ -471,11 +528,12 @@ foreach ($node in $NodeLabels) {
 }
 
 Write-Host (
-  "RELEASE_SAFETY_OK path={0} nodes={1} compact=v{2} sensor_mode={3} rtcm={4} battery={5} final_acceptance={6} source={7} files={8}" -f `
+  "RELEASE_SAFETY_OK path={0} nodes={1} compact=v{2} sensor_mode={3} gnss_source={4} rtcm={5} battery={6} final_acceptance={7} source={8} files={9}" -f `
     $artifactRoot,
     ($NodeLabels -join ","),
     $ExpectedCompactVersion,
     $ExpectedFieldSensorMode,
+    $ExpectedGnssSourceMode,
     $ExpectedGnssRtcmInjectionMode,
     $ExpectedBatteryCalibrationState,
     [bool]$RequireFinalBatteryAcceptance,

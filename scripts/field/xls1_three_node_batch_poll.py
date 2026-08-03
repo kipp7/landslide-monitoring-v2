@@ -41,6 +41,7 @@ COMPACT_VALID_IMU = 1 << 6
 COMPACT_VALID_BATTERY = 1 << 7
 COMPACT_STATUS_WARNING = 1 << 0
 COMPACT_STATUS_FIELD_SENSORS_SIMULATED = 1 << 1
+COMPACT_STATUS_GNSS_SIMULATED = 1 << 2
 V3_VALID_BATTERY = 1 << 0
 V3_VALID_SOIL = 1 << 1
 V3_VALID_SOIL_EC = 1 << 2
@@ -383,7 +384,7 @@ def decode_compact_telemetry_v3_v4(payload: bytes) -> dict[str, Any]:
     status_flags = payload[4]
     valid = struct.unpack(">H", payload[6:8])[0]
     fix_flags = struct.unpack(">H", payload[76:78])[0]
-    if status_flags & ~0x03 or valid & ~V3_KNOWN_VALID_MASK:
+    if status_flags & ~0x07 or valid & ~V3_KNOWN_VALID_MASK:
         raise ValueError("compact telemetry v3/v4 status or validity flags contain reserved bits")
 
     gnss_status_valid = bool(valid & V3_VALID_GNSS_STATUS)
@@ -420,6 +421,9 @@ def decode_compact_telemetry_v3_v4(payload: bytes) -> dict[str, Any]:
     correction_age_ms = struct.unpack(">I", payload[60:64])[0]
     solution_age_ms = struct.unpack(">I", payload[64:68])[0]
     trusted = bool(fix_flags & GNSS_FIX_TRUSTED)
+    gnss_simulated = bool(status_flags & COMPACT_STATUS_GNSS_SIMULATED)
+    if gnss_simulated and trusted:
+        raise ValueError("compact telemetry v3/v4 simulated GNSS cannot be trusted RTK evidence")
     if trusted and (
         gga_quality != 4
         or not valid & V3_VALID_GNSS_POSITION
@@ -573,6 +577,7 @@ def decode_compact_telemetry_v3_v4(payload: bytes) -> dict[str, Any]:
             "upload_trigger": trigger,
             "compact_payload_version": compact_version,
             "field_sensor_source": "simulated" if simulated else "hardware",
+            "gnss_source": "simulated" if gnss_simulated else "hardware",
             "battery_estimate_quality": battery_quality,
             "battery_estimate_quality_code": battery_quality_code,
             "legacy_valid_flags": valid_flags,
@@ -581,7 +586,7 @@ def decode_compact_telemetry_v3_v4(payload: bytes) -> dict[str, Any]:
             "rtk_coordinate_frame_code": coordinate_frame_code,
             "rtk_fix_type": fix_type,
             "rtk_fix_flags": fix_flags,
-            "rtk_displacement_eligible": trusted and coordinate_frame_code != 0,
+            "rtk_displacement_eligible": not gnss_simulated and trusted and coordinate_frame_code != 0,
             **(
                 {
                     "v4_valid_flags": valid,
@@ -599,6 +604,7 @@ def telemetry_profile_errors(
     telemetry: dict[str, Any],
     required_compact_version: int = 0,
     required_field_sensor_source: str = "any",
+    required_gnss_source: str = "any",
     require_battery_valid: bool = False,
     require_field_sensors_valid: bool = False,
     require_field_calibrated_battery: bool = False,
@@ -618,6 +624,15 @@ def telemetry_profile_errors(
     field_sensor_source = meta.get("field_sensor_source", "unknown")
     if required_field_sensor_source != "any" and field_sensor_source != required_field_sensor_source:
         errors.append(f"field-source-{field_sensor_source}-expected-{required_field_sensor_source}")
+
+    gnss_source = meta.get("gnss_source", "unknown")
+    if required_gnss_source != "any" and gnss_source != required_gnss_source:
+        errors.append(f"gnss-source-{gnss_source}-expected-{required_gnss_source}")
+    if gnss_source == "simulated":
+        if metrics.get("rtk_trusted") is not False:
+            errors.append("simulated-gnss-trusted-state-invalid")
+        if meta.get("rtk_displacement_eligible") is not False:
+            errors.append("simulated-gnss-displacement-eligibility-invalid")
 
     valid_flags = meta.get("legacy_valid_flags")
     if not isinstance(valid_flags, dict):
@@ -925,6 +940,7 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
                 telemetry,
                 required_compact_version=args.required_compact_version,
                 required_field_sensor_source=args.required_field_sensor_source,
+                required_gnss_source=args.required_gnss_source,
                 require_battery_valid=args.require_battery_valid,
                 require_field_sensors_valid=args.require_field_sensors_valid,
                 require_field_calibrated_battery=args.require_field_calibrated_battery,
@@ -1399,6 +1415,7 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
             "nodeOrderPolicy": "fixed-A-B-C-slots" if args.broadcast_poll else "rotating-A-B-C",
             "requiredCompactVersion": args.required_compact_version,
             "requiredFieldSensorSource": args.required_field_sensor_source,
+            "requiredGnssSource": args.required_gnss_source,
             "requireBatteryValid": args.require_battery_valid,
             "requireFieldSensorsValid": args.require_field_sensors_valid,
             "requireFieldCalibratedBattery": args.require_field_calibrated_battery,
@@ -1477,6 +1494,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--required-compact-version", type=int, choices=(0, 1, 2, 3, 4), default=0)
     parser.add_argument(
         "--required-field-sensor-source",
+        choices=("any", "simulated", "hardware"),
+        default="any",
+    )
+    parser.add_argument(
+        "--required-gnss-source",
         choices=("any", "simulated", "hardware"),
         default="any",
     )

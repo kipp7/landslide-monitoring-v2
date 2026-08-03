@@ -158,6 +158,24 @@ static unsigned int StatusFlags(const SensorData *data)
     unsigned int flags = 0U;
     if (data->warning) flags |= COMPACT_TELEMETRY_STATUS_WARNING;
     if (data->simulated_field_data) flags |= COMPACT_TELEMETRY_STATUS_FIELD_SENSORS_SIMULATED;
+    if (data->simulated_gnss_data) flags |= COMPACT_TELEMETRY_STATUS_GNSS_SIMULATED;
+    return flags;
+}
+
+static uint16_t SanitizedGnssFixFlags(const SensorData *data)
+{
+    uint16_t flags = data->gnss.fix_flags;
+    if (data->simulated_gnss_data) {
+        flags &= (uint16_t)~(
+            GNSS_FIX_NMEA_CHECKSUM_VALID |
+            GNSS_FIX_TRUSTED |
+            GNSS_FIX_TIME_VALID |
+            GNSS_FIX_GST_VALID |
+            GNSS_FIX_CORRECTION_AGE_VALID |
+            GNSS_FIX_STATION_VALID |
+            GNSS_FIX_FIXED_STATS_VALID
+        );
+    }
     return flags;
 }
 
@@ -274,7 +292,7 @@ int BuildCompactTelemetryV3(
     unsigned int valid = 0U;
     uint16_t fix_flags;
     if (data == NULL || output == NULL || output_size < COMPACT_TELEMETRY_V3_PAYLOAD_BYTES) return -1;
-    fix_flags = data->gnss.fix_flags;
+    fix_flags = SanitizedGnssFixFlags(data);
     if (data->battery_valid) valid |= COMPACT_TELEMETRY_V3_VALID_BATTERY;
     if (data->soil_valid) valid |= COMPACT_TELEMETRY_V3_VALID_SOIL;
     if (data->soil_ec_valid) valid |= COMPACT_TELEMETRY_V3_VALID_SOIL_EC;
@@ -298,7 +316,7 @@ int BuildCompactTelemetryV3(
 
     WriteLegacyMetrics(data, output, 1);
     if (data->gnss_status_valid) {
-        output[OFFSET_V3_GGA_QUALITY] = data->gnss.gga_quality;
+        output[OFFSET_V3_GGA_QUALITY] = data->simulated_gnss_data ? 1U : data->gnss.gga_quality;
         output[OFFSET_V3_COORDINATE_FRAME] = data->gnss.coordinate_frame;
         WriteUint16Be(output, OFFSET_V3_FIX_FLAGS, fix_flags);
         output[OFFSET_V3_SATELLITES_USED] = data->gnss.satellites_used;

@@ -7,6 +7,8 @@ param(
   [string]$GnssRtcmInjectionMode = "disabled",
   [ValidateSet("hardware", "simulated")]
   [string]$FieldSensorMode = "hardware",
+  [ValidateSet("hardware", "simulated")]
+  [string]$GnssSourceMode = "hardware",
   [ValidateSet(3, 4)]
   [int]$CompactVersion = 3,
   [ValidateRange(800000, 1200000)]
@@ -21,13 +23,17 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+if ($GnssSourceMode -eq "simulated" -and $GnssRtcmInjectionMode -ne "disabled") {
+  throw "Simulated GNSS requires GnssRtcmInjectionMode=disabled"
+}
+
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $sourceRoot = Join-Path $repoRoot "firmware\rk2206-xl01"
 $sampleRelative = "vendor\isoftstone\rk2206\samples\xl01_landslide_monitor_v1.1"
 $sampleRoot = Join-Path $SdkRoot $sampleRelative
 $productOut = Join-Path $SdkRoot "out\rk2206\isoftstone-rk2206"
 if (-not $ArtifactDirectory) {
-  $ArtifactDirectory = Join-Path $repoRoot ("artifacts\firmware\rk2206-xl01-compact-v{0}-{1}" -f $CompactVersion, $FieldSensorMode)
+  $ArtifactDirectory = Join-Path $repoRoot ("artifacts\firmware\rk2206-xl01-compact-v{0}-{1}-gnss-{2}" -f $CompactVersion, $FieldSensorMode, $GnssSourceMode)
 }
 $artifactRoot = [System.IO.Path]::GetFullPath($ArtifactDirectory)
 $backupRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("xls1-compact-sdk-backup-" + [guid]::NewGuid().ToString("N"))
@@ -59,6 +65,8 @@ $syncFiles = @(
   "drivers\sensors\battery_monitor.h",
   "drivers\sensors\simulated_field_sensors.c",
   "drivers\sensors\simulated_field_sensors.h",
+  "drivers\sensors\simulated_gnss.c",
+  "drivers\sensors\simulated_gnss.h",
   "app\sensor_data.h",
   "app\battery_estimator.c",
   "app\battery_estimator.h",
@@ -244,6 +252,17 @@ function Set-FieldSensorMode {
   [System.IO.File]::WriteAllText($configPath, $text, [System.Text.UTF8Encoding]::new($false))
 }
 
+function Set-GnssSourceMode {
+  $modeToken = switch ($GnssSourceMode) {
+    "hardware" { "GNSS_SOURCE_HARDWARE" }
+    "simulated" { "GNSS_SOURCE_SIMULATED" }
+  }
+  $configPath = Join-Path $sampleRoot "config\app_config.h"
+  $text = [System.IO.File]::ReadAllText($configPath)
+  $text = Set-SingleTokenMacro -Text $text -Macro "GNSS_SOURCE" -Value $modeToken
+  [System.IO.File]::WriteAllText($configPath, $text, [System.Text.UTF8Encoding]::new($false))
+}
+
 function Set-BatteryCalibration {
   param(
     [int]$GainPpm,
@@ -346,6 +365,7 @@ try {
   Set-GnssRtcmInjectionMode
   Set-CompactTelemetryVersion
   Set-FieldSensorMode
+  Set-GnssSourceMode
 
   foreach ($node in $nodes | Where-Object { $_.Label -in $NodeLabels }) {
     $nodeCalibration = $nodeBatteryCalibrations[$node.Label]
@@ -382,8 +402,8 @@ try {
   $globalCalibrationGainPpm = if ($resolvedBatteryCalibrationFile) { $null } else { $BatteryCalibrationGainPpm }
   $globalCalibrationOffsetMv = if ($resolvedBatteryCalibrationFile) { $null } else { $BatteryCalibrationOffsetMv }
   $manifest = [ordered]@{
-    schemaVersion = 1
-    profile = "rk2206-xl01-compact-v$CompactVersion-$FieldSensorMode"
+    schemaVersion = 2
+    profile = "rk2206-xl01-compact-v$CompactVersion-$FieldSensorMode-gnss-$GnssSourceMode"
     compactVersion = $CompactVersion
     sourceCommit = $sourceCommit
     sourceDirty = $sourceDirty
@@ -391,8 +411,11 @@ try {
     rtcmRuntimeBootMode = "disabled"
     rtcmRuntimeControlEnabled = $GnssRtcmInjectionMode -ne "disabled"
     fieldSensorMode = $FieldSensorMode
-    fieldSensorTruth = if ($FieldSensorMode -eq "simulated") { "RS485 values simulated; GPS and battery are real" } else { "RS485, GPS and battery are real" }
+    fieldSensorTruth = if ($FieldSensorMode -eq "simulated") { "RS485 values simulated; battery is real" } else { "RS485 and battery are real" }
     rs485HardwareInitialized = $FieldSensorMode -eq "hardware"
+    gnssSourceMode = $GnssSourceMode
+    gnssTruth = if ($GnssSourceMode -eq "simulated") { "Synthetic GNSS snapshot; UM220 PB6/PB7 UART is not initialized" } else { "UM220-IV NK on PB6/PB7 UART is real" }
+    gnssHardwareInitialized = $GnssSourceMode -eq "hardware"
     battery = [ordered]@{
       topology = "${batterySeriesCells}S${batteryParallelStrings}P"
       nominalCapacityMah = $batteryCapacityMah

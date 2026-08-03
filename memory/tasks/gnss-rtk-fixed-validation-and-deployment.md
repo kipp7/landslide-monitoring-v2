@@ -7,7 +7,7 @@ tags:
   - rtk
   - rk3568
   - rk2206
-status: blocked
+status: active
 ---
 
 # Task: gnss-rtk-fixed-validation-and-deployment
@@ -17,6 +17,14 @@ status: blocked
 将已验证可 Fixed 的 3 套 UM220-IV NK + BT-760 部署为可追溯、资源可控的三节点 RTK 位移系统；先通过共享链路门禁，再实现 RK3568 专业位移算法、服务器长周期分析和现场诊断。
 
 ## Current State
+
+### Indoor Real-RS485 / Simulated-GNSS Gate (2026-08-03)
+
+- 用户确认两路 RS485 硬件已接入，原“接口未安装”的现场阻断解除。当前室内阶段明确采用独立源组合：XLS1 PB2/PB3、SC16IS752 PB4/PB5、土壤三合一、三轴倾角和 field-calibrated PC0 均为真实硬件；GNSS 为编译期模拟源，UM220 PB6/PB7 UART 不初始化，RTCM capability 编译为 disabled。
+- Compact V4 状态位新增 `gnss_source=simulated` 证据。RK2206 构建器会清除 checksum/trusted/time/GST/correction-age/station/Fixed-statistics 证据；RK3568 再次拒绝“模拟 GNSS + trusted”矛盾帧并固定 `rtk_displacement_eligible=false`。服务器保留来源元数据，Windows 设备页和 GNSS 页显示“模拟输入”。模拟坐标不得进入 RTK baseline、ECEF/ENU、位移或厘米级结论。
+- 室内验收器新增 `--required-gnss-source simulated`，仍强制 Compact V4、hardware RS485、真实土壤/EC/三轴倾角、field-calibrated PC0、RTCM disabled/零历史活动，并按 60/600/1800 秒失败即停。禁用 RTCM 桩已修正为三个 age 字段返回 `UINT32_MAX`，避免“从未发生”被误判为“刚发生 0 ms”；独立 C99 回归已覆盖。
+- 离线门禁通过：RK2206 C99/禁用 RTCM、26 源文件引脚安全、发布安全、Python 金值与语法、field-gateway 46/46 + lint、telemetry-writer 14/14 + lint、API 10/10、Windows lint/production build。API 全仓 lint 仍有 68 个与本次未改路由相关的既有错误；本次 API build/test 通过，不在该硬件源切换中扩散修复。
+- dirty 候选已完成 A/B/C 三次 OpenHarmony 全量编译链接，仅用于构建证明，目录为 `artifacts/firmware/rk2206-xl01-compact-v4-rs485-hardware-gnss-simulated-candidate-20260803`，明确 `sourceDirty=true`、禁止烧录。三个二进制均包含 SC16IS752/RS485 和模拟 GNSS 标记，不含 GPS UART 初始化/真实 GNSS 标记，且 A/B/C 身份唯一。下一步先提交并推送源码，再从干净提交构建正式 immutable 包。
 
 ### In-Progress V4 Runtime Integration (2026-08-03)
 

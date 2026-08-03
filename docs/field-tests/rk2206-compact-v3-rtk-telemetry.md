@@ -32,7 +32,7 @@ production poll scheduler remains slower and prioritizes zero missing rounds.
 | 0 | 2 | ASCII magic `LS` |
 | 2 | 1 | payload version, fixed to `3` |
 | 3 | 1 | node number, A/B/C = 1/2/3 |
-| 4 | 1 | warning and simulated-field flags |
+| 4 | 1 | warning, simulated-field, and simulated-GNSS flags |
 | 5 | 1 | upload trigger |
 | 6 | 2 | v3 validity bitmap |
 | 8 | 4 | telemetry sequence |
@@ -112,6 +112,14 @@ validity flags, reserved bits, impossible Fixed ratios, invalid coordinate
 frames, and out-of-range coordinates. Only a trusted epoch is eligible for the
 professional ECEF/ENU displacement pipeline.
 
+Bit 2 of the status byte marks a synthetic GNSS snapshot. For that source,
+RK2206 clears checksum, trusted, time, GST, correction-age, reference-station,
+and Fixed-statistics evidence before serialization. RK3568 independently
+rejects a simulated snapshot that claims `GNSS_FIX_TRUSTED` and always sets
+`rtk_displacement_eligible=false`. Synthetic coordinates are therefore useful
+for indoor display and transport checks but are never RTK or displacement
+evidence.
+
 ## Snapshot And Compatibility Rules
 
 - `compact v3/v4` replaces the complete field-device shadow. Missing values in
@@ -125,11 +133,17 @@ professional ECEF/ENU displacement pipeline.
 
 ## Pin And Bring-Up Safety
 
-For `FieldSensorMode=simulated`, RK2206 generates only realistic soil/EC/tilt
-values. Real UM220 GNSS, XLS1, and PC0 battery sampling remain active. The RS485
-sources compile to empty units behind `ENABLE_RS485_BUS` and never initialize
-SC16IS752, so PB4/PB5 remain untouched until the explicit hardware build is
-selected.
+RS485 and GNSS use independent build-time source profiles. With
+`FieldSensorMode=simulated`, RK2206 generates soil/EC/tilt values and never
+initializes SC16IS752 on PB4/PB5. With `GnssSourceMode=simulated`, RK2206
+generates a non-trusted single-fix snapshot and never initializes the UM220
+UART on PB6/PB7. XLS1 on PB2/PB3 and the field-calibrated PC0 battery path stay
+real in both profiles.
+
+The indoor RS485 gate uses `FieldSensorMode=hardware` together with
+`GnssSourceMode=simulated`: both RS485 sensors are real, GNSS is explicitly
+synthetic, and RTCM capability is compiled out. The outdoor gate rebuilds from
+a clean commit with both sources set to `hardware`.
 
 The hardware build restores SC16IS752 over EI2C0_M0 PB4/PB5 and must not be
 flashed until the interface components, continuity, supply, direction, and

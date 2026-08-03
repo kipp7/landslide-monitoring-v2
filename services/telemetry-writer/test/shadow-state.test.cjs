@@ -98,6 +98,7 @@ test("compact v4 replaces stale fields while preserving RTCM runtime evidence", 
       install_label: "FIELD-NODE-A",
       legacy_node: "A",
       compact_payload_version: 4,
+      gnss_source: "simulated",
       v4_valid_flags: 0x1fff,
       rtcm_injection_mode: "live",
       rtcm_state_flags: 0x07,
@@ -113,6 +114,7 @@ test("compact v4 replaces stale fields while preserving RTCM runtime evidence", 
   assert.equal(state.metrics.temperature_c, undefined);
   assert.equal(state.metrics.accel_x_g, undefined);
   assert.equal(state.meta.rtcm_injection_mode, "live");
+  assert.equal(state.meta.gnss_source, "simulated");
   assert.equal(state.meta.rtcm_state_flags, 0x07);
   assert.equal(state.meta.legacy_valid_flags, undefined);
 });

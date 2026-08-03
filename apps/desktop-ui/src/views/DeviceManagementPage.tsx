@@ -387,6 +387,7 @@ export function DeviceManagementPage() {
       tiltXDeg: readMetricNumber(metrics, "tilt_x_deg"),
       tiltYDeg: readMetricNumber(metrics, "tilt_y_deg"),
       tiltZDeg: readMetricNumber(metrics, "tilt_z_deg"),
+      gnssSource: typeof meta.gnss_source === "string" ? meta.gnss_source : "hardware",
       rtkTrusted,
       rtkLatitude: rtkTrusted ? readMetricNumber(metrics, "rtk_latitude_deg") : null,
       rtkLongitude: rtkTrusted ? readMetricNumber(metrics, "rtk_longitude_deg") : null,
@@ -1548,7 +1549,7 @@ export function DeviceManagementPage() {
               <div className="desk-dm-stack-item">
                 <BaseCard title="实时传感器数据" className="desk-dm-stack-card">
                   <div className="desk-dm-muted" style={{ marginBottom: 10 }}>
-                    当前快照：电池 {formatMetricNumber(deviceStateSummary.batteryPct, 0)}% · 可信 RTK{" "}
+                    当前快照：电池 {formatMetricNumber(deviceStateSummary.batteryPct, 0)}% · GNSS {deviceStateSummary.gnssSource === "simulated" ? "模拟输入" : "真实硬件"} · 可信 RTK{" "}
                     {deviceStateSummary.rtkTrusted ? "通过" : "未通过"} · 坐标 {formatMetricNumber(deviceStateSummary.rtkLatitude, 9)}, {formatMetricNumber(deviceStateSummary.rtkLongitude, 9)} · 更新时间{" "}
                     {deviceStateSummary.updatedAt ? new Date(deviceStateSummary.updatedAt).toLocaleString("zh-CN") : "--"}
                   </div>

@@ -118,6 +118,7 @@ def stage_arguments(args: argparse.Namespace, duration_seconds: float) -> Namesp
         max_command_latency_ms=args.response_window_ms,
         required_compact_version=4,
         required_field_sensor_source="hardware",
+        required_gnss_source=args.required_gnss_source,
         require_battery_valid=True,
         require_field_sensors_valid=True,
         require_field_calibrated_battery=True,
@@ -152,6 +153,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--session-timeout-ms", type=int, default=2500)
     parser.add_argument("--max-retry-rate", type=float, default=0.02)
     parser.add_argument("--max-p95-interval-ms", type=float, default=2500.0)
+    parser.add_argument(
+        "--required-gnss-source",
+        choices=("hardware", "simulated"),
+        default="hardware",
+    )
     parser.add_argument("--inter-stage-quiet-seconds", type=float, default=2.0)
     parser.add_argument("--service", default="lsmv2-field-gateway.service")
     parser.add_argument("--environment-file", default="/etc/lsmv2/field-gateway.env")
@@ -190,6 +196,7 @@ def main() -> int:
         "maxRetryRate": args.max_retry_rate,
         "requiredCompactVersion": 4,
         "requiredFieldSensorSource": "hardware",
+        "requiredGnssSource": args.required_gnss_source,
         "requireFieldSensorsValid": True,
         "requireFieldCalibratedBattery": True,
         "requiredRtcmMode": "disabled",

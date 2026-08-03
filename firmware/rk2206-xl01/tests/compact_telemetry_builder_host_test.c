@@ -6,6 +6,7 @@
 #include "../app/compact_telemetry_builder.h"
 #include "../app/compact_poll_command.h"
 #include "../drivers/sensors/simulated_field_sensors.h"
+#include "../drivers/sensors/simulated_gnss.h"
 #include "../drivers/xl01/field_link_frame.h"
 
 static unsigned int ReadUint16Be(const unsigned char *input)
@@ -62,6 +63,7 @@ int main(void)
 {
     const char *command_id = "P112345678";
     SensorData data;
+    SensorData simulated_gnss;
     unsigned char payload[COMPACT_TELEMETRY_PAYLOAD_BYTES];
     unsigned char frame[FIELD_LINK_FRAME_ENCODED_BYTES];
     FieldLinkFrameDecoder decoder;
@@ -109,6 +111,31 @@ int main(void)
     assert(ReadUint16Be(payload + 79) == 52U);
     assert(ReadUint16Be(payload + 89) == 983U);
     assert(ReadUint16Be(payload + 93) == 82U);
+
+    simulated_gnss = data;
+    simulated_gnss.simulated_field_data = 0;
+    simulated_gnss.simulated_gnss_data = 1;
+    payload_len = BuildCompactTelemetryV3(
+        &simulated_gnss, "C", command_id, "scheduler_poll", payload, sizeof(payload));
+    assert(payload_len == COMPACT_TELEMETRY_V3_PAYLOAD_BYTES);
+    assert(payload[4] == (COMPACT_TELEMETRY_STATUS_WARNING |
+                          COMPACT_TELEMETRY_STATUS_GNSS_SIMULATED));
+    assert(payload[74] == 1U);
+    assert((ReadUint16Be(payload + 76) & GNSS_FIX_TRUSTED) == 0U);
+    assert((ReadUint16Be(payload + 76) & GNSS_FIX_CORRECTION_AGE_VALID) == 0U);
+    assert((ReadUint16Be(payload + 76) & GNSS_FIX_FIXED_STATS_VALID) == 0U);
+    assert((ReadUint16Be(payload + 76) & GNSS_FIX_STATION_VALID) == 0U);
+    assert((ReadUint16Be(payload + 6) & COMPACT_TELEMETRY_V3_VALID_CORRECTION_AGE) == 0U);
+    assert((ReadUint16Be(payload + 6) & COMPACT_TELEMETRY_V3_VALID_FIXED_STATS) == 0U);
+    assert((ReadUint16Be(payload + 6) & COMPACT_TELEMETRY_V3_VALID_STATION) == 0U);
+
+    memset(&simulated_gnss, 0, sizeof(simulated_gnss));
+    SimulatedGnss_Read(&simulated_gnss, 37U, 'B');
+    assert(simulated_gnss.gnss_status_valid == 1);
+    assert(simulated_gnss.simulated_gnss_data == 1);
+    assert(simulated_gnss.gnss.gga_quality == 1U);
+    assert(simulated_gnss.gnss.position_valid == 1U);
+    assert((simulated_gnss.gnss.fix_flags & GNSS_FIX_TRUSTED) == 0U);
 
     frame_len = FieldLinkFrame_Encode(
         FIELD_LINK_FRAME_TYPE_TELEMETRY, 9U, (const char *)payload, payload_len,

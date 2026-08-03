@@ -7,6 +7,8 @@ param(
   [string]$GnssRtcmInjectionMode = "disabled",
   [ValidateSet("hardware", "simulated")]
   [string]$FieldSensorMode = "hardware",
+  [ValidateSet("hardware", "simulated")]
+  [string]$GnssSourceMode = "hardware",
   [ValidateRange(800000, 1200000)]
   [int]$BatteryCalibrationGainPpm = 1000000,
   [ValidateRange(-2000, 2000)]
@@ -25,6 +27,7 @@ $builder = Join-Path $PSScriptRoot "build-xl01-compact-v3.ps1"
   -ArtifactDirectory $ArtifactDirectory `
   -GnssRtcmInjectionMode $GnssRtcmInjectionMode `
   -FieldSensorMode $FieldSensorMode `
+  -GnssSourceMode $GnssSourceMode `
   -CompactVersion 4 `
   -BatteryCalibrationGainPpm $BatteryCalibrationGainPpm `
   -BatteryCalibrationOffsetMv $BatteryCalibrationOffsetMv `

@@ -65,6 +65,9 @@
 #if ENABLE_SIMULATED_FIELD_SENSORS
 #include "../drivers/sensors/simulated_field_sensors.h"
 #endif
+#if ENABLE_SIMULATED_GNSS
+#include "../drivers/sensors/simulated_gnss.h"
+#endif
 
 // Application
 #include "../app/sensor_data.h"
@@ -108,7 +111,9 @@ static char g_process_command_json[FIELD_LINK_MAX_PAYLOAD_BYTES + 1] = {0};
 static int g_system_ready = 0;
 static int g_i2c_ready = 0;
 static int g_rs485_ready = 0;
+#if ENABLE_GPS
 static int g_gps_ready = 0;
+#endif
 static int g_battery_ready = 0;
 static unsigned int g_runtime_sampling_interval_ms = 1000;
 static unsigned int g_runtime_report_interval_ms = UPLOAD_INTERVAL_MS;
@@ -1404,6 +1409,7 @@ static void* SensorCollectionTask(const char* arg)
         next_sample.battery_valid = 0;
         next_sample.battery_estimate_quality = 0;
         next_sample.simulated_field_data = 0;
+        next_sample.simulated_gnss_data = 0;
         
 #if ENABLE_SIMULATED_FIELD_SENSORS
         SimulatedFieldSensors_Read(
@@ -1452,6 +1458,14 @@ static void* SensorCollectionTask(const char* arg)
                 next_sample.rain_valid = 1;
             }
         }
+#endif
+
+#if ENABLE_SIMULATED_GNSS
+        SimulatedGnss_Read(
+            &next_sample,
+            (unsigned int)g_stats.uptime_sec,
+            LEGACY_NODE_LABEL[0]
+        );
 #endif
 
 #if ENABLE_GPS
@@ -1599,6 +1613,11 @@ static void* DataUploadTask(const char* arg)
            (TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V1 ? "Compact v1 (46-byte payload)" : "JSON v1"))));
     printf("  Field Sensor Source: %s\n",
            ENABLE_SIMULATED_FIELD_SENSORS ? "SIMULATED (RS485 values only)" : "HARDWARE");
+#if ENABLE_SIMULATED_GNSS
+    printf("  GNSS Source: SIMULATED (no PB6/PB7 UART)\n");
+#else
+    printf("  GNSS Source: HARDWARE (UM220-IV NK on PB6/PB7)\n");
+#endif
     printf("  Max Retries: %d\n", MAX_RETRY_COUNT);
     printf("  ACK Check: %s\n", ENABLE_ACK_CHECK ? "Enabled" : "Disabled");
     printf("  ACK Timeout: %d ms\n", ACK_TIMEOUT_MS);
@@ -1609,12 +1628,15 @@ static void* DataUploadTask(const char* arg)
            (unsigned int)FIELD_LINK_STALE_REBOOT_MS);
     printf("----------------------------------------\n");
     printf("  Sensors:\n");
-    printf("    - GPS: %s\n", ENABLE_GPS ? "ON" : "OFF");
 #if ENABLE_GPS
+    printf("    - GNSS: HARDWARE ready=%s\n", g_gps_ready ? "yes" : "no");
     printf("    - RTCM Injection: %s runtime-lease=yes queue=%u max_queue_age=%u ms\n",
            GNSS_RTCM_CAPABILITY_MARKER,
            (unsigned int)GNSS_RTCM_QUEUE_DEPTH,
            (unsigned int)GNSS_RTCM_MAX_QUEUE_AGE_MS);
+#else
+    printf("    - GNSS: SIMULATED trusted=no displacement_eligible=no\n");
+    printf("    - RTCM Injection: DISABLED (simulated GNSS)\n");
 #endif
 #if ENABLE_BATTERY_MONITOR
     printf("    - Battery: ON ready=%s route=PC0/SARADC-ch0 input-only pack=%uS%uP/%umAh calibration=%s\n",

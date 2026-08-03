@@ -100,25 +100,36 @@
 // Use this to separate "firmware did not start / debug UART wrong" from sensor-driver issues.
 #define BOOT_SERIAL_DIAG_MODE 0
 
-// Field sensor source is a build-time profile. The simulated profile replaces
-// only RS485 readings and therefore never initializes EI2C0 PB4/PB5 or a missing
-// SC16IS752/RS485 interface. GPS and PC0 battery readings remain real.
+// RS485 and GNSS sources are independent build-time profiles. This allows the
+// indoor gate to use the real SC16IS752 sensors while keeping PB6/PB7 untouched
+// until the UM220 can be tested outdoors. PC0 battery sampling always stays real.
 #define FIELD_SENSOR_SOURCE_HARDWARE 0
 #define FIELD_SENSOR_SOURCE_SIMULATED 1
 #ifndef FIELD_SENSOR_SOURCE
 #define FIELD_SENSOR_SOURCE FIELD_SENSOR_SOURCE_HARDWARE
 #endif
 
+#define GNSS_SOURCE_HARDWARE 0
+#define GNSS_SOURCE_SIMULATED 1
+#ifndef GNSS_SOURCE
+#define GNSS_SOURCE GNSS_SOURCE_HARDWARE
+#endif
+
 #define FIELD_BUILD_PROFILE_PRODUCTION \
-    (FIELD_SENSOR_SOURCE == FIELD_SENSOR_SOURCE_HARDWARE)
+    (FIELD_SENSOR_SOURCE == FIELD_SENSOR_SOURCE_HARDWARE && \
+     GNSS_SOURCE == GNSS_SOURCE_HARDWARE)
 
 #if FIELD_SENSOR_SOURCE != FIELD_SENSOR_SOURCE_HARDWARE && \
     FIELD_SENSOR_SOURCE != FIELD_SENSOR_SOURCE_SIMULATED
 #error "FIELD_SENSOR_SOURCE must be HARDWARE or SIMULATED"
 #endif
+#if GNSS_SOURCE != GNSS_SOURCE_HARDWARE && GNSS_SOURCE != GNSS_SOURCE_SIMULATED
+#error "GNSS_SOURCE must be HARDWARE or SIMULATED"
+#endif
 
 // Sensor Enable Flags
-#define ENABLE_GPS                 1    // UM220-IV NK on EUART0_M0 (PB6/PB7)
+#define ENABLE_GPS                 (GNSS_SOURCE == GNSS_SOURCE_HARDWARE)
+#define ENABLE_SIMULATED_GNSS      (GNSS_SOURCE == GNSS_SOURCE_SIMULATED)
 #define ENABLE_RS485_BUS           (FIELD_SENSOR_SOURCE == FIELD_SENSOR_SOURCE_HARDWARE)
 #define ENABLE_RS485_SOIL_SENSOR   (ENABLE_RS485_BUS && 1) // RS-ECTH-N01-TR-1 three-in-one soil sensor on channel 1
 #define ENABLE_RS485_TILT_SENSOR   (ENABLE_RS485_BUS && 1) // RS485 tilt sensor on shared channel 2
@@ -130,6 +141,31 @@
 
 #if ENABLE_VIRTUAL
 #error "Whole-node virtual mode is forbidden; use FIELD_SENSOR_SOURCE_SIMULATED"
+#endif
+
+#define GNSS_COORDINATE_FRAME 1U         // 1=CGCS2000, 2=WGS84
+
+// RTCM is meaningful only with the real UM220 UART. A simulated GNSS build is
+// compile-time fail-closed and must use the disabled capability.
+#define GNSS_RTCM_INJECTION_DISABLED 0
+#define GNSS_RTCM_INJECTION_PROBE    1
+#define GNSS_RTCM_INJECTION_LIVE     2
+#ifndef GNSS_RTCM_INJECTION_MODE
+#define GNSS_RTCM_INJECTION_MODE GNSS_RTCM_INJECTION_LIVE
+#endif
+#ifndef GNSS_RTCM_INJECTION_CAPABILITY
+#define GNSS_RTCM_INJECTION_CAPABILITY GNSS_RTCM_INJECTION_MODE
+#endif
+#define GNSS_RTCM_BOOT_MODE GNSS_RTCM_INJECTION_DISABLED
+#define GNSS_RTCM_CAPABILITY_MARKER "boot=DISABLED capability=LIVE"
+
+#if ENABLE_SIMULATED_GNSS && \
+    GNSS_RTCM_INJECTION_MODE != GNSS_RTCM_INJECTION_DISABLED
+#error "Simulated GNSS requires GNSS_RTCM_INJECTION_MODE=DISABLED"
+#endif
+#if ENABLE_SIMULATED_GNSS && \
+    GNSS_RTCM_INJECTION_CAPABILITY != GNSS_RTCM_INJECTION_DISABLED
+#error "Simulated GNSS cannot compile an RTCM injection capability"
 #endif
 
 // Watchdog Configuration
@@ -167,22 +203,10 @@
 // PB4/PB5 are reserved for SC16IS752 I2C; legacy MPU6050 is not installed or compiled.
 #define GPS_UART_ID         EUART0_M0    // PB6(RX), PB7(TX) - RK2206 UART0_M0
 #define GPS_BAUDRATE        115200       // UM220-IV NK EVK config.ini WorkBaudrate defaults to 115200
-#define GNSS_COORDINATE_FRAME 1U         // 1=CGCS2000 (Qianxun port 8003), 2=WGS84 (port 8002)
 #define GPS_UART_PROBE_LOG_MODE 0        // 0=GPS UART confirmed; keep only parsed NMEA/fix logs
 #define GPS_VERBOSE_NMEA_LOG 0           // 0=hide raw GGA/RMC sentences; summary upload line shows GPS status
 // The image contains LIVE capability, but every boot starts fail-closed. The
 // gateway must arm a fresh session with a bounded lease before RTCM is accepted.
-#define GNSS_RTCM_INJECTION_DISABLED 0
-#define GNSS_RTCM_INJECTION_PROBE    1
-#define GNSS_RTCM_INJECTION_LIVE     2
-#ifndef GNSS_RTCM_INJECTION_MODE
-#define GNSS_RTCM_INJECTION_MODE GNSS_RTCM_INJECTION_LIVE
-#endif
-#ifndef GNSS_RTCM_INJECTION_CAPABILITY
-#define GNSS_RTCM_INJECTION_CAPABILITY GNSS_RTCM_INJECTION_MODE
-#endif
-#define GNSS_RTCM_BOOT_MODE GNSS_RTCM_INJECTION_DISABLED
-#define GNSS_RTCM_CAPABILITY_MARKER "boot=DISABLED capability=LIVE"
 #define GNSS_RTCM_MIN_LEASE_SECONDS 15U
 #define GNSS_RTCM_MAX_LEASE_SECONDS 300U
 #define GNSS_RTCM_QUEUE_DEPTH 4

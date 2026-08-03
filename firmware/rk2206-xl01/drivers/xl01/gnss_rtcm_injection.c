@@ -503,7 +503,15 @@ int GnssRtcmInjection_Init(uint8_t local_node) { (void)local_node; return 0; }
 int GnssRtcmInjection_ConfigureRuntime(const GnssRtcmModeCommand *command, uint64_t monotonic_ms)
 { (void)command; (void)monotonic_ms; return -1; }
 void GnssRtcmInjection_GetRuntimeStatus(uint64_t monotonic_ms, GnssRtcmRuntimeStatus *status)
-{ (void)monotonic_ms; if (status != NULL) memset(status, 0, sizeof(*status)); }
+{
+    (void)monotonic_ms;
+    if (status != NULL) {
+        memset(status, 0, sizeof(*status));
+        status->last_fragment_age_ms = GNSS_RTCM_AGE_UNAVAILABLE;
+        status->last_completed_frame_age_ms = GNSS_RTCM_AGE_UNAVAILABLE;
+        status->last_action_age_ms = GNSS_RTCM_AGE_UNAVAILABLE;
+    }
+}
 GnssRtcmReassemblyStatusV3 GnssRtcmInjection_AcceptFragment(
     const uint8_t *payload, uint16_t payload_bytes, uint64_t monotonic_ms)
 { (void)payload; (void)payload_bytes; (void)monotonic_ms; return GNSS_RTCM_REASSEMBLY_REJECTED; }

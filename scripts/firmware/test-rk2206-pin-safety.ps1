@@ -15,6 +15,8 @@ $config = Get-Content -LiteralPath (Join-Path $firmwareRoot "config\app_config.h
 $main = Get-Content -LiteralPath (Join-Path $firmwareRoot "main\landslide_main.c") -Raw
 $battery = Get-Content -LiteralPath (Join-Path $firmwareRoot "drivers\sensors\battery_monitor.c") -Raw
 $simulator = Get-Content -LiteralPath (Join-Path $firmwareRoot "drivers\sensors\simulated_field_sensors.c") -Raw
+$gnssSimulator = Get-Content -LiteralPath (Join-Path $firmwareRoot "drivers\sensors\simulated_gnss.c") -Raw
+$gpsDriver = Get-Content -LiteralPath (Join-Path $firmwareRoot "drivers\sensors\gps_driver.c") -Raw
 $build = Get-Content -LiteralPath (Join-Path $firmwareRoot "BUILD.gn") -Raw
 
 function Assert-Matches {
@@ -95,6 +97,12 @@ Assert-Matches $config '(?m)^#define\s+BATTERY_CALIBRATION_VERIFIED\s+0\s*$' `
   "Repository default battery calibration must remain unverified"
 Assert-Matches $config '(?m)^#define\s+FIELD_SENSOR_SOURCE\s+FIELD_SENSOR_SOURCE_HARDWARE\s*$' `
   "Repository default must remain hardware so tomorrow's build cannot inherit simulation"
+Assert-Matches $config '(?m)^#define\s+GNSS_SOURCE\s+GNSS_SOURCE_HARDWARE\s*$' `
+  "Repository default GNSS source must remain hardware"
+Assert-Matches $config '(?m)^#define\s+ENABLE_GPS\s+\(GNSS_SOURCE\s+==\s+GNSS_SOURCE_HARDWARE\)\s*$' `
+  "UM220 enablement must be derived from the GNSS source"
+Assert-Matches $config '(?m)^#define\s+ENABLE_SIMULATED_GNSS\s+\(GNSS_SOURCE\s+==\s+GNSS_SOURCE_SIMULATED\)\s*$' `
+  "Simulated GNSS enablement must be derived from the GNSS source"
 Assert-Matches $config '(?m)^#define\s+ENABLE_RS485_BUS\s+\(FIELD_SENSOR_SOURCE\s+==\s+FIELD_SENSOR_SOURCE_HARDWARE\)\s*$' `
   "RS485 enablement must be derived from the field sensor source"
 Assert-Matches $config '(?s)#if\s+ENABLE_RS485_BUS.*?#define\s+I2C_IDX\s+EI2C0_M0' `
@@ -110,9 +118,17 @@ Assert-NotMatches $battery '\b(?:IoTGpio|LzGpio|IoTPwm|IoTI2c|IoTUart|IoTSpi)[A-
   "Battery monitor contains a non-ADC hardware call and could drive PC0 incorrectly"
 Assert-NotMatches $simulator '\b(?:IoT|Lz)[A-Za-z0-9_]*\s*\(' `
   "Simulated field sensors must not call any hardware API"
+Assert-NotMatches $gnssSimulator '\b(?:IoT|Lz)[A-Za-z0-9_]*\s*\(' `
+  "Simulated GNSS must not call any hardware API"
+Assert-Matches $gpsDriver '(?s)#if\s+ENABLE_GPS.*?int\s+GPS_Init\s*\(' `
+  "The UM220 UART implementation must remain behind ENABLE_GPS"
 
 Assert-Matches $main '(?s)#if\s+ENABLE_SIMULATED_FIELD_SENSORS\s+SimulatedFieldSensors_Read\s*\(' `
   "Simulated RS485 data must remain behind its build-time guard"
+Assert-Matches $main '(?s)#if\s+ENABLE_SIMULATED_GNSS\s+SimulatedGnss_Read\s*\(' `
+  "Simulated GNSS data must remain behind its build-time guard"
+Assert-Matches $main '(?s)#if\s+ENABLE_GPS\s+if\s*\(\s*GPS_Init\s*\(' `
+  "UM220 initialization must remain behind ENABLE_GPS"
 Assert-Matches $main '(?s)#if\s+ENABLE_RS485_BUS\s+if\s*\(\s*FieldRs485_Init\s*\(' `
   "RS485 initialization must remain behind ENABLE_RS485_BUS"
 Assert-Matches $main 'BATTERY_CALIBRATION_VERIFIED\s*\?\s*"field"\s*:\s*"default"' `
@@ -172,4 +188,4 @@ Assert-Matches $adcHal '(?s)\.gpio\s*=\s*GPIO0_PC0.*?\.func\s*=\s*MUX_FUNC1.*?\.
 Assert-Matches $adcHal 'm_adcKey\.ctrl1\.gpio\s*=\s*GPIO0_PC0\s*\+\s*id' `
   "RK2206 ADC channel-to-PC pin mapping changed"
 
-Write-Host "PIN_SAFETY_OK sources=$($compiledSources.Count) XLS1=PB2/PB3 GPS=PB6/PB7 BATTERY=PC0-input RS485=PB4/PB5-hardware-only"
+Write-Host "PIN_SAFETY_OK sources=$($compiledSources.Count) XLS1=PB2/PB3 GNSS=PB6/PB7-hardware-only BATTERY=PC0-input RS485=PB4/PB5-hardware-only"

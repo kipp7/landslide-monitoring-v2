@@ -39,6 +39,7 @@ typedef struct {
     int battery_valid;          // 0=invalid, 1=valid
     int battery_estimate_quality; // 1=default calibration, 2=field calibrated
     int simulated_field_data;   // 1=RS485 values are generated for link rehearsal
+    int simulated_gnss_data;    // 1=GNSS snapshot is synthetic and never displacement-eligible
 } SensorData;
 
 typedef struct {

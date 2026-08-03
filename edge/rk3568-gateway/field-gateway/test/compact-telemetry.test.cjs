@@ -163,6 +163,7 @@ test("compact telemetry v3 decodes the RK2206 golden vector without losing RTK p
     rtk_reference_station_id: 82
   });
   assert.equal(decoded.meta.compact_payload_version, 3);
+  assert.equal(decoded.meta.gnss_source, "hardware");
   assert.equal(decoded.meta.rtk_coordinate_frame, "CGCS2000");
   assert.equal(decoded.meta.rtk_fix_type, "rtk_fixed");
   assert.equal(decoded.meta.rtk_displacement_eligible, true);
@@ -206,6 +207,31 @@ test("compact telemetry v4 preserves all sensors and reports auditable RTCM runt
   assert.equal(decoded.metrics.rtcm_crc_errors_total, 1);
   assert.equal(decoded.metrics.rtcm_queue_drops_total, 12);
   assert.equal(decoded.metrics.rtcm_uart_errors_total, 6);
+});
+
+test("compact telemetry v4 isolates simulated GNSS from RTK displacement", () => {
+  const payload = Buffer.from(
+    "4c53040303031fff0000004d000003849664c12a2f5b5302092e12eb02a1008cffe0" +
+      "000300000005bb02974e0000001b80b4e91500003039fffff6d7000007d00000007f" +
+      "075bcd15097e04017e6f1f003400060007000f004703d700020052023f0104123456" +
+      "780000e6f30000007b000000ea00000159000004d2000001c8000001c20002000100" +
+      "0c0006",
+    "hex"
+  );
+  payload[4] = (payload[4] & ~0x02) | 0x04;
+  payload.writeUInt16BE(payload.readUInt16BE(76) & ~(1 << 1), 76);
+
+  const decoded = decodeCompactTelemetry(payload);
+  assert.equal(decoded.meta.field_sensor_source, "hardware");
+  assert.equal(decoded.meta.gnss_source, "simulated");
+  assert.equal(decoded.metrics.rtk_trusted, false);
+  assert.equal(decoded.meta.rtk_displacement_eligible, false);
+
+  payload.writeUInt16BE(payload.readUInt16BE(76) | (1 << 1), 76);
+  assert.throws(
+    () => decodeCompactTelemetry(payload),
+    /simulated GNSS cannot be trusted/u
+  );
 });
 
 test("compact telemetry v4 rejects active RTCM without a lease and dirty disabled state", () => {

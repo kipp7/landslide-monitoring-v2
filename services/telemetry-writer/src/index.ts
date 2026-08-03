@@ -79,6 +79,7 @@ const FIELD_PROFILE_META_KEYS = new Set<string>([
   "time_jump_ms",
   "compact_payload_version",
   "field_sensor_source",
+  "gnss_source",
   "battery_estimate_quality_code",
   "rtk_coordinate_frame",
   "rtk_coordinate_frame_code",

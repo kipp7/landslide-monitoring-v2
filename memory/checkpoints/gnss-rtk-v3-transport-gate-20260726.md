@@ -7,7 +7,7 @@ tags:
   - rtk
   - xls1
   - transport
-status: blocked
+status: active
 ---
 
 # Checkpoint: gnss-rtk-v3-transport-gate-20260726
@@ -17,6 +17,13 @@ status: blocked
 在不更换 UM220-IV NK、BT-760 和 DL-XLS1/XL01 的前提下，先证明 RK3568 到 3 个 RK2206 的 RTCM 与精密 GNSS 数据链稳定、及时、可追溯，再进入 ECEF/ENU、Hampel/Kalman、服务器 CEEMDAN 和比赛界面。
 
 ## Last Confirmed State
+
+### Indoor RS485 Hybrid Source Checkpoint (2026-08-03)
+
+- 用户已完成两路 RS485 硬件接入，当前任务恢复 active。室内包使用真实 XLS1、真实 SC16IS752/土壤三合一/三轴倾角、真实逐节点 PC0 校准，并以编译期 `GnssSourceMode=simulated` 禁止 UM220 PB6/PB7 初始化和 RTCM capability；此配置不能产生 RTK Fixed、厘米级或专业位移证据。
+- 固件、RK3568、服务器和 Windows 已贯通 `gnss_source`。模拟 GNSS 会双层 fail-closed：RK2206 清除全部可信 RTK/时标/差分/Fixed 证据，RK3568 拒绝矛盾 trusted 帧并设置 `rtk_displacement_eligible=false`。严格现场脚本新增 `--required-gnss-source simulated`，其 dry-run 锁定 `hardware RS485 + simulated GNSS + RTCM disabled/clean + 60/600/1800 s`。
+- 审查修复了 RTCM capability 完全关闭时 age 桩返回 0 的问题；现在从未发生的 fragment/completed/action age 均为 `UINT32_MAX`，并有独立 C99 测试。相关结果：C99 协议/电池/GNSS/禁用 RTCM 全通过，pin safety 26 源文件通过，release safety 正反例通过，Python 金值通过，field-gateway 46/46，writer 14/14，API 10/10，Windows lint/build 通过。API 全仓 lint 的 68 个既有错误不在本次改动文件中。
+- A/B/C dirty 候选 OpenHarmony 全量构建成功，manifest 正确报告 `fieldSensorMode=hardware`、`rs485HardwareInitialized=true`、`gnssSourceMode=simulated`、`gnssHardwareInitialized=false`、RTCM disabled 和 A/B/C 最终校准。最终二进制包含真实 RS485 标记、无 GPS UART 初始化标记且身份唯一；由于 `sourceDirty=true`，候选严格禁止烧录。待源码干净提交并推送后再生成正式发布目录与哈希。
 
 ### Current Verified Baseline (2026-08-03)
 

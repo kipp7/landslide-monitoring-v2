@@ -40,6 +40,7 @@ type RtkSolutionSnapshot = {
   updatedAt: string;
   fresh: boolean;
   trusted: boolean;
+  source: string;
   fixType: string;
   coordinateFrame: string;
   satellites: number | null;
@@ -157,6 +158,7 @@ function buildRtkSolutionSnapshot(snapshot: DeviceStateSnapshot | null): RtkSolu
     updatedAt: snapshot.updatedAt,
     fresh,
     trusted: fresh && metricBoolean(snapshot, "rtk_trusted"),
+    source: metaText(snapshot, "gnss_source", "hardware"),
     fixType: metaText(snapshot, "rtk_fix_type", "unknown"),
     coordinateFrame: metaText(snapshot, "rtk_coordinate_frame", "unknown"),
     satellites: metricNumber(snapshot, "rtk_satellites_used"),
@@ -701,6 +703,7 @@ export function GpsMonitoringPage() {
         : rtkSolution.fixType === "rtk_float"
           ? "RTK Float"
           : rtkSolution.fixType;
+  const rtkSourceLabel = rtkSolution?.source === "simulated" ? "模拟输入" : "真实硬件";
   const rtkErrorSummary = rtkSolution
     ? [rtkSolution.crcErrors ?? 0, rtkSolution.queueDrops ?? 0, rtkSolution.uartErrors ?? 0].join("/")
     : "--";
@@ -1322,6 +1325,7 @@ export function GpsMonitoringPage() {
                         <div className="desk-loading">加载中…</div>
                       ) : (
                         <div className="desk-gps-rtk-grid">
+                          <div className="desk-gps-rtk-item"><span>GNSS 来源</span><strong>{rtkSourceLabel}</strong></div>
                           <div className="desk-gps-rtk-item"><span>解算</span><strong>{rtkFixLabel}</strong></div>
                           <div className="desk-gps-rtk-item"><span>可信门禁</span><strong>{rtkSolution?.trusted ? "通过" : "未通过"}</strong></div>
                           <div className="desk-gps-rtk-item"><span>使用卫星</span><strong>{rtkSolution?.satellites ?? "--"}</strong></div>

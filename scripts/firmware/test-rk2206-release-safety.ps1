@@ -27,16 +27,24 @@ function Write-Utf8Json {
 function New-TestRelease {
   param(
     [string]$Path,
+    [ValidateSet(1, 2)]
+    [int]$SchemaVersion = 1,
     [ValidateSet(3, 4)]
     [int]$CompactVersion = 3,
     [ValidateSet("hardware", "simulated")]
     [string]$Mode,
     [ValidateSet("disabled", "probe", "live")]
     [string]$RtcmMode = "disabled",
+    [ValidateSet("hardware", "simulated")]
+    [string]$GnssSource = "hardware",
     [ValidateSet("default-calibration", "field-calibrated")]
     [string]$BatteryState,
     [switch]$FinalAcceptance
   )
+
+  if ($GnssSource -eq "simulated" -and $RtcmMode -ne "disabled") {
+    throw "Test fixture cannot combine simulated GNSS with active RTCM"
+  }
 
   New-Item -ItemType Directory -Force -Path $Path | Out-Null
   $calibrated = $BatteryState -eq "field-calibrated"
@@ -120,6 +128,11 @@ function New-TestRelease {
   } else {
     "SIMULATED (RS485 values only)"
   }
+  $gnssMarker = if ($GnssSource -eq "simulated") {
+    "GNSS Source: SIMULATED (no PB6/PB7 UART)"
+  } else {
+    "GNSS Source: HARDWARE (UM220-IV NK on PB6/PB7)"
+  }
   [System.IO.File]::WriteAllBytes(
     (Join-Path $Path "rk2206_db_loader.bin"),
     [System.Text.Encoding]::ASCII.GetBytes("loader-fixture")
@@ -134,7 +147,8 @@ function New-TestRelease {
       "PC0/SARADC-ch0 input-only",
       $compactMarker,
       $sensorMarkers,
-      $capabilityMarker
+      $capabilityMarker,
+      $(if ($SchemaVersion -ge 2) { $gnssMarker } else { "" })
     ) -join "`0"
     foreach ($extension in @("bin", "img")) {
       [System.IO.File]::WriteAllBytes(
@@ -157,8 +171,8 @@ function New-TestRelease {
       }
   )
   $manifest = [ordered]@{
-    schemaVersion = 1
-    profile = "rk2206-xl01-compact-v$CompactVersion-$Mode"
+    schemaVersion = $SchemaVersion
+    profile = if ($SchemaVersion -ge 2) { "rk2206-xl01-compact-v$CompactVersion-$Mode-gnss-$GnssSource" } else { "rk2206-xl01-compact-v$CompactVersion-$Mode" }
     compactVersion = $CompactVersion
     sourceCommit = $sourceCommit
     sourceDirty = $false
@@ -192,6 +206,20 @@ function New-TestRelease {
     compactPollWireBytes = 28
     nodeSlotMs = 340
     files = $files
+  }
+  if ($SchemaVersion -ge 2) {
+    $manifest.fieldSensorTruth = if ($Mode -eq "hardware") {
+      "RS485 and battery are real"
+    } else {
+      "RS485 values simulated; battery is real"
+    }
+    $manifest.gnssSourceMode = $GnssSource
+    $manifest.gnssTruth = if ($GnssSource -eq "simulated") {
+      "Synthetic GNSS snapshot; UM220 PB6/PB7 UART is not initialized"
+    } else {
+      "UM220-IV NK on PB6/PB7 UART is real"
+    }
+    $manifest.gnssHardwareInitialized = $GnssSource -eq "hardware"
   }
   Write-Utf8Json -Path (Join-Path $Path "manifest.json") -Value $manifest
 }
@@ -247,6 +275,38 @@ try {
       -ExpectedCompactVersion 4 `
       -ExpectedFieldSensorMode simulated `
       -ExpectedGnssRtcmInjectionMode live `
+      -ExpectedBatteryCalibrationState default-calibration | Out-Null
+  }
+
+  $hybridRoot = Join-Path $testRoot "v4-rs485-hardware-gnss-simulated"
+  New-TestRelease `
+    -Path $hybridRoot `
+    -SchemaVersion 2 `
+    -CompactVersion 4 `
+    -Mode hardware `
+    -GnssSource simulated `
+    -RtcmMode disabled `
+    -BatteryState default-calibration
+  & $verifier `
+    -ArtifactDirectory $hybridRoot `
+    -ExpectedCompactVersion 4 `
+    -ExpectedFieldSensorMode hardware `
+    -ExpectedGnssSourceMode simulated `
+    -ExpectedGnssRtcmInjectionMode disabled `
+    -ExpectedBatteryCalibrationState default-calibration `
+    -ExpectedSourceCommit $sourceCommit | Out-Null
+
+  $hybridManifestPath = Join-Path $hybridRoot "manifest.json"
+  $hybridManifest = Get-Content -LiteralPath $hybridManifestPath -Raw | ConvertFrom-Json
+  $hybridManifest.gnssHardwareInitialized = $true
+  Write-Utf8Json -Path $hybridManifestPath -Value $hybridManifest
+  Assert-Rejected -Reason "simulated GNSS release presented as hardware-initialized" -Action {
+    & $verifier `
+      -ArtifactDirectory $hybridRoot `
+      -ExpectedCompactVersion 4 `
+      -ExpectedFieldSensorMode hardware `
+      -ExpectedGnssSourceMode simulated `
+      -ExpectedGnssRtcmInjectionMode disabled `
       -ExpectedBatteryCalibrationState default-calibration | Out-Null
   }
 
@@ -343,7 +403,7 @@ try {
       -ExpectedBatteryCalibrationState field-calibrated | Out-Null
   }
 
-  Write-Host "RELEASE_SAFETY_TEST_OK V3/V4 simulated/hardware/final-acceptance positives and tamper/identity/mode/runtime/acceptance negatives passed"
+  Write-Host "RELEASE_SAFETY_TEST_OK V3/V4 field/GNSS source/final-acceptance positives and tamper/identity/mode/runtime/acceptance negatives passed"
 } finally {
   if (Test-Path -LiteralPath $testRoot -PathType Container) {
     Remove-Item -LiteralPath $testRoot -Recurse -Force

@@ -14,6 +14,7 @@ const VALID_BATTERY = 1 << 7;
 
 const STATUS_WARNING = 1 << 0;
 const STATUS_FIELD_SENSORS_SIMULATED = 1 << 1;
+const STATUS_GNSS_SIMULATED = 1 << 2;
 
 const V3_VALID_BATTERY = 1 << 0;
 const V3_VALID_SOIL = 1 << 1;
@@ -237,7 +238,7 @@ export function decodeCompactTelemetry(payload: Buffer): CompactTelemetry {
     const fixFlags = payload.readUInt16BE(76);
     const metrics: Record<string, number | boolean> = {};
 
-    if ((statusFlags & ~0x03) !== 0 || (valid & ~V3_KNOWN_VALID_MASK) !== 0) {
+    if ((statusFlags & ~0x07) !== 0 || (valid & ~V3_KNOWN_VALID_MASK) !== 0) {
       throw new Error(`compact telemetry ${versionLabel} status or validity flags contain reserved bits`);
     }
     const gnssStatusValid = (valid & V3_VALID_GNSS_STATUS) !== 0;
@@ -281,6 +282,10 @@ export function decodeCompactTelemetry(payload: Buffer): CompactTelemetry {
     const ggaQuality = payload.readUInt8(74);
     const coordinateFrameCode = payload.readUInt8(75);
     const trusted = (fixFlags & GNSS_FIX_TRUSTED) !== 0;
+    const gnssSimulated = (statusFlags & STATUS_GNSS_SIMULATED) !== 0;
+    if (gnssSimulated && trusted) {
+      throw new Error(`compact telemetry ${versionLabel} simulated GNSS cannot be trusted RTK evidence`);
+    }
     if (gnssStatusValid && (
       ((fixFlags & GNSS_FIX_COORDINATE_FRAME_VALID) !== 0
         ? coordinateFrameCode !== 1 && coordinateFrameCode !== 2
@@ -409,12 +414,13 @@ export function decodeCompactTelemetry(payload: Buffer): CompactTelemetry {
         upload_trigger: uploadTriggerName(payload.readUInt8(5)),
         compact_payload_version: compactVersion,
         field_sensor_source: simulated ? "simulated" : "hardware",
+        gnss_source: gnssSimulated ? "simulated" : "hardware",
         battery_estimate_quality_code: batteryQualityCode,
         rtk_coordinate_frame: coordinateFrameName(coordinateFrameCode),
         rtk_coordinate_frame_code: coordinateFrameCode,
         rtk_fix_type: ggaFixType(ggaQuality),
         rtk_fix_flags: fixFlags,
-        rtk_displacement_eligible: trusted && coordinateFrameCode !== 0,
+        rtk_displacement_eligible: !gnssSimulated && trusted && coordinateFrameCode !== 0,
         v3_valid_flags: valid,
         ...(compactVersion === 4
           ? {
