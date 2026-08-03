@@ -31,8 +31,20 @@ PostgreSQL and ClickHouse data model instead of creating a second App database.
 - Block restart, network changes, threshold changes, serial writes, device
   control, and physical alarm trigger/clear requests before board dispatch.
 - Keep the rule engine and confirmed human workflow as physical alarm authority.
-- If an open-ended LLM is added later, run it on the server and accept only a
-  validated structured allowlist plan. Never give it direct board execution.
+- Use a replaceable OpenAI-compatible planner on the server. Its local system
+  prompt defines the role and JSON contract, while code-level schema and policy
+  validation remain authoritative. Never give the model direct board execution.
+- Keep online general-model endpoints and credentials on the server. The
+  HarmonyOS App and RK3568 must never embed a provider secret.
+- Keep real edge AI on RK3568 through the compact
+  `robust_baseline_ensemble` risk model, the
+  `random_forest_classifier` diagnosis model, and deterministic collection,
+  recheck, and report implementations. Return their evidence through the
+  server audit path instead of presenting the board as a generic chat model.
+- Keep the deterministic Chinese planner as both the no-model default and the
+  automatic fallback for timeout, network, HTTP, and invalid-response failures.
+- Do not queue phone messages for delayed execution. Preserve failed text for
+  explicit retry. Do not replay failed RK3568 tasks after the board reconnects.
 
 ## Rationale
 
@@ -53,10 +65,15 @@ PostgreSQL and ClickHouse data model instead of creating a second App database.
   and rollback plan before it enters the allowlist.
 - When Hermes is unavailable, original monitoring and alarm pages must continue
   independently; only the AI sidecar may fall back to a cached snapshot.
+- Conversation messages record whether planning came from the model or the
+  deterministic fallback, including a non-secret fallback reason for audit.
+- The App should distinguish model planning, rule fallback, and RK3568
+  execution so users can see which part of the result is actually intelligent,
+  which part is a safety guard, and which part ran at the edge.
 
 ## Follow-up
 
 - Finish the PR #349 staged production rollout and full regression.
 - Measure RK3568 CPU, memory, queue latency, and main-link health during a soak.
-- Add a replaceable server-side LLM planner only after the deterministic path
-  remains stable in production.
+- Select and configure the production model provider only after checking cloud
+  server resources. Keep model credentials out of Git and memory notes.

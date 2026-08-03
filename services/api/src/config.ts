@@ -70,6 +70,14 @@ const configSchema = z.object({
   rk3568HermesEdgeSupervisorUrl: optionalNonEmptyString(),
   rk3568StatusHttpTimeoutMs: z.coerce.number().int().positive().max(60_000).default(6000),
 
+  hermesPlannerMode: z.enum(["auto", "deterministic", "openai-compatible"]).default("auto"),
+  hermesLlmBaseUrl: optionalNonEmptyString(),
+  hermesLlmApiKey: optionalNonEmptyString(),
+  hermesLlmModel: optionalNonEmptyString(),
+  hermesLlmTimeoutMs: z.coerce.number().int().positive().max(15_000).default(6000),
+  hermesLlmMaxAttempts: z.coerce.number().int().min(1).max(2).default(2),
+  hermesLlmCooldownMs: z.coerce.number().int().min(5_000).max(300_000).default(30_000),
+
   apiMaxSeriesRangeHours: z.coerce.number().int().positive().default(168),
   apiMaxPoints: z.coerce.number().int().positive().default(100000),
   apiReplayMaxRangeHours: z.coerce.number().int().positive().default(168),
@@ -126,6 +134,14 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
     rk3568AlarmActuatorUrl: env.RK3568_ALARM_ACTUATOR_URL,
     rk3568FieldLinkMonitorUrl: env.RK3568_FIELD_LINK_MONITOR_URL,
     rk3568HermesEdgeSupervisorUrl: env.RK3568_HERMES_EDGE_SUPERVISOR_URL,
-    rk3568StatusHttpTimeoutMs: env.RK3568_STATUS_HTTP_TIMEOUT_MS
+    rk3568StatusHttpTimeoutMs: env.RK3568_STATUS_HTTP_TIMEOUT_MS,
+
+    hermesPlannerMode: env.HERMES_PLANNER_MODE,
+    hermesLlmBaseUrl: env.HERMES_LLM_BASE_URL,
+    hermesLlmApiKey: env.HERMES_LLM_API_KEY,
+    hermesLlmModel: env.HERMES_LLM_MODEL,
+    hermesLlmTimeoutMs: env.HERMES_LLM_TIMEOUT_MS,
+    hermesLlmMaxAttempts: env.HERMES_LLM_MAX_ATTEMPTS,
+    hermesLlmCooldownMs: env.HERMES_LLM_COOLDOWN_MS
   });
 }

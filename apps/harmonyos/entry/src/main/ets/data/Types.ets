@@ -149,6 +149,10 @@ export interface Alert {
   lastEventAt?: string;
 }
 
+export type AlertListStatus = 'active' | 'acked' | 'resolved';
+
+export type DeviceSeriesRange = '1h' | '24h' | '7d';
+
 export interface AlertStreamEvent {
   type: string;
   eventId: string;
@@ -380,6 +384,9 @@ export type HermesMessageRole = 'user' | 'assistant' | 'system';
 export interface HermesMessageMetadata {
   blocked?: boolean;
   safetyBoundary?: string;
+  plannerSource?: 'model' | 'deterministic';
+  plannerModel?: string;
+  plannerFallbackReason?: string;
 }
 
 export interface HermesMessage {
@@ -417,12 +424,20 @@ export interface HermesConversationHistory {
   tasks: Array<HermesAgentTask>;
 }
 
+export interface HermesPlannerStatus {
+  source: 'model' | 'deterministic';
+  model?: string;
+  fallback: boolean;
+  fallbackReason?: string;
+}
+
 export interface HermesChatResponse {
   conversation: HermesConversation;
   messages: Array<HermesMessage>;
   tasks: Array<HermesAgentTask>;
   blocked: boolean;
   suggestions: Array<EdgeAiActionName>;
+  planner: HermesPlannerStatus;
 }
 
 export interface EdgeRiskModelStatus {
@@ -435,6 +450,7 @@ export interface EdgeRiskModelStatus {
 }
 
 export interface EdgeAiStatus {
+  reachable?: boolean;
   available: boolean;
   mode: string;
   generatedAt: string;
@@ -722,11 +738,18 @@ export function shortTime(value: string | undefined): string {
   if (!value) return '暂无';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false });
+  return `${twoDigit(date.getHours())}:${twoDigit(date.getMinutes())}`;
 }
 
 function twoDigit(value: number): string {
   return value < 10 ? `0${value}` : `${value}`;
+}
+
+export function shortDateTime(value: string | undefined): string {
+  if (!value) return '暂无';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return `${twoDigit(date.getMonth() + 1)}-${twoDigit(date.getDate())} ${twoDigit(date.getHours())}:${twoDigit(date.getMinutes())}`;
 }
 
 export function beijingClockTime(value: string | undefined): string {

@@ -1,5 +1,5 @@
 import http from '@ohos.net.http';
-import { ApiEnvelope, LoginData, UserSummary, DashboardSummary, WeeklyTrend, Station, Device, DeviceState, SensorDefinition, MetricSeries, SeriesResponse, AlertPage, AlertEventsResponse, PredictionPage, FieldAlarmStatus, EdgeAiStatus, EdgeAiActionName, EdgeAiActionResponse, EdgeAiActionHistory, EdgeAiIntentResponse, HermesChatResponse, HermesConversationHistory, HermesConversationList } from './Types';
+import { AlertListStatus, ApiEnvelope, DeviceSeriesRange, LoginData, UserSummary, DashboardSummary, WeeklyTrend, Station, Device, DeviceState, SensorDefinition, MetricSeries, SeriesResponse, AlertPage, AlertEventsResponse, PredictionPage, FieldAlarmStatus, EdgeAiStatus, EdgeAiActionName, EdgeAiActionResponse, EdgeAiActionHistory, EdgeAiIntentResponse, HermesChatResponse, HermesConversationHistory, HermesConversationList } from './Types';
 import { normalizeApiBaseUrl } from './ApiConfig';
 
 export class ApiError extends Error {
@@ -157,14 +157,16 @@ export class ApiClient {
     return this.request<DeviceState>(`/data/state/${encodeURIComponent(deviceId)}`);
   }
 
-  async series(deviceId: string, sensorKeys: Array<string> = ['tilt_x_deg', 'tilt_y_deg', 'soil_temperature_c', 'temperature_c', 'soil_moisture_pct', 'humidity_pct', 'electrical_conductivity_us_cm']): Promise<SeriesResponse> {
+  async series(deviceId: string, range: DeviceSeriesRange = '24h', sensorKeys: Array<string> = ['tilt_x_deg', 'tilt_y_deg', 'tilt_z_deg', 'soil_temperature_c', 'temperature_c', 'soil_moisture_pct', 'humidity_pct', 'electrical_conductivity_us_cm']): Promise<SeriesResponse> {
+    if (range === '1h') return this.seriesForRange(deviceId, sensorKeys, 1, '1m');
+    if (range === '7d') return this.seriesForRange(deviceId, sensorKeys, 7 * 24, '1h');
     return this.seriesForRange(deviceId, sensorKeys, 24, '5m');
   }
 
   async weeklySeries(deviceId: string): Promise<SeriesResponse> {
     return this.seriesForRange(
       deviceId,
-      ['tilt_y_deg', 'soil_temperature_c', 'temperature_c', 'soil_moisture_pct', 'humidity_pct', 'electrical_conductivity_us_cm'],
+      ['tilt_y_deg', 'tilt_z_deg', 'soil_temperature_c', 'temperature_c', 'soil_moisture_pct', 'humidity_pct', 'electrical_conductivity_us_cm'],
       7 * 24,
       '1h'
     );
@@ -208,11 +210,13 @@ export class ApiClient {
     const normalized: Array<MetricSeries> = [];
     const tiltX = this.preferredSeries(response.series, 'tilt_x_deg');
     const tiltY = this.preferredSeries(response.series, 'tilt_y_deg');
+    const tiltZ = this.preferredSeries(response.series, 'tilt_z_deg');
     const soilTemperature = this.preferredSeries(response.series, 'soil_temperature_c', 'temperature_c');
     const soilMoisture = this.preferredSeries(response.series, 'soil_moisture_pct', 'humidity_pct');
     const soilConductivity = this.preferredSeries(response.series, 'electrical_conductivity_us_cm');
     if (tiltX) normalized.push(tiltX);
     if (tiltY) normalized.push(tiltY);
+    if (tiltZ) normalized.push(tiltZ);
     if (soilTemperature) normalized.push(soilTemperature);
     if (soilMoisture) normalized.push(soilMoisture);
     if (soilConductivity) normalized.push(soilConductivity);
@@ -226,8 +230,8 @@ export class ApiClient {
     };
   }
 
-  async alerts(): Promise<AlertPage> {
-    return this.request<AlertPage>('/alerts?page=1&pageSize=50&status=active');
+  async alerts(status: AlertListStatus = 'active'): Promise<AlertPage> {
+    return this.request<AlertPage>(`/alerts?page=1&pageSize=50&status=${encodeURIComponent(status)}`);
   }
 
   async alertEvents(alertId: string): Promise<AlertEventsResponse> {

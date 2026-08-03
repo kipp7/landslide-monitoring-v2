@@ -28,7 +28,7 @@ export struct MetricCard {
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
       Text(this.detail)
-        .fontSize(11)
+        .fontSize(12)
         .fontColor(this.accent)
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })

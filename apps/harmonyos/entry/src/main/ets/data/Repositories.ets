@@ -1,6 +1,6 @@
 import { ApiClient } from './ApiClient';
 import { CacheManager, CacheRead } from './CacheManager';
-import { DashboardSummary, WeeklyTrend, Station, Device, DeviceState, SensorDefinition, SeriesResponse, AlertPage, AlertEventsResponse, PredictionPage, FieldAlarmStatus, EdgeAiStatus, EdgeAiActionName, EdgeAiActionResponse, EdgeAiActionHistory, EdgeAiIntentResponse, HermesChatResponse, HermesConversationHistory, HermesConversationList } from './Types';
+import { AlertListStatus, DashboardSummary, DeviceSeriesRange, WeeklyTrend, Station, Device, DeviceState, SensorDefinition, SeriesResponse, AlertPage, AlertEventsResponse, PredictionPage, FieldAlarmStatus, EdgeAiStatus, EdgeAiActionName, EdgeAiActionResponse, EdgeAiActionHistory, EdgeAiIntentResponse, HermesChatResponse, HermesConversationHistory, HermesConversationList } from './Types';
 
 interface CacheTtlConfig {
   state: number;
@@ -27,7 +27,7 @@ export class MonitoringRepository {
   private dashboardRequest: Promise<DashboardSummary> | null = null;
   private stationListRequest: Promise<Array<Station>> | null = null;
   private deviceListRequests: Map<string, Promise<Array<Device>>> = new Map<string, Promise<Array<Device>>>();
-  private alertsRequest: Promise<AlertPage> | null = null;
+  private alertRequests: Map<string, Promise<AlertPage>> = new Map<string, Promise<AlertPage>>();
   private fieldAlarmStatusRequest: Promise<FieldAlarmStatus> | null = null;
   private edgeAiStatusRequest: Promise<EdgeAiStatus> | null = null;
   private edgeAiActionsRequest: Promise<EdgeAiActionHistory> | null = null;
@@ -135,7 +135,9 @@ export class MonitoringRepository {
 
   private async fetchEdgeAiStatus(): Promise<EdgeAiStatus> {
     const value = await this.api.edgeAiStatus();
-    if (value.available) await this.cache.write(this.cache.key('/edge-ai/status'), value);
+    if ((value.reachable ?? value.available) || value.available) {
+      await this.cache.write(this.cache.key('/edge-ai/status'), value);
+    }
     return value;
   }
 
@@ -195,25 +197,26 @@ export class MonitoringRepository {
     return value;
   }
 
-  cachedSeries(deviceId: string): Promise<CacheRead<SeriesResponse> | null> {
-    return this.cache.read<SeriesResponse>(this.cache.key('/data/series', deviceId), TTL.series);
+  cachedSeries(deviceId: string, range: DeviceSeriesRange = '24h'): Promise<CacheRead<SeriesResponse> | null> {
+    return this.cache.read<SeriesResponse>(this.cache.key('/data/series', `${deviceId}|${range}`), TTL.series);
   }
 
-  async series(deviceId: string): Promise<SeriesResponse> {
-    const pending = this.seriesRequests.get(deviceId);
+  async series(deviceId: string, range: DeviceSeriesRange = '24h'): Promise<SeriesResponse> {
+    const requestKey = `${deviceId}|${range}`;
+    const pending = this.seriesRequests.get(requestKey);
     if (pending) return pending;
-    const request = this.fetchSeries(deviceId);
-    this.seriesRequests.set(deviceId, request);
+    const request = this.fetchSeries(deviceId, range);
+    this.seriesRequests.set(requestKey, request);
     try {
       return await request;
     } finally {
-      this.seriesRequests.delete(deviceId);
+      this.seriesRequests.delete(requestKey);
     }
   }
 
-  private async fetchSeries(deviceId: string): Promise<SeriesResponse> {
-    const value = await this.api.series(deviceId);
-    await this.cache.write(this.cache.key('/data/series', deviceId), value, false);
+  private async fetchSeries(deviceId: string, range: DeviceSeriesRange): Promise<SeriesResponse> {
+    const value = await this.api.series(deviceId, range);
+    await this.cache.write(this.cache.key('/data/series', `${deviceId}|${range}`), value, false);
     return value;
   }
 
@@ -243,19 +246,21 @@ export class MonitoringRepository {
     return this.cache.read<AlertPage>(this.cache.key('/alerts'), TTL.alerts);
   }
 
-  async alerts(): Promise<AlertPage> {
-    if (this.alertsRequest) return this.alertsRequest;
-    this.alertsRequest = this.fetchAlerts();
+  async alerts(status: AlertListStatus = 'active'): Promise<AlertPage> {
+    const pending = this.alertRequests.get(status);
+    if (pending) return pending;
+    const request = this.fetchAlerts(status);
+    this.alertRequests.set(status, request);
     try {
-      return await this.alertsRequest;
+      return await request;
     } finally {
-      this.alertsRequest = null;
+      this.alertRequests.delete(status);
     }
   }
 
-  private async fetchAlerts(): Promise<AlertPage> {
-    const value = await this.api.alerts();
-    await this.cache.write(this.cache.key('/alerts'), value);
+  private async fetchAlerts(status: AlertListStatus): Promise<AlertPage> {
+    const value = await this.api.alerts(status);
+    if (status === 'active') await this.cache.write(this.cache.key('/alerts'), value);
     return value;
   }
 
@@ -270,7 +275,7 @@ export class MonitoringRepository {
   async clear(): Promise<void> {
     this.dashboardRequest = null;
     this.stationListRequest = null;
-    this.alertsRequest = null;
+    this.alertRequests.clear();
     this.fieldAlarmStatusRequest = null;
     this.edgeAiStatusRequest = null;
     this.deviceListRequests.clear();
