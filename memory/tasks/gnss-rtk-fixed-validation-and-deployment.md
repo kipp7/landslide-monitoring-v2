@@ -18,15 +18,16 @@ status: active
 
 ## Current State
 
-### RS485 Diagnostic V5-r2 Adversarial Audit (2026-08-03)
+### RS485 Diagnostic V5-r3 Adversarial Audit and Clean Release (2026-08-03)
 
-- 第二轮对抗性审查已完成代码阶段：Compact V4 正常遥测保持 `139 B payload / 157 B complete frame`，不增加周期业务负载；新增的 G3S V5 仅按节点按需查询，payload `552 B`，C99 金值完整 field-link 帧实测 `570 B`，禁止周期轮询或多节点并发查询。固件标记固定为 `fw-rk2206-rtk-compact-v4-rs485-diag-v5-r2-20260803`。
+- 第二轮对抗性审查已完成并锁定 clean release：Compact V4 正常遥测保持 `139 B payload / 157 B complete frame`，不增加周期业务负载；G3S V5 仅按节点按需查询，payload `552 B`，C99 金值完整 field-link 帧实测 `570 B`，禁止周期轮询或多节点并发查询。固件标记为 `fw-rk2206-rtk-compact-v4-rs485-diag-v5-r3-20260803`。
 - V5 按 soil/soil-EC/tilt/rain 分别累计 collection cycles、raw attempts、首次失败、retry recovery、final failure、skip、连续最终失败、最近状态/时间和采集时长。可选 EC 重探退避的 skip 不再覆盖最近真实 final-failure 证据；后续成功才记录 recovery。RK3568 TypeScript 与现场 Python 双端拒绝掩码、状态、事件、时间和饱和计数关系不可能的 V5。
-- SC16IS752 连续 I2C 寄存器读取失败现在返回 `read_failed`，不再伪装为外部传感器 timeout；一次可重试失败前强制恢复缓存的 UART baud/clock 配置。U4 scratchpad/内部 FIFO 自检失败时启动日志为 `state=DEGRADED`，不再同时输出误导性 `[OK] ready`，但保留采集以获取部分路径证据。
+- SC16IS752 连续 I2C 寄存器读取失败现在返回 `read_failed`，不再伪装为外部传感器 timeout；一次可重试失败前强制恢复缓存的 UART baud/clock 配置。U4 scratchpad/内部 FIFO 自检失败时，U4 与 RS485 两层启动日志都保持 `state=DEGRADED/WARN`，不再紧接误导性 `[OK]`，但保留采集以获取部分路径证据。
 - 健康启动不再执行约 15 秒参数扫描。只有正常读取在一次有界重试后仍 final fail，才在首个原子快照保存后运行一次 read-only scan；扫描每次尝试喂狗并恢复双通道 1.8432 MHz/4800 8N1。工具区分 `runtime_collection_not_started`、`read_only_scan_in_progress` 和真实 restore failure。
-- 离线门禁通过：C99 GNSS/RTCM、G3S V1-V5、V5 外层 encode/decode、RS485 retry/runtime、SC16IS752 cache；Python 语法/自检；field-gateway build、lint 和 `49/49`；26 源文件引脚正向与 3 项负例；发布安全正反例（含精确 V5-r2 marker 拒绝）；故障扫描快照/调度器/喂狗门禁；`git diff --check`。
-- 修改后的 A/B/C OpenHarmony 已全量编译链接。仅作证明的目录为 `output/rk2206-diag-v5-r2-adversarial-dirty-compile-proof-20260803`，manifest SHA-256 `1a80cad17f8122be87f007d3365c387ab534829f58a0f58283087664f389f19c`，明确 `sourceDirty=true`、禁止烧录。A/B/C 镜像 SHA-256 为 `6f0847f23e06e693db4f45fcbc7a739cd08a48b2b130bcbdcba555e6a8de41f4`、`8aaf8bf6b6b5631123dfc798d016c44eb9dc33bd78b5f8da07458041067c5267`、`66f2bfbafce8f7ee2659e11de19193db6330364de65d4b0650d08ffdafbccb36`；身份唯一、hardware RS485、simulated GNSS、RTCM disabled、最终 PC0 校准均已核对。待源码提交并推送后才能从 clean HEAD 构建正式 immutable 包。
-- `xls1_compact_v4_rs485_retry1_gnss_simulated_20260803` 及所有旧 V4/V3/dirty proof 均已被 V5-r2 路径取代，禁止下一轮烧录。当前尚未生成可烧录的 V5-r2 正式包，也未完成新包真机 60/600/1800 秒门禁。
+- 最后一轮审查额外发现并修复 field-link TX 竞态：旧代码在 UART mutex 之外分配帧序号，多任务并发时可能让 `N+1` 先于 `N` 上线路，制造假 sequence gap/reset。V5-r3 将序号分配、COBS/CRC 编码和完整分块写入纳入同一把锁，并新增 `test-rk2206-field-link-tx-order-safety.ps1` 发布门禁。
+- 离线门禁全部通过：C99 GNSS/RTCM、G3S V1-V5、V5 外层 encode/decode、RS485 retry/runtime、SC16IS752 cache；Python 语法/自检；field-gateway build、lint 和 `49/49`；26 源文件引脚正向与 3 项负例；发布安全正反例（含精确 marker 拒绝）；启动/扫描/发送顺序门禁；三节点电池 finalization/calibration/refinement 拒绝路径；`git diff --check`。
+- 实现提交 `b6b49adbbfe0601570bb87b292d29f736c6a44ac` 已推送 `origin/feat/gnss-rtk-v31-transport`。正式目录为 `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v4_rs485_diag_v5_r3_gnss_simulated_20260803`，manifest SHA-256 `96fdf0798ab5968abd58c6002e561e8f31b5804b2456c7db3e99021a27f2a6fc`；A/B/C `.img` SHA-256 为 `8f03f35ef3a26a4f38ef02235c042747371d2c030b29fbe7f412080f08dd1edc`、`73a3e873c3b66d2ce0a6865e7f1a2393a50e2d75b5b688fb18b917e5afe7cf80`、`ef4f8b4146f54f7f2bb5155aee2a4d41632267376cf2555387b61464c6cb4e9a`，loader SHA-256 `761d90888aa376156d562abf267dfe324b96c4397f7a601f6b4c64d0ea3bf977`。
+- 正式目录独立复验为 `sourceDirty=false`、A/B/C 身份唯一、hardware RS485、simulated GNSS、UM220 UART 未初始化、RTCM disabled、final PC0 calibration 和 P2 singleflight。V5-r2 clean/dirty、`retry1`、旧 V4/V3 及其他 proof 均禁止烧录。V5-r3 只是唯一允许下一轮室内验收烧录的包；尚未完成真机 60/600/1800 秒，不能声称真实三节点稳定或厘米级完成。
 
 ### [Superseded] RS485 Retry1 / Fixed-Order Timing Candidate (2026-08-03)
 
@@ -34,7 +35,7 @@ status: active
 - G3S V4 底层计数确认倾角失败全部为低频无响应：A `1498` 次请求中 `4` 次、B `2038` 中 `2` 次、C `1601` 中 `12` 次；没有 CRC、短帧、地址、功能码、写入或 TX 错误，当前三节点连续失败数均为 0。固件因此只对 timeout/read/short/CRC 做一次 `80 ms` 后补读；地址/异常/功能码/写入/TX 故障不重试，不缓存旧值，不放宽有效位。每次首次失败仍由 `rs485_modbus.c` 独立累计，补读不能掩盖故障率。
 - 验收器已与生产固定 A -> B -> C 顺序对齐，并把候选契约收敛为 `response=1500 ms / session=1500 ms / XLS1 retries=0 / batch interval=250 ms / max per-node P95=2500 ms`。零重试时 session 只需覆盖一个响应窗，不再错误强制两倍窗口；报告新增不含坐标的 `profileViolationSamples`。RK3568 生产配置仍为 `compact-targeted-v1`、`1200/1200/0`、`NTRIP_ENABLED=false`，尚未切换候选。
 - 实现提交 `f7a7e90442a90b94ec00402f981b561964408a35` 已推送 `origin/feat/gnss-rtk-v31-transport`。C99 主机测试、26 源文件引脚门禁、三项引脚负例、RS485 启动安全、发布安全、Python 金值/语法和 A/B/C OpenHarmony 全量编译均通过；构建链已补齐新增 retry-policy 头文件。启动标记为 `fw-rk2206-rtk-compact-v4-rs485-retry1-20260803`，串口摘要会显示 `max=1 gap=80 ms`。
-- 历史 `rs485_retry1` 包曾通过当时门禁，但现已由上面的 V5-r2 路径取代，禁止继续烧录；其哈希只保留为历史追溯，不再是当前操作指令。
+- 历史 `rs485_retry1` 包曾通过当时门禁，但现已由上面的 V5-r3 路径取代，禁止继续烧录；其哈希只保留为历史追溯，不再是当前操作指令。
 - RK3568 验收脚本已备份到 `/opt/lsmv2/backups/rs485-retry1-acceptance-predeploy-20260803-224256` 并更新；`xls1_compact_v4_acceptance.py` SHA-256 为 `f61d510d5822aefb446006339f6464e6b613c6330748cd9b3ef02f705ee1f413`，`xls1_three_node_batch_poll.py` 为 `77acbc412f141f3f193b332099dd07887a993fbdb9b773b173ee073d78d5ecfe`。远端语法和 simulated `--dry-run` 通过，field-gateway 与反向隧道 active、`NRestarts=0`。用户已将 A/B/C 下电并取走 RK3568 4G SIM；通用默认路由仍落到无 SIM 的 `usb0` 并超时，强制 `wlan0` 访问公网成功，但现有 guardian 已为生产云主机建立 `eth0` 专用路由，状态为 `cloud_reachable_via_ethernet_fallback`，1883/8080 均可达。因此明早纯 RS485 和现有云链不受影响；启用 CORS 前必须恢复 SIM 或为 CORS 单独确认可用出口。
 
 ### Indoor Real-RS485 / Simulated-GNSS Gate (2026-08-03)
@@ -178,7 +179,7 @@ status: active
 
 ## Plan
 
-- 等待 V5-r2 源码提交、推送并从 clean HEAD 生成正式 immutable A/B/C 包；正式哈希写回 locked acceptance 前不得烧录。之后只能按物理标签使用对应 `.img`，上电必须看到 `fw-rk2206-rtk-compact-v4-rs485-diag-v5-r2-20260803`。
+- 只按物理标签烧录正式 V5-r3 目录内对应 A/B/C `.img`；上电必须看到 `fw-rk2206-rtk-compact-v4-rs485-diag-v5-r3-20260803`。任何 r2、`retry1`、dirty proof 或旧包均停止使用。
 - 保持 `NTRIP_ENABLED=false`，先运行 `sudo python3 /usr/local/bin/xls1_compact_v4_acceptance.py --required-gnss-source simulated --check-prerequisites`，再用相同 source 参数运行正式门禁。脚本按固定 A -> B -> C、`1500/1500/0` 和 `250 ms` batch interval 自动执行 60/600/1800 秒；要求 100% 匹配、零链路重发/通信/profile 错误、三节点真实土壤/EC/倾角有效、PC0 field-calibrated、RTCM 全零且每节点 P95 <=2500 ms，任一阶段失败立即停止。
 - 三阶段全部通过前，RK3568 生产环境保持 `1200/1200/0` 不变；通过后再备份并原子切换为 `1500/1500/0`，重启一次 field-gateway，复核 active、`NRestarts=0` 和生产固定顺序。不要把传感器内部一次补读误记成 XLS1 链路重发。
 - A/B/C 已分别以 `+9/+7/最坏 9 mV` 通过电池同步验收并接受 `1046565/1048458/993702 ppm`，最终校准文件及 simulated/hardware 发布包均已生成并通过 final-acceptance、身份、哈希、模式和引脚门禁；百分比仍只是受负载、温度和老化影响的 3S OCV 估算，不能作为准确剩余 mAh 或续航。

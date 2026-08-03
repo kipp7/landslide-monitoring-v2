@@ -10,23 +10,36 @@ This gate validates the three real A/B/C RS485 sensor paths before NTRIP or RTCM
 
 ## Locked Inputs
 
-- Release status: V5-r2 source is under final clean-release preparation. Until
-  this section is replaced with a clean source commit and immutable hashes,
-  there is no approved image for the next flash.
+- Release status: V5-r3 is the only package approved for the next indoor RS485
+  acceptance flash. It is not yet a production-stability or RTK-Fixed result.
+- Release directory:
+  `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v4_rs485_diag_v5_r3_gnss_simulated_20260803`.
+- Source commit: `b6b49adbbfe0601570bb87b292d29f736c6a44ac`, pushed to
+  `origin/feat/gnss-rtk-v31-transport`; manifest `sourceDirty=false`.
+- Manifest SHA-256:
+  `96fdf0798ab5968abd58c6002e561e8f31b5804b2456c7db3e99021a27f2a6fc`.
+- A/B/C `.img` SHA-256:
+  `8f03f35ef3a26a4f38ef02235c042747371d2c030b29fbe7f412080f08dd1edc`,
+  `73a3e873c3b66d2ce0a6865e7f1a2393a50e2d75b5b688fb18b917e5afe7cf80`,
+  `ef4f8b4146f54f7f2bb5155aee2a4d41632267376cf2555387b61464c6cb4e9a`.
+- Loader SHA-256:
+  `761d90888aa376156d562abf267dfe324b96c4397f7a601f6b4c64d0ea3bf977`.
 - Payload: Compact V4, 139 bytes; complete COBS/CRC field-link frame: 157 bytes.
 - On-demand diagnostic: G3S V5, 552-byte payload and 570-byte measured golden
   field-link frame; never send periodically or query nodes concurrently.
-- Firmware marker: `fw-rk2206-rtk-compact-v4-rs485-diag-v5-r2-20260803`.
+- Firmware marker: `fw-rk2206-rtk-compact-v4-rs485-diag-v5-r3-20260803`.
+- TX ordering: frame sequence allocation, COBS/CRC encoding, and the complete
+  chunked UART write share one mutex. This prevents concurrent workers from
+  putting sequence `N+1` on the wire before sequence `N`.
 - Sensor policy: one retry after 80 ms for Modbus timeout/read/short/CRC failures only. Every failed first attempt remains in the low-level counters; no old sensor value is reused.
 - Acceptance timing: fixed A to B to C targeted order, 250 ms batch interval, 1500 ms response window, zero XLS1 link retries, 1500 ms logical-session limit, and 2500 ms maximum per-node P95 interval.
 - The RK3568 production service remains at its existing `1200/1200/0` timing until all three acceptance stages pass.
 - RK3568 must keep `NTRIP_ENABLED=false` throughout this gate.
 
-The former `xls1_compact_v4_rs485_retry1_gnss_simulated_20260803` package is
-superseded. Do not flash it, the V5-r2 dirty compile proof, earlier V4
-directories, rejected candidates, or V3 images. After this section is locked
-again, use only the approved image whose node label matches the physical A/B/C
-location.
+The former V5-r2 clean release, `xls1_compact_v4_rs485_retry1_gnss_simulated_20260803`,
+V5-r2 dirty compile proof, earlier V4 directories, rejected candidates, and V3
+images are all superseded. Do not flash them. Use only the V5-r3 `.img` whose
+node label matches the physical A/B/C location.
 
 ## Electrical and Pin Gate
 

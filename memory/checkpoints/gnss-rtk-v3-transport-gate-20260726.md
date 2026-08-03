@@ -18,12 +18,13 @@ status: active
 
 ## Last Confirmed State
 
-### RS485 Diagnostic V5-r2 Adversarial Audit (2026-08-03)
+### RS485 Diagnostic V5-r3 Adversarial Audit and Clean Release (2026-08-03)
 
 - 正常 Compact V4 上行仍为 `139/157 B`；G3S V5 是按节点请求的 `552 B` 诊断 payload，C99 金值完整帧 `570 B`，不会周期上传。V5 分离 soil/soil-EC/tilt/rain 的 attempt、retry recovery、final failure、skip、streak、最近状态/时间和采集时长；EC backoff 不再覆盖最近真实失败。
-- 修复了 I2C read failure 被误报外部 timeout、SC16IS752 UART cache 在 reset/漂移后失真、健康启动无条件长扫描、诊断扫描未锁定喂狗、U4 自检失败仍打印 `[OK]`、扫描中被误报 restore failure，以及发布器无法拒绝旧 firmware marker。双端 V5 decoder 对不可能统计 fail closed。
-- C99、Python、field-gateway `49/49`、lint、26 源引脚/3 负例、发布安全正反例、启动/扫描安全和 A/B/C OpenHarmony 全量编译均通过。dirty 编译证明位于 `output/rk2206-diag-v5-r2-adversarial-dirty-compile-proof-20260803`，manifest SHA-256 `1a80cad17f8122be87f007d3365c387ab534829f58a0f58283087664f389f19c` 且 `sourceDirty=true`，严格禁止烧录。
-- 当前无可烧录 V5-r2 包。旧 `xls1_compact_v4_rs485_retry1_gnss_simulated_20260803` 和所有更早包被取代。下一步先提交推送，再从 clean HEAD 构建并锁定 source commit、manifest 和 A/B/C 哈希；随后才按标签烧录并重跑 60/600/1800 秒。
+- 已修复 I2C read failure 被误报外部 timeout、SC16IS752 UART cache 在 reset/漂移后失真、健康启动无条件长扫描、扫描喂狗、U4/RS485 降级日志互相矛盾、扫描状态误判，以及 field-link 在 TX mutex 外分配序号造成的并发乱序。序号分配、COBS/CRC 编码和完整分块发送现为同一临界区，并有静态发布门禁。
+- C99、Python、field-gateway `49/49`、build/lint、26 源引脚/3 负例、发布安全正反例、启动/扫描/TX 顺序安全、电池三套拒绝路径及 A/B/C OpenHarmony 全量编译均通过。提交 `b6b49adbbfe0601570bb87b292d29f736c6a44ac` 已推送远端。
+- 当前唯一允许下一轮室内验收烧录的目录为 `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v4_rs485_diag_v5_r3_gnss_simulated_20260803`。manifest SHA-256 `96fdf0798ab5968abd58c6002e561e8f31b5804b2456c7db3e99021a27f2a6fc`；A/B/C `.img` SHA-256 为 `8f03f35ef3a26a4f38ef02235c042747371d2c030b29fbe7f412080f08dd1edc`、`73a3e873c3b66d2ce0a6865e7f1a2393a50e2d75b5b688fb18b917e5afe7cf80`、`ef4f8b4146f54f7f2bb5155aee2a4d41632267376cf2555387b61464c6cb4e9a`；loader SHA-256 `761d90888aa376156d562abf267dfe324b96c4397f7a601f6b4c64d0ea3bf977`。
+- 正式目录独立复验为 clean source、身份唯一、hardware RS485、simulated GNSS/no UM220 UART、RTCM disabled、final PC0 calibration 和 P2 singleflight。所有 V5-r2 clean/dirty、`retry1` 和更早包均禁止烧录。尚未运行 V5-r3 真机 60/600/1800 秒，因此不能宣称真实三节点稳定或厘米级完成。
 
 ### R3 Targeted Link Tuning Gate (2026-08-03 22:00 CST)
 
@@ -52,7 +53,7 @@ status: active
 - A/B/C 旧 Compact V4 室内镜像在真实共享 XLS1 上完成了两轮诊断，但未通过验收。60 秒报告 `/var/lib/lsmv2/experiments/xls1-compact-v4-0060s-20260803-190546.json` 的 SHA-256 为 `882f4d02405167cae11e4e03d1d87f035cabad6ee85bdb4c65c3c7205335d1e9`，28 轮应有 84 帧、实际匹配 0、解码错误 62。30 秒报告 `/var/lib/lsmv2/experiments/xls1-compact-v4-0030s-20260803-191221.json` 的 SHA-256 为 `7ab2baa4ce99b46965ef3b7e64eb38a7a5c6fa7b7b53462f081d0671a2c90694`，观察到 26 个完整 157 B 帧和 4 组 `236 B + 78 B = 314 B` 的两节点分块交织。该证据确认身份、139 B payload 和模拟 GNSS 标志正确，同时证明 P1 广播下多个 RK2206 的 32 B UART 分块会互相穿插；继续增大固定时隙不能从机制上保证不交织。
 - 南向协议新增向后兼容的 `compact-targeted-v1`：RK3568 发送 `P2<节点><8位十六进制 nonce>`，只有目标节点立即响应，网关必须以 `last_command_tag` 收到对应完整 157 B 帧或超时后才轮询下一节点。旧 `P1` 广播及 A/B/C `0/340/680 ms` 时隙只保留作回退。正式参数为 `SOUTHBOUND_POLLING_INTERVAL_MS=250`、`SOUTHBOUND_POLLING_SESSION_TIMEOUT_MS=1200`、`SOUTHBOUND_POLLING_PARTIAL_RETRIES=0`；RTCM/NTRIP 在室内阶段保持关闭。
 - `1f1f461df51c9be36cbda1dbac0b2f00cabc738d` 实现 P2 单飞、RK3568 轮转/命令标签匹配、现场脚本和 RTCM-disabled READY 桩；`05fd4a2a3eacb3515edb4f7fef718c996bf0383f` 修正发布清单，使 V4 明确记录 `compactPollProtocol=compact-targeted-v1`、命令 11 B、field-link 29 B、节点时隙 0。两次提交均已推送到 `feat/gnss-rtk-v31-transport`。完整离线回归为 RK2206 C99 host 通过、C/Python 金值通过、Python 编译通过、field-gateway 48/48、lint 通过、pin safety 26 源文件与 3/3 负例通过、release safety 正反例通过。
-- 当时唯一可烧录候选为 `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v4_rs485_hardware_gnss_simulated_targeted_v1_r2_20260803`；该历史包现已被顶部 V5-r2 状态取代，不得用于下一轮。原 manifest 和节点哈希仅保留作历史追溯。
+- 当时唯一可烧录候选为 `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v4_rs485_hardware_gnss_simulated_targeted_v1_r2_20260803`；该历史包现已被顶部 V5-r3 状态取代，不得用于下一轮。原 manifest 和节点哈希仅保留作历史追溯。
 - RK3568 `192.168.124.179` 已部署兼容 P1/P2 的最新 field-gateway 和两份现场脚本，远端哈希与本地一致；部署前备份为 `/opt/lsmv2/backups/compact-targeted-predeploy-20260803-194041`。`lsmv2-field-gateway.service` 当前 active，串口与 MQTT 已重连，`/etc/lsmv2/field-gateway.env` 仍为 `root:root 0600`、`NTRIP_ENABLED=false`、`SOUTHBOUND_POLLING_MODE=compact-broadcast-v1`。保持 P1 是为了让尚未重刷的旧节点继续可见；当前日志中的 RTCM state 拒绝、236/78 B 交织和广播超时属于旧镜像的已知预期失败，不是新 P2 的验收结果。
 - 当前唯一阻断是现场重新烧录：必须按物理标签使用上述 `r2` 目录内 A/B/C 对应 `.img` 全部重刷并上电。完成后先原子切换 RK3568 到 `compact-targeted-v1/250/1200/0`，执行 prerequisite 和 60 秒门禁；60 秒完全通过才运行 600 秒，600 秒完全通过才运行 1800 秒。当前不能声称真实 RS485 稳定通过，也不能进入室外真实 GNSS/RTCM 阶段。
 - 用户随后确认 A/B/C 已重刷 `r2` 并上电。RK3568 已在备份 `/opt/lsmv2/backups/compact-targeted-env-20260803-203804` 后原子切换为 `compact-targeted-v1/250/1200/0`，NTRIP 仍为 false、环境文件仍为 `root:root 0600`；前置检查通过。首轮 60 秒严格门禁按预期失败即停，没有进入 600 秒：报告 `/var/lib/lsmv2/experiments/xls1-compact-v4-0060s-20260803-203851.json` SHA-256 为 `e83eba916b30f44b1692df4f3f453d96f163a05985f991d6aff394b88a72f9f3`，总计 47/75；A 为 25/25、B 为 22/25、C 为 0/25。所有已收帧均为 Compact V4、真实 RS485、模拟 GNSS、RTCM disabled/READY-only 且全部 RTCM 计数为 0；解码/profile/未匹配/重复/残帧错误均为 0，A/B 已收序号连续。P2 已从机制上消除广播分块交织，但 C 的定向链路完全无响应，B 还有 3 次原始请求丢失。服务已自动恢复 active，生产轮询继续稳定发布 A/B 并持续记录 C 的独立 1200 ms 超时；下一步先确认 C 的供电、XLS1 天线/网络配置和串口启动身份，再评估 A/B 的有界定向重试，不能以提高轮询频率掩盖离线节点。
@@ -198,7 +199,7 @@ status: active
 
 ## In Progress
 
-- V5-r2 dirty A/B/C 已完成全量编译但严格禁止烧录；当前等待源提交/推送和 clean immutable release。生产轮询参数不在本次固件诊断审查中改动；新包按标签烧录后仍依次执行 60/600/1800 秒真机门禁，不用短测替代长测。
+- V5-r3 clean immutable release 已锁定；当前等待按物理标签烧录 A/B/C。生产轮询参数未在本次固件诊断审查中改动；烧录后仍依次执行 60/600/1800 秒真机门禁，不用短测替代长测。
 - V4 专用现场编排器已部署并通过 dry-run/无发送 prerequisites；它会一次持有并最终恢复网关服务，要求 V4 hardware、真实土壤/EC/三轴倾角、field-calibrated PC0、RTCM disabled/READY-only 且全部 RTCM 历史活动和错误计数为 0，再按 60/600/1800 秒逐级推进。
 - RK3568、服务器和 Windows 字段链已部署，但 RK3568 明确保持 `NTRIP_ENABLED=false`。预期失败自测已直接证明 C 仍在持续发旧 V2 并响应当前命令，说明它没有真正断电或存在独立供电；明天烧录前先处理该事实，不能把今晚兼容遥测计为 V4 验收。
 - A/B/C 已接受 `1046565/1048458/993702 ppm` 最终 PC0 校准；V4 manifest 将其绑定为 field-calibrated。百分比仍只是 3S OCV 估算，不宣称剩余 mAh 或续航。
@@ -207,7 +208,7 @@ status: active
 
 ## Next Actions
 
-1. 先完成 V5-r2 源码提交/推送和 clean release 锁定；不得烧录旧 `retry1`、旧 hardware LIVE 或 dirty proof。拿到新包后确认 C 独立供电，按 A/B/C 物理标签烧录；保持 NTRIP 关闭，先执行 `sudo python3 /usr/local/bin/xls1_compact_v4_acceptance.py --check-prerequisites`，再执行不带参数的同一脚本自动完成 60/600/1800 秒门禁。任一阶段失败不进入下一阶段。
+1. 确认 C 独立供电来源后，只使用 V5-r3 正式目录并按 A/B/C 物理标签烧录；保持 NTRIP 关闭，先执行 `sudo python3 /usr/local/bin/xls1_compact_v4_acceptance.py --required-gnss-source simulated --check-prerequisites`，再执行同一脚本的正式 60/600/1800 秒门禁。任一阶段失败不进入下一阶段。
 2. 通过脱敏健康摘要持续核对 `compactBroadcastRetryRate <= 0.02`、重发写失败为 0、逻辑总响应不超过 2500 ms，并同时确认 `usb0` 默认路由、反向 SSH、Hermes 和 MQTT 在线；不再通过插拔网线制造常规切换。
 3. 纯遥测 1800 秒通过后，才把 CORS 参数写入 RK3568 本地 600 权限环境文件并启用 PROBE。验证三节点相同 session/lease、RTCM 类型、分片、队列、CRC 和 UART 证据后，才允许切 LIVE。
 4. LIVE 后执行三节点真实 NTRIP 混合负载和室外 `GGA=4` 门禁，以 correction age、Fixed 连续性和可信坐标作为依据；再完成 ECEF/ENU、Hampel/Kalman、CEEMDAN 的算法验收。
@@ -223,10 +224,10 @@ status: active
 - 汇总日志证明平均输入负载，但不能证明 RTCM 单帧尺寸分布或亚秒级突发；不得用 16.91% UART 估算替代 XLS1 节点端完整率和 correction-age 证据。
 - 过滤 1084 与 1124 限频有明确的接收机支持集和链路容量依据，但合成 PROBE 不能证明真实 Fixed 连续性；必须在 LIVE 前用真实 CORS 输入和节点 GGA/correction-age 证据验证，失败时回滚为关闭而非偷偷放宽门禁。
 - C 控制链在线但传感器遥测为空不会减少生产容量预算；它仍使三节点传感器在线、三节点混合负载和最终厘米级系统验收保持未完成。不得以 ACK/G3S 响应替代当前传感器有效位和 compact 遥测证据。
-- V5-r2 只在正常读取 final fail 后运行一次只读扫描；扫描会尝试重叠的地址 1 寄存器组合，因此“soilQuery/tiltQuery found”仅证明该组合收到合法 Modbus 响应，不能单独证明物理型号。若 U4 自检通过且双通道 `rx_bytes=0/no_response>0`，故障才收敛到 U4 外部的隔离收发器、供电/GND、A/B、线束或传感器；有 RX 但 CRC/短帧异常则优先检查信号完整性和 UART 参数。
+- V5-r3 只在正常读取 final fail 后运行一次只读扫描；扫描会尝试重叠的地址 1 寄存器组合，因此“soilQuery/tiltQuery found”仅证明该组合收到合法 Modbus 响应，不能单独证明物理型号。若 U4 自检通过且双通道 `rx_bytes=0/no_response>0`，故障才收敛到 U4 外部的隔离收发器、供电/GND、A/B、线束或传感器；有 RX 但 CRC/短帧异常则优先检查信号完整性和 UART 参数。
 - 60 秒预检不能替代长测；800 ms 已在 60 秒无损、1800 秒出现 7 个缺帧。后续候选参数必须以至少 1800 秒严格门禁验收，且不得用 99.77% 的平均匹配率掩盖生产零丢帧要求。
 - 当前 guardian 可以确认 4G 可达并维护主机路由，但曾观察到路由改变后部分长连接仍留在旧接口。修复完成前避免人工切换；发生真实故障切换后必须同时核对云端反向端口、Hermes、MQTT 和 field-gateway，而不能只看路由表。
 
 ## Resume Prompt
 
-继续 2026-08-03 XLS1/RTK V4 链路任务：V5-r2 对抗审查与 dirty A/B/C 全量编译已通过，正常遥测仍为 139/157 B，按需 G3S V5 为 552 B（C99 金值完整帧 570 B），固件标记 `fw-rk2206-rtk-compact-v4-rs485-diag-v5-r2-20260803`。dirty proof 的 `sourceDirty=true`，旧 `retry1`/hardware LIVE/V3/V4 包均不得用于下一轮。先提交并推送源码，从 clean HEAD 运行 `prepare-xl01-rs485-hardware-gnss-simulated-release.ps1`，把正式 source commit、manifest 与 A/B/C 哈希写回 locked acceptance。之后按标签烧录，NTRIP 保持关闭并执行 60/600/1800 秒真实 RS485 门禁；失败时单节点运行 `xls1_gnss_v31_probe_sender.py --diagnostics-only --require-stats-version 5`。通过后再依次启用 PROBE、LIVE、室外 Fixed 和专业位移算法。OTA 仍禁止用于现场 A/B/C，原始报告、坐标和凭据不进入 Git。
+继续 2026-08-03 XLS1/RTK V4 链路任务：V5-r3 对抗审查、提交推送、A/B/C OpenHarmony clean build 和独立发布复验已通过。唯一下一轮烧录目录为 `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v4_rs485_diag_v5_r3_gnss_simulated_20260803`，source `b6b49adbbfe0601570bb87b292d29f736c6a44ac`，manifest SHA-256 `96fdf0798ab5968abd58c6002e561e8f31b5804b2456c7db3e99021a27f2a6fc`，启动标记 `fw-rk2206-rtk-compact-v4-rs485-diag-v5-r3-20260803`。正常遥测仍为 139/157 B，按需 G3S V5 为 552/570 B；真实 RS485、模拟 GNSS、RTCM disabled。按物理标签烧录后保持 NTRIP 关闭并执行 60/600/1800 秒门禁；失败时单节点运行 `xls1_gnss_v31_probe_sender.py --diagnostics-only --require-stats-version 5`。尚未完成真机长测或厘米级验收。通过纯遥测后再依次启用 PROBE、LIVE、室外 Fixed 和专业位移算法；OTA 仍禁止用于现场 A/B/C，原始报告、坐标和凭据不进入 Git。
