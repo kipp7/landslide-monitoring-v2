@@ -13,6 +13,7 @@ from xls1_three_node_batch_poll import (
     encode_frame,
     evaluate_stability_gate,
     classify_repeated_broadcast_telemetry,
+    polling_node_order,
     should_retry_broadcast_poll,
     telemetry_profile_errors,
 )
@@ -63,6 +64,9 @@ def main() -> None:
     targeted_poll = build_targeted_compact_poll("B")
     assert len(targeted_poll) == 11
     assert targeted_poll.startswith("P2B")
+    assert [label for label, _ in polling_node_order(0, True)] == ["A", "B", "C"]
+    assert [label for label, _ in polling_node_order(1, True)] == ["A", "B", "C"]
+    assert [label for label, _ in polling_node_order(1, False)] == ["B", "C", "A"]
 
     payload = bytes.fromhex(PAYLOAD_HEX)
     telemetry = decode_compact_telemetry(payload)

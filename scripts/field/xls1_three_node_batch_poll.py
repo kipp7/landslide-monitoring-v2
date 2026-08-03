@@ -101,6 +101,14 @@ def should_retry_broadcast_poll(
     return 0 < received_count < expected_count and retries_used < max_retries
 
 
+def polling_node_order(batch_index: int, targeted_compact_poll: bool) -> list[tuple[str, str]]:
+    order = list(NODES.items())
+    if targeted_compact_poll or len(order) < 2:
+        return order
+    rotation = batch_index % len(order)
+    return order[rotation:] + order[:rotation]
+
+
 def classify_repeated_broadcast_telemetry(
     attempts: int,
     retry_copy_already_observed: bool,
@@ -1129,9 +1137,7 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
         while True:
             now = time.monotonic()
             if now >= next_batch_at and next_batch_at < send_deadline:
-                order = list(NODES.items())
-                rotation = batches_sent % len(order)
-                order = order[rotation:] + order[:rotation]
+                order = polling_node_order(batches_sent, args.targeted_compact_poll)
                 batch_number = batches_sent + 1
                 if args.broadcast_poll:
                     batch_record_ids: list[str] = []
@@ -1451,7 +1457,7 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
             "nodeOrderPolicy": (
                 "fixed-A-B-C-slots"
                 if args.broadcast_poll
-                else "rotating-A-B-C-singleflight"
+                else "fixed-A-B-C-singleflight"
                 if args.targeted_compact_poll
                 else "rotating-A-B-C"
             ),
