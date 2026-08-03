@@ -103,6 +103,8 @@ Assert-Matches $config '(?m)^#define\s+ENABLE_GPS\s+\(GNSS_SOURCE\s+==\s+GNSS_SO
   "UM220 enablement must be derived from the GNSS source"
 Assert-Matches $config '(?m)^#define\s+ENABLE_SIMULATED_GNSS\s+\(GNSS_SOURCE\s+==\s+GNSS_SOURCE_SIMULATED\)\s*$' `
   "Simulated GNSS enablement must be derived from the GNSS source"
+Assert-Matches $config '(?s)#if\s+GNSS_RTCM_INJECTION_CAPABILITY\s*==\s*GNSS_RTCM_INJECTION_DISABLED.*?capability=DISABLED.*?#elif\s+GNSS_RTCM_INJECTION_CAPABILITY\s*==\s*GNSS_RTCM_INJECTION_PROBE.*?capability=PROBE.*?#elif\s+GNSS_RTCM_INJECTION_CAPABILITY\s*==\s*GNSS_RTCM_INJECTION_LIVE.*?capability=LIVE' `
+  "RTCM boot marker must reflect the compiled capability"
 Assert-Matches $config '(?m)^#define\s+ENABLE_RS485_BUS\s+\(FIELD_SENSOR_SOURCE\s+==\s+FIELD_SENSOR_SOURCE_HARDWARE\)\s*$' `
   "RS485 enablement must be derived from the field sensor source"
 Assert-Matches $config '(?s)#if\s+ENABLE_RS485_BUS.*?#define\s+I2C_IDX\s+EI2C0_M0' `
@@ -127,6 +129,8 @@ Assert-Matches $main '(?s)#if\s+ENABLE_SIMULATED_FIELD_SENSORS\s+SimulatedFieldS
   "Simulated RS485 data must remain behind its build-time guard"
 Assert-Matches $main '(?s)#if\s+ENABLE_SIMULATED_GNSS\s+SimulatedGnss_Read\s*\(' `
   "Simulated GNSS data must remain behind its build-time guard"
+Assert-Matches $main '(?s)GNSS:\s+SIMULATED.*?GNSS_RTCM_CAPABILITY_MARKER' `
+  "Simulated GNSS boot summary must expose the compiled RTCM capability"
 Assert-Matches $main '(?s)#if\s+ENABLE_GPS\s+if\s*\(\s*GPS_Init\s*\(' `
   "UM220 initialization must remain behind ENABLE_GPS"
 Assert-Matches $main '(?s)#if\s+ENABLE_RS485_BUS\s+if\s*\(\s*FieldRs485_Init\s*\(' `

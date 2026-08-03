@@ -1636,7 +1636,8 @@ static void* DataUploadTask(const char* arg)
            (unsigned int)GNSS_RTCM_MAX_QUEUE_AGE_MS);
 #else
     printf("    - GNSS: SIMULATED trusted=no displacement_eligible=no\n");
-    printf("    - RTCM Injection: DISABLED (simulated GNSS)\n");
+    printf("    - RTCM Injection: %s (simulated GNSS)\n",
+           GNSS_RTCM_CAPABILITY_MARKER);
 #endif
 #if ENABLE_BATTERY_MONITOR
     printf("    - Battery: ON ready=%s route=PC0/SARADC-ch0 input-only pack=%uS%uP/%umAh calibration=%s\n",
