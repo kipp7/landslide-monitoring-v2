@@ -18,6 +18,15 @@ status: active
 
 ## Last Confirmed State
 
+### R3 Targeted Link Tuning Gate (2026-08-03 22:00 CST)
+
+- A 的 XLS1 重置后，25 秒生产窗口连续发布 `seq=29..38` 共 10 帧，A 超时 0、协议错误 0；同窗 C 为 11/11，B 仅 3/11。随后运行态日志确认 A/B/C 均可发布，但 B 仍间歇出现独立 `P2B` 1200 ms 超时。RK3568 前置门禁继续通过：环境文件 `root:root 0600`、`NTRIP_ENABLED=false`、`/dev/ttyS3` 正常、网关 active。
+- 正式参数 `compact-targeted-v1 / 250 ms cooldown / 1200 ms response / 0 retry` 的 60 秒 R3 基线失败：33 轮应有 99 帧，实际 90/99；A 33/33、B 24/33、C 33/33。24 轮完整、9 轮部分、0 空轮，三节点已收序号均连续，解码/profile/未匹配/重复/残帧错误全为 0。B 成功响应 P50/P95/max 为 `405.7/652.1/671.8 ms`，远低于 1200 ms，说明增大等待窗不能解释缺失。报告 `/var/lib/lsmv2/experiments/xls1-compact-v4-0060s-20260803-215135.json`，SHA-256 `98803efd41d4345e006775bc804ec9379f895803871a5841e90dda8d1905ed3d`。
+- 单变量把 cooldown 从 250 ms 提高到 500 ms 的 60 秒对照同样失败且更差：总计 62/78，A 26/26、B 11/26、C 25/26，只有 10/26 完整轮；因此拒绝 500 ms，不把它写入生产配置。报告 `/var/lib/lsmv2/experiments/xls1-compact-v4-0060s-20260803-215522.json`，SHA-256 `63a7125920f00f789ce90004a482ca2dde19ae59255d158f2beb01dce7b898f1`。
+- 为排除 A/C 竞争，在保持同一 P2、250/1200、真实 RS485、模拟 GNSS、RTCM disabled/clean 门禁下运行 B-only 60 秒：B 为 42/63、缺 21，匹配率 66.67%；成功响应 P50/P95/max 为 `424.8/620.5/653.2 ms`，序号 `585..626` 连续，零解码/profile/未匹配/重复/残帧错误，传感器与电池均有效。21 个空轮最长连续长度仅 1，证明即使 A/C 完全不参与，B 仍稳定呈现约三分之一下行命令未被执行；报告 `/var/lib/lsmv2/experiments/xls1-compact-v4-b-only-0060s-20260803-2159.json`，SHA-256 `9693a2ec957aeb7eaf3eab8131bd031e2679df3e524ae59a3157c30d60f8cdc9`。
+- 当前结论：R3 固件、B 的 RS485/电池数据、RK3568 解码与 1200 ms 响应窗均有正证据；阻断收敛为 B 的 XLS1 下行/空口配置或模块状态，不是三节点共享节奏。当前约 33% 原始失败率远高于允许的 2% 恢复率，禁止先用软件重试掩盖。下一步由现场按 A 的同一可靠流程重置并重新配置 B 的 XLS1，确认地址/中心节点/信道等参数与 A/C 同一网络且身份不冲突；随后先跑 25 秒三节点观察，再从 250/1200/0 的严格 60 秒门禁重新开始。60 秒 100% 通过前不得进入 600/1800 秒或真实 GNSS/RTCM。
+- 恢复提示：连接 RK3568 `192.168.124.179`，确认 `lsmv2-field-gateway.service` active 且生产环境仍为 `compact-targeted-v1/250/1200/0`、NTRIP false；等待用户确认 B XLS1 已重置配置后，先统计最近 25 秒 A/B/C 发布和超时，再运行 `sudo python3 /usr/local/bin/xls1_compact_v4_acceptance.py --durations 60 --required-gnss-source simulated`。原始 JSON 只保留在 RK3568，不提交 Git。
+
 ### Deferred RS485 Startup Diagnostics Fix (2026-08-03 21:15 CST)
 
 - B 在重新烧录 `r2` 的正确 V4/B 镜像后，调试串口确认版本已为 `v1.3-um220-rs485-rtk-compact-v4`，SC16IS752 地址 `0x4D`、A/B scratchpad 和双通道内部 FIFO loopback 全部通过，但输出固定停在 `[OK] RS485 Modbus initialized via SC16IS752`，没有 `--- Initialization Complete ---`、任务启动或 `[FW MARK]`。RK3568 同期持续正确发送 `P2B`，数分钟内 `...0002` 回包仍为 0；A/C 可继续发布，因此不是 RK3568 串口、P2 单飞或 B 供电问题。
