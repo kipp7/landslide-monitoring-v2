@@ -24,6 +24,8 @@ status: active
 - 固件、RK3568、服务器和 Windows 已贯通 `gnss_source`。模拟 GNSS 会双层 fail-closed：RK2206 清除全部可信 RTK/时标/差分/Fixed 证据，RK3568 拒绝矛盾 trusted 帧并设置 `rtk_displacement_eligible=false`。严格现场脚本新增 `--required-gnss-source simulated`，其 dry-run 锁定 `hardware RS485 + simulated GNSS + RTCM disabled/clean + 60/600/1800 s`。
 - 审查修复了 RTCM capability 完全关闭时 age 桩返回 0 的问题；现在从未发生的 fragment/completed/action age 均为 `UINT32_MAX`，并有独立 C99 测试。相关结果：C99 协议/电池/GNSS/禁用 RTCM 全通过，pin safety 26 源文件通过，release safety 正反例通过，Python 金值通过，field-gateway 46/46，writer 14/14，API 10/10，Windows lint/build 通过。API 全仓 lint 的 68 个既有错误不在本次改动文件中。
 - A/B/C dirty 候选 OpenHarmony 全量构建成功，manifest 正确报告 `fieldSensorMode=hardware`、`rs485HardwareInitialized=true`、`gnssSourceMode=simulated`、`gnssHardwareInitialized=false`、RTCM disabled 和 A/B/C 最终校准。最终二进制包含真实 RS485 标记、无 GPS UART 初始化标记且身份唯一；由于 `sourceDirty=true`，候选严格禁止烧录。待源码干净提交并推送后再生成正式发布目录与哈希。
+- 正式打包的第一轮安全验证拒绝了“disabled capability + 遗留 LIVE 显示标记”的矛盾，未生成最终目录。`baf7e8ecfc052cbb57bcdc83902c16c7ed29ac5b` 将 capability marker 改为由编译宏派生并移除打包器对字符串的二次改写；单节点及三节点 OpenHarmony 全量重建均通过，二进制明确含 `boot=DISABLED capability=DISABLED`、模拟 GNSS、SC16IS752/RS485，且不含 GPS UART 初始化或 PROBE/LIVE capability 标记。
+- 可烧录正式包为 `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v4_rs485_hardware_gnss_simulated_20260803`，绑定已推送提交 `baf7e8ecfc052cbb57bcdc83902c16c7ed29ac5b`。manifest SHA-256 `cf18a8b9c86457f47ccd692150ae2d64a87125cb3181082657f504f6884a38b5`；A/B/C `.img` SHA-256 为 `256d5072...5f636`、`7d19be25...3ff31`、`beba41f1...4010c`。最终目录独立通过 `sourceDirty=false`、唯一身份、hardware RS485、simulated GNSS、RTCM disabled/无 runtime control、field-calibrated PC0 和 final acceptance 门禁。尚未烧录或运行真实 A/B/C 60/600/1800 秒，因此当前只完成“可开始调试”的发布准备。
 
 ### Current Verified Baseline (2026-08-03)
 

@@ -25,6 +25,8 @@ status: active
 - 室内验收器新增 `--required-gnss-source simulated`，仍强制 Compact V4、hardware RS485、真实土壤/EC/三轴倾角、field-calibrated PC0、RTCM disabled/零历史活动，并按 60/600/1800 秒失败即停。禁用 RTCM 桩已修正为三个 age 字段返回 `UINT32_MAX`，避免“从未发生”被误判为“刚发生 0 ms”；独立 C99 回归已覆盖。
 - 离线门禁通过：RK2206 C99/禁用 RTCM、26 源文件引脚安全、发布安全、Python 金值与语法、field-gateway 46/46 + lint、telemetry-writer 14/14 + lint、API 10/10、Windows lint/production build。API 全仓 lint 仍有 68 个与本次未改路由相关的既有错误；本次 API build/test 通过，不在该硬件源切换中扩散修复。
 - dirty 候选已完成 A/B/C 三次 OpenHarmony 全量编译链接，仅用于构建证明，目录为 `artifacts/firmware/rk2206-xl01-compact-v4-rs485-hardware-gnss-simulated-candidate-20260803`，明确 `sourceDirty=true`、禁止烧录。三个二进制均包含 SC16IS752/RS485 和模拟 GNSS 标记，不含 GPS UART 初始化/真实 GNSS 标记，且 A/B/C 身份唯一。下一步先提交并推送源码，再从干净提交构建正式 immutable 包。
+- 实现提交 `22c20ad87c6e0927e9b459875258f118289960f7` 与发布一致性修复 `baf7e8ecfc052cbb57bcdc83902c16c7ed29ac5b` 均已推送到 `origin/feat/gnss-rtk-v31-transport`。首次正式打包被验证器正确拒绝：实际 capability 已 disabled，但旧启动标记仍硬编码 LIVE；修复后 capability、manifest 和二进制启动证据改为同一编译宏派生，并用单节点全量构建确认 `boot=DISABLED capability=DISABLED` 存在且 GPS UART 初始化标记不存在。
+- 正式 A/B/C 室内包位于 `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v4_rs485_hardware_gnss_simulated_20260803`，manifest SHA-256 `cf18a8b9c86457f47ccd692150ae2d64a87125cb3181082657f504f6884a38b5`；A/B/C `.img` SHA-256 为 `256d5072b29760411dcd164001528d7f70064933872db21f2057bbefbdc5f636`、`7d19be25f07ac7bd3c8bbe79622df2b1ed01ccce003e5551bec6d14867d3ff31`、`beba41f18c78ac593781098d9425116b6554fd42f4a051ba45bb4c7db564010c`，loader SHA-256 `761d90888aa376156d562abf267dfe324b96c4397f7a601f6b4c64d0ea3bf977`。独立复验为 `sourceDirty=false`、hardware RS485、simulated GNSS、RTCM disabled、最终 A/B/C PC0 校准、139/157 B、唯一身份及禁止标记全部通过。下一步是按物理标签烧录，不得使用 dirty candidate。
 
 ### In-Progress V4 Runtime Integration (2026-08-03)
 
