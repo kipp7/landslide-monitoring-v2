@@ -845,6 +845,7 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
     compact_versions_by_node: dict[str, Counter[int]] = defaultdict(Counter)
     field_sources_by_node: dict[str, Counter[str]] = defaultdict(Counter)
     profile_violations_by_node: dict[str, Counter[str]] = defaultdict(Counter)
+    profile_violation_samples: list[dict[str, Any]] = []
     battery_voltages_by_node: dict[str, list[float]] = defaultdict(list)
     matched_after_retry_dispatch_by_node: Counter[str] = Counter()
     last_telemetry_by_node: dict[str, dict[str, Any]] = {}
@@ -964,7 +965,7 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
                     compact_versions_by_node[label][compact_version] += 1
                 if isinstance(field_source, str):
                     field_sources_by_node[label][field_source] += 1
-            for profile_error in telemetry_profile_errors(
+            profile_errors = telemetry_profile_errors(
                 telemetry,
                 required_compact_version=args.required_compact_version,
                 required_field_sensor_source=args.required_field_sensor_source,
@@ -974,8 +975,19 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
                 require_field_calibrated_battery=args.require_field_calibrated_battery,
                 required_rtcm_mode=args.required_rtcm_mode,
                 require_rtcm_clean=args.require_rtcm_clean,
-            ):
+            )
+            for profile_error in profile_errors:
                 profile_violations_by_node[label][profile_error] += 1
+            if profile_errors and len(profile_violation_samples) < 50:
+                profile_violation_samples.append(
+                    {
+                        "at": utc_now(),
+                        "elapsedMs": round((received_mono - started_mono) * 1000.0, 1),
+                        "node": label,
+                        "sequence": telemetry.get("seq"),
+                        "reasons": profile_errors,
+                    }
+                )
             if isinstance(metrics, dict) and isinstance(metrics.get("battery_v"), (int, float)):
                 battery_voltages_by_node[label].append(float(metrics["battery_v"]))
             last_telemetry_by_node[label] = telemetry
@@ -1502,6 +1514,7 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
         "validFrameTypes": dict(valid_frame_types),
         "errors": dict(errors),
         "errorSamples": error_samples,
+        "profileViolationSamples": profile_violation_samples,
         "unmatchedSamples": unmatched_samples,
         "duplicateSamples": duplicate_samples,
         "postRetryMatchSamples": post_retry_match_samples,

@@ -21,6 +21,8 @@ $fieldLinkStatsImplementation = Join-Path $repoRoot "firmware\rk2206-xl01\driver
 $probeProtocolTest = Join-Path $repoRoot "firmware\rk2206-xl01\tests\gnss_probe_stats_protocol_host_test.c"
 $fieldSensorsHeader = Join-Path $repoRoot "firmware\rk2206-xl01\drivers\sensors\field_sensors_rs485.h"
 $modbusHeader = Join-Path $repoRoot "firmware\rk2206-xl01\drivers\sensors\rs485_modbus.h"
+$rs485RetryPolicyHeader = Join-Path $repoRoot "firmware\rk2206-xl01\drivers\sensors\rs485_read_retry_policy.h"
+$rs485RetryPolicyTest = Join-Path $repoRoot "firmware\rk2206-xl01\tests\rs485_read_retry_policy_host_test.c"
 $sc16is752Header = Join-Path $repoRoot "firmware\rk2206-xl01\drivers\sensors\sc16is752_driver.h"
 $batteryEstimatorHeader = Join-Path $repoRoot "firmware\rk2206-xl01\app\battery_estimator.h"
 $batteryEstimatorImplementation = Join-Path $repoRoot "firmware\rk2206-xl01\app\battery_estimator.c"
@@ -45,7 +47,7 @@ foreach ($required in @(
   $sourceHeader, $sourceImplementation, $injectionHeader, $injectionImplementation,
   $appConfig, $sourceTest, $disabledInjectionTest, $probeProtocolHeader, $probeProtocolImplementation,
   $fieldLinkStatsHeader, $fieldLinkStatsImplementation, $probeProtocolTest,
-  $fieldSensorsHeader, $modbusHeader, $sc16is752Header,
+  $fieldSensorsHeader, $modbusHeader, $rs485RetryPolicyHeader, $rs485RetryPolicyTest, $sc16is752Header,
   $batteryEstimatorHeader, $batteryEstimatorImplementation, $batteryEstimatorTest,
   $compactBuilderHeader, $compactBuilderImplementation, $compactPollHeader,
   $compactPollImplementation, $sensorDataHeader, $fieldLinkFrameHeader,
@@ -83,6 +85,8 @@ docker cp $fieldLinkStatsImplementation "${ContainerName}:${containerRoot}/drive
 docker cp $probeProtocolTest "${ContainerName}:${containerRoot}/tests/gnss_probe_stats_protocol_host_test.c"
 docker cp $fieldSensorsHeader "${ContainerName}:${containerRoot}/drivers/sensors/field_sensors_rs485.h"
 docker cp $modbusHeader "${ContainerName}:${containerRoot}/drivers/sensors/rs485_modbus.h"
+docker cp $rs485RetryPolicyHeader "${ContainerName}:${containerRoot}/drivers/sensors/rs485_read_retry_policy.h"
+docker cp $rs485RetryPolicyTest "${ContainerName}:${containerRoot}/tests/rs485_read_retry_policy_host_test.c"
 docker cp $sc16is752Header "${ContainerName}:${containerRoot}/drivers/sensors/sc16is752_driver.h"
 docker cp $batteryEstimatorHeader "${ContainerName}:${containerRoot}/app/battery_estimator.h"
 docker cp $batteryEstimatorImplementation "${ContainerName}:${containerRoot}/app/battery_estimator.c"
@@ -133,6 +137,10 @@ gcc -std=c99 -Wall -Wextra -Werror -O2 \
   tests/gnss_probe_stats_protocol_host_test.c \
   -o gnss_probe_stats_protocol_host_test
 ./gnss_probe_stats_protocol_host_test
+gcc -std=c99 -Wall -Wextra -Werror -O2 \
+  tests/rs485_read_retry_policy_host_test.c \
+  -o rs485_read_retry_policy_host_test
+./rs485_read_retry_policy_host_test
 gcc -std=c99 -Wall -Wextra -Werror -O2 \
   app/battery_estimator.c \
   tests/battery_estimator_host_test.c \

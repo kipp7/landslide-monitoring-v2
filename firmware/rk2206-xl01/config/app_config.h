@@ -277,6 +277,11 @@
 #define RS485_BAUDRATE        4800        // Soil and tilt manuals: factory default 4800 8N1
 #define RS485_RESPONSE_TIMEOUT_MS 800
 #define RS485_INTER_REQUEST_GAP_MS 80
+#define RS485_SENSOR_READ_MAX_RETRIES 1U  // One bounded retry for transient read-path errors only
+#define RS485_SENSOR_READ_RETRY_GAP_MS 80U
+#if RS485_SENSOR_READ_MAX_RETRIES > 1U
+#error "RS485 sensor retries must remain bounded to at most one retry"
+#endif
 #define RS485_RAW_DIAG_MODE    0           // Production log: hide raw Modbus TX/RX frames
 #define RS485_TILT_AUTO_PROBE   0           // Production: fixed manual-confirmed channel/address/baud/clock
 #define RS485_TILT_PROBE_DIAG  0           // Hide one-time tilt probe details after bring-up

@@ -11,6 +11,7 @@
 #include "los_tick.h"
 #include "../../utils/watchdog_mgr.h"
 #include "rs485_modbus.h"
+#include "rs485_read_retry_policy.h"
 #if RS485_TRANSPORT_SC16IS752
 #include "sc16is752_driver.h"
 #endif
@@ -74,6 +75,46 @@ static float SignedRegisterToScaledFloat(uint16_t value, float scale)
     return (float)((int16_t)value) * scale;
 }
 
+static int ReadRegistersWithRetry(
+    const char *path,
+    uint8_t channel,
+    uint8_t function_code,
+    uint8_t addr,
+    uint16_t start_reg,
+    uint16_t reg_count,
+    uint16_t *regs,
+    unsigned int reg_capacity,
+    unsigned int timeout_ms)
+{
+    unsigned int retries_used = 0U;
+    int status;
+
+    do {
+        status = RS485_ModbusReadRegistersWithTimeoutOnChannel(
+            channel,
+            function_code,
+            addr,
+            start_reg,
+            reg_count,
+            regs,
+            reg_capacity,
+            timeout_ms);
+        if (status == RS485_MODBUS_OK) {
+            if (retries_used > 0U) {
+                printf("[RS485] transient read recovered path=%s ch=%u retry=%u\n",
+                       path, channel, retries_used);
+            }
+            return status;
+        }
+        if (!RS485_ReadShouldRetry(status, retries_used, RS485_SENSOR_READ_MAX_RETRIES)) {
+            return status;
+        }
+        retries_used++;
+        Watchdog_Feed();
+        LOS_Msleep(RS485_SENSOR_READ_RETRY_GAP_MS);
+    } while (1);
+}
+
 static int ReadTiltRegistersWithFunction(
     uint8_t channel,
     uint8_t function_code,
@@ -82,7 +123,8 @@ static int ReadTiltRegistersWithFunction(
     unsigned int reg_capacity,
     unsigned int timeout_ms)
 {
-    return RS485_ModbusReadRegistersWithTimeoutOnChannel(
+    return ReadRegistersWithRetry(
+        "tilt",
         channel,
         function_code,
         addr,
@@ -441,13 +483,16 @@ int FieldRs485_Read(FieldRs485Readings *out)
 #endif
         uint16_t regs[RS485_SOIL_REG_COUNT] = {0};
         (void)ReconfigureRs485ChannelWithClock(RS485_SOIL_CHANNEL, RS485_BAUDRATE, SC16IS752_XTAL_HZ);
-        if (RS485_ModbusReadHoldingRegistersOnChannel(
+        if (ReadRegistersWithRetry(
+                "soil",
                 RS485_SOIL_CHANNEL,
+                MODBUS_FC_READ_HOLDING_REGISTERS,
                 RS485_SOIL_ADDR,
                 RS485_SOIL_REG_START,
                 RS485_SOIL_REG_COUNT,
                 regs,
-                RS485_SOIL_REG_COUNT) == 0) {
+                RS485_SOIL_REG_COUNT,
+                RS485_RESPONSE_TIMEOUT_MS) == 0) {
             out->soil_moisture_pct =
                 (float)regs[RS485_SOIL_MOISTURE_REG_INDEX] * RS485_SOIL_MOISTURE_SCALE;
             out->soil_temperature_c =
@@ -460,13 +505,16 @@ int FieldRs485_Read(FieldRs485Readings *out)
                 int ec_read_ret;
 
                 LOS_Msleep(RS485_INTER_REQUEST_GAP_MS);
-                ec_read_ret = RS485_ModbusReadHoldingRegistersOnChannel(
+                ec_read_ret = ReadRegistersWithRetry(
+                    "soil_ec",
                     RS485_SOIL_CHANNEL,
+                    MODBUS_FC_READ_HOLDING_REGISTERS,
                     RS485_SOIL_ADDR,
                     RS485_SOIL_EC_REG,
                     1,
                     &ec_reg,
-                    1);
+                    1,
+                    RS485_RESPONSE_TIMEOUT_MS);
                 if (ec_read_ret == 0) {
                     if (!soil_ec_supported) {
                         printf("[RS485 SOIL] optional EC register detected at 0x%04X\n", RS485_SOIL_EC_REG);
@@ -599,13 +647,16 @@ int FieldRs485_Read(FieldRs485Readings *out)
 #if ENABLE_RS485_RAIN_SENSOR
     {
         uint16_t regs[RS485_RAIN_REG_COUNT] = {0};
-        if (RS485_ModbusReadHoldingRegistersOnChannel(
+        if (ReadRegistersWithRetry(
+                "rain",
                 RS485_RAIN_CHANNEL,
+                MODBUS_FC_READ_HOLDING_REGISTERS,
                 RS485_RAIN_ADDR,
                 RS485_RAIN_REG_START,
                 RS485_RAIN_REG_COUNT,
                 regs,
-                RS485_RAIN_REG_COUNT) == 0) {
+                RS485_RAIN_REG_COUNT,
+                RS485_RESPONSE_TIMEOUT_MS) == 0) {
             out->rain_total_mm = (float)regs[0] * RS485_RAIN_TOTAL_SCALE;
             out->rain_valid = 1;
             any_valid = 1;

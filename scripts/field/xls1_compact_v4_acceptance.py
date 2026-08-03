@@ -26,6 +26,15 @@ from xls1_three_node_batch_poll import (
 )
 
 
+PARTIAL_RETRIES = 0
+
+
+def minimum_session_timeout_ms(response_window_ms: int, partial_retries: int) -> int:
+    if response_window_ms <= 0 or partial_retries < 0:
+        raise ValueError("response window must be positive and partial retries non-negative")
+    return response_window_ms * (partial_retries + 1)
+
+
 def parse_durations(value: str) -> list[float]:
     try:
         durations = [float(part.strip()) for part in value.split(",") if part.strip()]
@@ -103,7 +112,7 @@ def stage_arguments(args: argparse.Namespace, duration_seconds: float) -> Namesp
         broadcast_poll=False,
         targeted_compact_poll=True,
         broadcast_response_timeout_ms=0,
-        broadcast_partial_retries=0,
+        broadcast_partial_retries=PARTIAL_RETRIES,
         max_broadcast_retry_rate=args.max_retry_rate,
         max_logical_response_latency_ms=args.session_timeout_ms,
         command_chunk_bytes=32,
@@ -150,9 +159,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--baud", type=int, default=115200)
     parser.add_argument("--durations", type=parse_durations, default=parse_durations("60,600,1800"))
     parser.add_argument("--batch-interval-ms", type=int, default=250)
-    parser.add_argument("--response-window-ms", type=int, default=1200)
-    parser.add_argument("--session-timeout-ms", type=int, default=2500)
-    parser.add_argument("--max-retry-rate", type=float, default=0.02)
+    parser.add_argument("--response-window-ms", type=int, default=1500)
+    parser.add_argument("--session-timeout-ms", type=int, default=1500)
+    parser.add_argument("--max-retry-rate", type=float, default=0.0)
     parser.add_argument("--max-p95-interval-ms", type=float, default=2500.0)
     parser.add_argument(
         "--required-gnss-source",
@@ -168,8 +177,14 @@ def parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if args.baud <= 0 or args.batch_interval_ms <= 0:
         parser.error("baud and batch interval must be positive")
-    if args.response_window_ms <= 0 or args.session_timeout_ms < 2 * args.response_window_ms:
-        parser.error("session timeout must cover the initial and one retry response window")
+    if args.response_window_ms <= 0:
+        parser.error("response window must be positive")
+    minimum_session_ms = minimum_session_timeout_ms(args.response_window_ms, PARTIAL_RETRIES)
+    if args.session_timeout_ms < minimum_session_ms:
+        parser.error(
+            "session timeout must cover every response window "
+            f"({minimum_session_ms} ms for {PARTIAL_RETRIES} retries)"
+        )
     if not 0.0 <= args.max_retry_rate <= 1.0:
         parser.error("max retry rate must be between zero and one")
     if args.max_p95_interval_ms <= 0 or args.inter_stage_quiet_seconds < 0:
@@ -193,7 +208,7 @@ def main() -> int:
         "batchIntervalMs": args.batch_interval_ms,
         "pollingMode": "compact-targeted-v1",
         "responseWindowMs": args.response_window_ms,
-        "partialRetries": 0,
+        "partialRetries": PARTIAL_RETRIES,
         "sessionTimeoutMs": args.session_timeout_ms,
         "maxRetryRate": args.max_retry_rate,
         "requiredCompactVersion": 4,

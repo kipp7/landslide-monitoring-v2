@@ -128,7 +128,7 @@ static char g_last_trusted_time_ts[40] = "";
 static char g_last_trusted_time_source[32] = "";
 static volatile uint32_t g_last_platform_command_tick = 0;
 static volatile int g_field_link_recovery_requested = 0;
-#define FW_RX_DIAG_MARKER "fw-rk2206-rtk-compact-v4-runtime-20260803"
+#define FW_RX_DIAG_MARKER "fw-rk2206-rtk-compact-v4-rs485-retry1-20260803"
 bool g_cloud_motor_enabled = false;
 int g_cloud_motor_speed = 0;
 MotorDirection g_cloud_motor_direction = MOTOR_DIRECTION_STOP;
@@ -1604,6 +1604,9 @@ static void* DataUploadTask(const char* arg)
     printf("  XL01 UART: %s\n", XL01_UART_ROUTE_NAME);
 #if ENABLE_RS485_BUS
     printf("  RS485 UART: %s baud=%d\n", RS485_UART_ROUTE_NAME, RS485_BAUDRATE);
+    printf("  RS485 Sensor Read Retry: max=%u gap=%u ms\n",
+           RS485_SENSOR_READ_MAX_RETRIES,
+           RS485_SENSOR_READ_RETRY_GAP_MS);
 #endif
     printf("  Upload Interval: %d ms\n", UPLOAD_INTERVAL_MS);
     printf("  Downlink Only: %s\n", DOWNLINK_ONLY_MODE ? "Enabled" : "Disabled");

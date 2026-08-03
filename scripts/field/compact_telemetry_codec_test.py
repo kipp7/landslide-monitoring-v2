@@ -17,7 +17,7 @@ from xls1_three_node_batch_poll import (
     should_retry_broadcast_poll,
     telemetry_profile_errors,
 )
-from xls1_compact_v4_acceptance import require_ntrip_disabled
+from xls1_compact_v4_acceptance import minimum_session_timeout_ms, require_ntrip_disabled
 
 
 PAYLOAD_HEX = (
@@ -44,6 +44,15 @@ PAYLOAD_V4_HEX = (
 
 
 def main() -> None:
+    assert minimum_session_timeout_ms(1500, 0) == 1500
+    assert minimum_session_timeout_ms(1500, 1) == 3000
+    try:
+        minimum_session_timeout_ms(0, 0)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("acceptance gate accepted a non-positive response window")
+
     with TemporaryDirectory() as temporary_directory:
         environment_file = Path(temporary_directory) / "field-gateway.env"
         environment_file.write_text("NTRIP_ENABLED=false\n", encoding="ascii")
