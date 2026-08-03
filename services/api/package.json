@@ -11,15 +11,15 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
+    "@clickhouse/client": "^1.12.1",
     "@fastify/cors": "^11.1.0",
     "@fastify/formbody": "^8.0.2",
-    "@clickhouse/client": "^1.12.1",
     "@lsmv2/observability": "*",
     "@lsmv2/rules": "*",
     "@lsmv2/validation": "*",
     "bcryptjs": "^3.0.2",
     "dotenv": "^16.4.7",
-    "fastify": "^5.2.1",
+    "fastify": "^5.11.0",
     "jsonwebtoken": "^9.0.2",
     "kafkajs": "^2.2.4",
     "pg": "^8.13.1",
