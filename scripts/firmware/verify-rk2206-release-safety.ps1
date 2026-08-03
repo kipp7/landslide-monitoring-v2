@@ -102,7 +102,7 @@ foreach ($property in @(
     "gnssRtcmInjectionMode", "fieldSensorMode", "fieldSensorTruth",
     "rtcmRuntimeBootMode", "rtcmRuntimeControlEnabled",
     "rs485HardwareInitialized", "battery", "firmwareMarker",
-    "sampleVersion", "compactPayloadBytes", "fieldLinkWireBytes",
+    "sampleVersion", "compactPayloadBytes", "fieldLinkWireBytes", "compactPollProtocol",
     "compactPollCommandBytes", "compactPollWireBytes", "nodeSlotMs", "files"
   )) {
   Assert-ObjectProperty -Object $manifest -Name $property -Context "Release manifest"
@@ -185,12 +185,17 @@ if ($isGnssSourceAwareManifest) {
 
 $expectedPayloadBytes = if ($ExpectedCompactVersion -eq 4) { 139 } else { 95 }
 $expectedWireBytes = if ($ExpectedCompactVersion -eq 4) { 157 } else { 113 }
+$expectedPollProtocol = if ($ExpectedCompactVersion -eq 4) { "compact-targeted-v1" } else { "compact-broadcast-v1" }
+$expectedPollCommandBytes = if ($ExpectedCompactVersion -eq 4) { 11 } else { 10 }
+$expectedPollWireBytes = if ($ExpectedCompactVersion -eq 4) { 29 } else { 28 }
+$expectedNodeSlotMs = if ($ExpectedCompactVersion -eq 4) { 0 } else { 340 }
 foreach ($fixedField in @(
     @{ Name = "compactPayloadBytes"; Value = $expectedPayloadBytes },
     @{ Name = "fieldLinkWireBytes"; Value = $expectedWireBytes },
-    @{ Name = "compactPollCommandBytes"; Value = 10 },
-    @{ Name = "compactPollWireBytes"; Value = 28 },
-    @{ Name = "nodeSlotMs"; Value = 340 }
+    @{ Name = "compactPollProtocol"; Value = $expectedPollProtocol },
+    @{ Name = "compactPollCommandBytes"; Value = $expectedPollCommandBytes },
+    @{ Name = "compactPollWireBytes"; Value = $expectedPollWireBytes },
+    @{ Name = "nodeSlotMs"; Value = $expectedNodeSlotMs }
   )) {
   Assert-ReleaseCondition -Condition ($manifest.($fixedField.Name) -eq $fixedField.Value) `
     -Message "Unexpected $($fixedField.Name): $($manifest.($fixedField.Name))"

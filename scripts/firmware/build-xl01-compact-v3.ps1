@@ -427,9 +427,10 @@ try {
     sampleVersion = Get-QuotedMacroValue -Path (Join-Path $sampleRoot "config\app_config.h") -Macro "FIRMWARE_SAMPLE_VERSION"
     compactPayloadBytes = if ($CompactVersion -eq 4) { 139 } else { 95 }
     fieldLinkWireBytes = if ($CompactVersion -eq 4) { 157 } else { 113 }
-    compactPollCommandBytes = 10
-    compactPollWireBytes = 28
-    nodeSlotMs = 340
+    compactPollProtocol = if ($CompactVersion -eq 4) { "compact-targeted-v1" } else { "compact-broadcast-v1" }
+    compactPollCommandBytes = if ($CompactVersion -eq 4) { 11 } else { 10 }
+    compactPollWireBytes = if ($CompactVersion -eq 4) { 29 } else { 28 }
+    nodeSlotMs = if ($CompactVersion -eq 4) { 0 } else { 340 }
     rollbackRelease = "competition-suite-20260723"
     generatedAt = (Get-Date).ToUniversalTime().ToString("o")
     files = @($files | ForEach-Object {

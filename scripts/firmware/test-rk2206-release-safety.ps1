@@ -203,9 +203,10 @@ function New-TestRelease {
     sampleVersion = $sampleVersion
     compactPayloadBytes = $compactPayloadBytes
     fieldLinkWireBytes = $fieldLinkWireBytes
-    compactPollCommandBytes = 10
-    compactPollWireBytes = 28
-    nodeSlotMs = 340
+    compactPollProtocol = if ($CompactVersion -eq 4) { "compact-targeted-v1" } else { "compact-broadcast-v1" }
+    compactPollCommandBytes = if ($CompactVersion -eq 4) { 11 } else { 10 }
+    compactPollWireBytes = if ($CompactVersion -eq 4) { 29 } else { 28 }
+    nodeSlotMs = if ($CompactVersion -eq 4) { 0 } else { 340 }
     files = $files
   }
   if ($SchemaVersion -ge 2) {
