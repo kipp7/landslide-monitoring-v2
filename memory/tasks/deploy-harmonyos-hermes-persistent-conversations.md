@@ -79,9 +79,23 @@ and alarm-isolation baseline.
   contextual safe-task starters to the chat-first Hermes surface, and unifies
   My, alerts, login, charts, typography, spacing, semantic colors, and touch
   targets without changing API or execution contracts.
-- The UI passed a bounded `1260x2720` HarmonyOS `5.0.1(13)` emulator screenshot
-  review. The latest locally verified HAP SHA256 is
-  `4EF48DB060B0EA6E72D9080A19BC147297A13C5144632FCD3F958D74BF3FF926`.
+- `apps/harmonyos/DESIGN.md` is now the App visual source of truth using the
+  official Google Labs alpha format. It replaces the root `.impeccable.md`,
+  records exact HarmonyOS tokens and operational hierarchy, and passes
+  `designmd 0.4.0` lint with `0` errors and `0` warnings.
+- The evidence-focused follow-up no longer claims a stable or live device state
+  while A/B/C are offline. Overview routes communication loss to Stations;
+  Stations derives the selected site status from actual node connectivity;
+  device detail distinguishes recent retained data from live data. Upload
+  counts use grouping separators, 24-hour trend labels include dates, and
+  midnight freshness now renders as `00:xx` instead of `24:xx`.
+- The final UI passed a bounded `1260x2720` HarmonyOS `5.0.1(13)` emulator
+  review for Overview, Stations, and device detail. Source/build-copy SHA256
+  values are `A3CBDFEE70A6DD4D89C48A7025DE83B4D22459A83F0978972AEF975584382BBF`
+  for `Index.ets` and
+  `C0AEF2247B81A167ADCF152CE25BB59F0F3B28C9FD21BEC5A3BAB2E0A1D7A6F1`
+  for `Types.ets`. The locally signed and verified HAP SHA256 is
+  `CBCF0F4A0027CB272DBCBC3D01D70666E5B490462E80EC5CD7EA45F2D5557486`.
   Normal DevEco signing is pending certificate renewal; the checked HAP used
   only an SDK simulator certificate in `E:/codex-build`.
 

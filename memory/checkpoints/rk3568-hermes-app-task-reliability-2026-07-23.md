@@ -139,26 +139,45 @@ telemetry, rule-engine, or physical alarm authority.
   `B5592A5937CCCF5E6756095DB4096B370969FD1202E75FE3882D27F6587B789D`.
   It clean-built, installed, launched, and restored the existing monitoring
   overview on the HarmonyOS `5.0.1(13)` emulator.
-- The PR #357 HarmonyOS flagship UI pass uses a documented field-situation
-  visual system in `.impeccable.md`: risk before volume metrics, visible data
-  provenance, quiet normal states, outdoor-readable type, and 44 vp controls.
-  Overview now prioritizes active risk and node availability, Stations shows
+- The PR #357 HarmonyOS flagship UI pass uses
+  `apps/harmonyos/DESIGN.md` as its Google Labs alpha-format visual source of
+  truth: risk before volume metrics, visible data provenance, quiet normal
+  states, outdoor-readable type, and 44 vp controls. The previous root
+  `.impeccable.md` was removed to avoid conflicting authorities. The document
+  passes `designmd 0.4.0` lint with `0` errors and `0` warnings.
+- Overview now prioritizes active risk and node availability, Stations shows
   map -> region -> node evidence, Hermes keeps a chat-first surface with three
   contextual safe-task starters, and My groups alert, location, cache, server,
-  version, and logout operations.
+  version, and logout operations. The follow-up derives selected-site status
+  from actual node connectivity, distinguishes offline-device snapshots from
+  live data, formats upload counts, date-qualifies 24-hour trends, and avoids
+  the locale midnight `24:xx` rendering.
 - Login, Overview, Stations, Hermes history, Hermes new conversation, My,
   alert empty state, and device detail were visually inspected at `1260x2720`
   on the HarmonyOS `5.0.1(13)` phone emulator. Screenshots are under
   `E:/codex-build/hermes-ui-polish-20260803/screenshots`; no overlap, clipping,
   bottom-navigation obstruction, or map-node loss was observed.
-- Source and ASCII build-copy `Index.ets` SHA256 values both equal
-  `3969796E84723DC4C1D63FFDEBA32AAAA9C2019AB08A481808F61373E3169E42`.
-  A clean Hvigor run completed type checking and ArkTS compilation. The DevEco
-  debug certificate expired at `2026-08-03 17:52 CST`, so the resulting unsigned
-  HAP was signed only in the temporary build directory with the SDK OpenHarmony
+- Source and ASCII build-copy SHA256 values both equal
+  `A3CBDFEE70A6DD4D89C48A7025DE83B4D22459A83F0978972AEF975584382BBF`
+  for `Index.ets` and
+  `C0AEF2247B81A167ADCF152CE25BB59F0F3B28C9FD21BEC5A3BAB2E0A1D7A6F1`
+  for `Types.ets`. A clean Hvigor run completed type checking, ArkTS
+  compilation, and packaging after putting the DevEco JBR first in the local
+  build PATH and clearing the stale Java 8 CLASSPATH. The DevEco debug
+  certificate expired at `2026-08-03 17:52 CST`, so the resulting unsigned HAP
+  was signed only in the temporary build directory with the SDK OpenHarmony
   simulator certificate and then verified successfully. The local signed HAP is
   `E:/codex-build/hermes-ui-polish-20260803/entry/build/default/outputs/default/entry-default-local-signed.hap`,
-  SHA256 `4EF48DB060B0EA6E72D9080A19BC147297A13C5144632FCD3F958D74BF3FF926`.
+  SHA256 `CBCF0F4A0027CB272DBCBC3D01D70666E5B490462E80EC5CD7EA45F2D5557486`.
+- Final screenshot SHA256 values are
+  `FF9F91D8E5F0CEC92CD8EEA1D4125D34B63BA4F1EA1B50BEC025C268CF1EBAFE`
+  for Overview,
+  `38F9F91A6818F4EBF6CA28BC5F3145F930A017502D59C479A1D314DA54F1BEDD`
+  for Stations, and
+  `011A09A2338D46A2733F4CC316371C41108D8F1835F1F019EF92A1D82528687C`
+  for device detail. They remain local under
+  `E:/codex-build/hermes-ui-polish-20260803/screenshots` and show no clipping,
+  overlap, map-node loss, false green offline state, or `24:xx` timestamp.
 
 ## In Progress
 
@@ -173,10 +192,10 @@ telemetry, rule-engine, or physical alarm authority.
   no model endpoint/name/credential is configured. Available local SSH keys did
   not authenticate to the cloud server for the planned read-only resource
   check, so no production container, environment, or model runtime changed.
-- The UI refinement is code-complete on PR #357 and only changes
-  `apps/harmonyos/entry/src/main/ets/pages/Index.ets` plus the local design
-  context. Monitoring, cache, map, SSE, Push, alarm, and Hermes API contracts
-  remain unchanged.
+- The UI refinement is code-complete on PR #357 and changes only presentation,
+  shared date formatting, and the repository design source in
+  `apps/harmonyos`. Monitoring, cache, map, SSE, Push, alarm, and Hermes API or
+  execution contracts remain unchanged.
 
 ## Next Actions
 

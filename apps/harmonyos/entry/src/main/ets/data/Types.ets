@@ -734,11 +734,18 @@ export function shortTime(value: string | undefined): string {
   if (!value) return '暂无';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false });
+  return `${twoDigit(date.getHours())}:${twoDigit(date.getMinutes())}`;
 }
 
 function twoDigit(value: number): string {
   return value < 10 ? `0${value}` : `${value}`;
+}
+
+export function shortDateTime(value: string | undefined): string {
+  if (!value) return '暂无';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return `${twoDigit(date.getMonth() + 1)}-${twoDigit(date.getDate())} ${twoDigit(date.getHours())}:${twoDigit(date.getMinutes())}`;
 }
 
 export function beijingClockTime(value: string | undefined): string {

@@ -10,7 +10,7 @@ import { AlertAlarmService } from '../data/AlertAlarmService';
 import { DeviceLocationService } from '../data/DeviceLocationService';
 import { AlertStreamClient } from '../data/AlertStreamClient';
 import { PushRegistrationService } from '../data/PushRegistrationService';
-import { Alert, AlertEvent, AlertMapLocation, AlertStreamEvent, DashboardSummary, Device, DeviceState, EdgeAgentTask, EdgeAiActionName, EdgeAiIntentResolution, EdgeAiStatus, EdgeRiskDevice, EvacuationTarget, HermesAction, HermesAgentTask, HermesConversation, HermesDiagnosticEvidence, HermesMessage, MetricSeries, SeriesPoint, SeriesResponse, Station, UserLocationStatus, UserMapLocation, alertStatusLabel, beijingClockTime, deviceConnectivityLabel, deviceDisplayName, deviceSupportsConductivity, deviceTypeLabel, displayMetric, eventTypeLabel, isAlarmActuatorDevice, isDeviceOnline, isOnlineStatus, metricShortLabel, metricUnitLabel, metricValue, numberValue, relativeTime, severityLabel, shortTime, soilConductivityValue, soilMoistureValue, soilTemperatureValue, stationDisplayName, stationNameLabel, stationStatusLabel, userDisplayName } from '../data/Types';
+import { Alert, AlertEvent, AlertMapLocation, AlertStreamEvent, DashboardSummary, Device, DeviceState, EdgeAgentTask, EdgeAiActionName, EdgeAiIntentResolution, EdgeAiStatus, EdgeRiskDevice, EvacuationTarget, HermesAction, HermesAgentTask, HermesConversation, HermesDiagnosticEvidence, HermesMessage, MetricSeries, SeriesPoint, SeriesResponse, Station, UserLocationStatus, UserMapLocation, alertStatusLabel, beijingClockTime, deviceConnectivityLabel, deviceDisplayName, deviceSupportsConductivity, deviceTypeLabel, displayMetric, eventTypeLabel, isAlarmActuatorDevice, isDeviceOnline, isOnlineStatus, metricShortLabel, metricUnitLabel, metricValue, numberValue, relativeTime, severityLabel, shortDateTime, shortTime, soilConductivityValue, soilMoistureValue, soilTemperatureValue, stationDisplayName, stationNameLabel, stationStatusLabel, userDisplayName } from '../data/Types';
 import { AlertMapView } from '../components/AlertMapView';
 import { ActiveAlertBanner, InAppAlertOverlay } from '../components/InAppAlertOverlay';
 import { StatusBanner } from '../components/StatusBanner';
@@ -32,7 +32,10 @@ const UI_COLOR_SUCCESS_SOFT: string = '#E8F3EF';
 const UI_COLOR_DANGER: string = '#B44832';
 const UI_COLOR_DANGER_SOFT: string = '#F7E9E5';
 const UI_COLOR_WARNING: string = '#A66021';
+const UI_COLOR_WARNING_SOFT: string = '#FFF3E0';
+const UI_COLOR_WARNING_LINE: string = '#E7D0AE';
 const UI_COLOR_INFO: string = '#477B96';
+const UI_COLOR_INFO_SOFT: string = '#EDF3F6';
 const UI_COLOR_MAP_DEFAULT: string = '#99441F';
 const UI_COLOR_MAP_MUTED: string = '#5B6670';
 const UI_COLOR_LOGIN_BRAND: string = '#173D32';
@@ -45,6 +48,11 @@ const UI_COLOR_HERMES_SOFT: string = '#EAF1ED';
 const UI_COLOR_HERMES_LINE: string = '#C9D8D0';
 const UI_PAGE_PADDING: number = 16;
 const UI_RADIUS_SURFACE: number = 8;
+
+function formatCount(value: number | undefined): string {
+  if (value === undefined || !Number.isFinite(value)) return '--';
+  return Math.max(0, Math.round(value)).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
 
 function edgeNodeFallbackName(deviceId: string): string {
   const suffix = deviceId.slice(-4);
@@ -2073,10 +2081,12 @@ struct OverviewPane {
         Column({ space: 12 }) {
           OverviewAlertCard({
             alerts: this.alerts,
+            dashboard: this.dashboard,
             freshness: this.alertFreshness,
             offline: this.alertOffline,
             refreshing: this.alertRefreshing,
             onOpenAlerts: () => this.onOpenAlerts(),
+            onOpenStations: () => this.onOpenStations(),
             onOpenMap: (alert: Alert | null) => this.onOpenAlertMap(alert)
           });
           OverviewOperationsCard({
@@ -2102,10 +2112,12 @@ struct OverviewPane {
 @Component
 struct OverviewAlertCard {
   @Prop alerts: Array<Alert>;
+  @Prop dashboard: DashboardSummary | null;
   @Prop freshness: string;
   @Prop offline: boolean;
   @Prop refreshing: boolean;
   onOpenAlerts: () => void = () => {};
+  onOpenStations: () => void = () => {};
   onOpenMap: (alert: Alert | null) => void = () => {};
 
   private primaryAlert(): Alert | null {
@@ -2116,16 +2128,64 @@ struct OverviewAlertCard {
     return alert.severity === 'critical' || alert.severity === 'high' ? UI_COLOR_DANGER : '#A76A2E';
   }
 
+  private offlineDevices(): number {
+    return this.dashboard?.offlineDevices ?? 0;
+  }
+
+  private hasOfflineDevices(): boolean {
+    return this.alerts.length === 0 && this.offlineDevices() > 0;
+  }
+
+  private attentionColor(): string {
+    if (this.alerts.length > 0) return UI_COLOR_DANGER;
+    if (this.offline || this.hasOfflineDevices()) return UI_COLOR_WARNING;
+    if (this.dashboard === null) return UI_COLOR_INFO;
+    return UI_COLOR_SUCCESS;
+  }
+
+  private attentionSoftColor(): string {
+    if (this.alerts.length > 0) return UI_COLOR_DANGER_SOFT;
+    if (this.offline || this.hasOfflineDevices()) return UI_COLOR_WARNING_SOFT;
+    if (this.dashboard === null) return UI_COLOR_INFO_SOFT;
+    return UI_COLOR_SUCCESS_SOFT;
+  }
+
+  private cardColor(): string {
+    if (this.alerts.length > 0) return UI_COLOR_DANGER_SOFT;
+    if (this.offline || this.hasOfflineDevices()) return UI_COLOR_WARNING_SOFT;
+    return UI_COLOR_SURFACE;
+  }
+
+  private cardBorderColor(): string {
+    if (this.alerts.length > 0) return '#EACBC2';
+    if (this.offline || this.hasOfflineDevices()) return UI_COLOR_WARNING_LINE;
+    return UI_COLOR_LINE;
+  }
+
+  private openPrimary(): void {
+    if (this.hasOfflineDevices()) {
+      this.onOpenStations();
+      return;
+    }
+    this.onOpenAlerts();
+  }
+
   private statusText(): string {
     if (this.refreshing) return '正在同步告警状态';
     if (this.offline) return `缓存数据 · ${this.freshness}`;
-    if (this.alerts.length === 0) return '当前无活动告警';
+    if (this.dashboard === null) return '节点状态正在获取';
+    if (this.alerts.length === 0 && this.offlineDevices() > 0) {
+      return `${this.offlineDevices()} 个节点离线 · 暂无活动告警`;
+    }
+    if (this.alerts.length === 0) return '全部节点在线 · 暂无活动告警';
     return `${this.alerts.length} 条待处理 · ${this.freshness}`;
   }
 
   private headline(): string {
     if (this.primaryAlert()) return this.primaryAlert()?.title ?? '监测告警';
     if (this.offline) return '告警状态等待联网确认';
+    if (this.dashboard === null) return '节点状态等待确认';
+    if (this.offlineDevices() > 0) return `${this.offlineDevices()} 个节点通信中断`;
     return '当前监测状态平稳';
   }
 
@@ -2134,18 +2194,18 @@ struct OverviewAlertCard {
       Row({ space: 10 }) {
         Stack({ alignContent: Alignment.Center }) {
           Circle({ width: 44, height: 44 })
-            .fill(this.alerts.length > 0 ? UI_COLOR_DANGER_SOFT : UI_COLOR_SUCCESS_SOFT)
+            .fill(this.attentionSoftColor())
           SymbolGlyph($r('sys.symbol.bell'))
             .fontSize(20)
-            .fontColor([this.alerts.length > 0 ? UI_COLOR_DANGER : UI_COLOR_SUCCESS])
+            .fontColor([this.attentionColor()])
         }
         .width(44)
         .height(44)
         Column({ space: 2 }) {
-          Text(this.alerts.length > 0 ? '当前最高风险' : '告警值守')
+          Text(this.alerts.length > 0 ? '当前最高风险' : this.offline || this.hasOfflineDevices() ? '运行提醒' : this.dashboard === null ? '状态同步' : '告警值守')
             .fontSize(13)
             .fontWeight(FontWeight.Medium)
-            .fontColor(this.alerts.length > 0 ? UI_COLOR_DANGER : UI_COLOR_TEXT_SECONDARY)
+            .fontColor(this.alerts.length > 0 ? UI_COLOR_DANGER : this.offline || this.hasOfflineDevices() ? UI_COLOR_WARNING : this.dashboard === null ? UI_COLOR_INFO : UI_COLOR_TEXT_SECONDARY)
           Text(this.headline())
             .fontSize(18)
             .fontWeight(FontWeight.Bold)
@@ -2163,8 +2223,8 @@ struct OverviewAlertCard {
         .width(44)
         .height(44)
         .backgroundColor(UI_COLOR_SURFACE)
-        .accessibilityText('打开告警中心')
-        .onClick(() => this.onOpenAlerts())
+        .accessibilityText(this.hasOfflineDevices() ? '打开监测站点' : '打开告警中心')
+        .onClick(() => this.openPrimary())
       }
       .width('100%')
 
@@ -2208,26 +2268,26 @@ struct OverviewAlertCard {
       } else {
         Row({ space: 10 }) {
           Circle({ width: 7, height: 7 })
-            .fill(this.offline ? UI_COLOR_DANGER : UI_COLOR_SUCCESS)
+            .fill(this.attentionColor())
           Text(this.statusText())
             .fontSize(13)
-            .fontColor(UI_COLOR_MUTED)
+            .fontColor(this.offline || this.hasOfflineDevices() ? UI_COLOR_WARNING : UI_COLOR_MUTED)
             .layoutWeight(1)
-          Button('查看全部')
+          Button(this.hasOfflineDevices() ? '查看站点' : '查看全部')
             .height(44)
             .fontSize(13)
             .fontColor(UI_COLOR_TEXT)
             .backgroundColor(UI_COLOR_SURFACE)
             .border({ width: 1, color: UI_COLOR_LINE })
             .borderRadius(UI_RADIUS_SURFACE)
-            .onClick(() => this.onOpenAlerts())
+            .onClick(() => this.openPrimary())
         }
         .width('100%')
       }
     }
     .padding(16)
-    .backgroundColor(this.alerts.length > 0 ? UI_COLOR_DANGER_SOFT : UI_COLOR_SURFACE)
-    .border({ width: 1, color: this.alerts.length > 0 ? '#EACBC2' : UI_COLOR_LINE })
+    .backgroundColor(this.cardColor())
+    .border({ width: 1, color: this.cardBorderColor() })
     .borderRadius(UI_RADIUS_SURFACE)
     .width('100%')
   }
@@ -2279,18 +2339,18 @@ struct OverviewOperationsCard {
       .width('100%')
 
       Row() {
-        OverviewStat({ label: '在线节点', value: `${this.dashboard?.onlineDevices ?? '--'}`, tone: UI_COLOR_SUCCESS });
+        OverviewStat({ label: '在线节点', value: `${this.dashboard?.onlineDevices ?? '--'}`, tone: (this.dashboard?.onlineDevices ?? 0) > 0 ? UI_COLOR_SUCCESS : UI_COLOR_MUTED });
         Divider().vertical(true).height(42).color(UI_COLOR_LINE)
-        OverviewStat({ label: '离线节点', value: `${this.dashboard?.offlineDevices ?? '--'}`, tone: (this.dashboard?.offlineDevices ?? 0) > 0 ? UI_COLOR_DANGER : UI_COLOR_TEXT });
+        OverviewStat({ label: '离线节点', value: `${this.dashboard?.offlineDevices ?? '--'}`, tone: this.dashboard === null ? UI_COLOR_MUTED : (this.dashboard?.offlineDevices ?? 0) > 0 ? UI_COLOR_DANGER : UI_COLOR_TEXT });
         Divider().vertical(true).height(42).color(UI_COLOR_LINE)
-        OverviewStat({ label: '监测站点', value: `${this.dashboard?.stations ?? '--'}`, tone: UI_COLOR_INFO });
+        OverviewStat({ label: '监测站点', value: `${this.dashboard?.stations ?? '--'}`, tone: this.dashboard === null ? UI_COLOR_MUTED : UI_COLOR_INFO });
       }
       .width('100%')
 
       Divider().color(UI_COLOR_LINE)
       Row({ space: 12 }) {
         Stack({ alignContent: Alignment.Center }) {
-          Circle({ width: 38, height: 38 }).fill('#EDF3F6')
+          Circle({ width: 38, height: 38 }).fill(UI_COLOR_INFO_SOFT)
           SymbolGlyph($r('sys.symbol.arrow_clockwise'))
             .fontSize(18)
             .fontColor([UI_COLOR_INFO])
@@ -2307,10 +2367,10 @@ struct OverviewOperationsCard {
         }
         .alignItems(HorizontalAlign.Start)
         .layoutWeight(1)
-        Text(`${this.dashboard?.todayReportCount ?? '--'}`)
+        Text(formatCount(this.dashboard?.todayReportCount))
           .fontSize(22)
           .fontWeight(FontWeight.Bold)
-          .fontColor(UI_COLOR_TEXT)
+          .fontColor(this.dashboard === null ? UI_COLOR_MUTED : UI_COLOR_TEXT)
       }
       .width('100%')
     }
@@ -3888,6 +3948,51 @@ struct StationsPane {
     return linkage.length > 0 ? `${base} · ${linkage.length} 台联动设备` : base;
   }
 
+  private monitoringStatusText(): string {
+    const monitoring = this.monitoringDevices();
+    const online = this.onlineDeviceCount(monitoring);
+    if (this.refreshing) return `正在同步 · 保留当前 ${monitoring.length} 个节点数据`;
+    if (this.offline) return `离线缓存 · ${this.freshness}`;
+    if (monitoring.length === 0) return `接口数据已更新 · 暂无监测节点 · ${this.freshness}`;
+    if (online === 0) return `节点通信中断 · 0 / ${monitoring.length} 个在线 · 接口数据 · ${this.freshness}`;
+    if (online < monitoring.length) return `部分节点离线 · ${online} / ${monitoring.length} 个在线 · 接口数据 · ${this.freshness}`;
+    return `节点全部在线 · ${online} / ${monitoring.length} 个在线 · ${this.freshness}`;
+  }
+
+  private monitoringStatusTone(): string {
+    if (this.refreshing) return UI_COLOR_ACCENT;
+    if (this.offline) return UI_COLOR_DANGER;
+    const monitoring = this.monitoringDevices();
+    if (monitoring.length === 0) return UI_COLOR_INFO;
+    return this.onlineDeviceCount(monitoring) < monitoring.length ? UI_COLOR_WARNING : UI_COLOR_SUCCESS;
+  }
+
+  private stationOperationalText(station: Station): string {
+    const monitoring = this.monitoringDevices();
+    if (station.stationId !== this.selectedStationId || monitoring.length === 0) {
+      return stationStatusLabel(station.status);
+    }
+    const online = this.onlineDeviceCount(monitoring);
+    if (online === 0) return '节点通信中断';
+    if (online < monitoring.length) return `${online}/${monitoring.length} 节点在线`;
+    return '节点全部在线';
+  }
+
+  private stationOperationalTone(station: Station): string {
+    const monitoring = this.monitoringDevices();
+    if (station.stationId === this.selectedStationId && monitoring.length > 0) {
+      return this.onlineDeviceCount(monitoring) < monitoring.length ? UI_COLOR_WARNING : UI_COLOR_SUCCESS;
+    }
+    return isOnlineStatus(station.status) ? UI_COLOR_SUCCESS : UI_COLOR_DANGER;
+  }
+
+  private stationOperationalSoftTone(station: Station): string {
+    const tone = this.stationOperationalTone(station);
+    if (tone === UI_COLOR_SUCCESS) return UI_COLOR_SUCCESS_SOFT;
+    if (tone === UI_COLOR_WARNING) return UI_COLOR_WARNING_SOFT;
+    return UI_COLOR_DANGER_SOFT;
+  }
+
   private stateForDevice(deviceId: string): DeviceState | null {
     for (let index = 0; index < this.deviceStates.length; index++) {
       if (this.deviceStates[index].deviceId === deviceId) return this.deviceStates[index];
@@ -3961,12 +4066,8 @@ struct StationsPane {
       Scroll() {
         Column({ space: 12 }) {
           StatusBanner({
-            text: this.refreshing
-              ? `正在同步 · 保留当前 ${this.monitoringDevices().length} 个节点数据`
-              : this.offline
-              ? `离线缓存 · ${this.freshness}`
-              : `实时数据 · ${this.onlineDeviceCount(this.monitoringDevices())} / ${this.monitoringDevices().length} 个监测节点在线 · ${this.freshness}`,
-            tone: this.refreshing ? UI_COLOR_ACCENT : this.offline ? UI_COLOR_DANGER : UI_COLOR_SUCCESS
+            text: this.monitoringStatusText(),
+            tone: this.monitoringStatusTone()
           });
           Column({ space: 10 }) {
             Row() {
@@ -4038,10 +4139,10 @@ struct StationsPane {
             Row({ space: 12 }) {
               Stack({ alignContent: Alignment.Center }) {
                 Circle({ width: 40, height: 40 })
-                  .fill(isOnlineStatus(station.status) ? UI_COLOR_SUCCESS_SOFT : UI_COLOR_DANGER_SOFT)
+                  .fill(this.stationOperationalSoftTone(station))
                 SymbolGlyph($r('sys.symbol.dot_radiowaves_left_and_right'))
                   .fontSize(18)
-                  .fontColor([isOnlineStatus(station.status) ? UI_COLOR_SUCCESS : UI_COLOR_DANGER])
+                  .fontColor([this.stationOperationalTone(station)])
               }
               .width(40)
               .height(40)
@@ -4058,10 +4159,10 @@ struct StationsPane {
               }
               .alignItems(HorizontalAlign.Start)
               .layoutWeight(1)
-              Text(stationStatusLabel(station.status))
+              Text(this.stationOperationalText(station))
                 .fontSize(12)
                 .fontWeight(FontWeight.Medium)
-                .fontColor(isOnlineStatus(station.status) ? UI_COLOR_SUCCESS : UI_COLOR_DANGER)
+                .fontColor(this.stationOperationalTone(station))
             }
             .constraintSize({ minHeight: 68 })
             .padding({ left: 14, right: 14, top: 10, bottom: 10 })
@@ -4069,7 +4170,7 @@ struct StationsPane {
             .border({ width: 1, color: this.selectedStationId === station.stationId ? UI_COLOR_HERMES_LINE : UI_COLOR_LINE })
             .borderRadius(UI_RADIUS_SURFACE)
             .width('100%')
-            .accessibilityText(`${stationDisplayName(station)}，${stationStatusLabel(station.status)}，点击查看节点`)
+            .accessibilityText(`${stationDisplayName(station)}，${this.stationOperationalText(station)}，点击查看节点`)
             .onClick(() => this.onSelectStation(station.stationId))
           }, (station: Station) => station.stationId)
           if (this.selectedStationId.length > 0) {
@@ -4362,6 +4463,23 @@ struct DevicePane {
     return series.points[series.points.length - 1].value;
   }
 
+  private statusText(): string {
+    if (this.refreshing) return '正在同步 · 当前监测值保持可见';
+    if (this.offline) return `离线缓存 · ${this.freshness}`;
+    if (!this.device) return '设备状态等待确认';
+    if (!isDeviceOnline(this.device, this.state?.updatedAt)) {
+      return `设备离线 · 最近数据 · ${this.freshness}`;
+    }
+    return `实时数据 · ${deviceConnectivityLabel(this.device, this.state?.updatedAt)} · ${this.freshness}`;
+  }
+
+  private statusTone(): string {
+    if (this.refreshing) return UI_COLOR_ACCENT;
+    if (this.offline) return UI_COLOR_WARNING;
+    if (!this.device) return UI_COLOR_INFO;
+    return isDeviceOnline(this.device, this.state?.updatedAt) ? UI_COLOR_SUCCESS : UI_COLOR_WARNING;
+  }
+
   build() {
     Column() {
       Row({ space: 12 }) {
@@ -4386,12 +4504,8 @@ struct DevicePane {
       Scroll() {
         Column({ space: 12 }) {
           StatusBanner({
-            text: this.refreshing
-              ? '正在同步 · 当前监测值保持可见'
-              : this.offline
-              ? `离线缓存 · ${this.freshness}`
-              : `实时数据 · ${this.device ? deviceConnectivityLabel(this.device, this.state?.updatedAt) : '状态未知'} · ${this.freshness}`,
-            tone: this.refreshing ? UI_COLOR_ACCENT : this.offline ? UI_COLOR_DANGER : this.device && isDeviceOnline(this.device, this.state?.updatedAt) ? UI_COLOR_SUCCESS : UI_COLOR_DANGER
+            text: this.statusText(),
+            tone: this.statusTone()
           });
           CurrentMetricsPane({
             state: this.state,
@@ -4399,7 +4513,7 @@ struct DevicePane {
             showConductivity: deviceSupportsConductivity(this.device)
           });
           Row() {
-            Text('24 小时趋势')
+            Text('近 24 小时趋势')
               .fontSize(17)
               .fontWeight(FontWeight.Bold)
               .fontColor(UI_COLOR_TEXT)
@@ -4565,12 +4679,12 @@ struct SeriesTrendCard {
 
   private startTime(): string {
     const points = this.points();
-    return points.length > 0 ? shortTime(points[0].ts) : '--';
+    return points.length > 0 ? shortDateTime(points[0].ts) : '--';
   }
 
   private endTime(): string {
     const points = this.points();
-    return points.length > 0 ? shortTime(points[points.length - 1].ts) : '--';
+    return points.length > 0 ? shortDateTime(points[points.length - 1].ts) : '--';
   }
 
   build() {
