@@ -18,6 +18,15 @@ status: active
 
 ## Last Confirmed State
 
+### Compact Targeted Singleflight Checkpoint (2026-08-03)
+
+- A/B/C 旧 Compact V4 室内镜像在真实共享 XLS1 上完成了两轮诊断，但未通过验收。60 秒报告 `/var/lib/lsmv2/experiments/xls1-compact-v4-0060s-20260803-190546.json` 的 SHA-256 为 `882f4d02405167cae11e4e03d1d87f035cabad6ee85bdb4c65c3c7205335d1e9`，28 轮应有 84 帧、实际匹配 0、解码错误 62。30 秒报告 `/var/lib/lsmv2/experiments/xls1-compact-v4-0030s-20260803-191221.json` 的 SHA-256 为 `7ab2baa4ce99b46965ef3b7e64eb38a7a5c6fa7b7b53462f081d0671a2c90694`，观察到 26 个完整 157 B 帧和 4 组 `236 B + 78 B = 314 B` 的两节点分块交织。该证据确认身份、139 B payload 和模拟 GNSS 标志正确，同时证明 P1 广播下多个 RK2206 的 32 B UART 分块会互相穿插；继续增大固定时隙不能从机制上保证不交织。
+- 南向协议新增向后兼容的 `compact-targeted-v1`：RK3568 发送 `P2<节点><8位十六进制 nonce>`，只有目标节点立即响应，网关必须以 `last_command_tag` 收到对应完整 157 B 帧或超时后才轮询下一节点。旧 `P1` 广播及 A/B/C `0/340/680 ms` 时隙只保留作回退。正式参数为 `SOUTHBOUND_POLLING_INTERVAL_MS=250`、`SOUTHBOUND_POLLING_SESSION_TIMEOUT_MS=1200`、`SOUTHBOUND_POLLING_PARTIAL_RETRIES=0`；RTCM/NTRIP 在室内阶段保持关闭。
+- `1f1f461df51c9be36cbda1dbac0b2f00cabc738d` 实现 P2 单飞、RK3568 轮转/命令标签匹配、现场脚本和 RTCM-disabled READY 桩；`05fd4a2a3eacb3515edb4f7fef718c996bf0383f` 修正发布清单，使 V4 明确记录 `compactPollProtocol=compact-targeted-v1`、命令 11 B、field-link 29 B、节点时隙 0。两次提交均已推送到 `feat/gnss-rtk-v31-transport`。完整离线回归为 RK2206 C99 host 通过、C/Python 金值通过、Python 编译通过、field-gateway 48/48、lint 通过、pin safety 26 源文件与 3/3 负例通过、release safety 正反例通过。
+- 唯一可烧录候选为 `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v4_rs485_hardware_gnss_simulated_targeted_v1_r2_20260803`，manifest SHA-256 为 `d96a78f81d2a2578345d10a5e20c5e1632a012912f9ba7d923326f216201c8c6`，来源提交 `05fd4a2a...` 且 `sourceDirty=false`。A/B/C `.img` SHA-256 分别为 `86d702786cb31aced7a2f1104b1d05d493787cc2775282755bcb4372d810923e`、`ab54d6efbd4e1c008f83417623b5572bf202ec6f7476dfb5ce8ce6d19f364233`、`0d11b1c7a69bb0eea0a56f235ce6afe36b2748e145d8651d69302bb85e02ac6d`。它严格锁定真实 RS485、模拟 GNSS、RTCM disabled/READY-only、逐节点 PC0 最终校准和唯一身份。无 `r2` 的同名首个目录因 manifest 仍沿用 P1 的 10/28/340 元数据而被废弃，不得烧录。
+- RK3568 `192.168.124.179` 已部署兼容 P1/P2 的最新 field-gateway 和两份现场脚本，远端哈希与本地一致；部署前备份为 `/opt/lsmv2/backups/compact-targeted-predeploy-20260803-194041`。`lsmv2-field-gateway.service` 当前 active，串口与 MQTT 已重连，`/etc/lsmv2/field-gateway.env` 仍为 `root:root 0600`、`NTRIP_ENABLED=false`、`SOUTHBOUND_POLLING_MODE=compact-broadcast-v1`。保持 P1 是为了让尚未重刷的旧节点继续可见；当前日志中的 RTCM state 拒绝、236/78 B 交织和广播超时属于旧镜像的已知预期失败，不是新 P2 的验收结果。
+- 当前唯一阻断是现场重新烧录：必须按物理标签使用上述 `r2` 目录内 A/B/C 对应 `.img` 全部重刷并上电。完成后先原子切换 RK3568 到 `compact-targeted-v1/250/1200/0`，执行 prerequisite 和 60 秒门禁；60 秒完全通过才运行 600 秒，600 秒完全通过才运行 1800 秒。当前不能声称真实 RS485 稳定通过，也不能进入室外真实 GNSS/RTCM 阶段。
+
 ### Indoor RS485 Hybrid Source Checkpoint (2026-08-03)
 
 - 用户已完成两路 RS485 硬件接入，当前任务恢复 active。室内包使用真实 XLS1、真实 SC16IS752/土壤三合一/三轴倾角、真实逐节点 PC0 校准，并以编译期 `GnssSourceMode=simulated` 禁止 UM220 PB6/PB7 初始化和 RTCM capability；此配置不能产生 RTK Fixed、厘米级或专业位移证据。
