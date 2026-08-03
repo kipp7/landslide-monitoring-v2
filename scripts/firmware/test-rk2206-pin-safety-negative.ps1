@@ -42,9 +42,16 @@ function Invoke-ExpectedFailure {
   }
 
   & $Mutate
-  $output = & pwsh -NoProfile -File $pinSafetyScript -SdkRoot $temporarySdkRoot `
-    -FirmwareRoot $temporaryFirmwareRoot 2>&1 | Out-String
-  if ($LASTEXITCODE -eq 0) {
+  $previousErrorActionPreference = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = "Continue"
+    $output = & pwsh -NoProfile -File $pinSafetyScript -SdkRoot $temporarySdkRoot `
+      -FirmwareRoot $temporaryFirmwareRoot 2>&1 | Out-String
+    $childExitCode = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $previousErrorActionPreference
+  }
+  if ($childExitCode -eq 0) {
     throw "$Name mutation unexpectedly passed the pin-safety gate"
   }
   if ($output -notmatch [regex]::Escape($ExpectedMessage)) {

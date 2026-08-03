@@ -283,6 +283,12 @@ def build_command(node_id: str, command_id: str) -> bytes:
     return json.dumps(command, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
 
 
+def build_targeted_compact_poll(label: str) -> str:
+    if label not in NODES:
+        raise ValueError(f"unsupported compact target: {label}")
+    return f"P2{label}{uuid.uuid4().hex[:8].upper()}"
+
+
 def decode_compact_telemetry(payload: bytes) -> dict[str, Any]:
     if len(payload) < 3 or payload[:2] != b"LS" or payload[2] not in COMPACT_PAYLOAD_BYTES_BY_VERSION:
         raise ValueError("compact telemetry magic or version mismatch")
@@ -889,12 +895,18 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
                 reason = str(exc)
                 errors[reason] += 1
                 if len(error_samples) < 20:
+                    decoded_prefix = ""
+                    try:
+                        decoded_prefix = cobs_decode(encoded)[:32].hex(" ")
+                    except Exception:
+                        pass
                     error_samples.append(
                         {
                             "at": utc_now(),
                             "reason": reason,
                             "frameBytes": len(encoded) + 1,
                             "hexPrefix": encoded[:64].hex(" "),
+                            "decodedPrefix": decoded_prefix,
                         }
                     )
                 continue
@@ -919,7 +931,15 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
                 reason = f"telemetry payload decode failed: {exc}"
                 errors[reason] += 1
                 if len(error_samples) < 20:
-                    error_samples.append({"at": utc_now(), "reason": reason, "frameBytes": len(encoded) + 1})
+                    error_samples.append(
+                        {
+                            "at": utc_now(),
+                            "reason": reason,
+                            "frameBytes": len(encoded) + 1,
+                            "compactHeaderHex": payload[:24].hex(" "),
+                            "compactV4RuntimeHex": payload[95:119].hex(" ") if len(payload) == 139 else "",
+                        }
+                    )
                 continue
 
             device_id = telemetry.get("device_id")
@@ -1193,12 +1213,24 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
                                 receive_once(fd, min(0.05, response_deadline - time.monotonic()))
                 else:
                     for position, (label, device_id) in enumerate(order):
-                        command_id = str(uuid.uuid4())
+                        command_id = (
+                            build_targeted_compact_poll(label)
+                            if args.targeted_compact_poll
+                            else str(uuid.uuid4())
+                        )
                         tag = command_tag(command_id)
                         while (tag, label) in send_records_by_tag:
-                            command_id = str(uuid.uuid4())
+                            command_id = (
+                                build_targeted_compact_poll(label)
+                                if args.targeted_compact_poll
+                                else str(uuid.uuid4())
+                            )
                             tag = command_tag(command_id)
-                        command_payload = build_command(device_id, command_id)
+                        command_payload = (
+                            command_id.encode("ascii")
+                            if args.targeted_compact_poll
+                            else build_command(device_id, command_id)
+                        )
                         frame = encode_frame(FIELD_LINK_TYPE_COMMAND, serial_sequence, command_payload)
                         serial_sequence = (serial_sequence + 1) & 0xFFFFFFFF
                         sent_mono = time.monotonic()
@@ -1226,7 +1258,10 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
                             while time.monotonic() < gap_deadline:
                                 receive_once(fd, min(0.05, gap_deadline - time.monotonic()))
                 batches_sent += 1
-                if args.broadcast_poll and args.broadcast_response_timeout_ms > 0:
+                if (
+                    (args.broadcast_poll and args.broadcast_response_timeout_ms > 0)
+                    or args.targeted_compact_poll
+                ):
                     next_batch_at = time.monotonic() + args.batch_interval_ms / 1000.0
                 else:
                     next_batch_at = first_batch_at + batches_sent * args.batch_interval_ms / 1000.0
@@ -1405,6 +1440,7 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
             "interCommandGapMs": args.inter_command_gap_ms,
             "responseWaitMs": args.response_wait_ms,
             "broadcastPoll": args.broadcast_poll,
+            "targetedCompactPoll": args.targeted_compact_poll,
             "broadcastResponseTimeoutMs": args.broadcast_response_timeout_ms,
             "broadcastPartialRetries": args.broadcast_partial_retries,
             "maxBroadcastRetryRate": args.max_broadcast_retry_rate,
@@ -1412,7 +1448,13 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
             "commandChunkBytes": args.command_chunk_bytes,
             "commandChunkDelayMs": args.command_chunk_delay_ms,
             "drainSeconds": args.drain_seconds,
-            "nodeOrderPolicy": "fixed-A-B-C-slots" if args.broadcast_poll else "rotating-A-B-C",
+            "nodeOrderPolicy": (
+                "fixed-A-B-C-slots"
+                if args.broadcast_poll
+                else "rotating-A-B-C-singleflight"
+                if args.targeted_compact_poll
+                else "rotating-A-B-C"
+            ),
             "requiredCompactVersion": args.required_compact_version,
             "requiredFieldSensorSource": args.required_field_sensor_source,
             "requiredGnssSource": args.required_gnss_source,
@@ -1471,6 +1513,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--inter-command-gap-ms", type=int, default=0)
     parser.add_argument("--response-wait-ms", type=int, default=0)
     parser.add_argument("--broadcast-poll", action="store_true")
+    parser.add_argument("--targeted-compact-poll", action="store_true")
     parser.add_argument("--broadcast-response-timeout-ms", type=int, default=0)
     parser.add_argument("--broadcast-partial-retries", type=int, default=0)
     parser.add_argument("--max-broadcast-retry-rate", type=float, default=1.0)
@@ -1527,6 +1570,10 @@ def parse_args() -> argparse.Namespace:
         parser.error("--broadcast-response-timeout-ms must be non-negative")
     if args.broadcast_response_timeout_ms > 0 and not args.broadcast_poll:
         parser.error("--broadcast-response-timeout-ms requires --broadcast-poll")
+    if args.broadcast_poll and args.targeted_compact_poll:
+        parser.error("--broadcast-poll and --targeted-compact-poll are mutually exclusive")
+    if args.targeted_compact_poll and args.response_wait_ms <= 0:
+        parser.error("--targeted-compact-poll requires a positive --response-wait-ms")
     if args.broadcast_partial_retries not in (0, 1):
         parser.error("--broadcast-partial-retries must be 0 or 1")
     if args.broadcast_partial_retries > 0 and (

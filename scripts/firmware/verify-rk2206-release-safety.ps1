@@ -25,6 +25,7 @@ param(
   [ValidateRange(1000, 100000)]
   [int]$ExpectedBatteryNominalVoltageMv = 11100,
   [switch]$RequireFinalBatteryAcceptance,
+  [switch]$RequireCompactTargetedPolling,
   [ValidateRange(1, 500)]
   [int]$MaxAcceptedBatteryErrorMv = 60,
   [ValidateRange(0, 500)]
@@ -200,6 +201,10 @@ Assert-ReleaseCondition -Condition (
 Assert-ReleaseCondition -Condition (
     $manifest.sampleVersion -is [string] -and $manifest.sampleVersion.Length -gt 0
   ) -Message "Release sampleVersion is empty"
+if ($RequireCompactTargetedPolling) {
+  Assert-ReleaseCondition -Condition ($ExpectedCompactVersion -eq 4) `
+    -Message "Compact targeted polling is only accepted for the V4 release gate"
+}
 
 if ($ExpectedSourceCommit) {
   Assert-ReleaseCondition -Condition ($manifest.sourceCommit -eq $ExpectedSourceCommit) `
@@ -514,6 +519,9 @@ foreach ($node in $NodeLabels) {
       $rtcmMarker,
       $capabilityMarker
     ) + $modeRequired
+    if ($RequireCompactTargetedPolling) {
+      $required += "compact-targeted-v1 P2 singleflight"
+    }
     $forbidden = @($modeForbidden)
     if ($isGnssSourceAwareManifest) {
       $required += $gnssMarker

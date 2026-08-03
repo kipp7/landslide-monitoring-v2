@@ -20,7 +20,9 @@ int main(void)
     assert(stats.completed_frames == 0U);
     assert(stats.injected_frames == 0U);
     assert(runtime.mode == GNSS_RTCM_INJECTION_DISABLED);
-    assert(runtime.state_flags == 0U);
+    assert(runtime.state_flags == GNSS_RTCM_STATE_READY);
+    assert(runtime.queue_pending == 0U);
+    assert(runtime.queue_high_watermark == 0U);
     assert(runtime.session_epoch == 0U);
     assert(runtime.lease_remaining_ms == 0U);
     assert(runtime.last_fragment_age_ms == GNSS_RTCM_AGE_UNAVAILABLE);

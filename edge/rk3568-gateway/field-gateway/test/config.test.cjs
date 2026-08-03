@@ -21,10 +21,10 @@ test("RK3568 deployment example pins the field-validated recovery profile", () =
   const config = loadConfigFromEnv(dotenv.parse(fs.readFileSync(envPath)));
 
   assert.equal(config.southboundPollingEnabled, true);
-  assert.equal(config.southboundPollingMode, "compact-broadcast-v1");
-  assert.equal(config.southboundPollingIntervalMs, 1000);
-  assert.equal(config.southboundPollingSessionTimeoutMs, 2500);
-  assert.equal(config.southboundPollingPartialRetries, 1);
+  assert.equal(config.southboundPollingMode, "compact-targeted-v1");
+  assert.equal(config.southboundPollingIntervalMs, 250);
+  assert.equal(config.southboundPollingSessionTimeoutMs, 1200);
+  assert.equal(config.southboundPollingPartialRetries, 0);
   assert.equal(config.southboundPollingRetryAfterMs, 1200);
 });
 
@@ -56,6 +56,28 @@ test("compact polling bounds retry count and requires a complete retry window", 
         SOUTHBOUND_POLLING_PARTIAL_RETRIES: "1"
       }),
     /compact-broadcast-v1/
+  );
+});
+
+test("compact targeted polling requires framed transport and forbids broadcast retries", () => {
+  assert.throws(
+    () =>
+      loadConfigFromEnv({
+        MQTT_URL: "mqtt://127.0.0.1:1883",
+        SOUTHBOUND_POLLING_MODE: "compact-targeted-v1",
+        FIELD_LINK_MODE: "raw-json"
+      }),
+    /compact-targeted-v1 requires FIELD_LINK_MODE=cobs-crc-v1/u
+  );
+  assert.throws(
+    () =>
+      loadConfigFromEnv({
+        MQTT_URL: "mqtt://127.0.0.1:1883",
+        SOUTHBOUND_POLLING_MODE: "compact-targeted-v1",
+        FIELD_LINK_MODE: "cobs-crc-v1",
+        SOUTHBOUND_POLLING_PARTIAL_RETRIES: "1"
+      }),
+    /requires compact-broadcast-v1/u
   );
 });
 

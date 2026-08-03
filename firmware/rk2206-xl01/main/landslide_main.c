@@ -739,6 +739,9 @@ static void HandleCompactBroadcastPoll(const char *command)
         !CompactPollCommand_IsValid(command, (int)strlen(command))) {
         return;
     }
+    if (!CompactPollCommand_TargetMatches(command, identity->legacy_node_label)) {
+        return;
+    }
     if (DOWNLINK_ONLY_MODE || !g_platform_uplink_enabled) {
         return;
     }
@@ -750,7 +753,7 @@ static void HandleCompactBroadcastPoll(const char *command)
     g_last_platform_command_uptime_s = SensorData_GetUptimeSnapshot();
     g_last_platform_command_tick = (uint32_t)LOS_TickCountGet();
 
-    delay_ms = CompactPollCommand_NodeDelayMs(identity->legacy_node_label);
+    delay_ms = CompactPollCommand_ResponseDelayMs(command, identity->legacy_node_label);
     if (delay_ms > 0U) {
         LOS_Msleep(delay_ms);
     }
@@ -1605,6 +1608,7 @@ static void* DataUploadTask(const char* arg)
     printf("  Manual Collect Delay: %d ms\n", PLATFORM_MANUAL_COLLECT_DELAY_MS);
     printf("  Poll ACK: %s\n", POLL_LATEST_TELEMETRY_ACK_ENABLED ? "Enabled" : "Telemetry confirms poll");
     printf("  Poll Request Check: %d ms\n", POLL_REQUEST_CHECK_INTERVAL_MS);
+    printf("  Compact Poll: %s (P1 broadcast rollback)\n", COMPACT_TARGETED_POLL_MARKER);
     printf("  Edge Uplink Mode: %s\n", EDGE_UPLINK_MODE == EDGE_UPLINK_MODE_POLLED ? "Polled" : "Periodic");
     printf("  Telemetry Payload: %s\n",
            TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V4 ? "Compact v4 (139-byte field + RTK + injection evidence)" :

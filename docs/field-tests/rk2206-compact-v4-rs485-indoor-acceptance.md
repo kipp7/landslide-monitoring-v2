@@ -59,6 +59,11 @@ unmatched frames, real soil/EC/tilt validity, field-calibrated PC0 data, the
 simulated GNSS source marker, and zero RTCM history. Do not tune link timing
 until the 1800-second baseline has completed.
 
+The V4 gate uses compact targeted single-flight polling. RK3568 sends one short
+`P2<node><nonce>` command and waits for that node's complete response before
+rotating to the next node. The older `P1` broadcast remains a rollback path for
+short V1/V2 frames; it is not an acceptance path for the 157-byte V4 response.
+
 ## Outdoor Transition
 
 After the indoor 1800-second gate passes, create a separate clean package with

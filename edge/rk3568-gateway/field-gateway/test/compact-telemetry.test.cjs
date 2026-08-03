@@ -3,6 +3,7 @@ const test = require("node:test");
 
 const {
   buildCompactBroadcastPollCommand,
+  buildCompactTargetedPollCommand,
   compactCommandTag,
   decodeCompactTelemetry,
   decodeCompactTelemetryV1
@@ -14,6 +15,13 @@ test("compact broadcast command uses the RK2206 FNV-1a tag", () => {
   assert.equal(poll.command, "P112345678");
   assert.equal(poll.commandTag, 0x9664c12a);
   assert.equal(compactCommandTag(poll.command), 0x9664c12a);
+});
+
+test("compact targeted command binds one node to the command tag", () => {
+  const poll = buildCompactTargetedPollCommand("B", "12345678");
+  assert.equal(poll.command, "P2B12345678");
+  assert.equal(poll.commandTag, compactCommandTag(poll.command));
+  assert.throws(() => buildCompactTargetedPollCommand("B", "1234"), /exactly 8/u);
 });
 
 test("compact telemetry survives binary COBS/CRC framing and preserves every field", () => {

@@ -2,7 +2,7 @@
 param(
   [string]$SdkRoot = "F:\2\openharmony\txsmartropenharmony",
   [string]$ContainerName = "openharmony-dev",
-  [string]$ReleaseDirectory = "F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v4_rs485_hardware_gnss_simulated_20260803",
+  [string]$ReleaseDirectory = "F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v4_rs485_hardware_gnss_simulated_targeted_v1_20260803",
   [string]$BatteryCalibrationFile = "",
   [ValidateSet("A", "B", "C")]
   [string[]]$NodeLabels = @("A", "B", "C")
@@ -58,6 +58,7 @@ try {
     -ExpectedSourceCommit $headCommit `
     -RequireCurrentHead `
     -RequireFinalBatteryAcceptance `
+    -RequireCompactTargetedPolling `
     -NodeLabels $NodeLabels
   if ($LASTEXITCODE -ne 0) {
     throw "Hybrid A/B/C release safety verification failed"
@@ -72,6 +73,7 @@ Truth profile
   - PC0 battery: real and field-calibrated
   - GNSS: simulated; UM220 PB6/PB7 UART is not initialized
   - RTCM: disabled
+  - Polling: compact-targeted-v1; one P2 target and one response in flight
 
 Flash only the image matching physical node A/B/C. This package is for indoor
 RS485 stabilization and must never be used as RTK Fixed or displacement evidence.

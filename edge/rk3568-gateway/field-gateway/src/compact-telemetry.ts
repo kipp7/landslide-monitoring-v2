@@ -88,6 +88,19 @@ export function buildCompactBroadcastPollCommand(nonce: string): { command: stri
   return { command, commandTag: compactCommandTag(command) };
 }
 
+export function buildCompactTargetedPollCommand(
+  nodeLabel: "A" | "B" | "C",
+  nonce: string
+): { command: string; commandTag: number } {
+  const normalizedNonce = nonce.toUpperCase();
+  if (!/^[0-9A-F]{8}$/u.test(normalizedNonce)) {
+    throw new Error("compact targeted nonce must contain exactly 8 hexadecimal characters");
+  }
+
+  const command = `P2${nodeLabel}${normalizedNonce}`;
+  return { command, commandTag: compactCommandTag(command) };
+}
+
 export function isCompactTelemetryV1(payload: Buffer): boolean {
   return (
     payload.length === COMPACT_TELEMETRY_V1_BYTES &&

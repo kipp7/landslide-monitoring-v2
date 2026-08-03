@@ -6,6 +6,7 @@ from tempfile import TemporaryDirectory
 
 from xls1_three_node_batch_poll import (
     analyze_batch_completeness,
+    build_targeted_compact_poll,
     command_tag,
     decode_compact_telemetry,
     decode_frame,
@@ -59,6 +60,9 @@ def main() -> None:
     assert should_retry_broadcast_poll(2, 3, 1, 1) is False
     assert classify_repeated_broadcast_telemetry(2, False) == "redundant-retry"
     assert classify_repeated_broadcast_telemetry(2, True) == "duplicate"
+    targeted_poll = build_targeted_compact_poll("B")
+    assert len(targeted_poll) == 11
+    assert targeted_poll.startswith("P2B")
 
     payload = bytes.fromhex(PAYLOAD_HEX)
     telemetry = decode_compact_telemetry(payload)

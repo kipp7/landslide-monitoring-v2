@@ -99,10 +99,11 @@ def stage_arguments(args: argparse.Namespace, duration_seconds: float) -> Namesp
         duration_seconds=duration_seconds,
         batch_interval_ms=args.batch_interval_ms,
         inter_command_gap_ms=0,
-        response_wait_ms=0,
-        broadcast_poll=True,
-        broadcast_response_timeout_ms=args.response_window_ms,
-        broadcast_partial_retries=1,
+        response_wait_ms=args.response_window_ms,
+        broadcast_poll=False,
+        targeted_compact_poll=True,
+        broadcast_response_timeout_ms=0,
+        broadcast_partial_retries=0,
         max_broadcast_retry_rate=args.max_retry_rate,
         max_logical_response_latency_ms=args.session_timeout_ms,
         command_chunk_bytes=32,
@@ -148,7 +149,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--serial-device", default="/dev/ttyS3")
     parser.add_argument("--baud", type=int, default=115200)
     parser.add_argument("--durations", type=parse_durations, default=parse_durations("60,600,1800"))
-    parser.add_argument("--batch-interval-ms", type=int, default=1000)
+    parser.add_argument("--batch-interval-ms", type=int, default=250)
     parser.add_argument("--response-window-ms", type=int, default=1200)
     parser.add_argument("--session-timeout-ms", type=int, default=2500)
     parser.add_argument("--max-retry-rate", type=float, default=0.02)
@@ -190,8 +191,9 @@ def main() -> int:
         "requiredNtripEnabled": False,
         "durationsSeconds": args.durations,
         "batchIntervalMs": args.batch_interval_ms,
+        "pollingMode": "compact-targeted-v1",
         "responseWindowMs": args.response_window_ms,
-        "partialRetries": 1,
+        "partialRetries": 0,
         "sessionTimeoutMs": args.session_timeout_ms,
         "maxRetryRate": args.max_retry_rate,
         "requiredCompactVersion": 4,

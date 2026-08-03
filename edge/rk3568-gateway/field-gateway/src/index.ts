@@ -15,6 +15,7 @@ import { encodeGnssRtcmModeCommandV1 } from "./gnss-transport-v3";
 import { RtcmDownlinkController } from "./rtcm-downlink-controller";
 import {
   buildCompactBroadcastPollCommand,
+  buildCompactTargetedPollCommand,
   decodeCompactTelemetry,
   isCompactTelemetry
 } from "./compact-telemetry";
@@ -263,6 +264,7 @@ type SouthboundCommandOrigin = "mqtt" | "internal-poll";
 
 type InternalPollCommandRecord = {
   commandId: string;
+  commandTag: number | undefined;
   commandType: string;
   deviceId: string;
   portPath: string;
@@ -272,6 +274,7 @@ type InternalPollCommandRecord = {
 
 type ActivePollTelemetryWindow = {
   commandId: string;
+  commandTag: number | undefined;
   commandType: string;
   deviceId: string;
   portPath: string;
@@ -1744,11 +1747,17 @@ class GatewayRuntime {
     const activePollWindow = this.activePollTelemetryWindows.get(sourcePort);
     const telemetryLastCommandId =
       envelope.meta && typeof envelope.meta.last_command_id === "string" ? envelope.meta.last_command_id : null;
+    const telemetryLastCommandTag =
+      envelope.meta && typeof envelope.meta.last_command_tag === "number"
+        ? envelope.meta.last_command_tag >>> 0
+        : null;
     const telemetryUploadTrigger =
       envelope.meta && typeof envelope.meta.upload_trigger === "string" ? envelope.meta.upload_trigger : null;
     const matchedActivePollWindow =
       activePollWindow?.deviceId === envelope.device_id &&
-      telemetryLastCommandId === activePollWindow.commandId &&
+      (activePollWindow.commandTag !== undefined
+        ? telemetryLastCommandTag === activePollWindow.commandTag
+        : telemetryLastCommandId === activePollWindow.commandId) &&
       telemetryUploadTrigger === "scheduler_poll";
     if (matchedActivePollWindow) {
       const roundTripMs = Math.max(0, Date.now() - activePollWindow.startedAtMs);
@@ -1766,10 +1775,6 @@ class GatewayRuntime {
       portState.lastPollTelemetryTs = receivedTs;
     }
 
-    const telemetryLastCommandTag =
-      envelope.meta && typeof envelope.meta.last_command_tag === "number"
-        ? envelope.meta.last_command_tag >>> 0
-        : null;
     if (
       this.config.southboundPollingMode === "compact-broadcast-v1" &&
       telemetryUploadTrigger === "scheduler_poll" &&
@@ -2323,9 +2328,23 @@ class GatewayRuntime {
   private async issueInternalPollForNode(nodeState: NodeRuntimeState, targetPort: string): Promise<void> {
     const traceId = newTraceId();
     const issuedTs = isoNow();
+    let commandId = buildInternalPollCommandId();
+    let commandTag: number | undefined;
+    if (this.config.southboundPollingMode === "compact-targeted-v1") {
+      const label = nodeState.fieldNodeId;
+      if (label !== "A" && label !== "B" && label !== "C") {
+        throw new Error(`compact targeted poll requires field node A, B or C: ${label}`);
+      }
+      const compactPoll = buildCompactTargetedPollCommand(
+        label,
+        randomUUID().replace(/-/gu, "").slice(0, 8)
+      );
+      commandId = compactPoll.command;
+      commandTag = compactPoll.commandTag;
+    }
     const command: DeviceCommandV1 = {
       schema_version: 1,
-      command_id: buildInternalPollCommandId(),
+      command_id: commandId,
       device_id: nodeState.deviceId,
       command_type: this.config.southboundPollingCommandType,
       payload: {
@@ -2339,6 +2358,7 @@ class GatewayRuntime {
 
     this.internalPollCommands.set(command.command_id, {
       commandId: command.command_id,
+      commandTag,
       commandType: command.command_type,
       deviceId: command.device_id,
       portPath: targetPort,
@@ -2510,7 +2530,10 @@ class GatewayRuntime {
 
     try {
       const gatewaySentTs = isoNow();
-      const southboundPayload = buildSouthboundCommandPayload(command, gatewaySentTs, origin);
+      const southboundPayload =
+        origin === "internal-poll" && this.config.southboundPollingMode === "compact-targeted-v1"
+          ? command.command_id
+          : buildSouthboundCommandPayload(command, gatewaySentTs, origin);
       const southboundPayloadBytes = Buffer.byteLength(southboundPayload, "utf8");
       await this.writeCommandToSerial(southboundPayload, targetPort, origin);
       this.stats.commandsForwarded += 1;
@@ -2709,6 +2732,7 @@ class GatewayRuntime {
 
     this.activePollTelemetryWindows.set(record.portPath, {
       commandId: record.commandId,
+      commandTag: record.commandTag,
       commandType: record.commandType,
       deviceId: record.deviceId,
       portPath: record.portPath,
@@ -3359,7 +3383,9 @@ class GatewayRuntime {
         pollingCompletionSignal:
           this.config.southboundPollingMode === "compact-broadcast-v1"
             ? "three-command-tag-matched-telemetry-frames"
-            : "matching-command-id-telemetry",
+            : this.config.southboundPollingMode === "compact-targeted-v1"
+              ? "single-command-tag-matched-telemetry-frame"
+              : "matching-command-id-telemetry",
         pollingIntervalMs: this.config.southboundPollingIntervalMs,
         pollingSessionTimeoutMs: this.config.southboundPollingSessionTimeoutMs,
         pollingPartialRetries: this.config.southboundPollingPartialRetries,

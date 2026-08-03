@@ -57,7 +57,9 @@ const configSchema = z
     commandSerialChunkBytes: z.coerce.number().int().nonnegative().default(0),
     commandSerialChunkDelayMs: z.coerce.number().int().nonnegative().default(0),
     southboundPollingEnabled: envBoolean(false),
-    southboundPollingMode: z.enum(["round-robin-json", "compact-broadcast-v1"]).default("round-robin-json"),
+    southboundPollingMode: z
+      .enum(["round-robin-json", "compact-broadcast-v1", "compact-targeted-v1"])
+      .default("round-robin-json"),
     southboundPollingCommandType: z.string().min(1).default("poll_latest_telemetry"),
     southboundPollingIntervalMs: z.coerce.number().int().positive().default(1000),
     southboundPollingSessionTimeoutMs: z.coerce.number().int().positive().default(5000),
@@ -186,11 +188,11 @@ const configSchema = z
       }
     }
 
-    if (data.southboundPollingMode === "compact-broadcast-v1" && data.fieldLinkMode !== "cobs-crc-v1") {
+    if (data.southboundPollingMode.startsWith("compact-") && data.fieldLinkMode !== "cobs-crc-v1") {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["fieldLinkMode"],
-        message: "compact-broadcast-v1 requires FIELD_LINK_MODE=cobs-crc-v1"
+        message: `${data.southboundPollingMode} requires FIELD_LINK_MODE=cobs-crc-v1`
       });
     }
 

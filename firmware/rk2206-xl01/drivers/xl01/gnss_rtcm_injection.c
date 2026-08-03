@@ -507,6 +507,7 @@ void GnssRtcmInjection_GetRuntimeStatus(uint64_t monotonic_ms, GnssRtcmRuntimeSt
     (void)monotonic_ms;
     if (status != NULL) {
         memset(status, 0, sizeof(*status));
+        status->state_flags = GNSS_RTCM_STATE_READY;
         status->last_fragment_age_ms = GNSS_RTCM_AGE_UNAVAILABLE;
         status->last_completed_frame_age_ms = GNSS_RTCM_AGE_UNAVAILABLE;
         status->last_action_age_ms = GNSS_RTCM_AGE_UNAVAILABLE;

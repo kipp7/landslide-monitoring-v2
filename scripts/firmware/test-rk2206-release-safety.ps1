@@ -148,6 +148,7 @@ function New-TestRelease {
       $compactMarker,
       $sensorMarkers,
       $capabilityMarker,
+      $(if ($CompactVersion -eq 4) { "compact-targeted-v1 P2 singleflight" } else { "" }),
       $(if ($SchemaVersion -ge 2) { $gnssMarker } else { "" })
     ) -join "`0"
     foreach ($extension in @("bin", "img")) {
@@ -294,6 +295,7 @@ try {
     -ExpectedGnssSourceMode simulated `
     -ExpectedGnssRtcmInjectionMode disabled `
     -ExpectedBatteryCalibrationState default-calibration `
+    -RequireCompactTargetedPolling `
     -ExpectedSourceCommit $sourceCommit | Out-Null
 
   $hybridManifestPath = Join-Path $hybridRoot "manifest.json"

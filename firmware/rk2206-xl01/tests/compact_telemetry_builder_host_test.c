@@ -212,9 +212,15 @@ int main(void)
 
     assert(CompactPollCommand_IsValid("P112345678", COMPACT_POLL_COMMAND_BYTES));
     assert(!CompactPollCommand_IsValid("P11234567Z", COMPACT_POLL_COMMAND_BYTES));
-    assert(CompactPollCommand_NodeDelayMs("A") == 0U);
-    assert(CompactPollCommand_NodeDelayMs("B") == 340U);
-    assert(CompactPollCommand_NodeDelayMs("C") == 680U);
+    assert(CompactPollCommand_IsValid("P2A12345678", COMPACT_TARGETED_POLL_COMMAND_BYTES));
+    assert(!CompactPollCommand_IsValid("P2D12345678", COMPACT_TARGETED_POLL_COMMAND_BYTES));
+    assert(CompactPollCommand_TargetMatches("P112345678", "A"));
+    assert(CompactPollCommand_TargetMatches("P2B12345678", "B"));
+    assert(!CompactPollCommand_TargetMatches("P2B12345678", "A"));
+    assert(CompactPollCommand_ResponseDelayMs("P112345678", "A") == 0U);
+    assert(CompactPollCommand_ResponseDelayMs("P112345678", "B") == 340U);
+    assert(CompactPollCommand_ResponseDelayMs("P112345678", "C") == 680U);
+    assert(CompactPollCommand_ResponseDelayMs("P2C12345678", "C") == 0U);
 
     printf("compact_v4_payload_bytes=%d field_link_wire_bytes=%d command_tag=%08x\n",
            payload_len, frame_len, CompactTelemetry_CommandTag(command_id));
