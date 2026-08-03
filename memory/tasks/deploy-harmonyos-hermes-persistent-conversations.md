@@ -73,6 +73,17 @@ and alarm-isolation baseline.
   station map, device detail, alert/map, and foreground alert-SSE regression.
 - Detailed evidence and rollback identifiers are in
   `memory/checkpoints/rk3568-hermes-app-task-reliability-2026-07-23.md`.
+- PR #357 now also carries the HarmonyOS field-situation UI pass. It replaces
+  the equal-weight overview metric grid with risk and node-operability
+  hierarchy, improves Stations and device evidence scanning, adds three
+  contextual safe-task starters to the chat-first Hermes surface, and unifies
+  My, alerts, login, charts, typography, spacing, semantic colors, and touch
+  targets without changing API or execution contracts.
+- The UI passed a bounded `1260x2720` HarmonyOS `5.0.1(13)` emulator screenshot
+  review. The latest locally verified HAP SHA256 is
+  `4EF48DB060B0EA6E72D9080A19BC147297A13C5144632FCD3F958D74BF3FF926`.
+  Normal DevEco signing is pending certificate renewal; the checked HAP used
+  only an SDK simulator certificate in `E:/codex-build`.
 
 ## Constraints
 
@@ -86,6 +97,8 @@ and alarm-isolation baseline.
 
 - Review and merge PR #357, retaining the signed emulator and production
   rollback evidence.
+- Renew the DevEco debug certificate and install the HarmonyOS 6.1.1 Pura 90
+  emulator image before a separate API 24 visual acceptance pass.
 - Select an OpenAI-compatible provider after checking production server
   resources. If no suitable local runtime exists, use a cloud API; keep the
   provider secret only in the production environment. The available local SSH

@@ -139,6 +139,26 @@ telemetry, rule-engine, or physical alarm authority.
   `B5592A5937CCCF5E6756095DB4096B370969FD1202E75FE3882D27F6587B789D`.
   It clean-built, installed, launched, and restored the existing monitoring
   overview on the HarmonyOS `5.0.1(13)` emulator.
+- The PR #357 HarmonyOS flagship UI pass uses a documented field-situation
+  visual system in `.impeccable.md`: risk before volume metrics, visible data
+  provenance, quiet normal states, outdoor-readable type, and 44 vp controls.
+  Overview now prioritizes active risk and node availability, Stations shows
+  map -> region -> node evidence, Hermes keeps a chat-first surface with three
+  contextual safe-task starters, and My groups alert, location, cache, server,
+  version, and logout operations.
+- Login, Overview, Stations, Hermes history, Hermes new conversation, My,
+  alert empty state, and device detail were visually inspected at `1260x2720`
+  on the HarmonyOS `5.0.1(13)` phone emulator. Screenshots are under
+  `E:/codex-build/hermes-ui-polish-20260803/screenshots`; no overlap, clipping,
+  bottom-navigation obstruction, or map-node loss was observed.
+- Source and ASCII build-copy `Index.ets` SHA256 values both equal
+  `3969796E84723DC4C1D63FFDEBA32AAAA9C2019AB08A481808F61373E3169E42`.
+  A clean Hvigor run completed type checking and ArkTS compilation. The DevEco
+  debug certificate expired at `2026-08-03 17:52 CST`, so the resulting unsigned
+  HAP was signed only in the temporary build directory with the SDK OpenHarmony
+  simulator certificate and then verified successfully. The local signed HAP is
+  `E:/codex-build/hermes-ui-polish-20260803/entry/build/default/outputs/default/entry-default-local-signed.hap`,
+  SHA256 `4EF48DB060B0EA6E72D9080A19BC147297A13C5144632FCD3F958D74BF3FF926`.
 
 ## In Progress
 
@@ -153,6 +173,10 @@ telemetry, rule-engine, or physical alarm authority.
   no model endpoint/name/credential is configured. Available local SSH keys did
   not authenticate to the cloud server for the planned read-only resource
   check, so no production container, environment, or model runtime changed.
+- The UI refinement is code-complete on PR #357 and only changes
+  `apps/harmonyos/entry/src/main/ets/pages/Index.ets` plus the local design
+  context. Monitoring, cache, map, SSE, Push, alarm, and Hermes API contracts
+  remain unchanged.
 
 ## Next Actions
 
@@ -163,6 +187,13 @@ telemetry, rule-engine, or physical alarm authority.
   monitoring stack.
 - Run an explicit forced-offline cache acceptance when emulator network control
   is available; do not stop production API merely to simulate this condition.
+- Renew DevEco automatic debug signing before the next normal IDE build. Keep
+  SDK test certificates outside Git and use them only for local simulator HAPs.
+- Download or repair the `Pura 90 / HarmonyOS 6.1.1(24)` emulator system image
+  before claiming runtime acceptance on API 24. The instance currently contains
+  configuration only and cannot boot; the App remains forward-compatible from
+  its declared `compatibleSdkVersion` `5.0.0(12)` but API 24 visual proof is
+  still pending.
 - Keep physical vibration, real GPS, vendor Push, and background survival out
   of emulator acceptance; verify them only when hardware testing is requested.
 - Power-cycle RK3568 and confirm time retention, reverse tunnel, supervisor,
@@ -183,17 +214,22 @@ telemetry, rule-engine, or physical alarm authority.
 - A future LLM must produce a structured allowlisted plan through the server;
   direct shell, serial, MQTT control, device control, or alarm authority is
   prohibited.
+- HarmonyOS `6.1.1(24)` runtime acceptance is not yet proven on this machine.
+  The configured Pura 90 instance lacks downloaded runtime image files; do not
+  confuse source compatibility with an executed high-version simulator test.
 - The first request during a model outage can spend up to two 6-second attempts
   before deterministic fallback. The following requests use the 30-second fast
   fallback circuit. Provider latency must be measured before production enablement.
 
 ## Resume Prompt
 
-Review and merge PR #357, including commit `7a0e046`. Select the model provider
-only after an authorized production resource check; then configure and canary
-the server planner while preserving deterministic fallback. Preserve the API
-and HAP rollback evidence, then run a forced-offline cache check when simulator
-network control is available. Treat real GPS, physical vibration, vendor Push,
-and background survival as hardware-only gaps. Power-cycle RK3568 to verify
-time retention. Do not add unrestricted device control or claim A/B/C online
-without serial evidence.
+Review and merge PR #357, including commit `7a0e046` and the HarmonyOS UI pass.
+Renew DevEco debug signing and download the Pura 90 API 24 emulator image before
+high-version runtime acceptance. Select the model provider only after an
+authorized production resource check; then configure and canary the server
+planner while preserving deterministic fallback. Preserve the API and HAP
+rollback evidence, then run a forced-offline cache check when simulator network
+control is available. Treat real GPS, physical vibration, vendor Push, and
+background survival as hardware-only gaps. Power-cycle RK3568 to verify time
+retention. Do not add unrestricted device control or claim A/B/C online without
+serial evidence.

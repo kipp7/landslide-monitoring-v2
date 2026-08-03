@@ -34,6 +34,13 @@ PostgreSQL and ClickHouse data model instead of creating a second App database.
 - Use a replaceable OpenAI-compatible planner on the server. Its local system
   prompt defines the role and JSON contract, while code-level schema and policy
   validation remain authoritative. Never give the model direct board execution.
+- Keep online general-model endpoints and credentials on the server. The
+  HarmonyOS App and RK3568 must never embed a provider secret.
+- Keep real edge AI on RK3568 through the compact
+  `robust_baseline_ensemble` risk model, the
+  `random_forest_classifier` diagnosis model, and deterministic collection,
+  recheck, and report implementations. Return their evidence through the
+  server audit path instead of presenting the board as a generic chat model.
 - Keep the deterministic Chinese planner as both the no-model default and the
   automatic fallback for timeout, network, HTTP, and invalid-response failures.
 - Do not queue phone messages for delayed execution. Preserve failed text for
@@ -60,6 +67,9 @@ PostgreSQL and ClickHouse data model instead of creating a second App database.
   independently; only the AI sidecar may fall back to a cached snapshot.
 - Conversation messages record whether planning came from the model or the
   deterministic fallback, including a non-secret fallback reason for audit.
+- The App should distinguish model planning, rule fallback, and RK3568
+  execution so users can see which part of the result is actually intelligent,
+  which part is a safety guard, and which part ran at the edge.
 
 ## Follow-up
 
