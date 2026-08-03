@@ -6,20 +6,23 @@ updated: 2026-08-03
 
 # RK2206 Compact V4 Hardware Acceptance
 
-This gate validates the three real A/B/C sensor nodes before NTRIP or RTCM injection is enabled. A software build, a legacy V2 compatibility frame, or a synthetic PROBE does not satisfy this gate.
+This gate validates the three real A/B/C RS485 sensor paths before NTRIP or RTCM injection is enabled. GNSS is compiled as simulated for this indoor stage and is excluded from RTK evidence. A software build, a legacy V2 compatibility frame, or a synthetic PROBE does not satisfy this gate.
 
 ## Locked Inputs
 
-- Source commit: `47cbddce3aab1d478087e45f95ff477f4a235d44` (confirmed on `origin/feat/gnss-rtk-v31-transport`).
-- Release: `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v4_hardware_live_20260803_r2`
-- Manifest SHA-256: `1ee3a5f8402cb64c9bcf5997cfbe53e4b7c4bf430765b98e90a498189c672e7d`
-- Node image SHA-256: A `7b5e775e72e4f3f5a29c8c0810d53aaf0a3bbba99ca8c07de7fa4eb4c2f7b70a`; B `a1ed7806ee3d2237097c61586783d5b757234099427f83660f6a8f2dd48bfa00`; C `eb6a744306c09832ee4c6012232eb7bcc7d82b78664ef3fa39f95d7538054773`.
+- Source commit: `f7a7e90442a90b94ec00402f981b561964408a35` (confirmed on `origin/feat/gnss-rtk-v31-transport`).
+- Release: `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v4_rs485_retry1_gnss_simulated_20260803`
+- Manifest SHA-256: `5e0dd2211b5bbc434e75ea00ad8cc34231d9d99fefb0aade7fb15f1a2ea2e6a1`
+- Node image SHA-256: A `8dc15ae5e7d58074ea926d19ebde26456e8c65511922a3056e140f4104d1c36f`; B `ac23575088faa522953b2e2a6205beec57331415653db7fc79434d1641b14890`; C `a9e6ec3e441fec0f143bfff896a2ae08909bb747d839c16f3807ee9877badb36`.
 - Loader SHA-256: `761d90888aa376156d562abf267dfe324b96c4397f7a601f6b4c64d0ea3bf977`.
 - Payload: Compact V4, 139 bytes; complete COBS/CRC field-link frame: 157 bytes.
-- Production timing baseline: 1000 ms cooldown, 1200 ms response window, one partial-only retry, 2500 ms total logical-session limit.
+- Firmware marker: `fw-rk2206-rtk-compact-v4-rs485-retry1-20260803`.
+- Sensor policy: one retry after 80 ms for Modbus timeout/read/short/CRC failures only. Every failed first attempt remains in the low-level counters; no old sensor value is reused.
+- Acceptance timing: fixed A to B to C targeted order, 250 ms batch interval, 1500 ms response window, zero XLS1 link retries, 1500 ms logical-session limit, and 2500 ms maximum per-node P95 interval.
+- The RK3568 production service remains at its existing `1200/1200/0` timing until all three acceptance stages pass.
 - RK3568 must keep `NTRIP_ENABLED=false` throughout this gate.
 
-Use only the image whose node label matches the physical A/B/C location. The non-`r2` V4 directory, earlier rejected candidates, and V3 simulated images are superseded and must not be flashed for this gate.
+Use only the image whose node label matches the physical A/B/C location. Earlier V4 directories, dirty build proofs, rejected candidates, and V3 images are superseded and must not be flashed for this gate.
 
 ## Electrical and Pin Gate
 
@@ -31,10 +34,10 @@ The locked firmware assignments are:
 | --- | --- | --- |
 | XLS1 user UART | PB2/PB3 | EUART2 M1, 115200 baud |
 | SC16IS752 I2C | PB4/PB5 | EI2C0 M0, hardware mode only |
-| UM220 GNSS UART | PB6/PB7 | UART0, 115200 baud |
+| UM220 GNSS UART | PB6/PB7 | not initialized in this indoor simulated-GNSS package |
 | Battery ADC | PC0 | input-only ADC with per-node field calibration |
 
-The V4 build must report hardware field sensors, a field-calibrated battery, and RTCM boot mode `disabled`. It must not initialize SHT30 or MPU6050. Firmware pin-safety and release-safety tests must pass before any rebuilt image is flashed.
+The V4 build must report hardware field sensors, simulated GNSS, a field-calibrated battery, and RTCM boot mode `disabled`. It must not initialize the UM220 UART, SHT30, or MPU6050. Firmware pin-safety and release-safety tests must pass before any rebuilt image is flashed.
 
 ## RK3568 Installation
 
@@ -48,13 +51,13 @@ sudo install -m 0755 xls1_compact_v4_acceptance.py /usr/local/bin/xls1_compact_v
 Review the immutable plan first:
 
 ```bash
-python3 /usr/local/bin/xls1_compact_v4_acceptance.py --dry-run
+python3 /usr/local/bin/xls1_compact_v4_acceptance.py --required-gnss-source simulated --dry-run
 ```
 
 Verify the root-owned `0600` environment file, disabled NTRIP setting, serial character device, and active gateway service without sending a field command:
 
 ```bash
-sudo python3 /usr/local/bin/xls1_compact_v4_acceptance.py --check-prerequisites
+sudo python3 /usr/local/bin/xls1_compact_v4_acceptance.py --required-gnss-source simulated --check-prerequisites
 ```
 
 ## Fail-Fast Three-Stage Gate
@@ -62,19 +65,19 @@ sudo python3 /usr/local/bin/xls1_compact_v4_acceptance.py --check-prerequisites
 After all three matching images are flashed and A/B/C are powered, run:
 
 ```bash
-sudo python3 /usr/local/bin/xls1_compact_v4_acceptance.py
+sudo python3 /usr/local/bin/xls1_compact_v4_acceptance.py --required-gnss-source simulated
 ```
 
 The runner holds `lsmv2-field-gateway.service` once for the entire sequence, preventing production polling from contaminating the XLS1 queue between stages. It runs 60, 600, then 1800 seconds and stops immediately when a stage fails. The service hold is removed and the original active state is restored on success, failure, interruption, or a normal exception.
 
 Each stage requires all of the following:
 
-- all A/B/C frames decode as Compact V4 and match the current broadcast command tag;
+- all A/B/C frames decode as Compact V4, report hardware field sensors plus simulated GNSS, and match the current targeted command tag;
 - 100% logical matching, continuous per-node sequence numbers, and zero real duplicate, unmatched, decode, CRC, or trailing-frame errors;
 - hardware soil temperature, soil moisture, EC, and three-axis tilt validity with bounded numeric values;
 - valid PC0 voltage and percentage with `field-calibrated` quality;
 - RTCM mode `disabled`, READY-only state, session epoch `0`, lease `0`, pending queue/high-water mark `0`, no historical RTCM action age, and all accepted/completed/injected/reject/CRC/queue-drop/UART counters at `0`;
-- retry-round rate at most 2%, attempt latency at most 1200 ms, and total logical latency at most 2500 ms.
+- zero XLS1 link retries, attempt and total logical latency at most 1500 ms, and per-node P95 interval at most 2500 ms.
 
 Reports stay under `/var/lib/lsmv2/experiments`. The runner prints each report path and SHA-256 plus a final summary path. Raw reports are not committed because later runs can carry real GNSS positions.
 
@@ -82,6 +85,8 @@ Reports stay under `/var/lib/lsmv2/experiments`. The runner prints each report p
 
 - A V2 frame means a node still runs old firmware or an independently powered old node remains on the channel. Stop and identify it.
 - A missing soil/EC/tilt validity bit is a sensor/SC16IS752/RS485 hardware failure until proven otherwise; do not weaken the gate.
+- A recovered sensor retry is acceptable but still increments the first-attempt Modbus error counter. A rising or sustained failure rate is a hardware fault and must not be hidden by the retry.
+- Keep B within the range already proven lossless; the prior `42/63` B-only result recovered to `86/86` when B was moved closer.
 - A battery quality other than `field-calibrated` means the wrong image or calibration was used.
 - Any nonzero RTCM session or lease while disabled is a fail-closed violation.
 - Do not tune XLS1 channel, UART chunks, node slots, RTCM pacing, and polling cooldown in the same experiment. Change one dimension only after the 1800-second baseline passes.

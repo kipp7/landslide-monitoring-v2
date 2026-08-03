@@ -18,6 +18,15 @@ status: active
 
 ## Current State
 
+### RS485 Retry1 / Fixed-Order Timing Candidate (2026-08-03)
+
+- B 的近距离复测证明此前主要是射频距离问题：远距离 B-only 为 `42/63`，移近后为 `86/86`，因此 B 固件、SC16IS752 和两个 RS485 传感器不再按损坏处理。三节点 `1200 ms` 响应窗仍有 `76/78`，B/C 最大响应约 `1319/1324 ms`，并出现一组 `236 B + 78 B` 交织；固定 A -> B -> C 的 `1500 ms` 候选为 `102/102`，零通信错误，A/B/C 到达 P95 分别为 `2177.3/2161.9/2365.6 ms`，均低于 `2500 ms`。
+- G3S V4 底层计数确认倾角失败全部为低频无响应：A `1498` 次请求中 `4` 次、B `2038` 中 `2` 次、C `1601` 中 `12` 次；没有 CRC、短帧、地址、功能码、写入或 TX 错误，当前三节点连续失败数均为 0。固件因此只对 timeout/read/short/CRC 做一次 `80 ms` 后补读；地址/异常/功能码/写入/TX 故障不重试，不缓存旧值，不放宽有效位。每次首次失败仍由 `rs485_modbus.c` 独立累计，补读不能掩盖故障率。
+- 验收器已与生产固定 A -> B -> C 顺序对齐，并把候选契约收敛为 `response=1500 ms / session=1500 ms / XLS1 retries=0 / batch interval=250 ms / max per-node P95=2500 ms`。零重试时 session 只需覆盖一个响应窗，不再错误强制两倍窗口；报告新增不含坐标的 `profileViolationSamples`。RK3568 生产配置仍为 `compact-targeted-v1`、`1200/1200/0`、`NTRIP_ENABLED=false`，尚未切换候选。
+- 实现提交 `f7a7e90442a90b94ec00402f981b561964408a35` 已推送 `origin/feat/gnss-rtk-v31-transport`。C99 主机测试、26 源文件引脚门禁、三项引脚负例、RS485 启动安全、发布安全、Python 金值/语法和 A/B/C OpenHarmony 全量编译均通过；构建链已补齐新增 retry-policy 头文件。启动标记为 `fw-rk2206-rtk-compact-v4-rs485-retry1-20260803`，串口摘要会显示 `max=1 gap=80 ms`。
+- 明早唯一允许烧录的室内包为 `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v4_rs485_retry1_gnss_simulated_20260803`。manifest SHA-256 `5e0dd2211b5bbc434e75ea00ad8cc34231d9d99fefb0aade7fb15f1a2ea2e6a1`；A/B/C `.img` SHA-256 分别为 `8dc15ae5e7d58074ea926d19ebde26456e8c65511922a3056e140f4104d1c36f`、`ac23575088faa522953b2e2a6205beec57331415653db7fc79434d1641b14890`、`a9e6ec3e441fec0f143bfff896a2ae08909bb747d839c16f3807ee9877badb36`。发布验证为 `sourceDirty=false`、hardware RS485、simulated GNSS、RTCM disabled、field-calibrated PC0、139/157 B 和唯一 A/B/C 身份。
+- RK3568 验收脚本已备份到 `/opt/lsmv2/backups/rs485-retry1-acceptance-predeploy-20260803-224256` 并更新；`xls1_compact_v4_acceptance.py` SHA-256 为 `f61d510d5822aefb446006339f6464e6b613c6330748cd9b3ef02f705ee1f413`，`xls1_three_node_batch_poll.py` 为 `77acbc412f141f3f193b332099dd07887a993fbdb9b773b173ee073d78d5ecfe`。远端语法和 simulated `--dry-run` 通过，服务 active、`NRestarts=0`。用户已将 A/B/C 下电并取走 RK3568 4G SIM；Wi-Fi/网线在线属于预期，未修改网络优先级，后续云端测试前需确认实际公网默认路由不再落到无 SIM 的 `usb0`。
+
 ### Indoor Real-RS485 / Simulated-GNSS Gate (2026-08-03)
 
 - 用户确认两路 RS485 硬件已接入，原“接口未安装”的现场阻断解除。当前室内阶段明确采用独立源组合：XLS1 PB2/PB3、SC16IS752 PB4/PB5、土壤三合一、三轴倾角和 field-calibrated PC0 均为真实硬件；GNSS 为编译期模拟源，UM220 PB6/PB7 UART 不初始化，RTCM capability 编译为 disabled。
@@ -159,10 +168,11 @@ status: active
 
 ## Plan
 
-- 明天先核对 C 的独立供电来源，再按物理标签烧录 `xls1_compact_v4_hardware_live_20260803_r2` 中 A/B/C 对应 `.img`；不得混刷身份，也不得使用非 `r2`、早期 rejected/dirty 候选。
-- 保持 `NTRIP_ENABLED=false`，先运行 `sudo python3 /usr/local/bin/xls1_compact_v4_acceptance.py --check-prerequisites`，再运行不带参数的同一脚本。它会确认三节点均为 compact V4、RTCM `disabled`/READY-only、session/lease/队列/全部历史 RTCM 计数为 0、RS485 三合一土壤/EC和独立三轴倾角有效、PC0 为 field-calibrated，并按 1000 ms cooldown、1200 ms 首窗、部分响应最多重发一次、2500 ms 总时限自动执行 60/600/1800 秒；任一阶段失败立即停止。
+- 明早按物理标签烧录 `xls1_compact_v4_rs485_retry1_gnss_simulated_20260803` 中 A/B/C 对应 `.img`；不得混刷身份，也不得使用 dirty build proof 或更早的 V4/V3 包。上电串口必须看到 `fw-rk2206-rtk-compact-v4-rs485-retry1-20260803` 及 `RS485 Sensor Read Retry: max=1 gap=80 ms`。
+- 保持 `NTRIP_ENABLED=false`，先运行 `sudo python3 /usr/local/bin/xls1_compact_v4_acceptance.py --required-gnss-source simulated --check-prerequisites`，再用相同 source 参数运行正式门禁。脚本按固定 A -> B -> C、`1500/1500/0` 和 `250 ms` batch interval 自动执行 60/600/1800 秒；要求 100% 匹配、零链路重发/通信/profile 错误、三节点真实土壤/EC/倾角有效、PC0 field-calibrated、RTCM 全零且每节点 P95 <=2500 ms，任一阶段失败立即停止。
+- 三阶段全部通过前，RK3568 生产环境保持 `1200/1200/0` 不变；通过后再备份并原子切换为 `1500/1500/0`，重启一次 field-gateway，复核 active、`NRestarts=0` 和生产固定顺序。不要把传感器内部一次补读误记成 XLS1 链路重发。
 - A/B/C 已分别以 `+9/+7/最坏 9 mV` 通过电池同步验收并接受 `1046565/1048458/993702 ppm`，最终校准文件及 simulated/hardware 发布包均已生成并通过 final-acceptance、身份、哈希、模式和引脚门禁；百分比仍只是受负载、温度和老化影响的 3S OCV 估算，不能作为准确剩余 mAh 或续航。
-- 保持 4G 主用、1000 ms 冷却和已部署的单次有界重发；持续观察生产重发率不高于 2%、总逻辑响应不高于 2500 ms，网线只保留局域网路由，不再通过人工插拔切换公网链路。
+- 当前 4G SIM 已取走，RK3568 使用 Wi-Fi 或网线均属正常；纯 XLS1 验收不依赖公网。恢复云端联调前先核对公网探测和默认路由，不能只因 eth0/wlan0 有地址就宣称服务器链路可用。
 - 纯遥测 1800 秒通过后，才把 CORS 参数写入 RK3568 本地 `600 root:root` 环境文件；密码不进入 Git、memory、日志或健康 JSON。先设置 `RTCM_RUNTIME_MODE=probe`，验证三节点确认同一非零 session/有限 lease、160 B 分片、160 ms 调度、RTCM 类型筛选、队列/CRC/UART 错误为 0，再进入 LIVE。
 - 捕获至少 60 s 不含凭据的实际 RTCM 与脱敏容量汇总；原始差分流和真实坐标不进入 Git。已部署 shaper 只保留 1005/1033/1074/1094/1124，过滤 UM220 不支持的 1114/1084，并以最新帧优先和 TTL 控制 correction age。
 - 在恢复 QZSS 前设计并门禁低频累计确认/选择性重传或等价的有界可靠机制；不能用无限队列、逐帧三节点 ACK 或盲目全量重复换取表面零丢包。机制必须保持 correction age 有界，并实测三节点反向确认不会与 compact 遥测争用半双工链路。
