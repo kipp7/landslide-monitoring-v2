@@ -24,7 +24,8 @@ status: active
 - 根因是 `FieldRs485_Init()` 在 `SYS_RUN(MainEntry)` 的调度器启动前调用 `RunReadOnlyDiagnostics()`。诊断读超时依赖 `LOS_TickCountGet()` 和 `LOS_Msleep()`；此时 LiteOS tick 尚未运行，无响应的第一个外部 Modbus 请求会永久等待。SC16IS752 内部自检通过只证明 U4/I2C/FIFO，不能保证外部探头会立即响应，因此该启动顺序违反 fail-open 要求。
 - 源码修复将 `FieldRs485_Init()` 收敛为纯硬件初始化，并新增 `FieldRs485_RunDiagnostics()`；传感器任务在调度器启动并保存首个正常快照后只调用一次扫描。即使两路 RS485 探头均断开，UART RX、命令处理和上传任务也能先启动，B 仍可用真实电池与明确标记的室内模拟 GNSS 响应 `P2B`，扫描继续使用原有有界超时并最终恢复 4800 baud/默认时钟。
 - 新增发布门禁 `scripts/firmware/test-rk2206-rs485-startup-safety.ps1`，强制初始化函数不得调用扫描、扫描入口必须保留 read-only probe、调用位置必须在 `SensorData_StoreSnapshot()` 之后且不得位于 `App_SystemInit()`。主机 GNSS/Compact V4 测试、PB 引脚安全门禁和新启动安全门禁均通过；B 的完整 OpenHarmony `hardware RS485 + simulated GNSS + RTCM disabled` 编译通过。编译验证目录 `output/rk2206-b-startup-fix-compile-20260803` 来自 dirty source，只用于编译证明，禁止烧录。
-- 下一门禁是提交并推送修复，从干净提交生成新的 immutable A/B/C 同源发布目录。现场先只重刷新包的 B 验证其能打印 `Initialization Complete`、`FW MARK` 并回复 `P2B`；B 通过后再统一 A/C，重新从严格 60 秒开始，不能沿用修复前的门禁结果。
+- 修复提交 `7675fb267fc99f010ebe01eba233a87fabae43e4` 已推送到 `feat/gnss-rtk-v31-transport`。正式 immutable 包为 `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v4_rs485_hardware_gnss_simulated_targeted_v1_r3_20260803`，manifest SHA-256 `53898f9f2bbf7c27eb4f03d908b304855bbc5b69e9c0cb4eaeab13fa3e5e81cc`；A/B/C `.img` SHA-256 分别为 `3782d9777e32890226829480f9ccdf97058f82c10d3e623b1af8ccdae40cc23c`、`77be90947703c1a92fa4ffeee6ada96168b167d0b8677193c58e9c21332acfb9`、`61cf709b2e0eeb12c804f359ad9f85a8da8c4a587a30050218c9ca192f2d460f`。独立发布门禁确认 `sourceDirty=false`、A/B/C 唯一身份、hardware RS485、simulated GNSS、RTCM disabled、逐节点 field-calibrated PC0、139/157 B 和 P2 singleflight。
+- 现场下一步先只重刷 R3 的 B 镜像，验证其能打印 `Initialization Complete`、`FW MARK` 并回复 `P2B`；B 通过后再统一 A/C，重新从严格 60 秒开始，不能沿用修复前的门禁结果。
 
 ### Compact Targeted Singleflight Checkpoint (2026-08-03)
 
