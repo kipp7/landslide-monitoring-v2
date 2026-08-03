@@ -79,9 +79,10 @@ and alarm-isolation baseline.
   contextual safe-task starters to the chat-first Hermes surface, and unifies
   My, alerts, login, charts, typography, spacing, semantic colors, and touch
   targets without changing API or execution contracts.
-- `apps/harmonyos/DESIGN.md` is now the App visual source of truth using the
-  official Google Labs alpha format. It replaces the root `.impeccable.md`,
-  records exact HarmonyOS tokens and operational hierarchy, and passes
+- `apps/harmonyos/DESIGN.md` remains the App visual source of truth using the
+  official Google Labs alpha format. The root `.impeccable.md` records only
+  users, field context, personality, and design principles; it does not define
+  competing tokens or components. The HarmonyOS design document passes
   `designmd 0.4.0` lint with `0` errors and `0` warnings.
 - The evidence-focused follow-up no longer claims a stable or live device state
   while A/B/C are offline. Overview routes communication loss to Stations;
@@ -98,6 +99,20 @@ and alarm-isolation baseline.
   `CBCF0F4A0027CB272DBCBC3D01D70666E5B490462E80EC5CD7EA45F2D5557486`.
   Normal DevEco signing is pending certificate renewal; the checked HAP used
   only an SDK simulator certificate in `E:/codex-build`.
+- The full-page follow-up adds real activity/acknowledged/resolved alert views,
+  severity filtering, focused event evidence, Chinese node titles, 1h/24h/7d
+  device trends, Z-axis and conductivity evidence, persisted sound/vibration
+  settings, notification diagnostics, a bounded alert test, password reveal,
+  Hermes history/tools refinements, and short state-transition motion. Active
+  alert cache/SSE paths remain separate from history queries, and no monitoring
+  or Hermes execution authority changed.
+- The final follow-up built and installed on the `1260x2720` HarmonyOS
+  `5.0.1(13)` emulator. Overview, Hermes, My, active-alert empty state,
+  44 resolved-alert records, focused event evidence, and setting persistence
+  were visually checked without overlap or clipping. The signed local HAP
+  SHA256 is `A42DBD87BDC2362047A48102CE32A161814FADAFB1136A7A06C816C784076E6A`;
+  the final source/build-copy `Index.ets` SHA256 is
+  `F12D8005490DF41AE5172FB18CE9BAEFECAD5260AA56FEAF67D15775C16CEFC7`.
 
 ## Constraints
 

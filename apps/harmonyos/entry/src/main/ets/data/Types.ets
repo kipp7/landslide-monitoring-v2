@@ -149,6 +149,10 @@ export interface Alert {
   lastEventAt?: string;
 }
 
+export type AlertListStatus = 'active' | 'acked' | 'resolved';
+
+export type DeviceSeriesRange = '1h' | '24h' | '7d';
+
 export interface AlertStreamEvent {
   type: string;
   eventId: string;

@@ -14,9 +14,18 @@ export class AlertAlarmService {
   private desiredPlaying: boolean = false;
   private requestVersion: number = 0;
   private vibrationTimer: number | undefined = undefined;
+  private soundEnabled: boolean = true;
+  private vibrationEnabled: boolean = true;
 
   constructor(context: common.UIAbilityContext) {
     this.context = context;
+  }
+
+  configure(soundEnabled: boolean, vibrationEnabled: boolean): void {
+    const changed = this.soundEnabled !== soundEnabled || this.vibrationEnabled !== vibrationEnabled;
+    this.soundEnabled = soundEnabled;
+    this.vibrationEnabled = vibrationEnabled;
+    if (changed && this.desiredPlaying) this.start();
   }
 
   async start(): Promise<void> {
@@ -24,8 +33,10 @@ export class AlertAlarmService {
     this.desiredPlaying = true;
     this.requestVersion += 1;
     const requestVersion = this.requestVersion;
-    this.startVibrationLoop();
+    if (this.vibrationEnabled) this.startVibrationLoop();
+    else this.stopVibrationLoop();
     await this.stopCurrentStream();
+    if (!this.soundEnabled) return;
     if (!await this.prepare() || !this.desiredPlaying || requestVersion !== this.requestVersion) {
       console.warn('[AlertAlarm] start cancelled before playback');
       return;
@@ -93,6 +104,7 @@ export class AlertAlarmService {
 
   private startVibrationLoop(): void {
     this.stopVibrationLoop();
+    if (!this.vibrationEnabled) return;
     this.vibratePulse();
     this.vibrationTimer = setInterval(() => {
       if (this.desiredPlaying) this.vibratePulse();

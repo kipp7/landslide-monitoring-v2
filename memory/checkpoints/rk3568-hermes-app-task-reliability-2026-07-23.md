@@ -142,9 +142,10 @@ telemetry, rule-engine, or physical alarm authority.
 - The PR #357 HarmonyOS flagship UI pass uses
   `apps/harmonyos/DESIGN.md` as its Google Labs alpha-format visual source of
   truth: risk before volume metrics, visible data provenance, quiet normal
-  states, outdoor-readable type, and 44 vp controls. The previous root
-  `.impeccable.md` was removed to avoid conflicting authorities. The document
-  passes `designmd 0.4.0` lint with `0` errors and `0` warnings.
+  states, outdoor-readable type, and 44 vp controls. The root
+  `.impeccable.md` now records context only and does not duplicate tokens or
+  component rules. The design document passes `designmd 0.4.0` lint with
+  `0` errors and `0` warnings.
 - Overview now prioritizes active risk and node availability, Stations shows
   map -> region -> node evidence, Hermes keeps a chat-first surface with three
   contextual safe-task starters, and My groups alert, location, cache, server,
@@ -178,6 +179,28 @@ telemetry, rule-engine, or physical alarm authority.
   for device detail. They remain local under
   `E:/codex-build/hermes-ui-polish-20260803/screenshots` and show no clipping,
   overlap, map-node loss, false green offline state, or `24:xx` timestamp.
+- The all-page follow-up adds an `OperationalStatePanel`, persisted alert sound
+  and vibration preferences, notification checks, a four-second alert test,
+  login password reveal, alert status/severity controls, focused event history,
+  Chinese node titles, 1h/24h/7d device ranges, Z-axis/conductivity evidence,
+  Hermes history/tools transitions, and serious-alert preemption. It queries
+  historical alerts separately from active alert SSE/cache state and does not
+  change database, monitoring, alarm, map, Push, or edge-task authority.
+- HarmonyOS `5.0.1(13)` emulator acceptance at `1260x2720` covered Overview,
+  Hermes, My, the active-alert empty state, 44 resolved alerts, event focus with
+  return/map actions, and settings persistence across force-stop/relaunch. The
+  test restored alert sound to enabled afterwards. Final screenshot SHA256
+  values are `C8B2778F7EA9FE49BD9F36A95A215FA574B6E32D16701A610989F7FB26A06E95`
+  for Overview, `666EBABA787C85B4B9D4FFF7D49F72B6EC00B8509E99238BCDF38F1A424FE6B8`
+  for Hermes, `A04F40FA754CCA7A5E8651A916C8ED22F1FAC55FCF35F7FC487E7F07B5DEC3B5`
+  for focused alert evidence, and
+  `C7D7A13431739F20CD9D380FF8D6D7407165A4C6BE5F94B10CF1158AA9AA0D6D`
+  for My.
+- Source and ASCII build-copy SHA256 values both equal
+  `F12D8005490DF41AE5172FB18CE9BAEFECAD5260AA56FEAF67D15775C16CEFC7`
+  for `Index.ets`. Hvigor type checking, ArkTS compilation, packaging, local
+  simulator signing, installation, and launch passed. The final local HAP
+  SHA256 is `A42DBD87BDC2362047A48102CE32A161814FADAFB1136A7A06C816C784076E6A`.
 
 ## In Progress
 
@@ -192,10 +215,10 @@ telemetry, rule-engine, or physical alarm authority.
   no model endpoint/name/credential is configured. Available local SSH keys did
   not authenticate to the cloud server for the planned read-only resource
   check, so no production container, environment, or model runtime changed.
-- The UI refinement is code-complete on PR #357 and changes only presentation,
-  shared date formatting, and the repository design source in
-  `apps/harmonyos`. Monitoring, cache, map, SSE, Push, alarm, and Hermes API or
-  execution contracts remain unchanged.
+- The UI refinement is code-complete on PR #357. It includes bounded alert
+  history API/repository additions and local user preferences while preserving
+  monitoring, active alert cache/SSE, map, Push, alarm, and Hermes execution
+  contracts.
 
 ## Next Actions
 

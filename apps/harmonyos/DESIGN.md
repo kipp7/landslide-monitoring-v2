@@ -48,6 +48,12 @@ typography:
     fontWeight: 400
     lineHeight: 1.4
     letterSpacing: 0px
+  control-label:
+    fontFamily: HarmonyOS Sans SC
+    fontSize: 13px
+    fontWeight: 500
+    lineHeight: 1.3
+    letterSpacing: 0px
   button:
     fontFamily: HarmonyOS Sans SC
     fontSize: 14px
@@ -123,6 +129,47 @@ components:
     backgroundColor: "{colors.primary-soft}"
     textColor: "{colors.primary}"
     rounded: "{rounded.surface}"
+  segment-selected:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.text}"
+    typography: "{typography.control-label}"
+    rounded: "{rounded.compact}"
+    height: "{spacing.touch-min}"
+  segment-rest:
+    backgroundColor: "{colors.primary-soft}"
+    textColor: "{colors.text-secondary}"
+    typography: "{typography.control-label}"
+    rounded: "{rounded.compact}"
+    height: "{spacing.touch-min}"
+  filter-selected:
+    backgroundColor: "{colors.text}"
+    textColor: "{colors.surface}"
+    typography: "{typography.control-label}"
+    rounded: "{rounded.surface}"
+    height: "{spacing.touch-min}"
+  state-panel:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.text}"
+    typography: "{typography.body}"
+    rounded: "{rounded.surface}"
+    padding: "{spacing.lg}"
+  settings-row:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.text}"
+    typography: "{typography.body}"
+    rounded: "{rounded.surface}"
+    height: "72px"
+  alert-card:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.text}"
+    typography: "{typography.body}"
+    rounded: "{rounded.surface}"
+    padding: "{spacing.md}"
+  navigation-badge:
+    backgroundColor: "{colors.danger}"
+    textColor: "{colors.surface}"
+    typography: "{typography.metadata}"
+    rounded: "{rounded.full}"
   secondary-text:
     textColor: "{colors.text-secondary}"
     typography: "{typography.body}"
@@ -214,6 +261,8 @@ maps the same numeric values to ArkUI `fp` for type and `vp` for geometry.
 - **Body:** 14 minimum for operational content.
 - **Metadata:** 12 for timestamps and provenance; never use it for required
   actions or primary evidence.
+- **Control labels:** 13 medium for segmented controls, filter chips, and
+  compact secondary actions; their touch surface remains at least 44 units.
 - **Metrics:** 30 only for the most important current value. Dense cards and
   sidebars use smaller type.
 - Letter spacing is always `0`; hierarchy comes from size and weight.
@@ -273,6 +322,19 @@ icon controls, not ordinary text commands.
   labels for commands. Every unfamiliar icon has accessibility text.
 - **Settings group:** grouped rows may use one containing surface with dividers;
   rows inside are not independent nested cards.
+- **Segmented controls:** use three equal-width 44-unit options for alert status
+  and device history range. Selection uses surface contrast, weight, and an
+  accessibility state rather than color alone.
+- **Operational state panel:** loading, empty, offline, and recovery states use
+  one icon or progress indicator, one literal title, one recovery explanation,
+  and at most one working action.
+- **Alert triage:** activity status and severity are separate controls. Sort
+  severe alerts before recent alerts, name the source node, and keep event
+  evidence grouped below the selected alert.
+- **Motion:** use 160 ms for control feedback, 180 ms for selection,
+  disclosure, and chat-message arrival, and 220 ms for the interruptive alert
+  overlay. Use ease-out with opacity and small translation or scale changes.
+  Never animate polling data, card dimensions, maps, or normal status dots.
 
 ## Do's and Don'ts
 
@@ -281,6 +343,10 @@ icon controls, not ordinary text commands.
   and RK3568-executed states in plain Chinese.
 - Do preserve ArkUI navigation, cache behavior, SSE alerts, map behavior, and
   API contracts while refining presentation.
+- Do expose real settings as native switches, and require confirmation before
+  switching servers, clearing a session, or logging out.
+- Do keep active alerts cached and streamed separately from acknowledged and
+  resolved history queries.
 - Do format large counts for scanning and qualify multi-day chart times with a
   date.
 - Don't fabricate live values, connectivity, GPS, conductivity, or AI evidence.
