@@ -84,6 +84,7 @@ $syncFiles = @(
   "drivers\sensors\field_alarm_rs485.h",
   "drivers\sensors\rs485_modbus.c",
   "drivers\sensors\rs485_modbus.h",
+  "drivers\sensors\rs485_read_diagnostics.h",
   "drivers\sensors\rs485_read_retry_policy.h",
   "drivers\sensors\sc16is752_driver.c",
   "drivers\sensors\sc16is752_driver.h"
@@ -232,7 +233,7 @@ function Set-CompactTelemetryVersion {
   $mainText = Set-SingleMacro `
     -Text $mainText `
     -Macro "FW_RX_DIAG_MARKER" `
-    -Value ("fw-rk2206-rtk-compact-v{0}-rs485-retry1-20260803" -f $CompactVersion)
+    -Value ("fw-rk2206-rtk-compact-v{0}-rs485-diag-v5-r2-20260803" -f $CompactVersion)
   [System.IO.File]::WriteAllText($mainPath, $mainText, [System.Text.UTF8Encoding]::new($false))
 }
 

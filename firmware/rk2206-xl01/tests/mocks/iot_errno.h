@@ -1,0 +1,7 @@
+#ifndef TESTS_MOCKS_IOT_ERRNO_H
+#define TESTS_MOCKS_IOT_ERRNO_H
+
+#define IOT_SUCCESS 0U
+#define IOT_FAILURE 1U
+
+#endif

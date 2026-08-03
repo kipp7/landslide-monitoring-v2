@@ -40,6 +40,11 @@ frames, real RS485 markers, no GPS UART initialization marker, final PC0
 calibration, unique A/B/C identities, RTCM disabled, and `sourceDirty=false`.
 Flash only the image matching the physical node label.
 
+The firmware marker for this diagnostic build is
+`fw-rk2206-rtk-compact-v4-rs485-diag-v5-r2-20260803`. Normal telemetry remains
+139/157 bytes. The separate 552-byte G3S V5 response is requested only while
+isolating a fault and must not be used as periodic telemetry.
+
 ## Runtime Gate
 
 Keep RK3568 `NTRIP_ENABLED=false`. After all three nodes are powered, run:
@@ -58,6 +63,43 @@ stage requires all A/B/C responses, continuous sequences, no decode/CRC or
 unmatched frames, real soil/EC/tilt validity, field-calibrated PC0 data, the
 simulated GNSS source marker, and zero RTCM history. Do not tune link timing
 until the 1800-second baseline has completed.
+
+## Failure Isolation
+
+When a node loses a required RS485 validity bit, stop the production gateway
+once and query that node directly:
+
+```bash
+sudo python3 /usr/local/bin/xls1_gnss_v31_probe_sender.py \
+  --diagnostics-only \
+  --target A \
+  --require-stats-version 5
+```
+
+Repeat with `B` or `C`; never query multiple nodes concurrently. V5 separates
+normal collection attempts from the one-time parameter scan. Healthy nodes do
+not run the long scan. A final collection failure triggers it once after a
+complete sample is stored, so the latest valid sample remains atomic and the
+watchdog continues to be fed.
+
+Use the structured conclusion together with these boundaries:
+
+- U4 address/init, scratchpad or loopback failure: inspect RK2206 PB4/PB5,
+  alignment, 3.3 V, address straps, crystal and SC16IS752 before sensors.
+- A failed U4 self-test prints `state=DEGRADED` rather than `[OK] ready` while
+  collection continues only to preserve partial-path evidence for isolation.
+- `readErrors`: board-side I2C/U4 reads failed; this is no longer reported as a
+  silent external sensor timeout.
+- U4 self-tests pass, zero RX bytes and `noResponses`: inspect sensor power,
+  common ground, A/B polarity, isolation/transceiver, cable and sensor.
+- RX bytes with CRC/short/address/function errors: inspect signal integrity,
+  baud/function/address and register assumptions.
+- `retryRecoveries` rise but `finalFailures` stay zero: transient path issue;
+  retain the evidence and continue the long gate only if the rate remains
+  bounded. Final failures are never hidden by retry.
+- `runtime_collection_not_started` means no completed collection exists yet;
+  `read_only_scan_in_progress` is not a restore failure. Query again after the
+  bounded one-time scan finishes.
 
 The V4 gate uses compact targeted single-flight polling. RK3568 sends one short
 `P2<node><nonce>` command and waits for that node's complete response before

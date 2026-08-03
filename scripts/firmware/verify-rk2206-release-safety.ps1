@@ -18,6 +18,7 @@ param(
   [ValidateSet("A", "B", "C")]
   [string[]]$NodeLabels = @("A", "B", "C"),
   [string]$ExpectedSourceCommit = "",
+  [string]$ExpectedFirmwareMarker = "",
   [switch]$RequireCurrentHead,
   [string]$ExpectedBatteryTopology = "3S2P",
   [ValidateRange(1, 100000)]
@@ -203,6 +204,10 @@ foreach ($fixedField in @(
 Assert-ReleaseCondition -Condition (
     $manifest.firmwareMarker -is [string] -and $manifest.firmwareMarker.Length -gt 0
   ) -Message "Release firmwareMarker is empty"
+if (-not [string]::IsNullOrWhiteSpace($ExpectedFirmwareMarker)) {
+  Assert-ReleaseCondition -Condition ($manifest.firmwareMarker -eq $ExpectedFirmwareMarker) `
+    -Message "Firmware marker mismatch: expected '$ExpectedFirmwareMarker', found '$($manifest.firmwareMarker)'"
+}
 Assert-ReleaseCondition -Condition (
     $manifest.sampleVersion -is [string] -and $manifest.sampleVersion.Length -gt 0
   ) -Message "Release sampleVersion is empty"

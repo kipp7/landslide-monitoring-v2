@@ -10,19 +10,23 @@ This gate validates the three real A/B/C RS485 sensor paths before NTRIP or RTCM
 
 ## Locked Inputs
 
-- Source commit: `f7a7e90442a90b94ec00402f981b561964408a35` (confirmed on `origin/feat/gnss-rtk-v31-transport`).
-- Release: `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v4_rs485_retry1_gnss_simulated_20260803`
-- Manifest SHA-256: `5e0dd2211b5bbc434e75ea00ad8cc34231d9d99fefb0aade7fb15f1a2ea2e6a1`
-- Node image SHA-256: A `8dc15ae5e7d58074ea926d19ebde26456e8c65511922a3056e140f4104d1c36f`; B `ac23575088faa522953b2e2a6205beec57331415653db7fc79434d1641b14890`; C `a9e6ec3e441fec0f143bfff896a2ae08909bb747d839c16f3807ee9877badb36`.
-- Loader SHA-256: `761d90888aa376156d562abf267dfe324b96c4397f7a601f6b4c64d0ea3bf977`.
+- Release status: V5-r2 source is under final clean-release preparation. Until
+  this section is replaced with a clean source commit and immutable hashes,
+  there is no approved image for the next flash.
 - Payload: Compact V4, 139 bytes; complete COBS/CRC field-link frame: 157 bytes.
-- Firmware marker: `fw-rk2206-rtk-compact-v4-rs485-retry1-20260803`.
+- On-demand diagnostic: G3S V5, 552-byte payload and 570-byte measured golden
+  field-link frame; never send periodically or query nodes concurrently.
+- Firmware marker: `fw-rk2206-rtk-compact-v4-rs485-diag-v5-r2-20260803`.
 - Sensor policy: one retry after 80 ms for Modbus timeout/read/short/CRC failures only. Every failed first attempt remains in the low-level counters; no old sensor value is reused.
 - Acceptance timing: fixed A to B to C targeted order, 250 ms batch interval, 1500 ms response window, zero XLS1 link retries, 1500 ms logical-session limit, and 2500 ms maximum per-node P95 interval.
 - The RK3568 production service remains at its existing `1200/1200/0` timing until all three acceptance stages pass.
 - RK3568 must keep `NTRIP_ENABLED=false` throughout this gate.
 
-Use only the image whose node label matches the physical A/B/C location. Earlier V4 directories, dirty build proofs, rejected candidates, and V3 images are superseded and must not be flashed for this gate.
+The former `xls1_compact_v4_rs485_retry1_gnss_simulated_20260803` package is
+superseded. Do not flash it, the V5-r2 dirty compile proof, earlier V4
+directories, rejected candidates, or V3 images. After this section is locked
+again, use only the approved image whose node label matches the physical A/B/C
+location.
 
 ## Electrical and Pin Gate
 

@@ -104,6 +104,7 @@ typedef enum {
 
 static SensorData g_sensor_data = {0};
 static GnssSensorDiagnostics g_sensor_diagnostics = {0};
+static FieldRs485RuntimeDiagnostics g_rs485_runtime_diagnostics = {0};
 static osMutexId_t g_sensor_data_mutex = NULL;
 static Statistics g_stats = {0};
 // Keep the platform command staging buffer off the ProcessTask stack.
@@ -128,7 +129,7 @@ static char g_last_trusted_time_ts[40] = "";
 static char g_last_trusted_time_source[32] = "";
 static volatile uint32_t g_last_platform_command_tick = 0;
 static volatile int g_field_link_recovery_requested = 0;
-#define FW_RX_DIAG_MARKER "fw-rk2206-rtk-compact-v4-rs485-retry1-20260803"
+#define FW_RX_DIAG_MARKER "fw-rk2206-rtk-compact-v4-rs485-diag-v5-r2-20260803"
 bool g_cloud_motor_enabled = false;
 int g_cloud_motor_speed = 0;
 MotorDirection g_cloud_motor_direction = MOTOR_DIRECTION_STOP;
@@ -265,7 +266,10 @@ static uint8_t SensorDiagnostics_InitializationSuccessMask(void)
     return mask;
 }
 
-static void SensorDiagnostics_RecordCycle(uint8_t success_mask, uint32_t uptime_s)
+static void SensorDiagnostics_RecordCycle(
+    uint8_t success_mask,
+    uint32_t uptime_s,
+    const FieldRs485CycleDiagnostics *rs485_cycle)
 {
     uint8_t enabled_mask = SensorDiagnostics_EnabledMask();
     unsigned int index;
@@ -292,19 +296,25 @@ static void SensorDiagnostics_RecordCycle(uint8_t success_mask, uint32_t uptime_
             g_sensor_diagnostics.consecutive_failures[index]++;
         }
     }
+    if (rs485_cycle != NULL) {
+        FieldRs485_RuntimeDiagnosticsRecordCycle(&g_rs485_runtime_diagnostics, rs485_cycle);
+    }
     SensorData_Unlock();
 }
 
-static void SensorDiagnostics_CopySnapshot(GnssSensorDiagnostics *snapshot)
+static void SensorDiagnostics_CopySnapshot(
+    GnssSensorDiagnostics *snapshot,
+    FieldRs485RuntimeDiagnostics *rs485_snapshot)
 {
     uint8_t enabled_mask;
 
-    if (snapshot == NULL) {
+    if (snapshot == NULL || rs485_snapshot == NULL) {
         return;
     }
     enabled_mask = SensorDiagnostics_EnabledMask();
     SensorData_Lock();
     memcpy(snapshot, &g_sensor_diagnostics, sizeof(*snapshot));
+    memcpy(rs485_snapshot, &g_rs485_runtime_diagnostics, sizeof(*rs485_snapshot));
     SensorData_Unlock();
     snapshot->enabled_mask = enabled_mask;
     snapshot->initialization_success_mask =
@@ -823,7 +833,8 @@ static int HandleGnssProbeStatsQuery(const char *command)
     FieldRs485Diagnostics field_rs485_diagnostics;
     Rs485ModbusDiagnostics modbus_diagnostics;
     GnssRtcmRuntimeStatus runtime;
-    uint8_t response[GNSS_PROBE_STATS_RESPONSE_V4_BYTES];
+    FieldRs485RuntimeDiagnostics rs485_runtime_diagnostics;
+    uint8_t response[GNSS_PROBE_STATS_RESPONSE_V5_BYTES];
     uint8_t target_node = 0U;
     uint8_t local_node;
     uint32_t nonce = 0U;
@@ -844,7 +855,7 @@ static int HandleGnssProbeStatsQuery(const char *command)
     GnssRtcmInjection_GetStats(&stats);
     GnssRtcmInjection_GetRuntimeStatus(MainMonotonicMs(), &runtime);
     XL01_GetFieldLinkRxStats(&link_stats);
-    SensorDiagnostics_CopySnapshot(&sensor_diagnostics);
+    SensorDiagnostics_CopySnapshot(&sensor_diagnostics, &rs485_runtime_diagnostics);
     memset(&sc16is752_diagnostics, 0, sizeof(sc16is752_diagnostics));
     memset(&field_rs485_diagnostics, 0, sizeof(field_rs485_diagnostics));
     memset(&modbus_diagnostics, 0, sizeof(modbus_diagnostics));
@@ -855,21 +866,22 @@ static int HandleGnssProbeStatsQuery(const char *command)
     SC16IS752_GetDiagnostics(&sc16is752_diagnostics);
 #endif
 #endif
-    response_len = GnssProbeStatsResponseV4_Encode(
+    response_len = GnssProbeStatsResponseV5_Encode(
         &stats,
         &link_stats,
         &sensor_diagnostics,
         &sc16is752_diagnostics,
         &field_rs485_diagnostics,
         &modbus_diagnostics,
+        &rs485_runtime_diagnostics,
         local_node,
         runtime.mode,
         nonce,
-        (uint32_t)SensorData_GetUptimeSnapshot(),
+        (uint32_t)(MainMonotonicMs() / 1000U),
         response,
         sizeof(response)
     );
-    if (response_len != GNSS_PROBE_STATS_RESPONSE_V4_BYTES) {
+    if (response_len != GNSS_PROBE_STATS_RESPONSE_V5_BYTES) {
         printf("[RTCM STATS] encode failed node=%u\n", (unsigned int)local_node);
         return 1;
     }
@@ -1380,6 +1392,7 @@ static void* SensorCollectionTask(const char* arg)
     uint8_t diagnostic_success_mask;
 #if ENABLE_RS485_BUS
     FieldRs485Readings rs485_readings;
+    const FieldRs485CycleDiagnostics *rs485_cycle_diagnostics;
     int rs485_diagnostics_pending = 1;
 #endif
 #if ENABLE_BATTERY_MONITOR
@@ -1390,8 +1403,13 @@ static void* SensorCollectionTask(const char* arg)
     printf("[Task] Sensor Collection started\n");
     
     while (1) {
+        uint32_t completed_uptime_s;
+
         // Read all enabled sensors
         diagnostic_success_mask = 0U;
+#if ENABLE_RS485_BUS
+        rs485_cycle_diagnostics = NULL;
+#endif
 
         SensorData_CopySnapshot(&next_sample);
         next_sample.soil_temperature = 0.0f;
@@ -1418,7 +1436,7 @@ static void* SensorCollectionTask(const char* arg)
 #if ENABLE_SIMULATED_FIELD_SENSORS
         SimulatedFieldSensors_Read(
             &next_sample,
-            (unsigned int)g_stats.uptime_sec,
+            (unsigned int)(MainMonotonicMs() / 1000U),
             LEGACY_NODE_LABEL[0]
         );
 #endif
@@ -1435,6 +1453,7 @@ static void* SensorCollectionTask(const char* arg)
 #if ENABLE_RS485_BUS
         if (g_rs485_ready) {
             (void)FieldRs485_Read(&rs485_readings);
+            rs485_cycle_diagnostics = &rs485_readings.cycle_diagnostics;
             if (rs485_readings.soil_valid) {
                 next_sample.soil_temperature = rs485_readings.soil_temperature_c;
                 next_sample.soil_moisture = rs485_readings.soil_moisture_pct;
@@ -1467,7 +1486,7 @@ static void* SensorCollectionTask(const char* arg)
 #if ENABLE_SIMULATED_GNSS
         SimulatedGnss_Read(
             &next_sample,
-            (unsigned int)g_stats.uptime_sec,
+            (unsigned int)(MainMonotonicMs() / 1000U),
             LEGACY_NODE_LABEL[0]
         );
 #endif
@@ -1489,12 +1508,24 @@ static void* SensorCollectionTask(const char* arg)
                 next_sample.warning = 1;
             }
         }
-        SensorDiagnostics_RecordCycle(diagnostic_success_mask, (uint32_t)g_stats.uptime_sec);
+        completed_uptime_s = (uint32_t)(MainMonotonicMs() / 1000U);
+        next_sample.uptime = completed_uptime_s;
+        g_stats.uptime_sec = completed_uptime_s;
+#if ENABLE_RS485_BUS
+        SensorDiagnostics_RecordCycle(
+            diagnostic_success_mask,
+            completed_uptime_s,
+            rs485_cycle_diagnostics);
+#else
+        SensorDiagnostics_RecordCycle(diagnostic_success_mask, completed_uptime_s, NULL);
+#endif
         SensorData_StoreSnapshot(&next_sample);
 
 #if ENABLE_RS485_BUS
-        if (rs485_diagnostics_pending) {
+        if (rs485_diagnostics_pending && rs485_cycle_diagnostics != NULL &&
+            FieldRs485_CycleHasFinalFailure(rs485_cycle_diagnostics)) {
             rs485_diagnostics_pending = 0;
+            printf("[RS485-DIAG] final read failure detected; starting one-time read-only scan\n");
             FieldRs485_RunDiagnostics();
         }
 #endif
@@ -1504,10 +1535,6 @@ static void* SensorCollectionTask(const char* arg)
         
         // Update every 1 second
         LOS_Msleep(g_runtime_sampling_interval_ms);
-        g_stats.uptime_sec += (g_runtime_sampling_interval_ms / 1000) > 0 ? (g_runtime_sampling_interval_ms / 1000) : 1;
-        SensorData_Lock();
-        g_sensor_data.uptime = g_stats.uptime_sec;
-        SensorData_Unlock();
     }
     
     return NULL;

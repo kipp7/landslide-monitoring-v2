@@ -297,7 +297,19 @@ try {
     -ExpectedGnssRtcmInjectionMode disabled `
     -ExpectedBatteryCalibrationState default-calibration `
     -RequireCompactTargetedPolling `
+    -ExpectedFirmwareMarker "fw-release-safety-fixture" `
     -ExpectedSourceCommit $sourceCommit | Out-Null
+
+  Assert-Rejected -Reason "release with an unexpected firmware marker" -Action {
+    & $verifier `
+      -ArtifactDirectory $hybridRoot `
+      -ExpectedCompactVersion 4 `
+      -ExpectedFieldSensorMode hardware `
+      -ExpectedGnssSourceMode simulated `
+      -ExpectedGnssRtcmInjectionMode disabled `
+      -ExpectedBatteryCalibrationState default-calibration `
+      -ExpectedFirmwareMarker "fw-wrong-version" | Out-Null
+  }
 
   $hybridManifestPath = Join-Path $hybridRoot "manifest.json"
   $hybridManifest = Get-Content -LiteralPath $hybridManifestPath -Raw | ConvertFrom-Json

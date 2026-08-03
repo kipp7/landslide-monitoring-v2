@@ -30,6 +30,8 @@ typedef struct {
 int SC16IS752_Init(void);
 void SC16IS752_SetClockHz(unsigned long xtal_hz);
 int SC16IS752_UartInit(Sc16is752Channel channel, unsigned int baudrate);
+int SC16IS752_UartEnsureConfigured(Sc16is752Channel channel, unsigned int baudrate);
+int SC16IS752_UartReconfigureCached(Sc16is752Channel channel);
 int SC16IS752_Write(Sc16is752Channel channel, const uint8_t *data, unsigned int len);
 int SC16IS752_WaitTxDone(Sc16is752Channel channel, unsigned int timeout_ms);
 int SC16IS752_Read(Sc16is752Channel channel, uint8_t *data, unsigned int len);

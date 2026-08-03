@@ -31,8 +31,9 @@ FIELD_LINK_TYPE_COMMAND = 2
 FIELD_LINK_TYPE_CONTROL = 4
 FIELD_LINK_TYPE_RTCM = 6
 RTCM_FRAGMENT_HEADER_BYTES = 42
-GNSS_PROBE_STATS_RESPONSE_BYTES = {1: 92, 2: 148, 3: 204, 4: 384}
+GNSS_PROBE_STATS_RESPONSE_BYTES = {1: 92, 2: 148, 3: 204, 4: 384, 5: 552}
 GNSS_RTCM_ACK_RESPONSE_BYTES = 24
+UINT32_MASK = 0xFFFFFFFF
 TARGET_MASKS = {"A": 0x01, "B": 0x02, "C": 0x04, "all": 0x07}
 NODE_NUMBERS = {"A": 1, "B": 2, "C": 3}
 PROBE_COUNTER_NAMES = (
@@ -87,6 +88,7 @@ MODBUS_DIAGNOSTIC_COUNTER_NAMES = (
     "byteCountErrors",
     "rxBytes",
 )
+FIELD_RS485_DIAGNOSTIC_PATH_NAMES = ("soil", "soilEc", "tilt", "rain")
 
 # The schedule reproduces the July 26 PC capture at about 880 B/s without
 # retaining site coordinates or NTRIP credentials. Frame sizes approximate the
@@ -475,6 +477,155 @@ def decode_probe_stats_response(payload: bytes) -> dict[str, Any]:
             },
             "modbusChannels": modbus_channels,
         }
+    if response_version >= 5:
+        schema_version, path_count, enabled_mask, current_valid_mask = payload[384:388]
+        all_path_mask = (1 << len(FIELD_RS485_DIAGNOSTIC_PATH_NAMES)) - 1
+        completed_cycles, last_completed_uptime_s, last_duration_ms, max_duration_ms = (
+            struct.unpack_from(">4I", payload, 388)
+        )
+        if (
+            schema_version != 1
+            or path_count != len(FIELD_RS485_DIAGNOSTIC_PATH_NAMES)
+            or (enabled_mask | current_valid_mask) & ~all_path_mask
+            or current_valid_mask & ~enabled_mask
+            or payload[548:552] != b"\x00\x00\x00\x00"
+            or last_completed_uptime_s > response["snapshotUptimeS"]
+            or last_duration_ms > max_duration_ms
+            or (
+                completed_cycles == 0
+                and (
+                    enabled_mask != 0
+                    or current_valid_mask != 0
+                    or last_completed_uptime_s != 0
+                    or last_duration_ms != 0
+                    or max_duration_ms != 0
+                )
+            )
+        ):
+            raise ValueError(
+                "GNSS PROBE RS485 runtime diagnostic schema, masks or reserved bytes are invalid"
+            )
+        paths: dict[str, Any] = {}
+        for index, name in enumerate(FIELD_RS485_DIAGNOSTIC_PATH_NAMES):
+            offset = 404 + index * 36
+            counters = struct.unpack_from(">8I", payload, offset)
+            last_first_status, last_final_status, last_attempts, last_event_flags = (
+                struct.unpack_from(">bbBB", payload, offset + 32)
+            )
+            mask = 1 << index
+            enabled = bool(enabled_mask & mask)
+            current_valid = bool(current_valid_mask & mask)
+            (
+                cycles,
+                attempts,
+                first_attempt_failures,
+                retry_recoveries,
+                final_failures,
+                skipped_cycles,
+                consecutive_final_failures,
+                last_event_uptime_s,
+            ) = counters
+            attempted_cycles = cycles - skipped_cycles
+            event_is_valid = (
+                (
+                    last_event_flags == 0
+                    and last_event_uptime_s == 0
+                    and last_first_status == 0
+                    and last_final_status == 0
+                    and last_attempts == 0
+                )
+                or (
+                    last_event_flags == 0x10
+                    and last_first_status == -1
+                    and last_final_status == -1
+                    and last_attempts == 0
+                )
+                or (
+                    last_event_flags in (0x03, 0x0B)
+                    and last_first_status < 0
+                    and last_final_status == 0
+                    and last_attempts >= 2
+                )
+                or (
+                    last_event_flags == 0x05
+                    and last_first_status < 0
+                    and last_final_status < 0
+                    and last_attempts >= 1
+                )
+                or (
+                    last_event_flags == 0x08
+                    and last_first_status == 0
+                    and last_final_status == 0
+                    and last_attempts >= 1
+                )
+            )
+            if (
+                not -12 <= last_first_status <= 0
+                or not -12 <= last_final_status <= 0
+                or last_attempts > 2
+                or last_event_flags & ~0x1F
+                or not event_is_valid
+                or last_event_uptime_s > response["snapshotUptimeS"]
+                or skipped_cycles > cycles
+                or attempts < attempted_cycles
+                or first_attempt_failures > attempted_cycles
+                or retry_recoveries > first_attempt_failures
+                or final_failures > first_attempt_failures
+                or consecutive_final_failures > final_failures
+                or (
+                    first_attempt_failures != UINT32_MASK
+                    and retry_recoveries != UINT32_MASK
+                    and final_failures != UINT32_MASK
+                    and retry_recoveries + final_failures != first_attempt_failures
+                )
+                or (enabled and cycles != completed_cycles)
+                or (
+                    not enabled
+                    and (
+                        any(counters)
+                        or last_first_status != 0
+                        or last_final_status != 0
+                        or last_attempts != 0
+                        or last_event_flags != 0
+                    )
+                )
+                or (current_valid and last_event_flags in (0x05, 0x10))
+                or (
+                    not current_valid
+                    and cycles > 0
+                    and last_event_flags in (0, 0x03, 0x08, 0x0B)
+                )
+            ):
+                raise ValueError(
+                    "GNSS PROBE RS485 runtime path counters, status or flags are inconsistent"
+                )
+            paths[name] = {
+                "index": index,
+                "mask": mask,
+                "enabled": enabled,
+                "currentValid": current_valid,
+                "cycles": cycles,
+                "attempts": attempts,
+                "firstAttemptFailures": first_attempt_failures,
+                "retryRecoveries": retry_recoveries,
+                "finalFailures": final_failures,
+                "skippedCycles": skipped_cycles,
+                "consecutiveFinalFailures": consecutive_final_failures,
+                "lastEventUptimeS": last_event_uptime_s,
+                "lastFirstStatus": last_first_status,
+                "lastFinalStatus": last_final_status,
+                "lastAttempts": last_attempts,
+                "lastEventFlags": last_event_flags,
+            }
+        response["rs485RuntimeDiagnostics"] = {
+            "enabledMask": enabled_mask,
+            "currentValidMask": current_valid_mask,
+            "completedCycles": completed_cycles,
+            "lastCompletedUptimeS": last_completed_uptime_s,
+            "lastDurationMs": last_duration_ms,
+            "maxDurationMs": max_duration_ms,
+            "paths": paths,
+        }
     return response
 
 
@@ -558,6 +709,17 @@ def print_hardware_diagnostics(prefix: str, response: dict[str, Any]) -> None:
         for channel in channels
     )
     exceptions = sum(channel["exceptionResponses"] for channel in channels)
+    runtime = response.get("rs485RuntimeDiagnostics")
+    runtime_paths_healthy = bool(
+        runtime is not None
+        and runtime["completedCycles"] > 0
+        and runtime["enabledMask"] != 0
+        and runtime["currentValidMask"] == runtime["enabledMask"]
+        and all(
+            not path["enabled"] or path["consecutiveFinalFailures"] == 0
+            for path in runtime["paths"].values()
+        )
+    )
     self_test_failures = [
         status
         for status in (
@@ -571,7 +733,17 @@ def print_hardware_diagnostics(prefix: str, response: dict[str, Any]) -> None:
         conclusion = "u4_i2c_or_initialization_failure"
     elif self_test_failures:
         conclusion = "u4_internal_uart_or_register_failure"
-    elif not scan["completed"] or not scan["restoreOk"]:
+    elif runtime is not None and runtime["completedCycles"] == 0:
+        conclusion = "runtime_collection_not_started"
+    elif not scan["started"]:
+        conclusion = (
+            "runtime_paths_healthy_scan_not_required"
+            if runtime_paths_healthy
+            else "read_only_scan_not_triggered"
+        )
+    elif not scan["completed"]:
+        conclusion = "read_only_scan_in_progress"
+    elif not scan["restoreOk"]:
         conclusion = "diagnostic_scan_or_production_restore_failure"
     elif scan["matchMask"] == 0x03:
         conclusion = "both_configured_query_paths_responded"
@@ -592,6 +764,33 @@ def print_hardware_diagnostics(prefix: str, response: dict[str, Any]) -> None:
         "scope=query-combination-match-not-sensor-model-identification",
         flush=True,
     )
+    if runtime is None:
+        return
+    sample_age_s = max(
+        0,
+        response["snapshotUptimeS"] - runtime["lastCompletedUptimeS"],
+    )
+    print(
+        f"{prefix}_RS485_RUNTIME cycles={runtime['completedCycles']} "
+        f"enabled=0x{runtime['enabledMask']:02X} current=0x{runtime['currentValidMask']:02X} "
+        f"sample_age_s={sample_age_s} duration_ms={runtime['lastDurationMs']} "
+        f"max_duration_ms={runtime['maxDurationMs']}",
+        flush=True,
+    )
+    for name, path in runtime["paths"].items():
+        if not path["enabled"]:
+            continue
+        print(
+            f"{prefix}_RS485_PATH path={name} valid={int(path['currentValid'])} "
+            f"cycles={path['cycles']} attempts={path['attempts']} "
+            f"first_fail={path['firstAttemptFailures']} retry_ok={path['retryRecoveries']} "
+            f"final_fail={path['finalFailures']} skipped={path['skippedCycles']} "
+            f"fail_streak={path['consecutiveFinalFailures']} "
+            f"last_event_uptime={path['lastEventUptimeS']} "
+            f"last_status={path['lastFirstStatus']}/{path['lastFinalStatus']} "
+            f"last_attempts={path['lastAttempts']} event=0x{path['lastEventFlags']:02X}",
+            flush=True,
+        )
 
 
 def uint32_delta(after: int, before: int) -> int:
@@ -1711,6 +1910,10 @@ def run_diagnostics_query(args: argparse.Namespace) -> dict[str, Any]:
     diagnostics = snapshot.get("sensorDiagnostics")
     if args.require_stats_version >= 3 and diagnostics is None:
         raise RuntimeError("G3S V3 sensor diagnostics are missing")
+    if args.require_stats_version >= 4 and snapshot.get("hardwareDiagnostics") is None:
+        raise RuntimeError("G3S V4 hardware diagnostics are missing")
+    if args.require_stats_version >= 5 and snapshot.get("rs485RuntimeDiagnostics") is None:
+        raise RuntimeError("G3S V5 RS485 runtime diagnostics are missing")
     print(
         f"DIAGNOSTICS node={args.target} version={snapshot['responseVersion']} "
         f"mode={snapshot['injectionMode']} uptime={snapshot['snapshotUptimeS']}",
@@ -1845,6 +2048,27 @@ def self_test() -> None:
     assert decoded_v4["hardwareDiagnostics"]["readOnlyScan"]["soilQuery"]["baudrate"] == 4800
     assert decoded_v4["hardwareDiagnostics"]["modbusChannels"][0]["noResponses"] == 105
     assert decoded_v4["hardwareDiagnostics"]["modbusChannels"][1]["lastExceptionCode"] == 2
+    v5_payload = bytearray(552)
+    v5_payload[:384] = v4_payload
+    v5_payload[3] = 5
+    struct.pack_into(">I", v5_payload, 12, 1300)
+    v5_payload[384:388] = bytes((1, 4, 0x07, 0x05))
+    struct.pack_into(">4I", v5_payload, 388, 100, 1234, 1680, 3440)
+    struct.pack_into(">8IbbBB", v5_payload, 404, 100, 101, 2, 1, 1, 0, 0, 1200, -4, 0, 2, 0x03)
+    struct.pack_into(">8IbbBB", v5_payload, 440, 100, 95, 5, 2, 3, 5, 1, 1234, -4, -4, 2, 0x05)
+    struct.pack_into(">8IbbBB", v5_payload, 476, 100, 100, 1, 0, 1, 0, 0, 1250, 0, 0, 1, 0x08)
+    decoded_v5 = decode_probe_stats_response(bytes(v5_payload))
+    assert decoded_v5["responseVersion"] == 5
+    assert decoded_v5["rs485RuntimeDiagnostics"]["lastDurationMs"] == 1680
+    assert decoded_v5["rs485RuntimeDiagnostics"]["paths"]["soil"]["retryRecoveries"] == 1
+    assert decoded_v5["rs485RuntimeDiagnostics"]["paths"]["soilEc"]["finalFailures"] == 3
+    impossible_v5 = bytearray(v5_payload)
+    struct.pack_into(">I", impossible_v5, 408, 99)
+    try:
+        decode_probe_stats_response(bytes(impossible_v5))
+        raise AssertionError("inconsistent V5 RS485 counters were accepted")
+    except ValueError as exc:
+        assert "counters, status or flags" in str(exc)
     v2_gate = evaluate_probe_gate(
         baseline_v2,
         final_v2,
@@ -1974,7 +2198,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--drain-ms", type=int, default=2000)
     parser.add_argument("--stats-timeout-seconds", type=float, default=3.0)
     parser.add_argument("--stats-retries", type=int, default=3)
-    parser.add_argument("--require-stats-version", type=int, choices=(1, 2, 3, 4), default=1)
+    parser.add_argument("--require-stats-version", type=int, choices=(1, 2, 3, 4, 5), default=1)
     parser.add_argument("--selective-retry", action="store_true")
     parser.add_argument("--max-retransmit-rounds", type=int, default=2)
     parser.add_argument("--ack-timeout-seconds", type=float, default=0.65)
@@ -2010,7 +2234,7 @@ def parse_args() -> argparse.Namespace:
     if not 0.0 <= args.max_retransmit_ratio <= 1.0:
         parser.error("max retransmit ratio must be in [0, 1]")
     if args.selective_retry and args.require_stats_version < 2:
-        parser.error("selective retry requires --require-stats-version 2, 3 or 4")
+        parser.error("selective retry requires --require-stats-version 2, 3, 4 or 5")
     if args.diagnostics_only and args.selective_retry:
         parser.error("diagnostics-only mode cannot use selective retry")
     if not 32 <= args.fragment_data_bytes <= 512:

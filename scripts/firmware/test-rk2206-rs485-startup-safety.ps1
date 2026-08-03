@@ -50,7 +50,21 @@ $sensorTaskSection = Get-SourceSection `
 $snapshotIndex = $sensorTaskSection.IndexOf("SensorData_StoreSnapshot", [System.StringComparison]::Ordinal)
 $diagnosticIndex = $sensorTaskSection.IndexOf("FieldRs485_RunDiagnostics", [System.StringComparison]::Ordinal)
 if ($snapshotIndex -lt 0 -or $diagnosticIndex -lt 0 -or $diagnosticIndex -le $snapshotIndex) {
-  throw "RS485 diagnostics must run once after the first sensor snapshot is stored"
+  throw "RS485 diagnostics must run only after a sensor snapshot is stored"
+}
+if (-not $sensorTaskSection.Contains("FieldRs485_CycleHasFinalFailure")) {
+  throw "Deferred RS485 scan must be gated by an actual final path failure"
+}
+foreach ($requiredSnapshotGuard in @(
+    "rs485_cycle_diagnostics = NULL;",
+    "rs485_cycle_diagnostics = &rs485_readings.cycle_diagnostics;"
+  )) {
+  if (-not $sensorTaskSection.Contains($requiredSnapshotGuard)) {
+    throw "RS485 runtime diagnostics must not consume an uninitialized collection snapshot: $requiredSnapshotGuard"
+  }
+}
+if ($sensorTaskSection -notmatch '(?s)SensorDiagnostics_RecordCycle\(\s*diagnostic_success_mask,\s*completed_uptime_s,\s*rs485_cycle_diagnostics\);') {
+  throw "Sensor diagnostics must receive the guarded RS485 cycle pointer"
 }
 
 $systemInitSection = Get-SourceSection `
@@ -61,4 +75,12 @@ if ($systemInitSection.Contains("FieldRs485_RunDiagnostics")) {
   throw "App_SystemInit must not call scheduler-dependent RS485 diagnostics"
 }
 
-Write-Host "RS485_STARTUP_SAFETY_OK diagnostics=post-scheduler-after-first-snapshot"
+$probeSection = Get-SourceSection `
+  -Source $fieldSource `
+  -StartMarker "static int ProbeReadOnlyPath(" `
+  -EndMarker "static void RunReadOnlyDiagnostics("
+if (-not $probeSection.Contains("Watchdog_Feed();")) {
+  throw "Each bounded read-only scan attempt must feed the watchdog"
+}
+
+Write-Host "RS485_STARTUP_SAFETY_OK diagnostics=post-scheduler-failure-triggered initialized_snapshot_only watchdog_fed"

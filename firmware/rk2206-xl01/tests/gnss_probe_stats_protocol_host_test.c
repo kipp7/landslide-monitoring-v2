@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "../app/gnss_probe_stats_protocol.h"
+#include "../drivers/xl01/field_link_frame.h"
 
 static uint16_t ReadUint16Be(const uint8_t *input)
 {
@@ -71,13 +72,19 @@ int main(void)
     GnssSensorDiagnostics sensor_diagnostics;
     Sc16is752Diagnostics sc16is752_diagnostics;
     FieldRs485Diagnostics field_rs485_diagnostics;
+    FieldRs485RuntimeDiagnostics rs485_runtime_diagnostics;
     Rs485ModbusDiagnostics modbus_diagnostics;
-    uint8_t payload[GNSS_PROBE_STATS_RESPONSE_V4_BYTES];
+    uint8_t payload[GNSS_PROBE_STATS_RESPONSE_V5_BYTES];
     uint8_t ack_payload[GNSS_RTCM_ACK_RESPONSE_V1_BYTES];
+    uint8_t wire[FIELD_LINK_FRAME_ENCODED_BYTES];
+    FieldLinkFrameDecoder wire_decoder;
+    FieldLinkFrameMessage decoded_message;
     uint8_t target = 0U;
     uint32_t nonce = 0U;
     uint32_t *counter = &stats.accepted_fragments;
     unsigned int index;
+    int wire_len;
+    int decode_ret = 0;
 
     TestFieldLinkRxStats();
     assert(GnssProbeStatsQueryV1_Decode(query, 12, &target, &nonce) == 0);
@@ -219,6 +226,83 @@ int main(void)
     assert(payload[376] == 3U && payload[377] == 4U);
     assert(payload[378] == 0U && payload[379] == 2U);
     assert(payload[380] == 0U && payload[383] == 0U);
+    memset(&rs485_runtime_diagnostics, 0, sizeof(rs485_runtime_diagnostics));
+    rs485_runtime_diagnostics.completed_cycles = 100U;
+    rs485_runtime_diagnostics.last_completed_uptime_s = 1234U;
+    rs485_runtime_diagnostics.last_duration_ms = 1680U;
+    rs485_runtime_diagnostics.max_duration_ms = 3440U;
+    rs485_runtime_diagnostics.enabled_mask =
+        FIELD_RS485_PATH_SOIL_MASK | FIELD_RS485_PATH_SOIL_EC_MASK | FIELD_RS485_PATH_TILT_MASK;
+    rs485_runtime_diagnostics.current_valid_mask =
+        FIELD_RS485_PATH_SOIL_MASK | FIELD_RS485_PATH_TILT_MASK;
+    for (index = 0U; index < 3U; ++index) {
+        FieldRs485PathRuntimeDiagnostics *path = &rs485_runtime_diagnostics.paths[index];
+        path->cycles = 100U;
+        path->attempts = index == 1U ? 95U : 100U + (index == 0U ? 1U : 0U);
+        path->first_attempt_failures = index == 1U ? 5U : (index == 0U ? 2U : 1U);
+        path->retry_recoveries = index == 0U ? 1U : (index == 1U ? 2U : 0U);
+        path->final_failures = index == 0U ? 1U : (index == 1U ? 3U : 1U);
+        path->skipped_cycles = index == 1U ? 5U : 0U;
+        path->consecutive_final_failures = index == 1U ? 1U : 0U;
+        path->last_event_uptime_s = 80U + index;
+        path->last_first_status = index == 2U ? RS485_MODBUS_OK : (int8_t)RS485_MODBUS_ERR_TIMEOUT;
+        path->last_final_status = index == 1U ? (int8_t)RS485_MODBUS_ERR_TIMEOUT : RS485_MODBUS_OK;
+        path->last_attempts = index == 2U ? 1U : 2U;
+        path->last_event_flags = index == 0U ?
+            (FIELD_RS485_EVENT_FIRST_FAILURE | FIELD_RS485_EVENT_RETRY_RECOVERED) :
+            (index == 1U ?
+                (FIELD_RS485_EVENT_FIRST_FAILURE | FIELD_RS485_EVENT_FINAL_FAILURE) :
+                FIELD_RS485_EVENT_RECOVERED_AFTER_FINAL);
+    }
+    assert(GnssProbeStatsResponseV5_Encode(
+        &stats, &link_stats, &sensor_diagnostics,
+        &sc16is752_diagnostics, &field_rs485_diagnostics, &modbus_diagnostics,
+        &rs485_runtime_diagnostics,
+        2U, GNSS_RTCM_INJECTION_PROBE, nonce, 1300U,
+        payload, sizeof(payload)
+    ) == GNSS_PROBE_STATS_RESPONSE_V5_BYTES);
+    assert(payload[3] == 5U && payload[384] == 1U);
+    assert(payload[385] == FIELD_RS485_PATH_COUNT);
+    assert(payload[386] == rs485_runtime_diagnostics.enabled_mask);
+    assert(payload[387] == rs485_runtime_diagnostics.current_valid_mask);
+    assert(ReadUint32Be(payload + 388) == 100U);
+    assert(ReadUint32Be(payload + 392) == 1234U);
+    assert(ReadUint32Be(payload + 396) == 1680U);
+    assert(ReadUint32Be(payload + 400) == 3440U);
+    for (index = 0U; index < FIELD_RS485_PATH_COUNT; ++index) {
+        unsigned int offset = 404U + index * 36U;
+        if (index < 3U) {
+            assert(ReadUint32Be(payload + offset) == 100U);
+            assert(ReadUint32Be(payload + offset + 28U) == 80U + index);
+        } else {
+            assert(ReadUint32Be(payload + offset) == 0U);
+        }
+    }
+    assert(payload[548] == 0U && payload[551] == 0U);
+    wire_len = FieldLinkFrame_Encode(
+        FIELD_LINK_FRAME_TYPE_CONTROL,
+        77U,
+        (const char *)payload,
+        GNSS_PROBE_STATS_RESPONSE_V5_BYTES,
+        wire,
+        sizeof(wire));
+    assert(wire_len > GNSS_PROBE_STATS_RESPONSE_V5_BYTES);
+    assert(wire_len <= 572);
+    FieldLinkFrameDecoder_Init(&wire_decoder);
+    memset(&decoded_message, 0, sizeof(decoded_message));
+    for (index = 0U; index < (unsigned int)wire_len; ++index) {
+        int current_ret = FieldLinkFrameDecoder_FeedByte(
+            &wire_decoder, wire[index], &decoded_message);
+        assert(current_ret >= 0);
+        if (current_ret == 1) {
+            decode_ret++;
+        }
+    }
+    assert(decode_ret == 1);
+    assert(decoded_message.type == FIELD_LINK_FRAME_TYPE_CONTROL);
+    assert(decoded_message.sequence == 77U);
+    assert(decoded_message.payload_len == GNSS_PROBE_STATS_RESPONSE_V5_BYTES);
+    assert(memcmp(decoded_message.payload, payload, sizeof(payload)) == 0);
     memset(&ack_window, 0, sizeof(ack_window));
     ack_window.session_valid = 1U;
     ack_window.session_epoch = 0x10203040U;
@@ -236,7 +320,7 @@ int main(void)
     assert(ReadUint32Be(ack_payload + 16) == 117U);
     assert(ReadUint16Be(ack_payload + 20) == 0xA55AU);
     assert(ReadUint16Be(ack_payload + 22) == 0U);
-    printf("gnss_probe_stats_protocol_host_test passed v4_payload_bytes=%u\n",
-           (unsigned int)sizeof(payload));
+    printf("gnss_probe_stats_protocol_host_test passed v5_payload_bytes=%u wire_bytes=%d\n",
+           (unsigned int)sizeof(payload), wire_len);
     return 0;
 }

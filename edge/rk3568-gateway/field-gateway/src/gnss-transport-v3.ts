@@ -8,7 +8,9 @@ export const GNSS_PROBE_STATS_RESPONSE_V1_BYTES = 92;
 export const GNSS_PROBE_STATS_RESPONSE_V2_BYTES = 148;
 export const GNSS_PROBE_STATS_RESPONSE_V3_BYTES = 204;
 export const GNSS_PROBE_STATS_RESPONSE_V4_BYTES = 384;
+export const GNSS_PROBE_STATS_RESPONSE_V5_BYTES = 552;
 export const GNSS_SENSOR_DIAGNOSTIC_COUNT = 4;
+export const FIELD_RS485_DIAGNOSTIC_PATH_COUNT = 4;
 export const GNSS_RTCM_ACK_QUERY_V1_BYTES = 12;
 export const GNSS_RTCM_ACK_RESPONSE_V1_BYTES = 24;
 export const GNSS_RTCM_MODE_COMMAND_V1_BYTES = 19;
@@ -236,6 +238,47 @@ export type GnssProbeStatsResponseV4 = Omit<GnssProbeStatsResponseV3, "responseV
   };
 };
 
+export const FIELD_RS485_DIAGNOSTIC_PATH_NAMES = [
+  "soil",
+  "soilEc",
+  "tilt",
+  "rain"
+] as const;
+
+export type FieldRs485DiagnosticPathName = (typeof FIELD_RS485_DIAGNOSTIC_PATH_NAMES)[number];
+
+export type FieldRs485PathRuntimeDiagnostics = {
+  index: number;
+  mask: number;
+  enabled: boolean;
+  currentValid: boolean;
+  cycles: number;
+  attempts: number;
+  firstAttemptFailures: number;
+  retryRecoveries: number;
+  finalFailures: number;
+  skippedCycles: number;
+  consecutiveFinalFailures: number;
+  lastEventUptimeS: number;
+  lastFirstStatus: number;
+  lastFinalStatus: number;
+  lastAttempts: number;
+  lastEventFlags: number;
+};
+
+export type GnssProbeStatsResponseV5 = Omit<GnssProbeStatsResponseV4, "responseVersion"> & {
+  responseVersion: 5;
+  rs485RuntimeDiagnostics: {
+    enabledMask: number;
+    currentValidMask: number;
+    completedCycles: number;
+    lastCompletedUptimeS: number;
+    lastDurationMs: number;
+    maxDurationMs: number;
+    paths: Record<FieldRs485DiagnosticPathName, FieldRs485PathRuntimeDiagnostics>;
+  };
+};
+
 export type GnssRtcmAckResponseV1 = {
   responseVersion: 1;
   nodeNumber: 1 | 2 | 3;
@@ -364,7 +407,7 @@ export function gnssRtcmAckReportsCompleted(
 
 export function decodeGnssProbeStatsResponse(
   input: Buffer
-): GnssProbeStatsResponseV1 | GnssProbeStatsResponseV2 | GnssProbeStatsResponseV3 | GnssProbeStatsResponseV4 {
+): GnssProbeStatsResponseV1 | GnssProbeStatsResponseV2 | GnssProbeStatsResponseV3 | GnssProbeStatsResponseV4 | GnssProbeStatsResponseV5 {
   if (input.length < 4 || input.subarray(0, 3).toString("ascii") !== "G3S") {
     throw new Error("GNSS PROBE stats magic or version mismatch");
   }
@@ -378,7 +421,9 @@ export function decodeGnssProbeStatsResponse(
           ? GNSS_PROBE_STATS_RESPONSE_V3_BYTES
           : responseVersion === 4
             ? GNSS_PROBE_STATS_RESPONSE_V4_BYTES
-            : null;
+            : responseVersion === 5
+              ? GNSS_PROBE_STATS_RESPONSE_V5_BYTES
+              : null;
   if (expectedBytes === null) {
     throw new Error("GNSS PROBE stats version is unsupported");
   }
@@ -582,8 +627,7 @@ export function decodeGnssProbeStatsResponse(
   if (input.readUInt32BE(380) !== 0) {
     throw new Error("GNSS PROBE Modbus diagnostic reserved bytes are non-zero");
   }
-  return {
-    responseVersion: 4,
+  const v4Extended = {
     ...v3Extended,
     hardwareDiagnostics: {
       sc16is752: {
@@ -591,10 +635,10 @@ export function decodeGnssProbeStatsResponse(
         detectedI2cAddress: input.readUInt8(206),
         addressFound: addressFound === 1,
         initStatus: input.readInt8(208),
-        scratchpadStatus: [input.readInt8(209), input.readInt8(210)],
-        internalLoopbackStatus: [input.readInt8(211), input.readInt8(212)],
-        uartInitStatus: [input.readInt8(213), input.readInt8(214)],
-        internalLoopbackRxBytes: [input.readUInt8(215), input.readUInt8(216)],
+        scratchpadStatus: [input.readInt8(209), input.readInt8(210)] as [number, number],
+        internalLoopbackStatus: [input.readInt8(211), input.readInt8(212)] as [number, number],
+        uartInitStatus: [input.readInt8(213), input.readInt8(214)] as [number, number],
+        internalLoopbackRxBytes: [input.readUInt8(215), input.readUInt8(216)] as [number, number],
         detectedLsr: input.readUInt8(217)
       },
       readOnlyScan: {
@@ -609,6 +653,127 @@ export function decodeGnssProbeStatsResponse(
         tiltQuery
       },
       modbusChannels
+    }
+  };
+  if (responseVersion === 4) {
+    return { responseVersion: 4, ...v4Extended };
+  }
+
+  const rs485SchemaVersion = input.readUInt8(384);
+  const rs485PathCount = input.readUInt8(385);
+  const rs485EnabledMask = input.readUInt8(386);
+  const rs485CurrentValidMask = input.readUInt8(387);
+  const allRs485PathMask = (1 << FIELD_RS485_DIAGNOSTIC_PATH_COUNT) - 1;
+  const rs485CompletedCycles = input.readUInt32BE(388);
+  const rs485LastCompletedUptimeS = input.readUInt32BE(392);
+  const rs485LastDurationMs = input.readUInt32BE(396);
+  const rs485MaxDurationMs = input.readUInt32BE(400);
+  if (
+    rs485SchemaVersion !== 1 ||
+    rs485PathCount !== FIELD_RS485_DIAGNOSTIC_PATH_COUNT ||
+    ((rs485EnabledMask | rs485CurrentValidMask) & ~allRs485PathMask) !== 0 ||
+    (rs485CurrentValidMask & ~rs485EnabledMask) !== 0 ||
+    input.readUInt32BE(548) !== 0 ||
+    rs485LastCompletedUptimeS > common.snapshotUptimeS ||
+    rs485LastDurationMs > rs485MaxDurationMs ||
+    (rs485CompletedCycles === 0 &&
+      (rs485EnabledMask !== 0 || rs485CurrentValidMask !== 0 ||
+        rs485LastCompletedUptimeS !== 0 || rs485LastDurationMs !== 0 || rs485MaxDurationMs !== 0))
+  ) {
+    throw new Error("GNSS PROBE RS485 runtime diagnostic schema, masks or reserved bytes are invalid");
+  }
+  const rs485Paths = Object.fromEntries(
+    FIELD_RS485_DIAGNOSTIC_PATH_NAMES.map((name, index) => {
+      const offset = 404 + index * 36;
+      const mask = 1 << index;
+      const lastFirstStatus = input.readInt8(offset + 32);
+      const lastFinalStatus = input.readInt8(offset + 33);
+      const lastAttempts = input.readUInt8(offset + 34);
+      const lastEventFlags = input.readUInt8(offset + 35);
+      const enabled = (rs485EnabledMask & mask) !== 0;
+      const currentValid = (rs485CurrentValidMask & mask) !== 0;
+      const cycles = input.readUInt32BE(offset);
+      const attempts = input.readUInt32BE(offset + 4);
+      const firstAttemptFailures = input.readUInt32BE(offset + 8);
+      const retryRecoveries = input.readUInt32BE(offset + 12);
+      const finalFailures = input.readUInt32BE(offset + 16);
+      const skippedCycles = input.readUInt32BE(offset + 20);
+      const consecutiveFinalFailures = input.readUInt32BE(offset + 24);
+      const lastEventUptimeS = input.readUInt32BE(offset + 28);
+      const attemptedCycles = cycles - skippedCycles;
+      const eventIsValid =
+        (lastEventFlags === 0 && lastEventUptimeS === 0 && lastFirstStatus === 0 &&
+          lastFinalStatus === 0 && lastAttempts === 0) ||
+        (lastEventFlags === 0x10 && lastFirstStatus === -1 && lastFinalStatus === -1 &&
+          lastAttempts === 0) ||
+        ((lastEventFlags === 0x03 || lastEventFlags === 0x0b) &&
+          lastFirstStatus < 0 && lastFinalStatus === 0 && lastAttempts >= 2) ||
+        (lastEventFlags === 0x05 && lastFirstStatus < 0 && lastFinalStatus < 0 &&
+          lastAttempts >= 1) ||
+        (lastEventFlags === 0x08 && lastFirstStatus === 0 && lastFinalStatus === 0 &&
+          lastAttempts >= 1);
+      if (
+        lastFirstStatus < -12 ||
+        lastFirstStatus > 0 ||
+        lastFinalStatus < -12 ||
+        lastFinalStatus > 0 ||
+        lastAttempts > 2 ||
+        (lastEventFlags & ~0x1f) !== 0 ||
+        !eventIsValid ||
+        lastEventUptimeS > common.snapshotUptimeS ||
+        skippedCycles > cycles ||
+        attempts < attemptedCycles ||
+        firstAttemptFailures > attemptedCycles ||
+        retryRecoveries > firstAttemptFailures ||
+        finalFailures > firstAttemptFailures ||
+        consecutiveFinalFailures > finalFailures ||
+        (firstAttemptFailures !== UINT32_MAX && retryRecoveries !== UINT32_MAX &&
+          finalFailures !== UINT32_MAX && retryRecoveries + finalFailures !== firstAttemptFailures) ||
+        (enabled ? cycles !== rs485CompletedCycles :
+          cycles !== 0 || attempts !== 0 || firstAttemptFailures !== 0 || retryRecoveries !== 0 ||
+          finalFailures !== 0 || skippedCycles !== 0 || consecutiveFinalFailures !== 0 ||
+          lastEventUptimeS !== 0 || lastFirstStatus !== 0 || lastFinalStatus !== 0 ||
+          lastAttempts !== 0 || lastEventFlags !== 0) ||
+        (currentValid && (lastEventFlags === 0x05 || lastEventFlags === 0x10)) ||
+        (!currentValid && cycles > 0 && (lastEventFlags === 0 || lastEventFlags === 0x03 ||
+          lastEventFlags === 0x08 || lastEventFlags === 0x0b))
+      ) {
+        throw new Error("GNSS PROBE RS485 runtime path counters, status or flags are inconsistent");
+      }
+      return [
+        name,
+        {
+          index,
+          mask,
+          enabled,
+          currentValid,
+          cycles,
+          attempts,
+          firstAttemptFailures,
+          retryRecoveries,
+          finalFailures,
+          skippedCycles,
+          consecutiveFinalFailures,
+          lastEventUptimeS,
+          lastFirstStatus,
+          lastFinalStatus,
+          lastAttempts,
+          lastEventFlags
+        }
+      ];
+    })
+  ) as Record<FieldRs485DiagnosticPathName, FieldRs485PathRuntimeDiagnostics>;
+  return {
+    responseVersion: 5,
+    ...v4Extended,
+    rs485RuntimeDiagnostics: {
+      enabledMask: rs485EnabledMask,
+      currentValidMask: rs485CurrentValidMask,
+      completedCycles: rs485CompletedCycles,
+      lastCompletedUptimeS: rs485LastCompletedUptimeS,
+      lastDurationMs: rs485LastDurationMs,
+      maxDurationMs: rs485MaxDurationMs,
+      paths: rs485Paths
     }
   };
 }
@@ -641,6 +806,14 @@ export function decodeGnssProbeStatsResponseV4(input: Buffer): GnssProbeStatsRes
   const decoded = decodeGnssProbeStatsResponse(input);
   if (decoded.responseVersion !== 4) {
     throw new Error("GNSS PROBE stats response is not V4");
+  }
+  return decoded;
+}
+
+export function decodeGnssProbeStatsResponseV5(input: Buffer): GnssProbeStatsResponseV5 {
+  const decoded = decodeGnssProbeStatsResponse(input);
+  if (decoded.responseVersion !== 5) {
+    throw new Error("GNSS PROBE stats response is not V5");
   }
   return decoded;
 }

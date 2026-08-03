@@ -17,6 +17,7 @@ const {
   decodeGnssProbeStatsResponseV2,
   decodeGnssProbeStatsResponseV3,
   decodeGnssProbeStatsResponseV4,
+  decodeGnssProbeStatsResponseV5,
   decodeGnssRtcmAckResponseV1,
   RtcmReassemblerV3,
   crc24q,
@@ -256,6 +257,76 @@ test("GNSS PROBE V4 exposes U4, read-only scan and classified Modbus diagnostics
   const inconsistent = Buffer.from(payload);
   inconsistent.writeUInt8(0x03, 222);
   assert.throws(() => decodeGnssProbeStatsResponse(inconsistent), /match mask is inconsistent/);
+});
+
+test("GNSS PROBE V5 separates RS485 path retries, final failures and sample age", () => {
+  const payload = Buffer.alloc(552);
+  payload.write("G3S", 0, "ascii");
+  payload.writeUInt8(5, 3);
+  payload.writeUInt8(2, 4);
+  payload.writeUInt8(1, 5);
+  payload.writeUInt32BE(0x89abcdef, 8);
+  payload.writeUInt32BE(1300, 12);
+  payload.writeUInt8(4, 152);
+  payload.writeUInt8(1, 204);
+  payload.writeUInt8(1, 220);
+  payload.writeUInt8(1, 384);
+  payload.writeUInt8(4, 385);
+  payload.writeUInt8(0x07, 386);
+  payload.writeUInt8(0x05, 387);
+  payload.writeUInt32BE(100, 388);
+  payload.writeUInt32BE(1234, 392);
+  payload.writeUInt32BE(1680, 396);
+  payload.writeUInt32BE(3440, 400);
+
+  const soilOffset = 404;
+  [100, 101, 2, 1, 1, 0, 0, 1200].forEach((value, index) => {
+    payload.writeUInt32BE(value, soilOffset + index * 4);
+  });
+  payload.writeInt8(-4, soilOffset + 32);
+  payload.writeInt8(0, soilOffset + 33);
+  payload.writeUInt8(2, soilOffset + 34);
+  payload.writeUInt8(0x03, soilOffset + 35);
+
+  const ecOffset = 440;
+  [100, 95, 5, 2, 3, 5, 1, 1234].forEach((value, index) => {
+    payload.writeUInt32BE(value, ecOffset + index * 4);
+  });
+  payload.writeInt8(-4, ecOffset + 32);
+  payload.writeInt8(-4, ecOffset + 33);
+  payload.writeUInt8(2, ecOffset + 34);
+  payload.writeUInt8(0x05, ecOffset + 35);
+
+  const tiltOffset = 476;
+  [100, 100, 1, 0, 1, 0, 0, 1250].forEach((value, index) => {
+    payload.writeUInt32BE(value, tiltOffset + index * 4);
+  });
+  payload.writeInt8(0, tiltOffset + 32);
+  payload.writeInt8(0, tiltOffset + 33);
+  payload.writeUInt8(1, tiltOffset + 34);
+  payload.writeUInt8(0x08, tiltOffset + 35);
+
+  const decoded = decodeGnssProbeStatsResponseV5(payload);
+  assert.equal(decoded.responseVersion, 5);
+  assert.equal(decoded.rs485RuntimeDiagnostics.completedCycles, 100);
+  assert.equal(decoded.rs485RuntimeDiagnostics.lastCompletedUptimeS, 1234);
+  assert.equal(decoded.rs485RuntimeDiagnostics.paths.soil.retryRecoveries, 1);
+  assert.equal(decoded.rs485RuntimeDiagnostics.paths.soilEc.finalFailures, 3);
+  assert.equal(decoded.rs485RuntimeDiagnostics.paths.tilt.currentValid, true);
+  assert.deepEqual(decodeGnssProbeStatsResponse(payload), decoded);
+  assert.throws(() => decodeGnssProbeStatsResponseV4(payload), /not V4/);
+
+  const inconsistent = Buffer.from(payload);
+  inconsistent.writeUInt8(0x08, 387);
+  assert.throws(() => decodeGnssProbeStatsResponse(inconsistent), /schema, masks or reserved/);
+
+  const impossibleCounters = Buffer.from(payload);
+  impossibleCounters.writeUInt32BE(99, soilOffset + 4);
+  assert.throws(() => decodeGnssProbeStatsResponse(impossibleCounters), /counters, status or flags/);
+
+  const impossibleEvent = Buffer.from(payload);
+  impossibleEvent.writeUInt8(0x01, soilOffset + 35);
+  assert.throws(() => decodeGnssProbeStatsResponse(impossibleEvent), /counters, status or flags/);
 });
 
 test("RTCM ACK V1 reports the recent completed-sequence bitmap", () => {

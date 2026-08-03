@@ -279,8 +279,20 @@
 #define RS485_INTER_REQUEST_GAP_MS 80
 #define RS485_SENSOR_READ_MAX_RETRIES 1U  // One bounded retry for transient read-path errors only
 #define RS485_SENSOR_READ_RETRY_GAP_MS 80U
+#define RS485_COLLECTION_PATH_LIMIT 4U
+#define RS485_COLLECTION_WATCHDOG_MARGIN_MS 1000U
+#define RS485_SINGLE_PATH_WORST_CASE_MS \
+    (RS485_RESPONSE_TIMEOUT_MS * (1U + RS485_SENSOR_READ_MAX_RETRIES) + \
+     RS485_SENSOR_READ_RETRY_GAP_MS * RS485_SENSOR_READ_MAX_RETRIES)
+#define RS485_COLLECTION_WORST_CASE_MS \
+    (RS485_COLLECTION_PATH_LIMIT * \
+     (RS485_SINGLE_PATH_WORST_CASE_MS + RS485_INTER_REQUEST_GAP_MS))
 #if RS485_SENSOR_READ_MAX_RETRIES > 1U
 #error "RS485 sensor retries must remain bounded to at most one retry"
+#endif
+#if (RS485_COLLECTION_WORST_CASE_MS + RS485_COLLECTION_WATCHDOG_MARGIN_MS) >= \
+    (WATCHDOG_TIMEOUT * 1000U)
+#error "Worst-case RS485 collection can exhaust the watchdog window"
 #endif
 #define RS485_RAW_DIAG_MODE    0           // Production log: hide raw Modbus TX/RX frames
 #define RS485_TILT_AUTO_PROBE   0           // Production: fixed manual-confirmed channel/address/baud/clock

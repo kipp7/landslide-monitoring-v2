@@ -70,11 +70,23 @@
 static uint8_t g_sc16is752_i2c_addr = SC16IS752_I2C_ADDR;
 static unsigned long g_sc16is752_xtal_hz = SC16IS752_XTAL_HZ;
 static Sc16is752Diagnostics g_sc16is752_diagnostics = {0};
+static uint8_t g_uart_config_valid[2] = {0U, 0U};
+static unsigned int g_uart_config_baudrate[2] = {0U, 0U};
+static unsigned long g_uart_config_xtal_hz[2] = {0UL, 0UL};
+
+static void Sc16is752_InvalidateUartConfig(void)
+{
+    g_uart_config_valid[0] = 0U;
+    g_uart_config_valid[1] = 0U;
+}
 
 static int Sc16is752_RecordUartInitStatus(Sc16is752Channel channel, int status)
 {
     if (channel == SC16IS752_CHANNEL_A || channel == SC16IS752_CHANNEL_B) {
         g_sc16is752_diagnostics.uart_init_status[(unsigned int)channel] = (int8_t)status;
+        if (status != 0) {
+            g_uart_config_valid[(unsigned int)channel] = 0U;
+        }
     }
     return status;
 }
@@ -149,6 +161,7 @@ static int Sc16is752_WriteBytes(uint8_t sub_addr, const uint8_t *data, unsigned 
         }
     }
 
+    Sc16is752_InvalidateUartConfig();
     return -2;
 }
 
@@ -173,6 +186,7 @@ static int Sc16is752_ReadBytes(uint8_t sub_addr, uint8_t *data, unsigned int len
         }
     }
 
+    Sc16is752_InvalidateUartConfig();
     return -2;
 }
 
@@ -384,15 +398,59 @@ int SC16IS752_UartInit(Sc16is752Channel channel, unsigned int baudrate)
            g_sc16is752_xtal_hz,
            divisor);
 #endif
+    g_uart_config_baudrate[(unsigned int)channel] = baudrate;
+    g_uart_config_xtal_hz[(unsigned int)channel] = g_sc16is752_xtal_hz;
+    g_uart_config_valid[(unsigned int)channel] = 1U;
     return Sc16is752_RecordUartInitStatus(channel, 0);
+}
+
+int SC16IS752_UartEnsureConfigured(Sc16is752Channel channel, unsigned int baudrate)
+{
+    unsigned int index;
+
+    if (channel != SC16IS752_CHANNEL_A && channel != SC16IS752_CHANNEL_B) {
+        return -7;
+    }
+    index = (unsigned int)channel;
+    if (g_uart_config_valid[index] &&
+        g_uart_config_baudrate[index] == baudrate &&
+        g_uart_config_xtal_hz[index] == g_sc16is752_xtal_hz) {
+        return 0;
+    }
+    return SC16IS752_UartInit(channel, baudrate);
+}
+
+int SC16IS752_UartReconfigureCached(Sc16is752Channel channel)
+{
+    unsigned int index;
+    unsigned int baudrate;
+    unsigned long xtal_hz;
+
+    if (channel != SC16IS752_CHANNEL_A && channel != SC16IS752_CHANNEL_B) {
+        return -7;
+    }
+    index = (unsigned int)channel;
+    baudrate = g_uart_config_baudrate[index];
+    xtal_hz = g_uart_config_xtal_hz[index];
+    if (baudrate == 0U || xtal_hz == 0UL) {
+        return -8;
+    }
+
+    g_sc16is752_xtal_hz = xtal_hz;
+    g_uart_config_valid[index] = 0U;
+    return SC16IS752_UartInit(channel, baudrate);
 }
 
 int SC16IS752_Init(void)
 {
     uint8_t lsr = 0;
     unsigned int ret;
+#if SC16IS752_SELF_TEST_DIAG || SC16IS752_STRUCTURED_DIAG
+    int self_test_failed;
+#endif
 
     memset(&g_sc16is752_diagnostics, 0, sizeof(g_sc16is752_diagnostics));
+    Sc16is752_InvalidateUartConfig();
     g_sc16is752_i2c_addr = SC16IS752_I2C_ADDR;
     g_sc16is752_diagnostics.configured_i2c_addr = SC16IS752_I2C_ADDR;
     g_sc16is752_diagnostics.init_status = SC16IS752_DIAG_NOT_RUN;
@@ -429,6 +487,7 @@ int SC16IS752_Init(void)
     g_sc16is752_diagnostics.detected_lsr = lsr;
 
     (void)Sc16is752_WriteReg(SC16IS752_CHANNEL_A, SC16IS752_REG_IOCTRL, SC16IS752_IOCTRL_RESET);
+    Sc16is752_InvalidateUartConfig();
     LOS_Msleep(10);
 
     if (Sc16is752_ReadReg(SC16IS752_CHANNEL_A, SC16IS752_REG_LSR, &lsr) != 0) {
@@ -454,9 +513,22 @@ int SC16IS752_Init(void)
         (int8_t)Sc16is752_InternalLoopbackTest(SC16IS752_CHANNEL_A);
     g_sc16is752_diagnostics.internal_loopback_status[1] =
         (int8_t)Sc16is752_InternalLoopbackTest(SC16IS752_CHANNEL_B);
+    self_test_failed =
+        g_sc16is752_diagnostics.scratchpad_status[0] != 0 ||
+        g_sc16is752_diagnostics.scratchpad_status[1] != 0 ||
+        g_sc16is752_diagnostics.internal_loopback_status[0] != 0 ||
+        g_sc16is752_diagnostics.internal_loopback_status[1] != 0;
 #endif
 
     g_sc16is752_diagnostics.init_status = 0;
+#if SC16IS752_SELF_TEST_DIAG || SC16IS752_STRUCTURED_DIAG
+    if (self_test_failed) {
+        printf("[WARN] SC16IS752 state=DEGRADED addr=0x%02X lsr=0x%02X; self-test failed, continuing for path isolation\n",
+               g_sc16is752_i2c_addr,
+               lsr);
+        return 0;
+    }
+#endif
     printf("[OK] SC16IS752 ready addr=0x%02X lsr=0x%02X\n", g_sc16is752_i2c_addr, lsr);
     return 0;
 }
@@ -532,8 +604,10 @@ int SC16IS752_Read(Sc16is752Channel channel, uint8_t *data, unsigned int len)
     }
 
     if (Sc16is752_ReadReg(channel, SC16IS752_REG_RXLVL, &rxlvl) != 0) {
-        if (Sc16is752_ReadReg(channel, SC16IS752_REG_LSR, &lsr) != 0 ||
-            (lsr & SC16IS752_LSR_DATA_READY) == 0U) {
+        if (Sc16is752_ReadReg(channel, SC16IS752_REG_LSR, &lsr) != 0) {
+            return -1;
+        }
+        if ((lsr & SC16IS752_LSR_DATA_READY) == 0U) {
             return 0;
         }
         rxlvl = 1;

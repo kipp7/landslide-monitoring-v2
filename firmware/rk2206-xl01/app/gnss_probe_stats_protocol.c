@@ -377,6 +377,98 @@ int GnssProbeStatsResponseV4_Encode(
     return GNSS_PROBE_STATS_RESPONSE_V4_BYTES;
 }
 
+static void EncodeFieldRs485PathRuntimeDiagnostics(
+    uint8_t *output,
+    const FieldRs485PathRuntimeDiagnostics *diagnostics)
+{
+    const uint32_t counters[] = {
+        diagnostics != NULL ? diagnostics->cycles : 0U,
+        diagnostics != NULL ? diagnostics->attempts : 0U,
+        diagnostics != NULL ? diagnostics->first_attempt_failures : 0U,
+        diagnostics != NULL ? diagnostics->retry_recoveries : 0U,
+        diagnostics != NULL ? diagnostics->final_failures : 0U,
+        diagnostics != NULL ? diagnostics->skipped_cycles : 0U,
+        diagnostics != NULL ? diagnostics->consecutive_final_failures : 0U,
+        diagnostics != NULL ? diagnostics->last_event_uptime_s : 0U,
+    };
+    unsigned int index;
+
+    for (index = 0U; index < sizeof(counters) / sizeof(counters[0]); ++index) {
+        WriteUint32Be(output + index * 4U, counters[index]);
+    }
+    if (diagnostics != NULL) {
+        output[32] = (uint8_t)diagnostics->last_first_status;
+        output[33] = (uint8_t)diagnostics->last_final_status;
+        output[34] = diagnostics->last_attempts;
+        output[35] = diagnostics->last_event_flags;
+    }
+}
+
+int GnssProbeStatsResponseV5_Encode(
+    const GnssRtcmInjectionStats *stats,
+    const FieldLinkRxStats *link_stats,
+    const GnssSensorDiagnostics *sensor_diagnostics,
+    const Sc16is752Diagnostics *sc16is752_diagnostics,
+    const FieldRs485Diagnostics *field_rs485_diagnostics,
+    const Rs485ModbusDiagnostics *modbus_diagnostics,
+    const FieldRs485RuntimeDiagnostics *rs485_runtime_diagnostics,
+    uint8_t node_number,
+    uint8_t injection_mode,
+    uint32_t nonce,
+    uint32_t snapshot_uptime_s,
+    uint8_t *output,
+    int output_size
+)
+{
+    unsigned int path_index;
+
+    if (output == NULL || output_size < GNSS_PROBE_STATS_RESPONSE_V5_BYTES) {
+        return -1;
+    }
+    if (GnssProbeStatsResponseV4_Encode(
+            stats,
+            link_stats,
+            sensor_diagnostics,
+            sc16is752_diagnostics,
+            field_rs485_diagnostics,
+            modbus_diagnostics,
+            node_number,
+            injection_mode,
+            nonce,
+            snapshot_uptime_s,
+            output,
+            output_size
+        ) != GNSS_PROBE_STATS_RESPONSE_V4_BYTES) {
+        return -1;
+    }
+
+    memset(
+        output + GNSS_PROBE_STATS_RESPONSE_V4_BYTES,
+        0,
+        GNSS_PROBE_STATS_RESPONSE_V5_BYTES - GNSS_PROBE_STATS_RESPONSE_V4_BYTES
+    );
+    output[3] = 5U;
+    output[384] = 1U;
+    output[385] = FIELD_RS485_PATH_COUNT;
+    if (rs485_runtime_diagnostics != NULL) {
+        output[386] = rs485_runtime_diagnostics->enabled_mask & FIELD_RS485_PATH_ALL_MASK;
+        output[387] = rs485_runtime_diagnostics->current_valid_mask & FIELD_RS485_PATH_ALL_MASK;
+        WriteUint32Be(output + 388, rs485_runtime_diagnostics->completed_cycles);
+        WriteUint32Be(output + 392, rs485_runtime_diagnostics->last_completed_uptime_s);
+        WriteUint32Be(output + 396, rs485_runtime_diagnostics->last_duration_ms);
+        WriteUint32Be(output + 400, rs485_runtime_diagnostics->max_duration_ms);
+    }
+    for (path_index = 0U; path_index < FIELD_RS485_PATH_COUNT; ++path_index) {
+        const FieldRs485PathRuntimeDiagnostics *path_diagnostics =
+            rs485_runtime_diagnostics != NULL ?
+                &rs485_runtime_diagnostics->paths[path_index] : NULL;
+        EncodeFieldRs485PathRuntimeDiagnostics(
+            output + 404U + path_index * 36U,
+            path_diagnostics);
+    }
+    return GNSS_PROBE_STATS_RESPONSE_V5_BYTES;
+}
+
 int GnssRtcmAckQueryV1_Decode(
     const char *payload,
     int payload_bytes,

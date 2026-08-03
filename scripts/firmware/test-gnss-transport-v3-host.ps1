@@ -21,9 +21,16 @@ $fieldLinkStatsImplementation = Join-Path $repoRoot "firmware\rk2206-xl01\driver
 $probeProtocolTest = Join-Path $repoRoot "firmware\rk2206-xl01\tests\gnss_probe_stats_protocol_host_test.c"
 $fieldSensorsHeader = Join-Path $repoRoot "firmware\rk2206-xl01\drivers\sensors\field_sensors_rs485.h"
 $modbusHeader = Join-Path $repoRoot "firmware\rk2206-xl01\drivers\sensors\rs485_modbus.h"
+$rs485DiagnosticsHeader = Join-Path $repoRoot "firmware\rk2206-xl01\drivers\sensors\rs485_read_diagnostics.h"
+$rs485DiagnosticsTest = Join-Path $repoRoot "firmware\rk2206-xl01\tests\rs485_read_diagnostics_host_test.c"
 $rs485RetryPolicyHeader = Join-Path $repoRoot "firmware\rk2206-xl01\drivers\sensors\rs485_read_retry_policy.h"
 $rs485RetryPolicyTest = Join-Path $repoRoot "firmware\rk2206-xl01\tests\rs485_read_retry_policy_host_test.c"
 $sc16is752Header = Join-Path $repoRoot "firmware\rk2206-xl01\drivers\sensors\sc16is752_driver.h"
+$sc16is752Implementation = Join-Path $repoRoot "firmware\rk2206-xl01\drivers\sensors\sc16is752_driver.c"
+$sc16is752CacheTest = Join-Path $repoRoot "firmware\rk2206-xl01\tests\sc16is752_uart_cache_host_test.c"
+$mockIotErrnoHeader = Join-Path $repoRoot "firmware\rk2206-xl01\tests\mocks\iot_errno.h"
+$mockIotI2cHeader = Join-Path $repoRoot "firmware\rk2206-xl01\tests\mocks\iot_i2c.h"
+$mockLosTaskHeader = Join-Path $repoRoot "firmware\rk2206-xl01\tests\mocks\los_task.h"
 $batteryEstimatorHeader = Join-Path $repoRoot "firmware\rk2206-xl01\app\battery_estimator.h"
 $batteryEstimatorImplementation = Join-Path $repoRoot "firmware\rk2206-xl01\app\battery_estimator.c"
 $batteryEstimatorTest = Join-Path $repoRoot "firmware\rk2206-xl01\tests\battery_estimator_host_test.c"
@@ -47,7 +54,9 @@ foreach ($required in @(
   $sourceHeader, $sourceImplementation, $injectionHeader, $injectionImplementation,
   $appConfig, $sourceTest, $disabledInjectionTest, $probeProtocolHeader, $probeProtocolImplementation,
   $fieldLinkStatsHeader, $fieldLinkStatsImplementation, $probeProtocolTest,
-  $fieldSensorsHeader, $modbusHeader, $rs485RetryPolicyHeader, $rs485RetryPolicyTest, $sc16is752Header,
+  $fieldSensorsHeader, $modbusHeader, $rs485DiagnosticsHeader, $rs485DiagnosticsTest,
+  $rs485RetryPolicyHeader, $rs485RetryPolicyTest, $sc16is752Header, $sc16is752Implementation,
+  $sc16is752CacheTest, $mockIotErrnoHeader, $mockIotI2cHeader, $mockLosTaskHeader,
   $batteryEstimatorHeader, $batteryEstimatorImplementation, $batteryEstimatorTest,
   $compactBuilderHeader, $compactBuilderImplementation, $compactPollHeader,
   $compactPollImplementation, $sensorDataHeader, $fieldLinkFrameHeader,
@@ -85,9 +94,17 @@ docker cp $fieldLinkStatsImplementation "${ContainerName}:${containerRoot}/drive
 docker cp $probeProtocolTest "${ContainerName}:${containerRoot}/tests/gnss_probe_stats_protocol_host_test.c"
 docker cp $fieldSensorsHeader "${ContainerName}:${containerRoot}/drivers/sensors/field_sensors_rs485.h"
 docker cp $modbusHeader "${ContainerName}:${containerRoot}/drivers/sensors/rs485_modbus.h"
+docker cp $rs485DiagnosticsHeader "${ContainerName}:${containerRoot}/drivers/sensors/rs485_read_diagnostics.h"
+docker cp $rs485DiagnosticsTest "${ContainerName}:${containerRoot}/tests/rs485_read_diagnostics_host_test.c"
 docker cp $rs485RetryPolicyHeader "${ContainerName}:${containerRoot}/drivers/sensors/rs485_read_retry_policy.h"
 docker cp $rs485RetryPolicyTest "${ContainerName}:${containerRoot}/tests/rs485_read_retry_policy_host_test.c"
 docker cp $sc16is752Header "${ContainerName}:${containerRoot}/drivers/sensors/sc16is752_driver.h"
+docker cp $sc16is752Implementation "${ContainerName}:${containerRoot}/drivers/sensors/sc16is752_driver.c"
+docker exec $ContainerName mkdir -p "${containerRoot}/tests/mocks"
+docker cp $sc16is752CacheTest "${ContainerName}:${containerRoot}/tests/sc16is752_uart_cache_host_test.c"
+docker cp $mockIotErrnoHeader "${ContainerName}:${containerRoot}/tests/mocks/iot_errno.h"
+docker cp $mockIotI2cHeader "${ContainerName}:${containerRoot}/tests/mocks/iot_i2c.h"
+docker cp $mockLosTaskHeader "${ContainerName}:${containerRoot}/tests/mocks/los_task.h"
 docker cp $batteryEstimatorHeader "${ContainerName}:${containerRoot}/app/battery_estimator.h"
 docker cp $batteryEstimatorImplementation "${ContainerName}:${containerRoot}/app/battery_estimator.c"
 docker cp $batteryEstimatorTest "${ContainerName}:${containerRoot}/tests/battery_estimator_host_test.c"
@@ -133,6 +150,7 @@ gcc -std=c99 -Wall -Wextra -Werror -O2 \
 gcc -std=c99 -Wall -Wextra -Werror -O2 \
   -DGNSS_RTCM_INJECTION_MODE=GNSS_RTCM_INJECTION_PROBE \
   drivers/xl01/field_link_rx_stats.c \
+  drivers/xl01/field_link_frame.c \
   app/gnss_probe_stats_protocol.c \
   tests/gnss_probe_stats_protocol_host_test.c \
   -o gnss_probe_stats_protocol_host_test
@@ -141,6 +159,15 @@ gcc -std=c99 -Wall -Wextra -Werror -O2 \
   tests/rs485_read_retry_policy_host_test.c \
   -o rs485_read_retry_policy_host_test
 ./rs485_read_retry_policy_host_test
+gcc -std=c99 -Wall -Wextra -Werror -O2 \
+  tests/rs485_read_diagnostics_host_test.c \
+  -o rs485_read_diagnostics_host_test
+./rs485_read_diagnostics_host_test
+gcc -std=c99 -Wall -Wextra -Werror -O2 -Itests/mocks \
+  drivers/sensors/sc16is752_driver.c \
+  tests/sc16is752_uart_cache_host_test.c \
+  -o sc16is752_uart_cache_host_test
+./sc16is752_uart_cache_host_test
 gcc -std=c99 -Wall -Wextra -Werror -O2 \
   app/battery_estimator.c \
   tests/battery_estimator_host_test.c \

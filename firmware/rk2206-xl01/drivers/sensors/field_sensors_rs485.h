@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#include "rs485_read_diagnostics.h"
+
 typedef struct {
     float soil_temperature_c;
     float soil_moisture_pct;
@@ -17,6 +19,8 @@ typedef struct {
 
     float rain_total_mm;
     int rain_valid;
+
+    FieldRs485CycleDiagnostics cycle_diagnostics;
 } FieldRs485Readings;
 
 #define FIELD_RS485_DIAG_SOIL_MATCH (1U << 0)

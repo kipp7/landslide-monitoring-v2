@@ -2,7 +2,7 @@
 param(
   [string]$SdkRoot = "F:\2\openharmony\txsmartropenharmony",
   [string]$ContainerName = "openharmony-dev",
-  [string]$ReleaseDirectory = "F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v4_rs485_hardware_gnss_simulated_targeted_v1_20260803",
+  [string]$ReleaseDirectory = "F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v4_rs485_diag_v5_r2_gnss_simulated_20260803",
   [string]$BatteryCalibrationFile = "",
   [ValidateSet("A", "B", "C")]
   [string[]]$NodeLabels = @("A", "B", "C")
@@ -22,6 +22,7 @@ $stagingRoot = Join-Path ([System.IO.Path]::GetTempPath()) `
 $builder = Join-Path $PSScriptRoot "build-xl01-compact-v4.ps1"
 $verifier = Join-Path $PSScriptRoot "verify-rk2206-release-safety.ps1"
 $startupSafety = Join-Path $PSScriptRoot "test-rk2206-rs485-startup-safety.ps1"
+$expectedFirmwareMarker = "fw-rk2206-rtk-compact-v4-rs485-diag-v5-r2-20260803"
 
 & $startupSafety
 
@@ -59,6 +60,7 @@ try {
     -ExpectedGnssRtcmInjectionMode disabled `
     -ExpectedBatteryCalibrationState field-calibrated `
     -ExpectedSourceCommit $headCommit `
+    -ExpectedFirmwareMarker $expectedFirmwareMarker `
     -RequireCurrentHead `
     -RequireFinalBatteryAcceptance `
     -RequireCompactTargetedPolling `
@@ -77,6 +79,10 @@ Truth profile
   - GNSS: simulated; UM220 PB6/PB7 UART is not initialized
   - RTCM: disabled
   - Polling: compact-targeted-v1; one P2 target and one response in flight
+  - Normal telemetry: 139-byte payload / 157-byte complete frame
+  - On-demand diagnostics: G3S V5, 552-byte payload; never poll periodically
+  - Healthy startup: no long parameter scan; one read-only scan runs only after
+    a normal RS485 path still fails after its bounded retry
 
 Flash only the image matching physical node A/B/C. This package is for indoor
 RS485 stabilization and must never be used as RTK Fixed or displacement evidence.

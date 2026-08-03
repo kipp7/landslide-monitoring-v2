@@ -69,6 +69,84 @@ typedef struct {
 } Rs485ProbeUartConfig;
 
 static FieldRs485Diagnostics g_field_rs485_diagnostics = {0};
+static uint32_t g_path_final_failure_streaks[FIELD_RS485_PATH_COUNT] = {0};
+static uint8_t g_path_success_seen[FIELD_RS485_PATH_COUNT] = {0};
+
+static uint64_t FieldRs485MonotonicMs(void)
+{
+    uint64_t ticks = (uint64_t)LOS_TickCountGet();
+    uint64_t ticks_per_second = (uint64_t)LOS_MS2Tick(1000U);
+
+    if (ticks_per_second == 0U) {
+        return ticks;
+    }
+    return ((ticks / ticks_per_second) * 1000U) +
+           (((ticks % ticks_per_second) * 1000U) / ticks_per_second);
+}
+
+static const char *FieldRs485PathName(unsigned int path_index)
+{
+    static const char *const names[FIELD_RS485_PATH_COUNT] = {
+        "soil",
+        "soil_ec",
+        "tilt",
+        "rain",
+    };
+
+    return path_index < FIELD_RS485_PATH_COUNT ? names[path_index] : "unknown";
+}
+
+static int ShouldLogFailureStreak(uint32_t streak)
+{
+    return streak <= 2U || (streak & (streak - 1U)) == 0U || (streak % 60U) == 0U;
+}
+
+static void LogPathReadResult(
+    unsigned int path_index,
+    uint8_t channel,
+    const FieldRs485PathCycleDiagnostics *result)
+{
+    uint32_t previous_streak;
+
+    if (result == NULL || path_index >= FIELD_RS485_PATH_COUNT || !result->attempted) {
+        return;
+    }
+
+    previous_streak = g_path_final_failure_streaks[path_index];
+    if (result->final_status == RS485_MODBUS_OK) {
+        if (!g_path_success_seen[path_index] && previous_streak == 0U &&
+            result->first_status == RS485_MODBUS_OK) {
+            printf("[RS485 PATH] state=READY path=%s ch=%u attempts=%u\n",
+                   FieldRs485PathName(path_index), channel, result->attempts);
+        }
+        g_path_success_seen[path_index] = 1U;
+        if (result->first_status != RS485_MODBUS_OK) {
+            printf("[RS485 PATH] state=RETRY_RECOVERED path=%s ch=%u first=%s attempts=%u\n",
+                   FieldRs485PathName(path_index),
+                   channel,
+                   RS485_ModbusStatusName(result->first_status),
+                   result->attempts);
+        }
+        if (previous_streak > 0U) {
+            printf("[RS485 PATH] state=RECOVERED path=%s ch=%u prior_final_failures=%u\n",
+                   FieldRs485PathName(path_index), channel, previous_streak);
+        }
+        g_path_final_failure_streaks[path_index] = 0U;
+        return;
+    }
+
+    g_path_final_failure_streaks[path_index] =
+        FieldRs485_SaturatingAddU32(previous_streak, 1U);
+    if (ShouldLogFailureStreak(g_path_final_failure_streaks[path_index])) {
+        printf("[RS485 PATH] state=FAILED path=%s ch=%u first=%s final=%s attempts=%u streak=%u\n",
+               FieldRs485PathName(path_index),
+               channel,
+               RS485_ModbusStatusName(result->first_status),
+               RS485_ModbusStatusName(result->final_status),
+               result->attempts,
+               g_path_final_failure_streaks[path_index]);
+    }
+}
 
 static float SignedRegisterToScaledFloat(uint16_t value, float scale)
 {
@@ -76,7 +154,7 @@ static float SignedRegisterToScaledFloat(uint16_t value, float scale)
 }
 
 static int ReadRegistersWithRetry(
-    const char *path,
+    unsigned int path_index,
     uint8_t channel,
     uint8_t function_code,
     uint8_t addr,
@@ -84,7 +162,8 @@ static int ReadRegistersWithRetry(
     uint16_t reg_count,
     uint16_t *regs,
     unsigned int reg_capacity,
-    unsigned int timeout_ms)
+    unsigned int timeout_ms,
+    FieldRs485PathCycleDiagnostics *path_diagnostics)
 {
     unsigned int retries_used = 0U;
     int status;
@@ -99,18 +178,20 @@ static int ReadRegistersWithRetry(
             regs,
             reg_capacity,
             timeout_ms);
+        FieldRs485_PathCycleRecordAttempt(path_diagnostics, status);
         if (status == RS485_MODBUS_OK) {
-            if (retries_used > 0U) {
-                printf("[RS485] transient read recovered path=%s ch=%u retry=%u\n",
-                       path, channel, retries_used);
-            }
+            LogPathReadResult(path_index, channel, path_diagnostics);
             return status;
         }
         if (!RS485_ReadShouldRetry(status, retries_used, RS485_SENSOR_READ_MAX_RETRIES)) {
+            LogPathReadResult(path_index, channel, path_diagnostics);
             return status;
         }
         retries_used++;
         Watchdog_Feed();
+#if RS485_TRANSPORT_SC16IS752
+        (void)SC16IS752_UartReconfigureCached((Sc16is752Channel)channel);
+#endif
         LOS_Msleep(RS485_SENSOR_READ_RETRY_GAP_MS);
     } while (1);
 }
@@ -121,10 +202,11 @@ static int ReadTiltRegistersWithFunction(
     uint8_t addr,
     uint16_t *regs,
     unsigned int reg_capacity,
-    unsigned int timeout_ms)
+    unsigned int timeout_ms,
+    FieldRs485PathCycleDiagnostics *path_diagnostics)
 {
     return ReadRegistersWithRetry(
-        "tilt",
+        FIELD_RS485_PATH_TILT_INDEX,
         channel,
         function_code,
         addr,
@@ -132,10 +214,16 @@ static int ReadTiltRegistersWithFunction(
         RS485_TILT_REG_COUNT,
         regs,
         reg_capacity,
-        timeout_ms);
+        timeout_ms,
+        path_diagnostics);
 }
 
-static int ReadTiltRegisters(uint8_t channel, uint8_t addr, uint16_t *regs, unsigned int reg_capacity)
+static int ReadTiltRegisters(
+    uint8_t channel,
+    uint8_t addr,
+    uint16_t *regs,
+    unsigned int reg_capacity,
+    FieldRs485PathCycleDiagnostics *path_diagnostics)
 {
     return ReadTiltRegistersWithFunction(
         channel,
@@ -143,7 +231,8 @@ static int ReadTiltRegisters(uint8_t channel, uint8_t addr, uint16_t *regs, unsi
         addr,
         regs,
         reg_capacity,
-        RS485_RESPONSE_TIMEOUT_MS);
+        RS485_RESPONSE_TIMEOUT_MS,
+        path_diagnostics);
 }
 
 static int ProbeTiltSingleRegister(
@@ -173,7 +262,7 @@ static int ProbeTiltSingleRegister(
 static int ReconfigureRs485Channel(uint8_t channel, unsigned int baudrate)
 {
 #if RS485_TRANSPORT_SC16IS752
-    return SC16IS752_UartInit((Sc16is752Channel)channel, baudrate);
+    return SC16IS752_UartEnsureConfigured((Sc16is752Channel)channel, baudrate);
 #else
     (void)channel;
     (void)baudrate;
@@ -467,12 +556,40 @@ void FieldRs485_RunDiagnostics(void)
 int FieldRs485_Read(FieldRs485Readings *out)
 {
     int any_valid = 0;
+    uint64_t collection_started_ms;
+    uint64_t collection_completed_ms;
+    uint64_t collection_duration_ms;
 
     if (out == NULL) {
         return -1;
     }
 
     memset(out, 0, sizeof(*out));
+    collection_started_ms = FieldRs485MonotonicMs();
+    FieldRs485_PathCycleInit(
+        &out->cycle_diagnostics.paths[FIELD_RS485_PATH_SOIL_INDEX],
+        ENABLE_RS485_SOIL_SENSOR);
+    FieldRs485_PathCycleInit(
+        &out->cycle_diagnostics.paths[FIELD_RS485_PATH_SOIL_EC_INDEX],
+        ENABLE_RS485_SOIL_SENSOR && RS485_SOIL_HAS_EC);
+    FieldRs485_PathCycleInit(
+        &out->cycle_diagnostics.paths[FIELD_RS485_PATH_TILT_INDEX],
+        ENABLE_RS485_TILT_SENSOR);
+    FieldRs485_PathCycleInit(
+        &out->cycle_diagnostics.paths[FIELD_RS485_PATH_RAIN_INDEX],
+        ENABLE_RS485_RAIN_SENSOR);
+#if ENABLE_RS485_SOIL_SENSOR
+    out->cycle_diagnostics.enabled_mask |= FIELD_RS485_PATH_SOIL_MASK;
+#if RS485_SOIL_HAS_EC
+    out->cycle_diagnostics.enabled_mask |= FIELD_RS485_PATH_SOIL_EC_MASK;
+#endif
+#endif
+#if ENABLE_RS485_TILT_SENSOR
+    out->cycle_diagnostics.enabled_mask |= FIELD_RS485_PATH_TILT_MASK;
+#endif
+#if ENABLE_RS485_RAIN_SENSOR
+    out->cycle_diagnostics.enabled_mask |= FIELD_RS485_PATH_RAIN_MASK;
+#endif
 
 #if ENABLE_RS485_SOIL_SENSOR
     {
@@ -484,7 +601,7 @@ int FieldRs485_Read(FieldRs485Readings *out)
         uint16_t regs[RS485_SOIL_REG_COUNT] = {0};
         (void)ReconfigureRs485ChannelWithClock(RS485_SOIL_CHANNEL, RS485_BAUDRATE, SC16IS752_XTAL_HZ);
         if (ReadRegistersWithRetry(
-                "soil",
+                FIELD_RS485_PATH_SOIL_INDEX,
                 RS485_SOIL_CHANNEL,
                 MODBUS_FC_READ_HOLDING_REGISTERS,
                 RS485_SOIL_ADDR,
@@ -492,7 +609,8 @@ int FieldRs485_Read(FieldRs485Readings *out)
                 RS485_SOIL_REG_COUNT,
                 regs,
                 RS485_SOIL_REG_COUNT,
-                RS485_RESPONSE_TIMEOUT_MS) == 0) {
+                RS485_RESPONSE_TIMEOUT_MS,
+                &out->cycle_diagnostics.paths[FIELD_RS485_PATH_SOIL_INDEX]) == 0) {
             out->soil_moisture_pct =
                 (float)regs[RS485_SOIL_MOISTURE_REG_INDEX] * RS485_SOIL_MOISTURE_SCALE;
             out->soil_temperature_c =
@@ -506,7 +624,7 @@ int FieldRs485_Read(FieldRs485Readings *out)
 
                 LOS_Msleep(RS485_INTER_REQUEST_GAP_MS);
                 ec_read_ret = ReadRegistersWithRetry(
-                    "soil_ec",
+                    FIELD_RS485_PATH_SOIL_EC_INDEX,
                     RS485_SOIL_CHANNEL,
                     MODBUS_FC_READ_HOLDING_REGISTERS,
                     RS485_SOIL_ADDR,
@@ -514,7 +632,8 @@ int FieldRs485_Read(FieldRs485Readings *out)
                     1,
                     &ec_reg,
                     1,
-                    RS485_RESPONSE_TIMEOUT_MS);
+                    RS485_RESPONSE_TIMEOUT_MS,
+                    &out->cycle_diagnostics.paths[FIELD_RS485_PATH_SOIL_EC_INDEX]);
                 if (ec_read_ret == 0) {
                     if (!soil_ec_supported) {
                         printf("[RS485 SOIL] optional EC register detected at 0x%04X\n", RS485_SOIL_EC_REG);
@@ -597,13 +716,24 @@ int FieldRs485_Read(FieldRs485Readings *out)
                 tilt_addr,
                 regs,
                 RS485_TILT_REG_COUNT,
-                RS485_RESPONSE_TIMEOUT_MS);
+                RS485_RESPONSE_TIMEOUT_MS,
+                &out->cycle_diagnostics.paths[FIELD_RS485_PATH_TILT_INDEX]);
         } else {
             uint8_t fallback_channel = (RS485_TILT_CHANNEL == RS485_CHANNEL_1) ? RS485_CHANNEL_2 : RS485_CHANNEL_1;
-            read_ret = ReadTiltRegisters(RS485_TILT_CHANNEL, RS485_TILT_ADDR, regs, RS485_TILT_REG_COUNT);
+            read_ret = ReadTiltRegisters(
+                RS485_TILT_CHANNEL,
+                RS485_TILT_ADDR,
+                regs,
+                RS485_TILT_REG_COUNT,
+                &out->cycle_diagnostics.paths[FIELD_RS485_PATH_TILT_INDEX]);
             if (read_ret != 0) {
                 memset(regs, 0, sizeof(regs));
-                read_ret = ReadTiltRegisters(fallback_channel, RS485_TILT_ADDR, regs, RS485_TILT_REG_COUNT);
+                read_ret = ReadTiltRegisters(
+                    fallback_channel,
+                    RS485_TILT_ADDR,
+                    regs,
+                    RS485_TILT_REG_COUNT,
+                    &out->cycle_diagnostics.paths[FIELD_RS485_PATH_TILT_INDEX]);
                 tilt_channel = fallback_channel;
             } else {
                 tilt_channel = RS485_TILT_CHANNEL;
@@ -617,7 +747,8 @@ int FieldRs485_Read(FieldRs485Readings *out)
             tilt_addr,
             regs,
             RS485_TILT_REG_COUNT,
-            RS485_RESPONSE_TIMEOUT_MS);
+            RS485_RESPONSE_TIMEOUT_MS,
+            &out->cycle_diagnostics.paths[FIELD_RS485_PATH_TILT_INDEX]);
 #endif
 
         if (read_ret == 0) {
@@ -648,7 +779,7 @@ int FieldRs485_Read(FieldRs485Readings *out)
     {
         uint16_t regs[RS485_RAIN_REG_COUNT] = {0};
         if (ReadRegistersWithRetry(
-                "rain",
+                FIELD_RS485_PATH_RAIN_INDEX,
                 RS485_RAIN_CHANNEL,
                 MODBUS_FC_READ_HOLDING_REGISTERS,
                 RS485_RAIN_ADDR,
@@ -656,7 +787,8 @@ int FieldRs485_Read(FieldRs485Readings *out)
                 RS485_RAIN_REG_COUNT,
                 regs,
                 RS485_RAIN_REG_COUNT,
-                RS485_RESPONSE_TIMEOUT_MS) == 0) {
+                RS485_RESPONSE_TIMEOUT_MS,
+                &out->cycle_diagnostics.paths[FIELD_RS485_PATH_RAIN_INDEX]) == 0) {
             out->rain_total_mm = (float)regs[0] * RS485_RAIN_TOTAL_SCALE;
             out->rain_valid = 1;
             any_valid = 1;
@@ -665,6 +797,24 @@ int FieldRs485_Read(FieldRs485Readings *out)
         LOS_Msleep(RS485_INTER_REQUEST_GAP_MS);
     }
 #endif
+
+    if (out->soil_valid) {
+        out->cycle_diagnostics.valid_mask |= FIELD_RS485_PATH_SOIL_MASK;
+    }
+    if (out->soil_ec_valid) {
+        out->cycle_diagnostics.valid_mask |= FIELD_RS485_PATH_SOIL_EC_MASK;
+    }
+    if (out->tilt_valid) {
+        out->cycle_diagnostics.valid_mask |= FIELD_RS485_PATH_TILT_MASK;
+    }
+    if (out->rain_valid) {
+        out->cycle_diagnostics.valid_mask |= FIELD_RS485_PATH_RAIN_MASK;
+    }
+    collection_completed_ms = FieldRs485MonotonicMs();
+    collection_duration_ms = collection_completed_ms - collection_started_ms;
+    out->cycle_diagnostics.completed_uptime_s = (uint32_t)(collection_completed_ms / 1000U);
+    out->cycle_diagnostics.duration_ms = collection_duration_ms > UINT32_MAX ?
+        UINT32_MAX : (uint32_t)collection_duration_ms;
 
     return any_valid ? 0 : -1;
 }
