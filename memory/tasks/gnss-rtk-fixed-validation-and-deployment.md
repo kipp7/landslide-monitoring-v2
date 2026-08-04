@@ -18,6 +18,23 @@ status: active
 
 ## Current State
 
+### Protected-P1 Indoor 60/600/1800 Gate Complete (2026-08-04)
+
+- C 重新插稳后电池有效位恢复。20 秒高频 environment 复核覆盖 C 两次，profile
+  violation 从此前 12 个降为 0；正式 60 秒随后 `46/46` 且 `stableProfile=true`。
+- 正式 600 秒为 `508/508`，1800 秒为 `1419/1419`；两段均为零丢帧、解码、
+  交织、重复、未匹配、scope/epoch/profile/sequence 错误且 P2 为 0。1800 秒
+  A/B/C arrival P95 `2095.0/1868.7/1810.2 ms`，command P95
+  `1063.4/1387.7/1051.5 ms`，最大 `3454.7/3157.9/1479.2 ms`，严格满足门槛。
+- 1800 秒内 P3 environment `25/25`、P4 audit `24/24`，A/B/C 均获得覆盖；真实
+  soil temperature/moisture/EC、三轴倾角和 field-calibrated PC0 全程有效，模拟
+  GNSS 保持 untrusted/displacement-ineligible，RTCM 保持 disabled/READY-only 且
+  活动和错误计数为 0。
+- 现场原始报告仅留 RK3568；三阶段报告及 summary 的 SHA-256 已记录在 checkpoint。
+  验收后 field-gateway active、零重启、hold clear、NTRIP false。室内传输任务完成；
+  下一任务是生成独立 hardware-GNSS V6 clean release，并在室外依次执行纯硬件
+  GNSS 遥测、RTCM PROBE、RTCM LIVE、持续 GGA=4/可信 ENU 位移门禁。
+
 ### Protected-P1 Deployed; C PC0 Blocks Long Gate (2026-08-04)
 
 - Hybrid 的 P2 恢复没有带来更早响应：修正记账后的 120 秒中 20 次 P2 全部晚于

@@ -18,6 +18,36 @@ status: active
 
 ## Last Confirmed State
 
+### Compact V6 Protected-P1 Indoor Gate Passed (2026-08-04)
+
+- C 重新插稳后，20 秒高频 P3 复核为 `12/12` 完整 core round、零 profile/协议
+  错误；5 个 environment 响应覆盖 A 2、C 2、B 1，C 电池与土壤三合一全部
+  恢复有效。该人为加重 P3 的小样本仅因 B arrival P95 `2621.7 ms` 超过正式
+  `2500 ms` 而整体 false，不作为生产门禁；报告 SHA-256
+  `99a458b545f5c3addcc4f9bbcb97520377f62582ec9d88ac8127465358d683c1`。
+- 随后使用正式 30/60 扩展 cadence 分别完成独立 `60 -> 600 -> 1800` fail-fast：
+  60 秒 `46/46`、600 秒 `508/508`、1800 秒 `1419/1419` 完整 core round；三段的
+  decode、wire length、unmatched、duplicate、recovery redundant、scope、epoch、
+  profile、sequence 和 trailing bytes 全部为 0，且没有发送 P2。
+- 60/600/1800 报告 SHA-256 分别为
+  `b9f9cbae345deb2d10fd8c3942708233308f64df2c7b659adfd8f63b256a7565`、
+  `bb7d663983451db3a403248bcac1e6eb0506060d1576a0e81e794831c8812ae7`、
+  `f39a1fa9fb62b6d68a5097a0a685975424a174670279f4a3226ed7dcf68eca52`；
+  对应 summary SHA-256 为
+  `2ce6c03a682906297e4376b8b7c04282b61f9e8aa67528c3b61645ec0ad4cb34`、
+  `9b3bde6a6a1ee9b3cac91e8e6745cfcecfd012fca96efe4358689e0366a13472`、
+  `c8847c2e3063221a9b531641fd0e657650a9056e712e8f94f9ab063f95a57beb`。
+- 600 秒 A/B/C arrival P95 为 `1577.5/1552.2/1350.7 ms`，P3/P4 各 9 帧并
+  各节点覆盖 3 次。1800 秒 arrival P95 为 `2095.0/1868.7/1810.2 ms`，command
+  P95 为 `1063.4/1387.7/1051.5 ms`，command max 为
+  `3454.7/3157.9/1479.2 ms`；P3 `25/25`、P4 `24/24`，三节点均覆盖，全部满足
+  `2500/2500/6500 ms` 门槛。
+- 验收后 RK3568 field-gateway 已恢复 active、`NRestarts=0`、runtime hold clear，
+  `NTRIP_ENABLED=false`。结论限于“真实 RS485 + 最终校准电池 + 模拟 GNSS + RTCM
+  disabled”的室内传输门禁通过；不能表述为硬件 GNSS、RTCM LIVE、室外 Fixed 或
+  厘米级位移算法已通过。下一阶段必须从同一 clean source 生成独立 hardware-GNSS
+  V6 包，再按纯遥测 -> PROBE -> LIVE -> 室外持续 GGA=4 推进。
+
 ### Compact V6 Protected-P1 Short Gate: Link Pass, C Battery Blocks (2026-08-04)
 
 - Hybrid 600 秒只有 `472/473` 完整 core round，出现 4 个解码错误、109 个恢复

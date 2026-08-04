@@ -45,10 +45,19 @@ status: active
 ### Current Boundary
 
 实现与最终 A/B/C 包绑定提交 `4ea5b7ea4df98828309983a60caf988578d540c8`；
-验收器能力探测修复提交 `2f1a2614`。当前短门禁的唯一阻断是 C environment 的
-PC0 电池字段持续无效，土壤/EC、倾角和通信均正常。必须先修复 C PC0/SARADC，
-再重跑 `60 -> 600 -> 1800`；不得删除电池门禁、沿用陈旧电压或把短门禁表述为
-完整生产/厘米级验收通过。NTRIP/RTCM/CORS 继续关闭。
+验收器能力探测修复提交 `2f1a2614`。此前短门禁的唯一阻断是 C environment 的
+PC0 电池字段持续无效，土壤/EC、倾角和通信均正常；当时保持 fail-fast，未删除
+电池门禁或沿用陈旧电压。该阻断已由下述重新插稳和完整门禁闭环。
+
+### Validation Result
+
+C 重新插稳后 PC0 字段恢复，protected single-P1 已按正式 cadence 完成独立
+60/600/1800 秒门禁：`46/46`、`508/508`、`1419/1419` 完整 core round，所有
+协议、线框、scope、epoch、profile 和序号错误为 0。1800 秒三节点 arrival P95
+均小于 2.1 秒，command P95 均小于 1.4 秒；P3 `25/25`、P4 `24/24`。因此本决策
+作为“真实 RS485/电池、模拟 GNSS、RTCM disabled”的室内生产传输基线正式接受，
+hybrid/P2 与旧大帧路线继续冻结。该结论不跨越 GNSS 真值边界：硬件 GNSS、CORS、
+RTCM LIVE、GGA=4 和厘米级 ENU 位移仍需独立室外发布包与门禁。
 
 ## Compact V6 Hybrid Recovery Refinement (2026-08-04)
 
