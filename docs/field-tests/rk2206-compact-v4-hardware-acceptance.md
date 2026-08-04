@@ -35,8 +35,8 @@ This gate validates the three real A/B/C RS485 sensor paths before NTRIP or RTCM
   chunked UART write share one mutex. This prevents concurrent workers from
   putting sequence `N+1` on the wire before sequence `N`.
 - Sensor policy: one retry after 80 ms for Modbus timeout/read/short/CRC failures only. Every failed first attempt remains in the low-level counters; no old sensor value is reused.
-- Acceptance timing: fixed A to B to C targeted order, 250 ms batch interval, 1500 ms response window, zero XLS1 link retries, 1500 ms logical-session limit, and 2500 ms maximum per-node P95 interval.
-- The RK3568 production service remains at its existing `1200/1200/0` timing until all three acceptance stages pass.
+- Acceptance timing: fixed A to B to C targeted order, 250 ms batch interval, 3000 ms receive-protection window, zero XLS1 link retries, independent 1500 ms command-latency limit, and 2500 ms maximum per-node P95 interval.
+- The RK3568 production service uses `compact-targeted-v1/250/3000/0`; the longer protection window prevents a late frame from overlapping the next node and does not relax either latency gate.
 - RK3568 must keep `NTRIP_ENABLED=false` throughout this gate.
 
 Two V5-r3 60-second runs delivered every requested frame (`90/90` and `78/78`)
@@ -44,6 +44,38 @@ without link, decode, profile, or sensor-validity errors, but failed the 2500 ms
 P95 interval gate. The second run reached 2640.0/2699.8/2675.8 ms for A/B/C.
 V5 diagnostics found only bounded recovered Modbus timeouts and zero final
 sensor failure. Source review then found the 200 ms hard-coded upload sleep.
+
+V5-r4 removed that hard-coded sleep, but the real three-node gate exposed a
+separate air-interface limit. The first 60-second stage passed with `111/111`
+matched frames, zero protocol/profile errors, and A/B/C arrival P95 of
+2072.4/1902.7/1901.8 ms. The following 600-second stage stopped the gate at
+`793/813`: A/B/C missed 7/8/5 frames and the decoder recorded 20 errors. Those
+errors formed exactly ten `236 B + 78 B = 314 B` pairs, the byte count of two
+157-byte frames interleaved in the shared XLS1 output. A/B/C arrival P95 rose
+to 3821.2/3939.8/3957.9 ms, so the 1800-second stage correctly did not start.
+
+G3S V5 diagnostics after the failure reported `hardwareGatePassed=true` for
+all nodes, healthy U4/soil/EC/tilt current state, and zero final-failure streaks.
+The few Modbus no-response events were recovered by the single bounded retry.
+The same 236/78 interleaving reproduced under the production gateway's former
+1200 ms session window. A 3000 ms protection-window comparison delivered
+`99/99` frames without protocol errors, proving that the short window caused
+the next node to transmit over a late response, but the permanent 3000 ms run
+still failed the independent speed gate: its A/B/C arrival P95 was
+4449.2/4470.6/5121.5 ms. Requiring 15 seconds of serial silence before another
+run still produced 4972.4/5380.6/4985.7 ms, excluding historical queue residue.
+
+The DL-XLxx manual explains the result: the session-layer nominal payload is
+only `[0,64] B`; larger payloads are merely described as possibly successful.
+It also documents 50 ms UART aggregation and about 900 B/s ideal one-way user
+throughput, with bidirectional traffic, same-channel nodes, range, and
+interference reducing that rate and moving excess data into a latency queue.
+Compact V4's 157-byte complete frame therefore consumes at least three nominal
+radio packets. V5-r4 is retained as diagnostic evidence but rejected for
+production periodic telemetry. Do not compensate by increasing timeouts or
+weakening the 100% match, zero-error, 1500 ms command-latency, or 2500 ms
+per-node P95 gates. The successor must preserve the 95-byte professional V3
+prefix while fitting its complete field-link frame within 128 bytes.
 
 The former V5-r3 release, V5-r2 clean release,
 `xls1_compact_v4_rs485_retry1_gnss_simulated_20260803`, dirty compile proofs,
@@ -104,7 +136,7 @@ Each stage requires all of the following:
 - hardware soil temperature, soil moisture, EC, and three-axis tilt validity with bounded numeric values;
 - valid PC0 voltage and percentage with `field-calibrated` quality;
 - RTCM mode `disabled`, READY-only state, session epoch `0`, lease `0`, pending queue/high-water mark `0`, no historical RTCM action age, and all accepted/completed/injected/reject/CRC/queue-drop/UART counters at `0`;
-- zero XLS1 link retries, attempt and total logical latency at most 1500 ms, and per-node P95 interval at most 2500 ms.
+- zero XLS1 link retries, command latency at most 1500 ms, total logical latency at most 3000 ms, and per-node P95 interval at most 2500 ms.
 
 Reports stay under `/var/lib/lsmv2/experiments`. The runner prints each report path and SHA-256 plus a final summary path. Raw reports are not committed because later runs can carry real GNSS positions.
 

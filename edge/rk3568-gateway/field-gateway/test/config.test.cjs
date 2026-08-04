@@ -23,7 +23,7 @@ test("RK3568 deployment example pins the field-validated recovery profile", () =
   assert.equal(config.southboundPollingEnabled, true);
   assert.equal(config.southboundPollingMode, "compact-targeted-v1");
   assert.equal(config.southboundPollingIntervalMs, 250);
-  assert.equal(config.southboundPollingSessionTimeoutMs, 1200);
+  assert.equal(config.southboundPollingSessionTimeoutMs, 3000);
   assert.equal(config.southboundPollingPartialRetries, 0);
   assert.equal(config.southboundPollingRetryAfterMs, 1200);
 });

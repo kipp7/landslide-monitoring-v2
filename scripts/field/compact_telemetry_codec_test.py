@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import struct
+from argparse import Namespace
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -17,7 +18,11 @@ from xls1_three_node_batch_poll import (
     should_retry_broadcast_poll,
     telemetry_profile_errors,
 )
-from xls1_compact_v4_acceptance import minimum_session_timeout_ms, require_ntrip_disabled
+from xls1_compact_v4_acceptance import (
+    minimum_session_timeout_ms,
+    require_ntrip_disabled,
+    stage_arguments,
+)
 
 
 PAYLOAD_HEX = (
@@ -52,6 +57,25 @@ def main() -> None:
         pass
     else:
         raise AssertionError("acceptance gate accepted a non-positive response window")
+
+    stage = stage_arguments(
+        Namespace(
+            serial_device="/dev/ttyS3",
+            baud=115200,
+            batch_interval_ms=250,
+            response_window_ms=3000,
+            session_timeout_ms=3000,
+            max_command_latency_ms=1500.0,
+            max_retry_rate=0.0,
+            max_p95_interval_ms=2500.0,
+            required_gnss_source="simulated",
+            service="lsmv2-field-gateway.service",
+        ),
+        60.0,
+    )
+    assert stage.response_wait_ms == 3000
+    assert stage.max_logical_response_latency_ms == 3000
+    assert stage.max_command_latency_ms == 1500.0
 
     with TemporaryDirectory() as temporary_directory:
         environment_file = Path(temporary_directory) / "field-gateway.env"

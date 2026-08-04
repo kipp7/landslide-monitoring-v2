@@ -18,6 +18,16 @@ status: active
 
 ## Current State
 
+### V5-r4 Hardware Gate: Framing Protected, 157 B Throughput Rejected (2026-08-04)
+
+- 用户已按 A/B/C 标签烧录并上电 V5-r4。正式 `60/600/1800` 首轮的 60 秒为 `111/111`、零丢失/重复/未匹配/解码/profile/RTCM 错误，A/B/C arrival P95 为 `2072.4/1902.7/1901.8 ms`，通过；600 秒随后严格失败并停止，结果为 `793/813`、20 个缺帧和 20 个解码错误。错误精确成 10 组 `236 B + 78 B = 314 B`，即两个 157 B 帧在共享 XLS1 输出中交织；A/B/C 分别缺 `7/8/5` 帧，arrival P95 为 `3821.2/3939.8/3957.9 ms`，不能进入 1800 秒。
+- 600 秒失败后的 G3S V5 查询中，A/B/C 均 `hardwareGatePassed=true`、soil/EC/tilt 当前有效、U4 正常、final failure/streak 为 0；低频 Modbus `no_response` 全部一次重试恢复。当前阻断不是 SC16IS752、RS485 探头、RTCM 或字段 profile。
+- 生产网关原 `compact-targeted-v1/250/1200/0` 同步复现：549 次轮询中 90 次 session timeout，并出现相同的 236/78 交织。将接收保护窗单变量提高到 3000 ms 的对照短测为 `99/99`、零协议错误，A/B/C arrival P95 `2273.8/2158.5/2290.3 ms`；因此 1200/1500 ms 超时后过早发送下一节点是交织的直接触发条件。
+- RK3568 已备份到 `/opt/lsmv2/backups/targeted-tail-window-predeploy-20260804-104141`，本地环境原子改为 `compact-targeted-v1/250/3000/0`，仍为 `root:root 0600`、`NTRIP_ENABLED=false`。3000 ms 是防止迟到帧撞上下一个节点的接收保护窗，不是性能放宽；验收器独立保留 command latency `<=1500 ms` 与 per-node arrival P95 `<=2500 ms`。
+- 部署后正式 60 秒为 `57/57`、零通信/profile 错误，但 A/B/C command P95 `2249.1/2133.4/1832.3 ms`、arrival P95 `4449.2/4470.6/5121.5 ms`，严格速度失败。随后停住生产轮询并要求 15 秒连续静默，仍只得到 `60/60` 完整帧且 arrival P95 `4972.4/5380.6/4985.7 ms`，排除单纯历史队列积压。
+- `DL-XLxx用户手册` 第 20、25、26 页给出机制证据：会话层标称载荷 `[0,64] B`，超过 64 B 只保证“可能成功”；用户串口按 50 ms 聚包，理想单向吞吐约 900 B/s，双向、同信道多节点、距离和干扰都会降低，并会以缓存表现为延迟。Compact V4 的 `139 B payload / 157 B wire frame` 至少占 3 个标称空口包，当前失败已收敛为周期帧尺寸与共享空口吞吐的架构瓶颈。
+- 下一候选不得继续调大超时或降低门禁。周期遥测保留 Compact V3 已有的真实 soil/EC/tilt、电池、纳米度坐标、MSL/椭球高、GGA quality、卫星/HDOP、GST、correction age、GNSS 周时、Fixed 连续率和参考站字段；RTCM 只保留 session/lease、队列、最近完成年龄、注入计数和错误摘要，使完整 COBS/CRC 线上帧 `<=128 B`（最多两个 64 B 标称空口包）。完整累计计数继续由按需 G3S V5 提供，禁止周期发送 570 B 诊断帧。新协议完成离线审查和 A/B/C clean build 前不要求再次烧录。
+
 ### RS485 Diagnostic V5-r4 Poll Cadence Fix and Clean Release (2026-08-04)
 
 - 用户按标签烧录 V5-r3 后，RK3568 前置门禁通过：`/dev/ttyS3`、网关 active/NRestarts=0、环境文件 `root:root 0600`、`NTRIP_ENABLED=false`。首轮 60 秒为 `90/90`、30/30 完整批次、零丢帧/重复/解析/profile/重发错误，但 C arrival P95 `2557.7 ms` 超过 `2500 ms`；第二轮为 `78/78`、26/26 完整批次、同样零通信与字段错误，但 A/B/C P95 为 `2640.0/2699.8/2675.8 ms`，再次严格失败。两轮报告 SHA-256 为 `84872026eac743e69a32e818a466eb1a44ec44a45e1a50423c42188c3505b180`、`30ec11f333b73edd555306385575e0c5fd928125bb97a8a21360c41e5dff0c4c`；原始 JSON 仅留 RK3568，不入 Git。
@@ -26,7 +36,7 @@ status: active
 - 对照启动摘要与源码发现真实调度缺陷：`POLL_REQUEST_CHECK_INTERVAL_MS=50` 且日志打印 50 ms，但 `DataUploadTask` 实际硬编码 `sleep_ms=200`。P2 A->B->C 单飞会逐节点累积这段反应抖动。V5-r4 改为 `DATA_UPLOAD_IDLE_CHECK_INTERVAL_MS`，轮询模式真实使用 50 ms；没有放宽 2500 ms 门限，也没有改变 RS485 重试、139 B 字段、RTCM 或 XLS1 参数。
 - 新增 `test-rk2206-poll-cadence-safety.ps1`，拒绝硬编码 200 ms 回归。构建复核还拦截了清单生成器独立硬编码 V5-r3 的问题；构建器现在以 `landslide_main.c` 为版本标记唯一来源，只派生 compact v3/v4 令牌，并由 `test-rk2206-release-marker-source-safety.ps1` 门禁。
 - 实现提交 `a6bb102f3f89eb50b72e08fc01922065d555cc31` 已推送。C99、Python、field-gateway `49/49` + lint、引脚正反例、发布安全、电池、TX 顺序、RS485 启动、轮询节奏、版本来源及 A/B/C OpenHarmony 全量编译全部通过。
-- 当前唯一允许下一次烧录的是 `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v4_rs485_diag_v5_r4_gnss_simulated_20260804`，标记 `fw-rk2206-rtk-compact-v4-rs485-diag-v5-r4-20260804`。manifest SHA-256 `481b0805c67b91e99041a3c7543eb62dafeceb431c8da492fd0fbc0978e7b94b`；A/B/C `.img` SHA-256 为 `1b0443d3ba92195dbc95d52566ad758a5068514b2010c13a8441b5b74e3f3c84`、`755325733db20efdf748636617acc5fe6d3063a1ad059dc0d326b5509ddd0065`、`16f17fb91d5867c3cd7a68b78ac8bc3a36bc005a0d51782ab5a65d6c931b7dd6`。仍需重新烧录并从 60 秒开始，尚未通过 600/1800 秒，不能声称三节点生产稳定或厘米级完成。
+- V5-r4 已按标签完成烧录并得到顶部所列真机结果；该目录与哈希继续保留追溯，但 600 秒通信/速度门禁失败，不能作为生产稳定或厘米级完成证据，也不应在没有新协议改动时重复烧录。
 
 ### [Superseded] RS485 Diagnostic V5-r3 Adversarial Audit and Clean Release (2026-08-03)
 

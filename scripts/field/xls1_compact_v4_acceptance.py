@@ -125,7 +125,7 @@ def stage_arguments(args: argparse.Namespace, duration_seconds: float) -> Namesp
         report_path="",
         required_match_rate=1.0,
         max_p95_interval_ms=args.max_p95_interval_ms,
-        max_command_latency_ms=args.response_window_ms,
+        max_command_latency_ms=args.max_command_latency_ms,
         required_compact_version=4,
         required_field_sensor_source="hardware",
         required_gnss_source=args.required_gnss_source,
@@ -159,8 +159,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--baud", type=int, default=115200)
     parser.add_argument("--durations", type=parse_durations, default=parse_durations("60,600,1800"))
     parser.add_argument("--batch-interval-ms", type=int, default=250)
-    parser.add_argument("--response-window-ms", type=int, default=1500)
-    parser.add_argument("--session-timeout-ms", type=int, default=1500)
+    parser.add_argument("--response-window-ms", type=int, default=3000)
+    parser.add_argument("--session-timeout-ms", type=int, default=3000)
+    parser.add_argument("--max-command-latency-ms", type=float, default=1500.0)
     parser.add_argument("--max-retry-rate", type=float, default=0.0)
     parser.add_argument("--max-p95-interval-ms", type=float, default=2500.0)
     parser.add_argument(
@@ -177,8 +178,10 @@ def parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if args.baud <= 0 or args.batch_interval_ms <= 0:
         parser.error("baud and batch interval must be positive")
-    if args.response_window_ms <= 0:
-        parser.error("response window must be positive")
+    if args.response_window_ms <= 0 or args.max_command_latency_ms <= 0:
+        parser.error("response window and command latency limit must be positive")
+    if args.max_command_latency_ms > args.response_window_ms:
+        parser.error("command latency limit must not exceed the measured response window")
     minimum_session_ms = minimum_session_timeout_ms(args.response_window_ms, PARTIAL_RETRIES)
     if args.session_timeout_ms < minimum_session_ms:
         parser.error(
@@ -210,6 +213,7 @@ def main() -> int:
         "responseWindowMs": args.response_window_ms,
         "partialRetries": PARTIAL_RETRIES,
         "sessionTimeoutMs": args.session_timeout_ms,
+        "maxCommandLatencyMs": args.max_command_latency_ms,
         "maxRetryRate": args.max_retry_rate,
         "requiredCompactVersion": 4,
         "requiredFieldSensorSource": "hardware",

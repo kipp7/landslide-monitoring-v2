@@ -18,6 +18,14 @@ status: active
 
 ## Last Confirmed State
 
+### V5-r4 157 B Shared-Link Rejection (2026-08-04)
+
+- A/B/C 已统一烧录 V5-r4。60 秒首级 `111/111` 且 A/B/C arrival P95 `2072.4/1902.7/1901.8 ms`；600 秒为 `793/813`，20 个缺帧与 20 个解码错误组成 10 组 `236+78=314 B` 的双帧交织，A/B/C arrival P95 均约 3.8..4.0 秒，因此 fail-fast 未进入 1800 秒。
+- 三节点 G3S V5 均确认 U4 和真实 soil/EC/tilt 当前健康、final fail/streak 为 0。生产 1200 ms 窗口在 549 次轮询中产生 90 次 timeout 与同型交织；3000 ms 保护窗短测 `99/99` 且零协议错误，证明迟到帧撞上下个 P2 是直接触发条件。
+- RK3568 已以备份 `/opt/lsmv2/backups/targeted-tail-window-predeploy-20260804-104141` 为回滚点，切为 `compact-targeted-v1/250/3000/0`，NTRIP 仍关闭；验收独立保留 1500 ms command max 和 2500 ms per-node arrival P95，不把保护窗当性能门槛。
+- 正式复跑 `57/57` 全帧完整但 arrival P95 `4449.2/4470.6/5121.5 ms`；15 秒完全静默排空后再测仍为 `60/60`、`4972.4/5380.6/4985.7 ms`，所以不是旧队列残留。手册明确无线载荷标称最多 64 B、理想单向约 900 B/s 且双向/同信道/距离/干扰会下降；157 B 正常帧至少占三个空口包，当前根因是周期帧尺寸与共享链路吞吐。
+- 下一步不是继续调 timeout。设计并离线审查一个 `wire <=128 B` 的快速周期帧：保留全部专业 RTK 与真实传感器字段，把 V4 的 44 B RTCM 审计尾部压缩为必要运行状态；完整累计诊断保留在按需 G3S V5。通过 C/Python/TypeScript 金值、字段 fail-closed、引脚/发布安全和 A/B/C clean build 后，再让用户统一重刷一次并重新执行 60/600/1800。
+
 ### RS485 Diagnostic V5-r4 Poll Cadence Fix (2026-08-04)
 
 - V5-r3 真机前置门禁通过，但两次 60 秒严格门禁分别为 `90/90` 和 `78/78` 全量匹配、所有批次完整、零通信/profile/重发错误，却因 arrival P95 超过 `2500 ms` 失败。首轮仅 C 为 `2557.7 ms`；复跑 A/B/C 为 `2640.0/2699.8/2675.8 ms`，因此未进入 600/1800 秒且不能放宽门限冒充通过。
