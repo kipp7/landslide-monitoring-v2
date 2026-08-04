@@ -148,3 +148,9 @@ clean hardware-GNSS V6 build for outdoor testing. CORS/RTCM/NTRIP remain off
 until that new build first passes pure telemetry, then PROBE, then LIVE, and
 finally sustained outdoor `GGA=4`/trusted displacement gates. Indoor simulated
 coordinates must never seed the displacement baseline.
+
+The first three-node outdoor LIVE comparison is recorded in
+`gnss-rtk-three-node-live-acceptance-20260805.md`. It proves that the hardware
+and shared link can put A/B/C into RTK FIXED without losing normal telemetry,
+but it does not supersede this promotion boundary: correction-age and trusted
+displacement gates remain mandatory.

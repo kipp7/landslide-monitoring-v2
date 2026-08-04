@@ -18,6 +18,27 @@ status: active
 
 ## Current State
 
+### Three-Node LIVE Reached RTK FIXED; Displacement Gate Still Closed (2026-08-05)
+
+- A/B/C 已烧录 UART drain V2 LIVE 候选。三节点 UM220 UART 均按 `115200` 工作；
+  A 的最终 G3S V6 诊断确认 `read_errors=0`、`fifo_drop=0`，GNSS、真实土壤三合一
+  与倾角当前有效。B/C 最终 G3S V6 快照因现场收设备尚待补测。
+- RK3568 已采用受轮询保护的 RTCM 调度：节点 LIVE 证据有效窗 `45 s`，连续下发
+  最多 `4` 帧，随后至少给普通轮询 `600 ms` 保护。真实 CORS LIVE 约 7 分钟得到
+  `111/111` 完整普通轮询、零 poll timeout、348 帧 RTCM 下发、caster 2112 个
+  有效帧且 CRC 0，三节点授权持续 `3/3`。
+- A/B/C 最终都报告 `quality=4 / RTK FIXED`，卫星数约 `32/32/34`，HDOP 约
+  `0.55`。这证明三节点共享链路和硬件可以同时进入 FIXED；但 correction age 约
+  `10 s`，且 `rtk_trusted=false`、`rtk_displacement_eligible=false`，所以专业
+  厘米级位移门禁仍关闭，尚未建立 ECEF/ENU 基线。
+- `1000 ms` 轮询、`6 frames/250 ms`、`4 frames/250 ms`、`4 frames/1200 ms`
+  均因授权下降、轮询超时或后半段 FLOAT 被拒绝。当前唯一保留候选是
+  `512 B fragment / 4 frames / 600 ms guard / 45 s evidence`；详细证据见
+  `docs/field-tests/gnss-rtk-three-node-live-acceptance-20260805.md`。
+- 用户已在降雨风险前收回 A/B/C。RK3568 保持 `NTRIP_ENABLED=false`、runtime
+  `probe`、fragment `512 B`、poll `250 ms`、audit cadence `2`，服务 active、
+  `NRestarts=0`，受保护环境文件仍为 `root:root 0600`。
+
 ### Hardware-GNSS V6 Release Ready; CORS Staged Fail-Closed (2026-08-04)
 
 - 从干净提交 `eb76454b2bb15204e24934d8fc387128cb3f1c19` 生成正式硬件 GNSS
@@ -341,17 +362,14 @@ status: active
 
 ## Plan
 
-- 只烧录上述 hardware-GNSS V6 正式目录中与物理节点标签一致的 `.img`；V5/V4、
-  simulated V6 和任何临时构建均停止用于当前室外阶段。
-- 连接三套 BT-760 后移到室外，保持 `NTRIP_ENABLED=false`，先检查三节点启动标记、
-  UUID、真实 GNSS 来源及 GGA/GST/HDOP/卫星数/时间字段，再依次执行 60/600 秒
-  hardware 纯遥测门禁。任一阶段失败都不启用 CORS。
-- 纯遥测通过后启用一个三节点共同、有限租约的 PROBE 会话；验证实际 RTCM 类型、
-  CRC、分片完成、队列边界、session/lease 和零 GNSS UART 注入。PROBE 结束或失败
-  必须自动返回关闭。
-- PROBE 通过后才切换有限租约 LIVE，并以持续 `GGA=4`、correction age P95
-  `<=3 s` / max `<=5 s`、可信 GST、无旧 session 注入及三节点 Fixed 连续性验收；
-  随后运行 1800 秒混合负载门禁。
+- 明早室外重新连接三套 BT-760 并上电，保持 `NTRIP_ENABLED=false`，先检查 A/B/C
+  启动标记、UUID、真实 GNSS/RS485 来源及 P1/P3/P4 普通遥测，形成新 session 基线。
+- 补齐 B/C 的 G3S V6，并复核 A/B/C 节点端接收、重组、实际注入、TTL、CRC、drop
+  和 UART write 计数；不能用网关 caster 计数替代节点端证据。
+- 先运行共同有限 PROBE，再启用 `512 B / 4 frames / 600 ms / 45 s` LIVE 候选。
+  LIVE 先做至少 600 秒，失败自动回到关闭，不能保留旧租约或旧队列。
+- 只有持续 `GGA=4`、correction age P95 `<=3 s` / max `<=5 s`、可信 GST、无旧
+  session 注入且三节点普通遥测零丢失，才运行 1800 秒混合负载门禁。
 - 只有室外 Fixed 与可信字段门禁通过，才建立 ECEF/ENU 基线并验收 RK3568
   Hampel/Kalman、服务器 CEEMDAN 和 UI；不得用构建成功、NTRIP 已连接或单次
   `GGA=4` 宣称厘米级完成。
@@ -362,7 +380,10 @@ status: active
 
 ## Open Questions
 
-- A/B 已通过的 450 B/s 共同候选在 C 和真实 RTCM、三节点上行混合负载下，空口广播行为、Fixed 连续性和旧队列风险是否仍满足门禁？
+- correction age 约 `10 s` 是真实修正新鲜度、共享链路调度延迟、节点时间戳口径，
+  还是 UM220 GGA age 字段解析/更新节奏造成？必须用节点端完成/注入时间和接收机输出对齐验证。
+- 当前 7 分钟三节点 FIXED 候选在 600/1800 秒长测中能否继续保持普通遥测零丢失、
+  Fixed 连续性、age/GST 门禁和旧队列隔离？
 - RK2206 无可信绝对 Unix 时钟时，是否接受网关绝对 TTL + 节点单调队列龄的双层策略，或需要补充可信时间同步？
 - 单条修正流供同一现场 3 台 rover 使用是否满足服务商授权与空间范围？
 

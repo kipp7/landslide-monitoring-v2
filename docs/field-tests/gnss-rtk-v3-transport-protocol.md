@@ -245,6 +245,37 @@ The 24-byte ACK implementation has C99 and TypeScript golden-vector coverage, an
 
 ## Capacity Gate
 
+### Shared Poll/RTCM Arbitration
+
+The RK3568 owns the only serial writer. Normal Compact V6 polling and RTCM
+downlink therefore use one explicit arbitration state instead of independent
+timers writing opportunistically:
+
+- every dispatched normal poll resets the RTCM burst counter;
+- at most four RTCM field-link fragments may be dispatched before another
+  normal poll must be dispatched;
+- every successful RTCM fragment write reschedules normal polling no later
+  than `max(configured poll interval, 600 ms)`;
+- a failed RTCM write does not count as a delivered fragment;
+- the controller must not dequeue another RTCM fragment while the burst gate
+  is closed;
+- runtime health exposes the arbitration counters whenever NTRIP is enabled.
+
+Node mode evidence remains fail-closed. A node is armed only by a fresh audit
+that reports the requested runtime mode and matching active session. The LIVE
+candidate accepts evidence up to 45 seconds old, bounded by the configured
+lease. This value covers the production P4 cadence; it is not permission to
+reuse evidence across a reboot, session change, expired lease, or serial-link
+loss.
+
+The 2026-08-05 field comparison selected `512-byte fragment data`, four frames
+per burst, a 600 ms poll guard, and a 45-second evidence window. That candidate
+kept `111/111` normal rounds complete with zero timeout while all three receivers
+reached RTK FIXED. It is still not a production displacement pass because the
+observed correction age was about 10 seconds. See
+`gnss-rtk-three-node-live-acceptance-20260805.md` for the complete promotion and
+rejection record.
+
 The PC baseline received about 882 B/s of RTCM. With 160-byte data fragments, large frames add about 60 bytes of V3.1 and field-link overhead per fragment. Actual traffic contains many message sizes, so a capture-driven calculator must determine the real overhead instead of applying one constant multiplier.
 
 Capacity planning counts configured capacity, not only currently online nodes. When A/B are active and C is unavailable, the model keeps C's full `116 B/s GNSS_CORE + 64 B/s compact telemetry = 180 B/s` reserve. It does not emit fake C telemetry. With the measured RTCM summary and 160-byte fragmentation, the current budget is:

@@ -18,6 +18,78 @@ status: active
 
 ## Last Confirmed State
 
+### Three-Node RTK FIXED Candidate And Safe Stop (2026-08-05)
+
+- A/B/C 已烧录 LIVE 候选固件
+  `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v6_gps_uart_rx_drain_v2_live_candidate_20260805`。
+  该目录及对应源码仍是候选状态，不能称为 clean Git release 或正式生产发布。
+- RK3568 网关新增节点 LIVE 证据 `45 s` 有效窗、每轮最多 `4` 个 RTCM 帧及 burst 后
+  `600 ms` 轮询保护。field-gateway 的 `62/62` 测试、TypeScript build 和 ESLint 均通过；
+  最终远端构建哈希为 `index.js=10b2a7c0c99c14a1ced72a0d95f7cfa66ca57a546f111dea0f4df5cb0712e562`、
+  `rtcm-downlink-controller.js=3a3044f1b962688911d1aca96a3b27c6b04b158aa914a82d4a36053049e6103b`、
+  `rtcm-poll-burst-gate.js=432a4d1b072bec76dc25f350a9dc7c0a5f451b2ba5a2feb1fa2b9f6aa38041b`。
+- `4 frames + 600 ms guard + 45 s evidence` 真实 CORS LIVE 连续运行约 7 分钟：NTRIP
+  一次连接即为 `ICY 200 OK`；普通遥测 `111/111` 轮完整、零 poll timeout；下发
+  RTCM `348` 帧，caster 输入 `2112` 个有效帧且 CRC 错误为 0；RTCM 串口写错误、
+  schema/interleaving 错误均为 0，三节点授权持续 `3/3`。
+- A/B/C 最终都达到 `quality=4 / RTK FIXED`，卫星数约 `32/32/34`，HDOP 均约
+  `0.55`。这证明三套 UM220、RK2206、XLS1 与 RK3568 共享差分链能够同时进入 FIXED，
+  但观测到 correction age 约 `10 s`，且 `rtk_trusted=false`、
+  `rtk_displacement_eligible=false`；因此尚未通过专业厘米级位移门禁，禁止建立 ENU 基线。
+- 参数对照结果已收敛：`1000 ms` 轮询、`6 frames/250 ms`、`4 frames/250 ms`、
+  `4 frames/1200 ms` 均因授权下降、轮询超时或后半段回落 FLOAT 被拒绝；当前只保留
+  `4 frames/600 ms` 候选。最终报告在 RK3568：
+  `/var/lib/lsmv2/experiments/ntrip-live-guard600-accepted-final-20260805.json`、
+  `ntrip-live-guard600-seg1-20260805.tsv`、`ntrip-live-guard600-seg2-20260805.tsv`。
+- A 已完成最终 G3S V6 查询：UM220 UART 锁定 `115200`，`read_errors=0`、
+  `fifo_drop=0`，GNSS、土壤温湿度/EC、倾角均有效；报告为
+  `/var/lib/lsmv2/experiments/ntrip-live-guard600-node-A-final-20260805.json`。B/C 最终
+  G3S 查询因现场收设备尚未执行。
+- 收设备前 RK3568 已恢复 fail-closed：`NTRIP_ENABLED=false`、
+  `RTCM_RUNTIME_MODE=probe`、`RTCM_FRAGMENT_DATA_BYTES=512`、轮询 `250 ms`、audit
+  cadence `2`；field-gateway `active`、`NRestarts=0`，环境文件为 `root:root 0600`。
+  用户已在下雨风险前收回 A/B/C，2026-08-06 重新室外上电前不再进行现场操作。
+
+### Hardware GNSS UART Drain Fix And Real Qianxun PROBE (2026-08-04 23:37..23:57 CST)
+
+- 三节点已烧录本轮 UART drain 修复包
+  `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v6_gps_uart_rx_drain_v2_20260804`；
+  A/B/C 镜像 SHA-256 分别为
+  `3e79d80d47622755e296c218ad9c46f5c7ffa0dcf8fb409c747cc8f4baad570c`、
+  `4ea16adf82681e31e1afd240db75aa4ca07cc0994e24a8fda99004f7caaccbf3`、
+  `38392a66d3abb081a752a266fdc011f111ef3b74f8c080d77c49b875ccb90291`，
+  唯一固件标记为 `fw-rk2206-rtk-compact-v6-gps-uart-drain-v2-20260804`。
+- 修复把 UM220 UART 单次读取从 `64 B` 提高到 `256 B`、轮询从 `10 ms` 缩短到
+  `2 ms`，并在 UART 任务中直接流式解析 NMEA，不再等待最长约 2.4 秒的 RS485
+  采集周期消费 FIFO。通过云服务器 `127.0.0.1:22079` 反向 SSH 在 RK3568 定向读取
+  G3S V6 后，A/B/C 均为 `state=locked_primary`、`active_baud=115200`、`switches=0`、
+  `reconfig_fail=0`、`read_errors=0`、`fifo_drop=0`；GGA/RMC 持续增长，证明共同问题是
+  RK2206 接收调度而不是 PB6/PB7、UM220 默认波特率或三块 GNSS 硬件。
+- 真实 CORS PROBE 使用受保护环境文件启动，账号和坐标未写入 Git/本记录。连接一次
+  成功，状态为 `ICY 200 OK`，首个累计窗口收到 `80113 B`、534 个有效 RTCM 帧，
+  caster 侧 CRC/帧错误为 0；三节点同一 session `allTargetsArmed=true`，普通 P1/P3/P4
+  遥测同时保持三节点完整、零 poll timeout、零 schema/interleaving/write error。
+- `RTCM_FRAGMENT_DATA_BYTES=160` 首轮以节点端零计数为基线，A/B/C 最终计数完全一致：
+  `acceptedFragments=102`、`completedFrames=63`、`probeValidatedFrames=63`、
+  `probeValidatedBytes=6365`、CRC/重复/拒绝/队列丢弃/UART 写错误/实际 GNSS 注入均为 0；
+  但每节点 `expiredAssemblies=10`，因此 160 B 多分片方案严格拒绝，不能据此进入 LIVE。
+- 随即仅把测试会话分片上限改为双方已支持的 `512 B`，审计 cadence 临时改为每 2 轮，
+  以同一批三节点做真实 CORS 对照。网关窗口为 22 个 frame/22 个 fragment、零写失败；
+  相对上一快照，A/B/C 都一致增加 `acceptedFragments +36`、`completedFrames +36`、
+  `probeValidatedFrames +36`、`probeValidatedBytes +4073`，并且
+  `expiredAssemblies +0`、CRC/重复/拒绝/队列丢弃/UART 写错误/实际注入均为 0。
+  该短窗证明 512 B 单分片方向有效，但尚未替代 60/600 秒严格 PROBE 门禁。
+- 原始报告仅保留在 RK3568：
+  `/var/lib/lsmv2/experiments/ntrip-real-probe-gateway-20260804.json`、
+  `ntrip-real-probe-final-{A,B,C}-20260804.json`、
+  `ntrip-real-probe-512-gateway-20260804.json` 和
+  `ntrip-real-probe-512-final-{A,B,C}-20260804.json`。现场配置备份为
+  `/opt/lsmv2/backups/ntrip-real-probe-20260804-234300/field-gateway.env`。
+- 结束时已完整恢复 fail-closed 配置：`NTRIP_ENABLED=false`、GGA source A、audit 60、
+  fragment 160，环境文件 `root:root 0600`；field-gateway `active`、`NRestarts=0`，
+  串口/MQTT 正常且 A/B/C 持续发布。A 当时只有 NMEA 流但 GGA quality 0、无有效定位，
+  B/C 为 quality 1；因此未启用 LIVE，也不能声称已获得 RTK Fixed 或厘米级位移。
+
 ### Hardware-GNSS V6 Release And Fail-Closed CORS Staging (2026-08-04)
 
 - 正式硬件 GNSS 发布包位于
@@ -393,31 +465,37 @@ status: active
 
 ## In Progress
 
-- Hardware-GNSS V6 clean immutable release 已锁定并独立复核；当前只等待用户按物理
-  标签烧录 A/B/C。受保护 P1 的室内 60/600/1800 基线不再修改。
-- RK3568 已完成短期 CORS 凭据预配置和原子备份，但 `NTRIP_ENABLED=false`，服务
-  active、零重启；在真实 GNSS 纯遥测门禁通过前不得连接或注入 RTCM。
+- UART drain V2 LIVE 候选已烧录到 A/B/C；三节点已同时进入 RTK FIXED，证明硬件和
+  传输路径可用。相关 RK2206 与网关源码仍是未提交工作树，候选发布目录不能称为正式版本。
+- 当前阻断项是 correction age 约 `10 s` 及 GST/可信证据不足，而不是能否进入 FIXED。
+  在 age P95 `<=3 s`、max `<=5 s` 且可信字段通过前，`rtk_displacement_eligible`
+  必须保持 false，不建立专业位移基线。
+- B/C 的最终 G3S V6 查询尚未执行；A 报告中的节点端 LIVE 注入计数也需在明早重新
+  上电后复核。今晚 A/B/C 已收回，RK3568 保持 NTRIP 关闭。
 - OTA 当前只允许离线设计和可恢复备用板验证；现场 A/B/C 的 `ota_prepare/apply`
   必须返回 `unsupported`。
 
 ## Next Actions
 
-1. 只烧录 hardware-GNSS V6 正式目录中匹配 A/B/C 物理标签的 `.img`，连接三套
-   BT-760 并移到室外；上电核对 UUID、标签、固件标记和硬件 GNSS 来源。
-2. 保持 CORS 关闭，执行 `--required-gnss-source hardware` 的前置检查及 60/600 秒
-   纯遥测门禁，核对真实 GGA/GST/HDOP/卫星数/时间且不从无效历元建立基线。
-3. 纯遥测通过后启动一个共同有限 PROBE 会话，验证 RTCM CRC/类型/分片/队列、
-   session/lease 和零 UART 注入；任一失败立即恢复 disabled。
-4. PROBE 通过后才切有限 LIVE，要求持续 `GGA=4`、correction age P95 `<=3 s`、
-   max `<=5 s`、可信 GST 和无旧 session，再运行 1800 秒混合负载。
-5. Fixed 门禁通过后再验收 ECEF/ENU、Hampel/Kalman、服务器 CEEMDAN 和 UI。
+1. 2026-08-06 在室外重新连接 A/B/C 与各自天线并上电；保持 NTRIP 关闭，先确认三节点
+   普通 P1/P3/P4 遥测、真实 RS485 与 GNSS 均在线，避免把旧 session 状态带入验收。
+2. 分别查询 B/C 的 G3S V6，并复核 A/B/C 节点端接收、重组、实际 GNSS 注入、TTL、
+   CRC、drop、UART write 计数，保存启用前基线。
+3. 使用当前 `512 B / 4 frames / 600 ms guard / 45 s evidence` 候选先做有限 PROBE，
+   确认三节点计数一致且零 expiry/CRC/drop/write error，再切有限 LIVE。
+4. LIVE 先运行至少 600 秒；只有持续 `GGA=4`、correction age P95 `<=3 s`、max
+   `<=5 s`、可信 GST、三节点普通轮询零丢失且无旧 session 才进入 1800 秒验收。
+5. 1800 秒通过后才建立 ECEF/ENU 基线并验收 Hampel/Kalman、服务器 CEEMDAN 和 UI；
+   若 age 仍约 10 秒，先定位 cadence、队列时间戳和 UM220 age 字段语义，不放宽门槛。
 
 ## Risks
 
 - 115200 只是 MCU-UART 标称值，不能证明 DL-XLS1 的广播、半双工、内部重试和队列吞吐。
 - gateway 输入 RTCM CRC 正常不等于节点收到新鲜修正；必须使用节点端完成/注入/TTL 证据。
+- `quality=4` 只证明接收机报告 RTK FIXED，不等于差分龄、GST 和位移基线都可信；本轮
+  age 约 `10 s` 已明确使专业位移门禁失败，比赛界面也不得把它显示为“厘米级已验收”。
 - RK2206 无可信绝对时钟时，旧模块队列风险不能只依赖节点 TTL；session epoch 必须持久化，网关必须先拒绝过期数据。
-- 新 PROBE-stats 已在 A/B 真机响应并暴露包率损失，C 尚未恢复；`LIVE` 仍只有可构建证明。不得由查询成功、UART 字节余量或历史 compact 三节点证据推导 RTCM PROBE 通过或厘米级三节点已部署。
+- 三节点短 PROBE 已证明 512 B 可消除本轮 assembly expiry，但只有 36 帧增量，仍不能替代 60/600 秒门禁；160 B 已现场失败，禁止直接用于 LIVE。
 - 单 NTRIP 流供 3 台 rover 使用仍需确认服务商授权和同站点空间范围。
 - 汇总日志证明平均输入负载，但不能证明 RTCM 单帧尺寸分布或亚秒级突发；不得用 16.91% UART 估算替代 XLS1 节点端完整率和 correction-age 证据。
 - 过滤 1084 与 1124 限频有明确的接收机支持集和链路容量依据，但合成 PROBE 不能证明真实 Fixed 连续性；必须在 LIVE 前用真实 CORS 输入和节点 GGA/correction-age 证据验证，失败时回滚为关闭而非偷偷放宽门禁。
@@ -428,15 +506,13 @@ status: active
 
 ## Resume Prompt
 
-继续 2026-08-04 XLS1/RTK 任务：protected-P1 室内真实 RS485/最终 PC0/模拟 GNSS
-已通过 60/600/1800，正式 hardware-GNSS V6 包已从 clean/pushed 提交 `eb76454b...`
-生成并独立复核，目录为
-`F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v6_protected_p1_rs485_gnss_hardware_live_20260804`。
-A/B/C 镜像身份、哈希、真实 GNSS UART、受保护 P1 和上电 RTCM disabled 均通过。
-RK3568 已把短期 CORS 参数写入 `0600 root:root` 环境文件并备份到
-`/opt/lsmv2/backups/ntrip-preconfigure-20260804-202843`，并显式设置 fail-closed
-`RTCM_RUNTIME_MODE=probe`、三节点 mask 与有限租约；当前仍为 `NTRIP_ENABLED=false`、
-服务 active/零重启，Git/memory 不含凭据。下一步让用户按标签
-烧录三份 `.img`，室外连接 BT-760，先做 hardware 纯遥测 60/600 秒，再依次做共同有限
-PROBE、有限 LIVE、持续 GGA=4/差分龄/GST 和 1800 秒三节点混合负载。全部通过前不得
-声称厘米级完成，也不得从无效或未 Fixed 坐标建立 ENU 基线。
+继续 2026-08-05 XLS1/RTK 任务：A/B/C 已烧录 UART drain V2 LIVE 候选；真实 CORS 下
+`512 B / 4 frames / 600 ms guard / 45 s evidence` 连续约 7 分钟得到 `111/111` 普通轮询、
+零 timeout、348 帧 RTCM 下发、caster CRC 0，A/B/C 最终均为 `quality=4 / RTK FIXED`。
+但 correction age 约 10 秒，`rtk_trusted=false`、`rtk_displacement_eligible=false`，故只能
+确认三节点硬件和链路能够 FIXED，不能建立专业厘米级 ENU 基线。最终报告在 RK3568
+`/var/lib/lsmv2/experiments/ntrip-live-guard600-*20260805*`；A 的 G3S V6 已通过，B/C 尚待。
+今晚用户已收回 A/B/C；RK3568 为 `NTRIP_ENABLED=false`、probe、fragment 512、poll 250、
+audit 2，field-gateway active/NRestarts=0，环境文件 0600。明早先在 NTRIP 关闭时确认
+三节点普通遥测和新 session，再查 B/C G3S，随后按 PROBE -> 600 秒 LIVE -> 1800 秒门禁
+推进，重点解决 age 与 GST。源码和发布目录仍未提交，Git/memory 不得包含凭据或坐标。
