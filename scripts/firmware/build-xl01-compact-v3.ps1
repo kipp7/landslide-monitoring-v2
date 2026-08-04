@@ -442,7 +442,7 @@ try {
     compactExtensionPollWireBytes = if ($CompactVersion -eq 6) { 29 } else { $null }
     layeredEnvironmentEveryCoreRounds = if ($CompactVersion -eq 6) { 30 } else { $null }
     layeredAuditEveryCoreRounds = if ($CompactVersion -eq 6) { 60 } else { $null }
-    recentBroadcastDedupDepth = if ($CompactVersion -eq 6) { 8 } else { $null }
+    recentBroadcastDedupDepth = if ($CompactVersion -eq 6) { 256 } else { $null }
     compactRecoveryPollCommandBytes = if ($CompactVersion -eq 6) { 11 } else { $null }
     compactRecoveryPollWireBytes = if ($CompactVersion -eq 6) { 29 } else { $null }
     rollbackRelease = "competition-suite-20260723"

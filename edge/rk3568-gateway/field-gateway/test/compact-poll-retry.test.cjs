@@ -3,6 +3,7 @@ const test = require("node:test");
 
 const {
   classifyCompactPollTelemetry,
+  compactPollTelemetryIsPublishable,
   decideCompactPollTimer
 } = require("../dist/compact-poll-retry.js");
 
@@ -76,6 +77,14 @@ test("compact poll telemetry separates retry redundancy from real duplicates", (
     }),
     "duplicate"
   );
+});
+
+test("only telemetry matched to the active logical poll is publishable", () => {
+  assert.equal(compactPollTelemetryIsPublishable("matched"), true);
+  assert.equal(compactPollTelemetryIsPublishable("matched-after-retry-dispatch"), true);
+  assert.equal(compactPollTelemetryIsPublishable("redundant-retry"), false);
+  assert.equal(compactPollTelemetryIsPublishable("duplicate"), false);
+  assert.equal(compactPollTelemetryIsPublishable("unmatched"), false);
 });
 
 test("a partial A/B round completes after C and drains one retry response per node", () => {

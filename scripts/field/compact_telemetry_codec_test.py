@@ -26,6 +26,7 @@ from xls1_compact_v4_acceptance import (
 )
 from xls1_compact_v6_layered_acceptance import (
     build_layered_poll,
+    evaluate_layered_gate,
     layered_extension_scope,
     sequence_summary,
 )
@@ -70,6 +71,37 @@ def main() -> None:
     assert layered_extension_scope(16, 3, 15) is None
     assert sequence_summary([0xFFFFFFFE, 0xFFFFFFFF, 0, 1])["nonUnitGaps"] == 0
     assert sequence_summary([1, 3])["nonUnitGaps"] == 1
+
+    healthy_node = {
+        "coreExpected": 10,
+        "coreMatched": 10,
+        "allScopeSequence": {"nonUnitGaps": 0, "nonForward": 0},
+        "coreArrivalIntervalMs": {"p95": 2400.0},
+        "commandToTelemetryLatencyMs": {"p95": 2300.0, "max": 6000.0},
+    }
+    layered_report = {
+        "result": {
+            "coreRoundsSent": 10,
+            "completeCoreRounds": 10,
+            "decodeErrors": 0,
+            "wireLengthViolations": 0,
+            "unmatchedTelemetry": 0,
+            "duplicateTelemetry": 0,
+            "recoveryRedundantTelemetry": 0,
+            "scopeMismatches": 0,
+            "extensionEpochMismatches": 0,
+            "profileViolations": 0,
+            "trailingUndelimitedBytes": 0,
+        },
+        "nodes": {label: dict(healthy_node) for label in ("A", "B", "C")},
+        "extensions": {
+            "environment": {"expected": 1, "matched": 1},
+            "audit": {"expected": 1, "matched": 1},
+        },
+    }
+    assert evaluate_layered_gate(layered_report, 2500.0, 2500.0, 6500.0)
+    layered_report["result"]["recoveryRedundantTelemetry"] = 1
+    assert not evaluate_layered_gate(layered_report, 2500.0, 2500.0, 6500.0)
 
     assert minimum_session_timeout_ms(1500, 0) == 1500
     assert minimum_session_timeout_ms(1500, 1) == 3000

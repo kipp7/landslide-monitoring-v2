@@ -175,7 +175,12 @@ def validate_scope_profile(telemetry: dict[str, Any], required_gnss_source: str)
     return errors
 
 
-def evaluate_layered_gate(report: dict[str, Any], max_p95_interval_ms: float, max_latency_ms: float) -> bool:
+def evaluate_layered_gate(
+    report: dict[str, Any],
+    max_p95_interval_ms: float,
+    max_p95_latency_ms: float,
+    max_latency_ms: float,
+) -> bool:
     result = report["result"]
     nodes = report["nodes"]
     extensions = report["extensions"]
@@ -186,6 +191,7 @@ def evaluate_layered_gate(report: dict[str, Any], max_p95_interval_ms: float, ma
         and result["wireLengthViolations"] == 0
         and result["unmatchedTelemetry"] == 0
         and result["duplicateTelemetry"] == 0
+        and result["recoveryRedundantTelemetry"] == 0
         and result["scopeMismatches"] == 0
         and result["extensionEpochMismatches"] == 0
         and result["profileViolations"] == 0
@@ -201,6 +207,8 @@ def evaluate_layered_gate(report: dict[str, Any], max_p95_interval_ms: float, ma
             and node["allScopeSequence"]["nonForward"] == 0
             and node["coreArrivalIntervalMs"]["p95"] is not None
             and node["coreArrivalIntervalMs"]["p95"] <= max_p95_interval_ms
+            and node["commandToTelemetryLatencyMs"]["p95"] is not None
+            and node["commandToTelemetryLatencyMs"]["p95"] <= max_p95_latency_ms
             and node["commandToTelemetryLatencyMs"]["max"] is not None
             and node["commandToTelemetryLatencyMs"]["max"] <= max_latency_ms
             for node in nodes.values()
@@ -227,6 +235,7 @@ def run_layered_experiment(args: argparse.Namespace) -> dict[str, Any]:
     wire_length_violations = 0
     unmatched = 0
     duplicates = 0
+    recovery_redundant = 0
     scope_mismatches = 0
     epoch_mismatches = 0
     core_rounds_sent = 0
@@ -238,7 +247,8 @@ def run_layered_experiment(args: argparse.Namespace) -> dict[str, Any]:
             samples.append({"at": utc_now(), "kind": kind, **values})
 
     def receive_once(fd: int, timeout: float) -> None:
-        nonlocal bytes_read, wire_length_violations, unmatched, duplicates, scope_mismatches, epoch_mismatches
+        nonlocal bytes_read, wire_length_violations, unmatched, duplicates, recovery_redundant
+        nonlocal scope_mismatches, epoch_mismatches
         readable, _, _ = select.select([fd], [], [], max(0.0, timeout))
         if not readable:
             return
@@ -294,25 +304,60 @@ def run_layered_experiment(args: argparse.Namespace) -> dict[str, Any]:
                 unmatched += 1
                 add_sample("unmatched", node=label, commandTag=tag, scope=scope)
                 continue
-            if record["matched"]:
-                duplicates += 1
-                add_sample("duplicate", node=label, commandTag=tag, scope=scope)
-                continue
             if scope != record["scope"]:
                 scope_mismatches += 1
                 add_sample("scope-mismatch", node=label, expected=record["scope"], actual=scope)
                 continue
 
-            received_mono = time.monotonic()
-            record["matched"] = True
-            record["receivedMono"] = received_mono
-            record["sampleEpoch"] = meta.get("sample_epoch")
-            latency_ms = (received_mono - record["sentMono"]) * 1000.0
             sequence = telemetry.get("seq")
             if isinstance(sequence, int):
                 all_sequences[label].append(sequence)
                 if scope == "core":
                     core_sequences[label].append(sequence)
+
+            if tag in record["seenCommandTags"]:
+                duplicates += 1
+                add_sample(
+                    "duplicate",
+                    node=label,
+                    commandTag=tag,
+                    scope=scope,
+                    responsePath=record.get("responsePath"),
+                )
+                continue
+            record["seenCommandTags"].add(tag)
+            if record["matched"]:
+                recovery_redundant += 1
+                route = "recovery" if tag == record.get("recoveryCommandTag") else "initial"
+                sent_mono = (
+                    record.get("recoverySentMono")
+                    if route == "recovery"
+                    else record["initialSentMono"]
+                )
+                add_sample(
+                    "recovery-redundant",
+                    node=label,
+                    commandTag=tag,
+                    scope=scope,
+                    responsePath=route,
+                    winningPath=record.get("responsePath"),
+                    latencyMs=round((time.monotonic() - sent_mono) * 1000.0, 1),
+                )
+                continue
+
+            received_mono = time.monotonic()
+            response_path = "recovery" if tag == record.get("recoveryCommandTag") else "initial"
+            producing_sent_mono = (
+                record.get("recoverySentMono")
+                if response_path == "recovery"
+                else record["initialSentMono"]
+            )
+            record["matched"] = True
+            record["receivedMono"] = received_mono
+            record["producingSentMono"] = producing_sent_mono
+            record["matchedCommandTag"] = tag
+            record["responsePath"] = response_path
+            record["sampleEpoch"] = meta.get("sample_epoch")
             if scope == "core":
                 core_arrivals[label].append(received_mono)
                 if isinstance(meta.get("sample_epoch"), int):
@@ -330,7 +375,35 @@ def run_layered_experiment(args: argparse.Namespace) -> dict[str, Any]:
                     )
             for violation in validate_scope_profile(telemetry, args.required_gnss_source):
                 profile_violations[violation] += 1
-                add_sample("profile-violation", node=label, scope=scope, reason=violation)
+                metrics = telemetry.get("metrics") if isinstance(telemetry.get("metrics"), dict) else {}
+                evidence = {
+                    "seq": telemetry.get("seq"),
+                    "sampleEpoch": meta.get("sample_epoch"),
+                    "validFlags": meta.get("v6_valid_flags"),
+                }
+                if scope == "core":
+                    evidence.update({key: metrics.get(key) for key in ("tilt_x_deg", "tilt_y_deg", "tilt_z_deg")})
+                elif scope == "environment":
+                    evidence.update(
+                        {
+                            key: metrics.get(key)
+                            for key in (
+                                "battery_v",
+                                "battery_pct",
+                                "soil_temperature_c",
+                                "soil_moisture_pct",
+                                "electrical_conductivity_us_cm",
+                            )
+                        }
+                    )
+                    evidence["batteryEstimateQualityCode"] = meta.get("battery_estimate_quality_code")
+                add_sample(
+                    "profile-violation",
+                    node=label,
+                    scope=scope,
+                    reason=violation,
+                    evidence=evidence,
+                )
 
         if len(receive_buffer) > 65536:
             errors["field-link assembler buffer overflow"] += 1
@@ -355,7 +428,8 @@ def run_layered_experiment(args: argparse.Namespace) -> dict[str, Any]:
                 "node": label,
                 "command": command,
                 "commandTag": tag,
-                "sentMono": sent_mono,
+                "initialSentMono": sent_mono,
+                "seenCommandTags": set(),
                 "matched": False,
             }
             records.append(record)
@@ -374,9 +448,9 @@ def run_layered_experiment(args: argparse.Namespace) -> dict[str, Any]:
             tag = command_tag(command)
         frame = encode_frame(FIELD_LINK_TYPE_COMMAND, serial_sequence, command.encode("ascii"))
         serial_sequence = (serial_sequence + 1) & 0xFFFFFFFF
-        record["command"] = command
-        record["commandTag"] = tag
-        record["sentMono"] = time.monotonic()
+        record["recoveryCommand"] = command
+        record["recoveryCommandTag"] = tag
+        record["recoverySentMono"] = time.monotonic()
         record["recoveryDispatched"] = True
         records_by_tag[(tag, record["node"])] = record
         write_chunked(fd, frame, args.command_chunk_bytes, args.command_chunk_delay_ms)
@@ -404,7 +478,6 @@ def run_layered_experiment(args: argparse.Namespace) -> dict[str, Any]:
         termios.tcflush(fd, termios.TCIOFLUSH)
         send_deadline = time.monotonic() + args.duration_seconds
         while time.monotonic() < send_deadline:
-            round_started = time.monotonic()
             core_rounds_sent += 1
             core_records: list[dict[str, Any]] = []
             if args.core_mode == "targeted":
@@ -445,7 +518,7 @@ def run_layered_experiment(args: argparse.Namespace) -> dict[str, Any]:
                 while not extension_records[0]["matched"] and time.monotonic() < extension_deadline:
                     receive_once(fd, min(0.05, extension_deadline - time.monotonic()))
 
-            next_round = round_started + args.core_interval_ms / 1000.0
+            next_round = time.monotonic() + args.core_interval_ms / 1000.0
             while time.monotonic() < next_round:
                 receive_once(fd, min(0.05, next_round - time.monotonic()))
 
@@ -471,9 +544,19 @@ def run_layered_experiment(args: argparse.Namespace) -> dict[str, Any]:
             for previous, current in zip(core_arrivals[label], core_arrivals[label][1:])
         ]
         node_latencies = [
-            (record["receivedMono"] - record["sentMono"]) * 1000.0
+            (record["receivedMono"] - record["producingSentMono"]) * 1000.0
             for record in core_records
             if record["matched"]
+        ]
+        initial_latencies = [
+            (record["receivedMono"] - record["initialSentMono"]) * 1000.0
+            for record in core_records
+            if record["matched"] and record.get("responsePath") == "initial"
+        ]
+        recovery_latencies = [
+            (record["receivedMono"] - record["recoverySentMono"]) * 1000.0
+            for record in core_records
+            if record["matched"] and record.get("responsePath") == "recovery"
         ]
         nodes[label] = {
             "coreExpected": len(core_records),
@@ -488,6 +571,15 @@ def run_layered_experiment(args: argparse.Namespace) -> dict[str, Any]:
                 "p95": percentile(node_latencies, 0.95),
                 "max": round(max(node_latencies), 1) if node_latencies else None,
             },
+            "initialCommandLatencyMs": {
+                "p95": percentile(initial_latencies, 0.95),
+                "max": round(max(initial_latencies), 1) if initial_latencies else None,
+            },
+            "recoveryCommandLatencyMs": {
+                "p95": percentile(recovery_latencies, 0.95),
+                "max": round(max(recovery_latencies), 1) if recovery_latencies else None,
+            },
+            "responsePaths": dict(Counter(record.get("responsePath") for record in core_records if record["matched"])),
             "allScopeSequence": sequence_summary(all_sequences[label]),
             "coreSequence": sequence_summary(core_sequences[label]),
         }
@@ -495,7 +587,7 @@ def run_layered_experiment(args: argparse.Namespace) -> dict[str, Any]:
     for scope in ("environment", "audit"):
         scoped = [record for record in records if record["scope"] == scope]
         scoped_latencies = [
-            (record["receivedMono"] - record["sentMono"]) * 1000.0
+            (record["receivedMono"] - record["producingSentMono"]) * 1000.0
             for record in scoped
             if record["matched"]
         ]
@@ -515,6 +607,7 @@ def run_layered_experiment(args: argparse.Namespace) -> dict[str, Any]:
         "wireLengthViolations": wire_length_violations,
         "unmatchedTelemetry": unmatched,
         "duplicateTelemetry": duplicates,
+        "recoveryRedundantTelemetry": recovery_redundant,
         "scopeMismatches": scope_mismatches,
         "extensionEpochMismatches": epoch_mismatches,
         "profileViolations": sum(profile_violations.values()),
@@ -549,6 +642,7 @@ def run_layered_experiment(args: argparse.Namespace) -> dict[str, Any]:
     result["stableProfile"] = evaluate_layered_gate(
         report,
         args.max_p95_interval_ms,
+        args.max_p95_command_latency_ms,
         args.max_command_latency_ms,
     )
     return report
@@ -559,9 +653,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--serial-device", default="/dev/ttyS3")
     parser.add_argument("--baud", type=int, default=115200)
     parser.add_argument("--durations", type=parse_durations, default=parse_durations("60,600,1800"))
-    parser.add_argument("--core-mode", choices=("broadcast", "targeted", "hybrid"), default="hybrid")
+    parser.add_argument("--core-mode", choices=("broadcast", "targeted", "hybrid"), default="broadcast")
     parser.add_argument("--core-interval-ms", type=int, default=250)
-    parser.add_argument("--core-response-timeout-ms", type=int, default=1500)
+    parser.add_argument("--core-response-timeout-ms", type=int, default=6500)
     parser.add_argument("--extension-response-timeout-ms", type=int, default=6000)
     parser.add_argument("--environment-every-rounds", type=int, default=30)
     parser.add_argument("--audit-every-rounds", type=int, default=60)
@@ -571,7 +665,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--command-chunk-delay-ms", type=int, default=10)
     parser.add_argument("--drain-seconds", type=float, default=3.0)
     parser.add_argument("--max-p95-interval-ms", type=float, default=2500.0)
-    parser.add_argument("--max-command-latency-ms", type=float, default=1500.0)
+    parser.add_argument("--max-p95-command-latency-ms", type=float, default=2500.0)
+    parser.add_argument("--max-command-latency-ms", type=float, default=6500.0)
     parser.add_argument("--required-gnss-source", choices=("hardware", "simulated"), default="simulated")
     parser.add_argument("--inter-stage-quiet-seconds", type=float, default=2.0)
     parser.add_argument("--service", default="lsmv2-field-gateway.service")
@@ -591,6 +686,7 @@ def parse_args() -> argparse.Namespace:
         args.settle_quiet_ms,
         args.command_chunk_bytes,
         args.max_p95_interval_ms,
+        args.max_p95_command_latency_ms,
         args.max_command_latency_ms,
     )
     if any(value <= 0 for value in positive) or args.drain_seconds < 0:
@@ -626,6 +722,7 @@ def main() -> int:
         "requiredGnssSource": args.required_gnss_source,
         "requiredNtripEnabled": False,
         "maxP95IntervalMs": args.max_p95_interval_ms,
+        "maxP95CommandLatencyMs": args.max_p95_command_latency_ms,
         "maxCommandLatencyMs": args.max_command_latency_ms,
     }
     if args.dry_run:

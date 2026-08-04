@@ -16,7 +16,7 @@ test("compact polling stability defaults allow slow three-node responses", () =>
   assert.equal(config.southboundPollingEmptyBackoffMaxMs, 30000);
 });
 
-test("RK3568 deployment example pins the Compact V6 layered profile", () => {
+test("RK3568 deployment example pins the protected Compact V6 layered profile", () => {
   const envPath = path.join(__dirname, "../deploy/field-gateway.env.rk3568.example");
   const config = loadConfigFromEnv(dotenv.parse(fs.readFileSync(envPath)));
 
@@ -24,7 +24,7 @@ test("RK3568 deployment example pins the Compact V6 layered profile", () => {
   assert.equal(config.southboundPollingMode, "compact-layered-v1");
   assert.equal(config.southboundPollingIntervalMs, 250);
   assert.equal(config.southboundPollingSessionTimeoutMs, 6500);
-  assert.equal(config.southboundPollingPartialRetries, 1);
+  assert.equal(config.southboundPollingPartialRetries, 0);
   assert.equal(config.southboundPollingRetryAfterMs, 1500);
   assert.equal(config.southboundLayeredEnvironmentEveryRounds, 30);
   assert.equal(config.southboundLayeredAuditEveryRounds, 60);

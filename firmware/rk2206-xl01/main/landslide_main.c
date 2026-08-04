@@ -134,7 +134,7 @@ static volatile uint32_t g_last_platform_command_tick = 0;
 static CompactPollBroadcastDeduplicator g_compact_poll_broadcast_deduplicator;
 static unsigned int g_compact_poll_broadcast_duplicates_suppressed = 0U;
 static volatile int g_field_link_recovery_requested = 0;
-#define FW_RX_DIAG_MARKER "fw-rk2206-rtk-compact-v6-layered-v2-hybrid-20260804"
+#define FW_RX_DIAG_MARKER "fw-rk2206-rtk-compact-v6-layered-v3-protected-p1-20260804"
 bool g_cloud_motor_enabled = false;
 int g_cloud_motor_speed = 0;
 MotorDirection g_cloud_motor_direction = MOTOR_DIRECTION_STOP;
@@ -1713,7 +1713,7 @@ static void* DataUploadTask(const char* arg)
     printf("  Poll Request Check: %d ms\n", DATA_UPLOAD_IDLE_CHECK_INTERVAL_MS);
     printf("  Compact Poll: layered-v1 P1 core / P3 environment / P4 audit (%s rollback)\n",
            COMPACT_TARGETED_POLL_MARKER);
-    printf("  Compact Recovery: P1 dedup depth=8 / P2 missing-node singleflight\n");
+    printf("  Compact Recovery: P1 dedup depth=256 / P2 diagnostic rollback only\n");
     printf("  Edge Uplink Mode: %s\n", EDGE_UPLINK_MODE == EDGE_UPLINK_MODE_POLLED ? "Polled" : "Periodic");
     printf("  Telemetry Payload: %s\n",
            TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V6 ? "Compact v6 layered (46-byte payload / 64-byte wire frame)" :

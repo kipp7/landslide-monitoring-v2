@@ -150,7 +150,7 @@ function New-TestRelease {
       $sensorMarkers,
       $capabilityMarker,
       $(if ($CompactVersion -eq 6) { "layered-v1 P1 core / P3 environment / P4 audit" } elseif ($CompactVersion -ge 4) { "compact-targeted-v1 P2 singleflight" } else { "" }),
-      $(if ($CompactVersion -eq 6) { "P1 dedup depth=8 / P2 missing-node singleflight" } else { "" }),
+      $(if ($CompactVersion -eq 6) { "P1 dedup depth=256 / P2 diagnostic rollback only" } else { "" }),
       $(if ($SchemaVersion -ge 2) { $gnssMarker } else { "" })
     ) -join "`0"
     foreach ($extension in @("bin", "img")) {
@@ -213,7 +213,7 @@ function New-TestRelease {
     compactExtensionPollWireBytes = if ($CompactVersion -eq 6) { 29 } else { $null }
     layeredEnvironmentEveryCoreRounds = if ($CompactVersion -eq 6) { 30 } else { $null }
     layeredAuditEveryCoreRounds = if ($CompactVersion -eq 6) { 60 } else { $null }
-    recentBroadcastDedupDepth = if ($CompactVersion -eq 6) { 8 } else { $null }
+    recentBroadcastDedupDepth = if ($CompactVersion -eq 6) { 256 } else { $null }
     compactRecoveryPollCommandBytes = if ($CompactVersion -eq 6) { 11 } else { $null }
     compactRecoveryPollWireBytes = if ($CompactVersion -eq 6) { 29 } else { $null }
     files = $files

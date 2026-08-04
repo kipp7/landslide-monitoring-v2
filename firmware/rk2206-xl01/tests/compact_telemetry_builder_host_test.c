@@ -103,7 +103,7 @@ int main(void)
         &deduplicator, "P112345678", COMPACT_POLL_COMMAND_BYTES) == 1);
     assert(CompactPollCommand_ShouldSuppressBroadcastDuplicate(
         &deduplicator, "P2A12345678", COMPACT_TARGETED_POLL_COMMAND_BYTES) == 0);
-    for (index = 0; index < 9; ++index) {
+    for (index = 0; index < (int)COMPACT_POLL_RECENT_BROADCASTS + 1; ++index) {
         char broadcast[COMPACT_POLL_COMMAND_BYTES + 1];
         snprintf(broadcast, sizeof(broadcast), "P1%08X", (unsigned int)(index + 1));
         assert(CompactPollCommand_ShouldSuppressBroadcastDuplicate(

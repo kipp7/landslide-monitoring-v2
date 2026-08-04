@@ -37,11 +37,13 @@ reserved and rejected by the C, TypeScript, and Python implementations.
 | environment | P3 targeted | uptime, calibrated battery, soil temperature/moisture/EC, geoid separation, GNSS week/TOW, vertical GST |
 | audit | P4 targeted | RTCM mode/session/lease/queue/error summary, fix flags, Fixed streak/ratio/drop count, station ID, full horizontal GST |
 
-P1 uses fixed A/B/C response slots `0/340/680 ms`. RK2206 remembers the eight
+P1 uses fixed A/B/C response slots `0/340/680 ms`. RK2206 remembers the 256
 most recent P1 commands and suppresses repeated delivery before entering a
-response slot. After the initial 1500 ms window, RK3568 sends a new targeted P2
-to each missing node, one at a time; it never retransmits the same P1. A
-completed logical core round may schedule at most one targeted extension. P3
+response slot. RK3568 keeps the round open for at most 6500 ms, closes it as
+soon as A/B/C are complete, and waits 250 ms before the next session. Production
+does not send P2: field evidence showed that P2 never beat the original P1 and
+only created redundant frames. A completed logical core round may schedule at
+most one targeted extension. P3
 is selected every 30 completed core rounds; P4 is selected every 60 and has
 priority when both are due. Extension targets rotate A/B/C. An extension never
 overlaps a core/recovery window, another scoped poll, a normal command, or an
@@ -119,15 +121,13 @@ sudo python3 scripts/field/xls1_compact_v6_layered_acceptance.py \
 The default stages are 60, 600, and 1800 seconds. Stop at the first failure.
 Every stage requires:
 
-- all logical core rounds complete with A/B/C responses, directly from P1 or
-  through bounded missing-node P2 recovery;
+- all logical core rounds complete with A/B/C responses from the single P1;
 - every expected P3 and P4 response matched;
 - exactly 64 bytes for every complete telemetry frame;
 - zero decode, trailing-byte, unmatched, duplicate, scope, epoch, profile, and
   non-forward/non-unit sequence errors;
 - per-node core arrival P95 `<=2500 ms`;
-- core command-to-telemetry maximum `<=1500 ms` from the command that produced
-  the accepted response;
+- per-node core command-to-telemetry P95 `<=2500 ms` and maximum `<=6500 ms`;
 - valid hardware tilt in core;
 - valid field-calibrated battery and complete soil temperature/moisture/EC in
   environment;

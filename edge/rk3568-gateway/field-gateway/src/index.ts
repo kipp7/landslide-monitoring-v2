@@ -26,7 +26,8 @@ import {
   type CompactPollCloseOutcome
 } from "./compact-poll-admission";
 import {
-  classifyCompactPollTelemetry
+  classifyCompactPollTelemetry,
+  compactPollTelemetryIsPublishable
 } from "./compact-poll-retry";
 import {
   isCompactLayeredPortBusy,
@@ -1844,12 +1845,13 @@ class GatewayRuntime {
       telemetryUploadTrigger === "scheduler_poll" &&
       telemetryLastCommandTag !== null
     ) {
-      this.matchCompactBroadcastTelemetry(
+      const acceptedForActivePoll = this.matchCompactBroadcastTelemetry(
         sourcePort,
         telemetryLastCommandTag,
         envelope.device_id,
         receivedTs
       );
+      if (!acceptedForActivePoll) return;
     }
 
     this.stats.parsedMessages += 1;
@@ -2935,7 +2937,7 @@ class GatewayRuntime {
     commandTag: number,
     deviceId: string,
     receivedTs: string
-  ): void {
+  ): boolean {
     let windowKey = this.compactBroadcastPollWindowKey(portPath, commandTag);
     let window = this.activeCompactBroadcastPollWindows.get(windowKey);
     if (!window) {
@@ -2958,18 +2960,18 @@ class GatewayRuntime {
     });
     if (classification === "unmatched" || !window) {
       this.stats.compactBroadcastUnmatchedTelemetry += 1;
-      return;
+      return false;
     }
     const portState = this.ensurePortRuntimeState(portPath);
     if (classification === "redundant-retry") {
       window.redundantRetryDeviceIds.add(deviceId);
       this.stats.compactBroadcastRedundantRetryTelemetry += 1;
       portState.pollRedundantRetryTelemetry += 1;
-      return;
+      return false;
     }
     if (classification === "duplicate") {
       this.stats.compactBroadcastDuplicateTelemetry += 1;
-      return;
+      return false;
     }
 
     window.receivedDeviceIds.add(deviceId);
@@ -3011,6 +3013,7 @@ class GatewayRuntime {
     } else if (completedRecovery) {
       void this.retryCompactBroadcastPoll(windowKey);
     }
+    return compactPollTelemetryIsPublishable(classification);
   }
 
   private closeCompactBroadcastPollWindow(

@@ -37,3 +37,9 @@ export function classifyCompactPollTelemetry(params: {
   }
   return params.missingAtRetryDispatch ? "matched-after-retry-dispatch" : "matched";
 }
+
+export function compactPollTelemetryIsPublishable(
+  classification: CompactPollTelemetryClassification
+): boolean {
+  return classification === "matched" || classification === "matched-after-retry-dispatch";
+}
