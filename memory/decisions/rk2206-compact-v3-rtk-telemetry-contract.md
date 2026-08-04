@@ -13,6 +13,43 @@ status: active
 
 # Decision: RK2206 Compact V3 RTK Telemetry Contract
 
+## Compact V6 Protected Single-P1 Decision (2026-08-04)
+
+### Evidence
+
+- Hybrid 600 秒发送 113 次 P2，只有 `472/473` 完整轮，出现 4 个解码错误和大量
+  冗余响应。修正恢复记账后的 120 秒虽为 `93/93`，但 20 次 P2 无一次抢在原 P1
+  前完成，反而增加 17 个 recovery-redundant 和 3 个 duplicate，故 P2 对当前
+  XLS1 队列没有恢复收益。
+- protected-P1 新固件烧录后，两次正式 60 秒均为 `51/51` 完整 core round，
+  所有协议/线框/scope/epoch/序号错误为 0；修正版一轮 A/B/C arrival P95 为
+  `1521.3/1375.4/1397.7 ms`，command P95 为 `517.7/786.2/1048.5 ms`，证明
+  单个 64 B P1 分层线框在当前三节点短门禁同时满足速度和稳定性。
+
+### Decision
+
+- 生产高频 core 只发送一个 P1，关闭 P2：
+  `SOUTHBOUND_POLLING_PARTIAL_RETRIES=0`。RK2206 保存最近 256 个 P1 command tag，
+  约使用 2.5 KiB 静态内存；RK3568 最多保护 6500 ms，A/B/C 齐全立即结束，轮后
+  静默 250 ms。迟到 unmatched、duplicate 和 recovery-redundant 只进入本地计数，
+  不刷新节点状态、不发布 MQTT。
+- P3/P4 生产 cadence 保持每 30/60 个完整 core round。验收器的每个独立阶段在
+  有效 core 快照后额外做一次 P3 和一次 P4 能力探测，避免 60 秒阶段因实际轮次
+  少于 60 而机械误判；探测仍执行相同 wire、scope、epoch、profile 与 RTCM
+  fail-closed 门禁，不降低任何生产标准。
+- 正式性能边界为 per-node core arrival P95 `<=2500 ms`、command P95
+  `<=2500 ms`、command max `<=6500 ms`。旧 `1500 ms max` 已被现场传播尾延迟
+  反复证明不现实，不能继续拿它制造假失败；6500 ms 只允许异常尾部，不能放宽
+  P95 更新速度。
+
+### Current Boundary
+
+实现与最终 A/B/C 包绑定提交 `4ea5b7ea4df98828309983a60caf988578d540c8`；
+验收器能力探测修复提交 `2f1a2614`。当前短门禁的唯一阻断是 C environment 的
+PC0 电池字段持续无效，土壤/EC、倾角和通信均正常。必须先修复 C PC0/SARADC，
+再重跑 `60 -> 600 -> 1800`；不得删除电池门禁、沿用陈旧电压或把短门禁表述为
+完整生产/厘米级验收通过。NTRIP/RTCM/CORS 继续关闭。
+
 ## Compact V6 Hybrid Recovery Refinement (2026-08-04)
 
 ### Evidence

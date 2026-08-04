@@ -18,6 +18,50 @@ status: active
 
 ## Last Confirmed State
 
+### Compact V6 Protected-P1 Short Gate: Link Pass, C Battery Blocks (2026-08-04)
+
+- Hybrid 600 秒只有 `472/473` 完整 core round，出现 4 个解码错误、109 个恢复
+  冗余/重复响应并发送 113 次 P2。修正验收记账后的 120 秒对照虽为 `93/93`，
+  但 20 次 P2 无一次早于原 P1，反而形成 17 个冗余帧和 3 个真重复帧。因此
+  hybrid 已停止，正式路线由提交 `4ea5b7ea4df98828309983a60caf988578d540c8`
+  收敛为受保护的单 P1：P2 关闭，A/B/C 完整即提前关闭，否则最多保护 6500 ms，
+  轮后静默 250 ms；节点 P1 去重深度为 256。RK3568 对 unmatched、duplicate 和
+  recovery-redundant 调度帧只计数，不更新节点状态或发布 MQTT。
+- 用户已按标签烧录并上电最终包
+  `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v6_protected_p1_rs485_gnss_simulated_20260804`。
+  manifest SHA-256 `beb376f7ac33207466925f0af69a127b8b2b5960967145c9c5e1782cdc85a7eb`；
+  A/B/C 镜像 SHA-256 分别为
+  `318e85277accc650e8210439442e86996b269379039358afd9fca82d7a618c7b`、
+  `37363ce6628babc1cb0227a2c250d72e75b7c8aee5f0bacf333671db413cb9f6`、
+  `d91c117d723f2555b2c76ad563e0f3a3dd9d1bff8eacf36eb27e613d9be7b8a2`。
+  包已通过 A/B/C clean build、身份、真实 RS485、最终 PC0 校准、模拟 GNSS、
+  RTCM disabled 和 `46 B payload/64 B wire` 发布门禁。
+- RK3568 当前为 `compact-layered-v1/partial-retries=0/session=6500 ms`，NTRIP false，
+  服务 active、`NRestarts=0`；部署前回滚点为
+  `/opt/lsmv2/backups/compact-v6-protected-p1-predeploy-20260804-174627`。上电后的生产
+  被动窗口已见 A/B/C 持续发布，未见 timeout、交织、unmatched 或 duplicate。
+- 首次正式 60 秒得到 `51/51` 完整轮、零通信/profile 错误，A/B/C arrival P95
+  `1490.4/1366.6/1347.4 ms`，但验收器因 60 秒内未自然到达第 60 轮 P4 cadence
+  而误判失败。报告 SHA-256 `4470c34ba407e2f33e0f46c4cf0c8c80466bc01c7c7754dc97b5e99c4b16637a`。
+  提交 `2f1a2614` 让每一阶段在有效 core 后明确验证一次 P3/P4，再恢复 30/60
+  正常 cadence；板端脚本 SHA-256
+  `c4bcd6fe9e722cee1dd95a31590c458b4e68bdf6ee4da0f4d0231dc1ab0c229e`，回滚点
+  `/opt/lsmv2/backups/compact-v6-acceptance-probe-predeploy-20260804-175839`。
+- 修正后 60 秒仍为 `51/51`，所有通信、线框、scope、epoch、序号和延迟门禁通过；
+  A/B/C arrival P95 `1521.3/1375.4/1397.7 ms`，command P95
+  `517.7/786.2/1048.5 ms`。唯一失败是 C 的 environment 帧 `validFlags=14`：
+  土壤温度/含水率/EC 有效，但 `battery_v/battery_pct/quality=null`，形成 4 个同源
+  profile violation。报告 SHA-256
+  `4aecfd564ffda0bf6e66ad59b1654762104606c791b51a5f99f490f3f5de2336`。
+- 30 秒高频 P3 复核为 `23/23` 完整轮、零通信错误；8 个 environment 响应覆盖
+  A 3 次、B 2 次、C 3 次，A/B 全有效，C 三次都只缺电池并累计 12 个同源
+  violation。报告 SHA-256
+  `ad7cec49760f645ecad90dcb8f27ebf6d5146087916cac191a0387721c1579b3`。
+  这证明当前链路和 RS485 短门禁通过，整体门禁被独立的 C PC0/SARADC 路径阻断；
+  不进入 600/1800 秒，也不允许缓存旧电压或降低门槛。下一步只测 C 上电时 PC0
+  对 GND，100k/27k 分压在约 11.5 V 电池下应约 `2.44 V`，再区分载板分压/焊点
+  与 C 核心板 PC0/SARADC/插接故障。
+
 ### Compact V6 Field Gate Rejected; Hybrid Candidate Ready For Clean Build (2026-08-04)
 
 - 原 V6 P1 60 秒通过，但 600 秒只有 `438/453` 完整 core round，并出现 4 个解码

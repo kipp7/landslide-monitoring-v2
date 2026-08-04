@@ -18,6 +18,31 @@ status: active
 
 ## Current State
 
+### Protected-P1 Deployed; C PC0 Blocks Long Gate (2026-08-04)
+
+- Hybrid 的 P2 恢复没有带来更早响应：修正记账后的 120 秒中 20 次 P2 全部晚于
+  原 P1，并产生 17 个冗余帧和 3 个真重复帧。正式实现已在 `4ea5b7ea` 收敛为
+  单 P1、256 条节点去重、6500 ms 异常保护、三节点齐全早关和 250 ms 轮后静默；
+  生产 `SOUTHBOUND_POLLING_PARTIAL_RETRIES=0`，性能门槛为 arrival/command P95
+  `<=2500 ms`、command max `<=6500 ms`，不再重复 hybrid/P2 参数试验。
+- 用户已烧录并上电 protected-P1 A/B/C 正式包；包目录、manifest 与三个镜像完整
+  哈希记录在 checkpoint。RK3568 保持 NTRIP/RTCM disabled，服务 active、零重启，
+  生产被动观察已确认 A/B/C 持续发布且无调度/协议错误。
+- 首轮 60 秒的 `51/51`、零错误结果因验收器要求自然到第 60 轮才产生 P4 而被误判；
+  `2f1a2614` 已让每个阶段先各验证一次 P3/P4 能力，再使用生产 30/60 cadence，
+  本地和 RK3568 金向量、Python 编译、dry-run 均通过，板端回滚目录为
+  `/opt/lsmv2/backups/compact-v6-acceptance-probe-predeploy-20260804-175839`。
+- 修正版 60 秒通信层再次 `51/51` 且零 decode、wire、unmatched、duplicate、scope、
+  epoch、sequence 和延迟错误；30 秒高频 P3 诊断又为 `23/23`。两轮只在 C
+  environment 复现电池无效，3 次均为 `validFlags=14`、`battery_v=null`、
+  `battery_pct=null`，同时 C 的 soil temperature/moisture/EC 与 core tilt 正常；
+  A/B environment 全有效。因此这不是链路、XLS1 吞吐、SC16IS752 或三合一探头
+  故障，而是 C 的 PC0/SARADC 独立路径。
+- 当前 fail-fast 停止在 60 秒，不运行 600/1800。用户下一次只需在 C 完整上电时
+  测 `PC0-GND`：约 `2.44 V` 表示载板分压基本到位，应查 C 核心板 PC0/SARADC
+  与插接；接近 0 V 或 3.3 V 则查 100k/27k 分压、焊点和走线。修复并确认 C
+  environment 电池有效后，从正式 60 秒重新开始，再自动进入 600/1800。
+
 ### Compact V6 Live Rejection And Hybrid Recovery Candidate (2026-08-04)
 
 - 用户已烧录并上电原 clean V6 A/B/C。P1 分层 60 秒 `57/57` 完整、零错误；
