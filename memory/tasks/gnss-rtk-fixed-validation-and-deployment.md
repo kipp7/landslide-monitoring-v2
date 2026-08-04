@@ -35,6 +35,9 @@ status: active
   均因授权下降、轮询超时或后半段 FLOAT 被拒绝。当前唯一保留候选是
   `512 B fragment / 4 frames / 600 ms guard / 45 s evidence`；详细证据见
   `docs/field-tests/gnss-rtk-three-node-live-acceptance-20260805.md`。
+- UART drain、G3S V6、RTCM burst/poll 仲裁与测试已由提交 `bd356416` 推送；现场
+  文档和本任务/检查点更新已由提交 `7f8234f2` 推送。现场候选镜像尚需从 clean
+  implementation commit 重建、复算并重做必要门禁后，才能升级为正式发布包。
 - 用户已在降雨风险前收回 A/B/C。RK3568 保持 `NTRIP_ENABLED=false`、runtime
   `probe`、fragment `512 B`、poll `250 ms`、audit cadence `2`，服务 active、
   `NRestarts=0`，受保护环境文件仍为 `root:root 0600`。

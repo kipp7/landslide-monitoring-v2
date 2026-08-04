@@ -22,7 +22,8 @@ status: active
 
 - A/B/C 已烧录 LIVE 候选固件
   `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v6_gps_uart_rx_drain_v2_live_candidate_20260805`。
-  该目录及对应源码仍是候选状态，不能称为 clean Git release 或正式生产发布。
+  对应实现已由提交 `bd356416` 推送到 `origin/feat/gnss-rtk-v31-transport`；但该现场
+  目录生成于提交前，尚未从该 clean commit 重建和复验，仍不能称为正式生产发布。
 - RK3568 网关新增节点 LIVE 证据 `45 s` 有效窗、每轮最多 `4` 个 RTCM 帧及 burst 后
   `600 ms` 轮询保护。field-gateway 的 `62/62` 测试、TypeScript build 和 ESLint 均通过；
   最终远端构建哈希为 `index.js=10b2a7c0c99c14a1ced72a0d95f7cfa66ca57a546f111dea0f4df5cb0712e562`、
@@ -466,7 +467,8 @@ status: active
 ## In Progress
 
 - UART drain V2 LIVE 候选已烧录到 A/B/C；三节点已同时进入 RTK FIXED，证明硬件和
-  传输路径可用。相关 RK2206 与网关源码仍是未提交工作树，候选发布目录不能称为正式版本。
+  传输路径可用。相关 RK2206 与网关源码已由 `bd356416` 提交并推送；候选发布目录
+  尚未从该 clean commit 重建，不能称为正式版本。
 - 当前阻断项是 correction age 约 `10 s` 及 GST/可信证据不足，而不是能否进入 FIXED。
   在 age P95 `<=3 s`、max `<=5 s` 且可信字段通过前，`rtk_displacement_eligible`
   必须保持 false，不建立专业位移基线。
@@ -515,4 +517,5 @@ status: active
 今晚用户已收回 A/B/C；RK3568 为 `NTRIP_ENABLED=false`、probe、fragment 512、poll 250、
 audit 2，field-gateway active/NRestarts=0，环境文件 0600。明早先在 NTRIP 关闭时确认
 三节点普通遥测和新 session，再查 B/C G3S，随后按 PROBE -> 600 秒 LIVE -> 1800 秒门禁
-推进，重点解决 age 与 GST。源码和发布目录仍未提交，Git/memory 不得包含凭据或坐标。
+推进，重点解决 age 与 GST。实现提交 `bd356416` 和现场文档/记忆提交 `7f8234f2` 已推送；
+候选发布目录尚未从 clean commit 重建，Git/memory 不得包含凭据或坐标。

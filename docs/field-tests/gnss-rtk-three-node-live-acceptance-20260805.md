@@ -36,6 +36,11 @@ The corresponding RK3568 build hashes were:
 Before field deployment, field-gateway passed 62 unit tests, TypeScript build,
 and ESLint.
 
+The implementation was subsequently committed and pushed as `bd356416` on
+`feat/gnss-rtk-v31-transport`. The flashed candidate directory predates that
+clean commit, so it remains field evidence rather than an immutable release;
+a formal package requires a clean rebuild and release verification.
+
 ## Parameter Comparison
 
 | Candidate | Normal telemetry | RTK behavior | Decision |
