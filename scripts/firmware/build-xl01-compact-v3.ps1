@@ -230,10 +230,15 @@ function Set-CompactTelemetryVersion {
 
   $mainPath = Join-Path $sampleRoot "main\landslide_main.c"
   $mainText = [System.IO.File]::ReadAllText($mainPath)
+  $sourceFirmwareMarker = Get-QuotedMacroValue -Path $mainPath -Macro "FW_RX_DIAG_MARKER"
+  if (([regex]::Matches($sourceFirmwareMarker, 'compact-v[34]')).Count -ne 1) {
+    throw "FW_RX_DIAG_MARKER must contain exactly one compact-v3/v4 token"
+  }
+  $targetFirmwareMarker = $sourceFirmwareMarker -replace 'compact-v[34]', ("compact-v{0}" -f $CompactVersion)
   $mainText = Set-SingleMacro `
     -Text $mainText `
     -Macro "FW_RX_DIAG_MARKER" `
-    -Value ("fw-rk2206-rtk-compact-v{0}-rs485-diag-v5-r3-20260803" -f $CompactVersion)
+    -Value $targetFirmwareMarker
   [System.IO.File]::WriteAllText($mainPath, $mainText, [System.Text.UTF8Encoding]::new($false))
 }
 

@@ -69,6 +69,12 @@
 // Production pull mode:
 // sample locally, but upload telemetry only when the center/gateway polls it.
 #define EDGE_UPLINK_MODE EDGE_UPLINK_MODE_POLLED
+#define PERIODIC_UPLOAD_IDLE_CHECK_INTERVAL_MS 200U
+#if EDGE_UPLINK_MODE == EDGE_UPLINK_MODE_POLLED
+#define DATA_UPLOAD_IDLE_CHECK_INTERVAL_MS POLL_REQUEST_CHECK_INTERVAL_MS
+#else
+#define DATA_UPLOAD_IDLE_CHECK_INTERVAL_MS PERIODIC_UPLOAD_IDLE_CHECK_INTERVAL_MS
+#endif
 #define UPLOAD_INTERVAL_MS  5000        // Periodic-mode interval; polled mode uploads only on request
 #define MAX_RETRY_COUNT     3           // Retry 3 times if send fails
 #define RETRY_DELAY_MS      500         // Wait 500ms between retries
@@ -289,6 +295,9 @@
      (RS485_SINGLE_PATH_WORST_CASE_MS + RS485_INTER_REQUEST_GAP_MS))
 #if RS485_SENSOR_READ_MAX_RETRIES > 1U
 #error "RS485 sensor retries must remain bounded to at most one retry"
+#endif
+#if POLL_REQUEST_CHECK_INTERVAL_MS == 0U
+#error "Polled upload request checks require a positive interval"
 #endif
 #if (RS485_COLLECTION_WORST_CASE_MS + RS485_COLLECTION_WATCHDOG_MARGIN_MS) >= \
     (WATCHDOG_TIMEOUT * 1000U)

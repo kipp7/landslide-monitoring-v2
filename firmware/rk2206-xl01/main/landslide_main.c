@@ -129,7 +129,7 @@ static char g_last_trusted_time_ts[40] = "";
 static char g_last_trusted_time_source[32] = "";
 static volatile uint32_t g_last_platform_command_tick = 0;
 static volatile int g_field_link_recovery_requested = 0;
-#define FW_RX_DIAG_MARKER "fw-rk2206-rtk-compact-v4-rs485-diag-v5-r3-20260803"
+#define FW_RX_DIAG_MARKER "fw-rk2206-rtk-compact-v4-rs485-diag-v5-r4-20260804"
 bool g_cloud_motor_enabled = false;
 int g_cloud_motor_speed = 0;
 MotorDirection g_cloud_motor_direction = MOTOR_DIRECTION_STOP;
@@ -1645,7 +1645,7 @@ static void* DataUploadTask(const char* arg)
     printf("  Post ACK Quiet: %d ms\n", PLATFORM_POST_ACK_QUIET_MS);
     printf("  Manual Collect Delay: %d ms\n", PLATFORM_MANUAL_COLLECT_DELAY_MS);
     printf("  Poll ACK: %s\n", POLL_LATEST_TELEMETRY_ACK_ENABLED ? "Enabled" : "Telemetry confirms poll");
-    printf("  Poll Request Check: %d ms\n", POLL_REQUEST_CHECK_INTERVAL_MS);
+    printf("  Poll Request Check: %d ms\n", DATA_UPLOAD_IDLE_CHECK_INTERVAL_MS);
     printf("  Compact Poll: %s (P1 broadcast rollback)\n", COMPACT_TARGETED_POLL_MARKER);
     printf("  Edge Uplink Mode: %s\n", EDGE_UPLINK_MODE == EDGE_UPLINK_MODE_POLLED ? "Polled" : "Periodic");
     printf("  Telemetry Payload: %s\n",
@@ -1713,7 +1713,7 @@ static void* DataUploadTask(const char* arg)
         int manual_collect_requested = 0;
         int poll_latest_requested = 0;
         const char *upload_trigger = "periodic";
-        unsigned int sleep_ms = 200;
+        unsigned int sleep_ms = DATA_UPLOAD_IDLE_CHECK_INTERVAL_MS;
 
 #if !ENABLE_SHARED_PORT_SOURCE_CONTROL
         unsigned int quiet_remaining_ms = g_platform_uplink_quiet_remaining_ms;
