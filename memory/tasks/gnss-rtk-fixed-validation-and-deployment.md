@@ -18,7 +18,17 @@ status: active
 
 ## Current State
 
-### RS485 Diagnostic V5-r3 Adversarial Audit and Clean Release (2026-08-03)
+### RS485 Diagnostic V5-r4 Poll Cadence Fix and Clean Release (2026-08-04)
+
+- 用户按标签烧录 V5-r3 后，RK3568 前置门禁通过：`/dev/ttyS3`、网关 active/NRestarts=0、环境文件 `root:root 0600`、`NTRIP_ENABLED=false`。首轮 60 秒为 `90/90`、30/30 完整批次、零丢帧/重复/解析/profile/重发错误，但 C arrival P95 `2557.7 ms` 超过 `2500 ms`；第二轮为 `78/78`、26/26 完整批次、同样零通信与字段错误，但 A/B/C P95 为 `2640.0/2699.8/2675.8 ms`，再次严格失败。两轮报告 SHA-256 为 `84872026eac743e69a32e818a466eb1a44ec44a45e1a50423c42188c3505b180`、`30ec11f333b73edd555306385575e0c5fd928125bb97a8a21360c41e5dff0c4c`；原始 JSON 仅留 RK3568，不入 Git。
+- G3S V5 三节点诊断均 `hardwareGatePassed=true`、当前 soil/EC/tilt 全有效、final failure/streak 为 0，U4/I2C/Modbus 无写入、CRC、短帧、地址、功能码或异常响应错误。运行约 500 周期后仅见低频 `no_response` 且全部一次补读恢复：A tilt 3 次，B EC 1 次/tilt 6 次，C soil 1 次/tilt 1 次；不能把它表述成坏传感器，也不能隐藏首次失败率。
+- RK3568 旧诊断脚本只接受 G3S V4，已备份到 `/opt/lsmv2/backups/g3s-v5-probe-predeploy-20260804-094703` 并原子更新；`/usr/local/bin/xls1_gnss_v31_probe_sender.py` SHA-256 为 `2672f2f7ac9c7def01e6274a6d896f0ffb696ecaf22a21cd1afa33443d6d4bd2`，板端 self-test 通过。field-gateway 每次查询后均恢复 active、`NRestarts=0`。
+- 对照启动摘要与源码发现真实调度缺陷：`POLL_REQUEST_CHECK_INTERVAL_MS=50` 且日志打印 50 ms，但 `DataUploadTask` 实际硬编码 `sleep_ms=200`。P2 A->B->C 单飞会逐节点累积这段反应抖动。V5-r4 改为 `DATA_UPLOAD_IDLE_CHECK_INTERVAL_MS`，轮询模式真实使用 50 ms；没有放宽 2500 ms 门限，也没有改变 RS485 重试、139 B 字段、RTCM 或 XLS1 参数。
+- 新增 `test-rk2206-poll-cadence-safety.ps1`，拒绝硬编码 200 ms 回归。构建复核还拦截了清单生成器独立硬编码 V5-r3 的问题；构建器现在以 `landslide_main.c` 为版本标记唯一来源，只派生 compact v3/v4 令牌，并由 `test-rk2206-release-marker-source-safety.ps1` 门禁。
+- 实现提交 `a6bb102f3f89eb50b72e08fc01922065d555cc31` 已推送。C99、Python、field-gateway `49/49` + lint、引脚正反例、发布安全、电池、TX 顺序、RS485 启动、轮询节奏、版本来源及 A/B/C OpenHarmony 全量编译全部通过。
+- 当前唯一允许下一次烧录的是 `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v4_rs485_diag_v5_r4_gnss_simulated_20260804`，标记 `fw-rk2206-rtk-compact-v4-rs485-diag-v5-r4-20260804`。manifest SHA-256 `481b0805c67b91e99041a3c7543eb62dafeceb431c8da492fd0fbc0978e7b94b`；A/B/C `.img` SHA-256 为 `1b0443d3ba92195dbc95d52566ad758a5068514b2010c13a8441b5b74e3f3c84`、`755325733db20efdf748636617acc5fe6d3063a1ad059dc0d326b5509ddd0065`、`16f17fb91d5867c3cd7a68b78ac8bc3a36bc005a0d51782ab5a65d6c931b7dd6`。仍需重新烧录并从 60 秒开始，尚未通过 600/1800 秒，不能声称三节点生产稳定或厘米级完成。
+
+### [Superseded] RS485 Diagnostic V5-r3 Adversarial Audit and Clean Release (2026-08-03)
 
 - 第二轮对抗性审查已完成并锁定 clean release：Compact V4 正常遥测保持 `139 B payload / 157 B complete frame`，不增加周期业务负载；G3S V5 仅按节点按需查询，payload `552 B`，C99 金值完整 field-link 帧实测 `570 B`，禁止周期轮询或多节点并发查询。固件标记为 `fw-rk2206-rtk-compact-v4-rs485-diag-v5-r3-20260803`。
 - V5 按 soil/soil-EC/tilt/rain 分别累计 collection cycles、raw attempts、首次失败、retry recovery、final failure、skip、连续最终失败、最近状态/时间和采集时长。可选 EC 重探退避的 skip 不再覆盖最近真实 final-failure 证据；后续成功才记录 recovery。RK3568 TypeScript 与现场 Python 双端拒绝掩码、状态、事件、时间和饱和计数关系不可能的 V5。
@@ -27,7 +37,7 @@ status: active
 - 最后一轮审查额外发现并修复 field-link TX 竞态：旧代码在 UART mutex 之外分配帧序号，多任务并发时可能让 `N+1` 先于 `N` 上线路，制造假 sequence gap/reset。V5-r3 将序号分配、COBS/CRC 编码和完整分块写入纳入同一把锁，并新增 `test-rk2206-field-link-tx-order-safety.ps1` 发布门禁。
 - 离线门禁全部通过：C99 GNSS/RTCM、G3S V1-V5、V5 外层 encode/decode、RS485 retry/runtime、SC16IS752 cache；Python 语法/自检；field-gateway build、lint 和 `49/49`；26 源文件引脚正向与 3 项负例；发布安全正反例（含精确 marker 拒绝）；启动/扫描/发送顺序门禁；三节点电池 finalization/calibration/refinement 拒绝路径；`git diff --check`。
 - 实现提交 `b6b49adbbfe0601570bb87b292d29f736c6a44ac` 已推送 `origin/feat/gnss-rtk-v31-transport`。正式目录为 `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v4_rs485_diag_v5_r3_gnss_simulated_20260803`，manifest SHA-256 `96fdf0798ab5968abd58c6002e561e8f31b5804b2456c7db3e99021a27f2a6fc`；A/B/C `.img` SHA-256 为 `8f03f35ef3a26a4f38ef02235c042747371d2c030b29fbe7f412080f08dd1edc`、`73a3e873c3b66d2ce0a6865e7f1a2393a50e2d75b5b688fb18b917e5afe7cf80`、`ef4f8b4146f54f7f2bb5155aee2a4d41632267376cf2555387b61464c6cb4e9a`，loader SHA-256 `761d90888aa376156d562abf267dfe324b96c4397f7a601f6b4c64d0ea3bf977`。
-- 正式目录独立复验为 `sourceDirty=false`、A/B/C 身份唯一、hardware RS485、simulated GNSS、UM220 UART 未初始化、RTCM disabled、final PC0 calibration 和 P2 singleflight。V5-r2 clean/dirty、`retry1`、旧 V4/V3 及其他 proof 均禁止烧录。V5-r3 只是唯一允许下一轮室内验收烧录的包；尚未完成真机 60/600/1800 秒，不能声称真实三节点稳定或厘米级完成。
+- 正式目录当时独立复验为 `sourceDirty=false`、A/B/C 身份唯一、hardware RS485、simulated GNSS、UM220 UART 未初始化、RTCM disabled、final PC0 calibration 和 P2 singleflight。V5-r3 后续因可复现的 P95 性能失败和 200/50 ms 实现/日志不一致被 V5-r4 取代，禁止继续烧录。
 
 ### [Superseded] RS485 Retry1 / Fixed-Order Timing Candidate (2026-08-03)
 
@@ -179,7 +189,7 @@ status: active
 
 ## Plan
 
-- 只按物理标签烧录正式 V5-r3 目录内对应 A/B/C `.img`；上电必须看到 `fw-rk2206-rtk-compact-v4-rs485-diag-v5-r3-20260803`。任何 r2、`retry1`、dirty proof 或旧包均停止使用。
+- 只按物理标签烧录正式 V5-r4 目录内对应 A/B/C `.img`；上电必须看到 `fw-rk2206-rtk-compact-v4-rs485-diag-v5-r4-20260804` 且 `Poll Request Check: 50 ms`。任何 V5-r3、r2、`retry1`、dirty proof 或旧包均停止使用。
 - 保持 `NTRIP_ENABLED=false`，先运行 `sudo python3 /usr/local/bin/xls1_compact_v4_acceptance.py --required-gnss-source simulated --check-prerequisites`，再用相同 source 参数运行正式门禁。脚本按固定 A -> B -> C、`1500/1500/0` 和 `250 ms` batch interval 自动执行 60/600/1800 秒；要求 100% 匹配、零链路重发/通信/profile 错误、三节点真实土壤/EC/倾角有效、PC0 field-calibrated、RTCM 全零且每节点 P95 <=2500 ms，任一阶段失败立即停止。
 - 三阶段全部通过前，RK3568 生产环境保持 `1200/1200/0` 不变；通过后再备份并原子切换为 `1500/1500/0`，重启一次 field-gateway，复核 active、`NRestarts=0` 和生产固定顺序。不要把传感器内部一次补读误记成 XLS1 链路重发。
 - A/B/C 已分别以 `+9/+7/最坏 9 mV` 通过电池同步验收并接受 `1046565/1048458/993702 ppm`，最终校准文件及 simulated/hardware 发布包均已生成并通过 final-acceptance、身份、哈希、模式和引脚门禁；百分比仍只是受负载、温度和老化影响的 3S OCV 估算，不能作为准确剩余 mAh 或续航。

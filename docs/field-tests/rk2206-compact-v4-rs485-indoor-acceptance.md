@@ -1,7 +1,7 @@
 ---
 title: RK2206 Compact V4 indoor RS485 acceptance
 status: active
-updated: 2026-08-03
+updated: 2026-08-04
 ---
 
 # RK2206 Compact V4 Indoor RS485 Acceptance
@@ -41,9 +41,14 @@ calibration, unique A/B/C identities, RTCM disabled, and `sourceDirty=false`.
 Flash only the image matching the physical node label.
 
 The firmware marker for this diagnostic build is
-`fw-rk2206-rtk-compact-v4-rs485-diag-v5-r3-20260803`. Normal telemetry remains
+`fw-rk2206-rtk-compact-v4-rs485-diag-v5-r4-20260804`. Normal telemetry remains
 139/157 bytes. The separate 552-byte G3S V5 response is requested only while
 isolating a fault and must not be used as periodic telemetry.
+
+V5-r4 makes the polled upload task use its configured 50 ms request-check
+interval. V5-r3 logged 50 ms but actually used a hard-coded 200 ms sleep, which
+caused repeatable P95 interval gate failures despite lossless frames. V5-r3 and
+all dirty V5-r4 build proofs are prohibited.
 
 ## Runtime Gate
 

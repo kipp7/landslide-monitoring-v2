@@ -1,7 +1,7 @@
 ---
 title: RK2206 Compact V4 hardware acceptance
 status: active
-updated: 2026-08-03
+updated: 2026-08-04
 ---
 
 # RK2206 Compact V4 Hardware Acceptance
@@ -10,24 +10,27 @@ This gate validates the three real A/B/C RS485 sensor paths before NTRIP or RTCM
 
 ## Locked Inputs
 
-- Release status: V5-r3 is the only package approved for the next indoor RS485
+- Release status: V5-r4 is the only package approved for the next indoor RS485
   acceptance flash. It is not yet a production-stability or RTK-Fixed result.
 - Release directory:
-  `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v4_rs485_diag_v5_r3_gnss_simulated_20260803`.
-- Source commit: `b6b49adbbfe0601570bb87b292d29f736c6a44ac`, pushed to
+  `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v4_rs485_diag_v5_r4_gnss_simulated_20260804`.
+- Source commit: `a6bb102f3f89eb50b72e08fc01922065d555cc31`, pushed to
   `origin/feat/gnss-rtk-v31-transport`; manifest `sourceDirty=false`.
 - Manifest SHA-256:
-  `96fdf0798ab5968abd58c6002e561e8f31b5804b2456c7db3e99021a27f2a6fc`.
+  `481b0805c67b91e99041a3c7543eb62dafeceb431c8da492fd0fbc0978e7b94b`.
 - A/B/C `.img` SHA-256:
-  `8f03f35ef3a26a4f38ef02235c042747371d2c030b29fbe7f412080f08dd1edc`,
-  `73a3e873c3b66d2ce0a6865e7f1a2393a50e2d75b5b688fb18b917e5afe7cf80`,
-  `ef4f8b4146f54f7f2bb5155aee2a4d41632267376cf2555387b61464c6cb4e9a`.
+  `1b0443d3ba92195dbc95d52566ad758a5068514b2010c13a8441b5b74e3f3c84`,
+  `755325733db20efdf748636617acc5fe6d3063a1ad059dc0d326b5509ddd0065`,
+  `16f17fb91d5867c3cd7a68b78ac8bc3a36bc005a0d51782ab5a65d6c931b7dd6`.
 - Loader SHA-256:
   `761d90888aa376156d562abf267dfe324b96c4397f7a601f6b4c64d0ea3bf977`.
 - Payload: Compact V4, 139 bytes; complete COBS/CRC field-link frame: 157 bytes.
 - On-demand diagnostic: G3S V5, 552-byte payload and 570-byte measured golden
   field-link frame; never send periodically or query nodes concurrently.
-- Firmware marker: `fw-rk2206-rtk-compact-v4-rs485-diag-v5-r3-20260803`.
+- Firmware marker: `fw-rk2206-rtk-compact-v4-rs485-diag-v5-r4-20260804`.
+- Poll reaction cadence: polled firmware now uses the configured 50 ms request
+  check. V5-r3 printed 50 ms but actually slept 200 ms in `DataUploadTask`;
+  that mismatch is rejected by a release safety gate.
 - TX ordering: frame sequence allocation, COBS/CRC encoding, and the complete
   chunked UART write share one mutex. This prevents concurrent workers from
   putting sequence `N+1` on the wire before sequence `N`.
@@ -36,9 +39,16 @@ This gate validates the three real A/B/C RS485 sensor paths before NTRIP or RTCM
 - The RK3568 production service remains at its existing `1200/1200/0` timing until all three acceptance stages pass.
 - RK3568 must keep `NTRIP_ENABLED=false` throughout this gate.
 
-The former V5-r2 clean release, `xls1_compact_v4_rs485_retry1_gnss_simulated_20260803`,
-V5-r2 dirty compile proof, earlier V4 directories, rejected candidates, and V3
-images are all superseded. Do not flash them. Use only the V5-r3 `.img` whose
+Two V5-r3 60-second runs delivered every requested frame (`90/90` and `78/78`)
+without link, decode, profile, or sensor-validity errors, but failed the 2500 ms
+P95 interval gate. The second run reached 2640.0/2699.8/2675.8 ms for A/B/C.
+V5 diagnostics found only bounded recovered Modbus timeouts and zero final
+sensor failure. Source review then found the 200 ms hard-coded upload sleep.
+
+The former V5-r3 release, V5-r2 clean release,
+`xls1_compact_v4_rs485_retry1_gnss_simulated_20260803`, dirty compile proofs,
+earlier V4 directories, rejected candidates, and V3 images are all superseded.
+Do not flash them. Use only the V5-r4 `.img` whose
 node label matches the physical A/B/C location.
 
 ## Electrical and Pin Gate
