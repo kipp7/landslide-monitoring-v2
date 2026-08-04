@@ -29,6 +29,7 @@ static_library("xl01_landslide_monitor") {
         
         # Drivers - Sensors
         "drivers/sensors/gnss_solution_parser.c",
+        "drivers/sensors/gps_uart_probe.c",
         "drivers/sensors/gps_driver.c",
         "drivers/sensors/simulated_gnss.c",
         "drivers/sensors/sc16is752_driver.c",

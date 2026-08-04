@@ -47,7 +47,9 @@ test("RTCM controller waits for every target node to confirm one leased session"
   assert.equal(fragment.sessionEpoch, 0x12345678);
   assert.equal(fragment.messageType, 1074);
   assert.equal(controller.stats(now).allTargetsArmed, true);
-  assert.equal(controller.stats(now + 10_001).allTargetsArmed, false);
+  assert.equal(controller.stats(now + 10_001).allTargetsArmed, true);
+  assert.equal(controller.stats(now + 45_000).allTargetsArmed, true);
+  assert.equal(controller.stats(now + 45_001).allTargetsArmed, false);
 });
 
 test("RTCM controller filters unsupported NTRIP messages through the UM220 essential profile", () => {

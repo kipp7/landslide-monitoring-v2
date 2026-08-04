@@ -14,6 +14,11 @@ import { buildNtripGga } from "./ntrip-gga";
 import { encodeGnssRtcmModeCommandV1 } from "./gnss-transport-v3";
 import { RtcmDownlinkController } from "./rtcm-downlink-controller";
 import {
+  DEFAULT_RTCM_MAX_FRAGMENTS_BETWEEN_POLLS,
+  RTCM_POST_BURST_POLL_GUARD_MS,
+  RtcmPollBurstGate
+} from "./rtcm-poll-burst-gate";
+import {
   buildCompactBroadcastPollCommand,
   buildCompactScopedPollCommand,
   buildCompactTargetedPollCommand,
@@ -1086,6 +1091,9 @@ class GatewayRuntime {
   private readonly rtcmWriteInFlightPorts = new Set<string>();
   private readonly rtcmController: RtcmDownlinkController | null;
   private readonly ntripClient: NtripClient | null;
+  private readonly rtcmPollBurstGate = new RtcmPollBurstGate(
+    DEFAULT_RTCM_MAX_FRAGMENTS_BETWEEN_POLLS
+  );
   private fieldLinkTxSequence = 0;
   private readonly stats: RuntimeStats = {
     serialChunks: 0,
@@ -2232,6 +2240,7 @@ class GatewayRuntime {
         this.config.southboundPollingCommandChunkBytes,
         this.config.southboundPollingCommandChunkDelayMs
       );
+      this.rtcmPollBurstGate.notePollDispatched();
     } catch (err) {
       this.stats.commandWriteFailures += 1;
       this.stats.lastError = err instanceof Error ? err.message : String(err);
@@ -2382,6 +2391,7 @@ class GatewayRuntime {
         this.config.southboundPollingCommandChunkBytes,
         this.config.southboundPollingCommandChunkDelayMs
       );
+      this.rtcmPollBurstGate.notePollDispatched();
     } catch (err) {
       this.stats.commandWriteFailures += 1;
       this.stats.compactBroadcastRetryWriteFailures += 1;
@@ -2442,6 +2452,17 @@ class GatewayRuntime {
     }
 
     this.pollerDueAtMs = dueAtMs;
+    this.pollerTimer = setTimeout(() => {
+      this.tickSouthboundPolling();
+    }, normalizedDelayMs);
+  }
+
+  private rescheduleSouthboundPolling(delayMs: number): void {
+    if (!this.config.southboundPollingEnabled || this.stopping) return;
+    if (this.pollerTimer) clearTimeout(this.pollerTimer);
+
+    const normalizedDelayMs = Math.max(0, delayMs);
+    this.pollerDueAtMs = performance.now() + normalizedDelayMs;
     this.pollerTimer = setTimeout(() => {
       this.tickSouthboundPolling();
     }, normalizedDelayMs);
@@ -3368,6 +3389,7 @@ class GatewayRuntime {
         ? this.config.southboundPollingCommandChunkDelayMs
         : this.config.commandSerialChunkDelayMs;
     await this.writeSerialFrame(serialPort, serialFrame, chunkBytes, chunkDelayMs);
+    if (origin === "internal-poll") this.rtcmPollBurstGate.notePollDispatched();
   }
 
   private async writeSerialFrame(
@@ -3486,9 +3508,13 @@ class GatewayRuntime {
         this.stats.rtcmControlWrites += 1;
         this.stats.lastRtcmControlTs = timestamp;
       } else {
+        this.rtcmPollBurstGate.noteFragmentDispatched();
         this.stats.rtcmFragmentWrites += 1;
         this.stats.lastRtcmFragmentTs = timestamp;
       }
+      this.rescheduleSouthboundPolling(
+        Math.max(this.config.southboundPollingIntervalMs, RTCM_POST_BURST_POLL_GUARD_MS)
+      );
       return true;
     } catch (err) {
       this.stats.rtcmWriteFailures += 1;
@@ -3520,6 +3546,7 @@ class GatewayRuntime {
   private async tickRtcmDispatch(): Promise<void> {
     const controller = this.rtcmController;
     if (!controller || this.stopping || !this.rtcmPortAvailable(this.config.serialDevice)) return;
+    if (this.config.southboundPollingEnabled && !this.rtcmPollBurstGate.canDispatchFragment()) return;
     const fragment = controller.takeNextFragment(Date.now());
     if (!fragment) return;
     const written = await this.writeRtcmFieldLinkPayload("rtcm", fragment, "fragment");
@@ -3591,7 +3618,8 @@ class GatewayRuntime {
             }
           : null,
         connection: this.ntripClient?.stats() ?? null,
-        downlink: this.rtcmController?.stats(nowMs) ?? null
+        downlink: this.rtcmController?.stats(nowMs) ?? null,
+        arbitration: this.config.ntripEnabled ? this.rtcmPollBurstGate.stats() : null
       },
       stats: {
         ...this.stats,

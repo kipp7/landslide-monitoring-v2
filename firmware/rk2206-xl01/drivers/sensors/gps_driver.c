@@ -27,6 +27,7 @@
 #include "los_task.h"  // For LOS_TaskCreate
 #include "cmsis_os2.h"  // For LOS_Msleep
 #include "../xl01/gnss_rtcm_injection.h"
+#include "gps_uart_probe.h"
 
 // GPS UART Configuration (moved from config to avoid dependency)
 // UM220-IV NK uses the carrier's dedicated PB6/PB7 UART route.
@@ -54,6 +55,11 @@
 #define GPS_UART_PROBE_IDLE_LOG_INTERVAL_MS 3000U
 #define GPS_UART_PROBE_RX_LOG_INTERVAL_MS 1000U
 #define GPS_UART_PROBE_PREVIEW_BYTES 24
+#define GPS_UART_FALLBACK_BAUDRATE 9600U
+#define GPS_UART_BAUD_PROBE_WINDOW_MS 8000U
+#define GPS_RTCM_REQUIRED_BAUDRATE 115200U
+#define GPS_UART_READ_CHUNK_BYTES 256U
+#define GPS_UART_POLL_INTERVAL_MS 2U
 
 static GnssSolutionParser g_gnss_parser;
 static osMutexId_t g_gnss_parser_mutex = NULL;
@@ -63,13 +69,13 @@ static unsigned char g_last_logged_gga_quality = 0U;
 static char g_line_buffer[GPS_LINE_BUF_SIZE];
 static int g_line_pos = 0;
 static unsigned int g_last_reported_fifo_drop_events = 0;
-static uint32_t g_last_fifo_write_warn_tick = 0;
 static int g_last_uart_read_status = 0;
 static volatile int g_gps_resync_requested = 0;
 static uint32_t g_uart_last_idle_probe_tick = 0;
 static uint32_t g_uart_last_rx_probe_tick = 0;
 static uint32_t g_uart_total_rx_bytes = 0;
 static bool g_line_collecting = false;
+static GpsUartProbe g_uart_probe;
 
 #if GNSS_RTCM_INJECTION_CAPABILITY != GNSS_RTCM_INJECTION_DISABLED
 static unsigned char g_rtcm_uart_frame[GNSS_RTCM_V3_MAX_FRAME_BYTES];
@@ -113,6 +119,94 @@ static void GnssParserUnlock(void)
     if (g_gnss_parser_mutex != NULL) osMutexRelease(g_gnss_parser_mutex);
 }
 
+static void ProcessGPSData(const unsigned char *data, int len);
+
+static unsigned int ConfigureGpsUart(uint32_t baudrate)
+{
+    IotUartAttribute uart_attr = {
+        .baudRate = baudrate,
+        .dataBits = IOT_UART_DATA_BIT_8,
+        .stopBits = IOT_UART_STOP_BIT_1,
+        .parity = IOT_UART_PARITY_NONE,
+        .rxBlock = IOT_UART_BLOCK_STATE_NONE_BLOCK,
+        .txBlock = IOT_UART_BLOCK_STATE_NONE_BLOCK,
+        .pad = IOT_FLOW_CTRL_NONE,
+    };
+
+    return IoTUartInit(GPS_UART_ID, &uart_attr);
+}
+
+static void UpdateGpsBaudProbe(void)
+{
+    uint32_t now_ms = (uint32_t)GpsMonotonicMs();
+    uint32_t desired_baudrate = 0U;
+    GpsUartProbeAction action;
+    unsigned int ret = IOT_SUCCESS;
+    GpsUartDiagnostics diagnostics;
+
+    GnssParserLock();
+    action = GpsUartProbe_Evaluate(
+        &g_uart_probe,
+        now_ms,
+        GPS_UART_BAUD_PROBE_WINDOW_MS);
+    if (action == GPS_UART_PROBE_ACTION_LOCK) {
+        GpsUartProbe_ApplyAction(&g_uart_probe, action, now_ms, 1);
+        GpsUartProbe_GetDiagnostics(
+            &g_uart_probe,
+            Fifo_DroppedBytes(&g_gps_fifo),
+            Fifo_DroppedEvents(&g_gps_fifo),
+            &diagnostics);
+    }
+    GnssParserUnlock();
+
+    if (action == GPS_UART_PROBE_ACTION_NONE) {
+        return;
+    }
+    if (action == GPS_UART_PROBE_ACTION_LOCK) {
+        printf(
+            "[GPS UART] baud locked=%u candidate=%u checksum_valid=%u gga=%u rmc=%u\n",
+            diagnostics.active_baudrate,
+            diagnostics.selected_candidate,
+            diagnostics.candidates[diagnostics.selected_candidate].checksum_valid_sentences,
+            diagnostics.candidates[diagnostics.selected_candidate].gga_sentences,
+            diagnostics.candidates[diagnostics.selected_candidate].rmc_sentences);
+        if (diagnostics.active_baudrate != GPS_RTCM_REQUIRED_BAUDRATE) {
+            printf(
+                "[GPS UART] NMEA detected at %u; RTCM LIVE remains blocked until UM220 is configured to %u\n",
+                diagnostics.active_baudrate,
+                GPS_RTCM_REQUIRED_BAUDRATE);
+        }
+        return;
+    }
+
+    desired_baudrate = action == GPS_UART_PROBE_ACTION_SWITCH_FALLBACK
+                           ? GPS_UART_FALLBACK_BAUDRATE
+                           : GPS_BAUDRATE;
+    ret = ConfigureGpsUart(desired_baudrate);
+    GnssParserLock();
+    GpsUartProbe_ApplyAction(
+        &g_uart_probe,
+        action,
+        now_ms,
+        ret == IOT_SUCCESS);
+    GnssParserUnlock();
+    g_gps_resync_requested = 1;
+    if (ret == IOT_SUCCESS) {
+        if (action == GPS_UART_PROBE_ACTION_SWITCH_FALLBACK) {
+            printf(
+                "[GPS UART] no valid NMEA at %u; probing fallback baud=%u\n",
+                GPS_BAUDRATE,
+                desired_baudrate);
+        } else {
+            printf(
+                "[GPS UART] no valid NMEA at either baud; restored default=%u\n",
+                desired_baudrate);
+        }
+    } else {
+        printf("[GPS UART] baud reconfigure failed target=%u ret=%u\n", desired_baudrate, ret);
+    }
+}
+
 static void PrintGpsUartProbeChunk(const unsigned char *data, int len)
 {
 #if GPS_UART_PROBE_LOG_MODE
@@ -154,6 +248,17 @@ static void PrintGpsUartProbeChunk(const unsigned char *data, int len)
 static int GPS_WriteRtcmFrame(const unsigned char *frame, uint16_t frame_bytes)
 {
     uint16_t offset = 0U;
+    int write_ready;
+
+    GnssParserLock();
+    write_ready = GpsUartProbe_IsRtcmWriteReady(
+        &g_uart_probe,
+        GPS_RTCM_REQUIRED_BAUDRATE);
+    GnssParserUnlock();
+    if (!write_ready) {
+        GnssRtcmInjection_RecordWriteError(0U);
+        return -1;
+    }
 
     while (offset < frame_bytes) {
         uint16_t remaining = (uint16_t)(frame_bytes - offset);
@@ -251,13 +356,17 @@ static void GPS_LogRtcmStatus(void)
 // 注：RK2206 UART不支持硬件中断，使用轮询模拟
 static void GPS_UartPollTask(void)
 {
-    unsigned char temp_buf[64];  // 临时缓冲区
+    unsigned char temp_buf[GPS_UART_READ_CHUNK_BYTES];
 
 #if GPS_UART_PROBE_LOG_MODE
     printf("[GPS PROBE] UART poll task running id=%u baud=%u\n", GPS_UART_ID, GPS_BAUDRATE);
 #endif
     
     while (1) {
+        if (g_gps_resync_requested) {
+            g_gps_resync_requested = 0;
+            ResetGpsLineState();
+        }
 #if GNSS_RTCM_INJECTION_CAPABILITY != GNSS_RTCM_INJECTION_DISABLED
         // This task exclusively owns GNSS UART I/O. Queue producers never call
         // IoTUartWrite, so NMEA reads and RTCM writes cannot race in the HAL.
@@ -269,7 +378,15 @@ static void GPS_UartPollTask(void)
         if (len > 0) {
             uint32_t now = LOS_TickCountGet();
             uint32_t rx_log_interval_ticks = LOS_MS2Tick(GPS_UART_PROBE_RX_LOG_INTERVAL_MS);
-            int written = Fifo_Write(&g_gps_fifo, temp_buf, (unsigned int)len);
+
+            GnssParserLock();
+            GpsUartProbe_Consume(
+                &g_uart_probe,
+                temp_buf,
+                (unsigned int)len,
+                (uint32_t)GpsMonotonicMs());
+            GnssParserUnlock();
+            ProcessGPSData(temp_buf, len);
 
             if (rx_log_interval_ticks == 0U) {
                 rx_log_interval_ticks = 1U;
@@ -282,26 +399,10 @@ static void GPS_UartPollTask(void)
             }
 
             g_last_uart_read_status = 1;
-            if (written < 0) {
-                if ((g_last_fifo_write_warn_tick == 0U) || ((now - g_last_fifo_write_warn_tick) >= 200U)) {
-                    g_last_fifo_write_warn_tick = now;
-                    printf("[GPS] FIFO write unavailable; dropping UART chunk len=%d\n", len);
-                }
-                g_gps_resync_requested = 1;
-            } else if (written < len) {
-                uint32_t now = LOS_TickCountGet();
-
-                if ((g_last_fifo_write_warn_tick == 0U) || ((now - g_last_fifo_write_warn_tick) >= 200U)) {
-                    g_last_fifo_write_warn_tick = now;
-                    printf("[GPS] FIFO short write %d/%d dropped_bytes=%u dropped_events=%u\n",
-                           written,
-                           len,
-                           Fifo_DroppedBytes(&g_gps_fifo),
-                           Fifo_DroppedEvents(&g_gps_fifo));
-                }
-                g_gps_resync_requested = 1;
-            }
         } else if (len < 0) {
+            GnssParserLock();
+            GpsUartProbe_RecordReadError(&g_uart_probe);
+            GnssParserUnlock();
             if (g_last_uart_read_status != len) {
                 g_last_uart_read_status = len;
                 printf("[GPS] UART read error ret=%d\n", len);
@@ -325,9 +426,10 @@ static void GPS_UartPollTask(void)
             }
             g_last_uart_read_status = 0;
         }
+
+        UpdateGpsBaudProbe();
         
-        // 10ms轮询一次（100Hz），足够GPS 9600波特率
-        LOS_Msleep(10);
+        LOS_Msleep(GPS_UART_POLL_INTERVAL_MS);
     }
 }
 
@@ -416,21 +518,13 @@ int GPS_Init(void)
         return -1;
     }
     
-    IotUartAttribute uart_attr = {
-        .baudRate = GPS_BAUDRATE,
-        .dataBits = IOT_UART_DATA_BIT_8,
-        .stopBits = IOT_UART_STOP_BIT_1,
-        .parity = IOT_UART_PARITY_NONE,
-        .rxBlock = IOT_UART_BLOCK_STATE_NONE_BLOCK,
-#if GNSS_RTCM_INJECTION_CAPABILITY == GNSS_RTCM_INJECTION_LIVE
-        .txBlock = IOT_UART_BLOCK_STATE_BLOCK,
-#else
-        .txBlock = IOT_UART_BLOCK_STATE_NONE_BLOCK,
-#endif
-        .pad = IOT_FLOW_CTRL_NONE,
-    };
-    
-    unsigned int ret = IoTUartInit(GPS_UART_ID, &uart_attr);
+    GpsUartProbe_Init(
+        &g_uart_probe,
+        GPS_BAUDRATE,
+        GPS_UART_FALLBACK_BAUDRATE,
+        (uint32_t)GpsMonotonicMs());
+
+    unsigned int ret = ConfigureGpsUart(GPS_BAUDRATE);
     if (ret != IOT_SUCCESS) {
         printf("[ERROR] GPS UART init failed: %u\n", ret);
         return -1;
@@ -461,11 +555,6 @@ void GPS_Poll(void)
     unsigned char recv_buf[GPS_RECV_BUF_SIZE];
     unsigned int total_drained = 0;
     unsigned int dropped_events = Fifo_DroppedEvents(&g_gps_fifo);
-
-    if (g_gps_resync_requested) {
-        g_gps_resync_requested = 0;
-        ResetGpsLineState();
-    }
 
     if (dropped_events != g_last_reported_fifo_drop_events) {
         g_last_reported_fifo_drop_events = dropped_events;
@@ -539,6 +628,20 @@ int GPS_GetGgaQuality(void)
 {
     GnssSolutionSnapshot snapshot;
     return GPS_ReadSolution(&snapshot) == 0 ? (int)snapshot.gga_quality : 0;
+}
+
+void GPS_GetUartDiagnostics(GpsUartDiagnostics *diagnostics)
+{
+    if (diagnostics == NULL) {
+        return;
+    }
+    GnssParserLock();
+    GpsUartProbe_GetDiagnostics(
+        &g_uart_probe,
+        Fifo_DroppedBytes(&g_gps_fifo),
+        Fifo_DroppedEvents(&g_gps_fifo),
+        diagnostics);
+    GnssParserUnlock();
 }
 
 #endif // ENABLE_GPS

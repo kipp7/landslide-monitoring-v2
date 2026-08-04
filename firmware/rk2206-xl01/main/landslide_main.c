@@ -134,7 +134,7 @@ static volatile uint32_t g_last_platform_command_tick = 0;
 static CompactPollBroadcastDeduplicator g_compact_poll_broadcast_deduplicator;
 static unsigned int g_compact_poll_broadcast_duplicates_suppressed = 0U;
 static volatile int g_field_link_recovery_requested = 0;
-#define FW_RX_DIAG_MARKER "fw-rk2206-rtk-compact-v6-layered-v3-protected-p1-20260804"
+#define FW_RX_DIAG_MARKER "fw-rk2206-rtk-compact-v6-gps-uart-drain-v2-live-20260805"
 bool g_cloud_motor_enabled = false;
 int g_cloud_motor_speed = 0;
 MotorDirection g_cloud_motor_direction = MOTOR_DIRECTION_STOP;
@@ -897,7 +897,8 @@ static int HandleGnssProbeStatsQuery(const char *command)
     Rs485ModbusDiagnostics modbus_diagnostics;
     GnssRtcmRuntimeStatus runtime;
     FieldRs485RuntimeDiagnostics rs485_runtime_diagnostics;
-    uint8_t response[GNSS_PROBE_STATS_RESPONSE_V5_BYTES];
+    GpsUartDiagnostics gps_uart_diagnostics;
+    uint8_t response[GNSS_PROBE_STATS_RESPONSE_V6_BYTES];
     uint8_t target_node = 0U;
     uint8_t local_node;
     uint32_t nonce = 0U;
@@ -922,6 +923,12 @@ static int HandleGnssProbeStatsQuery(const char *command)
     memset(&sc16is752_diagnostics, 0, sizeof(sc16is752_diagnostics));
     memset(&field_rs485_diagnostics, 0, sizeof(field_rs485_diagnostics));
     memset(&modbus_diagnostics, 0, sizeof(modbus_diagnostics));
+    memset(&gps_uart_diagnostics, 0, sizeof(gps_uart_diagnostics));
+#if ENABLE_GPS
+    GPS_GetUartDiagnostics(&gps_uart_diagnostics);
+#else
+    gps_uart_diagnostics.selected_candidate = GPS_UART_PROBE_NO_SELECTION;
+#endif
 #if ENABLE_RS485_BUS
     FieldRs485_GetDiagnostics(&field_rs485_diagnostics);
     RS485_ModbusGetDiagnostics(&modbus_diagnostics);
@@ -929,7 +936,7 @@ static int HandleGnssProbeStatsQuery(const char *command)
     SC16IS752_GetDiagnostics(&sc16is752_diagnostics);
 #endif
 #endif
-    response_len = GnssProbeStatsResponseV5_Encode(
+    response_len = GnssProbeStatsResponseV6_Encode(
         &stats,
         &link_stats,
         &sensor_diagnostics,
@@ -937,6 +944,7 @@ static int HandleGnssProbeStatsQuery(const char *command)
         &field_rs485_diagnostics,
         &modbus_diagnostics,
         &rs485_runtime_diagnostics,
+        &gps_uart_diagnostics,
         local_node,
         runtime.mode,
         nonce,
@@ -944,7 +952,7 @@ static int HandleGnssProbeStatsQuery(const char *command)
         response,
         sizeof(response)
     );
-    if (response_len != GNSS_PROBE_STATS_RESPONSE_V5_BYTES) {
+    if (response_len != GNSS_PROBE_STATS_RESPONSE_V6_BYTES) {
         printf("[RTCM STATS] encode failed node=%u\n", (unsigned int)local_node);
         return 1;
     }

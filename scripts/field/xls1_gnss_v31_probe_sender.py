@@ -31,7 +31,7 @@ FIELD_LINK_TYPE_COMMAND = 2
 FIELD_LINK_TYPE_CONTROL = 4
 FIELD_LINK_TYPE_RTCM = 6
 RTCM_FRAGMENT_HEADER_BYTES = 42
-GNSS_PROBE_STATS_RESPONSE_BYTES = {1: 92, 2: 148, 3: 204, 4: 384, 5: 552}
+GNSS_PROBE_STATS_RESPONSE_BYTES = {1: 92, 2: 148, 3: 204, 4: 384, 5: 552, 6: 660}
 GNSS_RTCM_ACK_RESPONSE_BYTES = 24
 UINT32_MASK = 0xFFFFFFFF
 TARGET_MASKS = {"A": 0x01, "B": 0x02, "C": 0x04, "all": 0x07}
@@ -626,7 +626,115 @@ def decode_probe_stats_response(payload: bytes) -> dict[str, Any]:
             "maxDurationMs": max_duration_ms,
             "paths": paths,
         }
+    if response_version >= 6:
+        schema_version, state, active_candidate, selected_candidate = payload[552:556]
+        (
+            active_baudrate,
+            switch_count,
+            reconfigure_failures,
+            read_errors,
+            fifo_dropped_bytes,
+            fifo_drop_events,
+        ) = struct.unpack_from(">6I", payload, 556)
+        candidates = []
+        for index in range(2):
+            values = struct.unpack_from(">10I", payload, 580 + index * 40)
+            candidate = dict(
+                zip(
+                    (
+                        "baudrate",
+                        "rxBytes",
+                        "printableBytes",
+                        "dollarBytes",
+                        "completedLines",
+                        "checksumValidSentences",
+                        "checksumInvalidSentences",
+                        "ggaSentences",
+                        "rmcSentences",
+                        "firstValidUptimeMs",
+                    ),
+                    values,
+                    strict=True,
+                )
+            )
+            if (
+                candidate["baudrate"] == 0
+                or candidate["printableBytes"] > candidate["rxBytes"]
+                or candidate["dollarBytes"] > candidate["rxBytes"]
+                or candidate["completedLines"] > candidate["dollarBytes"]
+                or candidate["checksumValidSentences"]
+                + candidate["checksumInvalidSentences"]
+                > candidate["completedLines"]
+                or candidate["ggaSentences"] + candidate["rmcSentences"]
+                > candidate["checksumValidSentences"]
+                or (
+                    candidate["checksumValidSentences"] == 0
+                    and candidate["firstValidUptimeMs"] != 0
+                )
+                or (
+                    candidate["checksumValidSentences"] > 0
+                    and candidate["firstValidUptimeMs"] == 0
+                )
+            ):
+                raise ValueError("GNSS UART candidate diagnostics are inconsistent")
+            candidates.append(candidate)
+        expected_selection = {3: 0, 4: 1}.get(state, 0xFF)
+        if (
+            schema_version != 1
+            or state not in range(1, 7)
+            or active_candidate not in (0, 1)
+            or selected_candidate not in (0, 1, 0xFF)
+            or selected_candidate != expected_selection
+            or active_baudrate != candidates[active_candidate]["baudrate"]
+        ):
+            raise ValueError("GNSS UART probe state or selection is inconsistent")
+        response["gpsUartDiagnostics"] = {
+            "schemaVersion": schema_version,
+            "state": state,
+            "activeCandidate": active_candidate,
+            "selectedCandidate": selected_candidate,
+            "activeBaudrate": active_baudrate,
+            "switchCount": switch_count,
+            "reconfigureFailures": reconfigure_failures,
+            "readErrors": read_errors,
+            "fifoDroppedBytes": fifo_dropped_bytes,
+            "fifoDropEvents": fifo_drop_events,
+            "candidates": candidates,
+        }
     return response
+
+
+def print_gps_uart_diagnostics(prefix: str, response: dict[str, Any]) -> None:
+    diagnostics = response.get("gpsUartDiagnostics")
+    if diagnostics is None:
+        return
+    state_names = {
+        1: "probing_primary",
+        2: "probing_fallback",
+        3: "locked_primary",
+        4: "locked_fallback",
+        5: "failed_default_primary",
+        6: "reconfigure_error",
+    }
+    print(
+        f"{prefix}_GPS_UART state={state_names[diagnostics['state']]} "
+        f"active_baud={diagnostics['activeBaudrate']} "
+        f"selected={diagnostics['selectedCandidate']} switches={diagnostics['switchCount']} "
+        f"reconfig_fail={diagnostics['reconfigureFailures']} "
+        f"read_errors={diagnostics['readErrors']} fifo_drop={diagnostics['fifoDroppedBytes']}",
+        flush=True,
+    )
+    for index, candidate in enumerate(diagnostics["candidates"]):
+        print(
+            f"{prefix}_GPS_UART_CANDIDATE index={index} baud={candidate['baudrate']} "
+            f"rx={candidate['rxBytes']} printable={candidate['printableBytes']} "
+            f"dollar={candidate['dollarBytes']} lines={candidate['completedLines']} "
+            f"checksum_ok={candidate['checksumValidSentences']} "
+            f"checksum_bad={candidate['checksumInvalidSentences']} "
+            f"gga={candidate['ggaSentences']} rmc={candidate['rmcSentences']} "
+            f"first_valid_ms={candidate['firstValidUptimeMs']}",
+            flush=True,
+        )
 
 
 def print_sensor_diagnostics(prefix: str, response: dict[str, Any]) -> None:
@@ -1914,6 +2022,8 @@ def run_diagnostics_query(args: argparse.Namespace) -> dict[str, Any]:
         raise RuntimeError("G3S V4 hardware diagnostics are missing")
     if args.require_stats_version >= 5 and snapshot.get("rs485RuntimeDiagnostics") is None:
         raise RuntimeError("G3S V5 RS485 runtime diagnostics are missing")
+    if args.require_stats_version >= 6 and snapshot.get("gpsUartDiagnostics") is None:
+        raise RuntimeError("G3S V6 GPS UART diagnostics are missing")
     print(
         f"DIAGNOSTICS node={args.target} version={snapshot['responseVersion']} "
         f"mode={snapshot['injectionMode']} uptime={snapshot['snapshotUptimeS']}",
@@ -1921,6 +2031,7 @@ def run_diagnostics_query(args: argparse.Namespace) -> dict[str, Any]:
     )
     print_sensor_diagnostics("DIAGNOSTIC", snapshot)
     print_hardware_diagnostics("DIAGNOSTIC", snapshot)
+    print_gps_uart_diagnostics("DIAGNOSTIC", snapshot)
     sensor_degraded = None
     if diagnostics is not None:
         sensor_degraded = bool(
@@ -2198,7 +2309,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--drain-ms", type=int, default=2000)
     parser.add_argument("--stats-timeout-seconds", type=float, default=3.0)
     parser.add_argument("--stats-retries", type=int, default=3)
-    parser.add_argument("--require-stats-version", type=int, choices=(1, 2, 3, 4, 5), default=1)
+    parser.add_argument("--require-stats-version", type=int, choices=(1, 2, 3, 4, 5, 6), default=1)
     parser.add_argument("--selective-retry", action="store_true")
     parser.add_argument("--max-retransmit-rounds", type=int, default=2)
     parser.add_argument("--ack-timeout-seconds", type=float, default=0.65)

@@ -49,6 +49,9 @@ $compactBuilderTest = Join-Path $repoRoot "firmware\rk2206-xl01\tests\compact_te
 $gnssSolutionHeader = Join-Path $repoRoot "firmware\rk2206-xl01\drivers\sensors\gnss_solution_parser.h"
 $gnssSolutionImplementation = Join-Path $repoRoot "firmware\rk2206-xl01\drivers\sensors\gnss_solution_parser.c"
 $gnssSolutionTest = Join-Path $repoRoot "firmware\rk2206-xl01\tests\gnss_solution_parser_host_test.c"
+$gpsUartProbeHeader = Join-Path $repoRoot "firmware\rk2206-xl01\drivers\sensors\gps_uart_probe.h"
+$gpsUartProbeImplementation = Join-Path $repoRoot "firmware\rk2206-xl01\drivers\sensors\gps_uart_probe.c"
+$gpsUartProbeTest = Join-Path $repoRoot "firmware\rk2206-xl01\tests\gps_uart_probe_host_test.c"
 
 foreach ($required in @(
   $sourceHeader, $sourceImplementation, $injectionHeader, $injectionImplementation,
@@ -63,7 +66,8 @@ foreach ($required in @(
   $fieldLinkFrameImplementation, $simulatedFieldSensorsHeader,
   $simulatedFieldSensorsImplementation, $simulatedGnssHeader,
   $simulatedGnssImplementation, $compactBuilderTest,
-  $gnssSolutionHeader, $gnssSolutionImplementation, $gnssSolutionTest
+  $gnssSolutionHeader, $gnssSolutionImplementation, $gnssSolutionTest,
+  $gpsUartProbeHeader, $gpsUartProbeImplementation, $gpsUartProbeTest
 )) {
   if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
     throw "Required GNSS transport source is missing: $required"
@@ -123,6 +127,9 @@ docker cp $compactBuilderTest "${ContainerName}:${containerRoot}/tests/compact_t
 docker cp $gnssSolutionHeader "${ContainerName}:${containerRoot}/drivers/sensors/gnss_solution_parser.h"
 docker cp $gnssSolutionImplementation "${ContainerName}:${containerRoot}/drivers/sensors/gnss_solution_parser.c"
 docker cp $gnssSolutionTest "${ContainerName}:${containerRoot}/tests/gnss_solution_parser_host_test.c"
+docker cp $gpsUartProbeHeader "${ContainerName}:${containerRoot}/drivers/sensors/gps_uart_probe.h"
+docker cp $gpsUartProbeImplementation "${ContainerName}:${containerRoot}/drivers/sensors/gps_uart_probe.c"
+docker cp $gpsUartProbeTest "${ContainerName}:${containerRoot}/tests/gps_uart_probe_host_test.c"
 if ($LASTEXITCODE -ne 0) {
   throw "Failed to copy GNSS transport sources into the container"
 }
@@ -187,6 +194,11 @@ gcc -std=c99 -Wall -Wextra -Werror -O2 \
   tests/gnss_solution_parser_host_test.c \
   -o gnss_solution_parser_host_test
 ./gnss_solution_parser_host_test
+gcc -std=c99 -Wall -Wextra -Werror -O2 \
+  drivers/sensors/gps_uart_probe.c \
+  tests/gps_uart_probe_host_test.c \
+  -o gps_uart_probe_host_test
+./gps_uart_probe_host_test
 "@
 
 docker exec $ContainerName bash -lc $compile

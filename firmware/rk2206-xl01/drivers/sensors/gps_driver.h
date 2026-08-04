@@ -12,6 +12,8 @@
 #ifndef DRIVERS_SENSORS_GPS_DRIVER_H
 #define DRIVERS_SENSORS_GPS_DRIVER_H
 
+#include "gps_uart_probe.h"
+
 #include "gnss_solution_parser.h"
 
 /**
@@ -33,5 +35,8 @@ int GPS_ReadSolution(GnssSolutionSnapshot *solution);
  * RMC status never changes this value.
  */
 int GPS_GetGgaQuality(void);
+
+/** Copy UART/baud/NMEA evidence for the on-demand G3S diagnostic response. */
+void GPS_GetUartDiagnostics(GpsUartDiagnostics *diagnostics);
 
 #endif // DRIVERS_SENSORS_GPS_DRIVER_H

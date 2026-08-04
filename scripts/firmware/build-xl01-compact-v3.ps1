@@ -59,6 +59,8 @@ $syncFiles = @(
   "drivers\xl01\xl01_driver.h",
   "drivers\sensors\gps_driver.c",
   "drivers\sensors\gps_driver.h",
+  "drivers\sensors\gps_uart_probe.c",
+  "drivers\sensors\gps_uart_probe.h",
   "drivers\sensors\gnss_solution_parser.c",
   "drivers\sensors\gnss_solution_parser.h",
   "drivers\sensors\battery_monitor.c",

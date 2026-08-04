@@ -74,7 +74,8 @@ int main(void)
     FieldRs485Diagnostics field_rs485_diagnostics;
     FieldRs485RuntimeDiagnostics rs485_runtime_diagnostics;
     Rs485ModbusDiagnostics modbus_diagnostics;
-    uint8_t payload[GNSS_PROBE_STATS_RESPONSE_V5_BYTES];
+    GpsUartDiagnostics gps_uart_diagnostics;
+    uint8_t payload[GNSS_PROBE_STATS_RESPONSE_V6_BYTES];
     uint8_t ack_payload[GNSS_RTCM_ACK_RESPONSE_V1_BYTES];
     uint8_t wire[FIELD_LINK_FRAME_ENCODED_BYTES];
     FieldLinkFrameDecoder wire_decoder;
@@ -279,15 +280,57 @@ int main(void)
         }
     }
     assert(payload[548] == 0U && payload[551] == 0U);
+    memset(&gps_uart_diagnostics, 0, sizeof(gps_uart_diagnostics));
+    gps_uart_diagnostics.schema_version = 1U;
+    gps_uart_diagnostics.state = GPS_UART_PROBE_STATE_LOCKED_PRIMARY;
+    gps_uart_diagnostics.active_candidate = 0U;
+    gps_uart_diagnostics.selected_candidate = 0U;
+    gps_uart_diagnostics.active_baudrate = 115200U;
+    gps_uart_diagnostics.switch_count = 2U;
+    gps_uart_diagnostics.reconfigure_failures = 3U;
+    gps_uart_diagnostics.read_errors = 4U;
+    gps_uart_diagnostics.fifo_dropped_bytes = 5U;
+    gps_uart_diagnostics.fifo_drop_events = 6U;
+    for (index = 0U; index < GPS_UART_PROBE_CANDIDATE_COUNT; ++index) {
+        GpsUartCandidateDiagnostics *candidate = &gps_uart_diagnostics.candidates[index];
+        candidate->baudrate = index == 0U ? 115200U : 9600U;
+        candidate->rx_bytes = 1000U + index;
+        candidate->printable_bytes = 900U + index;
+        candidate->dollar_bytes = 80U + index;
+        candidate->completed_lines = 70U + index;
+        candidate->checksum_valid_sentences = 60U + index;
+        candidate->checksum_invalid_sentences = 5U + index;
+        candidate->gga_sentences = 30U + index;
+        candidate->rmc_sentences = 20U + index;
+        candidate->first_valid_uptime_ms = 8000U + index;
+    }
+    assert(GnssProbeStatsResponseV6_Encode(
+        &stats, &link_stats, &sensor_diagnostics,
+        &sc16is752_diagnostics, &field_rs485_diagnostics, &modbus_diagnostics,
+        &rs485_runtime_diagnostics, &gps_uart_diagnostics,
+        2U, GNSS_RTCM_INJECTION_PROBE, nonce, 1300U,
+        payload, sizeof(payload)
+    ) == GNSS_PROBE_STATS_RESPONSE_V6_BYTES);
+    assert(payload[3] == 6U && payload[552] == 1U);
+    assert(payload[553] == GPS_UART_PROBE_STATE_LOCKED_PRIMARY);
+    assert(payload[554] == 0U && payload[555] == 0U);
+    assert(ReadUint32Be(payload + 556) == 115200U);
+    assert(ReadUint32Be(payload + 560) == 2U);
+    assert(ReadUint32Be(payload + 576) == 6U);
+    assert(ReadUint32Be(payload + 580) == 115200U);
+    assert(ReadUint32Be(payload + 584) == 1000U);
+    assert(ReadUint32Be(payload + 616) == 8000U);
+    assert(ReadUint32Be(payload + 620) == 9600U);
+    assert(ReadUint32Be(payload + 656) == 8001U);
     wire_len = FieldLinkFrame_Encode(
         FIELD_LINK_FRAME_TYPE_CONTROL,
         77U,
         (const char *)payload,
-        GNSS_PROBE_STATS_RESPONSE_V5_BYTES,
+        GNSS_PROBE_STATS_RESPONSE_V6_BYTES,
         wire,
         sizeof(wire));
-    assert(wire_len > GNSS_PROBE_STATS_RESPONSE_V5_BYTES);
-    assert(wire_len <= 572);
+    assert(wire_len > GNSS_PROBE_STATS_RESPONSE_V6_BYTES);
+    assert(wire_len <= 680);
     FieldLinkFrameDecoder_Init(&wire_decoder);
     memset(&decoded_message, 0, sizeof(decoded_message));
     for (index = 0U; index < (unsigned int)wire_len; ++index) {
@@ -301,7 +344,7 @@ int main(void)
     assert(decode_ret == 1);
     assert(decoded_message.type == FIELD_LINK_FRAME_TYPE_CONTROL);
     assert(decoded_message.sequence == 77U);
-    assert(decoded_message.payload_len == GNSS_PROBE_STATS_RESPONSE_V5_BYTES);
+    assert(decoded_message.payload_len == GNSS_PROBE_STATS_RESPONSE_V6_BYTES);
     assert(memcmp(decoded_message.payload, payload, sizeof(payload)) == 0);
     memset(&ack_window, 0, sizeof(ack_window));
     ack_window.session_valid = 1U;
@@ -320,7 +363,7 @@ int main(void)
     assert(ReadUint32Be(ack_payload + 16) == 117U);
     assert(ReadUint16Be(ack_payload + 20) == 0xA55AU);
     assert(ReadUint16Be(ack_payload + 22) == 0U);
-    printf("gnss_probe_stats_protocol_host_test passed v5_payload_bytes=%u wire_bytes=%d\n",
+    printf("gnss_probe_stats_protocol_host_test passed v6_payload_bytes=%u wire_bytes=%d\n",
            (unsigned int)sizeof(payload), wire_len);
     return 0;
 }

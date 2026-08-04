@@ -469,6 +469,99 @@ int GnssProbeStatsResponseV5_Encode(
     return GNSS_PROBE_STATS_RESPONSE_V5_BYTES;
 }
 
+static void EncodeGpsUartCandidate(
+    uint8_t *output,
+    const GpsUartCandidateDiagnostics *candidate)
+{
+    const uint32_t values[] = {
+        candidate != NULL ? candidate->baudrate : 0U,
+        candidate != NULL ? candidate->rx_bytes : 0U,
+        candidate != NULL ? candidate->printable_bytes : 0U,
+        candidate != NULL ? candidate->dollar_bytes : 0U,
+        candidate != NULL ? candidate->completed_lines : 0U,
+        candidate != NULL ? candidate->checksum_valid_sentences : 0U,
+        candidate != NULL ? candidate->checksum_invalid_sentences : 0U,
+        candidate != NULL ? candidate->gga_sentences : 0U,
+        candidate != NULL ? candidate->rmc_sentences : 0U,
+        candidate != NULL ? candidate->first_valid_uptime_ms : 0U,
+    };
+    unsigned int index;
+
+    for (index = 0U; index < sizeof(values) / sizeof(values[0]); ++index) {
+        WriteUint32Be(output + index * 4U, values[index]);
+    }
+}
+
+int GnssProbeStatsResponseV6_Encode(
+    const GnssRtcmInjectionStats *stats,
+    const FieldLinkRxStats *link_stats,
+    const GnssSensorDiagnostics *sensor_diagnostics,
+    const Sc16is752Diagnostics *sc16is752_diagnostics,
+    const FieldRs485Diagnostics *field_rs485_diagnostics,
+    const Rs485ModbusDiagnostics *modbus_diagnostics,
+    const FieldRs485RuntimeDiagnostics *rs485_runtime_diagnostics,
+    const GpsUartDiagnostics *gps_uart_diagnostics,
+    uint8_t node_number,
+    uint8_t injection_mode,
+    uint32_t nonce,
+    uint32_t snapshot_uptime_s,
+    uint8_t *output,
+    int output_size)
+{
+    unsigned int candidate_index;
+
+    if (output == NULL || output_size < GNSS_PROBE_STATS_RESPONSE_V6_BYTES) {
+        return -1;
+    }
+    if (GnssProbeStatsResponseV5_Encode(
+            stats,
+            link_stats,
+            sensor_diagnostics,
+            sc16is752_diagnostics,
+            field_rs485_diagnostics,
+            modbus_diagnostics,
+            rs485_runtime_diagnostics,
+            node_number,
+            injection_mode,
+            nonce,
+            snapshot_uptime_s,
+            output,
+            output_size
+        ) != GNSS_PROBE_STATS_RESPONSE_V5_BYTES) {
+        return -1;
+    }
+
+    memset(
+        output + GNSS_PROBE_STATS_RESPONSE_V5_BYTES,
+        0,
+        GNSS_PROBE_STATS_RESPONSE_V6_BYTES - GNSS_PROBE_STATS_RESPONSE_V5_BYTES);
+    output[3] = 6U;
+    if (gps_uart_diagnostics != NULL) {
+        output[552] = gps_uart_diagnostics->schema_version;
+        output[553] = gps_uart_diagnostics->state;
+        output[554] = gps_uart_diagnostics->active_candidate;
+        output[555] = gps_uart_diagnostics->selected_candidate;
+        WriteUint32Be(output + 556, gps_uart_diagnostics->active_baudrate);
+        WriteUint32Be(output + 560, gps_uart_diagnostics->switch_count);
+        WriteUint32Be(output + 564, gps_uart_diagnostics->reconfigure_failures);
+        WriteUint32Be(output + 568, gps_uart_diagnostics->read_errors);
+        WriteUint32Be(output + 572, gps_uart_diagnostics->fifo_dropped_bytes);
+        WriteUint32Be(output + 576, gps_uart_diagnostics->fifo_drop_events);
+    } else {
+        output[555] = GPS_UART_PROBE_NO_SELECTION;
+    }
+    for (candidate_index = 0U;
+         candidate_index < GPS_UART_PROBE_CANDIDATE_COUNT;
+         ++candidate_index) {
+        EncodeGpsUartCandidate(
+            output + 580U + candidate_index * 40U,
+            gps_uart_diagnostics != NULL
+                ? &gps_uart_diagnostics->candidates[candidate_index]
+                : NULL);
+    }
+    return GNSS_PROBE_STATS_RESPONSE_V6_BYTES;
+}
+
 int GnssRtcmAckQueryV1_Decode(
     const char *payload,
     int payload_bytes,
