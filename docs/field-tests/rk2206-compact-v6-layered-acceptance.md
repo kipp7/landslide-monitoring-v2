@@ -121,6 +121,8 @@ sudo python3 scripts/field/xls1_compact_v6_layered_acceptance.py \
 The default stages are 60, 600, and 1800 seconds. Stop at the first failure.
 Every stage requires:
 
+- one explicit P3 and one explicit P4 capability probe after valid core
+  snapshots exist, before the normal 30/60-round production cadence is used;
 - all logical core rounds complete with A/B/C responses from the single P1;
 - every expected P3 and P4 response matched;
 - exactly 64 bytes for every complete telemetry frame;

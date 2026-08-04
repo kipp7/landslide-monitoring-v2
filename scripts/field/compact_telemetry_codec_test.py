@@ -25,6 +25,7 @@ from xls1_compact_v4_acceptance import (
     stage_arguments,
 )
 from xls1_compact_v6_layered_acceptance import (
+    acceptance_extension_scope,
     build_layered_poll,
     evaluate_layered_gate,
     layered_extension_scope,
@@ -69,6 +70,11 @@ def main() -> None:
     assert layered_extension_scope(3, 3, 15) == "environment"
     assert layered_extension_scope(15, 3, 15) == "audit"
     assert layered_extension_scope(16, 3, 15) is None
+    assert acceptance_extension_scope(1, 30, 60, set()) == "environment"
+    assert acceptance_extension_scope(2, 30, 60, {"environment"}) == "audit"
+    assert acceptance_extension_scope(3, 30, 60, {"environment", "audit"}) is None
+    assert acceptance_extension_scope(30, 30, 60, {"environment", "audit"}) == "environment"
+    assert acceptance_extension_scope(60, 30, 60, {"environment", "audit"}) == "audit"
     assert sequence_summary([0xFFFFFFFE, 0xFFFFFFFF, 0, 1])["nonUnitGaps"] == 0
     assert sequence_summary([1, 3])["nonUnitGaps"] == 1
 

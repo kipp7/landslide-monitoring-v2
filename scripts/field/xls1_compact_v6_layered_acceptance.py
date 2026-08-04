@@ -85,6 +85,20 @@ def layered_extension_scope(core_round: int, environment_every: int, audit_every
     return None
 
 
+def acceptance_extension_scope(
+    core_round: int,
+    environment_every: int,
+    audit_every: int,
+    observed_scopes: set[str],
+) -> str | None:
+    """Exercise both extension decoders before following the production cadence."""
+    if "environment" not in observed_scopes:
+        return "environment"
+    if "audit" not in observed_scopes:
+        return "audit"
+    return layered_extension_scope(core_round, environment_every, audit_every)
+
+
 def sequence_summary(values: list[int]) -> dict[str, Any]:
     non_unit_gaps = 0
     non_forward = 0
@@ -502,10 +516,11 @@ def run_layered_experiment(args: argparse.Namespace) -> dict[str, Any]:
                             receive_once(fd, min(0.05, recovery_deadline - time.monotonic()))
 
             extension_scope = (
-                layered_extension_scope(
+                acceptance_extension_scope(
                     core_rounds_sent,
                     args.environment_every_rounds,
                     args.audit_every_rounds,
+                    {record["scope"] for record in records if record["matched"]},
                 )
                 if all(record["matched"] for record in core_records)
                 else None
