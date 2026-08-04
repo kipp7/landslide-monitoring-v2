@@ -18,6 +18,15 @@ status: active
 
 ## Last Confirmed State
 
+### Compact V5 Live Gate: Lossless With Guard, Cadence Rejected (2026-08-04)
+
+- 用户已按标签统一烧录正式 Compact V5 并上电。RK3568 运行快照确认 A/B/C 均为 `compact_payload_version=5`、hardware RS485、simulated GNSS、field-calibrated battery、RTCM `disabled + READY` 且 error summary 为 0；三节点真实 soil/EC/tilt 当前有效。
+- 原正式 60 秒门禁只做 500 ms 排空且使用 3000 ms 保护窗，结果为 `37/39`、2 个 decode error、1 个 unmatched。两条坏记录精确为 `207 B + 49 B = 256 B`，等于两个 128 B V5 完整帧，证明迟到帧仍可交织；首个 unmatched C 帧证明开始时还有生产轮询残留。报告 `/var/lib/lsmv2/experiments/xls1-compact-v5-0060s-20260804-121326.json` SHA-256 `ce14e28bd15961284c03a50689419721cd5b0ac8d52f678879b1b94f86b03e70`，summary SHA-256 `5481e5e2a0cc3b03980122a08bb33cfb3afe946979ca55b3dfb33a2cd8ecae05`；fail-fast 未进入 600/1800，服务自动恢复。
+- 单变量改为“最长 30 秒排空、连续 5 秒静默、6000 ms 接收保护”，同时保留 command P95 `<=1500 ms` 和 per-node arrival P95 `<=2500 ms`。60 秒为 `63/63`、21/21 完整批次，零丢失、解码、交织、未匹配、重复、profile 和序号错误；A/B/C command P95 `1334.9/1292.4/1374.9 ms`，但 arrival P95 `3419.8/3400.0/3645.4 ms`，所以仅因更新节奏严格失败。报告 SHA-256 `aeb3b55b540b47112e169be70a4b0c33ebf9f957d2bc369abd9921de6da5f047`。
+- 同参数 600 秒通信层为 `621/621`、207/207 完整批次，零丢帧、解码、交织、未匹配、重复和序号错误。C 仅 1 帧倾角无效，形成 4 个同源 profile reason；A/B/C command P95 `1836.4/2101.2/2093.9 ms`，arrival P95 `5377.9/5498.2/5757.7 ms`，严格失败并停止，不进入 1800 秒。报告 `/var/lib/lsmv2/experiments/xls1-compact-v5-drain5s-guard6s-0600s-20260804-122133.json` SHA-256 `3fa30b49a9bab884341ae01d57e23ce977906ecf3adb32f717a183af28535e3f`。
+- 结论必须分层表述：V5 在充分排空和 6 秒防碰撞窗下已证明 600 秒南向通信无损，但当前三节点 P2 串行轮询无法满足 2500 ms 更新间隔，且长测有一次真实倾角瞬态，因此整体验收仍失败。下一协议候选应让每个高频业务线框落在 XLS1 单个 `<=64 B` 标称会话包内，并按“高频位移/倾角核心 + 低频环境/完整审计扩展”分层；未完成字段契约、跨端组装、发布门禁和离线审查前不再次烧录。
+- 验收器提交 `ae2371b6` 已将默认排空改为 5 秒连续静默/30 秒上限、保护窗改为 6000 ms，性能门槛不变；生产配置提交 `c4c9289b` 同步把 targeted 保护窗改为 6000 ms。RK3568 验收脚本备份 `/opt/lsmv2/backups/acceptance-drain-predeploy-20260804-122346`，环境回滚点 `/opt/lsmv2/backups/targeted-guard6s-predeploy-20260804-123356`。现场环境仍为 `root:root 0600`、NTRIP false；配置后生产 60 秒为 `96/96`，A/B/C 各 32 帧，零超时/交织/拒绝/写入/发布错误，服务 active、`NRestarts=0`。
+
 ### Compact V5 Candidate And Powered V4 Baseline (2026-08-04)
 
 - 用户确认 A/B/C 已上电。RK3568 `192.168.124.179` 上的 field-gateway 为 active、`NRestarts=0`、MQTT connected，保持 `compact-targeted-v1/250/3000/0` 与 `NTRIP_ENABLED=false`。运行快照确认三节点仍是 Compact V4、hardware RS485、simulated GNSS；三节点土壤三合一、三轴倾角和 field-calibrated PC0 电池当前均有效。
@@ -254,4 +263,4 @@ status: active
 
 ## Resume Prompt
 
-继续 2026-08-04 XLS1/RTK Compact V5 任务：当前上电节点仍是已被 600 秒门禁拒绝的 139/157 B Compact V4；最新被动 60 秒虽为 `119/119` 且零错误，但不能重复解释为长测通过。110/128 B Compact V5 已由 clean 提交 `4320616a` 生成唯一正式目录 `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v5_rs485_gnss_simulated_20260804`，manifest SHA-256 `045b27c68acc6dc33ff0342a52ea294c1252dd383aff23f8a4c31b7efbcba734`。RK3568 V5 decoder/runner 已部署，回滚点 `/opt/lsmv2/backups/compact-v5-predeploy-20260804-120352`，服务 active 且 NTRIP false。用户下一步只按物理 A/B/C 标签烧录该目录对应 `.img`；随后运行 `xls1_compact_v5_acceptance.py --required-gnss-source simulated --check-prerequisites` 和正式 `60 -> 600 -> 1800` fail-fast。全部通过前不得启用 RTCM/CORS；原始报告、坐标和凭据不进入 Git。
+继续 2026-08-04 XLS1/RTK 任务：A/B/C 已烧录正式 Compact V5。原 500 ms 排空/3000 ms 保护的 60 秒门禁因一条生产残留帧和 `207+49=256 B` 双帧交织失败；改为 5 秒连续静默/6000 ms 保护后，60 秒 `63/63`、600 秒 `621/621`，通信层零丢帧/解码/交织/重复/未匹配且序号连续。整体验收仍失败：600 秒仅 C 有 1 帧倾角无效，且 A/B/C arrival P95 为 `5377.9/5498.2/5757.7 ms`，远超 2500 ms；未进入 1800 秒。验收器提交 `ae2371b6`、生产保护提交 `c4c9289b` 已推送，RK3568 环境已原子切到 6000 ms，回滚点 `/opt/lsmv2/backups/targeted-guard6s-predeploy-20260804-123356`，生产复核 `96/96` 零错误、NTRIP false。下一步不再调超时或立即重刷，而是设计每个高频线框 `<=64 B` 的分层协议：高频位移/倾角核心，低频 soil/EC/battery/完整 GNSS/RTCM 审计扩展；完成字段契约、跨端组装、离线门禁和 clean build 后再统一烧录。全部通过前不得启用 RTCM/CORS；原始报告、坐标和凭据不进入 Git。
