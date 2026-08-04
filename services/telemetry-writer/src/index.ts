@@ -57,6 +57,20 @@ type ShadowState = {
   meta: Record<string, unknown>;
 };
 
+type CompactV6Scope = "core" | "environment" | "audit";
+type CompactV6ScopeSample = {
+  sample_epoch: number;
+  received_ts: string;
+  metrics: Record<string, number | string | boolean | null>;
+  meta: Record<string, unknown>;
+};
+type CompactV6ScopeSamples = Partial<Record<CompactV6Scope, CompactV6ScopeSample>>;
+
+type ShadowReplayMessage = {
+  payload: TelemetryRawV1;
+  resetsShadow: boolean;
+};
+
 const FIELD_PROFILE_META_KEYS = new Set<string>([
   "_writer",
   "install_label",
@@ -93,7 +107,15 @@ const FIELD_PROFILE_META_KEYS = new Set<string>([
   "rtcm_state_flags",
   "rtcm_lease_resolution_ms",
   "rtcm_completion_age_resolution_ms",
-  "rtcm_injected_frames_counter_saturated"
+  "rtcm_injected_frames_counter_saturated",
+  "compact_scope",
+  "sample_epoch",
+  "v6_valid_flags",
+  "v6_quantization",
+  "rtk_fixed_streak_saturated",
+  "rtk_fix_drop_count_saturated",
+  "_scope_samples",
+  "_scope_status"
 ]);
 
 const FIELD_PROFILE_IDENTITY_META_KEYS = ["install_label", "legacy_node", "upload_trigger", "last_command_id", "last_command_type"];
@@ -250,6 +272,99 @@ function sanitizeFieldProfileShadowState(state: ShadowState): ShadowState {
   };
 }
 
+function compactV6Scope(value: unknown): CompactV6Scope | null {
+  return value === "core" || value === "environment" || value === "audit" ? value : null;
+}
+
+function normalizeCompactV6ScopeSamples(value: unknown): CompactV6ScopeSamples {
+  const output: CompactV6ScopeSamples = {};
+  if (!value || typeof value !== "object") return output;
+  const source = value as Record<string, unknown>;
+  for (const scope of ["core", "environment", "audit"] as const) {
+    const candidate = source[scope];
+    if (!candidate || typeof candidate !== "object") continue;
+    const sample = candidate as Record<string, unknown>;
+    if (!Number.isInteger(sample.sample_epoch) || Number(sample.sample_epoch) <= 0 ||
+        Number(sample.sample_epoch) > 0xffff_ffff || typeof sample.received_ts !== "string" ||
+        !Number.isFinite(Date.parse(sample.received_ts)) || !sample.metrics || typeof sample.metrics !== "object" ||
+        !sample.meta || typeof sample.meta !== "object") {
+      continue;
+    }
+    output[scope] = {
+      sample_epoch: Number(sample.sample_epoch),
+      received_ts: sample.received_ts,
+      metrics: sanitizeFieldProfileMetrics(
+        sample.metrics as Record<string, number | string | boolean | null>
+      ),
+      meta: sanitizeRecordByAllowedKeys(sample.meta as Record<string, unknown>, FIELD_PROFILE_META_KEYS)
+    };
+  }
+  return output;
+}
+
+function buildCompactV6ShadowState(
+  payload: TelemetryRawV1,
+  previous: ShadowState,
+  payloadMetrics: Record<string, number | string | boolean | null>,
+  payloadMeta: Record<string, unknown>
+): ShadowState {
+  const scope = compactV6Scope(payloadMeta.compact_scope);
+  const sampleEpoch = payloadMeta.sample_epoch;
+  if (!scope || !Number.isInteger(sampleEpoch) || Number(sampleEpoch) <= 0) {
+    return { metrics: {}, meta: {} };
+  }
+
+  const scopeSamples = normalizeCompactV6ScopeSamples(previous.meta._scope_samples);
+  scopeSamples[scope] = {
+    sample_epoch: Number(sampleEpoch),
+    received_ts: payload.received_ts,
+    metrics: { ...payloadMetrics },
+    meta: { ...payloadMeta }
+  };
+
+  const core = scopeSamples.core;
+  const metrics: Record<string, number | string | boolean | null> = core ? { ...core.metrics } : {};
+  const meta: Record<string, unknown> = core ? { ...core.meta } : {
+    install_label: payloadMeta.install_label,
+    legacy_node: payloadMeta.legacy_node,
+    compact_payload_version: 6
+  };
+  const matchedScopes: CompactV6Scope[] = core ? ["core"] : [];
+  if (core) {
+    for (const extensionScope of ["environment", "audit"] as const) {
+      const extension = scopeSamples[extensionScope];
+      if (extension?.sample_epoch !== core.sample_epoch) continue;
+      Object.assign(metrics, extension.metrics);
+      Object.assign(meta, extension.meta);
+      matchedScopes.push(extensionScope);
+    }
+    if (typeof metrics.rtk_altitude_msl_m === "number" &&
+        typeof metrics.rtk_geoid_separation_m === "number") {
+      metrics.rtk_ellipsoid_height_m =
+        Math.round((metrics.rtk_altitude_msl_m + metrics.rtk_geoid_separation_m) * 1000) / 1000;
+    }
+    meta.compact_scope = "core";
+    meta.packet_class = "hf_displacement_core";
+    meta.sample_epoch = core.sample_epoch;
+  }
+
+  meta._scope_samples = scopeSamples;
+  meta._scope_status = {
+    current_sample_epoch: core?.sample_epoch ?? null,
+    matched_scopes: matchedScopes,
+    environment_sample_epoch: scopeSamples.environment?.sample_epoch ?? null,
+    audit_sample_epoch: scopeSamples.audit?.sample_epoch ?? null
+  };
+  const previousWriter = previous.meta._writer;
+  const writerMeta = previousWriter && typeof previousWriter === "object"
+    ? { ...(previousWriter as Record<string, unknown>) }
+    : {};
+  if (payload.seq != null) writerMeta.last_seq = payload.seq;
+  writerMeta.last_received_ts = payload.received_ts;
+  meta._writer = writerMeta;
+  return { metrics, meta };
+}
+
 function buildShadowState(payload: TelemetryRawV1, previousState: unknown): ShadowState {
   const normalizedPrevious = normalizeShadowState(previousState);
   const payloadMeta = payload.meta && typeof payload.meta === "object" ? payload.meta : {};
@@ -268,6 +383,9 @@ function buildShadowState(payload: TelemetryRawV1, previousState: unknown): Shad
   const nextPayloadMeta = useFieldProfileSanitizer
     ? sanitizeRecordByAllowedKeys(payloadMeta, FIELD_PROFILE_META_KEYS)
     : payloadMeta;
+  if (payloadMeta.compact_payload_version === 6) {
+    return buildCompactV6ShadowState(payload, previous, nextMetrics, nextPayloadMeta);
+  }
   const replaceFieldSnapshot =
     payloadMeta.compact_payload_version === 3 ||
     payloadMeta.compact_payload_version === 4 ||
@@ -290,6 +408,30 @@ function buildShadowState(payload: TelemetryRawV1, previousState: unknown): Shad
     metrics: replaceFieldSnapshot ? { ...nextMetrics } : mergedMetrics,
     meta
   };
+}
+
+function buildSuccessfulShadowUpdates(
+  messages: ShadowReplayMessage[],
+  baseStateByDeviceId: Map<string, ShadowState | null>
+): Map<string, { updatedAtIso: string; state: ShadowState }> {
+  const updates = new Map<string, { updatedAtIso: string; state: ShadowState }>();
+  for (const message of messages) {
+    const { payload } = message;
+    const updatedAtIso = new Date(payload.received_ts).toISOString();
+    const accumulated = updates.get(payload.device_id);
+    if (accumulated && accumulated.updatedAtIso > updatedAtIso) continue;
+
+    const previousState = message.resetsShadow
+      ? null
+      : accumulated
+        ? accumulated.state
+        : baseStateByDeviceId.get(payload.device_id) ?? null;
+    updates.set(payload.device_id, {
+      updatedAtIso,
+      state: buildShadowState(payload, previousState)
+    });
+  }
+  return updates;
 }
 
 async function getLatestShadowSeq(pool: Pool, deviceId: string): Promise<number | null> {
@@ -579,6 +721,7 @@ async function main(): Promise<void> {
         raw: string;
         payload: TelemetryRawV1;
         rows: TelemetryRow[];
+        resetsShadow: boolean;
       };
 
       const pending: PendingMessage[] = [];
@@ -587,6 +730,7 @@ async function main(): Promise<void> {
       const deviceStateByDeviceId = new Map<string, { updatedAtIso: string; state: unknown }>();
       const latestSeqByDeviceId = new Map<string, number | null>();
       const latestShadowStateByDeviceId = new Map<string, ShadowState | null>();
+      const shadowBaseByDeviceId = new Map<string, ShadowState | null>();
 
       const flush = async (reason: string) => {
         if (pending.length === 0) return;
@@ -620,6 +764,7 @@ async function main(): Promise<void> {
           deviceStateByDeviceId.clear();
           latestSeqByDeviceId.clear();
           latestShadowStateByDeviceId.clear();
+          shadowBaseByDeviceId.clear();
           await commitResolvedOffsets(ctx);
           return;
         } catch (err) {
@@ -645,7 +790,7 @@ async function main(): Promise<void> {
           );
           stats.clickhouseInsertBatchesIsolated += 1;
 
-          const shadowUpdates = new Map<string, { updatedAtIso: string; state: unknown }>();
+          const successfulShadowMessages: ShadowReplayMessage[] = [];
 
           for (const p of pending) {
             if (!ctx.isRunning() || ctx.isStale()) break;
@@ -654,10 +799,9 @@ async function main(): Promise<void> {
             try {
               await insertRows(ch, config.clickhouseDatabase, config.clickhouseTable, p.rows);
 
-              const updatedAtIso = new Date(p.payload.received_ts).toISOString();
-              shadowUpdates.set(p.payload.device_id, {
-                updatedAtIso,
-                state: buildShadowState(p.payload, latestShadowStateByDeviceId.get(p.payload.device_id))
+              successfulShadowMessages.push({
+                payload: p.payload,
+                resetsShadow: p.resetsShadow
               });
 
               ctx.resolveOffset(p.offset);
@@ -682,6 +826,10 @@ async function main(): Promise<void> {
             }
           }
 
+          const shadowUpdates = buildSuccessfulShadowUpdates(
+            successfulShadowMessages,
+            shadowBaseByDeviceId
+          );
           if (pg && shadowUpdates.size > 0) {
             try {
               for (const [deviceId, v] of shadowUpdates.entries()) {
@@ -696,6 +844,7 @@ async function main(): Promise<void> {
           deviceStateByDeviceId.clear();
           latestSeqByDeviceId.clear();
           latestShadowStateByDeviceId.clear();
+          shadowBaseByDeviceId.clear();
           await commitResolvedOffsets(ctx);
           return;
         }
@@ -747,6 +896,7 @@ async function main(): Promise<void> {
           }
 
           const payload: TelemetryRawV1 = parsed;
+          let resetsShadow = false;
           if (pg && !latestShadowStateByDeviceId.has(payload.device_id)) {
             latestShadowStateByDeviceId.set(payload.device_id, await getLatestShadowState(pg, payload.device_id));
           }
@@ -781,6 +931,9 @@ async function main(): Promise<void> {
                   },
                   "telemetry seq rollback accepted for a verified producer reset"
                 );
+                latestShadowStateByDeviceId.set(payload.device_id, null);
+                deviceStateByDeviceId.delete(payload.device_id);
+                resetsShadow = true;
               } else {
                 const reasonCode = payload.seq === latestSeq ? "duplicate_seq" : "stale_seq";
                 await publishDlq({
@@ -852,16 +1005,19 @@ async function main(): Promise<void> {
           }
           const messageRows = toTelemetryRows(payload);
           if (messageRows.length > 0) {
-            pending.push({ offset: message.offset, raw, payload, rows: messageRows });
+            pending.push({ offset: message.offset, raw, payload, rows: messageRows, resetsShadow });
             pendingRowsCount += messageRows.length;
 
             const updatedAtIso = new Date(payload.received_ts).toISOString();
             const existing = deviceStateByDeviceId.get(payload.device_id);
+            const currentState = existing
+              ? normalizeShadowState(existing.state)
+              : latestShadowStateByDeviceId.get(payload.device_id) ?? null;
+            if (!shadowBaseByDeviceId.has(payload.device_id)) {
+              shadowBaseByDeviceId.set(payload.device_id, currentState);
+            }
             if (!existing || existing.updatedAtIso <= updatedAtIso) {
-              const previousState = existing
-                ? normalizeShadowState(existing.state)
-                : latestShadowStateByDeviceId.get(payload.device_id);
-              const nextState = buildShadowState(payload, previousState);
+              const nextState = buildShadowState(payload, resetsShadow ? null : currentState);
               deviceStateByDeviceId.set(payload.device_id, {
                 updatedAtIso,
                 state: nextState
@@ -930,7 +1086,7 @@ async function main(): Promise<void> {
   process.on("SIGTERM", () => void shutdown("SIGTERM"));
 }
 
-export const telemetryWriterTestHooks = { buildShadowState };
+export const telemetryWriterTestHooks = { buildShadowState, buildSuccessfulShadowUpdates };
 
 if (require.main === module) {
   void main();

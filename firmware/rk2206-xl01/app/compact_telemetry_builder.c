@@ -79,7 +79,8 @@ typedef char CompactTelemetryPayloadSizeCheck[
     COMPACT_TELEMETRY_V2_PAYLOAD_BYTES == 46 &&
     COMPACT_TELEMETRY_V3_PAYLOAD_BYTES == 95 &&
     COMPACT_TELEMETRY_V4_PAYLOAD_BYTES == 139 &&
-    COMPACT_TELEMETRY_V5_PAYLOAD_BYTES == 110 ? 1 : -1
+    COMPACT_TELEMETRY_V5_PAYLOAD_BYTES == 110 &&
+    COMPACT_TELEMETRY_V6_PAYLOAD_BYTES == 46 ? 1 : -1
 ];
 
 static void WriteUint16Be(unsigned char *output, unsigned int offset, unsigned int value)
@@ -115,6 +116,23 @@ static void WriteInt64Be(unsigned char *output, unsigned int offset, int64_t val
     }
 }
 
+static void WriteInt40Be(unsigned char *output, unsigned int offset, int64_t value)
+{
+    uint64_t bits = (uint64_t)value;
+    unsigned int index;
+    for (index = 0U; index < 5U; ++index) {
+        output[offset + index] = (unsigned char)(bits >> (32U - index * 8U));
+    }
+}
+
+static void WriteInt24Be(unsigned char *output, unsigned int offset, int32_t value)
+{
+    uint32_t bits = (uint32_t)value;
+    output[offset] = (unsigned char)((bits >> 16) & 0xFFU);
+    output[offset + 1U] = (unsigned char)((bits >> 8) & 0xFFU);
+    output[offset + 2U] = (unsigned char)(bits & 0xFFU);
+}
+
 static uint16_t SaturateUint16(uint32_t value)
 {
     return value > USHRT_MAX ? USHRT_MAX : (uint16_t)value;
@@ -143,6 +161,19 @@ static uint16_t QuantizeAgeUint16(uint32_t value, uint32_t resolution)
     return quantized >= COMPACT_TELEMETRY_V5_AGE_UNAVAILABLE
         ? COMPACT_TELEMETRY_V5_AGE_UNAVAILABLE - 1U
         : (uint16_t)quantized;
+}
+
+static uint8_t QuantizeCeilUint8(uint32_t value, uint32_t resolution)
+{
+    uint32_t quantized;
+    if (value == UINT32_MAX) return 0xFFU;
+    quantized = value / resolution + (value % resolution != 0U ? 1U : 0U);
+    return quantized >= 0xFFU ? 0xFFU : (uint8_t)quantized;
+}
+
+static int FitsInt24(int32_t value)
+{
+    return value >= -8388608 && value <= 8388607;
 }
 
 static int ScaleSigned(float value, float scale, int minimum, int maximum)
@@ -512,4 +543,265 @@ int BuildCompactTelemetryV5(
     }
     output[OFFSET_V5_ERROR_FLAGS] = (unsigned char)error_flags;
     return COMPACT_TELEMETRY_V5_PAYLOAD_BYTES;
+}
+
+static unsigned int V6StatusFlags(const SensorData *data, uint16_t fix_flags)
+{
+    unsigned int flags = StatusFlags(data);
+    if ((fix_flags & GNSS_FIX_TRUSTED) != 0U && !data->simulated_gnss_data) {
+        flags |= COMPACT_TELEMETRY_V6_STATUS_RTK_TRUSTED;
+    }
+    return flags;
+}
+
+static int BeginV6Payload(
+    const SensorData *data,
+    const char *legacy_node_label,
+    const char *last_command_id,
+    unsigned int scope,
+    unsigned int valid,
+    uint16_t fix_flags,
+    unsigned char *output)
+{
+    unsigned char node = NodeNumber(legacy_node_label);
+    if (data == NULL || output == NULL || node == 0U ||
+        scope < COMPACT_TELEMETRY_V6_SCOPE_CORE ||
+        scope > COMPACT_TELEMETRY_V6_SCOPE_AUDIT) {
+        return -1;
+    }
+    memset(output, 0, COMPACT_TELEMETRY_V6_PAYLOAD_BYTES);
+    output[0] = 'L';
+    output[1] = 'S';
+    output[2] = 6U;
+    output[3] = node;
+    output[4] = (unsigned char)V6StatusFlags(data, fix_flags);
+    output[5] = (unsigned char)scope;
+    WriteUint16Be(output, 6U, valid);
+    WriteUint32Be(output, 8U, data->seq);
+    WriteUint32Be(output, 12U, data->sample_epoch);
+    WriteUint32Be(output, 16U, CompactTelemetry_CommandTag(last_command_id));
+    return 0;
+}
+
+static int BuildCompactTelemetryV6Core(
+    const SensorData *data,
+    const char *legacy_node_label,
+    const char *last_command_id,
+    uint16_t fix_flags,
+    unsigned char *output)
+{
+    unsigned int valid = 0U;
+    uint8_t correction_age;
+    uint8_t solution_age;
+    uint8_t hdop;
+    unsigned int fix_summary = 0U;
+
+    if (data->tilt_valid) valid |= COMPACT_TELEMETRY_V6_CORE_VALID_TILT;
+    if (data->gnss_status_valid) {
+        valid |= COMPACT_TELEMETRY_V6_CORE_VALID_GNSS_STATUS;
+        if (data->gnss.position_valid &&
+            data->gnss.latitude_e9 >= -90000000000LL && data->gnss.latitude_e9 <= 90000000000LL &&
+            data->gnss.longitude_e9 >= -180000000000LL && data->gnss.longitude_e9 <= 180000000000LL) {
+            valid |= COMPACT_TELEMETRY_V6_CORE_VALID_POSITION;
+        }
+        if ((fix_flags & GNSS_FIX_ALTITUDE_VALID) != 0U && FitsInt24(data->gnss.altitude_msl_mm)) {
+            valid |= COMPACT_TELEMETRY_V6_CORE_VALID_ALTITUDE;
+        }
+        correction_age = QuantizeCeilUint8(data->gnss.correction_age_ms, 100U);
+        if ((fix_flags & GNSS_FIX_CORRECTION_AGE_VALID) != 0U && correction_age != 0xFFU) {
+            valid |= COMPACT_TELEMETRY_V6_CORE_VALID_CORRECTION_AGE;
+        }
+        solution_age = QuantizeCeilUint8(data->gnss.solution_age_ms, 20U);
+        if (solution_age != 0xFFU) valid |= COMPACT_TELEMETRY_V6_CORE_VALID_SOLUTION_AGE;
+        hdop = QuantizeCeilUint8(data->gnss.hdop_x100, 5U);
+        if ((fix_flags & GNSS_FIX_HDOP_VALID) != 0U && hdop != 0xFFU) {
+            valid |= COMPACT_TELEMETRY_V6_CORE_VALID_HDOP;
+        }
+        if ((fix_flags & GNSS_FIX_GST_VALID) != 0U && data->gnss.gst_sigma_lat_mm < 0xFFU) {
+            valid |= COMPACT_TELEMETRY_V6_CORE_VALID_GST_LAT;
+        }
+        if ((fix_flags & GNSS_FIX_GST_VALID) != 0U && data->gnss.gst_sigma_lon_mm < 0xFFU) {
+            valid |= COMPACT_TELEMETRY_V6_CORE_VALID_GST_LON;
+        }
+        fix_summary = (unsigned int)(data->simulated_gnss_data ? 1U : data->gnss.gga_quality);
+        if (fix_summary > 7U) fix_summary = 7U;
+        if ((fix_flags & GNSS_FIX_COORDINATE_FRAME_VALID) != 0U && data->gnss.coordinate_frame <= 2U) {
+            fix_summary |= (unsigned int)data->gnss.coordinate_frame << 3;
+        }
+    }
+
+    if (valid == 0U || BeginV6Payload(
+            data, legacy_node_label, last_command_id,
+            COMPACT_TELEMETRY_V6_SCOPE_CORE, valid, fix_flags, output) != 0) {
+        return valid == 0U ? COMPACT_TELEMETRY_ERR_EMPTY_METRICS : -1;
+    }
+    if ((valid & COMPACT_TELEMETRY_V6_CORE_VALID_TILT) != 0U) {
+        WriteInt16Be(output, 20U, ScaleSigned(data->angle_x, 100.0f, SHRT_MIN + 1, SHRT_MAX));
+        WriteInt16Be(output, 22U, ScaleSigned(data->angle_y, 100.0f, SHRT_MIN + 1, SHRT_MAX));
+        WriteInt16Be(output, 24U, ScaleSigned(data->angle_z, 100.0f, SHRT_MIN + 1, SHRT_MAX));
+    }
+    if ((valid & COMPACT_TELEMETRY_V6_CORE_VALID_POSITION) != 0U) {
+        WriteInt40Be(output, 26U, data->gnss.latitude_e9);
+        WriteInt40Be(output, 31U, data->gnss.longitude_e9);
+    }
+    if ((valid & COMPACT_TELEMETRY_V6_CORE_VALID_ALTITUDE) != 0U) {
+        WriteInt24Be(output, 36U, data->gnss.altitude_msl_mm);
+    }
+    output[39] = (unsigned char)fix_summary;
+    output[40] = data->gnss_status_valid ? data->gnss.satellites_used : 0U;
+    output[41] = (valid & COMPACT_TELEMETRY_V6_CORE_VALID_HDOP) != 0U ? hdop : 0xFFU;
+    output[42] = (valid & COMPACT_TELEMETRY_V6_CORE_VALID_CORRECTION_AGE) != 0U ? correction_age : 0xFFU;
+    output[43] = (valid & COMPACT_TELEMETRY_V6_CORE_VALID_SOLUTION_AGE) != 0U ? solution_age : 0xFFU;
+    output[44] = (valid & COMPACT_TELEMETRY_V6_CORE_VALID_GST_LAT) != 0U
+        ? (unsigned char)data->gnss.gst_sigma_lat_mm : 0xFFU;
+    output[45] = (valid & COMPACT_TELEMETRY_V6_CORE_VALID_GST_LON) != 0U
+        ? (unsigned char)data->gnss.gst_sigma_lon_mm : 0xFFU;
+    return COMPACT_TELEMETRY_V6_PAYLOAD_BYTES;
+}
+
+static int BuildCompactTelemetryV6Environment(
+    const SensorData *data,
+    const char *legacy_node_label,
+    const char *last_command_id,
+    uint16_t fix_flags,
+    unsigned char *output)
+{
+    unsigned int valid = 0U;
+    if (data->battery_valid) valid |= COMPACT_TELEMETRY_V6_ENV_VALID_BATTERY;
+    if (data->soil_valid) valid |= COMPACT_TELEMETRY_V6_ENV_VALID_SOIL;
+    if (data->soil_ec_valid) valid |= COMPACT_TELEMETRY_V6_ENV_VALID_SOIL_EC;
+    if (data->gnss_status_valid && (fix_flags & GNSS_FIX_GEOID_VALID) != 0U &&
+        FitsInt24(data->gnss.geoid_separation_mm)) {
+        valid |= COMPACT_TELEMETRY_V6_ENV_VALID_GEOID;
+    }
+    if (data->gnss_status_valid && (fix_flags & GNSS_FIX_TIME_VALID) != 0U) {
+        valid |= COMPACT_TELEMETRY_V6_ENV_VALID_GNSS_TIME;
+    }
+    if (data->gnss_status_valid && (fix_flags & GNSS_FIX_GST_VALID) != 0U) {
+        valid |= COMPACT_TELEMETRY_V6_ENV_VALID_GST_ALT;
+    }
+    if (valid == 0U || BeginV6Payload(
+            data, legacy_node_label, last_command_id,
+            COMPACT_TELEMETRY_V6_SCOPE_ENVIRONMENT, valid, fix_flags, output) != 0) {
+        return valid == 0U ? COMPACT_TELEMETRY_ERR_EMPTY_METRICS : -1;
+    }
+    WriteUint32Be(output, 20U, data->uptime);
+    if ((valid & COMPACT_TELEMETRY_V6_ENV_VALID_BATTERY) != 0U) {
+        WriteUint16Be(output, 24U, data->battery_voltage_mv > USHRT_MAX ? USHRT_MAX : data->battery_voltage_mv);
+        output[26] = (unsigned char)(data->battery_level < 0 ? 0 :
+            (data->battery_level > 100 ? 100 : data->battery_level));
+        output[27] = (unsigned char)(data->battery_estimate_quality < 0 ? 0 :
+            (data->battery_estimate_quality > 255 ? 255 : data->battery_estimate_quality));
+    }
+    if ((valid & COMPACT_TELEMETRY_V6_ENV_VALID_SOIL) != 0U) {
+        WriteInt16Be(output, 28U, ScaleSigned(data->soil_temperature, 100.0f, SHRT_MIN + 1, SHRT_MAX));
+        WriteUint16Be(output, 30U, ScaleUnsigned(data->soil_moisture, 100.0f, USHRT_MAX - 1U));
+    }
+    if ((valid & COMPACT_TELEMETRY_V6_ENV_VALID_SOIL_EC) != 0U) {
+        WriteUint16Be(output, 32U, ScaleUnsigned(data->soil_ec, 1.0f, USHRT_MAX - 1U));
+    }
+    if ((valid & COMPACT_TELEMETRY_V6_ENV_VALID_GEOID) != 0U) {
+        WriteInt24Be(output, 34U, data->gnss.geoid_separation_mm);
+    }
+    if ((valid & COMPACT_TELEMETRY_V6_ENV_VALID_GNSS_TIME) != 0U) {
+        WriteUint16Be(output, 37U, data->gnss.gnss_week);
+        WriteUint32Be(output, 39U, data->gnss.gnss_tow_ms);
+    }
+    if ((valid & COMPACT_TELEMETRY_V6_ENV_VALID_GST_ALT) != 0U) {
+        WriteUint16Be(output, 43U, data->gnss.gst_sigma_alt_mm);
+    }
+    return COMPACT_TELEMETRY_V6_PAYLOAD_BYTES;
+}
+
+static int BuildCompactTelemetryV6Audit(
+    const SensorData *data,
+    const GnssRtcmInjectionStats *rtcm_stats,
+    const GnssRtcmRuntimeStatus *rtcm_runtime,
+    const char *legacy_node_label,
+    const char *last_command_id,
+    uint16_t fix_flags,
+    unsigned char *output)
+{
+    unsigned int valid = COMPACT_TELEMETRY_V6_AUDIT_VALID_RTCM_RUNTIME;
+    unsigned int error_flags = 0U;
+    uint32_t queue_drops;
+    uint32_t fixed_packed;
+    uint32_t streak = data->gnss.fix_streak_s > 4094U ? 4095U : data->gnss.fix_streak_s;
+    uint32_t ratio = data->gnss.fixed_ratio_1m_permille;
+    uint32_t drops = data->gnss.fix_drop_count > 1022U ? 1023U : data->gnss.fix_drop_count;
+
+    if (data->gnss_status_valid) valid |= COMPACT_TELEMETRY_V6_AUDIT_VALID_GNSS_FIX;
+    if ((fix_flags & GNSS_FIX_FIXED_STATS_VALID) != 0U && ratio <= 1000U) {
+        valid |= COMPACT_TELEMETRY_V6_AUDIT_VALID_FIXED_STATS;
+    } else {
+        ratio = 1023U;
+    }
+    if ((fix_flags & GNSS_FIX_STATION_VALID) != 0U) {
+        valid |= COMPACT_TELEMETRY_V6_AUDIT_VALID_STATION;
+    }
+    if ((fix_flags & GNSS_FIX_GST_VALID) != 0U) {
+        valid |= COMPACT_TELEMETRY_V6_AUDIT_VALID_GST_HORIZONTAL;
+    }
+    if (BeginV6Payload(
+            data, legacy_node_label, last_command_id,
+            COMPACT_TELEMETRY_V6_SCOPE_AUDIT, valid, fix_flags, output) != 0) {
+        return -1;
+    }
+
+    queue_drops = SaturatingAddUint32(rtcm_stats->queue_evictions, rtcm_stats->queue_expired_frames);
+    queue_drops = SaturatingAddUint32(queue_drops, rtcm_stats->injection_dropped_frames);
+    if (rtcm_stats->rejected_fragments != 0U) error_flags |= COMPACT_TELEMETRY_V5_RTCM_ERROR_REJECTED_FRAGMENT;
+    if (rtcm_stats->crc_errors != 0U) error_flags |= COMPACT_TELEMETRY_V5_RTCM_ERROR_CRC;
+    if (queue_drops != 0U) error_flags |= COMPACT_TELEMETRY_V5_RTCM_ERROR_QUEUE_DROP;
+    if (rtcm_stats->uart_write_errors != 0U) error_flags |= COMPACT_TELEMETRY_V5_RTCM_ERROR_UART;
+    if (rtcm_stats->injected_frames > USHRT_MAX) error_flags |= COMPACT_TELEMETRY_V5_RTCM_INJECTED_COUNT_SATURATED;
+
+    output[20] = rtcm_runtime->mode;
+    output[21] = rtcm_runtime->state_flags;
+    output[22] = (unsigned char)(
+        ((rtcm_runtime->queue_pending > 15U ? 15U : rtcm_runtime->queue_pending) << 4) |
+        (rtcm_runtime->queue_high_watermark > 15U ? 15U : rtcm_runtime->queue_high_watermark));
+    output[23] = (unsigned char)error_flags;
+    WriteUint32Be(output, 24U, rtcm_runtime->session_epoch);
+    WriteUint16Be(output, 28U, QuantizeCeilUint16(rtcm_runtime->lease_remaining_ms, 100U));
+    WriteUint16Be(output, 30U, QuantizeAgeUint16(rtcm_runtime->last_completed_frame_age_ms, 10U));
+    WriteUint16Be(output, 32U, SaturateUint16(rtcm_stats->injected_frames));
+    WriteUint16Be(output, 34U, fix_flags);
+    fixed_packed = (streak << 20) | (ratio << 10) | drops;
+    WriteUint32Be(output, 36U, fixed_packed);
+    WriteUint16Be(output, 40U, data->gnss.reference_station_id);
+    WriteUint16Be(output, 42U, data->gnss.gst_sigma_lat_mm);
+    WriteUint16Be(output, 44U, data->gnss.gst_sigma_lon_mm);
+    return COMPACT_TELEMETRY_V6_PAYLOAD_BYTES;
+}
+
+int BuildCompactTelemetryV6(
+    const SensorData *data,
+    const GnssRtcmInjectionStats *rtcm_stats,
+    const GnssRtcmRuntimeStatus *rtcm_runtime,
+    unsigned int scope,
+    const char *legacy_node_label,
+    const char *last_command_id,
+    unsigned char *output,
+    int output_size)
+{
+    uint16_t fix_flags;
+    if (data == NULL || rtcm_stats == NULL || rtcm_runtime == NULL || output == NULL ||
+        data->seq == 0U || data->sample_epoch == 0U ||
+        output_size < COMPACT_TELEMETRY_V6_PAYLOAD_BYTES) {
+        return -1;
+    }
+    fix_flags = SanitizedGnssFixFlags(data);
+    if (!data->gnss_status_valid) fix_flags = 0U;
+    if (scope == COMPACT_TELEMETRY_V6_SCOPE_CORE) {
+        return BuildCompactTelemetryV6Core(data, legacy_node_label, last_command_id, fix_flags, output);
+    }
+    if (scope == COMPACT_TELEMETRY_V6_SCOPE_ENVIRONMENT) {
+        return BuildCompactTelemetryV6Environment(data, legacy_node_label, last_command_id, fix_flags, output);
+    }
+    if (scope == COMPACT_TELEMETRY_V6_SCOPE_AUDIT) {
+        return BuildCompactTelemetryV6Audit(
+            data, rtcm_stats, rtcm_runtime, legacy_node_label, last_command_id, fix_flags, output);
+    }
+    return -1;
 }

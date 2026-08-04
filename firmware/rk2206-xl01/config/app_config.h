@@ -55,8 +55,9 @@
 #define TELEMETRY_PAYLOAD_FORMAT_COMPACT_V3 3
 #define TELEMETRY_PAYLOAD_FORMAT_COMPACT_V4 4
 #define TELEMETRY_PAYLOAD_FORMAT_COMPACT_V5 5
-// Combined field + professional RTK summary: one response per node per poll.
-#define TELEMETRY_PAYLOAD_FORMAT TELEMETRY_PAYLOAD_FORMAT_COMPACT_V5
+#define TELEMETRY_PAYLOAD_FORMAT_COMPACT_V6 6
+// Layered 46-byte scopes: P1/P2 core, P3 environment, P4 RTK/RTCM audit.
+#define TELEMETRY_PAYLOAD_FORMAT TELEMETRY_PAYLOAD_FORMAT_COMPACT_V6
 #define XL01_UART_TX_CHUNK_SIZE 32     // Long transparent payloads are more stable when split into small UART bursts
 #define XL01_UART_TX_CHUNK_DELAY_MS 15 // Validated compact baseline; higher-rate profiles remain hardware sweep candidates
 #define PLATFORM_POST_ACK_QUIET_MS 1200 // Hold telemetry briefly after any command ACK to keep the shared XL01 stream separable
@@ -100,7 +101,7 @@
 #define SLEEP_AFTER_SEND    0           // Sleep after each send (low power)
 
 // Version marker
-#define FIRMWARE_SAMPLE_VERSION "v1.3-um220-rs485-rtk-compact-v5"
+#define FIRMWARE_SAMPLE_VERSION "v1.4-um220-rs485-rtk-compact-v6"
 
 // Bring-up diagnostic mode:
 // 1 = only print a boot heartbeat on the debug UART; do not initialize sensors or XL01.

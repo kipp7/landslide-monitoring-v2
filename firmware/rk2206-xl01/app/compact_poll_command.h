@@ -10,9 +10,16 @@ extern "C" {
 #define COMPACT_POLL_NODE_SLOT_MS 340U
 #define COMPACT_TARGETED_POLL_MARKER "compact-targeted-v1 P2 singleflight"
 
+enum {
+    COMPACT_POLL_SCOPE_CORE = 1,
+    COMPACT_POLL_SCOPE_ENVIRONMENT = 2,
+    COMPACT_POLL_SCOPE_AUDIT = 3
+};
+
 int CompactPollCommand_IsValid(const char *payload, int payload_len);
 int CompactPollCommand_TargetMatches(const char *payload, const char *legacy_node_label);
 unsigned int CompactPollCommand_ResponseDelayMs(const char *payload, const char *legacy_node_label);
+unsigned int CompactPollCommand_Scope(const char *payload);
 
 #ifdef __cplusplus
 }

@@ -15,9 +15,11 @@ import { encodeGnssRtcmModeCommandV1 } from "./gnss-transport-v3";
 import { RtcmDownlinkController } from "./rtcm-downlink-controller";
 import {
   buildCompactBroadcastPollCommand,
+  buildCompactScopedPollCommand,
   buildCompactTargetedPollCommand,
   decodeCompactTelemetry,
-  isCompactTelemetry
+  isCompactTelemetry,
+  type CompactTelemetryV6Scope
 } from "./compact-telemetry";
 import {
   CompactPollAdmissionController,
@@ -27,6 +29,12 @@ import {
   classifyCompactPollTelemetry,
   decideCompactPollTimer
 } from "./compact-poll-retry";
+import {
+  isCompactLayeredPortBusy,
+  layeredBroadcastAcceptsScope,
+  matchesActiveScopedPoll,
+  nextCompactLayeredExtensionScope
+} from "./compact-layered-scheduler";
 import {
   createCobsCrcFieldLinkAssembler,
   encodeFieldLinkFrame,
@@ -270,6 +278,7 @@ type InternalPollCommandRecord = {
   portPath: string;
   issuedTs: string;
   suppressAckPublish: boolean;
+  expectedScope?: CompactTelemetryV6Scope | undefined;
 };
 
 type ActivePollTelemetryWindow = {
@@ -282,6 +291,7 @@ type ActivePollTelemetryWindow = {
   startedAtMs: number;
   timeoutAtMs: number;
   timer: NodeJS.Timeout;
+  expectedScope?: CompactTelemetryV6Scope | undefined;
 };
 
 type ActiveCompactBroadcastPollWindow = {
@@ -1067,6 +1077,8 @@ class GatewayRuntime {
   private readonly activeCompactBroadcastPollWindows = new Map<string, ActiveCompactBroadcastPollWindow>();
   private readonly compactPollAdmission: CompactPollAdmissionController;
   private readonly portPollNodeCursor = new Map<string, number>();
+  private readonly layeredCoreRoundsByPort = new Map<string, number>();
+  private readonly layeredPendingScopeByPort = new Map<string, Exclude<CompactTelemetryV6Scope, "core">>();
   private readonly portLastReadAtMs = new Map<string, number>();
   private readonly rtcmWriteInFlightPorts = new Set<string>();
   private readonly rtcmController: RtcmDownlinkController | null;
@@ -1341,6 +1353,17 @@ class GatewayRuntime {
     await Promise.allSettled(shutdownTasks);
   }
 
+  private clearPollingStateForTransportLoss(portPath: string): void {
+    this.layeredPendingScopeByPort.delete(portPath);
+    this.closePendingCommandWindow(portPath, "failed");
+    this.closeActivePollTelemetryWindow(portPath, "failed");
+    for (const [windowKey, window] of this.activeCompactBroadcastPollWindows.entries()) {
+      if (window.portPath === portPath) {
+        this.closeCompactBroadcastPollWindow(windowKey, "failed");
+      }
+    }
+  }
+
   private scheduleSerialReconnect(portPath: string, reason: string): void {
     if (this.stopping) {
       return;
@@ -1452,9 +1475,10 @@ class GatewayRuntime {
       const message = err instanceof Error ? err.message : String(err);
       this.stats.lastError = message;
       portState.open = false;
-       portState.lastCloseTs = isoNow();
+      portState.lastCloseTs = isoNow();
       portState.lastError = message;
       this.logger.error({ err, serialDevice: portPath }, "field gateway serial error");
+      this.clearPollingStateForTransportLoss(portPath);
       this.scheduleSerialReconnect(portPath, message);
     });
 
@@ -1463,6 +1487,7 @@ class GatewayRuntime {
       portState.lastCloseTs = isoNow();
       if (!this.stopping) {
         this.logger.warn({ serialDevice: portPath }, "field gateway serial closed");
+        this.clearPollingStateForTransportLoss(portPath);
         this.scheduleSerialReconnect(portPath, "serial-close");
       }
     });
@@ -1753,12 +1778,47 @@ class GatewayRuntime {
         : null;
     const telemetryUploadTrigger =
       envelope.meta && typeof envelope.meta.upload_trigger === "string" ? envelope.meta.upload_trigger : null;
-    const matchedActivePollWindow =
-      activePollWindow?.deviceId === envelope.device_id &&
-      (activePollWindow.commandTag !== undefined
-        ? telemetryLastCommandTag === activePollWindow.commandTag
-        : telemetryLastCommandId === activePollWindow.commandId) &&
-      telemetryUploadTrigger === "scheduler_poll";
+    const telemetryCompactScope =
+      envelope.meta && typeof envelope.meta.compact_scope === "string" ? envelope.meta.compact_scope : null;
+    const matchedActivePollWindow = activePollWindow !== undefined && matchesActiveScopedPoll({
+      expectedDeviceId: activePollWindow.deviceId,
+      telemetryDeviceId: envelope.device_id,
+      expectedCommandId: activePollWindow.commandId,
+      telemetryCommandId: telemetryLastCommandId,
+      expectedCommandTag: activePollWindow.commandTag,
+      telemetryCommandTag: telemetryLastCommandTag,
+      telemetryUploadTrigger,
+      expectedScope: activePollWindow.expectedScope,
+      telemetryScope: telemetryCompactScope
+    });
+    const matchedActivePollIdentity = activePollWindow !== undefined && matchesActiveScopedPoll({
+      expectedDeviceId: activePollWindow.deviceId,
+      telemetryDeviceId: envelope.device_id,
+      expectedCommandId: activePollWindow.commandId,
+      telemetryCommandId: telemetryLastCommandId,
+      expectedCommandTag: activePollWindow.commandTag,
+      telemetryCommandTag: telemetryLastCommandTag,
+      telemetryUploadTrigger,
+      expectedScope: undefined,
+      telemetryScope: telemetryCompactScope
+    });
+    if (matchedActivePollIdentity && activePollWindow.expectedScope !== undefined &&
+        telemetryCompactScope !== activePollWindow.expectedScope) {
+      const reason = `compact layered scope mismatch: expected=${activePollWindow.expectedScope} actual=${String(telemetryCompactScope)}`;
+      this.stats.schemaRejected += 1;
+      this.stats.lastError = reason;
+      portState.lastError = reason;
+      await this.rejectIncomingTelemetry({
+        traceId,
+        sourcePort,
+        receivedTs,
+        rawPayload: normalizedPayload,
+        deviceId: envelope.device_id,
+        seq: envelope.seq ?? null,
+        reason
+      });
+      return;
+    }
     if (matchedActivePollWindow) {
       const roundTripMs = Math.max(0, Date.now() - activePollWindow.startedAtMs);
       const previousMatches = portState.pollTelemetryMatches;
@@ -1776,7 +1836,9 @@ class GatewayRuntime {
     }
 
     if (
-      this.config.southboundPollingMode === "compact-broadcast-v1" &&
+      (this.config.southboundPollingMode === "compact-broadcast-v1" ||
+       (this.config.southboundPollingMode === "compact-layered-v1" &&
+        layeredBroadcastAcceptsScope(telemetryCompactScope))) &&
       telemetryUploadTrigger === "scheduler_poll" &&
       telemetryLastCommandTag !== null
     ) {
@@ -1795,13 +1857,15 @@ class GatewayRuntime {
     nodeState.lastSeenTs = receivedTs;
     nodeState.lastSeenKind = "telemetry";
     nodeState.status = "online";
-    nodeState.latestTelemetry = {
-      receivedTs,
-      eventTs: envelope.event_ts ?? null,
-      seq: envelope.seq ?? null,
-      metrics: { ...envelope.metrics },
-      meta: { ...(envelope.meta ?? {}) }
-    };
+    if (telemetryCompactScope === null || telemetryCompactScope === "core") {
+      nodeState.latestTelemetry = {
+        receivedTs,
+        eventTs: envelope.event_ts ?? null,
+        seq: envelope.seq ?? null,
+        metrics: { ...envelope.metrics },
+        meta: { ...(envelope.meta ?? {}) }
+      };
+    }
     const rtcmNodeLabel = envelope.meta && typeof envelope.meta.legacy_node === "string"
       ? envelope.meta.legacy_node
       : null;
@@ -1943,6 +2007,10 @@ class GatewayRuntime {
       return;
     }
 
+    if (this.config.southboundPollingMode === "compact-layered-v1") {
+      this.tickCompactLayeredPolling();
+      return;
+    }
     if (this.config.southboundPollingMode === "compact-broadcast-v1") {
       this.tickCompactBroadcastPolling();
       return;
@@ -1987,6 +2055,34 @@ class GatewayRuntime {
     if (!issued && !busy) {
       this.scheduleSouthboundPolling(this.config.southboundPollingIntervalMs);
     }
+  }
+
+  private tickCompactLayeredPolling(): void {
+    let issued = false;
+    let busy = false;
+    for (const portPath of this.getConfiguredPortPaths()) {
+      const pendingScope = this.layeredPendingScopeByPort.get(portPath);
+      if (!pendingScope) continue;
+      if (isCompactLayeredPortBusy({
+        pendingCommand: this.pendingCommandWindows.has(portPath),
+        activeScopedPoll: this.activePollTelemetryWindows.has(portPath),
+        commandWriteQueued: this.portCommandChains.has(portPath),
+        rtcmWriteInFlight: this.rtcmWriteInFlightPorts.has(portPath),
+        activeBroadcastPoll: this.hasActiveCompactBroadcastPollWindowForPort(portPath),
+        broadcastAdmissionInFlight: this.compactPollAdmission.isInFlight(portPath)
+      })) {
+        busy = true;
+        continue;
+      }
+      const serialPort = this.serialPorts.get(portPath);
+      if (!serialPort?.isOpen) continue;
+      const node = this.nextPollingNodeForPort(portPath);
+      if (!node) continue;
+      this.layeredPendingScopeByPort.delete(portPath);
+      issued = true;
+      void this.issueInternalPollForNode(node, portPath, pendingScope);
+    }
+    if (!issued && !busy) this.tickCompactBroadcastPolling();
   }
 
   private tickCompactBroadcastPolling(): void {
@@ -2325,20 +2421,25 @@ class GatewayRuntime {
     return nodes[nextIndex] ?? null;
   }
 
-  private async issueInternalPollForNode(nodeState: NodeRuntimeState, targetPort: string): Promise<void> {
+  private async issueInternalPollForNode(
+    nodeState: NodeRuntimeState,
+    targetPort: string,
+    scope: CompactTelemetryV6Scope = "core"
+  ): Promise<void> {
     const traceId = newTraceId();
     const issuedTs = isoNow();
     let commandId = buildInternalPollCommandId();
     let commandTag: number | undefined;
-    if (this.config.southboundPollingMode === "compact-targeted-v1") {
+    if (this.config.southboundPollingMode === "compact-targeted-v1" ||
+        this.config.southboundPollingMode === "compact-layered-v1") {
       const label = nodeState.fieldNodeId;
       if (label !== "A" && label !== "B" && label !== "C") {
         throw new Error(`compact targeted poll requires field node A, B or C: ${label}`);
       }
-      const compactPoll = buildCompactTargetedPollCommand(
-        label,
-        randomUUID().replace(/-/gu, "").slice(0, 8)
-      );
+      const nonce = randomUUID().replace(/-/gu, "").slice(0, 8);
+      const compactPoll = this.config.southboundPollingMode === "compact-layered-v1" && scope !== "core"
+        ? buildCompactScopedPollCommand(scope, label, nonce)
+        : buildCompactTargetedPollCommand(label, nonce);
       commandId = compactPoll.command;
       commandTag = compactPoll.commandTag;
     }
@@ -2363,7 +2464,8 @@ class GatewayRuntime {
       deviceId: command.device_id,
       portPath: targetPort,
       issuedTs,
-      suppressAckPublish: this.config.southboundPollingSuppressAckPublish
+      suppressAckPublish: this.config.southboundPollingSuppressAckPublish,
+      expectedScope: this.config.southboundPollingMode === "compact-layered-v1" ? scope : undefined
     });
 
     try {
@@ -2531,7 +2633,9 @@ class GatewayRuntime {
     try {
       const gatewaySentTs = isoNow();
       const southboundPayload =
-        origin === "internal-poll" && this.config.southboundPollingMode === "compact-targeted-v1"
+        origin === "internal-poll" &&
+          (this.config.southboundPollingMode === "compact-targeted-v1" ||
+           this.config.southboundPollingMode === "compact-layered-v1")
           ? command.command_id
           : buildSouthboundCommandPayload(command, gatewaySentTs, origin);
       const southboundPayloadBytes = Buffer.byteLength(southboundPayload, "utf8");
@@ -2739,7 +2843,8 @@ class GatewayRuntime {
       startedTs,
       startedAtMs,
       timeoutAtMs,
-      timer
+      timer,
+      expectedScope: record.expectedScope
     });
   }
 
@@ -2889,6 +2994,16 @@ class GatewayRuntime {
       );
     } else if (reason === "telemetry") {
       this.stats.compactBroadcastPollsCompleted += 1;
+      if (this.config.southboundPollingMode === "compact-layered-v1") {
+        const coreRounds = (this.layeredCoreRoundsByPort.get(window.portPath) ?? 0) + 1;
+        this.layeredCoreRoundsByPort.set(window.portPath, coreRounds);
+        const extensionScope = nextCompactLayeredExtensionScope({
+          completedCoreRounds: coreRounds,
+          environmentEveryRounds: this.config.southboundLayeredEnvironmentEveryRounds,
+          auditEveryRounds: this.config.southboundLayeredAuditEveryRounds
+        });
+        if (extensionScope) this.layeredPendingScopeByPort.set(window.portPath, extensionScope);
+      }
     }
 
     const remainingWindow = Array.from(this.activeCompactBroadcastPollWindows.values()).find(

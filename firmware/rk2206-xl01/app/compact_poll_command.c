@@ -17,7 +17,7 @@ int CompactPollCommand_IsValid(const char *payload, int payload_len)
     if (payload[1] == '1') {
         if (payload_len != COMPACT_POLL_COMMAND_BYTES) return 0;
         index = 2;
-    } else if (payload[1] == '2') {
+    } else if (payload[1] == '2' || payload[1] == '3' || payload[1] == '4') {
         if (payload_len != COMPACT_TARGETED_POLL_COMMAND_BYTES ||
             (payload[2] != 'A' && payload[2] != 'B' && payload[2] != 'C')) {
             return 0;
@@ -40,12 +40,13 @@ int CompactPollCommand_TargetMatches(const char *payload, const char *legacy_nod
         return 0;
     }
     if (payload[1] == '1') return 1;
-    return payload[1] == '2' && payload[2] == legacy_node_label[0];
+    return (payload[1] == '2' || payload[1] == '3' || payload[1] == '4') &&
+        payload[2] == legacy_node_label[0];
 }
 
 unsigned int CompactPollCommand_ResponseDelayMs(const char *payload, const char *legacy_node_label)
 {
-    if (!CompactPollCommand_TargetMatches(payload, legacy_node_label) || payload[1] == '2') {
+    if (!CompactPollCommand_TargetMatches(payload, legacy_node_label) || payload[1] != '1') {
         return 0U;
     }
     if (legacy_node_label[0] == 'B') {
@@ -55,4 +56,12 @@ unsigned int CompactPollCommand_ResponseDelayMs(const char *payload, const char 
         return COMPACT_POLL_NODE_SLOT_MS * 2U;
     }
     return 0U;
+}
+
+unsigned int CompactPollCommand_Scope(const char *payload)
+{
+    if (payload == 0) return COMPACT_POLL_SCOPE_CORE;
+    if (payload[1] == '3') return COMPACT_POLL_SCOPE_ENVIRONMENT;
+    if (payload[1] == '4') return COMPACT_POLL_SCOPE_AUDIT;
+    return COMPACT_POLL_SCOPE_CORE;
 }

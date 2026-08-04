@@ -65,3 +65,42 @@ test("does not trust a smoke marker without field identity", () => {
   assert.equal(evaluateSequenceReset(payload, 1001, shadow).accept, false);
   assert.equal(shouldDiscardSyntheticShadow(payload, shadow), false);
 });
+
+test("accepts a compact V6 core sequence reset only with a newer receive time and epoch rollback", () => {
+  const previous = {
+    metrics: {},
+    meta: {
+      _writer: { last_seq: 900, last_received_ts: "2026-08-04T00:00:00.000Z" },
+      _scope_samples: {
+        core: {
+          sample_epoch: 700,
+          received_ts: "2026-08-04T00:00:00.000Z",
+          metrics: {},
+          meta: {},
+        },
+      },
+    },
+  };
+  const reset = {
+    seq: 1,
+    received_ts: "2026-08-04T00:00:10.000Z",
+    meta: { compact_payload_version: 6, compact_scope: "core", sample_epoch: 1 },
+  };
+
+  assert.equal(evaluateSequenceReset(reset, 900, previous).reason, "sample_epoch_rollback");
+  assert.equal(
+    evaluateSequenceReset({ ...reset, seq: 900 }, 900, previous).accept,
+    false,
+    "an exact duplicate sequence is not a reboot"
+  );
+  assert.equal(
+    evaluateSequenceReset({ ...reset, received_ts: "2026-08-03T23:59:59.000Z" }, 900, previous).accept,
+    false,
+    "a delayed old packet cannot reset the producer sequence"
+  );
+  assert.equal(
+    evaluateSequenceReset({ ...reset, meta: { ...reset.meta, compact_scope: "environment" } }, 900, previous).accept,
+    false,
+    "an extension cannot establish a reboot boundary"
+  );
+});

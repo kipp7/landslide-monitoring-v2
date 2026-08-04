@@ -6,6 +6,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from xls1_three_node_batch_poll import (
+    COMPACT_STATUS_GNSS_SIMULATED,
     analyze_batch_completeness,
     build_targeted_compact_poll,
     command_tag,
@@ -22,6 +23,11 @@ from xls1_compact_v4_acceptance import (
     minimum_session_timeout_ms,
     require_ntrip_disabled,
     stage_arguments,
+)
+from xls1_compact_v6_layered_acceptance import (
+    build_layered_poll,
+    layered_extension_scope,
+    sequence_summary,
 )
 
 
@@ -55,6 +61,15 @@ PAYLOAD_V5_HEX = (
 
 
 def main() -> None:
+    assert build_layered_poll("core").startswith("P1")
+    assert build_layered_poll("environment", "A").startswith("P3A")
+    assert build_layered_poll("audit", "C").startswith("P4C")
+    assert layered_extension_scope(3, 3, 15) == "environment"
+    assert layered_extension_scope(15, 3, 15) == "audit"
+    assert layered_extension_scope(16, 3, 15) is None
+    assert sequence_summary([0xFFFFFFFE, 0xFFFFFFFF, 0, 1])["nonUnitGaps"] == 0
+    assert sequence_summary([1, 3])["nonUnitGaps"] == 1
+
     assert minimum_session_timeout_ms(1500, 0) == 1500
     assert minimum_session_timeout_ms(1500, 1) == 3000
     try:
@@ -71,6 +86,8 @@ def main() -> None:
             batch_interval_ms=250,
             response_window_ms=3000,
             session_timeout_ms=3000,
+            settle_timeout_ms=30000,
+            settle_quiet_ms=5000,
             max_command_latency_ms=1500.0,
             max_retry_rate=0.0,
             max_p95_interval_ms=2500.0,
@@ -351,6 +368,47 @@ def main() -> None:
         assert "lacks a valid session lease" in str(exc)
     else:
         raise AssertionError("active V4 state without a lease was accepted")
+
+    v6_payloads = {
+        "core": bytes.fromhex(
+            "4c5306030b0101ff0000004d000000299664c12a008cffe0000305bb02974e1b80b4e9150030390c1f0b14070607"
+        ),
+        "environment": bytes.fromhex(
+            "4c5306030b02003f0000004d000000293026889d000003842f5b5302092e12eb02a1fff6d7097e075bcd15000f00"
+        ),
+        "audit": bytes.fromhex(
+            "4c5306030b03001f0000004d00000029e8b69a76023f140f123456780250001701c27e6f047f5c02005200060007"
+        ),
+    }
+    decoded_v6 = {scope: decode_compact_telemetry(value) for scope, value in v6_payloads.items()}
+    assert all(len(value) == 46 and len(encode_frame(1, 20, value)) == 64 for value in v6_payloads.values())
+    assert decoded_v6["core"]["meta"]["compact_scope"] == "core"
+    assert decoded_v6["core"]["meta"]["sample_epoch"] == 41
+    assert decoded_v6["core"]["metrics"]["rtk_latitude_deg"] == 24.612345678
+    assert decoded_v6["core"]["metrics"]["rtk_solution_age_ms"] == 140
+    assert decoded_v6["environment"]["metrics"]["battery_v"] == 12.123
+    assert decoded_v6["environment"]["metrics"]["soil_moisture_pct"] == 48.43
+    assert decoded_v6["audit"]["metrics"]["rtk_fixed_ratio_1m_pct"] == 98.3
+    assert decoded_v6["audit"]["metrics"]["rtcm_lease_remaining_ms"] == 59200
+
+    bad_v6 = bytearray(v6_payloads["core"])
+    bad_v6[4] |= COMPACT_STATUS_GNSS_SIMULATED
+    try:
+        decode_compact_telemetry(bytes(bad_v6))
+    except ValueError as exc:
+        assert "simulated GNSS cannot be trusted" in str(exc)
+    else:
+        raise AssertionError("trusted simulated V6 core was accepted")
+
+    zero_seq_v6 = bytearray(v6_payloads["core"])
+    zero_seq_v6[8:12] = b"\x00\x00\x00\x00"
+    try:
+        decode_compact_telemetry(bytes(zero_seq_v6))
+    except ValueError as exc:
+        assert "common header is malformed" in str(exc)
+    else:
+        raise AssertionError("reserved V6 sequence zero was accepted")
+
     healthy_nodes = {
         label: {
             "expected": 60,

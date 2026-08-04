@@ -10,7 +10,7 @@ param(
   [Parameter(Mandatory = $true)]
   [ValidateSet("disabled", "probe", "live")]
   [string]$ExpectedGnssRtcmInjectionMode,
-  [ValidateSet(3, 4, 5)]
+  [ValidateSet(3, 4, 5, 6)]
   [int]$ExpectedCompactVersion = 3,
   [Parameter(Mandatory = $true)]
   [ValidateSet("default-calibration", "field-calibrated")]
@@ -27,6 +27,7 @@ param(
   [int]$ExpectedBatteryNominalVoltageMv = 11100,
   [switch]$RequireFinalBatteryAcceptance,
   [switch]$RequireCompactTargetedPolling,
+  [switch]$RequireCompactLayeredPolling,
   [ValidateRange(1, 500)]
   [int]$MaxAcceptedBatteryErrorMv = 60,
   [ValidateRange(0, 500)]
@@ -184,12 +185,12 @@ if ($isGnssSourceAwareManifest) {
     -Message "Schema v1 releases implicitly use hardware GNSS"
 }
 
-$expectedPayloadBytes = switch ($ExpectedCompactVersion) { 3 { 95 } 4 { 139 } 5 { 110 } }
-$expectedWireBytes = switch ($ExpectedCompactVersion) { 3 { 113 } 4 { 157 } 5 { 128 } }
-$expectedPollProtocol = if ($ExpectedCompactVersion -ge 4) { "compact-targeted-v1" } else { "compact-broadcast-v1" }
-$expectedPollCommandBytes = if ($ExpectedCompactVersion -ge 4) { 11 } else { 10 }
-$expectedPollWireBytes = if ($ExpectedCompactVersion -ge 4) { 29 } else { 28 }
-$expectedNodeSlotMs = if ($ExpectedCompactVersion -ge 4) { 0 } else { 340 }
+$expectedPayloadBytes = switch ($ExpectedCompactVersion) { 3 { 95 } 4 { 139 } 5 { 110 } 6 { 46 } }
+$expectedWireBytes = switch ($ExpectedCompactVersion) { 3 { 113 } 4 { 157 } 5 { 128 } 6 { 64 } }
+$expectedPollProtocol = if ($ExpectedCompactVersion -eq 6) { "compact-layered-v1" } elseif ($ExpectedCompactVersion -ge 4) { "compact-targeted-v1" } else { "compact-broadcast-v1" }
+$expectedPollCommandBytes = if ($ExpectedCompactVersion -eq 6) { 10 } elseif ($ExpectedCompactVersion -ge 4) { 11 } else { 10 }
+$expectedPollWireBytes = if ($ExpectedCompactVersion -eq 6) { 28 } elseif ($ExpectedCompactVersion -ge 4) { 29 } else { 28 }
+$expectedNodeSlotMs = if ($ExpectedCompactVersion -eq 6) { 340 } elseif ($ExpectedCompactVersion -ge 4) { 0 } else { 340 }
 foreach ($fixedField in @(
     @{ Name = "compactPayloadBytes"; Value = $expectedPayloadBytes },
     @{ Name = "fieldLinkWireBytes"; Value = $expectedWireBytes },
@@ -212,8 +213,24 @@ Assert-ReleaseCondition -Condition (
     $manifest.sampleVersion -is [string] -and $manifest.sampleVersion.Length -gt 0
   ) -Message "Release sampleVersion is empty"
 if ($RequireCompactTargetedPolling) {
-  Assert-ReleaseCondition -Condition ($ExpectedCompactVersion -ge 4) `
+  Assert-ReleaseCondition -Condition ($ExpectedCompactVersion -in @(4, 5)) `
     -Message "Compact targeted polling is only accepted for V4/V5 release gates"
+}
+if ($RequireCompactLayeredPolling) {
+  Assert-ReleaseCondition -Condition ($ExpectedCompactVersion -eq 6) `
+    -Message "Compact layered polling is only accepted for V6 release gates"
+  foreach ($property in @(
+      "compactExtensionPollCommandBytes", "compactExtensionPollWireBytes",
+      "layeredEnvironmentEveryCoreRounds", "layeredAuditEveryCoreRounds"
+    )) {
+    Assert-ObjectProperty -Object $manifest -Name $property -Context "Compact V6 release manifest"
+  }
+  Assert-ReleaseCondition -Condition (
+      $manifest.compactExtensionPollCommandBytes -eq 11 -and
+      $manifest.compactExtensionPollWireBytes -eq 29 -and
+      $manifest.layeredEnvironmentEveryCoreRounds -eq 3 -and
+      $manifest.layeredAuditEveryCoreRounds -eq 15
+    ) -Message "Compact V6 layered cadence or extension wire contract is invalid"
 }
 
 if ($ExpectedSourceCommit) {
@@ -511,6 +528,7 @@ foreach ($node in $NodeLabels) {
       3 { "Compact v3 (95-byte field + RTK payload)" }
       4 { "Compact v4 (139-byte field + RTK + injection evidence)" }
       5 { "Compact v5 (110-byte field + RTK + injection summary)" }
+      6 { "Compact v6 layered (46-byte payload / 64-byte wire frame)" }
     }
     $capabilityMarker = switch ($ExpectedGnssRtcmInjectionMode) {
       "disabled" { "boot=DISABLED capability=DISABLED" }
@@ -531,6 +549,9 @@ foreach ($node in $NodeLabels) {
     ) + $modeRequired
     if ($RequireCompactTargetedPolling) {
       $required += "compact-targeted-v1 P2 singleflight"
+    }
+    if ($RequireCompactLayeredPolling) {
+      $required += "layered-v1 P1 core / P3 environment / P4 audit"
     }
     $forbidden = @($modeForbidden)
     if ($isGnssSourceAwareManifest) {

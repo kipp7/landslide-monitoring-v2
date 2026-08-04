@@ -13,6 +13,7 @@
 typedef struct {
     // System info
     unsigned int seq;           // Packet sequence number
+    unsigned int sample_epoch;  // Local sensor snapshot generation shared by V6 scopes
     unsigned int uptime;        // System uptime (seconds)
     
     // RS485 soil sensor

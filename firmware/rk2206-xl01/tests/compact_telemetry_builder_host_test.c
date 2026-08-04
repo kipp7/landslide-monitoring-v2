@@ -28,6 +28,22 @@ static int64_t ReadInt64Be(const unsigned char *input)
     return (int64_t)value;
 }
 
+static int64_t ReadInt40Be(const unsigned char *input)
+{
+    uint64_t value = 0U;
+    unsigned int index;
+    for (index = 0U; index < 5U; ++index) value = (value << 8) | input[index];
+    if ((value & (1ULL << 39)) != 0U) value |= ~((1ULL << 40) - 1ULL);
+    return (int64_t)value;
+}
+
+static int32_t ReadInt24Be(const unsigned char *input)
+{
+    uint32_t value = ((uint32_t)input[0] << 16) | ((uint32_t)input[1] << 8) | input[2];
+    if ((value & (1U << 23)) != 0U) value |= 0xFF000000U;
+    return (int32_t)value;
+}
+
 static void FillProfessionalGnss(SensorData *data)
 {
     data->gnss_status_valid = 1;
@@ -65,6 +81,9 @@ int main(void)
     SensorData data;
     SensorData simulated_gnss;
     unsigned char payload[COMPACT_TELEMETRY_PAYLOAD_BYTES];
+    unsigned char v6_core[COMPACT_TELEMETRY_V6_PAYLOAD_BYTES];
+    unsigned char v6_environment[COMPACT_TELEMETRY_V6_PAYLOAD_BYTES];
+    unsigned char v6_audit[COMPACT_TELEMETRY_V6_PAYLOAD_BYTES];
     unsigned char frame[FIELD_LINK_FRAME_ENCODED_BYTES];
     FieldLinkFrameDecoder decoder;
     FieldLinkFrameMessage decoded;
@@ -72,11 +91,13 @@ int main(void)
     GnssRtcmRuntimeStatus rtcm_runtime;
     int payload_len;
     int frame_len;
+    int v6_frame_len;
     int result = 0;
     int index;
 
     memset(&data, 0, sizeof(data));
     data.seq = 77U;
+    data.sample_epoch = 41U;
     data.uptime = 900U;
     SimulatedFieldSensors_Read(&data, data.uptime, 'C');
     data.battery_voltage_mv = 12123U;
@@ -152,6 +173,84 @@ int main(void)
     assert(decoded.sequence == 9U);
     assert(decoded.payload_len == payload_len);
     assert(memcmp(decoded.payload, payload, (size_t)payload_len) == 0);
+
+    memset(&rtcm_stats, 0, sizeof(rtcm_stats));
+    memset(&rtcm_runtime, 0, sizeof(rtcm_runtime));
+    rtcm_stats.injected_frames = 450U;
+    rtcm_stats.rejected_fragments = 2U;
+    rtcm_stats.crc_errors = 1U;
+    rtcm_stats.queue_evictions = 3U;
+    rtcm_stats.queue_expired_frames = 4U;
+    rtcm_stats.injection_dropped_frames = 5U;
+    rtcm_stats.uart_write_errors = 6U;
+    rtcm_runtime.mode = GNSS_RTCM_INJECTION_LIVE;
+    rtcm_runtime.state_flags = GNSS_RTCM_STATE_READY |
+        GNSS_RTCM_STATE_SESSION_ARMED | GNSS_RTCM_STATE_LEASE_VALID |
+        GNSS_RTCM_STATE_FRAGMENT_RECENT | GNSS_RTCM_STATE_FRAME_RECENT |
+        GNSS_RTCM_STATE_ACTION_RECENT;
+    rtcm_runtime.queue_pending = 1U;
+    rtcm_runtime.queue_high_watermark = 4U;
+    rtcm_runtime.session_epoch = 0x12345678U;
+    rtcm_runtime.lease_remaining_ms = 59123U;
+    rtcm_runtime.last_completed_frame_age_ms = 234U;
+
+    payload_len = BuildCompactTelemetryV6(
+        &data, &rtcm_stats, &rtcm_runtime, COMPACT_TELEMETRY_V6_SCOPE_CORE,
+        "C", command_id, v6_core, sizeof(v6_core));
+    assert(payload_len == COMPACT_TELEMETRY_V6_PAYLOAD_BYTES);
+    assert(v6_core[2] == 6U && v6_core[5] == COMPACT_TELEMETRY_V6_SCOPE_CORE);
+    assert(ReadUint32Be(v6_core + 8) == 77U && ReadUint32Be(v6_core + 12) == 41U);
+    assert(ReadInt40Be(v6_core + 26) == data.gnss.latitude_e9);
+    assert(ReadInt40Be(v6_core + 31) == data.gnss.longitude_e9);
+    assert(ReadInt24Be(v6_core + 36) == data.gnss.altitude_msl_mm);
+    assert(v6_core[39] == 12U && v6_core[40] == 31U);
+    assert(v6_core[41] == 11U && v6_core[42] == 20U && v6_core[43] == 7U);
+    assert(v6_core[44] == 6U && v6_core[45] == 7U);
+    frame_len = FieldLinkFrame_Encode(
+        FIELD_LINK_FRAME_TYPE_TELEMETRY, 12U, (const char *)v6_core, payload_len,
+        frame, sizeof(frame));
+    assert(frame_len == 64);
+    v6_frame_len = frame_len;
+
+    data.seq = 0U;
+    assert(BuildCompactTelemetryV6(
+        &data, &rtcm_stats, &rtcm_runtime, COMPACT_TELEMETRY_V6_SCOPE_CORE,
+        "C", command_id, v6_core, sizeof(v6_core)) < 0);
+    data.seq = 77U;
+
+    payload_len = BuildCompactTelemetryV6(
+        &data, &rtcm_stats, &rtcm_runtime, COMPACT_TELEMETRY_V6_SCOPE_ENVIRONMENT,
+        "C", "P3C12345678", v6_environment, sizeof(v6_environment));
+    assert(payload_len == COMPACT_TELEMETRY_V6_PAYLOAD_BYTES);
+    assert(v6_environment[5] == COMPACT_TELEMETRY_V6_SCOPE_ENVIRONMENT);
+    assert(ReadUint32Be(v6_environment + 20) == 900U);
+    assert(ReadUint16Be(v6_environment + 24) == 12123U);
+    assert(ReadInt24Be(v6_environment + 34) == -2345);
+    assert(ReadUint16Be(v6_environment + 37) == 2430U);
+    assert(ReadUint32Be(v6_environment + 39) == 123456789U);
+    assert(ReadUint16Be(v6_environment + 43) == 15U);
+    frame_len = FieldLinkFrame_Encode(
+        FIELD_LINK_FRAME_TYPE_TELEMETRY, 13U, (const char *)v6_environment, payload_len,
+        frame, sizeof(frame));
+    assert(frame_len == v6_frame_len);
+
+    payload_len = BuildCompactTelemetryV6(
+        &data, &rtcm_stats, &rtcm_runtime, COMPACT_TELEMETRY_V6_SCOPE_AUDIT,
+        "C", "P4C12345678", v6_audit, sizeof(v6_audit));
+    assert(payload_len == COMPACT_TELEMETRY_V6_PAYLOAD_BYTES);
+    assert(v6_audit[5] == COMPACT_TELEMETRY_V6_SCOPE_AUDIT);
+    assert(v6_audit[20] == GNSS_RTCM_INJECTION_LIVE && v6_audit[21] == rtcm_runtime.state_flags);
+    assert(v6_audit[22] == 0x14U && ReadUint32Be(v6_audit + 24) == 0x12345678U);
+    assert(ReadUint16Be(v6_audit + 28) == 592U);
+    assert(ReadUint16Be(v6_audit + 30) == 23U);
+    assert(ReadUint16Be(v6_audit + 32) == 450U);
+    assert(ReadUint16Be(v6_audit + 34) == data.gnss.fix_flags);
+    assert(ReadUint16Be(v6_audit + 40) == 82U);
+    assert(ReadUint16Be(v6_audit + 42) == 6U && ReadUint16Be(v6_audit + 44) == 7U);
+    frame_len = FieldLinkFrame_Encode(
+        FIELD_LINK_FRAME_TYPE_TELEMETRY, 14U, (const char *)v6_audit, payload_len,
+        frame, sizeof(frame));
+    assert(frame_len == v6_frame_len);
 
     memset(&rtcm_stats, 0, sizeof(rtcm_stats));
     memset(&rtcm_runtime, 0, sizeof(rtcm_runtime));
@@ -274,19 +373,31 @@ int main(void)
     assert(CompactPollCommand_IsValid("P112345678", COMPACT_POLL_COMMAND_BYTES));
     assert(!CompactPollCommand_IsValid("P11234567Z", COMPACT_POLL_COMMAND_BYTES));
     assert(CompactPollCommand_IsValid("P2A12345678", COMPACT_TARGETED_POLL_COMMAND_BYTES));
+    assert(CompactPollCommand_IsValid("P3A12345678", COMPACT_TARGETED_POLL_COMMAND_BYTES));
+    assert(CompactPollCommand_IsValid("P4C12345678", COMPACT_TARGETED_POLL_COMMAND_BYTES));
     assert(!CompactPollCommand_IsValid("P2D12345678", COMPACT_TARGETED_POLL_COMMAND_BYTES));
     assert(CompactPollCommand_TargetMatches("P112345678", "A"));
     assert(CompactPollCommand_TargetMatches("P2B12345678", "B"));
     assert(!CompactPollCommand_TargetMatches("P2B12345678", "A"));
+    assert(CompactPollCommand_TargetMatches("P3B12345678", "B"));
+    assert(CompactPollCommand_TargetMatches("P4C12345678", "C"));
+    assert(CompactPollCommand_Scope("P112345678") == COMPACT_POLL_SCOPE_CORE);
+    assert(CompactPollCommand_Scope("P2A12345678") == COMPACT_POLL_SCOPE_CORE);
+    assert(CompactPollCommand_Scope("P3A12345678") == COMPACT_POLL_SCOPE_ENVIRONMENT);
+    assert(CompactPollCommand_Scope("P4A12345678") == COMPACT_POLL_SCOPE_AUDIT);
     assert(CompactPollCommand_ResponseDelayMs("P112345678", "A") == 0U);
     assert(CompactPollCommand_ResponseDelayMs("P112345678", "B") == 340U);
     assert(CompactPollCommand_ResponseDelayMs("P112345678", "C") == 680U);
     assert(CompactPollCommand_ResponseDelayMs("P2C12345678", "C") == 0U);
 
-    printf("compact_v5_payload_bytes=%d field_link_wire_bytes=%d command_tag=%08x\n",
-           payload_len, frame_len, CompactTelemetry_CommandTag(command_id));
-    printf("payload_hex=");
-    for (index = 0; index < payload_len; ++index) printf("%02x", payload[index]);
+    printf("compact_v6_payload_bytes=%d field_link_wire_bytes=%d command_tag=%08x\n",
+           COMPACT_TELEMETRY_V6_PAYLOAD_BYTES, v6_frame_len, CompactTelemetry_CommandTag(command_id));
+    printf("v6_core_hex=");
+    for (index = 0; index < COMPACT_TELEMETRY_V6_PAYLOAD_BYTES; ++index) printf("%02x", v6_core[index]);
+    printf("\nv6_environment_hex=");
+    for (index = 0; index < COMPACT_TELEMETRY_V6_PAYLOAD_BYTES; ++index) printf("%02x", v6_environment[index]);
+    printf("\nv6_audit_hex=");
+    for (index = 0; index < COMPACT_TELEMETRY_V6_PAYLOAD_BYTES; ++index) printf("%02x", v6_audit[index]);
     printf("\n");
     return 0;
 }

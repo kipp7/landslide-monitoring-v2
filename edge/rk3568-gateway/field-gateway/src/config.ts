@@ -58,7 +58,7 @@ const configSchema = z
     commandSerialChunkDelayMs: z.coerce.number().int().nonnegative().default(0),
     southboundPollingEnabled: envBoolean(false),
     southboundPollingMode: z
-      .enum(["round-robin-json", "compact-broadcast-v1", "compact-targeted-v1"])
+      .enum(["round-robin-json", "compact-broadcast-v1", "compact-targeted-v1", "compact-layered-v1"])
       .default("round-robin-json"),
     southboundPollingCommandType: z.string().min(1).default("poll_latest_telemetry"),
     southboundPollingIntervalMs: z.coerce.number().int().positive().default(1000),
@@ -72,6 +72,8 @@ const configSchema = z
     southboundPollingSuppressAckPublish: envBoolean(true),
     southboundPollingEmptyBackoffInitialMs: z.coerce.number().int().positive().default(2000),
     southboundPollingEmptyBackoffMaxMs: z.coerce.number().int().positive().default(30000),
+    southboundLayeredEnvironmentEveryRounds: z.coerce.number().int().min(1).max(1000).default(3),
+    southboundLayeredAuditEveryRounds: z.coerce.number().int().min(2).max(10000).default(15),
     ntripEnabled: envBoolean(false),
     ntripHost: optionalNonEmptyString(),
     ntripPort: z.coerce.number().int().min(1).max(65535).default(8003),
@@ -200,12 +202,13 @@ const configSchema = z
       data.southboundPollingRetryAfterMs * (data.southboundPollingPartialRetries + 1);
     if (
       data.southboundPollingPartialRetries > 0 &&
-      data.southboundPollingMode !== "compact-broadcast-v1"
+      data.southboundPollingMode !== "compact-broadcast-v1" &&
+      data.southboundPollingMode !== "compact-layered-v1"
     ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["southboundPollingPartialRetries"],
-        message: "SOUTHBOUND_POLLING_PARTIAL_RETRIES requires compact-broadcast-v1"
+        message: "SOUTHBOUND_POLLING_PARTIAL_RETRIES requires compact-broadcast-v1 or compact-layered-v1"
       });
     }
     if (
@@ -279,6 +282,8 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
     southboundPollingSuppressAckPublish: env.SOUTHBOUND_POLLING_SUPPRESS_ACK_PUBLISH,
     southboundPollingEmptyBackoffInitialMs: env.SOUTHBOUND_POLLING_EMPTY_BACKOFF_INITIAL_MS,
     southboundPollingEmptyBackoffMaxMs: env.SOUTHBOUND_POLLING_EMPTY_BACKOFF_MAX_MS,
+    southboundLayeredEnvironmentEveryRounds: env.SOUTHBOUND_LAYERED_ENVIRONMENT_EVERY_ROUNDS,
+    southboundLayeredAuditEveryRounds: env.SOUTHBOUND_LAYERED_AUDIT_EVERY_ROUNDS,
     ntripEnabled: env.NTRIP_ENABLED,
     ntripHost: env.NTRIP_HOST,
     ntripPort: env.NTRIP_PORT,

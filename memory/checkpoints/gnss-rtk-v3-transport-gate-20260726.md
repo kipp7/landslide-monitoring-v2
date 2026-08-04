@@ -18,6 +18,35 @@ status: active
 
 ## Last Confirmed State
 
+### Compact V6 Layered Offline Candidate (2026-08-04)
+
+- V5 已冻结为“充分保护时无损但速度失败”的诊断基线。当前分支实现 V6
+  `compact-layered-v1`：P1 A/B/C core 广播时隙 `0/340/680 ms`，P3 environment
+  每 3 个完整 core round，P4 audit 每 15 个且优先；三类 payload 均为 `46 B`，
+  完整 field-link 线框均为 `64 B`。
+- core/environment/audit 通过非零 `sample_epoch` 绑定。RK2206 扩展复用最近 core
+  原子快照并独立递增 seq；RK3568 错 scope fail closed 且串口丢失清空调度窗口；
+  telemetry-writer 只合并同 epoch scopes，并以 core + seq/epoch rollback + 更新的
+  receive time 识别重启后清空旧 shadow。
+- 对抗性复审额外修复两项：ClickHouse 批量失败后的逐消息隔离现在从批次前基线
+  只重放实际插入成功消息，避免 DLQ 层污染 `device_state`；C/TypeScript/Python
+  三端统一拒绝 V6 保留 `seq=0`。telemetry-writer 当前 `18/18` 已通过。
+- 室内真值保持真实 RS485 土壤/EC/倾角、真实校准电池、模拟 GNSS 和 RTCM/NTRIP
+  disabled。Windows 继续消费服务器既有展平字段，不需要新增字段映射。
+- 本轮离线门禁已完成：RK2206 host/safety 与 V3/V4/V5/V6 发布正反例通过；A/B/C
+  `hb build -f` 全部通过，dirty 编译证据目录为
+  `output/rk2206-compact-v6-layered-dirty-compile-20260804`，release verifier 按设计因
+  `sourceDirty=true` 拒绝；field-gateway `58/58`、telemetry-writer `18/18`、API
+  `10/10`，三处非 API lint、Desktop UI production build、Windows WPF Release、
+  Python 金值/语法/V6 dry-run、PowerShell parser、Bash parser、补丁格式和敏感信息
+  审计均通过。API 全仓 lint 仍有 68 个不在 V6 改动文件中的既有错误，作为公开
+  基线缺口保留，不伪称通过。
+- 当前工作树尚未提交，也没有正式 V6 发布包。用户虽已上电节点，但现场节点不可能
+  运行这组未发布源码；禁止烧录 dirty 编译证据或声称 V6 真机通过。下一恢复点是
+  提交并推送全部 V6 修改，在 clean HEAD 上运行正式 prepare 脚本，然后再让用户按
+  标签烧录 A/B/C 并执行 `60 -> 600 -> 1800` fail-fast。三阶段前继续关闭
+  CORS/RTCM/NTRIP。
+
 ### Compact V5 Live Gate: Lossless With Guard, Cadence Rejected (2026-08-04)
 
 - 用户已按标签统一烧录正式 Compact V5 并上电。RK3568 运行快照确认 A/B/C 均为 `compact_payload_version=5`、hardware RS485、simulated GNSS、field-calibrated battery、RTCM `disabled + READY` 且 error summary 为 0；三节点真实 soil/EC/tilt 当前有效。

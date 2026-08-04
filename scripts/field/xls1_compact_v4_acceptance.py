@@ -166,7 +166,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-command-latency-ms", type=float, default=1500.0)
     parser.add_argument("--max-retry-rate", type=float, default=0.0)
     parser.add_argument("--max-p95-interval-ms", type=float, default=2500.0)
-    parser.add_argument("--required-compact-version", type=int, choices=(4, 5), default=4)
+    parser.add_argument("--required-compact-version", type=int, choices=(4, 5, 6), default=4)
     parser.add_argument(
         "--required-gnss-source",
         choices=("hardware", "simulated"),

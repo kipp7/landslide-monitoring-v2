@@ -30,7 +30,7 @@ FIELD_LINK_VERSION = 1
 FIELD_LINK_TYPE_TELEMETRY = 1
 FIELD_LINK_TYPE_COMMAND = 2
 FIELD_LINK_TYPE_ACK = 3
-COMPACT_PAYLOAD_BYTES_BY_VERSION = {1: 46, 2: 46, 3: 95, 4: 139, 5: 110}
+COMPACT_PAYLOAD_BYTES_BY_VERSION = {1: 46, 2: 46, 3: 95, 4: 139, 5: 110, 6: 46}
 COMPACT_VALID_TEMP = 1 << 0
 COMPACT_VALID_SOIL = 1 << 1
 COMPACT_VALID_SOIL_EC = 1 << 2
@@ -42,6 +42,7 @@ COMPACT_VALID_BATTERY = 1 << 7
 COMPACT_STATUS_WARNING = 1 << 0
 COMPACT_STATUS_FIELD_SENSORS_SIMULATED = 1 << 1
 COMPACT_STATUS_GNSS_SIMULATED = 1 << 2
+V6_STATUS_RTK_TRUSTED = 1 << 3
 V3_VALID_BATTERY = 1 << 0
 V3_VALID_SOIL = 1 << 1
 V3_VALID_SOIL_EC = 1 << 2
@@ -327,6 +328,8 @@ def decode_compact_telemetry(payload: bytes) -> dict[str, Any]:
     last_command_tag = struct.unpack(">I", payload[16:20])[0]
     metrics: dict[str, Any] = {}
 
+    if compact_version == 6:
+        return decode_compact_telemetry_v6(payload)
     if compact_version in (3, 4, 5):
         return decode_compact_telemetry_v3_v4(payload)
 
@@ -395,6 +398,244 @@ def decode_compact_telemetry(payload: bytes) -> dict[str, Any]:
                 "battery_ok": int(bool(valid & COMPACT_VALID_BATTERY)),
             },
         },
+    }
+
+
+def _read_signed_be(payload: bytes, start: int, length: int) -> int:
+    return int.from_bytes(payload[start : start + length], "big", signed=True)
+
+
+def decode_compact_telemetry_v6(payload: bytes) -> dict[str, Any]:
+    if len(payload) != 46 or payload[:3] != b"LS\x06" or payload[3] not in (1, 2, 3):
+        raise ValueError("compact telemetry v6 header mismatch")
+    status_flags = payload[4]
+    scope_code = payload[5]
+    valid = struct.unpack(">H", payload[6:8])[0]
+    seq = struct.unpack(">I", payload[8:12])[0]
+    sample_epoch = struct.unpack(">I", payload[12:16])[0]
+    if status_flags & ~0x0F or seq == 0 or sample_epoch == 0 or scope_code not in (1, 2, 3):
+        raise ValueError("compact telemetry v6 common header is malformed")
+    label = chr(ord("A") + payload[3] - 1)
+    scope = {1: "core", 2: "environment", 3: "audit"}[scope_code]
+    metrics: dict[str, Any] = {}
+    meta: dict[str, Any] = {
+        "install_label": f"FIELD-NODE-{label}",
+        "legacy_node": label,
+        "last_command_tag": struct.unpack(">I", payload[16:20])[0],
+        "upload_trigger": "scheduler_poll",
+        "compact_payload_version": 6,
+        "compact_scope": scope,
+        "sample_epoch": sample_epoch,
+        "packet_class": {
+            1: "hf_displacement_core",
+            2: "lf_environment",
+            3: "lf_rtk_audit",
+        }[scope_code],
+        "field_sensor_source": "simulated" if status_flags & COMPACT_STATUS_FIELD_SENSORS_SIMULATED else "hardware",
+        "gnss_source": "simulated" if status_flags & COMPACT_STATUS_GNSS_SIMULATED else "hardware",
+        "v6_valid_flags": valid,
+    }
+    gnss_simulated = bool(status_flags & COMPACT_STATUS_GNSS_SIMULATED)
+
+    if scope_code == 1:
+        if valid & ~0x01FF:
+            raise ValueError("compact telemetry v6 core validity is malformed")
+        gnss_status_valid = bool(valid & (1 << 1))
+        summary = payload[39]
+        gga_quality = summary & 0x07
+        coordinate_frame_code = (summary >> 3) & 0x03
+        trusted = bool(status_flags & V6_STATUS_RTK_TRUSTED)
+        if summary & 0xE0 or (
+            not gnss_status_valid and ((valid & 0x01FE) or summary or payload[40] or trusted)
+        ) or any(
+            bool(valid & mask) != (payload[offset] != 0xFF)
+            for mask, offset in (
+                (1 << 6, 41),
+                (1 << 4, 42),
+                (1 << 5, 43),
+                (1 << 7, 44),
+                (1 << 8, 45),
+            )
+        ):
+            raise ValueError("compact telemetry v6 core GNSS evidence is inconsistent")
+        if gnss_simulated and trusted:
+            raise ValueError("compact telemetry v6 simulated GNSS cannot be trusted")
+        if coordinate_frame_code > 2:
+            raise ValueError("compact telemetry v6 coordinate frame is invalid")
+        if valid & (1 << 0):
+            metrics.update(
+                {
+                    "tilt_x_deg": struct.unpack(">h", payload[20:22])[0] / 100.0,
+                    "tilt_y_deg": struct.unpack(">h", payload[22:24])[0] / 100.0,
+                    "tilt_z_deg": struct.unpack(">h", payload[24:26])[0] / 100.0,
+                    "warning_flag": bool(status_flags & COMPACT_STATUS_WARNING),
+                }
+            )
+        if gnss_status_valid:
+            metrics.update(
+                {
+                    "rtk_gga_quality": gga_quality,
+                    "rtk_trusted": trusted,
+                    "rtk_satellites_used": payload[40],
+                }
+            )
+        if valid & (1 << 2):
+            latitude_e9 = _read_signed_be(payload, 26, 5)
+            longitude_e9 = _read_signed_be(payload, 31, 5)
+            if not -90_000_000_000 <= latitude_e9 <= 90_000_000_000 or not -180_000_000_000 <= longitude_e9 <= 180_000_000_000:
+                raise ValueError("compact telemetry v6 RTK coordinates are out of range")
+            metrics["rtk_latitude_deg"] = latitude_e9 / 1_000_000_000.0
+            metrics["rtk_longitude_deg"] = longitude_e9 / 1_000_000_000.0
+        if valid & (1 << 3):
+            metrics["rtk_altitude_msl_m"] = _read_signed_be(payload, 36, 3) / 1000.0
+        if valid & (1 << 4):
+            metrics["rtk_correction_age_ms"] = payload[42] * 100
+        if valid & (1 << 5):
+            metrics["rtk_solution_age_ms"] = payload[43] * 20
+        if valid & (1 << 6):
+            metrics["rtk_hdop"] = payload[41] * 0.05
+        if valid & (1 << 7):
+            metrics["rtk_gst_sigma_lat_mm"] = payload[44]
+        if valid & (1 << 8):
+            metrics["rtk_gst_sigma_lon_mm"] = payload[45]
+        if trusted and (
+            gga_quality != 4
+            or coordinate_frame_code == 0
+            or not valid & (1 << 2)
+            or not valid & (1 << 4)
+            or not valid & (1 << 5)
+            or metrics["rtk_correction_age_ms"] > 5000
+            or metrics["rtk_solution_age_ms"] > 2000
+        ):
+            raise ValueError("compact telemetry v6 trusted RTK evidence violates the production gate")
+        meta.update(
+            {
+                "rtk_coordinate_frame": {1: "CGCS2000", 2: "WGS84"}.get(coordinate_frame_code, "unknown"),
+                "rtk_coordinate_frame_code": coordinate_frame_code,
+                "rtk_fix_type": {0: "invalid", 1: "single", 2: "dgps", 4: "rtk_fixed", 5: "rtk_float"}.get(gga_quality, "other"),
+                "rtk_displacement_eligible": not gnss_simulated and trusted and coordinate_frame_code != 0,
+                "v6_quantization": {"hdop": 0.05, "correction_age_ms": 100, "solution_age_ms": 20},
+            }
+        )
+    elif scope_code == 2:
+        if valid & ~0x003F:
+            raise ValueError("compact telemetry v6 environment validity is malformed")
+        meta["uptime_s"] = struct.unpack(">I", payload[20:24])[0]
+        if valid & (1 << 0):
+            metrics["battery_v"] = struct.unpack(">H", payload[24:26])[0] / 1000.0
+            metrics["battery_pct"] = payload[26]
+            meta["battery_estimate_quality_code"] = payload[27]
+        if valid & (1 << 1):
+            metrics["soil_temperature_c"] = struct.unpack(">h", payload[28:30])[0] / 100.0
+            metrics["soil_moisture_pct"] = struct.unpack(">H", payload[30:32])[0] / 100.0
+        if valid & (1 << 2):
+            metrics["electrical_conductivity_us_cm"] = struct.unpack(">H", payload[32:34])[0]
+        if valid & (1 << 3):
+            metrics["rtk_geoid_separation_m"] = _read_signed_be(payload, 34, 3) / 1000.0
+        if valid & (1 << 4):
+            metrics["rtk_gnss_week"] = struct.unpack(">H", payload[37:39])[0]
+            metrics["rtk_tow_ms"] = struct.unpack(">I", payload[39:43])[0]
+        if valid & (1 << 5):
+            metrics["rtk_gst_sigma_alt_mm"] = struct.unpack(">H", payload[43:45])[0]
+    else:
+        if valid & ~0x001F:
+            raise ValueError("compact telemetry v6 audit validity is malformed")
+        rtcm_mode = payload[20]
+        rtcm_state_flags = payload[21]
+        queue_pending = payload[22] >> 4
+        queue_high_watermark = payload[22] & 0x0F
+        error_flags = payload[23]
+        session_epoch = struct.unpack(">I", payload[24:28])[0]
+        lease_units = struct.unpack(">H", payload[28:30])[0]
+        completed_age_units = struct.unpack(">H", payload[30:32])[0]
+        injected_frames = struct.unpack(">H", payload[32:34])[0]
+        fix_flags = struct.unpack(">H", payload[34:36])[0]
+        session_armed = bool(rtcm_state_flags & V4_RTCM_STATE_SESSION_ARMED)
+        lease_valid = bool(rtcm_state_flags & V4_RTCM_STATE_LEASE_VALID)
+        saturated = bool(error_flags & V5_RTCM_INJECTED_COUNT_SATURATED)
+        completed_frame_recent = bool(rtcm_state_flags & (1 << 4))
+        gnss_fix_valid = bool(valid & (1 << 0))
+        fixed_stats_valid = bool(valid & (1 << 1))
+        station_valid = bool(valid & (1 << 2))
+        gst_horizontal_valid = bool(valid & (1 << 3))
+        rtcm_runtime_valid = bool(valid & (1 << 4))
+        trusted = bool(status_flags & V6_STATUS_RTK_TRUSTED)
+        if (
+            rtcm_mode > 2
+            or rtcm_state_flags & ~V4_RTCM_KNOWN_STATE_MASK
+            or not rtcm_state_flags & V4_RTCM_STATE_READY
+            or queue_pending > queue_high_watermark
+            or error_flags & ~V5_RTCM_KNOWN_ERROR_MASK
+            or (saturated and injected_frames != 0xFFFF)
+            or (completed_frame_recent and completed_age_units == V5_AGE_UNAVAILABLE)
+            or not rtcm_runtime_valid
+        ):
+            raise ValueError("compact telemetry v6 RTCM audit is malformed")
+        if rtcm_mode == 0:
+            if session_epoch or lease_units or session_armed or lease_valid or queue_pending:
+                raise ValueError("compact telemetry v6 disabled RTCM state is not fail-closed")
+        elif not session_epoch or not lease_units or not session_armed or not lease_valid:
+            raise ValueError("compact telemetry v6 active RTCM state lacks a valid lease")
+        if (
+            (not gnss_fix_valid and fix_flags != 0)
+            or fixed_stats_valid != bool(fix_flags & GNSS_FIX_FIXED_STATS_VALID)
+            or station_valid != bool(fix_flags & GNSS_FIX_STATION_VALID)
+            or gst_horizontal_valid != bool(fix_flags & GNSS_FIX_GST_VALID)
+            or trusted != (not gnss_simulated and bool(fix_flags & GNSS_FIX_TRUSTED))
+        ):
+            raise ValueError("compact telemetry v6 audit GNSS validity is inconsistent")
+        metrics.update(
+            {
+                "rtcm_injection_mode_code": rtcm_mode,
+                "rtcm_session_epoch": session_epoch,
+                "rtcm_lease_remaining_ms": lease_units * 100,
+                "rtcm_queue_pending": queue_pending,
+                "rtcm_queue_high_watermark": queue_high_watermark,
+                "rtcm_injected_frames_total": injected_frames,
+                "rtcm_error_summary_flags": error_flags & 0x0F,
+                "rtcm_rejected_fragment_error": bool(error_flags & V5_RTCM_ERROR_REJECTED_FRAGMENT),
+                "rtcm_crc_error": bool(error_flags & V5_RTCM_ERROR_CRC),
+                "rtcm_queue_drop_error": bool(error_flags & V5_RTCM_ERROR_QUEUE_DROP),
+                "rtcm_uart_error": bool(error_flags & V5_RTCM_ERROR_UART),
+            }
+        )
+        if completed_age_units != V5_AGE_UNAVAILABLE:
+            metrics["rtcm_last_completed_frame_age_ms"] = completed_age_units * 10
+        if fixed_stats_valid:
+            packed = struct.unpack(">I", payload[36:40])[0]
+            streak, ratio, drops = packed >> 20, (packed >> 10) & 0x3FF, packed & 0x3FF
+            if ratio > 1000:
+                raise ValueError("compact telemetry v6 fixed ratio is malformed")
+            if streak != 4095:
+                metrics["rtk_fixed_streak_s"] = streak
+            if drops != 1023:
+                metrics["rtk_fix_drop_count"] = drops
+            metrics["rtk_fixed_ratio_1m_pct"] = ratio / 10.0
+            meta["rtk_fixed_streak_saturated"] = streak == 4095
+            meta["rtk_fix_drop_count_saturated"] = drops == 1023
+        if station_valid:
+            metrics["rtk_reference_station_id"] = struct.unpack(">H", payload[40:42])[0]
+        if gst_horizontal_valid:
+            metrics["rtk_gst_sigma_lat_mm"] = struct.unpack(">H", payload[42:44])[0]
+            metrics["rtk_gst_sigma_lon_mm"] = struct.unpack(">H", payload[44:46])[0]
+        meta.update(
+            {
+                "rtk_fix_flags": fix_flags,
+                "rtcm_injection_mode": {0: "disabled", 1: "probe", 2: "live"}[rtcm_mode],
+                "rtcm_state_flags": rtcm_state_flags,
+                "rtcm_lease_resolution_ms": 100,
+                "rtcm_completion_age_resolution_ms": 10,
+                "rtcm_injected_frames_counter_saturated": saturated,
+            }
+        )
+
+    return {
+        "schema_version": 1,
+        "device_id": NODES[label],
+        "event_ts": None,
+        "seq": seq,
+        "metrics": metrics,
+        "meta": meta,
     }
 
 
@@ -1648,7 +1889,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--required-match-rate", type=float, default=1.0)
     parser.add_argument("--max-p95-interval-ms", type=float, default=1500.0)
     parser.add_argument("--max-command-latency-ms", type=float, default=950.0)
-    parser.add_argument("--required-compact-version", type=int, choices=(0, 1, 2, 3, 4, 5), default=0)
+    parser.add_argument("--required-compact-version", type=int, choices=(0, 1, 2, 3, 4, 5, 6), default=0)
     parser.add_argument(
         "--required-field-sensor-source",
         choices=("any", "simulated", "hardware"),

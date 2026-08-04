@@ -3,6 +3,7 @@ const test = require("node:test");
 
 const {
   buildCompactBroadcastPollCommand,
+  buildCompactScopedPollCommand,
   buildCompactTargetedPollCommand,
   compactCommandTag,
   decodeCompactTelemetry,
@@ -22,6 +23,15 @@ test("compact targeted command binds one node to the command tag", () => {
   assert.equal(poll.command, "P2B12345678");
   assert.equal(poll.commandTag, compactCommandTag(poll.command));
   assert.throws(() => buildCompactTargetedPollCommand("B", "1234"), /exactly 8/u);
+});
+
+test("compact V6 scoped commands distinguish environment and audit", () => {
+  const environment = buildCompactScopedPollCommand("environment", "B", "12345678");
+  const audit = buildCompactScopedPollCommand("audit", "C", "12345678");
+  assert.equal(environment.command, "P3B12345678");
+  assert.equal(audit.command, "P4C12345678");
+  assert.equal(environment.commandTag, compactCommandTag(environment.command));
+  assert.equal(audit.commandTag, compactCommandTag(audit.command));
 });
 
 test("compact telemetry survives binary COBS/CRC framing and preserves every field", () => {
@@ -386,4 +396,109 @@ test("compact telemetry v3 rejects contradictory trusted RTK evidence", () => {
     () => decodeCompactTelemetry(impossibleFixedRatio),
     /Fixed ratio exceeds/u
   );
+});
+
+test("compact telemetry v6 keeps each layered scope inside one 64-byte XLS1 frame", () => {
+  const core = Buffer.from(
+    "4c5306030b0101ff0000004d000000299664c12a008cffe0000305bb02974e1b80b4e9150030390c1f0b14070607",
+    "hex"
+  );
+  const environment = Buffer.from(
+    "4c5306030b02003f0000004d000000293026889d000003842f5b5302092e12eb02a1fff6d7097e075bcd15000f00",
+    "hex"
+  );
+  const audit = Buffer.from(
+    "4c5306030b03001f0000004d00000029e8b69a76023f140f123456780250001701c27e6f047f5c02005200060007",
+    "hex"
+  );
+  for (const [index, payload] of [core, environment, audit].entries()) {
+    assert.equal(payload.length, 46);
+    assert.equal(encodeFieldLinkFrame({ frameType: "telemetry", sequence: 20 + index, payloadBytes: payload }).length, 64);
+  }
+
+  const coreDecoded = decodeCompactTelemetry(core);
+  assert.equal(coreDecoded.meta.compact_scope, "core");
+  assert.equal(coreDecoded.meta.packet_class, "hf_displacement_core");
+  assert.equal(coreDecoded.meta.sample_epoch, 41);
+  assert.equal(coreDecoded.meta.rtk_displacement_eligible, true);
+  assert.deepEqual(coreDecoded.metrics, {
+    tilt_x_deg: 1.4,
+    tilt_y_deg: -0.32,
+    tilt_z_deg: 0.03,
+    warning_flag: true,
+    rtk_gga_quality: 4,
+    rtk_trusted: true,
+    rtk_satellites_used: 31,
+    rtk_latitude_deg: 24.612345678,
+    rtk_longitude_deg: 118.123456789,
+    rtk_altitude_msl_m: 12.345,
+    rtk_correction_age_ms: 2000,
+    rtk_solution_age_ms: 140,
+    rtk_hdop: 0.55,
+    rtk_gst_sigma_lat_mm: 6,
+    rtk_gst_sigma_lon_mm: 7
+  });
+
+  const environmentDecoded = decodeCompactTelemetry(environment);
+  assert.equal(environmentDecoded.meta.compact_scope, "environment");
+  assert.equal(environmentDecoded.meta.uptime_s, 900);
+  assert.equal(environmentDecoded.metrics.battery_v, 12.123);
+  assert.equal(environmentDecoded.metrics.soil_temperature_c, 23.5);
+  assert.equal(environmentDecoded.metrics.soil_moisture_pct, 48.43);
+  assert.equal(environmentDecoded.metrics.electrical_conductivity_us_cm, 673);
+  assert.equal(environmentDecoded.metrics.rtk_geoid_separation_m, -2.345);
+  assert.equal(environmentDecoded.metrics.rtk_gnss_week, 2430);
+  assert.equal(environmentDecoded.metrics.rtk_tow_ms, 123456789);
+  assert.equal(environmentDecoded.metrics.rtk_gst_sigma_alt_mm, 15);
+
+  const auditDecoded = decodeCompactTelemetry(audit);
+  assert.equal(auditDecoded.meta.compact_scope, "audit");
+  assert.equal(auditDecoded.meta.rtk_fix_flags, 0x7e6f);
+  assert.equal(auditDecoded.metrics.rtk_fixed_streak_s, 71);
+  assert.equal(auditDecoded.metrics.rtk_fixed_ratio_1m_pct, 98.3);
+  assert.equal(auditDecoded.metrics.rtk_fix_drop_count, 2);
+  assert.equal(auditDecoded.metrics.rtk_reference_station_id, 82);
+  assert.equal(auditDecoded.metrics.rtcm_session_epoch, 0x12345678);
+  assert.equal(auditDecoded.metrics.rtcm_lease_remaining_ms, 59200);
+  assert.equal(auditDecoded.metrics.rtcm_last_completed_frame_age_ms, 230);
+  assert.equal(auditDecoded.metrics.rtcm_injected_frames_total, 450);
+});
+
+test("compact telemetry v6 fails closed on cross-scope contradictions", () => {
+  const core = Buffer.from(
+    "4c5306030b0101ff0000004d000000299664c12a008cffe0000305bb02974e1b80b4e9150030390c1f0b14070607",
+    "hex"
+  );
+  const simulatedTrusted = Buffer.from(core);
+  simulatedTrusted[4] |= 0x04;
+  assert.throws(() => decodeCompactTelemetry(simulatedTrusted), /simulated GNSS cannot be trusted/u);
+
+  const badScope = Buffer.from(core);
+  badScope[5] = 9;
+  assert.throws(() => decodeCompactTelemetry(badScope), /scope is invalid/u);
+
+  const zeroSequence = Buffer.from(core);
+  zeroSequence.writeUInt32BE(0, 8);
+  assert.throws(() => decodeCompactTelemetry(zeroSequence), /common header is malformed/u);
+
+  const audit = Buffer.from(
+    "4c5306030b03001f0000004d00000029e8b69a76023f140f123456780250001701c27e6f047f5c02005200060007",
+    "hex"
+  );
+  audit[20] = 0;
+  assert.throws(() => decodeCompactTelemetry(audit), /not fail-closed/u);
+
+  const missingRuntimeValidity = Buffer.from(
+    "4c5306030b03001f0000004d00000029e8b69a76023f140f123456780250001701c27e6f047f5c02005200060007",
+    "hex"
+  );
+  missingRuntimeValidity.writeUInt16BE(missingRuntimeValidity.readUInt16BE(6) & ~(1 << 4), 6);
+  assert.throws(() => decodeCompactTelemetry(missingRuntimeValidity), /RTCM audit is malformed/u);
+
+  const contradictoryGnssValidity = Buffer.from(
+    "4c5306030b03001f0000004d00000029e8b69a76023f140f123456780250001701c27e6f047f5c02005200060007",
+    "hex"
+  );
+  contradictoryGnssValidity.writeUInt16BE(contradictoryGnssValidity.readUInt16BE(6) & ~(1 << 2), 6);
+  assert.throws(() => decodeCompactTelemetry(contradictoryGnssValidity), /GNSS validity is inconsistent/u);
 });

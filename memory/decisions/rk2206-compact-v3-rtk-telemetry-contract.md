@@ -13,6 +13,44 @@ status: active
 
 # Decision: RK2206 Compact V3 RTK Telemetry Contract
 
+## Compact V6 Layered Amendment (2026-08-04)
+
+### Context
+
+Compact V5 在 600 秒真实三节点链路中只有使用 6 秒保护窗才做到无损，且
+command P95 和 per-node arrival P95 均超过既定 `1500/2500 ms` 门限。XLS1
+手册的标称会话 payload 上限为 64 B，因此 128 B 完整 V5 线框仍需至少两个
+空口包，不能同时满足速度和稳定性。
+
+### Decision
+
+- 采用 `compact-layered-v1`：core/environment/audit payload 均固定 46 B，完整
+  COBS/CRC 线框固定 64 B。P1 广播 core，A/B/C 时隙为 `0/340/680 ms`；每 3
+  个完整 core round 插入一个定向 P3 environment，每 15 个插入一个定向 P4
+  audit，冲突时 audit 优先，扩展目标轮转 A/B/C。
+- core 保留高频三轴倾角与可信位移必要证据；environment 保留真实三合一土壤、
+  校准电池和低频 GNSS 辅助量；audit 保留 Fixed 连续性、参考站、GST 和 RTCM
+  会话/租约/队列/错误摘要。SHT30、MPU6050 和雨量仍不加入。
+- RK2206 为 core 保存互斥保护的原子传感器快照；P3/P4 复用该快照及同一个非零
+  `sample_epoch`，但使用各自递增且跳过 0 的 `seq`。启动后没有 core 快照时
+  扩展 fail closed。
+- RK3568 只接受与活动窗口一致的 scope；错 scope 帧进入本地 rejected evidence，
+  不关闭正确窗口也不上云。串口 error/close 清除待发扩展、活动轮询和普通命令窗，
+  重连后从新 core 开始。
+- 服务端只合并与当前 core 相同 epoch 的扩展。V6 重启只在 core、seq 严格回退、
+  epoch 回退或相等、receive time 更新四条件同时成立时接受，并清空旧 scopes。
+  ClickHouse 隔离回退只用实际插入成功的消息重放 shadow，DLQ 消息不得污染状态。
+
+### Consequences
+
+- 高频线框首次落入一个 XLS1 标称 64 B 空口包，同时不删除专业字段；代价是土壤、
+  电池和完整审计改为低频，但仍按源 core epoch 可追溯。
+- `1500 ms` command maximum 和 `2500 ms` per-node core arrival P95 不降低。
+- 当前 V6 仍是 dirty-source 离线候选，没有正式发布包，也没有真机结论。必须完成
+  同一提交的 A/B/C clean build、全部离线门禁、clean release，再重新执行严格
+  `60/600/1800` 秒；通过前 NTRIP/RTCM/CORS 保持关闭。
+- 权威验收规则见 `docs/field-tests/rk2206-compact-v6-layered-acceptance.md`。
+
 ## Compact V5 Amendment (2026-08-04)
 
 ### Context

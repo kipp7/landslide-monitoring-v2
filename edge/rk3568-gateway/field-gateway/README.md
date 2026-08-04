@@ -26,15 +26,20 @@ Common variables:
 - `SPOOL_ROOT_DIR` - local spool root.
 - `HEALTH_FILE_PATH` - runtime health JSON output path.
 - `SOUTHBOUND_POLLING_ENABLED` - enables gateway-managed polling on shared links.
-- `SOUTHBOUND_POLLING_MODE` - `round-robin-json` for rollback, `compact-broadcast-v1` for the V1/V2 broadcast profile, or `compact-targeted-v1` for V4/V5 single-flight polling.
+- `SOUTHBOUND_POLLING_MODE` - `round-robin-json` for rollback, `compact-broadcast-v1` for V1/V2, `compact-targeted-v1` for V4/V5, or `compact-layered-v1` for V6.
 - `SOUTHBOUND_POLLING_INTERVAL_MS` - minimum cooldown after a targeted node session closes; the indoor profile uses `250` ms.
 - `SOUTHBOUND_POLLING_SESSION_TIMEOUT_MS` - per-node receive-protection window; the targeted profile uses `6000` ms so a late response cannot overlap the next node. This is not the acceptance latency limit.
 - `SOUTHBOUND_POLLING_PARTIAL_RETRIES` - `0` or `1`; retries apply only to the legacy compact broadcast mode and remain `0` for targeted polling.
 - `SOUTHBOUND_POLLING_RETRY_AFTER_MS` - legacy broadcast per-attempt response window; the targeted profile does not retry.
 - `SOUTHBOUND_POLLING_PREWRITE_QUIET_MS` / `SOUTHBOUND_POLLING_PREWRITE_MAX_WAIT_MS` - poll-only quiet guard before a serial write.
 - `SOUTHBOUND_POLLING_COMMAND_CHUNK_BYTES` / `SOUTHBOUND_POLLING_COMMAND_CHUNK_DELAY_MS` - poll-only downlink pacing. Normal control commands keep the conservative `COMMAND_SERIAL_*` pacing.
+- `SOUTHBOUND_LAYERED_ENVIRONMENT_EVERY_ROUNDS` / `SOUTHBOUND_LAYERED_AUDIT_EVERY_ROUNDS` - V6 P3/P4 extension cadence; the reviewed profile is `3` and `15` completed core rounds.
 
 In `compact-targeted-v1` mode the gateway rotates A/B/C and sends `P2<node><nonce>`. Only the named node may respond, and the next command is not sent until the complete response arrives or the bounded receive-protection window closes. V4 uses a 157-byte frame; V5 preserves the professional field/RTK prefix in a 128-byte frame. A 3000 ms window still allowed two late V5 responses to form a `207 + 49 = 256` byte interleaving pair; the targeted deployment therefore uses 6000 ms. Successful responses still close the session immediately. The acceptance gate independently keeps command latency at 1500 ms and per-node P95 interval at 2500 ms, so protection does not weaken the speed requirement. `compact-broadcast-v1` and its `0/340/680 ms` slots remain available for the shorter V1/V2 rollback payloads. The gateway expands each binary response back into the telemetry JSON contract before MQTT publishing. Externally issued control commands remain JSON, keep their command ACKs, and pause internal polling while their quiet window is active.
+
+In `compact-layered-v1` mode the gateway sends one `P1<nonce>` core broadcast. A/B/C respond in the existing `0/340/680 ms` slots, so each displacement/tilt core remains a 46-byte payload and a 64-byte complete COBS/CRC frame. After every three completed core rounds, the gateway inserts one targeted `P3<node><nonce>` environment response; after every fifteen rounds it inserts one `P4<node><nonce>` RTK/RTCM audit response instead. Audit has priority when both cadences coincide, so one core round can create at most one extension. A scoped window closes only when node, command tag, upload trigger, and scope all match. The telemetry writer only merges scopes sharing the same `sample_epoch`; stale soil, battery, or audit values are never presented as current data.
+
+Indoor V6 deployment keeps `NTRIP_ENABLED=false`, hardware RS485 and battery enabled, and GNSS simulated. Run `scripts/field/xls1_compact_v6_layered_acceptance.py` on RK3568 for the strict `60/600/1800` second gates before preparing a hardware-GNSS outdoor package.
 
 ## Local Development
 

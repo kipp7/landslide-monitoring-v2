@@ -1,5 +1,6 @@
 export type SequencePayload = {
   seq?: number | null;
+  received_ts?: string;
   meta?: Record<string, unknown>;
 };
 
@@ -10,7 +11,7 @@ export type SequenceShadowState = {
 
 export type SequenceResetDecision = {
   accept: boolean;
-  reason: "uptime_rollback" | "synthetic_shadow_replaced" | null;
+  reason: "uptime_rollback" | "sample_epoch_rollback" | "synthetic_shadow_replaced" | null;
   previousUptimeS: number | null;
   nextUptimeS: number | null;
 };
@@ -41,6 +42,49 @@ function normalizeMarker(value: unknown): string {
         .toLowerCase()
         .replace(/[\s-]+/g, "_")
     : "";
+}
+
+function toPositiveUint32OrNull(value: unknown): number | null {
+  const parsed = toFiniteNumberOrNull(value);
+  return parsed != null && Number.isInteger(parsed) && parsed > 0 && parsed <= 0xffff_ffff
+    ? parsed
+    : null;
+}
+
+function toTimestampMsOrNull(value: unknown): number | null {
+  if (typeof value !== "string") return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function compactV6CoreEpochFromState(
+  state: SequenceShadowState | null | undefined
+): number | null {
+  const samples = state?.meta._scope_samples;
+  if (!samples || typeof samples !== "object") return null;
+  const core = (samples as Record<string, unknown>).core;
+  if (!core || typeof core !== "object") return null;
+  return toPositiveUint32OrNull((core as Record<string, unknown>).sample_epoch);
+}
+
+function isVerifiedCompactV6EpochRollback(
+  payload: SequencePayload,
+  latestSeq: number,
+  previousShadowState: SequenceShadowState | null | undefined
+): boolean {
+  if (payload.seq == null || payload.seq >= latestSeq ||
+      payload.meta?.compact_payload_version !== 6 || payload.meta.compact_scope !== "core") {
+    return false;
+  }
+  const nextEpoch = toPositiveUint32OrNull(payload.meta.sample_epoch);
+  const previousEpoch = compactV6CoreEpochFromState(previousShadowState);
+  const nextReceivedMs = toTimestampMsOrNull(payload.received_ts);
+  const previousWriter = previousShadowState?.meta._writer;
+  const previousReceivedMs = previousWriter && typeof previousWriter === "object"
+    ? toTimestampMsOrNull((previousWriter as Record<string, unknown>).last_received_ts)
+    : null;
+  return nextEpoch != null && previousEpoch != null && nextEpoch <= previousEpoch &&
+    nextReceivedMs != null && previousReceivedMs != null && nextReceivedMs > previousReceivedMs;
 }
 
 function isFieldProfilePayload(payload: SequencePayload): boolean {
@@ -86,6 +130,15 @@ export function evaluateSequenceReset(
     return {
       accept: true,
       reason: "uptime_rollback",
+      previousUptimeS,
+      nextUptimeS,
+    };
+  }
+
+  if (sequenceRolledBack && isVerifiedCompactV6EpochRollback(payload, latestSeq, previousShadowState)) {
+    return {
+      accept: true,
+      reason: "sample_epoch_rollback",
       previousUptimeS,
       nextUptimeS,
     };

@@ -103,6 +103,8 @@ typedef enum {
 // ==================== Global State ====================
 
 static SensorData g_sensor_data = {0};
+static SensorData g_v6_core_upload_snapshot = {0};
+static int g_v6_core_upload_snapshot_valid = 0;
 static GnssSensorDiagnostics g_sensor_diagnostics = {0};
 static FieldRs485RuntimeDiagnostics g_rs485_runtime_diagnostics = {0};
 static osMutexId_t g_sensor_data_mutex = NULL;
@@ -121,6 +123,7 @@ static unsigned int g_runtime_report_interval_ms = UPLOAD_INTERVAL_MS;
 static int g_platform_uplink_enabled = 1;
 static volatile int g_platform_manual_collect_requested = 0;
 static volatile int g_platform_poll_latest_requested = 0;
+static volatile unsigned int g_platform_poll_scope = COMPACT_POLL_SCOPE_CORE;
 static volatile unsigned int g_platform_uplink_quiet_remaining_ms = 0;
 static char g_last_platform_command_type[32] = "";
 static char g_last_platform_command_id[64] = "";
@@ -129,7 +132,7 @@ static char g_last_trusted_time_ts[40] = "";
 static char g_last_trusted_time_source[32] = "";
 static volatile uint32_t g_last_platform_command_tick = 0;
 static volatile int g_field_link_recovery_requested = 0;
-#define FW_RX_DIAG_MARKER "fw-rk2206-rtk-compact-v5-rtcm-summary-v1-20260804"
+#define FW_RX_DIAG_MARKER "fw-rk2206-rtk-compact-v6-layered-v1-20260804"
 bool g_cloud_motor_enabled = false;
 int g_cloud_motor_speed = 0;
 MotorDirection g_cloud_motor_direction = MOTOR_DIRECTION_STOP;
@@ -186,6 +189,7 @@ static void SensorData_CopySnapshot(SensorData *snapshot)
 static void SensorData_StoreSnapshot(const SensorData *snapshot)
 {
     unsigned int seq;
+    unsigned int sample_epoch;
 
     if (snapshot == NULL) {
         return;
@@ -193,13 +197,20 @@ static void SensorData_StoreSnapshot(const SensorData *snapshot)
 
     SensorData_Lock();
     seq = g_sensor_data.seq;
+    sample_epoch = g_sensor_data.sample_epoch + 1U;
+    if (sample_epoch == 0U) {
+        sample_epoch = 1U;
+    }
     memcpy(&g_sensor_data, snapshot, sizeof(g_sensor_data));
     g_sensor_data.seq = seq;
+    g_sensor_data.sample_epoch = sample_epoch;
     SensorData_Unlock();
 }
 
 static void SensorData_TakeUploadSnapshot(SensorData *snapshot)
 {
+    unsigned int next_seq;
+
     if (snapshot == NULL) {
         return;
     }
@@ -207,9 +218,49 @@ static void SensorData_TakeUploadSnapshot(SensorData *snapshot)
     memset(snapshot, 0, sizeof(*snapshot));
     SensorData_Lock();
     memcpy(snapshot, &g_sensor_data, sizeof(*snapshot));
-    snapshot->seq = g_sensor_data.seq + 1;
+    next_seq = g_sensor_data.seq + 1U;
+    if (next_seq == 0U) {
+        next_seq = 1U;
+    }
+    snapshot->seq = next_seq;
     g_sensor_data.seq = snapshot->seq;
     SensorData_Unlock();
+}
+
+static int SensorData_TakeV6UploadSnapshot(SensorData *snapshot, unsigned int scope)
+{
+    unsigned int next_seq;
+    int snapshot_available = 0;
+
+    if (snapshot == NULL) {
+        return 0;
+    }
+
+    memset(snapshot, 0, sizeof(*snapshot));
+    SensorData_Lock();
+    if (scope == COMPACT_POLL_SCOPE_CORE) {
+        memcpy(snapshot, &g_sensor_data, sizeof(*snapshot));
+        if (snapshot->sample_epoch != 0U) {
+            memcpy(&g_v6_core_upload_snapshot, snapshot, sizeof(g_v6_core_upload_snapshot));
+            g_v6_core_upload_snapshot_valid = 1;
+            snapshot_available = 1;
+        }
+    } else if ((scope == COMPACT_POLL_SCOPE_ENVIRONMENT || scope == COMPACT_POLL_SCOPE_AUDIT) &&
+               g_v6_core_upload_snapshot_valid) {
+        memcpy(snapshot, &g_v6_core_upload_snapshot, sizeof(*snapshot));
+        snapshot_available = 1;
+    }
+
+    if (snapshot_available) {
+        next_seq = g_sensor_data.seq + 1U;
+        if (next_seq == 0U) {
+            next_seq = 1U;
+        }
+        snapshot->seq = next_seq;
+        g_sensor_data.seq = next_seq;
+    }
+    SensorData_Unlock();
+    return snapshot_available;
 }
 
 static unsigned int SensorData_GetUptimeSnapshot(void)
@@ -767,6 +818,7 @@ static void HandleCompactBroadcastPoll(const char *command)
     if (delay_ms > 0U) {
         LOS_Msleep(delay_ms);
     }
+    g_platform_poll_scope = CompactPollCommand_Scope(command);
     g_platform_poll_latest_requested = 1;
 }
 
@@ -1607,7 +1659,8 @@ static void* DataUploadTask(const char* arg)
     TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V2 || \
     TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V3 || \
     TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V4 || \
-    TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V5
+    TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V5 || \
+    TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V6
     unsigned char compact_payload[COMPACT_TELEMETRY_PAYLOAD_BYTES];
 #else
     char json[FIELD_LINK_MAX_PAYLOAD_BYTES + 1];
@@ -1647,14 +1700,16 @@ static void* DataUploadTask(const char* arg)
     printf("  Manual Collect Delay: %d ms\n", PLATFORM_MANUAL_COLLECT_DELAY_MS);
     printf("  Poll ACK: %s\n", POLL_LATEST_TELEMETRY_ACK_ENABLED ? "Enabled" : "Telemetry confirms poll");
     printf("  Poll Request Check: %d ms\n", DATA_UPLOAD_IDLE_CHECK_INTERVAL_MS);
-    printf("  Compact Poll: %s (P1 broadcast rollback)\n", COMPACT_TARGETED_POLL_MARKER);
+    printf("  Compact Poll: layered-v1 P1 core / P3 environment / P4 audit (%s rollback)\n",
+           COMPACT_TARGETED_POLL_MARKER);
     printf("  Edge Uplink Mode: %s\n", EDGE_UPLINK_MODE == EDGE_UPLINK_MODE_POLLED ? "Polled" : "Periodic");
     printf("  Telemetry Payload: %s\n",
-           TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V5 ? "Compact v5 (110-byte field + RTK + injection summary)" :
+           TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V6 ? "Compact v6 layered (46-byte payload / 64-byte wire frame)" :
+           (TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V5 ? "Compact v5 (110-byte field + RTK + injection summary)" :
            (TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V4 ? "Compact v4 (139-byte field + RTK + injection evidence)" :
            (TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V3 ? "Compact v3 (95-byte field + RTK payload)" :
            (TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V2 ? "Compact v2 (46-byte payload)" :
-           (TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V1 ? "Compact v1 (46-byte payload)" : "JSON v1")))));
+           (TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V1 ? "Compact v1 (46-byte payload)" : "JSON v1"))))));
     printf("  Field Sensor Source: %s\n",
            ENABLE_SIMULATED_FIELD_SENSORS ? "SIMULATED (RS485 values only)" : "HARDWARE");
 #if ENABLE_SIMULATED_GNSS
@@ -1714,6 +1769,7 @@ static void* DataUploadTask(const char* arg)
     while (1) {
         int manual_collect_requested = 0;
         int poll_latest_requested = 0;
+        unsigned int poll_scope = COMPACT_POLL_SCOPE_CORE;
         const char *upload_trigger = "periodic";
         unsigned int sleep_ms = DATA_UPLOAD_IDLE_CHECK_INTERVAL_MS;
 
@@ -1743,6 +1799,8 @@ static void* DataUploadTask(const char* arg)
         }
         if (g_platform_poll_latest_requested) {
             poll_latest_requested = 1;
+            poll_scope = g_platform_poll_scope;
+            g_platform_poll_scope = COMPACT_POLL_SCOPE_CORE;
             g_platform_poll_latest_requested = 0;
         }
 
@@ -1812,26 +1870,46 @@ static void* DataUploadTask(const char* arg)
             continue;
         }
 
+#if TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V6
+        if (!SensorData_TakeV6UploadSnapshot(&telemetry_snapshot, poll_scope)) {
+            printf("[UPLOAD SKIP] V6 scope=%u has no completed core sensor snapshot\n", poll_scope);
+            elapsed_since_upload_ms = 0;
+            LOS_Msleep(200);
+            elapsed_since_upload_ms += 200;
+            continue;
+        }
+#else
         SensorData_TakeUploadSnapshot(&telemetry_snapshot);
-#if ENABLE_GPS
-        telemetry_snapshot.gnss_status_valid =
-            GPS_ReadSolution(&telemetry_snapshot.gnss) == 0 ? 1 : 0;
 #endif
 #if TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V1 || \
     TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V2 || \
     TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V3 || \
     TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V4 || \
-    TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V5
+    TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V5 || \
+    TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V6
         memset(compact_payload, 0, sizeof(compact_payload));
 #if TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V4 || \
-    TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V5
+    TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V5 || \
+    TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V6
         GnssRtcmInjection_GetStats(&rtcm_stats);
         GnssRtcmInjection_GetRuntimeStatus(MainMonotonicMs(), &rtcm_runtime);
-#if TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V5
+#if TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V6
+        len = BuildCompactTelemetryV6(
+            &telemetry_snapshot,
+            &rtcm_stats,
+            &rtcm_runtime,
+            poll_scope,
+            DeviceIdentity_Get()->legacy_node_label,
+            g_last_platform_command_id,
+            compact_payload,
+            sizeof(compact_payload)
+        );
+#elif TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V5
         len = BuildCompactTelemetryV5(
 #else
         len = BuildCompactTelemetryV4(
 #endif
+#if TELEMETRY_PAYLOAD_FORMAT != TELEMETRY_PAYLOAD_FORMAT_COMPACT_V6
             &telemetry_snapshot,
             &rtcm_stats,
             &rtcm_runtime,
@@ -1841,6 +1919,7 @@ static void* DataUploadTask(const char* arg)
             compact_payload,
             sizeof(compact_payload)
         );
+#endif
 #else
 #if TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V3
         len = BuildCompactTelemetryV3(

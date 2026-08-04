@@ -3,6 +3,9 @@ export const COMPACT_TELEMETRY_V2_BYTES = 46;
 export const COMPACT_TELEMETRY_V3_BYTES = 95;
 export const COMPACT_TELEMETRY_V4_BYTES = 139;
 export const COMPACT_TELEMETRY_V5_BYTES = 110;
+export const COMPACT_TELEMETRY_V6_BYTES = 46;
+
+export type CompactTelemetryV6Scope = "core" | "environment" | "audit";
 
 const VALID_TEMPERATURE = 1 << 0;
 const VALID_SOIL = 1 << 1;
@@ -16,6 +19,14 @@ const VALID_BATTERY = 1 << 7;
 const STATUS_WARNING = 1 << 0;
 const STATUS_FIELD_SENSORS_SIMULATED = 1 << 1;
 const STATUS_GNSS_SIMULATED = 1 << 2;
+const V6_STATUS_RTK_TRUSTED = 1 << 3;
+
+const V6_SCOPE_CORE = 1;
+const V6_SCOPE_ENVIRONMENT = 2;
+const V6_SCOPE_AUDIT = 3;
+const V6_CORE_KNOWN_VALID_MASK = (1 << 9) - 1;
+const V6_ENV_KNOWN_VALID_MASK = (1 << 6) - 1;
+const V6_AUDIT_KNOWN_VALID_MASK = (1 << 5) - 1;
 
 const V3_VALID_BATTERY = 1 << 0;
 const V3_VALID_SOIL = 1 << 1;
@@ -48,6 +59,7 @@ const V4_RTCM_MODE_DISABLED = 0;
 const V4_RTCM_STATE_READY = 1 << 0;
 const V4_RTCM_STATE_SESSION_ARMED = 1 << 1;
 const V4_RTCM_STATE_LEASE_VALID = 1 << 2;
+const V4_RTCM_STATE_FRAME_RECENT = 1 << 4;
 const V4_AGE_UNAVAILABLE = 0xffff_ffff;
 const V5_RTCM_KNOWN_ERROR_MASK = 0x1f;
 const V5_RTCM_ERROR_REJECTED_FRAGMENT = 1 << 0;
@@ -111,6 +123,20 @@ export function buildCompactTargetedPollCommand(
   return { command, commandTag: compactCommandTag(command) };
 }
 
+export function buildCompactScopedPollCommand(
+  scope: Exclude<CompactTelemetryV6Scope, "core">,
+  nodeLabel: "A" | "B" | "C",
+  nonce: string
+): { command: string; commandTag: number } {
+  const normalizedNonce = nonce.toUpperCase();
+  if (!/^[0-9A-F]{8}$/u.test(normalizedNonce)) {
+    throw new Error("compact scoped nonce must contain exactly 8 hexadecimal characters");
+  }
+  const kind = scope === "environment" ? "3" : "4";
+  const command = `P${kind}${nodeLabel}${normalizedNonce}`;
+  return { command, commandTag: compactCommandTag(command) };
+}
+
 export function isCompactTelemetryV1(payload: Buffer): boolean {
   return (
     payload.length === COMPACT_TELEMETRY_V1_BYTES &&
@@ -127,7 +153,8 @@ export function isCompactTelemetry(payload: Buffer): boolean {
     (version === 2 && payload.length === COMPACT_TELEMETRY_V2_BYTES) ||
     (version === 3 && payload.length === COMPACT_TELEMETRY_V3_BYTES) ||
     (version === 4 && payload.length === COMPACT_TELEMETRY_V4_BYTES) ||
-    (version === 5 && payload.length === COMPACT_TELEMETRY_V5_BYTES);
+    (version === 5 && payload.length === COMPACT_TELEMETRY_V5_BYTES) ||
+    (version === 6 && payload.length === COMPACT_TELEMETRY_V6_BYTES);
 }
 
 function decodeNode(payload: Buffer): { deviceId: string; nodeLabel: string } {
@@ -168,6 +195,225 @@ function readSafeInt64(input: Buffer, offset: number, field: string): number {
   const numeric = Number(value);
   if (!Number.isSafeInteger(numeric)) throw new Error(`${field} exceeds the JavaScript safe integer range`);
   return numeric;
+}
+
+function readInt40Be(input: Buffer, offset: number): number {
+  let value = 0;
+  for (let index = 0; index < 5; index += 1) value = value * 256 + input.readUInt8(offset + index);
+  return value >= 2 ** 39 ? value - 2 ** 40 : value;
+}
+
+function readInt24Be(input: Buffer, offset: number): number {
+  const value = input.readUIntBE(offset, 3);
+  return value >= 2 ** 23 ? value - 2 ** 24 : value;
+}
+
+function compactV6Base(payload: Buffer, scope: CompactTelemetryV6Scope): CompactTelemetry {
+  const { deviceId, nodeLabel } = decodeNode(payload);
+  const statusFlags = payload.readUInt8(4);
+  const seq = payload.readUInt32BE(8);
+  const sampleEpoch = payload.readUInt32BE(12);
+  if ((statusFlags & ~0x0f) !== 0 || seq === 0 || sampleEpoch === 0) {
+    throw new Error("compact telemetry v6 common header is malformed");
+  }
+  return {
+    schema_version: 1,
+    device_id: deviceId,
+    event_ts: null,
+    seq,
+    metrics: {},
+    meta: {
+      install_label: `FIELD-NODE-${nodeLabel}`,
+      legacy_node: nodeLabel,
+      last_command_tag: payload.readUInt32BE(16),
+      upload_trigger: "scheduler_poll",
+      compact_payload_version: 6,
+      compact_scope: scope,
+      sample_epoch: sampleEpoch,
+      packet_class:
+        scope === "core" ? "hf_displacement_core" : scope === "environment" ? "lf_environment" : "lf_rtk_audit",
+      field_sensor_source: (statusFlags & STATUS_FIELD_SENSORS_SIMULATED) !== 0 ? "simulated" : "hardware",
+      gnss_source: (statusFlags & STATUS_GNSS_SIMULATED) !== 0 ? "simulated" : "hardware",
+      v6_valid_flags: payload.readUInt16BE(6)
+    }
+  };
+}
+
+function decodeCompactTelemetryV6(payload: Buffer): CompactTelemetry {
+  const scopeCode = payload.readUInt8(5);
+  const scope: CompactTelemetryV6Scope =
+    scopeCode === V6_SCOPE_CORE ? "core" :
+      scopeCode === V6_SCOPE_ENVIRONMENT ? "environment" :
+        scopeCode === V6_SCOPE_AUDIT ? "audit" : (() => { throw new Error("compact telemetry v6 scope is invalid"); })();
+  const decoded = compactV6Base(payload, scope);
+  const metrics = decoded.metrics;
+  const meta = decoded.meta;
+  const statusFlags = payload.readUInt8(4);
+  const valid = payload.readUInt16BE(6);
+  const gnssSimulated = (statusFlags & STATUS_GNSS_SIMULATED) !== 0;
+
+  if (scope === "core") {
+    if ((valid & ~V6_CORE_KNOWN_VALID_MASK) !== 0) throw new Error("compact telemetry v6 core validity is malformed");
+    const gnssStatusValid = (valid & (1 << 1)) !== 0;
+    const summary = payload.readUInt8(39);
+    const ggaQuality = summary & 0x07;
+    const coordinateFrameCode = (summary >> 3) & 0x03;
+    const trusted = (statusFlags & V6_STATUS_RTK_TRUSTED) !== 0;
+    const quantizedValidity = [
+      [1 << 6, 41],
+      [1 << 4, 42],
+      [1 << 5, 43],
+      [1 << 7, 44],
+      [1 << 8, 45]
+    ] as const;
+    if ((summary & 0xe0) !== 0 ||
+        (!gnssStatusValid && ((valid & 0x1fe) !== 0 || summary !== 0 || payload.readUInt8(40) !== 0 || trusted)) ||
+        quantizedValidity.some(([mask, offset]) => ((valid & mask) !== 0) !== (payload.readUInt8(offset) !== 0xff))) {
+      throw new Error("compact telemetry v6 core GNSS evidence is inconsistent");
+    }
+    if (gnssSimulated && trusted) throw new Error("compact telemetry v6 simulated GNSS cannot be trusted");
+    if (coordinateFrameCode > 2) throw new Error("compact telemetry v6 coordinate frame is invalid");
+
+    if ((valid & (1 << 0)) !== 0) {
+      metrics.tilt_x_deg = payload.readInt16BE(20) / 100;
+      metrics.tilt_y_deg = payload.readInt16BE(22) / 100;
+      metrics.tilt_z_deg = payload.readInt16BE(24) / 100;
+      metrics.warning_flag = (statusFlags & STATUS_WARNING) !== 0;
+    }
+    if (gnssStatusValid) {
+      metrics.rtk_gga_quality = ggaQuality;
+      metrics.rtk_trusted = trusted;
+      metrics.rtk_satellites_used = payload.readUInt8(40);
+    }
+    if ((valid & (1 << 2)) !== 0) {
+      const latitudeE9 = readInt40Be(payload, 26);
+      const longitudeE9 = readInt40Be(payload, 31);
+      if (latitudeE9 < -90_000_000_000 || latitudeE9 > 90_000_000_000 ||
+          longitudeE9 < -180_000_000_000 || longitudeE9 > 180_000_000_000) {
+        throw new Error("compact telemetry v6 RTK coordinates are out of range");
+      }
+      metrics.rtk_latitude_deg = latitudeE9 / 1_000_000_000;
+      metrics.rtk_longitude_deg = longitudeE9 / 1_000_000_000;
+    }
+    if ((valid & (1 << 3)) !== 0) metrics.rtk_altitude_msl_m = readInt24Be(payload, 36) / 1000;
+    if ((valid & (1 << 4)) !== 0) metrics.rtk_correction_age_ms = payload.readUInt8(42) * 100;
+    if ((valid & (1 << 5)) !== 0) metrics.rtk_solution_age_ms = payload.readUInt8(43) * 20;
+    if ((valid & (1 << 6)) !== 0) metrics.rtk_hdop = payload.readUInt8(41) * 0.05;
+    if ((valid & (1 << 7)) !== 0) metrics.rtk_gst_sigma_lat_mm = payload.readUInt8(44);
+    if ((valid & (1 << 8)) !== 0) metrics.rtk_gst_sigma_lon_mm = payload.readUInt8(45);
+    if (trusted && (ggaQuality !== 4 || coordinateFrameCode === 0 || (valid & (1 << 2)) === 0 ||
+        (valid & (1 << 4)) === 0 || (valid & (1 << 5)) === 0 ||
+        Number(metrics.rtk_correction_age_ms) > 5000 || Number(metrics.rtk_solution_age_ms) > 2000)) {
+      throw new Error("compact telemetry v6 trusted RTK evidence violates the production gate");
+    }
+    meta.rtk_coordinate_frame = coordinateFrameName(coordinateFrameCode);
+    meta.rtk_coordinate_frame_code = coordinateFrameCode;
+    meta.rtk_fix_type = ggaFixType(ggaQuality);
+    meta.rtk_displacement_eligible = !gnssSimulated && trusted && coordinateFrameCode !== 0;
+    meta.v6_quantization = { hdop: 0.05, correction_age_ms: 100, solution_age_ms: 20 };
+    return decoded;
+  }
+
+  if (scope === "environment") {
+    if ((valid & ~V6_ENV_KNOWN_VALID_MASK) !== 0) throw new Error("compact telemetry v6 environment validity is malformed");
+    meta.uptime_s = payload.readUInt32BE(20);
+    if ((valid & (1 << 0)) !== 0) {
+      metrics.battery_v = payload.readUInt16BE(24) / 1000;
+      metrics.battery_pct = payload.readUInt8(26);
+      meta.battery_estimate_quality_code = payload.readUInt8(27);
+    }
+    if ((valid & (1 << 1)) !== 0) {
+      metrics.soil_temperature_c = payload.readInt16BE(28) / 100;
+      metrics.soil_moisture_pct = payload.readUInt16BE(30) / 100;
+    }
+    if ((valid & (1 << 2)) !== 0) metrics.electrical_conductivity_us_cm = payload.readUInt16BE(32);
+    if ((valid & (1 << 3)) !== 0) metrics.rtk_geoid_separation_m = readInt24Be(payload, 34) / 1000;
+    if ((valid & (1 << 4)) !== 0) {
+      metrics.rtk_gnss_week = payload.readUInt16BE(37);
+      metrics.rtk_tow_ms = payload.readUInt32BE(39);
+    }
+    if ((valid & (1 << 5)) !== 0) metrics.rtk_gst_sigma_alt_mm = payload.readUInt16BE(43);
+    return decoded;
+  }
+
+  if ((valid & ~V6_AUDIT_KNOWN_VALID_MASK) !== 0) throw new Error("compact telemetry v6 audit validity is malformed");
+  const rtcmMode = payload.readUInt8(20);
+  const rtcmStateFlags = payload.readUInt8(21);
+  const queue = payload.readUInt8(22);
+  const queuePending = queue >> 4;
+  const queueHighWatermark = queue & 0x0f;
+  const errorFlags = payload.readUInt8(23);
+  const sessionEpoch = payload.readUInt32BE(24);
+  const leaseUnits = payload.readUInt16BE(28);
+  const completedAgeUnits = payload.readUInt16BE(30);
+  const injectedFrames = payload.readUInt16BE(32);
+  const fixFlags = payload.readUInt16BE(34);
+  const sessionArmed = (rtcmStateFlags & V4_RTCM_STATE_SESSION_ARMED) !== 0;
+  const leaseValid = (rtcmStateFlags & V4_RTCM_STATE_LEASE_VALID) !== 0;
+  const saturated = (errorFlags & V5_RTCM_INJECTED_COUNT_SATURATED) !== 0;
+  const completedFrameRecent = (rtcmStateFlags & V4_RTCM_STATE_FRAME_RECENT) !== 0;
+  const gnssFixValid = (valid & (1 << 0)) !== 0;
+  const fixedStatsValid = (valid & (1 << 1)) !== 0;
+  const stationValid = (valid & (1 << 2)) !== 0;
+  const gstHorizontalValid = (valid & (1 << 3)) !== 0;
+  const rtcmRuntimeValid = (valid & (1 << 4)) !== 0;
+  const trusted = (statusFlags & V6_STATUS_RTK_TRUSTED) !== 0;
+  if (rtcmMode > 2 || (rtcmStateFlags & ~V4_RTCM_KNOWN_STATE_MASK) !== 0 ||
+      (rtcmStateFlags & V4_RTCM_STATE_READY) === 0 || queuePending > queueHighWatermark ||
+      (errorFlags & ~V5_RTCM_KNOWN_ERROR_MASK) !== 0 || (saturated && injectedFrames !== 0xffff) ||
+      (completedFrameRecent && completedAgeUnits === V5_AGE_UNAVAILABLE) || !rtcmRuntimeValid) {
+    throw new Error("compact telemetry v6 RTCM audit is malformed");
+  }
+  if (rtcmMode === V4_RTCM_MODE_DISABLED) {
+    if (sessionEpoch !== 0 || leaseUnits !== 0 || sessionArmed || leaseValid || queuePending !== 0) {
+      throw new Error("compact telemetry v6 disabled RTCM state is not fail-closed");
+    }
+  } else if (sessionEpoch === 0 || leaseUnits === 0 || !sessionArmed || !leaseValid) {
+    throw new Error("compact telemetry v6 active RTCM state lacks a valid lease");
+  }
+  if ((!gnssFixValid && fixFlags !== 0) ||
+      fixedStatsValid !== ((fixFlags & GNSS_FIX_FIXED_STATS_VALID) !== 0) ||
+      stationValid !== ((fixFlags & GNSS_FIX_STATION_VALID) !== 0) ||
+      gstHorizontalValid !== ((fixFlags & GNSS_FIX_GST_VALID) !== 0) ||
+      trusted !== (!gnssSimulated && (fixFlags & GNSS_FIX_TRUSTED) !== 0)) {
+    throw new Error("compact telemetry v6 audit GNSS validity is inconsistent");
+  }
+  metrics.rtcm_injection_mode_code = rtcmMode;
+  metrics.rtcm_session_epoch = sessionEpoch;
+  metrics.rtcm_lease_remaining_ms = leaseUnits * 100;
+  metrics.rtcm_queue_pending = queuePending;
+  metrics.rtcm_queue_high_watermark = queueHighWatermark;
+  if (completedAgeUnits !== V5_AGE_UNAVAILABLE) metrics.rtcm_last_completed_frame_age_ms = completedAgeUnits * 10;
+  metrics.rtcm_injected_frames_total = injectedFrames;
+  metrics.rtcm_error_summary_flags = errorFlags & 0x0f;
+  metrics.rtcm_rejected_fragment_error = (errorFlags & V5_RTCM_ERROR_REJECTED_FRAGMENT) !== 0;
+  metrics.rtcm_crc_error = (errorFlags & V5_RTCM_ERROR_CRC) !== 0;
+  metrics.rtcm_queue_drop_error = (errorFlags & V5_RTCM_ERROR_QUEUE_DROP) !== 0;
+  metrics.rtcm_uart_error = (errorFlags & V5_RTCM_ERROR_UART) !== 0;
+  if (fixedStatsValid) {
+    const packed = payload.readUInt32BE(36);
+    const streak = packed >>> 20;
+    const ratio = (packed >>> 10) & 0x03ff;
+    const drops = packed & 0x03ff;
+    if (ratio > 1000) throw new Error("compact telemetry v6 fixed ratio is malformed");
+    if (streak !== 4095) metrics.rtk_fixed_streak_s = streak;
+    if (drops !== 1023) metrics.rtk_fix_drop_count = drops;
+    metrics.rtk_fixed_ratio_1m_pct = ratio / 10;
+    meta.rtk_fixed_streak_saturated = streak === 4095;
+    meta.rtk_fix_drop_count_saturated = drops === 1023;
+  }
+  if (stationValid) metrics.rtk_reference_station_id = payload.readUInt16BE(40);
+  if (gstHorizontalValid) {
+    metrics.rtk_gst_sigma_lat_mm = payload.readUInt16BE(42);
+    metrics.rtk_gst_sigma_lon_mm = payload.readUInt16BE(44);
+  }
+  meta.rtk_fix_flags = fixFlags;
+  meta.rtcm_injection_mode = rtcmMode === 2 ? "live" : rtcmMode === 1 ? "probe" : "disabled";
+  meta.rtcm_state_flags = rtcmStateFlags;
+  meta.rtcm_lease_resolution_ms = 100;
+  meta.rtcm_completion_age_resolution_ms = 10;
+  meta.rtcm_injected_frames_counter_saturated = saturated;
+  return decoded;
 }
 
 export function decodeCompactTelemetryV1(payload: Buffer): CompactTelemetryV1 {
@@ -246,8 +492,11 @@ export function decodeCompactTelemetryV1(payload: Buffer): CompactTelemetryV1 {
 export function decodeCompactTelemetry(payload: Buffer): CompactTelemetry {
   if (!isCompactTelemetry(payload)) {
     throw new Error(
-      `compact telemetry signature mismatch: expected a valid v1, v2, v3, v4 or v5 payload`
+      `compact telemetry signature mismatch: expected a valid v1, v2, v3, v4, v5 or v6 payload`
     );
+  }
+  if (payload.readUInt8(2) === 6) {
+    return decodeCompactTelemetryV6(payload);
   }
   if (payload.readUInt8(2) === 1) {
     return decodeCompactTelemetryV1(payload);

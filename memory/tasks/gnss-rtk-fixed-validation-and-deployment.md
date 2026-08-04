@@ -18,6 +18,26 @@ status: active
 
 ## Current State
 
+### Compact V6 Layered Implementation, Not Yet Released (2026-08-04)
+
+- 已实现一个标称 XLS1 单包的分层候选：core/environment/audit 均为 `46 B payload /
+  64 B complete frame`。P1 广播 A/B/C core 并使用 `0/340/680 ms` 时隙；P3 每
+  3 个完整 core round、P4 每 15 个且优先，定向目标轮转。
+- 高频 core 保留三轴倾角、纳度坐标、高程、GGA/卫星/HDOP、correction/solution
+  age 和水平 GST；低频 environment 保留校准电池、三合一土壤、geoid/GNSS time/
+  垂直 GST；audit 保留 RTCM 运行摘要、Fixed 连续性、参考站和完整水平 GST。
+  SHT30、MPU6050、雨量不重新加入。
+- 节点扩展复用最近 core 的同一原子快照和 `sample_epoch`；服务器只展平相同 epoch，
+  重启时清空旧 scopes。网关拒绝错误 scope 并在串口断开时清空所有相关窗口。
+  最新复审又补上隔离 ClickHouse 失败消息不进入 shadow，以及三端拒绝 V6 `seq=0`。
+- 当前离线结果包含 field-gateway `58/58`、telemetry-writer 更新后 `18/18`、双方
+  TypeScript build/lint、Python V6 金值/自检/语法、RK2206 snapshot 静态门禁和
+  `git diff --check`；但 C/解码器门禁刚有新修改，因此最终总回归仍需重跑。
+- 当前仍是 dirty source，没有正式 V6 release，不能让用户烧录。下一步是本轮
+  A/B/C OpenHarmony clean build、全仓相关回归、敏感信息扫描、提交和推送；随后
+  才允许 clean prepare release，并从室内真实 RS485 + 模拟 GNSS + RTCM disabled
+  的 `60/600/1800` 门禁开始。
+
 ### Compact V5 Live Gate: Integrity Passed, Cadence Rejected (2026-08-04)
 
 - A/B/C 已统一烧录正式 V5，真实 RS485、校准电池、模拟 GNSS 和 RTCM disabled/clean 身份均正确。原正式 60 秒因排空只有 500 ms、保护只有 3000 ms，得到 `37/39`、2 个 decode error、1 个 unmatched；坏帧 `207+49=256 B` 精确证明两个 V5 128 B 帧交织，unmatched C 则证明生产残留未排空。

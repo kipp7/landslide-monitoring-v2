@@ -12,8 +12,8 @@ if ($builder -match 'fw-rk2206-rtk-compact-v\{0\}-rs485-diag-v5-r\d+-\d{8}') {
 }
 foreach ($required in @(
     '$sourceFirmwareMarker = Get-QuotedMacroValue -Path $mainPath -Macro "FW_RX_DIAG_MARKER"',
-    "([regex]::Matches(`$sourceFirmwareMarker, 'compact-v[345]')).Count -ne 1",
-    "`$targetFirmwareMarker = `$sourceFirmwareMarker -replace 'compact-v[345]'",
+    "([regex]::Matches(`$sourceFirmwareMarker, 'compact-v[3456]')).Count -ne 1",
+    "`$targetFirmwareMarker = `$sourceFirmwareMarker -replace 'compact-v[3456]'",
     '-Value $targetFirmwareMarker'
   )) {
   if (-not $builder.Contains($required)) {
