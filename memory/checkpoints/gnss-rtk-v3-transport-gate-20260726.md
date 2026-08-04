@@ -35,7 +35,10 @@ status: active
 - RK3568 已在不启用连接的情况下预配置本次 CORS 参数；原文件备份为
   `/opt/lsmv2/backups/ntrip-preconfigure-20260804-202843/field-gateway.env`。环境文件
   仍为 `0600 root:root`，网关重启验证为 `active/running`、`NRestarts=0`，健康状态
-  为 `ntrip.enabled=false`。本记录不含账号、密码、端点、原始 RTCM 或真实坐标。
+  为 `ntrip.enabled=false`。已额外显式固定 `RTCM_RUNTIME_MODE=probe`、三节点 mask、
+  90 秒租约和 `160 B/160 ms` 边界，避免以后启用 NTRIP 时落入程序默认 LIVE；变更前
+  备份为 `/opt/lsmv2/backups/ntrip-probe-safety-20260804-203816/field-gateway.env`。
+  本记录不含账号、密码、端点、原始 RTCM 或真实坐标。
 - 当前门槛是用户按物理标签烧录三份硬件 GNSS 镜像。烧录后先在室外、CORS 关闭
   状态执行 60/600 秒真实 GNSS 纯遥测；通过后才运行共同有限 PROBE，再切有限 LIVE，
   最终要求持续 `GGA=4`、差分龄 `<=5 s`、可信 GST 及 1800 秒三节点混合负载。
@@ -431,8 +434,9 @@ status: active
 `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v6_protected_p1_rs485_gnss_hardware_live_20260804`。
 A/B/C 镜像身份、哈希、真实 GNSS UART、受保护 P1 和上电 RTCM disabled 均通过。
 RK3568 已把短期 CORS 参数写入 `0600 root:root` 环境文件并备份到
-`/opt/lsmv2/backups/ntrip-preconfigure-20260804-202843`，但仍为
-`NTRIP_ENABLED=false`、服务 active/零重启；Git/memory 不含凭据。下一步让用户按标签
+`/opt/lsmv2/backups/ntrip-preconfigure-20260804-202843`，并显式设置 fail-closed
+`RTCM_RUNTIME_MODE=probe`、三节点 mask 与有限租约；当前仍为 `NTRIP_ENABLED=false`、
+服务 active/零重启，Git/memory 不含凭据。下一步让用户按标签
 烧录三份 `.img`，室外连接 BT-760，先做 hardware 纯遥测 60/600 秒，再依次做共同有限
 PROBE、有限 LIVE、持续 GGA=4/差分龄/GST 和 1800 秒三节点混合负载。全部通过前不得
 声称厘米级完成，也不得从无效或未 Fixed 坐标建立 ENU 基线。

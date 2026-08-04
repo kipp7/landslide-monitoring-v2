@@ -38,8 +38,11 @@ status: active
 - RK3568 已把本次短期 CORS 参数原子写入 `/etc/lsmv2/field-gateway.env`，原文件备份
   为 `/opt/lsmv2/backups/ntrip-preconfigure-20260804-202843/field-gateway.env`。配置文件
   保持 `0600 root:root`，网关重启后 `active/running`、`NRestarts=0`，健康状态仍为
-  `NTRIP_ENABLED=false`。账号、密码、端点、坐标和原始 RTCM 不进入 Git、memory 或
-  普通日志。
+  `NTRIP_ENABLED=false`。另已显式固定 `RTCM_RUNTIME_MODE=probe`、三节点 mask、90 秒
+  租约和 `160 B/160 ms` 边界，安全配置前备份为
+  `/opt/lsmv2/backups/ntrip-probe-safety-20260804-203816/field-gateway.env`；后续启用
+  NTRIP 也不会因程序默认值直接进入 LIVE。账号、密码、端点、坐标和原始 RTCM
+  不进入 Git、memory 或普通日志。
 - 当前等待用户按物理标签烧录 A/B/C。厘米级尚未验收；烧录后必须先在室外、CORS
   关闭状态完成真实 GNSS 纯遥测 60/600 秒，再运行统一有限 PROBE，只有节点端 CRC、
   分片、队列和零 UART 注入证据全部通过才切 LIVE，最终以持续 `GGA=4`、差分龄
