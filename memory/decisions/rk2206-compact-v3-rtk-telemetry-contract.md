@@ -46,9 +46,12 @@ command P95 和 per-node arrival P95 均超过既定 `1500/2500 ms` 门限。XLS
 - 高频线框首次落入一个 XLS1 标称 64 B 空口包，同时不删除专业字段；代价是土壤、
   电池和完整审计改为低频，但仍按源 core epoch 可追溯。
 - `1500 ms` command maximum 和 `2500 ms` per-node core arrival P95 不降低。
-- 当前 V6 仍是 dirty-source 离线候选，没有正式发布包，也没有真机结论。必须完成
-  同一提交的 A/B/C clean build、全部离线门禁、clean release，再重新执行严格
-  `60/600/1800` 秒；通过前 NTRIP/RTCM/CORS 保持关闭。
+- V6 实现已由 clean 提交 `af0c6e519ef8294fdda74ff5f1e79b280cd4ef05`
+  完成 A/B/C 全量构建、全部离线门禁和 clean release。正式室内包位于
+  `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v6_layered_rs485_gnss_simulated_20260804`，
+  manifest SHA-256 为 `ff5191ba5d3908ea38c6cc4d24a90013707b0d15fa5a13bac98d8615bc1f3039`。
+  这仍不是 V6 真机结论；必须按标签统一烧录并重新执行严格 `60/600/1800` 秒，
+  通过前 NTRIP/RTCM/CORS 保持关闭。
 - 权威验收规则见 `docs/field-tests/rk2206-compact-v6-layered-acceptance.md`。
 
 ## Compact V5 Amendment (2026-08-04)

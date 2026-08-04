@@ -41,11 +41,18 @@ status: active
   Python 金值/语法/V6 dry-run、PowerShell parser、Bash parser、补丁格式和敏感信息
   审计均通过。API 全仓 lint 仍有 68 个不在 V6 改动文件中的既有错误，作为公开
   基线缺口保留，不伪称通过。
-- 当前工作树尚未提交，也没有正式 V6 发布包。用户虽已上电节点，但现场节点不可能
-  运行这组未发布源码；禁止烧录 dirty 编译证据或声称 V6 真机通过。下一恢复点是
-  提交并推送全部 V6 修改，在 clean HEAD 上运行正式 prepare 脚本，然后再让用户按
-  标签烧录 A/B/C 并执行 `60 -> 600 -> 1800` fail-fast。三阶段前继续关闭
-  CORS/RTCM/NTRIP。
+- V6 实现提交 `af0c6e519ef8294fdda74ff5f1e79b280cd4ef05` 已推送；正式 prepare
+  在同一 clean HEAD 上重跑安全门禁和 A/B/C 全量构建，并生成唯一室内包
+  `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v6_layered_rs485_gnss_simulated_20260804`。
+  manifest SHA-256 为 `ff5191ba5d3908ea38c6cc4d24a90013707b0d15fa5a13bac98d8615bc1f3039`；
+  A/B/C `.img` SHA-256 分别为
+  `3bda38a61d29461f5bb66f8b6c81a31bee5500fcecf04181e55de1148c769c38`、
+  `930903f03f6b6368e99f9321aab561e9941cc168cf557ce1c6a65aa6f510936f`、
+  `138312e9c1cfa2bbde8911aabd4f776e95c852427128bb9d6dabac68845aa367`。
+  独立复算确认 `sourceDirty=false`、hardware RS485、simulated GNSS、RTCM disabled、
+  final battery calibration、`46/64 B` 和 layered cadence `3/15`。下一恢复点是按物理
+  标签烧录这三份正式 `.img`，再执行 `60 -> 600 -> 1800` fail-fast；尚未烧录或真机
+  通过，三阶段前继续关闭 CORS/RTCM/NTRIP。
 
 ### Compact V5 Live Gate: Lossless With Guard, Cadence Rejected (2026-08-04)
 

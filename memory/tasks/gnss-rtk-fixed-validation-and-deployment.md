@@ -18,7 +18,7 @@ status: active
 
 ## Current State
 
-### Compact V6 Layered Implementation, Not Yet Released (2026-08-04)
+### Compact V6 Layered Clean Release, Awaiting Field Gate (2026-08-04)
 
 - 已实现一个标称 XLS1 单包的分层候选：core/environment/audit 均为 `46 B payload /
   64 B complete frame`。P1 广播 A/B/C core 并使用 `0/340/680 ms` 时隙；P3 每
@@ -30,13 +30,17 @@ status: active
 - 节点扩展复用最近 core 的同一原子快照和 `sample_epoch`；服务器只展平相同 epoch，
   重启时清空旧 scopes。网关拒绝错误 scope 并在串口断开时清空所有相关窗口。
   最新复审又补上隔离 ClickHouse 失败消息不进入 shadow，以及三端拒绝 V6 `seq=0`。
-- 当前离线结果包含 field-gateway `58/58`、telemetry-writer 更新后 `18/18`、双方
-  TypeScript build/lint、Python V6 金值/自检/语法、RK2206 snapshot 静态门禁和
-  `git diff --check`；但 C/解码器门禁刚有新修改，因此最终总回归仍需重跑。
-- 当前仍是 dirty source，没有正式 V6 release，不能让用户烧录。下一步是本轮
-  A/B/C OpenHarmony clean build、全仓相关回归、敏感信息扫描、提交和推送；随后
-  才允许 clean prepare release，并从室内真实 RS485 + 模拟 GNSS + RTCM disabled
-  的 `60/600/1800` 门禁开始。
+- 最终离线回归已通过：RK2206 host/safety 和发布正反例、A/B/C `hb build -f`、
+  field-gateway `58/58`、telemetry-writer `18/18`、API `10/10`、相关 lint/build、
+  Windows WPF Release、Python/PowerShell/Bash 解析、金值、dry-run、补丁与敏感信息
+  审计。API 全仓 lint 的 68 个既有错误不在 V6 改动文件内，保留为明确基线缺口。
+- clean 实现提交 `af0c6e519ef8294fdda74ff5f1e79b280cd4ef05` 已推送。正式包位于
+  `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v6_layered_rs485_gnss_simulated_20260804`，
+  manifest SHA-256 为 `ff5191ba5d3908ea38c6cc4d24a90013707b0d15fa5a13bac98d8615bc1f3039`；
+  A/B/C `.img` SHA-256 为 `3bda38a61...769c38`、`930903f03...10936f`、
+  `138312e9...aa367`。包已证明构建和配置真值，尚未证明现场链路；下一步只烧录
+  对应标签的三份正式 `.img`，从真实 RS485 + 模拟 GNSS + RTCM disabled 的
+  `60/600/1800` 门禁开始。
 
 ### Compact V5 Live Gate: Integrity Passed, Cadence Rejected (2026-08-04)
 
