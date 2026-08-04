@@ -12,8 +12,22 @@ extern "C" {
 #define COMPACT_TELEMETRY_V2_PAYLOAD_BYTES 46
 #define COMPACT_TELEMETRY_V3_PAYLOAD_BYTES 95
 #define COMPACT_TELEMETRY_V4_PAYLOAD_BYTES 139
+#define COMPACT_TELEMETRY_V5_PAYLOAD_BYTES 110
+// Keep the largest supported payload for shared test and task buffers.
 #define COMPACT_TELEMETRY_PAYLOAD_BYTES COMPACT_TELEMETRY_V4_PAYLOAD_BYTES
 #define COMPACT_TELEMETRY_ERR_EMPTY_METRICS (-2)
+
+#define COMPACT_TELEMETRY_V5_LEASE_RESOLUTION_MS 100U
+#define COMPACT_TELEMETRY_V5_COMPLETION_AGE_RESOLUTION_MS 10U
+#define COMPACT_TELEMETRY_V5_AGE_UNAVAILABLE 0xFFFFU
+
+enum {
+    COMPACT_TELEMETRY_V5_RTCM_ERROR_REJECTED_FRAGMENT = 1U << 0,
+    COMPACT_TELEMETRY_V5_RTCM_ERROR_CRC = 1U << 1,
+    COMPACT_TELEMETRY_V5_RTCM_ERROR_QUEUE_DROP = 1U << 2,
+    COMPACT_TELEMETRY_V5_RTCM_ERROR_UART = 1U << 3,
+    COMPACT_TELEMETRY_V5_RTCM_INJECTED_COUNT_SATURATED = 1U << 4
+};
 
 enum {
     COMPACT_TELEMETRY_TRIGGER_UNKNOWN = 0,
@@ -85,6 +99,17 @@ int BuildCompactTelemetryV3(
 );
 
 int BuildCompactTelemetryV4(
+    const SensorData *data,
+    const GnssRtcmInjectionStats *rtcm_stats,
+    const GnssRtcmRuntimeStatus *rtcm_runtime,
+    const char *legacy_node_label,
+    const char *last_command_id,
+    const char *upload_trigger,
+    unsigned char *output,
+    int output_size
+);
+
+int BuildCompactTelemetryV5(
     const SensorData *data,
     const GnssRtcmInjectionStats *rtcm_stats,
     const GnssRtcmRuntimeStatus *rtcm_runtime,

@@ -13,6 +13,37 @@ status: active
 
 # Decision: RK2206 Compact V3 RTK Telemetry Contract
 
+## Compact V5 Amendment (2026-08-04)
+
+### Context
+
+Compact V4 在真实三节点共享 XLS1 的 600 秒门禁中只有 `793/813` 匹配，
+并形成 10 组 `236 B + 78 B = 314 B` 的双 157 B 帧交织。3000 ms 保护窗
+能阻止帧交织，却仍无法满足 command latency `<=1500 ms` 和 per-node arrival
+P95 `<=2500 ms`。DL-XLxx 手册规定会话层标称 payload 为 `[0,64] B`，V4
+完整帧至少需要三个标称空口包，因此不能再靠增大超时解决。
+
+### Decision
+
+- 新周期协议使用 Compact V5：完整保留 V3 的 95 B 专业传感器与 RTK 前缀，
+  RTCM 扩展压缩为 15 B，总 payload `110 B`，完整 COBS/CRC 帧固定 `128 B`。
+- 周期 RTCM 摘要只保留 mode/state、pending/high-water、session epoch、100 ms
+  分辨率租约、10 ms 分辨率最近完整帧年龄、饱和 16 位 injected count 和错误位。
+- rejected/CRC/queue/UART 错误位只表达“本次启动曾发生”，不得伪装成精确累计数；
+  完整累计明细继续由单节点按需 G3S V5 提供，禁止周期或并发查询。
+- RK3568 继续重复验证 fail-closed、保留位、会话/租约和计数饱和关系；服务器把
+  V5 作为完整快照替换，Windows 显示“正常/异常位摘要”。
+- 100% 匹配、零协议/profile 错误、1500 ms command latency 和 2500 ms
+  per-node arrival P95 门禁不降低。3000 ms 只作为防止迟到帧交织的保护窗。
+
+### Rationale And Consequences
+
+128 B 完整帧最多占两个标称 64 B 空口包，直接减少已实测的第三包尾延迟，且没有
+删除土壤温湿度/EC、三轴倾角、电池、纳度坐标、高程、GGA/HDOP/GST、差分龄、
+GNSS 周时、Fixed 连续性和参考站等专业字段。代价是周期帧不再携带所有 RTCM
+累计计数，但这些数据仍可按需审计。V5 当前仅完成离线跨端验证，必须重新通过
+真实 A/B/C 的 60/600/1800 秒门禁后才能视为稳定传输基线。
+
 ## Context
 
 三节点当前稳定基线使用 46 字节 compact v2，但它只能携带普通经纬度，无法保留纳度坐标、高程、差分龄、解算龄、GST、基站号和 Fixed 连续性，因此不能支撑可审计的厘米级位移算法。与此同时，实际硬件没有使用 SHT30 和 MPU6050，继续采集或上传其字段只会增加 RK2206 资源占用、I2C 风险和服务端陈旧状态。

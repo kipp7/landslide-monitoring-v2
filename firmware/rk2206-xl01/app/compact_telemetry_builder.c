@@ -62,14 +62,24 @@ enum {
     OFFSET_V4_REJECTED_FRAGMENTS = 131,
     OFFSET_V4_CRC_ERRORS = 133,
     OFFSET_V4_QUEUE_DROPS = 135,
-    OFFSET_V4_UART_ERRORS = 137
+    OFFSET_V4_UART_ERRORS = 137,
+    OFFSET_V5_RTCM_MODE = 95,
+    OFFSET_V5_RTCM_STATE_FLAGS = 96,
+    OFFSET_V5_QUEUE_PENDING = 97,
+    OFFSET_V5_QUEUE_HIGH_WATERMARK = 98,
+    OFFSET_V5_SESSION_EPOCH = 99,
+    OFFSET_V5_LEASE_REMAINING_100MS = 103,
+    OFFSET_V5_LAST_COMPLETED_AGE_10MS = 105,
+    OFFSET_V5_INJECTED_FRAMES = 107,
+    OFFSET_V5_ERROR_FLAGS = 109
 };
 
 typedef char CompactTelemetryPayloadSizeCheck[
     COMPACT_TELEMETRY_V1_PAYLOAD_BYTES == 46 &&
     COMPACT_TELEMETRY_V2_PAYLOAD_BYTES == 46 &&
     COMPACT_TELEMETRY_V3_PAYLOAD_BYTES == 95 &&
-    COMPACT_TELEMETRY_V4_PAYLOAD_BYTES == 139 ? 1 : -1
+    COMPACT_TELEMETRY_V4_PAYLOAD_BYTES == 139 &&
+    COMPACT_TELEMETRY_V5_PAYLOAD_BYTES == 110 ? 1 : -1
 ];
 
 static void WriteUint16Be(unsigned char *output, unsigned int offset, unsigned int value)
@@ -108,6 +118,31 @@ static void WriteInt64Be(unsigned char *output, unsigned int offset, int64_t val
 static uint16_t SaturateUint16(uint32_t value)
 {
     return value > USHRT_MAX ? USHRT_MAX : (uint16_t)value;
+}
+
+static uint32_t SaturatingAddUint32(uint32_t left, uint32_t right)
+{
+    return UINT32_MAX - left < right ? UINT32_MAX : left + right;
+}
+
+static uint16_t QuantizeCeilUint16(uint32_t value, uint32_t resolution)
+{
+    uint32_t quantized;
+    if (value == 0U) return 0U;
+    quantized = value / resolution + (value % resolution != 0U ? 1U : 0U);
+    return quantized >= COMPACT_TELEMETRY_V5_AGE_UNAVAILABLE
+        ? COMPACT_TELEMETRY_V5_AGE_UNAVAILABLE - 1U
+        : (uint16_t)quantized;
+}
+
+static uint16_t QuantizeAgeUint16(uint32_t value, uint32_t resolution)
+{
+    uint32_t quantized;
+    if (value == UINT32_MAX) return COMPACT_TELEMETRY_V5_AGE_UNAVAILABLE;
+    quantized = value / resolution;
+    return quantized >= COMPACT_TELEMETRY_V5_AGE_UNAVAILABLE
+        ? COMPACT_TELEMETRY_V5_AGE_UNAVAILABLE - 1U
+        : (uint16_t)quantized;
 }
 
 static int ScaleSigned(float value, float scale, int minimum, int maximum)
@@ -390,14 +425,91 @@ int BuildCompactTelemetryV4(
                   SaturateUint16(rtcm_stats->rejected_fragments));
     WriteUint16Be(output, OFFSET_V4_CRC_ERRORS,
                   SaturateUint16(rtcm_stats->crc_errors));
-    queue_drops = rtcm_stats->queue_evictions + rtcm_stats->queue_expired_frames;
-    if (UINT32_MAX - queue_drops < rtcm_stats->injection_dropped_frames) {
-        queue_drops = UINT32_MAX;
-    } else {
-        queue_drops += rtcm_stats->injection_dropped_frames;
-    }
+    queue_drops = SaturatingAddUint32(
+        rtcm_stats->queue_evictions,
+        rtcm_stats->queue_expired_frames
+    );
+    queue_drops = SaturatingAddUint32(queue_drops, rtcm_stats->injection_dropped_frames);
     WriteUint16Be(output, OFFSET_V4_QUEUE_DROPS, SaturateUint16(queue_drops));
     WriteUint16Be(output, OFFSET_V4_UART_ERRORS,
                   SaturateUint16(rtcm_stats->uart_write_errors));
     return COMPACT_TELEMETRY_V4_PAYLOAD_BYTES;
+}
+
+int BuildCompactTelemetryV5(
+    const SensorData *data,
+    const GnssRtcmInjectionStats *rtcm_stats,
+    const GnssRtcmRuntimeStatus *rtcm_runtime,
+    const char *legacy_node_label,
+    const char *last_command_id,
+    const char *upload_trigger,
+    unsigned char *output,
+    int output_size)
+{
+    uint32_t queue_drops;
+    unsigned int error_flags = 0U;
+    int base_len;
+
+    if (data == NULL || rtcm_stats == NULL || rtcm_runtime == NULL ||
+        output == NULL || output_size < COMPACT_TELEMETRY_V5_PAYLOAD_BYTES) {
+        return -1;
+    }
+    base_len = BuildCompactTelemetryV3(
+        data, legacy_node_label, last_command_id, upload_trigger,
+        output, output_size
+    );
+    if (base_len != COMPACT_TELEMETRY_V3_PAYLOAD_BYTES) return base_len;
+
+    memset(output + COMPACT_TELEMETRY_V3_PAYLOAD_BYTES, 0,
+           COMPACT_TELEMETRY_V5_PAYLOAD_BYTES - COMPACT_TELEMETRY_V3_PAYLOAD_BYTES);
+    output[OFFSET_VERSION] = 5U;
+    output[OFFSET_V5_RTCM_MODE] = rtcm_runtime->mode;
+    output[OFFSET_V5_RTCM_STATE_FLAGS] = rtcm_runtime->state_flags;
+    output[OFFSET_V5_QUEUE_PENDING] = rtcm_runtime->queue_pending;
+    output[OFFSET_V5_QUEUE_HIGH_WATERMARK] = rtcm_runtime->queue_high_watermark;
+    WriteUint32Be(output, OFFSET_V5_SESSION_EPOCH, rtcm_runtime->session_epoch);
+    WriteUint16Be(
+        output,
+        OFFSET_V5_LEASE_REMAINING_100MS,
+        QuantizeCeilUint16(
+            rtcm_runtime->lease_remaining_ms,
+            COMPACT_TELEMETRY_V5_LEASE_RESOLUTION_MS
+        )
+    );
+    WriteUint16Be(
+        output,
+        OFFSET_V5_LAST_COMPLETED_AGE_10MS,
+        QuantizeAgeUint16(
+            rtcm_runtime->last_completed_frame_age_ms,
+            COMPACT_TELEMETRY_V5_COMPLETION_AGE_RESOLUTION_MS
+        )
+    );
+    WriteUint16Be(
+        output,
+        OFFSET_V5_INJECTED_FRAMES,
+        SaturateUint16(rtcm_stats->injected_frames)
+    );
+
+    queue_drops = SaturatingAddUint32(
+        rtcm_stats->queue_evictions,
+        rtcm_stats->queue_expired_frames
+    );
+    queue_drops = SaturatingAddUint32(queue_drops, rtcm_stats->injection_dropped_frames);
+    if (rtcm_stats->rejected_fragments != 0U) {
+        error_flags |= COMPACT_TELEMETRY_V5_RTCM_ERROR_REJECTED_FRAGMENT;
+    }
+    if (rtcm_stats->crc_errors != 0U) {
+        error_flags |= COMPACT_TELEMETRY_V5_RTCM_ERROR_CRC;
+    }
+    if (queue_drops != 0U) {
+        error_flags |= COMPACT_TELEMETRY_V5_RTCM_ERROR_QUEUE_DROP;
+    }
+    if (rtcm_stats->uart_write_errors != 0U) {
+        error_flags |= COMPACT_TELEMETRY_V5_RTCM_ERROR_UART;
+    }
+    if (rtcm_stats->injected_frames > USHRT_MAX) {
+        error_flags |= COMPACT_TELEMETRY_V5_RTCM_INJECTED_COUNT_SATURATED;
+    }
+    output[OFFSET_V5_ERROR_FLAGS] = (unsigned char)error_flags;
+    return COMPACT_TELEMETRY_V5_PAYLOAD_BYTES;
 }

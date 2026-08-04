@@ -30,7 +30,7 @@ FIELD_LINK_VERSION = 1
 FIELD_LINK_TYPE_TELEMETRY = 1
 FIELD_LINK_TYPE_COMMAND = 2
 FIELD_LINK_TYPE_ACK = 3
-COMPACT_PAYLOAD_BYTES_BY_VERSION = {1: 46, 2: 46, 3: 95, 4: 139}
+COMPACT_PAYLOAD_BYTES_BY_VERSION = {1: 46, 2: 46, 3: 95, 4: 139, 5: 110}
 COMPACT_VALID_TEMP = 1 << 0
 COMPACT_VALID_SOIL = 1 << 1
 COMPACT_VALID_SOIL_EC = 1 << 2
@@ -73,6 +73,15 @@ V4_RTCM_STATE_SESSION_ARMED = 1 << 1
 V4_RTCM_STATE_LEASE_VALID = 1 << 2
 V4_RTCM_KNOWN_STATE_MASK = 0x3F
 V4_AGE_UNAVAILABLE = 0xFFFFFFFF
+V5_RTCM_KNOWN_ERROR_MASK = 0x1F
+V5_RTCM_ERROR_REJECTED_FRAGMENT = 1 << 0
+V5_RTCM_ERROR_CRC = 1 << 1
+V5_RTCM_ERROR_QUEUE_DROP = 1 << 2
+V5_RTCM_ERROR_UART = 1 << 3
+V5_RTCM_INJECTED_COUNT_SATURATED = 1 << 4
+V5_AGE_UNAVAILABLE = 0xFFFF
+V5_LEASE_RESOLUTION_MS = 100
+V5_COMPLETION_AGE_RESOLUTION_MS = 10
 NODES = {
     "A": "00000000-0000-0000-0000-000000000001",
     "B": "00000000-0000-0000-0000-000000000002",
@@ -318,7 +327,7 @@ def decode_compact_telemetry(payload: bytes) -> dict[str, Any]:
     last_command_tag = struct.unpack(">I", payload[16:20])[0]
     metrics: dict[str, Any] = {}
 
-    if compact_version in (3, 4):
+    if compact_version in (3, 4, 5):
         return decode_compact_telemetry_v3_v4(payload)
 
     if compact_version == 1 and valid & COMPACT_VALID_TEMP:
@@ -392,8 +401,8 @@ def decode_compact_telemetry(payload: bytes) -> dict[str, Any]:
 def decode_compact_telemetry_v3_v4(payload: bytes) -> dict[str, Any]:
     compact_version = payload[2]
     compact_node = payload[3]
-    if compact_version not in (3, 4) or compact_node not in (1, 2, 3):
-        raise ValueError("compact telemetry v3/v4 header mismatch")
+    if compact_version not in (3, 4, 5) or compact_node not in (1, 2, 3):
+        raise ValueError("compact telemetry v3/v4/v5 header mismatch")
     label = chr(ord("A") + compact_node - 1)
     status_flags = payload[4]
     valid = struct.unpack(">H", payload[6:8])[0]
@@ -508,6 +517,8 @@ def decode_compact_telemetry_v3_v4(payload: bytes) -> dict[str, Any]:
 
     rtcm_mode = 0
     rtcm_state_flags = 0
+    rtcm_error_flags = 0
+    rtcm_injected_frames_counter_saturated = False
     if compact_version == 4:
         rtcm_mode = payload[95]
         rtcm_state_flags = payload[96]
@@ -554,6 +565,59 @@ def decode_compact_telemetry_v3_v4(payload: bytes) -> dict[str, Any]:
             age = struct.unpack(">I", payload[start : start + 4])[0]
             if age != V4_AGE_UNAVAILABLE:
                 metrics[name] = age
+    elif compact_version == 5:
+        rtcm_mode = payload[95]
+        rtcm_state_flags = payload[96]
+        queue_pending = payload[97]
+        queue_high_watermark = payload[98]
+        session_epoch = struct.unpack(">I", payload[99:103])[0]
+        lease_remaining_units = struct.unpack(">H", payload[103:105])[0]
+        completed_age_units = struct.unpack(">H", payload[105:107])[0]
+        injected_frames = struct.unpack(">H", payload[107:109])[0]
+        rtcm_error_flags = payload[109]
+        session_armed = bool(rtcm_state_flags & V4_RTCM_STATE_SESSION_ARMED)
+        lease_valid = bool(rtcm_state_flags & V4_RTCM_STATE_LEASE_VALID)
+        completed_frame_recent = bool(rtcm_state_flags & (1 << 4))
+        rtcm_injected_frames_counter_saturated = bool(
+            rtcm_error_flags & V5_RTCM_INJECTED_COUNT_SATURATED
+        )
+        if (
+            rtcm_mode > 2
+            or rtcm_state_flags & ~V4_RTCM_KNOWN_STATE_MASK
+            or not rtcm_state_flags & V4_RTCM_STATE_READY
+            or queue_pending > queue_high_watermark
+            or rtcm_error_flags & ~V5_RTCM_KNOWN_ERROR_MASK
+            or (completed_frame_recent and completed_age_units == V5_AGE_UNAVAILABLE)
+            or (rtcm_injected_frames_counter_saturated and injected_frames != 0xFFFF)
+        ):
+            raise ValueError("compact telemetry v5 RTCM runtime summary is malformed")
+        if rtcm_mode == V4_RTCM_MODE_DISABLED:
+            if session_epoch or lease_remaining_units or session_armed or lease_valid or queue_pending:
+                raise ValueError("compact telemetry v5 disabled RTCM state is not fail-closed")
+        elif not session_epoch or not lease_remaining_units or not session_armed or not lease_valid:
+            raise ValueError("compact telemetry v5 active RTCM state lacks a valid session lease")
+
+        metrics.update(
+            {
+                "rtcm_injection_mode_code": rtcm_mode,
+                "rtcm_session_epoch": session_epoch,
+                "rtcm_lease_remaining_ms": lease_remaining_units * V5_LEASE_RESOLUTION_MS,
+                "rtcm_queue_pending": queue_pending,
+                "rtcm_queue_high_watermark": queue_high_watermark,
+                "rtcm_injected_frames_total": injected_frames,
+                "rtcm_error_summary_flags": rtcm_error_flags & 0x0F,
+                "rtcm_rejected_fragment_error": bool(
+                    rtcm_error_flags & V5_RTCM_ERROR_REJECTED_FRAGMENT
+                ),
+                "rtcm_crc_error": bool(rtcm_error_flags & V5_RTCM_ERROR_CRC),
+                "rtcm_queue_drop_error": bool(rtcm_error_flags & V5_RTCM_ERROR_QUEUE_DROP),
+                "rtcm_uart_error": bool(rtcm_error_flags & V5_RTCM_ERROR_UART),
+            }
+        )
+        if completed_age_units != V5_AGE_UNAVAILABLE:
+            metrics["rtcm_last_completed_frame_age_ms"] = (
+                completed_age_units * V5_COMPLETION_AGE_RESOLUTION_MS
+            )
 
     trigger = {1: "periodic", 2: "manual_collect", 3: "scheduler_poll"}.get(payload[5], "unknown")
     battery_quality_code = payload[23]
@@ -603,11 +667,22 @@ def decode_compact_telemetry_v3_v4(payload: bytes) -> dict[str, Any]:
             "rtk_displacement_eligible": not gnss_simulated and trusted and coordinate_frame_code != 0,
             **(
                 {
-                    "v4_valid_flags": valid,
+                    **({"v4_valid_flags": valid} if compact_version == 4 else {"v5_valid_flags": valid}),
                     "rtcm_injection_mode": {0: "disabled", 1: "probe", 2: "live"}[rtcm_mode],
                     "rtcm_state_flags": rtcm_state_flags,
+                    **(
+                        {
+                            "rtcm_lease_resolution_ms": V5_LEASE_RESOLUTION_MS,
+                            "rtcm_completion_age_resolution_ms": V5_COMPLETION_AGE_RESOLUTION_MS,
+                            "rtcm_injected_frames_counter_saturated": (
+                                rtcm_injected_frames_counter_saturated
+                            ),
+                        }
+                        if compact_version == 5
+                        else {}
+                    ),
                 }
-                if compact_version == 4
+                if compact_version in (4, 5)
                 else {}
             ),
         },
@@ -686,28 +761,42 @@ def telemetry_profile_errors(
     if required_rtcm_mode != "any" and rtcm_mode != required_rtcm_mode:
         errors.append(f"rtcm-mode-{rtcm_mode}-expected-{required_rtcm_mode}")
     if require_rtcm_clean:
-        if compact_version != 4:
-            errors.append("rtcm-evidence-requires-compact-v4")
+        if compact_version not in (4, 5):
+            errors.append("rtcm-evidence-requires-compact-v4-or-v5")
         else:
             if required_rtcm_mode == "disabled" and meta.get("rtcm_state_flags") != V4_RTCM_STATE_READY:
                 errors.append("rtcm-disabled-state-not-ready-only")
-            for key in (
-                "rtcm_queue_high_watermark",
-                "rtcm_accepted_fragments_total",
-                "rtcm_completed_frames_total",
-                "rtcm_injected_frames_total",
-                "rtcm_rejected_fragments_total",
-                "rtcm_crc_errors_total",
-                "rtcm_queue_drops_total",
-                "rtcm_uart_errors_total",
-            ):
+            clean_counter_keys = (
+                (
+                    "rtcm_queue_high_watermark",
+                    "rtcm_accepted_fragments_total",
+                    "rtcm_completed_frames_total",
+                    "rtcm_injected_frames_total",
+                    "rtcm_rejected_fragments_total",
+                    "rtcm_crc_errors_total",
+                    "rtcm_queue_drops_total",
+                    "rtcm_uart_errors_total",
+                )
+                if compact_version == 4
+                else (
+                    "rtcm_queue_high_watermark",
+                    "rtcm_injected_frames_total",
+                    "rtcm_error_summary_flags",
+                )
+            )
+            for key in clean_counter_keys:
                 if metrics.get(key) != 0:
                     errors.append(f"{key}-not-zero")
-            for key in (
-                "rtcm_last_fragment_age_ms",
-                "rtcm_last_completed_frame_age_ms",
-                "rtcm_last_action_age_ms",
-            ):
+            clean_age_keys = (
+                (
+                    "rtcm_last_fragment_age_ms",
+                    "rtcm_last_completed_frame_age_ms",
+                    "rtcm_last_action_age_ms",
+                )
+                if compact_version == 4
+                else ("rtcm_last_completed_frame_age_ms",)
+            )
+            for key in clean_age_keys:
                 if key in metrics:
                     errors.append(f"{key}-unexpected")
     return errors
@@ -947,6 +1036,7 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
                             "frameBytes": len(encoded) + 1,
                             "compactHeaderHex": payload[:24].hex(" "),
                             "compactV4RuntimeHex": payload[95:119].hex(" ") if len(payload) == 139 else "",
+                            "compactV5RuntimeHex": payload[95:110].hex(" ") if len(payload) == 110 else "",
                         }
                     )
                 continue
@@ -1408,6 +1498,11 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
                         "rtcm_crc_errors_total",
                         "rtcm_queue_drops_total",
                         "rtcm_uart_errors_total",
+                        "rtcm_error_summary_flags",
+                        "rtcm_rejected_fragment_error",
+                        "rtcm_crc_error",
+                        "rtcm_queue_drop_error",
+                        "rtcm_uart_error",
                     )
                 },
             },
@@ -1553,7 +1648,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--required-match-rate", type=float, default=1.0)
     parser.add_argument("--max-p95-interval-ms", type=float, default=1500.0)
     parser.add_argument("--max-command-latency-ms", type=float, default=950.0)
-    parser.add_argument("--required-compact-version", type=int, choices=(0, 1, 2, 3, 4), default=0)
+    parser.add_argument("--required-compact-version", type=int, choices=(0, 1, 2, 3, 4, 5), default=0)
     parser.add_argument(
         "--required-field-sensor-source",
         choices=("any", "simulated", "hardware"),

@@ -46,6 +46,12 @@ PAYLOAD_V4_HEX = (
     "780000e6f30000007b000000ea00000159000004d2000001c8000001c20002000100"
     "0c0006"
 )
+PAYLOAD_V5_HEX = (
+    "4c53050303031fff0000004d000003849664c12a2f5b5302092e12eb02a1008cffe0"
+    "000300000005bb02974e0000001b80b4e91500003039fffff6d7000007d00000007f"
+    "075bcd15097e04017e6f1f003400060007000f004703d700020052023f0104123456"
+    "780250001701c20f"
+)
 
 
 def main() -> None:
@@ -68,6 +74,7 @@ def main() -> None:
             max_command_latency_ms=1500.0,
             max_retry_rate=0.0,
             max_p95_interval_ms=2500.0,
+            required_compact_version=5,
             required_gnss_source="simulated",
             service="lsmv2-field-gateway.service",
         ),
@@ -157,7 +164,7 @@ def main() -> None:
     )
     assert legacy_rtcm_errors == [
         "rtcm-mode-unavailable-expected-disabled",
-        "rtcm-evidence-requires-compact-v4",
+        "rtcm-evidence-requires-compact-v4-or-v5",
     ]
 
     telemetry_v3 = decode_compact_telemetry(bytes.fromhex(PAYLOAD_V3_HEX))
@@ -174,6 +181,73 @@ def main() -> None:
     assert telemetry_v4_live["metrics"]["rtcm_session_epoch"] == 0x12345678
     assert telemetry_v4_live["metrics"]["rtcm_lease_remaining_ms"] == 59123
     assert telemetry_v4_live["metrics"]["rtcm_crc_errors_total"] == 1
+
+    telemetry_v5_live = decode_compact_telemetry(bytes.fromhex(PAYLOAD_V5_HEX))
+    v5_frame = encode_frame(1, 11, bytes.fromhex(PAYLOAD_V5_HEX))
+    assert len(bytes.fromhex(PAYLOAD_V5_HEX)) == 110
+    assert len(v5_frame) == 128
+    assert telemetry_v5_live["meta"]["compact_payload_version"] == 5
+    assert telemetry_v5_live["meta"]["rtcm_injection_mode"] == "live"
+    assert telemetry_v5_live["meta"]["rtcm_lease_resolution_ms"] == 100
+    assert telemetry_v5_live["meta"]["rtcm_completion_age_resolution_ms"] == 10
+    assert telemetry_v5_live["meta"]["rtcm_injected_frames_counter_saturated"] is False
+    assert telemetry_v5_live["metrics"]["rtcm_session_epoch"] == 0x12345678
+    assert telemetry_v5_live["metrics"]["rtcm_lease_remaining_ms"] == 59200
+    assert telemetry_v5_live["metrics"]["rtcm_last_completed_frame_age_ms"] == 230
+    assert telemetry_v5_live["metrics"]["rtcm_injected_frames_total"] == 450
+    assert telemetry_v5_live["metrics"]["rtcm_error_summary_flags"] == 0x0F
+    assert telemetry_v5_live["metrics"]["rtcm_rejected_fragment_error"] is True
+    assert telemetry_v5_live["metrics"]["rtcm_crc_error"] is True
+    assert telemetry_v5_live["metrics"]["rtcm_queue_drop_error"] is True
+    assert telemetry_v5_live["metrics"]["rtcm_uart_error"] is True
+
+    saturated_v5 = bytearray.fromhex(PAYLOAD_V5_HEX)
+    saturated_v5[107:109] = bytes.fromhex("ffff")
+    saturated_v5[109] |= 0x10
+    telemetry_v5_saturated = decode_compact_telemetry(bytes(saturated_v5))
+    assert telemetry_v5_saturated["metrics"]["rtcm_error_summary_flags"] == 0x0F
+    assert telemetry_v5_saturated["meta"]["rtcm_injected_frames_counter_saturated"] is True
+
+    disabled_v5 = bytearray.fromhex(PAYLOAD_V5_HEX)
+    disabled_v5[4] &= ~0x02
+    disabled_v5[95] = 0
+    disabled_v5[96] = 0x01
+    disabled_v5[97:105] = bytes(8)
+    disabled_v5[105:107] = bytes.fromhex("ffff")
+    disabled_v5[107:110] = bytes(3)
+    telemetry_v5_disabled = decode_compact_telemetry(bytes(disabled_v5))
+    assert telemetry_v5_disabled["meta"]["rtcm_injection_mode"] == "disabled"
+    assert telemetry_v5_disabled["metrics"]["rtcm_session_epoch"] == 0
+    assert "rtcm_last_completed_frame_age_ms" not in telemetry_v5_disabled["metrics"]
+    assert telemetry_profile_errors(
+        telemetry_v5_disabled,
+        required_compact_version=5,
+        required_field_sensor_source="hardware",
+        required_gnss_source="hardware",
+        require_battery_valid=True,
+        require_field_sensors_valid=True,
+        require_field_calibrated_battery=True,
+        required_rtcm_mode="disabled",
+        require_rtcm_clean=True,
+    ) == []
+
+    dirty_disabled_v5 = bytearray(disabled_v5)
+    dirty_disabled_v5[102] = 1
+    try:
+        decode_compact_telemetry(bytes(dirty_disabled_v5))
+    except ValueError as exc:
+        assert "disabled RTCM state is not fail-closed" in str(exc)
+    else:
+        raise AssertionError("dirty disabled V5 state was accepted")
+
+    malformed_v5 = bytearray.fromhex(PAYLOAD_V5_HEX)
+    malformed_v5[109] = 0x80
+    try:
+        decode_compact_telemetry(bytes(malformed_v5))
+    except ValueError as exc:
+        assert "runtime summary is malformed" in str(exc)
+    else:
+        raise AssertionError("V5 reserved error flag was accepted")
 
     disabled_v4 = bytearray.fromhex(PAYLOAD_V4_HEX)
     disabled_v4[4] &= ~0x02

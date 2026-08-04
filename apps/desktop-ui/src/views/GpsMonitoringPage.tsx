@@ -51,9 +51,7 @@ type RtkSolutionSnapshot = {
   fixedRatioPct: number | null;
   stationId: number | null;
   rtcmMode: string;
-  crcErrors: number | null;
-  queueDrops: number | null;
-  uartErrors: number | null;
+  rtcmErrorFlags: number | null;
 };
 
 const GPS_THRESHOLD_BLUE_KEY = "gps.displacement_threshold_blue_mm";
@@ -154,6 +152,18 @@ function buildRtkSolutionSnapshot(snapshot: DeviceStateSnapshot | null): RtkSolu
   if (!snapshot) return null;
   const updatedMs = Date.parse(snapshot.updatedAt);
   const fresh = Number.isFinite(updatedMs) && Date.now() - updatedMs <= 30_000;
+  const compactErrorFlags = metricNumber(snapshot, "rtcm_error_summary_flags");
+  const legacyRejectedErrors = metricNumber(snapshot, "rtcm_rejected_fragments_total");
+  const legacyCrcErrors = metricNumber(snapshot, "rtcm_crc_errors_total");
+  const legacyQueueDrops = metricNumber(snapshot, "rtcm_queue_drops_total");
+  const legacyUartErrors = metricNumber(snapshot, "rtcm_uart_errors_total");
+  const hasLegacyErrorCounters = [legacyRejectedErrors, legacyCrcErrors, legacyQueueDrops, legacyUartErrors]
+    .some((value) => value !== null);
+  const legacyErrorFlags =
+    ((legacyRejectedErrors ?? 0) > 0 ? 1 : 0) |
+    ((legacyCrcErrors ?? 0) > 0 ? 2 : 0) |
+    ((legacyQueueDrops ?? 0) > 0 ? 4 : 0) |
+    ((legacyUartErrors ?? 0) > 0 ? 8 : 0);
   return {
     updatedAt: snapshot.updatedAt,
     fresh,
@@ -169,9 +179,7 @@ function buildRtkSolutionSnapshot(snapshot: DeviceStateSnapshot | null): RtkSolu
     fixedRatioPct: metricNumber(snapshot, "rtk_fixed_ratio_1m_pct"),
     stationId: metricNumber(snapshot, "rtk_reference_station_id"),
     rtcmMode: metaText(snapshot, "rtcm_injection_mode", "disabled"),
-    crcErrors: metricNumber(snapshot, "rtcm_crc_errors_total"),
-    queueDrops: metricNumber(snapshot, "rtcm_queue_drops_total"),
-    uartErrors: metricNumber(snapshot, "rtcm_uart_errors_total")
+    rtcmErrorFlags: compactErrorFlags ?? (hasLegacyErrorCounters ? legacyErrorFlags : null)
   };
 }
 
@@ -705,7 +713,11 @@ export function GpsMonitoringPage() {
           : rtkSolution.fixType;
   const rtkSourceLabel = rtkSolution?.source === "simulated" ? "模拟输入" : "真实硬件";
   const rtkErrorSummary = rtkSolution
-    ? [rtkSolution.crcErrors ?? 0, rtkSolution.queueDrops ?? 0, rtkSolution.uartErrors ?? 0].join("/")
+    ? rtkSolution.rtcmErrorFlags === null
+      ? "--"
+      : rtkSolution.rtcmErrorFlags === 0
+      ? "正常"
+      : `异常 0x${rtkSolution.rtcmErrorFlags.toString(16).padStart(2, "0").toUpperCase()}`
     : "--";
 
   const displacementOption = useMemo(() => {
@@ -1337,7 +1349,7 @@ export function GpsMonitoringPage() {
                           <div className="desk-gps-rtk-item"><span>基准站</span><strong>{rtkSolution?.stationId ?? "--"}</strong></div>
                           <div className="desk-gps-rtk-item"><span>坐标系</span><strong>{rtkSolution?.coordinateFrame ?? "--"}</strong></div>
                           <div className="desk-gps-rtk-item"><span>RTCM</span><strong>{rtkSolution?.rtcmMode ?? "--"}</strong></div>
-                          <div className="desk-gps-rtk-item"><span>CRC/队列/UART</span><strong>{rtkErrorSummary}</strong></div>
+                          <div className="desk-gps-rtk-item"><span>RTCM 运行状态</span><strong>{rtkErrorSummary}</strong></div>
                         </div>
                       )}
                     </BaseCard>

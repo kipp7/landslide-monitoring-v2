@@ -129,7 +129,7 @@ static char g_last_trusted_time_ts[40] = "";
 static char g_last_trusted_time_source[32] = "";
 static volatile uint32_t g_last_platform_command_tick = 0;
 static volatile int g_field_link_recovery_requested = 0;
-#define FW_RX_DIAG_MARKER "fw-rk2206-rtk-compact-v4-rs485-diag-v5-r4-20260804"
+#define FW_RX_DIAG_MARKER "fw-rk2206-rtk-compact-v5-rtcm-summary-v1-20260804"
 bool g_cloud_motor_enabled = false;
 int g_cloud_motor_speed = 0;
 MotorDirection g_cloud_motor_direction = MOTOR_DIRECTION_STOP;
@@ -1606,7 +1606,8 @@ static void* DataUploadTask(const char* arg)
 #if TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V1 || \
     TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V2 || \
     TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V3 || \
-    TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V4
+    TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V4 || \
+    TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V5
     unsigned char compact_payload[COMPACT_TELEMETRY_PAYLOAD_BYTES];
 #else
     char json[FIELD_LINK_MAX_PAYLOAD_BYTES + 1];
@@ -1649,10 +1650,11 @@ static void* DataUploadTask(const char* arg)
     printf("  Compact Poll: %s (P1 broadcast rollback)\n", COMPACT_TARGETED_POLL_MARKER);
     printf("  Edge Uplink Mode: %s\n", EDGE_UPLINK_MODE == EDGE_UPLINK_MODE_POLLED ? "Polled" : "Periodic");
     printf("  Telemetry Payload: %s\n",
-           TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V4 ? "Compact v4 (139-byte field + RTK + injection evidence)" :
+           TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V5 ? "Compact v5 (110-byte field + RTK + injection summary)" :
+           (TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V4 ? "Compact v4 (139-byte field + RTK + injection evidence)" :
            (TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V3 ? "Compact v3 (95-byte field + RTK payload)" :
            (TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V2 ? "Compact v2 (46-byte payload)" :
-           (TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V1 ? "Compact v1 (46-byte payload)" : "JSON v1"))));
+           (TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V1 ? "Compact v1 (46-byte payload)" : "JSON v1")))));
     printf("  Field Sensor Source: %s\n",
            ENABLE_SIMULATED_FIELD_SENSORS ? "SIMULATED (RS485 values only)" : "HARDWARE");
 #if ENABLE_SIMULATED_GNSS
@@ -1818,12 +1820,18 @@ static void* DataUploadTask(const char* arg)
 #if TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V1 || \
     TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V2 || \
     TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V3 || \
-    TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V4
+    TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V4 || \
+    TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V5
         memset(compact_payload, 0, sizeof(compact_payload));
-#if TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V4
+#if TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V4 || \
+    TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V5
         GnssRtcmInjection_GetStats(&rtcm_stats);
         GnssRtcmInjection_GetRuntimeStatus(MainMonotonicMs(), &rtcm_runtime);
+#if TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V5
+        len = BuildCompactTelemetryV5(
+#else
         len = BuildCompactTelemetryV4(
+#endif
             &telemetry_snapshot,
             &rtcm_stats,
             &rtcm_runtime,

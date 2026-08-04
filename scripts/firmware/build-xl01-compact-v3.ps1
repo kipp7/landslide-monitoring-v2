@@ -9,7 +9,7 @@ param(
   [string]$FieldSensorMode = "hardware",
   [ValidateSet("hardware", "simulated")]
   [string]$GnssSourceMode = "hardware",
-  [ValidateSet(3, 4)]
+  [ValidateSet(3, 4, 5)]
   [int]$CompactVersion = 3,
   [ValidateRange(800000, 1200000)]
   [int]$BatteryCalibrationGainPpm = 1000000,
@@ -231,10 +231,10 @@ function Set-CompactTelemetryVersion {
   $mainPath = Join-Path $sampleRoot "main\landslide_main.c"
   $mainText = [System.IO.File]::ReadAllText($mainPath)
   $sourceFirmwareMarker = Get-QuotedMacroValue -Path $mainPath -Macro "FW_RX_DIAG_MARKER"
-  if (([regex]::Matches($sourceFirmwareMarker, 'compact-v[34]')).Count -ne 1) {
-    throw "FW_RX_DIAG_MARKER must contain exactly one compact-v3/v4 token"
+  if (([regex]::Matches($sourceFirmwareMarker, 'compact-v[345]')).Count -ne 1) {
+    throw "FW_RX_DIAG_MARKER must contain exactly one compact-v3/v4/v5 token"
   }
-  $targetFirmwareMarker = $sourceFirmwareMarker -replace 'compact-v[34]', ("compact-v{0}" -f $CompactVersion)
+  $targetFirmwareMarker = $sourceFirmwareMarker -replace 'compact-v[345]', ("compact-v{0}" -f $CompactVersion)
   $mainText = Set-SingleMacro `
     -Text $mainText `
     -Macro "FW_RX_DIAG_MARKER" `
@@ -432,12 +432,12 @@ try {
     }
     firmwareMarker = Get-QuotedMacroValue -Path (Join-Path $sampleRoot "main\landslide_main.c") -Macro "FW_RX_DIAG_MARKER"
     sampleVersion = Get-QuotedMacroValue -Path (Join-Path $sampleRoot "config\app_config.h") -Macro "FIRMWARE_SAMPLE_VERSION"
-    compactPayloadBytes = if ($CompactVersion -eq 4) { 139 } else { 95 }
-    fieldLinkWireBytes = if ($CompactVersion -eq 4) { 157 } else { 113 }
-    compactPollProtocol = if ($CompactVersion -eq 4) { "compact-targeted-v1" } else { "compact-broadcast-v1" }
-    compactPollCommandBytes = if ($CompactVersion -eq 4) { 11 } else { 10 }
-    compactPollWireBytes = if ($CompactVersion -eq 4) { 29 } else { 28 }
-    nodeSlotMs = if ($CompactVersion -eq 4) { 0 } else { 340 }
+    compactPayloadBytes = switch ($CompactVersion) { 3 { 95 } 4 { 139 } 5 { 110 } }
+    fieldLinkWireBytes = switch ($CompactVersion) { 3 { 113 } 4 { 157 } 5 { 128 } }
+    compactPollProtocol = if ($CompactVersion -ge 4) { "compact-targeted-v1" } else { "compact-broadcast-v1" }
+    compactPollCommandBytes = if ($CompactVersion -ge 4) { 11 } else { 10 }
+    compactPollWireBytes = if ($CompactVersion -ge 4) { 29 } else { 28 }
+    nodeSlotMs = if ($CompactVersion -ge 4) { 0 } else { 340 }
     rollbackRelease = "competition-suite-20260723"
     generatedAt = (Get-Date).ToUniversalTime().ToString("o")
     files = @($files | ForEach-Object {

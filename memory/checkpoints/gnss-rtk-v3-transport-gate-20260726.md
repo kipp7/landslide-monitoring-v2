@@ -18,6 +18,13 @@ status: active
 
 ## Last Confirmed State
 
+### Compact V5 Candidate And Powered V4 Baseline (2026-08-04)
+
+- 用户确认 A/B/C 已上电。RK3568 `192.168.124.179` 上的 field-gateway 为 active、`NRestarts=0`、MQTT connected，保持 `compact-targeted-v1/250/3000/0` 与 `NTRIP_ENABLED=false`。运行快照确认三节点仍是 Compact V4、hardware RS485、simulated GNSS；三节点土壤三合一、三轴倾角和 field-calibrated PC0 电池当前均有效。
+- 不抢占串口的 60 秒生产窗口为 `119/119` 轮询匹配，A/B/C 分别新增 `40/39/40` 帧；schema reject、decode/rejected、interleaving、publish failure、poll timeout、command write failure 和服务重连增量均为 0。该结果只证明当前上电与短时链路健康，不推翻同一 157 B V4 已在 600 秒复现 `793/813` 和双帧交织的拒绝结论，也不是 V5 验收。
+- Compact V5 候选完整保留 V3 的 95 B 专业字段，并以 15 B RTCM 摘要形成 `110 B payload / 128 B complete frame`。C/Python 黄金向量、RK2206 host、field-gateway `51/51`、telemetry-writer `15/15`、Windows lint/production build、26 源引脚正向/3 负例、发布安全 V3/V4/V5、RS485 启动、TX 顺序、轮询节奏、电池三套门禁及 `git diff --check` 已通过。
+- 候选尚未从干净提交生成正式 A/B/C 包，RK3568 也尚未部署 V5 decoder/acceptance runner；此前 dirty 临时构建只用于编译证明，禁止烧录。下一步先提交推送，再由干净 HEAD 生成 immutable V5 包、独立复验并原子部署网关与脚本；之后才让用户按物理标签统一烧录一次并重跑 V5 `60 -> 600 -> 1800`。三阶段通过前继续关闭 RTCM/CORS。
+
 ### V5-r4 157 B Shared-Link Rejection (2026-08-04)
 
 - A/B/C 已统一烧录 V5-r4。60 秒首级 `111/111` 且 A/B/C arrival P95 `2072.4/1902.7/1901.8 ms`；600 秒为 `793/813`，20 个缺帧与 20 个解码错误组成 10 组 `236+78=314 B` 的双帧交织，A/B/C arrival P95 均约 3.8..4.0 秒，因此 fail-fast 未进入 1800 秒。
@@ -246,4 +253,4 @@ status: active
 
 ## Resume Prompt
 
-继续 2026-08-04 XLS1/RTK V4 链路任务：V5-r3 两次 60 秒均全帧无损但 P95 超 2500 ms，已定位 `DataUploadTask` 实际 200 ms 与配置/日志 50 ms 不一致。V5-r4 修复和两项发布门禁已由提交 `a6bb102f3f89eb50b72e08fc01922065d555cc31` 推送；唯一下一轮烧录目录为 `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v4_rs485_diag_v5_r4_gnss_simulated_20260804`，manifest SHA-256 `481b0805c67b91e99041a3c7543eb62dafeceb431c8da492fd0fbc0978e7b94b`，启动标记 `fw-rk2206-rtk-compact-v4-rs485-diag-v5-r4-20260804`。正常遥测仍为 139/157 B，按需 G3S V5 为 552/570 B；真实 RS485、模拟 GNSS、RTCM disabled。按标签重新烧录后从 60 秒重跑，只有通过才进入 600/1800 秒；失败时单节点查询 G3S V5。尚未完成 V5-r4 真机长测或厘米级验收，原始报告、坐标和凭据不进入 Git。
+继续 2026-08-04 XLS1/RTK Compact V5 任务：当前上电节点仍是已被 600 秒门禁拒绝的 139/157 B Compact V4；最新被动 60 秒虽为 `119/119` 且零错误，但不能重复解释为长测通过。110/128 B Compact V5 已完成跨端实现和离线门禁，尚未从干净提交正式打包或烧录。先提交推送，再运行 `prepare-xl01-compact-v5-rs485-gnss-simulated-release.ps1` 生成唯一 immutable A/B/C 包，记录 manifest 与镜像 SHA-256；随后原子部署 RK3568 V5 decoder 和三份现场脚本，保持 `NTRIP_ENABLED=false`。用户按物理标签统一烧录后运行 `xls1_compact_v5_acceptance.py --required-gnss-source simulated`，严格按 `60 -> 600 -> 1800` fail-fast。全部通过前不得启用 RTCM/CORS；原始报告、坐标和凭据不进入 Git。

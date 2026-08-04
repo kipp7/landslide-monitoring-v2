@@ -1,10 +1,11 @@
-# RK2206 Compact V3/V4 RTK Telemetry Contract
+# RK2206 Compact V3/V4/V5 RTK Telemetry Contract
 
 ## Purpose
 
-`compact v4` is the production RK2206-to-RK3568 telemetry response for the
-three field nodes. It keeps the complete 95-byte V3 sensor/GNSS prefix and adds
-auditable RTCM runtime evidence. V3 remains documented as the rollback format.
+`compact v5` is the RK2206-to-RK3568 periodic telemetry candidate for the three
+field nodes. It keeps the complete 95-byte V3 sensor/GNSS prefix and adds a
+bounded RTCM runtime summary. V4 remains decodable for diagnostics and rollback
+analysis, but its 157-byte complete frame failed the real shared-XLS1 long gate.
 
 The design priorities are:
 
@@ -18,12 +19,15 @@ The design priorities are:
 
 - Compact V3 payload: 95 bytes; complete COBS/CRC frame: 113 bytes.
 - Compact V4 payload: 139 bytes; complete COBS/CRC frame: 157 bytes.
+- Compact V5 payload: 110 bytes; complete COBS/CRC frame: exactly 128 bytes.
 - The payload is one fixed snapshot. GNSS is not sent as a second frequent
   packet.
 
-At 115200 baud, a 157-byte V4 8N1 serial frame occupies about 13.6 ms. Three
-nodes at one response per second use 471 B/s of field-link framing; the
-production poll scheduler remains slower and prioritizes zero missing rounds.
+The DL-XLxx manual defines a nominal `[0,64] B` session payload. V5 therefore
+fits in at most two nominal radio packets, whereas V4 needs at least three.
+This reduces the mechanism that produced late 236/78-byte interleaving in the
+V5-r4 firmware gate. It is still a candidate until it passes the strict real
+three-node 60/600/1800-second tests; byte arithmetic is not field evidence.
 
 ## Payload Layout
 
@@ -94,6 +98,33 @@ than exposed as a plausible measurement. State flags report ready, armed
 session, valid lease, recent fragment, recent completed frame, and recent
 action evidence.
 
+## V5 RTCM Summary
+
+| Offset | Bytes | Metric/meta projection |
+| --- | ---: | --- |
+| 95 | 1 | `rtcm_injection_mode_code`: 0 disabled, 1 probe, 2 live |
+| 96 | 1 | `rtcm_state_flags` in metadata |
+| 97 | 1 | `rtcm_queue_pending` |
+| 98 | 1 | `rtcm_queue_high_watermark` |
+| 99 | 4 | `rtcm_session_epoch` |
+| 103 | 2 | lease remaining, unsigned units of 100 ms, rounded up |
+| 105 | 2 | last completed RTCM frame age, unsigned units of 10 ms |
+| 107 | 2 | injected-frame counter, saturated at 65535 |
+| 109 | 1 | cumulative error-summary and counter-saturation flags |
+
+Age `0xFFFF` means unavailable and is omitted by RK3568. Error bits 0..4 mean
+rejected fragment observed, CRC error observed, queue drop observed, UART error
+observed, and injected counter saturated. Bits 5..7 are reserved and rejected.
+The gateway publishes the four error classes as booleans plus
+`rtcm_error_summary_flags`; it does not misrepresent those bits as exact
+counters. Exact accepted/completed/rejected/CRC/drop/UART totals remain in the
+single-node, on-demand G3S V5 response and are never queried periodically.
+
+The decoder rejects reserved flags, impossible queue state, a recent-complete
+flag without an available completion age, a false saturation claim, and active
+RTCM without a non-zero session and lease. Disabled mode must have no armed
+session, lease, or pending queue, preserving fail-closed behavior.
+
 The validity bitmap is authoritative. A zero-filled fixed-width slot is not a
 measurement unless its corresponding validity bit is set.
 
@@ -122,7 +153,7 @@ evidence.
 
 ## Snapshot And Compatibility Rules
 
-- `compact v3/v4` replaces the complete field-device shadow. Missing values in
+- `compact v3/v4/v5` replaces the complete field-device shadow. Missing values in
   a current snapshot purge stale legacy, MPU6050, SHT30, and old RTK values.
 - `compact v1/v2` keeps sparse merge behavior so the deployed rollback firmware
   remains compatible.
@@ -149,7 +180,7 @@ The hardware build restores SC16IS752 over EI2C0_M0 PB4/PB5 and must not be
 flashed until the interface components, continuity, supply, direction, and
 I2C-address gates have passed.
 
-The V4 production image contains LIVE RTCM capability but every boot is
+The hardware-GNSS V5 production image may contain LIVE RTCM capability but every boot is
 fail-closed in `DISABLED`. RK3568 must explicitly arm a non-zero session epoch,
 target mask, mode, and 15..300 second lease. Reboot, lease expiry, invalid
 session state, or an explicit disable command returns the node to `DISABLED`.

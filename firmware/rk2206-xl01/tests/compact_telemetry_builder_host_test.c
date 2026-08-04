@@ -210,6 +210,67 @@ int main(void)
     assert(result == 1 && decoded.payload_len == payload_len);
     assert(memcmp(decoded.payload, payload, (size_t)payload_len) == 0);
 
+    payload_len = BuildCompactTelemetryV5(
+        &data, &rtcm_stats, &rtcm_runtime, "C", command_id,
+        "scheduler_poll", payload, sizeof(payload));
+    assert(payload_len == COMPACT_TELEMETRY_V5_PAYLOAD_BYTES);
+    assert(payload[2] == 5U);
+    assert(payload[95] == GNSS_RTCM_INJECTION_LIVE);
+    assert(payload[96] == rtcm_runtime.state_flags);
+    assert(payload[97] == 1U && payload[98] == 4U);
+    assert(ReadUint32Be(payload + 99) == 0x12345678U);
+    assert(ReadUint16Be(payload + 103) == 592U);
+    assert(ReadUint16Be(payload + 105) == 23U);
+    assert(ReadUint16Be(payload + 107) == 450U);
+    assert(payload[109] == 0x0FU);
+
+    frame_len = FieldLinkFrame_Encode(
+        FIELD_LINK_FRAME_TYPE_TELEMETRY, 11U, (const char *)payload, payload_len,
+        frame, sizeof(frame));
+    assert(frame_len == 128);
+    memset(&decoded, 0, sizeof(decoded));
+    FieldLinkFrameDecoder_Init(&decoder);
+    for (index = 0; index < frame_len; ++index) {
+        result = FieldLinkFrameDecoder_FeedByte(&decoder, frame[index], &decoded);
+    }
+    assert(result == 1 && decoded.payload_len == payload_len);
+    assert(memcmp(decoded.payload, payload, (size_t)payload_len) == 0);
+
+    rtcm_stats.injected_frames = 70000U;
+    payload_len = BuildCompactTelemetryV5(
+        &data, &rtcm_stats, &rtcm_runtime, "C", command_id,
+        "scheduler_poll", payload, sizeof(payload));
+    assert(payload_len == COMPACT_TELEMETRY_V5_PAYLOAD_BYTES);
+    assert(ReadUint16Be(payload + 107) == 0xFFFFU);
+    assert((payload[109] & COMPACT_TELEMETRY_V5_RTCM_INJECTED_COUNT_SATURATED) != 0U);
+
+    rtcm_stats.queue_evictions = UINT32_MAX;
+    rtcm_stats.queue_expired_frames = 1U;
+    rtcm_stats.injection_dropped_frames = 1U;
+    payload_len = BuildCompactTelemetryV5(
+        &data, &rtcm_stats, &rtcm_runtime, "C", command_id,
+        "scheduler_poll", payload, sizeof(payload));
+    assert(payload_len == COMPACT_TELEMETRY_V5_PAYLOAD_BYTES);
+    assert((payload[109] & COMPACT_TELEMETRY_V5_RTCM_ERROR_QUEUE_DROP) != 0U);
+
+    memset(&rtcm_stats, 0, sizeof(rtcm_stats));
+    memset(&rtcm_runtime, 0, sizeof(rtcm_runtime));
+    rtcm_runtime.state_flags = GNSS_RTCM_STATE_READY;
+    rtcm_runtime.last_fragment_age_ms = UINT32_MAX;
+    rtcm_runtime.last_completed_frame_age_ms = UINT32_MAX;
+    rtcm_runtime.last_action_age_ms = UINT32_MAX;
+    payload_len = BuildCompactTelemetryV5(
+        &data, &rtcm_stats, &rtcm_runtime, "C", command_id,
+        "scheduler_poll", payload, sizeof(payload));
+    assert(payload_len == COMPACT_TELEMETRY_V5_PAYLOAD_BYTES);
+    assert(payload[95] == GNSS_RTCM_INJECTION_DISABLED);
+    assert(payload[96] == GNSS_RTCM_STATE_READY);
+    assert(ReadUint32Be(payload + 99) == 0U);
+    assert(ReadUint16Be(payload + 103) == 0U);
+    assert(ReadUint16Be(payload + 105) == COMPACT_TELEMETRY_V5_AGE_UNAVAILABLE);
+    assert(ReadUint16Be(payload + 107) == 0U);
+    assert(payload[109] == 0U);
+
     assert(CompactPollCommand_IsValid("P112345678", COMPACT_POLL_COMMAND_BYTES));
     assert(!CompactPollCommand_IsValid("P11234567Z", COMPACT_POLL_COMMAND_BYTES));
     assert(CompactPollCommand_IsValid("P2A12345678", COMPACT_TARGETED_POLL_COMMAND_BYTES));
@@ -222,7 +283,7 @@ int main(void)
     assert(CompactPollCommand_ResponseDelayMs("P112345678", "C") == 680U);
     assert(CompactPollCommand_ResponseDelayMs("P2C12345678", "C") == 0U);
 
-    printf("compact_v4_payload_bytes=%d field_link_wire_bytes=%d command_tag=%08x\n",
+    printf("compact_v5_payload_bytes=%d field_link_wire_bytes=%d command_tag=%08x\n",
            payload_len, frame_len, CompactTelemetry_CommandTag(command_id));
     printf("payload_hex=");
     for (index = 0; index < payload_len; ++index) printf("%02x", payload[index]);

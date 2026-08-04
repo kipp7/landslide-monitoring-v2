@@ -2,6 +2,7 @@ export const COMPACT_TELEMETRY_V1_BYTES = 46;
 export const COMPACT_TELEMETRY_V2_BYTES = 46;
 export const COMPACT_TELEMETRY_V3_BYTES = 95;
 export const COMPACT_TELEMETRY_V4_BYTES = 139;
+export const COMPACT_TELEMETRY_V5_BYTES = 110;
 
 const VALID_TEMPERATURE = 1 << 0;
 const VALID_SOIL = 1 << 1;
@@ -48,6 +49,15 @@ const V4_RTCM_STATE_READY = 1 << 0;
 const V4_RTCM_STATE_SESSION_ARMED = 1 << 1;
 const V4_RTCM_STATE_LEASE_VALID = 1 << 2;
 const V4_AGE_UNAVAILABLE = 0xffff_ffff;
+const V5_RTCM_KNOWN_ERROR_MASK = 0x1f;
+const V5_RTCM_ERROR_REJECTED_FRAGMENT = 1 << 0;
+const V5_RTCM_ERROR_CRC = 1 << 1;
+const V5_RTCM_ERROR_QUEUE_DROP = 1 << 2;
+const V5_RTCM_ERROR_UART = 1 << 3;
+const V5_RTCM_INJECTED_COUNT_SATURATED = 1 << 4;
+const V5_AGE_UNAVAILABLE = 0xffff;
+const V5_LEASE_RESOLUTION_MS = 100;
+const V5_COMPLETION_AGE_RESOLUTION_MS = 10;
 
 const DEVICE_IDS = [
   "",
@@ -116,7 +126,8 @@ export function isCompactTelemetry(payload: Buffer): boolean {
   return (version === 1 && payload.length === COMPACT_TELEMETRY_V1_BYTES) ||
     (version === 2 && payload.length === COMPACT_TELEMETRY_V2_BYTES) ||
     (version === 3 && payload.length === COMPACT_TELEMETRY_V3_BYTES) ||
-    (version === 4 && payload.length === COMPACT_TELEMETRY_V4_BYTES);
+    (version === 4 && payload.length === COMPACT_TELEMETRY_V4_BYTES) ||
+    (version === 5 && payload.length === COMPACT_TELEMETRY_V5_BYTES);
 }
 
 function decodeNode(payload: Buffer): { deviceId: string; nodeLabel: string } {
@@ -235,16 +246,16 @@ export function decodeCompactTelemetryV1(payload: Buffer): CompactTelemetryV1 {
 export function decodeCompactTelemetry(payload: Buffer): CompactTelemetry {
   if (!isCompactTelemetry(payload)) {
     throw new Error(
-      `compact telemetry signature mismatch: expected a valid v1, v2, v3 or v4 payload`
+      `compact telemetry signature mismatch: expected a valid v1, v2, v3, v4 or v5 payload`
     );
   }
   if (payload.readUInt8(2) === 1) {
     return decodeCompactTelemetryV1(payload);
   }
 
-  if (payload.readUInt8(2) === 3 || payload.readUInt8(2) === 4) {
+  if (payload.readUInt8(2) === 3 || payload.readUInt8(2) === 4 || payload.readUInt8(2) === 5) {
     const compactVersion = payload.readUInt8(2);
-    const versionLabel = compactVersion === 4 ? "v4" : "v3";
+    const versionLabel = `v${String(compactVersion)}`;
     const { deviceId, nodeLabel } = decodeNode(payload);
     const statusFlags = payload.readUInt8(4);
     const valid = payload.readUInt16BE(6);
@@ -368,6 +379,8 @@ export function decodeCompactTelemetry(payload: Buffer): CompactTelemetry {
 
     let rtcmMode = 0;
     let rtcmStateFlags = 0;
+    let rtcmErrorFlags = 0;
+    let rtcmInjectedFramesCounterSaturated = false;
     if (compactVersion === 4) {
       rtcmMode = payload.readUInt8(95);
       rtcmStateFlags = payload.readUInt8(96);
@@ -409,6 +422,53 @@ export function decodeCompactTelemetry(payload: Buffer): CompactTelemetry {
       metrics.rtcm_crc_errors_total = payload.readUInt16BE(133);
       metrics.rtcm_queue_drops_total = payload.readUInt16BE(135);
       metrics.rtcm_uart_errors_total = payload.readUInt16BE(137);
+    } else if (compactVersion === 5) {
+      rtcmMode = payload.readUInt8(95);
+      rtcmStateFlags = payload.readUInt8(96);
+      const queuePending = payload.readUInt8(97);
+      const queueHighWatermark = payload.readUInt8(98);
+      const sessionEpoch = payload.readUInt32BE(99);
+      const leaseRemainingUnits = payload.readUInt16BE(103);
+      const completedAgeUnits = payload.readUInt16BE(105);
+      const injectedFrames = payload.readUInt16BE(107);
+      rtcmErrorFlags = payload.readUInt8(109);
+      const sessionArmed = (rtcmStateFlags & V4_RTCM_STATE_SESSION_ARMED) !== 0;
+      const leaseValid = (rtcmStateFlags & V4_RTCM_STATE_LEASE_VALID) !== 0;
+      const completedFrameRecent = (rtcmStateFlags & (1 << 4)) !== 0;
+      rtcmInjectedFramesCounterSaturated =
+        (rtcmErrorFlags & V5_RTCM_INJECTED_COUNT_SATURATED) !== 0;
+
+      if (rtcmMode > 2 || (rtcmStateFlags & ~V4_RTCM_KNOWN_STATE_MASK) !== 0 ||
+          (rtcmStateFlags & V4_RTCM_STATE_READY) === 0 || queuePending > queueHighWatermark ||
+          (rtcmErrorFlags & ~V5_RTCM_KNOWN_ERROR_MASK) !== 0 ||
+          (completedFrameRecent && completedAgeUnits === V5_AGE_UNAVAILABLE) ||
+          (rtcmInjectedFramesCounterSaturated && injectedFrames !== 0xffff)) {
+        throw new Error("compact telemetry v5 RTCM runtime summary is malformed");
+      }
+      if (rtcmMode === V4_RTCM_MODE_DISABLED) {
+        if (sessionEpoch !== 0 || leaseRemainingUnits !== 0 || sessionArmed || leaseValid || queuePending !== 0) {
+          throw new Error("compact telemetry v5 disabled RTCM state is not fail-closed");
+        }
+      } else if (sessionEpoch === 0 || leaseRemainingUnits === 0 || !sessionArmed || !leaseValid) {
+        throw new Error("compact telemetry v5 active RTCM state lacks a valid session lease");
+      }
+
+      metrics.rtcm_injection_mode_code = rtcmMode;
+      metrics.rtcm_session_epoch = sessionEpoch;
+      metrics.rtcm_lease_remaining_ms = leaseRemainingUnits * V5_LEASE_RESOLUTION_MS;
+      metrics.rtcm_queue_pending = queuePending;
+      metrics.rtcm_queue_high_watermark = queueHighWatermark;
+      if (completedAgeUnits !== V5_AGE_UNAVAILABLE) {
+        metrics.rtcm_last_completed_frame_age_ms =
+          completedAgeUnits * V5_COMPLETION_AGE_RESOLUTION_MS;
+      }
+      metrics.rtcm_injected_frames_total = injectedFrames;
+      metrics.rtcm_error_summary_flags = rtcmErrorFlags & 0x0f;
+      metrics.rtcm_rejected_fragment_error =
+        (rtcmErrorFlags & V5_RTCM_ERROR_REJECTED_FRAGMENT) !== 0;
+      metrics.rtcm_crc_error = (rtcmErrorFlags & V5_RTCM_ERROR_CRC) !== 0;
+      metrics.rtcm_queue_drop_error = (rtcmErrorFlags & V5_RTCM_ERROR_QUEUE_DROP) !== 0;
+      metrics.rtcm_uart_error = (rtcmErrorFlags & V5_RTCM_ERROR_UART) !== 0;
     }
 
     const batteryQualityCode = payload.readUInt8(23);
@@ -435,11 +495,16 @@ export function decodeCompactTelemetry(payload: Buffer): CompactTelemetry {
         rtk_fix_flags: fixFlags,
         rtk_displacement_eligible: !gnssSimulated && trusted && coordinateFrameCode !== 0,
         v3_valid_flags: valid,
-        ...(compactVersion === 4
+        ...(compactVersion >= 4
           ? {
-              v4_valid_flags: valid,
               rtcm_injection_mode: rtcmMode === 2 ? "live" : rtcmMode === 1 ? "probe" : "disabled",
-              rtcm_state_flags: rtcmStateFlags
+              rtcm_state_flags: rtcmStateFlags,
+              ...(compactVersion === 4 ? { v4_valid_flags: valid } : {
+                v5_valid_flags: valid,
+                rtcm_lease_resolution_ms: V5_LEASE_RESOLUTION_MS,
+                rtcm_completion_age_resolution_ms: V5_COMPLETION_AGE_RESOLUTION_MS,
+                rtcm_injected_frames_counter_saturated: rtcmInjectedFramesCounterSaturated
+              })
             }
           : {})
       }

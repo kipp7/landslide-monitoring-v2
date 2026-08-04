@@ -10,7 +10,7 @@ param(
   [Parameter(Mandatory = $true)]
   [ValidateSet("disabled", "probe", "live")]
   [string]$ExpectedGnssRtcmInjectionMode,
-  [ValidateSet(3, 4)]
+  [ValidateSet(3, 4, 5)]
   [int]$ExpectedCompactVersion = 3,
   [Parameter(Mandatory = $true)]
   [ValidateSet("default-calibration", "field-calibrated")]
@@ -184,12 +184,12 @@ if ($isGnssSourceAwareManifest) {
     -Message "Schema v1 releases implicitly use hardware GNSS"
 }
 
-$expectedPayloadBytes = if ($ExpectedCompactVersion -eq 4) { 139 } else { 95 }
-$expectedWireBytes = if ($ExpectedCompactVersion -eq 4) { 157 } else { 113 }
-$expectedPollProtocol = if ($ExpectedCompactVersion -eq 4) { "compact-targeted-v1" } else { "compact-broadcast-v1" }
-$expectedPollCommandBytes = if ($ExpectedCompactVersion -eq 4) { 11 } else { 10 }
-$expectedPollWireBytes = if ($ExpectedCompactVersion -eq 4) { 29 } else { 28 }
-$expectedNodeSlotMs = if ($ExpectedCompactVersion -eq 4) { 0 } else { 340 }
+$expectedPayloadBytes = switch ($ExpectedCompactVersion) { 3 { 95 } 4 { 139 } 5 { 110 } }
+$expectedWireBytes = switch ($ExpectedCompactVersion) { 3 { 113 } 4 { 157 } 5 { 128 } }
+$expectedPollProtocol = if ($ExpectedCompactVersion -ge 4) { "compact-targeted-v1" } else { "compact-broadcast-v1" }
+$expectedPollCommandBytes = if ($ExpectedCompactVersion -ge 4) { 11 } else { 10 }
+$expectedPollWireBytes = if ($ExpectedCompactVersion -ge 4) { 29 } else { 28 }
+$expectedNodeSlotMs = if ($ExpectedCompactVersion -ge 4) { 0 } else { 340 }
 foreach ($fixedField in @(
     @{ Name = "compactPayloadBytes"; Value = $expectedPayloadBytes },
     @{ Name = "fieldLinkWireBytes"; Value = $expectedWireBytes },
@@ -212,8 +212,8 @@ Assert-ReleaseCondition -Condition (
     $manifest.sampleVersion -is [string] -and $manifest.sampleVersion.Length -gt 0
   ) -Message "Release sampleVersion is empty"
 if ($RequireCompactTargetedPolling) {
-  Assert-ReleaseCondition -Condition ($ExpectedCompactVersion -eq 4) `
-    -Message "Compact targeted polling is only accepted for the V4 release gate"
+  Assert-ReleaseCondition -Condition ($ExpectedCompactVersion -ge 4) `
+    -Message "Compact targeted polling is only accepted for V4/V5 release gates"
 }
 
 if ($ExpectedSourceCommit) {
@@ -507,10 +507,10 @@ $gnssForbidden = if ($expectGnssHardware) {
 foreach ($node in $NodeLabels) {
   foreach ($extension in @("bin", "img")) {
     $path = Join-Path $artifactRoot "rk2206-node-$node-xls1-compact-v$ExpectedCompactVersion-$ExpectedFieldSensorMode.$extension"
-    $compactMarker = if ($ExpectedCompactVersion -eq 4) {
-      "Compact v4 (139-byte field + RTK + injection evidence)"
-    } else {
-      "Compact v3 (95-byte field + RTK payload)"
+    $compactMarker = switch ($ExpectedCompactVersion) {
+      3 { "Compact v3 (95-byte field + RTK payload)" }
+      4 { "Compact v4 (139-byte field + RTK + injection evidence)" }
+      5 { "Compact v5 (110-byte field + RTK + injection summary)" }
     }
     $capabilityMarker = switch ($ExpectedGnssRtcmInjectionMode) {
       "disabled" { "boot=DISABLED capability=DISABLED" }

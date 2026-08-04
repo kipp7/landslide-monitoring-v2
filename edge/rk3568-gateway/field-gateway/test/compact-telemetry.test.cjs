@@ -217,6 +217,77 @@ test("compact telemetry v4 preserves all sensors and reports auditable RTCM runt
   assert.equal(decoded.metrics.rtcm_uart_errors_total, 6);
 });
 
+test("compact telemetry v5 fits two XLS1 packets and preserves essential RTCM evidence", () => {
+  const payload = Buffer.from(
+    "4c53050303031fff0000004d000003849664c12a2f5b5302092e12eb02a1008cffe0" +
+      "000300000005bb02974e0000001b80b4e91500003039fffff6d7000007d00000007f" +
+      "075bcd15097e04017e6f1f003400060007000f004703d700020052023f0104123456" +
+      "780250001701c20f",
+    "hex"
+  );
+  assert.equal(payload.length, 110);
+  const frame = encodeFieldLinkFrame({ frameType: "telemetry", sequence: 11, payloadBytes: payload });
+  assert.equal(frame.length, 128);
+
+  const decoded = decodeCompactTelemetry(payload);
+  assert.equal(decoded.meta.compact_payload_version, 5);
+  assert.equal(decoded.meta.rtcm_injection_mode, "live");
+  assert.equal(decoded.meta.rtcm_state_flags, 0x3f);
+  assert.equal(decoded.meta.rtcm_lease_resolution_ms, 100);
+  assert.equal(decoded.meta.rtcm_completion_age_resolution_ms, 10);
+  assert.equal(decoded.meta.rtcm_injected_frames_counter_saturated, false);
+  assert.equal(decoded.metrics.rtk_latitude_deg, 24.612345678);
+  assert.equal(decoded.metrics.rtcm_session_epoch, 0x12345678);
+  assert.equal(decoded.metrics.rtcm_lease_remaining_ms, 59200);
+  assert.equal(decoded.metrics.rtcm_last_completed_frame_age_ms, 230);
+  assert.equal(decoded.metrics.rtcm_injected_frames_total, 450);
+  assert.equal(decoded.metrics.rtcm_error_summary_flags, 0x0f);
+  assert.equal(decoded.metrics.rtcm_rejected_fragment_error, true);
+  assert.equal(decoded.metrics.rtcm_crc_error, true);
+  assert.equal(decoded.metrics.rtcm_queue_drop_error, true);
+  assert.equal(decoded.metrics.rtcm_uart_error, true);
+  assert.equal(decoded.metrics.rtcm_completed_frames_total, undefined);
+
+  const saturated = Buffer.from(payload);
+  saturated.writeUInt16BE(0xffff, 107);
+  saturated[109] |= 0x10;
+  const saturatedDecoded = decodeCompactTelemetry(saturated);
+  assert.equal(saturatedDecoded.metrics.rtcm_error_summary_flags, 0x0f);
+  assert.equal(saturatedDecoded.meta.rtcm_injected_frames_counter_saturated, true);
+});
+
+test("compact telemetry v5 rejects dirty disabled state and malformed summary flags", () => {
+  const payload = Buffer.from(
+    "4c53050303031fff0000004d000003849664c12a2f5b5302092e12eb02a1008cffe0" +
+      "000300000005bb02974e0000001b80b4e91500003039fffff6d7000007d00000007f" +
+      "075bcd15097e04017e6f1f003400060007000f004703d700020052023f0104123456" +
+      "780250001701c20f",
+    "hex"
+  );
+  const disabled = Buffer.from(payload);
+  disabled[95] = 0;
+  disabled[96] = 0x01;
+  disabled.fill(0, 97, 105);
+  disabled.writeUInt16BE(0xffff, 105);
+  disabled.fill(0, 107, 110);
+  const decoded = decodeCompactTelemetry(disabled);
+  assert.equal(decoded.meta.rtcm_injection_mode, "disabled");
+  assert.equal(decoded.metrics.rtcm_session_epoch, 0);
+  assert.equal(decoded.metrics.rtcm_last_completed_frame_age_ms, undefined);
+
+  const dirtySession = Buffer.from(disabled);
+  dirtySession[102] = 1;
+  assert.throws(() => decodeCompactTelemetry(dirtySession), /not fail-closed/u);
+
+  const reservedError = Buffer.from(payload);
+  reservedError[109] = 0x80;
+  assert.throws(() => decodeCompactTelemetry(reservedError), /runtime summary is malformed/u);
+
+  const falseSaturation = Buffer.from(payload);
+  falseSaturation[109] |= 0x10;
+  assert.throws(() => decodeCompactTelemetry(falseSaturation), /runtime summary is malformed/u);
+});
+
 test("compact telemetry v4 isolates simulated GNSS from RTK displacement", () => {
   const payload = Buffer.from(
     "4c53040303031fff0000004d000003849664c12a2f5b5302092e12eb02a1008cffe0" +

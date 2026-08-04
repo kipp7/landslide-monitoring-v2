@@ -29,7 +29,7 @@ function New-TestRelease {
     [string]$Path,
     [ValidateSet(1, 2)]
     [int]$SchemaVersion = 1,
-    [ValidateSet(3, 4)]
+    [ValidateSet(3, 4, 5)]
     [int]$CompactVersion = 3,
     [ValidateSet("hardware", "simulated")]
     [string]$Mode,
@@ -115,12 +115,12 @@ function New-TestRelease {
 
   $firmwareMarker = "fw-release-safety-fixture"
   $sampleVersion = "v-test-compact-v$CompactVersion"
-  $compactPayloadBytes = if ($CompactVersion -eq 4) { 139 } else { 95 }
-  $fieldLinkWireBytes = if ($CompactVersion -eq 4) { 157 } else { 113 }
-  $compactMarker = if ($CompactVersion -eq 4) {
-    "Compact v4 (139-byte field + RTK + injection evidence)"
-  } else {
-    "Compact v3 (95-byte field + RTK payload)"
+  $compactPayloadBytes = switch ($CompactVersion) { 3 { 95 } 4 { 139 } 5 { 110 } }
+  $fieldLinkWireBytes = switch ($CompactVersion) { 3 { 113 } 4 { 157 } 5 { 128 } }
+  $compactMarker = switch ($CompactVersion) {
+    3 { "Compact v3 (95-byte field + RTK payload)" }
+    4 { "Compact v4 (139-byte field + RTK + injection evidence)" }
+    5 { "Compact v5 (110-byte field + RTK + injection summary)" }
   }
   $capabilityMarker = "boot=DISABLED capability=$($RtcmMode.ToUpperInvariant())"
   $sensorMarkers = if ($Mode -eq "hardware") {
@@ -148,7 +148,7 @@ function New-TestRelease {
       $compactMarker,
       $sensorMarkers,
       $capabilityMarker,
-      $(if ($CompactVersion -eq 4) { "compact-targeted-v1 P2 singleflight" } else { "" }),
+      $(if ($CompactVersion -ge 4) { "compact-targeted-v1 P2 singleflight" } else { "" }),
       $(if ($SchemaVersion -ge 2) { $gnssMarker } else { "" })
     ) -join "`0"
     foreach ($extension in @("bin", "img")) {
@@ -203,10 +203,10 @@ function New-TestRelease {
     sampleVersion = $sampleVersion
     compactPayloadBytes = $compactPayloadBytes
     fieldLinkWireBytes = $fieldLinkWireBytes
-    compactPollProtocol = if ($CompactVersion -eq 4) { "compact-targeted-v1" } else { "compact-broadcast-v1" }
-    compactPollCommandBytes = if ($CompactVersion -eq 4) { 11 } else { 10 }
-    compactPollWireBytes = if ($CompactVersion -eq 4) { 29 } else { 28 }
-    nodeSlotMs = if ($CompactVersion -eq 4) { 0 } else { 340 }
+    compactPollProtocol = if ($CompactVersion -ge 4) { "compact-targeted-v1" } else { "compact-broadcast-v1" }
+    compactPollCommandBytes = if ($CompactVersion -ge 4) { 11 } else { 10 }
+    compactPollWireBytes = if ($CompactVersion -ge 4) { 29 } else { 28 }
+    nodeSlotMs = if ($CompactVersion -ge 4) { 0 } else { 340 }
     files = $files
   }
   if ($SchemaVersion -ge 2) {
@@ -265,6 +265,25 @@ try {
     -ExpectedFieldSensorMode simulated `
     -ExpectedGnssRtcmInjectionMode live `
     -ExpectedBatteryCalibrationState default-calibration `
+    -ExpectedSourceCommit $sourceCommit | Out-Null
+
+  $v5Root = Join-Path $testRoot "v5-summary"
+  New-TestRelease `
+    -Path $v5Root `
+    -SchemaVersion 2 `
+    -CompactVersion 5 `
+    -Mode hardware `
+    -GnssSource simulated `
+    -RtcmMode disabled `
+    -BatteryState default-calibration
+  & $verifier `
+    -ArtifactDirectory $v5Root `
+    -ExpectedCompactVersion 5 `
+    -ExpectedFieldSensorMode hardware `
+    -ExpectedGnssSourceMode simulated `
+    -ExpectedGnssRtcmInjectionMode disabled `
+    -ExpectedBatteryCalibrationState default-calibration `
+    -RequireCompactTargetedPolling `
     -ExpectedSourceCommit $sourceCommit | Out-Null
 
   $v4ManifestPath = Join-Path $v4Root "manifest.json"
@@ -418,7 +437,7 @@ try {
       -ExpectedBatteryCalibrationState field-calibrated | Out-Null
   }
 
-  Write-Host "RELEASE_SAFETY_TEST_OK V3/V4 field/GNSS source/final-acceptance positives and tamper/identity/mode/runtime/acceptance negatives passed"
+  Write-Host "RELEASE_SAFETY_TEST_OK V3/V4/V5 field/GNSS source/final-acceptance positives and tamper/identity/mode/runtime/acceptance negatives passed"
 } finally {
   if (Test-Path -LiteralPath $testRoot -PathType Container) {
     Remove-Item -LiteralPath $testRoot -Recurse -Force

@@ -118,3 +118,47 @@ test("compact v4 replaces stale fields while preserving RTCM runtime evidence", 
   assert.equal(state.meta.rtcm_state_flags, 0x07);
   assert.equal(state.meta.legacy_valid_flags, undefined);
 });
+
+test("compact v5 replaces stale V4 counters with the bounded RTCM summary", () => {
+  const payload = {
+    schema_version: 1,
+    device_id: "00000000-0000-0000-0000-000000000001",
+    received_ts: "2026-08-04T00:00:02.000Z",
+    seq: 102,
+    metrics: {
+      battery_v: 11.5,
+      rtcm_injection_mode_code: 2,
+      rtcm_session_epoch: 0x12345678,
+      rtcm_lease_remaining_ms: 59200,
+      rtcm_queue_pending: 1,
+      rtcm_queue_high_watermark: 4,
+      rtcm_last_completed_frame_age_ms: 230,
+      rtcm_injected_frames_total: 450,
+      rtcm_error_summary_flags: 0,
+      rtcm_crc_error: false,
+    },
+    meta: {
+      install_label: "FIELD-NODE-A",
+      legacy_node: "A",
+      compact_payload_version: 5,
+      v5_valid_flags: 0x1fff,
+      rtcm_injection_mode: "live",
+      rtcm_state_flags: 0x3f,
+      rtcm_lease_resolution_ms: 100,
+      rtcm_completion_age_resolution_ms: 10,
+      rtcm_injected_frames_counter_saturated: false,
+    },
+  };
+
+  const state = telemetryWriterTestHooks.buildShadowState(payload, {
+    metrics: { rtcm_completed_frames_total: 42, rtcm_crc_errors_total: 3 },
+    meta: { compact_payload_version: 4, v4_valid_flags: 0x1fff },
+  });
+
+  assert.deepEqual(state.metrics, payload.metrics);
+  assert.equal(state.metrics.rtcm_completed_frames_total, undefined);
+  assert.equal(state.metrics.rtcm_crc_errors_total, undefined);
+  assert.equal(state.meta.v4_valid_flags, undefined);
+  assert.equal(state.meta.v5_valid_flags, 0x1fff);
+  assert.equal(state.meta.rtcm_lease_resolution_ms, 100);
+});

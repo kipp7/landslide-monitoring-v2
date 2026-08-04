@@ -26,15 +26,15 @@ Common variables:
 - `SPOOL_ROOT_DIR` - local spool root.
 - `HEALTH_FILE_PATH` - runtime health JSON output path.
 - `SOUTHBOUND_POLLING_ENABLED` - enables gateway-managed polling on shared links.
-- `SOUTHBOUND_POLLING_MODE` - `round-robin-json` for rollback, `compact-broadcast-v1` for the V1/V2 broadcast profile, or `compact-targeted-v1` for V4 single-flight polling.
-- `SOUTHBOUND_POLLING_INTERVAL_MS` - minimum cooldown after a targeted node session closes; the V4 indoor profile uses `250` ms.
-- `SOUTHBOUND_POLLING_SESSION_TIMEOUT_MS` - per-node receive-protection window; the V4 targeted profile uses `3000` ms so a late response cannot overlap the next node. This is not the acceptance latency limit.
+- `SOUTHBOUND_POLLING_MODE` - `round-robin-json` for rollback, `compact-broadcast-v1` for the V1/V2 broadcast profile, or `compact-targeted-v1` for V4/V5 single-flight polling.
+- `SOUTHBOUND_POLLING_INTERVAL_MS` - minimum cooldown after a targeted node session closes; the indoor profile uses `250` ms.
+- `SOUTHBOUND_POLLING_SESSION_TIMEOUT_MS` - per-node receive-protection window; the targeted profile uses `3000` ms so a late response cannot overlap the next node. This is not the acceptance latency limit.
 - `SOUTHBOUND_POLLING_PARTIAL_RETRIES` - `0` or `1`; retries apply only to the legacy compact broadcast mode and remain `0` for targeted polling.
 - `SOUTHBOUND_POLLING_RETRY_AFTER_MS` - legacy broadcast per-attempt response window; the targeted profile does not retry.
 - `SOUTHBOUND_POLLING_PREWRITE_QUIET_MS` / `SOUTHBOUND_POLLING_PREWRITE_MAX_WAIT_MS` - poll-only quiet guard before a serial write.
 - `SOUTHBOUND_POLLING_COMMAND_CHUNK_BYTES` / `SOUTHBOUND_POLLING_COMMAND_CHUNK_DELAY_MS` - poll-only downlink pacing. Normal control commands keep the conservative `COMMAND_SERIAL_*` pacing.
 
-In `compact-targeted-v1` mode the gateway rotates A/B/C and sends `P2<node><nonce>`. Only the named node may respond, and the next command is not sent until that complete 157-byte V4 response arrives or the bounded receive-protection window closes. The 3000 ms protection window covers observed radio tail latency; the acceptance gate independently keeps command latency at 1500 ms and per-node P95 interval at 2500 ms, so protection does not weaken the speed requirement. `compact-broadcast-v1` and its `0/340/680 ms` slots remain available for the shorter V1/V2 rollback payloads. The gateway expands each binary response back into the telemetry JSON contract before MQTT publishing. Externally issued control commands remain JSON, keep their command ACKs, and pause internal polling while their quiet window is active.
+In `compact-targeted-v1` mode the gateway rotates A/B/C and sends `P2<node><nonce>`. Only the named node may respond, and the next command is not sent until the complete response arrives or the bounded receive-protection window closes. V4 uses a 157-byte frame; V5 preserves the professional field/RTK prefix in a 128-byte frame. The 3000 ms protection window covers observed radio tail latency; the acceptance gate independently keeps command latency at 1500 ms and per-node P95 interval at 2500 ms, so protection does not weaken the speed requirement. `compact-broadcast-v1` and its `0/340/680 ms` slots remain available for the shorter V1/V2 rollback payloads. The gateway expands each binary response back into the telemetry JSON contract before MQTT publishing. Externally issued control commands remain JSON, keep their command ACKs, and pause internal polling while their quiet window is active.
 
 ## Local Development
 

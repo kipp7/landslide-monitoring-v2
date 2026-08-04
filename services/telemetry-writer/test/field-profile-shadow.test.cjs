@@ -81,6 +81,11 @@ test("preserves the complete compact v4 field contract", () => {
     rtcm_crc_errors_total: 0,
     rtcm_queue_drops_total: 0,
     rtcm_uart_errors_total: 0,
+    rtcm_error_summary_flags: 0,
+    rtcm_rejected_fragment_error: false,
+    rtcm_crc_error: false,
+    rtcm_queue_drop_error: false,
+    rtcm_uart_error: false,
   };
 
   assert.deepEqual(sanitizeFieldProfileMetrics(metrics), metrics);

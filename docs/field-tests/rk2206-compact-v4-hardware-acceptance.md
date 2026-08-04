@@ -1,6 +1,6 @@
 ---
 title: RK2206 Compact V4 hardware acceptance
-status: active
+status: rejected
 updated: 2026-08-04
 ---
 
@@ -152,4 +152,11 @@ Reports stay under `/var/lib/lsmv2/experiments`. The runner prints each report p
 
 ## After This Gate
 
-Only after all three stages pass may CORS credentials be enabled in the RK3568 root-owned `0600` environment file. Continue in this order: PROBE with a common finite session/lease, then LIVE mixed load, then outdoor `GGA=4` and correction-age/Fixed-continuity acceptance. None of the three pure-telemetry stages proves centimeter-level positioning.
+V5-r4 failed this gate and must not be retried unchanged. Its successor is
+Compact V5: the same 95-byte professional field/RTK prefix plus a 15-byte RTCM
+summary, producing a 128-byte complete frame. V5 must start again at the strict
+60/600/1800-second pure-telemetry gate. Only after all three stages pass may
+CORS credentials be enabled in the RK3568 root-owned `0600` environment file.
+Continue in this order: PROBE with a common finite session/lease, then LIVE
+mixed load, then outdoor `GGA=4` and correction-age/Fixed-continuity acceptance.
+None of the pure-telemetry stages proves centimeter-level positioning.

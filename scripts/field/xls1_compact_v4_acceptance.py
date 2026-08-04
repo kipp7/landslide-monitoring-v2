@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run fail-fast Compact V4 hardware gates while holding the gateway service once."""
+"""Run fail-fast Compact V4/V5 hardware gates while holding the gateway service once."""
 
 from __future__ import annotations
 
@@ -126,7 +126,7 @@ def stage_arguments(args: argparse.Namespace, duration_seconds: float) -> Namesp
         required_match_rate=1.0,
         max_p95_interval_ms=args.max_p95_interval_ms,
         max_command_latency_ms=args.max_command_latency_ms,
-        required_compact_version=4,
+        required_compact_version=args.required_compact_version,
         required_field_sensor_source="hardware",
         required_gnss_source=args.required_gnss_source,
         require_battery_valid=True,
@@ -164,6 +164,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-command-latency-ms", type=float, default=1500.0)
     parser.add_argument("--max-retry-rate", type=float, default=0.0)
     parser.add_argument("--max-p95-interval-ms", type=float, default=2500.0)
+    parser.add_argument("--required-compact-version", type=int, choices=(4, 5), default=4)
     parser.add_argument(
         "--required-gnss-source",
         choices=("hardware", "simulated"),
@@ -201,7 +202,8 @@ def main() -> int:
     args = parse_args()
     run_id = datetime.now().strftime("%Y%m%d-%H%M%S")
     output_directory = Path(args.output_directory)
-    summary_path = output_directory / f"xls1-compact-v4-acceptance-{run_id}.json"
+    compact_label = f"v{args.required_compact_version}"
+    summary_path = output_directory / f"xls1-compact-{compact_label}-acceptance-{run_id}.json"
     plan = {
         "serialDevice": args.serial_device,
         "baud": args.baud,
@@ -215,7 +217,7 @@ def main() -> int:
         "sessionTimeoutMs": args.session_timeout_ms,
         "maxCommandLatencyMs": args.max_command_latency_ms,
         "maxRetryRate": args.max_retry_rate,
-        "requiredCompactVersion": 4,
+        "requiredCompactVersion": args.required_compact_version,
         "requiredFieldSensorSource": "hardware",
         "requiredGnssSource": args.required_gnss_source,
         "requireFieldSensorsValid": True,
@@ -253,7 +255,7 @@ def main() -> int:
         installed_hold = install_runtime_service_hold(args.service)
         for index, duration_seconds in enumerate(args.durations, start=1):
             label = stage_label(duration_seconds)
-            report_path = output_directory / f"xls1-compact-v4-{label}-{run_id}.json"
+            report_path = output_directory / f"xls1-compact-{compact_label}-{label}-{run_id}.json"
             print(
                 json.dumps(
                     {
@@ -312,7 +314,7 @@ def main() -> int:
     )
     summary = {
         "schemaVersion": 1,
-        "experiment": "xls1-compact-v4-acceptance",
+        "experiment": f"xls1-compact-{compact_label}-acceptance",
         "startedAt": started_at,
         "finishedAt": utc_now(),
         "plan": plan,

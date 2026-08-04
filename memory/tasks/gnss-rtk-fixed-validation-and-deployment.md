@@ -18,6 +18,12 @@ status: active
 
 ## Current State
 
+### Compact V5 Candidate And Powered V4 Baseline (2026-08-04)
+
+- A/B/C 当前全部上电并持续返回 Compact V4。RK3568 服务 active、`NRestarts=0`、MQTT connected，NTRIP 关闭；60 秒生产窗口 `119/119` 匹配，A/B/C 为 `40/39/40`，零协议、交织、发布、写入、超时和重连增量。真实土壤/EC/倾角与校准电池有效，GNSS 仍是明确标记的室内模拟源。
+- 该短测不覆盖已知 V4 600 秒 `793/813` 和 10 组 157 B 双帧交织失败。Compact V5 已把周期线框压到 `110 B payload / 128 B complete frame`，保留全部 V3 专业字段并增加 15 B RTCM 摘要；离线跨端、发布、引脚、调度、电池和 Windows 生产构建门禁均已通过。
+- V5 正式包、干净提交和 RK3568 V5 部署尚未完成，节点也尚未烧录 V5。dirty 临时候选禁止烧录；下一步为 clean commit/push -> immutable A/B/C build -> RK3568 原子部署 -> 按标签统一烧录 -> V5 `60/600/1800`。RTCM/CORS 继续关闭。
+
 ### V5-r4 Hardware Gate: Framing Protected, 157 B Throughput Rejected (2026-08-04)
 
 - 用户已按 A/B/C 标签烧录并上电 V5-r4。正式 `60/600/1800` 首轮的 60 秒为 `111/111`、零丢失/重复/未匹配/解码/profile/RTCM 错误，A/B/C arrival P95 为 `2072.4/1902.7/1901.8 ms`，通过；600 秒随后严格失败并停止，结果为 `793/813`、20 个缺帧和 20 个解码错误。错误精确成 10 组 `236 B + 78 B = 314 B`，即两个 157 B 帧在共享 XLS1 输出中交织；A/B/C 分别缺 `7/8/5` 帧，arrival P95 为 `3821.2/3939.8/3957.9 ms`，不能进入 1800 秒。
@@ -199,9 +205,9 @@ status: active
 
 ## Plan
 
-- 只按物理标签烧录正式 V5-r4 目录内对应 A/B/C `.img`；上电必须看到 `fw-rk2206-rtk-compact-v4-rs485-diag-v5-r4-20260804` 且 `Poll Request Check: 50 ms`。任何 V5-r3、r2、`retry1`、dirty proof 或旧包均停止使用。
-- 保持 `NTRIP_ENABLED=false`，先运行 `sudo python3 /usr/local/bin/xls1_compact_v4_acceptance.py --required-gnss-source simulated --check-prerequisites`，再用相同 source 参数运行正式门禁。脚本按固定 A -> B -> C、`1500/1500/0` 和 `250 ms` batch interval 自动执行 60/600/1800 秒；要求 100% 匹配、零链路重发/通信/profile 错误、三节点真实土壤/EC/倾角有效、PC0 field-calibrated、RTCM 全零且每节点 P95 <=2500 ms，任一阶段失败立即停止。
-- 三阶段全部通过前，RK3568 生产环境保持 `1200/1200/0` 不变；通过后再备份并原子切换为 `1500/1500/0`，重启一次 field-gateway，复核 active、`NRestarts=0` 和生产固定顺序。不要把传感器内部一次补读误记成 XLS1 链路重发。
+- 不再烧录或重测 V5-r4/V4。先把 Compact V5 实现提交推送，从干净 HEAD 用 `prepare-xl01-compact-v5-rs485-gnss-simulated-release.ps1` 生成唯一 immutable A/B/C 包，并独立复核 manifest、身份、模式、校准、文件集合和 SHA-256；任何 dirty proof、V5-r4、V5-r3、r2 或 `retry1` 包均停止使用。
+- 在烧录前原子部署 RK3568 的 V5 field-gateway build、通用 batch runner、V4/V5 acceptance wrapper，保留备份并确认服务 active、`NRestarts=0`、环境文件 `root:root 0600`、`NTRIP_ENABLED=false`。生产参数暂时保持当前 `compact-targeted-v1/250/3000/0`，不以增大窗口冒充速度通过。
+- 用户只按物理标签统一烧录正式 Compact V5 A/B/C `.img`。先运行 `xls1_compact_v5_acceptance.py --required-gnss-source simulated --check-prerequisites`，再严格执行 `60/600/1800` fail-fast；要求 100% 匹配、零链路重发/通信/profile 错误、真实 soil/EC/tilt、field-calibrated PC0、RTCM ready-only/clean、command latency <=1500 ms 且每节点 arrival P95 <=2500 ms。
 - A/B/C 已分别以 `+9/+7/最坏 9 mV` 通过电池同步验收并接受 `1046565/1048458/993702 ppm`，最终校准文件及 simulated/hardware 发布包均已生成并通过 final-acceptance、身份、哈希、模式和引脚门禁；百分比仍只是受负载、温度和老化影响的 3S OCV 估算，不能作为准确剩余 mAh 或续航。
 - 当前 4G SIM 已取走；guardian 已把生产云主机回退到 `eth0`，但通用默认公网仍被无 SIM 的 `usb0` 阻断。纯 XLS1 验收不依赖公网且不得为此改变路由；进入 CORS/RTK 阶段前再恢复 SIM，或单独验证并固定 CORS 经 `wlan0`/可用网线的路由。
 - 纯遥测 1800 秒通过后，才把 CORS 参数写入 RK3568 本地 `600 root:root` 环境文件；密码不进入 Git、memory、日志或健康 JSON。先设置 `RTCM_RUNTIME_MODE=probe`，验证三节点确认同一非零 session/有限 lease、160 B 分片、160 ms 调度、RTCM 类型筛选、队列/CRC/UART 错误为 0，再进入 LIVE。
