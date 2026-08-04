@@ -30,8 +30,19 @@ status: active
   `30/60` 个完整 core round，避免低频字段拖慢厘米级位移核心。
 - 当前候选使用 P1 健康路径、RK2206 最近 8 个 P1 去重、RK3568 对缺失节点逐个
   P2 单飞恢复；不再重发同一 P1。离线 C99、Python、field-gateway `58/58`、lint、
-  发布门禁均已通过。下一步从 clean/pushed commit 构建唯一 A/B/C hybrid 包；在用户
-  重新烧录前不得把旧 V6 的结果表述为通过，也不进入 1800 秒或 RTCM。
+  发布门禁均已通过。clean/pushed 提交 `c78ad6f3779499ab1ddf5f6d1e3055e13908c1ed`
+  已生成唯一 A/B/C hybrid 包：
+  `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v6_hybrid_rs485_gnss_simulated_20260804`。
+  manifest SHA-256 为 `38f9b8c4aea295f700d5cff9dd28492212a8dba14f02bb6ec4e551fba09d25e5`；
+  A/B/C `.img` SHA-256 为 `10385b69...d25c3`、`e331872a...104f5`、
+  `3770876c...c0f4f1`。独立门禁确认 hardware RS485、simulated GNSS、RTCM
+  disabled、final battery、46/64 B、dedup 8 和 P3/P4 `30/60`。
+- RK3568 已部署同提交构建的向后兼容 `index.js`/`config.js` 和 hybrid 验收器，
+  备份 `/opt/lsmv2/backups/compact-v6-hybrid-code-predeploy-20260804-162844`；三文件
+  SHA-256 为 `f1ddd515...8d3c8`、`b7f90c04...37d6b`、`fbcaec3a...a371`，服务
+  active、`NRestarts=0`。在用户重刷前环境故意保持 `1500/partial0/P3-3/P4-15`；
+  旧节点日志中的 partial timeout 不是 hybrid 验收。下一步只需按标签重刷三份新
+  `.img`，再原子切换 `6500/partial1/retry1500/P3-30/P4-60` 并跑 fail-fast。
 - 真机报告分别保留在 RK3568：P1 60/600 SHA-256 为
   `cc69e8082bcf514cc24183cbece92064e7ec55fdadc34d61e24f45440e6dd020` /
   `34899b6d7a23845a5c6fb433cc43385f1ec7eb3babd17cffe7895e37083acf38`；

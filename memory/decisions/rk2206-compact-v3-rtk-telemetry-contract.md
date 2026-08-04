@@ -40,9 +40,12 @@ status: active
 
 ### Boundary
 
-该混合方案已通过 C99 host、field-gateway `58/58`、lint/build、Python 金值和发布
-正反例门禁，但尚未从 clean commit 生成、烧录或完成 `60/600/1800` 真机验收。
-旧 V6 layered-v1 镜像继续保留为失败证据，不再作为下一轮烧录包。
+该混合方案已由 clean/pushed 提交
+`c78ad6f3779499ab1ddf5f6d1e3055e13908c1ed` 构建。唯一下一轮正式包为
+`F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v6_hybrid_rs485_gnss_simulated_20260804`，
+manifest SHA-256 `38f9b8c4aea295f700d5cff9dd28492212a8dba14f02bb6ec4e551fba09d25e5`。
+尚未烧录或完成 `60/600/1800` 真机验收；旧 V6 layered-v1 镜像继续保留为失败
+证据，不再作为下一轮烧录包。
 
 ## Compact V6 Layered Amendment (2026-08-04)
 

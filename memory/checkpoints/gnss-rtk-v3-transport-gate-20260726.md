@@ -31,8 +31,18 @@ status: active
   窗口后对缺失节点发送新 P2 tag，逐节点单飞，最多一个恢复 pass；会话总保护
   6500 ms，但健康轮三帧齐全时立即关闭。P3/P4 正式 cadence 为 `30/60`。
 - C99 host、field-gateway `58/58`、field-gateway lint/build、Python 金值/语法、
-  发布安全正反例、轮询节奏/TX 顺序/快照门禁已经通过。尚未 clean commit、发布或
-  烧录；下一恢复点是提交推送后生成 immutable hybrid A/B/C 包，然后只重刷这一次。
+  发布安全正反例、轮询节奏/TX 顺序/快照门禁已经通过。clean/pushed 源提交为
+  `c78ad6f3779499ab1ddf5f6d1e3055e13908c1ed`；immutable hybrid 包在
+  `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v6_hybrid_rs485_gnss_simulated_20260804`，
+  manifest SHA-256 `38f9b8c4aea295f700d5cff9dd28492212a8dba14f02bb6ec4e551fba09d25e5`，
+  A/B/C 镜像 SHA-256 分别为
+  `10385b69fc04798d1e27ce9a44cd911e0555d9610ffe30192abf6581531d25c3`、
+  `e331872aad407fb708921d3405d77325331e99fbb962b683b372547eaba104f5`、
+  `3770876c367ea03174dfa7364f50c0a6952171aed3ead8312ec5973a90c0f4f1`。
+- RK3568 兼容代码与验收器已预部署，备份为
+  `/opt/lsmv2/backups/compact-v6-hybrid-code-predeploy-20260804-162844`，远端哈希与本地
+  一致，服务 active/NRestarts=0；环境尚未启用恢复，保持旧 V6 值。下一恢复点是用户
+  按 A/B/C 标签重刷上述三份镜像，然后切换 hybrid 环境并立即执行 60 秒门禁。
 
 ### Compact V6 Layered Offline Candidate (2026-08-04)
 
