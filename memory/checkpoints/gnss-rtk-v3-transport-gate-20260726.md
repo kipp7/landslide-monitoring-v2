@@ -18,6 +18,28 @@ status: active
 
 ## Last Confirmed State
 
+### Hardware-GNSS V6 Release And Fail-Closed CORS Staging (2026-08-04)
+
+- 正式硬件 GNSS 发布包位于
+  `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v6_protected_p1_rs485_gnss_hardware_live_20260804`，
+  来源为干净且已推送提交 `eb76454b2bb15204e24934d8fc387128cb3f1c19`。manifest
+  SHA-256 为 `19cb4cc34c9b3b089fb1b0ba0b7f70843917ef78702ac73d52adda63d70691cc`；
+  A/B/C `.img` SHA-256 分别为
+  `56dc3e25cf5ba36dc8f4969d6cca959912baca5cf046a435aae13780aa165e08`、
+  `1e99db87854c68156b848ce66bbd81b20c0467ef2a2ad0fce0fd8e02d47fc7a9`、
+  `b24370a2ddb07d013165466a855b276f60f6de7de848bd764da34caced455126`。
+- 7/7 manifest 文件已独立复算长度与 SHA-256；三个 `.img` 均只命中自身 UUID 和
+  `FIELD-NODE-A/B/C` 标签，包含真实 UM220 PB6/PB7 UART、真实 RS485、最终 PC0
+  校准、protected-P1、`boot=DISABLED capability=LIVE` 标记，不含 simulated、
+  PROBE-only 或 DISABLED-only 标记。固件每次重启或租约过期都返回 disabled。
+- RK3568 已在不启用连接的情况下预配置本次 CORS 参数；原文件备份为
+  `/opt/lsmv2/backups/ntrip-preconfigure-20260804-202843/field-gateway.env`。环境文件
+  仍为 `0600 root:root`，网关重启验证为 `active/running`、`NRestarts=0`，健康状态
+  为 `ntrip.enabled=false`。本记录不含账号、密码、端点、原始 RTCM 或真实坐标。
+- 当前门槛是用户按物理标签烧录三份硬件 GNSS 镜像。烧录后先在室外、CORS 关闭
+  状态执行 60/600 秒真实 GNSS 纯遥测；通过后才运行共同有限 PROBE，再切有限 LIVE，
+  最终要求持续 `GGA=4`、差分龄 `<=5 s`、可信 GST 及 1800 秒三节点混合负载。
+
 ### Compact V6 Protected-P1 Indoor Gate Passed (2026-08-04)
 
 - C 重新插稳后，20 秒高频 P3 复核为 `12/12` 完整 core round、零 profile/协议
@@ -368,20 +390,24 @@ status: active
 
 ## In Progress
 
-- V5-r3 clean immutable release 已锁定；当前等待按物理标签烧录 A/B/C。生产轮询参数未在本次固件诊断审查中改动；烧录后仍依次执行 60/600/1800 秒真机门禁，不用短测替代长测。
-- V4 专用现场编排器已部署并通过 dry-run/无发送 prerequisites；它会一次持有并最终恢复网关服务，要求 V4 hardware、真实土壤/EC/三轴倾角、field-calibrated PC0、RTCM disabled/READY-only 且全部 RTCM 历史活动和错误计数为 0，再按 60/600/1800 秒逐级推进。
-- RK3568、服务器和 Windows 字段链已部署，但 RK3568 明确保持 `NTRIP_ENABLED=false`。预期失败自测已直接证明 C 仍在持续发旧 V2 并响应当前命令，说明它没有真正断电或存在独立供电；明天烧录前先处理该事实，不能把今晚兼容遥测计为 V4 验收。
-- A/B/C 已接受 `1046565/1048458/993702 ppm` 最终 PC0 校准；V4 manifest 将其绑定为 field-calibrated。百分比仍只是 3S OCV 估算，不宣称剩余 mAh 或续航。
-- OTA 当前只允许离线设计和可恢复备用板验证；现场 A/B/C 的 `ota_prepare/apply` 必须返回 `unsupported`。
-- RTCM runtime 当前保持 disabled；先建立 V4 hardware 纯遥测三节点稳定/延迟基线，再按 PROBE -> LIVE -> 室外 Fixed 顺序推进。
+- Hardware-GNSS V6 clean immutable release 已锁定并独立复核；当前只等待用户按物理
+  标签烧录 A/B/C。受保护 P1 的室内 60/600/1800 基线不再修改。
+- RK3568 已完成短期 CORS 凭据预配置和原子备份，但 `NTRIP_ENABLED=false`，服务
+  active、零重启；在真实 GNSS 纯遥测门禁通过前不得连接或注入 RTCM。
+- OTA 当前只允许离线设计和可恢复备用板验证；现场 A/B/C 的 `ota_prepare/apply`
+  必须返回 `unsupported`。
 
 ## Next Actions
 
-1. 只使用 V5-r4 正式目录并按 A/B/C 物理标签重新烧录；上电确认 V5-r4 marker 与真实 `Poll Request Check: 50 ms`。保持 NTRIP 关闭，先执行 `sudo python3 /usr/local/bin/xls1_compact_v4_acceptance.py --required-gnss-source simulated --check-prerequisites`，再执行同一脚本的正式 60/600/1800 秒门禁。任一阶段失败不进入下一阶段。
-2. 通过脱敏健康摘要持续核对 `compactBroadcastRetryRate <= 0.02`、重发写失败为 0、逻辑总响应不超过 2500 ms，并同时确认 `usb0` 默认路由、反向 SSH、Hermes 和 MQTT 在线；不再通过插拔网线制造常规切换。
-3. 纯遥测 1800 秒通过后，才把 CORS 参数写入 RK3568 本地 600 权限环境文件并启用 PROBE。验证三节点相同 session/lease、RTCM 类型、分片、队列、CRC 和 UART 证据后，才允许切 LIVE。
-4. LIVE 后执行三节点真实 NTRIP 混合负载和室外 `GGA=4` 门禁，以 correction age、Fixed 连续性和可信坐标作为依据；再完成 ECEF/ENU、Hampel/Kalman、CEEMDAN 的算法验收。
-5. OTA 只在可有线救援备用板启动：先证明 loader 可手动启动 FW1/FW2，再实现 fail-closed Flash HAL、签名、冗余原子元数据、pending/confirm/rollback 和掉电注入测试；所有门禁通过前不修改现场节点。
+1. 只烧录 hardware-GNSS V6 正式目录中匹配 A/B/C 物理标签的 `.img`，连接三套
+   BT-760 并移到室外；上电核对 UUID、标签、固件标记和硬件 GNSS 来源。
+2. 保持 CORS 关闭，执行 `--required-gnss-source hardware` 的前置检查及 60/600 秒
+   纯遥测门禁，核对真实 GGA/GST/HDOP/卫星数/时间且不从无效历元建立基线。
+3. 纯遥测通过后启动一个共同有限 PROBE 会话，验证 RTCM CRC/类型/分片/队列、
+   session/lease 和零 UART 注入；任一失败立即恢复 disabled。
+4. PROBE 通过后才切有限 LIVE，要求持续 `GGA=4`、correction age P95 `<=3 s`、
+   max `<=5 s`、可信 GST 和无旧 session，再运行 1800 秒混合负载。
+5. Fixed 门禁通过后再验收 ECEF/ENU、Hampel/Kalman、服务器 CEEMDAN 和 UI。
 
 ## Risks
 
@@ -399,4 +425,14 @@ status: active
 
 ## Resume Prompt
 
-继续 2026-08-04 XLS1/RTK 任务：A/B/C 已烧录正式 Compact V5。原 500 ms 排空/3000 ms 保护的 60 秒门禁因一条生产残留帧和 `207+49=256 B` 双帧交织失败；改为 5 秒连续静默/6000 ms 保护后，60 秒 `63/63`、600 秒 `621/621`，通信层零丢帧/解码/交织/重复/未匹配且序号连续。整体验收仍失败：600 秒仅 C 有 1 帧倾角无效，且 A/B/C arrival P95 为 `5377.9/5498.2/5757.7 ms`，远超 2500 ms；未进入 1800 秒。验收器提交 `ae2371b6`、生产保护提交 `c4c9289b` 已推送，RK3568 环境已原子切到 6000 ms，回滚点 `/opt/lsmv2/backups/targeted-guard6s-predeploy-20260804-123356`，生产复核 `96/96` 零错误、NTRIP false。下一步不再调超时或立即重刷，而是设计每个高频线框 `<=64 B` 的分层协议：高频位移/倾角核心，低频 soil/EC/battery/完整 GNSS/RTCM 审计扩展；完成字段契约、跨端组装、离线门禁和 clean build 后再统一烧录。全部通过前不得启用 RTCM/CORS；原始报告、坐标和凭据不进入 Git。
+继续 2026-08-04 XLS1/RTK 任务：protected-P1 室内真实 RS485/最终 PC0/模拟 GNSS
+已通过 60/600/1800，正式 hardware-GNSS V6 包已从 clean/pushed 提交 `eb76454b...`
+生成并独立复核，目录为
+`F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v6_protected_p1_rs485_gnss_hardware_live_20260804`。
+A/B/C 镜像身份、哈希、真实 GNSS UART、受保护 P1 和上电 RTCM disabled 均通过。
+RK3568 已把短期 CORS 参数写入 `0600 root:root` 环境文件并备份到
+`/opt/lsmv2/backups/ntrip-preconfigure-20260804-202843`，但仍为
+`NTRIP_ENABLED=false`、服务 active/零重启；Git/memory 不含凭据。下一步让用户按标签
+烧录三份 `.img`，室外连接 BT-760，先做 hardware 纯遥测 60/600 秒，再依次做共同有限
+PROBE、有限 LIVE、持续 GGA=4/差分龄/GST 和 1800 秒三节点混合负载。全部通过前不得
+声称厘米级完成，也不得从无效或未 Fixed 坐标建立 ENU 基线。

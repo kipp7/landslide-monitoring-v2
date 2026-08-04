@@ -18,6 +18,33 @@ status: active
 
 ## Current State
 
+### Hardware-GNSS V6 Release Ready; CORS Staged Fail-Closed (2026-08-04)
+
+- 从干净提交 `eb76454b2bb15204e24934d8fc387128cb3f1c19` 生成正式硬件 GNSS
+  发布包 `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v6_protected_p1_rs485_gnss_hardware_live_20260804`。
+  包保持受保护单 P1 的 `46 B payload / 64 B wire`，使用 PB6/PB7 上真实
+  UM220-IV NK、PB4/PB5 上真实 RS485 和最终逐节点 PC0 校准。固件编译具备 LIVE
+  能力，但每次上电均为 `boot=DISABLED`，只有新鲜的有限租约才能依次进入
+  PROBE/LIVE，租约过期或重启自动关闭。
+- manifest SHA-256 为
+  `19cb4cc34c9b3b089fb1b0ba0b7f70843917ef78702ac73d52adda63d70691cc`；A/B/C
+  `.img` SHA-256 分别为
+  `56dc3e25cf5ba36dc8f4969d6cca959912baca5cf046a435aae13780aa165e08`、
+  `1e99db87854c68156b848ce66bbd81b20c0467ef2a2ad0fce0fd8e02d47fc7a9`、
+  `b24370a2ddb07d013165466a855b276f60f6de7de848bd764da34caced455126`。
+  独立复核确认 manifest 7/7 文件长度与哈希匹配，三个镜像只包含自身 UUID/标签，
+  均包含硬件 GNSS、UART 初始化、protected-P1 和 `boot=DISABLED capability=LIVE`
+  标记，不含 simulated、PROBE-only 或 DISABLED-only 标记。
+- RK3568 已把本次短期 CORS 参数原子写入 `/etc/lsmv2/field-gateway.env`，原文件备份
+  为 `/opt/lsmv2/backups/ntrip-preconfigure-20260804-202843/field-gateway.env`。配置文件
+  保持 `0600 root:root`，网关重启后 `active/running`、`NRestarts=0`，健康状态仍为
+  `NTRIP_ENABLED=false`。账号、密码、端点、坐标和原始 RTCM 不进入 Git、memory 或
+  普通日志。
+- 当前等待用户按物理标签烧录 A/B/C。厘米级尚未验收；烧录后必须先在室外、CORS
+  关闭状态完成真实 GNSS 纯遥测 60/600 秒，再运行统一有限 PROBE，只有节点端 CRC、
+  分片、队列和零 UART 注入证据全部通过才切 LIVE，最终以持续 `GGA=4`、差分龄
+  `<=5 s`、可信 GST 和 1800 秒三节点混合负载验收。
+
 ### Protected-P1 Indoor 60/600/1800 Gate Complete (2026-08-04)
 
 - C 重新插稳后电池有效位恢复。20 秒高频 environment 复核覆盖 C 两次，profile
@@ -311,18 +338,24 @@ status: active
 
 ## Plan
 
-- 不再烧录或重测 V5-r4/V4。唯一允许烧录的是 clean 提交 `4320616a` 的 `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v5_rs485_gnss_simulated_20260804`；它已独立通过 manifest、身份、模式、校准、文件集合和 SHA-256 复核。任何 dirty proof、V5-r4、V5-r3、r2 或 `retry1` 包均停止使用。
-- RK3568 的 V5 field-gateway decoder、通用 batch runner、V4/V5 acceptance wrapper 已部署并验证，备份为 `/opt/lsmv2/backups/compact-v5-predeploy-20260804-120352`。环境文件仍为 `root:root 0600`、`NTRIP_ENABLED=false`，生产参数保持 `compact-targeted-v1/250/3000/0`，不以增大窗口冒充速度通过。
-- 当前 V5 已完成 60/600 真机取证但因更新间隔、长测 command P95 和一次 C 倾角瞬态失败，禁止直接进入 1800 秒或 RTCM。下一步先冻结 V5 作为无损诊断基线，设计并对抗性审查单帧 `<=64 B` 的分层 V6 字段/采样/组装契约；只有跨端金值、状态替换、发布安全、A/B/C clean build 全部通过后才让用户再次烧录，并重新执行 `60/600/1800` fail-fast。
-- A/B/C 已分别以 `+9/+7/最坏 9 mV` 通过电池同步验收并接受 `1046565/1048458/993702 ppm`，最终校准文件及 simulated/hardware 发布包均已生成并通过 final-acceptance、身份、哈希、模式和引脚门禁；百分比仍只是受负载、温度和老化影响的 3S OCV 估算，不能作为准确剩余 mAh 或续航。
-- 当前 4G SIM 已取走；guardian 已把生产云主机回退到 `eth0`，但通用默认公网仍被无 SIM 的 `usb0` 阻断。纯 XLS1 验收不依赖公网且不得为此改变路由；进入 CORS/RTK 阶段前再恢复 SIM，或单独验证并固定 CORS 经 `wlan0`/可用网线的路由。
-- 纯遥测 1800 秒通过后，才把 CORS 参数写入 RK3568 本地 `600 root:root` 环境文件；密码不进入 Git、memory、日志或健康 JSON。先设置 `RTCM_RUNTIME_MODE=probe`，验证三节点确认同一非零 session/有限 lease、160 B 分片、160 ms 调度、RTCM 类型筛选、队列/CRC/UART 错误为 0，再进入 LIVE。
-- 捕获至少 60 s 不含凭据的实际 RTCM 与脱敏容量汇总；原始差分流和真实坐标不进入 Git。已部署 shaper 只保留 1005/1033/1074/1094/1124，过滤 UM220 不支持的 1114/1084，并以最新帧优先和 TTL 控制 correction age。
-- 在恢复 QZSS 前设计并门禁低频累计确认/选择性重传或等价的有界可靠机制；不能用无限队列、逐帧三节点 ACK 或盲目全量重复换取表面零丢包。机制必须保持 correction age 有界，并实测三节点反向确认不会与 compact 遥测争用半双工链路。
-- PROBE 通过后执行真实 NTRIP 混合负载；不把合成/PROBE 通过等同于 RTK Fixed。每次只改变一个层级：hardware 纯遥测 -> PROBE -> LIVE -> 室外 Fixed；不同时回退 RK2206 和 RK3568。
-- 至少运行 60 分钟三节点门禁，目标 correction age P95 <=3 s、max <=5 s、无旧 session 注入且 Fixed 连续。
-- 室外 `GGA=4` 与可信门禁通过后，才用这些样本建立基线并完成 RK3568 ECEF/ENU、Hampel/Kalman、服务器 CEEMDAN 和 UI/profile 的算法验收；当前 API 的可信 RTK 筛选与高精度显示不能替代该算法门禁。
-- OTA 只在可有线救援备用板推进：先证明 loader 可手动启动 FW1/FW2，再实现 fail-closed Flash HAL、签名、冗余原子元数据、pending/confirm/rollback 和掉电注入测试。所有门禁通过前，现场 A/B/C 的 `ota_prepare/apply` 必须返回 `unsupported`。
+- 只烧录上述 hardware-GNSS V6 正式目录中与物理节点标签一致的 `.img`；V5/V4、
+  simulated V6 和任何临时构建均停止用于当前室外阶段。
+- 连接三套 BT-760 后移到室外，保持 `NTRIP_ENABLED=false`，先检查三节点启动标记、
+  UUID、真实 GNSS 来源及 GGA/GST/HDOP/卫星数/时间字段，再依次执行 60/600 秒
+  hardware 纯遥测门禁。任一阶段失败都不启用 CORS。
+- 纯遥测通过后启用一个三节点共同、有限租约的 PROBE 会话；验证实际 RTCM 类型、
+  CRC、分片完成、队列边界、session/lease 和零 GNSS UART 注入。PROBE 结束或失败
+  必须自动返回关闭。
+- PROBE 通过后才切换有限租约 LIVE，并以持续 `GGA=4`、correction age P95
+  `<=3 s` / max `<=5 s`、可信 GST、无旧 session 注入及三节点 Fixed 连续性验收；
+  随后运行 1800 秒混合负载门禁。
+- 只有室外 Fixed 与可信字段门禁通过，才建立 ECEF/ENU 基线并验收 RK3568
+  Hampel/Kalman、服务器 CEEMDAN 和 UI；不得用构建成功、NTRIP 已连接或单次
+  `GGA=4` 宣称厘米级完成。
+- 现场 CORS 凭据只留在 RK3568 `0600 root:root` 环境文件；账号更新、运行日志、
+  健康摘要、Git 和 memory 都不得回显密码、真实坐标或原始 RTCM。
+- OTA 仍只在可有线救援备用板推进；现场 A/B/C 的 `ota_prepare/apply` 保持
+  `unsupported`。
 
 ## Open Questions
 
