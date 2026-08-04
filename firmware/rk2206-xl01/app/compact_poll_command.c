@@ -1,5 +1,7 @@
 #include "compact_poll_command.h"
 
+#include <string.h>
+
 static int IsHexDigit(char value)
 {
     return (value >= '0' && value <= '9') ||
@@ -64,4 +66,32 @@ unsigned int CompactPollCommand_Scope(const char *payload)
     if (payload[1] == '3') return COMPACT_POLL_SCOPE_ENVIRONMENT;
     if (payload[1] == '4') return COMPACT_POLL_SCOPE_AUDIT;
     return COMPACT_POLL_SCOPE_CORE;
+}
+
+int CompactPollCommand_ShouldSuppressBroadcastDuplicate(
+    CompactPollBroadcastDeduplicator *deduplicator,
+    const char *payload,
+    int payload_len
+)
+{
+    unsigned int index;
+    unsigned int slot;
+
+    if (deduplicator == 0 || payload == 0 || payload_len != COMPACT_POLL_COMMAND_BYTES ||
+        payload[0] != 'P' || payload[1] != '1' || !CompactPollCommand_IsValid(payload, payload_len)) {
+        return 0;
+    }
+    for (index = 0U; index < deduplicator->count; ++index) {
+        if (memcmp(deduplicator->commands[index], payload, COMPACT_POLL_COMMAND_BYTES) == 0) {
+            return 1;
+        }
+    }
+
+    slot = deduplicator->next_index;
+    memcpy(deduplicator->commands[slot], payload, COMPACT_POLL_COMMAND_BYTES);
+    deduplicator->next_index = (slot + 1U) % COMPACT_POLL_RECENT_BROADCASTS;
+    if (deduplicator->count < COMPACT_POLL_RECENT_BROADCASTS) {
+        deduplicator->count += 1U;
+    }
+    return 0;
 }

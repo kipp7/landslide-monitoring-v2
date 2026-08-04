@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run fail-closed Compact V6 layered P1/P3/P4 field-link acceptance."""
+"""Run fail-closed Compact V6 layered field-link acceptance."""
 
 from __future__ import annotations
 
@@ -65,9 +65,11 @@ def percentile(values: list[float], fraction: float) -> float | None:
 def build_layered_poll(scope: str, label: str | None = None) -> str:
     nonce = uuid.uuid4().hex[:8].upper()
     if scope == "core":
-        if label is not None:
-            raise ValueError("core is broadcast and must not have a target label")
-        return f"P1{nonce}"
+        if label is None:
+            return f"P1{nonce}"
+        if label not in NODES:
+            raise ValueError("targeted core poll requires node A/B/C")
+        return f"P2{label}{nonce}"
     if scope not in ("environment", "audit") or label not in NODES:
         raise ValueError("layered extensions require environment/audit and node A/B/C")
     return f"P{'3' if scope == 'environment' else '4'}{label}{nonce}"
@@ -214,7 +216,6 @@ def run_layered_experiment(args: argparse.Namespace) -> dict[str, Any]:
     core_arrivals: dict[str, list[float]] = defaultdict(list)
     all_sequences: dict[str, list[int]] = defaultdict(list)
     core_sequences: dict[str, list[int]] = defaultdict(list)
-    latencies: dict[str, list[float]] = defaultdict(list)
     latest_core_epoch: dict[str, int] = {}
     errors: Counter[str] = Counter()
     profile_violations: Counter[str] = Counter()
@@ -229,6 +230,7 @@ def run_layered_experiment(args: argparse.Namespace) -> dict[str, Any]:
     scope_mismatches = 0
     epoch_mismatches = 0
     core_rounds_sent = 0
+    targeted_recovery_commands = 0
     extension_cursor = 0
 
     def add_sample(kind: str, **values: Any) -> None:
@@ -306,7 +308,6 @@ def run_layered_experiment(args: argparse.Namespace) -> dict[str, Any]:
             record["receivedMono"] = received_mono
             record["sampleEpoch"] = meta.get("sample_epoch")
             latency_ms = (received_mono - record["sentMono"]) * 1000.0
-            latencies[label].append(latency_ms)
             sequence = telemetry.get("seq")
             if isinstance(sequence, int):
                 all_sequences[label].append(sequence)
@@ -364,6 +365,24 @@ def run_layered_experiment(args: argparse.Namespace) -> dict[str, Any]:
         bytes_written += len(frame)
         return created
 
+    def send_targeted_recovery(fd: int, record: dict[str, Any]) -> None:
+        nonlocal serial_sequence, bytes_written, targeted_recovery_commands
+        command = build_layered_poll("core", record["node"])
+        tag = command_tag(command)
+        while (tag, record["node"]) in records_by_tag:
+            command = build_layered_poll("core", record["node"])
+            tag = command_tag(command)
+        frame = encode_frame(FIELD_LINK_TYPE_COMMAND, serial_sequence, command.encode("ascii"))
+        serial_sequence = (serial_sequence + 1) & 0xFFFFFFFF
+        record["command"] = command
+        record["commandTag"] = tag
+        record["sentMono"] = time.monotonic()
+        record["recoveryDispatched"] = True
+        records_by_tag[(tag, record["node"])] = record
+        write_chunked(fd, frame, args.command_chunk_bytes, args.command_chunk_delay_ms)
+        bytes_written += len(frame)
+        targeted_recovery_commands += 1
+
     fd = os.open(args.serial_device, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
     try:
         configure_serial(fd, args.baud)
@@ -387,10 +406,27 @@ def run_layered_experiment(args: argparse.Namespace) -> dict[str, Any]:
         while time.monotonic() < send_deadline:
             round_started = time.monotonic()
             core_rounds_sent += 1
-            core_records = send_poll(fd, "core", list(NODES), core_rounds_sent)
-            response_deadline = time.monotonic() + args.core_response_timeout_ms / 1000.0
-            while not all(record["matched"] for record in core_records) and time.monotonic() < response_deadline:
-                receive_once(fd, min(0.05, response_deadline - time.monotonic()))
+            core_records: list[dict[str, Any]] = []
+            if args.core_mode == "targeted":
+                for label in NODES:
+                    node_records = send_poll(fd, "core", [label], core_rounds_sent)
+                    core_records.extend(node_records)
+                    response_deadline = time.monotonic() + args.core_response_timeout_ms / 1000.0
+                    while not node_records[0]["matched"] and time.monotonic() < response_deadline:
+                        receive_once(fd, min(0.05, response_deadline - time.monotonic()))
+            else:
+                core_records = send_poll(fd, "core", list(NODES), core_rounds_sent)
+                response_deadline = time.monotonic() + args.core_response_timeout_ms / 1000.0
+                while not all(record["matched"] for record in core_records) and time.monotonic() < response_deadline:
+                    receive_once(fd, min(0.05, response_deadline - time.monotonic()))
+                if args.core_mode == "hybrid":
+                    for record in core_records:
+                        if record["matched"]:
+                            continue
+                        send_targeted_recovery(fd, record)
+                        recovery_deadline = time.monotonic() + args.core_response_timeout_ms / 1000.0
+                        while not record["matched"] and time.monotonic() < recovery_deadline:
+                            receive_once(fd, min(0.05, recovery_deadline - time.monotonic()))
 
             extension_scope = (
                 layered_extension_scope(
@@ -434,7 +470,11 @@ def run_layered_experiment(args: argparse.Namespace) -> dict[str, Any]:
             (current - previous) * 1000.0
             for previous, current in zip(core_arrivals[label], core_arrivals[label][1:])
         ]
-        node_latencies = latencies[label]
+        node_latencies = [
+            (record["receivedMono"] - record["sentMono"]) * 1000.0
+            for record in core_records
+            if record["matched"]
+        ]
         nodes[label] = {
             "coreExpected": len(core_records),
             "coreMatched": sum(record["matched"] for record in core_records),
@@ -454,10 +494,19 @@ def run_layered_experiment(args: argparse.Namespace) -> dict[str, Any]:
     extensions = {}
     for scope in ("environment", "audit"):
         scoped = [record for record in records if record["scope"] == scope]
+        scoped_latencies = [
+            (record["receivedMono"] - record["sentMono"]) * 1000.0
+            for record in scoped
+            if record["matched"]
+        ]
         extensions[scope] = {
             "expected": len(scoped),
             "matched": sum(record["matched"] for record in scoped),
             "nodes": dict(Counter(record["node"] for record in scoped if record["matched"])),
+            "commandToTelemetryLatencyMs": {
+                "p95": percentile(scoped_latencies, 0.95),
+                "max": round(max(scoped_latencies), 1) if scoped_latencies else None,
+            },
         }
     result = {
         "coreRoundsSent": core_rounds_sent,
@@ -469,6 +518,7 @@ def run_layered_experiment(args: argparse.Namespace) -> dict[str, Any]:
         "scopeMismatches": scope_mismatches,
         "extensionEpochMismatches": epoch_mismatches,
         "profileViolations": sum(profile_violations.values()),
+        "targetedRecoveryCommands": targeted_recovery_commands,
         "trailingUndelimitedBytes": len(receive_buffer),
     }
     report = {
@@ -478,6 +528,7 @@ def run_layered_experiment(args: argparse.Namespace) -> dict[str, Any]:
         "finishedAt": utc_now(),
         "durationSeconds": args.duration_seconds,
         "configuration": {
+            "coreMode": args.core_mode,
             "coreIntervalMs": args.core_interval_ms,
             "coreResponseTimeoutMs": args.core_response_timeout_ms,
             "extensionResponseTimeoutMs": args.extension_response_timeout_ms,
@@ -508,11 +559,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--serial-device", default="/dev/ttyS3")
     parser.add_argument("--baud", type=int, default=115200)
     parser.add_argument("--durations", type=parse_durations, default=parse_durations("60,600,1800"))
+    parser.add_argument("--core-mode", choices=("broadcast", "targeted", "hybrid"), default="hybrid")
     parser.add_argument("--core-interval-ms", type=int, default=250)
     parser.add_argument("--core-response-timeout-ms", type=int, default=1500)
-    parser.add_argument("--extension-response-timeout-ms", type=int, default=1500)
-    parser.add_argument("--environment-every-rounds", type=int, default=3)
-    parser.add_argument("--audit-every-rounds", type=int, default=15)
+    parser.add_argument("--extension-response-timeout-ms", type=int, default=6000)
+    parser.add_argument("--environment-every-rounds", type=int, default=30)
+    parser.add_argument("--audit-every-rounds", type=int, default=60)
     parser.add_argument("--settle-timeout-ms", type=int, default=30000)
     parser.add_argument("--settle-quiet-ms", type=int, default=5000)
     parser.add_argument("--command-chunk-bytes", type=int, default=64)

@@ -23,11 +23,11 @@ test("RK3568 deployment example pins the Compact V6 layered profile", () => {
   assert.equal(config.southboundPollingEnabled, true);
   assert.equal(config.southboundPollingMode, "compact-layered-v1");
   assert.equal(config.southboundPollingIntervalMs, 250);
-  assert.equal(config.southboundPollingSessionTimeoutMs, 1500);
-  assert.equal(config.southboundPollingPartialRetries, 0);
-  assert.equal(config.southboundPollingRetryAfterMs, 1200);
-  assert.equal(config.southboundLayeredEnvironmentEveryRounds, 3);
-  assert.equal(config.southboundLayeredAuditEveryRounds, 15);
+  assert.equal(config.southboundPollingSessionTimeoutMs, 6500);
+  assert.equal(config.southboundPollingPartialRetries, 1);
+  assert.equal(config.southboundPollingRetryAfterMs, 1500);
+  assert.equal(config.southboundLayeredEnvironmentEveryRounds, 30);
+  assert.equal(config.southboundLayeredAuditEveryRounds, 60);
   assert.equal(config.ntripEnabled, false);
 });
 
@@ -48,7 +48,7 @@ test("compact polling bounds retry count and requires a complete retry window", 
         SOUTHBOUND_POLLING_MODE: "compact-broadcast-v1",
         SOUTHBOUND_POLLING_PARTIAL_RETRIES: "1",
         SOUTHBOUND_POLLING_RETRY_AFTER_MS: "1200",
-        SOUTHBOUND_POLLING_SESSION_TIMEOUT_MS: "2399"
+        SOUTHBOUND_POLLING_SESSION_TIMEOUT_MS: "4799"
       }),
     /SOUTHBOUND_POLLING_SESSION_TIMEOUT_MS/
   );

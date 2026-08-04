@@ -440,8 +440,11 @@ try {
     nodeSlotMs = if ($CompactVersion -eq 6) { 340 } elseif ($CompactVersion -ge 4) { 0 } else { 340 }
     compactExtensionPollCommandBytes = if ($CompactVersion -eq 6) { 11 } else { $null }
     compactExtensionPollWireBytes = if ($CompactVersion -eq 6) { 29 } else { $null }
-    layeredEnvironmentEveryCoreRounds = if ($CompactVersion -eq 6) { 3 } else { $null }
-    layeredAuditEveryCoreRounds = if ($CompactVersion -eq 6) { 15 } else { $null }
+    layeredEnvironmentEveryCoreRounds = if ($CompactVersion -eq 6) { 30 } else { $null }
+    layeredAuditEveryCoreRounds = if ($CompactVersion -eq 6) { 60 } else { $null }
+    recentBroadcastDedupDepth = if ($CompactVersion -eq 6) { 8 } else { $null }
+    compactRecoveryPollCommandBytes = if ($CompactVersion -eq 6) { 11 } else { $null }
+    compactRecoveryPollWireBytes = if ($CompactVersion -eq 6) { 29 } else { $null }
     rollbackRelease = "competition-suite-20260723"
     generatedAt = (Get-Date).ToUniversalTime().ToString("o")
     files = @($files | ForEach-Object {

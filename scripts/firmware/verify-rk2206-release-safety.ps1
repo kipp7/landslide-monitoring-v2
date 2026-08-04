@@ -221,16 +221,21 @@ if ($RequireCompactLayeredPolling) {
     -Message "Compact layered polling is only accepted for V6 release gates"
   foreach ($property in @(
       "compactExtensionPollCommandBytes", "compactExtensionPollWireBytes",
-      "layeredEnvironmentEveryCoreRounds", "layeredAuditEveryCoreRounds"
+      "layeredEnvironmentEveryCoreRounds", "layeredAuditEveryCoreRounds",
+      "recentBroadcastDedupDepth", "compactRecoveryPollCommandBytes",
+      "compactRecoveryPollWireBytes"
     )) {
     Assert-ObjectProperty -Object $manifest -Name $property -Context "Compact V6 release manifest"
   }
   Assert-ReleaseCondition -Condition (
       $manifest.compactExtensionPollCommandBytes -eq 11 -and
       $manifest.compactExtensionPollWireBytes -eq 29 -and
-      $manifest.layeredEnvironmentEveryCoreRounds -eq 3 -and
-      $manifest.layeredAuditEveryCoreRounds -eq 15
-    ) -Message "Compact V6 layered cadence or extension wire contract is invalid"
+      $manifest.layeredEnvironmentEveryCoreRounds -eq 30 -and
+      $manifest.layeredAuditEveryCoreRounds -eq 60 -and
+      $manifest.recentBroadcastDedupDepth -eq 8 -and
+      $manifest.compactRecoveryPollCommandBytes -eq 11 -and
+      $manifest.compactRecoveryPollWireBytes -eq 29
+    ) -Message "Compact V6 layered cadence, dedup, recovery or extension wire contract is invalid"
 }
 
 if ($ExpectedSourceCommit) {
@@ -552,6 +557,7 @@ foreach ($node in $NodeLabels) {
     }
     if ($RequireCompactLayeredPolling) {
       $required += "layered-v1 P1 core / P3 environment / P4 audit"
+      $required += "P1 dedup depth=8 / P2 missing-node singleflight"
     }
     $forbidden = @($modeForbidden)
     if ($isGnssSourceAwareManifest) {

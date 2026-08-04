@@ -26,8 +26,7 @@ import {
   type CompactPollCloseOutcome
 } from "./compact-poll-admission";
 import {
-  classifyCompactPollTelemetry,
-  decideCompactPollTimer
+  classifyCompactPollTelemetry
 } from "./compact-poll-retry";
 import {
   isCompactLayeredPortBusy,
@@ -302,6 +301,9 @@ type ActiveCompactBroadcastPollWindow = {
   receivedDeviceIds: Set<string>;
   redundantRetryDeviceIds: Set<string>;
   missingAtRetryDispatch: Set<string>;
+  recoveryQueue: string[];
+  recoveryCommandTags: Map<number, string>;
+  activeRecoveryDeviceId: string | null;
   retriesSent: number;
   retryDispatchedAtMs: number | null;
   startedTs: string;
@@ -2201,6 +2203,9 @@ class GatewayRuntime {
       receivedDeviceIds: new Set<string>(),
       redundantRetryDeviceIds: new Set<string>(),
       missingAtRetryDispatch: new Set<string>(),
+      recoveryQueue: [],
+      recoveryCommandTags: new Map<number, string>(),
+      activeRecoveryDeviceId: null,
       retriesSent: 0,
       retryDispatchedAtMs: null,
       startedTs,
@@ -2271,21 +2276,24 @@ class GatewayRuntime {
       const window = this.activeCompactBroadcastPollWindows.get(windowKey);
       if (!window) return;
 
-      const decision = decideCompactPollTimer({
-        receivedNodes: window.receivedDeviceIds.size,
-        expectedNodes: window.expectedDeviceIds.size,
-        retriesSent: window.retriesSent,
-        maxRetries: this.config.southboundPollingPartialRetries
-      });
-      if (decision === "complete") {
+      if (window.receivedDeviceIds.size >= window.expectedDeviceIds.size) {
         this.closeCompactBroadcastPollWindow(windowKey, "telemetry");
         return;
       }
-      if (decision === "timeout") {
+      if (this.config.southboundPollingPartialRetries <= 0) {
         this.closeCompactBroadcastPollWindow(windowKey, "timeout");
         return;
       }
 
+      window.activeRecoveryDeviceId = null;
+      if (window.missingAtRetryDispatch.size === 0) {
+        window.missingAtRetryDispatch = new Set(
+          Array.from(window.expectedDeviceIds).filter(
+            (deviceId) => !window.receivedDeviceIds.has(deviceId)
+          )
+        );
+        window.recoveryQueue = Array.from(window.missingAtRetryDispatch);
+      }
       await this.retryCompactBroadcastPoll(windowKey);
     } catch (err) {
       this.stats.lastError = err instanceof Error ? err.message : String(err);
@@ -2296,7 +2304,28 @@ class GatewayRuntime {
 
   private async retryCompactBroadcastPoll(windowKey: string): Promise<void> {
     const window = this.activeCompactBroadcastPollWindows.get(windowKey);
-    if (!window || window.retriesSent >= this.config.southboundPollingPartialRetries) return;
+    if (window === undefined) return;
+    if (window.activeRecoveryDeviceId !== null) return;
+
+    let recoveryDeviceId: string | undefined;
+    while (window.recoveryQueue.length > 0 && recoveryDeviceId === undefined) {
+      const candidate = window.recoveryQueue.shift();
+      if (candidate && !window.receivedDeviceIds.has(candidate)) recoveryDeviceId = candidate;
+    }
+    if (!recoveryDeviceId) {
+      this.closeCompactBroadcastPollWindow(
+        windowKey,
+        window.receivedDeviceIds.size === window.expectedDeviceIds.size ? "telemetry" : "timeout"
+      );
+      return;
+    }
+
+    const nodeState = this.nodeState.get(recoveryDeviceId);
+    const label = nodeState?.fieldNodeId;
+    if (!nodeState || (label !== "A" && label !== "B" && label !== "C")) {
+      this.closeCompactBroadcastPollWindow(windowKey, "failed");
+      return;
+    }
 
     const portState = this.ensurePortRuntimeState(window.portPath);
     const serialPort = this.serialPorts.get(window.portPath);
@@ -2313,16 +2342,35 @@ class GatewayRuntime {
       return;
     }
 
-    window.missingAtRetryDispatch = new Set(
-      Array.from(window.expectedDeviceIds).filter((deviceId) => !window.receivedDeviceIds.has(deviceId))
+    let targetedPoll = buildCompactTargetedPollCommand(
+      label,
+      randomUUID().replace(/-/gu, "").slice(0, 8)
     );
+    while (window.recoveryCommandTags.has(targetedPoll.commandTag)) {
+      targetedPoll = buildCompactTargetedPollCommand(
+        label,
+        randomUUID().replace(/-/gu, "").slice(0, 8)
+      );
+    }
     window.retriesSent += 1;
     window.retryDispatchedAtMs = performance.now();
+    window.activeRecoveryDeviceId = recoveryDeviceId;
+    window.recoveryCommandTags.set(targetedPoll.commandTag, recoveryDeviceId);
+    const remainingSessionMs =
+      window.startedAtMs + this.config.southboundPollingSessionTimeoutMs - performance.now();
+    if (remainingSessionMs <= 0) {
+      this.closeCompactBroadcastPollWindow(windowKey, "timeout");
+      return;
+    }
+    clearTimeout(window.timer);
+    window.timer = setTimeout(() => {
+      void this.handleCompactBroadcastPollTimer(windowKey);
+    }, Math.min(this.config.southboundPollingRetryAfterMs, remainingSessionMs));
     portState.sendOwnerState = "writing-command";
     const serialFrame = encodeFieldLinkFrame({
       frameType: "command",
       sequence: this.nextFieldLinkTxSequence(),
-      payloadText: window.command
+      payloadText: targetedPoll.command
     });
 
     try {
@@ -2342,10 +2390,11 @@ class GatewayRuntime {
         {
           err,
           serialDevice: window.portPath,
-          commandTag: window.commandTag,
+          commandTag: targetedPoll.commandTag,
+          recoveryDeviceId,
           retryNumber: window.retriesSent
         },
-        "field gateway compact broadcast retry write failed"
+        "field gateway compact targeted recovery write failed"
       );
       return;
     }
@@ -2361,25 +2410,18 @@ class GatewayRuntime {
     portState.lastPollCommandTs = retryTs;
     portState.sendOwnerState = "waiting-for-poll-telemetry";
 
-    const remainingSessionMs =
-      window.startedAtMs + this.config.southboundPollingSessionTimeoutMs - performance.now();
-    if (remainingSessionMs <= 0) {
-      this.closeCompactBroadcastPollWindow(windowKey, "timeout");
-      return;
-    }
-    clearTimeout(window.timer);
-    window.timer = setTimeout(() => {
-      void this.handleCompactBroadcastPollTimer(windowKey);
-    }, Math.min(this.config.southboundPollingRetryAfterMs, remainingSessionMs));
     this.logger.warn(
       {
         serialDevice: window.portPath,
-        commandTag: window.commandTag,
+        commandTag: targetedPoll.commandTag,
+        recoveryDeviceId,
         retryNumber: window.retriesSent,
-        missingDeviceIds: Array.from(window.missingAtRetryDispatch),
+        remainingDeviceIds: window.recoveryQueue.filter(
+          (deviceId) => !window.receivedDeviceIds.has(deviceId)
+        ),
         responseWindowMs: this.config.southboundPollingRetryAfterMs
       },
-      "field gateway compact broadcast poll retried after a partial response window"
+      "field gateway compact targeted recovery dispatched after broadcast response window"
     );
   }
 
@@ -2894,8 +2936,19 @@ class GatewayRuntime {
     deviceId: string,
     receivedTs: string
   ): void {
-    const windowKey = this.compactBroadcastPollWindowKey(portPath, commandTag);
-    const window = this.activeCompactBroadcastPollWindows.get(windowKey);
+    let windowKey = this.compactBroadcastPollWindowKey(portPath, commandTag);
+    let window = this.activeCompactBroadcastPollWindows.get(windowKey);
+    if (!window) {
+      const recoveredWindow = Array.from(this.activeCompactBroadcastPollWindows.entries()).find(
+        ([, candidate]) =>
+          candidate.portPath === portPath &&
+          candidate.recoveryCommandTags.get(commandTag) === deviceId
+      );
+      if (recoveredWindow) {
+        windowKey = recoveredWindow[0];
+        window = recoveredWindow[1];
+      }
+    }
     const classification = classifyCompactPollTelemetry({
       expected: window?.expectedDeviceIds.has(deviceId) === true,
       alreadyReceived: window?.receivedDeviceIds.has(deviceId) === true,
@@ -2948,8 +3001,15 @@ class GatewayRuntime {
     this.stats.compactBroadcastTelemetryMatches += 1;
     this.stats.lastInternalPollTelemetryTs = receivedTs;
 
-    if (window.receivedDeviceIds.size === window.expectedDeviceIds.size && window.retriesSent === 0) {
+    const completedRecovery = window.activeRecoveryDeviceId === deviceId;
+    if (completedRecovery) {
+      clearTimeout(window.timer);
+      window.activeRecoveryDeviceId = null;
+    }
+    if (window.receivedDeviceIds.size === window.expectedDeviceIds.size) {
       this.closeCompactBroadcastPollWindow(windowKey, "telemetry");
+    } else if (completedRecovery) {
+      void this.retryCompactBroadcastPoll(windowKey);
     }
   }
 

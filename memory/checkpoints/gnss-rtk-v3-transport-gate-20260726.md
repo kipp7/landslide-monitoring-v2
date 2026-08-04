@@ -18,6 +18,22 @@ status: active
 
 ## Last Confirmed State
 
+### Compact V6 Field Gate Rejected; Hybrid Candidate Ready For Clean Build (2026-08-04)
+
+- 原 V6 P1 60 秒通过，但 600 秒只有 `438/453` 完整 core round，并出现 4 个解码
+  错误和 9 个同 tag 重复响应；两组 `79+49=128 B` 证明重复 64 B 帧交织。
+  纯 P2 在 1 ms 冷却的 60 秒对照为 `168/168`、P95 `1.36..1.41 s`，但分层
+  600 秒 arrival P95 上升到 `3.28..3.39 s`，即使只缺 1 个 core 响应仍因速度拒绝。
+- `P2 高频 + P3/30 + P4/60` 的 90 秒对照为 `61/61` 完整轮，所有线框、scope、
+  epoch、profile 和序号门禁为 0 错误，P95 `2108.4/2303.0/2341.0 ms`。因此不再
+  重复广播/P2 参数试验，进入 P1 正常路径 + 去重 + 缺失节点 P2 恢复。
+- RK2206 当前源码在响应前缓存最近 8 个 P1 并忽略重复；RK3568 初始 1500 ms
+  窗口后对缺失节点发送新 P2 tag，逐节点单飞，最多一个恢复 pass；会话总保护
+  6500 ms，但健康轮三帧齐全时立即关闭。P3/P4 正式 cadence 为 `30/60`。
+- C99 host、field-gateway `58/58`、field-gateway lint/build、Python 金值/语法、
+  发布安全正反例、轮询节奏/TX 顺序/快照门禁已经通过。尚未 clean commit、发布或
+  烧录；下一恢复点是提交推送后生成 immutable hybrid A/B/C 包，然后只重刷这一次。
+
 ### Compact V6 Layered Offline Candidate (2026-08-04)
 
 - V5 已冻结为“充分保护时无损但速度失败”的诊断基线。当前分支实现 V6

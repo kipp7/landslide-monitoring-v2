@@ -62,6 +62,7 @@ PAYLOAD_V5_HEX = (
 
 def main() -> None:
     assert build_layered_poll("core").startswith("P1")
+    assert build_layered_poll("core", "B").startswith("P2B")
     assert build_layered_poll("environment", "A").startswith("P3A")
     assert build_layered_poll("audit", "C").startswith("P4C")
     assert layered_extension_scope(3, 3, 15) == "environment"

@@ -94,6 +94,23 @@ int main(void)
     int v6_frame_len;
     int result = 0;
     int index;
+    CompactPollBroadcastDeduplicator deduplicator;
+
+    memset(&deduplicator, 0, sizeof(deduplicator));
+    assert(CompactPollCommand_ShouldSuppressBroadcastDuplicate(
+        &deduplicator, "P112345678", COMPACT_POLL_COMMAND_BYTES) == 0);
+    assert(CompactPollCommand_ShouldSuppressBroadcastDuplicate(
+        &deduplicator, "P112345678", COMPACT_POLL_COMMAND_BYTES) == 1);
+    assert(CompactPollCommand_ShouldSuppressBroadcastDuplicate(
+        &deduplicator, "P2A12345678", COMPACT_TARGETED_POLL_COMMAND_BYTES) == 0);
+    for (index = 0; index < 9; ++index) {
+        char broadcast[COMPACT_POLL_COMMAND_BYTES + 1];
+        snprintf(broadcast, sizeof(broadcast), "P1%08X", (unsigned int)(index + 1));
+        assert(CompactPollCommand_ShouldSuppressBroadcastDuplicate(
+            &deduplicator, broadcast, COMPACT_POLL_COMMAND_BYTES) == 0);
+    }
+    assert(CompactPollCommand_ShouldSuppressBroadcastDuplicate(
+        &deduplicator, "P112345678", COMPACT_POLL_COMMAND_BYTES) == 0);
 
     memset(&data, 0, sizeof(data));
     data.seq = 77U;

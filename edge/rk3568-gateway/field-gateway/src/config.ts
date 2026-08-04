@@ -198,8 +198,8 @@ const configSchema = z
       });
     }
 
-    const requiredRetryWindowMs =
-      data.southboundPollingRetryAfterMs * (data.southboundPollingPartialRetries + 1);
+    const requiredRetryWindowMs = data.southboundPollingRetryAfterMs *
+      (data.southboundPollingPartialRetries > 0 ? 4 : 1);
     if (
       data.southboundPollingPartialRetries > 0 &&
       data.southboundPollingMode !== "compact-broadcast-v1" &&
@@ -219,7 +219,7 @@ const configSchema = z
         code: z.ZodIssueCode.custom,
         path: ["southboundPollingSessionTimeoutMs"],
         message:
-          "SOUTHBOUND_POLLING_SESSION_TIMEOUT_MS must cover every bounded compact broadcast response window"
+          "SOUTHBOUND_POLLING_SESSION_TIMEOUT_MS must cover the broadcast window and three bounded targeted recovery windows"
       });
     }
 

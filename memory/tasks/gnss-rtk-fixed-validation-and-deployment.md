@@ -18,6 +18,28 @@ status: active
 
 ## Current State
 
+### Compact V6 Live Rejection And Hybrid Recovery Candidate (2026-08-04)
+
+- 用户已烧录并上电原 clean V6 A/B/C。P1 分层 60 秒 `57/57` 完整、零错误；
+  600 秒为 `438/453` 完整，4 个解码错误、9 个重复响应，坏帧证明两个 64 B 帧
+  发生交织。P2 定向 1 ms 冷却短测 `168/168` 且刷新 P95 约 `1.36..1.41 s`；
+  但完整分层 P2 600 秒三节点刷新 P95 `3.28..3.39 s`，因此广播缺长期去重、
+  纯串行又不满足速度，两条单一路径均停止。
+- 90 秒低频 P3/P4 对照 `61/61` 完整 core round、零协议/profile/epoch 错误，
+  arrival P95 `2108.4/2303.0/2341.0 ms`；据此把 environment/audit 调整为
+  `30/60` 个完整 core round，避免低频字段拖慢厘米级位移核心。
+- 当前候选使用 P1 健康路径、RK2206 最近 8 个 P1 去重、RK3568 对缺失节点逐个
+  P2 单飞恢复；不再重发同一 P1。离线 C99、Python、field-gateway `58/58`、lint、
+  发布门禁均已通过。下一步从 clean/pushed commit 构建唯一 A/B/C hybrid 包；在用户
+  重新烧录前不得把旧 V6 的结果表述为通过，也不进入 1800 秒或 RTCM。
+- 真机报告分别保留在 RK3568：P1 60/600 SHA-256 为
+  `cc69e8082bcf514cc24183cbece92064e7ec55fdadc34d61e24f45440e6dd020` /
+  `34899b6d7a23845a5c6fb433cc43385f1ec7eb3babd17cffe7895e37083acf38`；
+  P2 1 ms 60、低频分层 90、分层 600 SHA-256 为
+  `d123ecb047b7e0ada1e2daa975b889f7cd3fd12743462a8e2608c17af5e6fc06`、
+  `9aa158fc5bc3ebbe2514ef1077bd3afae90be7a3463496793522556e318509ee`、
+  `1ce6884a40978fa4a23cbdad7674745b83e6c02cf94e6f653c2c478f5b59f7b2`。
+
 ### Compact V6 Layered Clean Release, Awaiting Field Gate (2026-08-04)
 
 - 已实现一个标称 XLS1 单包的分层候选：core/environment/audit 均为 `46 B payload /

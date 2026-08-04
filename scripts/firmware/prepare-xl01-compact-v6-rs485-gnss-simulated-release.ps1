@@ -2,7 +2,7 @@
 param(
   [string]$SdkRoot = "F:\2\openharmony\txsmartropenharmony",
   [string]$ContainerName = "openharmony-dev",
-  [string]$ReleaseDirectory = "F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v6_layered_rs485_gnss_simulated_20260804",
+  [string]$ReleaseDirectory = "F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v6_hybrid_rs485_gnss_simulated_20260804",
   [string]$BatteryCalibrationFile = "",
   [ValidateSet("A", "B", "C")]
   [string[]]$NodeLabels = @("A", "B", "C")
@@ -27,7 +27,7 @@ $gates = @(
   "test-rk2206-release-marker-source-safety.ps1",
   "test-rk2206-snapshot-atomicity.ps1"
 )
-$expectedFirmwareMarker = "fw-rk2206-rtk-compact-v6-layered-v1-20260804"
+$expectedFirmwareMarker = "fw-rk2206-rtk-compact-v6-layered-v2-hybrid-20260804"
 
 foreach ($gate in $gates) {
   & (Join-Path $PSScriptRoot $gate)
@@ -85,7 +85,8 @@ Truth profile
   - GNSS: simulated; UM220 PB6/PB7 UART is not initialized
   - RTCM: disabled for the pure-telemetry gate
   - Polling: compact-layered-v1; P1 core with 0/340/680 ms slots
-  - Extensions: one P3 environment every 3 core rounds, one P4 audit every 15
+  - Recovery: duplicate P1 suppression depth 8; targeted P2 for missing nodes
+  - Extensions: one P3 environment every 30 core rounds, one P4 audit every 60
   - Every telemetry payload: 46 bytes; every complete telemetry frame: 64 bytes
 
 Flash only the image matching physical node A/B/C. This indoor package does
@@ -93,7 +94,7 @@ not prove RTK Fixed or centimetre-level displacement.
 
 After all nodes are online, run the repository script on RK3568:
   sudo python3 scripts/field/xls1_compact_v6_layered_acceptance.py --required-gnss-source simulated --check-prerequisites
-  sudo python3 scripts/field/xls1_compact_v6_layered_acceptance.py --required-gnss-source simulated
+  sudo python3 scripts/field/xls1_compact_v6_layered_acceptance.py --core-mode hybrid --core-response-timeout-ms 1500 --extension-response-timeout-ms 6000 --environment-every-rounds 30 --audit-every-rounds 60 --required-gnss-source simulated
 
 Only after the strict 60/600/1800-second gates pass may a hardware-GNSS V6
 package be built for the outdoor UM220 + BT-760 + CORS gate.

@@ -131,8 +131,10 @@ static unsigned int g_last_platform_command_uptime_s = 0;
 static char g_last_trusted_time_ts[40] = "";
 static char g_last_trusted_time_source[32] = "";
 static volatile uint32_t g_last_platform_command_tick = 0;
+static CompactPollBroadcastDeduplicator g_compact_poll_broadcast_deduplicator;
+static unsigned int g_compact_poll_broadcast_duplicates_suppressed = 0U;
 static volatile int g_field_link_recovery_requested = 0;
-#define FW_RX_DIAG_MARKER "fw-rk2206-rtk-compact-v6-layered-v1-20260804"
+#define FW_RX_DIAG_MARKER "fw-rk2206-rtk-compact-v6-layered-v2-hybrid-20260804"
 bool g_cloud_motor_enabled = false;
 int g_cloud_motor_speed = 0;
 MotorDirection g_cloud_motor_direction = MOTOR_DIRECTION_STOP;
@@ -804,6 +806,15 @@ static void HandleCompactBroadcastPoll(const char *command)
         return;
     }
     if (DOWNLINK_ONLY_MODE || !g_platform_uplink_enabled) {
+        return;
+    }
+    if (CompactPollCommand_ShouldSuppressBroadcastDuplicate(
+            &g_compact_poll_broadcast_deduplicator,
+            command,
+            (int)strlen(command))) {
+        g_compact_poll_broadcast_duplicates_suppressed += 1U;
+        printf("[POLL DEDUP] suppressed=%u\n",
+               g_compact_poll_broadcast_duplicates_suppressed);
         return;
     }
 
@@ -1702,6 +1713,7 @@ static void* DataUploadTask(const char* arg)
     printf("  Poll Request Check: %d ms\n", DATA_UPLOAD_IDLE_CHECK_INTERVAL_MS);
     printf("  Compact Poll: layered-v1 P1 core / P3 environment / P4 audit (%s rollback)\n",
            COMPACT_TARGETED_POLL_MARKER);
+    printf("  Compact Recovery: P1 dedup depth=8 / P2 missing-node singleflight\n");
     printf("  Edge Uplink Mode: %s\n", EDGE_UPLINK_MODE == EDGE_UPLINK_MODE_POLLED ? "Polled" : "Periodic");
     printf("  Telemetry Payload: %s\n",
            TELEMETRY_PAYLOAD_FORMAT == TELEMETRY_PAYLOAD_FORMAT_COMPACT_V6 ? "Compact v6 layered (46-byte payload / 64-byte wire frame)" :

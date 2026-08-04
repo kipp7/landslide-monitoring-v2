@@ -13,6 +13,37 @@ status: active
 
 # Decision: RK2206 Compact V3 RTK Telemetry Contract
 
+## Compact V6 Hybrid Recovery Refinement (2026-08-04)
+
+### Evidence
+
+- 原 V6 P1 分层方案 60 秒为 `57/57` 完整 core round、零错误，但 600 秒仅
+  `438/453` 完整，出现 4 个解码错误和 9 个同 tag 重复帧；两组坏帧均精确为
+  `79+49=128 B`，即两个 64 B 帧交织。报告 SHA-256 为
+  `34899b6d7a23845a5c6fb433cc43385f1ec7eb3babd17cffe7895e37083acf38`。
+- P2 定向串行把 1 ms 冷却短测做到 `168/168`、零通信错误，刷新 P95
+  `1358.2/1383.3/1410.2 ms`；但完整分层 600 秒为 `1010/1011` core 帧，三节点
+  arrival P95 已升至 `3392.2/3390.8/3278.4 ms`，严格速度失败。报告 SHA-256
+  `1ce6884a40978fa4a23cbdad7674745b83e6c02cf94e6f653c2c478f5b59f7b2`。
+
+### Decision
+
+- 高频 core 改为混合闭环：正常轮只发一个 P1；RK2206 在进入 `0/340/680 ms`
+  响应时隙前抑制最近 8 个 P1 的重复投递；初始窗口缺节点时，RK3568 不重发 P1，
+  而是逐节点发送带新 tag 的 P2，收到或超时后才处理下一个缺失节点。
+- P3 environment 从每 3 个完整 core round 调整为每 30 个，P4 audit 从每 15 个
+  调整为每 60 个。90 秒实测的低频对照为 `61/61` 完整 core round，P3/P4 均匹配，
+  arrival P95 `2108.4/2303.0/2341.0 ms`，报告 SHA-256
+  `9aa158fc5bc3ebbe2514ef1077bd3afae90be7a3463496793522556e318509ee`。
+- 性能门槛不降低：per-node core arrival P95 仍 `<=2500 ms`，产生有效 core 的命令
+  最大响应仍 `<=1500 ms`。恢复总保护窗只约束异常轮，不用于放宽健康轮速度。
+
+### Boundary
+
+该混合方案已通过 C99 host、field-gateway `58/58`、lint/build、Python 金值和发布
+正反例门禁，但尚未从 clean commit 生成、烧录或完成 `60/600/1800` 真机验收。
+旧 V6 layered-v1 镜像继续保留为失败证据，不再作为下一轮烧录包。
+
 ## Compact V6 Layered Amendment (2026-08-04)
 
 ### Context
