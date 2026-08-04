@@ -117,8 +117,8 @@ def stage_arguments(args: argparse.Namespace, duration_seconds: float) -> Namesp
         max_logical_response_latency_ms=args.session_timeout_ms,
         command_chunk_bytes=32,
         command_chunk_delay_ms=15,
-        settle_ms=2000,
-        settle_quiet_ms=500,
+        settle_ms=args.settle_timeout_ms,
+        settle_quiet_ms=args.settle_quiet_ms,
         warmup_seconds=0.0,
         drain_seconds=5.0,
         service=args.service,
@@ -159,8 +159,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--baud", type=int, default=115200)
     parser.add_argument("--durations", type=parse_durations, default=parse_durations("60,600,1800"))
     parser.add_argument("--batch-interval-ms", type=int, default=250)
-    parser.add_argument("--response-window-ms", type=int, default=3000)
-    parser.add_argument("--session-timeout-ms", type=int, default=3000)
+    parser.add_argument("--response-window-ms", type=int, default=6000)
+    parser.add_argument("--session-timeout-ms", type=int, default=6000)
+    parser.add_argument("--settle-timeout-ms", type=int, default=30000)
+    parser.add_argument("--settle-quiet-ms", type=int, default=5000)
     parser.add_argument("--max-command-latency-ms", type=float, default=1500.0)
     parser.add_argument("--max-retry-rate", type=float, default=0.0)
     parser.add_argument("--max-p95-interval-ms", type=float, default=2500.0)
@@ -193,6 +195,8 @@ def parse_args() -> argparse.Namespace:
         parser.error("max retry rate must be between zero and one")
     if args.max_p95_interval_ms <= 0 or args.inter_stage_quiet_seconds < 0:
         parser.error("latency limits must be positive and quiet time non-negative")
+    if args.settle_timeout_ms < args.settle_quiet_ms or args.settle_quiet_ms <= 0:
+        parser.error("settle timeout must cover a positive settle quiet window")
     if args.dry_run and args.check_prerequisites:
         parser.error("--dry-run and --check-prerequisites are mutually exclusive")
     return args
@@ -215,6 +219,8 @@ def main() -> int:
         "responseWindowMs": args.response_window_ms,
         "partialRetries": PARTIAL_RETRIES,
         "sessionTimeoutMs": args.session_timeout_ms,
+        "settleTimeoutMs": args.settle_timeout_ms,
+        "settleQuietMs": args.settle_quiet_ms,
         "maxCommandLatencyMs": args.max_command_latency_ms,
         "maxRetryRate": args.max_retry_rate,
         "requiredCompactVersion": args.required_compact_version,

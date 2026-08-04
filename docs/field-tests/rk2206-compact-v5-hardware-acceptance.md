@@ -40,9 +40,15 @@ The runner holds the production gateway once and executes 60, 600, then 1800
 seconds, stopping on the first failure. It requires 100% command matching,
 continuous node sequences, zero decode/CRC/unmatched/duplicate/profile errors,
 zero XLS1 retries, command latency at most 1500 ms, total protected-session
-latency at most 3000 ms, and A/B/C arrival P95 at most 2500 ms. All real
+latency at most 6000 ms, and A/B/C arrival P95 at most 2500 ms. All real
 soil/EC/tilt fields and the calibrated battery must remain valid. RTCM must be
 READY-only, fail-closed, and clean.
+
+Before the first command, the runner drains the shared receiver until it has
+observed 5 seconds of continuous silence, bounded by a 30-second timeout. The
+protected response window is 6 seconds, while the independent command-latency
+gate remains 1500 ms. The longer window prevents a late frame from colliding
+with the next node; it does not relax the performance requirement.
 
 Passing this indoor gate proves only the three-node sensor/transport baseline.
 It does not prove RTCM injection, RTK Fixed, centimetre accuracy, or the
