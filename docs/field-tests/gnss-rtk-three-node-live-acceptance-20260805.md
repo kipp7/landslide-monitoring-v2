@@ -9,6 +9,56 @@ It separates link capability from professional displacement acceptance.
 No CORS credentials, real coordinates, raw RTCM, or protected environment
 contents belong in this document.
 
+## G3B v1 Field Result And 600-Second Reconvergence
+
+All three nodes were subsequently flashed with the clean G3B v1 release. A
+60-second legacy-G3R PROBE and the staged G3B PROBE gates completed without
+CRC, reassembly, queue, UART-write, schema, interleaving, or normal-poll
+errors. At aggregation four, 100 accepted inner fragments were carried by 38
+outer XLS1 frames and the A/B/C node counters agreed.
+
+Source and burst comparisons then established the following:
+
+- `AUTO`, aggregation four, burst four remained at `GGA=2` and had
+  correction-age P95 near 16 seconds, so it was rejected.
+- `RTCM32_GGB`, aggregation four, burst four produced `13/13` tail samples at
+  `GGA=4` on A/B/C in its first 180-second LIVE run. Correction-age P95 and
+  maximum were still 6 seconds, so the professional gate remained closed.
+- Increasing the burst allowance to eight did not improve age and caused A/B
+  to remain FLOAT for the tail window. It was rejected.
+- A bounded 200 ms observation-coalescing experiment produced zero actual
+  coalescing deferrals on the real stream. Its 180-second result and a matching
+  coalescing-disabled control both remained FLOAT with otherwise clean links.
+  The experiment therefore had no demonstrated benefit and was removed rather
+  than retained as another production control.
+
+After two minutes of uninterrupted satellite tracking, the retained
+`RTCM32_GGB / aggregation 4 / burst 4 / 600 ms guard / 1 Hz observation`
+candidate ran for 600 seconds. A first reached FIXED at about four minutes and
+all three reached FIXED at about six minutes. The final 120-second window was:
+
+- A/B/C `12/12` samples at `GGA=4`;
+- final A/B/C correction age `4/4/4 s`;
+- A/B/C correction-age P95 and maximum `7/7 s`;
+- 102 issued and 102 completed normal polls, with zero timeout;
+- 1,868 valid caster frames, 1,058 accepted inner RTCM writes, and 508 outer
+  field-frame writes;
+- zero caster CRC, RTCM write, schema, and interleaving errors.
+
+This separates convergence from transport failure: a 180-second run after
+corrections have been interrupted is not long enough to reject the hardware or
+firmware. The shared system can regain three-node FIXED, but it still fails the
+professional freshness gate because P95 and maximum correction age are above
+the required 3 and 5 seconds. No displacement baseline may be created yet.
+
+The authoritative result remains on RK3568 at
+`/var/lib/lsmv2/experiments/g3b4-rtcm32ggb-reconvergence-live600-20260805-20260805-222313.json`.
+Its monitor SHA-256 is
+`9ea9cb7f7cc96a54c2c09115dcf8b7aa85b45591758197dccebf82950f813be8`.
+After the session, NTRIP was disabled, runtime returned to PROBE, aggregation
+returned to one, the gateway was active with zero service restarts, and the
+pre-experiment stable build was restored.
+
 ## Tested Hardware And Software
 
 - Three RK2206 field nodes A/B/C with UM220-IV NK, BT-760, real SC16IS752

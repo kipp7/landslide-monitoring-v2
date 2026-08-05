@@ -18,6 +18,32 @@ status: active
 
 ## Current State
 
+### G3B v1 Three-Node FIXED Reconvergence; Age Gate Still Fails (2026-08-05)
+
+- A/B/C 已烧录正式 G3B v1 镜像。legacy G3R、G3B 聚合 2 和聚合 4 的分阶段 PROBE
+  均完成；聚合 4 的 60 秒窗口以 38 个 XLS1 外层帧承载 100 个内层片段，三节点计数
+  一致，CRC、重组、队列、UART 写、普通轮询、schema 和交织错误均为 0。
+- `AUTO` 在聚合 4/burst 4 下仍为三节点 `GGA=2`、age P95 约 16 秒，已拒绝。
+  `RTCM32_GGB` 的首次 180 秒 LIVE 在最后 120 秒令 A/B/C 全部 `13/13 GGA=4`，但
+  age P95/max 均为 6 秒。burst 8 没有降低 age，且 A/B 后段保持 FLOAT，已拒绝。
+- 200 ms 观测合并实验在真实流上的触发计数始终为 0；其 180 秒 LIVE 与同参数
+  `coalesce=0` 对照均保持 FLOAT，普通链路都为零错误。该开关没有现场收益，代码和
+  RK3568 构建均已撤回测试前稳定版本，未进入 Git。
+- 等待两分钟连续跟踪后，以
+  `RTCM32_GGB / G3B=4 / burst=4 / guard=600 ms / observation=1 Hz` 运行 600 秒。
+  A 约 4 分钟先 FIXED，约 6 分钟后三节点全部 FIXED；
+  最后 120 秒 A/B/C 均为 `12/12 GGA=4`，最终 age 为 `4/4/4 s`。这证明断续测试后的
+  180 秒不足以否决硬件或固件，三节点能重新收敛。
+- 600 秒窗口完成普通轮询 `102/102`，接收 1868 个有效 caster 帧，写入 1058 个
+  内层 RTCM 片段和 508 个外层 field 帧；CRC、RTCM 写、poll timeout、schema、交织
+  错误全部为 0。但 A/B/C 的 age P95/max 都是 7 秒，且最后 120 秒并非全程 trusted/
+  eligible，所以专业门禁仍为 false，禁止建立位移基线。
+- 权威报告为 RK3568 上的
+  `/var/lib/lsmv2/experiments/g3b4-rtcm32ggb-reconvergence-live600-20260805-20260805-222313.json`，
+  monitor SHA-256 为
+  `9ea9cb7f7cc96a54c2c09115dcf8b7aa85b45591758197dccebf82950f813be8`。结束后已恢复
+  `NTRIP_ENABLED=false`、runtime probe、聚合数 1；服务 active、`NRestarts=0`。
+
 ### G3B v1 Clean Release Verified; 0.5 Hz Still Fails Age Gate (2026-08-05)
 
 - 天线调整后的双观测组 `0.5 Hz` LIVE 连续 `300 s`：最后 `120 s` A/B 持续
@@ -393,20 +419,19 @@ status: active
 
 ## Plan
 
-1. 部署匹配网关但保持 `NTRIP_ENABLED=false`、runtime probe、聚合数 1。
-2. 三节点烧录后按“普通遥测 -> legacy G3R PROBE -> G3B/2 PROBE -> 1 Hz LIVE 600 s
-   -> 1800 s”推进；任一阶段失败立即恢复 fail-closed。
-3. C 若继续 GGA=5，独立调整其天线和接收环境；不得以降低三节点共同 cadence 或放宽
-   correction-age/GST 门槛冒充系统通过。
+1. 保持已验证候选和 fail-closed 默认值不变，补齐 caster -> shaper -> XLS1 -> RK2206
+   -> UM220 -> GGA 的分段时间证据，先定位 age P95 7 秒的来源。
+2. 只对有分段证据的延迟点做单变量修改，然后重复 600 秒 LIVE；任一错误门或 age 门
+   失败立即恢复 NTRIP false、runtime probe、聚合数 1。
+3. 600 秒达到三节点持续 GGA=4、age P95 `<=3 s`、max `<=5 s`、可信 GST 和全链零
+   错误后，才执行 1800 秒和 60 分钟生产验收，再建立 ECEF/ENU 基线。
 
 ## Open Questions
 
-- correction age 约 `10 s` 是真实修正新鲜度、共享链路调度延迟、节点时间戳口径，
+- correction age P95 约 `7 s` 是真实修正新鲜度、共享链路调度延迟、节点时间戳口径，
   还是 UM220 GGA age 字段解析/更新节奏造成？必须用节点端完成/注入时间和接收机输出对齐验证。
-- G3B 聚合数 2 能否在双观测组 1 Hz 的 600/1800 秒长测中同时保持普通遥测零丢失、
-  三节点 Fixed 连续性、age/GST 门禁和旧队列隔离？
-- C 在收到不少于 A/B 的修正片段时仍为 GGA=5，调整其天线位置和局部接收环境后能否
-  与 A/B 同时持续 GGA=4？
+- 为什么 G3B=4 已将最后 120 秒三节点稳定到 GGA=4、全链错误归零，但 GGA age 仍在
+  4--7 秒波动？是选帧限频、普通轮询保护、UM220 应用时机还是上游观测历元导致？
 - RK2206 无可信绝对 Unix 时钟时，是否接受网关绝对 TTL + 节点单调队列龄的双层策略，或需要补充可信时间同步？
 - 单条修正流供同一现场 3 台 rover 使用是否满足服务商授权与空间范围？
 

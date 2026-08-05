@@ -18,6 +18,30 @@ status: active
 
 ## Last Confirmed State
 
+### G3B v1 600-Second Three-Node Reconvergence (2026-08-05)
+
+- A/B/C 已烧录正式 G3B v1 包，legacy G3R、聚合 2、聚合 4 PROBE 均通过。聚合 4
+  的 60 秒窗口用 38 个 XLS1 外层帧承载 100 个内层片段，三节点接受计数一致，全部
+  CRC、重组、队列、UART 写、轮询、schema 和交织错误为 0。
+- `AUTO` 因三节点保持 GGA=2 且 age P95 约 16 秒被拒绝；`RTCM32_GGB`、聚合 4、
+  burst 4 的首次 180 秒窗口在最后 120 秒令三节点全部 `13/13 GGA=4`，但 age P95/
+  max 为 6 秒。burst 8 没有改善 age 且使 A/B 后段 FLOAT，已拒绝。
+- 200 ms observation coalesce 在真实流上零触发；实验组和 coalesce=0 对照的 180 秒
+  窗口均保持 FLOAT、链路零错误。因此该代码和部署均已撤回，不增加无现场收益的
+  生产参数。
+- 等待两分钟连续跟踪后，以保留参数运行 600 秒：A 约 4 分钟 FIXED，约 6 分钟后
+  A/B/C 全部 FIXED，最后 120 秒均为 `12/12 GGA=4`，最终 age 为 `4/4/4 s`。普通
+  轮询 `102/102`，有效 caster 帧 1868、内层 RTCM 写 1058、外层 field 写 508，
+  全部错误门为 0。
+- A/B/C 最后 120 秒 age P95/max 均为 7 秒，并非全程 trusted/eligible；专业门禁
+  仍失败，禁止建立 ENU 基线。权威报告为
+  `/var/lib/lsmv2/experiments/g3b4-rtcm32ggb-reconvergence-live600-20260805-20260805-222313.json`，
+  monitor SHA-256
+  `9ea9cb7f7cc96a54c2c09115dcf8b7aa85b45591758197dccebf82950f813be8`。
+- 结束时 RK3568 已恢复测试前稳定构建、NTRIP false、runtime probe、聚合数 1；服务
+  active、`NRestarts=0`。下一步只做 correction-age 分段归因，不重复已拒绝的 burst、
+  AUTO 或 coalesce 参数。
+
 ### 0.5 Hz Observation And G3B v1 Candidate (2026-08-05)
 
 - 调整天线摆放后的双观测组 `0.5 Hz` LIVE 连续观测 `300 s`。最后 `120 s` 内
@@ -500,37 +524,34 @@ status: active
 
 ## In Progress
 
-- 正式 G3B v1 A/B/C 包已从 clean commit 生成并复验，等待按物理标签烧录。
-- 新网关部署后保持 `NTRIP_ENABLED=false`、runtime `probe`、聚合数 `1`；等待
-  三节点新固件全部烧录后再依次执行 legacy G3R PROBE、G3B 聚合数 2 PROBE 和
-  受控 1 Hz LIVE。
-
-- UART drain V2 LIVE 候选已烧录到 A/B/C；三节点已同时进入 RTK FIXED，证明硬件和
-  传输路径可用。相关 RK2206 与网关源码已由 `bd356416` 提交并推送；候选发布目录
-  尚未从该 clean commit 重建，不能称为正式版本。
-- 当前阻断项是 correction age 约 `10 s` 及 GST/可信证据不足，而不是能否进入 FIXED。
-  在 age P95 `<=3 s`、max `<=5 s` 且可信字段通过前，`rtk_displacement_eligible`
-  必须保持 false，不建立专业位移基线。
-- B/C 的最终 G3S V6 查询尚未执行；A 报告中的节点端 LIVE 注入计数也需在明早重新
-  上电后复核。今晚 A/B/C 已收回，RK3568 保持 NTRIP 关闭。
+- 正式 G3B v1 A/B/C 包已烧录；legacy G3R、G3B 聚合 2/4 PROBE 及 600 秒三节点
+  FIXED 恢复测试已完成。生产候选只保留
+  `RTCM32_GGB / G3B=4 / burst=4 / guard=600 ms / observation=1 Hz`。
+- 当前阻断项已收敛为 correction-age 时效：最后 120 秒虽持续三节点 GGA=4，但
+  P95/max 为 7 秒。下一步需分段量测 caster 到达、网关整形/排队、XLS1 下发、
+  RK2206 重组/UART 写入和 GGA 输出，不继续只靠调整 burst 猜测。
+- RK3568 已恢复测试前稳定构建并保持 `NTRIP_ENABLED=false`、runtime probe、聚合数 1；
+  200 ms 观测合并实验已删除，不进入生产配置。
 - OTA 当前只允许离线设计和可恢复备用板验证；现场 A/B/C 的 `ota_prepare/apply`
   必须返回 `unsupported`。
 
 ## Next Actions
 
-1. 原子部署 RK3568 网关，但保持 NTRIP 关闭、runtime probe、聚合数 1。
-2. 用户按 A/B/C 标签烧录后先做普通遥测与旧 G3R PROBE，再切聚合数 2 做 G3B PROBE；
-   要求外层写入与约两倍内层接受计数一致，全部错误增量为 0。
-3. 执行双观测组 1 Hz LIVE 600 秒；只有三节点持续 GGA=4、age P95 `<=3 s`、max
-   `<=5 s`、可信 GST 和全链零错误才进入 1800 秒。
-4. C 若仍为 GGA=5，单独调整 C 天线/环境并复测，不降低共同 cadence 掩盖独立故障。
+1. 在不改变保留参数的前提下补齐修正时效分段证据：caster 接收、shaper 入/出队、
+   field 写入、RK2206 完帧/UART 注入和接收机 GGA age，确认 7 秒来自链路调度、接收机
+   报告口径还是上游历元延迟。
+2. 只有定位并修复了可证明的延迟段，才重复 600 秒 LIVE；三节点持续 GGA=4、age P95
+   `<=3 s`、max `<=5 s`、可信 GST 和全链零错误后才进入 1800 秒。
+3. 1800 秒通过后再做 60 分钟生产验收和 ECEF/ENU 基线；此前 UI 只能显示 FIXED 与
+   专业门禁状态，不能显示“厘米级位移已验收”。
+4. 保持天线位置和连续供电，避免把每次中断后的 4--6 分钟重新收敛误判成程序回归。
 
 ## Risks
 
 - 115200 只是 MCU-UART 标称值，不能证明 DL-XLS1 的广播、半双工、内部重试和队列吞吐。
 - gateway 输入 RTCM CRC 正常不等于节点收到新鲜修正；必须使用节点端完成/注入/TTL 证据。
 - `quality=4` 只证明接收机报告 RTK FIXED，不等于差分龄、GST 和位移基线都可信；本轮
-  age 约 `10 s` 已明确使专业位移门禁失败，比赛界面也不得把它显示为“厘米级已验收”。
+  age P95/max 为 `7 s`，已明确使专业位移门禁失败，比赛界面也不得把它显示为“厘米级已验收”。
 - RK2206 无可信绝对时钟时，旧模块队列风险不能只依赖节点 TTL；session epoch 必须持久化，网关必须先拒绝过期数据。
 - 三节点短 PROBE 已证明 512 B 可消除本轮 assembly expiry，但只有 36 帧增量，仍不能替代 60/600 秒门禁；160 B 已现场失败，禁止直接用于 LIVE。
 - 单 NTRIP 流供 3 台 rover 使用仍需确认服务商授权和同站点空间范围。
@@ -543,15 +564,14 @@ status: active
 
 ## Resume Prompt
 
-继续 2026-08-05 XLS1/RTK G3B 任务：双观测组 0.5 Hz 的 300 秒观测中，最后 120 秒
-A/B 持续 GGA=4，C 全程 GGA=5；A/B/C 片段约 1514/1515/1533，网关链路错误为 0，
-但 age P95 仍为 10/9/7 秒，专业位移门禁关闭。G3B v1 已实现一个 field-link 帧聚合
-2..4 个旧 G3R，默认聚合数 1，双方上限 1024 B，外层/内层计数分离；实现提交
-`d4a71555` 已推送，本地 71/71、lint、C99 和发布安全门禁通过。正式 A/B/C 包目录为
-`F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v6_rtcm_batch_v1_rs485_gnss_hardware_live_20260805`，
-manifest SHA-256 `11afc1f4...494a6f`，独立验证通过。下一步部署 RK3568 但保持 NTRIP
-关闭、runtime probe、聚合数 1。三节点烧录后依次做普通遥测、legacy G3R PROBE、
-聚合数 2 G3B PROBE、双观测组 1 Hz LIVE 600/1800 秒。晋级条件为三节点持续 GGA=4、
-age P95 不超过 3 秒、max 不超过 5 秒、可信 GST 和全链零错误。C 若仍 FLOAT，单独
-调整 C 天线与环境，不降低共同 cadence 或门槛。Git/memory 禁止写入凭据、端点、
-坐标或原始 RTCM。
+继续 2026-08-05 XLS1/RTK G3B 任务：A/B/C 已烧录正式 G3B v1，legacy G3R、聚合 2/4
+PROBE 均通过。保留候选为 RTCM32_GGB、G3B=4、burst=4、guard=600 ms、observation=1 Hz。
+等待两分钟后运行 600 秒，A 约 4 分钟 FIXED、约 6 分钟后三节点全 FIXED；最后 120 秒
+A/B/C 均为 12/12 GGA=4，最终 age 4/4/4 秒，普通轮询 102/102，caster 1868 帧、
+内层 RTCM 1058、外层 field 508，全部链路错误为 0。但三节点 age P95/max 都为 7 秒，
+专业位移门禁仍关闭。AUTO、burst=8 和 200 ms coalesce 已拒绝；coalesce 代码/部署已
+撤回。RK3568 当前为测试前稳定构建、NTRIP false、runtime probe、聚合数 1，服务
+active/NRestarts=0。下一步不要继续盲调参数；量测 caster 到达、shaper 排队、field
+写入、RK2206 完帧/UART 注入和 GGA age 的分段时间，定位 7 秒来源后再做单变量修复与
+600 秒复验。只有 P95 <=3 秒、max <=5 秒、三节点持续 GGA=4、可信 GST 和全链零错误
+才进入 1800 秒。Git/memory 禁止写入凭据、端点、坐标或原始 RTCM。
