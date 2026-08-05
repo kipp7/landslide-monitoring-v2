@@ -575,7 +575,7 @@ static void HandleFieldLinkMessage(const FieldLinkFrameMessage *message, Statist
 
     if (message->type == FIELD_LINK_FRAME_TYPE_RTCM) {
 #if ENABLE_GPS && GNSS_RTCM_INJECTION_CAPABILITY != GNSS_RTCM_INJECTION_DISABLED
-        GnssRtcmInjection_AcceptFragment(
+        GnssRtcmInjection_AcceptPayload(
             (const uint8_t *)message->payload,
             (uint16_t)message->payload_len,
             XL01_MonotonicMs()

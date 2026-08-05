@@ -48,6 +48,8 @@ typedef struct {
 
 #define GNSS_RTCM_MODE_COMMAND_BYTES 19
 #define GNSS_RTCM_AGE_UNAVAILABLE UINT32_MAX
+#define GNSS_RTCM_BATCH_HEADER_BYTES 8U
+#define GNSS_RTCM_BATCH_MAX_FRAGMENTS 4U
 
 enum {
     GNSS_RTCM_STATE_READY = 1U << 0,
@@ -96,6 +98,12 @@ void GnssRtcmInjection_GetRuntimeStatus(
 );
 
 GnssRtcmReassemblyStatusV3 GnssRtcmInjection_AcceptFragment(
+    const uint8_t *payload,
+    uint16_t payload_bytes,
+    uint64_t monotonic_ms
+);
+
+GnssRtcmReassemblyStatusV3 GnssRtcmInjection_AcceptPayload(
     const uint8_t *payload,
     uint16_t payload_bytes,
     uint64_t monotonic_ms

@@ -3,6 +3,7 @@ const test = require("node:test");
 
 const { crc24q, decodeRtcmFragmentV3 } = require("../dist/gnss-transport-v3.js");
 const { RtcmDownlinkController } = require("../dist/rtcm-downlink-controller.js");
+const { decodeRtcmFragmentBatchV1 } = require("../dist/rtcm-fragment-batch.js");
 
 function buildRtcmFrame(messageType, extraPayloadBytes = 72) {
   const payload = Buffer.alloc(2 + extraPayloadBytes);
@@ -93,4 +94,40 @@ test("RTCM controller returns a failed serial fragment to the head of its bounde
 
   const retry = controller.takeNextFragment(10_001);
   assert.deepEqual(retry, first);
+});
+
+test("RTCM controller aggregates two observations and restores their order after a failed write", () => {
+  const now = 10_000;
+  const controller = new RtcmDownlinkController({
+    mode: "live",
+    targetMask: 0x01,
+    leaseSeconds: 90,
+    maxFragmentDataBytes: 512,
+    observationIntervalMs: 1000,
+    maxFragmentsPerFieldFrame: 2,
+    sessionEpoch: 0x01020304
+  });
+  controller.observeNode({
+    nodeLabel: "A",
+    mode: 2,
+    sessionEpoch: 0x01020304,
+    leaseRemainingMs: 80_000,
+    observedUnixMs: now
+  });
+  controller.offerNtripChunk(Buffer.concat([buildRtcmFrame(1074, 48), buildRtcmFrame(1124, 160)]), now);
+
+  const prepared = controller.takeNextFieldPayload(now);
+  assert.ok(prepared);
+  assert.equal(prepared.batched, true);
+  assert.equal(prepared.fragments.length, 2);
+  assert.deepEqual(decodeRtcmFragmentBatchV1(prepared.payload), prepared.fragments);
+  assert.deepEqual(
+    prepared.fragments.map((fragment) => decodeRtcmFragmentV3(fragment).messageType),
+    [1074, 1124]
+  );
+
+  controller.returnFieldPayload(prepared);
+  const retry = controller.takeNextFieldPayload(now + 1);
+  assert.ok(retry);
+  assert.deepEqual(retry.fragments, prepared.fragments);
 });

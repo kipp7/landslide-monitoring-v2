@@ -142,3 +142,56 @@ test("NTRIP validates coordinate frame and reconnect delay range", () => {
     /NTRIP_RECONNECT_MAX_DELAY_MS/u
   );
 });
+
+test("RTCM poll arbitration defaults are conservative and overrides are bounded", () => {
+  const defaults = loadConfigFromEnv({ MQTT_URL: "mqtt://127.0.0.1:1883" });
+  assert.equal(defaults.rtcmMaxFragmentsBetweenPolls, 4);
+  assert.equal(defaults.rtcmPostBurstPollGuardMs, 600);
+  assert.equal(defaults.rtcmMinCorrectionWindowMs, 0);
+  assert.equal(defaults.rtcmMaxFragmentsPerFieldFrame, 1);
+
+  const candidate = loadConfigFromEnv({
+    MQTT_URL: "mqtt://127.0.0.1:1883",
+    RTCM_MAX_FRAGMENTS_BETWEEN_POLLS: "12",
+    RTCM_POST_BURST_POLL_GUARD_MS: "250",
+    RTCM_MIN_CORRECTION_WINDOW_MS: "2500",
+    RTCM_MAX_FRAGMENTS_PER_FIELD_FRAME: "2"
+  });
+  assert.equal(candidate.rtcmMaxFragmentsBetweenPolls, 12);
+  assert.equal(candidate.rtcmPostBurstPollGuardMs, 250);
+  assert.equal(candidate.rtcmMinCorrectionWindowMs, 2500);
+  assert.equal(candidate.rtcmMaxFragmentsPerFieldFrame, 2);
+
+  assert.throws(
+    () =>
+      loadConfigFromEnv({
+        MQTT_URL: "mqtt://127.0.0.1:1883",
+        RTCM_MAX_FRAGMENTS_BETWEEN_POLLS: "33"
+      }),
+    /rtcmMaxFragmentsBetweenPolls/u
+  );
+  assert.throws(
+    () =>
+      loadConfigFromEnv({
+        MQTT_URL: "mqtt://127.0.0.1:1883",
+        RTCM_POST_BURST_POLL_GUARD_MS: "99"
+      }),
+    /rtcmPostBurstPollGuardMs/u
+  );
+  assert.throws(
+    () =>
+      loadConfigFromEnv({
+        MQTT_URL: "mqtt://127.0.0.1:1883",
+        RTCM_MIN_CORRECTION_WINDOW_MS: "5001"
+      }),
+    /rtcmMinCorrectionWindowMs/u
+  );
+  assert.throws(
+    () =>
+      loadConfigFromEnv({
+        MQTT_URL: "mqtt://127.0.0.1:1883",
+        RTCM_MAX_FRAGMENTS_PER_FIELD_FRAME: "5"
+      }),
+    /rtcmMaxFragmentsPerFieldFrame/u
+  );
+});

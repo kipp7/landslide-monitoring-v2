@@ -338,6 +338,65 @@ static void TestRuntimeModeProtocol(void)
     assert(runtime.session_epoch == 0U);
 }
 
+static void TestRtcmFragmentBatch(void)
+{
+    uint8_t frame[RTCM_FRAME_BYTES];
+    uint8_t first[GNSS_RTCM_V3_FRAGMENT_HEADER_BYTES + TEST_FRAGMENT_DATA_BYTES];
+    uint8_t second[GNSS_RTCM_V3_FRAGMENT_HEADER_BYTES + TEST_FRAGMENT_DATA_BYTES];
+    uint8_t batch[FIELD_LINK_MAX_PAYLOAD_BYTES];
+    uint16_t first_bytes;
+    uint16_t second_bytes;
+    uint16_t offset = GNSS_RTCM_BATCH_HEADER_BYTES;
+    uint16_t second_offset;
+    GnssRtcmInjectionStats stats;
+
+    BuildRtcm(frame);
+    first_bytes = BuildFragment(
+        frame, 0U, 71U, 1U, GNSS_V3_TARGET_NODE_A, TEST_NOW_MS, first
+    );
+    second_bytes = BuildFragment(
+        frame, 0U, 71U, 2U, GNSS_V3_TARGET_NODE_A, TEST_NOW_MS, second
+    );
+    memset(batch, 0, sizeof(batch));
+    batch[0] = 0x47U;
+    batch[1] = 0x33U;
+    batch[2] = 0x42U;
+    batch[3] = 1U;
+    batch[4] = 2U;
+    WriteU16(batch + offset, first_bytes);
+    offset = (uint16_t)(offset + 2U);
+    memcpy(batch + offset, first, first_bytes);
+    offset = (uint16_t)(offset + first_bytes);
+    WriteU16(batch + offset, second_bytes);
+    offset = (uint16_t)(offset + 2U);
+    second_offset = offset;
+    memcpy(batch + offset, second, second_bytes);
+    offset = (uint16_t)(offset + second_bytes);
+
+    assert(GnssRtcmInjection_Init(1U) == 0);
+    ArmInjection(GNSS_RTCM_INJECTION_PROBE, 71U, TEST_NOW_MS - 100U);
+    batch[second_offset] ^= 0x01U;
+    assert(GnssRtcmInjection_AcceptPayload(batch, offset, TEST_NOW_MS) ==
+           GNSS_RTCM_REASSEMBLY_REJECTED);
+    GnssRtcmInjection_GetStats(&stats);
+    assert(stats.accepted_fragments == 0U);
+    assert(stats.rejected_fragments == 1U);
+    batch[second_offset] ^= 0x01U;
+
+    assert(GnssRtcmInjection_AcceptPayload(batch, offset, TEST_NOW_MS) ==
+           GNSS_RTCM_REASSEMBLY_ACCEPTED);
+    GnssRtcmInjection_GetStats(&stats);
+    assert(stats.accepted_fragments == 2U);
+    assert(stats.rejected_fragments == 1U);
+
+    batch[offset++] = 0U;
+    assert(GnssRtcmInjection_AcceptPayload(batch, offset, TEST_NOW_MS + 1U) ==
+           GNSS_RTCM_REASSEMBLY_REJECTED);
+    GnssRtcmInjection_GetStats(&stats);
+    assert(stats.accepted_fragments == 2U);
+    assert(stats.rejected_fragments == 2U);
+}
+
 static void TestBoundedInjectionQueue(void)
 {
     uint8_t frame[RTCM_FRAME_BYTES];
@@ -426,6 +485,7 @@ int main(void)
     TestRtcmReassembly();
     TestFreshnessAndSessionRejection();
     TestRuntimeModeProtocol();
+    TestRtcmFragmentBatch();
     TestBoundedInjectionQueue();
     TestInjectionCrcCounter();
     printf("gnss_transport_v3_host_test passed reassembler_bytes=%u queue_bytes=%u\n",

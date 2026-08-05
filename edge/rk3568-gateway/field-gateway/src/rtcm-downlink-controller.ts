@@ -6,6 +6,10 @@ import {
   fragmentRtcmFrameV3
 } from "./gnss-transport-v3";
 import { Rtcm3StreamDecoder, Um220RtcmShaper } from "./rtcm-downlink-shaper";
+import {
+  RTCM_FRAGMENT_BATCH_MAX_PAYLOAD_BYTES,
+  encodeRtcmFragmentBatchV1
+} from "./rtcm-fragment-batch";
 
 export type RtcmRuntimeMode = "probe" | "live";
 
@@ -15,7 +19,14 @@ export type RtcmDownlinkControllerConfig = {
   leaseSeconds: number;
   maxFragmentDataBytes: number;
   observationIntervalMs: number;
+  maxFragmentsPerFieldFrame?: number;
   sessionEpoch?: number;
+};
+
+export type RtcmPreparedFieldPayload = {
+  payload: Buffer;
+  fragments: Buffer[];
+  batched: boolean;
 };
 
 export type RtcmNodeEvidence = {
@@ -32,6 +43,7 @@ export type RtcmDownlinkControllerStats = {
   targetMask: number;
   armedNodeCount: number;
   requiredNodeCount: number;
+  maxFragmentsPerFieldFrame: number;
   allTargetsArmed: boolean;
   ntripChunks: number;
   ntripBytes: number;
@@ -76,6 +88,7 @@ export class RtcmDownlinkController {
   private ntripBytes = 0;
   private lastPreparedMessageType: number | null = null;
   private lastPreparedTs: string | null = null;
+  private readonly maxFragmentsPerFieldFrame: number;
 
   constructor(private readonly config: RtcmDownlinkControllerConfig) {
     if (!Number.isInteger(config.targetMask) || config.targetMask < 1 ||
@@ -94,6 +107,11 @@ export class RtcmDownlinkController {
       throw new Error("RTCM session epoch must be a non-zero uint32");
     }
     this.requestedMode = config.mode === "live" ? 2 : 1;
+    this.maxFragmentsPerFieldFrame = config.maxFragmentsPerFieldFrame ?? 1;
+    if (!Number.isInteger(this.maxFragmentsPerFieldFrame) ||
+        this.maxFragmentsPerFieldFrame < 1 || this.maxFragmentsPerFieldFrame > 4) {
+      throw new Error("RTCM field frame aggregation must be in 1..4");
+    }
     this.shaper = new Um220RtcmShaper({ observationIntervalMs: config.observationIntervalMs });
   }
 
@@ -149,6 +167,37 @@ export class RtcmDownlinkController {
     this.pendingFragments.unshift(Buffer.from(fragment));
   }
 
+  takeNextFieldPayload(nowUnixMs: number): RtcmPreparedFieldPayload | null {
+    const first = this.takeNextFragment(nowUnixMs);
+    if (!first) return null;
+    const fragments = [first];
+
+    while (fragments.length < this.maxFragmentsPerFieldFrame) {
+      const candidate = this.takeNextFragment(nowUnixMs);
+      if (!candidate) break;
+      const batchBytes = 8 + fragments.reduce((total, fragment) => total + 2 + fragment.length, 0) +
+        2 + candidate.length;
+      if (batchBytes > RTCM_FRAGMENT_BATCH_MAX_PAYLOAD_BYTES) {
+        this.returnFragment(candidate);
+        break;
+      }
+      fragments.push(candidate);
+    }
+
+    return {
+      payload: fragments.length === 1 ? Buffer.from(first) : encodeRtcmFragmentBatchV1(fragments),
+      fragments: fragments.map((fragment) => Buffer.from(fragment)),
+      batched: fragments.length > 1
+    };
+  }
+
+  returnFieldPayload(prepared: RtcmPreparedFieldPayload): void {
+    for (let index = prepared.fragments.length - 1; index >= 0; index -= 1) {
+      const fragment = prepared.fragments[index];
+      if (fragment) this.returnFragment(fragment);
+    }
+  }
+
   stats(nowUnixMs = Date.now()): RtcmDownlinkControllerStats {
     const armedNodeCount = this.armedNodeCount(nowUnixMs);
     const requiredNodeCount = targetLabels(this.config.targetMask).length;
@@ -158,6 +207,7 @@ export class RtcmDownlinkController {
       targetMask: this.config.targetMask,
       armedNodeCount,
       requiredNodeCount,
+      maxFragmentsPerFieldFrame: this.maxFragmentsPerFieldFrame,
       allTargetsArmed: armedNodeCount === requiredNodeCount,
       ntripChunks: this.ntripChunks,
       ntripBytes: this.ntripBytes,

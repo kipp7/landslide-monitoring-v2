@@ -18,6 +18,24 @@ status: active
 
 ## Current State
 
+### G3B v1 Ready For Clean Release; 0.5 Hz Still Fails Age Gate (2026-08-05)
+
+- 天线调整后的双观测组 `0.5 Hz` LIVE 连续 `300 s`：最后 `120 s` A/B 持续
+  `GGA=4`，C 全程 `GGA=5`；A/B/C 接收修正片段约 `1514/1515/1533`，网关 CRC、
+  UART 写、普通轮询、schema 和交织错误均为 0。C 没有少收修正，需按节点独立处理
+  天线摆放、多路径、接收机状态或收敛问题。
+- correction-age P95 仍约为 A/B/C `10/9/7 s`，未达到 `P95 <=3 s`、`max <=5 s`，
+  所以 0.5 Hz 不能晋级生产，专业位移和厘米级展示门禁继续关闭。
+- 已实现 `G3B v1`：单个 field-link/XLS1 帧聚合 `2..4` 个旧 G3R，RK2206 对整个
+  批次和每个内层片段先验校验，写失败保持原顺序回队；双方共同强制 `1024 B` 上限。
+  burst 预算按外层帧计，健康状态分开记录外层写入和内层片段写入。
+- 向后兼容默认值为 `RTCM_MAX_FRAGMENTS_PER_FIELD_FRAME=1`。三节点全部烧录新镜像前
+  禁止设为 2；烧录后也必须先过聚合数 1 的 legacy G3R PROBE，再过聚合数 2 的
+  G3B PROBE，才允许受控 1 Hz LIVE。
+- 本地回归已通过 field-gateway `71/71`、TypeScript build、ESLint、RK2206 C99 与
+  关键安全门禁。当前工作树尚未提交，正式发布包尚未生成；下一步先完成扫描、提交
+  推送和 clean release，再部署 fail-closed 网关。
+
 ### Three-Node LIVE Reached RTK FIXED; Displacement Gate Still Closed (2026-08-05)
 
 - A/B/C 已烧录 UART drain V2 LIVE 候选。三节点 UM220 UART 均按 `115200` 工作；
@@ -365,28 +383,23 @@ status: active
 
 ## Plan
 
-- 明早室外重新连接三套 BT-760 并上电，保持 `NTRIP_ENABLED=false`，先检查 A/B/C
-  启动标记、UUID、真实 GNSS/RS485 来源及 P1/P3/P4 普通遥测，形成新 session 基线。
-- 补齐 B/C 的 G3S V6，并复核 A/B/C 节点端接收、重组、实际注入、TTL、CRC、drop
-  和 UART write 计数；不能用网关 caster 计数替代节点端证据。
-- 先运行共同有限 PROBE，再启用 `512 B / 4 frames / 600 ms / 45 s` LIVE 候选。
-  LIVE 先做至少 600 秒，失败自动回到关闭，不能保留旧租约或旧队列。
-- 只有持续 `GGA=4`、correction age P95 `<=3 s` / max `<=5 s`、可信 GST、无旧
-  session 注入且三节点普通遥测零丢失，才运行 1800 秒混合负载门禁。
-- 只有室外 Fixed 与可信字段门禁通过，才建立 ECEF/ENU 基线并验收 RK3568
-  Hampel/Kalman、服务器 CEEMDAN 和 UI；不得用构建成功、NTRIP 已连接或单次
-  `GGA=4` 宣称厘米级完成。
-- 现场 CORS 凭据只留在 RK3568 `0600 root:root` 环境文件；账号更新、运行日志、
-  健康摘要、Git 和 memory 都不得回显密码、真实坐标或原始 RTCM。
-- OTA 仍只在可有线救援备用板推进；现场 A/B/C 的 `ota_prepare/apply` 保持
-  `unsupported`。
+1. 完成 G3B v1 敏感扫描和全量回归，提交并推送实现与现有三份记录。
+2. 从 clean commit 构建、验证 A/B/C 正式硬件 GNSS LIVE-capable 发布包，记录 manifest
+   与三份烧录镜像 SHA-256。
+3. 部署匹配网关但保持 `NTRIP_ENABLED=false`、runtime probe、聚合数 1。
+4. 三节点烧录后按“普通遥测 -> legacy G3R PROBE -> G3B/2 PROBE -> 1 Hz LIVE 600 s
+   -> 1800 s”推进；任一阶段失败立即恢复 fail-closed。
+5. C 若继续 GGA=5，独立调整其天线和接收环境；不得以降低三节点共同 cadence 或放宽
+   correction-age/GST 门槛冒充系统通过。
 
 ## Open Questions
 
 - correction age 约 `10 s` 是真实修正新鲜度、共享链路调度延迟、节点时间戳口径，
   还是 UM220 GGA age 字段解析/更新节奏造成？必须用节点端完成/注入时间和接收机输出对齐验证。
-- 当前 7 分钟三节点 FIXED 候选在 600/1800 秒长测中能否继续保持普通遥测零丢失、
-  Fixed 连续性、age/GST 门禁和旧队列隔离？
+- G3B 聚合数 2 能否在双观测组 1 Hz 的 600/1800 秒长测中同时保持普通遥测零丢失、
+  三节点 Fixed 连续性、age/GST 门禁和旧队列隔离？
+- C 在收到不少于 A/B 的修正片段时仍为 GGA=5，调整其天线位置和局部接收环境后能否
+  与 A/B 同时持续 GGA=4？
 - RK2206 无可信绝对 Unix 时钟时，是否接受网关绝对 TTL + 节点单调队列龄的双层策略，或需要补充可信时间同步？
 - 单条修正流供同一现场 3 台 rover 使用是否满足服务商授权与空间范围？
 

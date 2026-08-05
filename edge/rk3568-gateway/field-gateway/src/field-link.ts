@@ -27,6 +27,7 @@ export type FieldLinkAssembler = {
 };
 
 const FIELD_LINK_VERSION = 1;
+export const FIELD_LINK_MAX_PAYLOAD_BYTES = 1024;
 
 const FRAME_TYPE_TO_CODE: Record<FieldLinkFrameType, number> = {
   telemetry: 1,
@@ -130,6 +131,11 @@ export function encodeFieldLinkFrame(
   } & ({ payloadText: string; payloadBytes?: never } | { payloadBytes: Buffer; payloadText?: never })
 ): Buffer {
   const payload = "payloadBytes" in params ? Buffer.from(params.payloadBytes) : Buffer.from(params.payloadText, "utf8");
+  if (payload.length > FIELD_LINK_MAX_PAYLOAD_BYTES) {
+    throw new Error(
+      `field-link payload exceeds ${String(FIELD_LINK_MAX_PAYLOAD_BYTES)} bytes: ${String(payload.length)}`
+    );
+  }
   const header = Buffer.alloc(12);
   header.writeUInt8(FIELD_LINK_VERSION, 0);
   header.writeUInt8(FRAME_TYPE_TO_CODE[params.frameType], 1);
@@ -165,6 +171,11 @@ function decodeFieldLinkFrame(frameBytes: Buffer): FieldLinkInboundPayload {
 
   const sequence = decoded.readUInt32BE(4);
   const payloadLength = decoded.readUInt32BE(8);
+  if (payloadLength > FIELD_LINK_MAX_PAYLOAD_BYTES) {
+    throw new Error(
+      `field-link payload exceeds ${String(FIELD_LINK_MAX_PAYLOAD_BYTES)} bytes: ${String(payloadLength)}`
+    );
+  }
   const payloadStart = 12;
   const crcStart = decoded.length - 4;
   const actualPayloadLength = crcStart - payloadStart;

@@ -14,9 +14,9 @@ import { buildNtripGga } from "./ntrip-gga";
 import { encodeGnssRtcmModeCommandV1 } from "./gnss-transport-v3";
 import { RtcmDownlinkController } from "./rtcm-downlink-controller";
 import {
-  DEFAULT_RTCM_MAX_FRAGMENTS_BETWEEN_POLLS,
-  RTCM_POST_BURST_POLL_GUARD_MS,
-  RtcmPollBurstGate
+  RtcmPollBurstGate,
+  selectRtcmTargetedPollScope,
+  shouldYieldSouthboundPollToRtcm
 } from "./rtcm-poll-burst-gate";
 import {
   buildCompactBroadcastPollCommand,
@@ -241,6 +241,7 @@ type RuntimeStats = {
   maxCompactBroadcastRetryResponseMs: number;
   rtcmControlWrites: number;
   rtcmFragmentWrites: number;
+  rtcmFieldFrameWrites: number;
   rtcmWriteDeferrals: number;
   rtcmWriteFailures: number;
   lastRtcmControlTs: string | null;
@@ -1091,9 +1092,7 @@ class GatewayRuntime {
   private readonly rtcmWriteInFlightPorts = new Set<string>();
   private readonly rtcmController: RtcmDownlinkController | null;
   private readonly ntripClient: NtripClient | null;
-  private readonly rtcmPollBurstGate = new RtcmPollBurstGate(
-    DEFAULT_RTCM_MAX_FRAGMENTS_BETWEEN_POLLS
-  );
+  private readonly rtcmPollBurstGate: RtcmPollBurstGate;
   private fieldLinkTxSequence = 0;
   private readonly stats: RuntimeStats = {
     serialChunks: 0,
@@ -1134,6 +1133,7 @@ class GatewayRuntime {
     maxCompactBroadcastRetryResponseMs: 0,
     rtcmControlWrites: 0,
     rtcmFragmentWrites: 0,
+    rtcmFieldFrameWrites: 0,
     rtcmWriteDeferrals: 0,
     rtcmWriteFailures: 0,
     lastRtcmControlTs: null,
@@ -1171,6 +1171,10 @@ class GatewayRuntime {
   ) {
     this.logger = createLogger(config.serviceName);
     this.spool = new SpoolManager(config);
+    this.rtcmPollBurstGate = new RtcmPollBurstGate(
+      config.rtcmMaxFragmentsBetweenPolls,
+      config.rtcmMinCorrectionWindowMs
+    );
     this.compactPollAdmission = new CompactPollAdmissionController({
       steadyIntervalMs: config.southboundPollingIntervalMs,
       emptyBackoffInitialMs: config.southboundPollingEmptyBackoffInitialMs,
@@ -1188,7 +1192,8 @@ class GatewayRuntime {
         targetMask: config.rtcmTargetMask,
         leaseSeconds: config.rtcmSessionLeaseSeconds,
         maxFragmentDataBytes: config.rtcmFragmentDataBytes,
-        observationIntervalMs: config.rtcmObservationIntervalMs
+        observationIntervalMs: config.rtcmObservationIntervalMs,
+        maxFragmentsPerFieldFrame: config.rtcmMaxFragmentsPerFieldFrame
       });
       this.ntripClient = new NtripClient({
         host: config.ntripHost ?? "",
@@ -2019,6 +2024,10 @@ class GatewayRuntime {
       return;
     }
 
+    if (this.yieldSouthboundPollingToRtcm()) {
+      return;
+    }
+
     if (this.config.southboundPollingMode === "compact-layered-v1") {
       this.tickCompactLayeredPolling();
       return;
@@ -2058,8 +2067,13 @@ class GatewayRuntime {
         continue;
       }
 
+      const pollScope = selectRtcmTargetedPollScope({
+        rtcmActive: this.rtcmController !== null,
+        allTargetsArmed: this.rtcmController?.allTargetsArmed(Date.now()) ?? false,
+        hasCoreSnapshot: nextNode.latestTelemetry !== null
+      });
       issued = true;
-      void this.issueInternalPollForNode(nextNode, portPath);
+      void this.issueInternalPollForNode(nextNode, portPath, pollScope);
     }
 
     // A busy port will schedule itself when its active session closes. This avoids
@@ -2067,6 +2081,32 @@ class GatewayRuntime {
     if (!issued && !busy) {
       this.scheduleSouthboundPolling(this.config.southboundPollingIntervalMs);
     }
+  }
+
+  private yieldSouthboundPollingToRtcm(): boolean {
+    const controller = this.rtcmController;
+    if (!controller) return false;
+
+    const nowMs = Date.now();
+    const downlink = controller.stats(nowMs);
+    const controlWriteDue = nowMs >= this.rtcmNextModeRefreshAtMs;
+    const shouldYield = shouldYieldSouthboundPollToRtcm({
+      controlWriteDue,
+      allTargetsArmed: downlink.allTargetsArmed,
+      pendingFragments: downlink.pendingFragments,
+      pendingTypes: downlink.shaper.pendingTypes,
+      canDispatchFragment: this.rtcmPollBurstGate.canDispatchFragment(),
+      correctionWindowActive: this.rtcmPollBurstGate.correctionWindowActive(performance.now())
+    });
+    if (!shouldYield) return false;
+
+    if (controlWriteDue) {
+      void this.tickRtcmModeLease();
+    } else {
+      void this.tickRtcmDispatch();
+    }
+    this.scheduleSouthboundPolling(this.config.rtcmDispatchIntervalMs);
+    return true;
   }
 
   private tickCompactLayeredPolling(): void {
@@ -2240,7 +2280,7 @@ class GatewayRuntime {
         this.config.southboundPollingCommandChunkBytes,
         this.config.southboundPollingCommandChunkDelayMs
       );
-      this.rtcmPollBurstGate.notePollDispatched();
+      this.rtcmPollBurstGate.notePollDispatched(performance.now());
     } catch (err) {
       this.stats.commandWriteFailures += 1;
       this.stats.lastError = err instanceof Error ? err.message : String(err);
@@ -2391,7 +2431,7 @@ class GatewayRuntime {
         this.config.southboundPollingCommandChunkBytes,
         this.config.southboundPollingCommandChunkDelayMs
       );
-      this.rtcmPollBurstGate.notePollDispatched();
+      this.rtcmPollBurstGate.notePollDispatched(performance.now());
     } catch (err) {
       this.stats.commandWriteFailures += 1;
       this.stats.compactBroadcastRetryWriteFailures += 1;
@@ -2502,7 +2542,7 @@ class GatewayRuntime {
         throw new Error(`compact targeted poll requires field node A, B or C: ${label}`);
       }
       const nonce = randomUUID().replace(/-/gu, "").slice(0, 8);
-      const compactPoll = this.config.southboundPollingMode === "compact-layered-v1" && scope !== "core"
+      const compactPoll = scope !== "core"
         ? buildCompactScopedPollCommand(scope, label, nonce)
         : buildCompactTargetedPollCommand(label, nonce);
       commandId = compactPoll.command;
@@ -2530,7 +2570,7 @@ class GatewayRuntime {
       portPath: targetPort,
       issuedTs,
       suppressAckPublish: this.config.southboundPollingSuppressAckPublish,
-      expectedScope: this.config.southboundPollingMode === "compact-layered-v1" ? scope : undefined
+      expectedScope: scope !== "core" ? scope : undefined
     });
 
     try {
@@ -3389,7 +3429,9 @@ class GatewayRuntime {
         ? this.config.southboundPollingCommandChunkDelayMs
         : this.config.commandSerialChunkDelayMs;
     await this.writeSerialFrame(serialPort, serialFrame, chunkBytes, chunkDelayMs);
-    if (origin === "internal-poll") this.rtcmPollBurstGate.notePollDispatched();
+    if (origin === "internal-poll") {
+      this.rtcmPollBurstGate.notePollDispatched(performance.now());
+    }
   }
 
   private async writeSerialFrame(
@@ -3478,7 +3520,8 @@ class GatewayRuntime {
   private async writeRtcmFieldLinkPayload(
     frameType: "command" | "rtcm",
     payload: Buffer,
-    owner: "control" | "fragment"
+    owner: "control" | "fragment",
+    fragmentUnits = 1
   ): Promise<boolean> {
     const portPath = this.config.serialDevice;
     if (!this.rtcmPortAvailable(portPath)) {
@@ -3489,6 +3532,7 @@ class GatewayRuntime {
     if (!serialPort?.isOpen) return false;
     this.rtcmWriteInFlightPorts.add(portPath);
     const portState = this.ensurePortRuntimeState(portPath);
+    let postWritePollGuardScheduled = false;
     portState.sendOwnerState = owner === "control" ? "writing-rtcm-control" : "writing-rtcm";
     const serialFrame = encodeFieldLinkFrame({
       frameType,
@@ -3508,13 +3552,20 @@ class GatewayRuntime {
         this.stats.rtcmControlWrites += 1;
         this.stats.lastRtcmControlTs = timestamp;
       } else {
-        this.rtcmPollBurstGate.noteFragmentDispatched();
-        this.stats.rtcmFragmentWrites += 1;
+        // A G3B batch still consumes exactly one shared XLS1/field-link frame.
+        this.rtcmPollBurstGate.noteFieldFrameDispatched();
+        this.stats.rtcmFieldFrameWrites += 1;
+        this.stats.rtcmFragmentWrites += fragmentUnits;
         this.stats.lastRtcmFragmentTs = timestamp;
       }
-      this.rescheduleSouthboundPolling(
-        Math.max(this.config.southboundPollingIntervalMs, RTCM_POST_BURST_POLL_GUARD_MS)
-      );
+      const pollDelayMs = owner === "fragment" && !this.rtcmPollBurstGate.canDispatchFragment()
+        ? this.config.southboundPollingIntervalMs
+        : Math.max(
+            this.config.southboundPollingIntervalMs,
+            this.config.rtcmPostBurstPollGuardMs
+          );
+      this.rescheduleSouthboundPolling(pollDelayMs);
+      postWritePollGuardScheduled = true;
       return true;
     } catch (err) {
       this.stats.rtcmWriteFailures += 1;
@@ -3532,7 +3583,11 @@ class GatewayRuntime {
           !this.hasActiveCompactBroadcastPollWindowForPort(portPath)) {
         portState.sendOwnerState = "idle";
       }
-      this.scheduleSouthboundPolling(this.config.southboundPollingIntervalMs);
+      // A successful write already installed the longer RTCM/poll guard above.
+      // Only failed or deferred writes need the ordinary polling fallback.
+      if (!postWritePollGuardScheduled) {
+        this.scheduleSouthboundPolling(this.config.southboundPollingIntervalMs);
+      }
     }
   }
 
@@ -3547,10 +3602,15 @@ class GatewayRuntime {
     const controller = this.rtcmController;
     if (!controller || this.stopping || !this.rtcmPortAvailable(this.config.serialDevice)) return;
     if (this.config.southboundPollingEnabled && !this.rtcmPollBurstGate.canDispatchFragment()) return;
-    const fragment = controller.takeNextFragment(Date.now());
-    if (!fragment) return;
-    const written = await this.writeRtcmFieldLinkPayload("rtcm", fragment, "fragment");
-    if (!written) controller.returnFragment(fragment);
+    const prepared = controller.takeNextFieldPayload(Date.now());
+    if (!prepared) return;
+    const written = await this.writeRtcmFieldLinkPayload(
+      "rtcm",
+      prepared.payload,
+      "fragment",
+      prepared.fragments.length
+    );
+    if (!written) controller.returnFieldPayload(prepared);
   }
 
   private nextFieldLinkTxSequence(): number {
@@ -3619,7 +3679,12 @@ class GatewayRuntime {
           : null,
         connection: this.ntripClient?.stats() ?? null,
         downlink: this.rtcmController?.stats(nowMs) ?? null,
-        arbitration: this.config.ntripEnabled ? this.rtcmPollBurstGate.stats() : null
+        arbitration: this.config.ntripEnabled
+          ? {
+              ...this.rtcmPollBurstGate.stats(performance.now()),
+              postBurstPollGuardMs: this.config.rtcmPostBurstPollGuardMs
+            }
+          : null
       },
       stats: {
         ...this.stats,

@@ -224,10 +224,15 @@ function Set-CompactTelemetryVersion {
     -Text $text `
     -Macro "TELEMETRY_PAYLOAD_FORMAT" `
     -Value ("TELEMETRY_PAYLOAD_FORMAT_COMPACT_V{0}" -f $CompactVersion)
+  $sourceSampleVersion = Get-QuotedMacroValue -Path $configPath -Macro "FIRMWARE_SAMPLE_VERSION"
+  if (([regex]::Matches($sourceSampleVersion, 'compact-v[3456]')).Count -ne 1) {
+    throw "FIRMWARE_SAMPLE_VERSION must contain exactly one compact-v3/v4/v5/v6 token"
+  }
+  $targetSampleVersion = $sourceSampleVersion -replace 'compact-v[3456]', ("compact-v{0}" -f $CompactVersion)
   $text = Set-SingleMacro `
     -Text $text `
     -Macro "FIRMWARE_SAMPLE_VERSION" `
-    -Value ("v1.3-um220-rs485-rtk-compact-v{0}" -f $CompactVersion)
+    -Value $targetSampleVersion
   [System.IO.File]::WriteAllText($configPath, $text, [System.Text.UTF8Encoding]::new($false))
 
   $mainPath = Join-Path $sampleRoot "main\landslide_main.c"

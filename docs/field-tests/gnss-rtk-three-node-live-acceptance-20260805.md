@@ -106,6 +106,46 @@ baseline may be created from this run. Promotion still requires:
 The UI and competition presentation must not convert `quality=4` alone into a
 "centimetre-level accepted" state.
 
+## Subsequent 0.5 Hz Observation
+
+After the antenna placement was adjusted, a subsequent 300-second LIVE window
+used the two retained correction observation groups at 0.5 Hz. The last
+120 seconds kept A and B at `GGA quality=4`, while C remained at
+`GGA quality=5` for the whole window. A/B/C accepted approximately
+`1514/1515/1533` correction fragments. Gateway RTCM CRC, UART-write, normal
+poll, schema, and interleaving error deltas were all zero.
+
+This result rules out a shared loss of corrections as the main explanation for
+C: C did not receive fewer fragments than A or B. C remains an independent
+antenna-placement, local multipath, receiver-state, or convergence problem and
+must be corrected at that node. The correction-age P95 was still approximately
+`10/9/7 s` for A/B/C, so the professional displacement gate remained closed.
+The 0.5 Hz profile is useful diagnosis, not the accepted production cadence.
+
+## G3B v1 Transport Successor
+
+The next transport revision reduces XLS1 packet rate without discarding RTCM
+content. One `G3B v1` field-link payload contains two to four complete legacy
+`G3R` fragments. RK2206 validates the entire outer batch boundary and every
+inner G3R before accepting any fragment. A failed gateway write returns all
+inner fragments to the queue in their original order.
+
+Compatibility is intentionally fail-closed:
+
+- `RTCM_MAX_FRAGMENTS_PER_FIELD_FRAME=1` remains the default and emits only
+  legacy G3R payloads;
+- all three RK2206 nodes must boot the new image before aggregation is enabled;
+- aggregation is first tested at `2` in PROBE, never directly in LIVE;
+- one G3B consumes one XLS1/field-link burst unit, while health separately
+  records outer field-frame writes and accepted inner-fragment writes;
+- the field-link payload ceiling remains exactly `1024 B` on both gateway and
+  RK2206.
+
+The intended LIVE target is the two-observation-group `1 Hz` profile. It may be
+accepted only when A/B/C sustain `GGA quality=4`, correction-age P95 is at most
+`3 s`, correction-age maximum is at most `5 s`, and all normal-poll, CRC,
+reassembly, queue, UART, schema, and session-error deltas remain zero.
+
 ## Safe Stop And Resume
 
 After the run the RK3568 was restored to:
@@ -120,12 +160,13 @@ After the run the RK3568 was restored to:
 
 On the next outdoor power-up:
 
-1. Keep NTRIP off and confirm fresh A/B/C core, environment, audit, GNSS, and
-   RS485 telemetry.
-2. Capture final G3S V6 snapshots for B/C and fresh pre-run counters for A/B/C.
-3. Run limited PROBE with 512-byte fragments and require exact node-side
-   completion with zero error deltas.
-4. Run the retained LIVE candidate for at least 600 seconds, then 1800 seconds
-   only if correction-age, GST, session, and normal-poll gates all pass.
-5. Investigate the 10-second age as a measurement or scheduling defect instead
-   of relaxing the professional threshold.
+1. Build and verify the immutable G3B-capable A/B/C release from a clean commit.
+2. Deploy the matching gateway with NTRIP disabled and aggregation fixed at 1.
+3. After all three nodes are flashed, verify ordinary telemetry and legacy-G3R
+   PROBE with zero error deltas.
+4. Set aggregation to 2 and repeat PROBE. Confirm that one outer field frame
+   accounts for approximately two accepted inner fragments.
+5. Run controlled 1 Hz LIVE for 600 seconds, then 1800 seconds only when
+   correction-age, GST, session, and normal-poll gates pass.
+6. Adjust C independently if it remains FLOAT; do not mask that condition by
+   reducing the common correction cadence or relaxing the professional gate.

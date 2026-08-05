@@ -134,7 +134,7 @@ static volatile uint32_t g_last_platform_command_tick = 0;
 static CompactPollBroadcastDeduplicator g_compact_poll_broadcast_deduplicator;
 static unsigned int g_compact_poll_broadcast_duplicates_suppressed = 0U;
 static volatile int g_field_link_recovery_requested = 0;
-#define FW_RX_DIAG_MARKER "fw-rk2206-rtk-compact-v6-gps-uart-drain-v2-live-20260805"
+#define FW_RX_DIAG_MARKER "fw-rk2206-rtk-compact-v6-gps-uart-drain-v2-rtcm-batch-v1-live-20260805"
 bool g_cloud_motor_enabled = false;
 int g_cloud_motor_speed = 0;
 MotorDirection g_cloud_motor_direction = MOTOR_DIRECTION_STOP;

@@ -18,6 +18,28 @@ status: active
 
 ## Last Confirmed State
 
+### 0.5 Hz Observation And G3B v1 Candidate (2026-08-05)
+
+- 调整天线摆放后的双观测组 `0.5 Hz` LIVE 连续观测 `300 s`。最后 `120 s` 内
+  A/B 持续 `GGA=4`，C 全程 `GGA=5`；A/B/C 接收修正片段约为
+  `1514/1515/1533`。网关 CRC、UART 写、普通轮询、schema 与交织错误增量均为 0。
+  C 没有少收修正，故其未 Fixed 不能归因于共同网关漏发；优先检查 C 独立的天线
+  摆放、遮挡/多路径、接收机状态和收敛条件。
+- 同一窗口 correction-age P95 仍约为 A/B/C `10/9/7 s`，不满足专业门槛
+  `P95 <=3 s`、`max <=5 s`；因此 `0.5 Hz` 只作为诊断结果，不作为生产厘米级验收。
+- 已实现 `G3B v1` 聚合：一个外层 field-link 帧装入 `2..4` 个完整旧 `G3R` 片段，
+  RK2206 先校验完整外层边界及所有内层 G3R，再接受任一片段；写失败时网关按原顺序
+  全量回队。field-link 上限继续由 RK3568/RK2206 共同强制为 `1024 B`。
+- burst 预算按外层 field-link/XLS1 帧记账，一个 G3B 只消耗一个预算；健康状态分别
+  暴露 `rtcmFieldFrameWrites` 与内层 `rtcmFragmentWrites`，并明确
+  `accountingUnit=field-link-frame`，避免把聚合后的两个片段误算成两个空口包。
+- 兼容门禁固定为默认 `RTCM_MAX_FRAGMENTS_PER_FIELD_FRAME=1`。必须先部署新网关但
+  保持 NTRIP 关闭和聚合数 1，三节点全部烧录新镜像并通过旧 G3R PROBE 后，才可切到
+  `2` 做 G3B PROBE；禁止旧节点与 G3B 混跑，也禁止直接切 LIVE。
+- 当前本地实现的 field-gateway `71/71`、TypeScript build、ESLint、RK2206 C99 主机
+  测试及关键发布/引脚/轮询/锁顺序/快照门禁均已通过。正式状态仍需完成敏感扫描、
+  提交推送、从 clean commit 构建 A/B/C immutable release 并由发布验证器复核。
+
 ### Three-Node RTK FIXED Candidate And Safe Stop (2026-08-05)
 
 - A/B/C 已烧录 LIVE 候选固件
@@ -466,6 +488,12 @@ status: active
 
 ## In Progress
 
+- 将 G3B v1 实现和本次 0.5 Hz 现场结论提交、推送，并从 clean commit 生成正式
+  A/B/C 硬件 GNSS LIVE-capable 发布包。
+- 新网关部署后先保持 `NTRIP_ENABLED=false`、runtime `probe`、聚合数 `1`；等待
+  三节点新固件全部烧录后再依次执行 legacy G3R PROBE、G3B 聚合数 2 PROBE 和
+  受控 1 Hz LIVE。
+
 - UART drain V2 LIVE 候选已烧录到 A/B/C；三节点已同时进入 RTK FIXED，证明硬件和
   传输路径可用。相关 RK2206 与网关源码已由 `bd356416` 提交并推送；候选发布目录
   尚未从该 clean commit 重建，不能称为正式版本。
@@ -479,16 +507,14 @@ status: active
 
 ## Next Actions
 
-1. 2026-08-06 在室外重新连接 A/B/C 与各自天线并上电；保持 NTRIP 关闭，先确认三节点
-   普通 P1/P3/P4 遥测、真实 RS485 与 GNSS 均在线，避免把旧 session 状态带入验收。
-2. 分别查询 B/C 的 G3S V6，并复核 A/B/C 节点端接收、重组、实际 GNSS 注入、TTL、
-   CRC、drop、UART write 计数，保存启用前基线。
-3. 使用当前 `512 B / 4 frames / 600 ms guard / 45 s evidence` 候选先做有限 PROBE，
-   确认三节点计数一致且零 expiry/CRC/drop/write error，再切有限 LIVE。
-4. LIVE 先运行至少 600 秒；只有持续 `GGA=4`、correction age P95 `<=3 s`、max
-   `<=5 s`、可信 GST、三节点普通轮询零丢失且无旧 session 才进入 1800 秒验收。
-5. 1800 秒通过后才建立 ECEF/ENU 基线并验收 Hampel/Kalman、服务器 CEEMDAN 和 UI；
-   若 age 仍约 10 秒，先定位 cadence、队列时间戳和 UM220 age 字段语义，不放宽门槛。
+1. 完成敏感信息扫描和全量回归，提交并推送 G3B 实现，使工作树干净。
+2. 用正式发布脚本构建 A/B/C，记录 manifest 与三个烧录镜像 SHA-256，并再次提交推送。
+3. 原子部署 RK3568 网关，但保持 NTRIP 关闭、runtime probe、聚合数 1。
+4. 用户按 A/B/C 标签烧录后先做普通遥测与旧 G3R PROBE，再切聚合数 2 做 G3B PROBE；
+   要求外层写入与约两倍内层接受计数一致，全部错误增量为 0。
+5. 执行双观测组 1 Hz LIVE 600 秒；只有三节点持续 GGA=4、age P95 `<=3 s`、max
+   `<=5 s`、可信 GST 和全链零错误才进入 1800 秒。
+6. C 若仍为 GGA=5，单独调整 C 天线/环境并复测，不降低共同 cadence 掩盖独立故障。
 
 ## Risks
 
@@ -508,14 +534,13 @@ status: active
 
 ## Resume Prompt
 
-继续 2026-08-05 XLS1/RTK 任务：A/B/C 已烧录 UART drain V2 LIVE 候选；真实 CORS 下
-`512 B / 4 frames / 600 ms guard / 45 s evidence` 连续约 7 分钟得到 `111/111` 普通轮询、
-零 timeout、348 帧 RTCM 下发、caster CRC 0，A/B/C 最终均为 `quality=4 / RTK FIXED`。
-但 correction age 约 10 秒，`rtk_trusted=false`、`rtk_displacement_eligible=false`，故只能
-确认三节点硬件和链路能够 FIXED，不能建立专业厘米级 ENU 基线。最终报告在 RK3568
-`/var/lib/lsmv2/experiments/ntrip-live-guard600-*20260805*`；A 的 G3S V6 已通过，B/C 尚待。
-今晚用户已收回 A/B/C；RK3568 为 `NTRIP_ENABLED=false`、probe、fragment 512、poll 250、
-audit 2，field-gateway active/NRestarts=0，环境文件 0600。明早先在 NTRIP 关闭时确认
-三节点普通遥测和新 session，再查 B/C G3S，随后按 PROBE -> 600 秒 LIVE -> 1800 秒门禁
-推进，重点解决 age 与 GST。实现提交 `bd356416` 和现场文档/记忆提交 `7f8234f2` 已推送；
-候选发布目录尚未从 clean commit 重建，Git/memory 不得包含凭据或坐标。
+继续 2026-08-05 XLS1/RTK G3B 任务：双观测组 0.5 Hz 的 300 秒观测中，最后 120 秒
+A/B 持续 GGA=4，C 全程 GGA=5；A/B/C 片段约 1514/1515/1533，网关链路错误为 0，
+但 age P95 仍为 10/9/7 秒，专业位移门禁关闭。G3B v1 已实现一个 field-link 帧聚合
+2..4 个旧 G3R，默认聚合数 1，双方上限 1024 B，外层/内层计数分离；本地 71/71、
+lint、C99 和发布安全门禁通过。下一步先敏感扫描、提交推送，再从 clean commit 生成并
+验证 A/B/C 正式包，记录 manifest/镜像 SHA-256；随后部署 RK3568 但保持 NTRIP 关闭、
+runtime probe、聚合数 1。三节点烧录后依次做普通遥测、legacy G3R PROBE、聚合数 2
+G3B PROBE、双观测组 1 Hz LIVE 600/1800 秒。晋级条件为三节点持续 GGA=4、age P95
+不超过 3 秒、max 不超过 5 秒、可信 GST 和全链零错误。C 若仍 FLOAT，单独调整 C 天线
+与环境，不降低共同 cadence 或门槛。Git/memory 禁止写入凭据、端点、坐标或原始 RTCM。

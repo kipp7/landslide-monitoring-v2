@@ -328,6 +328,80 @@ GnssRtcmReassemblyStatusV3 GnssRtcmInjection_AcceptFragment(
     return status;
 }
 
+GnssRtcmReassemblyStatusV3 GnssRtcmInjection_AcceptPayload(
+    const uint8_t *payload,
+    uint16_t payload_bytes,
+    uint64_t monotonic_ms)
+{
+    uint16_t offsets[GNSS_RTCM_BATCH_MAX_FRAGMENTS];
+    uint16_t lengths[GNSS_RTCM_BATCH_MAX_FRAGMENTS];
+    GnssRtcmFragmentViewV3 fragment;
+    GnssRtcmReassemblyStatusV3 aggregate = GNSS_RTCM_REASSEMBLY_DUPLICATE;
+    uint16_t offset;
+    uint8_t count;
+    uint8_t index;
+
+    if (payload == NULL || payload_bytes > FIELD_LINK_MAX_PAYLOAD_BYTES) {
+        Lock();
+        g_stats.rejected_fragments++;
+        Unlock();
+        return GNSS_RTCM_REASSEMBLY_REJECTED;
+    }
+    if (payload_bytes < 3U || payload[0] != 0x47U || payload[1] != 0x33U || payload[2] != 0x42U) {
+        return GnssRtcmInjection_AcceptFragment(payload, payload_bytes, monotonic_ms);
+    }
+
+    if (payload_bytes < GNSS_RTCM_BATCH_HEADER_BYTES || payload[3] != 1U ||
+        payload[5] != 0U || payload[6] != 0U || payload[7] != 0U) {
+        Lock();
+        g_stats.rejected_fragments++;
+        Unlock();
+        return GNSS_RTCM_REASSEMBLY_REJECTED;
+    }
+    count = payload[4];
+    if (count < 2U || count > GNSS_RTCM_BATCH_MAX_FRAGMENTS) {
+        Lock();
+        g_stats.rejected_fragments++;
+        Unlock();
+        return GNSS_RTCM_REASSEMBLY_REJECTED;
+    }
+
+    offset = GNSS_RTCM_BATCH_HEADER_BYTES;
+    for (index = 0U; index < count; ++index) {
+        uint32_t end;
+        if ((uint32_t)offset + 2U > payload_bytes) break;
+        lengths[index] = (uint16_t)(((uint16_t)payload[offset] << 8) | payload[offset + 1U]);
+        offset = (uint16_t)(offset + 2U);
+        offsets[index] = offset;
+        end = (uint32_t)offset + lengths[index];
+        if (lengths[index] == 0U || end > payload_bytes ||
+            GnssTransportV3_DecodeRtcmFragment(payload + offset, lengths[index], &fragment) != 0) {
+            break;
+        }
+        offset = (uint16_t)end;
+    }
+    if (index != count || offset != payload_bytes) {
+        Lock();
+        g_stats.rejected_fragments++;
+        Unlock();
+        return GNSS_RTCM_REASSEMBLY_REJECTED;
+    }
+
+    for (index = 0U; index < count; ++index) {
+        GnssRtcmReassemblyStatusV3 status = GnssRtcmInjection_AcceptFragment(
+            payload + offsets[index], lengths[index], monotonic_ms
+        );
+        if (status == GNSS_RTCM_REASSEMBLY_REJECTED) return status;
+        if (status == GNSS_RTCM_REASSEMBLY_COMPLETE) {
+            aggregate = status;
+        } else if (status == GNSS_RTCM_REASSEMBLY_ACCEPTED &&
+                   aggregate != GNSS_RTCM_REASSEMBLY_COMPLETE) {
+            aggregate = status;
+        }
+    }
+    return aggregate;
+}
+
 int GnssRtcmInjection_TryDequeue(
     uint64_t monotonic_ms,
     uint8_t *frame,
@@ -514,6 +588,9 @@ void GnssRtcmInjection_GetRuntimeStatus(uint64_t monotonic_ms, GnssRtcmRuntimeSt
     }
 }
 GnssRtcmReassemblyStatusV3 GnssRtcmInjection_AcceptFragment(
+    const uint8_t *payload, uint16_t payload_bytes, uint64_t monotonic_ms)
+{ (void)payload; (void)payload_bytes; (void)monotonic_ms; return GNSS_RTCM_REASSEMBLY_REJECTED; }
+GnssRtcmReassemblyStatusV3 GnssRtcmInjection_AcceptPayload(
     const uint8_t *payload, uint16_t payload_bytes, uint64_t monotonic_ms)
 { (void)payload; (void)payload_bytes; (void)monotonic_ms; return GNSS_RTCM_REASSEMBLY_REJECTED; }
 int GnssRtcmInjection_TryDequeue(

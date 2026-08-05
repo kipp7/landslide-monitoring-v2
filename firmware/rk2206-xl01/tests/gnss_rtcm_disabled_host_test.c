@@ -12,6 +12,8 @@ int main(void)
     memset(&stats, 0xA5, sizeof(stats));
     memset(&runtime, 0xA5, sizeof(runtime));
     assert(GnssRtcmInjection_Init(1U) == 0);
+    assert(GnssRtcmInjection_AcceptPayload(NULL, 0U, 1234U) ==
+           GNSS_RTCM_REASSEMBLY_REJECTED);
 
     GnssRtcmInjection_GetStats(&stats);
     GnssRtcmInjection_GetRuntimeStatus(1234U, &runtime);
