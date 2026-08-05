@@ -18,6 +18,39 @@ status: active
 
 ## Last Confirmed State
 
+### G3S V7 Field Attribution Completed; RF/Receiver Gate Still Fails (2026-08-06)
+
+- A/B/C 已烧录不可变 G3S V7 镜像并通过逐节点查询。三节点 UM220 均锁定硬件
+  `115200`，UART read/reconfigure/FIFO drop 为 0；真实土壤、EC、倾角当前有效。
+- RK3568 已原子部署完整同构 field-gateway，避免入口与协议文件混版。受保护环境仍为
+  `root:root 0600`，凭据只存在该文件；测试前后均恢复 `NTRIP_ENABLED=false`、runtime
+  probe、聚合数 1，服务 active、`NRestarts=0`。
+- 真实 caster 分档 PROBE 全通过：G3R 为 `74 inner / 74 outer`，G3B=2 为
+  `80/40`，G3B=4 为 `86/40`。三档 caster CRC、field write、poll timeout、schema、
+  交织错误均为 0；A/B/C 接受/完帧/PROBE 计数一致，节点 CRC、重组、容量、队列和
+  UART 错误均无增量。
+- 旧合成发送器未取得 V7 runtime lease，因 boot DISABLED 被预期拒绝；其拒绝/解码
+  计数贯穿正式阶段保持不变，不计入生产传输错误。后续不得再用旧脚本直接判定当前
+  DISABLED/LIVE 固件的 G3R 门禁。
+- 保留参数的 600 秒 LIVE 收到 1871 个有效 caster 帧，写入 `1058 inner / 503 outer`，
+  普通轮询 `106/106`；CRC、写入、poll timeout、schema、交织错误全为 0。网关
+  caster-to-field P95 `1120 ms`、shaper P95 `947 ms`、serial-write P95 `199 ms`。
+- 定位质量未通过：最后 120 秒 A/B/C 均为 `0/12 GGA=4`，保持 RTK FLOAT；三节点
+  correction-age P95/max 均为 6 秒，禁止建立 ENU 基线或生成专业位移。
+- LIVE 后 V7 显示每节点注入 1061 帧/113954 B，UART partial/write、queue eviction、
+  injection drop 全为 0；完帧到出队 P95 `<=20 ms`，UM220 UART 写 P95 `<=10 ms`，
+  完帧到写完 P95 `<=50 ms`，A/B/C 总路径最大值 `35/38/43 ms`。RK2206 调度不再是
+  4--6 秒 age 的候选根因。
+- 权威无敏感摘要位于 RK3568
+  `/var/lib/lsmv2/experiments/g3s-v7-g3b4-live600-20260806-004205.json`，monitor SHA-256
+  为 `d71eeda6ce079f2b79bb0a9de1dc38ab95376c99c24ea9e75be19394d86ab824`。下一步保持
+  传输参数不变，只做无遮挡 RF 复测或单节点隔离，并核对 UM220 内部修正应用/GGA age
+  口径与上游观测历元。
+- 现场脚本已支持 `require-stats-version=7`，分段归因脚本新增可选第 4 参数
+  `aggregation=1..4` 且默认仍为 4；非法值在修改环境前拒绝。测试结束后反向 SSH 通道
+  离线，但离线前已再次确认 fail-closed、服务 active 和 `NRestarts=0`；恢复远程通道后
+  先做只读复核，不重复 600 秒窗口。
+
 ### RK3568 Stage Attribution And G3S V7 Immutable Release (2026-08-05)
 
 - 在保留参数完全不变的 600 秒窗口中，RK3568 caster 到 field-write P95 约

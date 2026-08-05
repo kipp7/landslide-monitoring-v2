@@ -2123,6 +2123,8 @@ def run_diagnostics_query(args: argparse.Namespace) -> dict[str, Any]:
         raise RuntimeError("G3S V5 RS485 runtime diagnostics are missing")
     if args.require_stats_version >= 6 and snapshot.get("gpsUartDiagnostics") is None:
         raise RuntimeError("G3S V6 GPS UART diagnostics are missing")
+    if args.require_stats_version >= 7 and snapshot.get("rtcmLatencyDiagnostics") is None:
+        raise RuntimeError("G3S V7 RTCM latency diagnostics are missing")
     print(
         f"DIAGNOSTICS node={args.target} version={snapshot['responseVersion']} "
         f"mode={snapshot['injectionMode']} uptime={snapshot['snapshotUptimeS']}",
@@ -2448,7 +2450,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--drain-ms", type=int, default=2000)
     parser.add_argument("--stats-timeout-seconds", type=float, default=3.0)
     parser.add_argument("--stats-retries", type=int, default=3)
-    parser.add_argument("--require-stats-version", type=int, choices=(1, 2, 3, 4, 5, 6), default=1)
+    parser.add_argument(
+        "--require-stats-version", type=int, choices=(1, 2, 3, 4, 5, 6, 7), default=1
+    )
     parser.add_argument("--selective-retry", action="store_true")
     parser.add_argument("--max-retransmit-rounds", type=int, default=2)
     parser.add_argument("--ack-timeout-seconds", type=float, default=0.65)
@@ -2484,7 +2488,7 @@ def parse_args() -> argparse.Namespace:
     if not 0.0 <= args.max_retransmit_ratio <= 1.0:
         parser.error("max retransmit ratio must be in [0, 1]")
     if args.selective_retry and args.require_stats_version < 2:
-        parser.error("selective retry requires --require-stats-version 2, 3, 4 or 5")
+        parser.error("selective retry requires --require-stats-version 2 or later")
     if args.diagnostics_only and args.selective_retry:
         parser.error("diagnostics-only mode cannot use selective retry")
     if not 32 <= args.fragment_data_bytes <= 512:

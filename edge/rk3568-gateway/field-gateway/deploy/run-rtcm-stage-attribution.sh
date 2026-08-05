@@ -4,6 +4,7 @@ set -euo pipefail
 mode=${1:-}
 duration=${2:-}
 label=${3:-}
+aggregation=${4:-4}
 
 if [[ $EUID -ne 0 ]]; then
   echo "run as root" >&2
@@ -19,6 +20,10 @@ if ! [[ "$duration" =~ ^[0-9]+$ ]] || (( duration < 60 || duration > 1800 )); th
 fi
 if ! [[ "$label" =~ ^[A-Za-z0-9._-]+$ ]]; then
   echo "label contains unsupported characters" >&2
+  exit 2
+fi
+if ! [[ "$aggregation" =~ ^[1-4]$ ]]; then
+  echo "aggregation must be an integer in [1, 4]" >&2
   exit 2
 fi
 
@@ -92,7 +97,7 @@ set_env_value NTRIP_ENABLED true
 set_env_value NTRIP_MOUNTPOINT RTCM32_GGB
 set_env_value RTCM_RUNTIME_MODE "$mode"
 set_env_value RTCM_OBSERVATION_INTERVAL_MS 1000
-set_env_value RTCM_MAX_FRAGMENTS_PER_FIELD_FRAME 4
+set_env_value RTCM_MAX_FRAGMENTS_PER_FIELD_FRAME "$aggregation"
 set_env_value RTCM_MAX_FRAGMENTS_BETWEEN_POLLS 4
 set_env_value RTCM_POST_BURST_POLL_GUARD_MS 600
 set_env_value RTCM_MIN_CORRECTION_WINDOW_MS 2500
@@ -167,7 +172,7 @@ PY
   sleep 10
 done
 
-python3 - "$mode" "$duration" "$monitor_path" "$summary_path" "$health_file" <<'PY'
+python3 - "$mode" "$duration" "$monitor_path" "$summary_path" "$health_file" "$aggregation" <<'PY'
 import csv
 import hashlib
 import json
@@ -176,7 +181,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-mode, duration, monitor, summary, health = sys.argv[1:]
+mode, duration, monitor, summary, health, aggregation = sys.argv[1:]
 monitor_path = Path(monitor)
 rows = list(csv.DictReader(monitor_path.open(encoding="utf-8"), delimiter="\t"))
 health_data = json.loads(Path(health).read_text(encoding="utf-8"))
@@ -219,7 +224,7 @@ result = {
     "profile": {
         "mountpoint": "RTCM32_GGB",
         "observationIntervalMs": 1000,
-        "maxFragmentsPerFieldFrame": 4,
+        "maxFragmentsPerFieldFrame": int(aggregation),
         "maxFragmentsBetweenPolls": 4,
         "postBurstPollGuardMs": 600,
         "minCorrectionWindowMs": 2500,

@@ -9,6 +9,65 @@ It separates link capability from professional displacement acceptance.
 No CORS credentials, real coordinates, raw RTCM, or protected environment
 contents belong in this document.
 
+## G3S V7 Field Attribution - 2026-08-06
+
+All three nodes were flashed with the immutable G3S V7 images and passed an
+on-demand diagnostic query. A/B/C locked their hardware UM220 UART at 115200
+baud with zero read, reconfiguration, or FIFO-drop errors. Hardware soil, EC,
+and tilt paths were current on all three nodes.
+
+The RK3568 gateway was atomically replaced as one complete build before the
+test. The protected environment remained `root:root 0600`; credentials were
+configured only there. The test began and ended fail-closed with NTRIP
+disabled, runtime mode PROBE, and field-frame aggregation one.
+
+The staged real-caster PROBE gates were clean:
+
+- legacy G3R used 74 inner writes and 74 outer field frames;
+- G3B aggregation two used 80 inner writes and 40 outer field frames;
+- G3B aggregation four used 86 inner writes and 40 outer field frames;
+- every stage had zero caster CRC, field-write, normal-poll timeout, schema,
+  and interleaving errors;
+- the A/B/C V7 accepted/completed/PROBE counters remained identical, while
+  CRC, reassembly-expiry, capacity, queue, and UART error counters did not
+  increase.
+
+An earlier legacy synthetic sender was intentionally rejected because the V7
+release boots RTCM DISABLED and the old sender does not acquire a runtime
+lease. Those rejected/decode counters remained unchanged through all valid
+PROBE and LIVE stages and are not attributed to the production transport.
+
+The retained G3B4 profile then ran LIVE for 600 seconds. It received 1,871
+valid caster frames, prepared and wrote 1,058 inner RTCM fragments in 503
+outer field frames, and completed 106/106 normal polls. Caster CRC, write,
+poll-timeout, schema, and interleaving errors were all zero. Gateway
+caster-to-field-write P95 was 1,120 ms, shaper-queue P95 was 947 ms, and
+serial-write P95 was 199 ms.
+
+This run did not pass the positioning gate. The final 120-second window had
+zero of 12 samples at GGA quality 4 for A, B, and C; all three remained RTK
+FLOAT. Correction-age P95 and maximum were 6 seconds on every node. No ENU
+baseline or professional displacement sample may be created from this run.
+
+The post-LIVE V7 query bounded the node path much more tightly. Each node
+reported 1,061 injected frames and 113,954 injected bytes with no UART partial
+write, write error, queue eviction, or injection drop. Reassembly completion
+to queue dequeue was P95 at most 20 ms, UM220 UART write was P95 at most 10 ms,
+and completion to UART-finished was P95 at most 50 ms. Maximum total node-path
+latency was 35/38/43 ms for A/B/C.
+
+The shared software transport is therefore not the source of the remaining
+4--6 second correction age or this run's failure to reach FIXED. The unresolved
+scope is now downstream of the completed UM220 UART write: receiver correction
+application and GGA reporting semantics, incoming observation epoch, and RF
+conditions. Transport parameters must remain unchanged for the next RF or
+single-node isolation run.
+
+The authoritative credential-free summary remains on RK3568 at
+`/var/lib/lsmv2/experiments/g3s-v7-g3b4-live600-20260806-004205.json`; its
+monitor SHA-256 is
+`d71eeda6ce079f2b79bb0a9de1dc38ab95376c99c24ea9e75be19394d86ab824`.
+
 ## G3B v1 Field Result And 600-Second Reconvergence
 
 All three nodes were subsequently flashed with the clean G3B v1 release. A

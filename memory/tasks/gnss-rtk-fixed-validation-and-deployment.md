@@ -18,6 +18,33 @@ status: active
 
 ## Current State
 
+### G3S V7 True Field Attribution Complete; Positioning Gate Failed (2026-08-06)
+
+- A/B/C 不可变 G3S V7 已烧录并通过硬件诊断：UM220 均锁定 `115200`，GNSS UART
+  read/reconfigure/FIFO drop 为 0，土壤/EC/倾角当前有效。匹配 RK3568 完整构建已
+  原子部署，避免混版；环境文件保持 `root:root 0600`，凭据不进入 Git、memory 或日志。
+- 正式 real-caster PROBE 按 G3R、G3B=2、G3B=4 顺序通过，网关 inner/outer 分别为
+  `74/74`、`80/40`、`86/40`。各阶段 A/B/C 节点计数一致，caster CRC、节点 CRC/
+  重组/队列/UART、field write、poll timeout、schema 和交织错误增量均为 0。
+- 旧合成探针没有 runtime lease，被 boot DISABLED 固件按设计拒绝；该轮产生的历史
+  reject/decode 计数在正式 PROBE/LIVE 中不再增长。它证明 fail-closed 生效，但不能
+  作为当前固件的运输性能结果。
+- 保留配置 600 秒 LIVE 为 `1871 caster / 1058 inner / 503 outer / 106/106 polls`，
+  全链错误 0。RK3568 caster-to-field P95 `1120 ms`、shaper P95 `947 ms`、串口写 P95
+  `199 ms`，再次证明共享通信稳定。
+- 本轮最终 120 秒 A/B/C 均 `0/12 GGA=4`，持续 FLOAT，correction-age P95/max 均
+  6 秒，故厘米级/专业位移门禁失败。与前一晚同参数可三节点 FIXED 的结果对照后，
+  当前差异优先属于 RF/多路径、接收机收敛/内部应用或上游观测历元，而非传输参数。
+- V7 将 RK2206 段界定为每节点 `1061 frames / 113954 B` 全部成功；完帧到出队 P95
+  `<=20 ms`、UM220 UART 写 P95 `<=10 ms`、完帧到写完 P95 `<=50 ms`，最大仅
+  A/B/C `35/38/43 ms`。停止调整 burst、guard、聚合和轮询参数。
+- 当前已恢复 fail-closed：NTRIP false、runtime probe、聚合数 1、服务 active、
+  `NRestarts=0`。下一轮先改善三副 BT-760 的无遮挡环境并保持参数不变复测；若仍全
+  FLOAT，再做单节点目标隔离和 UM220 GGA age/修正应用口径核对，不直接扩大共享负载。
+- 现场工具已补齐 V7 强制诊断门禁，并允许分段脚本用第 4 参数选择 `aggregation=1..4`
+  （默认 4、非法值先拒绝）。完整测试后反向 SSH 通道离线；设备离线前已确认安全恢复，
+  下次先恢复通道并只读核对环境与服务，不需要重新烧录或重复本轮运输测试。
+
 ### RK3568 Stage Bound Established; G3S V7 Immutable Release Built (2026-08-05)
 
 - 保留参数不变完成 600 秒 RK3568 分段归因：caster 到 field-write P95 约
