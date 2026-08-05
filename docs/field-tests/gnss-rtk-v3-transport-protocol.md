@@ -112,7 +112,7 @@ Only the existing GPS poll task accesses the GNSS UART. The XL01 receive path ca
 
 The current RK2206 build has monotonic time but no independently trusted absolute Unix clock. It therefore enforces reassembly and local queue age while incrementing `ttl_unverified_fragments`; the gateway remains responsible for absolute generated-time filtering. `LIVE` must not be field-enabled until this limitation and the mixed-load gate are explicitly accepted.
 
-Exposed counters include accepted/completed/duplicate/rejected fragments, CRC errors, expired assemblies, capacity evictions, TTL-unverified fragments, queue depth/high-water/eviction/expiration, probe-validated frames, injected bytes, partial writes and injection drops. PROBE V2 also reports completed-frame counts for 1005/1033/1074/1094/1114/1124 plus field-link decoded frames, decoded RTCM frames, decode failures, sequence gaps/duplicates/resets and UART RX FIFO drops. PROBE V3 appends diagnostic state for the deployed UM220-IV NK, RS-ECTH-N01-TR-1 and RS-DIP-N01-1 acquisition paths; disabled legacy drivers are not reported as installed sensors. PROBE V4 appends U4 self-tests, a bounded read-only parameter scan and categorized per-channel Modbus failures. PROBE V5 appends collection-level and per-path RS485 attempts, retry recoveries, final failures, skips, failure streaks and monotonic event times. It does not alter compact telemetry or enable RTCM injection.
+Exposed counters include accepted/completed/duplicate/rejected fragments, CRC errors, expired assemblies, capacity evictions, TTL-unverified fragments, queue depth/high-water/eviction/expiration, probe-validated frames, injected bytes, partial writes and injection drops. PROBE V2 also reports completed-frame counts for 1005/1033/1074/1094/1114/1124 plus field-link decoded frames, decoded RTCM frames, decode failures, sequence gaps/duplicates/resets and UART RX FIFO drops. PROBE V3 appends diagnostic state for the deployed UM220-IV NK, RS-ECTH-N01-TR-1 and RS-DIP-N01-1 acquisition paths; disabled legacy drivers are not reported as installed sensors. PROBE V4 appends U4 self-tests, a bounded read-only parameter scan and categorized per-channel Modbus failures. PROBE V5 appends collection-level and per-path RS485 attempts, retry recoveries, final failures, skips, failure streaks and monotonic event times. V6 appends the GNSS UART baud-selection and NMEA receive evidence. V7 appends bounded RTCM completion, dequeue and UM220 UART-write latency histograms. None of these diagnostic versions alters compact telemetry or enables RTCM injection.
 
 ## RK3568 Closed-Loop PROBE Statistics
 
@@ -124,12 +124,12 @@ G3Q + node letter A/B/C + 8 uppercase hexadecimal nonce
 
 For example, `G3QB89ABCDEF` asks node B for a snapshot. The nonce must be non-zero. All nodes receive the command, but only the addressed node responds. A valid query is first queued by the XL01 receive path and is handled by the normal data-processing task; the UART receive callback never transmits a response.
 
-The node returns a fixed binary payload as field-link `control=4`. V1 is 92 bytes, V2 is 148 bytes, V3 is 204 bytes, V4 is 384 bytes, and the current diagnostic V5 is 552 bytes. Every version retains the complete preceding layout before appending fields. The outer COBS/CRC32 frame protects the whole response:
+The node returns a fixed binary payload as field-link `control=4`. V1 is 92 bytes, V2 is 148 bytes, V3 is 204 bytes, V4 is 384 bytes, V5 is 552 bytes, V6 is 660 bytes, and V7 is 916 bytes. Every version retains the complete preceding layout before appending fields. The outer COBS/CRC32 frame protects the whole response:
 
 | Offset | Bytes | Field |
 | ---: | ---: | --- |
 | 0 | 3 | ASCII `G3S` |
-| 3 | 1 | response version `1`, `2`, `3`, `4` or `5` |
+| 3 | 1 | response version `1` through `7` |
 | 4 | 1 | node number A/B/C = `1/2/3` |
 | 5 | 1 | injection mode `DISABLED/PROBE/LIVE = 0/1/2` |
 | 6 | 2 | reserved, zero |
@@ -175,6 +175,15 @@ The node returns a fixed binary payload as field-link `control=4`. V1 is 92 byte
 | 388 | 16 | V5 only: completed cycles, last completion uptime, last duration and maximum duration |
 | 404 | 144 | V5 only: four 36-byte path records in soil, soil-EC, tilt and rain order |
 | 548 | 4 | V5 only: reserved, zero |
+| 552 | 4 | V6 only: UART schema, probe state, active candidate and selected candidate |
+| 556 | 24 | V6 only: active baud, switches, reconfiguration failures, read errors and FIFO-drop counters |
+| 580 | 80 | V6 only: two 40-byte candidate records for 115200 and 9600 baud |
+| 660 | 4 | V7 only: latency schema `1`, histogram count `3`, bucket count `14`, reserved zero |
+| 664 | 4 | V7 only: RTCM session epoch associated with the histograms |
+| 668 | 56 | V7 only: 14 fixed big-endian uint32 bucket upper bounds in milliseconds |
+| 724 | 64 | V7 only: completed reassembly to queue dequeue histogram |
+| 788 | 64 | V7 only: UM220 UART write-duration histogram |
+| 852 | 64 | V7 only: completed reassembly to UM220 UART write-finished histogram |
 
 Counter order is: accepted, duplicate, rejected, completed, CRC errors, expired assemblies, capacity evictions, TTL-unverified fragments, queued frames, queue evictions, queue-expired frames, PROBE-validated frames, PROBE-validated bytes, injected frames, injected bytes, UART write errors, UART partial writes and injection drops.
 
@@ -197,7 +206,11 @@ Each V5 path record contains eight big-endian uint32 values followed by four sta
 
 A deliberate optional-path reprobe skip increments `skipped_cycles` but does not erase the latest real final-failure status or timestamp. A later successful attempt records recovery. This keeps an EC backoff from replacing the evidence needed to distinguish a sensor failure from a planned skip.
 
-V5 is an on-demand diagnostic, never a periodic business payload. The current golden vector is 552 bytes before framing and 570 bytes as a complete COBS/CRC field-link frame. The software limit is 1024 payload bytes. The DL-XLxx manual states that its transparent user UART buffers and internally splits arbitrary serial streams, with roughly 900 byte/s one-way throughput when uncontended; one V5 response therefore occupies roughly 0.63 seconds of nominal radio capacity. Queries remain addressed one node at a time with a 3-second response timeout and must not be sent once per second or concurrently with an acceptance load.
+V6 candidate records contain baud, received/printable/dollar bytes, complete lines, valid/invalid checksums, GGA/RMC counts, and first-valid uptime. The selected-state relationship and all counter subsets are validated before the response is accepted.
+
+Each V7 histogram is `sample_count`, `max_ms`, then 14 bucket counts. Fixed inclusive upper bounds are `0, 1, 2, 5, 10, 20, 50, 100, 250, 500, 1000, 2000, 3000, overflow ms`. Encoders and decoders require an exact count sum and require the maximum to fall in the highest non-empty bucket. P50/P95 are reported as bucket upper bounds, not fabricated point estimates. Completion-to-dequeue samples exist in PROBE and LIVE; the two UART histograms exist only for successful LIVE writes. Histograms reset when the runtime mode or session epoch changes and remain queryable after fail-closed disable, until a new session starts.
+
+G3S is an on-demand diagnostic, never a periodic business payload. The V7 golden vector is 916 bytes before framing and 934 bytes as a complete COBS/CRC field-link frame, below the 1024-byte software payload limit. At the DL-XLxx manual's roughly 900 byte/s uncontended one-way throughput, one V7 response occupies about 1.04 seconds of nominal radio capacity. Queries remain addressed one node at a time with a 3-second response timeout and must not be sent once per second or concurrently with an acceptance load.
 
 The RK3568 tool queries once before traffic and once after the drain interval. It computes uint32 wrap-safe deltas, so old accumulated counters do not require a node reboot. A PROBE run passes only when:
 

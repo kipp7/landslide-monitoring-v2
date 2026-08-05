@@ -34,6 +34,12 @@ static uint64_t g_last_action_ms;
 static uint8_t g_has_last_fragment;
 static uint8_t g_has_last_completed_frame;
 static uint8_t g_has_last_action;
+static GnssRtcmLatencyDiagnostics g_latency_diagnostics;
+
+static const uint32_t g_latency_bucket_upper_bounds_ms[GNSS_RTCM_LATENCY_BUCKET_COUNT] = {
+    0U, 1U, 2U, 5U, 10U, 20U, 50U,
+    100U, 250U, 500U, 1000U, 2000U, 3000U, UINT32_MAX
+};
 
 #ifndef GNSS_RTCM_INJECTION_HOST_TEST
 static osMutexId_t g_mutex;
@@ -179,6 +185,41 @@ static uint32_t AgeMs(uint64_t monotonic_ms, uint64_t then_ms, uint8_t valid)
     return age > UINT32_MAX ? UINT32_MAX : (uint32_t)age;
 }
 
+static uint32_t DurationMs(uint64_t started_ms, uint64_t finished_ms)
+{
+    uint64_t duration;
+    if (finished_ms < started_ms) return 0U;
+    duration = finished_ms - started_ms;
+    return duration > UINT32_MAX ? UINT32_MAX : (uint32_t)duration;
+}
+
+static void ResetLatencyDiagnostics(uint32_t session_epoch)
+{
+    memset(&g_latency_diagnostics, 0, sizeof(g_latency_diagnostics));
+    g_latency_diagnostics.schema_version = GNSS_RTCM_LATENCY_SCHEMA_VERSION;
+    g_latency_diagnostics.bucket_count = GNSS_RTCM_LATENCY_BUCKET_COUNT;
+    g_latency_diagnostics.session_epoch = session_epoch;
+    memcpy(
+        g_latency_diagnostics.bucket_upper_bounds_ms,
+        g_latency_bucket_upper_bounds_ms,
+        sizeof(g_latency_bucket_upper_bounds_ms)
+    );
+}
+
+static void RecordLatency(GnssRtcmLatencyHistogram *histogram, uint32_t duration_ms)
+{
+    uint8_t bucket;
+    if (histogram == NULL || histogram->sample_count == UINT32_MAX) return;
+    histogram->sample_count++;
+    if (duration_ms > histogram->max_ms) histogram->max_ms = duration_ms;
+    for (bucket = 0U; bucket < GNSS_RTCM_LATENCY_BUCKET_COUNT; ++bucket) {
+        if (duration_ms <= g_latency_bucket_upper_bounds_ms[bucket]) {
+            histogram->bucket_counts[bucket]++;
+            return;
+        }
+    }
+}
+
 static void EnqueueCompleted(
     const uint8_t *frame,
     uint16_t frame_bytes,
@@ -245,6 +286,7 @@ int GnssRtcmInjection_Init(uint8_t local_node)
     g_has_last_fragment = 0U;
     g_has_last_completed_frame = 0U;
     g_has_last_action = 0U;
+    ResetLatencyDiagnostics(0U);
     g_ready = 1U;
     GnssRtcmReassemblerV3_Init(&g_reassembler, local_node);
     Unlock();
@@ -277,6 +319,7 @@ int GnssRtcmInjection_ConfigureRuntime(
         if (g_runtime_mode != command->mode ||
             g_armed_session_epoch != command->session_epoch) {
             ResetSessionState();
+            ResetLatencyDiagnostics(command->session_epoch);
         }
         g_runtime_mode = command->mode;
         g_armed_session_epoch = command->session_epoch;
@@ -407,7 +450,8 @@ int GnssRtcmInjection_TryDequeue(
     uint8_t *frame,
     uint16_t frame_capacity,
     uint16_t *frame_bytes,
-    uint16_t *message_type)
+    uint16_t *message_type,
+    uint64_t *completed_monotonic_ms)
 {
     GnssRtcmQueueSlot *slot;
     if (g_ready == 0U || frame == NULL || frame_bytes == NULL) return -1;
@@ -435,6 +479,11 @@ int GnssRtcmInjection_TryDequeue(
         memcpy(frame, slot->frame, slot->frame_bytes);
         *frame_bytes = slot->frame_bytes;
         if (message_type != NULL) *message_type = slot->message_type;
+        if (completed_monotonic_ms != NULL) *completed_monotonic_ms = slot->enqueued_ms;
+        RecordLatency(
+            &g_latency_diagnostics.completion_to_dequeue_ms,
+            DurationMs(slot->enqueued_ms, monotonic_ms)
+        );
         EvictQueueHead();
         Unlock();
         return 1;
@@ -454,13 +503,28 @@ void GnssRtcmInjection_RecordProbe(uint16_t frame_bytes, uint64_t monotonic_ms)
     Unlock();
 }
 
-void GnssRtcmInjection_RecordInjected(uint16_t frame_bytes, uint64_t monotonic_ms)
+void GnssRtcmInjection_RecordInjected(
+    uint16_t frame_bytes,
+    uint64_t completed_monotonic_ms,
+    uint64_t write_started_monotonic_ms,
+    uint64_t write_finished_monotonic_ms)
 {
     if (g_ready == 0U) return;
     Lock();
     g_stats.injected_frames++;
     g_stats.injected_bytes += frame_bytes;
-    g_last_action_ms = monotonic_ms;
+    if (completed_monotonic_ms <= write_started_monotonic_ms &&
+        write_started_monotonic_ms <= write_finished_monotonic_ms) {
+        RecordLatency(
+            &g_latency_diagnostics.uart_write_ms,
+            DurationMs(write_started_monotonic_ms, write_finished_monotonic_ms)
+        );
+        RecordLatency(
+            &g_latency_diagnostics.completion_to_uart_finished_ms,
+            DurationMs(completed_monotonic_ms, write_finished_monotonic_ms)
+        );
+    }
+    g_last_action_ms = write_finished_monotonic_ms;
     g_has_last_action = 1U;
     Unlock();
 }
@@ -500,6 +564,18 @@ void GnssRtcmInjection_GetStats(GnssRtcmInjectionStats *stats)
     stats->capacity_evictions += g_reassembler.capacity_evictions;
     stats->ttl_unverified_fragments += g_reassembler.ttl_unverified_fragments;
     stats->queue_pending = g_queue_count;
+    Unlock();
+}
+
+void GnssRtcmInjection_GetLatencyDiagnostics(GnssRtcmLatencyDiagnostics *diagnostics)
+{
+    if (diagnostics == NULL) return;
+    if (g_ready == 0U) {
+        memset(diagnostics, 0, sizeof(*diagnostics));
+        return;
+    }
+    Lock();
+    *diagnostics = g_latency_diagnostics;
     Unlock();
 }
 
@@ -595,20 +671,28 @@ GnssRtcmReassemblyStatusV3 GnssRtcmInjection_AcceptPayload(
 { (void)payload; (void)payload_bytes; (void)monotonic_ms; return GNSS_RTCM_REASSEMBLY_REJECTED; }
 int GnssRtcmInjection_TryDequeue(
     uint64_t monotonic_ms, uint8_t *frame, uint16_t frame_capacity,
-    uint16_t *frame_bytes, uint16_t *message_type)
+    uint16_t *frame_bytes, uint16_t *message_type, uint64_t *completed_monotonic_ms)
 {
     (void)monotonic_ms; (void)frame; (void)frame_capacity; (void)message_type;
+    (void)completed_monotonic_ms;
     if (frame_bytes != NULL) *frame_bytes = 0U;
     return 0;
 }
 void GnssRtcmInjection_RecordProbe(uint16_t frame_bytes, uint64_t monotonic_ms)
 { (void)frame_bytes; (void)monotonic_ms; }
-void GnssRtcmInjection_RecordInjected(uint16_t frame_bytes, uint64_t monotonic_ms)
-{ (void)frame_bytes; (void)monotonic_ms; }
+void GnssRtcmInjection_RecordInjected(
+    uint16_t frame_bytes, uint64_t completed_monotonic_ms,
+    uint64_t write_started_monotonic_ms, uint64_t write_finished_monotonic_ms)
+{
+    (void)frame_bytes; (void)completed_monotonic_ms;
+    (void)write_started_monotonic_ms; (void)write_finished_monotonic_ms;
+}
 void GnssRtcmInjection_RecordWriteError(uint8_t partial_write) { (void)partial_write; }
 void GnssRtcmInjection_RecordInjectionDrop(void) {}
 void GnssRtcmInjection_GetStats(GnssRtcmInjectionStats *stats)
 { if (stats != NULL) memset(stats, 0, sizeof(*stats)); }
+void GnssRtcmInjection_GetLatencyDiagnostics(GnssRtcmLatencyDiagnostics *diagnostics)
+{ if (diagnostics != NULL) memset(diagnostics, 0, sizeof(*diagnostics)); }
 void GnssRtcmInjection_GetAckWindow(GnssRtcmAckWindow *window)
 { if (window != NULL) memset(window, 0, sizeof(*window)); }
 

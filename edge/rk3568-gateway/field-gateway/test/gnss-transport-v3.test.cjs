@@ -18,6 +18,8 @@ const {
   decodeGnssProbeStatsResponseV3,
   decodeGnssProbeStatsResponseV4,
   decodeGnssProbeStatsResponseV5,
+  decodeGnssProbeStatsResponseV6,
+  decodeGnssProbeStatsResponseV7,
   decodeGnssRtcmAckResponseV1,
   RtcmReassemblerV3,
   crc24q,
@@ -50,6 +52,29 @@ function buildRtcmFrame(messageType, extraPayloadBytes = 72) {
   payload.copy(frame, 3);
   frame.writeUIntBE(crc24q(frame.subarray(0, frame.length - 3)), frame.length - 3, 3);
   return frame;
+}
+
+function buildProbeStatsV6() {
+  const payload = Buffer.alloc(660);
+  payload.write("G3S", 0, "ascii");
+  payload.writeUInt8(6, 3);
+  payload.writeUInt8(2, 4);
+  payload.writeUInt8(2, 5);
+  payload.writeUInt32BE(0x89abcdef, 8);
+  payload.writeUInt32BE(1300, 12);
+  payload.writeUInt8(4, 152);
+  payload.writeUInt8(1, 204);
+  payload.writeUInt8(1, 220);
+  payload.writeUInt8(1, 384);
+  payload.writeUInt8(4, 385);
+  payload.writeUInt8(1, 552);
+  payload.writeUInt8(3, 553);
+  payload.writeUInt8(0, 554);
+  payload.writeUInt8(0, 555);
+  payload.writeUInt32BE(115200, 556);
+  payload.writeUInt32BE(115200, 580);
+  payload.writeUInt32BE(9600, 620);
+  return payload;
 }
 
 function gnssCoreFixture() {
@@ -327,6 +352,52 @@ test("GNSS PROBE V5 separates RS485 path retries, final failures and sample age"
   const impossibleEvent = Buffer.from(payload);
   impossibleEvent.writeUInt8(0x01, soilOffset + 35);
   assert.throws(() => decodeGnssProbeStatsResponse(impossibleEvent), /counters, status or flags/);
+});
+
+test("GNSS PROBE V6/V7 preserve UART evidence and add bounded RTCM stage histograms", () => {
+  const v6Payload = buildProbeStatsV6();
+  const decodedV6 = decodeGnssProbeStatsResponseV6(v6Payload);
+  assert.equal(decodedV6.gpsUartDiagnostics.state, 3);
+  assert.equal(decodedV6.gpsUartDiagnostics.activeBaudrate, 115200);
+  assert.equal(decodedV6.gpsUartDiagnostics.candidates[1].baudrate, 9600);
+
+  const v7Payload = Buffer.alloc(916);
+  v6Payload.copy(v7Payload);
+  v7Payload.writeUInt8(7, 3);
+  v7Payload.set([1, 3, 14, 0], 660);
+  v7Payload.writeUInt32BE(0x10203040, 664);
+  [0, 1, 2, 5, 10, 20, 50, 100, 250, 500, 1000, 2000, 3000, 0xffffffff]
+    .forEach((bound, index) => v7Payload.writeUInt32BE(bound, 668 + index * 4));
+  v7Payload.writeUInt32BE(4, 724);
+  v7Payload.writeUInt32BE(90, 728);
+  v7Payload.writeUInt32BE(4, 732 + 7 * 4);
+  v7Payload.writeUInt32BE(3, 788);
+  v7Payload.writeUInt32BE(8, 792);
+  v7Payload.writeUInt32BE(3, 796 + 4 * 4);
+  v7Payload.writeUInt32BE(3, 852);
+  v7Payload.writeUInt32BE(105, 856);
+  v7Payload.writeUInt32BE(3, 860 + 8 * 4);
+
+  const decodedV7 = decodeGnssProbeStatsResponseV7(v7Payload);
+  assert.equal(decodedV7.rtcmLatencyDiagnostics.sessionEpoch, 0x10203040);
+  assert.equal(decodedV7.rtcmLatencyDiagnostics.completionToDequeueMs.sampleCount, 4);
+  assert.equal(decodedV7.rtcmLatencyDiagnostics.completionToDequeueMs.p95UpperBoundMs, 100);
+  assert.equal(decodedV7.rtcmLatencyDiagnostics.uartWriteMs.maxMs, 8);
+  assert.equal(decodedV7.rtcmLatencyDiagnostics.completionToUartFinishedMs.p50UpperBoundMs, 250);
+  assert.deepEqual(decodeGnssProbeStatsResponse(v7Payload), decodedV7);
+  assert.throws(() => decodeGnssProbeStatsResponseV6(v7Payload), /not V6/);
+
+  const inconsistent = Buffer.from(v7Payload);
+  inconsistent.writeUInt32BE(2, 724);
+  assert.throws(() => decodeGnssProbeStatsResponse(inconsistent), /histogram counters or maximum/);
+
+  const oversizedBucketCount = Buffer.from(v7Payload);
+  oversizedBucketCount.writeUInt8(0xff, 662);
+  assert.throws(() => decodeGnssProbeStatsResponse(oversizedBucketCount), /schema, histogram count or bounds/);
+
+  const inconsistentBound = Buffer.from(v7Payload);
+  inconsistentBound.writeUInt32BE(21, 668 + 5 * 4);
+  assert.throws(() => decodeGnssProbeStatsResponse(inconsistentBound), /schema, histogram count or bounds/);
 });
 
 test("RTCM ACK V1 reports the recent completed-sequence bitmap", () => {

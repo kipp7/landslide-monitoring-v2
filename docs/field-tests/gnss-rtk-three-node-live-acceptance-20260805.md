@@ -213,6 +213,31 @@ layered polling, unique A/B/C identities, and all seven manifest artifacts.
 | C `Firmware.img` | `5405d02c463333d8779c223e04dcd63a7935274826badd23d6e48d56035abfc1` |
 | loader | `761d90888aa376156d562abf267dfe324b96c4397f7a601f6b4c64d0ea3bf977` |
 
+## Correction-Age Stage Attribution
+
+A later 600-second run kept the retained `RTCM32_GGB / G3B=4 / burst=4 /
+guard=600 ms / correction-window=2500 ms / observation=1 Hz` profile unchanged
+and instrumented only the RK3568 path. It completed with zero caster CRC,
+field-write, normal-poll, schema, and interleaving errors. The bounded
+caster-receive to completed field-write P95 was approximately `1121 ms`; the
+serial-write P95 was approximately `158 ms`.
+
+That evidence bounds the gateway contribution near 1.1 seconds and cannot
+explain the receivers' 6--7 second GGA correction age. Parameter guessing at
+the gateway is therefore stopped. The next image adds backward-compatible
+`G3S V7` node diagnostics with three fixed histograms:
+
+- completed RTCM reassembly to queue dequeue;
+- UM220 UART write duration;
+- completed RTCM reassembly to UM220 UART write completion.
+
+V7 is a 916-byte on-demand diagnostic only. It does not enlarge the Compact V6
+business payload, alter the retained correction cadence, or relax the
+professional displacement gate. A/B/C must be rebuilt from one clean commit,
+flashed by physical label, and queried one node at a time after the next
+controlled LIVE window. Until that evidence exists, the unresolved interval is
+RK2206 queue/UART scheduling plus UM220 internal application/reporting time.
+
 ## Safe Stop And Resume
 
 After the run the RK3568 was restored to:

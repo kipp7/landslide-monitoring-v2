@@ -31,7 +31,9 @@ FIELD_LINK_TYPE_COMMAND = 2
 FIELD_LINK_TYPE_CONTROL = 4
 FIELD_LINK_TYPE_RTCM = 6
 RTCM_FRAGMENT_HEADER_BYTES = 42
-GNSS_PROBE_STATS_RESPONSE_BYTES = {1: 92, 2: 148, 3: 204, 4: 384, 5: 552, 6: 660}
+GNSS_PROBE_STATS_RESPONSE_BYTES = {
+    1: 92, 2: 148, 3: 204, 4: 384, 5: 552, 6: 660, 7: 916
+}
 GNSS_RTCM_ACK_RESPONSE_BYTES = 24
 UINT32_MASK = 0xFFFFFFFF
 TARGET_MASKS = {"A": 0x01, "B": 0x02, "C": 0x04, "all": 0x07}
@@ -89,6 +91,14 @@ MODBUS_DIAGNOSTIC_COUNTER_NAMES = (
     "rxBytes",
 )
 FIELD_RS485_DIAGNOSTIC_PATH_NAMES = ("soil", "soilEc", "tilt", "rain")
+RTCM_LATENCY_BUCKET_UPPER_BOUNDS_MS = (
+    0, 1, 2, 5, 10, 20, 50, 100, 250, 500, 1000, 2000, 3000, UINT32_MASK
+)
+RTCM_LATENCY_HISTOGRAM_NAMES = (
+    "completionToDequeueMs",
+    "uartWriteMs",
+    "completionToUartFinishedMs",
+)
 
 # The schedule reproduces the July 26 PC capture at about 880 B/s without
 # retaining site coordinates or NTRIP credentials. Frame sizes approximate the
@@ -701,6 +711,81 @@ def decode_probe_stats_response(payload: bytes) -> dict[str, Any]:
             "fifoDropEvents": fifo_drop_events,
             "candidates": candidates,
         }
+    if response_version >= 7:
+        schema_version, histogram_count, bucket_count, reserved = payload[660:664]
+        session_epoch = struct.unpack_from(">I", payload, 664)[0]
+        if (
+            schema_version != 1
+            or histogram_count != len(RTCM_LATENCY_HISTOGRAM_NAMES)
+            or bucket_count != len(RTCM_LATENCY_BUCKET_UPPER_BOUNDS_MS)
+            or reserved != 0
+        ):
+            raise ValueError(
+                "GNSS RTCM latency schema, histogram count or bounds are invalid"
+            )
+        bucket_upper_bounds = struct.unpack_from(
+            f">{len(RTCM_LATENCY_BUCKET_UPPER_BOUNDS_MS)}I", payload, 668
+        )
+        if bucket_upper_bounds != RTCM_LATENCY_BUCKET_UPPER_BOUNDS_MS:
+            raise ValueError(
+                "GNSS RTCM latency schema, histogram count or bounds are invalid"
+            )
+
+        def decode_latency_histogram(offset: int) -> dict[str, Any]:
+            sample_count, max_ms = struct.unpack_from(">II", payload, offset)
+            bucket_counts = struct.unpack_from(f">{bucket_count}I", payload, offset + 8)
+            highest_non_empty = max(
+                (index for index, count in enumerate(bucket_counts) if count),
+                default=-1,
+            )
+            previous_bound = bucket_upper_bounds[highest_non_empty - 1] if highest_non_empty > 0 else -1
+            current_bound = bucket_upper_bounds[highest_non_empty] if highest_non_empty >= 0 else None
+            if (
+                sum(bucket_counts) != sample_count
+                or (sample_count == 0 and (max_ms != 0 or highest_non_empty != -1))
+                or (
+                    sample_count > 0
+                    and (
+                        highest_non_empty < 0
+                        or current_bound is None
+                        or max_ms <= previous_bound
+                        or max_ms > current_bound
+                    )
+                )
+            ):
+                raise ValueError(
+                    "GNSS RTCM latency histogram counters or maximum are inconsistent"
+                )
+
+            def percentile_upper_bound(percent: int) -> int | None:
+                if sample_count == 0:
+                    return None
+                target = math.ceil(sample_count * percent / 100)
+                cumulative = 0
+                for index, count in enumerate(bucket_counts):
+                    cumulative += count
+                    if cumulative >= target:
+                        bound = bucket_upper_bounds[index]
+                        return None if bound == UINT32_MASK else bound
+                return None
+
+            return {
+                "sampleCount": sample_count,
+                "maxMs": max_ms if sample_count else None,
+                "bucketCounts": list(bucket_counts),
+                "p50UpperBoundMs": percentile_upper_bound(50),
+                "p95UpperBoundMs": percentile_upper_bound(95),
+            }
+
+        response["rtcmLatencyDiagnostics"] = {
+            "schemaVersion": schema_version,
+            "sessionEpoch": session_epoch,
+            "bucketUpperBoundsMs": list(bucket_upper_bounds),
+            **{
+                name: decode_latency_histogram(724 + index * 64)
+                for index, name in enumerate(RTCM_LATENCY_HISTOGRAM_NAMES)
+            },
+        }
     return response
 
 
@@ -733,6 +818,20 @@ def print_gps_uart_diagnostics(prefix: str, response: dict[str, Any]) -> None:
             f"checksum_bad={candidate['checksumInvalidSentences']} "
             f"gga={candidate['ggaSentences']} rmc={candidate['rmcSentences']} "
             f"first_valid_ms={candidate['firstValidUptimeMs']}",
+            flush=True,
+        )
+
+
+def print_rtcm_latency_diagnostics(prefix: str, response: dict[str, Any]) -> None:
+    diagnostics = response.get("rtcmLatencyDiagnostics")
+    if diagnostics is None:
+        return
+    for name in RTCM_LATENCY_HISTOGRAM_NAMES:
+        histogram = diagnostics[name]
+        print(
+            f"{prefix}_RTCM_LATENCY stage={name} session={diagnostics['sessionEpoch']:08X} "
+            f"samples={histogram['sampleCount']} p50_upper_ms={histogram['p50UpperBoundMs']} "
+            f"p95_upper_ms={histogram['p95UpperBoundMs']} max_ms={histogram['maxMs']}",
             flush=True,
         )
 
@@ -2032,6 +2131,7 @@ def run_diagnostics_query(args: argparse.Namespace) -> dict[str, Any]:
     print_sensor_diagnostics("DIAGNOSTIC", snapshot)
     print_hardware_diagnostics("DIAGNOSTIC", snapshot)
     print_gps_uart_diagnostics("DIAGNOSTIC", snapshot)
+    print_rtcm_latency_diagnostics("DIAGNOSTIC", snapshot)
     sensor_degraded = None
     if diagnostics is not None:
         sensor_degraded = bool(
@@ -2180,6 +2280,45 @@ def self_test() -> None:
         raise AssertionError("inconsistent V5 RS485 counters were accepted")
     except ValueError as exc:
         assert "counters, status or flags" in str(exc)
+    v6_payload = bytearray(660)
+    v6_payload[:552] = v5_payload
+    v6_payload[3] = 6
+    v6_payload[552:556] = bytes((1, 3, 0, 0))
+    struct.pack_into(">I", v6_payload, 556, 115200)
+    struct.pack_into(">I", v6_payload, 580, 115200)
+    struct.pack_into(">I", v6_payload, 620, 9600)
+    decoded_v6 = decode_probe_stats_response(bytes(v6_payload))
+    assert decoded_v6["responseVersion"] == 6
+    assert decoded_v6["gpsUartDiagnostics"]["activeBaudrate"] == 115200
+    assert decoded_v6["gpsUartDiagnostics"]["candidates"][1]["baudrate"] == 9600
+    v7_payload = bytearray(916)
+    v7_payload[:660] = v6_payload
+    v7_payload[3] = 7
+    v7_payload[660:664] = bytes((1, 3, 14, 0))
+    struct.pack_into(">I", v7_payload, 664, 0x10203040)
+    struct.pack_into(">14I", v7_payload, 668, *RTCM_LATENCY_BUCKET_UPPER_BOUNDS_MS)
+    struct.pack_into(">II14I", v7_payload, 724, 4, 90, *([0] * 7), 4, *([0] * 6))
+    struct.pack_into(">II14I", v7_payload, 788, 3, 8, *([0] * 4), 3, *([0] * 9))
+    struct.pack_into(">II14I", v7_payload, 852, 3, 105, *([0] * 8), 3, *([0] * 5))
+    decoded_v7 = decode_probe_stats_response(bytes(v7_payload))
+    assert decoded_v7["responseVersion"] == 7
+    assert decoded_v7["rtcmLatencyDiagnostics"]["sessionEpoch"] == 0x10203040
+    assert decoded_v7["rtcmLatencyDiagnostics"]["completionToDequeueMs"]["p95UpperBoundMs"] == 100
+    assert decoded_v7["rtcmLatencyDiagnostics"]["uartWriteMs"]["maxMs"] == 8
+    inconsistent_v7 = bytearray(v7_payload)
+    struct.pack_into(">I", inconsistent_v7, 724, 2)
+    try:
+        decode_probe_stats_response(bytes(inconsistent_v7))
+        raise AssertionError("inconsistent V7 RTCM latency histogram was accepted")
+    except ValueError as exc:
+        assert "histogram counters or maximum" in str(exc)
+    invalid_bucket_count_v7 = bytearray(v7_payload)
+    invalid_bucket_count_v7[662] = 0xFF
+    try:
+        decode_probe_stats_response(bytes(invalid_bucket_count_v7))
+        raise AssertionError("oversized V7 RTCM latency bucket count was accepted")
+    except ValueError as exc:
+        assert "schema, histogram count or bounds" in str(exc)
     v2_gate = evaluate_probe_gate(
         baseline_v2,
         final_v2,

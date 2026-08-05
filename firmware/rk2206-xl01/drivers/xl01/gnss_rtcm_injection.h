@@ -50,6 +50,25 @@ typedef struct {
 #define GNSS_RTCM_AGE_UNAVAILABLE UINT32_MAX
 #define GNSS_RTCM_BATCH_HEADER_BYTES 8U
 #define GNSS_RTCM_BATCH_MAX_FRAGMENTS 4U
+#define GNSS_RTCM_LATENCY_SCHEMA_VERSION 1U
+#define GNSS_RTCM_LATENCY_HISTOGRAM_COUNT 3U
+#define GNSS_RTCM_LATENCY_BUCKET_COUNT 14U
+
+typedef struct {
+    uint32_t sample_count;
+    uint32_t max_ms;
+    uint32_t bucket_counts[GNSS_RTCM_LATENCY_BUCKET_COUNT];
+} GnssRtcmLatencyHistogram;
+
+typedef struct {
+    uint8_t schema_version;
+    uint8_t bucket_count;
+    uint32_t session_epoch;
+    uint32_t bucket_upper_bounds_ms[GNSS_RTCM_LATENCY_BUCKET_COUNT];
+    GnssRtcmLatencyHistogram completion_to_dequeue_ms;
+    GnssRtcmLatencyHistogram uart_write_ms;
+    GnssRtcmLatencyHistogram completion_to_uart_finished_ms;
+} GnssRtcmLatencyDiagnostics;
 
 enum {
     GNSS_RTCM_STATE_READY = 1U << 0,
@@ -114,14 +133,21 @@ int GnssRtcmInjection_TryDequeue(
     uint8_t *frame,
     uint16_t frame_capacity,
     uint16_t *frame_bytes,
-    uint16_t *message_type
+    uint16_t *message_type,
+    uint64_t *completed_monotonic_ms
 );
 
 void GnssRtcmInjection_RecordProbe(uint16_t frame_bytes, uint64_t monotonic_ms);
-void GnssRtcmInjection_RecordInjected(uint16_t frame_bytes, uint64_t monotonic_ms);
+void GnssRtcmInjection_RecordInjected(
+    uint16_t frame_bytes,
+    uint64_t completed_monotonic_ms,
+    uint64_t write_started_monotonic_ms,
+    uint64_t write_finished_monotonic_ms
+);
 void GnssRtcmInjection_RecordWriteError(uint8_t partial_write);
 void GnssRtcmInjection_RecordInjectionDrop(void);
 void GnssRtcmInjection_GetStats(GnssRtcmInjectionStats *stats);
+void GnssRtcmInjection_GetLatencyDiagnostics(GnssRtcmLatencyDiagnostics *diagnostics);
 void GnssRtcmInjection_GetAckWindow(GnssRtcmAckWindow *window);
 
 #ifdef __cplusplus

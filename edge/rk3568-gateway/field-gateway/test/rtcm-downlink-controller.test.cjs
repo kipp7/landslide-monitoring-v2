@@ -43,7 +43,7 @@ test("RTCM controller waits for every target node to confirm one leased session"
   }
   const payload = controller.takeNextFragment(now);
   assert.ok(payload);
-  const fragment = decodeRtcmFragmentV3(payload);
+  const fragment = decodeRtcmFragmentV3(payload.payload);
   assert.equal(fragment.targetMask, 7);
   assert.equal(fragment.sessionEpoch, 0x12345678);
   assert.equal(fragment.messageType, 1074);
@@ -66,7 +66,7 @@ test("RTCM controller filters unsupported NTRIP messages through the UM220 essen
   controller.observeNode({ nodeLabel: "A", mode: 1, sessionEpoch: 7, leaseRemainingMs: 80_000, observedUnixMs: now });
   controller.offerNtripChunk(Buffer.concat([buildRtcmFrame(1114), buildRtcmFrame(1124)]), now);
   const payload = controller.takeNextFragment(now);
-  assert.equal(decodeRtcmFragmentV3(payload).messageType, 1124);
+  assert.equal(decodeRtcmFragmentV3(payload.payload).messageType, 1124);
   assert.equal(controller.stats(now).shaper.unsupportedFrames, 1);
 });
 
@@ -120,9 +120,9 @@ test("RTCM controller aggregates two observations and restores their order after
   assert.ok(prepared);
   assert.equal(prepared.batched, true);
   assert.equal(prepared.fragments.length, 2);
-  assert.deepEqual(decodeRtcmFragmentBatchV1(prepared.payload), prepared.fragments);
+  assert.deepEqual(decodeRtcmFragmentBatchV1(prepared.payload), prepared.fragments.map((fragment) => fragment.payload));
   assert.deepEqual(
-    prepared.fragments.map((fragment) => decodeRtcmFragmentV3(fragment).messageType),
+    prepared.fragments.map((fragment) => decodeRtcmFragmentV3(fragment.payload).messageType),
     [1074, 1124]
   );
 
@@ -130,4 +130,44 @@ test("RTCM controller aggregates two observations and restores their order after
   const retry = controller.takeNextFieldPayload(now + 1);
   assert.ok(retry);
   assert.deepEqual(retry.fragments, prepared.fragments);
+});
+
+test("RTCM controller attributes bounded queue, arbitration, serial and caster-to-write latency", () => {
+  const controller = new RtcmDownlinkController({
+    mode: "live",
+    targetMask: 0x01,
+    leaseSeconds: 90,
+    maxFragmentDataBytes: 512,
+    observationIntervalMs: 1000,
+    maxFragmentsPerFieldFrame: 2,
+    sessionEpoch: 0x01020304
+  });
+  controller.observeNode({
+    nodeLabel: "A",
+    mode: 2,
+    sessionEpoch: 0x01020304,
+    leaseRemainingMs: 80_000,
+    observedUnixMs: 10_000
+  });
+  controller.offerNtripChunk(Buffer.concat([buildRtcmFrame(1074, 48), buildRtcmFrame(1005, 32)]), 10_000);
+
+  controller.noteDispatchBlocked("poll-guard", 10_100);
+  const prepared = controller.takeNextFieldPayload(10_300);
+  assert.ok(prepared);
+  controller.noteDispatchReady(10_700);
+  controller.noteFieldPayloadWritten(prepared, 10_920, 10_950);
+
+  const latency = controller.stats(10_950).latency;
+  assert.equal(latency.shaperQueueMs.all.samplesTotal, 2);
+  assert.equal(latency.shaperQueueMs.all.p95Ms, 300);
+  assert.equal(latency.shaperQueueMs.byMessageType["1074"].lastMs, 300);
+  assert.equal(latency.shaperQueueMs.byMessageType["1005"].lastMs, 300);
+  assert.equal(latency.dispatchBlockMs.all.lastMs, 600);
+  assert.equal(latency.dispatchBlockMs.byReason["poll-guard"].lastMs, 600);
+  assert.equal(latency.preparedToWriteStartMs.lastMs, 620);
+  assert.equal(latency.serialWriteMs.lastMs, 30);
+  assert.equal(latency.casterToFieldWriteMs.all.samplesTotal, 2);
+  assert.equal(latency.casterToFieldWriteMs.all.lastMs, 950);
+  assert.deepEqual(latency.lastFieldWrite.messageTypes, [1005, 1074]);
+  assert.equal(latency.lastFieldWrite.oldestCasterAgeMs, 950);
 });

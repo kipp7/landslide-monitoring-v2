@@ -18,6 +18,28 @@ status: active
 
 ## Current State
 
+### RK3568 Stage Bound Established; G3S V7 Ready For Clean Release (2026-08-05)
+
+- 保留参数不变完成 600 秒 RK3568 分段归因：caster 到 field-write P95 约
+  `1121 ms`，其中串口写 P95 约 `158 ms`；caster CRC、field 写、普通轮询、schema
+  和交织错误均为 0。网关约 1.1 秒不能解释 GGA correction age 的 6--7 秒，停止继续
+  猜测 burst、guard 或 observation 参数。
+- 新增向后兼容 `G3S V7`，V1--V6 布局不变。V7 为 916 B 按需诊断载荷，完整
+  COBS/CRC 线框金值为 934 B，低于 1024 B 上限且不进入 Compact V6 常规遥测。
+  三个固定直方图分别量测 RTCM 完帧到出队、UM220 UART 写入、完帧到 UART 写完。
+- 直方图固定为 14 个毫秒上界桶，严格校验 schema、边界、计数和最大值；畸形桶数先
+  拒绝再读取，uint32 计数饱和后整体冻结，避免编码器/TypeScript/Python 解码器出现
+  不一致。session 或模式变化时清零，新会话间不串账；fail-closed 后保留最后会话供查询。
+- RK3568 端补充有界 caster/shaper/仲裁/串口阶段窗口和 600 秒自动恢复脚本。当前
+  field-gateway `75/75`、TypeScript build、ESLint、RK2206 C99 全套主机测试和 Python
+  自检均通过。尚未从 clean commit 构建 A/B/C，不得把源码通过写成真机通过。
+- RK3568 继续保持 `NTRIP_ENABLED=false`、runtime probe、聚合数 1；生产候选仍仅为
+  `RTCM32_GGB / G3B=4 / burst=4 / guard=600 ms / correction-window=2500 ms /
+  observation=1 Hz`。专业位移门禁继续关闭。
+- 自动分段归因脚本的退出路径已加固：恢复原环境后仍显式强制 NTRIP 关闭、runtime
+  probe 和 `RTCM_MAX_FRAGMENTS_PER_FIELD_FRAME=1`；脚本已在 OpenHarmony 容器内
+  通过 `bash -n`，不得在无人值守状态保留实验聚合数 4。
+
 ### G3B v1 Three-Node FIXED Reconvergence; Age Gate Still Fails (2026-08-05)
 
 - A/B/C 已烧录正式 G3B v1 镜像。legacy G3R、G3B 聚合 2 和聚合 4 的分阶段 PROBE
@@ -419,17 +441,18 @@ status: active
 
 ## Plan
 
-1. 保持已验证候选和 fail-closed 默认值不变，补齐 caster -> shaper -> XLS1 -> RK2206
-   -> UM220 -> GGA 的分段时间证据，先定位 age P95 7 秒的来源。
-2. 只对有分段证据的延迟点做单变量修改，然后重复 600 秒 LIVE；任一错误门或 age 门
+1. 从同一 clean commit 生成并复验 A/B/C G3S V7 镜像，按物理标签烧录；先做普通遥测
+   和 G3R/G3B PROBE，再在保留参数下做 600 秒 LIVE，并逐节点查询 V7。
+2. 用 V7 区分 RK2206 完帧到出队、UM220 UART 写入及 UM220 内部应用/GGA 报告时间；
+   只对有分段证据的延迟点做单变量修改。任一错误门或 age 门
    失败立即恢复 NTRIP false、runtime probe、聚合数 1。
 3. 600 秒达到三节点持续 GGA=4、age P95 `<=3 s`、max `<=5 s`、可信 GST 和全链零
    错误后，才执行 1800 秒和 60 分钟生产验收，再建立 ECEF/ENU 基线。
 
 ## Open Questions
 
-- correction age P95 约 `7 s` 是真实修正新鲜度、共享链路调度延迟、节点时间戳口径，
-  还是 UM220 GGA age 字段解析/更新节奏造成？必须用节点端完成/注入时间和接收机输出对齐验证。
+- RK3568 已将自身贡献约束到 P95 约 `1.1 s` 后，剩余 correction age 是 RK2206 队列、
+  UM220 UART 写入、接收机内部应用，还是 GGA age 字段的历元/报告口径？需用 V7 与 GGA 对齐验证。
 - 为什么 G3B=4 已将最后 120 秒三节点稳定到 GGA=4、全链错误归零，但 GGA age 仍在
   4--7 秒波动？是选帧限频、普通轮询保护、UM220 应用时机还是上游观测历元导致？
 - RK2206 无可信绝对 Unix 时钟时，是否接受网关绝对 TTL + 节点单调队列龄的双层策略，或需要补充可信时间同步？

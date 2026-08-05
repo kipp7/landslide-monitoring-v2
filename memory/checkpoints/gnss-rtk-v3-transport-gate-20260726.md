@@ -18,6 +18,27 @@ status: active
 
 ## Last Confirmed State
 
+### RK3568 Stage Attribution And G3S V7 Release Candidate (2026-08-05)
+
+- 在保留参数完全不变的 600 秒窗口中，RK3568 caster 到 field-write P95 约
+  `1121 ms`，串口写 P95 约 `158 ms`；caster CRC、field 写、poll timeout、schema
+  和交织错误均为 0。网关只解释约 1.1 秒，不能解释 GGA correction age 6--7 秒。
+- 已实现向后兼容 `G3S V7`：916 B 按需载荷、934 B 完整线框，V1--V6 不变，Compact
+  V6 常规遥测不增加字节。三个 14 桶直方图分别记录完帧到出队、UART 写入、完帧到
+  UART 写完；session/模式切换清零，fail-closed 后保留最后会话供定向查询。
+- 编码器、TypeScript 和 Python 均先校验固定 schema/桶数/边界，再验证样本总数与最大
+  值所在桶；畸形计数和越界桶数负例已覆盖。计数到 `UINT32_MAX` 后整体冻结，保持三端
+  不变量一致。
+- field-gateway `75/75`、TypeScript build、ESLint、RK2206 C99 主机测试、Python 自检
+  和 `git diff --check` 均通过。尚未 clean commit、推送和构建 A/B/C，因此节点侧 V7
+  真机证据仍为待办，不能宣称 correction-age 根因已定位。
+- RK3568 保持 `NTRIP_ENABLED=false`、runtime probe、聚合数 1。保留参数仍是
+  `RTCM32_GGB / G3B=4 / burst=4 / guard=600 ms / correction-window=2500 ms /
+  observation=1 Hz`，专业位移门禁仍关闭。
+- 600 秒分段归因脚本在正常退出、异常和信号中断时都会恢复备份，并强制
+  `NTRIP_ENABLED=false`、runtime probe、聚合数 1；已在 OpenHarmony 容器内通过
+  `bash -n`，不会把实验聚合数 4 遗留到场外运行状态。
+
 ### G3B v1 600-Second Three-Node Reconvergence (2026-08-05)
 
 - A/B/C 已烧录正式 G3B v1 包，legacy G3R、聚合 2、聚合 4 PROBE 均通过。聚合 4
@@ -527,9 +548,9 @@ status: active
 - 正式 G3B v1 A/B/C 包已烧录；legacy G3R、G3B 聚合 2/4 PROBE 及 600 秒三节点
   FIXED 恢复测试已完成。生产候选只保留
   `RTCM32_GGB / G3B=4 / burst=4 / guard=600 ms / observation=1 Hz`。
-- 当前阻断项已收敛为 correction-age 时效：最后 120 秒虽持续三节点 GGA=4，但
-  P95/max 为 7 秒。下一步需分段量测 caster 到达、网关整形/排队、XLS1 下发、
-  RK2206 重组/UART 写入和 GGA 输出，不继续只靠调整 burst 猜测。
+- 当前阻断项仍是 correction-age 时效：RK3568 已将自身 P95 约束到 `1121 ms`，下一步
+  用 G3S V7 真机量测 RK2206 完帧/出队/UART 写入，再与 GGA 输出对齐；不继续靠调整
+  burst 猜测。
 - RK3568 已恢复测试前稳定构建并保持 `NTRIP_ENABLED=false`、runtime probe、聚合数 1；
   200 ms 观测合并实验已删除，不进入生产配置。
 - OTA 当前只允许离线设计和可恢复备用板验证；现场 A/B/C 的 `ota_prepare/apply`
@@ -537,10 +558,10 @@ status: active
 
 ## Next Actions
 
-1. 在不改变保留参数的前提下补齐修正时效分段证据：caster 接收、shaper 入/出队、
-   field 写入、RK2206 完帧/UART 注入和接收机 GGA age，确认 7 秒来自链路调度、接收机
-   报告口径还是上游历元延迟。
-2. 只有定位并修复了可证明的延迟段，才重复 600 秒 LIVE；三节点持续 GGA=4、age P95
+1. 从 clean commit 构建/复验 A/B/C V7 镜像并按物理标签烧录；依次做普通遥测、G3R/
+   G3B PROBE 和保留参数 600 秒 LIVE，结束后定向查询三节点 V7。
+2. 用节点直方图区分 RK2206 队列、UART 写入与 UM220 内部/GGA 报告时间。只有定位并
+   修复可证明的延迟段，才重复 600 秒 LIVE；三节点持续 GGA=4、age P95
    `<=3 s`、max `<=5 s`、可信 GST 和全链零错误后才进入 1800 秒。
 3. 1800 秒通过后再做 60 分钟生产验收和 ECEF/ENU 基线；此前 UI 只能显示 FIXED 与
    专业门禁状态，不能显示“厘米级位移已验收”。
@@ -564,14 +585,13 @@ status: active
 
 ## Resume Prompt
 
-继续 2026-08-05 XLS1/RTK G3B 任务：A/B/C 已烧录正式 G3B v1，legacy G3R、聚合 2/4
-PROBE 均通过。保留候选为 RTCM32_GGB、G3B=4、burst=4、guard=600 ms、observation=1 Hz。
-等待两分钟后运行 600 秒，A 约 4 分钟 FIXED、约 6 分钟后三节点全 FIXED；最后 120 秒
-A/B/C 均为 12/12 GGA=4，最终 age 4/4/4 秒，普通轮询 102/102，caster 1868 帧、
-内层 RTCM 1058、外层 field 508，全部链路错误为 0。但三节点 age P95/max 都为 7 秒，
-专业位移门禁仍关闭。AUTO、burst=8 和 200 ms coalesce 已拒绝；coalesce 代码/部署已
-撤回。RK3568 当前为测试前稳定构建、NTRIP false、runtime probe、聚合数 1，服务
-active/NRestarts=0。下一步不要继续盲调参数；量测 caster 到达、shaper 排队、field
-写入、RK2206 完帧/UART 注入和 GGA age 的分段时间，定位 7 秒来源后再做单变量修复与
-600 秒复验。只有 P95 <=3 秒、max <=5 秒、三节点持续 GGA=4、可信 GST 和全链零错误
-才进入 1800 秒。Git/memory 禁止写入凭据、端点、坐标或原始 RTCM。
+继续 2026-08-05 XLS1/RTK correction-age 分段归因：保留候选为 RTCM32_GGB、G3B=4、
+burst=4、guard=600 ms、correction-window=2500 ms、observation=1 Hz。既有 600 秒三节点
+最后 120 秒均 GGA=4，但 age P95/max 7 秒，专业门禁关闭。新增 RK3568 分段窗口证明
+caster 到 field-write P95 约 1121 ms、串口写 P95 约 158 ms且 600 秒全链零错误，故
+网关不足以解释 6--7 秒。G3S V7 已在源码实现 916 B 按需诊断和三组节点直方图，离线
+回归全绿，但尚未 clean commit/推送/出包/烧录。下一步从 clean commit 构建唯一 A/B/C
+镜像，烧录后依次做遥测、PROBE、600 秒 LIVE，并逐节点查询 V7。RK3568 必须保持
+NTRIP false、runtime probe、聚合数 1，直到受控测试开始。只有 age P95 <=3 秒、max
+<=5 秒、三节点持续 GGA=4、可信 GST 和全链零错误才进入 1800 秒。Git/memory 禁止写入
+凭据、端点、坐标或原始 RTCM。

@@ -245,9 +245,13 @@ static void PrintGpsUartProbeChunk(const unsigned char *data, int len)
 }
 
 #if GNSS_RTCM_INJECTION_CAPABILITY != GNSS_RTCM_INJECTION_DISABLED
-static int GPS_WriteRtcmFrame(const unsigned char *frame, uint16_t frame_bytes)
+static int GPS_WriteRtcmFrame(
+    const unsigned char *frame,
+    uint16_t frame_bytes,
+    uint64_t completed_monotonic_ms)
 {
     uint16_t offset = 0U;
+    uint64_t write_started_monotonic_ms;
     int write_ready;
 
     GnssParserLock();
@@ -260,6 +264,7 @@ static int GPS_WriteRtcmFrame(const unsigned char *frame, uint16_t frame_bytes)
         return -1;
     }
 
+    write_started_monotonic_ms = GpsMonotonicMs();
     while (offset < frame_bytes) {
         uint16_t remaining = (uint16_t)(frame_bytes - offset);
         uint16_t chunk = remaining > GNSS_RTCM_UART_CHUNK_SIZE
@@ -274,7 +279,12 @@ static int GPS_WriteRtcmFrame(const unsigned char *frame, uint16_t frame_bytes)
         offset = (uint16_t)(offset + chunk);
     }
 
-    GnssRtcmInjection_RecordInjected(frame_bytes, GpsMonotonicMs());
+    GnssRtcmInjection_RecordInjected(
+        frame_bytes,
+        completed_monotonic_ms,
+        write_started_monotonic_ms,
+        GpsMonotonicMs()
+    );
     return 0;
 }
 
@@ -282,6 +292,7 @@ static void GPS_ProcessRtcmQueue(void)
 {
     GnssRtcmRuntimeStatus runtime;
     uint64_t now_ms = GpsMonotonicMs();
+    uint64_t completed_monotonic_ms = 0U;
     uint16_t frame_bytes = 0U;
     uint16_t message_type = 0U;
     int dequeue_ret = GnssRtcmInjection_TryDequeue(
@@ -289,7 +300,8 @@ static void GPS_ProcessRtcmQueue(void)
         g_rtcm_uart_frame,
         sizeof(g_rtcm_uart_frame),
         &frame_bytes,
-        &message_type
+        &message_type,
+        &completed_monotonic_ms
     );
 
     (void)message_type;
@@ -301,7 +313,11 @@ static void GPS_ProcessRtcmQueue(void)
     if (runtime.mode == GNSS_RTCM_INJECTION_PROBE) {
         GnssRtcmInjection_RecordProbe(frame_bytes, now_ms);
     } else if (runtime.mode == GNSS_RTCM_INJECTION_LIVE &&
-               GPS_WriteRtcmFrame(g_rtcm_uart_frame, frame_bytes) != 0) {
+               GPS_WriteRtcmFrame(
+                   g_rtcm_uart_frame,
+                   frame_bytes,
+                   completed_monotonic_ms
+               ) != 0) {
         GnssRtcmInjection_RecordInjectionDrop();
     }
 }

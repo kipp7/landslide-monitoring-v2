@@ -101,7 +101,7 @@
 #define SLEEP_AFTER_SEND    0           // Sleep after each send (low power)
 
 // Version marker
-#define FIRMWARE_SAMPLE_VERSION "v1.7-um220-rs485-rtk-compact-v6-gps-uart-drain-rtcm-batch-v1"
+#define FIRMWARE_SAMPLE_VERSION "v1.8-um220-rs485-rtk-compact-v6-rtcm-batch-v1-g3s-v7"
 
 // Bring-up diagnostic mode:
 // 1 = only print a boot heartbeat on the debug UART; do not initialize sensors or XL01.

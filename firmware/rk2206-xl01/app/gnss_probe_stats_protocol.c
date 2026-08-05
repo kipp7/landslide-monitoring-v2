@@ -562,6 +562,139 @@ int GnssProbeStatsResponseV6_Encode(
     return GNSS_PROBE_STATS_RESPONSE_V6_BYTES;
 }
 
+static int ValidateLatencyHistogram(
+    const GnssRtcmLatencyHistogram *histogram,
+    const uint32_t *upper_bounds)
+{
+    uint64_t total = 0U;
+    int highest_non_empty = -1;
+    unsigned int index;
+
+    if (histogram == NULL || upper_bounds == NULL) return -1;
+    for (index = 0U; index < GNSS_RTCM_LATENCY_BUCKET_COUNT; ++index) {
+        total += histogram->bucket_counts[index];
+        if (histogram->bucket_counts[index] != 0U) highest_non_empty = (int)index;
+    }
+    if (total != histogram->sample_count) {
+        return -1;
+    }
+    if (histogram->sample_count == 0U) {
+        return histogram->max_ms == 0U && highest_non_empty < 0 ? 0 : -1;
+    }
+    if (highest_non_empty < 0 ||
+        histogram->max_ms > upper_bounds[highest_non_empty] ||
+        (highest_non_empty > 0 && histogram->max_ms <= upper_bounds[highest_non_empty - 1])) {
+        return -1;
+    }
+    return 0;
+}
+
+static int ValidateLatencyDiagnostics(const GnssRtcmLatencyDiagnostics *diagnostics)
+{
+    static const uint32_t expected_upper_bounds[GNSS_RTCM_LATENCY_BUCKET_COUNT] = {
+        0U, 1U, 2U, 5U, 10U, 20U, 50U,
+        100U, 250U, 500U, 1000U, 2000U, 3000U, UINT32_MAX
+    };
+    unsigned int index;
+    if (diagnostics == NULL ||
+        diagnostics->schema_version != GNSS_RTCM_LATENCY_SCHEMA_VERSION ||
+        diagnostics->bucket_count != GNSS_RTCM_LATENCY_BUCKET_COUNT) {
+        return -1;
+    }
+    for (index = 0U; index < GNSS_RTCM_LATENCY_BUCKET_COUNT; ++index) {
+        if (diagnostics->bucket_upper_bounds_ms[index] != expected_upper_bounds[index]) {
+            return -1;
+        }
+    }
+    if (ValidateLatencyHistogram(
+            &diagnostics->completion_to_dequeue_ms,
+            diagnostics->bucket_upper_bounds_ms) != 0 ||
+        ValidateLatencyHistogram(
+            &diagnostics->uart_write_ms,
+            diagnostics->bucket_upper_bounds_ms) != 0 ||
+        ValidateLatencyHistogram(
+            &diagnostics->completion_to_uart_finished_ms,
+            diagnostics->bucket_upper_bounds_ms) != 0) {
+        return -1;
+    }
+    return 0;
+}
+
+static void EncodeLatencyHistogram(
+    uint8_t *output,
+    const GnssRtcmLatencyHistogram *histogram)
+{
+    unsigned int index;
+    WriteUint32Be(output, histogram->sample_count);
+    WriteUint32Be(output + 4, histogram->max_ms);
+    for (index = 0U; index < GNSS_RTCM_LATENCY_BUCKET_COUNT; ++index) {
+        WriteUint32Be(output + 8U + index * 4U, histogram->bucket_counts[index]);
+    }
+}
+
+int GnssProbeStatsResponseV7_Encode(
+    const GnssRtcmInjectionStats *stats,
+    const FieldLinkRxStats *link_stats,
+    const GnssSensorDiagnostics *sensor_diagnostics,
+    const Sc16is752Diagnostics *sc16is752_diagnostics,
+    const FieldRs485Diagnostics *field_rs485_diagnostics,
+    const Rs485ModbusDiagnostics *modbus_diagnostics,
+    const FieldRs485RuntimeDiagnostics *rs485_runtime_diagnostics,
+    const GpsUartDiagnostics *gps_uart_diagnostics,
+    const GnssRtcmLatencyDiagnostics *latency_diagnostics,
+    uint8_t node_number,
+    uint8_t injection_mode,
+    uint32_t nonce,
+    uint32_t snapshot_uptime_s,
+    uint8_t *output,
+    int output_size)
+{
+    unsigned int index;
+    if (output == NULL || output_size < GNSS_PROBE_STATS_RESPONSE_V7_BYTES ||
+        ValidateLatencyDiagnostics(latency_diagnostics) != 0) {
+        return -1;
+    }
+    if (GnssProbeStatsResponseV6_Encode(
+            stats,
+            link_stats,
+            sensor_diagnostics,
+            sc16is752_diagnostics,
+            field_rs485_diagnostics,
+            modbus_diagnostics,
+            rs485_runtime_diagnostics,
+            gps_uart_diagnostics,
+            node_number,
+            injection_mode,
+            nonce,
+            snapshot_uptime_s,
+            output,
+            output_size
+        ) != GNSS_PROBE_STATS_RESPONSE_V6_BYTES) {
+        return -1;
+    }
+
+    memset(
+        output + GNSS_PROBE_STATS_RESPONSE_V6_BYTES,
+        0,
+        GNSS_PROBE_STATS_RESPONSE_V7_BYTES - GNSS_PROBE_STATS_RESPONSE_V6_BYTES);
+    output[3] = 7U;
+    output[660] = latency_diagnostics->schema_version;
+    output[661] = GNSS_RTCM_LATENCY_HISTOGRAM_COUNT;
+    output[662] = latency_diagnostics->bucket_count;
+    WriteUint32Be(output + 664, latency_diagnostics->session_epoch);
+    for (index = 0U; index < GNSS_RTCM_LATENCY_BUCKET_COUNT; ++index) {
+        WriteUint32Be(
+            output + 668U + index * 4U,
+            latency_diagnostics->bucket_upper_bounds_ms[index]);
+    }
+    EncodeLatencyHistogram(output + 724, &latency_diagnostics->completion_to_dequeue_ms);
+    EncodeLatencyHistogram(output + 788, &latency_diagnostics->uart_write_ms);
+    EncodeLatencyHistogram(
+        output + 852,
+        &latency_diagnostics->completion_to_uart_finished_ms);
+    return GNSS_PROBE_STATS_RESPONSE_V7_BYTES;
+}
+
 int GnssRtcmAckQueryV1_Decode(
     const char *payload,
     int payload_bytes,

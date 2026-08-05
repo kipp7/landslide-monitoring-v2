@@ -30,7 +30,7 @@ $gates = @(
   "test-rk2206-release-marker-source-safety.ps1",
   "test-rk2206-snapshot-atomicity.ps1"
 )
-$expectedFirmwareMarker = "fw-rk2206-rtk-compact-v6-gps-uart-drain-v2-rtcm-batch-v1-live-20260805"
+$expectedFirmwareMarker = "fw-rk2206-rtk-compact-v6-rtcm-batch-v1-g3s-v7-live-20260805"
 
 function Assert-AsciiMarker {
   param(
@@ -117,7 +117,7 @@ try {
   }
 
   $instructions = @"
-Compact V6 protected-P1 + RTCM G3B v1 hardware GNSS LIVE-capable release
+Compact V6 protected-P1 + RTCM G3B v1 + G3S V7 hardware GNSS LIVE-capable release
 
 Truth profile
   - XLS1 PB2/PB3: real
@@ -126,6 +126,7 @@ Truth profile
   - GNSS: real UM220-IV NK on PB6/PB7 at 115200 baud
   - RTCM capability: LIVE, but every boot starts DISABLED
   - RTCM downlink: legacy G3R plus validated G3B v1 aggregation (2..4 inner fragments)
+  - On-demand diagnostics: G3S V7 bounded node queue and UM220 UART latency histograms
   - Runtime modes: DISABLED -> PROBE -> LIVE under a fresh 15..300 s lease
   - Polling: protected single P1, no production P2 recovery
   - Every telemetry payload: 46 bytes; every complete telemetry frame: 64 bytes

@@ -3600,17 +3600,40 @@ class GatewayRuntime {
 
   private async tickRtcmDispatch(): Promise<void> {
     const controller = this.rtcmController;
-    if (!controller || this.stopping || !this.rtcmPortAvailable(this.config.serialDevice)) return;
-    if (this.config.southboundPollingEnabled && !this.rtcmPollBurstGate.canDispatchFragment()) return;
-    const prepared = controller.takeNextFieldPayload(Date.now());
+    if (!controller || this.stopping) return;
+    const nowUnixMs = Date.now();
+    if (!controller.hasPendingCorrections()) {
+      controller.noteDispatchReady(nowUnixMs);
+      return;
+    }
+    if (!controller.allTargetsArmed(nowUnixMs)) {
+      controller.noteDispatchBlocked("targets-unarmed", nowUnixMs);
+      return;
+    }
+    if (!this.rtcmPortAvailable(this.config.serialDevice)) {
+      controller.noteDispatchBlocked("port-busy", nowUnixMs);
+      return;
+    }
+    if (this.config.southboundPollingEnabled && !this.rtcmPollBurstGate.canDispatchFragment()) {
+      controller.noteDispatchBlocked("poll-guard", nowUnixMs);
+      return;
+    }
+    controller.noteDispatchReady(nowUnixMs);
+    const prepared = controller.takeNextFieldPayload(nowUnixMs);
     if (!prepared) return;
+    const writeStartedUnixMs = Date.now();
     const written = await this.writeRtcmFieldLinkPayload(
       "rtcm",
       prepared.payload,
       "fragment",
       prepared.fragments.length
     );
-    if (!written) controller.returnFieldPayload(prepared);
+    const writeCompletedUnixMs = Date.now();
+    if (written) {
+      controller.noteFieldPayloadWritten(prepared, writeStartedUnixMs, writeCompletedUnixMs);
+    } else {
+      controller.returnFieldPayload(prepared);
+    }
   }
 
   private nextFieldLinkTxSequence(): number {

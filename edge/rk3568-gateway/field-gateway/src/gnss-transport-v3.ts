@@ -9,8 +9,13 @@ export const GNSS_PROBE_STATS_RESPONSE_V2_BYTES = 148;
 export const GNSS_PROBE_STATS_RESPONSE_V3_BYTES = 204;
 export const GNSS_PROBE_STATS_RESPONSE_V4_BYTES = 384;
 export const GNSS_PROBE_STATS_RESPONSE_V5_BYTES = 552;
+export const GNSS_PROBE_STATS_RESPONSE_V6_BYTES = 660;
+export const GNSS_PROBE_STATS_RESPONSE_V7_BYTES = 916;
 export const GNSS_SENSOR_DIAGNOSTIC_COUNT = 4;
 export const FIELD_RS485_DIAGNOSTIC_PATH_COUNT = 4;
+export const GNSS_RTCM_LATENCY_BUCKET_UPPER_BOUNDS_MS = [
+  0, 1, 2, 5, 10, 20, 50, 100, 250, 500, 1000, 2000, 3000, 0xffffffff
+] as const;
 export const GNSS_RTCM_ACK_QUERY_V1_BYTES = 12;
 export const GNSS_RTCM_ACK_RESPONSE_V1_BYTES = 24;
 export const GNSS_RTCM_MODE_COMMAND_V1_BYTES = 19;
@@ -279,6 +284,56 @@ export type GnssProbeStatsResponseV5 = Omit<GnssProbeStatsResponseV4, "responseV
   };
 };
 
+export type GpsUartCandidateDiagnostics = {
+  baudrate: number;
+  rxBytes: number;
+  printableBytes: number;
+  dollarBytes: number;
+  completedLines: number;
+  checksumValidSentences: number;
+  checksumInvalidSentences: number;
+  ggaSentences: number;
+  rmcSentences: number;
+  firstValidUptimeMs: number;
+};
+
+export type GnssProbeStatsResponseV6 = Omit<GnssProbeStatsResponseV5, "responseVersion"> & {
+  responseVersion: 6;
+  gpsUartDiagnostics: {
+    schemaVersion: number;
+    state: number;
+    activeCandidate: number;
+    selectedCandidate: number;
+    activeBaudrate: number;
+    switchCount: number;
+    reconfigureFailures: number;
+    readErrors: number;
+    fifoDroppedBytes: number;
+    fifoDropEvents: number;
+    candidates: [GpsUartCandidateDiagnostics, GpsUartCandidateDiagnostics];
+  };
+};
+
+export type GnssRtcmLatencyHistogram = {
+  sampleCount: number;
+  maxMs: number | null;
+  bucketCounts: number[];
+  p50UpperBoundMs: number | null;
+  p95UpperBoundMs: number | null;
+};
+
+export type GnssProbeStatsResponseV7 = Omit<GnssProbeStatsResponseV6, "responseVersion"> & {
+  responseVersion: 7;
+  rtcmLatencyDiagnostics: {
+    schemaVersion: number;
+    sessionEpoch: number;
+    bucketUpperBoundsMs: number[];
+    completionToDequeueMs: GnssRtcmLatencyHistogram;
+    uartWriteMs: GnssRtcmLatencyHistogram;
+    completionToUartFinishedMs: GnssRtcmLatencyHistogram;
+  };
+};
+
 export type GnssRtcmAckResponseV1 = {
   responseVersion: 1;
   nodeNumber: 1 | 2 | 3;
@@ -407,7 +462,9 @@ export function gnssRtcmAckReportsCompleted(
 
 export function decodeGnssProbeStatsResponse(
   input: Buffer
-): GnssProbeStatsResponseV1 | GnssProbeStatsResponseV2 | GnssProbeStatsResponseV3 | GnssProbeStatsResponseV4 | GnssProbeStatsResponseV5 {
+): GnssProbeStatsResponseV1 | GnssProbeStatsResponseV2 | GnssProbeStatsResponseV3 |
+  GnssProbeStatsResponseV4 | GnssProbeStatsResponseV5 | GnssProbeStatsResponseV6 |
+  GnssProbeStatsResponseV7 {
   if (input.length < 4 || input.subarray(0, 3).toString("ascii") !== "G3S") {
     throw new Error("GNSS PROBE stats magic or version mismatch");
   }
@@ -423,7 +480,11 @@ export function decodeGnssProbeStatsResponse(
             ? GNSS_PROBE_STATS_RESPONSE_V4_BYTES
             : responseVersion === 5
               ? GNSS_PROBE_STATS_RESPONSE_V5_BYTES
-              : null;
+              : responseVersion === 6
+                ? GNSS_PROBE_STATS_RESPONSE_V6_BYTES
+                : responseVersion === 7
+                  ? GNSS_PROBE_STATS_RESPONSE_V7_BYTES
+                  : null;
   if (expectedBytes === null) {
     throw new Error("GNSS PROBE stats version is unsupported");
   }
@@ -763,8 +824,7 @@ export function decodeGnssProbeStatsResponse(
       ];
     })
   ) as Record<FieldRs485DiagnosticPathName, FieldRs485PathRuntimeDiagnostics>;
-  return {
-    responseVersion: 5,
+  const v5Extended = {
     ...v4Extended,
     rs485RuntimeDiagnostics: {
       enabledMask: rs485EnabledMask,
@@ -774,6 +834,143 @@ export function decodeGnssProbeStatsResponse(
       lastDurationMs: rs485LastDurationMs,
       maxDurationMs: rs485MaxDurationMs,
       paths: rs485Paths
+    }
+  };
+  if (responseVersion === 5) {
+    return { responseVersion: 5, ...v5Extended };
+  }
+
+  const gpsSchemaVersion = input.readUInt8(552);
+  const gpsState = input.readUInt8(553);
+  const gpsActiveCandidate = input.readUInt8(554);
+  const gpsSelectedCandidate = input.readUInt8(555);
+  const gpsCandidateCounterNames = [
+    "baudrate", "rxBytes", "printableBytes", "dollarBytes", "completedLines",
+    "checksumValidSentences", "checksumInvalidSentences", "ggaSentences",
+    "rmcSentences", "firstValidUptimeMs"
+  ] as const;
+  const gpsCandidates = [0, 1].map((candidateIndex) => {
+    const candidate = Object.fromEntries(
+      gpsCandidateCounterNames.map((name, index) => [
+        name,
+        input.readUInt32BE(580 + candidateIndex * 40 + index * 4)
+      ])
+    ) as GpsUartCandidateDiagnostics;
+    if (
+      candidate.baudrate === 0 ||
+      candidate.printableBytes > candidate.rxBytes ||
+      candidate.dollarBytes > candidate.rxBytes ||
+      candidate.completedLines > candidate.dollarBytes ||
+      candidate.checksumValidSentences + candidate.checksumInvalidSentences > candidate.completedLines ||
+      candidate.ggaSentences + candidate.rmcSentences > candidate.checksumValidSentences ||
+      (candidate.checksumValidSentences === 0) !== (candidate.firstValidUptimeMs === 0)
+    ) {
+      throw new Error("GNSS UART candidate diagnostics are inconsistent");
+    }
+    return candidate;
+  }) as [GpsUartCandidateDiagnostics, GpsUartCandidateDiagnostics];
+  const expectedGpsSelection = gpsState === 3 ? 0 : gpsState === 4 ? 1 : 0xff;
+  const activeGpsCandidate = gpsCandidates[gpsActiveCandidate];
+  if (
+    gpsSchemaVersion !== 1 ||
+    gpsState < 1 || gpsState > 6 ||
+    gpsActiveCandidate > 1 ||
+    ![0, 1, 0xff].includes(gpsSelectedCandidate) ||
+    gpsSelectedCandidate !== expectedGpsSelection ||
+    input.readUInt32BE(556) !== activeGpsCandidate?.baudrate
+  ) {
+    throw new Error("GNSS UART probe state or selection is inconsistent");
+  }
+  const v6Extended = {
+    ...v5Extended,
+    gpsUartDiagnostics: {
+      schemaVersion: gpsSchemaVersion,
+      state: gpsState,
+      activeCandidate: gpsActiveCandidate,
+      selectedCandidate: gpsSelectedCandidate,
+      activeBaudrate: input.readUInt32BE(556),
+      switchCount: input.readUInt32BE(560),
+      reconfigureFailures: input.readUInt32BE(564),
+      readErrors: input.readUInt32BE(568),
+      fifoDroppedBytes: input.readUInt32BE(572),
+      fifoDropEvents: input.readUInt32BE(576),
+      candidates: gpsCandidates
+    }
+  };
+  if (responseVersion === 6) {
+    return { responseVersion: 6, ...v6Extended };
+  }
+
+  const latencySchemaVersion = input.readUInt8(660);
+  const latencyHistogramCount = input.readUInt8(661);
+  const latencyBucketCount = input.readUInt8(662);
+  const latencyReserved = input.readUInt8(663);
+  if (
+    latencySchemaVersion !== 1 ||
+    latencyHistogramCount !== 3 ||
+    latencyBucketCount !== GNSS_RTCM_LATENCY_BUCKET_UPPER_BOUNDS_MS.length ||
+    latencyReserved !== 0
+  ) {
+    throw new Error("GNSS RTCM latency schema, histogram count or bounds are invalid");
+  }
+  const latencyBounds = GNSS_RTCM_LATENCY_BUCKET_UPPER_BOUNDS_MS.map((_, index) =>
+    input.readUInt32BE(668 + index * 4)
+  );
+  if (latencyBounds.some((bound, index) => bound !== GNSS_RTCM_LATENCY_BUCKET_UPPER_BOUNDS_MS[index])) {
+    throw new Error("GNSS RTCM latency schema, histogram count or bounds are invalid");
+  }
+  const decodeLatencyHistogram = (offset: number): GnssRtcmLatencyHistogram => {
+    const sampleCount = input.readUInt32BE(offset);
+    const encodedMaxMs = input.readUInt32BE(offset + 4);
+    const bucketCounts = Array.from({ length: latencyBucketCount }, (_, index) =>
+      input.readUInt32BE(offset + 8 + index * 4)
+    );
+    const summedCount = bucketCounts.reduce((total, count) => total + count, 0);
+    let highestNonEmpty = -1;
+    bucketCounts.forEach((count, index) => {
+      if (count > 0) highestNonEmpty = index;
+    });
+    const previousBound = highestNonEmpty > 0 ? (latencyBounds[highestNonEmpty - 1] ?? -1) : -1;
+    const currentBound = highestNonEmpty >= 0 ? (latencyBounds[highestNonEmpty] ?? null) : null;
+    if (
+      summedCount !== sampleCount ||
+      (sampleCount === 0 && (encodedMaxMs !== 0 || highestNonEmpty !== -1)) ||
+      (sampleCount > 0 &&
+        (highestNonEmpty < 0 || currentBound === null || encodedMaxMs <= previousBound || encodedMaxMs > currentBound))
+    ) {
+      throw new Error("GNSS RTCM latency histogram counters or maximum are inconsistent");
+    }
+    const percentileUpperBound = (numerator: number, denominator: number): number | null => {
+      if (sampleCount === 0) return null;
+      const target = Math.ceil((sampleCount * numerator) / denominator);
+      let cumulative = 0;
+      for (let index = 0; index < bucketCounts.length; index += 1) {
+        cumulative += bucketCounts[index] ?? 0;
+        if (cumulative >= target) {
+          const bound = latencyBounds[index];
+          return bound === UINT32_MAX || bound === undefined ? null : bound;
+        }
+      }
+      return null;
+    };
+    return {
+      sampleCount,
+      maxMs: sampleCount === 0 ? null : encodedMaxMs,
+      bucketCounts,
+      p50UpperBoundMs: percentileUpperBound(50, 100),
+      p95UpperBoundMs: percentileUpperBound(95, 100)
+    };
+  };
+  return {
+    responseVersion: 7,
+    ...v6Extended,
+    rtcmLatencyDiagnostics: {
+      schemaVersion: latencySchemaVersion,
+      sessionEpoch: input.readUInt32BE(664),
+      bucketUpperBoundsMs: latencyBounds,
+      completionToDequeueMs: decodeLatencyHistogram(724),
+      uartWriteMs: decodeLatencyHistogram(788),
+      completionToUartFinishedMs: decodeLatencyHistogram(852)
     }
   };
 }
@@ -814,6 +1011,22 @@ export function decodeGnssProbeStatsResponseV5(input: Buffer): GnssProbeStatsRes
   const decoded = decodeGnssProbeStatsResponse(input);
   if (decoded.responseVersion !== 5) {
     throw new Error("GNSS PROBE stats response is not V5");
+  }
+  return decoded;
+}
+
+export function decodeGnssProbeStatsResponseV6(input: Buffer): GnssProbeStatsResponseV6 {
+  const decoded = decodeGnssProbeStatsResponse(input);
+  if (decoded.responseVersion !== 6) {
+    throw new Error("GNSS PROBE stats response is not V6");
+  }
+  return decoded;
+}
+
+export function decodeGnssProbeStatsResponseV7(input: Buffer): GnssProbeStatsResponseV7 {
+  const decoded = decodeGnssProbeStatsResponse(input);
+  if (decoded.responseVersion !== 7) {
+    throw new Error("GNSS PROBE stats response is not V7");
   }
   return decoded;
 }

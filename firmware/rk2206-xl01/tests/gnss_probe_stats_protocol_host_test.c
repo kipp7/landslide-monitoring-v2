@@ -75,7 +75,9 @@ int main(void)
     FieldRs485RuntimeDiagnostics rs485_runtime_diagnostics;
     Rs485ModbusDiagnostics modbus_diagnostics;
     GpsUartDiagnostics gps_uart_diagnostics;
+    GnssRtcmLatencyDiagnostics latency_diagnostics;
     uint8_t payload[GNSS_PROBE_STATS_RESPONSE_V6_BYTES];
+    uint8_t v7_payload[GNSS_PROBE_STATS_RESPONSE_V7_BYTES];
     uint8_t ack_payload[GNSS_RTCM_ACK_RESPONSE_V1_BYTES];
     uint8_t wire[FIELD_LINK_FRAME_ENCODED_BYTES];
     FieldLinkFrameDecoder wire_decoder;
@@ -346,6 +348,94 @@ int main(void)
     assert(decoded_message.sequence == 77U);
     assert(decoded_message.payload_len == GNSS_PROBE_STATS_RESPONSE_V6_BYTES);
     assert(memcmp(decoded_message.payload, payload, sizeof(payload)) == 0);
+
+    memset(&latency_diagnostics, 0, sizeof(latency_diagnostics));
+    latency_diagnostics.schema_version = GNSS_RTCM_LATENCY_SCHEMA_VERSION;
+    latency_diagnostics.bucket_count = GNSS_RTCM_LATENCY_BUCKET_COUNT;
+    latency_diagnostics.session_epoch = 0x10203040U;
+    {
+        const uint32_t bounds[GNSS_RTCM_LATENCY_BUCKET_COUNT] = {
+            0U, 1U, 2U, 5U, 10U, 20U, 50U,
+            100U, 250U, 500U, 1000U, 2000U, 3000U, UINT32_MAX
+        };
+        memcpy(latency_diagnostics.bucket_upper_bounds_ms, bounds, sizeof(bounds));
+    }
+    latency_diagnostics.completion_to_dequeue_ms.sample_count = 4U;
+    latency_diagnostics.completion_to_dequeue_ms.max_ms = 90U;
+    latency_diagnostics.completion_to_dequeue_ms.bucket_counts[7] = 4U;
+    latency_diagnostics.uart_write_ms.sample_count = 3U;
+    latency_diagnostics.uart_write_ms.max_ms = 8U;
+    latency_diagnostics.uart_write_ms.bucket_counts[4] = 3U;
+    latency_diagnostics.completion_to_uart_finished_ms.sample_count = 3U;
+    latency_diagnostics.completion_to_uart_finished_ms.max_ms = 105U;
+    latency_diagnostics.completion_to_uart_finished_ms.bucket_counts[8] = 3U;
+    assert(GnssProbeStatsResponseV7_Encode(
+        &stats, &link_stats, &sensor_diagnostics,
+        &sc16is752_diagnostics, &field_rs485_diagnostics, &modbus_diagnostics,
+        &rs485_runtime_diagnostics, &gps_uart_diagnostics, &latency_diagnostics,
+        2U, GNSS_RTCM_INJECTION_LIVE, nonce, 1300U,
+        v7_payload, sizeof(v7_payload)
+    ) == GNSS_PROBE_STATS_RESPONSE_V7_BYTES);
+    assert(v7_payload[3] == 7U && v7_payload[660] == GNSS_RTCM_LATENCY_SCHEMA_VERSION);
+    assert(v7_payload[661] == GNSS_RTCM_LATENCY_HISTOGRAM_COUNT);
+    assert(v7_payload[662] == GNSS_RTCM_LATENCY_BUCKET_COUNT && v7_payload[663] == 0U);
+    assert(ReadUint32Be(v7_payload + 664) == 0x10203040U);
+    assert(ReadUint32Be(v7_payload + 668) == 0U);
+    assert(ReadUint32Be(v7_payload + 720) == UINT32_MAX);
+    assert(ReadUint32Be(v7_payload + 724) == 4U);
+    assert(ReadUint32Be(v7_payload + 728) == 90U);
+    assert(ReadUint32Be(v7_payload + 760) == 4U);
+    assert(ReadUint32Be(v7_payload + 788) == 3U);
+    assert(ReadUint32Be(v7_payload + 852) == 3U);
+    assert(ReadUint32Be(v7_payload + 856) == 105U);
+    wire_len = FieldLinkFrame_Encode(
+        FIELD_LINK_FRAME_TYPE_CONTROL,
+        78U,
+        (const char *)v7_payload,
+        GNSS_PROBE_STATS_RESPONSE_V7_BYTES,
+        wire,
+        sizeof(wire));
+    assert(wire_len > GNSS_PROBE_STATS_RESPONSE_V7_BYTES);
+    assert(wire_len <= 940);
+    FieldLinkFrameDecoder_Init(&wire_decoder);
+    memset(&decoded_message, 0, sizeof(decoded_message));
+    decode_ret = 0;
+    for (index = 0U; index < (unsigned int)wire_len; ++index) {
+        int current_ret = FieldLinkFrameDecoder_FeedByte(
+            &wire_decoder, wire[index], &decoded_message);
+        assert(current_ret >= 0);
+        if (current_ret == 1) decode_ret++;
+    }
+    assert(decode_ret == 1);
+    assert(decoded_message.payload_len == GNSS_PROBE_STATS_RESPONSE_V7_BYTES);
+    assert(memcmp(decoded_message.payload, v7_payload, sizeof(v7_payload)) == 0);
+    latency_diagnostics.bucket_count--;
+    assert(GnssProbeStatsResponseV7_Encode(
+        &stats, &link_stats, &sensor_diagnostics,
+        &sc16is752_diagnostics, &field_rs485_diagnostics, &modbus_diagnostics,
+        &rs485_runtime_diagnostics, &gps_uart_diagnostics, &latency_diagnostics,
+        2U, GNSS_RTCM_INJECTION_LIVE, nonce, 1300U,
+        v7_payload, sizeof(v7_payload)
+    ) == -1);
+    latency_diagnostics.bucket_count++;
+    latency_diagnostics.bucket_upper_bounds_ms[5]++;
+    assert(GnssProbeStatsResponseV7_Encode(
+        &stats, &link_stats, &sensor_diagnostics,
+        &sc16is752_diagnostics, &field_rs485_diagnostics, &modbus_diagnostics,
+        &rs485_runtime_diagnostics, &gps_uart_diagnostics, &latency_diagnostics,
+        2U, GNSS_RTCM_INJECTION_LIVE, nonce, 1300U,
+        v7_payload, sizeof(v7_payload)
+    ) == -1);
+    latency_diagnostics.bucket_upper_bounds_ms[5]--;
+    latency_diagnostics.uart_write_ms.sample_count++;
+    assert(GnssProbeStatsResponseV7_Encode(
+        &stats, &link_stats, &sensor_diagnostics,
+        &sc16is752_diagnostics, &field_rs485_diagnostics, &modbus_diagnostics,
+        &rs485_runtime_diagnostics, &gps_uart_diagnostics, &latency_diagnostics,
+        2U, GNSS_RTCM_INJECTION_LIVE, nonce, 1300U,
+        v7_payload, sizeof(v7_payload)
+    ) == -1);
+    latency_diagnostics.uart_write_ms.sample_count--;
     memset(&ack_window, 0, sizeof(ack_window));
     ack_window.session_valid = 1U;
     ack_window.session_epoch = 0x10203040U;
@@ -363,7 +453,7 @@ int main(void)
     assert(ReadUint32Be(ack_payload + 16) == 117U);
     assert(ReadUint16Be(ack_payload + 20) == 0xA55AU);
     assert(ReadUint16Be(ack_payload + 22) == 0U);
-    printf("gnss_probe_stats_protocol_host_test passed v6_payload_bytes=%u wire_bytes=%d\n",
-           (unsigned int)sizeof(payload), wire_len);
+    printf("gnss_probe_stats_protocol_host_test passed v7_payload_bytes=%u wire_bytes=%d\n",
+           (unsigned int)sizeof(v7_payload), wire_len);
     return 0;
 }

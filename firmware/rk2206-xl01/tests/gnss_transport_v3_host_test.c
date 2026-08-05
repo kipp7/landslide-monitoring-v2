@@ -403,7 +403,9 @@ static void TestBoundedInjectionQueue(void)
     uint8_t dequeued[GNSS_RTCM_V3_MAX_FRAME_BYTES];
     uint16_t dequeued_bytes = 0U;
     uint16_t message_type = 0U;
+    uint64_t completed_monotonic_ms = 0U;
     GnssRtcmInjectionStats stats;
+    GnssRtcmLatencyDiagnostics latency;
     GnssRtcmAckWindow ack_window;
 
     BuildRtcm(frame);
@@ -433,34 +435,65 @@ static void TestBoundedInjectionQueue(void)
     assert(ack_window.completed_bitmap == 0x001FU);
 
     assert(GnssRtcmInjection_TryDequeue(
-        1100U, dequeued, sizeof(dequeued), &dequeued_bytes, &message_type
+        1100U, dequeued, sizeof(dequeued), &dequeued_bytes, &message_type,
+        &completed_monotonic_ms
     ) == 1);
     assert(dequeued_bytes == RTCM_FRAME_BYTES);
     assert(message_type == 1124U);
+    assert(completed_monotonic_ms == 1014U);
     assert(memcmp(dequeued, frame, RTCM_FRAME_BYTES) == 0);
     GnssRtcmInjection_RecordProbe(dequeued_bytes, 1100U);
 
     assert(GnssRtcmInjection_TryDequeue(
-        1100U, dequeued, sizeof(dequeued), &dequeued_bytes, &message_type
+        1100U, dequeued, sizeof(dequeued), &dequeued_bytes, &message_type, NULL
     ) == 1);
     assert(GnssRtcmInjection_TryDequeue(
-        1100U, dequeued, sizeof(dequeued), &dequeued_bytes, &message_type
+        1100U, dequeued, sizeof(dequeued), &dequeued_bytes, &message_type, NULL
     ) == 1);
     assert(GnssRtcmInjection_TryDequeue(
-        1100U, dequeued, sizeof(dequeued), &dequeued_bytes, &message_type
+        1100U, dequeued, sizeof(dequeued), &dequeued_bytes, &message_type, NULL
     ) == 1);
     assert(GnssRtcmInjection_TryDequeue(
-        1100U, dequeued, sizeof(dequeued), &dequeued_bytes, &message_type
+        1100U, dequeued, sizeof(dequeued), &dequeued_bytes, &message_type, NULL
     ) == 0);
 
     assert(FeedInjectionFrame(frame, 51U, 6U, 1200U, -1) == GNSS_RTCM_REASSEMBLY_COMPLETE);
     assert(GnssRtcmInjection_TryDequeue(
-        4205U, dequeued, sizeof(dequeued), &dequeued_bytes, &message_type
+        4205U, dequeued, sizeof(dequeued), &dequeued_bytes, &message_type, NULL
     ) == 0);
     GnssRtcmInjection_GetStats(&stats);
     assert(stats.queue_expired_frames == 1U);
     assert(stats.probe_validated_frames == 1U);
     assert(stats.probe_validated_bytes == RTCM_FRAME_BYTES);
+    GnssRtcmInjection_GetLatencyDiagnostics(&latency);
+    assert(latency.schema_version == GNSS_RTCM_LATENCY_SCHEMA_VERSION);
+    assert(latency.session_epoch == 51U);
+    assert(latency.completion_to_dequeue_ms.sample_count == 4U);
+    assert(latency.completion_to_dequeue_ms.max_ms == 86U);
+    assert(latency.completion_to_dequeue_ms.bucket_counts[7] == 4U);
+    assert(latency.uart_write_ms.sample_count == 0U);
+
+    ArmInjection(GNSS_RTCM_INJECTION_LIVE, 52U, 4300U);
+    assert(FeedInjectionFrame(frame, 52U, 1U, 4400U, -1) == GNSS_RTCM_REASSEMBLY_COMPLETE);
+    assert(GnssRtcmInjection_TryDequeue(
+        4412U, dequeued, sizeof(dequeued), &dequeued_bytes, &message_type,
+        &completed_monotonic_ms
+    ) == 1);
+    assert(completed_monotonic_ms == 4404U);
+    GnssRtcmInjection_RecordInjected(
+        dequeued_bytes, completed_monotonic_ms, 4413U, 4421U
+    );
+    GnssRtcmInjection_GetLatencyDiagnostics(&latency);
+    assert(latency.session_epoch == 52U);
+    assert(latency.completion_to_dequeue_ms.sample_count == 1U);
+    assert(latency.completion_to_dequeue_ms.max_ms == 8U);
+    assert(latency.completion_to_dequeue_ms.bucket_counts[4] == 1U);
+    assert(latency.uart_write_ms.sample_count == 1U);
+    assert(latency.uart_write_ms.max_ms == 8U);
+    assert(latency.uart_write_ms.bucket_counts[4] == 1U);
+    assert(latency.completion_to_uart_finished_ms.sample_count == 1U);
+    assert(latency.completion_to_uart_finished_ms.max_ms == 17U);
+    assert(latency.completion_to_uart_finished_ms.bucket_counts[5] == 1U);
 }
 
 static void TestInjectionCrcCounter(void)
