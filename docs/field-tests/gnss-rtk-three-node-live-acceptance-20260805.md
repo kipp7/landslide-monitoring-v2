@@ -146,6 +146,23 @@ accepted only when A/B/C sustain `GGA quality=4`, correction-age P95 is at most
 `3 s`, correction-age maximum is at most `5 s`, and all normal-poll, CRC,
 reassembly, queue, UART, schema, and session-error deltas remain zero.
 
+The immutable A/B/C release was built from clean pushed commit
+`d4a7155547d3d7dc6e84d36b3fbc6d9fed170030` at:
+
+`F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v6_rtcm_batch_v1_rs485_gnss_hardware_live_20260805`
+
+Its release verifier independently confirmed hardware GNSS, hardware RS485,
+field-calibrated PC0, LIVE capability with DISABLED boot mode, Compact V6
+layered polling, unique A/B/C identities, and all seven manifest artifacts.
+
+| Artifact | SHA-256 |
+| --- | --- |
+| `manifest.json` | `11afc1f4c835c9267afc8cb3753d881a050baa69700a3b9683f61cf2dd494a6f` |
+| A `Firmware.img` | `450a8d3a62714fae6f771729fcf6745d077ac4e83f1653594b81584167ed958a` |
+| B `Firmware.img` | `3d42289066e70eda27c212093fc83c2cc3de499c1008f41c3580523f81598fd8` |
+| C `Firmware.img` | `5405d02c463333d8779c223e04dcd63a7935274826badd23d6e48d56035abfc1` |
+| loader | `761d90888aa376156d562abf267dfe324b96c4397f7a601f6b4c64d0ea3bf977` |
+
 ## Safe Stop And Resume
 
 After the run the RK3568 was restored to:
@@ -160,13 +177,12 @@ After the run the RK3568 was restored to:
 
 On the next outdoor power-up:
 
-1. Build and verify the immutable G3B-capable A/B/C release from a clean commit.
-2. Deploy the matching gateway with NTRIP disabled and aggregation fixed at 1.
-3. After all three nodes are flashed, verify ordinary telemetry and legacy-G3R
+1. Deploy the matching gateway with NTRIP disabled and aggregation fixed at 1.
+2. After all three nodes are flashed, verify ordinary telemetry and legacy-G3R
    PROBE with zero error deltas.
-4. Set aggregation to 2 and repeat PROBE. Confirm that one outer field frame
+3. Set aggregation to 2 and repeat PROBE. Confirm that one outer field frame
    accounts for approximately two accepted inner fragments.
-5. Run controlled 1 Hz LIVE for 600 seconds, then 1800 seconds only when
+4. Run controlled 1 Hz LIVE for 600 seconds, then 1800 seconds only when
    correction-age, GST, session, and normal-poll gates pass.
-6. Adjust C independently if it remains FLOAT; do not mask that condition by
+5. Adjust C independently if it remains FLOAT; do not mask that condition by
    reducing the common correction cadence or relaxing the professional gate.

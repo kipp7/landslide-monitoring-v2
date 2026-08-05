@@ -36,9 +36,21 @@ status: active
 - 兼容门禁固定为默认 `RTCM_MAX_FRAGMENTS_PER_FIELD_FRAME=1`。必须先部署新网关但
   保持 NTRIP 关闭和聚合数 1，三节点全部烧录新镜像并通过旧 G3R PROBE 后，才可切到
   `2` 做 G3B PROBE；禁止旧节点与 G3B 混跑，也禁止直接切 LIVE。
-- 当前本地实现的 field-gateway `71/71`、TypeScript build、ESLint、RK2206 C99 主机
-  测试及关键发布/引脚/轮询/锁顺序/快照门禁均已通过。正式状态仍需完成敏感扫描、
-  提交推送、从 clean commit 构建 A/B/C immutable release 并由发布验证器复核。
+- 实现与本轮记录已由 clean 提交
+  `d4a7155547d3d7dc6e84d36b3fbc6d9fed170030` 推送。field-gateway `71/71`、
+  TypeScript build、ESLint、RK2206 C99 主机测试及关键发布/引脚/轮询/锁顺序/快照门禁
+  均通过；敏感扫描未发现 CORS 账号、端点或明文 NTRIP 密码。
+- 正式 A/B/C 包位于
+  `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v6_rtcm_batch_v1_rs485_gnss_hardware_live_20260805`。
+  manifest SHA-256 为
+  `11afc1f4c835c9267afc8cb3753d881a050baa69700a3b9683f61cf2dd494a6f`；A/B/C
+  `.img` SHA-256 分别为
+  `450a8d3a62714fae6f771729fcf6745d077ac4e83f1653594b81584167ed958a`、
+  `3d42289066e70eda27c212093fc83c2cc3de499c1008f41c3580523f81598fd8`、
+  `5405d02c463333d8779c223e04dcd63a7935274826badd23d6e48d56035abfc1`；loader 为
+  `761d90888aa376156d562abf267dfe324b96c4397f7a601f6b4c64d0ea3bf977`。
+  独立发布验证确认 `sourceDirty=false`、唯一 A/B/C 身份、真实 GNSS/RS485、逐节点最终
+  PC0 校准、Compact V6 layered、LIVE capability 与 boot DISABLED，7 个清单文件全通过。
 
 ### Three-Node RTK FIXED Candidate And Safe Stop (2026-08-05)
 
@@ -488,9 +500,8 @@ status: active
 
 ## In Progress
 
-- 将 G3B v1 实现和本次 0.5 Hz 现场结论提交、推送，并从 clean commit 生成正式
-  A/B/C 硬件 GNSS LIVE-capable 发布包。
-- 新网关部署后先保持 `NTRIP_ENABLED=false`、runtime `probe`、聚合数 `1`；等待
+- 正式 G3B v1 A/B/C 包已从 clean commit 生成并复验，等待按物理标签烧录。
+- 新网关部署后保持 `NTRIP_ENABLED=false`、runtime `probe`、聚合数 `1`；等待
   三节点新固件全部烧录后再依次执行 legacy G3R PROBE、G3B 聚合数 2 PROBE 和
   受控 1 Hz LIVE。
 
@@ -507,14 +518,12 @@ status: active
 
 ## Next Actions
 
-1. 完成敏感信息扫描和全量回归，提交并推送 G3B 实现，使工作树干净。
-2. 用正式发布脚本构建 A/B/C，记录 manifest 与三个烧录镜像 SHA-256，并再次提交推送。
-3. 原子部署 RK3568 网关，但保持 NTRIP 关闭、runtime probe、聚合数 1。
-4. 用户按 A/B/C 标签烧录后先做普通遥测与旧 G3R PROBE，再切聚合数 2 做 G3B PROBE；
+1. 原子部署 RK3568 网关，但保持 NTRIP 关闭、runtime probe、聚合数 1。
+2. 用户按 A/B/C 标签烧录后先做普通遥测与旧 G3R PROBE，再切聚合数 2 做 G3B PROBE；
    要求外层写入与约两倍内层接受计数一致，全部错误增量为 0。
-5. 执行双观测组 1 Hz LIVE 600 秒；只有三节点持续 GGA=4、age P95 `<=3 s`、max
+3. 执行双观测组 1 Hz LIVE 600 秒；只有三节点持续 GGA=4、age P95 `<=3 s`、max
    `<=5 s`、可信 GST 和全链零错误才进入 1800 秒。
-6. C 若仍为 GGA=5，单独调整 C 天线/环境并复测，不降低共同 cadence 掩盖独立故障。
+4. C 若仍为 GGA=5，单独调整 C 天线/环境并复测，不降低共同 cadence 掩盖独立故障。
 
 ## Risks
 
@@ -537,10 +546,12 @@ status: active
 继续 2026-08-05 XLS1/RTK G3B 任务：双观测组 0.5 Hz 的 300 秒观测中，最后 120 秒
 A/B 持续 GGA=4，C 全程 GGA=5；A/B/C 片段约 1514/1515/1533，网关链路错误为 0，
 但 age P95 仍为 10/9/7 秒，专业位移门禁关闭。G3B v1 已实现一个 field-link 帧聚合
-2..4 个旧 G3R，默认聚合数 1，双方上限 1024 B，外层/内层计数分离；本地 71/71、
-lint、C99 和发布安全门禁通过。下一步先敏感扫描、提交推送，再从 clean commit 生成并
-验证 A/B/C 正式包，记录 manifest/镜像 SHA-256；随后部署 RK3568 但保持 NTRIP 关闭、
-runtime probe、聚合数 1。三节点烧录后依次做普通遥测、legacy G3R PROBE、聚合数 2
-G3B PROBE、双观测组 1 Hz LIVE 600/1800 秒。晋级条件为三节点持续 GGA=4、age P95
-不超过 3 秒、max 不超过 5 秒、可信 GST 和全链零错误。C 若仍 FLOAT，单独调整 C 天线
-与环境，不降低共同 cadence 或门槛。Git/memory 禁止写入凭据、端点、坐标或原始 RTCM。
+2..4 个旧 G3R，默认聚合数 1，双方上限 1024 B，外层/内层计数分离；实现提交
+`d4a71555` 已推送，本地 71/71、lint、C99 和发布安全门禁通过。正式 A/B/C 包目录为
+`F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v6_rtcm_batch_v1_rs485_gnss_hardware_live_20260805`，
+manifest SHA-256 `11afc1f4...494a6f`，独立验证通过。下一步部署 RK3568 但保持 NTRIP
+关闭、runtime probe、聚合数 1。三节点烧录后依次做普通遥测、legacy G3R PROBE、
+聚合数 2 G3B PROBE、双观测组 1 Hz LIVE 600/1800 秒。晋级条件为三节点持续 GGA=4、
+age P95 不超过 3 秒、max 不超过 5 秒、可信 GST 和全链零错误。C 若仍 FLOAT，单独
+调整 C 天线与环境，不降低共同 cadence 或门槛。Git/memory 禁止写入凭据、端点、
+坐标或原始 RTCM。

@@ -18,7 +18,7 @@ status: active
 
 ## Current State
 
-### G3B v1 Ready For Clean Release; 0.5 Hz Still Fails Age Gate (2026-08-05)
+### G3B v1 Clean Release Verified; 0.5 Hz Still Fails Age Gate (2026-08-05)
 
 - 天线调整后的双观测组 `0.5 Hz` LIVE 连续 `300 s`：最后 `120 s` A/B 持续
   `GGA=4`，C 全程 `GGA=5`；A/B/C 接收修正片段约 `1514/1515/1533`，网关 CRC、
@@ -32,9 +32,19 @@ status: active
 - 向后兼容默认值为 `RTCM_MAX_FRAGMENTS_PER_FIELD_FRAME=1`。三节点全部烧录新镜像前
   禁止设为 2；烧录后也必须先过聚合数 1 的 legacy G3R PROBE，再过聚合数 2 的
   G3B PROBE，才允许受控 1 Hz LIVE。
-- 本地回归已通过 field-gateway `71/71`、TypeScript build、ESLint、RK2206 C99 与
-  关键安全门禁。当前工作树尚未提交，正式发布包尚未生成；下一步先完成扫描、提交
-  推送和 clean release，再部署 fail-closed 网关。
+- 实现与记录已由 clean 提交
+  `d4a7155547d3d7dc6e84d36b3fbc6d9fed170030` 推送；field-gateway `71/71`、
+  TypeScript build、ESLint、RK2206 C99 与关键安全门禁全部通过，敏感扫描为 0 命中。
+- 正式 A/B/C 包位于
+  `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v6_rtcm_batch_v1_rs485_gnss_hardware_live_20260805`。
+  manifest SHA-256 为
+  `11afc1f4c835c9267afc8cb3753d881a050baa69700a3b9683f61cf2dd494a6f`；A/B/C
+  `.img` SHA-256 分别为
+  `450a8d3a62714fae6f771729fcf6745d077ac4e83f1653594b81584167ed958a`、
+  `3d42289066e70eda27c212093fc83c2cc3de499c1008f41c3580523f81598fd8`、
+  `5405d02c463333d8779c223e04dcd63a7935274826badd23d6e48d56035abfc1`。
+  独立发布验证确认 clean source、唯一身份、真实 GNSS/RS485、最终 PC0 校准、LIVE
+  capability/boot DISABLED、Compact V6 layered 与 7 个清单文件全部通过。
 
 ### Three-Node LIVE Reached RTK FIXED; Displacement Gate Still Closed (2026-08-05)
 
@@ -383,13 +393,10 @@ status: active
 
 ## Plan
 
-1. 完成 G3B v1 敏感扫描和全量回归，提交并推送实现与现有三份记录。
-2. 从 clean commit 构建、验证 A/B/C 正式硬件 GNSS LIVE-capable 发布包，记录 manifest
-   与三份烧录镜像 SHA-256。
-3. 部署匹配网关但保持 `NTRIP_ENABLED=false`、runtime probe、聚合数 1。
-4. 三节点烧录后按“普通遥测 -> legacy G3R PROBE -> G3B/2 PROBE -> 1 Hz LIVE 600 s
+1. 部署匹配网关但保持 `NTRIP_ENABLED=false`、runtime probe、聚合数 1。
+2. 三节点烧录后按“普通遥测 -> legacy G3R PROBE -> G3B/2 PROBE -> 1 Hz LIVE 600 s
    -> 1800 s”推进；任一阶段失败立即恢复 fail-closed。
-5. C 若继续 GGA=5，独立调整其天线和接收环境；不得以降低三节点共同 cadence 或放宽
+3. C 若继续 GGA=5，独立调整其天线和接收环境；不得以降低三节点共同 cadence 或放宽
    correction-age/GST 门槛冒充系统通过。
 
 ## Open Questions
