@@ -18,7 +18,7 @@ status: active
 
 ## Last Confirmed State
 
-### RK3568 Stage Attribution And G3S V7 Release Candidate (2026-08-05)
+### RK3568 Stage Attribution And G3S V7 Immutable Release (2026-08-05)
 
 - 在保留参数完全不变的 600 秒窗口中，RK3568 caster 到 field-write P95 约
   `1121 ms`，串口写 P95 约 `158 ms`；caster CRC、field 写、poll timeout、schema
@@ -30,8 +30,16 @@ status: active
   值所在桶；畸形计数和越界桶数负例已覆盖。计数到 `UINT32_MAX` 后整体冻结，保持三端
   不变量一致。
 - field-gateway `75/75`、TypeScript build、ESLint、RK2206 C99 主机测试、Python 自检
-  和 `git diff --check` 均通过。尚未 clean commit、推送和构建 A/B/C，因此节点侧 V7
-  真机证据仍为待办，不能宣称 correction-age 根因已定位。
+  和 `git diff --check` 均通过。实现已由 clean 提交
+  `107597851b99ac8a745978adfe8a0f0aeaced668` 推送并生成唯一不可变 A/B/C 包：
+  `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v6_g3s_v7_latency_diag_rs485_gnss_hardware_live_20260805`。
+- manifest SHA-256 为
+  `2a91850732fdf4e414c3fdc3dee8439065f761a59b8bcf27b83cdefe8d81fb41`；A/B/C `.img`
+  分别为 `e903d565ff764c7114690364ac29261644d4a37665415289d679076dd35f284a`、
+  `0d22fd4373d801c6611514073a705a4e41bcb7053ca8ea32a98d43e5b879dfd8`、
+  `f399eea340b0f4af8503b7887792ef194703707a89e0fce7fb95ac890e968c4f`。发布安全确认
+  clean source、hardware GNSS/RS485、最终 PC0 校准、boot DISABLED、LIVE capability、
+  V7 marker 和唯一身份；尚未烧录或真机验收，不能宣称 correction-age 根因已定位。
 - RK3568 保持 `NTRIP_ENABLED=false`、runtime probe、聚合数 1。保留参数仍是
   `RTCM32_GGB / G3B=4 / burst=4 / guard=600 ms / correction-window=2500 ms /
   observation=1 Hz`，专业位移门禁仍关闭。
@@ -551,6 +559,8 @@ status: active
 - 当前阻断项仍是 correction-age 时效：RK3568 已将自身 P95 约束到 `1121 ms`，下一步
   用 G3S V7 真机量测 RK2206 完帧/出队/UART 写入，再与 GGA 输出对齐；不继续靠调整
   burst 猜测。
+- G3S V7 不可变 A/B/C 包已经由 clean pushed commit 构建并通过发布安全门禁；当前只
+  等按物理标签烧录，尚未取得节点侧 V7 真机证据。
 - RK3568 已恢复测试前稳定构建并保持 `NTRIP_ENABLED=false`、runtime probe、聚合数 1；
   200 ms 观测合并实验已删除，不进入生产配置。
 - OTA 当前只允许离线设计和可恢复备用板验证；现场 A/B/C 的 `ota_prepare/apply`
@@ -558,8 +568,8 @@ status: active
 
 ## Next Actions
 
-1. 从 clean commit 构建/复验 A/B/C V7 镜像并按物理标签烧录；依次做普通遥测、G3R/
-   G3B PROBE 和保留参数 600 秒 LIVE，结束后定向查询三节点 V7。
+1. 按物理标签烧录已复验的 A/B/C V7 镜像；依次做普通遥测、G3R/G3B PROBE 和保留
+   参数 600 秒 LIVE，结束后定向查询三节点 V7。
 2. 用节点直方图区分 RK2206 队列、UART 写入与 UM220 内部/GGA 报告时间。只有定位并
    修复可证明的延迟段，才重复 600 秒 LIVE；三节点持续 GGA=4、age P95
    `<=3 s`、max `<=5 s`、可信 GST 和全链零错误后才进入 1800 秒。
@@ -590,8 +600,9 @@ burst=4、guard=600 ms、correction-window=2500 ms、observation=1 Hz。既有 6
 最后 120 秒均 GGA=4，但 age P95/max 7 秒，专业门禁关闭。新增 RK3568 分段窗口证明
 caster 到 field-write P95 约 1121 ms、串口写 P95 约 158 ms且 600 秒全链零错误，故
 网关不足以解释 6--7 秒。G3S V7 已在源码实现 916 B 按需诊断和三组节点直方图，离线
-回归全绿，但尚未 clean commit/推送/出包/烧录。下一步从 clean commit 构建唯一 A/B/C
-镜像，烧录后依次做遥测、PROBE、600 秒 LIVE，并逐节点查询 V7。RK3568 必须保持
+回归全绿；clean 提交 `107597851b99ac8a745978adfe8a0f0aeaced668` 已推送，唯一不可变
+A/B/C 包已生成并通过发布门禁但尚未烧录。下一步按标签烧录后依次做遥测、PROBE、
+600 秒 LIVE，并逐节点查询 V7。RK3568 必须保持
 NTRIP false、runtime probe、聚合数 1，直到受控测试开始。只有 age P95 <=3 秒、max
 <=5 秒、三节点持续 GGA=4、可信 GST 和全链零错误才进入 1800 秒。Git/memory 禁止写入
 凭据、端点、坐标或原始 RTCM。

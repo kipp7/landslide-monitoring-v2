@@ -233,10 +233,26 @@ the gateway is therefore stopped. The next image adds backward-compatible
 
 V7 is a 916-byte on-demand diagnostic only. It does not enlarge the Compact V6
 business payload, alter the retained correction cadence, or relax the
-professional displacement gate. A/B/C must be rebuilt from one clean commit,
-flashed by physical label, and queried one node at a time after the next
-controlled LIVE window. Until that evidence exists, the unresolved interval is
-RK2206 queue/UART scheduling plus UM220 internal application/reporting time.
+professional displacement gate. The immutable A/B/C release was built from
+clean pushed commit `107597851b99ac8a745978adfe8a0f0aeaced668` at:
+
+`F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v6_g3s_v7_latency_diag_rs485_gnss_hardware_live_20260805`
+
+The release verifier confirmed hardware GNSS, hardware RS485, field-calibrated
+PC0, LIVE capability with DISABLED boot mode, Compact V6 layered polling, the
+new V7 marker, and unique A/B/C identities. Independent hashes are:
+
+| Artifact | SHA-256 |
+| --- | --- |
+| `manifest.json` | `2a91850732fdf4e414c3fdc3dee8439065f761a59b8bcf27b83cdefe8d81fb41` |
+| A `.img` | `e903d565ff764c7114690364ac29261644d4a37665415289d679076dd35f284a` |
+| B `.img` | `0d22fd4373d801c6611514073a705a4e41bcb7053ca8ea32a98d43e5b879dfd8` |
+| C `.img` | `f399eea340b0f4af8503b7887792ef194703707a89e0fce7fb95ac890e968c4f` |
+
+The images have not yet been flashed or field-validated. After flashing by
+physical label, V7 must be queried one node at a time after the next controlled
+LIVE window. Until that evidence exists, the unresolved interval is RK2206
+queue/UART scheduling plus UM220 internal application/reporting time.
 
 ## Safe Stop And Resume
 

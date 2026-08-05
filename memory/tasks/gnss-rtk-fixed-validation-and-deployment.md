@@ -18,7 +18,7 @@ status: active
 
 ## Current State
 
-### RK3568 Stage Bound Established; G3S V7 Ready For Clean Release (2026-08-05)
+### RK3568 Stage Bound Established; G3S V7 Immutable Release Built (2026-08-05)
 
 - 保留参数不变完成 600 秒 RK3568 分段归因：caster 到 field-write P95 约
   `1121 ms`，其中串口写 P95 约 `158 ms`；caster CRC、field 写、普通轮询、schema
@@ -32,7 +32,16 @@ status: active
   不一致。session 或模式变化时清零，新会话间不串账；fail-closed 后保留最后会话供查询。
 - RK3568 端补充有界 caster/shaper/仲裁/串口阶段窗口和 600 秒自动恢复脚本。当前
   field-gateway `75/75`、TypeScript build、ESLint、RK2206 C99 全套主机测试和 Python
-  自检均通过。尚未从 clean commit 构建 A/B/C，不得把源码通过写成真机通过。
+  自检均通过。实现已由 clean 提交 `107597851b99ac8a745978adfe8a0f0aeaced668`
+  推送并生成唯一不可变 A/B/C 包：
+  `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v6_g3s_v7_latency_diag_rs485_gnss_hardware_live_20260805`。
+- manifest SHA-256 为
+  `2a91850732fdf4e414c3fdc3dee8439065f761a59b8bcf27b83cdefe8d81fb41`；A/B/C `.img`
+  分别为 `e903d565ff764c7114690364ac29261644d4a37665415289d679076dd35f284a`、
+  `0d22fd4373d801c6611514073a705a4e41bcb7053ca8ea32a98d43e5b879dfd8`、
+  `f399eea340b0f4af8503b7887792ef194703707a89e0fce7fb95ac890e968c4f`。发布门禁确认
+  hardware GNSS/RS485、最终 PC0 校准、boot DISABLED、LIVE capability、V7 marker 和
+  唯一身份；镜像尚未烧录，仍不得把离线通过写成真机通过。
 - RK3568 继续保持 `NTRIP_ENABLED=false`、runtime probe、聚合数 1；生产候选仍仅为
   `RTCM32_GGB / G3B=4 / burst=4 / guard=600 ms / correction-window=2500 ms /
   observation=1 Hz`。专业位移门禁继续关闭。
@@ -441,8 +450,8 @@ status: active
 
 ## Plan
 
-1. 从同一 clean commit 生成并复验 A/B/C G3S V7 镜像，按物理标签烧录；先做普通遥测
-   和 G3R/G3B PROBE，再在保留参数下做 600 秒 LIVE，并逐节点查询 V7。
+1. 按物理标签烧录已复验的 A/B/C G3S V7 镜像；先做普通遥测和 G3R/G3B PROBE，
+   再在保留参数下做 600 秒 LIVE，并逐节点查询 V7。
 2. 用 V7 区分 RK2206 完帧到出队、UM220 UART 写入及 UM220 内部应用/GGA 报告时间；
    只对有分段证据的延迟点做单变量修改。任一错误门或 age 门
    失败立即恢复 NTRIP false、runtime probe、聚合数 1。
