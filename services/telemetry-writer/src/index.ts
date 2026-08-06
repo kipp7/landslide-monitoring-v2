@@ -544,8 +544,9 @@ async function upsertDeviceStateShadow(
     );
     await client.query(
       `
-        UPDATE devices
-        SET
+      UPDATE devices
+      SET
+          status = CASE WHEN status = 'revoked' THEN status ELSE 'active' END,
           last_seen_at = GREATEST(COALESCE(last_seen_at, '-infinity'::timestamptz), $2::timestamptz),
           updated_at = GREATEST(COALESCE(updated_at, '-infinity'::timestamptz), $2::timestamptz)
         WHERE device_id = $1
