@@ -363,7 +363,9 @@ async function main(): Promise<void> {
     if (!baseUrl) return;
 
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), config.actuatorTimeoutMs);
+    const timer = setTimeout(() => {
+      controller.abort();
+    }, config.actuatorTimeoutMs);
     try {
       const res = await fetch(`${baseUrl}${path}`, { method: "POST", signal: controller.signal });
       const body = await res.text().catch(() => "");

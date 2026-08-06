@@ -39,7 +39,7 @@ const configSchema = z.object({
   batchFlushIntervalMs: z.coerce.number().int().positive().default(1000),
 
   messageMaxBytes: z.coerce.number().int().positive().max(10_000_000).default(256 * 1024),
-  highFrequencyBudgetBytes: z.coerce.number().int().positive().max(10_000_000).default(192),
+  highFrequencyBudgetBytes: z.coerce.number().int().positive().max(10_000_000).default(1536),
   dlqRawPayloadMaxBytes: z.coerce.number().int().positive().max(10_000_000).default(64 * 1024),
   statsLogIntervalMs: z.coerce.number().int().positive().max(600_000).default(30_000),
 
