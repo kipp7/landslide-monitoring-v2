@@ -1623,9 +1623,9 @@ static void* SensorCollectionTask(const char* arg)
         // Check warnings
         next_sample.warning = 0;
         if (next_sample.tilt_valid) {
+            // Z is integrated yaw: keep it in telemetry, but never use it as a tilt warning axis.
             if (fabs(next_sample.angle_x) > RS485_TILT_WARNING_DEG ||
-                fabs(next_sample.angle_y) > RS485_TILT_WARNING_DEG ||
-                fabs(next_sample.angle_z) > RS485_TILT_WARNING_DEG) {
+                fabs(next_sample.angle_y) > RS485_TILT_WARNING_DEG) {
                 next_sample.warning = 1;
             }
         }

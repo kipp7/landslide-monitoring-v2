@@ -352,7 +352,7 @@ export type CompetitionTiltDeviation = {
   current: TiltVector;
   baseline: TiltVector;
   delta: TiltVector;
-  maxAxis: "x" | "y" | "z";
+  maxAxis: "x" | "y";
   maxDeviationDeg: number;
 };
 
@@ -382,13 +382,13 @@ export function computeCompetitionTiltDeviation(
     y: current.y - baseline.y,
     z: current.z - baseline.z
   };
-  const axes: { axis: "x" | "y" | "z"; value: number }[] = [
+  // The sensor's Z value is integrated yaw and can drift without a physical tilt change.
+  const warningAxes: { axis: "x" | "y"; value: number }[] = [
     { axis: "x", value: Math.abs(delta.x) },
-    { axis: "y", value: Math.abs(delta.y) },
-    { axis: "z", value: Math.abs(delta.z) }
+    { axis: "y", value: Math.abs(delta.y) }
   ];
-  axes.sort((a, b) => b.value - a.value);
-  const maximum = axes[0] ?? { axis: "x" as const, value: 0 };
+  warningAxes.sort((a, b) => b.value - a.value);
+  const maximum = warningAxes[0] ?? { axis: "x" as const, value: 0 };
   return {
     current,
     baseline,

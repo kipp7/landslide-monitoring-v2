@@ -86,6 +86,8 @@ event: alert
 data: {"type":"alert","eventId":"3cae3f27-63d2-4f2a-9fe1-54c57d727463","alertId":"d2e7ca4b-63e2-4d0a-9ff8-2f045eb6ed86","eventType":"ALERT_TRIGGER","severity":"high","title":"节点 B 倾角高风险告警","message":"节点 B 相对比赛基线的 Y 轴偏移 3.4°，达到 3° 高风险阈值。","deviceId":"...","stationId":"...","evidence":{"maxAxis":"y","maxDeviationDeg":3.4},"createdAt":"2026-07-20T02:10:00.000Z"}
 ```
 
+比赛相对倾角规则的告警轴固定为 X/Y。Z 是传感器通过积分得到的偏航角，可能在设备未发生倾斜时持续漂移，因此不参与触发、升级、更新或恢复判断。Z 仍按原协议上传、存储和显示，并保留在告警证据的 `baseline/current/delta.z` 中供诊断使用。
+
 ## 12. Anomaly assessment（兼容旧系统）
 
 说明：参考区有 `/api/anomaly-assessment` 用于“异常类型聚合 + 国标四级预警展示”。v2 中该能力以 alerts/rule-engine 为数据源提供兼容聚合端点，避免旧前端/运营依赖缺失。

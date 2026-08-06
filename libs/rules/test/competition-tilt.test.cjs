@@ -25,6 +25,17 @@ test("computes the largest absolute offset from a non-level baseline", () => {
   assert.deepEqual(result.delta, { x: 3.0999999999999996, y: 0.5, z: 1.2999999999999972 });
 });
 
+test("keeps Z drift as diagnostic evidence but excludes it from alarm deviation", () => {
+  const result = computeCompetitionTiltDeviation(
+    { x: 1.02, y: -0.47, z: 40.0 },
+    { x: 1.0, y: -0.5, z: -54.0 }
+  );
+
+  assert.equal(result.maxAxis, "y");
+  assert.ok(Math.abs(result.maxDeviationDeg - 0.03) < 1e-9);
+  assert.deepEqual(result.delta, { x: 0.020000000000000018, y: 0.030000000000000027, z: 94 });
+});
+
 test("rejects a critical threshold below the high threshold", () => {
   const parsed = competitionTiltProfileSchema.safeParse({
     schemaVersion: 1,
