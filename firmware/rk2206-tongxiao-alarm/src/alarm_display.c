@@ -151,6 +151,34 @@ static void SafeShortId(char *target, size_t target_size, const char *source)
     snprintf(target, target_size, "%.8s...%.8s", source, source + length - 8U);
 }
 
+static void DeviceIdSuffix(char *target, size_t target_size, const char *source)
+{
+    size_t length;
+    const char *suffix;
+
+    if (target_size == 0) return;
+    target[0] = '\0';
+    if (source == NULL || source[0] == '\0') return;
+    length = strlen(source);
+    suffix = length > 8U ? source + length - 8U : source;
+    snprintf(target, target_size, "%s", suffix);
+}
+
+static void FirmwareVersionShort(char *target, size_t target_size, const char *source)
+{
+    size_t length;
+    const char *suffix;
+
+    if (target_size == 0) return;
+    target[0] = '\0';
+    if (source == NULL || source[0] == '\0') return;
+    suffix = strchr(source, '-');
+    length = suffix == NULL ? strlen(source) : (size_t)(suffix - source);
+    if (length >= target_size) length = target_size - 1U;
+    memcpy(target, source, length);
+    target[length] = '\0';
+}
+
 static bool HasAlertContext(const AlarmSnapshot *snapshot)
 {
     return snapshot->desired.title[0] != '\0' || snapshot->desired.message[0] != '\0' ||
@@ -219,15 +247,17 @@ static void ShowAlertContext(const AlarmSnapshot *snapshot, uint16_t fg, uint16_
 static void ShowDeviceContext(const AlarmSnapshot *snapshot, uint16_t fg, uint16_t bg)
 {
     char device[24];
+    char firmware[16];
     char revision[48];
     char revision_display[20];
     size_t revision_length;
 
-    SafeShortId(device, sizeof(device), TONGXIAO_DEVICE_ID);
+    DeviceIdSuffix(device, sizeof(device), TONGXIAO_DEVICE_ID);
+    FirmwareVersionShort(firmware, sizeof(firmware), TONGXIAO_FIRMWARE_VERSION);
     ShowChinese(STATUS_LABEL_X, 112, "设备", fg, bg, 24);
-    ShowAscii(STATUS_VALUE_X, 116, device, fg, bg, 16);
+    ShowAscii(STATUS_VALUE_X, 112, device, fg, bg, 24);
     ShowChinese(STATUS_LABEL_X, 138, "固件", fg, bg, 24);
-    ShowAscii(STATUS_VALUE_X, 138, TONGXIAO_FIRMWARE_VERSION, fg, bg, 24);
+    ShowAscii(STATUS_VALUE_X, 138, firmware, fg, bg, 24);
     ShowChinese(STATUS_LABEL_X, 164, "指令", fg, bg, 24);
     snprintf(revision, sizeof(revision), "%llu", (unsigned long long)snapshot->desired.revision);
     revision_length = strlen(revision);
