@@ -113,8 +113,6 @@ export type RtcmDownlinkControllerStats = {
   shaper: ReturnType<Um220RtcmShaper["stats"]>;
 };
 
-const MAXIMUM_NODE_EVIDENCE_AGE_MS = 45_000;
-
 function randomSessionEpoch(): number {
   let value = 0;
   while (value === 0) value = randomBytes(4).readUInt32BE(0);
@@ -452,15 +450,18 @@ export class RtcmDownlinkController {
   }
 
   private armedNodeCount(nowUnixMs: number): number {
-    const maximumEvidenceAgeMs = Math.min(
-      this.config.leaseSeconds * 1000,
-      MAXIMUM_NODE_EVIDENCE_AGE_MS
-    );
     return targetLabels(this.config.targetMask).filter((nodeLabel) => {
       const evidence = this.nodeEvidence.get(nodeLabel);
-      return evidence?.mode === this.requestedMode &&
-        evidence.sessionEpoch === this.sessionEpoch && evidence.leaseRemainingMs > 0 &&
-        nowUnixMs >= evidence.observedUnixMs && nowUnixMs - evidence.observedUnixMs <= maximumEvidenceAgeMs;
+      if (evidence?.mode !== this.requestedMode || evidence.sessionEpoch !== this.sessionEpoch ||
+          evidence.leaseRemainingMs <= 0 || nowUnixMs < evidence.observedUnixMs) {
+        return false;
+      }
+      const evidenceAgeMs = nowUnixMs - evidence.observedUnixMs;
+      const maximumEvidenceAgeMs = Math.min(
+        this.config.leaseSeconds * 1000,
+        evidence.leaseRemainingMs
+      );
+      return evidenceAgeMs <= maximumEvidenceAgeMs;
     }).length;
   }
 }

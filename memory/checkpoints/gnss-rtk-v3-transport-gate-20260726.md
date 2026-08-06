@@ -12,6 +12,43 @@ status: active
 
 # Checkpoint: gnss-rtk-v3-transport-gate-20260726
 
+## Scheduler Starvation And Empty-Poll Recovery (2026-08-06 17:13 CST)
+
+- 长差分龄的网关侧根因已定位并修复：三节点 core 一轮实际约 `2.2--2.6 s`，超过原
+  `2000 ms` deadline，导致 P4 RTCM audit 长期饥饿，约 90 秒后误判 targets unarmed。
+  audit 现可越过 overdue core，未 armed 时强制 P4，正常审计频率为每 5 个 core round。
+- 修复后 600 秒 LIVE 为 `211 issued / 210 completed / 1 timeout`；CRC、schema、交织和
+  写失败全 0，最后 120 秒 A/B/C 均 `12/12 GGA=4`。观测帧 caster-to-field P95
+  `1131 ms`，串口写 P95 `216 ms`；差分龄最大 `11/10/9 s`，因此只有 `<=6 s` 样本可进入
+  高可信位移门禁。
+- 唯一 timeout 是一次广播命令后 `0/3` 节点响应：旧逻辑先等 `1500 ms`，再对 A/B/C
+  各做一次 `1500 ms` 定向等待，最后再退避 `2000 ms`，将一次 XLS1 下行丢帧放大到约
+  `8.5 s`。现改为零响应时立即结束该窗口，首次按正常间隔快速重发；仅连续空轮询进入
+  `2/4/8... s` 指数退避。部分节点响应的定向恢复保持不变。
+- 快速恢复版部署后 180 秒 LIVE 为 `70/70`、poll timeout 0，所有传输错误为 0，平均
+  `2.57 s/组三节点`；观测帧 caster-to-field P95 `1163 ms`。后段 GGA=4 时差分龄仍曾同步
+  到 16 秒，而 fresh RTCM 传输未中断，证明剩余 age 波动在 UM220 载波解算/应用侧，不是
+  RK3568 调度或串口堵塞。
+- 两轮原始报告只保留在 RK3568 experiments 目录；结束后均恢复
+  `NTRIP_ENABLED=false`、runtime probe、聚合 1，服务 active。凭据、坐标和原始 RTCM
+  未写入 Git 或 memory；ABC 不需要因本次网关修复重新烧录。
+
+## Latest Resume State (2026-08-06 15:50 CST)
+
+- 最终 low-rate V2 包的 60 秒纯通信复查完成：A/B/C 各 `48/48`，所有传输错误为 0。
+  报告中的 3 个 profile violation 只是 B 先前 LIVE 的累计 RTCM 审计值仍非零。
+- 同参数 600 秒 LIVE 尾窗三节点均 `12/12 GGA=4`，但 correction-age P95/max 已升至
+  A `23/23 s`、B/C `24/24 s`；轮询 `82/100`，17 timeout、27 schema error。
+- caster CRC、field write 和 interleaving 错误均为 0；serial-write P95 `213 ms`。
+  直接异常证据为 `port-busy` P95 `6419 ms` 与 `targets-unarmed` P95 `8631 ms`，因此
+  下一步应检查 RK3568 调度生命周期，不再归因于天气/天线或重复试波特率。
+- 权威报告：
+  `/var/lib/lsmv2/experiments/lowrate-v2-g3b4-live600-recheck-20260806-20260806-153824.json`，
+  SHA-256 `681b4107e07a5b3b211c3750fce37247ccf96f924e6730bd8c5031d52a70afd6`。
+- 测试结束已确认 `NTRIP_ENABLED=false`、runtime probe、聚合 1；生产服务 active，
+  `NRestarts=0`。恢复时先读 gateway `port-busy` 判定、targets arming 生命周期及本轮
+  schemaRejected 来源，修复并通过 build/test 后再构建固件或重复 600 秒 LIVE。
+
 ## Final V2 Hardware Package (2026-08-06)
 
 - 最终包已从 clean commit

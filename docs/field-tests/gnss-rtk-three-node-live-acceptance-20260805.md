@@ -465,3 +465,55 @@ aggregation one. Remote runners must query the exact production unit name.
 These gates accept the three-node communication and acquisition profile. They
 still do not accept RTK FIXED, correction age, centimetre displacement, or the
 final 1800-second mixed LIVE load.
+
+## Low-Rate V2 PROBE And LIVE Results - 2026-08-06
+
+The final low-rate V2 package passed the gateway/field-link PROBE stages with
+the retained `RTCM32_GGB / 1 Hz / burst=4 / guard=600 ms / window=2500 ms`
+profile. Legacy G3R, G3B=2 and G3B=4 each completed a 60-second run with zero
+caster CRC, field-write, poll-timeout, schema or interleaving errors. Their
+inner/outer write counts were respectively `48/48`, `72/36` and `78/35`.
+These runs prove the gateway and air-link PROBE path only; a matching G3S V7
+node response was not obtained and therefore node-side PROBE completion is not
+claimed.
+
+The first 600-second G3B=4 LIVE run reached `GGA quality=4` on A/B/C for all
+`12/12` samples in the final 120 seconds. Correction-age P95 was A/B/C
+`12/11/11 s`; transport recorded `88/96` completed polls, eight poll timeouts,
+three schema errors and zero field-write failures. This proved convergence but
+failed the mixed-load freshness and zero-error gates.
+
+A second controlled 600-second LIVE run at 15:38 CST reproduced and amplified
+the scheduling issue:
+
+- A/B/C remained `GGA quality=4` for all `12/12` final-window samples;
+- correction-age P95/max was A `23/23 s`, B `24/24 s`, C `24/24 s`;
+- caster input was healthy: `1846` valid frames, zero CRC errors;
+- `686` inner fragments were prepared and written in `307` outer frames with
+  zero write failures and zero interleaving errors;
+- normal polling completed `82/100`, with `17` timeouts and `27` schema errors;
+- dispatch blocking was dominated by `port-busy` (P95 `6419 ms`) and
+  `targets-unarmed` (P95 `8631 ms`), while serial-write P95 was only `213 ms`;
+- observation caster-to-field P95 remained `1202 ms`, but reference messages
+  reached P95 `6698 ms` and max `10092 ms`.
+
+The second report is stored only on RK3568 at
+`/var/lib/lsmv2/experiments/lowrate-v2-g3b4-live600-recheck-20260806-20260806-153824.json`,
+SHA-256 `681b4107e07a5b3b211c3750fce37247ccf96f924e6730bd8c5031d52a70afd6`.
+Its credential-free monitor SHA-256 is
+`b0da466177118d19fd68087b61fa4fecd73fb9b69d5b9985d845b080aa717339`.
+
+An immediately preceding 60-second ordinary-communication run completed
+`48/48` rounds per node with all transport/protocol errors zero. Its three
+profile violations were only B's historical non-zero RTCM audit counters from
+the prior LIVE session, not new injection while NTRIP was disabled. This report
+is `/var/lib/lsmv2/experiments/xls1-compact-v6-layered-0060s-20260806-153413.json`,
+SHA-256 `8ace0c7e1f96f99feb74fddf41d857077923c66ae56e2d8517f5155917ca31d9`.
+
+The evidence therefore separates the outcome cleanly: ordinary three-node
+telemetry is accepted and all receivers can remain FIXED, but the current
+shared mixed-load scheduler is not freshness-accepted. The next revision must
+shorten or preempt the `port-busy`/`targets-unarmed` intervals and eliminate
+normal-poll/schema failures before another 600-second LIVE run. The test trap
+restored `NTRIP_ENABLED=false`, runtime PROBE and aggregation one; the exact
+production unit was verified active with `NRestarts=0`.

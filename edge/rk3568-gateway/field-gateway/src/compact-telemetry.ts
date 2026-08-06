@@ -260,7 +260,7 @@ function decodeCompactTelemetryV6(payload: Buffer): CompactTelemetry {
     const summary = payload.readUInt8(39);
     const ggaQuality = summary & 0x07;
     const coordinateFrameCode = (summary >> 3) & 0x03;
-    const trusted = (statusFlags & V6_STATUS_RTK_TRUSTED) !== 0;
+    let trusted = (statusFlags & V6_STATUS_RTK_TRUSTED) !== 0;
     const quantizedValidity = [
       [1 << 6, 41],
       [1 << 4, 42],
@@ -303,11 +303,17 @@ function decodeCompactTelemetryV6(payload: Buffer): CompactTelemetry {
     if ((valid & (1 << 6)) !== 0) metrics.rtk_hdop = payload.readUInt8(41) * 0.05;
     if ((valid & (1 << 7)) !== 0) metrics.rtk_gst_sigma_lat_mm = payload.readUInt8(44);
     if ((valid & (1 << 8)) !== 0) metrics.rtk_gst_sigma_lon_mm = payload.readUInt8(45);
-    if (trusted && (ggaQuality !== 4 || coordinateFrameCode === 0 || (valid & (1 << 2)) === 0 ||
+    const trustClaimRejected = trusted &&
+      (ggaQuality !== 4 || coordinateFrameCode === 0 || (valid & (1 << 2)) === 0 ||
         (valid & (1 << 4)) === 0 || (valid & (1 << 5)) === 0 ||
         Number(metrics.rtk_correction_age_ms) > RTK_TRUST_MAX_CORRECTION_AGE_MS ||
-        Number(metrics.rtk_solution_age_ms) > RTK_TRUST_MAX_SOLUTION_AGE_MS)) {
-      throw new Error("compact telemetry v6 trusted RTK evidence violates the production gate");
+        Number(metrics.rtk_solution_age_ms) > RTK_TRUST_MAX_SOLUTION_AGE_MS);
+    if (trustClaimRejected) {
+      // Preserve the poll response and non-displacement measurements while failing
+      // the professional displacement gate closed.
+      trusted = false;
+      metrics.rtk_trusted = false;
+      meta.rtk_trust_claim_rejected = true;
     }
     meta.rtk_coordinate_frame = coordinateFrameName(coordinateFrameCode);
     meta.rtk_coordinate_frame_code = coordinateFrameCode;

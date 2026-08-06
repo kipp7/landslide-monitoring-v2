@@ -12,6 +12,40 @@ status: active
 
 # Task: gnss-rtk-fixed-validation-and-deployment
 
+## RK3568 Mixed-Load Scheduler Fix (2026-08-06 17:13 CST)
+
+- 已解除 Compact V6 core overdue 对 P4 RTCM audit 的无限饥饿，audit 周期固定为每 5 轮，
+  未 armed 时立即审计；此前约 90 秒一次的 targets-unarmed/20 秒级 correction-age 长空窗
+  已消失。
+- 600 秒基线为 `211/210`、仅 1 次 XLS1 广播空响应，所有协议和写入错误为 0，最后
+  120 秒三节点全部 GGA=4。该空响应被旧 `6500 ms` 窗口和 `2000 ms` 退避放大，现已改成
+  首次空响应快速重发，连续失败才指数退避，部分节点补采逻辑不变。
+- 新版部署后的 180 秒无回归为 `70/70`、timeout 0、全错误门为 0，三节点轮询平均
+  `2.57 s/组`，RTCM 观测 caster-to-field P95 `1163 ms`。当前采集/传输阶段可接受。
+- GGA=4 期间 correction age 仍可能超过 6 秒，而 RTCM 最新观测保持约 1.2 秒内写出；
+  专业位移继续只接纳 `GGA=4 && correction_age<=6 s`，其余样本用于状态展示但不得更新
+  ENU 基线。下一步不再调共享通信参数，只在更好 RF 条件下验证 UM220 固定连续性。
+- RK3568 已恢复 fail-closed：NTRIP false、runtime probe、聚合 1、服务 active；本次只改
+  网关，A/B/C 无需重刷。
+
+## Low-Rate V2 LIVE Recheck (2026-08-06 15:38 CST)
+
+- 先行 60 秒纯通信为 A/B/C 各 `48/48`，协议与传输错误全 0；3 个 profile violation
+  仅来自 B 上一轮 LIVE 后仍为非零的 RTCM 累计审计值，不是本轮关闭 NTRIP 后的新错误。
+- 随后保留参数完成 600 秒 G3B=4 LIVE。最后 120 秒 A/B/C 均为 `12/12 GGA=4`，证明
+  三节点可以持续 FIXED；但 correction-age P95/max 为 A `23/23 s`、B/C `24/24 s`。
+- caster `1846` 帧且 CRC 0，`686` inner / `307` outer、写失败 0、交织错误 0；普通轮询
+  仅 `82/100`，出现 17 次 timeout、27 次 schema error。dispatch 的 `port-busy` P95
+  `6419 ms`、`targets-unarmed` P95 `8631 ms`，而串口写 P95 仅 `213 ms`，当前瓶颈明确在
+  共享调度/会话窗口，不是天线、caster CRC 或串口物理写速率。
+- 报告仅存 RK3568：
+  `/var/lib/lsmv2/experiments/lowrate-v2-g3b4-live600-recheck-20260806-20260806-153824.json`，
+  SHA-256 `681b4107e07a5b3b211c3750fce37247ccf96f924e6730bd8c5031d52a70afd6`。
+- 当前结论：三节点普通通信与 FIXED 能力通过；混合负载 freshness/零错误门禁失败。
+  下一步只修 `port-busy/targets-unarmed` 生命周期和 poll/schema 错误，不再重复调整天线、
+  波特率或先跑无判定价值的短 LIVE。结束后已恢复 NTRIP false、runtime probe、聚合 1，
+  `lsmv2-field-gateway.service` active、`NRestarts=0`。
+
 ## Core-Tilt Timing V2 (2026-08-06)
 
 - 本轮复审未删除 Compact V6 字段：固定 46 B payload/64 B 完整线框下，GNSS 专业证据、

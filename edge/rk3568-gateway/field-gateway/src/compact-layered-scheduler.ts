@@ -46,6 +46,13 @@ export function layeredBroadcastAcceptsScope(scope: string | null): boolean {
   return scope === "core";
 }
 
+export function layeredExtensionMayPreemptCore(params: {
+  scope: CompactLayeredExtensionScope | null;
+  rtcmActive: boolean;
+}): boolean {
+  return params.rtcmActive && params.scope === "audit";
+}
+
 export function matchesActiveScopedPoll(params: {
   expectedDeviceId: string;
   telemetryDeviceId: string;

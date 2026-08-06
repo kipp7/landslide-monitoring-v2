@@ -456,10 +456,10 @@ test("compact telemetry v6 keeps each layered scope inside one 64-byte XLS1 fram
 
   const correctionAgeTooOld = Buffer.from(core);
   correctionAgeTooOld.writeUInt8(61, 42);
-  assert.throws(
-    () => decodeCompactTelemetry(correctionAgeTooOld),
-    /trusted RTK evidence violates/u
-  );
+  const downgraded = decodeCompactTelemetry(correctionAgeTooOld);
+  assert.equal(downgraded.metrics.rtk_trusted, false);
+  assert.equal(downgraded.meta.rtk_displacement_eligible, false);
+  assert.equal(downgraded.meta.rtk_trust_claim_rejected, true);
 
   const environmentDecoded = decodeCompactTelemetry(environment);
   assert.equal(environmentDecoded.meta.compact_scope, "environment");

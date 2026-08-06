@@ -37,6 +37,7 @@ import {
 import {
   compactLayeredCorePollOverdue,
   isCompactLayeredPortBusy,
+  layeredExtensionMayPreemptCore,
   layeredBroadcastAcceptsScope,
   matchesActiveScopedPoll,
   nextCompactLayeredExtensionScopes
@@ -183,6 +184,8 @@ type PortRuntimeState = {
 
 type SpoolState = "pending" | "published" | "rejected";
 
+const RTCM_UNARMED_MODE_RETRY_MS = 5_000;
+
 type SpoolRecord = {
   schema_version: 1;
   spool_id: string;
@@ -208,6 +211,7 @@ type RuntimeStats = {
   serialBytes: number;
   parsedMessages: number;
   schemaRejected: number;
+  rtkTrustClaimDowngrades: number;
   rejectedMessages: number;
   rejectedWriteFailures: number;
   interleavingSuspected: number;
@@ -1101,6 +1105,7 @@ class GatewayRuntime {
     serialBytes: 0,
     parsedMessages: 0,
     schemaRejected: 0,
+    rtkTrustClaimDowngrades: 0,
     rejectedMessages: 0,
     rejectedWriteFailures: 0,
     interleavingSuspected: 0,
@@ -1588,6 +1593,20 @@ class GatewayRuntime {
     if (input.frameType === "telemetry" && isCompactTelemetry(input.rawPayloadBytes)) {
       try {
         const envelope = decodeCompactTelemetry(input.rawPayloadBytes);
+        if (envelope.meta.rtk_trust_claim_rejected === true) {
+          this.stats.rtkTrustClaimDowngrades += 1;
+          this.logger.warn(
+            {
+              sourcePort,
+              frameSequence: input.sequence,
+              node: envelope.meta.legacy_node,
+              ggaQuality: envelope.metrics.rtk_gga_quality,
+              correctionAgeMs: envelope.metrics.rtk_correction_age_ms,
+              solutionAgeMs: envelope.metrics.rtk_solution_age_ms
+            },
+            "field gateway downgraded inconsistent RTK trust claim"
+          );
+        }
         await this.handlePayloadCandidate(JSON.stringify(envelope), sourcePort, input.frameType, input.sequence);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -2121,8 +2140,15 @@ class GatewayRuntime {
   private tickCompactLayeredPolling(): void {
     for (const portPath of this.getConfiguredPortPaths()) {
       const pendingScopes = this.layeredPendingScopesByPort.get(portPath);
-      const pendingScope = pendingScopes?.[0];
-      if (!pendingScope || this.compactLayeredCorePollIsOverdue(portPath)) continue;
+      const allTargetsArmed = this.rtcmController?.allTargetsArmed(Date.now()) ?? true;
+      const recoveryAuditRequired = this.rtcmController !== null && !allTargetsArmed;
+      const pendingScope = recoveryAuditRequired ? "audit" : pendingScopes?.[0] ?? null;
+      if (!pendingScope ||
+          (this.compactLayeredCorePollIsOverdue(portPath) &&
+           !layeredExtensionMayPreemptCore({
+             scope: pendingScope,
+             rtcmActive: this.rtcmController !== null
+           }))) continue;
       if (isCompactLayeredPortBusy({
         pendingCommand: this.pendingCommandWindows.has(portPath),
         activeScopedPoll: this.activePollTelemetryWindows.has(portPath),
@@ -2137,9 +2163,12 @@ class GatewayRuntime {
       if (!serialPort?.isOpen) continue;
       const node = this.nextPollingNodeForPort(portPath);
       if (!node) continue;
-      const remainingScopes = pendingScopes.slice(1);
-      if (remainingScopes.length === 0) this.layeredPendingScopesByPort.delete(portPath);
-      else this.layeredPendingScopesByPort.set(portPath, remainingScopes);
+      if (recoveryAuditRequired && node.latestTelemetry === null) continue;
+      if (!recoveryAuditRequired && pendingScopes) {
+        const remainingScopes = pendingScopes.slice(1);
+        if (remainingScopes.length === 0) this.layeredPendingScopesByPort.delete(portPath);
+        else this.layeredPendingScopesByPort.set(portPath, remainingScopes);
+      }
       void this.issueInternalPollForNode(node, portPath, pendingScope);
     }
     this.tickCompactBroadcastPolling();
@@ -2349,6 +2378,10 @@ class GatewayRuntime {
         return;
       }
       if (this.config.southboundPollingPartialRetries <= 0) {
+        this.closeCompactBroadcastPollWindow(windowKey, "timeout");
+        return;
+      }
+      if (window.receivedDeviceIds.size === 0) {
         this.closeCompactBroadcastPollWindow(windowKey, "timeout");
         return;
       }
@@ -3616,9 +3649,18 @@ class GatewayRuntime {
 
   private async tickRtcmModeLease(): Promise<void> {
     const controller = this.rtcmController;
-    if (!controller || this.stopping || Date.now() < this.rtcmNextModeRefreshAtMs) return;
+    if (!controller || this.stopping) return;
+    const nowUnixMs = Date.now();
+    const allTargetsArmed = controller.allTargetsArmed(nowUnixMs);
+    if (!allTargetsArmed && this.rtcmNextModeRefreshAtMs - nowUnixMs > RTCM_UNARMED_MODE_RETRY_MS) {
+      this.rtcmNextModeRefreshAtMs = nowUnixMs;
+    }
+    if (nowUnixMs < this.rtcmNextModeRefreshAtMs) return;
     const written = await this.writeRtcmFieldLinkPayload("command", controller.buildModeCommand(), "control");
-    if (written) this.rtcmNextModeRefreshAtMs = Date.now() + this.config.rtcmSessionRefreshMs;
+    if (written) {
+      this.rtcmNextModeRefreshAtMs = Date.now() +
+        (allTargetsArmed ? this.config.rtcmSessionRefreshMs : RTCM_UNARMED_MODE_RETRY_MS);
+    }
   }
 
   private async tickRtcmDispatch(): Promise<void> {

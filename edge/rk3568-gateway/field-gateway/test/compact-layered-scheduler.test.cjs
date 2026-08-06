@@ -5,6 +5,7 @@ const {
   compactLayeredCorePollOverdue,
   isCompactLayeredPortBusy,
   layeredBroadcastAcceptsScope,
+  layeredExtensionMayPreemptCore,
   matchesActiveScopedPoll,
   nextCompactLayeredExtensionScopes
 } = require("../dist/compact-layered-scheduler.js");
@@ -98,4 +99,11 @@ test("the core deadline preempts low-rate work after two seconds", () => {
     () => compactLayeredCorePollOverdue({ nowMs: -1, lastCorePollDispatchedAtMs: null, deadlineMs: 2000 }),
     /nowMs/u
   );
+});
+
+test("RTCM audit cannot be starved by an already overdue core poll", () => {
+  assert.equal(layeredExtensionMayPreemptCore({ scope: "audit", rtcmActive: true }), true);
+  assert.equal(layeredExtensionMayPreemptCore({ scope: "environment", rtcmActive: true }), false);
+  assert.equal(layeredExtensionMayPreemptCore({ scope: "audit", rtcmActive: false }), false);
+  assert.equal(layeredExtensionMayPreemptCore({ scope: null, rtcmActive: true }), false);
 });

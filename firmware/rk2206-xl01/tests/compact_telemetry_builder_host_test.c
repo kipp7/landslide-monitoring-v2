@@ -223,6 +223,21 @@ int main(void)
     assert(v6_core[39] == 12U && v6_core[40] == 31U);
     assert(v6_core[41] == 11U && v6_core[42] == 20U && v6_core[43] == 7U);
     assert(v6_core[44] == 6U && v6_core[45] == 7U);
+    assert((v6_core[4] & COMPACT_TELEMETRY_V6_STATUS_RTK_TRUSTED) != 0U);
+
+    data.gnss.correction_age_ms = GNSS_TRUST_MAX_CORRECTION_AGE_MS + 1U;
+    payload_len = BuildCompactTelemetryV6(
+        &data, &rtcm_stats, &rtcm_runtime, COMPACT_TELEMETRY_V6_SCOPE_CORE,
+        "C", command_id, v6_core, sizeof(v6_core));
+    assert(payload_len == COMPACT_TELEMETRY_V6_PAYLOAD_BYTES);
+    assert((v6_core[4] & COMPACT_TELEMETRY_V6_STATUS_RTK_TRUSTED) == 0U);
+    data.gnss.correction_age_ms = 2000U;
+    payload_len = BuildCompactTelemetryV6(
+        &data, &rtcm_stats, &rtcm_runtime, COMPACT_TELEMETRY_V6_SCOPE_CORE,
+        "C", command_id, v6_core, sizeof(v6_core));
+    assert(payload_len == COMPACT_TELEMETRY_V6_PAYLOAD_BYTES);
+    assert((v6_core[4] & COMPACT_TELEMETRY_V6_STATUS_RTK_TRUSTED) != 0U);
+
     frame_len = FieldLinkFrame_Encode(
         FIELD_LINK_FRAME_TYPE_TELEMETRY, 12U, (const char *)v6_core, payload_len,
         frame, sizeof(frame));

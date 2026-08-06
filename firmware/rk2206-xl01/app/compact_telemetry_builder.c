@@ -245,6 +245,22 @@ static uint16_t SanitizedGnssFixFlags(const SensorData *data)
     return flags;
 }
 
+static uint16_t SanitizedV6GnssFixFlags(const SensorData *data)
+{
+    uint16_t flags = SanitizedGnssFixFlags(data);
+    if ((flags & GNSS_FIX_TRUSTED) != 0U &&
+        (data->gnss.gga_quality != 4U || !data->gnss.position_valid ||
+         (flags & GNSS_FIX_COORDINATE_FRAME_VALID) == 0U ||
+         data->gnss.coordinate_frame == GNSS_COORDINATE_FRAME_UNKNOWN ||
+         data->gnss.coordinate_frame > GNSS_COORDINATE_FRAME_WGS84 ||
+         (flags & GNSS_FIX_CORRECTION_AGE_VALID) == 0U ||
+         data->gnss.correction_age_ms > GNSS_TRUST_MAX_CORRECTION_AGE_MS ||
+         data->gnss.solution_age_ms > GNSS_TRUST_MAX_SOLUTION_AGE_MS)) {
+        flags &= (uint16_t)~GNSS_FIX_TRUSTED;
+    }
+    return flags;
+}
+
 static int BeginPayload(
     const SensorData *data,
     const char *legacy_node_label,
@@ -791,7 +807,7 @@ int BuildCompactTelemetryV6(
         output_size < COMPACT_TELEMETRY_V6_PAYLOAD_BYTES) {
         return -1;
     }
-    fix_flags = SanitizedGnssFixFlags(data);
+    fix_flags = SanitizedV6GnssFixFlags(data);
     if (!data->gnss_status_valid) fix_flags = 0U;
     if (scope == COMPACT_TELEMETRY_V6_SCOPE_CORE) {
         return BuildCompactTelemetryV6Core(data, legacy_node_label, last_command_id, fix_flags, output);

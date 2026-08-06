@@ -52,8 +52,10 @@ export class CompactPollAdmissionController {
     let delayMs = this.config.steadyIntervalMs;
     if (outcome === "empty-timeout") {
       state.consecutiveEmptyTimeouts += 1;
-      const exponent = Math.min(30, state.consecutiveEmptyTimeouts - 1);
-      delayMs = Math.min(this.config.emptyBackoffMaxMs, this.config.emptyBackoffInitialMs * 2 ** exponent);
+      if (state.consecutiveEmptyTimeouts > 1) {
+        const exponent = Math.min(30, state.consecutiveEmptyTimeouts - 2);
+        delayMs = Math.min(this.config.emptyBackoffMaxMs, this.config.emptyBackoffInitialMs * 2 ** exponent);
+      }
     } else if (outcome === "complete" || outcome === "partial-timeout") {
       state.consecutiveEmptyTimeouts = 0;
     } else if (outcome === "shutdown") {
