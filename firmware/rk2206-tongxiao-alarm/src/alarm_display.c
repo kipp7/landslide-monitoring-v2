@@ -157,6 +157,24 @@ static bool HasAlertContext(const AlarmSnapshot *snapshot)
         snapshot->desired.station_id[0] != '\0' || snapshot->desired.alert_id[0] != '\0';
 }
 
+static bool ShouldShowAlertContext(const AlarmSnapshot *snapshot)
+{
+    if (snapshot == NULL || !HasAlertContext(snapshot)) return false;
+    /* An idle/all-clear revision may retain the event for traceability, but it
+     * must never render the old event's evacuation advice as a live warning. */
+    return snapshot->desired.state == ALARM_STATE_ACTIVE ||
+        snapshot->desired.state == ALARM_STATE_SILENCED;
+}
+
+static const char *SuggestionChinese(const AlarmSnapshot *snapshot)
+{
+    if (snapshot == NULL || snapshot->desired.state == ALARM_STATE_IDLE) return "继续观察";
+    if (snapshot->desired.state == ALARM_STATE_SILENCED) return "等待复核";
+    if (snapshot->desired.severity == ALARM_SEVERITY_CRITICAL) return "立即撤离";
+    if (snapshot->desired.severity == ALARM_SEVERITY_HIGH) return "准备撤离";
+    return "注意观察";
+}
+
 static void ShowProtocolStatus(const AlarmSnapshot *snapshot, uint16_t fg, uint16_t bg)
 {
     uint16_t wifi_color = bg == LCD_WHITE ? (snapshot->wifi_connected ? LCD_GREEN : LCD_RED) : fg;
@@ -193,9 +211,7 @@ static void ShowAlertContext(const AlarmSnapshot *snapshot, uint16_t fg, uint16_
     ShowChinese(STATUS_LABEL_X, 138, "等级", fg, bg, 24);
     ShowChinese(STATUS_VALUE_X, 138, SeverityChinese(snapshot->desired.severity), fg, bg, 24);
     ShowChinese(STATUS_LABEL_X, 164, "建议", fg, bg, 24);
-    ShowChinese(STATUS_VALUE_X, 164,
-        snapshot->desired.severity == ALARM_SEVERITY_CRITICAL ? "立即撤离" : "准备撤离",
-        fg, bg, 24);
+    ShowChinese(STATUS_VALUE_X, 164, SuggestionChinese(snapshot), fg, bg, 24);
     ShowChinese(STATUS_LABEL_X, 190, "告警", fg, bg, 24);
     ShowAscii(STATUS_VALUE_X, 194, alert[0] ? alert : "--", fg, bg, 16);
 }
@@ -291,7 +307,7 @@ void AlarmDisplay_Render(const AlarmSnapshot *snapshot)
     }
 
     lcd_draw_line(12, 106, 307, 106, foreground);
-    if (HasAlertContext(snapshot)) ShowAlertContext(snapshot, foreground, background);
+    if (ShouldShowAlertContext(snapshot)) ShowAlertContext(snapshot, foreground, background);
     else ShowDeviceContext(snapshot, foreground, background);
     ShowProtocolStatus(snapshot, foreground, background);
     g_rendered_snapshot = *snapshot;
