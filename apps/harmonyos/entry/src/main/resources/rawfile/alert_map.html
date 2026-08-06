@@ -665,13 +665,13 @@
         if (guidancePoints.length > 1) {
           map.fitBounds(guidancePoints, { paddingTopLeft: [54, 76], paddingBottomRight: [54, 360], maxZoom: 16, animate: true });
         } else if (highlightAlert && focusLocation && validCoordinate(Number(focusLocation.latitude), Number(focusLocation.longitude))) {
-          map.flyTo([Number(focusLocation.latitude), Number(focusLocation.longitude)], 18, { animate: true, duration: 0.7 });
+          map.flyTo([Number(focusLocation.latitude), Number(focusLocation.longitude)], 16, { animate: true, duration: 0.7 });
         } else if (points.length === 1) {
-          map.flyTo(points[0], 18, { animate: true, duration: 0.7 });
+          map.flyTo(points[0], 16, { animate: true, duration: 0.7 });
         } else if (points.length > 1) {
-          map.fitBounds(points, { padding: [42, 42], maxZoom: 20, animate: true });
+          map.fitBounds(points, { padding: [42, 42], maxZoom: 17, animate: true });
         } else if (focusLocation && validCoordinate(Number(focusLocation.latitude), Number(focusLocation.longitude))) {
-          map.flyTo([Number(focusLocation.latitude), Number(focusLocation.longitude)], 18, { animate: true, duration: 0.7 });
+          map.flyTo([Number(focusLocation.latitude), Number(focusLocation.longitude)], 16, { animate: true, duration: 0.7 });
         }
       }
 
