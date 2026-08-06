@@ -27,6 +27,11 @@ status: active
   ENU 基线。下一步不再调共享通信参数，只在更好 RF 条件下验证 UM220 固定连续性。
 - RK3568 已恢复 fail-closed：NTRIP false、runtime probe、聚合 1、服务 active；本次只改
   网关，A/B/C 无需重刷。
+- 轮询节拍最终接受值为 `core deadline=1600 ms`：180 秒 `77/77`、全错误门为 0，平均
+  `2.34 s/组三节点`。`1500/500 ms correction window` 以及 `1000 ms core deadline` 均未将
+  节拍稳定推到 2 秒，继续压参数收益不足且会侵占 RTCM 裕量；用户已确认约 2.3 秒可接受。
+- 生产 RK3568 已显式写入 `SOUTHBOUND_CORE_POLL_DEADLINE_MS=1600` 并保持 NTRIP false、
+  probe、聚合 1、服务 active、零重启。停止设计 V7 双倾角样本或要求重刷 ABC。
 
 ## Low-Rate V2 LIVE Recheck (2026-08-06 15:38 CST)
 

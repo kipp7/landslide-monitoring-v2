@@ -5,6 +5,8 @@ mode=${1:-}
 duration=${2:-}
 label=${3:-}
 aggregation=${4:-4}
+correction_window_ms=${5:-2500}
+core_deadline_ms=${6:-2000}
 
 if [[ $EUID -ne 0 ]]; then
   echo "run as root" >&2
@@ -24,6 +26,16 @@ if ! [[ "$label" =~ ^[A-Za-z0-9._-]+$ ]]; then
 fi
 if ! [[ "$aggregation" =~ ^[1-4]$ ]]; then
   echo "aggregation must be an integer in [1, 4]" >&2
+  exit 2
+fi
+if ! [[ "$correction_window_ms" =~ ^[0-9]+$ ]] ||
+  (( correction_window_ms < 500 || correction_window_ms > 5000 )); then
+  echo "correction window must be an integer in [500, 5000] ms" >&2
+  exit 2
+fi
+if ! [[ "$core_deadline_ms" =~ ^[0-9]+$ ]] ||
+  (( core_deadline_ms < 1000 || core_deadline_ms > 10000 )); then
+  echo "core deadline must be an integer in [1000, 10000] ms" >&2
   exit 2
 fi
 
@@ -100,7 +112,8 @@ set_env_value RTCM_OBSERVATION_INTERVAL_MS 1000
 set_env_value RTCM_MAX_FRAGMENTS_PER_FIELD_FRAME "$aggregation"
 set_env_value RTCM_MAX_FRAGMENTS_BETWEEN_POLLS 4
 set_env_value RTCM_POST_BURST_POLL_GUARD_MS 600
-set_env_value RTCM_MIN_CORRECTION_WINDOW_MS 2500
+set_env_value RTCM_MIN_CORRECTION_WINDOW_MS "$correction_window_ms"
+set_env_value SOUTHBOUND_CORE_POLL_DEADLINE_MS "$core_deadline_ms"
 systemctl restart "$service"
 systemctl is-active --quiet "$service"
 
@@ -172,7 +185,7 @@ PY
   sleep 10
 done
 
-python3 - "$mode" "$duration" "$monitor_path" "$summary_path" "$health_file" "$aggregation" <<'PY'
+python3 - "$mode" "$duration" "$monitor_path" "$summary_path" "$health_file" "$aggregation" "$correction_window_ms" "$core_deadline_ms" <<'PY'
 import csv
 import hashlib
 import json
@@ -181,7 +194,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-mode, duration, monitor, summary, health, aggregation = sys.argv[1:]
+mode, duration, monitor, summary, health, aggregation, correction_window, core_deadline = sys.argv[1:]
 monitor_path = Path(monitor)
 rows = list(csv.DictReader(monitor_path.open(encoding="utf-8"), delimiter="\t"))
 health_data = json.loads(Path(health).read_text(encoding="utf-8"))
@@ -227,7 +240,8 @@ result = {
         "maxFragmentsPerFieldFrame": int(aggregation),
         "maxFragmentsBetweenPolls": 4,
         "postBurstPollGuardMs": 600,
-        "minCorrectionWindowMs": 2500,
+        "minCorrectionWindowMs": int(correction_window),
+        "corePollDeadlineMs": int(core_deadline),
     },
     "connection": {
         "state": connection.get("state"),

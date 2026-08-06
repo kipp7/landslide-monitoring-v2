@@ -32,6 +32,14 @@ status: active
 - 两轮原始报告只保留在 RK3568 experiments 目录；结束后均恢复
   `NTRIP_ENABLED=false`、runtime probe、聚合 1，服务 active。凭据、坐标和原始 RTCM
   未写入 Git 或 memory；ABC 不需要因本次网关修复重新烧录。
+- 后续单变量节拍测试否定了继续压 correction window：`1500 ms` 和允许下限 `500 ms`
+  均仍约 `2.3 s/组三节点`。core deadline `1600 ms` 的完整 180 秒为 `77/77`、所有错误 0，
+  即平均 `2.34 s/组`；压到允许下限 `1000 ms` 的 60 秒仍只有 `23 completed / 24 issued`，
+  没有可重复收益。用户确认约 2.3 秒可接受，停止继续压缩协议或增加倾角历史帧。
+- RK3568 生产环境现固定 `SOUTHBOUND_CORE_POLL_DEADLINE_MS=1600`，其余已验收参数保持不变；
+  当前 fail-closed 为 NTRIP false、runtime probe、聚合 1、服务 active、`NRestarts=0`。
+  runner 新增可选 correction-window/core-deadline 参数，默认仍为 `2500/2000 ms`，只用于
+  单变量诊断，不会静默改变生产配置。
 
 ## Latest Resume State (2026-08-06 15:50 CST)
 
