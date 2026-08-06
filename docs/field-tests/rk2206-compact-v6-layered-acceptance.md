@@ -55,8 +55,9 @@ or an RTCM write.
 - Hardware tilt and the latest GNSS solution are sampled on the 1-second core
   loop. Tilt owns the RS485 bus before every low-rate path.
 - The core tilt request uses a dedicated `300 ms` response timeout and at most
-  one retry. Its worst-case bounded wait is therefore about `680 ms` including
-  the `80 ms` retry gap; the older `800 ms` sensor timeout is retained only for
+  one retry. Including the driver's bounded `50 ms` TX-complete wait per
+  attempt, its worst-case wait is about `780 ms` (`50+300+80+50+300`); the older
+  `800 ms` sensor timeout is retained only for
   non-core paths. This keeps a transient tilt timeout from consuming the next
   one-second core slot while preserving one recovery attempt.
 - PC0 battery and soil temperature/moisture/EC are sampled every 10 seconds.

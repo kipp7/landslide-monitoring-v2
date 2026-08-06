@@ -16,8 +16,8 @@ status: active
 
 - 数据合同复审结论：核心 46 B/完整 64 B 线框没有可删除且能降低空口负载的字段；GNSS
   精度证据、倾角、环境、电池和 RTCM 审计继续保留。
-- 新版核心倾角 RS485 读取使用 `300 ms` 超时和 1 次重试，最坏约 `680 ms`；低频土壤/
-  EC 保持 `300 ms/0 retry`，环境采样 10 秒，核心倾角/GNSS 1 秒。
+- 新版核心倾角 RS485 读取使用 `300 ms` 超时和 1 次重试，计入两次各 `50 ms` TX 等待后
+  最坏约 `780 ms`；低频土壤/EC 保持 `300 ms/0 retry`，环境采样 10 秒，核心倾角/GNSS 1 秒。
 - 源码 marker 已升为 `v1.9...lowrate-v2` / `fw-...lowrate-v2-live-20260806`。同一
   clean commit `9b9be527a594085283747099c88812080f8f2b8a` 已生成正式 A/B/C hardware
   LIVE-capable 包：
@@ -52,7 +52,7 @@ status: active
   次重试，环境路径仍为 `300 ms + 0` 次重试。网关 build、lint、`76/76` 测试、
   RK2206 C99 host tests、采样周期、引脚、RS485 启动、TX 顺序、marker 与原子快照门禁
   均已通过；A/B/C OpenHarmony 正式镜像尚未生成，不能让现场烧录。
-- 下一步从同一 clean commit 构建 A/B/C，再真机先关闭 RTCM 验收：每节点任意健康 4 秒
+- 下一步按物理标签烧录该 v2 包，再真机先关闭 RTCM 验收：每节点任意健康 4 秒
   至少两个不同 `sample_epoch`、倾角有效、协议错误为 0；随后做混合负载，要求持续
   `GGA=4`、差分龄 `<=6 s`、解算龄 `<=2 s`。低频单次超时只记缺失，不得拖垮 core。
 

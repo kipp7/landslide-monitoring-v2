@@ -16,12 +16,13 @@ status: active
 
 - 本轮复审未删除 Compact V6 字段：固定 46 B payload/64 B 完整线框下，GNSS 专业证据、
   电池和环境/RTCM 审计字段不会因删除而降低空口负载。
-- RK2206 核心倾角读取已改为 `300 ms + 1 retry`，最坏约 `680 ms`；土壤温度/湿度/EC
+- RK2206 核心倾角读取已改为 `300 ms + 1 retry`，计入两次各 `50 ms` TX-complete 等待后
+  最坏约 `780 ms`；土壤温度/湿度/EC
   仍为 10 秒、`300 ms + 0 retry`。版本 marker 为
   `fw-rk2206-rtk-compact-v6-lowrate-v2-live-20260806`。
 - 当前状态：源码改动已通过网关 `76/76`、build/lint、C99 host 与采样/引脚/启动/快照
-  门禁；下一步必须同源生成 A/B/C hardware LIVE 包并记录 manifest/hash，现场先保持
-  `NTRIP_ENABLED=false` 做 4 秒核心采样门禁，再进入 PROBE/LIVE。
+  门禁；A/B/C hardware LIVE-capable 包已从 clean commit 生成并记录 manifest/hash。现场
+  仍先保持 `NTRIP_ENABLED=false` 做 4 秒核心采样门禁，再进入 PROBE/LIVE。
 
 ## Goal
 
@@ -33,7 +34,7 @@ status: active
 
 - 固件和 RK3568 已完成同版源代码调整：倾角/GNSS 1 秒，电池/土壤温度/含水率/EC
   10 秒；倾角优先于土壤，低频 `300 ms / 0 retry`，无效数据缺失而不是 0。
-- 核心倾角读取已独立为 `300 ms + 1 retry`，最坏约 `680 ms`，避免沿用 800 ms 路径
+- 核心倾角读取已独立为 `300 ms + 1 retry`，计入 TX 等待后最坏约 `780 ms`，避免沿用 800 ms 路径
   把一次异常拖入下一个核心采样槽。
 - EC 初次不可用后的复探测为每 6 个环境周期，约 60 秒；倾角单独读取不再支付末尾
   80 ms 空等。现有专业 GNSS、供电和 RTCM 字段全部保留，线框仍为 64 B。

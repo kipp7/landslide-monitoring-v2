@@ -130,7 +130,7 @@ Truth profile
   - Runtime modes: DISABLED -> PROBE -> LIVE under a fresh 15..300 s lease
   - Polling: protected single P1, no production P2 recovery
   - Acquisition: tilt/GNSS 1 s; battery/soil/EC 10 s; tilt is read first
-  - Core tilt RS485: 300 ms timeout, one retry (worst case about 680 ms)
+  - Core tilt RS485: 300 ms timeout, one retry (worst case about 780 ms including TX waits)
   - Low-rate RS485: 300 ms timeout, no retry, missing data is never encoded as zero
   - Every telemetry payload: 46 bytes; every complete telemetry frame: 64 bytes
 
