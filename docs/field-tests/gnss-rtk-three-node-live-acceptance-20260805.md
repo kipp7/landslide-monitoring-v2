@@ -410,3 +410,24 @@ The image boots with RTCM disabled and is only LIVE-capable after the gateway
 lease sequence. Flash by physical node label, keep NTRIP disabled for the first
 communication gate, and do not call the package RTK-accepted until the outdoor
 G3R/G3B PROBE and 600/1800-second positioning gates pass.
+
+## Quick Hardware Core Gate - 2026-08-06
+
+A 20-second hardware-GNSS Compact V6 core run completed through the RK3568
+reverse SSH channel after A/B/C were powered:
+
+- A/B/C completed `13/13` core rounds each;
+- decode, wire-length, unmatched, duplicate, scope, epoch and profile errors were zero;
+- `stableProfile=true`, hardware GNSS required, RTCM remained disabled;
+- gateway arrival-interval P95 was A/B/C `2355.9/2360.1/2356.4 ms` and command-latency
+  P95 was `1407.1/1749.4/2105.8 ms`.
+
+The interval values are shared XLS1 polling arrival intervals, not local RK2206
+tilt sampling intervals. The short run proves the current three-node Compact V6
+communication/decode loop is healthy, but it is not a 600/1800-second acceptance
+or an RTK positioning result. The gateway was restored automatically to
+`active/running` with `NRestarts=0`, serial/MQTT online, NTRIP disabled, runtime
+PROBE and aggregation one.
+
+Credential-free report path on RK3568:
+`/var/lib/lsmv2/experiments/xls1-compact-v6-layered-0020s-20260806-141155.json`

@@ -27,6 +27,17 @@ status: active
 - 当前 RK3568 运行状态要求保持 `NTRIP_ENABLED=false`、runtime `probe`、聚合数 `1`；
   烧录后先做 4 秒纯通信门禁，再按 `G3R -> G3B=2 -> G3B=4 -> LIVE` 进入实测。
 
+## Quick Core Gate (2026-08-06)
+
+- 20 秒真实硬件 Compact V6 core 短测通过：A/B/C `13/13` 完整轮次，所有协议/profile
+  错误为 0，报告 SHA-256 为
+  `719cfb652e33f431596faf11ea847d22731a2a1aa9b36f1e1cca52400fd451b5`，报告留在 RK3568
+  `/var/lib/lsmv2/experiments/xls1-compact-v6-layered-0020s-20260806-141155.json`。
+- A/B/C 到达间隔 P95 为 `2355.9/2360.1/2356.4 ms`，属于共享 XLS1/网关轮询观测，不能
+  反推 RK2206 倾角本地采样恰为该周期；短测只证明通信闭环，不证明 RTK 或严格 1 Hz。
+- 测试后网关已恢复 `active/running`、`NRestarts=0`、三节点在线、串口/MQTT 在线，保持
+  `NTRIP_ENABLED=false`、runtime `probe`、聚合数 1。
+
 ## Compact V6 Low-Rate V2 Core Timing (2026-08-06)
 
 - 数据合同复审结论：核心 46 B/完整 64 B 线框没有可删除且能降低空口负载的字段；GNSS

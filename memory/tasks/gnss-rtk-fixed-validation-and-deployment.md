@@ -39,6 +39,21 @@ status: active
 - 该包为真实 UM220 GNSS、真实 RS485、Compact V6、LIVE-capable 但启动 `RTCM disabled`；
   不能把构建通过视为现场 RTK 通过，必须按物理标签匹配 A/B/C 后再验收。
 
+## Quick Hardware Core Gate (2026-08-06)
+
+- 用户上电 A/B/C 后，经 RK3568 反向 SSH 运行 20 秒 Compact V6 core 短测；报告仅保留在
+  RK3568：`/var/lib/lsmv2/experiments/xls1-compact-v6-layered-0020s-20260806-141155.json`，
+  SHA-256 `719cfb652e33f431596faf11ea847d22731a2a1aa9b36f1e1cca52400fd451b5`；汇总哈希
+  `b1861062eb54efd60f70be9a82788dd5d7c823b0d8bb2373e39e0706edf0a317`。
+- A/B/C 各完成 `13/13` core 轮次，`decode/wire-length/unmatched/duplicate/scope/profile`
+  错误均为 0，`stableProfile=true`。报告要求硬件 GNSS、64 B wire，RTCM 保持 disabled。
+- 端到端 gateway 到达间隔 P95 为 A/B/C `2355.9/2360.1/2356.4 ms`，命令延迟 P95 为
+  `1407.1/1749.4/2105.8 ms`；这是共享 XLS1 轮询到达节奏，不等于 RK2206 本地倾角
+  采样周期。短测证明当前三节点通信和 V6 解码链闭环正常，但不替代 600/1800 秒门禁。
+- 测试结束自动恢复网关，`active/running`、`NRestarts=0`、串口/MQTT 在线、A/B/C
+  `online`，`NTRIP_ENABLED=false`、runtime `probe`、聚合数 1；当前三节点 GGA 均为单点，
+  未开启 RTCM。
+
 ## Goal
 
 将已验证可 Fixed 的 3 套 UM220-IV NK + BT-760 部署为可追溯、资源可控的三节点 RTK 位移系统；先通过共享链路门禁，再实现 RK3568 专业位移算法、服务器长周期分析和现场诊断。
