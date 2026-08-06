@@ -70,6 +70,8 @@ const V5_RTCM_INJECTED_COUNT_SATURATED = 1 << 4;
 const V5_AGE_UNAVAILABLE = 0xffff;
 const V5_LEASE_RESOLUTION_MS = 100;
 const V5_COMPLETION_AGE_RESOLUTION_MS = 10;
+const RTK_TRUST_MAX_CORRECTION_AGE_MS = 6000;
+const RTK_TRUST_MAX_SOLUTION_AGE_MS = 2000;
 
 const DEVICE_IDS = [
   "",
@@ -303,7 +305,8 @@ function decodeCompactTelemetryV6(payload: Buffer): CompactTelemetry {
     if ((valid & (1 << 8)) !== 0) metrics.rtk_gst_sigma_lon_mm = payload.readUInt8(45);
     if (trusted && (ggaQuality !== 4 || coordinateFrameCode === 0 || (valid & (1 << 2)) === 0 ||
         (valid & (1 << 4)) === 0 || (valid & (1 << 5)) === 0 ||
-        Number(metrics.rtk_correction_age_ms) > 5000 || Number(metrics.rtk_solution_age_ms) > 2000)) {
+        Number(metrics.rtk_correction_age_ms) > RTK_TRUST_MAX_CORRECTION_AGE_MS ||
+        Number(metrics.rtk_solution_age_ms) > RTK_TRUST_MAX_SOLUTION_AGE_MS)) {
       throw new Error("compact telemetry v6 trusted RTK evidence violates the production gate");
     }
     meta.rtk_coordinate_frame = coordinateFrameName(coordinateFrameCode);
@@ -571,8 +574,8 @@ export function decodeCompactTelemetry(payload: Buffer): CompactTelemetry {
       (valid & V3_VALID_GNSS_POSITION) === 0 ||
       (valid & V3_VALID_CORRECTION_AGE) === 0 ||
       (fixFlags & GNSS_FIX_COORDINATE_FRAME_VALID) === 0 ||
-      payload.readUInt32BE(60) > 5000 ||
-      payload.readUInt32BE(64) > 2000
+      payload.readUInt32BE(60) > RTK_TRUST_MAX_CORRECTION_AGE_MS ||
+      payload.readUInt32BE(64) > RTK_TRUST_MAX_SOLUTION_AGE_MS
     )) {
       throw new Error(`compact telemetry ${versionLabel} trusted RTK evidence violates the production gate`);
     }

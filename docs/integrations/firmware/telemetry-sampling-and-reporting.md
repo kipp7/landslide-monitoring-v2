@@ -67,3 +67,17 @@ permalink: landslide-monitoring-v2-mainline/docs/integrations/firmware/telemetry
 
 - 单机链路压力主要来自 report_interval，而不是 sampling
 - 采样频率提升时，建议上报做窗口聚合（min/max/avg/last）
+
+## 6. RK2206 Compact V6 现场配置（2026-08-06）
+
+- 倾角与 GNSS 核心快照：目标 1 秒采样；健康链路按 4 秒内至少出现 2 个不同
+  `sample_epoch` 验收。
+- 电池、土壤温度、土壤含水率、土壤电导率 EC：10 秒采样。
+- 同一 RS485 周期固定先读倾角，再读土壤/EC。土壤/EC 使用 300 ms 超时、零重试，
+  单次失败只清除有效位，不上传 0，也不阻断 core。
+- 两次低频采样之间保留最近一次有效环境值；到达新的计划采样点后若读取失败，旧值
+  不再冒充新样本。
+- EC 初次不可用时每 6 次低频读取重新探测一次，约 60 秒。
+- Compact V6 的 core/environment/audit 均为 46 B payload、64 B 完整线框。固定布局下
+  删除字段不会减少空口字节，因此保留电池电压与百分比，以及坐标、GGA、差分龄、
+  解算龄、HDOP/GST、站号、Fixed 连续性和 RTCM 审计等专业证据。

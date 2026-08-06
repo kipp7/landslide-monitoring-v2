@@ -362,6 +362,17 @@ test("compact telemetry v3 rejects contradictory trusted RTK evidence", () => {
     /trusted RTK evidence violates/u
   );
 
+  const correctionAgeBoundary = Buffer.from(golden);
+  correctionAgeBoundary.writeUInt32BE(6000, 60);
+  assert.equal(decodeCompactTelemetry(correctionAgeBoundary).metrics.rtk_trusted, true);
+
+  const correctionAgeTooOld = Buffer.from(golden);
+  correctionAgeTooOld.writeUInt32BE(6001, 60);
+  assert.throws(
+    () => decodeCompactTelemetry(correctionAgeTooOld),
+    /trusted RTK evidence violates/u
+  );
+
   const mismatchedPosition = Buffer.from(golden);
   mismatchedPosition.writeUInt16BE(mismatchedPosition.readUInt16BE(6) & ~(1 << 5), 6);
   assert.throws(
@@ -438,6 +449,17 @@ test("compact telemetry v6 keeps each layered scope inside one 64-byte XLS1 fram
     rtk_gst_sigma_lat_mm: 6,
     rtk_gst_sigma_lon_mm: 7
   });
+
+  const correctionAgeBoundary = Buffer.from(core);
+  correctionAgeBoundary.writeUInt8(60, 42);
+  assert.equal(decodeCompactTelemetry(correctionAgeBoundary).metrics.rtk_trusted, true);
+
+  const correctionAgeTooOld = Buffer.from(core);
+  correctionAgeTooOld.writeUInt8(61, 42);
+  assert.throws(
+    () => decodeCompactTelemetry(correctionAgeTooOld),
+    /trusted RTK evidence violates/u
+  );
 
   const environmentDecoded = decodeCompactTelemetry(environment);
   assert.equal(environmentDecoded.meta.compact_scope, "environment");

@@ -42,12 +42,30 @@ most recent P1 commands and suppresses repeated delivery before entering a
 response slot. RK3568 keeps the round open for at most 6500 ms, closes it as
 soon as A/B/C are complete, and waits 250 ms before the next session. Production
 does not send P2: field evidence showed that P2 never beat the original P1 and
-only created redundant frames. A completed logical core round may schedule at
-most one targeted extension. P3
-is selected every 30 completed core rounds; P4 is selected every 60 and has
-priority when both are due. Extension targets rotate A/B/C. An extension never
-overlaps a core/recovery window, another scoped poll, a normal command, or an
-RTCM write.
+only created redundant frames. P3 is selected every 30 completed core rounds;
+P4 is selected every 60. When both are due, both enter the bounded pending
+queue in audit/environment order instead of dropping environment. Extension
+targets rotate A/B/C. A 2000 ms core-dispatch deadline preempts queued
+extensions and RTCM data, so an extension never starves core. An extension
+never overlaps a core/recovery window, another scoped poll, a normal command,
+or an RTCM write.
+
+## Acquisition Cadence And Failure Isolation
+
+- Hardware tilt and the latest GNSS solution are sampled on the 1-second core
+  loop. Tilt owns the RS485 bus before every low-rate path.
+- PC0 battery and soil temperature/moisture/EC are sampled every 10 seconds.
+  The last valid environment value remains available between scheduled reads.
+- A scheduled soil/EC read has a 300 ms response timeout and no retry. Failure
+  clears that reading's validity instead of publishing zero and cannot delay
+  the tilt request that already completed in the same cycle.
+- Optional EC capability is rechecked after six low-rate reads, approximately
+  one minute, preserving the former recovery interval after the cadence change.
+- The 80 ms Modbus inter-request gap is used only when another selected path
+  follows. A tilt-only core cycle does not pay an unnecessary trailing delay.
+- Compact V6 remains `46 B payload / 64 B complete frame`; no professional RTK
+  evidence was removed because deleting fixed-layout fields would not reduce
+  airtime.
 
 ## Snapshot And Merge Rules
 
@@ -131,8 +149,11 @@ Every stage requires:
 - per-node core arrival P95 `<=2500 ms`;
 - per-node core command-to-telemetry P95 `<=2500 ms` and maximum `<=6500 ms`;
 - valid hardware tilt in core;
+- every node produces at least two distinct core `sample_epoch` values in each
+  four-second healthy observation window;
 - valid field-calibrated battery and complete soil temperature/moisture/EC in
-  environment;
+  at least one explicit environment capability sample per node; an individual
+  low-rate timeout is recorded as missing data and must not fail a core round;
 - simulated GNSS explicitly untrusted and displacement-ineligible;
 - audit RTCM exactly disabled/ready-only, with zero session, lease, queue,
   injection count, and error summary.

@@ -18,6 +18,44 @@ status: active
 
 ## Current State
 
+### Low-Rate Environment V1 Implemented; Build And Flash Gate Next (2026-08-06)
+
+- 固件和 RK3568 已完成同版源代码调整：倾角/GNSS 1 秒，电池/土壤温度/含水率/EC
+  10 秒；倾角优先于土壤，低频 `300 ms / 0 retry`，无效数据缺失而不是 0。
+- EC 初次不可用后的复探测为每 6 个环境周期，约 60 秒；倾角单独读取不再支付末尾
+  80 ms 空等。现有专业 GNSS、供电和 RTCM 字段全部保留，线框仍为 64 B。
+- 网关 2 秒 core 截止会推迟 RTCM/P3/P4；重合的 P4/P3 均保存并依次发送，避免 audit
+  长期压掉 environment。网关 build/lint/`76/76` 和 RK2206 C99/静态门禁均通过。
+- 待办顺序：完成 OpenHarmony A/B/C 同源构建和 release 校验；用户烧录后先在
+  `NTRIP_ENABLED=false` 下检查每节点 4 秒至少两个不同 core epoch，再跑真实 RTCM
+  混合负载。混合门禁保持 `GGA=4 / correction age <=6 s / solution age <=2 s`。
+- 正式镜像路径和 SHA-256 尚未产生；在记录发布目录与 manifest 前，本任务状态仍为
+  active，不能把当前源码包当作可烧录发布物。
+
+### 1800-Second Recheck Completed; B FIXED Window Is Not Yet Production-Grade (2026-08-06)
+
+- 保留生产候选参数完成真实 caster 1800 秒 LIVE；`120 s` 只是报告最终尾窗。结果为
+  `5712 caster / 3282 inner / 1570 outer / 303/303 polls`，CRC、写入、轮询超时、
+  schema、交织错误全为 0，网关服务 `NRestarts=0`。
+- A/B/C 全窗口 `GGA=4` 样本为 `0/14/0`。B 从 elapsed 1221 秒固定到 1355 秒，约
+  134 秒后退回 FLOAT；最终 120 秒三节点均 `0/12`。系统证明仍可厘米级 FIXED，但
+  当前固定时间和保持率不足，禁止据此建立专业 ENU 基线或宣布厘米级验收通过。
+- B 在 4--6 秒 correction age 下完成并保持 FIXED，说明 5 秒不是硬阻断；B 退回
+  FLOAT 时 age 为 4 秒，完整序列后续才出现 A/B/C `14/15/16 s` 峰值。因此 age 偏高
+  会降低裕量，但不能单独解释本次失锁。
+- V7 逐节点复核保持 `completion->dequeue P95 <=20 ms / UART write P95 <=10 ms /
+  completion->write P95 <=50 ms`，最大仅 A/B/C `53/37/34 ms`，GNSS UART 错误为 0。
+  A/B 停止边界各有 2 个 queue expiry，C 无；无 eviction、partial/write error 或监控
+  窗口内写失败。共享 RK3568/RK2206/XLS1 传输不再是当前 FIXED 保持失败的候选根因。
+- 权威报告：
+  `/var/lib/lsmv2/experiments/g3s-v7-g3b4-live1800-20260806-011454.json`；monitor SHA-256
+  `64e841e18c49338396edf92b082250ac9379e9a994e4fcc77f8e7f70fb9e19d7`。
+- 下一步保持固件和传输参数不变，先把单节点放到真正无遮挡、远离墙体/屋檐/金属和
+  潮湿反射面的位置运行对照；同一位置再轮换 A/B/C，可分离天线摆放与接收机个体差异。
+  只有该对照仍出现共同 age/失锁，才继续核对 RTCM 观测历元和 UM220 内部应用口径。
+- 测试结束已恢复 `NTRIP_ENABLED=false`、runtime probe、聚合 1，服务 active；真实账号、
+  密码、坐标和原始 RTCM 均未写入仓库、memory 或报告。
+
 ### G3S V7 True Field Attribution Complete; Positioning Gate Failed (2026-08-06)
 
 - A/B/C 不可变 G3S V7 已烧录并通过硬件诊断：UM220 均锁定 `115200`，GNSS UART

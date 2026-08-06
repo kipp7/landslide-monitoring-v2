@@ -2,10 +2,11 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 
 const {
+  compactLayeredCorePollOverdue,
   isCompactLayeredPortBusy,
   layeredBroadcastAcceptsScope,
   matchesActiveScopedPoll,
-  nextCompactLayeredExtensionScope
+  nextCompactLayeredExtensionScopes
 } = require("../dist/compact-layered-scheduler.js");
 const {
   buildCompactBroadcastPollCommand,
@@ -55,19 +56,46 @@ test("layered extensions never overlap a core or another scoped window", () => {
   }
 });
 
-test("each completed core round schedules at most one extension with audit priority", () => {
+test("coincident audit and environment rounds preserve both low-rate scopes", () => {
   const scopes = Array.from({ length: 30 }, (_, index) =>
-    nextCompactLayeredExtensionScope({
+    nextCompactLayeredExtensionScopes({
       completedCoreRounds: index + 1,
       environmentEveryRounds: 3,
       auditEveryRounds: 15
     })
-  );
+  ).flat();
 
   assert.equal(scopes[2], "environment");
-  assert.equal(scopes[14], "audit");
-  assert.equal(scopes[29], "audit");
-  assert.equal(scopes.filter((scope) => scope === "environment").length, 8);
+  assert.equal(scopes.filter((scope) => scope === "environment").length, 10);
   assert.equal(scopes.filter((scope) => scope === "audit").length, 2);
-  assert.ok(scopes.every((scope) => scope === null || typeof scope === "string"));
+  assert.deepEqual(
+    nextCompactLayeredExtensionScopes({
+      completedCoreRounds: 30,
+      environmentEveryRounds: 3,
+      auditEveryRounds: 15
+    }),
+    ["audit", "environment"]
+  );
+});
+
+test("the core deadline preempts low-rate work after two seconds", () => {
+  assert.equal(compactLayeredCorePollOverdue({
+    nowMs: 1000,
+    lastCorePollDispatchedAtMs: null,
+    deadlineMs: 2000
+  }), true);
+  assert.equal(compactLayeredCorePollOverdue({
+    nowMs: 2999,
+    lastCorePollDispatchedAtMs: 1000,
+    deadlineMs: 2000
+  }), false);
+  assert.equal(compactLayeredCorePollOverdue({
+    nowMs: 3000,
+    lastCorePollDispatchedAtMs: 1000,
+    deadlineMs: 2000
+  }), true);
+  assert.throws(
+    () => compactLayeredCorePollOverdue({ nowMs: -1, lastCorePollDispatchedAtMs: null, deadlineMs: 2000 }),
+    /nowMs/u
+  );
 });

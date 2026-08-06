@@ -78,6 +78,7 @@
 #define DATA_UPLOAD_IDLE_CHECK_INTERVAL_MS PERIODIC_UPLOAD_IDLE_CHECK_INTERVAL_MS
 #endif
 #define UPLOAD_INTERVAL_MS  5000        // Periodic-mode interval; polled mode uploads only on request
+#define ENVIRONMENT_SAMPLE_INTERVAL_MS 10000U // Battery and soil/EC are low-rate health/environment signals
 #define MAX_RETRY_COUNT     3           // Retry 3 times if send fails
 #define RETRY_DELAY_MS      500         // Wait 500ms between retries
 #define ACK_TIMEOUT_MS      1000        // Wait 1s for ACK from gateway
@@ -101,7 +102,7 @@
 #define SLEEP_AFTER_SEND    0           // Sleep after each send (low power)
 
 // Version marker
-#define FIRMWARE_SAMPLE_VERSION "v1.8-um220-rs485-rtk-compact-v6-rtcm-batch-v1-g3s-v7"
+#define FIRMWARE_SAMPLE_VERSION "v1.9-um220-rs485-rtk-compact-v6-lowrate-v1"
 
 // Bring-up diagnostic mode:
 // 1 = only print a boot heartbeat on the debug UART; do not initialize sensors or XL01.
@@ -284,8 +285,10 @@
 #define RS485_CHANNEL_2       1           // SC16IS752 UART B -> U8 -> J7
 #define RS485_BAUDRATE        4800        // Soil and tilt manuals: factory default 4800 8N1
 #define RS485_RESPONSE_TIMEOUT_MS 800
+#define RS485_LOW_PRIORITY_RESPONSE_TIMEOUT_MS 300U
 #define RS485_INTER_REQUEST_GAP_MS 80
 #define RS485_SENSOR_READ_MAX_RETRIES 1U  // One bounded retry for transient read-path errors only
+#define RS485_LOW_PRIORITY_READ_MAX_RETRIES 0U
 #define RS485_SENSOR_READ_RETRY_GAP_MS 80U
 #define RS485_COLLECTION_PATH_LIMIT 4U
 #define RS485_COLLECTION_WATCHDOG_MARGIN_MS 1000U
@@ -297,6 +300,9 @@
      (RS485_SINGLE_PATH_WORST_CASE_MS + RS485_INTER_REQUEST_GAP_MS))
 #if RS485_SENSOR_READ_MAX_RETRIES > 1U
 #error "RS485 sensor retries must remain bounded to at most one retry"
+#endif
+#if ENVIRONMENT_SAMPLE_INTERVAL_MS < 1000U
+#error "Low-rate environment sampling must not compete with the 1-second core loop"
 #endif
 #if POLL_REQUEST_CHECK_INTERVAL_MS == 0U
 #error "Polled upload request checks require a positive interval"
@@ -342,7 +348,7 @@
 #define RS485_SOIL_HAS_EC      1
 #define RS485_SOIL_EC_REG      0x0002
 #define RS485_SOIL_EC_SCALE    1.0f
-#define RS485_SOIL_EC_REPROBE_READS 60U
+#define RS485_SOIL_EC_REPROBE_READS 6U // Six 10-second environment reads keep the reprobe near one minute
 #define RS485_SOIL_CHANNEL     RS485_CHANNEL_1
 
 // RS-DIP-N01-1 tilt sensor manual: factory address 1, 4800 8N1.

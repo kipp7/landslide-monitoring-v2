@@ -163,6 +163,7 @@ static int ReadRegistersWithRetry(
     uint16_t *regs,
     unsigned int reg_capacity,
     unsigned int timeout_ms,
+    unsigned int max_retries,
     FieldRs485PathCycleDiagnostics *path_diagnostics)
 {
     unsigned int retries_used = 0U;
@@ -183,7 +184,7 @@ static int ReadRegistersWithRetry(
             LogPathReadResult(path_index, channel, path_diagnostics);
             return status;
         }
-        if (!RS485_ReadShouldRetry(status, retries_used, RS485_SENSOR_READ_MAX_RETRIES)) {
+        if (!RS485_ReadShouldRetry(status, retries_used, max_retries)) {
             LogPathReadResult(path_index, channel, path_diagnostics);
             return status;
         }
@@ -215,6 +216,7 @@ static int ReadTiltRegistersWithFunction(
         regs,
         reg_capacity,
         timeout_ms,
+        RS485_SENSOR_READ_MAX_RETRIES,
         path_diagnostics);
 }
 
@@ -553,9 +555,13 @@ void FieldRs485_RunDiagnostics(void)
 #endif
 }
 
-int FieldRs485_Read(FieldRs485Readings *out)
+int FieldRs485_ReadSelected(FieldRs485Readings *out, uint8_t requested_mask)
 {
     int any_valid = 0;
+    int read_soil;
+    int read_soil_ec;
+    int read_tilt;
+    int read_rain;
     uint64_t collection_started_ms;
     uint64_t collection_completed_ms;
     uint64_t collection_duration_ms;
@@ -564,124 +570,42 @@ int FieldRs485_Read(FieldRs485Readings *out)
         return -1;
     }
 
+    requested_mask &= FIELD_RS485_PATH_ALL_MASK;
+    read_soil = (requested_mask & FIELD_RS485_PATH_SOIL_MASK) != 0U;
+    read_soil_ec = (requested_mask & FIELD_RS485_PATH_SOIL_EC_MASK) != 0U;
+    read_tilt = (requested_mask & FIELD_RS485_PATH_TILT_MASK) != 0U;
+    read_rain = (requested_mask & FIELD_RS485_PATH_RAIN_MASK) != 0U;
+
     memset(out, 0, sizeof(*out));
     collection_started_ms = FieldRs485MonotonicMs();
     FieldRs485_PathCycleInit(
         &out->cycle_diagnostics.paths[FIELD_RS485_PATH_SOIL_INDEX],
-        ENABLE_RS485_SOIL_SENSOR);
+        ENABLE_RS485_SOIL_SENSOR && read_soil);
     FieldRs485_PathCycleInit(
         &out->cycle_diagnostics.paths[FIELD_RS485_PATH_SOIL_EC_INDEX],
-        ENABLE_RS485_SOIL_SENSOR && RS485_SOIL_HAS_EC);
+        ENABLE_RS485_SOIL_SENSOR && RS485_SOIL_HAS_EC && read_soil_ec);
     FieldRs485_PathCycleInit(
         &out->cycle_diagnostics.paths[FIELD_RS485_PATH_TILT_INDEX],
-        ENABLE_RS485_TILT_SENSOR);
+        ENABLE_RS485_TILT_SENSOR && read_tilt);
     FieldRs485_PathCycleInit(
         &out->cycle_diagnostics.paths[FIELD_RS485_PATH_RAIN_INDEX],
-        ENABLE_RS485_RAIN_SENSOR);
+        ENABLE_RS485_RAIN_SENSOR && read_rain);
 #if ENABLE_RS485_SOIL_SENSOR
-    out->cycle_diagnostics.enabled_mask |= FIELD_RS485_PATH_SOIL_MASK;
+    if (read_soil) out->cycle_diagnostics.enabled_mask |= FIELD_RS485_PATH_SOIL_MASK;
 #if RS485_SOIL_HAS_EC
-    out->cycle_diagnostics.enabled_mask |= FIELD_RS485_PATH_SOIL_EC_MASK;
+    if (read_soil_ec) out->cycle_diagnostics.enabled_mask |= FIELD_RS485_PATH_SOIL_EC_MASK;
 #endif
 #endif
 #if ENABLE_RS485_TILT_SENSOR
-    out->cycle_diagnostics.enabled_mask |= FIELD_RS485_PATH_TILT_MASK;
+    if (read_tilt) out->cycle_diagnostics.enabled_mask |= FIELD_RS485_PATH_TILT_MASK;
 #endif
 #if ENABLE_RS485_RAIN_SENSOR
-    out->cycle_diagnostics.enabled_mask |= FIELD_RS485_PATH_RAIN_MASK;
-#endif
-
-#if ENABLE_RS485_SOIL_SENSOR
-    {
-#if RS485_SOIL_HAS_EC
-        static int soil_ec_supported = 0;
-        static int soil_ec_unavailable_reported = 0;
-        static unsigned int soil_ec_reprobe_countdown = 0U;
-#endif
-        uint16_t regs[RS485_SOIL_REG_COUNT] = {0};
-        (void)ReconfigureRs485ChannelWithClock(RS485_SOIL_CHANNEL, RS485_BAUDRATE, SC16IS752_XTAL_HZ);
-        if (ReadRegistersWithRetry(
-                FIELD_RS485_PATH_SOIL_INDEX,
-                RS485_SOIL_CHANNEL,
-                MODBUS_FC_READ_HOLDING_REGISTERS,
-                RS485_SOIL_ADDR,
-                RS485_SOIL_REG_START,
-                RS485_SOIL_REG_COUNT,
-                regs,
-                RS485_SOIL_REG_COUNT,
-                RS485_RESPONSE_TIMEOUT_MS,
-                &out->cycle_diagnostics.paths[FIELD_RS485_PATH_SOIL_INDEX]) == 0) {
-            out->soil_moisture_pct =
-                (float)regs[RS485_SOIL_MOISTURE_REG_INDEX] * RS485_SOIL_MOISTURE_SCALE;
-            out->soil_temperature_c =
-                SignedRegisterToScaledFloat(regs[RS485_SOIL_TEMPERATURE_REG_INDEX], RS485_SOIL_TEMPERATURE_SCALE);
-            out->soil_valid = 1;
-            any_valid = 1;
-#if RS485_SOIL_HAS_EC
-            if (soil_ec_supported || soil_ec_reprobe_countdown == 0U) {
-                uint16_t ec_reg = 0;
-                int ec_read_ret;
-
-                LOS_Msleep(RS485_INTER_REQUEST_GAP_MS);
-                ec_read_ret = ReadRegistersWithRetry(
-                    FIELD_RS485_PATH_SOIL_EC_INDEX,
-                    RS485_SOIL_CHANNEL,
-                    MODBUS_FC_READ_HOLDING_REGISTERS,
-                    RS485_SOIL_ADDR,
-                    RS485_SOIL_EC_REG,
-                    1,
-                    &ec_reg,
-                    1,
-                    RS485_RESPONSE_TIMEOUT_MS,
-                    &out->cycle_diagnostics.paths[FIELD_RS485_PATH_SOIL_EC_INDEX]);
-                if (ec_read_ret == 0) {
-                    if (!soil_ec_supported) {
-                        printf("[RS485 SOIL] optional EC register detected at 0x%04X\n", RS485_SOIL_EC_REG);
-                    }
-                    soil_ec_supported = 1;
-                    soil_ec_unavailable_reported = 0;
-                    soil_ec_reprobe_countdown = 0U;
-                    out->soil_ec_us_cm = (float)ec_reg * RS485_SOIL_EC_SCALE;
-                    out->soil_ec_valid = 1;
-                } else if (!soil_ec_supported) {
-                    soil_ec_reprobe_countdown = RS485_SOIL_EC_REPROBE_READS;
-                    if (!soil_ec_unavailable_reported) {
-                        printf("[RS485 SOIL] optional EC register unavailable; base temperature/moisture remain active\n");
-                        soil_ec_unavailable_reported = 1;
-                    }
-                }
-            }
-            if (!soil_ec_supported && soil_ec_reprobe_countdown > 0U) {
-                soil_ec_reprobe_countdown--;
-            }
-#endif
-#if RS485_SENSOR_RESULT_LOG
-            if (out->soil_ec_valid) {
-                printf("[RS485 SOIL] ch=%u addr=%u temp=%.*fC moisture=%.*f%% ec=%.0fuS/cm\n",
-                       RS485_SOIL_CHANNEL,
-                       RS485_SOIL_ADDR,
-                       RS485_SOIL_TEMPERATURE_DECIMALS,
-                       out->soil_temperature_c,
-                       RS485_SOIL_MOISTURE_DECIMALS,
-                       out->soil_moisture_pct,
-                       out->soil_ec_us_cm);
-            } else {
-                printf("[RS485 SOIL] ch=%u addr=%u temp=%.*fC moisture=%.*f%% ec=N/A\n",
-                       RS485_SOIL_CHANNEL,
-                       RS485_SOIL_ADDR,
-                       RS485_SOIL_TEMPERATURE_DECIMALS,
-                       out->soil_temperature_c,
-                       RS485_SOIL_MOISTURE_DECIMALS,
-                       out->soil_moisture_pct);
-            }
-#endif
-        }
-        LOS_Msleep(RS485_INTER_REQUEST_GAP_MS);
-    }
+    if (read_rain) out->cycle_diagnostics.enabled_mask |= FIELD_RS485_PATH_RAIN_MASK;
 #endif
 
 #if ENABLE_RS485_TILT_SENSOR
-    {
+    /* Core displacement evidence always gets the bus before low-rate paths. */
+    if (read_tilt) {
 #if RS485_TILT_AUTO_PROBE
         static int tilt_probe_done = 0;
         static int tilt_probe_ok = 0;
@@ -771,12 +695,107 @@ int FieldRs485_Read(FieldRs485Readings *out)
                    out->tilt_z_deg);
 #endif
         }
-        LOS_Msleep(RS485_INTER_REQUEST_GAP_MS);
+        if (read_soil || read_rain) {
+            LOS_Msleep(RS485_INTER_REQUEST_GAP_MS);
+        }
+    }
+#endif
+
+#if ENABLE_RS485_SOIL_SENSOR
+    if (read_soil) {
+#if RS485_SOIL_HAS_EC
+        static int soil_ec_supported = 0;
+        static int soil_ec_unavailable_reported = 0;
+        static unsigned int soil_ec_reprobe_countdown = 0U;
+#endif
+        uint16_t regs[RS485_SOIL_REG_COUNT] = {0};
+        (void)ReconfigureRs485ChannelWithClock(RS485_SOIL_CHANNEL, RS485_BAUDRATE, SC16IS752_XTAL_HZ);
+        if (ReadRegistersWithRetry(
+                FIELD_RS485_PATH_SOIL_INDEX,
+                RS485_SOIL_CHANNEL,
+                MODBUS_FC_READ_HOLDING_REGISTERS,
+                RS485_SOIL_ADDR,
+                RS485_SOIL_REG_START,
+                RS485_SOIL_REG_COUNT,
+                regs,
+                RS485_SOIL_REG_COUNT,
+                RS485_LOW_PRIORITY_RESPONSE_TIMEOUT_MS,
+                RS485_LOW_PRIORITY_READ_MAX_RETRIES,
+                &out->cycle_diagnostics.paths[FIELD_RS485_PATH_SOIL_INDEX]) == 0) {
+            out->soil_moisture_pct =
+                (float)regs[RS485_SOIL_MOISTURE_REG_INDEX] * RS485_SOIL_MOISTURE_SCALE;
+            out->soil_temperature_c =
+                SignedRegisterToScaledFloat(regs[RS485_SOIL_TEMPERATURE_REG_INDEX], RS485_SOIL_TEMPERATURE_SCALE);
+            out->soil_valid = 1;
+            any_valid = 1;
+#if RS485_SOIL_HAS_EC
+            if (read_soil_ec && (soil_ec_supported || soil_ec_reprobe_countdown == 0U)) {
+                uint16_t ec_reg = 0;
+                int ec_read_ret;
+
+                LOS_Msleep(RS485_INTER_REQUEST_GAP_MS);
+                ec_read_ret = ReadRegistersWithRetry(
+                    FIELD_RS485_PATH_SOIL_EC_INDEX,
+                    RS485_SOIL_CHANNEL,
+                    MODBUS_FC_READ_HOLDING_REGISTERS,
+                    RS485_SOIL_ADDR,
+                    RS485_SOIL_EC_REG,
+                    1,
+                    &ec_reg,
+                    1,
+                    RS485_LOW_PRIORITY_RESPONSE_TIMEOUT_MS,
+                    RS485_LOW_PRIORITY_READ_MAX_RETRIES,
+                    &out->cycle_diagnostics.paths[FIELD_RS485_PATH_SOIL_EC_INDEX]);
+                if (ec_read_ret == 0) {
+                    if (!soil_ec_supported) {
+                        printf("[RS485 SOIL] optional EC register detected at 0x%04X\n", RS485_SOIL_EC_REG);
+                    }
+                    soil_ec_supported = 1;
+                    soil_ec_unavailable_reported = 0;
+                    soil_ec_reprobe_countdown = 0U;
+                    out->soil_ec_us_cm = (float)ec_reg * RS485_SOIL_EC_SCALE;
+                    out->soil_ec_valid = 1;
+                } else if (!soil_ec_supported) {
+                    soil_ec_reprobe_countdown = RS485_SOIL_EC_REPROBE_READS;
+                    if (!soil_ec_unavailable_reported) {
+                        printf("[RS485 SOIL] optional EC register unavailable; base temperature/moisture remain active\n");
+                        soil_ec_unavailable_reported = 1;
+                    }
+                }
+            }
+            if (!soil_ec_supported && soil_ec_reprobe_countdown > 0U) {
+                soil_ec_reprobe_countdown--;
+            }
+#endif
+#if RS485_SENSOR_RESULT_LOG
+            if (out->soil_ec_valid) {
+                printf("[RS485 SOIL] ch=%u addr=%u temp=%.*fC moisture=%.*f%% ec=%.0fuS/cm\n",
+                       RS485_SOIL_CHANNEL,
+                       RS485_SOIL_ADDR,
+                       RS485_SOIL_TEMPERATURE_DECIMALS,
+                       out->soil_temperature_c,
+                       RS485_SOIL_MOISTURE_DECIMALS,
+                       out->soil_moisture_pct,
+                       out->soil_ec_us_cm);
+            } else {
+                printf("[RS485 SOIL] ch=%u addr=%u temp=%.*fC moisture=%.*f%% ec=N/A\n",
+                       RS485_SOIL_CHANNEL,
+                       RS485_SOIL_ADDR,
+                       RS485_SOIL_TEMPERATURE_DECIMALS,
+                       out->soil_temperature_c,
+                       RS485_SOIL_MOISTURE_DECIMALS,
+                       out->soil_moisture_pct);
+            }
+#endif
+        }
+        if (read_rain) {
+            LOS_Msleep(RS485_INTER_REQUEST_GAP_MS);
+        }
     }
 #endif
 
 #if ENABLE_RS485_RAIN_SENSOR
-    {
+    if (read_rain) {
         uint16_t regs[RS485_RAIN_REG_COUNT] = {0};
         if (ReadRegistersWithRetry(
                 FIELD_RS485_PATH_RAIN_INDEX,
@@ -788,13 +807,13 @@ int FieldRs485_Read(FieldRs485Readings *out)
                 regs,
                 RS485_RAIN_REG_COUNT,
                 RS485_RESPONSE_TIMEOUT_MS,
+                RS485_SENSOR_READ_MAX_RETRIES,
                 &out->cycle_diagnostics.paths[FIELD_RS485_PATH_RAIN_INDEX]) == 0) {
             out->rain_total_mm = (float)regs[0] * RS485_RAIN_TOTAL_SCALE;
             out->rain_valid = 1;
             any_valid = 1;
             printf("[RS485 RAIN] total=%.1fmm\n", out->rain_total_mm);
         }
-        LOS_Msleep(RS485_INTER_REQUEST_GAP_MS);
     }
 #endif
 
@@ -817,6 +836,11 @@ int FieldRs485_Read(FieldRs485Readings *out)
         UINT32_MAX : (uint32_t)collection_duration_ms;
 
     return any_valid ? 0 : -1;
+}
+
+int FieldRs485_Read(FieldRs485Readings *out)
+{
+    return FieldRs485_ReadSelected(out, FIELD_RS485_PATH_ALL_MASK);
 }
 
 void FieldRs485_GetDiagnostics(FieldRs485Diagnostics *snapshot)

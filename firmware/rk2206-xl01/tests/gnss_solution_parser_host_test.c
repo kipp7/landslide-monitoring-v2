@@ -22,6 +22,7 @@ static int Push(GnssSolutionParser *parser, const char *body, unsigned int now_m
 int main(void)
 {
     GnssSolutionParser parser;
+    GnssSolutionParser boundary_parser;
     GnssSolutionSnapshot solution;
 
     GnssSolutionParser_Init(&parser, GNSS_COORDINATE_FRAME_CGCS2000);
@@ -78,6 +79,19 @@ int main(void)
     assert(GnssSolutionParser_GetSnapshot(&parser, 4050U, &solution) == 0);
     assert((solution.fix_flags & GNSS_FIX_TIME_VALID) == 0U);
     assert(GnssSolutionParser_GetSnapshot(&parser, 19001U, &solution) == -1);
+
+    /* The production displacement gate includes 6000 ms and rejects 6001 ms. */
+    GnssSolutionParser_Init(&boundary_parser, GNSS_COORDINATE_FRAME_CGCS2000);
+    assert(Push(&boundary_parser,
+        "GNGGA,083602.00,2234.89234567,N,11356.12345678,E,4,31,0.52,12.345,M,-2.345,M,6.0,82", 5000U) == 1);
+    assert(GnssSolutionParser_GetSnapshot(&boundary_parser, 5000U, &solution) == 0);
+    assert(solution.correction_age_ms == 6000U);
+    assert((solution.fix_flags & GNSS_FIX_TRUSTED) != 0U);
+    assert(Push(&boundary_parser,
+        "GNGGA,083603.00,2234.89234567,N,11356.12345678,E,4,31,0.52,12.345,M,-2.345,M,6.001,82", 6000U) == 1);
+    assert(GnssSolutionParser_GetSnapshot(&boundary_parser, 6000U, &solution) == 0);
+    assert(solution.correction_age_ms == 6001U);
+    assert((solution.fix_flags & GNSS_FIX_TRUSTED) == 0U);
 
     assert(GnssSolutionParser_PushNmea(&parser,
         "$GNGGA,083602.00,2234.0,N,11356.0,E,4,20,0.8,1.0,M,0.0,M,1.0,1*00", 4000U) == -1);

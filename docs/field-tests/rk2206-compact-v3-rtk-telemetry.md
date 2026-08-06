@@ -135,7 +135,7 @@ RK2206 only sets `GNSS_FIX_TRUSTED` when all conditions are true:
 - the current checksum-valid GGA reports quality `4` (RTK Fixed);
 - latitude and longitude parsed successfully;
 - the configured coordinate frame is known;
-- correction age is present and no greater than 5000 ms;
+- correction age is present and no greater than 6000 ms;
 - local solution age is no greater than 2000 ms.
 
 RK3568 independently validates the same conditions and rejects contradictory

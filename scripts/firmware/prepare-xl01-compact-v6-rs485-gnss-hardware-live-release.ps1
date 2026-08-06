@@ -2,7 +2,7 @@
 param(
   [string]$SdkRoot = "F:\2\openharmony\txsmartropenharmony",
   [string]$ContainerName = "openharmony-dev",
-  [string]$ReleaseDirectory = "F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v6_rtcm_batch_v1_rs485_gnss_hardware_live_20260805",
+  [string]$ReleaseDirectory = "F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v6_lowrate_v1_rs485_gnss_hardware_live_20260806",
   [string]$BatteryCalibrationFile = "",
   [ValidateSet("A", "B", "C")]
   [string[]]$NodeLabels = @("A", "B", "C")
@@ -17,7 +17,7 @@ if ([string]::IsNullOrWhiteSpace($BatteryCalibrationFile)) {
 $resolvedCalibration = (Resolve-Path -LiteralPath $BatteryCalibrationFile -ErrorAction Stop).Path
 $releaseRoot = [System.IO.Path]::GetFullPath($ReleaseDirectory)
 $stagingRoot = Join-Path ([System.IO.Path]::GetTempPath()) `
-  ("rk2206-compact-v6-rtcm-batch-v1-hardware-live-" + [guid]::NewGuid().ToString("N"))
+  ("rk2206-compact-v6-lowrate-v1-hardware-live-" + [guid]::NewGuid().ToString("N"))
 $builder = Join-Path $PSScriptRoot "build-xl01-compact-v6.ps1"
 $verifier = Join-Path $PSScriptRoot "verify-rk2206-release-safety.ps1"
 $rollbackRelease = "F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v6_protected_p1_rs485_gnss_simulated_20260804"
@@ -30,7 +30,7 @@ $gates = @(
   "test-rk2206-release-marker-source-safety.ps1",
   "test-rk2206-snapshot-atomicity.ps1"
 )
-$expectedFirmwareMarker = "fw-rk2206-rtk-compact-v6-rtcm-batch-v1-g3s-v7-live-20260805"
+$expectedFirmwareMarker = "fw-rk2206-rtk-compact-v6-lowrate-v1-live-20260806"
 
 function Assert-AsciiMarker {
   param(
@@ -117,7 +117,7 @@ try {
   }
 
   $instructions = @"
-Compact V6 protected-P1 + RTCM G3B v1 + G3S V7 hardware GNSS LIVE-capable release
+Compact V6 protected-P1 + 10-second low-rate sensors + RTCM G3B v1 + G3S V7 hardware GNSS LIVE-capable release
 
 Truth profile
   - XLS1 PB2/PB3: real
@@ -129,6 +129,8 @@ Truth profile
   - On-demand diagnostics: G3S V7 bounded node queue and UM220 UART latency histograms
   - Runtime modes: DISABLED -> PROBE -> LIVE under a fresh 15..300 s lease
   - Polling: protected single P1, no production P2 recovery
+  - Acquisition: tilt/GNSS 1 s; battery/soil/EC 10 s; tilt is read first
+  - Low-rate RS485: 300 ms timeout, no retry, missing data is never encoded as zero
   - Every telemetry payload: 46 bytes; every complete telemetry frame: 64 bytes
 
 Flash only the image matching physical node A/B/C. Do not enable NTRIP before
@@ -146,7 +148,8 @@ Fast fail-closed field sequence
      Then set RTCM_MAX_FRAGMENTS_PER_FIELD_FRAME=2 and repeat PROBE; a G3B batch
      consumes one field-link burst unit while accepted fragment deltas count both.
   5. Only after PROBE passes, arm LIVE with a bounded lease. Require sustained
-     GGA quality 4, correction age <=5 s, trustworthy GST, and no stale session.
+     GGA quality 4, correction age <=6 s, solution age <=2 s, trustworthy GST,
+     and no stale session.
   6. Run the final 1800-second mixed-load gate before accepting centimetre RTK.
 
 This image is flashed once. Mode changes use fail-closed runtime leases; reboot

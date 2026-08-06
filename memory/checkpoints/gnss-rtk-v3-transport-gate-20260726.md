@@ -18,6 +18,53 @@ status: active
 
 ## Last Confirmed State
 
+### Compact V6 Low-Rate V1 Source Gate Passed; Hardware Flash Pending (2026-08-06)
+
+- 同一个 Compact V6 线框内完成采样分层：倾角和 GNSS 保持 1 秒核心采样；PC0 电池、
+  土壤温度、含水率和 EC 改为 10 秒。SHT30、MPU6050 和雨量仍不进入当前合同。
+- RS485 每轮先读倾角，再读低频土壤/EC。低频路径固定 `300 ms / 0 retry`；单次失败
+  清除有效位且不上传伪造 0，两次计划读取之间保留最近有效值。EC 不可用后的重新探测
+  从 60 次改为 6 次低频读取，仍约为 60 秒。
+- 仅当后面还有 RS485 请求时保留 80 ms 间隔，倾角单独采集不再额外空等。Compact V6
+  仍为 `46 B payload / 64 B wire`，GNSS 专业证据和电池双指标不删，因为固定线框下删
+  字段不减少空口负载。
+- RK3568 新增 2 秒 core dispatch 截止；到期时 core 优先于 RTCM 和 P3/P4。P3/P4 同时
+  到期时均排队，先 audit 后 environment，不再丢 environment。
+- 源码标识为 `v1.9-um220-rs485-rtk-compact-v6-lowrate-v1` /
+  `fw-rk2206-rtk-compact-v6-lowrate-v1-live-20260806`。网关 build、lint、`76/76` 测试、
+  RK2206 C99 host tests、采样周期、引脚、RS485 启动、TX 顺序、marker 与原子快照门禁
+  均已通过；A/B/C OpenHarmony 正式镜像尚未生成，不能让现场烧录。
+- 下一步从同一 clean commit 构建 A/B/C，再真机先关闭 RTCM 验收：每节点任意健康 4 秒
+  至少两个不同 `sample_epoch`、倾角有效、协议错误为 0；随后做混合负载，要求持续
+  `GGA=4`、差分龄 `<=6 s`、解算龄 `<=2 s`。低频单次超时只记缺失，不得拖垮 core。
+
+### G3S V7 1800-Second Recheck: B Briefly FIXED; RF/Receiver Gate Still Open (2026-08-06)
+
+- 保留参数 `RTCM32_GGB / aggregation=4 / burst=4 / guard=600 ms / observation=1 Hz`
+  完整运行 1800 秒；JSON 中的 120 秒只是最终定位尾窗，不是总测试时长。权威报告为
+  `/var/lib/lsmv2/experiments/g3s-v7-g3b4-live1800-20260806-011454.json`，monitor SHA-256
+  为 `64e841e18c49338396edf92b082250ac9379e9a994e4fcc77f8e7f70fb9e19d7`。
+- 全程为 `5712 caster / 3282 inner / 1570 outer / 303/303 polls`；caster CRC、field
+  write、poll timeout、schema、交织错误均为 0，服务未重启。共享通信稳定性继续通过。
+- 175 个约 10 秒样本中 A/B/C 的 `GGA=4` 数为 `0/14/0`。B 在 elapsed 1221 秒首次
+  FIXED，持续至 1355 秒样本，约 134 秒；A/C 全程 FLOAT。最终 120 秒三节点仍为
+  `0/12 GGA=4`，因此专业定位门禁仍失败，但“等待超过 120 秒也不能 FIXED”已被 B 的
+  现场结果否定。
+- 最终尾窗三节点 correction-age P95/max 均为 6 秒；完整序列的 A/B/C 最大值为
+  `14/15/16 s`。B 在 1366 秒退回 FLOAT 时 age 仍为 4 秒，9--16 秒共同峰值随后才出现，
+  不得把峰值写成 B 失锁的直接原因。约 5 秒 age 可兼容 FIXED，但会降低收敛速度和
+  保持裕量，是风险放大因素而非唯一根因。
+- LIVE 后 V7 再次证明 RK2206 路径很短：三节点完帧到出队 P95 `<=20 ms`、UM220 写
+  P95 `<=10 ms`、完帧到写完 P95 `<=50 ms`，最大值 A/B/C 为 `53/37/34 ms`；GNSS
+  UART read/reconfigure/FIFO drop 为 0。A/B 各注入 3282 帧并在 LIVE 停止边界各记录
+  2 个 queue expiry，C 注入 3284 帧且 expiry 为 0；无 queue eviction、partial write、
+  UART write error 或网关窗口内写失败。停止边界计数保留记录，但不伪装为窗口内丢包。
+- 当前剩余范围是天线视野/遮挡/多路径、上游 RTCM 观测历元和 UM220 内部修正应用/
+  模糊度固定；厚云本身不是优先嫌疑。停止调整共享 burst、guard、aggregation 和轮询。
+  下一步做相同参数的单节点无遮挡对照，再按同一物理位置依次比较 A/B/C。
+- 测试及逐节点诊断后已恢复 fail-closed：`NTRIP_ENABLED=false`、runtime probe、聚合 1、
+  服务 active、`NRestarts=0`；凭据、坐标和原始 RTCM 未进入 Git 或 memory。
+
 ### G3S V7 Field Attribution Completed; RF/Receiver Gate Still Fails (2026-08-06)
 
 - A/B/C 已烧录不可变 G3S V7 镜像并通过逐节点查询。三节点 UM220 均锁定硬件

@@ -38,7 +38,7 @@ if ($initSection.Contains("RunReadOnlyDiagnostics")) {
 $diagnosticSection = Get-SourceSection `
   -Source $fieldSource `
   -StartMarker "void FieldRs485_RunDiagnostics(void)" `
-  -EndMarker "int FieldRs485_Read(FieldRs485Readings *out)"
+  -EndMarker "int FieldRs485_ReadSelected(FieldRs485Readings *out, uint8_t requested_mask)"
 if (-not $diagnosticSection.Contains("RunReadOnlyDiagnostics")) {
   throw "Deferred RS485 diagnostics entry point is missing the read-only scan"
 }
@@ -52,8 +52,17 @@ $diagnosticIndex = $sensorTaskSection.IndexOf("FieldRs485_RunDiagnostics", [Syst
 if ($snapshotIndex -lt 0 -or $diagnosticIndex -lt 0 -or $diagnosticIndex -le $snapshotIndex) {
   throw "RS485 diagnostics must run only after a sensor snapshot is stored"
 }
-if (-not $sensorTaskSection.Contains("FieldRs485_CycleHasFinalFailure")) {
-  throw "Deferred RS485 scan must be gated by an actual final path failure"
+foreach ($tiltOnlyGuard in @(
+    "paths[FIELD_RS485_PATH_TILT_INDEX].enabled",
+    "paths[FIELD_RS485_PATH_TILT_INDEX].attempted",
+    "paths[FIELD_RS485_PATH_TILT_INDEX].final_status != RS485_MODBUS_OK"
+  )) {
+  if (-not $sensorTaskSection.Contains($tiltOnlyGuard)) {
+    throw "Deferred RS485 scan must be gated by a final high-priority tilt failure: $tiltOnlyGuard"
+  }
+}
+if ($sensorTaskSection.Contains("FieldRs485_CycleHasFinalFailure")) {
+  throw "A low-priority soil/EC failure must not trigger the full RS485 scan"
 }
 foreach ($requiredSnapshotGuard in @(
     "rs485_cycle_diagnostics = NULL;",
@@ -83,4 +92,4 @@ if (-not $probeSection.Contains("Watchdog_Feed();")) {
   throw "Each bounded read-only scan attempt must feed the watchdog"
 }
 
-Write-Host "RS485_STARTUP_SAFETY_OK diagnostics=post-scheduler-failure-triggered initialized_snapshot_only watchdog_fed"
+Write-Host "RS485_STARTUP_SAFETY_OK diagnostics=post-scheduler-tilt-failure-only initialized_snapshot_only watchdog_fed"

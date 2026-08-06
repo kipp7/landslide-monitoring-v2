@@ -9,6 +9,59 @@ It separates link capability from professional displacement acceptance.
 No CORS credentials, real coordinates, raw RTCM, or protected environment
 contents belong in this document.
 
+## G3S V7 1800-Second Recheck - 2026-08-06
+
+The retained `RTCM32_GGB / aggregation=4 / burst=4 / guard=600 ms /
+observation=1 Hz` profile ran LIVE for the full 1,800 seconds. The 120-second
+window in the generated JSON is only the final positioning window; it is not
+the test duration. The run received 5,712 valid caster frames, prepared and
+wrote 3,282 inner RTCM frames in 1,570 outer field frames, and completed
+303/303 normal polls. Caster CRC, field-write, poll-timeout, schema, and
+interleaving errors were all zero, and the service did not restart.
+
+The longer window proved that FIXED remained possible but did not pass the
+positioning gate. Node B first reached GGA quality 4 at elapsed 1,221 seconds
+and remained FIXED through the 1,355-second sample: 14 consecutive samples
+over approximately 134 seconds. A and C never reached quality 4. Across all
+175 monitor samples, the quality-4 counts were A/B/C `0/14/0`; the final
+120-second window was again `0/12` for every node because B had already
+returned to FLOAT.
+
+The final-window correction-age P95 and maximum were 6 seconds on every node.
+The complete monitor contained a later common transient with A/B/C maxima of
+14/15/16 seconds. That transient did not cause B's initial loss of FIXED: B
+returned to quality 5 at elapsed 1,366 seconds while its reported age was
+still 4 seconds, and the 9--16 second samples appeared later. An age near five
+seconds is therefore compatible with FIXED on this stationary system, but it
+reduces convergence and hold margin and remains outside the preferred
+professional operating range. It is a contributing risk, not a proven sole
+cause.
+
+Post-LIVE V7 queries again bounded the node path. A/B/C completion-to-dequeue
+P95 was at most 20 ms, UART-write P95 at most 10 ms, and completion-to-write
+P95 at most 50 ms; total maxima were 53/37/34 ms. GNSS UART read,
+reconfiguration, and FIFO-drop counters were zero. A and B each injected
+3,282 frames and reported two queue expirations at the LIVE shutdown boundary;
+C injected 3,284 frames with zero expiry. There were no queue evictions,
+partial writes, UART write errors, or monitored gateway write failures. The
+two shutdown-boundary expirations are retained in this record rather than
+being treated as in-window transport loss.
+
+This recheck rules out a 120-second observation window as the reason for the
+earlier all-FLOAT result. It also reconfirms that the shared software path is
+not the source of the 4--6 second GGA age. The remaining scope is RF visibility
+and multipath, incoming observation epochs, and UM220 correction application
+and ambiguity resolution. Do not retune the accepted shared transport profile.
+The next controlled comparison is an unobstructed single-node run, followed by
+the same physical placement for the other receivers if needed.
+
+The authoritative credential-free summary is
+`/var/lib/lsmv2/experiments/g3s-v7-g3b4-live1800-20260806-011454.json`; its
+monitor SHA-256 is
+`64e841e18c49338396edf92b082250ac9379e9a994e4fcc77f8e7f70fb9e19d7`.
+The gateway ended fail-closed with NTRIP disabled, runtime mode PROBE,
+field-frame aggregation one, service active, and `NRestarts=0`.
+
 ## G3S V7 Field Attribution - 2026-08-06
 
 All three nodes were flashed with the immutable G3S V7 images and passed an

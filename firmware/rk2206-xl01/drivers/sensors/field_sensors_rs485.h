@@ -25,6 +25,9 @@ typedef struct {
 
 #define FIELD_RS485_DIAG_SOIL_MATCH (1U << 0)
 #define FIELD_RS485_DIAG_TILT_MATCH (1U << 1)
+#define FIELD_RS485_READ_SOIL_MASK (FIELD_RS485_PATH_SOIL_MASK | FIELD_RS485_PATH_SOIL_EC_MASK)
+#define FIELD_RS485_READ_TILT_MASK FIELD_RS485_PATH_TILT_MASK
+#define FIELD_RS485_READ_RAIN_MASK FIELD_RS485_PATH_RAIN_MASK
 
 typedef struct {
     uint8_t found;
@@ -52,6 +55,8 @@ typedef struct {
 int FieldRs485_Init(void);
 /* Timeout-based diagnostics require the scheduler tick to be running. */
 void FieldRs485_RunDiagnostics(void);
+/* Read only the requested paths so low-rate environmental probes cannot delay tilt. */
+int FieldRs485_ReadSelected(FieldRs485Readings *out, uint8_t requested_mask);
 int FieldRs485_Read(FieldRs485Readings *out);
 void FieldRs485_GetDiagnostics(FieldRs485Diagnostics *snapshot);
 

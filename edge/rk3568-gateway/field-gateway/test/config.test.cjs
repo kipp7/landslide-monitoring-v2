@@ -26,6 +26,7 @@ test("RK3568 deployment example pins the protected Compact V6 layered profile", 
   assert.equal(config.southboundPollingSessionTimeoutMs, 6500);
   assert.equal(config.southboundPollingPartialRetries, 0);
   assert.equal(config.southboundPollingRetryAfterMs, 1500);
+  assert.equal(config.southboundCorePollDeadlineMs, 2000);
   assert.equal(config.southboundLayeredEnvironmentEveryRounds, 30);
   assert.equal(config.southboundLayeredAuditEveryRounds, 60);
   assert.equal(config.ntripEnabled, false);
@@ -145,6 +146,7 @@ test("NTRIP validates coordinate frame and reconnect delay range", () => {
 
 test("RTCM poll arbitration defaults are conservative and overrides are bounded", () => {
   const defaults = loadConfigFromEnv({ MQTT_URL: "mqtt://127.0.0.1:1883" });
+  assert.equal(defaults.southboundCorePollDeadlineMs, 2000);
   assert.equal(defaults.rtcmMaxFragmentsBetweenPolls, 4);
   assert.equal(defaults.rtcmPostBurstPollGuardMs, 600);
   assert.equal(defaults.rtcmMinCorrectionWindowMs, 0);
@@ -161,6 +163,14 @@ test("RTCM poll arbitration defaults are conservative and overrides are bounded"
   assert.equal(candidate.rtcmPostBurstPollGuardMs, 250);
   assert.equal(candidate.rtcmMinCorrectionWindowMs, 2500);
   assert.equal(candidate.rtcmMaxFragmentsPerFieldFrame, 2);
+
+  assert.throws(
+    () => loadConfigFromEnv({
+      MQTT_URL: "mqtt://127.0.0.1:1883",
+      SOUTHBOUND_CORE_POLL_DEADLINE_MS: "999"
+    }),
+    /southboundCorePollDeadlineMs/u
+  );
 
   assert.throws(
     () =>

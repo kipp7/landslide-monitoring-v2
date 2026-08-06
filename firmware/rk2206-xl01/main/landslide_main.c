@@ -134,7 +134,7 @@ static volatile uint32_t g_last_platform_command_tick = 0;
 static CompactPollBroadcastDeduplicator g_compact_poll_broadcast_deduplicator;
 static unsigned int g_compact_poll_broadcast_duplicates_suppressed = 0U;
 static volatile int g_field_link_recovery_requested = 0;
-#define FW_RX_DIAG_MARKER "fw-rk2206-rtk-compact-v6-rtcm-batch-v1-g3s-v7-live-20260805"
+#define FW_RX_DIAG_MARKER "fw-rk2206-rtk-compact-v6-lowrate-v1-live-20260806"
 bool g_cloud_motor_enabled = false;
 int g_cloud_motor_speed = 0;
 MotorDirection g_cloud_motor_direction = MOTOR_DIRECTION_STOP;
@@ -325,18 +325,36 @@ static void SensorDiagnostics_RecordCycle(
     const FieldRs485CycleDiagnostics *rs485_cycle)
 {
     uint8_t enabled_mask = SensorDiagnostics_EnabledMask();
+    uint8_t sampled_mask = enabled_mask;
     unsigned int index;
 
     success_mask &= enabled_mask;
+    if (rs485_cycle != NULL) {
+        sampled_mask = enabled_mask & GNSS_SENSOR_UM220_MASK;
+        if ((rs485_cycle->enabled_mask & FIELD_RS485_PATH_SOIL_MASK) != 0U) {
+            sampled_mask |= GNSS_SENSOR_SOIL_MASK;
+        }
+        if ((rs485_cycle->enabled_mask & FIELD_RS485_PATH_SOIL_EC_MASK) != 0U) {
+            sampled_mask |= GNSS_SENSOR_SOIL_EC_MASK;
+        }
+        if ((rs485_cycle->enabled_mask & FIELD_RS485_PATH_TILT_MASK) != 0U) {
+            sampled_mask |= GNSS_SENSOR_TILT_MASK;
+        }
+    }
+    success_mask &= sampled_mask;
     SensorData_Lock();
     g_sensor_diagnostics.enabled_mask = enabled_mask;
     g_sensor_diagnostics.initialization_success_mask =
         SensorDiagnostics_InitializationSuccessMask() & enabled_mask;
-    g_sensor_diagnostics.current_valid_mask = success_mask;
+    g_sensor_diagnostics.current_valid_mask =
+        (g_sensor_diagnostics.current_valid_mask & (uint8_t)~sampled_mask) | success_mask;
     g_sensor_diagnostics.ever_success_mask |= success_mask;
     for (index = 0U; index < GNSS_SENSOR_DIAGNOSTIC_COUNT; ++index) {
         uint8_t bit = (uint8_t)(1U << index);
         if ((enabled_mask & bit) == 0U) {
+            continue;
+        }
+        if ((sampled_mask & bit) == 0U) {
             continue;
         }
         if (g_sensor_diagnostics.sample_counts[index] != 0xFFFFFFFFU) {
@@ -1464,6 +1482,7 @@ static void* SensorCollectionTask(const char* arg)
     (void)arg;
     SensorData next_sample;
     uint8_t diagnostic_success_mask;
+    uint64_t next_environment_sample_ms = 0U;
 #if ENABLE_RS485_BUS
     FieldRs485Readings rs485_readings;
     const FieldRs485CycleDiagnostics *rs485_cycle_diagnostics;
@@ -1477,7 +1496,23 @@ static void* SensorCollectionTask(const char* arg)
     printf("[Task] Sensor Collection started\n");
     
     while (1) {
+        uint64_t cycle_started_ms = MainMonotonicMs();
+        uint64_t cycle_completed_ms;
+        unsigned int sleep_ms;
         uint32_t completed_uptime_s;
+        int environment_sample_due = 0;
+#if ENABLE_RS485_BUS
+        uint8_t rs485_read_mask = FIELD_RS485_READ_TILT_MASK;
+#endif
+
+        if (next_environment_sample_ms == 0U ||
+            cycle_started_ms >= next_environment_sample_ms) {
+            environment_sample_due = 1;
+#if ENABLE_RS485_BUS
+            rs485_read_mask |= FIELD_RS485_READ_SOIL_MASK | FIELD_RS485_READ_RAIN_MASK;
+#endif
+            next_environment_sample_ms = cycle_started_ms + ENVIRONMENT_SAMPLE_INTERVAL_MS;
+        }
 
         // Read all enabled sensors
         diagnostic_success_mask = 0U;
@@ -1486,11 +1521,21 @@ static void* SensorCollectionTask(const char* arg)
 #endif
 
         SensorData_CopySnapshot(&next_sample);
+#if ENABLE_RS485_BUS
+        if (environment_sample_due) {
+            next_sample.soil_temperature = 0.0f;
+            next_sample.soil_moisture = 0.0f;
+            next_sample.soil_ec = 0.0f;
+            next_sample.soil_ec_valid = 0;
+            next_sample.soil_valid = 0;
+        }
+#else
         next_sample.soil_temperature = 0.0f;
         next_sample.soil_moisture = 0.0f;
         next_sample.soil_ec = 0.0f;
         next_sample.soil_ec_valid = 0;
         next_sample.soil_valid = 0;
+#endif
         memset(&next_sample.gnss, 0, sizeof(next_sample.gnss));
         next_sample.gnss_status_valid = 0;
         next_sample.angle_x = 0.0f;
@@ -1500,10 +1545,12 @@ static void* SensorCollectionTask(const char* arg)
         next_sample.rain_total = 0.0f;
         next_sample.rain_valid = 0;
         next_sample.warning = 0;
-        next_sample.battery_level = 0;
-        next_sample.battery_voltage_mv = 0U;
-        next_sample.battery_valid = 0;
-        next_sample.battery_estimate_quality = 0;
+        if (environment_sample_due) {
+            next_sample.battery_level = 0;
+            next_sample.battery_voltage_mv = 0U;
+            next_sample.battery_valid = 0;
+            next_sample.battery_estimate_quality = 0;
+        }
         next_sample.simulated_field_data = 0;
         next_sample.simulated_gnss_data = 0;
         
@@ -1516,7 +1563,7 @@ static void* SensorCollectionTask(const char* arg)
 #endif
 
 #if ENABLE_BATTERY_MONITOR
-        if (g_battery_ready && BatteryMonitor_Read(&battery_reading) == 0) {
+        if (environment_sample_due && g_battery_ready && BatteryMonitor_Read(&battery_reading) == 0) {
             next_sample.battery_level = (int)battery_reading.percentage;
             next_sample.battery_voltage_mv = battery_reading.pack_voltage_mv;
             next_sample.battery_estimate_quality = (int)battery_reading.estimate_quality;
@@ -1526,7 +1573,7 @@ static void* SensorCollectionTask(const char* arg)
 
 #if ENABLE_RS485_BUS
         if (g_rs485_ready) {
-            (void)FieldRs485_Read(&rs485_readings);
+            (void)FieldRs485_ReadSelected(&rs485_readings, rs485_read_mask);
             rs485_cycle_diagnostics = &rs485_readings.cycle_diagnostics;
             if (rs485_readings.soil_valid) {
                 next_sample.soil_temperature = rs485_readings.soil_temperature_c;
@@ -1597,9 +1644,11 @@ static void* SensorCollectionTask(const char* arg)
 
 #if ENABLE_RS485_BUS
         if (rs485_diagnostics_pending && rs485_cycle_diagnostics != NULL &&
-            FieldRs485_CycleHasFinalFailure(rs485_cycle_diagnostics)) {
+            rs485_cycle_diagnostics->paths[FIELD_RS485_PATH_TILT_INDEX].enabled &&
+            rs485_cycle_diagnostics->paths[FIELD_RS485_PATH_TILT_INDEX].attempted &&
+            rs485_cycle_diagnostics->paths[FIELD_RS485_PATH_TILT_INDEX].final_status != RS485_MODBUS_OK) {
             rs485_diagnostics_pending = 0;
-            printf("[RS485-DIAG] final read failure detected; starting one-time read-only scan\n");
+            printf("[RS485-DIAG] final tilt read failure detected; starting one-time read-only scan\n");
             FieldRs485_RunDiagnostics();
         }
 #endif
@@ -1607,8 +1656,10 @@ static void* SensorCollectionTask(const char* arg)
         // Feed watchdog
         Watchdog_Feed();
         
-        // Update every 1 second
-        LOS_Msleep(g_runtime_sampling_interval_ms);
+        cycle_completed_ms = MainMonotonicMs();
+        sleep_ms = cycle_completed_ms - cycle_started_ms < g_runtime_sampling_interval_ms ?
+            g_runtime_sampling_interval_ms - (unsigned int)(cycle_completed_ms - cycle_started_ms) : 1U;
+        LOS_Msleep(sleep_ms);
     }
     
     return NULL;
@@ -1710,6 +1761,10 @@ static void* DataUploadTask(const char* arg)
     printf("  RS485 Sensor Read Retry: max=%u gap=%u ms\n",
            RS485_SENSOR_READ_MAX_RETRIES,
            RS485_SENSOR_READ_RETRY_GAP_MS);
+    printf("  Sensor Cadence: tilt/GNSS=1s battery/soil/EC=%ums low_priority_timeout=%ums retries=%u\n",
+           ENVIRONMENT_SAMPLE_INTERVAL_MS,
+           RS485_LOW_PRIORITY_RESPONSE_TIMEOUT_MS,
+           RS485_LOW_PRIORITY_READ_MAX_RETRIES);
 #endif
     printf("  Upload Interval: %d ms\n", UPLOAD_INTERVAL_MS);
     printf("  Downlink Only: %s\n", DOWNLINK_ONLY_MODE ? "Enabled" : "Disabled");

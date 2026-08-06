@@ -35,10 +35,11 @@ import {
   compactPollTelemetryIsPublishable
 } from "./compact-poll-retry";
 import {
+  compactLayeredCorePollOverdue,
   isCompactLayeredPortBusy,
   layeredBroadcastAcceptsScope,
   matchesActiveScopedPoll,
-  nextCompactLayeredExtensionScope
+  nextCompactLayeredExtensionScopes
 } from "./compact-layered-scheduler";
 import {
   createCobsCrcFieldLinkAssembler,
@@ -1087,7 +1088,8 @@ class GatewayRuntime {
   private readonly compactPollAdmission: CompactPollAdmissionController;
   private readonly portPollNodeCursor = new Map<string, number>();
   private readonly layeredCoreRoundsByPort = new Map<string, number>();
-  private readonly layeredPendingScopeByPort = new Map<string, Exclude<CompactTelemetryV6Scope, "core">>();
+  private readonly layeredPendingScopesByPort = new Map<string, Array<Exclude<CompactTelemetryV6Scope, "core">>>();
+  private readonly layeredLastCorePollDispatchedAtMsByPort = new Map<string, number>();
   private readonly portLastReadAtMs = new Map<string, number>();
   private readonly rtcmWriteInFlightPorts = new Set<string>();
   private readonly rtcmController: RtcmDownlinkController | null;
@@ -1370,7 +1372,8 @@ class GatewayRuntime {
   }
 
   private clearPollingStateForTransportLoss(portPath: string): void {
-    this.layeredPendingScopeByPort.delete(portPath);
+    this.layeredPendingScopesByPort.delete(portPath);
+    this.layeredLastCorePollDispatchedAtMsByPort.delete(portPath);
     this.closePendingCommandWindow(portPath, "failed");
     this.closeActivePollTelemetryWindow(portPath, "failed");
     for (const [windowKey, window] of this.activeCompactBroadcastPollWindows.entries()) {
@@ -2087,6 +2090,12 @@ class GatewayRuntime {
     const controller = this.rtcmController;
     if (!controller) return false;
 
+    if (this.config.southboundPollingMode === "compact-layered-v1" &&
+        this.getConfiguredPortPaths().some((portPath) =>
+          this.serialPorts.get(portPath)?.isOpen === true && this.compactLayeredCorePollIsOverdue(portPath))) {
+      return false;
+    }
+
     const nowMs = Date.now();
     const downlink = controller.stats(nowMs);
     const controlWriteDue = nowMs >= this.rtcmNextModeRefreshAtMs;
@@ -2110,11 +2119,10 @@ class GatewayRuntime {
   }
 
   private tickCompactLayeredPolling(): void {
-    let issued = false;
-    let busy = false;
     for (const portPath of this.getConfiguredPortPaths()) {
-      const pendingScope = this.layeredPendingScopeByPort.get(portPath);
-      if (!pendingScope) continue;
+      const pendingScopes = this.layeredPendingScopesByPort.get(portPath);
+      const pendingScope = pendingScopes?.[0];
+      if (!pendingScope || this.compactLayeredCorePollIsOverdue(portPath)) continue;
       if (isCompactLayeredPortBusy({
         pendingCommand: this.pendingCommandWindows.has(portPath),
         activeScopedPoll: this.activePollTelemetryWindows.has(portPath),
@@ -2123,18 +2131,26 @@ class GatewayRuntime {
         activeBroadcastPoll: this.hasActiveCompactBroadcastPollWindowForPort(portPath),
         broadcastAdmissionInFlight: this.compactPollAdmission.isInFlight(portPath)
       })) {
-        busy = true;
         continue;
       }
       const serialPort = this.serialPorts.get(portPath);
       if (!serialPort?.isOpen) continue;
       const node = this.nextPollingNodeForPort(portPath);
       if (!node) continue;
-      this.layeredPendingScopeByPort.delete(portPath);
-      issued = true;
+      const remainingScopes = pendingScopes.slice(1);
+      if (remainingScopes.length === 0) this.layeredPendingScopesByPort.delete(portPath);
+      else this.layeredPendingScopesByPort.set(portPath, remainingScopes);
       void this.issueInternalPollForNode(node, portPath, pendingScope);
     }
-    if (!issued && !busy) this.tickCompactBroadcastPolling();
+    this.tickCompactBroadcastPolling();
+  }
+
+  private compactLayeredCorePollIsOverdue(portPath: string): boolean {
+    return compactLayeredCorePollOverdue({
+      nowMs: performance.now(),
+      lastCorePollDispatchedAtMs: this.layeredLastCorePollDispatchedAtMsByPort.get(portPath) ?? null,
+      deadlineMs: this.config.southboundCorePollDeadlineMs
+    });
   }
 
   private tickCompactBroadcastPolling(): void {
@@ -2281,6 +2297,7 @@ class GatewayRuntime {
         this.config.southboundPollingCommandChunkDelayMs
       );
       this.rtcmPollBurstGate.notePollDispatched(performance.now());
+      this.layeredLastCorePollDispatchedAtMsByPort.set(portPath, performance.now());
     } catch (err) {
       this.stats.commandWriteFailures += 1;
       this.stats.lastError = err instanceof Error ? err.message : String(err);
@@ -3121,12 +3138,18 @@ class GatewayRuntime {
       if (this.config.southboundPollingMode === "compact-layered-v1") {
         const coreRounds = (this.layeredCoreRoundsByPort.get(window.portPath) ?? 0) + 1;
         this.layeredCoreRoundsByPort.set(window.portPath, coreRounds);
-        const extensionScope = nextCompactLayeredExtensionScope({
+        const extensionScopes = nextCompactLayeredExtensionScopes({
           completedCoreRounds: coreRounds,
           environmentEveryRounds: this.config.southboundLayeredEnvironmentEveryRounds,
           auditEveryRounds: this.config.southboundLayeredAuditEveryRounds
         });
-        if (extensionScope) this.layeredPendingScopeByPort.set(window.portPath, extensionScope);
+        if (extensionScopes.length > 0) {
+          const pendingScopes = this.layeredPendingScopesByPort.get(window.portPath) ?? [];
+          for (const scope of extensionScopes) {
+            if (!pendingScopes.includes(scope)) pendingScopes.push(scope);
+          }
+          this.layeredPendingScopesByPort.set(window.portPath, pendingScopes);
+        }
       }
     }
 

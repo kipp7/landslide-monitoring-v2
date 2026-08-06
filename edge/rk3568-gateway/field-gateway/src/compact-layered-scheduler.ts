@@ -2,11 +2,11 @@ import type { CompactTelemetryV6Scope } from "./compact-telemetry";
 
 export type CompactLayeredExtensionScope = Exclude<CompactTelemetryV6Scope, "core">;
 
-export function nextCompactLayeredExtensionScope(params: {
+export function nextCompactLayeredExtensionScopes(params: {
   completedCoreRounds: number;
   environmentEveryRounds: number;
   auditEveryRounds: number;
-}): CompactLayeredExtensionScope | null {
+}): CompactLayeredExtensionScope[] {
   if (!Number.isInteger(params.completedCoreRounds) || params.completedCoreRounds <= 0) {
     throw new Error("completedCoreRounds must be a positive integer");
   }
@@ -17,9 +17,29 @@ export function nextCompactLayeredExtensionScope(params: {
     throw new Error("auditEveryRounds must be a positive integer");
   }
 
-  if (params.completedCoreRounds % params.auditEveryRounds === 0) return "audit";
-  if (params.completedCoreRounds % params.environmentEveryRounds === 0) return "environment";
-  return null;
+  const scopes: CompactLayeredExtensionScope[] = [];
+  if (params.completedCoreRounds % params.auditEveryRounds === 0) scopes.push("audit");
+  if (params.completedCoreRounds % params.environmentEveryRounds === 0) scopes.push("environment");
+  return scopes;
+}
+
+export function compactLayeredCorePollOverdue(params: {
+  nowMs: number;
+  lastCorePollDispatchedAtMs: number | null;
+  deadlineMs: number;
+}): boolean {
+  if (!Number.isFinite(params.nowMs) || params.nowMs < 0) {
+    throw new Error("nowMs must be a non-negative finite number");
+  }
+  if (params.lastCorePollDispatchedAtMs !== null &&
+      (!Number.isFinite(params.lastCorePollDispatchedAtMs) || params.lastCorePollDispatchedAtMs < 0)) {
+    throw new Error("lastCorePollDispatchedAtMs must be null or a non-negative finite number");
+  }
+  if (!Number.isFinite(params.deadlineMs) || params.deadlineMs <= 0) {
+    throw new Error("deadlineMs must be a positive finite number");
+  }
+  return params.lastCorePollDispatchedAtMs === null ||
+    params.nowMs - params.lastCorePollDispatchedAtMs >= params.deadlineMs;
 }
 
 export function layeredBroadcastAcceptsScope(scope: string | null): boolean {
