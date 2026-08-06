@@ -25,6 +25,9 @@ status: active
 - 源码标识升为 `v1.9-um220-rs485-rtk-compact-v6-lowrate-v2` /
   `fw-rk2206-rtk-compact-v6-lowrate-v2-live-20260806`；现场必须按新 marker 验证，不能
   混用 v1/v2 镜像。
+- 该决定已由 clean commit `9b9be527a594085283747099c88812080f8f2b8a` 生成 A/B/C 发布包，
+  manifest SHA-256 为 `9310ed3eb0bcf193a308e4d71b832b1f692af2d94eff318246e3a6ef9700704b`，
+  路径为 `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v6_lowrate_v2_corefast_rs485_gnss_hardware_live_20260806`。
 
 ## Compact V6 Acquisition Cadence Amendment (2026-08-06)
 

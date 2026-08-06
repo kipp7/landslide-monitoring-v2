@@ -18,8 +18,16 @@ status: active
   精度证据、倾角、环境、电池和 RTCM 审计继续保留。
 - 新版核心倾角 RS485 读取使用 `300 ms` 超时和 1 次重试，最坏约 `680 ms`；低频土壤/
   EC 保持 `300 ms/0 retry`，环境采样 10 秒，核心倾角/GNSS 1 秒。
-- 源码 marker 已升为 `v1.9...lowrate-v2` / `fw-...lowrate-v2-live-20260806`，发布包
-  需重新从 clean commit 构建；旧 v1 包不应与本次源码混烧。
+- 源码 marker 已升为 `v1.9...lowrate-v2` / `fw-...lowrate-v2-live-20260806`。同一
+  clean commit `9b9be527a594085283747099c88812080f8f2b8a` 已生成正式 A/B/C hardware
+  LIVE-capable 包：
+  `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v6_lowrate_v2_corefast_rs485_gnss_hardware_live_20260806`。
+  manifest SHA-256 为
+  `9310ed3eb0bcf193a308e4d71b832b1f692af2d94eff318246e3a6ef9700704b`；A/B/C `.bin`
+  SHA-256 分别为 `800756c70de9b553b445e9ca1e62bde482d47d27881e2c0182eba020c18656e2`、
+  `202366ec8490bf83a1173274852efe7e014c84ec6112a61d7b24bf68f765df73`、
+  `efb72b834c8428e726663334d39afb8b9bd8356f41454eb37433875c93c8019`。旧 v1 包不应与
+  本次源码混烧。
 
 ## Objective
 

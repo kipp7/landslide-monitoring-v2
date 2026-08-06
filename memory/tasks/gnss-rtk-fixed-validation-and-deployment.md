@@ -42,8 +42,15 @@ status: active
 - 待办顺序：完成 OpenHarmony A/B/C 同源构建和 release 校验；用户烧录后先在
   `NTRIP_ENABLED=false` 下检查每节点 4 秒至少两个不同 core epoch，再跑真实 RTCM
   混合负载。混合门禁保持 `GGA=4 / correction age <=6 s / solution age <=2 s`。
-- v2 正式镜像路径和 SHA-256 尚未产生；在记录发布目录与 manifest 前，本任务状态仍为
-  active，不能把当前源码包当作可烧录发布物。
+- v2 正式镜像已从 clean commit
+  `9b9be527a594085283747099c88812080f8f2b8a` 构建并通过发布安全：
+  `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v6_lowrate_v2_corefast_rs485_gnss_hardware_live_20260806`，
+  manifest `9310ed3eb0bcf193a308e4d71b832b1f692af2d94eff318246e3a6ef9700704b`。
+  A/B/C `.bin` 哈希依次为 `800756c70de9b553b445e9ca1e62bde482d47d27881e2c0182eba020c18656e2`、
+  `202366ec8490bf83a1173274852efe7e014c84ec6112a61d7b24bf68f765df73`、
+  `efb72b834c8428e726663334d39afb8b9bd8356f41454ebe37433875c93c8019`。
+  仍未进行本轮真机烧录；现场门禁保持 `NTRIP_ENABLED=false`，不能把编译通过当作 RTK
+  定位通过。
 
 ### 1800-Second Recheck Completed; B FIXED Window Is Not Yet Production-Grade (2026-08-06)
 
