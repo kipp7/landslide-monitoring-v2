@@ -431,3 +431,37 @@ PROBE and aggregation one.
 
 Credential-free report path on RK3568:
 `/var/lib/lsmv2/experiments/xls1-compact-v6-layered-0020s-20260806-141155.json`
+
+## Strict Communication Gates - 2026-08-06
+
+The final low-rate V2 hardware package passed separate 60-second and 600-second
+Compact V6 communication gates with real UM220 GNSS and RTCM disabled:
+
+- 60 seconds: `39/39` complete core rounds and zero decode, wire-length,
+  unmatched, duplicate, recovery, scope, epoch, profile, or trailing-byte errors;
+- 600 seconds: `470/470` complete core rounds with the same zero-error profile;
+- all 470 responses from each node used the initial P1 path, with no targeted
+  recovery command;
+- A/B/C core-arrival P95 was `1802.0/1812.2/1797.7 ms` and command-latency P95
+  was `837.0/1131.1/1444.9 ms`;
+- all `9/9` environment and `8/8` audit responses matched, and the strict
+  distinct-epoch window checks remained satisfied.
+
+The 600-second report is
+`/var/lib/lsmv2/experiments/xls1-compact-v6-layered-0600s-20260806-142631.json`
+with SHA-256
+`8b47d3b3a66c8215457cf76e0ed3ca64e544ce71212149e780ecb3219bbb3231`.
+The summary SHA-256 is
+`84caa922bf627cb0d1e7b36931e9814f2abb5e0c23914512981a7400c5f6e3f5`.
+
+The outer Windows SSH wait expired after the remote report had already passed.
+An initial follow-up queried the wrong alias, `field-gateway.service`, and must
+not be treated as evidence that production stopped. The real unit,
+`lsmv2-field-gateway.service`, was verified `active/running`, `NRestarts=0`;
+its journal shows uninterrupted serial/MQTT publishing for A/B/C from the
+14:36:48 automatic restore onward. NTRIP remained disabled, runtime PROBE, and
+aggregation one. Remote runners must query the exact production unit name.
+
+These gates accept the three-node communication and acquisition profile. They
+still do not accept RTK FIXED, correction age, centimetre displacement, or the
+final 1800-second mixed LIVE load.

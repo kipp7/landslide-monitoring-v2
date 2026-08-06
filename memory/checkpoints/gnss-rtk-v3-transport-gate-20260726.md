@@ -38,6 +38,24 @@ status: active
 - 测试后网关已恢复 `active/running`、`NRestarts=0`、三节点在线、串口/MQTT 在线，保持
   `NTRIP_ENABLED=false`、runtime `probe`、聚合数 1。
 
+## Strict 60/600-Second Communication Gate (2026-08-06)
+
+- 真实硬件 GNSS、RTCM disabled 条件下，60 秒 `39/39`、600 秒 `470/470` 核心轮次全部
+  完整；解码、64 B 线长、未匹配、重复、恢复冗余、scope、epoch、profile、尾部残字节错误
+  均为 0，定向恢复命令为 0。600 秒期间 environment `9/9`、audit `8/8` 全匹配，严格
+  4 秒窗口内不同倾角 `sample_epoch` 门禁通过。
+- 600 秒 A/B/C 到达间隔 P95 为 `1802.0/1812.2/1797.7 ms`，命令延迟 P95 为
+  `837.0/1131.1/1444.9 ms`；三节点各 `470/470` 均走初始 P1 路径。报告 SHA-256 为
+  `8b47d3b3a66c8215457cf76e0ed3ca64e544ce71212149e780ecb3219bbb3231`，汇总 SHA-256 为
+  `84caa922bf627cb0d1e7b36931e9814f2abb5e0c23914512981a7400c5f6e3f5`，原始文件只留 RK3568。
+- 外层 Windows SSH 等待在远端报告完成后超时；首次复核误查了不存在的
+  `field-gateway.service` 别名，该 inactive 结果无效。真实生产 unit
+  `lsmv2-field-gateway.service` 为 `active/running`、`NRestarts=0`，journal 证明从
+  14:36:48 自动恢复后 A/B/C 串口/MQTT 连续发布；NTRIP disabled、runtime PROBE、聚合数 1。
+  后续必须使用精确 unit 名实查，不能把错误别名当成服务故障。
+- 当前可接受“三节点通信与采集节奏 600 秒通过”，仍不可写成 RTK/厘米级通过；下一阶段
+  才进入受控 PROBE/LIVE、GGA=4/差分龄/solution age 和最终 1800 秒混合负载门禁。
+
 ## Compact V6 Low-Rate V2 Core Timing (2026-08-06)
 
 - 数据合同复审结论：核心 46 B/完整 64 B 线框没有可删除且能降低空口负载的字段；GNSS

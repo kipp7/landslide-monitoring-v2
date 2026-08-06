@@ -54,6 +54,23 @@ status: active
   `online`，`NTRIP_ENABLED=false`、runtime `probe`、聚合数 1；当前三节点 GGA 均为单点，
   未开启 RTCM。
 
+## Strict Communication Acceptance (2026-08-06)
+
+- 同一最终 low-rate V2 硬件包随后通过独立 60 秒和 600 秒门禁：分别 `39/39`、`470/470`
+  核心轮次完整，协议/profile 全错误项为 0，定向恢复为 0；600 秒所有节点均为
+  `470/470` 初始 P1 响应，environment `9/9`、audit `8/8`，4 秒不同倾角 epoch 门禁通过。
+- 600 秒 A/B/C 核心到达 P95 `1802.0/1812.2/1797.7 ms`，命令延迟 P95
+  `837.0/1131.1/1444.9 ms`，均低于 2500 ms 门槛。报告路径为 RK3568
+  `/var/lib/lsmv2/experiments/xls1-compact-v6-layered-0600s-20260806-142631.json`，SHA-256
+  `8b47d3b3a66c8215457cf76e0ed3ca64e544ce71212149e780ecb3219bbb3231`；汇总 SHA-256
+  `84caa922bf627cb0d1e7b36931e9814f2abb5e0c23914512981a7400c5f6e3f5`。
+- 外层 SSH 等待在远端完成后超时；首次复核误查 `field-gateway.service` 别名。真实生产 unit
+  `lsmv2-field-gateway.service` 始终为 `active/running`、`NRestarts=0`，journal 证明从
+  14:36:48 自动恢复后持续发布三节点数据；NTRIP disabled、runtime PROBE、聚合数 1。
+  后续 runner 仍需实查 post-run 状态，但必须锁定精确 unit 名，不能使用模糊别名。
+- 通信与采集阶段现已满足 600 秒接受条件；未完成项收敛为受控 RTCM PROBE/LIVE、三节点
+  持续 GGA=4、correction/solution age、GST/HDOP/卫星数及最终 1800 秒混合负载验收。
+
 ## Goal
 
 将已验证可 Fixed 的 3 套 UM220-IV NK + BT-760 部署为可追溯、资源可控的三节点 RTK 位移系统；先通过共享链路门禁，再实现 RK3568 专业位移算法、服务器长周期分析和现场诊断。
