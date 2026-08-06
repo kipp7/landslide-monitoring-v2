@@ -911,7 +911,8 @@ struct Index {
     if (!this.repository) return;
     try {
       const status = await (this.repository as MonitoringRepository).fieldAlarmStatus();
-      this.alarmActuatorOnline = status.actuator.yx75r?.available ?? status.actuator.available;
+      const hardwareOnline = status.actuator.tongxiao?.boardOnline ?? status.actuator.yx75r?.available ?? false;
+      this.alarmActuatorOnline = status.actuator.available === true && status.actuator.dryRun !== true && hardwareOnline === true;
     } catch {
       // Preserve the last verified state when the status request is interrupted.
     }

@@ -44,11 +44,20 @@ export interface FieldAlarmDeviceProbe {
   queriedAt?: string;
 }
 
+export interface FieldAlarmTongxiaoStatus {
+  boardOnline?: boolean;
+  mqttConnected?: boolean;
+  presenceAgeSeconds?: number | null;
+  presenceStaleSeconds?: number;
+}
+
 export interface FieldAlarmActuatorStatus {
   available: boolean;
+  dryRun?: boolean;
   state?: string;
   lastActionAt?: string;
   yx75r?: FieldAlarmDeviceProbe;
+  tongxiao?: FieldAlarmTongxiaoStatus;
 }
 
 export interface FieldAlarmStatus {
