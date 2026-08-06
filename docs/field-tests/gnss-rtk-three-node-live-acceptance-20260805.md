@@ -389,3 +389,24 @@ On the next outdoor power-up:
    correction-age, GST, session, and normal-poll gates pass.
 5. Adjust C independently if it remains FLOAT; do not mask that condition by
    reducing the common correction cadence or relaxing the professional gate.
+## Final Compact V6 Low-Rate V2 Package - 2026-08-06
+
+The final hardware-GNSS/RS485 package was rebuilt from clean source commit
+`b4c40a85df5a28c442c9d9b5f44e8b3537730c0d` after the core-tilt timing review.
+The release verifier passed with `sourceDirty=false`; this is a build/release
+record, not a field acceptance result.
+
+Package directory:
+`F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v6_lowrate_v2_corefast_rs485_gnss_hardware_live_final_20260806`
+
+| Artifact | SHA-256 |
+| --- | --- |
+| `manifest.json` | `a160e5ed61254be8efd0603c7b3729aad4a15ca2704a70cf19d0350b0275b7aa` |
+| A `.bin` | `800756c70de9b553b445e9ca1e62bde482d47d27881e2c0182eba020c18656e2` |
+| B `.bin` | `202366ec8490bf83a1173274852efe7e014c84ec6112a61d7b24bf68f765df73` |
+| C `.bin` | `efb72b834c8428e726663334d39afb8b9bd8356f41454ebe37433875c93c8019` |
+
+The image boots with RTCM disabled and is only LIVE-capable after the gateway
+lease sequence. Flash by physical node label, keep NTRIP disabled for the first
+communication gate, and do not call the package RTK-accepted until the outdoor
+G3R/G3B PROBE and 600/1800-second positioning gates pass.

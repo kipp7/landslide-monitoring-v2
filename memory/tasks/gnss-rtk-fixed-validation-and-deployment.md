@@ -24,13 +24,28 @@ status: active
   门禁；A/B/C hardware LIVE-capable 包已从 clean commit 生成并记录 manifest/hash。现场
   仍先保持 `NTRIP_ENABLED=false` 做 4 秒核心采样门禁，再进入 PROBE/LIVE。
 
+## Final Hardware LIVE-Capable Package (2026-08-06)
+
+- 最终 A/B/C 包已从干净提交
+  `b4c40a85df5a28c442c9d9b5f44e8b3537730c0d` 重新构建，发布安全门禁通过，`sourceDirty=false`。
+- 烧录目录：
+  `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v6_lowrate_v2_corefast_rs485_gnss_hardware_live_final_20260806`
+- `manifest.json` SHA-256：
+  `a160e5ed61254be8efd0603c7b3729aad4a15ca2704a70cf19d0350b0275b7aa`
+- A/B/C `.bin` SHA-256：
+  `800756c70de9b553b445e9ca1e62bde482d47d27881e2c0182eba020c18656e2` /
+  `202366ec8490bf83a1173274852efe7e014c84ec6112a61d7b24bf68f765df73` /
+  `efb72b834c8428e726663334d39afb8b9bd8356f41454ebe37433875c93c8019`。
+- 该包为真实 UM220 GNSS、真实 RS485、Compact V6、LIVE-capable 但启动 `RTCM disabled`；
+  不能把构建通过视为现场 RTK 通过，必须按物理标签匹配 A/B/C 后再验收。
+
 ## Goal
 
 将已验证可 Fixed 的 3 套 UM220-IV NK + BT-760 部署为可追溯、资源可控的三节点 RTK 位移系统；先通过共享链路门禁，再实现 RK3568 专业位移算法、服务器长周期分析和现场诊断。
 
 ## Current State
 
-### Low-Rate Environment V2 Core-Timing Implemented; Build And Flash Gate Next (2026-08-06)
+### Low-Rate Environment V2 Core-Timing Implemented; Final Package Ready (2026-08-06)
 
 - 固件和 RK3568 已完成同版源代码调整：倾角/GNSS 1 秒，电池/土壤温度/含水率/EC
   10 秒；倾角优先于土壤，低频 `300 ms / 0 retry`，无效数据缺失而不是 0。
@@ -40,7 +55,7 @@ status: active
   80 ms 空等。现有专业 GNSS、供电和 RTCM 字段全部保留，线框仍为 64 B。
 - 网关 2 秒 core 截止会推迟 RTCM/P3/P4；重合的 P4/P3 均保存并依次发送，避免 audit
   长期压掉 environment。网关 build/lint/`76/76` 和 RK2206 C99/静态门禁均通过。
-- 待办顺序：完成 OpenHarmony A/B/C 同源构建和 release 校验；用户烧录后先在
+- 现场待办顺序：用户烧录后先在
   `NTRIP_ENABLED=false` 下检查每节点 4 秒至少两个不同 core epoch，再跑真实 RTCM
   混合负载。混合门禁保持 `GGA=4 / correction age <=6 s / solution age <=2 s`。
 - v2 正式镜像已从 clean commit

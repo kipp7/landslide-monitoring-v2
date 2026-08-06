@@ -12,6 +12,21 @@ status: active
 
 # Checkpoint: gnss-rtk-v3-transport-gate-20260726
 
+## Final V2 Hardware Package (2026-08-06)
+
+- 最终包已从 clean commit
+  `b4c40a85df5a28c442c9d9b5f44e8b3537730c0d` 构建并通过发布安全门禁，未进行真机烧录。
+- 包路径：
+  `F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v6_lowrate_v2_corefast_rs485_gnss_hardware_live_final_20260806`
+- manifest SHA-256：
+  `a160e5ed61254be8efd0603c7b3729aad4a15ca2704a70cf19d0350b0275b7aa`
+- A/B/C `.bin` SHA-256：
+  `800756c70de9b553b445e9ca1e62bde482d47d27881e2c0182eba020c18656e2` /
+  `202366ec8490bf83a1173274852efe7e014c84ec6112a61d7b24bf68f765df73` /
+  `efb72b834c8428e726663334d39afb8b9bd8356f41454ebe37433875c93c8019`。
+- 当前 RK3568 运行状态要求保持 `NTRIP_ENABLED=false`、runtime `probe`、聚合数 `1`；
+  烧录后先做 4 秒纯通信门禁，再按 `G3R -> G3B=2 -> G3B=4 -> LIVE` 进入实测。
+
 ## Compact V6 Low-Rate V2 Core Timing (2026-08-06)
 
 - 数据合同复审结论：核心 46 B/完整 64 B 线框没有可删除且能降低空口负载的字段；GNSS
@@ -26,7 +41,7 @@ status: active
   `9310ed3eb0bcf193a308e4d71b832b1f692af2d94eff318246e3a6ef9700704b`；A/B/C `.bin`
   SHA-256 分别为 `800756c70de9b553b445e9ca1e62bde482d47d27881e2c0182eba020c18656e2`、
   `202366ec8490bf83a1173274852efe7e014c84ec6112a61d7b24bf68f765df73`、
-  `efb72b834c8428e726663334d39afb8b9bd8356f41454eb37433875c93c8019`。旧 v1 包不应与
+  `efb72b834c8428e726663334d39afb8b9bd8356f41454ebe37433875c93c8019`。旧 v1 包不应与
   本次源码混烧。
 
 ## Objective
