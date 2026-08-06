@@ -23,6 +23,8 @@ interface SeriesValue {
   ts: string;
 }
 
+type CoordinateKeyPair = Array<string>;
+
 export class AlertLocationRepository {
   private api: ApiClient;
   private cache: CacheManager;
@@ -75,21 +77,34 @@ export class AlertLocationRepository {
     };
   }
 
-  async resolveNodes(devices: Array<Device>): Promise<Array<AlertMapLocation>> {
+  async resolveNodes(
+    devices: Array<Device>,
+    states: Array<DeviceState> = []
+  ): Promise<Array<AlertMapLocation>> {
     const sorted = devices.slice().sort((left: Device, right: Device) =>
       deviceDisplayName(left).localeCompare(deviceDisplayName(right))
     );
     const tasks: Array<Promise<AlertMapLocation>> = [];
     for (let index = 0; index < sorted.length; index++) {
-      tasks.push(this.resolveNode(sorted[index], index, sorted.length));
+      tasks.push(this.resolveNode(
+        sorted[index],
+        index,
+        sorted.length,
+        this.findDeviceState(sorted[index].deviceId, states)
+      ));
     }
     return Promise.all(tasks);
   }
 
-  private async resolveNode(device: Device, index: number, total: number): Promise<AlertMapLocation> {
+  private async resolveNode(
+    device: Device,
+    index: number,
+    total: number,
+    state: DeviceState | null
+  ): Promise<AlertMapLocation> {
     let gps: AlertMapLocation | null = null;
     try {
-      gps = await this.deviceGpsLocation(device);
+      gps = await this.deviceGpsLocation(device, state);
     } catch {
       gps = null;
     }
@@ -138,13 +153,37 @@ export class AlertLocationRepository {
 
   private coordinateFromRecord(record: JsonRecord | undefined): Coordinate | null {
     if (!record) return null;
-    const direct = this.coordinateFromValues(
-      this.firstNumber(record, ['latitude', 'lat', 'gps_latitude']),
-      this.firstNumber(record, ['longitude', 'lng', 'lon', 'gps_longitude'])
-    );
-    if (direct) return direct;
+    // RK3568 now publishes RTK coordinates. Try complete pairs in priority
+    // order so a newer latitude is never mixed with an older longitude.
+    const coordinatePairs: Array<CoordinateKeyPair> = [
+      ['rtk_latitude_deg', 'rtk_longitude_deg'],
+      ['latitude_deg', 'longitude_deg'],
+      ['gnss_latitude', 'gnss_longitude'],
+      ['gps_latitude', 'gps_longitude'],
+      ['latitude', 'longitude'],
+      ['lat', 'lng'],
+      ['lat', 'lon']
+    ];
+    for (let pairIndex = 0; pairIndex < coordinatePairs.length; pairIndex++) {
+      const pair = coordinatePairs[pairIndex];
+      const direct = this.coordinateFromValues(
+        this.firstNumber(record, [pair[0]]),
+        this.firstNumber(record, [pair[1]])
+      );
+      if (direct) return direct;
+    }
 
-    const nestedKeys = ['location', 'gps', 'coordinates'];
+    const nestedKeys = [
+      'location',
+      'gps',
+      'gnss',
+      'rtk',
+      'coordinates',
+      'position',
+      'latestGPS',
+      'latestGps',
+      'latest_gps'
+    ];
     for (let index = 0; index < nestedKeys.length; index++) {
       const nested = record[nestedKeys[index]];
       if (typeof nested === 'object' && nested !== null && !Array.isArray(nested)) {
@@ -171,29 +210,45 @@ export class AlertLocationRepository {
   private async deviceStateCoordinate(deviceId: string): Promise<Coordinate | null> {
     try {
       const state = await this.api.deviceState(deviceId);
-      const coordinate = this.coordinateFromRecord(state.state.metrics);
-      if (!coordinate) return null;
-      return {
-        latitude: coordinate.latitude,
-        longitude: coordinate.longitude,
-        updatedAt: state.updatedAt
-      };
+      return this.coordinateFromDeviceState(state);
     } catch {
       return null;
     }
   }
 
+  private coordinateFromDeviceState(state: DeviceState): Coordinate | null {
+    const coordinate = this.coordinateFromRecord(state.state.metrics) ??
+      this.coordinateFromRecord(state.state.meta);
+    if (!coordinate) return null;
+    return {
+      latitude: coordinate.latitude,
+      longitude: coordinate.longitude,
+      updatedAt: state.updatedAt
+    };
+  }
+
   private async deviceSeriesCoordinate(deviceId: string): Promise<Coordinate | null> {
     try {
       const response = await this.api.gpsSeries(deviceId);
-      const latitude = this.latestSeriesValue(response, 'gps_latitude');
-      const longitude = this.latestSeriesValue(response, 'gps_longitude');
-      if (!latitude || !longitude || !this.validCoordinate(latitude.value, longitude.value)) return null;
-      return {
-        latitude: latitude.value,
-        longitude: longitude.value,
-        updatedAt: latitude.ts > longitude.ts ? latitude.ts : longitude.ts
-      };
+      const coordinatePairs: Array<CoordinateKeyPair> = [
+        ['rtk_latitude_deg', 'rtk_longitude_deg'],
+        ['latitude_deg', 'longitude_deg'],
+        ['gnss_latitude', 'gnss_longitude'],
+        ['gps_latitude', 'gps_longitude']
+      ];
+      for (let pairIndex = 0; pairIndex < coordinatePairs.length; pairIndex++) {
+        const pair = coordinatePairs[pairIndex];
+        const latitude = this.latestSeriesValue(response, pair[0]);
+        const longitude = this.latestSeriesValue(response, pair[1]);
+        if (latitude && longitude && this.validCoordinate(latitude.value, longitude.value)) {
+          return {
+            latitude: latitude.value,
+            longitude: longitude.value,
+            updatedAt: latitude.ts > longitude.ts ? latitude.ts : longitude.ts
+          };
+        }
+      }
+      return null;
     } catch {
       return null;
     }
@@ -220,8 +275,13 @@ export class AlertLocationRepository {
     };
   }
 
-  private async deviceGpsLocation(device: Device): Promise<AlertMapLocation | null> {
-    const stateCoordinate = await this.deviceStateCoordinate(device.deviceId);
+  private async deviceGpsLocation(
+    device: Device,
+    state: DeviceState | null = null
+  ): Promise<AlertMapLocation | null> {
+    const stateCoordinate = state
+      ? this.coordinateFromDeviceState(state)
+      : await this.deviceStateCoordinate(device.deviceId);
     if (stateCoordinate) {
       const source: AlertLocationSource = this.isRecent(stateCoordinate.updatedAt) ? 'gps-live' : 'gps-last';
       const location = this.gpsLocation(device, stateCoordinate, source);
@@ -274,6 +334,13 @@ export class AlertLocationRepository {
     if (!deviceId) return null;
     for (let index = 0; index < devices.length; index++) {
       if (devices[index].deviceId === deviceId) return devices[index];
+    }
+    return null;
+  }
+
+  private findDeviceState(deviceId: string, states: Array<DeviceState>): DeviceState | null {
+    for (let index = 0; index < states.length; index++) {
+      if (states[index].deviceId === deviceId) return states[index];
     }
     return null;
   }

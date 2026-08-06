@@ -797,6 +797,35 @@ struct Index {
     await this.loadStationMapLocations(devices);
   }
 
+  private async refreshSelectedStationMapLocations(stationId: string): Promise<void> {
+    if (stationId.length === 0 || stationId !== this.selectedStationId) return;
+    if (!this.alertLocationRepository && this.cache) {
+      this.alertLocationRepository = new AlertLocationRepository(this.api, this.cache);
+    }
+    if (!this.alertLocationRepository) return;
+
+    const monitoringDevices: Array<Device> = [];
+    for (let index = 0; index < this.devices.length; index++) {
+      if (this.devices[index].status.toLowerCase() === 'revoked' || isAlarmActuatorDevice(this.devices[index])) continue;
+      monitoringDevices.push(this.devices[index]);
+    }
+    const locations = await this.alertLocationRepository.resolveNodes(monitoringDevices, this.deviceStates);
+    if (stationId !== this.selectedStationId) return;
+
+    const merged: Array<AlertMapLocation> = [];
+    for (let locationIndex = 0; locationIndex < this.stationMapLocations.length; locationIndex++) {
+      let belongsToSelectedStation = false;
+      for (let deviceIndex = 0; deviceIndex < monitoringDevices.length; deviceIndex++) {
+        if (this.stationMapLocations[locationIndex].deviceId === monitoringDevices[deviceIndex].deviceId) {
+          belongsToSelectedStation = true;
+        }
+      }
+      if (!belongsToSelectedStation) merged.push(this.stationMapLocations[locationIndex]);
+    }
+    for (let index = 0; index < locations.length; index++) merged.push(locations[index]);
+    this.stationMapLocations = merged;
+  }
+
   private async loadDevices(stationId: string, parentRequestSequence?: number): Promise<void> {
     const requestSequence = parentRequestSequence ?? ++this.stationRequestSequence;
     if (parentRequestSequence === undefined) this.stationRefreshing = true;
@@ -1120,9 +1149,11 @@ struct Index {
     this.errorMessage = '暂未找到该监测节点，请先刷新站点数据';
   }
 
-  private refreshStationRealtime(): void {
-    this.refreshStationDeviceStates();
+  private async refreshStationRealtime(): Promise<void> {
+    const stationId = this.selectedStationId;
     this.refreshAlarmActuatorStatus();
+    await this.refreshStationDeviceStates(stationId);
+    await this.refreshSelectedStationMapLocations(stationId);
   }
 
   private async loadAlerts(): Promise<void> {
@@ -6657,7 +6688,7 @@ struct BottomTabs {
         TabButton({ label: 'AI', icon: $r('sys.symbol.arrow_clockwise'), textIcon: 'AI', active: this.screen === 'ai', badgeCount: 0, onTap: () => this.onSelect('ai') });
         TabButton({ label: '我的', icon: $r('sys.symbol.person_crop_circle_fill_1'), active: this.screen === 'settings', badgeCount: 0, onTap: () => this.onSelect('settings') });
       }
-      .layoutWeight(1)
+      .height(68)
       .width('100%')
     }
     .height(68)
@@ -6677,7 +6708,7 @@ struct TabButton {
 
   build() {
     Column({ space: 2 }) {
-      Stack({ alignContent: Alignment.TopEnd }) {
+      Stack({ alignContent: Alignment.Center }) {
         if (this.textIcon.length > 0) {
           Text(this.textIcon)
             .fontSize(12)
@@ -6704,11 +6735,11 @@ struct TabButton {
             .padding({ left: 3, right: 3 })
             .backgroundColor(UI_COLOR_DANGER)
             .borderRadius(8)
-            .offset({ x: 8, y: -3 })
+            .offset({ x: 13, y: -9 })
         }
       }
       .width(40)
-      .height(28)
+      .height(32)
       .backgroundColor(this.active ? UI_COLOR_HERMES_SOFT : Color.Transparent)
       .borderRadius(8)
       .animation({ duration: 180, curve: Curve.EaseOut })
@@ -6720,6 +6751,7 @@ struct TabButton {
     .layoutWeight(1)
     .height('100%')
     .justifyContent(FlexAlign.Center)
+    .alignItems(HorizontalAlign.Center)
     .accessibilityText(`${this.label}${this.badgeCount > 0 ? `，${this.badgeCount} 条待处理` : ''}`)
     .onClick(() => this.onTap())
   }

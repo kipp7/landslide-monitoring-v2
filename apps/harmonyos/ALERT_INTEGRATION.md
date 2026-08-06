@@ -52,7 +52,9 @@ GET /api/v1/data/state/{deviceId}
 GET /api/v1/data/series/{deviceId}
 ```
 
-定位优先级为告警证据 GPS、设备实时 GPS、设备七日历史 GPS、最后有效 GPS、站点 GPS、厦门大学默认位置。
+定位优先级为告警证据坐标、设备实时 RTK、兼容 GPS/GNSS、设备七日历史位置、最后有效位置、站点坐标、厦门大学默认位置。当前 RTK 字段为 `rtk_latitude_deg` / `rtk_longitude_deg`，同时兼容 `latitude_deg` / `longitude_deg`、`gnss_latitude` / `gnss_longitude` 和旧的 `gps_latitude` / `gps_longitude`。
+
+站点页每 10 秒刷新节点状态后会复用同一批状态更新地图，不额外重复请求 `/data/state`。服务器坐标变化会自动更新对应节点；设备离线或接口暂时不可用时继续显示最后一次有效位置。
 
 打开具体告警地图时，App 会在获得系统授权后读取手机当前定位，用于在本机计算与告警点或安全集合点的直线距离和相对方位。手机定位不上传服务器、不写入业务数据库，也不保存到本地快照；退出地图后只保留当前进程中的临时状态。
 

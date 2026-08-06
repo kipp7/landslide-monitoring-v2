@@ -176,7 +176,18 @@ export class ApiClient {
   async gpsSeries(deviceId: string): Promise<SeriesResponse> {
     const end = new Date();
     const start = new Date(end.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const sensorKeys = ['gps_latitude', 'gps_longitude'];
+    // The current RK3568/desktop contract uses RTK coordinates. Keep the
+    // legacy GPS and GNSS names in the request for older field nodes.
+    const sensorKeys = [
+      'rtk_latitude_deg',
+      'rtk_longitude_deg',
+      'latitude_deg',
+      'longitude_deg',
+      'gnss_latitude',
+      'gnss_longitude',
+      'gps_latitude',
+      'gps_longitude'
+    ];
     const query = `?startTime=${encodeURIComponent(start.toISOString())}&endTime=${encodeURIComponent(end.toISOString())}&sensorKeys=${encodeURIComponent(sensorKeys.join(','))}&interval=5m&timeField=received`;
     return this.request<SeriesResponse>(`/data/series/${encodeURIComponent(deviceId)}${query}`);
   }
