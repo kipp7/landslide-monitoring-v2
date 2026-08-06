@@ -248,15 +248,15 @@ export interface EdgeRiskFeature {
 
 export interface EdgeRiskDevice {
   deviceId: string;
-  stationId?: string;
+  stationId?: string | null;
   generatedAt: string;
-  dataUpdatedAt?: string;
+  dataUpdatedAt?: string | null;
   dataStatus: string;
-  modelKey: string;
-  modelVersion: string;
-  riskScore: number;
+  modelKey: string | null;
+  modelVersion: string | null;
+  riskScore: number | null;
   riskLevel: string;
-  confidence: number;
+  confidence: number | null;
   hardRuleTriggered: boolean;
   hardRuleReasons: Array<string>;
   explain: string;
@@ -432,6 +432,8 @@ export interface HermesPlannerStatus {
 }
 
 export interface HermesChatResponse {
+  requestId?: string;
+  duplicate?: boolean;
   conversation: HermesConversation;
   messages: Array<HermesMessage>;
   tasks: Array<HermesAgentTask>;
@@ -442,27 +444,121 @@ export interface HermesChatResponse {
 
 export interface EdgeRiskModelStatus {
   loaded: boolean;
-  modelKey?: string;
-  modelVersion?: string;
-  trainedAt?: string;
-  trainingSource?: string;
-  error?: string;
+  displayName?: string;
+  modelType?: string;
+  methodKind?: string;
+  modelKey?: string | null;
+  modelVersion?: string | null;
+  trainedAt?: string | null;
+  trainingSource?: string | null;
+  error?: string | null;
+  configExpired?: boolean | null;
+  expiryDetail?: string | null;
+  inference?: EdgeRiskInference | null;
+}
+
+export interface EdgeRiskInference {
+  lastInferenceAt?: string | null;
+  lastInferenceDurationMs?: number | null;
+  inputFeatureCount?: number | null;
+}
+
+export interface EdgeDiagnosisOod {
+  detected?: boolean | null;
+  normalizedEntropy?: number | null;
+  minConfidence?: number | null;
+  maxEntropy?: number | null;
+  reason?: string | null;
+}
+
+export interface EdgeDiagnosisStatus {
+  category?: string | null;
+  confidence?: number | null;
+  ood?: EdgeDiagnosisOod | null;
+}
+
+export interface EdgeDiagnosisModelStatus {
+  displayName?: string | null;
+  modelKey?: string | null;
+  modelVersion?: string | null;
+  modelType?: string | null;
+  loaded?: boolean | null;
+  lastInferenceAt?: string | null;
+  inferenceDurationMs?: number | null;
+  inputFeatureCount?: number | null;
+  diagnosisType?: string | null;
+  diagnosisConfidence?: number | null;
+  ood?: EdgeDiagnosisOod | null;
+}
+
+export interface EdgeAiModelsStatus {
+  risk?: EdgeRiskModelStatus | null;
+  diagnosis?: EdgeDiagnosisModelStatus | null;
+}
+
+export interface EdgeRuntimeResources {
+  cpuLoad1?: number | null;
+  memoryTotalMb?: number | null;
+  memoryAvailableMb?: number | null;
+  memoryAvailableRatio?: number | null;
+  temperatureC?: number | null;
+  taskQueue?: EdgeAiActionQueue | null;
+}
+
+export interface EdgeSafetyStatus {
+  reachable?: boolean | null;
+  state?: string | null;
+  rulesVersion?: string | null;
+  activeLeases?: Array<Object> | null;
+  pendingSyncCount?: number | null;
+}
+
+export interface EdgeAutonomyStatus {
+  state?: string | null;
+  consecutiveAnomalyCycles?: number | null;
+  hourlyExecutionCount?: number | null;
+  hourlyExecutionLimit?: number | null;
+  recentDecision?: EdgeAutonomyDecision | null;
+}
+
+export interface EdgeAutonomyDecision {
+  action?: EdgeAiActionName | null;
+  trigger?: string | null;
+  status?: string | null;
+  decidedAt?: string | null;
+  evidence?: Object | null;
 }
 
 export interface EdgeAiStatus {
   reachable?: boolean;
   available: boolean;
+  stale?: boolean;
+  offline?: boolean;
+  partial?: boolean;
+  snapshotStale?: boolean;
+  liveDeviceCount?: number;
+  staleDeviceCount?: number;
+  offlineDeviceCount?: number;
+  insufficientDeviceCount?: number;
+  state?: string;
+  stateText?: string;
   mode: string;
   generatedAt: string;
   mqttConnected: boolean;
   model: EdgeRiskModelStatus;
   overallRiskLevel: string;
-  maxRiskScore?: number;
+  maxRiskScore?: number | null;
   hardRuleTriggered: boolean;
   devices: Array<EdgeRiskDevice>;
   tasks: Array<EdgeAgentTask>;
   pendingUploadCount: number;
-  runtimeError?: string;
+  pendingOfflineSyncCount?: number | null;
+  models?: EdgeAiModelsStatus | null;
+  diagnosis?: EdgeDiagnosisStatus | null;
+  resources?: EdgeRuntimeResources | null;
+  safety?: EdgeSafetyStatus | null;
+  autonomy?: EdgeAutonomyStatus | null;
+  runtimeError?: string | null;
 }
 
 export function numberValue(value: Object | undefined): number | null {

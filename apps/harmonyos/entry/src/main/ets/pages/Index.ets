@@ -64,7 +64,8 @@ function edgeNodeFallbackName(deviceId: string): string {
   return `监测节点 ${suffix}`;
 }
 
-function hermesDiagnosisLabel(value: string | undefined): string {
+function hermesDiagnosisLabel(value: string | null | undefined): string {
+  if (value === 'unknown_ood') return '未知数据分布';
   if (value === 'healthy_watch') return '链路运行平稳';
   if (value === 'center_mqtt_route_unreachable') return '中心消息通路不可达';
   if (value === 'center_mqtt_service_unavailable') return '中心消息服务不可用';
@@ -76,6 +77,26 @@ function hermesDiagnosisLabel(value: string | undefined): string {
   if (value === 'edge_resource_pressure') return '边缘主机资源压力偏高';
   if (value === 'model_unavailable') return '诊断模型暂不可用';
   return '需要人工复核';
+}
+
+function hermesActionLabel(value: EdgeAiActionName): string {
+  if (value === 'recheck') return '重新研判';
+  if (value === 'collect_logs') return '采集日志';
+  return '生成报告';
+}
+
+function edgeAutonomyStateLabel(value: string | null | undefined): string {
+  if (value === 'idle') return '空闲监测';
+  if (value === 'observing_anomaly') return '异常观察中';
+  if (value === 'rate_limited') return '已限流';
+  return value ?? '状态待确认';
+}
+
+function edgeAutonomyDecisionStatusLabel(value: string | null | undefined): string {
+  if (value === 'accepted') return '已接纳';
+  if (value === 'suppressed') return '已抑制';
+  if (value === 'failed') return '失败';
+  return value ?? '待确认';
 }
 
 function localizedHermesText(value: string): string {
@@ -142,6 +163,8 @@ struct Index {
   @State private connectionUpdatedAt: string = '尚未请求';
   @State private dashboard: DashboardSummary | null = null;
   @State private edgeAiStatus: EdgeAiStatus | null = null;
+  @State private edgeAiServerOffline: boolean = false;
+  @State private edgeAiSnapshotCached: boolean = false;
   @State private edgeAiRefreshing: boolean = false;
   @State private edgeAiActionBusy: boolean = false;
   @State private edgeAiActions: Array<HermesAction> = [];
@@ -153,6 +176,7 @@ struct Index {
   @State private edgeAiConversationTasks: Array<HermesAgentTask> = [];
   @State private edgeAiChatLoading: boolean = false;
   @State private edgeAiFailedIntent: string = '';
+  @State private edgeAiPendingRequestId: string = '';
   @State private overviewTrends: Array<DeviceMonitoringTrend> = [];
   @State private stations: Array<Station> = [];
   @State private devices: Array<Device> = [];
@@ -408,6 +432,8 @@ struct Index {
     this.clearInAppAlerts();
     this.dashboard = null;
     this.edgeAiStatus = null;
+    this.edgeAiServerOffline = false;
+    this.edgeAiSnapshotCached = false;
     this.edgeAiRefreshing = false;
     this.edgeAiActionBusy = false;
     this.edgeAiActions = [];
@@ -418,6 +444,7 @@ struct Index {
     this.edgeAiMessages = [];
     this.edgeAiConversationTasks = [];
     this.edgeAiChatLoading = false;
+    this.edgeAiPendingRequestId = '';
     this.overviewTrends = [];
     this.stations = [];
     this.devices = [];
@@ -865,13 +892,34 @@ struct Index {
     if (!this.repository || this.edgeAiRefreshing) return;
     this.edgeAiRefreshing = true;
     const repository = this.repository as MonitoringRepository;
+    let cachedStatus: EdgeAiStatus | null = null;
     try {
       const cached = await repository.cachedEdgeAiStatus();
-      if (cached) this.edgeAiStatus = cached.value;
-      const status = await repository.edgeAiStatus();
-      this.edgeAiStatus = status;
+      if (cached) {
+        cachedStatus = cached.value;
+        this.edgeAiStatus = cached.value;
+        this.edgeAiSnapshotCached = true;
+      }
     } catch {
-      // AI is an optional sidecar; keep its last snapshot without affecting monitoring pages.
+      // Cache is optional; continue with the server request.
+    }
+    try {
+      const status = await repository.edgeAiStatus();
+      const live = (status.reachable ?? status.available) === true && status.snapshotStale !== true;
+      if (live) {
+        this.edgeAiStatus = status;
+        this.edgeAiSnapshotCached = false;
+      } else if (cachedStatus === null) {
+        this.edgeAiStatus = status;
+        this.edgeAiSnapshotCached = true;
+      } else {
+        this.edgeAiSnapshotCached = true;
+      }
+      this.edgeAiServerOffline = false;
+    } catch {
+      this.edgeAiServerOffline = true;
+      this.edgeAiSnapshotCached = cachedStatus !== null;
+      // Keep the cached snapshot, but label it as non-live in the Hermes surface.
     }
     try {
       const history = await repository.edgeAiActions();
@@ -935,6 +983,7 @@ struct Index {
     this.edgeAiConversationTasks = [];
     this.edgeAiIntentResolution = null;
     this.edgeAiFailedIntent = '';
+    this.edgeAiPendingRequestId = '';
   }
 
   private async recheckEdgeAi(): Promise<void> {
@@ -985,6 +1034,11 @@ struct Index {
     if (!this.repository || this.edgeAiActionBusy || intent.trim().length === 0) return;
     this.edgeAiActionBusy = true;
     this.edgeAiFailedIntent = '';
+    if (this.edgeAiPendingRequestId.length === 0) {
+      const randomPart = Math.floor(Math.random() * 0xFFFFFFF).toString(36);
+      this.edgeAiPendingRequestId = `harmonyos:chat:${Date.now().toString(36)}:${randomPart}`;
+    }
+    const requestId = this.edgeAiPendingRequestId;
     const localMessageId = `local-${Date.now()}`;
     const localMessage: HermesMessage = {
       messageId: localMessageId,
@@ -997,14 +1051,20 @@ struct Index {
     this.edgeAiMessages = [...this.edgeAiMessages, localMessage];
     try {
       const repository = this.repository as MonitoringRepository;
-      const response = await repository.sendHermesMessage(intent.trim(), this.edgeAiConversationId);
+      const response = await repository.sendHermesMessage(intent.trim(), this.edgeAiConversationId, requestId);
       this.edgeAiConversationId = response.conversation.conversationId;
       const nextMessages: Array<HermesMessage> = [];
       for (let index = 0; index < this.edgeAiMessages.length; index++) {
         if (this.edgeAiMessages[index].messageId !== localMessageId) nextMessages.push(this.edgeAiMessages[index]);
       }
       for (let index = 0; index < response.messages.length; index++) {
-        nextMessages.push(response.messages[index]);
+        let duplicateMessage = false;
+        for (let existingIndex = 0; existingIndex < nextMessages.length; existingIndex++) {
+          if (nextMessages[existingIndex].messageId === response.messages[index].messageId) {
+            duplicateMessage = true;
+          }
+        }
+        if (!duplicateMessage) nextMessages.push(response.messages[index]);
       }
       this.edgeAiMessages = nextMessages;
 
@@ -1036,6 +1096,7 @@ struct Index {
         suggestions: response.suggestions ?? []
       };
       await this.refreshEdgeAiAfterAction(repository);
+      this.edgeAiPendingRequestId = '';
     } catch (error) {
       const restoredMessages: Array<HermesMessage> = [];
       for (let index = 0; index < this.edgeAiMessages.length; index++) {
@@ -1795,6 +1856,8 @@ struct Index {
           } else if (this.screen === 'ai') {
             AiPane({
               status: this.edgeAiStatus,
+              serverOffline: this.edgeAiServerOffline,
+              snapshotCached: this.edgeAiSnapshotCached,
               devices: this.devices,
               actions: this.edgeAiActions,
               intentResolution: this.edgeAiIntentResolution,
@@ -2642,6 +2705,8 @@ struct OverviewStat {
 @Component
 struct AiPane {
   @Prop status: EdgeAiStatus | null;
+  @Prop serverOffline: boolean;
+  @Prop snapshotCached: boolean;
   @Prop devices: Array<Device>;
   @Prop actions: Array<HermesAction>;
   @Prop intentResolution: EdgeAiIntentResolution | null;
@@ -2662,13 +2727,19 @@ struct AiPane {
   @State private showingHistory: boolean = false;
 
   private connectionText(): string {
+    if (this.serverOffline) return '服务器离线 · 显示缓存';
+    if (this.snapshotCached) return 'RK3568 状态缓存 · 非实时';
     if (!this.status) return '正在连接 RK3568 边缘智能';
     if (!(this.status.reachable ?? this.status.available)) return 'RK3568 暂时离线';
-    if (!this.status.available) return 'RK3568 在线 · 等待节点数据';
+    if (!this.status.available) return 'RK3568 在线 · 等待有效节点数据';
+    if (this.status.offline) return 'RK3568 在线 · 节点数据离线';
+    if (this.status.stale) return 'RK3568 在线 · 数据陈旧';
     return `RK3568 在线 · ${this.status.devices.length} 个节点`;
   }
 
   private connectionColor(): string {
+    if (this.serverOffline) return '#A06A18';
+    if (this.snapshotCached) return '#A06A18';
     if (!this.status) return UI_COLOR_MUTED;
     return (this.status.reachable ?? this.status.available) ? UI_COLOR_SUCCESS : UI_COLOR_DANGER;
   }
@@ -2753,6 +2824,8 @@ struct AiPane {
       } else {
         HermesCommandPanel({
           status: this.status,
+          serverOffline: this.serverOffline,
+          snapshotCached: this.snapshotCached,
           executing: this.executing,
           resolution: this.intentResolution,
           messages: this.messages,
@@ -2998,6 +3071,8 @@ struct HermesSituationPanel {
 @Component
 struct HermesCommandPanel {
   @Prop status: EdgeAiStatus | null;
+  @Prop serverOffline: boolean;
+  @Prop snapshotCached: boolean;
   @Prop executing: boolean;
   @Prop resolution: EdgeAiIntentResolution | null;
   @Prop messages: Array<HermesMessage>;
@@ -3029,6 +3104,8 @@ struct HermesCommandPanel {
   }
 
   private welcomeText(): string {
+    if (this.serverOffline) return '服务器离线，当前展示已保存快照；不会把缓存状态标记为实时。';
+    if (this.snapshotCached) return 'RK3568 状态快照已缓存；当前不会把陈旧数据标记为实时。';
     if (!this.status) return '正在连接边缘智能，稍后即可开始对话。';
     if (!(this.status.reachable ?? this.status.available)) {
       return '边缘端暂时离线，你仍可查看已保存的对话与执行记录。';
@@ -3038,15 +3115,97 @@ struct HermesCommandPanel {
   }
 
   private edgeStatusText(): string {
+    if (this.serverOffline) return '服务器离线 · 显示缓存';
+    if (this.snapshotCached) return 'RK3568 状态缓存 · 非实时';
     if (!this.status) return '正在连接 RK3568';
     if (!(this.status.reachable ?? this.status.available)) return 'RK3568 暂时离线';
-    if (!this.status.available) return 'RK3568 在线，等待节点数据';
+    if (!this.status.available) return 'RK3568 在线，等待有效节点数据';
+    if (this.status.offline) return 'RK3568 在线，节点数据离线';
+    if (this.status.partial) {
+      return `RK3568 在线，${this.status.liveDeviceCount ?? 0} 个节点在线，${this.status.offlineDeviceCount ?? 0} 个节点离线`;
+    }
+    if (this.status.stale) return 'RK3568 在线，数据陈旧';
     return `RK3568 在线，${this.status.devices.length} 个节点参与研判`;
   }
 
   private edgeStatusColor(): string {
+    if (this.serverOffline) return '#A06A18';
+    if (this.snapshotCached) return '#A06A18';
     if (!this.status) return UI_COLOR_MUTED;
+    if (this.status.partial || this.status.stale || this.status.snapshotStale) return '#A06A18';
     return (this.status.reachable ?? this.status.available) ? UI_COLOR_SUCCESS : UI_COLOR_DANGER;
+  }
+
+  private riskAssessmentText(): string {
+    if (!this.status?.available || this.status.maxRiskScore === undefined || this.status.maxRiskScore === null) return '等待有效节点数据';
+    return `风险分数 ${Math.round(this.status.maxRiskScore * 100)} / 100`;
+  }
+
+  private diagnosisText(): string {
+    const category = this.status?.diagnosis?.category;
+    const confidence = this.status?.diagnosis?.confidence;
+    const ood = this.status?.diagnosis?.ood;
+    if (ood?.detected === true) return `未知分布 · ${ood.reason ?? '需人工复核'}`;
+    if (!category || confidence === undefined || confidence === null) return '等待诊断结果';
+    return `${hermesDiagnosisLabel(category)} · 置信度 ${Math.round(confidence * 100)}%`;
+  }
+
+  private safetyText(): string {
+    if (!this.status?.safety?.reachable) return '本地规则状态不可达';
+    const leases = this.status.safety.activeLeases?.length ?? 0;
+    return `${this.status.safety.rulesVersion ?? '规则待加载'} · ${leases} 个活动租约`;
+  }
+
+  private riskModelText(): string {
+    const model = this.status?.models?.risk ?? this.status?.model;
+    if (!model) return '鲁棒基线风险评分器 · 待加载';
+    return `${model.displayName ?? '鲁棒基线风险评分器'} · ${model.modelVersion ?? '版本待确认'} · ${model.loaded ? '已加载' : '未加载'}`;
+  }
+
+  private diagnosisModelText(): string {
+    const model = this.status?.models?.diagnosis;
+    if (!model) return '端侧链路诊断 · 模型待加载';
+    return `${model.displayName ?? '端侧链路诊断'} · ${model.modelVersion ?? '版本待确认'} · ${model.loaded ? '已加载' : '未加载'}`;
+  }
+
+  private resourceText(): string {
+    const resources = this.status?.resources;
+    if (!resources) return '资源证据待上报';
+    const cpu = resources.cpuLoad1 === undefined || resources.cpuLoad1 === null ? '--' : resources.cpuLoad1.toFixed(2);
+    const memory = resources.memoryAvailableMb === undefined || resources.memoryAvailableMb === null ? '--' : `${Math.round(resources.memoryAvailableMb)}MB`;
+    const temperature = resources.temperatureC === undefined || resources.temperatureC === null ? '--' : `${resources.temperatureC.toFixed(1)}°C`;
+    return `CPU ${cpu} · 可用内存 ${memory} · ${temperature}`;
+  }
+
+  private riskInferenceText(): string {
+    const inference = this.status?.models?.risk?.inference;
+    if (!inference) return '风险模型推理证据待上报';
+    const duration = inference.lastInferenceDurationMs === undefined || inference.lastInferenceDurationMs === null
+      ? '--'
+      : `${inference.lastInferenceDurationMs} ms`;
+    const featureCount = inference.inputFeatureCount === undefined || inference.inputFeatureCount === null
+      ? '--'
+      : `${inference.inputFeatureCount} 个特征`;
+    return `${duration} · ${featureCount}`;
+  }
+
+  private diagnosisEvidenceText(): string {
+    const model = this.status?.models?.diagnosis;
+    if (!model) return '诊断推理证据待上报';
+    const duration = model.inferenceDurationMs === undefined || model.inferenceDurationMs === null
+      ? '--'
+      : `${model.inferenceDurationMs} ms`;
+    const ood = model.ood?.detected === true ? '未知分布，需人工复核' : '分布内';
+    return `${duration} · ${ood}`;
+  }
+
+  private autonomyText(): string {
+    const autonomy = this.status?.autonomy;
+    if (!autonomy) return '自治状态待上报';
+    const decision = autonomy.recentDecision;
+    const action = decision?.action;
+    if (action === undefined || action === null) return `${edgeAutonomyStateLabel(autonomy.state)} · 暂无自动任务`;
+    return `${edgeAutonomyStateLabel(autonomy.state)} · ${hermesActionLabel(action)} · ${edgeAutonomyDecisionStatusLabel(decision?.status)}`;
   }
 
   build() {
@@ -3096,6 +3255,37 @@ struct HermesCommandPanel {
               .backgroundColor(UI_COLOR_SURFACE)
               .border({ width: 1, color: UI_COLOR_LINE })
               .borderRadius(16)
+
+              Column() {
+                HermesEdgeStateLine({ label: '端侧风险研判', value: this.riskAssessmentText() })
+                Divider().color(UI_COLOR_LINE).margin({ left: 14, right: 14 })
+                HermesEdgeStateLine({ label: '端侧链路诊断', value: this.diagnosisText() })
+                Divider().color(UI_COLOR_LINE).margin({ left: 14, right: 14 })
+                HermesEdgeStateLine({ label: '规则安全保障', value: this.safetyText() })
+                Divider().color(UI_COLOR_LINE).margin({ left: 14, right: 14 })
+                HermesEdgeStateLine({ label: '鲁棒基线风险评分器', value: this.riskModelText() })
+                Divider().color(UI_COLOR_LINE).margin({ left: 14, right: 14 })
+                HermesEdgeStateLine({ label: '端侧链路诊断模型', value: this.diagnosisModelText() })
+                Divider().color(UI_COLOR_LINE).margin({ left: 14, right: 14 })
+                HermesEdgeStateLine({ label: '风险推理证据', value: this.riskInferenceText() })
+                Divider().color(UI_COLOR_LINE).margin({ left: 14, right: 14 })
+                HermesEdgeStateLine({ label: '诊断推理证据', value: this.diagnosisEvidenceText() })
+                Divider().color(UI_COLOR_LINE).margin({ left: 14, right: 14 })
+                HermesEdgeStateLine({ label: '板端运行资源', value: this.resourceText() })
+                Divider().color(UI_COLOR_LINE).margin({ left: 14, right: 14 })
+                HermesEdgeStateLine({ label: '本地自治状态', value: this.autonomyText() })
+                Divider().color(UI_COLOR_LINE).margin({ left: 14, right: 14 })
+                HermesEdgeStateLine({ label: '离线待同步', value: `${this.status?.pendingOfflineSyncCount ?? 0} 条` })
+                Divider().color(UI_COLOR_LINE).margin({ left: 14, right: 14 })
+                HermesEdgeStateLine({
+                  label: '云端模型解释',
+                  value: this.serverOffline ? '服务器离线' : this.snapshotCached ? '状态缓存 · 非实时' : '服务器在线 · 按需解释'
+                })
+              }
+              .width('100%')
+              .backgroundColor(UI_COLOR_SURFACE)
+              .border({ width: 1, color: UI_COLOR_LINE })
+              .borderRadius(UI_RADIUS_SURFACE)
 
               Column() {
                 HermesPromptSuggestion({
@@ -3173,7 +3363,7 @@ struct HermesCommandPanel {
                 SymbolGlyph($r('sys.symbol.exclamationmark_triangle'))
                   .fontSize(18)
                   .fontColor([UI_COLOR_MUTED])
-                Text('消息未送达，任务没有执行')
+                Text('发送结果未确认')
                   .fontSize(13)
                   .fontWeight(FontWeight.Medium)
                   .fontColor(UI_COLOR_TEXT)
@@ -3193,6 +3383,10 @@ struct HermesCommandPanel {
                 .fontColor(UI_COLOR_MUTED)
                 .maxLines(2)
                 .textOverflow({ overflow: TextOverflow.Ellipsis })
+                .width('100%')
+              Text('重试会沿用同一请求标识，不会重复下发已执行任务。')
+                .fontSize(12)
+                .fontColor(UI_COLOR_SUBTLE)
                 .width('100%')
             }
             .padding(12)
@@ -3397,6 +3591,31 @@ struct HermesMessageRow {
 }
 
 @Component
+struct HermesEdgeStateLine {
+  @Prop label: string;
+  @Prop value: string;
+
+  build() {
+    Row({ space: 12 }) {
+      Text(this.label)
+        .fontSize(13)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(UI_COLOR_TEXT)
+        .width(108)
+      Text(this.value)
+        .fontSize(12)
+        .fontColor(UI_COLOR_MUTED)
+        .textAlign(TextAlign.End)
+        .maxLines(2)
+        .layoutWeight(1)
+    }
+    .constraintSize({ minHeight: 44 })
+    .padding({ left: 14, right: 14, top: 8, bottom: 8 })
+    .width('100%')
+  }
+}
+
+@Component
 struct HermesPromptSuggestion {
   @Prop title: string;
   @Prop detail: string;
@@ -3537,6 +3756,12 @@ struct HermesNodeRow {
     return value.replace('deg', '°');
   }
 
+  private riskScoreText(): string {
+    return this.risk.riskScore === null || this.risk.riskScore === undefined
+      ? '--'
+      : `${Math.round(this.risk.riskScore * 100)}%`;
+  }
+
   build() {
     Row({ space: 11 }) {
       Column({ space: 3 }) {
@@ -3560,7 +3785,7 @@ struct HermesNodeRow {
           .fontSize(12)
           .fontWeight(FontWeight.Bold)
           .fontColor(this.riskColor())
-        Text(`${Math.round(this.risk.riskScore * 100)}%`)
+        Text(this.riskScoreText())
           .fontSize(12)
           .fontWeight(FontWeight.Bold)
           .fontColor(UI_COLOR_TEXT)

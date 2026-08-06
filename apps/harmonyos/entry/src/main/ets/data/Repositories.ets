@@ -171,8 +171,8 @@ export class MonitoringRepository {
     return this.api.hermesConversation(conversationId);
   }
 
-  sendHermesMessage(message: string, conversationId: string = ''): Promise<HermesChatResponse> {
-    return this.api.sendHermesMessage(message, conversationId);
+  sendHermesMessage(message: string, conversationId: string = '', requestId: string = ''): Promise<HermesChatResponse> {
+    return this.api.sendHermesMessage(message, conversationId, requestId);
   }
 
   cachedState(deviceId: string): Promise<CacheRead<DeviceState> | null> {

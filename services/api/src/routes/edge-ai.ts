@@ -45,6 +45,10 @@ const chatSchema = z
   .object({
     conversationId: z.string().uuid().optional(),
     message: z.string().trim().min(1).max(2000),
+    requestId: z
+      .string()
+      .regex(/^[a-z0-9][a-z0-9._:-]{7,127}$/iu)
+      .optional(),
   })
   .strict();
 
@@ -65,9 +69,17 @@ export type EdgeAiIntentResolution = {
 
 type JsonObject = Record<string, unknown>;
 const actionIdSchema = z.string().uuid();
+const EDGE_STATUS_SNAPSHOT_MAX_AGE_MS = 120_000;
 
 function isObject(value: unknown): value is JsonObject {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isoAgeMs(value: unknown, now = Date.now()): number | null {
+  if (typeof value !== "string") return null;
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return null;
+  return Math.max(0, now - timestamp);
 }
 
 export function resolveEdgeAiIntent(intent: string): EdgeAiIntentResolution {
@@ -371,6 +383,63 @@ async function insertMessage(
   });
 }
 
+async function findConversationByRequestId(
+  pg: PgPool,
+  owner: HermesOwner,
+  requestId: string
+): Promise<HermesConversationRow | null> {
+  return withPgClient(pg, async (client) =>
+    queryOne<HermesConversationRow>(
+      client,
+      owner.userId
+        ? `
+          SELECT ${CONVERSATION_COLUMNS}
+          FROM hermes_conversations
+          WHERE user_id=$1
+            AND conversation_id IN (
+              SELECT conversation_id
+              FROM hermes_messages
+              WHERE role='user' AND metadata->>'requestId'=$2
+            )
+          ORDER BY updated_at DESC
+          LIMIT 1
+        `
+        : `
+          SELECT ${CONVERSATION_COLUMNS}
+          FROM hermes_conversations
+          WHERE user_id IS NULL AND owner_username=$1
+            AND conversation_id IN (
+              SELECT conversation_id
+              FROM hermes_messages
+              WHERE role='user' AND metadata->>'requestId'=$2
+            )
+          ORDER BY updated_at DESC
+          LIMIT 1
+        `,
+      [owner.userId ?? owner.username, requestId]
+    )
+  );
+}
+
+async function loadConversationHistory(
+  pg: PgPool,
+  conversationId: string
+): Promise<{ messages: HermesMessageRow[]; tasks: HermesTaskRow[] }> {
+  return withPgClient(pg, async (client) => {
+    const [messages, tasks] = await Promise.all([
+      client.query<HermesMessageRow>(
+        `SELECT ${MESSAGE_COLUMNS} FROM hermes_messages WHERE conversation_id=$1 ORDER BY created_at ASC LIMIT 200`,
+        [conversationId]
+      ),
+      client.query<HermesTaskRow>(
+        `SELECT ${TASK_COLUMNS} FROM hermes_tasks WHERE conversation_id=$1 ORDER BY created_at ASC LIMIT 100`,
+        [conversationId]
+      ),
+    ]);
+    return { messages: messages.rows, tasks: tasks.rows };
+  });
+}
+
 async function createTask(
   pg: PgPool,
   conversationId: string,
@@ -500,27 +569,160 @@ export function registerEdgeAiRoutes(
     const traceId = request.traceId;
     if (!(await requirePermission(adminCfg, pg, request, reply, "data:view"))) return;
 
-    const direct = await callHermes(config, "/v1/edge-risk", { method: "GET" });
-    if (direct.ok) {
-      ok(
-        reply,
-        { ...direct.body, reachable: true, available: direct.body.available === true },
-        traceId
-      );
-      return;
-    }
-
-    const supervision =
-      direct.status > 0
-        ? await callHermes(config, "/v1/supervision", { method: "GET" })
-        : { ok: false, status: 0, body: {}, error: direct.error };
+    const [direct, supervision] = await Promise.all([
+      callHermes(config, "/v1/edge-risk", { method: "GET" }),
+      callHermes(config, "/v1/supervision", { method: "GET" }),
+    ]);
     const edgeRiskAgent = isObject(supervision.body.edgeRiskAgent)
       ? supervision.body.edgeRiskAgent
       : null;
-    if (supervision.ok && edgeRiskAgent) {
+    const risk = direct.ok ? direct.body : edgeRiskAgent;
+    if (risk && (direct.ok || supervision.ok)) {
+      const devices = Array.isArray(risk.devices) ? risk.devices : [];
+      const liveDeviceCount = devices.filter(
+        (device) => isObject(device) && device.dataStatus === "live"
+      ).length;
+      const staleDeviceCount = devices.filter(
+        (device) => isObject(device) && device.dataStatus === "stale"
+      ).length;
+      const offlineDeviceCount = devices.filter(
+        (device) => isObject(device) && device.dataStatus === "offline"
+      ).length;
+      const insufficientDeviceCount = devices.filter(
+        (device) => isObject(device) && device.dataStatus === "insufficient"
+      ).length;
+      const stale =
+        (isObject(risk.model) && risk.model.configExpired === true) ||
+        staleDeviceCount > 0;
+      const offline = devices.length > 0 && offlineDeviceCount === devices.length;
+      const partial = offlineDeviceCount > 0 && liveDeviceCount > 0;
+      const snapshotAgeMs =
+        isoAgeMs(risk.generatedAt) ?? isoAgeMs(supervision.body.generatedAt);
+      const snapshotStale =
+        snapshotAgeMs !== null && snapshotAgeMs > EDGE_STATUS_SNAPSHOT_MAX_AGE_MS;
+      const reachable = !snapshotStale && (direct.ok || supervision.ok);
+      const diagnosis = isObject(supervision.body.aiDiagnosis)
+        ? supervision.body.aiDiagnosis
+        : null;
+      const localResources = isObject(supervision.body.localResources)
+        ? supervision.body.localResources
+        : null;
+      const localAutonomy = isObject(supervision.body.localAutonomy)
+        ? supervision.body.localAutonomy
+        : null;
+      const localSafetyEnvelope = isObject(supervision.body.localSafety)
+        ? supervision.body.localSafety
+        : null;
+      const localSafety = isObject(localSafetyEnvelope?.status)
+        ? localSafetyEnvelope.status
+        : null;
+      const safetyRules = isObject(localSafety?.rules) ? localSafety.rules : null;
+      const actionInterface = isObject(supervision.body.actionInterface)
+        ? supervision.body.actionInterface
+        : null;
+      const actionQueue = isObject(actionInterface?.queue) ? actionInterface.queue : null;
+      const available = risk.available === true && reachable;
       ok(
         reply,
-        { ...edgeRiskAgent, reachable: true, available: edgeRiskAgent.available === true },
+        {
+          ...risk,
+          reachable,
+          available,
+          stale: stale || snapshotStale,
+          offline,
+          partial,
+          liveDeviceCount,
+          staleDeviceCount,
+          offlineDeviceCount,
+          insufficientDeviceCount,
+          snapshotStale,
+          state: !reachable
+            ? "offline"
+            : !available
+              ? "waiting_for_valid_node_data"
+              : offline
+                ? "offline"
+                : partial
+                  ? "partial"
+                  : stale
+                    ? "stale"
+                    : "available",
+          stateText: !reachable
+            ? "RK3568 离线或状态快照过期"
+            : !available
+              ? "等待有效节点数据"
+              : offline
+                ? "端侧节点全部离线"
+                : partial
+                  ? `端侧部分在线（${String(liveDeviceCount)} 个在线，${String(offlineDeviceCount)} 个离线）`
+                  : stale
+                    ? "端侧数据陈旧"
+                    : "端侧研判运行中",
+          labels: {
+            edgeRisk: "端侧风险研判",
+            linkDiagnosis: "端侧链路诊断",
+            safety: "规则安全保障",
+            cloudExplanation: "云端模型解释",
+          },
+          models: {
+            risk: isObject(risk.model)
+              ? {
+                  ...risk.model,
+                  displayName: "鲁棒基线风险评分器",
+                  methodKind: "statistical_scoring",
+                  inference: isObject(risk.inference) ? risk.inference : null,
+                }
+              : null,
+            diagnosis: diagnosis
+              ? {
+                  displayName: "端侧链路诊断",
+                  modelKey: diagnosis.modelKey ?? null,
+                  modelVersion: diagnosis.modelVersion ?? null,
+                  modelType: diagnosis.modelType ?? "random_forest_classifier",
+                  loaded: diagnosis.modelLoaded === true,
+                  lastInferenceAt: diagnosis.inferenceAt ?? null,
+                  inferenceDurationMs: diagnosis.inferenceDurationMs ?? null,
+                  inputFeatureCount: diagnosis.inputFeatureCount ?? null,
+                  diagnosisType: diagnosis.diagnosisType ?? null,
+                  diagnosisConfidence: diagnosis.confidence ?? null,
+                  ood: isObject(diagnosis.ood) ? diagnosis.ood : null,
+                }
+              : null,
+          },
+          diagnosis: diagnosis
+            ? {
+                category: diagnosis.diagnosisType ?? null,
+                confidence: diagnosis.confidence ?? null,
+                ood: isObject(diagnosis.ood) ? diagnosis.ood : null,
+              }
+            : null,
+          resources: localResources
+            ? {
+                cpuLoad1: localResources.load1 ?? null,
+                memoryTotalMb: localResources.memTotalMb ?? null,
+                memoryAvailableMb: localResources.memAvailableMb ?? null,
+                memoryAvailableRatio: localResources.memAvailableRatio ?? null,
+                temperatureC: localResources.maxTemperatureC ?? null,
+                taskQueue: actionQueue,
+              }
+            : null,
+          autonomy: localAutonomy,
+          safety: {
+            reachable: localSafetyEnvelope?.reachable === true,
+            state: localSafety?.state ?? "unavailable",
+            rulesVersion: safetyRules?.version ?? null,
+            activeLeases: Array.isArray(localSafety?.activeLeases)
+              ? localSafety.activeLeases
+              : [],
+            pendingSyncCount:
+              typeof localSafety?.pendingSyncCount === "number"
+                ? localSafety.pendingSyncCount
+                : 0,
+          },
+          pendingOfflineSyncCount:
+            (typeof risk.pendingUploadCount === "number" ? risk.pendingUploadCount : 0) +
+            (typeof localSafety?.pendingSyncCount === "number" ? localSafety.pendingSyncCount : 0),
+        },
         traceId
       );
       return;
@@ -531,6 +733,10 @@ export function registerEdgeAiRoutes(
       {
         reachable: false,
         available: false,
+        stale: false,
+        offline: true,
+        state: "offline",
+        stateText: "RK3568 离线",
         mode: "hermes-edge-risk-agent",
         generatedAt: new Date().toISOString(),
         mqttConnected: false,
@@ -542,12 +748,29 @@ export function registerEdgeAiRoutes(
         pendingUploadCount: 0,
         model: {
           loaded: false,
+          displayName: "鲁棒基线风险评分器",
+          modelType: "robust_baseline_ensemble",
+          methodKind: "statistical_scoring",
           modelKey: null,
           modelVersion: null,
           trainedAt: null,
           trainingSource: null,
+          configExpired: false,
+          expiryDetail: null,
           error: direct.error ?? supervision.error ?? "Hermes 暂不可达",
         },
+        models: { risk: null, diagnosis: null },
+        diagnosis: null,
+        resources: null,
+        autonomy: null,
+        safety: {
+          reachable: false,
+          state: "unavailable",
+          rulesVersion: null,
+          activeLeases: [],
+          pendingSyncCount: 0,
+        },
+        pendingOfflineSyncCount: 0,
       },
       traceId
     );
@@ -682,6 +905,34 @@ export function registerEdgeAiRoutes(
     }
 
     const owner = ownerForRequest(request);
+    const requestId = parsed.data.requestId ?? randomUUID();
+    const existingConversation = await findConversationByRequestId(pg, owner, requestId);
+    if (existingConversation) {
+      const history = await loadConversationHistory(pg, existingConversation.conversation_id);
+      const assistant = [...history.messages].reverse().find((message) => message.role === "assistant");
+      const metadata = assistant && isObject(assistant.metadata) ? assistant.metadata : {};
+      ok(
+        reply,
+        {
+          requestId,
+          conversation: conversationDto(existingConversation),
+          messages: history.messages.map(messageDto),
+          tasks: history.tasks.map(taskDto),
+          blocked: metadata.blocked === true,
+          suggestions: [],
+          planner: {
+            source: metadata.plannerSource === "model" ? "model" : "deterministic",
+            model: typeof metadata.plannerModel === "string" ? metadata.plannerModel : null,
+            fallback: typeof metadata.plannerFallbackReason === "string" && metadata.plannerFallbackReason.length > 0,
+            fallbackReason:
+              typeof metadata.plannerFallbackReason === "string" ? metadata.plannerFallbackReason : null,
+          },
+          duplicate: true,
+        },
+        traceId
+      );
+      return;
+    }
     let conversation = parsed.data.conversationId
       ? await loadOwnedConversation(pg, parsed.data.conversationId, owner)
       : null;
@@ -694,7 +945,8 @@ export function registerEdgeAiRoutes(
       pg,
       conversation.conversation_id,
       "user",
-      parsed.data.message
+      parsed.data.message,
+      { requestId }
     );
     const [previousPlan, plannerHistory] = await Promise.all([
       loadPreviousPlan(pg, conversation.conversation_id),
@@ -790,6 +1042,7 @@ export function registerEdgeAiRoutes(
     ok(
       reply,
       {
+        requestId,
         conversation: conversationDto(conversation),
         messages: [messageDto(userMessage), messageDto(assistantMessage)],
         tasks: completedRows.map(taskDto),

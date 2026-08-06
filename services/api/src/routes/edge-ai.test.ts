@@ -4,6 +4,7 @@ import Fastify from "fastify";
 import { loadConfigFromEnv } from "../config";
 import { buildHermesAssistantReply, planHermesMessage } from "../hermes-agent";
 import { planHermesWithFallback } from "../hermes-planner";
+import type { PgPool } from "../postgres";
 import { registerEdgeAiRoutes, resolveEdgeAiIntent, type EdgeAiIntentResolution } from "./edge-ai";
 
 type EdgeAiEnvelope = {
@@ -11,10 +12,133 @@ type EdgeAiEnvelope = {
   data?: {
     reachable?: boolean;
     available?: boolean;
+    stale?: boolean;
+    offline?: boolean;
+    partial?: boolean;
+    snapshotStale?: boolean;
+    state?: string;
     overallRiskLevel?: string;
     devices?: unknown[];
   };
 };
+
+type FakeHermesStore = {
+  conversations: Record<string, unknown>[];
+  messages: Record<string, unknown>[];
+  tasks: Record<string, unknown>[];
+};
+
+type FakeHermesClient = {
+  query(sql: string, params?: unknown[]): Promise<{ rows: Record<string, unknown>[] }>;
+  release(): void;
+};
+
+function fakeHermesPool(store: FakeHermesStore) {
+  let sequence = 1;
+  const nextId = (): string => {
+    const suffix = String(sequence++).padStart(12, "0");
+    return `00000000-0000-4000-8000-${suffix}`;
+  };
+  const client: FakeHermesClient = {
+    query(sql: string, params: unknown[] = []): Promise<{ rows: Record<string, unknown>[] }> {
+      const normalized = sql.replace(/\s+/gu, " ").trim().toLowerCase();
+      if (normalized.startsWith("select") && normalized.includes("from hermes_conversations") && normalized.includes("from hermes_messages")) {
+        const owner = String(params[0]);
+        const requestId = String(params[1]);
+        const message = store.messages.find((item) =>
+          item.role === "user" &&
+          (item.metadata as Record<string, unknown> | undefined)?.requestId === requestId
+        );
+        const conversation = message
+          ? store.conversations.find((item) =>
+              item.conversation_id === message.conversation_id &&
+              (item.user_id === owner ||
+                (item.user_id === null && item.owner_username === owner))
+            )
+          : undefined;
+        return Promise.resolve({ rows: conversation ? [conversation] : [] });
+      }
+      if (normalized.startsWith("insert into hermes_conversations")) {
+        const row = {
+          conversation_id: nextId(),
+          user_id: params[0],
+          owner_username: params[1],
+          title: params[2],
+          status: "active",
+          created_at: "2026-08-06T00:00:00.000Z",
+          updated_at: "2026-08-06T00:00:00.000Z",
+        };
+        store.conversations.push(row);
+        return Promise.resolve({ rows: [row] });
+      }
+      if (normalized.startsWith("insert into hermes_messages")) {
+        const row = {
+          message_id: nextId(),
+          conversation_id: params[0],
+          role: params[1],
+          content: params[2],
+          metadata: JSON.parse(String(params[3])) as unknown,
+          created_at: `2026-08-06T00:00:0${String(store.messages.length)}.000Z`,
+        };
+        store.messages.push(row);
+        return Promise.resolve({ rows: [row] });
+      }
+      if (normalized.startsWith("select metadata") && normalized.includes("from hermes_messages")) {
+        return Promise.resolve({ rows: [] });
+      }
+      if (normalized.startsWith("select role, content") && normalized.includes("from hermes_messages")) {
+        return Promise.resolve({
+          rows: store.messages
+            .filter((item) => item.conversation_id === params[0] && (item.role === "user" || item.role === "assistant"))
+            .map((item) => ({ role: item.role, content: item.content })),
+        });
+      }
+      if (normalized.startsWith("insert into hermes_tasks")) {
+        const row = {
+          task_id: nextId(),
+          conversation_id: params[0],
+          action: params[4],
+          label: params[5],
+          status: "queued",
+          safety_level: "read_only",
+          result: {},
+          edge_action_id: null,
+          error: null,
+          created_at: "2026-08-06T00:00:00.000Z",
+          started_at: null,
+          completed_at: null,
+        };
+        store.tasks.push(row);
+        return Promise.resolve({ rows: [row] });
+      }
+      if (normalized.startsWith("update hermes_tasks set status='running'")) return Promise.resolve({ rows: [] });
+      if (normalized.startsWith("update hermes_tasks") && normalized.includes("returning")) {
+        const row = store.tasks.find((item) => item.task_id === params[0]);
+        if (row) {
+          row.status = params[1];
+          row.result = JSON.parse(String(params[2]));
+          row.edge_action_id = params[3];
+          row.error = params[4];
+          row.completed_at = "2026-08-06T00:00:01.000Z";
+        }
+        return Promise.resolve({ rows: row ? [row] : [] });
+      }
+      if (normalized.startsWith("select") && normalized.includes("from hermes_messages") && normalized.includes("order by created_at asc")) {
+        return Promise.resolve({ rows: store.messages.filter((item) => item.conversation_id === params[0]) });
+      }
+      if (normalized.startsWith("select") && normalized.includes("from hermes_tasks") && normalized.includes("order by created_at asc")) {
+        return Promise.resolve({ rows: store.tasks.filter((item) => item.conversation_id === params[0]) });
+      }
+      if (normalized.startsWith("update hermes_conversations")) {
+        const row = store.conversations.find((item) => item.conversation_id === params[0]);
+        return Promise.resolve({ rows: row ? [row] : [] });
+      }
+      return Promise.resolve({ rows: [] });
+    },
+    release(): void { return; },
+  };
+  return { connect: (): Promise<FakeHermesClient> => Promise.resolve(client) } as unknown as PgPool;
+}
 
 function fetchUrl(input: string | URL | Request): string {
   if (typeof input === "string") return input;
@@ -50,8 +174,15 @@ void test("status degrades to unavailable when Hermes is not configured", async 
 
 void test("status keeps RK3568 reachable when edge risk data is unavailable", async (context) => {
   context.mock.method(globalThis, "fetch", async (input: string | URL | Request) => {
-    assert.equal(fetchUrl(input), "http://127.0.0.1:18082/v1/edge-risk");
+    const url = fetchUrl(input);
     await Promise.resolve();
+    if (url.endsWith("/v1/supervision")) {
+      return new Response(JSON.stringify({}), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    assert.equal(url, "http://127.0.0.1:18082/v1/edge-risk");
     return new Response(
       JSON.stringify({
         available: false,
@@ -80,8 +211,247 @@ void test("status keeps RK3568 reachable when edge risk data is unavailable", as
   assert.ok(data);
   assert.equal(data.reachable, true);
   assert.equal(data.available, false);
+  assert.equal(data.stale, false);
+  assert.equal(data.offline, false);
+  assert.equal(data.state, "waiting_for_valid_node_data");
   assert.equal(data.overallRiskLevel, "unavailable");
   assert.deepEqual(data.devices, []);
+  await app.close();
+});
+
+void test("status reports partial node availability instead of all nodes offline", async (context) => {
+  context.mock.method(globalThis, "fetch", async (input: string | URL | Request) => {
+    const url = fetchUrl(input);
+    await Promise.resolve();
+    if (url.endsWith("/v1/supervision")) {
+      return new Response(JSON.stringify({ generatedAt: new Date().toISOString() }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return new Response(JSON.stringify({
+      available: true,
+      generatedAt: new Date().toISOString(),
+      overallRiskLevel: "normal",
+      devices: [
+        { deviceId: "node-b", dataStatus: "live" },
+        { deviceId: "node-c", dataStatus: "live" },
+        { deviceId: "node-a", dataStatus: "offline" },
+      ],
+    }), { status: 200, headers: { "content-type": "application/json" } });
+  });
+
+  const app = Fastify({ logger: false });
+  app.decorateRequest("traceId", "edge-ai-test");
+  const config = loadConfigFromEnv({
+    CLICKHOUSE_URL: "http://127.0.0.1:8123",
+    AUTH_REQUIRED: "false",
+    RK3568_HERMES_EDGE_SUPERVISOR_URL: "http://127.0.0.1:18082",
+  });
+  registerEdgeAiRoutes(app, config, null);
+
+  const response = await app.inject({ method: "GET", url: "/edge-ai/status" });
+  const data = response.json<EdgeAiEnvelope>().data;
+  assert.ok(data);
+  assert.equal(data.reachable, true);
+  assert.equal(data.available, true);
+  assert.equal(data.partial, true);
+  assert.equal(data.offline, false);
+  assert.equal(data.state, "partial");
+  assert.equal((data as unknown as Record<string, unknown>).liveDeviceCount, 2);
+  assert.equal((data as unknown as Record<string, unknown>).offlineDeviceCount, 1);
+  await app.close();
+});
+
+void test("status marks a fallback snapshot unreachable after the freshness window", async (context) => {
+  context.mock.method(globalThis, "fetch", async (input: string | URL | Request) => {
+    const url = fetchUrl(input);
+    await Promise.resolve();
+    if (url.endsWith("/v1/supervision")) {
+      return Promise.resolve(new Response(JSON.stringify({
+        generatedAt: new Date(Date.now() - 180_000).toISOString(),
+        edgeRiskAgent: {
+          available: true,
+          generatedAt: new Date(Date.now() - 180_000).toISOString(),
+          devices: [{ deviceId: "node-b", dataStatus: "live" }],
+        },
+      }), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+    return new Response("unavailable", { status: 503 });
+  });
+
+  const app = Fastify({ logger: false });
+  app.decorateRequest("traceId", "edge-ai-test");
+  const config = loadConfigFromEnv({
+    CLICKHOUSE_URL: "http://127.0.0.1:8123",
+    AUTH_REQUIRED: "false",
+    RK3568_HERMES_EDGE_SUPERVISOR_URL: "http://127.0.0.1:18082",
+  });
+  registerEdgeAiRoutes(app, config, null);
+
+  const response = await app.inject({ method: "GET", url: "/edge-ai/status" });
+  const data = response.json<EdgeAiEnvelope>().data;
+  assert.ok(data);
+  assert.equal(data.reachable, false);
+  assert.equal(data.available, false);
+  assert.equal(data.stale, true);
+  assert.equal(data.snapshotStale, true);
+  assert.equal(data.state, "offline");
+  await app.close();
+});
+
+void test("status marks a directly returned old risk snapshot as stale", async (context) => {
+  context.mock.method(globalThis, "fetch", async (input: string | URL | Request) => {
+    const url = fetchUrl(input);
+    await Promise.resolve();
+    if (url.endsWith("/v1/supervision")) {
+      return new Response(JSON.stringify({ generatedAt: new Date().toISOString() }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return new Response(JSON.stringify({
+      available: true,
+      generatedAt: new Date(Date.now() - 180_000).toISOString(),
+      devices: [{ deviceId: "node-b", dataStatus: "live" }],
+    }), { status: 200, headers: { "content-type": "application/json" } });
+  });
+
+  const app = Fastify({ logger: false });
+  app.decorateRequest("traceId", "edge-ai-test");
+  const config = loadConfigFromEnv({
+    CLICKHOUSE_URL: "http://127.0.0.1:8123",
+    AUTH_REQUIRED: "false",
+    RK3568_HERMES_EDGE_SUPERVISOR_URL: "http://127.0.0.1:18082",
+  });
+  registerEdgeAiRoutes(app, config, null);
+
+  const response = await app.inject({ method: "GET", url: "/edge-ai/status" });
+  const data = response.json<EdgeAiEnvelope>().data;
+  assert.ok(data);
+  assert.equal(data.reachable, false);
+  assert.equal(data.available, false);
+  assert.equal(data.snapshotStale, true);
+  assert.equal(data.state, "offline");
+  await app.close();
+});
+
+void test("status preserves nullable resources and OOD diagnosis evidence", async (context) => {
+  context.mock.method(globalThis, "fetch", async (input: string | URL | Request) => {
+    const url = fetchUrl(input);
+    await Promise.resolve();
+    if (url.endsWith("/v1/supervision")) {
+      return new Response(JSON.stringify({
+        generatedAt: new Date().toISOString(),
+        localResources: {
+          load1: null,
+          memTotalMb: 4096,
+          memAvailableMb: null,
+          memAvailableRatio: null,
+          maxTemperatureC: null,
+        },
+        aiDiagnosis: {
+          modelKey: "edge-diagnosis",
+          modelVersion: "2026.08",
+          modelType: "random_forest_classifier",
+          modelLoaded: true,
+          inferenceAt: new Date().toISOString(),
+          inferenceDurationMs: 2.75,
+          inputFeatureCount: 12,
+          diagnosisType: "unknown_ood",
+          confidence: 0.38,
+          ood: {
+            detected: true,
+            normalizedEntropy: 0.91,
+            minConfidence: 0.55,
+            maxEntropy: 0.8,
+            reason: "max_probability_below_threshold",
+          },
+        },
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    }
+    return new Response(JSON.stringify({
+      available: true,
+      generatedAt: new Date().toISOString(),
+      model: { loaded: true },
+      inference: { lastInferenceDurationMs: 1.25, inputFeatureCount: 9 },
+      devices: [{ deviceId: "node-b", dataStatus: "live" }],
+    }), { status: 200, headers: { "content-type": "application/json" } });
+  });
+
+  const app = Fastify({ logger: false });
+  app.decorateRequest("traceId", "edge-ai-test");
+  const config = loadConfigFromEnv({
+    CLICKHOUSE_URL: "http://127.0.0.1:8123",
+    AUTH_REQUIRED: "false",
+    RK3568_HERMES_EDGE_SUPERVISOR_URL: "http://127.0.0.1:18082",
+  });
+  registerEdgeAiRoutes(app, config, null);
+
+  const response = await app.inject({ method: "GET", url: "/edge-ai/status" });
+  const data = response.json<{ data: Record<string, unknown> }>().data;
+  const resources = testJsonObject(data.resources);
+  assert.equal(resources.cpuLoad1, null);
+  assert.equal(resources.memoryAvailableMb, null);
+  assert.equal(resources.temperatureC, null);
+  const diagnosis = testJsonObject(data.diagnosis);
+  assert.equal(diagnosis.category, "unknown_ood");
+  assert.equal(testJsonObject(diagnosis.ood).detected, true);
+  const models = testJsonObject(data.models);
+  const diagnosisModel = testJsonObject(models.diagnosis);
+  assert.equal(diagnosisModel.inferenceDurationMs, 2.75);
+  assert.equal(testJsonObject(diagnosisModel.ood).reason, "max_probability_below_threshold");
+  await app.close();
+});
+
+void test("chat retries with the same requestId return history without dispatching twice", async (context) => {
+  const store: FakeHermesStore = { conversations: [], messages: [], tasks: [] };
+  let actionCalls = 0;
+  context.mock.method(globalThis, "fetch", (input: string | URL | Request) => {
+    const url = fetchUrl(input);
+    if (url.endsWith("/v1/actions/generate_report")) {
+      actionCalls += 1;
+      return Promise.resolve(new Response(JSON.stringify({
+        schema_version: 1,
+        accepted: true,
+        duplicate: false,
+        action: {
+          id: "00000000-0000-4000-8000-000000000301",
+          status: "completed",
+          summary: "报告已生成",
+          result: { reportId: "report-1" },
+        },
+      }), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+    return Promise.reject(new Error(`unexpected Hermes request: ${url}`));
+  });
+
+  const app = Fastify({ logger: false });
+  app.decorateRequest("traceId", "edge-ai-test");
+  app.decorateRequest("user", null);
+  const config = loadConfigFromEnv({
+    CLICKHOUSE_URL: "http://127.0.0.1:8123",
+    AUTH_REQUIRED: "false",
+    RK3568_HERMES_EDGE_SUPERVISOR_URL: "http://127.0.0.1:18082",
+  });
+  registerEdgeAiRoutes(app, config, fakeHermesPool(store));
+
+  const payload = {
+    message: "生成当前态势报告",
+    requestId: "harmonyos:chat:retry-0001",
+  };
+  const first = await app.inject({ method: "POST", url: "/edge-ai/chat", payload });
+  assert.equal(first.statusCode, 200);
+  assert.equal(first.json<{ data: { duplicate?: boolean } }>().data.duplicate, undefined);
+  assert.equal(actionCalls, 1);
+
+  const retry = await app.inject({ method: "POST", url: "/edge-ai/chat", payload });
+  assert.equal(retry.statusCode, 200);
+  const retryData = retry.json<{ data: { duplicate: boolean; requestId: string; tasks: unknown[] } }>().data;
+  assert.equal(retryData.duplicate, true);
+  assert.equal(retryData.requestId, payload.requestId);
+  assert.equal(retryData.tasks.length, 1);
+  assert.equal(actionCalls, 1);
   await app.close();
 });
 

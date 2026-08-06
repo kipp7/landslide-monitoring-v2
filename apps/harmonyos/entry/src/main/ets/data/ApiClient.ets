@@ -48,6 +48,7 @@ interface EdgeAiIntentRequest {
 interface HermesChatRequest {
   message: string;
   conversationId?: string;
+  requestId?: string;
 }
 
 export class ApiClient {
@@ -278,10 +279,11 @@ export class ApiClient {
     );
   }
 
-  async sendHermesMessage(message: string, conversationId: string = ''): Promise<HermesChatResponse> {
+  async sendHermesMessage(message: string, conversationId: string = '', requestId: string = ''): Promise<HermesChatResponse> {
+    const effectiveRequestId = requestId.length > 0 ? requestId : this.edgeAiRequestId('chat');
     const body: HermesChatRequest = conversationId.length > 0
-      ? { message: message, conversationId: conversationId }
-      : { message: message };
+      ? { message: message, conversationId: conversationId, requestId: effectiveRequestId }
+      : { message: message, requestId: effectiveRequestId };
     return this.request<HermesChatResponse>('/edge-ai/chat', http.RequestMethod.POST, body, true, true, 30000);
   }
 
