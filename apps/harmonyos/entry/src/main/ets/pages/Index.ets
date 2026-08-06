@@ -6418,7 +6418,7 @@ struct SettingsPane {
                 switchedOn: this.alarmSoundEnabled,
                 onChange: (enabled: boolean) => this.onAlarmSoundChange(enabled)
               });
-              Divider().color(UI_COLOR_LINE).margin({ left: 56 })
+              Divider().color(UI_COLOR_LINE).margin({ left: 64, right: 16 })
               ToggleSettingsItem({
                 icon: $r('sys.symbol.dot_radiowaves_left_and_right'),
                 title: '告警震动',
@@ -6427,7 +6427,7 @@ struct SettingsPane {
                 switchedOn: this.alarmVibrationEnabled,
                 onChange: (enabled: boolean) => this.onAlarmVibrationChange(enabled)
               });
-              Divider().color(UI_COLOR_LINE).margin({ left: 56 })
+              Divider().color(UI_COLOR_LINE).margin({ left: 64, right: 16 })
               SettingsItem({
                 icon: $r('sys.symbol.bell'),
                 title: '系统通知',
@@ -6437,7 +6437,7 @@ struct SettingsPane {
                 actionLabel: '检查',
                 onTap: () => this.onCheckNotification()
               });
-              Divider().color(UI_COLOR_LINE).margin({ left: 56 })
+              Divider().color(UI_COLOR_LINE).margin({ left: 64, right: 16 })
               SettingsItem({
                 icon: $r('sys.symbol.arrow_clockwise'),
                 title: '测试告警提醒',
@@ -6605,15 +6605,16 @@ struct ToggleSettingsItem {
       .alignItems(HorizontalAlign.Start)
       .layoutWeight(1)
       Toggle({ type: ToggleType.Switch, isOn: this.switchedOn })
-        .width(52)
-        .height(44)
+        .width(44)
+        .height(32)
+        .margin({ right: 4 })
         .selectedColor(UI_COLOR_HERMES)
         .accessibilityText(`${this.title}${this.switchedOn ? '已开启' : '已关闭'}`)
         .onChange((enabled: boolean) => this.onChange(enabled))
     }
     .width('100%')
-    .constraintSize({ minHeight: 72 })
-    .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+    .constraintSize({ minHeight: 76 })
+    .padding({ left: 12, right: 12, top: 10, bottom: 10 })
     .alignItems(VerticalAlign.Center)
   }
 }
