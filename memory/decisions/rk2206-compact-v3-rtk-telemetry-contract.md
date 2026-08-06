@@ -13,6 +13,19 @@ status: active
 
 # Decision: RK2206 Compact V3 RTK Telemetry Contract
 
+## Compact V6 Core-Tilt Timing Amendment (2026-08-06)
+
+- 复审确认 Compact V6 的三类 46 B payload 已占满固定线框的有效布局；保留坐标、
+  GGA/差分龄/解算龄、HDOP/GST、Fixed 连续性、参考站和 RTCM 审计字段。删除这些
+  字段不会缩短 64 B COBS/CRC 线框，反而会降低专家可审计性。
+- 倾角属于 1 秒核心路径，改用独立 `300 ms` 响应超时和最多 1 次重试；包含 `80 ms`
+  重试间隔的最坏等待约 `680 ms`。环境土壤/EC 仍为 `300 ms/0 retry`，原有 800 ms
+  仅保留给非核心雨量等路径。这样单次倾角无响应不会拖过下一个核心采样槽，同时保留
+  一次瞬态恢复机会。
+- 源码标识升为 `v1.9-um220-rs485-rtk-compact-v6-lowrate-v2` /
+  `fw-rk2206-rtk-compact-v6-lowrate-v2-live-20260806`；现场必须按新 marker 验证，不能
+  混用 v1/v2 镜像。
+
 ## Compact V6 Acquisition Cadence Amendment (2026-08-06)
 
 - 高频合同只包含长期位移需要的核心变化量：RS485 三轴倾角与最新 GNSS 解算按 1 秒

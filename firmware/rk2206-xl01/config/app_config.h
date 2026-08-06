@@ -102,7 +102,7 @@
 #define SLEEP_AFTER_SEND    0           // Sleep after each send (low power)
 
 // Version marker
-#define FIRMWARE_SAMPLE_VERSION "v1.9-um220-rs485-rtk-compact-v6-lowrate-v1"
+#define FIRMWARE_SAMPLE_VERSION "v1.9-um220-rs485-rtk-compact-v6-lowrate-v2"
 
 // Bring-up diagnostic mode:
 // 1 = only print a boot heartbeat on the debug UART; do not initialize sensors or XL01.
@@ -285,6 +285,8 @@
 #define RS485_CHANNEL_2       1           // SC16IS752 UART B -> U8 -> J7
 #define RS485_BAUDRATE        4800        // Soil and tilt manuals: factory default 4800 8N1
 #define RS485_RESPONSE_TIMEOUT_MS 800
+#define RS485_CORE_RESPONSE_TIMEOUT_MS 300U
+#define RS485_CORE_READ_MAX_RETRIES 1U
 #define RS485_LOW_PRIORITY_RESPONSE_TIMEOUT_MS 300U
 #define RS485_INTER_REQUEST_GAP_MS 80
 #define RS485_SENSOR_READ_MAX_RETRIES 1U  // One bounded retry for transient read-path errors only
@@ -300,6 +302,12 @@
      (RS485_SINGLE_PATH_WORST_CASE_MS + RS485_INTER_REQUEST_GAP_MS))
 #if RS485_SENSOR_READ_MAX_RETRIES > 1U
 #error "RS485 sensor retries must remain bounded to at most one retry"
+#endif
+#if RS485_CORE_READ_MAX_RETRIES > 1U
+#error "Core tilt retries must remain bounded to at most one retry"
+#endif
+#if RS485_CORE_RESPONSE_TIMEOUT_MS == 0U
+#error "Core tilt response timeout must be positive"
 #endif
 #if ENVIRONMENT_SAMPLE_INTERVAL_MS < 1000U
 #error "Low-rate environment sampling must not compete with the 1-second core loop"

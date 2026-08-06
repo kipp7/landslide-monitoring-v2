@@ -134,7 +134,7 @@ static volatile uint32_t g_last_platform_command_tick = 0;
 static CompactPollBroadcastDeduplicator g_compact_poll_broadcast_deduplicator;
 static unsigned int g_compact_poll_broadcast_duplicates_suppressed = 0U;
 static volatile int g_field_link_recovery_requested = 0;
-#define FW_RX_DIAG_MARKER "fw-rk2206-rtk-compact-v6-lowrate-v1-live-20260806"
+#define FW_RX_DIAG_MARKER "fw-rk2206-rtk-compact-v6-lowrate-v2-live-20260806"
 bool g_cloud_motor_enabled = false;
 int g_cloud_motor_speed = 0;
 MotorDirection g_cloud_motor_direction = MOTOR_DIRECTION_STOP;
@@ -1761,7 +1761,9 @@ static void* DataUploadTask(const char* arg)
     printf("  RS485 Sensor Read Retry: max=%u gap=%u ms\n",
            RS485_SENSOR_READ_MAX_RETRIES,
            RS485_SENSOR_READ_RETRY_GAP_MS);
-    printf("  Sensor Cadence: tilt/GNSS=1s battery/soil/EC=%ums low_priority_timeout=%ums retries=%u\n",
+    printf("  Sensor Cadence: tilt/GNSS=1s core_timeout=%ums core_retries=%u battery/soil/EC=%ums low_priority_timeout=%ums retries=%u\n",
+           RS485_CORE_RESPONSE_TIMEOUT_MS,
+           RS485_CORE_READ_MAX_RETRIES,
            ENVIRONMENT_SAMPLE_INTERVAL_MS,
            RS485_LOW_PRIORITY_RESPONSE_TIMEOUT_MS,
            RS485_LOW_PRIORITY_READ_MAX_RETRIES);

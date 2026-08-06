@@ -216,7 +216,7 @@ static int ReadTiltRegistersWithFunction(
         regs,
         reg_capacity,
         timeout_ms,
-        RS485_SENSOR_READ_MAX_RETRIES,
+        RS485_CORE_READ_MAX_RETRIES,
         path_diagnostics);
 }
 
@@ -233,7 +233,7 @@ static int ReadTiltRegisters(
         addr,
         regs,
         reg_capacity,
-        RS485_RESPONSE_TIMEOUT_MS,
+        RS485_CORE_RESPONSE_TIMEOUT_MS,
         path_diagnostics);
 }
 
@@ -640,7 +640,7 @@ int FieldRs485_ReadSelected(FieldRs485Readings *out, uint8_t requested_mask)
                 tilt_addr,
                 regs,
                 RS485_TILT_REG_COUNT,
-                RS485_RESPONSE_TIMEOUT_MS,
+                RS485_CORE_RESPONSE_TIMEOUT_MS,
                 &out->cycle_diagnostics.paths[FIELD_RS485_PATH_TILT_INDEX]);
         } else {
             uint8_t fallback_channel = (RS485_TILT_CHANNEL == RS485_CHANNEL_1) ? RS485_CHANNEL_2 : RS485_CHANNEL_1;
@@ -671,7 +671,7 @@ int FieldRs485_ReadSelected(FieldRs485Readings *out, uint8_t requested_mask)
             tilt_addr,
             regs,
             RS485_TILT_REG_COUNT,
-            RS485_RESPONSE_TIMEOUT_MS,
+            RS485_CORE_RESPONSE_TIMEOUT_MS,
             &out->cycle_diagnostics.paths[FIELD_RS485_PATH_TILT_INDEX]);
 #endif
 

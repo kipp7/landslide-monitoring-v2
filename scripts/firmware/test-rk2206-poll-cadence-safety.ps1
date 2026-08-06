@@ -24,8 +24,45 @@ if ($config -notmatch '(?m)^#define RS485_LOW_PRIORITY_RESPONSE_TIMEOUT_MS 300U\
     $config -notmatch '(?m)^#define RS485_LOW_PRIORITY_READ_MAX_RETRIES 0U\b') {
   throw "Low-rate RS485 paths must remain bounded to 300 ms with no retry"
 }
+if ($config -notmatch '(?m)^#define RS485_CORE_RESPONSE_TIMEOUT_MS 300U\b' -or
+    $config -notmatch '(?m)^#define RS485_CORE_READ_MAX_RETRIES 1U\b') {
+  throw "Core tilt path must remain bounded to 300 ms with one retry"
+}
 if ($config -notmatch '(?m)^#define RS485_SOIL_EC_REPROBE_READS 6U\b') {
   throw "EC reprobe must stay near one minute after moving environment reads to 10 seconds"
+}
+$tiltFunctionStart = $rs485.IndexOf(
+  "static int ReadTiltRegistersWithFunction(",
+  [System.StringComparison]::Ordinal
+)
+$tiltFunctionEnd = $rs485.IndexOf(
+  "static int ProbeTiltSingleRegister(",
+  $tiltFunctionStart,
+  [System.StringComparison]::Ordinal
+)
+if ($tiltFunctionStart -lt 0 -or $tiltFunctionEnd -le $tiltFunctionStart) {
+  throw "Cannot isolate the core tilt read helpers"
+}
+$tiltHelpers = $rs485.Substring($tiltFunctionStart, $tiltFunctionEnd - $tiltFunctionStart)
+if (-not $tiltHelpers.Contains("RS485_CORE_READ_MAX_RETRIES") -or
+    -not $tiltHelpers.Contains("RS485_CORE_RESPONSE_TIMEOUT_MS")) {
+  throw "Core tilt helpers must use dedicated timeout and retry bounds"
+}
+$tiltCollectionStart = $rs485.IndexOf(
+  "int FieldRs485_ReadSelected(FieldRs485Readings *out, uint8_t requested_mask)",
+  [System.StringComparison]::Ordinal
+)
+$tiltCollectionEnd = $rs485.IndexOf(
+  "#if ENABLE_RS485_SOIL_SENSOR",
+  $tiltCollectionStart,
+  [System.StringComparison]::Ordinal
+)
+if ($tiltCollectionStart -lt 0 -or $tiltCollectionEnd -le $tiltCollectionStart) {
+  throw "Cannot isolate the core tilt collection path"
+}
+$tiltCollection = $rs485.Substring($tiltCollectionStart, $tiltCollectionEnd - $tiltCollectionStart)
+if ($tiltCollection -match 'RS485_RESPONSE_TIMEOUT_MS\s*,') {
+  throw "Core tilt collection must not use the legacy 800 ms timeout"
 }
 
 $selectedReadStart = $rs485.IndexOf(
@@ -91,4 +128,4 @@ if ($uploadTask -notmatch 'Poll Request Check: %d ms\\n", DATA_UPLOAD_IDLE_CHECK
   throw "The startup summary must print the interval actually used by DataUploadTask"
 }
 
-Write-Host "POLL_CADENCE_SAFETY_OK core_ms=1000 environment_ms=10000 poll_check_ms=50 low_priority_timeout_ms=300 retries=0"
+Write-Host "POLL_CADENCE_SAFETY_OK core_ms=1000 environment_ms=10000 poll_check_ms=50 core_timeout_ms=300 core_retries=1 low_priority_timeout_ms=300 retries=0"

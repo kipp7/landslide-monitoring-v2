@@ -12,16 +12,29 @@ status: active
 
 # Task: gnss-rtk-fixed-validation-and-deployment
 
+## Core-Tilt Timing V2 (2026-08-06)
+
+- 本轮复审未删除 Compact V6 字段：固定 46 B payload/64 B 完整线框下，GNSS 专业证据、
+  电池和环境/RTCM 审计字段不会因删除而降低空口负载。
+- RK2206 核心倾角读取已改为 `300 ms + 1 retry`，最坏约 `680 ms`；土壤温度/湿度/EC
+  仍为 10 秒、`300 ms + 0 retry`。版本 marker 为
+  `fw-rk2206-rtk-compact-v6-lowrate-v2-live-20260806`。
+- 当前状态：源码改动已通过网关 `76/76`、build/lint、C99 host 与采样/引脚/启动/快照
+  门禁；下一步必须同源生成 A/B/C hardware LIVE 包并记录 manifest/hash，现场先保持
+  `NTRIP_ENABLED=false` 做 4 秒核心采样门禁，再进入 PROBE/LIVE。
+
 ## Goal
 
 将已验证可 Fixed 的 3 套 UM220-IV NK + BT-760 部署为可追溯、资源可控的三节点 RTK 位移系统；先通过共享链路门禁，再实现 RK3568 专业位移算法、服务器长周期分析和现场诊断。
 
 ## Current State
 
-### Low-Rate Environment V1 Implemented; Build And Flash Gate Next (2026-08-06)
+### Low-Rate Environment V2 Core-Timing Implemented; Build And Flash Gate Next (2026-08-06)
 
 - 固件和 RK3568 已完成同版源代码调整：倾角/GNSS 1 秒，电池/土壤温度/含水率/EC
   10 秒；倾角优先于土壤，低频 `300 ms / 0 retry`，无效数据缺失而不是 0。
+- 核心倾角读取已独立为 `300 ms + 1 retry`，最坏约 `680 ms`，避免沿用 800 ms 路径
+  把一次异常拖入下一个核心采样槽。
 - EC 初次不可用后的复探测为每 6 个环境周期，约 60 秒；倾角单独读取不再支付末尾
   80 ms 空等。现有专业 GNSS、供电和 RTCM 字段全部保留，线框仍为 64 B。
 - 网关 2 秒 core 截止会推迟 RTCM/P3/P4；重合的 P4/P3 均保存并依次发送，避免 audit
@@ -29,7 +42,7 @@ status: active
 - 待办顺序：完成 OpenHarmony A/B/C 同源构建和 release 校验；用户烧录后先在
   `NTRIP_ENABLED=false` 下检查每节点 4 秒至少两个不同 core epoch，再跑真实 RTCM
   混合负载。混合门禁保持 `GGA=4 / correction age <=6 s / solution age <=2 s`。
-- 正式镜像路径和 SHA-256 尚未产生；在记录发布目录与 manifest 前，本任务状态仍为
+- v2 正式镜像路径和 SHA-256 尚未产生；在记录发布目录与 manifest 前，本任务状态仍为
   active，不能把当前源码包当作可烧录发布物。
 
 ### 1800-Second Recheck Completed; B FIXED Window Is Not Yet Production-Grade (2026-08-06)

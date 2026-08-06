@@ -2,7 +2,7 @@
 param(
   [string]$SdkRoot = "F:\2\openharmony\txsmartropenharmony",
   [string]$ContainerName = "openharmony-dev",
-  [string]$ReleaseDirectory = "F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v6_lowrate_v1_rs485_gnss_hardware_live_20260806",
+  [string]$ReleaseDirectory = "F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v6_lowrate_v2_corefast_rs485_gnss_hardware_live_20260806",
   [string]$BatteryCalibrationFile = "",
   [ValidateSet("A", "B", "C")]
   [string[]]$NodeLabels = @("A", "B", "C")
@@ -17,7 +17,7 @@ if ([string]::IsNullOrWhiteSpace($BatteryCalibrationFile)) {
 $resolvedCalibration = (Resolve-Path -LiteralPath $BatteryCalibrationFile -ErrorAction Stop).Path
 $releaseRoot = [System.IO.Path]::GetFullPath($ReleaseDirectory)
 $stagingRoot = Join-Path ([System.IO.Path]::GetTempPath()) `
-  ("rk2206-compact-v6-lowrate-v1-hardware-live-" + [guid]::NewGuid().ToString("N"))
+  ("rk2206-compact-v6-lowrate-v2-corefast-hardware-live-" + [guid]::NewGuid().ToString("N"))
 $builder = Join-Path $PSScriptRoot "build-xl01-compact-v6.ps1"
 $verifier = Join-Path $PSScriptRoot "verify-rk2206-release-safety.ps1"
 $rollbackRelease = "F:\2\openharmony\rk2206_firmware_releases\xls1_compact_v6_protected_p1_rs485_gnss_simulated_20260804"
@@ -30,7 +30,7 @@ $gates = @(
   "test-rk2206-release-marker-source-safety.ps1",
   "test-rk2206-snapshot-atomicity.ps1"
 )
-$expectedFirmwareMarker = "fw-rk2206-rtk-compact-v6-lowrate-v1-live-20260806"
+$expectedFirmwareMarker = "fw-rk2206-rtk-compact-v6-lowrate-v2-live-20260806"
 
 function Assert-AsciiMarker {
   param(
@@ -130,6 +130,7 @@ Truth profile
   - Runtime modes: DISABLED -> PROBE -> LIVE under a fresh 15..300 s lease
   - Polling: protected single P1, no production P2 recovery
   - Acquisition: tilt/GNSS 1 s; battery/soil/EC 10 s; tilt is read first
+  - Core tilt RS485: 300 ms timeout, one retry (worst case about 680 ms)
   - Low-rate RS485: 300 ms timeout, no retry, missing data is never encoded as zero
   - Every telemetry payload: 46 bytes; every complete telemetry frame: 64 bytes
 

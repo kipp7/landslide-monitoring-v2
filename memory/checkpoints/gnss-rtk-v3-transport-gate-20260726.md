@@ -12,13 +12,22 @@ status: active
 
 # Checkpoint: gnss-rtk-v3-transport-gate-20260726
 
+## Compact V6 Low-Rate V2 Core Timing (2026-08-06)
+
+- 数据合同复审结论：核心 46 B/完整 64 B 线框没有可删除且能降低空口负载的字段；GNSS
+  精度证据、倾角、环境、电池和 RTCM 审计继续保留。
+- 新版核心倾角 RS485 读取使用 `300 ms` 超时和 1 次重试，最坏约 `680 ms`；低频土壤/
+  EC 保持 `300 ms/0 retry`，环境采样 10 秒，核心倾角/GNSS 1 秒。
+- 源码 marker 已升为 `v1.9...lowrate-v2` / `fw-...lowrate-v2-live-20260806`，发布包
+  需重新从 clean commit 构建；旧 v1 包不应与本次源码混烧。
+
 ## Objective
 
 在不更换 UM220-IV NK、BT-760 和 DL-XLS1/XL01 的前提下，先证明 RK3568 到 3 个 RK2206 的 RTCM 与精密 GNSS 数据链稳定、及时、可追溯，再进入 ECEF/ENU、Hampel/Kalman、服务器 CEEMDAN 和比赛界面。
 
 ## Last Confirmed State
 
-### Compact V6 Low-Rate V1 Source Gate Passed; Hardware Flash Pending (2026-08-06)
+### Compact V6 Low-Rate V2 Core-Timing Source Gate Passed; Hardware Flash Pending (2026-08-06)
 
 - 同一个 Compact V6 线框内完成采样分层：倾角和 GNSS 保持 1 秒核心采样；PC0 电池、
   土壤温度、含水率和 EC 改为 10 秒。SHT30、MPU6050 和雨量仍不进入当前合同。
@@ -30,8 +39,9 @@ status: active
   字段不减少空口负载。
 - RK3568 新增 2 秒 core dispatch 截止；到期时 core 优先于 RTCM 和 P3/P4。P3/P4 同时
   到期时均排队，先 audit 后 environment，不再丢 environment。
-- 源码标识为 `v1.9-um220-rs485-rtk-compact-v6-lowrate-v1` /
-  `fw-rk2206-rtk-compact-v6-lowrate-v1-live-20260806`。网关 build、lint、`76/76` 测试、
+- 源码标识为 `v1.9-um220-rs485-rtk-compact-v6-lowrate-v2` /
+  `fw-rk2206-rtk-compact-v6-lowrate-v2-live-20260806`。核心倾角专用路径为 `300 ms + 1`
+  次重试，环境路径仍为 `300 ms + 0` 次重试。网关 build、lint、`76/76` 测试、
   RK2206 C99 host tests、采样周期、引脚、RS485 启动、TX 顺序、marker 与原子快照门禁
   均已通过；A/B/C OpenHarmony 正式镜像尚未生成，不能让现场烧录。
 - 下一步从同一 clean commit 构建 A/B/C，再真机先关闭 RTCM 验收：每节点任意健康 4 秒
