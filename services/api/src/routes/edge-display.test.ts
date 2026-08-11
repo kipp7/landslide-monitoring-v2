@@ -21,6 +21,7 @@ function fakePool(): PgPool {
       }] };
     }
     if (sql.includes("persisted_version_count")) {
+      assert.match(sql, /station_id = \$2::uuid/);
       return { rows: [{
         persisted_version_count: "44",
         predictions_24h: "580",
@@ -76,6 +77,15 @@ function fakePool(): PgPool {
                 available: true,
               },
               {
+                key: "tilt_change_5m",
+                label: "5分钟倾角变化",
+                unit: "deg",
+                value: 0.3,
+                score: 0.1,
+                weight: 0.24,
+                available: true,
+              },
+              {
                 key: "gps_displacement",
                 label: "GPS基线位移",
                 unit: "m",
@@ -92,8 +102,8 @@ function fakePool(): PgPool {
     }
     if (sql.includes("date_trunc('hour'")) {
       return { rows: [
-        { bucket_at: "2026-08-10T21:00:00Z", risk_score: 0.22 },
-        { bucket_at: "2026-08-10T22:00:00Z", risk_score: 0.31 },
+        { bucket_at: "2026-08-10T21:00:00Z", risk_score: 0.22, hard_rule_triggered: false },
+        { bucket_at: "2026-08-10T22:00:00Z", risk_score: 0.31, hard_rule_triggered: true },
       ] };
     }
     if (sql.includes("GROUP BY model_version")) {
@@ -166,7 +176,15 @@ test("model summary uses persisted facts and preserves unavailable evaluation st
     assert.equal(summary.model.sampleCount, 20286);
     assert.equal(summary.currentAssessment.riskScore, 0.31);
     assert.equal(summary.currentAssessment.sourceDeviceCount, 2);
-    assert.equal(summary.currentAssessment.features[0]?.contribution, 0.05600000000000001);
+    assert.ok(
+      Math.abs((summary.currentAssessment.features[0]?.contribution ?? 0) - (0.056 / 0.52)) < 1e-12
+    );
+    assert.ok(
+      Math.abs((summary.currentAssessment.features[1]?.contribution ?? 0) - (0.024 / 0.52)) < 1e-12
+    );
+    assert.equal(summary.currentAssessment.features[2]?.contribution, null);
+    assert.equal(summary.riskTrend24h[0]?.hardRuleTriggered, false);
+    assert.equal(summary.riskTrend24h[1]?.hardRuleTriggered, true);
     assert.deepEqual(summary.displacementForecast.missingInputs, ["GPS基线位移"]);
     assert.equal(summary.evaluation.currentStation.status, "not_evaluated");
     assert.equal(summary.evaluation.currentStation.label, "未评估");

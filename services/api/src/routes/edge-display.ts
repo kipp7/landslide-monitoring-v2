@@ -36,6 +36,7 @@ type PredictionRow = {
 type TrendRow = {
   bucket_at: string;
   risk_score: number | string;
+  hard_rule_triggered: boolean;
 };
 
 type VersionRow = {
@@ -101,7 +102,7 @@ export type EdgeDisplayModelSummary = {
     factors: string[];
     features: FeatureSummary[];
   };
-  riskTrend24h: Array<{ at: string; riskScore: number }>;
+  riskTrend24h: Array<{ at: string; riskScore: number; hardRuleTriggered: boolean }>;
   evaluation: {
     currentStation: {
       status: "not_evaluated";
@@ -155,7 +156,7 @@ function stringList(value: unknown): string[] {
 
 function parseFeatures(value: unknown): FeatureSummary[] {
   if (!Array.isArray(value)) return [];
-  return value.flatMap((item) => {
+  const features = value.flatMap((item) => {
     if (!isObject(item)) return [];
     const key = stringOrNull(item.key);
     const label = stringOrNull(item.label);
@@ -169,10 +170,24 @@ function parseFeatures(value: unknown): FeatureSummary[] {
       value: numberOrNull(item.value),
       score,
       weight,
-      contribution: score !== null && weight !== null ? score * weight : null,
+      contribution: null,
       available: item.available === true,
     }];
   });
+  const availableWeight = features.reduce(
+    (sum, feature) => feature.available ? sum + (feature.weight ?? 0) : sum,
+    0
+  );
+  return features.map((feature) => ({
+    ...feature,
+    contribution:
+      feature.available &&
+      feature.score !== null &&
+      feature.weight !== null &&
+      availableWeight > 0
+        ? (feature.score * feature.weight) / availableWeight
+        : null,
+  }));
 }
 
 async function readJsonObject(path: string): Promise<JsonObject | null> {
@@ -270,14 +285,19 @@ export async function buildEdgeDisplayModelSummary(input: {
       `
         SELECT
           COUNT(DISTINCT model_version) FILTER (WHERE model_version IS NOT NULL)::text AS persisted_version_count,
-          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '24 hours')::text AS predictions_24h,
-          CASE WHEN MAX(created_at) IS NULL THEN NULL
-            ELSE to_char(MAX(created_at) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+          COUNT(*) FILTER (
+            WHERE station_id = $2::uuid AND created_at >= NOW() - INTERVAL '24 hours'
+          )::text AS predictions_24h,
+          CASE WHEN MAX(created_at) FILTER (WHERE station_id = $2::uuid) IS NULL THEN NULL
+            ELSE to_char(
+              MAX(created_at) FILTER (WHERE station_id = $2::uuid) AT TIME ZONE 'UTC',
+              'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+            )
           END AS latest_prediction_at
         FROM ai_predictions
         WHERE model_key = $1
       `,
-      [config.edgeDisplayModelKey]
+      [config.edgeDisplayModelKey, station.station_id]
     );
 
     const predictionsResult = await client.query<PredictionRow>(
@@ -301,7 +321,8 @@ export async function buildEdgeDisplayModelSummary(input: {
       `
         SELECT
           to_char(date_trunc('hour', created_at) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS bucket_at,
-          MAX(risk_score) AS risk_score
+          MAX(risk_score) AS risk_score,
+          BOOL_OR(payload->'hardRuleTriggered' = 'true'::jsonb) AS hard_rule_triggered
         FROM ai_predictions
         WHERE station_id = $1::uuid
           AND model_key = $2
@@ -397,7 +418,9 @@ export async function buildEdgeDisplayModelSummary(input: {
     },
     riskTrend24h: database.trend.flatMap((row) => {
       const riskScore = numberOrNull(row.risk_score);
-      return riskScore === null ? [] : [{ at: row.bucket_at, riskScore }];
+      return riskScore === null
+        ? []
+        : [{ at: row.bucket_at, riskScore, hardRuleTriggered: row.hard_rule_triggered === true }];
     }),
     evaluation: {
       currentStation: {
