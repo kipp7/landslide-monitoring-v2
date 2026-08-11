@@ -44,6 +44,7 @@ import { registerLegacyDeviceManagementCompatRoutes } from "./routes/legacy-devi
 import { registerLegacyDebugToolRoutes } from "./routes/legacy-debug-tools";
 import { registerLegacyDbAdminRoutes } from "./routes/legacy-db-admin";
 import { registerIotServerCompatRoutes } from "./routes/iot-server-compat";
+import { isEdgeDisplayReadRequest, registerEdgeDisplayRoutes } from "./routes/edge-display";
 
 async function main(): Promise<void> {
   dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
@@ -103,6 +104,7 @@ async function main(): Promise<void> {
 
     const traceId = request.traceId;
     const auth = request.headers.authorization;
+    if (isEdgeDisplayReadRequest(config, request.url, auth)) return;
     if (!config.authRequired) {
       if (!auth || !auth.startsWith("Bearer ") || auth.trim() === "Bearer") return;
 
@@ -179,6 +181,7 @@ async function main(): Promise<void> {
     if (!pg) return;
     if (request.url === "/health" || request.url === "/iot/health") return;
     if (request.url.startsWith("/emqx/")) return;
+    if (request.url.startsWith("/api/v1/edge-display/")) return;
 
     const responseTimeMs = Math.max(0, Date.now() - request.startTimeMs);
     const method = request.method;
@@ -312,6 +315,7 @@ async function main(): Promise<void> {
     registerCameraRoutes(v1, config, pg);
     registerAiPredictionRoutes(v1, config, pg);
     registerOnboardingRoutes(v1, config, ch, pg);
+    registerEdgeDisplayRoutes(v1, config, pg);
     done();
   }, { prefix: "/api/v1" });
 

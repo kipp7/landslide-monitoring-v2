@@ -32,6 +32,11 @@ services:
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-}
       ADMIN_API_TOKEN: ${ADMIN_API_TOKEN:-}
+      EDGE_DISPLAY_READ_TOKEN: ${EDGE_DISPLAY_READ_TOKEN:-}
+      EDGE_DISPLAY_STATION_CODE: ${EDGE_DISPLAY_STATION_CODE:-ST-LS-CN-GX-YL-GBS-001-01}
+      EDGE_DISPLAY_MODEL_KEY: ${EDGE_DISPLAY_MODEL_KEY:-landslide-edge-risk}
+      EDGE_DISPLAY_CACHE_TTL_MS: ${EDGE_DISPLAY_CACHE_TTL_MS:-30000}
+      EDGE_MODEL_ARTIFACT_PATH: /data/edge-ai-models/latest.json
       DB_ADMIN_ENABLED: ${DB_ADMIN_ENABLED:-false}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
 
@@ -62,6 +67,7 @@ services:
       # Expose the latest RK3568/Hermes evidence artifacts to the API runtime.
       # The API reads these files on demand for the desktop System Monitor.
       - ../../docs/unified/reports:/repo/docs/unified/reports:ro
+      - edge_ai_models:/data/edge-ai-models:ro
     ports:
       - "8080:8080"
     depends_on:
