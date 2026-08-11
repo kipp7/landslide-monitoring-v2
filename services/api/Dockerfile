@@ -44,6 +44,7 @@ COPY --from=builder /repo/packages/validation/dist /repo/packages/validation/dis
 
 COPY --from=builder /repo/services/api/package.json /repo/services/api/package.json
 COPY --from=builder /repo/services/api/dist /repo/services/api/dist
+COPY services/api/resources /repo/services/api/resources
 COPY docs/integrations/rules /repo/docs/integrations/rules
 COPY docs/unified/reports /repo/docs/unified/reports
 

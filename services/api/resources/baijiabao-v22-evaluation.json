@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "lsmv2.model-evaluation-reference.v1",
+  "displayName": "BJB-DP-ENS-SUPPORT-CAL-v22",
+  "modelKey": "baijiabao.displacement.pointwise-fixed-expert-ensemble-support-calibrated-v22",
+  "modelVersion": "0.22.0",
+  "role": "regional-reference",
+  "evaluationScope": "Baijiabao full runtime decomposition",
+  "evaluatedSamples": 1352,
+  "metrics": {
+    "maeMm": 0.6263070948659626,
+    "rmseMm": 0.8856069067653007,
+    "r2": 0.1392463010552235,
+    "directionAccuracy": 0.5836,
+    "withinOneMm": 0.8114,
+    "p90AbsoluteErrorMm": 1.3676232698847706
+  },
+  "provenance": {
+    "sourceDocument": "docs/integrations/ai/regional-model-runtime.md#37-baijiabao-v22-support-calibrated-forecast-production-main",
+    "sourceArtifact": "artifacts/models/regional-experts/phase1-displacement-forecast/baijiabao-displacement-v22.prediction-regression-v1.json"
+  }
+}

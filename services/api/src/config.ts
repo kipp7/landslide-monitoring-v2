@@ -33,6 +33,15 @@ const configSchema = z.object({
   postgresPoolMax: z.coerce.number().int().positive().default(10),
 
   adminApiToken: z.string().optional(),
+  edgeDisplayReadToken: optionalNonEmptyString(),
+  edgeDisplayStationCode: z.string().min(1).default("ST-LS-CN-GX-YL-GBS-001-01"),
+  edgeDisplayModelKey: z.string().min(1).default("landslide-edge-risk"),
+  edgeDisplayCacheTtlMs: z.coerce.number().int().min(5_000).max(300_000).default(30_000),
+  edgeModelArtifactPath: z.string().min(1).default("/data/edge-ai-models/latest.json"),
+  regionalModelEvaluationPath: z
+    .string()
+    .min(1)
+    .default("/repo/services/api/resources/baijiabao-v22-evaluation.json"),
   dbAdminEnabled: z
     .string()
     .optional()
@@ -96,6 +105,12 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv): AppConfig {
     postgresPoolMax: env.POSTGRES_POOL_MAX,
 
     adminApiToken: env.ADMIN_API_TOKEN,
+    edgeDisplayReadToken: env.EDGE_DISPLAY_READ_TOKEN,
+    edgeDisplayStationCode: env.EDGE_DISPLAY_STATION_CODE,
+    edgeDisplayModelKey: env.EDGE_DISPLAY_MODEL_KEY,
+    edgeDisplayCacheTtlMs: env.EDGE_DISPLAY_CACHE_TTL_MS,
+    edgeModelArtifactPath: env.EDGE_MODEL_ARTIFACT_PATH,
+    regionalModelEvaluationPath: env.REGIONAL_MODEL_EVALUATION_PATH,
     dbAdminEnabled: env.DB_ADMIN_ENABLED,
     authRequired: env.AUTH_REQUIRED,
 
