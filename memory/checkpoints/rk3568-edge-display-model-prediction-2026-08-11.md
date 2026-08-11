@@ -32,10 +32,11 @@ explicitly unavailable and must never be replaced by demo, random, or synthetic 
 - Physical A/B/C nodes are intentionally powered off for battery charging. Historical
   database data is available and is sufficient for implementation and offline
   validation.
-- The API implementation is commit `4758ef68` on branch
+- The API implementation is commit `6bc29167` on branch
   `feature/rk3568-model-page-20260811`, with PR
   `https://github.com/kipp7/landslide-monitoring-v2/pull/361`.
-- The UI implementation is commit `1f1897f` on branch
+- The UI implementation, including the cold-start display recovery change, is commit
+  `a7ef6e2` on branch
   `feature/model-prediction-page-20260811`, with PR
   `https://github.com/kipp7/rk3568-edge-display/pull/1`.
 - The model page is deployed on the RK3568 and is reachable through the private local
@@ -81,8 +82,13 @@ explicitly unavailable and must never be replaced by demo, random, or synthetic 
   provenance-backed regional reference.
 - The fixed `1024x600` model page has no Canvas or continuous animation. CDP verification
   reported a `1024x600` viewport and document, 236 elements, and no overflowing element.
-- Frontend verification passed TypeScript, production build, and 22 tests. API
+- Frontend verification passed TypeScript, production build, and 25 tests. API
   verification passed the build and all 12 route tests.
+- A production cross-check compared the authenticated summary endpoint with PostgreSQL,
+  the signed model artifact, and the versioned Baijiabao evaluation artifact. All 86
+  checks passed. The confirmed snapshot was model version `20260810T211304Z`, 44
+  persisted versions, 993 current-station predictions in 24 hours, risk score `0.0721`,
+  `offline` data status, and 1 of 6 available features.
 - A controlled RK3568 reboot produced a new boot ID. The reverse SSH path returned in
   approximately 30-40 seconds; graphical target completed in 16.2 seconds. Display,
   field gateway, field-link monitor, Hermes supervisor, and reverse tunnel services all
@@ -92,16 +98,34 @@ explicitly unavailable and must never be replaced by demo, random, or synthetic 
 - With the model page idle, the measured five-second Chromium CPU delta was `0.0%` and
   aggregate Chromium PSS was 373.8 MiB. The 3.9 GiB board had approximately 3.13 GiB
   available; the Python display proxy used approximately 10 MiB.
+- The first physical power-up sometimes left the 10.1-inch HDMI panel blue even though
+  Xorg and Chromium had started. The deployed script was forcing a generic
+  `1024x600_60.00` 49 MHz timing while the panel EDID advertises native `1024x600`
+  51.25 MHz (`60.05 Hz`). The kiosk now waits for a valid EDID, prefers the native
+  timing, forces HDMI RGB 24-bit, rechecks the mode during the cold-boot window, and
+  restarts Chromium after an unexpected exit.
+- Two software reboots returned through the reverse tunnel without manual recovery.
+  The final active mode was EDID-native `1024x600 60.05 Hz`, RGB, 24-bit, with a good
+  HDMI link. Terminating Chromium caused a new browser PID to appear automatically;
+  the field gateway, link monitor, and reverse tunnel remained active.
+- On the animated traffic page, the whole Chromium process group measured 373.6 MiB PSS
+  and 129.2% of one CPU core across a 10-second sample. It remains pinned to CPU cores
+  2 and 3 at `nice=10`. During the same sample, the field gateway used 35.9 MiB and
+  0.7% CPU, with approximately 3.13 GiB memory available system-wide.
 
 ## In Progress
 
 - Await review and merge of the API and UI pull requests.
 - Keep the deployed sidecar and RK3568 display under observation while A/B/C remain
   intentionally powered off.
+- Await one real power-off/power-on observation of the HDMI panel. Software reboot
+  evidence is not sufficient to close the physical cold-start issue.
 
 ## Next Actions
 
 - Review and merge API PR `#361` and UI PR `#1`.
+- Perform one true cold-power boot and confirm that the first power-up shows the UI,
+  with `1024x600 60.05 Hz`, RGB 24-bit still active after the boot window.
 - When the A/B/C nodes are powered again, verify fresh serial reads, live MQTT publish
   age, database arrival, and UI counter updates end to end.
 - Recheck memory and publish latency with all three nodes actively producing data.
@@ -123,6 +147,9 @@ explicitly unavailable and must never be replaced by demo, random, or synthetic 
 - Field-link monitoring currently reports critical freshness because all three nodes
   are powered off. MQTT itself remains connected with an empty spool and zero publish
   failures; do not treat the expected node-offline state as an uplink failure.
+- The EDID-native timing fix is verified across software reboot only. A real power-cycle
+  can expose panel-controller timing that software reboot cannot reproduce, so the
+  first-power-up blue-screen issue remains open until that physical test passes.
 - The NTRIP client has observed upstream `ECONNRESET` reconnects. This is separate from
   MQTT and the display deployment and should be investigated only within the GNSS/NTRIP
   task boundary.
@@ -136,8 +163,10 @@ explicitly unavailable and must never be replaced by demo, random, or synthetic 
 
 ## Resume Prompt
 
-Continue from API PR `#361` and UI PR `#1`. The model page is already deployed and has
-passed a controlled reboot. Preserve the dedicated read-only endpoint, stale-cache
-fallback, explicit unavailable states, and the protected MQTT/field-gateway boundary.
-When A/B/C return, perform the remaining fresh end-to-end publish and database-arrival
-validation before declaring production acceptance.
+Continue from API PR `#361` and UI PR `#1`. The model page and EDID-native HDMI recovery
+are deployed, and software reboot verification passed. First perform a true power-off
+and first-power-up display test; do not close the blue-screen issue based on software
+reboot alone. Preserve the dedicated read-only endpoint, stale-cache fallback, explicit
+unavailable states, and protected MQTT/field-gateway boundary. When A/B/C return,
+perform the remaining fresh end-to-end publish and database-arrival validation before
+declaring production acceptance.
