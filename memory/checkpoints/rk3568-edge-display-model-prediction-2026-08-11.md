@@ -32,6 +32,17 @@ explicitly unavailable and must never be replaced by demo, random, or synthetic 
 - Physical A/B/C nodes are intentionally powered off for battery charging. Historical
   database data is available and is sufficient for implementation and offline
   validation.
+- The API implementation is commit `4758ef68` on branch
+  `feature/rk3568-model-page-20260811`, with PR
+  `https://github.com/kipp7/landslide-monitoring-v2/pull/361`.
+- The UI implementation is commit `1f1897f` on branch
+  `feature/model-prediction-page-20260811`, with PR
+  `https://github.com/kipp7/rk3568-edge-display/pull/1`.
+- The model page is deployed on the RK3568 and is reachable through the private local
+  display service at `http://127.0.0.1:1420/`.
+- The board is reached through the cloud-hosted reverse SSH path: cloud loopback port
+  `22079` terminates at the RK3568 SSH service. Direct Wi-Fi SSH was not used for this
+  deployment.
 
 ## Data Integrity Rules
 
@@ -51,22 +62,51 @@ explicitly unavailable and must never be replaced by demo, random, or synthetic 
 - Iteration count means persisted successful training/adaptation iterations, not page
   refreshes, process starts, or MQTT messages.
 
+## Verified Implementation
+
+- The authenticated read-only endpoint is
+  `/api/v1/edge-display/model-summary`. It uses a dedicated display token, a 30-second
+  server cache, a read-only model-artifact mount, and does not write display polling to
+  `api_logs`.
+- The dedicated cloud runtime `lsmv2_edge_display_summary_api` listens only on
+  `127.0.0.1:18089`; its root filesystem and model artifact mount are read-only. The
+  observed runtime footprint was approximately 29 MiB with negligible CPU use.
+- The RK3568 reverse tunnel permits only the required model-summary loopback target.
+  The board-side proxy refreshes every 60 seconds and serves its last valid disk cache
+  during an upstream outage.
+- The UI provides `01 实时态势` and `02 模型预测` tabs, removes the synthetic traffic
+  demo path, and renders missing live values as `--` rather than zero.
+- Current-station evaluation is explicitly `未评估`. Future displacement is explicitly
+  `不可用` until trusted displacement inputs exist. Baijiabao v22 appears only as a
+  provenance-backed regional reference.
+- The fixed `1024x600` model page has no Canvas or continuous animation. CDP verification
+  reported a `1024x600` viewport and document, 236 elements, and no overflowing element.
+- Frontend verification passed TypeScript, production build, and 22 tests. API
+  verification passed the build and all 12 route tests.
+- A controlled RK3568 reboot produced a new boot ID. The reverse SSH path returned in
+  approximately 30-40 seconds; graphical target completed in 16.2 seconds. Display,
+  field gateway, field-link monitor, Hermes supervisor, and reverse tunnel services all
+  returned to `active` without manual intervention.
+- After reboot, the display HTTP endpoint, model-summary proxy, Chromium kiosk, MQTT
+  connection, and queue state all recovered. `spoolPending=0`, `publishFailures=0`.
+- With the model page idle, the measured five-second Chromium CPU delta was `0.0%` and
+  aggregate Chromium PSS was 373.8 MiB. The 3.9 GiB board had approximately 3.13 GiB
+  available; the Python display proxy used approximately 10 MiB.
+
 ## In Progress
 
-- Audit the production database schema, API routes, RK3568 summary service, and model
-  artifacts to map every proposed field to an authoritative source.
-- Implement the backend summary contract and the lightweight React display page only
-  after the field-level source map is proven.
+- Await review and merge of the API and UI pull requests.
+- Keep the deployed sidecar and RK3568 display under observation while A/B/C remain
+  intentionally powered off.
 
 ## Next Actions
 
-- Inspect current production and local service versions without changing network or
-  telemetry services.
-- Query existing historical telemetry and prediction tables read-only.
-- Add deterministic calculations and tests for the model-display summary contract.
-- Add the page switch and model page with explicit unavailable and stale states.
-- Verify 1024x600 rendering, memory, CPU, frame pacing, startup recovery, and telemetry
-  upload stability before deployment acceptance.
+- Review and merge API PR `#361` and UI PR `#1`.
+- When the A/B/C nodes are powered again, verify fresh serial reads, live MQTT publish
+  age, database arrival, and UI counter updates end to end.
+- Recheck memory and publish latency with all three nodes actively producing data.
+- Preserve HDMI at `1024x600` until the MIPI panel is commissioned; validate the actual
+  MIPI timing and output name before changing the kiosk display script.
 
 ## Risks
 
@@ -80,6 +120,12 @@ explicitly unavailable and must never be replaced by demo, random, or synthetic 
   placeholder label.
 - UI work must not restart, reconfigure, or contend with MQTT, field-gateway, telemetry
   spool, database, or network failover services.
+- Field-link monitoring currently reports critical freshness because all three nodes
+  are powered off. MQTT itself remains connected with an empty spool and zero publish
+  failures; do not treat the expected node-offline state as an uplink failure.
+- The NTRIP client has observed upstream `ECONNRESET` reconnects. This is separate from
+  MQTT and the display deployment and should be investigated only within the GNSS/NTRIP
+  task boundary.
 
 ## Rollback
 
@@ -90,7 +136,8 @@ explicitly unavailable and must never be replaced by demo, random, or synthetic 
 
 ## Resume Prompt
 
-Continue the RK3568 model prediction page from the backed-up UI baseline. Prove a real
-database, API, or model-artifact source for every field before rendering it. Use
-historical data while A/B/C are powered off, preserve explicit stale/unavailable
-states, and verify display resource use does not degrade telemetry upload stability.
+Continue from API PR `#361` and UI PR `#1`. The model page is already deployed and has
+passed a controlled reboot. Preserve the dedicated read-only endpoint, stale-cache
+fallback, explicit unavailable states, and the protected MQTT/field-gateway boundary.
+When A/B/C return, perform the remaining fresh end-to-end publish and database-arrival
+validation before declaring production acceptance.
