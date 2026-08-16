@@ -38,7 +38,7 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: ${PG_PORT:-5432}
       POSTGRES_USER: ${PG_USER:-landslide}
-      POSTGRES_PASSWORD: ${PG_PASSWORD:-change-me}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-${POSTGRES_PASSWORD:-change-me}}
       POSTGRES_DATABASE: ${PG_DATABASE:-landslide_monitor}
       POSTGRES_POOL_MAX: ${AI_PREDICTION_POSTGRES_POOL_MAX:-5}
       CLICKHOUSE_URL: http://clickhouse:8123

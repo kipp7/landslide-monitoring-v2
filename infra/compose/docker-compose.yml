@@ -22,7 +22,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${PG_USER:-landslide}
-      POSTGRES_PASSWORD: ${PG_PASSWORD:-change-me}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-${POSTGRES_PASSWORD:-change-me}}
       POSTGRES_DB: ${PG_DATABASE:-landslide_monitor}
       TZ: Asia/Shanghai
     volumes:

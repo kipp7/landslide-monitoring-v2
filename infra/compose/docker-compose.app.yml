@@ -39,7 +39,7 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: ${PG_PORT:-5432}
       POSTGRES_USER: ${PG_USER:-landslide}
-      POSTGRES_PASSWORD: ${PG_PASSWORD:-change-me}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-${POSTGRES_PASSWORD:-change-me}}
       POSTGRES_DATABASE: ${PG_DATABASE:-landslide_monitor}
 
       # ClickHouse (inside compose network)
@@ -142,7 +142,7 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: ${PG_PORT:-5432}
       POSTGRES_USER: ${PG_USER:-landslide}
-      POSTGRES_PASSWORD: ${PG_PASSWORD:-change-me}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-${POSTGRES_PASSWORD:-change-me}}
       POSTGRES_DATABASE: ${PG_DATABASE:-landslide_monitor}
       POSTGRES_POOL_MAX: ${WRITER_POSTGRES_POOL_MAX:-5}
       BATCH_MAX_ROWS: ${WRITER_BATCH_MAX_ROWS:-2000}
@@ -189,7 +189,7 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: ${PG_PORT:-5432}
       POSTGRES_USER: ${PG_USER:-landslide}
-      POSTGRES_PASSWORD: ${PG_PASSWORD:-change-me}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-${POSTGRES_PASSWORD:-change-me}}
       POSTGRES_DATABASE: ${PG_DATABASE:-landslide_monitor}
       POSTGRES_POOL_MAX: ${AI_PREDICTION_POSTGRES_POOL_MAX:-5}
       CLICKHOUSE_URL: http://clickhouse:8123
@@ -230,7 +230,7 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: ${PG_PORT:-5432}
       POSTGRES_USER: ${PG_USER:-landslide}
-      POSTGRES_PASSWORD: ${PG_PASSWORD:-change-me}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-${POSTGRES_PASSWORD:-change-me}}
       POSTGRES_DATABASE: ${PG_DATABASE:-landslide_monitor}
       POSTGRES_POOL_MAX: ${RULE_ENGINE_POSTGRES_POOL_MAX:-5}
       RULES_REFRESH_MS: ${RULES_REFRESH_MS:-2000}
@@ -259,7 +259,7 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: ${PG_PORT:-5432}
       POSTGRES_USER: ${PG_USER:-landslide}
-      POSTGRES_PASSWORD: ${PG_PASSWORD:-change-me}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-${POSTGRES_PASSWORD:-change-me}}
       POSTGRES_DATABASE: ${PG_DATABASE:-landslide_monitor}
       POSTGRES_POOL_MAX: ${ALERT_NOTIFY_POSTGRES_POOL_MAX:-5}
       NOTIFY_TYPE: app
@@ -294,7 +294,7 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: ${PG_PORT:-5432}
       POSTGRES_USER: ${PG_USER:-landslide}
-      POSTGRES_PASSWORD: ${PG_PASSWORD:-change-me}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-${POSTGRES_PASSWORD:-change-me}}
       POSTGRES_DATABASE: ${PG_DATABASE:-landslide_monitor}
       POSTGRES_POOL_MAX: ${COMMAND_POSTGRES_POOL_MAX:-5}
     depends_on:
@@ -326,7 +326,7 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: ${PG_PORT:-5432}
       POSTGRES_USER: ${PG_USER:-landslide}
-      POSTGRES_PASSWORD: ${PG_PASSWORD:-change-me}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-${POSTGRES_PASSWORD:-change-me}}
       POSTGRES_DATABASE: ${PG_DATABASE:-landslide_monitor}
       POSTGRES_POOL_MAX: ${COMMAND_POSTGRES_POOL_MAX:-5}
     depends_on:
@@ -353,7 +353,7 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: ${PG_PORT:-5432}
       POSTGRES_USER: ${PG_USER:-landslide}
-      POSTGRES_PASSWORD: ${PG_PASSWORD:-change-me}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-${POSTGRES_PASSWORD:-change-me}}
       POSTGRES_DATABASE: ${PG_DATABASE:-landslide_monitor}
       POSTGRES_POOL_MAX: ${COMMAND_POSTGRES_POOL_MAX:-5}
     depends_on:
@@ -377,7 +377,7 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: ${PG_PORT:-5432}
       POSTGRES_USER: ${PG_USER:-landslide}
-      POSTGRES_PASSWORD: ${PG_PASSWORD:-change-me}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-${POSTGRES_PASSWORD:-change-me}}
       POSTGRES_DATABASE: ${PG_DATABASE:-landslide_monitor}
       POSTGRES_POOL_MAX: ${COMMAND_POSTGRES_POOL_MAX:-5}
       COMMAND_ACK_TIMEOUT_SECONDS: ${COMMAND_ACK_TIMEOUT_SECONDS:-60}
