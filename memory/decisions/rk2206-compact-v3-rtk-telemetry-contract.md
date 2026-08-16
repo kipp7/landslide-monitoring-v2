@@ -13,6 +13,57 @@ status: active
 
 # Decision: RK2206 Compact V3 RTK Telemetry Contract
 
+## Windows GPS Relaxed Analysis View (2026-08-07)
+
+### Decision
+
+- Windows 的 GPS 算法/形变页面显式请求 `trustedOnly=false`：只要 RTK 经纬度有效且核心
+  遥测未超过 30 秒，即显示“厘米位移可用”，并允许 GGA 不是 4 的坐标参与毫米位移、
+  趋势、形变速度和服务器 CEEMDAN/预测分析。
+- GGA quality、Fix 类型、卫星数、HDOP、GST、差分龄、解算龄、Fixed 连续性、基准站和
+  RTCM 错误摘要继续展示和存储，但在该页面中作为质量证据，不再作为可用性硬门禁。
+- API 的序列与分析端点新增可选 `trustedOnly` 参数；默认值仍为 `true`。因此 RK3568 的
+  `rtk_trusted` 生成逻辑、服务器默认专业接口和其他消费者保持原严格语义，只有 Windows
+  GPS 页面进入宽松通道，不能据此删除底层质量字段或改变生产告警门禁。
+- 有持久基线时，宽松序列继续按持久基线计算水平、垂直和三维总位移；没有持久基线时，
+  客户端以当前窗口前 12 个有效坐标生成临时参考点。旧服务器不支持宽松参数时，客户端
+  仍可直接读取 RTK 经纬度/海拔序列完成同一计算，不再退回 Fixed-only 历史点。
+
+### Verification
+
+- API build 和 10 项路由测试通过；生产服务器接口实测返回
+  `positionProfile=custom`、`trustedOnly=false`、序列 13 点，分析接口 HTTP 200。
+- 生产 API 镜像为 `sha256:cace2e9d27f67d93c861247c7611917cc5cfd875c314612ec9fd542c222f5e6c`，
+  容器 running、`RestartCount=0`；回滚点为
+  `/opt/lsmv2-production/backups/api-gps-loose-20260807-061424`。
+- Windows TypeScript/Vite build、ESLint 和正式 portable 原生启动检查通过；WebView ready，
+  前端运行错误为 0，正式路径仍为
+  `landslide-monitoring-desktop/artifacts/windows/portable`。
+
+## Single-Node Poll Window Observation (2026-08-07)
+
+### Evidence
+
+- 现场对照显示：A/B/C 三节点同时在线时，核心数据轮次约 `3.5 s`；只保留一个物理节点时，倾角告警很难在短时间内触发。
+- RK3568 生产配置仍将 A、B、C 都标记为 enabled，并使用 `compact-layered-v1`；南向轮询间隔为 `250 ms`、会话保护窗口为 `6500 ms`、部分恢复重试为 `0`。
+- 网关的广播轮询窗口按所有已配置且 enabled 的节点建立 `expectedDeviceIds`。只有收到全部 expected 节点才提前关闭窗口；单节点回应而另两个节点离线时，会等满 `6500 ms` 后超时，再等待约 `250 ms` 进入下一轮。
+- 因此单节点实际核心轮询周期约为 `6.5--6.75 s`，而比赛告警默认要求连续 2 个超阈值点，触发延迟可达到约 `13.5 s` 或更长。该 `6500 ms` 是 RK3568 到 RK2206/XLS1 的南向串口接收保护窗口，不是 RK3568 上传服务器的周期。
+- 三节点都在窗口内返回时，窗口在最后一个节点返回后立即关闭，因此现场约 `3.5 s` 的三节点结果与代码行为一致。
+
+### Decision
+
+- 当前不回退、不修改网关、服务器、桌面端或 RK2206 固件；接受并记录该单节点退化现象，避免用简单缩短 `6500 ms` 的方式重新引入迟到帧交织和 CRC 风险。
+- 三节点正常在线时，继续使用已经验收的 V6 单 P1 广播和现有 RTCM 仲裁参数。
+
+### Consequences
+
+- 单节点或部分节点离线时，核心数据和基于连续点的告警响应会明显变慢；这是南向轮询完成条件的调度退化，不是服务器 MQTT 上传等待，也不是桌面端刷新周期造成的。
+- 若后续优化，必须采用“在线节点自适应完成条件 + 离线节点低频恢复探测 + 迟到帧保护”的组合，不能只降低会话超时或永久禁用 B/C。还需同时复核 RTCM 发送量、差分龄、CRC/交织计数和节点重新上线能力。
+
+### Follow-up
+
+- 本记录作为后续单节点/部分节点调度优化的基线；在用户明确批准前不实施代码或配置变更。
+
 ## Compact V6 Core-Tilt Timing Amendment (2026-08-06)
 
 - 复审确认 Compact V6 的三类 46 B payload 已占满固定线框的有效布局；保留坐标、

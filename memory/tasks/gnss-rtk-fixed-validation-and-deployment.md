@@ -12,6 +12,50 @@ status: active
 
 # Task: gnss-rtk-fixed-validation-and-deployment
 
+## Windows GPS Relaxed Analysis Deployment (2026-08-07 06:20 CST)
+
+- GPS 算法页已改为显式使用服务器 `trustedOnly=false` 通道。有效且新鲜的 RTK 坐标不再因
+  GGA 未到 4 被降级为“仅观察”，而是直接进入毫米位移、速度、趋势和 CEEMDAN/预测分析；
+  GGA/HDOP/GST/差分龄等仍作为工程质量证据显示。
+- 服务器默认仍为 `trustedOnly=true`，RK3568 和其他消费者的严格门禁未改。生产 API 已完成
+  备份、构建、原子换容器与真实鉴权接口验证，容器 active、零重启。
+- 正式 Windows 包已覆盖到 `landslide-monitoring-desktop/artifacts/windows/portable`，保持
+  原生产 API 配置。原生壳/WebView ready，API 配置校验通过，前端 runtime error 为 0。
+
+## Desktop Review-Clear Latency Fix (2026-08-07 00:22 CST)
+
+- 现场终端和 HarmonyOS App 的解除速度可接受，本轮只优化 Windows 可视化大屏，不改变
+  `1.5 deg / 连续 2 点` 自动重新布防规则，也不改变服务端先确认执行结果再归档的严谨语义。
+- 根因是桌面端状态竞争，不是现场链路：AnalysisPage 每 5 秒整页刷新时先读取告警状态，
+  随后等待全部设备状态才回写，因此复核期间可能把动作前的旧告警延迟写回；AppShell 的
+  2 秒兜底轮询也未拒绝过期响应。
+- 已移除 AnalysisPage 整页刷新中的重复告警读取，告警状态统一由共享 Zustand store、
+  `/alerts/stream` 和 AppShell 兜底轮询维护；共享状态新增 revision，任何已接受的复核动作
+  都会使动作前发出的请求失效，AppShell 另以 request sequence 拒绝乱序响应。复核成功后
+  继续先做本地确定性状态转换，再后台回查服务器，避免“已解除又闪回”。
+- 完成归档提示停留由 6 秒缩短为 3 秒。桌面端 TypeScript/Vite build、ESLint、`git diff
+  --check` 均通过；正式 portable 已按原生产 API 配置重打包，Windows 外壳/WebView 就绪，
+  静置 60 秒 runtime error 为 0，API 配置校验通过。
+- 同轮修复了倾角基线弹窗只做单字段范围限制、未做阈值关系校验的问题。客户端现在提交前
+  强制 `criticalDeg > highDeg`、`recoveryDeg < highDeg`，并校验点数、更新步长和全部数值
+  范围；冲突输入会标红并显示具体中文原因，不再把无效组合发到服务器后只显示“告警阈值
+  无效”。正式 portable 经干净构建恢复为 20 个文件、约 8.5 MB，并再次通过 60 秒运行验收。
+
+## Three-Node Reboot Sequence Recovery (2026-08-07 00:05 CST)
+
+- A/B/C 和 RK3568 重新上电后，RK3568 健康快照确认三节点持续 online、串口/MQTT/spool
+  正常，但桌面端全部显示离线。根因不在现场链路：RK2206 的 Compact V6 `seq` 从约
+  `6700` 回到低值，服务器 telemetry-writer 的运行镜像仍是只识别 `uptime_s` 回退的旧
+  sequence policy，因而把新帧连续判为 `stale_seq` 并送入 DLQ，PostgreSQL
+  `devices.last_seen_at` 停在约一小时前。
+- 已把仓库现有的 Compact V6 `sample_epoch` 回退验证策略部署到生产 writer，并用容器内
+  `sample_epoch_rollback` 代码存在作为镜像门禁。重建时必须显式使用 Compose project
+  `lsmv2-production`；省略 `-p` 会误接入另一个 default network，导致新 writer 无法访问
+  `kafka:9092`。错误网络容器已移除，生产容器重新接入 `lsmv2-production_default`。
+- 修复后 writer 分别接纳 A/B/C 的 verified reset，随后 30 秒统计为 349 条成功、DLQ 0、
+  ClickHouse 写失败 0；三节点 `last_seen_at` 和 shadow seq 持续前进，正式 devices API 返回
+  三节点最新时间。历史 ClickHouse 数据和设备注册记录均未删除或改写。
+
 ## RK3568 Mixed-Load Scheduler Fix (2026-08-06 17:13 CST)
 
 - 已解除 Compact V6 core overdue 对 P4 RTCM audit 的无限饥饿，audit 周期固定为每 5 轮，
