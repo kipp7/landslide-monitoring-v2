@@ -86,6 +86,19 @@ test("preserves the complete compact v4 field contract", () => {
     rtcm_crc_error: false,
     rtcm_queue_drop_error: false,
     rtcm_uart_error: false,
+    displacement_east_mm: 12.3,
+    displacement_north_mm: -4.5,
+    displacement_up_mm: 2.1,
+    displacement_horizontal_mm: 13.1,
+    displacement_3d_mm: 13.3,
+    displacement_velocity_east_mm_h: 0.8,
+    displacement_velocity_north_mm_h: -0.2,
+    displacement_velocity_up_mm_h: 0.1,
+    displacement_velocity_horizontal_mm_h: 0.82,
+    displacement_sigma_horizontal_mm: 7.4,
+    displacement_sigma_up_mm: 10.2,
+    displacement_innovation_nis: 1.7,
+    displacement_mm: 13.1,
   };
 
   assert.deepEqual(sanitizeFieldProfileMetrics(metrics), metrics);

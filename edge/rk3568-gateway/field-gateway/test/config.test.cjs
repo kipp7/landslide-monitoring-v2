@@ -29,7 +29,21 @@ test("RK3568 deployment example pins the protected Compact V6 layered profile", 
   assert.equal(config.southboundCorePollDeadlineMs, 2000);
   assert.equal(config.southboundLayeredEnvironmentEveryRounds, 30);
   assert.equal(config.southboundLayeredAuditEveryRounds, 60);
+  assert.equal(config.rtkDisplacementEnabled, true);
+  assert.equal(config.rtkDisplacementStateFilePath, "/var/lib/lsmv2/field-gateway/state/rtk-displacement-v1.json");
   assert.equal(config.ntripEnabled, false);
+});
+
+test("professional RTK displacement is enabled by default and can be explicitly disabled", () => {
+  const defaults = loadConfigFromEnv({ MQTT_URL: "mqtt://127.0.0.1:1883" });
+  assert.equal(defaults.rtkDisplacementEnabled, true);
+  assert.equal(defaults.rtkDisplacementStateFilePath, undefined);
+
+  const disabled = loadConfigFromEnv({
+    MQTT_URL: "mqtt://127.0.0.1:1883",
+    RTK_DISPLACEMENT_ENABLED: "false",
+  });
+  assert.equal(disabled.rtkDisplacementEnabled, false);
 });
 
 test("compact polling bounds retry count and requires a complete retry window", () => {

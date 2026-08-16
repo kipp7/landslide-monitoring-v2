@@ -20,6 +20,11 @@ const baselineSchema = z.object({
   notes: z.string().max(2000).optional()
 });
 
+const queryBooleanSchema = z.union([
+  z.boolean(),
+  z.enum(["true", "false"]).transform((value) => value === "true")
+]);
+
 const seriesQuerySchema = z.object({
   startTime: z.string().datetime(),
   endTime: z.string().datetime(),
@@ -27,6 +32,7 @@ const seriesQuerySchema = z.object({
   latKey: z.string().min(1).default(PROFESSIONAL_RTK_POSITION_KEYS.latitude),
   lonKey: z.string().min(1).default(PROFESSIONAL_RTK_POSITION_KEYS.longitude),
   altKey: z.string().min(1).optional().default(PROFESSIONAL_RTK_POSITION_KEYS.altitude),
+  trustedOnly: queryBooleanSchema.optional(),
   limit: z.coerce.number().int().positive().max(200000).default(20000)
 });
 
@@ -34,6 +40,7 @@ const analysisQuerySchema = z.object({
   timeRange: z.string().optional(),
   startTime: z.string().datetime().optional(),
   endTime: z.string().datetime().optional(),
+  trustedOnly: queryBooleanSchema.optional(),
   limit: z.coerce.number().int().positive().max(5000).default(200)
 });
 
@@ -421,7 +428,8 @@ export function registerGpsDeformationRoutes(
     latKey: string,
     lonKey: string,
     altKey: string | undefined,
-    limit: number
+    limit: number,
+    requestedTrustedOnly?: boolean
   ) => {
     if (!pg) {
       return { error: { code: 503, message: "PostgreSQL 未配置" } };
@@ -455,7 +463,7 @@ export function registerGpsDeformationRoutes(
 
     const bucketSeconds = intervalSeconds(interval);
     const sensorKeys = altKey ? [latKey, lonKey, altKey] : [latKey, lonKey];
-    const trustedOnly = isProfessionalRtkPosition({ latKey, lonKey });
+    const trustedOnly = isProfessionalRtkPosition({ latKey, lonKey }) && (requestedTrustedOnly ?? true);
     const trustedTimestampClause = trustedOnly
       ? `AND received_ts IN (
           SELECT received_ts
@@ -570,14 +578,14 @@ export function registerGpsDeformationRoutes(
       return;
     }
 
-    const { startTime, endTime, interval, latKey, lonKey, altKey, limit } = parseQuery.data;
+    const { startTime, endTime, interval, latKey, lonKey, altKey, trustedOnly, limit } = parseQuery.data;
     const start = new Date(startTime);
     const end = new Date(endTime);
     if (!(start < end)) {
       fail(reply, 400, "参数错误", traceId, { field: "timeRange" });
       return;
     }
-    const built = await buildSeriesData(deviceId, start, end, interval, latKey, lonKey, altKey, limit);
+    const built = await buildSeriesData(deviceId, start, end, interval, latKey, lonKey, altKey, limit, trustedOnly);
     if ("error" in built) {
       fail(reply, built.error.code, built.error.message, traceId, { field: "deviceId", issues: built.error.details });
       return;
@@ -621,7 +629,8 @@ export function registerGpsDeformationRoutes(
       PROFESSIONAL_RTK_POSITION_KEYS.latitude,
       PROFESSIONAL_RTK_POSITION_KEYS.longitude,
       PROFESSIONAL_RTK_POSITION_KEYS.altitude,
-      limit
+      limit,
+      parsed.data.trustedOnly
     );
     if ("error" in built) {
       fail(reply, built.error.code, built.error.message, traceId, { field: "deviceId", issues: built.error.details });

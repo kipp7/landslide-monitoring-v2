@@ -48,6 +48,11 @@ import {
   type FieldLinkFrameType,
   type FieldLinkInboundPayload
 } from "./field-link";
+import {
+  RtkDisplacementStateStore,
+  type RtkCoordinateFrame,
+  type RtkDisplacementObservation
+} from "./rtk-displacement";
 
 type TelemetryEnvelopeV1 = {
   schema_version: 1;
@@ -336,6 +341,14 @@ type GatewayPayloadAssembler = {
 
 type JsonObject = Record<string, unknown>;
 
+type RtkAuxiliaryEvidence = {
+  geoidSeparationM: number | null;
+  sigmaAltitudeMm: number | null;
+  observedAtMs: number;
+};
+
+const RTK_AUXILIARY_MAX_AGE_MS = 10 * 60 * 1000;
+
 const FIELD_METRIC_KEYS = new Set([
   "accel_x_g",
   "accel_y_g",
@@ -363,8 +376,29 @@ const FIELD_METRIC_KEYS = new Set([
   "rtk_trusted",
   "rtk_correction_age_ms",
   "rtk_solution_age_ms",
+  "displacement_east_mm",
+  "displacement_north_mm",
+  "displacement_up_mm",
+  "displacement_horizontal_mm",
+  "displacement_3d_mm",
+  "displacement_velocity_east_mm_h",
+  "displacement_velocity_north_mm_h",
+  "displacement_velocity_up_mm_h",
+  "displacement_velocity_horizontal_mm_h",
+  "displacement_sigma_horizontal_mm",
+  "displacement_sigma_up_mm",
+  "displacement_innovation_nis",
+  "displacement_mm",
   "warning_flag"
 ]);
+
+function finiteMetric(
+  metrics: Record<string, number | string | boolean | null>,
+  key: string
+): number | null {
+  const value = metrics[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
 
 function isoNow(): string {
   return new Date().toISOString();
@@ -1099,6 +1133,8 @@ class GatewayRuntime {
   private readonly rtcmController: RtcmDownlinkController | null;
   private readonly ntripClient: NtripClient | null;
   private readonly rtcmPollBurstGate: RtcmPollBurstGate;
+  private readonly rtkDisplacement: RtkDisplacementStateStore | null;
+  private readonly rtkAuxiliaryEvidence = new Map<string, RtkAuxiliaryEvidence>();
   private fieldLinkTxSequence = 0;
   private readonly stats: RuntimeStats = {
     serialChunks: 0,
@@ -1178,6 +1214,14 @@ class GatewayRuntime {
   ) {
     this.logger = createLogger(config.serviceName);
     this.spool = new SpoolManager(config);
+    this.rtkDisplacement = config.rtkDisplacementEnabled
+      ? new RtkDisplacementStateStore(
+          path.resolve(
+            config.rtkDisplacementStateFilePath ??
+              path.join(config.spoolRootDir, "state", "rtk-displacement-v1.json")
+          )
+        )
+      : null;
     this.rtcmPollBurstGate = new RtcmPollBurstGate(
       config.rtcmMaxFragmentsBetweenPolls,
       config.rtcmMinCorrectionWindowMs
@@ -1236,6 +1280,7 @@ class GatewayRuntime {
   async start(): Promise<void> {
     this.stopping = false;
     await this.spool.init();
+    await this.rtkDisplacement?.init();
     const mqttClient = mqtt.connect(this.config.mqttUrl, {
       ...(this.config.mqttUsername && this.config.mqttPassword
         ? { username: this.config.mqttUsername, password: this.config.mqttPassword }
@@ -1791,15 +1836,14 @@ class GatewayRuntime {
       );
       return;
     }
-    const normalizedPayload = JSON.stringify(envelope);
-    const normalizedPayloadBytes = Buffer.byteLength(normalizedPayload, "utf8");
     const nodeState = this.resolveNodeForTelemetry(envelope.device_id, traceId, sourcePort);
     if (!nodeState) {
+      const rejectedPayload = JSON.stringify(envelope);
       await this.rejectIncomingTelemetry({
         traceId,
         sourcePort,
         receivedTs,
-        rawPayload: normalizedPayload,
+        rawPayload: rejectedPayload,
         deviceId: envelope.device_id,
         seq: envelope.seq ?? null,
         reason: this.stats.lastError ?? "telemetry routing rejected"
@@ -1850,7 +1894,7 @@ class GatewayRuntime {
         traceId,
         sourcePort,
         receivedTs,
-        rawPayload: normalizedPayload,
+        rawPayload: JSON.stringify(envelope),
         deviceId: envelope.device_id,
         seq: envelope.seq ?? null,
         reason
@@ -1888,6 +1932,28 @@ class GatewayRuntime {
       );
       if (!acceptedForActivePoll) return;
     }
+
+    await this.enrichRtkDisplacement(envelope, receivedTs, telemetryCompactScope);
+    const derivedEnvelopeCandidate: unknown = envelope;
+    if (!this.validateEnvelope.validate(derivedEnvelopeCandidate)) {
+      const reason = "derived RTK displacement envelope validation failed";
+      const rejectedPayload = JSON.stringify(envelope);
+      this.stats.schemaRejected += 1;
+      this.stats.lastError = reason;
+      portState.lastError = reason;
+      await this.rejectIncomingTelemetry({
+        traceId,
+        sourcePort,
+        receivedTs,
+        rawPayload: rejectedPayload,
+        deviceId: envelope.device_id,
+        seq: envelope.seq ?? null,
+        reason
+      });
+      return;
+    }
+    const normalizedPayload = JSON.stringify(envelope);
+    const normalizedPayloadBytes = Buffer.byteLength(normalizedPayload, "utf8");
 
     this.stats.parsedMessages += 1;
     this.stats.lastParsedMessageTs = receivedTs;
@@ -1961,6 +2027,89 @@ class GatewayRuntime {
       });
       this.logger.error({ traceId, err, sourcePort }, "field gateway spool enqueue failed");
     }
+  }
+
+  private async enrichRtkDisplacement(
+    envelope: TelemetryEnvelopeV1,
+    receivedTs: string,
+    compactScope: string | null
+  ): Promise<void> {
+    if (!this.rtkDisplacement) return;
+    const observedAtMs = Date.parse(receivedTs);
+    const geoidSeparationM = finiteMetric(envelope.metrics, "rtk_geoid_separation_m");
+    const sigmaAltitudeMm = finiteMetric(envelope.metrics, "rtk_gst_sigma_alt_mm");
+    const previousAuxiliary = this.rtkAuxiliaryEvidence.get(envelope.device_id);
+    if (geoidSeparationM !== null || sigmaAltitudeMm !== null) {
+      this.rtkAuxiliaryEvidence.set(envelope.device_id, {
+        geoidSeparationM: geoidSeparationM ?? previousAuxiliary?.geoidSeparationM ?? null,
+        sigmaAltitudeMm: sigmaAltitudeMm ?? previousAuxiliary?.sigmaAltitudeMm ?? null,
+        observedAtMs
+      });
+    }
+    if (compactScope !== null && compactScope !== "core") return;
+
+    const auxiliary = this.rtkAuxiliaryEvidence.get(envelope.device_id);
+    const auxiliaryFresh = auxiliary !== undefined &&
+      observedAtMs - auxiliary.observedAtMs <= RTK_AUXILIARY_MAX_AGE_MS;
+    const altitudeMslM = finiteMetric(envelope.metrics, "rtk_altitude_msl_m");
+    let ellipsoidHeightM = finiteMetric(envelope.metrics, "rtk_ellipsoid_height_m");
+    if (ellipsoidHeightM === null && altitudeMslM !== null && auxiliaryFresh &&
+        auxiliary.geoidSeparationM !== null) {
+      ellipsoidHeightM = altitudeMslM + auxiliary.geoidSeparationM;
+      envelope.metrics.rtk_ellipsoid_height_m = ellipsoidHeightM;
+    }
+
+    const meta = envelope.meta ?? {};
+    const coordinateFrameValue = meta.rtk_coordinate_frame;
+    const coordinateFrame: RtkCoordinateFrame | null =
+      coordinateFrameValue === "WGS84" || coordinateFrameValue === "CGCS2000"
+        ? coordinateFrameValue
+        : null;
+    const sampleEpochValue = meta.sample_epoch;
+    const observation: RtkDisplacementObservation = {
+      deviceId: envelope.device_id,
+      observedAtMs,
+      latitudeDeg: finiteMetric(envelope.metrics, "rtk_latitude_deg") ?? Number.NaN,
+      longitudeDeg: finiteMetric(envelope.metrics, "rtk_longitude_deg") ?? Number.NaN,
+      ellipsoidHeightM,
+      coordinateFrame,
+      displacementEligible: meta.rtk_displacement_eligible === true,
+      gnssSource: typeof meta.gnss_source === "string" ? meta.gnss_source : null,
+      ggaQuality: finiteMetric(envelope.metrics, "rtk_gga_quality"),
+      trusted: envelope.metrics.rtk_trusted === true,
+      correctionAgeMs: finiteMetric(envelope.metrics, "rtk_correction_age_ms"),
+      solutionAgeMs: finiteMetric(envelope.metrics, "rtk_solution_age_ms"),
+      sigmaLatitudeMm: finiteMetric(envelope.metrics, "rtk_gst_sigma_lat_mm"),
+      sigmaLongitudeMm: finiteMetric(envelope.metrics, "rtk_gst_sigma_lon_mm"),
+      sigmaAltitudeMm: auxiliaryFresh ? auxiliary.sigmaAltitudeMm : null,
+      sampleEpoch: typeof sampleEpochValue === "number" && Number.isInteger(sampleEpochValue)
+        ? sampleEpochValue
+        : null
+    };
+    let result = this.rtkDisplacement.process(observation);
+    if (result.baselineChanged) {
+      try {
+        await this.rtkDisplacement.persistChangedBaseline(envelope.device_id);
+      } catch (error) {
+        this.stats.lastError = error instanceof Error ? error.message : String(error);
+        this.logger.error(
+          { err: error, deviceId: envelope.device_id },
+          "field gateway RTK displacement baseline persistence failed closed"
+        );
+        result = this.rtkDisplacement.process(observation);
+      }
+    }
+    Object.assign(envelope.metrics, result.metrics);
+    envelope.meta = {
+      ...meta,
+      ...result.meta,
+      rtk_ellipsoid_height_source:
+        finiteMetric(envelope.metrics, "rtk_ellipsoid_height_m") !== null
+          ? geoidSeparationM !== null || (auxiliaryFresh && auxiliary?.geoidSeparationM !== null)
+            ? "msl_plus_geoid"
+            : "receiver_ellipsoid"
+          : "unavailable"
+    };
   }
 
   private async rejectIncomingTelemetry(params: {

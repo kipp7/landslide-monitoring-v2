@@ -67,6 +67,18 @@ export const FIELD_PROFILE_METRIC_KEYS = new Set<string>([
   "rssi_dbm",
   "snr_db",
   "packet_loss_pct",
+  "displacement_east_mm",
+  "displacement_north_mm",
+  "displacement_up_mm",
+  "displacement_horizontal_mm",
+  "displacement_3d_mm",
+  "displacement_velocity_east_mm_h",
+  "displacement_velocity_north_mm_h",
+  "displacement_velocity_up_mm_h",
+  "displacement_velocity_horizontal_mm_h",
+  "displacement_sigma_horizontal_mm",
+  "displacement_sigma_up_mm",
+  "displacement_innovation_nis",
   "displacement_mm",
   "vibration_g"
 ]);
