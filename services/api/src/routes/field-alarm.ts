@@ -4,6 +4,7 @@ import {
   competitionTiltProfileSchema,
   competitionTiltThresholdsSchema,
   computeCompetitionTiltDeviation,
+  DEFAULT_COMPETITION_TILT_QUICK_ALARM_THRESHOLDS,
   DEFAULT_COMPETITION_TILT_THRESHOLDS,
   readTiltVector,
   type CompetitionTiltProfile,
@@ -52,9 +53,17 @@ const competitionProfileUpdateSchema = z
     message: "enabled or thresholds is required"
   });
 
+const competitionQuickArmSchema = z
+  .object({
+    deviceIds: z.array(z.string().uuid()).min(1).max(100).optional(),
+    durationSeconds: z.number().int().min(30).max(600).optional()
+  })
+  .strict();
+
 const COMPETITION_PROFILE_CONFIG_KEY = "field_alarm.competition_tilt_profile.v1";
 const COMPETITION_RULE_NAME = "比赛演示相对倾角分级告警";
 const COMPETITION_BASELINE_MAX_AGE_SECONDS = 30;
+const COMPETITION_QUICK_ALARM_DURATION_SECONDS = 180;
 
 type FieldAlarmAction = z.infer<typeof fieldAlarmActionSchema>["action"];
 type AlertLifecycleEventType = "ALERT_ACK" | "ALERT_RESOLVE";
@@ -594,6 +603,127 @@ export function registerFieldAlarmRoutes(
       status: "success",
       requestData: parsed.data,
       responseData: { profile, skipped }
+    });
+    ok(reply, { profile, skipped }, traceId);
+  });
+
+  app.post("/field-alarm/competition-profile/quick-arm", async (request, reply) => {
+    const traceId = request.traceId;
+    if (!(await requirePermission(adminCfg, pg, request, reply, "alert:config"))) return;
+    if (!pg) {
+      fail(reply, 503, "PostgreSQL 未配置", traceId);
+      return;
+    }
+    const parsed = competitionQuickArmSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      fail(reply, 400, "参数错误", traceId, { field: "body", issues: parsed.error.issues });
+      return;
+    }
+
+    const current = await loadCompetitionProfile(pg);
+    if (!current?.enabled) {
+      fail(reply, 409, "请先采集并启用倾角基线", traceId);
+      return;
+    }
+    const alerts = await loadPhysicalAlarmAlerts(pg);
+    const activeCompetitionAlerts = [...alerts.active, ...alerts.acked].filter(
+      (alert) => alert.rule_id === current.ruleId
+    );
+    if (activeCompetitionAlerts.length > 0) {
+      fail(reply, 409, "请先完成人工复核并解除当前比赛告警", traceId, {
+        alertIds: activeCompetitionAlerts.map((alert) => alert.alert_id)
+      });
+      return;
+    }
+
+    const configuredIds = new Set(current.devices.map((device) => device.deviceId));
+    const deviceIds = parsed.data.deviceIds ?? current.devices.map((device) => device.deviceId);
+    const unknownDeviceIds = deviceIds.filter((deviceId) => !configuredIds.has(deviceId));
+    if (unknownDeviceIds.length > 0) {
+      fail(reply, 400, "快速预警只能覆盖已采集基线的节点", traceId, { unknownDeviceIds });
+      return;
+    }
+
+    const rows = await withPgClient(pg, async (client) =>
+      client.query<{
+        device_id: string;
+        device_name: string;
+        state: unknown;
+        updated_at: string;
+        last_seq: string | null;
+      }>(
+        `
+          SELECT
+            d.device_id,
+            d.device_name,
+            ds.state,
+            to_char(ds.updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS updated_at,
+            ds.state #>> '{meta,_writer,last_seq}' AS last_seq
+          FROM devices d
+          JOIN device_state ds ON ds.device_id = d.device_id
+          WHERE d.device_id = ANY($1::uuid[])
+          ORDER BY d.device_name ASC
+        `,
+        [deviceIds]
+      )
+    );
+
+    const now = new Date();
+    const anchors = [] as NonNullable<CompetitionTiltProfile["quickAlarm"]>["anchors"];
+    const skipped: { deviceId: string; deviceName: string; reason: string }[] = [];
+    for (const row of rows.rows) {
+      const state = row.state && typeof row.state === "object" ? (row.state as Record<string, unknown>) : {};
+      const metrics = state.metrics && typeof state.metrics === "object" ? (state.metrics as Record<string, unknown>) : {};
+      const tilt = readTiltVector(metrics);
+      const observedMs = Date.parse(row.updated_at);
+      if (!tilt) {
+        skipped.push({ deviceId: row.device_id, deviceName: row.device_name, reason: "缺少完整倾角 X/Y/Z" });
+        continue;
+      }
+      if (!Number.isFinite(observedMs) || now.getTime() - observedMs > COMPETITION_BASELINE_MAX_AGE_SECONDS * 1000) {
+        skipped.push({ deviceId: row.device_id, deviceName: row.device_name, reason: "倾角数据超过 30 秒" });
+        continue;
+      }
+      const parsedSeq = row.last_seq == null ? null : Number(row.last_seq);
+      anchors.push({
+        deviceId: row.device_id,
+        tilt,
+        observedAt: row.updated_at,
+        seq: parsedSeq !== null && Number.isInteger(parsedSeq) && parsedSeq >= 0 ? parsedSeq : null
+      });
+    }
+    if (anchors.length === 0) {
+      fail(reply, 409, "没有可用于快速预警的新鲜倾角数据", traceId, { skipped });
+      return;
+    }
+
+    const durationSeconds = parsed.data.durationSeconds ?? COMPETITION_QUICK_ALARM_DURATION_SECONDS;
+    const armedAt = now.toISOString();
+    const expiresAt = new Date(now.getTime() + durationSeconds * 1000).toISOString();
+    const profile = competitionTiltProfileSchema.parse({
+      ...current,
+      quickAlarm: {
+        armedAt,
+        expiresAt,
+        durationSeconds,
+        deviceIds,
+        thresholds: DEFAULT_COMPETITION_TILT_QUICK_ALARM_THRESHOLDS,
+        anchors
+      }
+    });
+    await withPgClient(pg, async (client) => {
+      await client.query(
+        "UPDATE system_configs SET config_value = $2, updated_at = NOW() WHERE config_key = $1",
+        [COMPETITION_PROFILE_CONFIG_KEY, JSON.stringify(profile)]
+      );
+    });
+    void enqueueOperationLog(pg, request, {
+      module: "field_alarm",
+      action: "arm_competition_tilt_quick_alarm",
+      description: "arm competition quick tilt alarm for configured devices",
+      status: "success",
+      requestData: parsed.data,
+      responseData: { armedAt, expiresAt, deviceIds, anchorDeviceIds: anchors.map((anchor) => anchor.deviceId), skipped }
     });
     ok(reply, { profile, skipped }, traceId);
   });

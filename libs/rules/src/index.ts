@@ -332,6 +332,50 @@ export const competitionTiltDeviceSchema = z
   })
   .strict();
 
+export const competitionTiltQuickAlarmThresholdsSchema = z
+  .object({
+    pointDeltaDeg: z.number().positive().max(10),
+    anchorMaxDeviationDeg: z.number().nonnegative().max(10),
+    maxGapSeconds: z.number().positive().max(30),
+    maxSingleDeltaDeg: z.number().positive().max(90)
+  })
+  .strict()
+  .refine((value) => value.maxSingleDeltaDeg > value.pointDeltaDeg, {
+    message: "maxSingleDeltaDeg must be greater than pointDeltaDeg",
+    path: ["maxSingleDeltaDeg"]
+  });
+
+export type CompetitionTiltQuickAlarmThresholds = z.infer<typeof competitionTiltQuickAlarmThresholdsSchema>;
+
+export const DEFAULT_COMPETITION_TILT_QUICK_ALARM_THRESHOLDS: CompetitionTiltQuickAlarmThresholds = {
+  pointDeltaDeg: 2,
+  anchorMaxDeviationDeg: 1,
+  maxGapSeconds: 30,
+  maxSingleDeltaDeg: 30
+};
+
+export const competitionTiltQuickAlarmAnchorSchema = z
+  .object({
+    deviceId: z.string().uuid(),
+    tilt: tiltVectorSchema,
+    observedAt: z.string().datetime(),
+    seq: z.number().int().nonnegative().nullable()
+  })
+  .strict();
+
+export const competitionTiltQuickAlarmSchema = z
+  .object({
+    armedAt: z.string().datetime(),
+    expiresAt: z.string().datetime(),
+    durationSeconds: z.number().int().min(30).max(600),
+    deviceIds: z.array(z.string().uuid()).min(1).max(100),
+    thresholds: competitionTiltQuickAlarmThresholdsSchema,
+    anchors: z.array(competitionTiltQuickAlarmAnchorSchema).max(100)
+  })
+  .strict();
+
+export type CompetitionTiltQuickAlarm = z.infer<typeof competitionTiltQuickAlarmSchema>;
+
 export const competitionTiltProfileSchema = z
   .object({
     schemaVersion: z.literal(1),
@@ -342,7 +386,8 @@ export const competitionTiltProfileSchema = z
     capturedAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
     thresholds: competitionTiltThresholdsSchema,
-    devices: z.array(competitionTiltDeviceSchema).min(1).max(100)
+    devices: z.array(competitionTiltDeviceSchema).min(1).max(100),
+    quickAlarm: competitionTiltQuickAlarmSchema.optional()
   })
   .strict();
 
@@ -355,6 +400,68 @@ export type CompetitionTiltDeviation = {
   maxAxis: "x" | "y";
   maxDeviationDeg: number;
 };
+
+export type CompetitionTiltQuickTriggerResult = {
+  triggered: boolean;
+  reason:
+    | "triggered"
+    | "invalid_time_order"
+    | "invalid_sequence_order"
+    | "gap_too_large"
+    | "anchor_outside_baseline"
+    | "below_baseline_threshold"
+    | "below_point_delta"
+    | "implausible_point_delta";
+  pointDelta: TiltVector;
+  maxPointDeltaDeg: number;
+  previousBaselineDeviationDeg: number;
+  currentBaselineDeviationDeg: number;
+  gapSeconds: number;
+};
+
+export function evaluateCompetitionTiltQuickTrigger(input: {
+  previous: TiltVector;
+  current: TiltVector;
+  baseline: TiltVector;
+  previousTsMs: number;
+  currentTsMs: number;
+  previousSeq: number | null;
+  currentSeq: number | null;
+  baselineTriggerDeg: number;
+  thresholds: CompetitionTiltQuickAlarmThresholds;
+}): CompetitionTiltQuickTriggerResult {
+  const pointDelta = {
+    x: input.current.x - input.previous.x,
+    y: input.current.y - input.previous.y,
+    z: input.current.z - input.previous.z
+  };
+  const maxPointDeltaDeg = Math.max(Math.abs(pointDelta.x), Math.abs(pointDelta.y));
+  const previousBaselineDeviationDeg = computeCompetitionTiltDeviation(input.previous, input.baseline).maxDeviationDeg;
+  const currentBaselineDeviationDeg = computeCompetitionTiltDeviation(input.current, input.baseline).maxDeviationDeg;
+  const gapSeconds = (input.currentTsMs - input.previousTsMs) / 1000;
+  const result = (reason: CompetitionTiltQuickTriggerResult["reason"]): CompetitionTiltQuickTriggerResult => ({
+    triggered: reason === "triggered",
+    reason,
+    pointDelta,
+    maxPointDeltaDeg,
+    previousBaselineDeviationDeg,
+    currentBaselineDeviationDeg,
+    gapSeconds
+  });
+
+  if (!Number.isFinite(gapSeconds) || gapSeconds <= 0) return result("invalid_time_order");
+  if (input.previousSeq !== null && input.currentSeq !== null && input.currentSeq <= input.previousSeq) {
+    return result("invalid_sequence_order");
+  }
+  if (gapSeconds > input.thresholds.maxGapSeconds) return result("gap_too_large");
+  if (previousBaselineDeviationDeg > input.thresholds.anchorMaxDeviationDeg) {
+    return result("anchor_outside_baseline");
+  }
+  if (currentBaselineDeviationDeg < input.baselineTriggerDeg) return result("below_baseline_threshold");
+  if (maxPointDeltaDeg < input.thresholds.pointDeltaDeg) return result("below_point_delta");
+  if (maxPointDeltaDeg > input.thresholds.maxSingleDeltaDeg) return result("implausible_point_delta");
+  return result("triggered");
+}
 
 export function readTiltVector(metrics: Record<string, unknown>): TiltVector | null {
   const x = metrics.tilt_x_deg;

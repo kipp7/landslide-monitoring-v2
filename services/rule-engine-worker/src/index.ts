@@ -2,17 +2,20 @@ import { createLogger } from "@lsmv2/observability";
 import {
   competitionTiltProfileSchema,
   computeCompetitionTiltDeviation,
+  evaluateCompetitionTiltQuickTrigger,
   evalCondition,
   findFirstSensorLeaf,
   readTiltVector,
   ruleDslSchema,
   templateString,
   type CompetitionTiltProfile,
+  type CompetitionTiltQuickTriggerResult,
   type MetricPoint,
   type MetricSeriesGetter,
   type MetricWindow,
   type RuleDslV1,
-  type Severity
+  type Severity,
+  type TiltVector
 } from "@lsmv2/rules";
 import { loadAndCompileSchema } from "@lsmv2/validation";
 import dotenv from "dotenv";
@@ -109,6 +112,9 @@ type CompetitionTiltRuntimeState = {
   lastResolvedEventAt: string | null;
   lastPublishedDeviationDeg: number | null;
   lastPublishedAxis: "x" | "y" | "z" | null;
+  lastValidTilt: TiltVector | null;
+  lastValidTsMs: number | null;
+  lastValidSeq: number | null;
 };
 
 const COMPETITION_PROFILE_CONFIG_KEY = "field_alarm.competition_tilt_profile.v1";
@@ -567,6 +573,7 @@ async function main(): Promise<void> {
     const latest = await loadLatestAlertForRuleDevice(profile.ruleId, payload.device_id);
     let runtime = competitionStateByDevice.get(payload.device_id);
     if (runtime?.profileUpdatedAt !== profile.updatedAt) {
+      const quickAnchor = profile.quickAlarm?.anchors.find((anchor) => anchor.deviceId === payload.device_id);
       runtime = {
         profileUpdatedAt: profile.updatedAt,
         armed: true,
@@ -575,7 +582,10 @@ async function main(): Promise<void> {
         recoveryStreak: 0,
         lastResolvedEventAt: null,
         lastPublishedDeviationDeg: null,
-        lastPublishedAxis: null
+        lastPublishedAxis: null,
+        lastValidTilt: quickAnchor?.tilt ?? null,
+        lastValidTsMs: quickAnchor ? Date.parse(quickAnchor.observedAt) : null,
+        lastValidSeq: quickAnchor?.seq ?? null
       };
       competitionStateByDevice.set(payload.device_id, runtime);
     }
@@ -592,6 +602,56 @@ async function main(): Promise<void> {
       runtime.lastResolvedEventAt = latest.created_at;
       runtime.lastPublishedDeviationDeg = null;
       runtime.lastPublishedAxis = null;
+    }
+
+    const currentTsMs = Date.parse(payload.received_ts);
+    const currentSeq = Number.isInteger(payload.seq) && (payload.seq ?? -1) >= 0 ? payload.seq ?? null : null;
+    const quickAlarm = profile.quickAlarm;
+    const quickArmedAtMs = quickAlarm ? Date.parse(quickAlarm.armedAt) : Number.NaN;
+    const quickExpiresAtMs = quickAlarm ? Date.parse(quickAlarm.expiresAt) : Number.NaN;
+    const quickWindowActive = Boolean(
+      quickAlarm &&
+        quickAlarm.deviceIds.includes(payload.device_id) &&
+        Number.isFinite(currentTsMs) &&
+        currentTsMs >= quickArmedAtMs &&
+        currentTsMs <= quickExpiresAtMs &&
+        Date.now() <= quickExpiresAtMs
+    );
+    let quickEvaluation: CompetitionTiltQuickTriggerResult | null = null;
+    if (
+      quickAlarm &&
+      quickWindowActive &&
+      runtime.armed &&
+      !latestIsActive &&
+      !latestIsAcked &&
+      runtime.lastValidTilt &&
+      runtime.lastValidTsMs !== null
+    ) {
+      quickEvaluation = evaluateCompetitionTiltQuickTrigger({
+        previous: runtime.lastValidTilt,
+        current,
+        baseline: configuredDevice.baseline,
+        previousTsMs: runtime.lastValidTsMs,
+        currentTsMs,
+        previousSeq: runtime.lastValidSeq,
+        currentSeq,
+        baselineTriggerDeg: thresholds.highDeg,
+        thresholds: quickAlarm.thresholds
+      });
+    }
+
+    const previousGapSeconds =
+      runtime.lastValidTsMs === null ? Number.POSITIVE_INFINITY : (currentTsMs - runtime.lastValidTsMs) / 1000;
+    const sequenceOrdered =
+      runtime.lastValidSeq === null || currentSeq === null || currentSeq > runtime.lastValidSeq;
+    if (
+      Number.isFinite(currentTsMs) &&
+      (runtime.lastValidTsMs === null || currentTsMs > runtime.lastValidTsMs) &&
+      (sequenceOrdered || previousGapSeconds > (quickAlarm?.thresholds.maxGapSeconds ?? 6))
+    ) {
+      runtime.lastValidTilt = current;
+      runtime.lastValidTsMs = currentTsMs;
+      runtime.lastValidSeq = currentSeq;
     }
 
     if (!runtime.armed && !latestIsActive && !latestIsAcked) {
@@ -619,7 +679,12 @@ async function main(): Promise<void> {
         rounded(deviation.maxDeviationDeg)
       )}°，达到 ${String(threshold)}° ${severity === "critical" ? "严重风险" : "高风险"}阈值。`;
     };
-    const evidence = (severity: Severity, consecutivePoints: number) => ({
+    const evidence = (
+      severity: Severity,
+      consecutivePoints: number,
+      triggerPath: "stable" | "quick" = "stable",
+      quickResult?: CompetitionTiltQuickTriggerResult
+    ) => ({
       kind: "rule",
       source: "competition_relative_tilt",
       mode: profile.mode,
@@ -635,10 +700,64 @@ async function main(): Promise<void> {
       thresholds,
       severity,
       consecutivePoints,
+      triggerPath,
+      ...(quickResult
+        ? {
+            quick: {
+              previous: {
+                x: rounded(current.x - quickResult.pointDelta.x),
+                y: rounded(current.y - quickResult.pointDelta.y),
+                z: rounded(current.z - quickResult.pointDelta.z)
+              },
+              pointDelta: {
+                x: rounded(quickResult.pointDelta.x),
+                y: rounded(quickResult.pointDelta.y),
+                z: rounded(quickResult.pointDelta.z)
+              },
+              maxPointDeltaDeg: rounded(quickResult.maxPointDeltaDeg),
+              previousBaselineDeviationDeg: rounded(quickResult.previousBaselineDeviationDeg),
+              gapSeconds: rounded(quickResult.gapSeconds),
+              armedAt: quickAlarm?.armedAt ?? null,
+              expiresAt: quickAlarm?.expiresAt ?? null
+            }
+          }
+        : {}),
       receivedTs: payload.received_ts,
       seq: payload.seq ?? null,
       latchedUntilManualResolve: true
     });
+
+    if (quickEvaluation?.triggered && !latestIsActive && !latestIsAcked) {
+      const severity = deviation.maxDeviationDeg >= thresholds.criticalDeg ? ("critical" as const) : ("high" as const);
+      const alertId = crypto.randomUUID();
+      await insertAlertEvent({
+        alertId,
+        eventType: "ALERT_TRIGGER",
+        ruleId: profile.ruleId,
+        ruleVersion: profile.ruleVersion,
+        deviceId: payload.device_id,
+        stationId: configuredDevice.stationId,
+        severity,
+        title: titleForSeverity(severity),
+        message: messageForSeverity(severity),
+        evidence: evidence(severity, 1, "quick", quickEvaluation),
+        explain: "competition quick tilt alert triggered from one fresh plausible movement and latched until manual resolve"
+      });
+      runtime.lastPublishedDeviationDeg = deviation.maxDeviationDeg;
+      runtime.lastPublishedAxis = deviation.maxAxis;
+      logger.info(
+        {
+          deviceId: payload.device_id,
+          alertId,
+          severity,
+          maxDeviationDeg: deviation.maxDeviationDeg,
+          maxPointDeltaDeg: quickEvaluation.maxPointDeltaDeg,
+          gapSeconds: quickEvaluation.gapSeconds
+        },
+        "competition quick tilt alert triggered"
+      );
+      return;
+    }
 
     if (latestIsActive || latestIsAcked) {
       runtime.criticalStreak =

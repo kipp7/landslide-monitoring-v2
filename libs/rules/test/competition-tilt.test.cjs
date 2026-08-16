@@ -4,7 +4,9 @@ const test = require("node:test");
 const {
   competitionTiltProfileSchema,
   computeCompetitionTiltDeviation,
+  DEFAULT_COMPETITION_TILT_QUICK_ALARM_THRESHOLDS,
   DEFAULT_COMPETITION_TILT_THRESHOLDS,
+  evaluateCompetitionTiltQuickTrigger,
   readTiltVector,
 } = require("../dist/index.js");
 
@@ -61,4 +63,65 @@ test("rejects a critical threshold below the high threshold", () => {
     ],
   });
   assert.equal(parsed.success, false);
+});
+
+test("quick alarm triggers on one plausible fresh movement from the baseline", () => {
+  const result = evaluateCompetitionTiltQuickTrigger({
+    previous: { x: 0.2, y: -0.1, z: 89.9 },
+    current: { x: 3.4, y: -0.2, z: 90.1 },
+    baseline: { x: 0, y: 0, z: 90 },
+    previousTsMs: 1_000,
+    currentTsMs: 4_000,
+    previousSeq: 10,
+    currentSeq: 11,
+    baselineTriggerDeg: 3,
+    thresholds: DEFAULT_COMPETITION_TILT_QUICK_ALARM_THRESHOLDS,
+  });
+
+  assert.equal(result.triggered, true);
+  assert.equal(result.reason, "triggered");
+  assert.ok(Math.abs(result.maxPointDeltaDeg - 3.2) < 1e-9);
+});
+
+test("quick alarm tolerates a missing tilt cycle in the three-node field link", () => {
+  const result = evaluateCompetitionTiltQuickTrigger({
+    previous: { x: 1.23, y: -0.02, z: -33.78 },
+    current: { x: 6.27, y: -4.65, z: -33.78 },
+    baseline: { x: 1.23, y: -0.02, z: -33.78 },
+    previousTsMs: 1_000,
+    currentTsMs: 16_200,
+    previousSeq: 641,
+    currentSeq: 647,
+    baselineTriggerDeg: 3,
+    thresholds: DEFAULT_COMPETITION_TILT_QUICK_ALARM_THRESHOLDS,
+  });
+
+  assert.equal(result.triggered, true);
+  assert.equal(result.reason, "triggered");
+  assert.ok(Math.abs(result.gapSeconds - 15.2) < 1e-9);
+});
+
+test("quick alarm rejects stale, reordered, already-displaced and implausible points", () => {
+  const base = {
+    previous: { x: 0.2, y: 0, z: 90 },
+    current: { x: 3.4, y: 0, z: 90 },
+    baseline: { x: 0, y: 0, z: 90 },
+    previousTsMs: 1_000,
+    currentTsMs: 4_000,
+    previousSeq: 10,
+    currentSeq: 11,
+    baselineTriggerDeg: 3,
+    thresholds: DEFAULT_COMPETITION_TILT_QUICK_ALARM_THRESHOLDS,
+  };
+
+  assert.equal(evaluateCompetitionTiltQuickTrigger({ ...base, currentTsMs: 32_000 }).reason, "gap_too_large");
+  assert.equal(evaluateCompetitionTiltQuickTrigger({ ...base, currentSeq: 10 }).reason, "invalid_sequence_order");
+  assert.equal(
+    evaluateCompetitionTiltQuickTrigger({ ...base, previous: { x: 1.2, y: 0, z: 90 } }).reason,
+    "anchor_outside_baseline"
+  );
+  assert.equal(
+    evaluateCompetitionTiltQuickTrigger({ ...base, current: { x: 40, y: 0, z: 90 } }).reason,
+    "implausible_point_delta"
+  );
 });
