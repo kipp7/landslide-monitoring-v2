@@ -1,0 +1,87 @@
+{
+  "revision": "CAD-R0.2",
+  "scope": "tilt-reference-plate interface correction",
+  "manufacturing_status": "REVIEW REQUIRED",
+  "supersedes": "FN-SUB-001 hole definition in CAD-R0.1",
+  "solidworks": "2022 SP5.0",
+  "part": {
+    "part": "FN-SUB-002_tilt-reference-plate_M3_R0.2",
+    "status": "DESIGN_M3_TAPPED",
+    "native_bytes": 88623,
+    "step_bytes": 36553,
+    "preview_bytes": 162393,
+    "expected_volume_mm3": 30541.095,
+    "actual_volume_mm3": 30541.095
+  },
+  "drawing": {
+    "drawing_bytes": 59778,
+    "pdf_bytes": 21766,
+    "drawing_preview_bytes": 15434
+  },
+  "interface": {
+    "plate_mm": [
+      120.0,
+      85.0,
+      3.0
+    ],
+    "thread": "M3 x 0.5 - 6H THRU",
+    "modeled_tap_drill_diameter_mm": 2.5,
+    "hole_centres_from_lower_left_mm": [
+      [
+        21.0,
+        23.0
+      ],
+      [
+        99.0,
+        23.0
+      ],
+      [
+        21.0,
+        62.0
+      ],
+      [
+        99.0,
+        62.0
+      ]
+    ],
+    "sensor_clearance_holes_mm": 3.6,
+    "warning": "Do not copy the sensor body's 3.6 mm clearance holes into the tapped plate."
+  },
+  "artifacts": [
+    {
+      "name": "FN-SUB-002_tilt-reference-plate_M3_R0.2.pdf",
+      "bytes": 21766,
+      "sha256": "14c9057bea2240f2232ccae7c9c9b949cebade9479fb6729067729d3ef9f87ba"
+    },
+    {
+      "name": "FN-SUB-002_tilt-reference-plate_M3_R0.2.png",
+      "bytes": 162393,
+      "sha256": "e7e75266728e78f4e32461f96be87f14140d7ff0bb4b63ebdb614d4bc24a52ee"
+    },
+    {
+      "name": "FN-SUB-002_tilt-reference-plate_M3_R0.2.SLDDRW",
+      "bytes": 59778,
+      "sha256": "bb0f28efd4052e84781ddcda58aa6b0ca194bdd8ddbf96b4a25f73bb60937b30"
+    },
+    {
+      "name": "FN-SUB-002_tilt-reference-plate_M3_R0.2.SLDPRT",
+      "bytes": 88623,
+      "sha256": "911c8a0a487338de0d7c4370d2e3cda2e980d6570c408137515f377c8c5f5e58"
+    },
+    {
+      "name": "FN-SUB-002_tilt-reference-plate_M3_R0.2.STEP",
+      "bytes": 36553,
+      "sha256": "7ebd933dc52313dd4ef166b794afca680549d04ed6ae50a7b43146b25e67d5ba"
+    },
+    {
+      "name": "FN-SUB-002_tilt-reference-plate_M3_R0.2_drawing.png",
+      "bytes": 15434,
+      "sha256": "483e4004665a175a034f7afaa22c5a57dc74762ac1e591bfaea76ff117c4636f"
+    },
+    {
+      "name": "FN-SUB-002_tilt-reference-plate_M3_R0.2_profile-tap-drill.DXF",
+      "bytes": 588,
+      "sha256": "b19954838ca66f96117770184b8ac6383e70033c48976f422b77a4a9cdcab163"
+    }
+  ]
+}

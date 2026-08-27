@@ -5,7 +5,7 @@
 [![Windows](https://img.shields.io/badge/platform-Windows-0078D4.svg)](apps/windows-shell)
 [![Edge](https://img.shields.io/badge/edge-RK3568-2E7D32.svg)](edge/rk3568-gateway)
 [![Firmware](https://img.shields.io/badge/firmware-RK2206-7952B3.svg)](firmware/rk2206-xl01)
-[![Hardware](https://img.shields.io/badge/hardware-carrier%20board-455A64.svg)](hardware/carrier-board)
+[![Hardware](https://img.shields.io/badge/hardware-field%20node-455A64.svg)](hardware/)
 
 English | [简体中文](README.zh-CN.md)
 
@@ -13,9 +13,9 @@ English | [简体中文](README.zh-CN.md)
   <img src="docs/assets/branding/social-preview.png" alt="Landslide Monitoring V2 end-to-end system preview" width="100%" />
 </p>
 
-Landslide Monitoring V2 is an end-to-end open-source landslide monitoring system. It brings together the Windows operator client, cloud backend services, RK3568 edge gateway services, RK2206 field-node firmware, and carrier-board hardware handoff assets in one public repository.
+Landslide Monitoring V2 is an end-to-end open-source landslide monitoring system. It brings together the Windows operator client, cloud backend services, RK3568 edge gateway services, RK2206 field-node firmware, and field-node hardware design assets in one public repository.
 
-The repository is organized around five product areas: desktop operations, cloud backend services, edge gateway services, field firmware, and carrier-board hardware.
+The repository is organized around five product areas: desktop operations, cloud backend services, edge gateway services, field firmware, and field-node hardware.
 
 ## System Overview
 
@@ -32,7 +32,7 @@ RK2206 field nodes
 - Cloud backend with REST API, PostgreSQL, ClickHouse, EMQX, Kafka, telemetry ingestion, rules, and device-command workers.
 - RK3568 edge services for serial telemetry, MQTT forwarding, local health summaries, supervision, and alarm actuation.
 - RK2206 XL01 field firmware package for sensor acquisition, telemetry envelopes, command acknowledgements, watchdogs, and board utilities.
-- Carrier-board public handoff package with schematic, PCB preview, Gerber, BOM, pick-and-place, and LCEDA source package.
+- Field-node hardware package covering the existing carrier board, enclosure, internal mounting, solar power, procurement, and next-board requirements.
 - Bilingual documentation, GitHub issue templates, maintainer notes, security policy, CI, and MIT license.
 
 ## Repository Layout
@@ -45,7 +45,7 @@ RK2206 field nodes
 | `infra/compose/` | Single-host backend infrastructure and application deployment. |
 | `edge/rk3568-gateway/` | RK3568 gateway, link-monitor, supervisor, and alarm actuator services. |
 | `firmware/rk2206-xl01/` | RK2206 XL01 field-node firmware package and pinout notes. |
-| `hardware/carrier-board/` | Public carrier-board design and fabrication handoff assets. |
+| `hardware/` | Field-node hardware index, carrier-board handoff, enclosure, solar power, procurement, and revision records. |
 | `packages/`, `libs/` | Shared TypeScript packages used by edge and backend services. |
 | `scripts/desktop/` | Windows desktop development, packaging, and verification scripts. |
 | `docs/` | Architecture, scope, release, system, maintainer, and bilingual documentation. |
@@ -58,7 +58,8 @@ RK2206 field nodes
 | Cloud backend | Maintained | [Docker Compose deployment](infra/compose/README.md) |
 | RK3568 edge gateway | Maintained | [Edge gateway](edge/rk3568-gateway/README.md) |
 | RK2206 field firmware | Maintained as public firmware package | [Firmware](firmware/rk2206-xl01/README.md) |
-| Carrier-board hardware handoff | Maintained as public design package | [Hardware](hardware/carrier-board/README.md) |
+| Existing carrier-board handoff | Maintained as an as-built reference with known source conflicts | [Carrier board](hardware/carrier-board/README.md) |
+| Field-node enclosure and power design | EVT0.1 design input; not released for manufacture | [Hardware index](hardware/README.md) |
 | Web and mobile applications | Not included in the public tree | [Project scope](docs/PROJECT_SCOPE.md) |
 
 ## Tech Stack
@@ -71,7 +72,7 @@ RK2206 field nodes
 | Cloud backend | Node.js 20, Fastify, PostgreSQL, ClickHouse, EMQX, Kafka |
 | Edge services | Node.js 20, TypeScript, MQTT, serialport, systemd deployment templates |
 | Field firmware | OpenHarmony/RK2206 application package |
-| Hardware handoff | Schematic, PCB preview, Gerber, BOM, pick-and-place, LCEDA project package |
+| Hardware handoff | Carrier-board sources, enclosure and mounting specifications, solar-power requirements, procurement, and revision records |
 | Tooling | npm workspaces, ESLint, Prettier, GitHub Actions |
 
 ## Quick Start
@@ -140,7 +141,7 @@ Default packaging outputs stay outside Git:
 
 ## Repository Scope
 
-This repository includes public source code, documentation, examples, deployment templates, the RK2206 firmware package, and carrier-board handoff files. Runtime secrets, local logs, generated builds, and site-specific configuration should stay outside Git.
+This repository includes public source code, documentation, examples, deployment templates, the RK2206 firmware package, and field-node hardware design files. Runtime secrets, local logs, generated builds, vendor-chat captures, and site-specific configuration should stay outside Git.
 
 ## Contributing
 

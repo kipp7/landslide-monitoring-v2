@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000">
+  <defs>
+    <pattern id="fr4" width="12" height="12" patternUnits="userSpaceOnUse">
+      <rect width="12" height="12" fill="#e7f7ef"/>
+      <path d="M0 12L12 0M-3 3L3-3M9 15L15 9" stroke="#70c79a" stroke-width="2"/>
+    </pattern>
+    <linearGradient id="plastic" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#f2f4f7"/><stop offset="0.5" stop-color="#ffffff"/><stop offset="1" stop-color="#d0d5dd"/>
+    </linearGradient>
+    <style>
+      .title{font:700 36px "Noto Sans SC",sans-serif;fill:#101828}.sub{font:22px "Noto Sans SC",sans-serif;fill:#475467}.head{font:700 28px "Noto Sans SC",sans-serif;fill:#101828}.label{font:24px "Noto Sans SC",sans-serif;fill:#344054}.note{font:21px "Noto Sans SC",sans-serif;fill:#475467}.small{font:19px "Noto Sans SC",sans-serif;fill:#667085}.dim{stroke:#175cd3;stroke-width:3;fill:none}.datum{stroke:#d92d20;stroke-width:3;stroke-dasharray:12 9}.leader{stroke:#667085;stroke-width:3;fill:none}.steel{fill:#d7dee6;stroke:#475467;stroke-width:3}.box{fill:#fff;stroke:#d0d5dd;stroke-width:3}
+    </style>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="5" refY="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#175cd3"/></marker>
+  </defs>
+  <rect width="1600" height="1000" fill="#f7f8fa"/>
+  <text x="70" y="72" class="title">FR4 与箱体共面柱直接承托切面（MECH-R0.3-DRAFT）</text>
+  <text x="70" y="112" class="sub">外围柱 6 mm；中部为 1 mm 加高层 + 5 mm 柱身。两者柱顶同一标高，FR4 下方不加高度补偿垫片。</text>
+
+  <rect x="60" y="150" width="710" height="670" rx="8" class="box"/>
+  <text x="95" y="200" class="head">A. 外围低柱</text>
+  <text x="95" y="235" class="note">主箱底至柱顶：约 6 mm</text>
+  <rect x="135" y="305" width="565" height="90" fill="url(#fr4)" stroke="#027a48" stroke-width="4"/>
+  <text x="155" y="360" class="label">FR4/G10 · 3 mm</text>
+  <text x="520" y="360" class="label">Ø3.5 通孔</text>
+  <rect x="365" y="260" width="105" height="28" rx="5" class="steel"/>
+  <rect x="397" y="210" width="41" height="50" rx="8" class="steel"/>
+  <rect x="410" y="288" width="15" height="205" fill="#9aa4b2"/>
+  <path d="M330 690V450Q330 395 385 395H450Q505 395 505 450V690Z" fill="url(#plastic)" stroke="#667085" stroke-width="4"/>
+  <path d="M393 395V585Q393 615 418 615Q443 615 443 585V395" fill="#fff" stroke="#667085" stroke-width="3"/>
+  <rect x="105" y="690" width="595" height="65" fill="#eaecf0" stroke="#667085" stroke-width="3"/>
+  <line x1="85" y1="395" x2="1515" y2="395" class="datum"/>
+  <text x="95" y="430" class="small" fill="#d92d20">共同柱顶基准面 Z</text>
+  <line x1="590" y1="395" x2="590" y2="690" class="dim" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <text x="615" y="555" class="label">约 6 mm</text>
+  <text x="120" y="735" class="label">主箱底基准</text>
+
+  <rect x="830" y="150" width="710" height="670" rx="8" class="box"/>
+  <text x="865" y="200" class="head">B. 中间四柱</text>
+  <text x="865" y="235" class="note">1 + 5 = 6 mm，柱顶共面</text>
+  <rect x="905" y="305" width="565" height="90" fill="url(#fr4)" stroke="#027a48" stroke-width="4"/>
+  <text x="925" y="360" class="label">FR4 直接承托</text>
+  <text x="1300" y="360" class="label">无垫片</text>
+  <rect x="1135" y="260" width="105" height="28" rx="5" class="steel"/>
+  <rect x="1167" y="210" width="41" height="50" rx="8" class="steel"/>
+  <rect x="1180" y="288" width="15" height="205" fill="#9aa4b2"/>
+  <path d="M1100 640V450Q1100 395 1155 395H1220Q1275 395 1275 450V640Z" fill="url(#plastic)" stroke="#667085" stroke-width="4"/>
+  <path d="M1163 395V550Q1163 580 1188 580Q1213 580 1213 550V395" fill="#fff" stroke="#667085" stroke-width="3"/>
+  <rect x="875" y="690" width="595" height="65" fill="#eaecf0" stroke="#667085" stroke-width="3"/>
+  <rect x="1025" y="640" width="330" height="50" fill="#d0d5dd" stroke="#667085" stroke-width="3"/>
+  <line x1="1370" y1="395" x2="1370" y2="640" class="dim" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <text x="1395" y="530" class="label">约 5 mm</text>
+  <line x1="990" y1="640" x2="990" y2="690" class="dim" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <text x="905" y="672" class="small">1 mm 加高层</text>
+  <text x="890" y="735" class="label">主箱底基准</text>
+
+  <rect x="60" y="850" width="1480" height="105" rx="8" fill="#fff" stroke="#98a2b3" stroke-width="3"/>
+  <text x="90" y="890" class="head">装配与放行条件</text>
+  <text x="90" y="925" class="note">FR4 直接落在柱顶；M3 自攻螺钉 + 平垫只负责夹紧。正式 DXF 前用直尺复核 R1-R6 共面性，并实测孔径、盲孔深度与螺钉有效咬合。</text>
+</svg>

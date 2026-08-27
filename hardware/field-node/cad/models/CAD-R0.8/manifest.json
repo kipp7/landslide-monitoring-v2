@@ -1,0 +1,644 @@
+{
+  "revision": "CAD-R0.8",
+  "scope": "four context-rich connection details with sectional review drawings",
+  "manufacturing_status": "ENGINEERING REVIEW / NOT FOR MANUFACTURE",
+  "solidworks": "2022 SP5.0",
+  "assemblies": [
+    {
+      "name": "FN-ASM-007A_enclosure-back-connection-detail_R0.8",
+      "component_count": 9,
+      "native": "FN-ASM-007A_enclosure-back-connection-detail_R0.8.SLDASM",
+      "step": "FN-ASM-007A_enclosure-back-connection-detail_R0.8.STEP",
+      "previews": [
+        "FN-ASM-007A_enclosure-back-connection-detail_R0.8_isometric.png",
+        "FN-ASM-007A_enclosure-back-connection-detail_R0.8_front.png",
+        "FN-ASM-007A_enclosure-back-connection-detail_R0.8_right-section.png"
+      ],
+      "left_open_in_solidworks": false,
+      "drawing": {
+        "native": "FN-ASM-007A_enclosure-back-connection-detail_R0.8.SLDDRW",
+        "pdf": "FN-ASM-007A_enclosure-back-connection-detail_R0.8.pdf",
+        "preview": "FN-ASM-007A_enclosure-back-connection-detail_R0.8_drawing.png",
+        "drawing_bytes": 71386,
+        "pdf_bytes": 19495,
+        "preview_bytes": 16558
+      }
+    },
+    {
+      "name": "FN-ASM-007B_solar-clamp-pivot-detail_R0.8",
+      "component_count": 14,
+      "native": "FN-ASM-007B_solar-clamp-pivot-detail_R0.8.SLDASM",
+      "step": "FN-ASM-007B_solar-clamp-pivot-detail_R0.8.STEP",
+      "previews": [
+        "FN-ASM-007B_solar-clamp-pivot-detail_R0.8_isometric.png",
+        "FN-ASM-007B_solar-clamp-pivot-detail_R0.8_front.png",
+        "FN-ASM-007B_solar-clamp-pivot-detail_R0.8_right-section.png"
+      ],
+      "left_open_in_solidworks": false,
+      "drawing": {
+        "native": "FN-ASM-007B_solar-clamp-pivot-detail_R0.8.SLDDRW",
+        "pdf": "FN-ASM-007B_solar-clamp-pivot-detail_R0.8.pdf",
+        "preview": "FN-ASM-007B_solar-clamp-pivot-detail_R0.8_drawing.png",
+        "drawing_bytes": 75066,
+        "pdf_bytes": 19962,
+        "preview_bytes": 19556
+      }
+    },
+    {
+      "name": "FN-ASM-007C_gnss-mast-base-brace-detail_R0.8",
+      "component_count": 12,
+      "native": "FN-ASM-007C_gnss-mast-base-brace-detail_R0.8.SLDASM",
+      "step": "FN-ASM-007C_gnss-mast-base-brace-detail_R0.8.STEP",
+      "previews": [
+        "FN-ASM-007C_gnss-mast-base-brace-detail_R0.8_isometric.png",
+        "FN-ASM-007C_gnss-mast-base-brace-detail_R0.8_front.png",
+        "FN-ASM-007C_gnss-mast-base-brace-detail_R0.8_right-section.png"
+      ],
+      "left_open_in_solidworks": false,
+      "drawing": {
+        "native": "FN-ASM-007C_gnss-mast-base-brace-detail_R0.8.SLDDRW",
+        "pdf": "FN-ASM-007C_gnss-mast-base-brace-detail_R0.8.pdf",
+        "preview": "FN-ASM-007C_gnss-mast-base-brace-detail_R0.8_drawing.png",
+        "drawing_bytes": 204933,
+        "pdf_bytes": 25374,
+        "preview_bytes": 20240
+      }
+    },
+    {
+      "name": "FN-ASM-007D_through-wall-drip-retention-detail_R0.8",
+      "component_count": 18,
+      "native": "FN-ASM-007D_through-wall-drip-retention-detail_R0.8.SLDASM",
+      "step": "FN-ASM-007D_through-wall-drip-retention-detail_R0.8.STEP",
+      "previews": [
+        "FN-ASM-007D_through-wall-drip-retention-detail_R0.8_isometric.png",
+        "FN-ASM-007D_through-wall-drip-retention-detail_R0.8_front.png",
+        "FN-ASM-007D_through-wall-drip-retention-detail_R0.8_right-section.png"
+      ],
+      "left_open_in_solidworks": false,
+      "drawing": {
+        "native": "FN-ASM-007D_through-wall-drip-retention-detail_R0.8.SLDDRW",
+        "pdf": "FN-ASM-007D_through-wall-drip-retention-detail_R0.8.pdf",
+        "preview": "FN-ASM-007D_through-wall-drip-retention-detail_R0.8_drawing.png",
+        "drawing_bytes": 481376,
+        "pdf_bytes": 25143,
+        "preview_bytes": 17751
+      }
+    }
+  ],
+  "drawing_package": {
+    "name": "FN-DRW-008_connection-detail-review-package_R0.8.pdf",
+    "pages": 4,
+    "bytes": 68488
+  },
+  "native_geometry": {
+    "parts": [],
+    "section_part_count": 3,
+    "native_round_cable_count": 4
+  },
+  "base_dependencies": [
+    {
+      "name": "FN-FRM-003_crossmember-330x30x30_CONCEPT_R0.6.SLDPRT",
+      "source_revision": "CAD-R0.6",
+      "bytes": 66190,
+      "sha256": "384ac18b55dd2a3fa9fda9b5e137c453bc0092580ba00061cac75128dfa38b64"
+    },
+    {
+      "name": "FN-FRM-004_mast-30x30x220_CONCEPT_R0.6.SLDPRT",
+      "source_revision": "CAD-R0.6",
+      "bytes": 40539,
+      "sha256": "c3989d05351ef8c0571b55fd6acdee296c5b6e5e6a2a394f61cece2703434e2b"
+    },
+    {
+      "name": "FN-FRM-006_left-mast-brace_D16_CONCEPT_R0.6.SLDPRT",
+      "source_revision": "CAD-R0.6",
+      "bytes": 104915,
+      "sha256": "888dba20d8a138cbc0b1352e3a7130518b4a6c65dc807f98f309aebdf7dc37cb"
+    },
+    {
+      "name": "FN-FRM-007_right-mast-brace_D16_CONCEPT_R0.6.SLDPRT",
+      "source_revision": "CAD-R0.6",
+      "bytes": 131123,
+      "sha256": "da5dc8d9e6dffa519fd4654d22fdbe84bbb114f4eb8fcb65774c2dff9ae36665"
+    },
+    {
+      "name": "FN-FST-001_M6-bolt-envelope-D6x55_PENDING_R0.7.SLDPRT",
+      "source_revision": "CAD-R0.7",
+      "bytes": 129141,
+      "sha256": "fb1cde05a5e2d23a973c063226d31fe9593b206b03c3363fa25e554d6c2a5995"
+    },
+    {
+      "name": "FN-FST-002_M6-washer-envelope-D14x2_PENDING_R0.7.SLDPRT",
+      "source_revision": "CAD-R0.7",
+      "bytes": 70268,
+      "sha256": "54977d579aa7a61dbbfe3553fd1bba5b09ca7f52f091f647ce8a129b71e71f57"
+    },
+    {
+      "name": "FN-FST-003_solar-pivot-envelope-D8x40_PENDING_R0.7.SLDPRT",
+      "source_revision": "CAD-R0.7",
+      "bytes": 125396,
+      "sha256": "a87af95e67fd4cf9af6a5f5a169e8b5c51ff8436e4e49829152cb0f4e0794531"
+    },
+    {
+      "name": "FN-FST-004_mast-bolt-envelope-D8x35_PENDING_R0.7.SLDPRT",
+      "source_revision": "CAD-R0.7",
+      "bytes": 46414,
+      "sha256": "9104dab8f6c97785514de2f8e469bf86948f61b1ba8d9dcc55cc3b826bdd9ee0"
+    },
+    {
+      "name": "FN-FST-005_clip-fastener-envelope-D4x18_PENDING_R0.7.SLDPRT",
+      "source_revision": "CAD-R0.7",
+      "bytes": 147382,
+      "sha256": "85badeb5ab85cb7bdba1f353b587690402a3fe8be7f876ceb359798f3c5d5d52"
+    },
+    {
+      "name": "FN-GNS-002_mast-platform-120x120x6_CONCEPT_R0.6.SLDPRT",
+      "source_revision": "CAD-R0.6",
+      "bytes": 80368,
+      "sha256": "bc117a71db1a08cb7a0a701f60b2bd386cb0ff5058e95fb1c6e1d502227c8c23"
+    },
+    {
+      "name": "FN-GNS-003_BTM87SF-envelope_D78x24_PENDING_R0.6.SLDPRT",
+      "source_revision": "CAD-R0.6",
+      "bytes": 88098,
+      "sha256": "4b0b1f0136c3b3735612541d09526e3f28f24fb68502e84a7d7f99a4aa52c900"
+    },
+    {
+      "name": "FN-GNS-004_BT760-envelope_D180x70_PENDING_R0.6.SLDPRT",
+      "source_revision": "CAD-R0.6",
+      "bytes": 85236,
+      "sha256": "7fd924e6b38b1311f03af74ac05675d2c9220f49e072123d9bab7fde27a7f814"
+    },
+    {
+      "name": "FN-HAR-036_P-clip-envelope-20x8x15_PENDING_R0.7.SLDPRT",
+      "source_revision": "CAD-R0.7",
+      "bytes": 64964,
+      "sha256": "e5b83e72fbb50e94eebf0df36619aea7d4387298b5a1a31f5b02d0b382e4214e"
+    },
+    {
+      "name": "FN-HAR-037_lower-strain-relief-bar-110x12x8_CONCEPT_R0.7.SLDPRT",
+      "source_revision": "CAD-R0.7",
+      "bytes": 67959,
+      "sha256": "c5a2e548ec1094e47ef471f9062dcbebefac772f35439756237684d9725c23e4"
+    },
+    {
+      "name": "FN-IFC-002_sma-bulkhead-envelope-D12x34_R0.6.SLDPRT",
+      "source_revision": "CAD-R0.6",
+      "bytes": 140995,
+      "sha256": "83ed817fdd95c512fc31c284c5e9e111ec4d908c54bba6691cd40e002d9c5b1a"
+    },
+    {
+      "name": "FN-IFC-003_sma-collar-envelope-D17x5_R0.6.SLDPRT",
+      "source_revision": "CAD-R0.6",
+      "bytes": 78835,
+      "sha256": "ee12d4c1ae586b7420da03bd7b1667d493341c7a73a98258146f37b6e104a29b"
+    },
+    {
+      "name": "FN-IFC-004_m16-gland-envelope-D24x34_R0.6.SLDPRT",
+      "source_revision": "CAD-R0.6",
+      "bytes": 120086,
+      "sha256": "00f6443f0a4f9db8b34053397a1c66953054cb0510aba344b931666e1d6201c8"
+    },
+    {
+      "name": "FN-IFC-005_m16-cap-envelope-D29x5_R0.6.SLDPRT",
+      "source_revision": "CAD-R0.6",
+      "bytes": 71386,
+      "sha256": "c6469e34f0da1fa547731fc779f68df4b1eec186a9c24a1bf753f4cb64adb92d"
+    },
+    {
+      "name": "FN-MNT-001_enclosure-back-strap-300x6x32_CONCEPT_R0.7.SLDPRT",
+      "source_revision": "CAD-R0.7",
+      "bytes": 59910,
+      "sha256": "9402d80deb0938001a48da4936b9ccf083e836c9b7ee58326f58d243340a0e08"
+    },
+    {
+      "name": "FN-SOL-004_swm10w-panel-envelope_R0.6.SLDPRT",
+      "source_revision": "CAD-R0.6",
+      "bytes": 80834,
+      "sha256": "a637f2a0f2d0c26c46982293c659875134e8e0d3ee3188ff63f99a5caf03923d"
+    },
+    {
+      "name": "FN-SOL-005_swm10w-active-face_R0.6.SLDPRT",
+      "source_revision": "CAD-R0.6",
+      "bytes": 77694,
+      "sha256": "3e9226ec55551f9b21c96ef96110034c3518a032c5351db99e6980c1e43a7264"
+    },
+    {
+      "name": "FN-SOL-006_panel-back-rail-320x25x20_CONCEPT_R0.7.SLDPRT",
+      "source_revision": "CAD-R0.7",
+      "bytes": 64239,
+      "sha256": "27b3bfc204bce74f29b2b04926a2acc9e22f9da6982160cfc4ffb74d4f94cdf7"
+    },
+    {
+      "name": "FN-SOL-007_panel-edge-clamp-24x18x8_PENDING_R0.7.SLDPRT",
+      "source_revision": "CAD-R0.7",
+      "bytes": 83831,
+      "sha256": "b9de0c892ced694eac50bced7f1df65b6a11efb489336faecedca44dd3b6e786"
+    }
+  ],
+  "validation": {
+    "detail_assembly_count": 4,
+    "native_drawing_count": 4,
+    "section_context_part_count": 3,
+    "native_round_wall_detail_cable_count": 4,
+    "drawing_package_page_count": 4,
+    "nominal_panel_back_rail_offset_mm": 18.5,
+    "nominal_mast_base_hole_count": 4,
+    "nominal_lower_wall_cutout_count": 4,
+    "released_manufacturing_drawings": 0
+  },
+  "blocked_inputs": [
+    "enclosure rear hole table and wall capacity",
+    "SWM-10W frame hole table and approved edge clamp geometry",
+    "BT-M87SF three-hole pattern installation height and BT-760 TNC datum",
+    "frame tube wall thickness joint design fastener grades wind and transport loads",
+    "actual cable OD connector length bend radius gland and P-clip samples",
+    "XLS1 antenna interface and ground-plane requirement"
+  ],
+  "artifacts": [
+    {
+      "name": "FN-ASM-007A_enclosure-back-connection-detail_R0.8.pdf",
+      "bytes": 19495,
+      "sha256": "9b98953043501d5024a9341454346730a98328533517713fca8c905516cf726f"
+    },
+    {
+      "name": "FN-ASM-007A_enclosure-back-connection-detail_R0.8.SLDASM",
+      "bytes": 93072,
+      "sha256": "010e3e3d81b2b70eb7302152484d12f51caef4f8bdcd7b2c717128b6a40f9b0f"
+    },
+    {
+      "name": "FN-ASM-007A_enclosure-back-connection-detail_R0.8.SLDDRW",
+      "bytes": 71386,
+      "sha256": "61dd61964aafa4c46d7c703c19e3fb5fb23309c7e49bdabd478f638650448153"
+    },
+    {
+      "name": "FN-ASM-007A_enclosure-back-connection-detail_R0.8.STEP",
+      "bytes": 105446,
+      "sha256": "cd6d7c30cb067cce98b0d4fd841af0fe192f612080286fb746eb531561270a71"
+    },
+    {
+      "name": "FN-ASM-007A_enclosure-back-connection-detail_R0.8_drawing.png",
+      "bytes": 16558,
+      "sha256": "84c56756c1839d2f51e58b291487b4962a39b9e33247682be3aff4cea008a7f2"
+    },
+    {
+      "name": "FN-ASM-007A_enclosure-back-connection-detail_R0.8_front.png",
+      "bytes": 104963,
+      "sha256": "fc911e827b3083aed8c2773acdbddafa4c242af2f0157d5967e139659e20295c"
+    },
+    {
+      "name": "FN-ASM-007A_enclosure-back-connection-detail_R0.8_isometric.png",
+      "bytes": 220010,
+      "sha256": "91c3c278202004b33f7c8bfaaab2d6e937323f173855d88c60a5295294c5297b"
+    },
+    {
+      "name": "FN-ASM-007A_enclosure-back-connection-detail_R0.8_right-section.png",
+      "bytes": 113590,
+      "sha256": "2d3bfdb17a6f4542db42f0313c53cee0ed704480c667544ced04bab7013b3ba4"
+    },
+    {
+      "name": "FN-ASM-007B_solar-clamp-pivot-detail_R0.8.pdf",
+      "bytes": 19962,
+      "sha256": "fca4ef981f4960eb1a5aa3caab1920d728b34bf78c72c0953ee0d006aa6b0215"
+    },
+    {
+      "name": "FN-ASM-007B_solar-clamp-pivot-detail_R0.8.SLDASM",
+      "bytes": 91473,
+      "sha256": "438340c43d4edff22e14b7151e976549e91b93fcc4bee9933853bf08507ba7bc"
+    },
+    {
+      "name": "FN-ASM-007B_solar-clamp-pivot-detail_R0.8.SLDDRW",
+      "bytes": 75066,
+      "sha256": "6c44d9bc9d467155ad242a52f3fb2c932d0c3c091f8adcc3f1d41c151bccba00"
+    },
+    {
+      "name": "FN-ASM-007B_solar-clamp-pivot-detail_R0.8.STEP",
+      "bytes": 125332,
+      "sha256": "ac2004117a317340bacd5aaba6a3b1964a61915f2b72fd5f025cc11b2961e5ea"
+    },
+    {
+      "name": "FN-ASM-007B_solar-clamp-pivot-detail_R0.8_drawing.png",
+      "bytes": 19556,
+      "sha256": "2b72c40e93a402bbab39413a306f37f6dae4455b1e455f8cf5ee26ae97b18c03"
+    },
+    {
+      "name": "FN-ASM-007B_solar-clamp-pivot-detail_R0.8_front.png",
+      "bytes": 96072,
+      "sha256": "a2c0ce8c67cf38405da616fa1d56fed897483b1cad3c57f8b322ad0a03d34cdc"
+    },
+    {
+      "name": "FN-ASM-007B_solar-clamp-pivot-detail_R0.8_isometric.png",
+      "bytes": 202615,
+      "sha256": "bcfa4194d14eb055ddaf05ad414d5be4fe6b111ee2b424705d6dffb8fd540525"
+    },
+    {
+      "name": "FN-ASM-007B_solar-clamp-pivot-detail_R0.8_right-section.png",
+      "bytes": 126706,
+      "sha256": "03c39ffa0e90905f000ae96e7324a29da12b15478574ac834f1f93ce23c459df"
+    },
+    {
+      "name": "FN-ASM-007C_gnss-mast-base-brace-detail_R0.8.pdf",
+      "bytes": 25374,
+      "sha256": "ed53dd369563251ed408ba713bdfb3d175a785648dc1653204090e0f885c1d0a"
+    },
+    {
+      "name": "FN-ASM-007C_gnss-mast-base-brace-detail_R0.8.SLDASM",
+      "bytes": 186819,
+      "sha256": "83abdca64c92781984b26b7b86c61fd713e0c689c6f403f5fbfeed0978830bd0"
+    },
+    {
+      "name": "FN-ASM-007C_gnss-mast-base-brace-detail_R0.8.SLDDRW",
+      "bytes": 204933,
+      "sha256": "d067f35afe63761d85afe5910ffcd1d33e9f4fef2ffed8d18cf8a8983b574fc9"
+    },
+    {
+      "name": "FN-ASM-007C_gnss-mast-base-brace-detail_R0.8.STEP",
+      "bytes": 261306,
+      "sha256": "ca9f5b3652cf1d0fbc9ca4d0114dbebd44c60918572f8294eb30fbd251459acf"
+    },
+    {
+      "name": "FN-ASM-007C_gnss-mast-base-brace-detail_R0.8_drawing.png",
+      "bytes": 20240,
+      "sha256": "553204ab49efc7610c53645ce8d31fd3aafa0780ea53e862425607bd72a1c915"
+    },
+    {
+      "name": "FN-ASM-007C_gnss-mast-base-brace-detail_R0.8_front.png",
+      "bytes": 168363,
+      "sha256": "2001c7c0aaab816d13becd1a1be5283086e167494aaee4273b9a6cdd2ccf725c"
+    },
+    {
+      "name": "FN-ASM-007C_gnss-mast-base-brace-detail_R0.8_isometric.png",
+      "bytes": 183299,
+      "sha256": "697a0e79e4f4b8ff2915d3f1065ab384e23603b7656a2ad01f4c34f5d0b0ade3"
+    },
+    {
+      "name": "FN-ASM-007C_gnss-mast-base-brace-detail_R0.8_right-section.png",
+      "bytes": 133115,
+      "sha256": "241f2566964a641cd45cfec0acff76008841b77a3bb78e423dde96eb82fb0ca0"
+    },
+    {
+      "name": "FN-ASM-007D_through-wall-drip-retention-detail_R0.8.pdf",
+      "bytes": 25143,
+      "sha256": "01a97874d33d497e1384211ce75dd8b95314a41a9d50ee75172bbdaab88fcecb"
+    },
+    {
+      "name": "FN-ASM-007D_through-wall-drip-retention-detail_R0.8.SLDASM",
+      "bytes": 463226,
+      "sha256": "1528906fbbabe8c49baa8e1c913f48a8c609fd6b0279dddbdedb8d9d41754ce0"
+    },
+    {
+      "name": "FN-ASM-007D_through-wall-drip-retention-detail_R0.8.SLDDRW",
+      "bytes": 481376,
+      "sha256": "2378e404ff587acfd384bf961423535eeb4a42431bc7cda09968cb4deeae1842"
+    },
+    {
+      "name": "FN-ASM-007D_through-wall-drip-retention-detail_R0.8.STEP",
+      "bytes": 1921096,
+      "sha256": "c8eb3f98351a8387a233c5b23bfe638062ee1cab2ebd4c58ce9d9071a56e0810"
+    },
+    {
+      "name": "FN-ASM-007D_through-wall-drip-retention-detail_R0.8_drawing.png",
+      "bytes": 17751,
+      "sha256": "da381ab2715602f59496d232fc7a6b12fb1dbf961f8e5b0ab6b84028472df0c7"
+    },
+    {
+      "name": "FN-ASM-007D_through-wall-drip-retention-detail_R0.8_front.png",
+      "bytes": 131917,
+      "sha256": "d3d8572ad85855a3c300447fc30c568f00b30b08a18f30af062b566bd2b5c25a"
+    },
+    {
+      "name": "FN-ASM-007D_through-wall-drip-retention-detail_R0.8_isometric.png",
+      "bytes": 258792,
+      "sha256": "a92be73cd058e71b2dddd45195e9b06b3ca165211b1a739f1c68fc7dfd19a036"
+    },
+    {
+      "name": "FN-ASM-007D_through-wall-drip-retention-detail_R0.8_right-section.png",
+      "bytes": 179127,
+      "sha256": "75203db471a26d7b3b0e9bc3a617413fdf4c36cddb4f910cf8492f445af92a0d"
+    },
+    {
+      "name": "FN-DRW-008_connection-detail-review-package_R0.8.pdf",
+      "bytes": 68488,
+      "sha256": "4efea179055f27e3772550878bf19f428ab468d41700c99e85132d504d5cfd7e"
+    },
+    {
+      "name": "FN-FRM-003_crossmember-330x30x30_CONCEPT_R0.6.SLDPRT",
+      "bytes": 66190,
+      "sha256": "384ac18b55dd2a3fa9fda9b5e137c453bc0092580ba00061cac75128dfa38b64"
+    },
+    {
+      "name": "FN-FRM-004_mast-30x30x220_CONCEPT_R0.6.SLDPRT",
+      "bytes": 40539,
+      "sha256": "c3989d05351ef8c0571b55fd6acdee296c5b6e5e6a2a394f61cece2703434e2b"
+    },
+    {
+      "name": "FN-FRM-006_left-mast-brace_D16_CONCEPT_R0.6.SLDPRT",
+      "bytes": 104915,
+      "sha256": "888dba20d8a138cbc0b1352e3a7130518b4a6c65dc807f98f309aebdf7dc37cb"
+    },
+    {
+      "name": "FN-FRM-007_right-mast-brace_D16_CONCEPT_R0.6.SLDPRT",
+      "bytes": 131123,
+      "sha256": "da5dc8d9e6dffa519fd4654d22fdbe84bbb114f4eb8fcb65774c2dff9ae36665"
+    },
+    {
+      "name": "FN-FST-001_M6-bolt-envelope-D6x55_PENDING_R0.7.SLDPRT",
+      "bytes": 129141,
+      "sha256": "fb1cde05a5e2d23a973c063226d31fe9593b206b03c3363fa25e554d6c2a5995"
+    },
+    {
+      "name": "FN-FST-002_M6-washer-envelope-D14x2_PENDING_R0.7.SLDPRT",
+      "bytes": 70268,
+      "sha256": "54977d579aa7a61dbbfe3553fd1bba5b09ca7f52f091f647ce8a129b71e71f57"
+    },
+    {
+      "name": "FN-FST-003_solar-pivot-envelope-D8x40_PENDING_R0.7.SLDPRT",
+      "bytes": 125396,
+      "sha256": "a87af95e67fd4cf9af6a5f5a169e8b5c51ff8436e4e49829152cb0f4e0794531"
+    },
+    {
+      "name": "FN-FST-004_mast-bolt-envelope-D8x35_PENDING_R0.7.SLDPRT",
+      "bytes": 46414,
+      "sha256": "9104dab8f6c97785514de2f8e469bf86948f61b1ba8d9dcc55cc3b826bdd9ee0"
+    },
+    {
+      "name": "FN-FST-005_clip-fastener-envelope-D4x18_PENDING_R0.7.SLDPRT",
+      "bytes": 147382,
+      "sha256": "85badeb5ab85cb7bdba1f353b587690402a3fe8be7f876ceb359798f3c5d5d52"
+    },
+    {
+      "name": "FN-GNS-002_mast-platform-120x120x6_CONCEPT_R0.6.SLDPRT",
+      "bytes": 80368,
+      "sha256": "bc117a71db1a08cb7a0a701f60b2bd386cb0ff5058e95fb1c6e1d502227c8c23"
+    },
+    {
+      "name": "FN-GNS-003_BTM87SF-envelope_D78x24_PENDING_R0.6.SLDPRT",
+      "bytes": 88098,
+      "sha256": "4b0b1f0136c3b3735612541d09526e3f28f24fb68502e84a7d7f99a4aa52c900"
+    },
+    {
+      "name": "FN-GNS-004_BT760-envelope_D180x70_PENDING_R0.6.SLDPRT",
+      "bytes": 85236,
+      "sha256": "7fd924e6b38b1311f03af74ac05675d2c9220f49e072123d9bab7fde27a7f814"
+    },
+    {
+      "name": "FN-GNS-006_mast-base-plate-90x80x8_4HOLE-NOMINAL_R0.8.png",
+      "bytes": 173806,
+      "sha256": "a428b19190705260a324cdb525a4053630e05a70d8bcd8b68bfbb229c01ac95f"
+    },
+    {
+      "name": "FN-GNS-006_mast-base-plate-90x80x8_4HOLE-NOMINAL_R0.8.SLDPRT",
+      "bytes": 92063,
+      "sha256": "bfa361f431378a91b8c971c7a1f3d63802dc64ebd4b2c23e067cf2e52343d48c"
+    },
+    {
+      "name": "FN-GNS-006_mast-base-plate-90x80x8_4HOLE-NOMINAL_R0.8.STEP",
+      "bytes": 36603,
+      "sha256": "f02c0f22951e4cb77239903c5c421db73b071a76b0431582c98cf04c9ccb36c8"
+    },
+    {
+      "name": "FN-HAR-036_P-clip-envelope-20x8x15_PENDING_R0.7.SLDPRT",
+      "bytes": 64964,
+      "sha256": "e5b83e72fbb50e94eebf0df36619aea7d4387298b5a1a31f5b02d0b382e4214e"
+    },
+    {
+      "name": "FN-HAR-037_lower-strain-relief-bar-110x12x8_CONCEPT_R0.7.SLDPRT",
+      "bytes": 67959,
+      "sha256": "c5a2e548ec1094e47ef471f9062dcbebefac772f35439756237684d9725c23e4"
+    },
+    {
+      "name": "FN-HAR-038_W7-rf1-through-wall-detail_R0.8.png",
+      "bytes": 194223,
+      "sha256": "f5d414bb049e123fbe95cb0d32a6b83feed272aebff3efd79f73eb7b60fca683"
+    },
+    {
+      "name": "FN-HAR-038_W7-rf1-through-wall-detail_R0.8.SLDPRT",
+      "bytes": 167948,
+      "sha256": "79d6eead6d9a0b6f83c2130055884ac864a7c4217d97231b61c48c5741fd69fb"
+    },
+    {
+      "name": "FN-HAR-038_W7-rf1-through-wall-detail_R0.8.STEP",
+      "bytes": 317811,
+      "sha256": "d4e48aea3ef043f89ecea619a9d88f3e8f0f5ff289bb89b1e1916a7581b9d2d4"
+    },
+    {
+      "name": "FN-HAR-039_W8-rf2-through-wall-detail_R0.8.png",
+      "bytes": 217437,
+      "sha256": "6b660eb6688a40ff46d43a4e4a692e7db6d934299ebf40af772b13ed20c75e1f"
+    },
+    {
+      "name": "FN-HAR-039_W8-rf2-through-wall-detail_R0.8.SLDPRT",
+      "bytes": 193044,
+      "sha256": "b2db8a9933df578fdb3e5438a01530d0353c35e75c701d20b8add601f7be3e8c"
+    },
+    {
+      "name": "FN-HAR-039_W8-rf2-through-wall-detail_R0.8.STEP",
+      "bytes": 316362,
+      "sha256": "0a9ca390e23857efe7c7a617c1e01f9ddf8b52f6f3d0812db2ab97e1d623615d"
+    },
+    {
+      "name": "FN-HAR-040_W6-g2-through-wall-drip-detail_R0.8.png",
+      "bytes": 172869,
+      "sha256": "3bb03323f985f185c72d3303149642e38140824809fd9edca0b6470135db2c12"
+    },
+    {
+      "name": "FN-HAR-040_W6-g2-through-wall-drip-detail_R0.8.SLDPRT",
+      "bytes": 229201,
+      "sha256": "63302f7fb8b8ed1d2c8bf6569afcddb37bd645e3138f14f7ce481360af4dc072"
+    },
+    {
+      "name": "FN-HAR-040_W6-g2-through-wall-drip-detail_R0.8.STEP",
+      "bytes": 453248,
+      "sha256": "b5c15a617cedc56a0b8255dc2efbd6164e900e69374ede24838b0bb17ab4a318"
+    },
+    {
+      "name": "FN-HAR-041_W1-g1-through-wall-drip-detail_R0.8.png",
+      "bytes": 218361,
+      "sha256": "a4bfa4aca2d765f28632819610a586956a21cd74917a9c0ae1e35770422ba37c"
+    },
+    {
+      "name": "FN-HAR-041_W1-g1-through-wall-drip-detail_R0.8.SLDPRT",
+      "bytes": 239251,
+      "sha256": "b326eb23fddb4dc8d92b1e8fdb84295c57a76778ced6d68b29050306b3eaf293"
+    },
+    {
+      "name": "FN-HAR-041_W1-g1-through-wall-drip-detail_R0.8.STEP",
+      "bytes": 641271,
+      "sha256": "961d8f8300980666092b7e0d91518bebefee10cc61eaff4744c251daed8ff91d"
+    },
+    {
+      "name": "FN-IFC-002_sma-bulkhead-envelope-D12x34_R0.6.SLDPRT",
+      "bytes": 140995,
+      "sha256": "83ed817fdd95c512fc31c284c5e9e111ec4d908c54bba6691cd40e002d9c5b1a"
+    },
+    {
+      "name": "FN-IFC-003_sma-collar-envelope-D17x5_R0.6.SLDPRT",
+      "bytes": 78835,
+      "sha256": "ee12d4c1ae586b7420da03bd7b1667d493341c7a73a98258146f37b6e104a29b"
+    },
+    {
+      "name": "FN-IFC-004_m16-gland-envelope-D24x34_R0.6.SLDPRT",
+      "bytes": 120086,
+      "sha256": "00f6443f0a4f9db8b34053397a1c66953054cb0510aba344b931666e1d6201c8"
+    },
+    {
+      "name": "FN-IFC-005_m16-cap-envelope-D29x5_R0.6.SLDPRT",
+      "bytes": 71386,
+      "sha256": "c6469e34f0da1fa547731fc779f68df4b1eec186a9c24a1bf753f4cb64adb92d"
+    },
+    {
+      "name": "FN-MNT-001_enclosure-back-strap-300x6x32_CONCEPT_R0.7.SLDPRT",
+      "bytes": 59910,
+      "sha256": "9402d80deb0938001a48da4936b9ccf083e836c9b7ee58326f58d243340a0e08"
+    },
+    {
+      "name": "FN-SEC-001_enclosure-rear-wall-coupon-300x80x4_2HOLE-NOMINAL_R0.8.png",
+      "bytes": 160977,
+      "sha256": "68b726237d6bb8bf47d351686125f014aef8781c0f6a2c243cfbbc0de5334af1"
+    },
+    {
+      "name": "FN-SEC-001_enclosure-rear-wall-coupon-300x80x4_2HOLE-NOMINAL_R0.8.SLDPRT",
+      "bytes": 66968,
+      "sha256": "e8023d82cfed9583bbd8441ac996ba7aadc9ad9ae168acf81b3c1d0b122e94b9"
+    },
+    {
+      "name": "FN-SEC-001_enclosure-rear-wall-coupon-300x80x4_2HOLE-NOMINAL_R0.8.STEP",
+      "bytes": 26235,
+      "sha256": "d56f61af839e119ed230125dec01e57d8aa17240552ec224bc225e55e3af51a7"
+    },
+    {
+      "name": "FN-SEC-002_lower-wall-coupon-280x65x3_4PORT-NOMINAL_R0.8.png",
+      "bytes": 170998,
+      "sha256": "ed7610cb73180e3bcb922626d82c492b823e36ee5b63dc4bab2f3e9354057929"
+    },
+    {
+      "name": "FN-SEC-002_lower-wall-coupon-280x65x3_4PORT-NOMINAL_R0.8.SLDPRT",
+      "bytes": 76251,
+      "sha256": "105d6b49fee98044144c5bde4a715a9fb7d9a8b70c52484f3bea0002a3ad0cae"
+    },
+    {
+      "name": "FN-SEC-002_lower-wall-coupon-280x65x3_4PORT-NOMINAL_R0.8.STEP",
+      "bytes": 36637,
+      "sha256": "89f83991b02a8976c9620765afd17c6c74b1ed70768755428976f944a0ab38b9"
+    },
+    {
+      "name": "FN-SOL-004_swm10w-panel-envelope_R0.6.SLDPRT",
+      "bytes": 80834,
+      "sha256": "a637f2a0f2d0c26c46982293c659875134e8e0d3ee3188ff63f99a5caf03923d"
+    },
+    {
+      "name": "FN-SOL-005_swm10w-active-face_R0.6.SLDPRT",
+      "bytes": 77694,
+      "sha256": "3e9226ec55551f9b21c96ef96110034c3518a032c5351db99e6980c1e43a7264"
+    },
+    {
+      "name": "FN-SOL-006_panel-back-rail-320x25x20_CONCEPT_R0.7.SLDPRT",
+      "bytes": 64239,
+      "sha256": "27b3bfc204bce74f29b2b04926a2acc9e22f9da6982160cfc4ffb74d4f94cdf7"
+    },
+    {
+      "name": "FN-SOL-007_panel-edge-clamp-24x18x8_PENDING_R0.7.SLDPRT",
+      "bytes": 83831,
+      "sha256": "b9de0c892ced694eac50bced7f1df65b6a11efb489336faecedca44dd3b6e786"
+    }
+  ]
+}

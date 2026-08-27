@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+ <defs><style>
+ text{font-family:"Microsoft YaHei","Noto Sans SC",sans-serif;fill:#172033;letter-spacing:0}.title{font-size:34px;font-weight:700}.sub{font-size:17px;fill:#516078}.h{font-size:21px;font-weight:700}.b{font-size:16px;font-weight:650}.s{font-size:14px;fill:#45536a}.xs{font-size:12px;fill:#65738a}.panel{fill:#fff;stroke:#cbd3df;stroke-width:2}.solar{fill:#315d87;stroke:#153b60;stroke-width:4}.metal{fill:#d9dee6;stroke:#58677c;stroke-width:4}.gnss{fill:#fff;stroke:#147a55;stroke-width:4}.feed{fill:none;stroke:#2f6eb5;stroke-width:5}.sky{fill:none;stroke:#147a55;stroke-width:2;stroke-dasharray:8 6}.leader{fill:none;stroke:#334155;stroke-width:2;marker-end:url(#a)}.tbd{fill:#fff7e6;stroke:#d88a13;stroke-width:2}.bad{fill:#fff1f0;stroke:#c4453c;stroke-width:2}
+ </style><marker id="a" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0 0L9 3L0 6Z" fill="#334155"/></marker></defs>
+ <rect width="1600" height="900" fill="#f4f6f8"/><text x="54" y="60" class="title">BT-760 / BT-M87SF 一体式侧翼平台</text><text x="54" y="92" class="sub">目的：不增加独立监测柱，同时避免太阳能板遮挡 GNSS；工作状态保持固定相位中心</text>
+ <rect x="50" y="125" width="940" height="710" rx="6" class="panel"/><text x="80" y="165" class="h">推荐：固定侧翼平台（比赛版）</text>
+ <rect x="125" y="455" width="570" height="28" class="solar" transform="rotate(-10 695 469)"/><text x="160" y="430" class="b">太阳能板上表面</text>
+ <path d="M720 230V720" stroke="#526173" stroke-width="14"/><path d="M720 290H895" stroke="#526173" stroke-width="14"/><path d="M720 600H520" stroke="#526173" stroke-width="14"/>
+ <rect x="820" y="245" width="160" height="34" rx="3" class="metal"/><rect x="860" y="210" width="80" height="35" rx="3" class="metal"/><ellipse cx="900" cy="180" rx="72" ry="27" class="gnss"/><rect x="868" y="198" width="64" height="12" class="metal"/>
+ <circle cx="900" cy="170" r="7" fill="#c4453c"/><path d="M900 170V95M900 170L830 100M900 170L970 100" class="sky"/><text x="925" y="102" class="b">相位中心（示意）</text><text x="925" y="126" class="s">安装后不得相对背架移动</text>
+ <path d="M888 218C820 340 830 505 730 570C650 620 570 640 535 670" class="feed"/><text x="780" y="510" class="s">3 m、50 Ω、TNC-J → SMA-J</text><text x="780" y="534" class="s">非 RP-SMA；留滴水弯和应力释放</text>
+ <rect x="160" y="565" width="360" height="185" rx="6" fill="#eef1f4" stroke="#68758a" stroke-width="4"/><text x="230" y="650" class="h">320 × 240 × 145 防水箱</text>
+ <text x="770" y="350" class="b">三条刚性要求</text><text x="770" y="378" class="s">• 平台固定在共背架，不固定到塑料箱盖</text><text x="770" y="404" class="s">• 天线底面高于太阳能板最高遮挡线</text><text x="770" y="430" class="s">• 平台不得在风载下扭转或重复装配漂移</text>
+ <path d="M784 452L875 275" class="leader"/>
+
+ <rect x="1025" y="125" width="525" height="710" rx="6" class="panel"/><text x="1055" y="165" class="h">BT-M87SF 接口冻结边界</text>
+ <ellipse cx="1285" cy="295" rx="160" ry="70" class="metal"/><circle cx="1285" cy="295" r="40" fill="#f7fafc" stroke="#58677c" stroke-width="3"/><circle cx="1170" cy="295" r="10" fill="#fff" stroke="#c4453c" stroke-width="3"/><circle cx="1342" cy="245" r="10" fill="#fff" stroke="#c4453c" stroke-width="3"/><circle cx="1342" cy="345" r="10" fill="#fff" stroke="#c4453c" stroke-width="3"/>
+ <text x="1120" y="402" class="s">三孔法兰形态已确认；圆周直径、孔径、中心口、</text><text x="1120" y="428" class="s">总高和安装面尺寸必须以到货底座实测/图纸为准。</text>
+ <rect x="1055" y="475" width="465" height="135" rx="5" class="tbd"/><text x="1078" y="510" class="b">到货后测量</text><text x="1078" y="540" class="s">A. 3 个孔的孔径与孔中心坐标</text><text x="1078" y="566" class="s">B. 中心穿线孔及 TNC 接头摆动空间</text><text x="1078" y="592" class="s">C. 底座平面度、材料、紧固扭矩</text>
+ <rect x="1055" y="640" width="465" height="120" rx="5" class="bad"/><text x="1078" y="675" class="b">不要这样做</text><text x="1078" y="704" class="s">天线贴太阳能板后方、装在可弯塑料盖、馈线悬空受力、</text><text x="1078" y="730" class="s">或每次搬运后随意改变天线位置却沿用旧坐标基准。</text>
+ <text x="54" y="865" class="xs">GNSS-MECH-R0.2 · CONCEPT INTERFACE / NOT FOR FABRICATION · BT-M87SF 仍是合理的预采购件，但底座孔表未冻结</text>
+</svg>

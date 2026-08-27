@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720">
+  <defs>
+    <style>
+      text { font-family: "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; fill: #172033; letter-spacing: 0; }
+      .title { font-size: 30px; font-weight: 700; }
+      .sub { font-size: 16px; fill: #475467; }
+      .head { font-size: 20px; font-weight: 700; }
+      .label { font-size: 16px; font-weight: 600; }
+      .small { font-size: 14px; fill: #475467; }
+    </style>
+  </defs>
+  <rect width="1200" height="720" fill="#f7f8fa"/>
+  <text x="55" y="55" class="title">比赛版：倾角传感器保留箱内的固定结构</text>
+  <text x="55" y="88" class="sub">电子设备使用 FR4 主安装板；倾角传感器使用独立金属小基准板，避免整块钢板的重量和射频影响。</text>
+
+  <rect x="55" y="125" width="700" height="505" rx="8" fill="#fff" stroke="#d0d5dd" stroke-width="2"/>
+  <text x="85" y="165" class="head">剖面结构</text>
+  <rect x="245" y="205" width="320" height="95" rx="10" fill="#ffe8cc" stroke="#b54708" stroke-width="3"/>
+  <text x="405" y="248" text-anchor="middle" class="label">倾角传感器 90 x 58 x 36</text>
+  <text x="405" y="275" text-anchor="middle" class="small">4 x Ø3.6；孔距 78 x 39</text>
+  <line x1="285" y1="196" x2="285" y2="323" stroke="#344054" stroke-width="6"/>
+  <line x1="525" y1="196" x2="525" y2="323" stroke="#344054" stroke-width="6"/>
+  <text x="590" y="244" class="small">M3 螺钉</text>
+  <rect x="205" y="302" width="400" height="36" rx="3" fill="#b8c0cc" stroke="#344054" stroke-width="2"/>
+  <text x="405" y="327" text-anchor="middle" class="label">304 小基准板，约 120 x 85 x 3 mm</text>
+  <line x1="235" y1="338" x2="235" y2="420" stroke="#027a48" stroke-width="5"/>
+  <line x1="575" y1="338" x2="575" y2="420" stroke="#027a48" stroke-width="5"/>
+  <text x="620" y="376" class="small">小板四点固定</text>
+  <rect x="145" y="420" width="520" height="28" rx="3" fill="#d7e8ff" stroke="#175cd3" stroke-width="3"/>
+  <text x="405" y="442" text-anchor="middle" class="label">3 mm FR4/G10 主安装板</text>
+  <rect x="215" y="448" width="38" height="88" fill="#e6f4ea" stroke="#027a48" stroke-width="2"/>
+  <rect x="557" y="448" width="38" height="88" fill="#e6f4ea" stroke="#027a48" stroke-width="2"/>
+  <text x="625" y="495" class="small">倾角区域下方四点刚性支撑</text>
+  <rect x="115" y="536" width="580" height="42" rx="8" fill="#edf1f5" stroke="#667085" stroke-width="3"/>
+  <text x="405" y="563" text-anchor="middle" class="label">防水箱底部塑料孔柱 / 承托面</text>
+  <text x="405" y="610" text-anchor="middle" class="small">最终支撑位置要与箱体实物孔柱匹配，避免金属小板形成悬臂。</text>
+
+  <rect x="790" y="125" width="355" height="505" rx="8" fill="#fff" stroke="#d0d5dd" stroke-width="2"/>
+  <text x="820" y="165" class="head">比赛版装配原则</text>
+  <text x="820" y="215" class="label">1. 不更换整块 FR4</text>
+  <text x="820" y="245" class="small">PCB、电池和充电模块仍固定在绝缘板上。</text>
+  <text x="820" y="295" class="label">2. 倾角使用独立小钢板</text>
+  <text x="820" y="325" class="small">局部提高平面度和刚度，重量约 0.24 kg。</text>
+  <text x="820" y="375" class="label">3. 箱体采用双点或四点背架</text>
+  <text x="820" y="405" class="small">不能只靠单个抱箍，否则整箱仍可能旋转。</text>
+  <text x="820" y="455" class="label">4. 每次搬运后校零</text>
+  <text x="820" y="485" class="small">检查螺钉扭矩标记，再静置 5 秒执行校准。</text>
+  <rect x="820" y="535" width="295" height="65" rx="7" fill="#fff8e7" stroke="#f0b429" stroke-width="2"/>
+  <text x="840" y="562" class="label">适用边界</text>
+  <text x="840" y="586" class="small">比赛展示可用；长期野外版仍需更刚性的传力路径。</text>
+</svg>

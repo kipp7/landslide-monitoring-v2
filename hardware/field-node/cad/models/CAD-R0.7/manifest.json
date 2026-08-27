@@ -1,0 +1,509 @@
+{
+  "revision": "CAD-R0.7",
+  "scope": "structural connection details plus frame-retained external harness",
+  "manufacturing_status": "ENGINEERING CONCEPT / NOT FOR MANUFACTURE",
+  "solidworks": "2022 SP5.0",
+  "assemblies": [
+    {
+      "name": "FN-ASM-006A_structural-detail_R0.7",
+      "component_count": 41,
+      "native": "FN-ASM-006A_structural-detail_R0.7.SLDASM",
+      "step": "FN-ASM-006A_structural-detail_R0.7.STEP",
+      "previews": [
+        "FN-ASM-006A_structural-detail_R0.7_isometric.png",
+        "FN-ASM-006A_structural-detail_R0.7_front.png",
+        "FN-ASM-006A_structural-detail_R0.7_right.png"
+      ],
+      "left_open_in_solidworks": false
+    },
+    {
+      "name": "FN-ASM-006B_external-harness-retention_R0.7",
+      "component_count": 21,
+      "native": "FN-ASM-006B_external-harness-retention_R0.7.SLDASM",
+      "step": "FN-ASM-006B_external-harness-retention_R0.7.STEP",
+      "previews": [
+        "FN-ASM-006B_external-harness-retention_R0.7_isometric.png",
+        "FN-ASM-006B_external-harness-retention_R0.7_front.png"
+      ],
+      "left_open_in_solidworks": false
+    },
+    {
+      "name": "FN-ASM-006_full-field-node-detailed-concept_R0.7",
+      "component_count": 4,
+      "resolved_component_count": 124,
+      "native": "FN-ASM-006_full-field-node-detailed-concept_R0.7.SLDASM",
+      "step": "FN-ASM-006_full-field-node-detailed-concept_R0.7.STEP",
+      "previews": [
+        "FN-ASM-006_full-field-node-detailed-concept_R0.7_isometric.png",
+        "FN-ASM-006_full-field-node-detailed-concept_R0.7_front.png",
+        "FN-ASM-006_full-field-node-detailed-concept_R0.7_right.png",
+        "FN-ASM-006_full-field-node-detailed-concept_R0.7_top.png"
+      ],
+      "left_open_in_solidworks": true
+    }
+  ],
+  "base_dependencies": [
+    {
+      "name": "FN-ASM-004_internal-round-harness_R0.6.SLDASM",
+      "revision": "CAD-R0.6",
+      "bytes": 1113171,
+      "sha256": "8703a16509601d472a8e013134d837ce0bdd80502c626be05caba2f11be09687"
+    },
+    {
+      "name": "FN-ASM-005A_external-structure_R0.6.SLDASM",
+      "revision": "CAD-R0.6",
+      "bytes": 391658,
+      "sha256": "1b46f336c36a05bdf4ed2e69d53e05eaea406d6c272041c97e76943a1eed263b"
+    }
+  ],
+  "native_geometry": {
+    "parts": [
+      {
+        "name": "FN-MNT-001_enclosure-back-strap-300x6x32_CONCEPT_R0.7",
+        "status": "REUSED"
+      },
+      {
+        "name": "FN-FST-001_M6-bolt-envelope-D6x55_PENDING_R0.7",
+        "status": "REUSED"
+      },
+      {
+        "name": "FN-FST-002_M6-washer-envelope-D14x2_PENDING_R0.7",
+        "status": "REUSED"
+      },
+      {
+        "name": "FN-SOL-006_panel-back-rail-320x25x20_CONCEPT_R0.7",
+        "status": "REUSED"
+      },
+      {
+        "name": "FN-SOL-007_panel-edge-clamp-24x18x8_PENDING_R0.7",
+        "status": "REUSED"
+      },
+      {
+        "name": "FN-FST-003_solar-pivot-envelope-D8x40_PENDING_R0.7",
+        "status": "REUSED"
+      },
+      {
+        "name": "FN-GNS-005_mast-base-plate-90x80x8_CONCEPT_R0.7",
+        "status": "REUSED"
+      },
+      {
+        "name": "FN-FST-004_mast-bolt-envelope-D8x35_PENDING_R0.7",
+        "status": "REUSED"
+      },
+      {
+        "name": "FN-FRM-008_tube-end-cap-30x30x3_CONCEPT_R0.7",
+        "status": "REUSED"
+      },
+      {
+        "name": "FN-FRM-009_foot-end-cap-50x3x30_CONCEPT_R0.7",
+        "status": "REUSED"
+      },
+      {
+        "name": "FN-FRM-010_foot-gusset-50x8x80_CONCEPT_R0.7",
+        "status": "REUSED"
+      },
+      {
+        "name": "FN-HAR-036_P-clip-envelope-20x8x15_PENDING_R0.7",
+        "status": "REUSED"
+      },
+      {
+        "name": "FN-HAR-037_lower-strain-relief-bar-110x12x8_CONCEPT_R0.7",
+        "status": "REUSED"
+      },
+      {
+        "name": "FN-FST-005_clip-fastener-envelope-D4x18_PENDING_R0.7",
+        "status": "REUSED"
+      },
+      {
+        "name": "FN-HAR-032_W1-pv-frame-routed_R0.7",
+        "wire_id": "W1-EXT",
+        "status": "REUSED"
+      },
+      {
+        "name": "FN-HAR-033_W6-soil-strain-relieved_R0.7",
+        "wire_id": "W6-EXT",
+        "status": "REUSED"
+      },
+      {
+        "name": "FN-HAR-034_W7-gnss-frame-routed_R0.7",
+        "wire_id": "W7-EXT",
+        "status": "REUSED"
+      },
+      {
+        "name": "FN-HAR-035_W8-xls1-frame-routed_R0.7",
+        "wire_id": "W8-EXT",
+        "status": "REUSED"
+      }
+    ],
+    "detail_primitive_count": 14,
+    "native_round_cable_count": 4
+  },
+  "validation": {
+    "rectangular_harness_reused": false,
+    "external_round_sweep_count": 4,
+    "cable_clip_count": 8,
+    "enclosure_back_strap_count": 2,
+    "solar_back_rail_count": 2,
+    "solar_edge_clamp_count": 4,
+    "master_subassembly_count": 4,
+    "nominal_lid_to_back_strap_gap_mm": 0.55,
+    "panel_back_rail_normal_offset_mm": 18.5,
+    "mast_clip_nominal_overlap_mm": 5.0
+  },
+  "blocked_inputs": [
+    "enclosure rear mounting hole table and plastic wall capacity",
+    "SWM-10W frame hole table and approved clamp geometry",
+    "BT-760 physical envelope and TNC datum",
+    "BT-M87SF three-hole pattern and mounting stack",
+    "frame tube wall thickness fastener grades wind and transport loads",
+    "actual cable OD connector length minimum bend radius and P-clip sizes",
+    "XLS1 external antenna model ground-plane and connector requirements"
+  ],
+  "artifacts": [
+    {
+      "name": "FN-ASM-006_full-field-node-detailed-concept_R0.7.SLDASM",
+      "bytes": 2094916,
+      "sha256": "860080f774842e8a7f16ab8e481e8d797b7d71b74a9aafa757955c6e99712b80"
+    },
+    {
+      "name": "FN-ASM-006_full-field-node-detailed-concept_R0.7.STEP",
+      "bytes": 11305193,
+      "sha256": "c7d0c2f6f4061c30c84c978d72e57d9e105011e9b7c9a7e490e70b16042b88e7"
+    },
+    {
+      "name": "FN-ASM-006_full-field-node-detailed-concept_R0.7_front.png",
+      "bytes": 148429,
+      "sha256": "b3c2b22a2b00645d880fe0692eab9a6bf5dd4e5b91fcf842571f09de26a2b490"
+    },
+    {
+      "name": "FN-ASM-006_full-field-node-detailed-concept_R0.7_isometric.png",
+      "bytes": 190893,
+      "sha256": "29935f797ec5556a16debbe15d696e457db2932e1bf380d5286e6cb4d6d3071d"
+    },
+    {
+      "name": "FN-ASM-006_full-field-node-detailed-concept_R0.7_right.png",
+      "bytes": 150040,
+      "sha256": "6575ae7a2885ab6dccfdf7ea4dd52c54190c18a2b4e0d2f6c60e2cb3948306a0"
+    },
+    {
+      "name": "FN-ASM-006_full-field-node-detailed-concept_R0.7_top.png",
+      "bytes": 252553,
+      "sha256": "de993e292d35e282ce38abd2575e637fe612f895bc54d405fe09164cd9ec6af8"
+    },
+    {
+      "name": "FN-ASM-006A_structural-detail_R0.7.SLDASM",
+      "bytes": 100493,
+      "sha256": "e6380301cbe17cfb2fc0ce515f9172264ccc463c462c5f2c858c3b2f341a5607"
+    },
+    {
+      "name": "FN-ASM-006A_structural-detail_R0.7.STEP",
+      "bytes": 251353,
+      "sha256": "32f9055b299c9d205d4aaeb354d300fa4c55d30e5eac013749a2b8cc67d36146"
+    },
+    {
+      "name": "FN-ASM-006A_structural-detail_R0.7_front.png",
+      "bytes": 111559,
+      "sha256": "339cd8aa0ea326a5d3f03bf01d448e365acd63a4d7894e26ff4bfbd0158ef974"
+    },
+    {
+      "name": "FN-ASM-006A_structural-detail_R0.7_isometric.png",
+      "bytes": 160863,
+      "sha256": "f9d66082fe195719fc244ecd52b5c2c4ff8ba7c2e9f6e14fae6da3354c63c3f6"
+    },
+    {
+      "name": "FN-ASM-006A_structural-detail_R0.7_right.png",
+      "bytes": 111710,
+      "sha256": "2d8e7d6f41cce3d69905c6b8f4a7814c929c29dc25b43c1e49fcd716046c3f87"
+    },
+    {
+      "name": "FN-ASM-006B_external-harness-retention_R0.7.SLDASM",
+      "bytes": 814568,
+      "sha256": "fba5f1c7c48ad1c55aa6bb7e672a4910ca03b11b50bc4af55ef614c9f64186ca"
+    },
+    {
+      "name": "FN-ASM-006B_external-harness-retention_R0.7.STEP",
+      "bytes": 6641918,
+      "sha256": "1f71631f2aad06450b30fe2484c375514947f6eec7ed31a95bd63eb325a79311"
+    },
+    {
+      "name": "FN-ASM-006B_external-harness-retention_R0.7_front.png",
+      "bytes": 147745,
+      "sha256": "00a70459e528cc7a7669b79c7c05be8abc8f1660077efcb500861cc276c19f95"
+    },
+    {
+      "name": "FN-ASM-006B_external-harness-retention_R0.7_isometric.png",
+      "bytes": 163075,
+      "sha256": "441afd046a068f0ca3ce491af334f142002730251b00ea56a208025374d2da3d"
+    },
+    {
+      "name": "FN-FRM-008_tube-end-cap-30x30x3_CONCEPT_R0.7.png",
+      "bytes": 163537,
+      "sha256": "ac8bcdd72911a762fcaac646be9474220fd4351f902fbd8b50b2215eb7468f30"
+    },
+    {
+      "name": "FN-FRM-008_tube-end-cap-30x30x3_CONCEPT_R0.7.SLDPRT",
+      "bytes": 82581,
+      "sha256": "d1092e8c2bac01a31d4424e5332cbe1baf4774cb290272051d47c20a566ab1d0"
+    },
+    {
+      "name": "FN-FRM-008_tube-end-cap-30x30x3_CONCEPT_R0.7.STEP",
+      "bytes": 15698,
+      "sha256": "ee4223b4e3412acc3b476df62b2872978bd6d3cd4766844d1d053e34a60c9449"
+    },
+    {
+      "name": "FN-FRM-009_foot-end-cap-50x3x30_CONCEPT_R0.7.png",
+      "bytes": 146254,
+      "sha256": "b0af19a9e496c30c9fb813cb70050e38c2f764715586fa7dfce04f2f39ecc529"
+    },
+    {
+      "name": "FN-FRM-009_foot-end-cap-50x3x30_CONCEPT_R0.7.SLDPRT",
+      "bytes": 58714,
+      "sha256": "fef7242bf6aaafbccb59cf5fbc9d1518d9cfcf238717d1864161394a3696b034"
+    },
+    {
+      "name": "FN-FRM-009_foot-end-cap-50x3x30_CONCEPT_R0.7.STEP",
+      "bytes": 15679,
+      "sha256": "f5b4683bf510e4a2feafd2555725513644f2f107f6350d23b4b2ba9182b7ff85"
+    },
+    {
+      "name": "FN-FRM-010_foot-gusset-50x8x80_CONCEPT_R0.7.png",
+      "bytes": 135543,
+      "sha256": "df3aebf974789a91ff5478dcc40ac8fac17d9330294be8ef373394dd7ad553b5"
+    },
+    {
+      "name": "FN-FRM-010_foot-gusset-50x8x80_CONCEPT_R0.7.SLDPRT",
+      "bytes": 47921,
+      "sha256": "2d8d3c5e2ae54cd4cfbf661361b908b1ea36ab6c7d24287a03bcfbbbc49014fd"
+    },
+    {
+      "name": "FN-FRM-010_foot-gusset-50x8x80_CONCEPT_R0.7.STEP",
+      "bytes": 15686,
+      "sha256": "c6b9b0b681aa306481860acc7c39893162ec4640aee8f0b60150574a1d13b472"
+    },
+    {
+      "name": "FN-FST-001_M6-bolt-envelope-D6x55_PENDING_R0.7.png",
+      "bytes": 317831,
+      "sha256": "7784652ee2f5ee2133bffaa39fe6beb7363d2fba1b5cb77202a420803f529a97"
+    },
+    {
+      "name": "FN-FST-001_M6-bolt-envelope-D6x55_PENDING_R0.7.SLDPRT",
+      "bytes": 129141,
+      "sha256": "fb1cde05a5e2d23a973c063226d31fe9593b206b03c3363fa25e554d6c2a5995"
+    },
+    {
+      "name": "FN-FST-001_M6-bolt-envelope-D6x55_PENDING_R0.7.STEP",
+      "bytes": 11747,
+      "sha256": "c3340989c1868be549c7ff42374f4f19c69d4c0a4eec2314df1fcf83458ee404"
+    },
+    {
+      "name": "FN-FST-002_M6-washer-envelope-D14x2_PENDING_R0.7.png",
+      "bytes": 177915,
+      "sha256": "84d21446e5ff404591e4a8a5c7ddcd2693f602ab951e7bd396394e664c14fbef"
+    },
+    {
+      "name": "FN-FST-002_M6-washer-envelope-D14x2_PENDING_R0.7.SLDPRT",
+      "bytes": 70268,
+      "sha256": "54977d579aa7a61dbbfe3553fd1bba5b09ca7f52f091f647ce8a129b71e71f57"
+    },
+    {
+      "name": "FN-FST-002_M6-washer-envelope-D14x2_PENDING_R0.7.STEP",
+      "bytes": 11758,
+      "sha256": "2fdeb3a7d5843e04867a60ef51d2aa1eff1bf8c1b88406a54db7e4016f20d186"
+    },
+    {
+      "name": "FN-FST-003_solar-pivot-envelope-D8x40_PENDING_R0.7.png",
+      "bytes": 334912,
+      "sha256": "b932afcf1c123d1b3f40a1b9a1a46b880ef7c409a596a935f6ec1b857784c015"
+    },
+    {
+      "name": "FN-FST-003_solar-pivot-envelope-D8x40_PENDING_R0.7.SLDPRT",
+      "bytes": 125396,
+      "sha256": "a87af95e67fd4cf9af6a5f5a169e8b5c51ff8436e4e49829152cb0f4e0794531"
+    },
+    {
+      "name": "FN-FST-003_solar-pivot-envelope-D8x40_PENDING_R0.7.STEP",
+      "bytes": 11764,
+      "sha256": "cc27a87eac7c91fb26f5e0e259b43651afb533e490aef5e48b1d6920e0447d54"
+    },
+    {
+      "name": "FN-FST-004_mast-bolt-envelope-D8x35_PENDING_R0.7.png",
+      "bytes": 144562,
+      "sha256": "7388f370bf5e1c131e974a1ff49cbdd9a56a9f05a81fd44c38f9f4c6d0985d64"
+    },
+    {
+      "name": "FN-FST-004_mast-bolt-envelope-D8x35_PENDING_R0.7.SLDPRT",
+      "bytes": 46414,
+      "sha256": "9104dab8f6c97785514de2f8e469bf86948f61b1ba8d9dcc55cc3b826bdd9ee0"
+    },
+    {
+      "name": "FN-FST-004_mast-bolt-envelope-D8x35_PENDING_R0.7.STEP",
+      "bytes": 11754,
+      "sha256": "2b20dca6c9818c4fa458f0fa297495a9f0e87d70b4dfb3eace6a6eb44a6abb1d"
+    },
+    {
+      "name": "FN-FST-005_clip-fastener-envelope-D4x18_PENDING_R0.7.png",
+      "bytes": 357910,
+      "sha256": "cc2a746bbab3758e3809933dcdbe57505141ff0cb36a47608c6d068c07dd7e76"
+    },
+    {
+      "name": "FN-FST-005_clip-fastener-envelope-D4x18_PENDING_R0.7.SLDPRT",
+      "bytes": 147382,
+      "sha256": "85badeb5ab85cb7bdba1f353b587690402a3fe8be7f876ceb359798f3c5d5d52"
+    },
+    {
+      "name": "FN-FST-005_clip-fastener-envelope-D4x18_PENDING_R0.7.STEP",
+      "bytes": 11774,
+      "sha256": "0d7194d711f21fa4e91e2ff4ce9146cd601ca8a839bd7a8655e01b3560bbc47e"
+    },
+    {
+      "name": "FN-GNS-005_mast-base-plate-90x80x8_CONCEPT_R0.7.png",
+      "bytes": 162672,
+      "sha256": "f43439edf5878936448c78bb2e934a63b9befcec4dad6e461cbfd8c1cca8b602"
+    },
+    {
+      "name": "FN-GNS-005_mast-base-plate-90x80x8_CONCEPT_R0.7.SLDPRT",
+      "bytes": 82952,
+      "sha256": "af2357f6327c1804f69375985343ac1bfe6b293a98680e0281710b4424721f8b"
+    },
+    {
+      "name": "FN-GNS-005_mast-base-plate-90x80x8_CONCEPT_R0.7.STEP",
+      "bytes": 15703,
+      "sha256": "df522441de5b70dfdbfa657b78f4f28fa743aed809f32dfb5b819cc3956f9118"
+    },
+    {
+      "name": "FN-HAR-032_W1-pv-frame-routed_R0.7.png",
+      "bytes": 164092,
+      "sha256": "388709178415a563d93f42e20c2e910f1bdfd7a87ded5c78301e3ae0b3a283c8"
+    },
+    {
+      "name": "FN-HAR-032_W1-pv-frame-routed_R0.7.SLDPRT",
+      "bytes": 514495,
+      "sha256": "ead121a31a10a9da71f9c3b5fff926c4948d68b04bd17f93f03fb63623f81c79"
+    },
+    {
+      "name": "FN-HAR-032_W1-pv-frame-routed_R0.7.STEP",
+      "bytes": 2274484,
+      "sha256": "0c2571a34f4d723e4f42436fadb9c007062f736a9111addd045319d981067c6b"
+    },
+    {
+      "name": "FN-HAR-033_W6-soil-strain-relieved_R0.7.png",
+      "bytes": 160285,
+      "sha256": "89cf43f5fcd8b0ffc22848d09175fb2554d6039ad249e0298aa517a8eb6e1715"
+    },
+    {
+      "name": "FN-HAR-033_W6-soil-strain-relieved_R0.7.SLDPRT",
+      "bytes": 278907,
+      "sha256": "8b3ceefe99baf0bf1bb57bfdcc41d886fec8dd731e7a52584a45835404f83b17"
+    },
+    {
+      "name": "FN-HAR-033_W6-soil-strain-relieved_R0.7.STEP",
+      "bytes": 862162,
+      "sha256": "17ef9a1184a6fa462306420e58684f49524b46cce34e40c23ac29123f2687197"
+    },
+    {
+      "name": "FN-HAR-034_W7-gnss-frame-routed_R0.7.png",
+      "bytes": 139867,
+      "sha256": "6cfe7068496bdf5d88e1cb09a1dca7ec633b07affec981fedf3cd4bcec216b68"
+    },
+    {
+      "name": "FN-HAR-034_W7-gnss-frame-routed_R0.7.SLDPRT",
+      "bytes": 403301,
+      "sha256": "d1821a8845f66146d6fb62fc4f207f21f8b1eb589161467f68b3240822cfab72"
+    },
+    {
+      "name": "FN-HAR-034_W7-gnss-frame-routed_R0.7.STEP",
+      "bytes": 1704687,
+      "sha256": "a5f76eee34aa9e32712eddcbe8701b9dbe52f7ded5e75328e105eacb1a64e323"
+    },
+    {
+      "name": "FN-HAR-035_W8-xls1-frame-routed_R0.7.png",
+      "bytes": 146949,
+      "sha256": "c90a3b474fbd5287a3503dbfcee12bef18fdc9e55ffb1b0b4f98b7976181f234"
+    },
+    {
+      "name": "FN-HAR-035_W8-xls1-frame-routed_R0.7.SLDPRT",
+      "bytes": 388499,
+      "sha256": "52e1d61195366fbda0da9a213e5d63a01671a1455e932bfd062a42c500a2ef6a"
+    },
+    {
+      "name": "FN-HAR-035_W8-xls1-frame-routed_R0.7.STEP",
+      "bytes": 1642952,
+      "sha256": "63de1edb7a90e4bf932f8843358218403446a3723adf2ce186b31ac36ac2efbe"
+    },
+    {
+      "name": "FN-HAR-036_P-clip-envelope-20x8x15_PENDING_R0.7.png",
+      "bytes": 152452,
+      "sha256": "b4c5d905ec55a6846d49026cbac5ba94bada4ec6e2e09f4c9342c23f43a3ce51"
+    },
+    {
+      "name": "FN-HAR-036_P-clip-envelope-20x8x15_PENDING_R0.7.SLDPRT",
+      "bytes": 64964,
+      "sha256": "e5b83e72fbb50e94eebf0df36619aea7d4387298b5a1a31f5b02d0b382e4214e"
+    },
+    {
+      "name": "FN-HAR-036_P-clip-envelope-20x8x15_PENDING_R0.7.STEP",
+      "bytes": 15708,
+      "sha256": "688e16c6e91c0b1a77cfc27532379942888bbcd3358044640aa5709e4593920f"
+    },
+    {
+      "name": "FN-HAR-037_lower-strain-relief-bar-110x12x8_CONCEPT_R0.7.png",
+      "bytes": 157933,
+      "sha256": "360777477895f5281b168210b8e3156a2c616a29d301e3824ac96e389ddc9998"
+    },
+    {
+      "name": "FN-HAR-037_lower-strain-relief-bar-110x12x8_CONCEPT_R0.7.SLDPRT",
+      "bytes": 67959,
+      "sha256": "c5a2e548ec1094e47ef471f9062dcbebefac772f35439756237684d9725c23e4"
+    },
+    {
+      "name": "FN-HAR-037_lower-strain-relief-bar-110x12x8_CONCEPT_R0.7.STEP",
+      "bytes": 15725,
+      "sha256": "339a10a9671c8fdb375f6a01a05d66def42a15e92b55f0e282dc7f48a8d0aeed"
+    },
+    {
+      "name": "FN-MNT-001_enclosure-back-strap-300x6x32_CONCEPT_R0.7.png",
+      "bytes": 154934,
+      "sha256": "79d298e9eb297d59175f05d1b6885266055e1a2b05446866db34c6d981aa1b0d"
+    },
+    {
+      "name": "FN-MNT-001_enclosure-back-strap-300x6x32_CONCEPT_R0.7.SLDPRT",
+      "bytes": 59910,
+      "sha256": "9402d80deb0938001a48da4936b9ccf083e836c9b7ee58326f58d243340a0e08"
+    },
+    {
+      "name": "FN-MNT-001_enclosure-back-strap-300x6x32_CONCEPT_R0.7.STEP",
+      "bytes": 15722,
+      "sha256": "742650671f80f073544c12ecaeeedfbe7bb4de830ae584c9cca19bbe47b3f83a"
+    },
+    {
+      "name": "FN-SOL-006_panel-back-rail-320x25x20_CONCEPT_R0.7.png",
+      "bytes": 155629,
+      "sha256": "890c8b79dd7517ef15cfcaef8fada47e744de2495aff3881f201e9d50c109192"
+    },
+    {
+      "name": "FN-SOL-006_panel-back-rail-320x25x20_CONCEPT_R0.7.SLDPRT",
+      "bytes": 64239,
+      "sha256": "27b3bfc204bce74f29b2b04926a2acc9e22f9da6982160cfc4ffb74d4f94cdf7"
+    },
+    {
+      "name": "FN-SOL-006_panel-back-rail-320x25x20_CONCEPT_R0.7.STEP",
+      "bytes": 15705,
+      "sha256": "d57c7e530cdb0d190b3035c867701f57d02c8f07e7a2b15ce3aff9e89229ff6b"
+    },
+    {
+      "name": "FN-SOL-007_panel-edge-clamp-24x18x8_PENDING_R0.7.png",
+      "bytes": 162382,
+      "sha256": "22376dd1f6056eccd28c5226a1de0e3c02ae2c3ce04ea765ccb781db7be66ac1"
+    },
+    {
+      "name": "FN-SOL-007_panel-edge-clamp-24x18x8_PENDING_R0.7.SLDPRT",
+      "bytes": 83831,
+      "sha256": "b9de0c892ced694eac50bced7f1df65b6a11efb489336faecedca44dd3b6e786"
+    },
+    {
+      "name": "FN-SOL-007_panel-edge-clamp-24x18x8_PENDING_R0.7.STEP",
+      "bytes": 15688,
+      "sha256": "6c14f9dad5c25d585c53f7c3c930f17801f6756964d65bbb085f83b8e1b4a1db"
+    }
+  ]
+}

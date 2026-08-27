@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+ <defs><style>
+ text{font-family:"Microsoft YaHei","Noto Sans SC",sans-serif;fill:#172033;letter-spacing:0}.title{font-size:34px;font-weight:700}.sub{font-size:17px;fill:#516078}.h{font-size:21px;font-weight:700}.b{font-size:16px;font-weight:650}.s{font-size:14px;fill:#45536a}.xs{font-size:12px;fill:#65738a}.panel{fill:#fff;stroke:#cbd3df;stroke-width:2}.box{fill:#edf1f5;stroke:#69768a;stroke-width:4}.fr4{fill:#dceaff;stroke:#2465bd;stroke-width:4}.metal{fill:#d9dee6;stroke:#59697f;stroke-width:4}.pcb{fill:#dff3e7;stroke:#147a55;stroke-width:4}.tilt{fill:#ffe5bf;stroke:#bd6410;stroke-width:4}.line{fill:none;stroke:#38465b;stroke-width:3;stroke-dasharray:8 6;marker-end:url(#a)}.red{fill:#fff1f0;stroke:#c4453c;stroke-width:2}
+ </style><marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0 0L9 3L0 6Z" fill="#38465b"/></marker></defs>
+ <rect width="1600" height="900" fill="#f4f6f8"/><text x="54" y="60" class="title">箱内固定层级：爆炸装配示意</text><text x="54" y="92" class="sub">电子安装与倾角测量基准分层；FR4 负责绝缘承载，局部 304 板负责倾角平面刚度</text>
+ <rect x="50" y="125" width="990" height="710" rx="6" class="panel"/><text x="80" y="165" class="h">装配层级（高度与孔位待实物闭合）</text>
+ <path d="M175 720H900V790H175Q130 790 130 745Q130 720 175 720Z" class="box"/><text x="380" y="765" class="b">防水箱底壳 / 低位塑料孔柱</text>
+ <g fill="#c7ced8" stroke="#59697f" stroke-width="3"><rect x="220" y="670" width="36" height="50"/><rect x="420" y="670" width="36" height="50"/><rect x="650" y="670" width="36" height="50"/><rect x="830" y="670" width="36" height="50"/></g>
+ <text x="875" y="698" class="s">M3 自攻孔柱</text>
+ <path d="M180 590H890L850 640H220Z" class="fr4"/><text x="400" y="622" class="b">异形 FR4/G10 主安装板 · 3 mm</text>
+ <g stroke="#147a55" stroke-width="8"><path d="M320 535V590M600 535V590"/></g><path d="M250 460H670L625 530H295Z" class="pcb"/><text x="370" y="500" class="b">现场节点 PCB 170 × 115</text><text x="348" y="523" class="s">4 × M3 支柱；模块高度需合盖复核</text>
+ <g stroke="#59697f" stroke-width="8"><path d="M720 520V590M840 520V590"/></g><path d="M690 445H900L865 510H725Z" class="metal"/><text x="732" y="482" class="b">304 小基准板 120 × 85 × 3</text>
+ <path d="M735 340H885L850 425H770Z" class="tilt"/><text x="772" y="380" class="b">倾角 90 × 58 × 36</text><text x="778" y="404" class="s">4 × M3 防松</text>
+ <rect x="160" y="430" width="190" height="100" rx="5" fill="#fff6df" stroke="#c98312" stroke-width="3"/><text x="194" y="470" class="b">电池阻燃托盘</text><text x="184" y="496" class="s">两条机械绑带 · 尺寸 TBD</text>
+ <rect x="390" y="350" width="190" height="72" rx="5" fill="#f2edff" stroke="#7651c9" stroke-width="3"/><text x="420" y="382" class="b">CN3791 成品模块</text><text x="425" y="405" class="s">外形 / 孔位 / 高度 TBD</text>
+ <path d="M238 665V640M438 665V640M668 665V640M848 665V640" class="line"/><path d="M320 535V530M600 535V530M720 520V510M840 520V510" class="line"/>
+ <text x="95" y="270" class="b">分层原则</text><text x="95" y="300" class="s">• 箱体孔柱只承担总成固定；先确认孔深后选择限深螺钉</text><text x="95" y="328" class="s">• PCB、电池、充电模块都固定在 FR4，不直接粘箱底</text><text x="95" y="356" class="s">• 倾角小板四点支撑，禁止单边悬臂</text><text x="95" y="384" class="s">• 传感器与基准板之间不垫泡棉、厚橡胶或厚胶层</text>
+
+ <rect x="1075" y="125" width="475" height="710" rx="6" class="panel"/><text x="1105" y="165" class="h">紧固件与材料选择</text>
+ <text x="1105" y="215" class="b">箱体 → FR4</text><text x="1105" y="244" class="s">M3 限深自攻螺钉 + Ø3.5 FR4 通孔</text><text x="1105" y="270" class="s">平垫 + 隔离套；仅咬合塑料柱</text><text x="1105" y="296" class="s">最终长度取决于孔深（TBD）</text>
+ <text x="1105" y="344" class="b">FR4 → PCB / 托盘 / 模块</text><text x="1105" y="373" class="s">M3 贯穿螺钉、尼龙或金属支柱、防松螺母</text><text x="1105" y="399" class="s">模块必须有机械固定孔；胶仅作辅助</text>
+ <text x="1105" y="447" class="b">FR4 → 倾角小基准板</text><text x="1105" y="476" class="s">4 个独立刚性支撑点，尽量靠近箱体孔柱</text><text x="1105" y="502" class="s">板间孔位待箱体转印后冻结</text>
+ <rect x="1105" y="550" width="415" height="155" rx="5" class="red"/><text x="1128" y="585" class="b">为什么不换整块铁底板</text><text x="1128" y="615" class="s">265 × 185 × 3 mm 普通钢板约 1.16 kg，</text><text x="1128" y="642" class="s">会增加塑料孔柱长期载荷，并对 GPS / DL-XLS1</text><text x="1128" y="669" class="s">形成大面积金属遮挡。只在倾角区域使用 304 小板。</text>
+ <text x="1105" y="755" class="b">验收</text><text x="1105" y="784" class="s">50 N 拉力不位移；运输后零点复现；合盖不干涉；IP65 无渗水。</text>
+ <text x="54" y="865" class="xs">MECH-R0.2 · EXPLODED REFERENCE / NOT FOR FABRICATION · 具体支柱高度和孔表需实物验证</text>
+</svg>

@@ -1,0 +1,77 @@
+$schema: "https://raw.githubusercontent.com/context-hub/generator/refs/heads/main/json-schema.json"
+
+exclude:
+  patterns:
+    - ".env*"
+    - "*.log"
+    - "ctx-*.log"
+    - "*.db"
+    - "*.sqlite*"
+    - "*.pyc"
+  paths:
+    - ".context"
+    - ".git"
+    - ".tools"
+    - ".venv"
+    - "node_modules"
+    - "__pycache__"
+    - ".bm-state"
+
+documents:
+  - description: Workspace structure overview
+    outputPath: workspace/structure.md
+    overwrite: true
+    sources:
+      - type: tree
+        sourcePaths:
+          - .
+        showSize: true
+        showLastModified: true
+
+  - description: Workspace guidance and durable notes
+    outputPath: workspace/guidance.md
+    overwrite: true
+    sources:
+      - type: file
+        sourcePaths:
+          - WORKSPACE.md
+          - WORKFLOWS.md
+          - memory
+        filePattern:
+          - "*.md"
+        showTreeView: true
+
+  - description: Source and config snapshot
+    outputPath: workspace/code-and-config.md
+    overwrite: true
+    sources:
+      - type: file
+        sourcePaths:
+          - .
+        filePattern:
+          - "*.md"
+          - "*.toml"
+          - "*.yaml"
+          - "*.yml"
+          - "*.json"
+          - "*.ps1"
+          - "*.sh"
+          - "*.py"
+          - "*.ts"
+          - "*.tsx"
+          - "*.js"
+          - "*.jsx"
+          - "*.rs"
+          - "*.go"
+          - "*.java"
+          - "*.cs"
+        notPath:
+          - ".context/**"
+          - ".git/**"
+          - ".tools/**"
+          - ".venv/**"
+          - "node_modules/**"
+          - "__pycache__/**"
+          - ".bm-state/**"
+        showTreeView: true
+        maxFiles: 200
