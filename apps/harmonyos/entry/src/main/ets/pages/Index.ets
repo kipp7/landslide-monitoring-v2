@@ -10,21 +10,34 @@ import { AlertAlarmService } from '../data/AlertAlarmService';
 import { DeviceLocationService } from '../data/DeviceLocationService';
 import { AlertStreamClient } from '../data/AlertStreamClient';
 import { PushRegistrationService } from '../data/PushRegistrationService';
-import { Alert, AlertEvent, AlertMapLocation, AlertStreamEvent, DashboardSummary, Device, DeviceState, EdgeAgentTask, EdgeAiActionName, EdgeAiIntentResolution, EdgeAiStatus, EdgeRiskDevice, EvacuationTarget, HermesAction, HermesAgentTask, HermesConversation, HermesDiagnosticEvidence, HermesMessage, MetricSeries, SeriesPoint, SeriesResponse, Station, UserLocationStatus, UserMapLocation, alertStatusLabel, beijingClockTime, deviceConnectivityLabel, deviceDisplayName, deviceSupportsConductivity, deviceTypeLabel, displayMetric, eventTypeLabel, isAlarmActuatorDevice, isDeviceOnline, isOnlineStatus, metricShortLabel, metricUnitLabel, metricValue, numberValue, relativeTime, severityLabel, shortTime, soilConductivityValue, soilMoistureValue, soilTemperatureValue, stationDisplayName, stationNameLabel, stationStatusLabel, userDisplayName } from '../data/Types';
+import { UserPreferencesStore } from '../data/UserPreferencesStore';
+import { Alert, AlertEvent, AlertListStatus, AlertMapLocation, AlertStreamEvent, DashboardSummary, Device, DeviceSeriesRange, DeviceState, EdgeAgentTask, EdgeAiActionName, EdgeAiIntentResolution, EdgeAiStatus, EdgeRiskDevice, EvacuationTarget, HermesAction, HermesAgentTask, HermesConversation, HermesDiagnosticEvidence, HermesMessage, MetricSeries, SeriesPoint, SeriesResponse, Station, UserLocationStatus, UserMapLocation, alertStatusLabel, beijingClockTime, deviceConnectivityLabel, deviceDisplayName, deviceSupportsConductivity, deviceTypeLabel, displayMetric, eventTypeLabel, isAlarmActuatorDevice, isDeviceOnline, isOnlineStatus, metricShortLabel, metricUnitLabel, metricValue, numberValue, relativeTime, severityLabel, shortDateTime, shortTime, soilConductivityValue, soilMoistureValue, soilTemperatureValue, stationDisplayName, stationNameLabel, stationStatusLabel, userDisplayName } from '../data/Types';
 import { AlertMapView } from '../components/AlertMapView';
 import { ActiveAlertBanner, InAppAlertOverlay } from '../components/InAppAlertOverlay';
-import { MetricCard } from '../components/MetricCard';
+import { OperationalStatePanel } from '../components/OperationalStatePanel';
 import { StatusBanner } from '../components/StatusBanner';
 
 type AppScreen = 'overview' | 'stations' | 'ai' | 'alerts' | 'settings' | 'device' | 'alert-map';
 
 const UI_COLOR_TEXT: string = '#18212B';
+const UI_COLOR_TEXT_SECONDARY: string = '#52606D';
 const UI_COLOR_MUTED: string = '#6C7782';
 const UI_COLOR_SUBTLE: string = '#8A949E';
 const UI_COLOR_SURFACE: string = '#FFFFFF';
+const UI_COLOR_SURFACE_ALT: string = '#F8FAF9';
+const UI_COLOR_PAGE: string = '#F4F6F5';
+const UI_COLOR_LINE: string = '#E2E8E5';
 const UI_COLOR_ACCENT: string = '#E46D35';
+const UI_COLOR_ACCENT_SOFT: string = '#F8ECE6';
 const UI_COLOR_SUCCESS: string = '#3C9D82';
+const UI_COLOR_SUCCESS_SOFT: string = '#E8F3EF';
 const UI_COLOR_DANGER: string = '#B44832';
+const UI_COLOR_DANGER_SOFT: string = '#F7E9E5';
+const UI_COLOR_WARNING: string = '#A66021';
+const UI_COLOR_WARNING_SOFT: string = '#FFF3E0';
+const UI_COLOR_WARNING_LINE: string = '#E7D0AE';
+const UI_COLOR_INFO: string = '#477B96';
+const UI_COLOR_INFO_SOFT: string = '#EDF3F6';
 const UI_COLOR_MAP_DEFAULT: string = '#99441F';
 const UI_COLOR_MAP_MUTED: string = '#5B6670';
 const UI_COLOR_LOGIN_BRAND: string = '#173D32';
@@ -36,6 +49,12 @@ const UI_COLOR_HERMES: string = '#173D32';
 const UI_COLOR_HERMES_SOFT: string = '#EAF1ED';
 const UI_COLOR_HERMES_LINE: string = '#C9D8D0';
 const UI_PAGE_PADDING: number = 16;
+const UI_RADIUS_SURFACE: number = 8;
+
+function formatCount(value: number | undefined): string {
+  if (value === undefined || !Number.isFinite(value)) return '--';
+  return Math.max(0, Math.round(value)).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
 
 function edgeNodeFallbackName(deviceId: string): string {
   const suffix = deviceId.slice(-4);
@@ -133,6 +152,7 @@ struct Index {
   @State private edgeAiMessages: Array<HermesMessage> = [];
   @State private edgeAiConversationTasks: Array<HermesAgentTask> = [];
   @State private edgeAiChatLoading: boolean = false;
+  @State private edgeAiFailedIntent: string = '';
   @State private overviewTrends: Array<DeviceMonitoringTrend> = [];
   @State private stations: Array<Station> = [];
   @State private devices: Array<Device> = [];
@@ -145,7 +165,13 @@ struct Index {
   @State private selectedDevice: Device | null = null;
   @State private selectedDeviceState: DeviceState | null = null;
   @State private selectedSeries: SeriesResponse | null = null;
+  @State private deviceSeriesRange: DeviceSeriesRange = '24h';
   @State private alerts: Array<Alert> = [];
+  @State private alertHistory: Array<Alert> = [];
+  @State private alertViewStatus: AlertListStatus = 'active';
+  @State private alertHistoryFreshness: string = '尚未更新';
+  @State private alertHistoryOffline: boolean = false;
+  @State private alertHistoryRefreshing: boolean = false;
   @State private selectedAlert: Alert | null = null;
   @State private alertEvents: Array<AlertEvent> = [];
   @State private eventsLoading: boolean = false;
@@ -164,6 +190,10 @@ struct Index {
   @State private alertOverlayVisible: boolean = false;
   @State private alertAlarmMuted: boolean = false;
   @State private queuedAlertCount: number = 0;
+  @State private alarmSoundEnabled: boolean = true;
+  @State private alarmVibrationEnabled: boolean = true;
+  @State private notificationEnabled: boolean | null = null;
+  @State private alarmTestFeedback: string = '';
 
   private context: common.UIAbilityContext | undefined = undefined;
   private api: ApiClient = new ApiClient(DEFAULT_API_BASE_URL);
@@ -175,6 +205,7 @@ struct Index {
   private alertNotifications: AlertNotificationService | undefined = undefined;
   private alertAlarm: AlertAlarmService | undefined = undefined;
   private pushRegistration: PushRegistrationService = new PushRegistrationService();
+  private userPreferences: UserPreferencesStore | undefined = undefined;
   private alertEventQueue: Array<AlertStreamEvent> = [];
   private handlingPendingAlert: boolean = false;
   private overviewTimer: number | undefined = undefined;
@@ -186,11 +217,15 @@ struct Index {
   private stationStateRequestSequence: number = 0;
   private stationMapRequestSequence: number = 0;
   private userLocationRequestSequence: number = 0;
+  private alertHistoryRequestSequence: number = 0;
+  private alarmTestTimer: number | undefined = undefined;
 
   aboutToAppear(): void {
     this.context = getContext(this) as common.UIAbilityContext;
     this.alertAlarm = new AlertAlarmService(this.context);
     this.deviceLocationService = new DeviceLocationService(this.context);
+    this.userPreferences = new UserPreferencesStore(this.context);
+    this.restoreUserPreferences();
     this.api.setTokenObserver(() => {
       this.saveSession();
     });
@@ -202,6 +237,8 @@ struct Index {
     this.stopAlertStream(true);
     if (this.alertAlarm) this.alertAlarm.release();
     this.alertAlarm = undefined;
+    if (this.alarmTestTimer !== undefined) clearTimeout(this.alarmTestTimer);
+    this.alarmTestTimer = undefined;
   }
 
   onPageShow(): void {
@@ -319,6 +356,54 @@ struct Index {
     if (success) this.errorMessage = '';
   }
 
+  private async restoreUserPreferences(): Promise<void> {
+    if (!this.userPreferences) return;
+    const preferences = await this.userPreferences.load();
+    this.alarmSoundEnabled = preferences.alarmSoundEnabled;
+    this.alarmVibrationEnabled = preferences.alarmVibrationEnabled;
+    if (this.alertAlarm) this.alertAlarm.configure(this.alarmSoundEnabled, this.alarmVibrationEnabled);
+  }
+
+  private async updateAlarmPreferences(soundEnabled: boolean, vibrationEnabled: boolean): Promise<void> {
+    this.alarmSoundEnabled = soundEnabled;
+    this.alarmVibrationEnabled = vibrationEnabled;
+    this.alarmTestFeedback = '';
+    if (this.alertAlarm) this.alertAlarm.configure(soundEnabled, vibrationEnabled);
+    if (this.userPreferences) {
+      await this.userPreferences.save({
+        alarmSoundEnabled: soundEnabled,
+        alarmVibrationEnabled: vibrationEnabled
+      });
+    }
+  }
+
+  private async refreshNotificationStatus(requestPermission: boolean = false): Promise<void> {
+    if (!this.context) return;
+    if (!this.alertNotifications) this.alertNotifications = new AlertNotificationService(this.context);
+    if (requestPermission) await this.alertNotifications.prepare(true);
+    this.notificationEnabled = this.alertNotifications.isEnabled();
+  }
+
+  private runAlarmTest(): void {
+    if (this.activeAlertEvent) {
+      this.alertOverlayVisible = true;
+      this.alarmTestFeedback = '当前有未解除告警，已打开真实告警提醒';
+      return;
+    }
+    if (!this.alarmSoundEnabled && !this.alarmVibrationEnabled) {
+      this.alarmTestFeedback = '声音与震动均已关闭，请至少开启一项后测试';
+      return;
+    }
+    if (this.alarmTestTimer !== undefined) clearTimeout(this.alarmTestTimer);
+    this.getAlertAlarm().start();
+    this.alarmTestFeedback = '测试提醒将在 4 秒后自动停止';
+    this.alarmTestTimer = setTimeout(() => {
+      this.alarmTestTimer = undefined;
+      if (!this.activeAlertEvent && this.alertAlarm) this.alertAlarm.stop();
+      this.alarmTestFeedback = '测试完成';
+    }, 4000);
+  }
+
   private resetMonitoringData(): void {
     this.clearInAppAlerts();
     this.dashboard = null;
@@ -346,7 +431,14 @@ struct Index {
     this.selectedDevice = null;
     this.selectedDeviceState = null;
     this.selectedSeries = null;
+    this.deviceSeriesRange = '24h';
     this.alerts = [];
+    this.alertHistory = [];
+    this.alertViewStatus = 'active';
+    this.alertHistoryFreshness = '尚未更新';
+    this.alertHistoryOffline = false;
+    this.alertHistoryRefreshing = false;
+    this.alertHistoryRequestSequence += 1;
     this.selectedAlert = null;
     this.alertEvents = [];
     this.alertMapAlert = null;
@@ -368,6 +460,7 @@ struct Index {
     this.stationRefreshing = false;
     this.deviceRefreshing = false;
     this.alertRefreshing = false;
+    this.alarmTestFeedback = '';
     this.screen = 'overview';
     this.errorMessage = '';
   }
@@ -776,7 +869,7 @@ struct Index {
       const cached = await repository.cachedEdgeAiStatus();
       if (cached) this.edgeAiStatus = cached.value;
       const status = await repository.edgeAiStatus();
-      if (status.available || !cached) this.edgeAiStatus = status;
+      this.edgeAiStatus = status;
     } catch {
       // AI is an optional sidecar; keep its last snapshot without affecting monitoring pages.
     }
@@ -809,6 +902,7 @@ struct Index {
         this.edgeAiConversationId = history.conversation.conversationId;
         this.edgeAiMessages = history.messages ?? [];
         this.edgeAiConversationTasks = history.tasks ?? [];
+        this.edgeAiIntentResolution = null;
       }
     } catch {
       // The conversation service is optional during a rolling server upgrade.
@@ -820,11 +914,13 @@ struct Index {
   private async openHermesConversation(conversationId: string): Promise<void> {
     if (!this.repository || this.edgeAiChatLoading || conversationId.length === 0) return;
     this.edgeAiChatLoading = true;
+    this.edgeAiFailedIntent = '';
     try {
       const history = await (this.repository as MonitoringRepository).hermesConversation(conversationId);
       this.edgeAiConversationId = history.conversation.conversationId;
       this.edgeAiMessages = history.messages ?? [];
       this.edgeAiConversationTasks = history.tasks ?? [];
+      this.edgeAiIntentResolution = null;
     } catch (error) {
       this.errorMessage = this.errorText(error);
     } finally {
@@ -838,6 +934,7 @@ struct Index {
     this.edgeAiMessages = [];
     this.edgeAiConversationTasks = [];
     this.edgeAiIntentResolution = null;
+    this.edgeAiFailedIntent = '';
   }
 
   private async recheckEdgeAi(): Promise<void> {
@@ -852,7 +949,7 @@ struct Index {
 
   private async refreshEdgeAiAfterAction(repository: MonitoringRepository): Promise<void> {
     const status = await repository.edgeAiStatus();
-    if (status.available || !this.edgeAiStatus?.available) this.edgeAiStatus = status;
+    this.edgeAiStatus = status;
     try {
       const history = await repository.edgeAiActions();
       this.edgeAiActions = history.actions ?? [];
@@ -887,6 +984,7 @@ struct Index {
   private async sendHermesMessage(intent: string): Promise<void> {
     if (!this.repository || this.edgeAiActionBusy || intent.trim().length === 0) return;
     this.edgeAiActionBusy = true;
+    this.edgeAiFailedIntent = '';
     const localMessageId = `local-${Date.now()}`;
     const localMessage: HermesMessage = {
       messageId: localMessageId,
@@ -944,6 +1042,7 @@ struct Index {
         if (this.edgeAiMessages[index].messageId !== localMessageId) restoredMessages.push(this.edgeAiMessages[index]);
       }
       this.edgeAiMessages = restoredMessages;
+      this.edgeAiFailedIntent = intent.trim();
       this.errorMessage = this.errorText(error);
     } finally {
       this.edgeAiActionBusy = false;
@@ -982,7 +1081,7 @@ struct Index {
       this.alertOffline = false;
       if (this.screen === 'alerts') this.markConnection(true);
 
-      if (this.selectedAlert) {
+      if (this.alertViewStatus === 'active' && this.selectedAlert) {
         let selectedStillExists = false;
         for (let index = 0; index < this.alerts.length; index++) {
           if (this.alerts[index].alertId === this.selectedAlert?.alertId) selectedStillExists = true;
@@ -1003,10 +1102,76 @@ struct Index {
     }
   }
 
+  private alertPaneAlerts(): Array<Alert> {
+    return this.alertViewStatus === 'active' ? this.alerts : this.alertHistory;
+  }
+
+  private alertPaneFreshness(): string {
+    return this.alertViewStatus === 'active' ? this.alertFreshness : this.alertHistoryFreshness;
+  }
+
+  private alertPaneOffline(): boolean {
+    return this.alertViewStatus === 'active' ? this.alertOffline : this.alertHistoryOffline;
+  }
+
+  private alertPaneRefreshing(): boolean {
+    return this.alertViewStatus === 'active' ? this.alertRefreshing : this.alertHistoryRefreshing;
+  }
+
+  private async selectAlertViewStatus(status: AlertListStatus): Promise<void> {
+    if (status === this.alertViewStatus) {
+      await this.refreshAlertPane();
+      return;
+    }
+    this.alertViewStatus = status;
+    this.alertHistoryRequestSequence += 1;
+    this.alertHistoryRefreshing = false;
+    this.selectedAlert = null;
+    this.alertEvents = [];
+    if (status === 'active') {
+      await this.loadAlerts();
+      return;
+    }
+    this.alertHistory = [];
+    this.alertHistoryFreshness = '正在读取';
+    await this.loadAlertHistory(status);
+  }
+
+  private async loadAlertHistory(status: AlertListStatus): Promise<void> {
+    if (status === 'active' || this.alertHistoryRefreshing) return;
+    if (!this.repository) this.getRepository();
+    this.alertHistoryRefreshing = true;
+    const requestSequence = ++this.alertHistoryRequestSequence;
+    try {
+      const page = await (this.repository as MonitoringRepository).alerts(status);
+      if (requestSequence !== this.alertHistoryRequestSequence || this.alertViewStatus !== status) return;
+      this.alertHistory = page.list ?? [];
+      this.alertHistoryFreshness = `更新于 ${shortTime(new Date().toISOString())}`;
+      this.alertHistoryOffline = false;
+      if (this.screen === 'alerts') this.markConnection(true);
+    } catch (error) {
+      if (requestSequence !== this.alertHistoryRequestSequence || this.alertViewStatus !== status) return;
+      this.alertHistoryOffline = true;
+      this.alertHistoryFreshness = '历史记录获取失败';
+      if (this.screen === 'alerts') {
+        this.markConnection(false);
+        this.errorMessage = this.errorText(error);
+      }
+    } finally {
+      if (requestSequence === this.alertHistoryRequestSequence) this.alertHistoryRefreshing = false;
+    }
+  }
+
+  private async refreshAlertPane(): Promise<void> {
+    if (this.alertViewStatus === 'active') await this.loadAlerts();
+    else await this.loadAlertHistory(this.alertViewStatus);
+  }
+
   private async openDevice(device: Device): Promise<void> {
     this.selectedDevice = device;
     this.selectedDeviceState = null;
     this.selectedSeries = null;
+    this.deviceSeriesRange = '24h';
     this.screen = 'device';
     this.stopDeviceTimers();
     await this.refreshDevice();
@@ -1020,7 +1185,7 @@ struct Index {
     const deviceId = this.selectedDevice.deviceId;
     try {
       const cachedState = await repository.cachedState(deviceId);
-      const cachedSeries = await repository.cachedSeries(deviceId);
+      const cachedSeries = await repository.cachedSeries(deviceId, this.deviceSeriesRange);
       if (cachedState) this.selectedDeviceState = cachedState.value;
       if (cachedSeries) this.selectedSeries = cachedSeries.value;
       await Promise.all([this.refreshDeviceState(true), this.refreshDeviceSeries()]);
@@ -1046,9 +1211,23 @@ struct Index {
   private async refreshDeviceSeries(): Promise<void> {
     if (this.screen !== 'device' || !this.selectedDevice || !this.repository) return;
     try {
-      this.selectedSeries = await (this.repository as MonitoringRepository).series(this.selectedDevice.deviceId);
+      this.selectedSeries = await (this.repository as MonitoringRepository).series(this.selectedDevice.deviceId, this.deviceSeriesRange);
     } catch {
       // Latest values remain available when historical storage is temporarily unavailable.
+    }
+  }
+
+  private async selectDeviceSeriesRange(range: DeviceSeriesRange): Promise<void> {
+    if (range === this.deviceSeriesRange || !this.selectedDevice || !this.repository) return;
+    this.deviceSeriesRange = range;
+    this.deviceRefreshing = true;
+    try {
+      const repository = this.repository as MonitoringRepository;
+      const cached = await repository.cachedSeries(this.selectedDevice.deviceId, range);
+      this.selectedSeries = cached?.value ?? null;
+      await this.refreshDeviceSeries();
+    } finally {
+      this.deviceRefreshing = false;
     }
   }
 
@@ -1061,7 +1240,7 @@ struct Index {
     }
     if (!this.alertNotifications && this.context) {
       this.alertNotifications = new AlertNotificationService(this.context);
-      this.alertNotifications.prepare();
+      this.alertNotifications.prepare().finally(() => this.refreshNotificationStatus());
     }
     this.alertStream.start();
   }
@@ -1112,6 +1291,7 @@ struct Index {
           this.presentInAppAlert(pendingEvent);
         }
       }
+      this.alertViewStatus = 'active';
       this.screen = 'alerts';
       await this.loadAlerts();
       let target: Alert | null = null;
@@ -1142,7 +1322,26 @@ struct Index {
 
   private getAlertAlarm(): AlertAlarmService {
     if (!this.alertAlarm && this.context) this.alertAlarm = new AlertAlarmService(this.context);
-    return this.alertAlarm as AlertAlarmService;
+    const alarm = this.alertAlarm as AlertAlarmService;
+    alarm.configure(this.alarmSoundEnabled, this.alarmVibrationEnabled);
+    return alarm;
+  }
+
+  private alertSeverityPriority(severity: string): number {
+    const normalized = severity.toLowerCase();
+    if (normalized === 'critical') return 4;
+    if (normalized === 'high') return 3;
+    if (normalized === 'medium') return 2;
+    return 1;
+  }
+
+  private sortAlertQueue(): void {
+    this.alertEventQueue.sort((left: AlertStreamEvent, right: AlertStreamEvent): number => {
+      const severity = this.alertSeverityPriority(right.severity) - this.alertSeverityPriority(left.severity);
+      if (severity !== 0) return severity;
+      return new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
+    });
+    this.queuedAlertCount = this.alertEventQueue.length;
   }
 
   private presentInAppAlert(event: AlertStreamEvent): void {
@@ -1164,8 +1363,17 @@ struct Index {
           return;
         }
       }
+      if (this.alertSeverityPriority(event.severity) > this.alertSeverityPriority(this.activeAlertEvent.severity)) {
+        this.alertEventQueue.push(this.activeAlertEvent);
+        this.activeAlertEvent = event;
+        this.sortAlertQueue();
+        this.alertOverlayVisible = true;
+        this.alertAlarmMuted = false;
+        this.getAlertAlarm().start();
+        return;
+      }
       this.alertEventQueue.push(event);
-      this.queuedAlertCount = this.alertEventQueue.length;
+      this.sortAlertQueue();
       this.alertOverlayVisible = true;
       if (this.alertAlarmMuted) {
         this.alertAlarmMuted = false;
@@ -1416,7 +1624,7 @@ struct Index {
     this.userLocationRequestSequence += 1;
     this.screen = 'alerts';
     this.alertMapLoading = false;
-    this.loadAlerts();
+    this.refreshAlertPane();
     if (this.activeAlertEvent) this.alertOverlayVisible = true;
     if (!this.activeAlertEvent && this.alertEventQueue.length > 0) this.discardInAppAlert();
   }
@@ -1427,7 +1635,8 @@ struct Index {
     if (screen === 'overview') this.loadOverview();
     if (screen === 'stations') this.loadStations();
     if (screen === 'ai') this.loadEdgeAiStatus();
-    if (screen === 'alerts') this.loadAlerts();
+    if (screen === 'alerts') this.refreshAlertPane();
+    if (screen === 'settings') this.refreshNotificationStatus();
     if (screen !== 'device') this.stopDeviceTimers();
   }
 
@@ -1435,7 +1644,7 @@ struct Index {
     if (this.screen === 'overview') this.loadOverview();
     if (this.screen === 'stations') this.loadStations();
     if (this.screen === 'ai') this.loadEdgeAiStatus();
-    if (this.screen === 'alerts') this.loadAlerts();
+    if (this.screen === 'alerts') this.refreshAlertPane();
     if (this.screen === 'device') this.refreshDevice();
     if (this.screen === 'alert-map') this.refreshAlertMap();
   }
@@ -1479,7 +1688,8 @@ struct Index {
       if (this.loggedIn && this.screen === 'ai') this.loadEdgeAiStatus();
     }, 30000);
     this.alertTimer = setInterval(() => {
-      if (this.loggedIn && (this.screen === 'overview' || this.screen === 'alerts')) this.loadAlerts();
+      if (this.loggedIn && this.screen === 'overview') this.loadAlerts();
+      if (this.loggedIn && this.screen === 'alerts') this.refreshAlertPane();
     }, 30000);
     this.stationTimer = setInterval(() => {
       if (this.loggedIn && this.screen === 'stations') this.refreshStationRealtime();
@@ -1592,6 +1802,7 @@ struct Index {
               conversationId: this.edgeAiConversationId,
               messages: this.edgeAiMessages,
               conversationTasks: this.edgeAiConversationTasks,
+              failedIntent: this.edgeAiFailedIntent,
               chatLoading: this.edgeAiChatLoading,
               refreshing: this.edgeAiRefreshing || this.edgeAiActionBusy,
               executing: this.edgeAiActionBusy,
@@ -1607,9 +1818,11 @@ struct Index {
               device: this.selectedDevice,
               state: this.selectedDeviceState,
               series: this.selectedSeries,
+              seriesRange: this.deviceSeriesRange,
               freshness: this.deviceFreshness,
               offline: this.deviceOffline,
               refreshing: this.deviceRefreshing,
+              onRangeChange: (range: DeviceSeriesRange) => this.selectDeviceSeriesRange(range),
               onRefresh: () => this.refreshDevice(),
               onBack: () => this.selectScreen('stations')
             });
@@ -1628,16 +1841,20 @@ struct Index {
             });
           } else if (this.screen === 'alerts') {
             AlertsPane({
-              alerts: this.alerts,
+              alerts: this.alertPaneAlerts(),
+              devices: this.devices,
+              stations: this.stations,
+              viewStatus: this.alertViewStatus,
               selectedAlert: this.selectedAlert,
               events: this.alertEvents,
               loadingEvents: this.eventsLoading,
-              freshness: this.alertFreshness,
-              offline: this.alertOffline,
-              refreshing: this.alertRefreshing,
+              freshness: this.alertPaneFreshness(),
+              offline: this.alertPaneOffline(),
+              refreshing: this.alertPaneRefreshing(),
+              onStatusChange: (status: AlertListStatus) => this.selectAlertViewStatus(status),
               onSelect: (alert: Alert) => this.openAlert(alert),
               onOpenMap: (alert: Alert | null) => this.openAlertMap(alert),
-              onRefresh: () => this.loadAlerts()
+              onRefresh: () => this.refreshAlertPane()
             });
           } else {
             SettingsPane({
@@ -1645,6 +1862,14 @@ struct Index {
               apiBaseUrl: this.apiBaseUrl,
               connectionState: this.connectionState,
               connectionUpdatedAt: this.connectionUpdatedAt,
+              alarmSoundEnabled: this.alarmSoundEnabled,
+              alarmVibrationEnabled: this.alarmVibrationEnabled,
+              notificationEnabled: this.notificationEnabled,
+              alarmTestFeedback: this.alarmTestFeedback,
+              onAlarmSoundChange: (enabled: boolean) => this.updateAlarmPreferences(enabled, this.alarmVibrationEnabled),
+              onAlarmVibrationChange: (enabled: boolean) => this.updateAlarmPreferences(this.alarmSoundEnabled, enabled),
+              onCheckNotification: () => this.refreshNotificationStatus(true),
+              onTestAlarm: () => this.runAlarmTest(),
               onSave: (value: string) => this.saveApiBase(value),
               onClearCache: () => this.clearLocalCache(),
               onLogout: () => this.logout()
@@ -1660,13 +1885,14 @@ struct Index {
           if (this.screen !== 'device' && this.screen !== 'alert-map') {
             BottomTabs({
               screen: this.screen,
+              activeAlertCount: this.alerts.length,
               onSelect: (screen: AppScreen) => this.selectScreen(screen)
             });
           }
         }
         .width('100%')
         .height('100%')
-        .backgroundColor('#F5F7F8')
+        .backgroundColor(UI_COLOR_PAGE)
       }
       if (this.loggedIn && this.activeAlertEvent && this.alertOverlayVisible) {
         InAppAlertOverlay({
@@ -1682,7 +1908,7 @@ struct Index {
     }
     .width('100%')
     .height('100%')
-    .backgroundColor('#F5F7F8')
+    .backgroundColor(UI_COLOR_PAGE)
   }
 }
 
@@ -1706,7 +1932,8 @@ struct RefreshIconButton {
     }
     .width(44)
     .height(44)
-    .backgroundColor(UI_COLOR_SURFACE)
+    .backgroundColor(UI_COLOR_SURFACE_ALT)
+    .border({ width: 1, color: UI_COLOR_LINE })
     .enabled(!this.refreshing)
     .stateEffect(!this.refreshing)
     .accessibilityText(this.refreshing ? '正在同步数据' : '刷新数据')
@@ -1751,7 +1978,7 @@ struct PageHeader {
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
         Text(this.refreshing ? '正在同步最新数据' : this.subtitle)
-          .fontSize(11)
+          .fontSize(12)
           .fontColor(this.offline ? UI_COLOR_DANGER : UI_COLOR_MUTED)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -1778,13 +2005,13 @@ struct SessionRestoringPane {
         .fontWeight(FontWeight.Medium)
         .fontColor(UI_COLOR_TEXT)
       Text('准备最近一次监测数据')
-        .fontSize(11)
+        .fontSize(12)
         .fontColor(UI_COLOR_MUTED)
     }
     .width('100%')
     .height('100%')
     .justifyContent(FlexAlign.Center)
-    .backgroundColor('#F5F7F8')
+    .backgroundColor(UI_COLOR_PAGE)
     .accessibilityText('正在恢复登录状态')
   }
 }
@@ -1795,8 +2022,9 @@ struct LoginPane {
   @Prop errorMessage: string;
   @Prop apiBaseUrl: string;
   onSubmit: (username: string, password: string, apiBaseUrl: string) => void = () => {};
-  @State private username: string = 'admin';
+  @State private username: string = '';
   @State private password: string = '';
+  @State private passwordVisible: boolean = false;
 
   build() {
     Scroll() {
@@ -1858,17 +2086,33 @@ struct LoginPane {
             .fontSize(13)
             .fontWeight(FontWeight.Medium)
             .fontColor(UI_COLOR_TEXT)
-          TextInput({ placeholder: '请输入密码', text: this.password })
-            .type(InputType.Password)
-            .onChange((value: string) => this.password = value)
-            .height(50)
-            .fontSize(15)
-            .fontColor(UI_COLOR_TEXT)
-            .placeholderColor(UI_COLOR_SUBTLE)
-            .caretColor(UI_COLOR_LOGIN_BRAND)
-            .backgroundColor(UI_COLOR_LOGIN_FIELD)
-            .border({ width: 1, color: UI_COLOR_LOGIN_BORDER })
-            .borderRadius(8)
+          Row() {
+            TextInput({ placeholder: '请输入密码', text: this.password })
+              .type(this.passwordVisible ? InputType.Normal : InputType.Password)
+              .onChange((value: string) => this.password = value)
+              .height(48)
+              .fontSize(15)
+              .fontColor(UI_COLOR_TEXT)
+              .placeholderColor(UI_COLOR_SUBTLE)
+              .caretColor(UI_COLOR_LOGIN_BRAND)
+              .backgroundColor(Color.Transparent)
+              .layoutWeight(1)
+            Button(this.passwordVisible ? '隐藏' : '显示')
+              .width(64)
+              .height(44)
+              .fontSize(13)
+              .fontColor(UI_COLOR_LOGIN_BRAND)
+              .backgroundColor(Color.Transparent)
+              .accessibilityText(this.passwordVisible ? '隐藏密码' : '显示密码')
+              .onClick(() => {
+                this.getUIContext().animateTo({ duration: 160, curve: Curve.EaseOut }, () => this.passwordVisible = !this.passwordVisible);
+              })
+          }
+          .height(50)
+          .width('100%')
+          .backgroundColor(UI_COLOR_LOGIN_FIELD)
+          .border({ width: 1, color: UI_COLOR_LOGIN_BORDER })
+          .borderRadius(8)
         }
         .width('100%')
         .alignItems(HorizontalAlign.Start)
@@ -1993,7 +2237,7 @@ struct LoginServerSettingsPane {
               .border({ width: 1, color: UI_COLOR_LOGIN_BORDER })
               .borderRadius(8)
             Text('需要包含 /api/v1 路径')
-              .fontSize(11)
+              .fontSize(12)
               .fontColor(UI_COLOR_MUTED)
           }
           .width('100%')
@@ -2053,31 +2297,24 @@ struct OverviewPane {
       });
       Scroll() {
         Column({ space: 12 }) {
-          StatusBanner({
-            text: this.refreshing
-              ? '正在同步 · 当前数据保持可见'
-              : this.offline
-              ? `离线缓存 · ${this.freshness}`
-              : `实时数据 · ${this.dashboard?.onlineDevices ?? '--'} / ${this.dashboard?.totalDevices ?? '--'} 台设备在线 · ${this.freshness}`,
-            tone: this.refreshing ? UI_COLOR_ACCENT : this.offline ? UI_COLOR_DANGER : UI_COLOR_SUCCESS
-          });
-          Row({ space: 8 }) {
-            MetricCard({ label: '在线设备', value: `${this.dashboard?.onlineDevices ?? '--'}`, detail: `共 ${this.dashboard?.totalDevices ?? '--'} 台`, accent: '#3C9D82' });
-            MetricCard({ label: '监测站点', value: `${this.dashboard?.stations ?? '--'}`, detail: '查看设备', accent: '#E46D35', actionable: true, onTap: () => this.onOpenStations() });
-          }
-          Row({ space: 8 }) {
-            MetricCard({ label: '离线设备', value: `${this.dashboard?.offlineDevices ?? '--'}`, detail: '需要关注', accent: '#B44832' });
-            MetricCard({ label: '今日数据上传条数', value: `${this.dashboard?.todayReportCount ?? '--'}`, detail: `北京时间 ${beijingClockTime(this.dashboard?.lastUpdatedAt)}`, accent: '#477B96' });
-          }
           OverviewAlertCard({
             alerts: this.alerts,
+            dashboard: this.dashboard,
             freshness: this.alertFreshness,
             offline: this.alertOffline,
             refreshing: this.alertRefreshing,
             onOpenAlerts: () => this.onOpenAlerts(),
+            onOpenStations: () => this.onOpenStations(),
             onOpenMap: (alert: Alert | null) => this.onOpenAlertMap(alert)
           });
-          OverviewTrendPane({ trends: this.trends });
+          OverviewOperationsCard({
+            dashboard: this.dashboard,
+            freshness: this.freshness,
+            offline: this.offline,
+            refreshing: this.refreshing,
+            onOpenStations: () => this.onOpenStations()
+          });
+          OverviewTrendPane({ trends: this.trends, refreshing: this.refreshing, offline: this.offline });
         }
         .padding({ left: 16, right: 16, bottom: 24 })
         .width('100%')
@@ -2093,10 +2330,12 @@ struct OverviewPane {
 @Component
 struct OverviewAlertCard {
   @Prop alerts: Array<Alert>;
+  @Prop dashboard: DashboardSummary | null;
   @Prop freshness: string;
   @Prop offline: boolean;
   @Prop refreshing: boolean;
   onOpenAlerts: () => void = () => {};
+  onOpenStations: () => void = () => {};
   onOpenMap: (alert: Alert | null) => void = () => {};
 
   private primaryAlert(): Alert | null {
@@ -2107,111 +2346,296 @@ struct OverviewAlertCard {
     return alert.severity === 'critical' || alert.severity === 'high' ? UI_COLOR_DANGER : '#A76A2E';
   }
 
+  private offlineDevices(): number {
+    return this.dashboard?.offlineDevices ?? 0;
+  }
+
+  private hasOfflineDevices(): boolean {
+    return this.alerts.length === 0 && this.offlineDevices() > 0;
+  }
+
+  private attentionColor(): string {
+    if (this.alerts.length > 0) return UI_COLOR_DANGER;
+    if (this.offline || this.hasOfflineDevices()) return UI_COLOR_WARNING;
+    if (this.dashboard === null) return UI_COLOR_INFO;
+    return UI_COLOR_SUCCESS;
+  }
+
+  private attentionSoftColor(): string {
+    if (this.alerts.length > 0) return UI_COLOR_DANGER_SOFT;
+    if (this.offline || this.hasOfflineDevices()) return UI_COLOR_WARNING_SOFT;
+    if (this.dashboard === null) return UI_COLOR_INFO_SOFT;
+    return UI_COLOR_SUCCESS_SOFT;
+  }
+
+  private cardColor(): string {
+    if (this.alerts.length > 0) return UI_COLOR_DANGER_SOFT;
+    if (this.offline || this.hasOfflineDevices()) return UI_COLOR_WARNING_SOFT;
+    return UI_COLOR_SURFACE;
+  }
+
+  private cardBorderColor(): string {
+    if (this.alerts.length > 0) return '#EACBC2';
+    if (this.offline || this.hasOfflineDevices()) return UI_COLOR_WARNING_LINE;
+    return UI_COLOR_LINE;
+  }
+
+  private openPrimary(): void {
+    if (this.hasOfflineDevices()) {
+      this.onOpenStations();
+      return;
+    }
+    this.onOpenAlerts();
+  }
+
   private statusText(): string {
     if (this.refreshing) return '正在同步告警状态';
     if (this.offline) return `缓存数据 · ${this.freshness}`;
-    if (this.alerts.length === 0) return '当前无活动告警';
+    if (this.dashboard === null) return '节点状态正在获取';
+    if (this.alerts.length === 0 && this.offlineDevices() > 0) {
+      return `${this.offlineDevices()} 个节点离线 · 暂无活动告警`;
+    }
+    if (this.alerts.length === 0) return '全部节点在线 · 暂无活动告警';
     return `${this.alerts.length} 条待处理 · ${this.freshness}`;
   }
 
+  private headline(): string {
+    if (this.primaryAlert()) return this.primaryAlert()?.title ?? '监测告警';
+    if (this.offline) return '告警状态等待联网确认';
+    if (this.dashboard === null) return '节点状态等待确认';
+    if (this.offlineDevices() > 0) return `${this.offlineDevices()} 个节点通信中断`;
+    return '当前监测状态平稳';
+  }
+
   build() {
-    Column({ space: 10 }) {
+    Column({ space: 12 }) {
       Row({ space: 10 }) {
         Stack({ alignContent: Alignment.Center }) {
-          Circle({ width: 38, height: 38 })
-            .fill(this.alerts.length > 0 ? '#F8E9E5' : '#EAF5F1')
+          Circle({ width: 44, height: 44 })
+            .fill(this.attentionSoftColor())
           SymbolGlyph($r('sys.symbol.bell'))
-            .fontSize(18)
-            .fontColor([this.alerts.length > 0 ? UI_COLOR_DANGER : UI_COLOR_SUCCESS])
+            .fontSize(20)
+            .fontColor([this.attentionColor()])
         }
-        .width(38)
-        .height(38)
+        .width(44)
+        .height(44)
         Column({ space: 2 }) {
-          Text('告警中心')
-            .fontSize(16)
+          Text(this.alerts.length > 0 ? '当前最高风险' : this.offline || this.hasOfflineDevices() ? '运行提醒' : this.dashboard === null ? '状态同步' : '告警值守')
+            .fontSize(13)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(this.alerts.length > 0 ? UI_COLOR_DANGER : this.offline || this.hasOfflineDevices() ? UI_COLOR_WARNING : this.dashboard === null ? UI_COLOR_INFO : UI_COLOR_TEXT_SECONDARY)
+          Text(this.headline())
+            .fontSize(18)
             .fontWeight(FontWeight.Bold)
             .fontColor(UI_COLOR_TEXT)
-          Text(this.statusText())
-            .fontSize(10)
-            .fontColor(this.offline ? UI_COLOR_DANGER : UI_COLOR_MUTED)
-            .maxLines(1)
+            .maxLines(2)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
         }
         .alignItems(HorizontalAlign.Start)
         .layoutWeight(1)
         Button({ type: ButtonType.Circle }) {
           SymbolGlyph($r('sys.symbol.chevron_right'))
-            .fontSize(16)
-            .fontColor([UI_COLOR_MUTED])
+            .fontSize(18)
+            .fontColor([UI_COLOR_TEXT])
         }
-        .width(32)
-        .height(32)
-        .backgroundColor('#F1F3F4')
-        .onClick(() => this.onOpenAlerts())
+        .width(44)
+        .height(44)
+        .backgroundColor(UI_COLOR_SURFACE)
+        .accessibilityText(this.hasOfflineDevices() ? '打开监测站点' : '打开告警中心')
+        .onClick(() => this.openPrimary())
       }
       .width('100%')
 
       if (this.primaryAlert()) {
-        Column({ space: 7 }) {
+        Column({ space: 10 }) {
           Row() {
-            Text(this.primaryAlert()?.title ?? '监测告警')
+            Text(this.statusText())
               .fontSize(13)
               .fontWeight(FontWeight.Medium)
-              .fontColor(UI_COLOR_TEXT)
-              .maxLines(2)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
+              .fontColor(UI_COLOR_DANGER)
               .layoutWeight(1)
             Text(severityLabel(this.primaryAlert()?.severity ?? ''))
-              .fontSize(10)
+              .fontSize(12)
+              .fontWeight(FontWeight.Bold)
               .fontColor(this.severityColor(this.primaryAlert() as Alert))
           }
           Text(`${alertStatusLabel(this.primaryAlert()?.status ?? '')} · ${relativeTime(this.primaryAlert()?.lastEventAt)}`)
-            .fontSize(11)
+            .fontSize(12)
             .fontColor(UI_COLOR_MUTED)
           Row({ space: 8 }) {
-            Button('查看全部')
-              .height(34)
-              .fontSize(12)
+            Button('立即查看')
+              .height(44)
+              .fontSize(14)
               .fontColor('#FFFFFF')
-              .backgroundColor(UI_COLOR_TEXT)
-              .borderRadius(6)
+              .backgroundColor(UI_COLOR_DANGER)
+              .borderRadius(UI_RADIUS_SURFACE)
               .layoutWeight(1)
               .onClick(() => this.onOpenAlerts())
             Button('地图定位')
-              .height(34)
-              .fontSize(12)
+              .height(44)
+              .fontSize(14)
               .fontColor(UI_COLOR_TEXT)
-              .backgroundColor('#E9EDF0')
-              .borderRadius(6)
+              .backgroundColor(UI_COLOR_SURFACE)
+              .border({ width: 1, color: UI_COLOR_LINE })
+              .borderRadius(UI_RADIUS_SURFACE)
               .layoutWeight(1)
               .onClick(() => this.onOpenMap(this.primaryAlert()))
           }
           .width('100%')
         }
-        .padding(12)
-        .backgroundColor('#FFF7F3')
-        .borderRadius(7)
       } else {
-        Row({ space: 8 }) {
-          Text(this.offline ? '暂时无法获取最新告警' : '系统运行正常，暂无活动告警')
-            .fontSize(12)
-            .fontColor(UI_COLOR_MUTED)
-            .layoutWeight(1)
-          Button('查看全部')
-            .height(32)
-            .fontSize(11)
-            .fontColor(UI_COLOR_TEXT)
-            .backgroundColor('#E9EDF0')
-            .borderRadius(6)
-            .onClick(() => this.onOpenAlerts())
+        Column({ space: 10 }) {
+          Row({ space: 10 }) {
+            Circle({ width: 7, height: 7 })
+              .fill(this.attentionColor())
+            Text(this.statusText())
+              .fontSize(13)
+              .fontColor(this.offline || this.hasOfflineDevices() ? UI_COLOR_WARNING : UI_COLOR_MUTED)
+              .layoutWeight(1)
+          }
+          .width('100%')
+          Row({ space: 8 }) {
+            if (this.hasOfflineDevices()) {
+              Button('查看站点')
+                .height(44)
+                .fontSize(13)
+                .fontColor(UI_COLOR_TEXT)
+                .backgroundColor(UI_COLOR_SURFACE)
+                .border({ width: 1, color: UI_COLOR_LINE })
+                .borderRadius(UI_RADIUS_SURFACE)
+                .layoutWeight(1)
+                .onClick(() => this.onOpenStations())
+            }
+            Button('告警记录')
+              .height(44)
+              .fontSize(13)
+              .fontColor(UI_COLOR_TEXT)
+              .backgroundColor(UI_COLOR_SURFACE)
+              .border({ width: 1, color: UI_COLOR_LINE })
+              .borderRadius(UI_RADIUS_SURFACE)
+              .layoutWeight(1)
+              .onClick(() => this.onOpenAlerts())
+          }
+          .width('100%')
         }
         .width('100%')
       }
     }
-    .padding(14)
-    .backgroundColor(UI_COLOR_SURFACE)
-    .borderRadius(8)
+    .padding(16)
+    .backgroundColor(this.cardColor())
+    .border({ width: 1, color: this.cardBorderColor() })
+    .borderRadius(UI_RADIUS_SURFACE)
     .width('100%')
+  }
+}
+
+@Component
+struct OverviewOperationsCard {
+  @Prop dashboard: DashboardSummary | null;
+  @Prop freshness: string;
+  @Prop offline: boolean;
+  @Prop refreshing: boolean;
+  onOpenStations: () => void = () => {};
+
+  private sourceText(): string {
+    if (this.refreshing) return '正在同步，当前数据保持可见';
+    if (this.offline) return `离线缓存 · ${this.freshness}`;
+    return `实时数据 · ${this.freshness}`;
+  }
+
+  build() {
+    Column({ space: 14 }) {
+      Row() {
+        Column({ space: 3 }) {
+          Text('运行概况')
+            .fontSize(17)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(UI_COLOR_TEXT)
+          Row({ space: 6 }) {
+            Circle({ width: 7, height: 7 })
+              .fill(this.refreshing ? UI_COLOR_ACCENT : this.offline ? UI_COLOR_DANGER : UI_COLOR_SUCCESS)
+            Text(this.sourceText())
+              .fontSize(12)
+              .fontColor(this.offline ? UI_COLOR_DANGER : UI_COLOR_MUTED)
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+          }
+        }
+        .alignItems(HorizontalAlign.Start)
+        .layoutWeight(1)
+        Button('查看站点')
+          .height(44)
+          .fontSize(13)
+          .fontColor(UI_COLOR_TEXT)
+          .backgroundColor(UI_COLOR_SURFACE_ALT)
+          .border({ width: 1, color: UI_COLOR_LINE })
+          .borderRadius(UI_RADIUS_SURFACE)
+          .onClick(() => this.onOpenStations())
+      }
+      .width('100%')
+
+      Row() {
+        OverviewStat({ label: '在线节点', value: `${this.dashboard?.onlineDevices ?? '--'}`, tone: (this.dashboard?.onlineDevices ?? 0) > 0 ? UI_COLOR_SUCCESS : UI_COLOR_MUTED });
+        Divider().vertical(true).height(42).color(UI_COLOR_LINE)
+        OverviewStat({ label: '离线节点', value: `${this.dashboard?.offlineDevices ?? '--'}`, tone: this.dashboard === null ? UI_COLOR_MUTED : (this.dashboard?.offlineDevices ?? 0) > 0 ? UI_COLOR_DANGER : UI_COLOR_TEXT });
+        Divider().vertical(true).height(42).color(UI_COLOR_LINE)
+        OverviewStat({ label: '监测站点', value: `${this.dashboard?.stations ?? '--'}`, tone: this.dashboard === null ? UI_COLOR_MUTED : UI_COLOR_INFO });
+      }
+      .width('100%')
+
+      Divider().color(UI_COLOR_LINE)
+      Row({ space: 12 }) {
+        Stack({ alignContent: Alignment.Center }) {
+          Circle({ width: 38, height: 38 }).fill(UI_COLOR_INFO_SOFT)
+          SymbolGlyph($r('sys.symbol.arrow_clockwise'))
+            .fontSize(18)
+            .fontColor([UI_COLOR_INFO])
+        }
+        .width(38)
+        .height(38)
+        Column({ space: 3 }) {
+          Text('今日数据上传')
+            .fontSize(13)
+            .fontColor(UI_COLOR_TEXT_SECONDARY)
+          Text(`北京时间 ${beijingClockTime(this.dashboard?.lastUpdatedAt)}`)
+            .fontSize(12)
+            .fontColor(UI_COLOR_MUTED)
+        }
+        .alignItems(HorizontalAlign.Start)
+        .layoutWeight(1)
+        Text(formatCount(this.dashboard?.todayReportCount))
+          .fontSize(22)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(this.dashboard === null ? UI_COLOR_MUTED : UI_COLOR_TEXT)
+      }
+      .width('100%')
+    }
+    .padding(16)
+    .backgroundColor(UI_COLOR_SURFACE)
+    .border({ width: 1, color: UI_COLOR_LINE })
+    .borderRadius(UI_RADIUS_SURFACE)
+    .width('100%')
+  }
+}
+
+@Component
+struct OverviewStat {
+  @Prop label: string;
+  @Prop value: string;
+  @Prop tone: string;
+
+  build() {
+    Column({ space: 4 }) {
+      Text(this.value)
+        .fontSize(24)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(this.tone)
+      Text(this.label)
+        .fontSize(12)
+        .fontColor(UI_COLOR_MUTED)
+    }
+    .layoutWeight(1)
+    .alignItems(HorizontalAlign.Start)
   }
 }
 
@@ -2225,6 +2649,7 @@ struct AiPane {
   @Prop conversationId: string;
   @Prop messages: Array<HermesMessage>;
   @Prop conversationTasks: Array<HermesAgentTask>;
+  @Prop failedIntent: string;
   @Prop chatLoading: boolean;
   @Prop refreshing: boolean;
   @Prop executing: boolean;
@@ -2238,43 +2663,47 @@ struct AiPane {
 
   private connectionText(): string {
     if (!this.status) return '正在连接 RK3568 边缘智能';
-    if (!this.status.available) return 'RK3568 暂时离线';
+    if (!(this.status.reachable ?? this.status.available)) return 'RK3568 暂时离线';
+    if (!this.status.available) return 'RK3568 在线 · 等待节点数据';
     return `RK3568 在线 · ${this.status.devices.length} 个节点`;
   }
 
   private connectionColor(): string {
     if (!this.status) return UI_COLOR_MUTED;
-    return this.status.available ? UI_COLOR_SUCCESS : UI_COLOR_DANGER;
+    return (this.status.reachable ?? this.status.available) ? UI_COLOR_SUCCESS : UI_COLOR_DANGER;
   }
 
   private startNewConversation(): void {
-    this.showingHistory = false;
+    this.getUIContext().animateTo({ duration: 180, curve: Curve.EaseOut }, () => this.showingHistory = false);
     this.onNewConversation();
   }
 
   private selectConversation(conversationId: string): void {
-    this.showingHistory = false;
+    this.getUIContext().animateTo({ duration: 180, curve: Curve.EaseOut }, () => this.showingHistory = false);
     this.onSelectConversation(conversationId);
+  }
+
+  private toggleHistory(): void {
+    this.getUIContext().animateTo({ duration: 180, curve: Curve.EaseOut }, () => this.showingHistory = !this.showingHistory);
   }
 
   build() {
     Column() {
       Row({ space: 10 }) {
-        Button({ type: ButtonType.Circle }) {
-          Text(this.showingHistory ? '×' : '☰')
-            .fontSize(this.showingHistory ? 23 : 19)
-            .fontWeight(FontWeight.Medium)
-            .fontColor(UI_COLOR_TEXT)
-        }
-        .width(44)
+        Button(this.showingHistory ? '返回' : '历史')
+        .width(60)
         .height(44)
-        .backgroundColor('#F2F4F3')
+        .fontSize(13)
+        .fontColor(UI_COLOR_TEXT)
+        .backgroundColor(UI_COLOR_SURFACE_ALT)
+        .border({ width: 1, color: UI_COLOR_LINE })
+        .borderRadius(UI_RADIUS_SURFACE)
         .accessibilityText(this.showingHistory ? '关闭历史对话' : '查看历史对话')
-        .onClick(() => this.showingHistory = !this.showingHistory)
+        .onClick(() => this.toggleHistory())
 
         Column({ space: 3 }) {
           Text(this.showingHistory ? '历史对话' : 'Hermes')
-            .fontSize(18)
+            .fontSize(19)
             .fontWeight(FontWeight.Bold)
             .fontColor(UI_COLOR_TEXT)
           Row({ space: 5 }) {
@@ -2284,7 +2713,7 @@ struct AiPane {
               Circle({ width: 6, height: 6 }).fill(this.connectionColor())
             }
             Text(this.showingHistory ? `${this.conversations.length} 个会话` : this.connectionText())
-              .fontSize(11)
+              .fontSize(12)
               .fontColor(UI_COLOR_MUTED)
               .maxLines(1)
               .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -2295,15 +2724,14 @@ struct AiPane {
         .accessibilityText(`${this.connectionText()}，点击刷新`)
         .onClick(() => this.onRefresh())
 
-        Button({ type: ButtonType.Circle }) {
-          Text('＋')
-            .fontSize(24)
-            .fontWeight(FontWeight.Medium)
-            .fontColor('#F7FAF8')
-        }
-        .width(44)
+        Button('新建')
+        .width(60)
         .height(44)
+        .fontSize(13)
+        .fontWeight(FontWeight.Medium)
+        .fontColor('#F7FAF8')
         .backgroundColor(UI_COLOR_HERMES)
+        .borderRadius(UI_RADIUS_SURFACE)
         .enabled(!this.executing)
         .accessibilityText('新建对话')
         .onClick(() => this.startNewConversation())
@@ -2311,7 +2739,7 @@ struct AiPane {
       .height(64)
       .padding({ left: 12, right: 12, top: 6, bottom: 6 })
       .backgroundColor(UI_COLOR_SURFACE)
-      .border({ width: { bottom: 1 }, color: '#E6EBE8' })
+      .border({ width: { bottom: 1 }, color: UI_COLOR_LINE })
       .width('100%')
 
       if (this.showingHistory) {
@@ -2330,13 +2758,14 @@ struct AiPane {
           messages: this.messages,
           tasks: this.conversationTasks,
           loading: this.chatLoading,
+          failedIntent: this.failedIntent,
           onAction: (action: EdgeAiActionName) => this.onAction(action),
           onIntent: (intent: string) => this.onIntent(intent)
         });
       }
     }
     .layoutWeight(1)
-    .backgroundColor('#F8FAF9')
+    .backgroundColor(UI_COLOR_PAGE)
   }
 }
 
@@ -2504,7 +2933,7 @@ struct HermesSituationPanel {
           Circle({ width: 8, height: 8 })
             .fill(this.status?.available ? '#75D3B7' : '#AAB5AF')
           Text('HERMES · 边缘态势')
-            .fontSize(11)
+            .fontSize(12)
             .fontWeight(FontWeight.Medium)
             .fontColor('#DDEAE4')
         }
@@ -2533,14 +2962,14 @@ struct HermesSituationPanel {
 
       Row({ space: 8 }) {
         Text(`风险 ${this.scoreText()}`)
-          .fontSize(10)
+          .fontSize(12)
           .fontWeight(FontWeight.Medium)
           .fontColor('#173D32')
           .backgroundColor('#DDECE5')
           .borderRadius(5)
           .padding({ left: 9, right: 9, top: 5, bottom: 5 })
         Text(this.status?.mqttConnected ? '链路在线' : '离线研判')
-          .fontSize(10)
+          .fontSize(12)
           .fontColor('#DDEAE4')
           .backgroundColor('#285648')
           .borderRadius(5)
@@ -2548,8 +2977,8 @@ struct HermesSituationPanel {
         Blank()
         if (this.primaryDevice()) {
           Button('查看节点')
-            .height(34)
-            .fontSize(11)
+            .height(44)
+            .fontSize(13)
             .fontWeight(FontWeight.Medium)
             .fontColor(UI_COLOR_HERMES)
             .backgroundColor('#F2F7F4')
@@ -2574,6 +3003,7 @@ struct HermesCommandPanel {
   @Prop messages: Array<HermesMessage>;
   @Prop tasks: Array<HermesAgentTask>;
   @Prop loading: boolean;
+  @Prop failedIntent: string;
   @State private intentText: string = '';
   @State private toolsExpanded: boolean = false;
   private chatScroller: Scroller = new Scroller();
@@ -2588,6 +3018,10 @@ struct HermesCommandPanel {
     this.onIntent(value);
   }
 
+  private setToolsExpanded(expanded: boolean): void {
+    this.getUIContext().animateTo({ duration: 180, curve: Curve.EaseOut }, () => this.toolsExpanded = expanded);
+  }
+
   private feedbackColor(): string {
     if (this.resolution?.blocked) return UI_COLOR_DANGER;
     if (this.resolution?.resolved) return UI_COLOR_SUCCESS;
@@ -2596,8 +3030,23 @@ struct HermesCommandPanel {
 
   private welcomeText(): string {
     if (!this.status) return '正在连接边缘智能，稍后即可开始对话。';
-    if (!this.status.available) return '边缘端暂时离线，你仍可查看已保存的对话与执行记录。';
+    if (!(this.status.reachable ?? this.status.available)) {
+      return '边缘端暂时离线，你仍可查看已保存的对话与执行记录。';
+    }
+    if (!this.status.available) return 'RK3568 已连接。节点数据恢复前，仍可对话并安排安全只读任务。';
     return '可以询问当前风险，也可以直接安排一组安全只读任务。';
+  }
+
+  private edgeStatusText(): string {
+    if (!this.status) return '正在连接 RK3568';
+    if (!(this.status.reachable ?? this.status.available)) return 'RK3568 暂时离线';
+    if (!this.status.available) return 'RK3568 在线，等待节点数据';
+    return `RK3568 在线，${this.status.devices.length} 个节点参与研判`;
+  }
+
+  private edgeStatusColor(): string {
+    if (!this.status) return UI_COLOR_MUTED;
+    return (this.status.reachable ?? this.status.available) ? UI_COLOR_SUCCESS : UI_COLOR_DANGER;
   }
 
   build() {
@@ -2615,18 +3064,18 @@ struct HermesCommandPanel {
             .justifyContent(FlexAlign.Center)
             .width('100%')
           } else if (this.messages.length === 0) {
-            Column({ space: 14 }) {
+            Column({ space: 16 }) {
               Stack({ alignContent: Alignment.Center }) {
-                Circle({ width: 54, height: 54 }).fill(UI_COLOR_HERMES)
+                Circle({ width: 56, height: 56 }).fill(UI_COLOR_HERMES)
                 Text('H')
                   .fontSize(22)
                   .fontWeight(FontWeight.Bold)
                   .fontColor('#F7FAF8')
               }
-              .width(54)
-              .height(54)
+              .width(56)
+              .height(56)
               Text('有什么需要我处理？')
-                .fontSize(21)
+                .fontSize(22)
                 .fontWeight(FontWeight.Bold)
                 .fontColor(UI_COLOR_TEXT)
               Text(this.welcomeText())
@@ -2635,8 +3084,44 @@ struct HermesCommandPanel {
                 .lineHeight(21)
                 .textAlign(TextAlign.Center)
                 .width('100%')
+              Row({ space: 7 }) {
+                Circle({ width: 7, height: 7 }).fill(this.edgeStatusColor())
+                Text(this.edgeStatusText())
+                  .fontSize(12)
+                  .fontColor(this.edgeStatusColor())
+                  .maxLines(1)
+                  .textOverflow({ overflow: TextOverflow.Ellipsis })
+              }
+              .padding({ left: 10, right: 10, top: 6, bottom: 6 })
+              .backgroundColor(UI_COLOR_SURFACE)
+              .border({ width: 1, color: UI_COLOR_LINE })
+              .borderRadius(16)
+
+              Column() {
+                HermesPromptSuggestion({
+                  title: '研判当前风险',
+                  detail: '汇总 A / B / C 节点与端侧模型证据',
+                  onTap: () => this.onIntent('研判当前风险，并说明主要风险因素和数据来源')
+                });
+                Divider().color(UI_COLOR_LINE).margin({ left: 16, right: 16 })
+                HermesPromptSuggestion({
+                  title: '诊断上传链路',
+                  detail: '检查串口、网关、MQTT 与待回传队列',
+                  onTap: () => this.onIntent('诊断当前上传链路，并给出可以验证的检查结果')
+                });
+                Divider().color(UI_COLOR_LINE).margin({ left: 16, right: 16 })
+                HermesPromptSuggestion({
+                  title: '生成值守报告',
+                  detail: '形成当前态势、异常与建议的审计记录',
+                  onTap: () => this.onIntent('根据当前监测态势生成一份值守报告')
+                });
+              }
+              .width('100%')
+              .backgroundColor(UI_COLOR_SURFACE)
+              .border({ width: 1, color: UI_COLOR_LINE })
+              .borderRadius(UI_RADIUS_SURFACE)
             }
-            .padding({ left: 20, right: 20, top: 54, bottom: 34 })
+            .padding({ left: 4, right: 4, top: 32, bottom: 28 })
             .width('100%')
           } else {
             ForEach(this.messages.slice(Math.max(0, this.messages.length - 40)), (message: HermesMessage) => {
@@ -2677,7 +3162,42 @@ struct HermesCommandPanel {
                 .layoutWeight(1)
             }
             .padding({ left: 12, right: 12, top: 11, bottom: 11 })
-            .backgroundColor('#F8EAE6')
+            .backgroundColor(UI_COLOR_DANGER_SOFT)
+            .borderRadius(8)
+            .width('100%')
+          }
+
+          if (this.failedIntent.length > 0) {
+            Column({ space: 8 }) {
+              Row({ space: 9 }) {
+                SymbolGlyph($r('sys.symbol.exclamationmark_triangle'))
+                  .fontSize(18)
+                  .fontColor([UI_COLOR_MUTED])
+                Text('消息未送达，任务没有执行')
+                  .fontSize(13)
+                  .fontWeight(FontWeight.Medium)
+                  .fontColor(UI_COLOR_TEXT)
+                  .layoutWeight(1)
+                Button('重试')
+                  .height(44)
+                  .fontSize(13)
+                  .fontColor('#F7FAF8')
+                  .backgroundColor(UI_COLOR_HERMES)
+                  .borderRadius(22)
+                  .enabled(!this.executing)
+                  .onClick(() => this.onIntent(this.failedIntent))
+              }
+              .width('100%')
+              Text(this.failedIntent)
+                .fontSize(12)
+                .fontColor(UI_COLOR_MUTED)
+                .maxLines(2)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+                .width('100%')
+            }
+            .padding(12)
+            .backgroundColor(UI_COLOR_SURFACE_ALT)
+            .border({ width: 1, color: UI_COLOR_LINE })
             .borderRadius(8)
             .width('100%')
           }
@@ -2691,7 +3211,7 @@ struct HermesCommandPanel {
                   .fontColor(UI_COLOR_TEXT)
                   .layoutWeight(1)
                 Text(`${this.tasks.length} 项任务`)
-                  .fontSize(11)
+                  .fontSize(12)
                   .fontColor(UI_COLOR_MUTED)
               }
               .width('100%')
@@ -2703,7 +3223,8 @@ struct HermesCommandPanel {
               }, (task: HermesAgentTask) => task.taskId)
             }
             .padding(14)
-            .backgroundColor('#F0F4F2')
+            .backgroundColor(UI_COLOR_SURFACE_ALT)
+            .border({ width: 1, color: UI_COLOR_LINE })
             .borderRadius(8)
             .width('100%')
           }
@@ -2726,7 +3247,7 @@ struct HermesCommandPanel {
               action: 'recheck',
               actionEnabled: !this.executing,
               onAction: (action: EdgeAiActionName) => {
-                this.toolsExpanded = false;
+                this.setToolsExpanded(false);
                 this.onAction(action);
               }
             });
@@ -2735,7 +3256,7 @@ struct HermesCommandPanel {
               action: 'generate_report',
               actionEnabled: !this.executing,
               onAction: (action: EdgeAiActionName) => {
-                this.toolsExpanded = false;
+                this.setToolsExpanded(false);
                 this.onAction(action);
               }
             });
@@ -2744,7 +3265,7 @@ struct HermesCommandPanel {
               action: 'collect_logs',
               actionEnabled: !this.executing,
               onAction: (action: EdgeAiActionName) => {
-                this.toolsExpanded = false;
+                this.setToolsExpanded(false);
                 this.onAction(action);
               }
             });
@@ -2753,18 +3274,18 @@ struct HermesCommandPanel {
         }
 
         Row({ space: 4 }) {
-          Button({ type: ButtonType.Circle }) {
-            Text(this.toolsExpanded ? '×' : '＋')
-              .fontSize(this.toolsExpanded ? 21 : 19)
-              .fontWeight(FontWeight.Medium)
-              .fontColor(UI_COLOR_TEXT)
-          }
-          .width(42)
-          .height(42)
+          Button(this.toolsExpanded ? '收起' : '工具')
+          .width(72)
+          .height(44)
+          .padding({ left: 0, right: 0 })
+          .fontSize(13)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(UI_COLOR_TEXT)
           .backgroundColor(this.toolsExpanded ? '#E2E8E4' : '#00000000')
+          .borderRadius(8)
           .enabled(!this.executing)
           .accessibilityText(this.toolsExpanded ? '收起任务工具' : '打开任务工具')
-          .onClick(() => this.toolsExpanded = !this.toolsExpanded)
+          .onClick(() => this.setToolsExpanded(!this.toolsExpanded))
 
           TextInput({ text: this.intentText, placeholder: '给 Hermes 发消息' })
             .height(48)
@@ -2786,23 +3307,24 @@ struct HermesCommandPanel {
                 .fontColor(['#F7FAF8'])
             }
           }
-          .width(42)
-          .height(42)
+          .width(44)
+          .height(44)
           .backgroundColor(!this.executing && this.intentText.trim().length > 0 ? UI_COLOR_HERMES : '#BFC9C4')
+          .animation({ duration: 160, curve: Curve.EaseOut })
           .enabled(!this.executing && this.intentText.trim().length > 0)
           .accessibilityText('发送给 Hermes')
           .onClick(() => this.submitIntent())
         }
         .height(52)
         .padding({ left: 4, right: 4 })
-        .backgroundColor('#F3F5F4')
-        .border({ width: 1, color: '#E0E5E2' })
+        .backgroundColor(UI_COLOR_SURFACE_ALT)
+        .border({ width: 1, color: UI_COLOR_LINE })
         .borderRadius(26)
         .width('100%')
       }
       .padding({ left: 14, right: 14, top: 10, bottom: 10 })
       .backgroundColor(UI_COLOR_SURFACE)
-      .border({ width: { top: 1 }, color: '#E6EBE8' })
+      .border({ width: { top: 1 }, color: UI_COLOR_LINE })
       .width('100%')
     }
     .layoutWeight(1)
@@ -2813,6 +3335,7 @@ struct HermesCommandPanel {
 @Component
 struct HermesMessageRow {
   @Prop message: HermesMessage;
+  @State private revealed: boolean = false;
 
   build() {
     if (this.message.role === 'user') {
@@ -2831,6 +3354,9 @@ struct HermesMessageRow {
       }
       .width('100%')
       .alignItems(VerticalAlign.Top)
+      .opacity(this.revealed ? 1 : 0.7)
+      .translate({ y: this.revealed ? 0 : 6 })
+      .onAppear(() => this.getUIContext().animateTo({ duration: 180, curve: Curve.EaseOut }, () => this.revealed = true))
     } else {
       Row({ space: 10 }) {
         Stack({ alignContent: Alignment.Center }) {
@@ -2848,6 +3374,14 @@ struct HermesMessageRow {
             .fontColor(UI_COLOR_TEXT)
             .lineHeight(23)
             .width('100%')
+          if (this.message.metadata.plannerSource) {
+            Text(this.message.metadata.plannerSource === 'model'
+              ? `在线模型规划${this.message.metadata.plannerModel ? ` · ${this.message.metadata.plannerModel}` : ''} · RK3568 安全执行`
+              : '规则保障规划 · RK3568 安全执行')
+              .fontSize(12)
+              .fontColor(UI_COLOR_SUBTLE)
+              .margin({ top: 7 })
+          }
         }
         .padding({ top: 3 })
         .alignItems(HorizontalAlign.Start)
@@ -2855,7 +3389,43 @@ struct HermesMessageRow {
       }
       .width('100%')
       .alignItems(VerticalAlign.Top)
+      .opacity(this.revealed ? 1 : 0.7)
+      .translate({ y: this.revealed ? 0 : 6 })
+      .onAppear(() => this.getUIContext().animateTo({ duration: 180, curve: Curve.EaseOut }, () => this.revealed = true))
     }
+  }
+}
+
+@Component
+struct HermesPromptSuggestion {
+  @Prop title: string;
+  @Prop detail: string;
+  onTap: () => void = () => {};
+
+  build() {
+    Row({ space: 12 }) {
+      Column({ space: 4 }) {
+        Text(this.title)
+          .fontSize(15)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(UI_COLOR_TEXT)
+        Text(this.detail)
+          .fontSize(12)
+          .fontColor(UI_COLOR_MUTED)
+          .maxLines(2)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+      }
+      .alignItems(HorizontalAlign.Start)
+      .layoutWeight(1)
+      SymbolGlyph($r('sys.symbol.chevron_right'))
+        .fontSize(17)
+        .fontColor([UI_COLOR_SUBTLE])
+    }
+    .width('100%')
+    .constraintSize({ minHeight: 66 })
+    .padding({ left: 16, right: 14, top: 11, bottom: 11 })
+    .accessibilityText(`${this.title}，${this.detail}`)
+    .onClick(() => this.onTap())
   }
 }
 
@@ -2868,13 +3438,13 @@ struct HermesQuickAction {
 
   build() {
     Button(this.label)
-      .height(38)
-      .fontSize(12)
+      .height(44)
+      .fontSize(13)
       .fontWeight(FontWeight.Medium)
       .fontColor(UI_COLOR_HERMES)
       .backgroundColor('#F0F4F2')
       .border({ width: 1, color: '#DFE6E2' })
-      .borderRadius(19)
+      .borderRadius(22)
       .enabled(this.actionEnabled)
       .layoutWeight(1)
       .onClick(() => this.onAction(this.action))
@@ -2896,14 +3466,14 @@ struct HermesNodeSection {
           .fontColor(UI_COLOR_TEXT)
           .layoutWeight(1)
         Text(`${this.status?.devices.length ?? 0} 个节点`)
-          .fontSize(10)
+          .fontSize(12)
           .fontColor(UI_COLOR_MUTED)
       }
       .width('100%')
       Column() {
         if (!this.status || this.status.devices.length === 0) {
           Text('等待节点遥测进入边缘研判')
-            .fontSize(11)
+            .fontSize(12)
             .fontColor(UI_COLOR_MUTED)
             .padding(14)
             .width('100%')
@@ -2975,19 +3545,19 @@ struct HermesNodeRow {
           .fontWeight(FontWeight.Bold)
           .fontColor(UI_COLOR_TEXT)
         Text(this.factorText())
-          .fontSize(10)
+          .fontSize(12)
           .fontColor(UI_COLOR_MUTED)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
         Text(`${this.dataLabel()} · ${this.risk.dataUpdatedAt ? shortTime(this.risk.dataUpdatedAt) : '尚无数据'}`)
-          .fontSize(9)
+          .fontSize(12)
           .fontColor(UI_COLOR_SUBTLE)
       }
       .alignItems(HorizontalAlign.Start)
       .layoutWeight(1)
       Column({ space: 3 }) {
         Text(this.riskLabel())
-          .fontSize(10)
+          .fontSize(12)
           .fontWeight(FontWeight.Bold)
           .fontColor(this.riskColor())
         Text(`${Math.round(this.risk.riskScore * 100)}%`)
@@ -3048,7 +3618,7 @@ struct HermesTaskSection {
         }, (task: EdgeAgentTask) => task.taskId)
       } else {
         Text('Hermes 正在等待下一项安全任务')
-          .fontSize(11)
+          .fontSize(12)
           .fontColor(UI_COLOR_MUTED)
           .padding({ top: 8, bottom: 8 })
           .width('100%')
@@ -3121,7 +3691,7 @@ struct HermesAgentTaskTimelineRow {
             .textOverflow({ overflow: TextOverflow.Ellipsis })
           Row() {
             Text(`${shortTime(this.task.createdAt)} · ${this.task.safetyLevel === 'read_only' ? '只读自动执行' : '需要人工确认'}`)
-              .fontSize(11)
+              .fontSize(12)
               .fontColor(UI_COLOR_SUBTLE)
               .layoutWeight(1)
             if (this.hasRecord()) {
@@ -3131,7 +3701,9 @@ struct HermesAgentTaskTimelineRow {
                 .fontColor(UI_COLOR_HERMES)
                 .backgroundColor('#E8EFEB')
                 .borderRadius(6)
-                .onClick(() => this.expanded = !this.expanded)
+                .onClick(() => {
+                  this.getUIContext().animateTo({ duration: 180, curve: Curve.EaseOut }, () => this.expanded = !this.expanded);
+                })
             }
           }
           .width('100%')
@@ -3160,6 +3732,7 @@ struct HermesAgentTaskTimelineRow {
         .padding(12)
         .backgroundColor('#F0F4F2')
         .borderRadius(7)
+        .animation({ duration: 180, curve: Curve.EaseOut })
         .width('100%')
       }
     }
@@ -3182,19 +3755,19 @@ struct HermesDiagnosticEvidenceRow {
     Column({ space: 3 }) {
       Row() {
         Text(this.evidence.command)
-          .fontSize(11)
+          .fontSize(12)
           .fontWeight(FontWeight.Medium)
           .fontColor(UI_COLOR_TEXT)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
           .layoutWeight(1)
         Text(this.evidence.ok ? '正常' : '异常')
-          .fontSize(11)
+          .fontSize(12)
           .fontColor(this.evidence.ok ? UI_COLOR_SUCCESS : UI_COLOR_DANGER)
       }
       .width('100%')
       Text(this.output())
-        .fontSize(11)
+        .fontSize(12)
         .fontColor(UI_COLOR_MUTED)
         .lineHeight(17)
         .maxLines(4)
@@ -3247,17 +3820,17 @@ struct HermesActionTimelineRow {
             .fontColor(UI_COLOR_TEXT)
             .layoutWeight(1)
           Text(shortTime(this.action.createdAt))
-            .fontSize(9)
+            .fontSize(12)
             .fontColor(UI_COLOR_SUBTLE)
         }
         .width('100%')
         Text(hermesActionSummary(this.action))
-          .fontSize(10)
+          .fontSize(12)
           .fontColor(UI_COLOR_MUTED)
           .maxLines(2)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
         Text(this.statusText())
-          .fontSize(9)
+          .fontSize(12)
           .fontColor(this.statusColor())
       }
       .padding({ bottom: this.last ? 0 : 8 })
@@ -3291,12 +3864,12 @@ struct HermesPredictionTimelineRow {
             .fontColor(UI_COLOR_TEXT)
             .layoutWeight(1)
           Text(shortTime(this.task.createdAt))
-            .fontSize(9)
+            .fontSize(12)
             .fontColor(UI_COLOR_SUBTLE)
         }
         .width('100%')
         Text(this.task.verification)
-          .fontSize(10)
+          .fontSize(12)
           .fontColor(UI_COLOR_MUTED)
           .maxLines(2)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -3321,7 +3894,7 @@ struct HermesRuntimeStrip {
           .fontWeight(FontWeight.Bold)
           .fontColor(this.status?.model.loaded ? UI_COLOR_SUCCESS : UI_COLOR_MUTED)
         Text('风险模型')
-          .fontSize(9)
+          .fontSize(12)
           .fontColor(UI_COLOR_MUTED)
       }
       .alignItems(HorizontalAlign.Start)
@@ -3332,7 +3905,7 @@ struct HermesRuntimeStrip {
           .fontWeight(FontWeight.Bold)
           .fontColor(UI_COLOR_TEXT)
         Text('研判节点')
-          .fontSize(9)
+          .fontSize(12)
           .fontColor(UI_COLOR_MUTED)
       }
       .alignItems(HorizontalAlign.Start)
@@ -3343,7 +3916,7 @@ struct HermesRuntimeStrip {
           .fontWeight(FontWeight.Bold)
           .fontColor((this.status?.pendingUploadCount ?? 0) > 0 ? UI_COLOR_ACCENT : UI_COLOR_TEXT)
         Text('待回传')
-          .fontSize(9)
+          .fontSize(12)
           .fontColor(UI_COLOR_MUTED)
       }
       .alignItems(HorizontalAlign.Start)
@@ -3354,7 +3927,7 @@ struct HermesRuntimeStrip {
           .fontWeight(FontWeight.Bold)
           .fontColor(this.status?.mqttConnected ? UI_COLOR_SUCCESS : UI_COLOR_DANGER)
         Text('边缘链路')
-          .fontSize(9)
+          .fontSize(12)
           .fontColor(UI_COLOR_MUTED)
       }
       .alignItems(HorizontalAlign.Start)
@@ -3369,6 +3942,8 @@ struct HermesRuntimeStrip {
 @Component
 struct OverviewTrendPane {
   @Prop trends: Array<DeviceMonitoringTrend>;
+  @Prop refreshing: boolean;
+  @Prop offline: boolean;
   @State private selectedMetricKey: string = 'tilt_y_deg';
 
   private metricOptions(): Array<DeviceMetricOption> {
@@ -3407,12 +3982,12 @@ struct OverviewTrendPane {
       Row() {
         Column({ space: 2 }) {
           Text('近 7 日监测趋势')
-            .fontSize(16)
+            .fontSize(17)
             .fontWeight(FontWeight.Bold)
-            .fontColor('#18212B')
+            .fontColor(UI_COLOR_TEXT)
           Text('按节点对比 · 1 小时均值')
-            .fontSize(10)
-            .fontColor('#8A949E')
+            .fontSize(12)
+            .fontColor(UI_COLOR_MUTED)
         }
         .alignItems(HorizontalAlign.Start)
       }
@@ -3439,23 +4014,34 @@ struct OverviewTrendPane {
           });
         }, (trend: DeviceMonitoringTrend) => `${trend.device.deviceId}-${this.selectedMetricKey}`)
       } else {
-        Column({ space: 5 }) {
-          Text('正在获取节点趋势')
+        Row({ space: 10 }) {
+          if (this.refreshing) {
+            LoadingProgress().width(18).height(18).color(UI_COLOR_ACCENT)
+          } else {
+            SymbolGlyph($r('sys.symbol.arrow_clockwise'))
+              .fontSize(18)
+              .fontColor([this.offline ? UI_COLOR_WARNING : UI_COLOR_INFO])
+          }
+          Column({ space: 4 }) {
+          Text(this.refreshing ? '正在获取节点趋势' : this.offline ? '趋势数据暂时不可用' : '当前没有可绘制的趋势')
             .fontSize(13)
             .fontWeight(FontWeight.Medium)
-            .fontColor('#18212B')
-          Text('总览数值可先正常查看')
-            .fontSize(11)
-            .fontColor('#6C7782')
+            .fontColor(UI_COLOR_TEXT)
+          Text(this.offline ? '当前总览与缓存数值仍保持可见' : this.refreshing ? '同步完成后会按节点显示' : '节点形成历史数据后会自动显示')
+            .fontSize(12)
+            .fontColor(UI_COLOR_MUTED)
+          }
+          .alignItems(HorizontalAlign.Start)
+          .layoutWeight(1)
         }
-        .alignItems(HorizontalAlign.Start)
         .padding({ top: 12, bottom: 12 })
         .width('100%')
       }
     }
-    .padding(14)
-    .backgroundColor('#FFFFFF')
-    .borderRadius(8)
+    .padding(16)
+    .backgroundColor(UI_COLOR_SURFACE)
+    .border({ width: 1, color: UI_COLOR_LINE })
+    .borderRadius(UI_RADIUS_SURFACE)
     .width('100%')
   }
 }
@@ -3525,12 +4111,12 @@ struct OverviewTrendRow {
           .fill(isDeviceOnline(this.trend.device, this.trend.latestStateAt) ? UI_COLOR_SUCCESS : UI_COLOR_DANGER)
         Column({ space: 2 }) {
           Text(deviceDisplayName(this.trend.device))
-            .fontSize(13)
-            .fontWeight(FontWeight.Medium)
-            .fontColor('#18212B')
+            .fontSize(14)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(UI_COLOR_TEXT)
           Text(this.summaryText())
-            .fontSize(10)
-            .fontColor('#6C7782')
+            .fontSize(12)
+            .fontColor(UI_COLOR_MUTED)
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
         }
@@ -3552,11 +4138,11 @@ struct OverviewTrendRow {
       } else {
         Text(this.unsupported ? '此节点未配置电导率传感器' :
           this.metric ? '仅 1 个数据点，暂不能形成趋势' : '该节点暂无此项历史数据')
-          .fontSize(10)
-          .fontColor('#8A949E')
+          .fontSize(12)
+          .fontColor(UI_COLOR_SUBTLE)
       }
       if (this.showDivider) {
-        Divider().color('#EEF1F3').margin({ top: 3 })
+        Divider().color(UI_COLOR_LINE).margin({ top: 3 })
       }
     }
     .width('100%')
@@ -3624,6 +4210,51 @@ struct StationsPane {
     const linkage = this.linkageDevices();
     const base = `${monitoring.length} 个监测节点 · ${this.onlineDeviceCount(monitoring)} 个在线`;
     return linkage.length > 0 ? `${base} · ${linkage.length} 台联动设备` : base;
+  }
+
+  private monitoringStatusText(): string {
+    const monitoring = this.monitoringDevices();
+    const online = this.onlineDeviceCount(monitoring);
+    if (this.refreshing) return `正在同步 · 保留当前 ${monitoring.length} 个节点数据`;
+    if (this.offline) return `离线缓存 · ${this.freshness}`;
+    if (monitoring.length === 0) return `接口数据已更新 · 暂无监测节点 · ${this.freshness}`;
+    if (online === 0) return `节点通信中断 · 0 / ${monitoring.length} 个在线 · 接口数据 · ${this.freshness}`;
+    if (online < monitoring.length) return `部分节点离线 · ${online} / ${monitoring.length} 个在线 · 接口数据 · ${this.freshness}`;
+    return `节点全部在线 · ${online} / ${monitoring.length} 个在线 · ${this.freshness}`;
+  }
+
+  private monitoringStatusTone(): string {
+    if (this.refreshing) return UI_COLOR_ACCENT;
+    if (this.offline) return UI_COLOR_DANGER;
+    const monitoring = this.monitoringDevices();
+    if (monitoring.length === 0) return UI_COLOR_INFO;
+    return this.onlineDeviceCount(monitoring) < monitoring.length ? UI_COLOR_WARNING : UI_COLOR_SUCCESS;
+  }
+
+  private stationOperationalText(station: Station): string {
+    const monitoring = this.monitoringDevices();
+    if (station.stationId !== this.selectedStationId || monitoring.length === 0) {
+      return stationStatusLabel(station.status);
+    }
+    const online = this.onlineDeviceCount(monitoring);
+    if (online === 0) return '节点通信中断';
+    if (online < monitoring.length) return `${online}/${monitoring.length} 节点在线`;
+    return '节点全部在线';
+  }
+
+  private stationOperationalTone(station: Station): string {
+    const monitoring = this.monitoringDevices();
+    if (station.stationId === this.selectedStationId && monitoring.length > 0) {
+      return this.onlineDeviceCount(monitoring) < monitoring.length ? UI_COLOR_WARNING : UI_COLOR_SUCCESS;
+    }
+    return isOnlineStatus(station.status) ? UI_COLOR_SUCCESS : UI_COLOR_DANGER;
+  }
+
+  private stationOperationalSoftTone(station: Station): string {
+    const tone = this.stationOperationalTone(station);
+    if (tone === UI_COLOR_SUCCESS) return UI_COLOR_SUCCESS_SOFT;
+    if (tone === UI_COLOR_WARNING) return UI_COLOR_WARNING_SOFT;
+    return UI_COLOR_DANGER_SOFT;
   }
 
   private stateForDevice(deviceId: string): DeviceState | null {
@@ -3699,22 +4330,18 @@ struct StationsPane {
       Scroll() {
         Column({ space: 12 }) {
           StatusBanner({
-            text: this.refreshing
-              ? `正在同步 · 保留当前 ${this.monitoringDevices().length} 个节点数据`
-              : this.offline
-              ? `离线缓存 · ${this.freshness}`
-              : `实时数据 · ${this.onlineDeviceCount(this.monitoringDevices())} / ${this.monitoringDevices().length} 个监测节点在线 · ${this.freshness}`,
-            tone: this.refreshing ? UI_COLOR_ACCENT : this.offline ? UI_COLOR_DANGER : UI_COLOR_SUCCESS
+            text: this.monitoringStatusText(),
+            tone: this.monitoringStatusTone()
           });
           Column({ space: 10 }) {
             Row() {
               Column({ space: 3 }) {
                 Text('站点分布')
-                  .fontSize(16)
+                  .fontSize(17)
                   .fontWeight(FontWeight.Bold)
                   .fontColor(UI_COLOR_TEXT)
                 Text(this.mapStatusText())
-                  .fontSize(11)
+                  .fontSize(12)
                   .fontColor(UI_COLOR_MUTED)
               }
               .alignItems(HorizontalAlign.Start)
@@ -3739,8 +4366,9 @@ struct StationsPane {
                 onRelocate: () => this.onRefreshMap()
               })
                 .width('100%')
-                .height(238)
-                .borderRadius(8)
+                .height(226)
+                .borderRadius(UI_RADIUS_SURFACE)
+                .border({ width: 1, color: UI_COLOR_LINE })
                 .clip(true)
             } else {
               Column({ space: 8 }) {
@@ -3748,113 +4376,147 @@ struct StationsPane {
                   .fontSize(28)
                   .fontColor([UI_COLOR_SUBTLE])
                 Text(this.mapLoading ? '正在准备站点地图' : '节点位置可用后将在这里显示')
-                  .fontSize(12)
+                  .fontSize(13)
                   .fontColor(UI_COLOR_MUTED)
               }
               .width('100%')
               .height(150)
               .justifyContent(FlexAlign.Center)
-              .backgroundColor('#EEF2F0')
-              .borderRadius(8)
+              .backgroundColor(UI_COLOR_SURFACE_ALT)
+              .border({ width: 1, color: UI_COLOR_LINE })
+              .borderRadius(UI_RADIUS_SURFACE)
             }
           }
           .width('100%')
-          Text('选择站点')
-            .fontSize(13)
-            .fontWeight(FontWeight.Medium)
-            .fontColor('#52606D')
-            .width('100%')
+          Column({ space: 3 }) {
+            Text('监测区域')
+              .fontSize(17)
+              .fontWeight(FontWeight.Bold)
+              .fontColor(UI_COLOR_TEXT)
+            Text('选择站点后自动更新节点状态')
+              .fontSize(12)
+              .fontColor(UI_COLOR_MUTED)
+          }
+          .alignItems(HorizontalAlign.Start)
+          .width('100%')
           ForEach(this.stations, (station: Station) => {
             Row({ space: 12 }) {
-              Circle({ width: 10, height: 10 })
-                .fill(isOnlineStatus(station.status) ? '#3C9D82' : '#B44832')
+              Stack({ alignContent: Alignment.Center }) {
+                Circle({ width: 40, height: 40 })
+                  .fill(this.stationOperationalSoftTone(station))
+                SymbolGlyph($r('sys.symbol.dot_radiowaves_left_and_right'))
+                  .fontSize(18)
+                  .fontColor([this.stationOperationalTone(station)])
+              }
+              .width(40)
+              .height(40)
               Column({ space: 4 }) {
                 Text(stationDisplayName(station))
                   .fontSize(16)
-                  .fontWeight(FontWeight.Medium)
-                  .fontColor('#18212B')
+                  .fontWeight(FontWeight.Bold)
+                  .fontColor(UI_COLOR_TEXT)
                   .maxLines(1)
                   .textOverflow({ overflow: TextOverflow.Ellipsis })
                 Text(`${station.stationCode ?? '未设置编号'} · ${station.regionCode ?? '未配置区域'}`)
-                  .fontSize(11)
-                  .fontColor('#6C7782')
+                  .fontSize(12)
+                  .fontColor(UI_COLOR_MUTED)
               }
               .alignItems(HorizontalAlign.Start)
               .layoutWeight(1)
-              Text(stationStatusLabel(station.status))
-                .fontSize(11)
-                .fontColor(isOnlineStatus(station.status) ? '#287C67' : '#B44832')
+              Text(this.stationOperationalText(station))
+                .fontSize(12)
+                .fontWeight(FontWeight.Medium)
+                .fontColor(this.stationOperationalTone(station))
             }
-            .padding({ left: 14, right: 14, top: 13, bottom: 13 })
-            .backgroundColor(this.selectedStationId === station.stationId ? '#FFF1EA' : '#FFFFFF')
-            .borderRadius(8)
+            .constraintSize({ minHeight: 68 })
+            .padding({ left: 14, right: 14, top: 10, bottom: 10 })
+            .backgroundColor(this.selectedStationId === station.stationId ? UI_COLOR_HERMES_SOFT : UI_COLOR_SURFACE)
+            .border({ width: 1, color: this.selectedStationId === station.stationId ? UI_COLOR_HERMES_LINE : UI_COLOR_LINE })
+            .borderRadius(UI_RADIUS_SURFACE)
+            .animation({ duration: 180, curve: Curve.EaseOut })
             .width('100%')
+            .accessibilityText(`${stationDisplayName(station)}，${this.stationOperationalText(station)}，点击查看节点`)
             .onClick(() => this.onSelectStation(station.stationId))
           }, (station: Station) => station.stationId)
           if (this.selectedStationId.length > 0) {
-            Divider().color('#E3E8EB').margin({ top: 4, bottom: 2 })
             Row() {
               Column({ space: 3 }) {
-                Text(this.selectedStationName())
+                Text('节点状态')
                   .fontSize(17)
                   .fontWeight(FontWeight.Bold)
-                  .fontColor('#18212B')
-                Text(this.stationDeviceSummary())
+                  .fontColor(UI_COLOR_TEXT)
+                Text(`${this.selectedStationName()} · ${this.stationDeviceSummary()}`)
                   .fontSize(12)
-                  .fontColor('#6C7782')
+                  .fontColor(UI_COLOR_MUTED)
+                  .maxLines(2)
+                  .textOverflow({ overflow: TextOverflow.Ellipsis })
               }
               .alignItems(HorizontalAlign.Start)
               .layoutWeight(1)
-              Text('设备列表')
-                .fontSize(12)
-                .fontColor('#6C7782')
             }
             .width('100%')
             ForEach(this.monitoringDevices(), (device: Device) => {
               Column({ space: 10 }) {
                 Row({ space: 12 }) {
-                  Circle({ width: 10, height: 10 })
-                    .fill(this.deviceIsOnline(device) ? '#3C9D82' : '#B44832')
+                  Stack({ alignContent: Alignment.Center }) {
+                    Circle({ width: 40, height: 40 })
+                      .fill(this.deviceIsOnline(device) ? UI_COLOR_SUCCESS_SOFT : UI_COLOR_DANGER_SOFT)
+                    Circle({ width: 9, height: 9 })
+                      .fill(this.deviceIsOnline(device) ? UI_COLOR_SUCCESS : UI_COLOR_DANGER)
+                  }
+                  .width(40)
+                  .height(40)
                   Column({ space: 4 }) {
                     Text(deviceDisplayName(device))
-                      .fontSize(15)
-                      .fontWeight(FontWeight.Medium)
-                      .fontColor('#18212B')
+                      .fontSize(16)
+                      .fontWeight(FontWeight.Bold)
+                      .fontColor(UI_COLOR_TEXT)
                     Text(`${deviceTypeLabel(device.deviceType)} · ${relativeTime(this.deviceUpdatedAt(device))}`)
-                      .fontSize(11)
-                      .fontColor('#6C7782')
+                      .fontSize(12)
+                      .fontColor(UI_COLOR_MUTED)
                   }
                   .alignItems(HorizontalAlign.Start)
                   .layoutWeight(1)
                   Column({ space: 2 }) {
                     Text(this.deviceStatus(device))
-                      .fontSize(11)
-                      .fontColor(this.deviceIsOnline(device) ? '#287C67' : '#B44832')
-                    Text('›')
-                      .fontSize(22)
-                      .fontColor('#8A949E')
+                      .fontSize(12)
+                      .fontWeight(FontWeight.Medium)
+                      .fontColor(this.deviceIsOnline(device) ? UI_COLOR_SUCCESS : UI_COLOR_DANGER)
+                    SymbolGlyph($r('sys.symbol.chevron_right'))
+                      .fontSize(17)
+                      .fontColor([UI_COLOR_SUBTLE])
                   }
                 }
                 if (this.stateForDevice(device.deviceId)) {
-                  Divider().color('#EEF1F3')
+                  Divider().color(UI_COLOR_LINE)
                   Row() {
                     StationMetric({ label: 'X 倾角', value: displayMetric(metricValue(this.stateForDevice(device.deviceId), 'tilt_x_deg')), unit: '°' });
                     StationMetric({ label: 'Y 倾角', value: displayMetric(metricValue(this.stateForDevice(device.deviceId), 'tilt_y_deg')), unit: '°' });
+                    StationMetric({ label: 'Z 倾角', value: displayMetric(metricValue(this.stateForDevice(device.deviceId), 'tilt_z_deg')), unit: '°' });
+                  }
+                  .width('100%')
+                  Divider().color(UI_COLOR_LINE)
+                  Row() {
                     StationMetric({ label: '土壤温度', value: displayMetric(soilTemperatureValue(this.stateForDevice(device.deviceId)), 1), unit: '°C' });
                     StationMetric({ label: '土壤湿度', value: displayMetric(soilMoistureValue(this.stateForDevice(device.deviceId)), 1), unit: '%' });
+                    if (deviceSupportsConductivity(device)) {
+                      StationMetric({ label: '电导率', value: displayMetric(soilConductivityValue(this.stateForDevice(device.deviceId)), 0), unit: 'μS/cm' });
+                    }
                   }
                   .width('100%')
                 } else {
                   Text('正在获取节点实时数据…')
-                    .fontSize(11)
-                    .fontColor('#8A949E')
+                    .fontSize(12)
+                    .fontColor(UI_COLOR_SUBTLE)
                     .width('100%')
                 }
               }
               .padding({ left: 14, right: 12, top: 13, bottom: 13 })
-              .backgroundColor('#FFFFFF')
-              .borderRadius(8)
+              .backgroundColor(UI_COLOR_SURFACE)
+              .border({ width: 1, color: UI_COLOR_LINE })
+              .borderRadius(UI_RADIUS_SURFACE)
               .width('100%')
+              .accessibilityText(`${deviceDisplayName(device)}，${this.deviceStatus(device)}，点击查看监测详情`)
               .onClick(() => this.onSelectDevice(device))
             }, (device: Device) => device.deviceId)
             if (this.monitoringDevices().length === 0) {
@@ -3864,16 +4526,16 @@ struct StationsPane {
             }
             if (this.linkageDevices().length > 0) {
               Text('联动告警设备')
-                .fontSize(13)
-                .fontWeight(FontWeight.Medium)
-                .fontColor('#52606D')
+                .fontSize(17)
+                .fontWeight(FontWeight.Bold)
+                .fontColor(UI_COLOR_TEXT)
                 .width('100%')
                 .margin({ top: 6 })
               ForEach(this.linkageDevices(), (device: Device) => {
                 Row({ space: 12 }) {
                   Stack({ alignContent: Alignment.Center }) {
                     Circle({ width: 36, height: 36 })
-                      .fill(this.deviceIsOnline(device) ? '#EAF5F1' : '#F8E9E5')
+                      .fill(this.deviceIsOnline(device) ? UI_COLOR_SUCCESS_SOFT : UI_COLOR_DANGER_SOFT)
                     SymbolGlyph($r('sys.symbol.bell'))
                       .fontSize(18)
                       .fontColor([this.deviceIsOnline(device) ? UI_COLOR_SUCCESS : UI_COLOR_DANGER])
@@ -3888,27 +4550,34 @@ struct StationsPane {
                       .maxLines(1)
                       .textOverflow({ overflow: TextOverflow.Ellipsis })
                     Text(this.linkageStatusDetail())
-                      .fontSize(11)
+                      .fontSize(12)
                       .fontColor(UI_COLOR_MUTED)
                   }
                   .alignItems(HorizontalAlign.Start)
                   .layoutWeight(1)
                   Text(this.deviceStatus(device))
-                    .fontSize(11)
+                    .fontSize(12)
                     .fontWeight(FontWeight.Medium)
                     .fontColor(this.deviceIsOnline(device) ? '#287C67' : UI_COLOR_DANGER)
                 }
                 .padding({ left: 14, right: 14, top: 13, bottom: 13 })
                 .backgroundColor(UI_COLOR_SURFACE)
-                .borderRadius(8)
+                .border({ width: 1, color: UI_COLOR_LINE })
+                .borderRadius(UI_RADIUS_SURFACE)
                 .width('100%')
               }, (device: Device) => device.deviceId)
             }
           }
           if (this.stations.length === 0) {
-            Text('暂无站点数据')
-              .fontSize(13)
-              .fontColor('#6C7782')
+            OperationalStatePanel({
+              icon: $r('sys.symbol.dot_radiowaves_left_and_right'),
+              title: this.refreshing ? '正在读取监测站点' : this.offline ? '站点数据暂时不可用' : '尚未配置监测站点',
+              detail: this.offline ? `当前没有可用缓存 · ${this.freshness}` : this.refreshing ? '正在连接服务器并同步站点与节点定义' : '服务器返回站点后会自动显示在这里',
+              tone: this.offline ? UI_COLOR_DANGER : this.refreshing ? UI_COLOR_ACCENT : UI_COLOR_INFO,
+              loading: this.refreshing,
+              actionLabel: this.refreshing ? '' : '重新加载',
+              onAction: () => this.onRefresh()
+            });
           }
         }
         .padding({ left: 16, right: 16, bottom: 24 })
@@ -3931,12 +4600,12 @@ struct StationMetric {
   build() {
     Column({ space: 3 }) {
       Text(this.label)
-        .fontSize(10)
-        .fontColor('#6C7782')
+        .fontSize(12)
+        .fontColor(UI_COLOR_MUTED)
       Text(`${this.value}${this.unit}`)
-        .fontSize(13)
-        .fontWeight(FontWeight.Medium)
-        .fontColor('#18212B')
+        .fontSize(15)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(UI_COLOR_TEXT)
         .maxLines(1)
     }
     .alignItems(HorizontalAlign.Start)
@@ -3954,33 +4623,32 @@ struct CurrentMetricsPane {
     Column({ space: 12 }) {
       Row() {
         Text('当前监测值')
-          .fontSize(15)
+          .fontSize(17)
           .fontWeight(FontWeight.Bold)
-          .fontColor('#18212B')
+          .fontColor(UI_COLOR_TEXT)
         Blank().layoutWeight(1)
         Text(relativeTime(this.state?.updatedAt))
-          .fontSize(11)
-          .fontColor('#6C7782')
+          .fontSize(12)
+          .fontColor(UI_COLOR_MUTED)
       }
       Row() {
         DetailMetric({ label: 'X 轴倾角', value: displayMetric(metricValue(this.state, 'tilt_x_deg')), unit: '°' });
         DetailMetric({ label: 'Y 轴倾角', value: displayMetric(metricValue(this.state, 'tilt_y_deg')), unit: '°' });
+        DetailMetric({ label: 'Z 轴倾角', value: displayMetric(metricValue(this.state, 'tilt_z_deg')), unit: '°' });
       }
-      Divider().color('#EEF1F3')
+      Divider().color(UI_COLOR_LINE)
       Row() {
         DetailMetric({ label: '土壤温度', value: displayMetric(soilTemperatureValue(this.state), 1), unit: '°C' });
         DetailMetric({ label: '土壤湿度', value: displayMetric(soilMoistureValue(this.state), 1), unit: '%' });
-      }
-      if (this.showConductivity) {
-        Divider().color('#EEF1F3')
-        Row() {
+        if (this.showConductivity) {
           DetailMetric({ label: '土壤电导率', value: displayMetric(this.conductivity, 0), unit: 'μS/cm' });
         }
       }
     }
-    .padding(14)
-    .backgroundColor('#FFFFFF')
-    .borderRadius(8)
+    .padding(16)
+    .backgroundColor(UI_COLOR_SURFACE)
+    .border({ width: 1, color: UI_COLOR_LINE })
+    .borderRadius(UI_RADIUS_SURFACE)
     .width('100%')
   }
 }
@@ -3994,12 +4662,12 @@ struct DetailMetric {
   build() {
     Column({ space: 4 }) {
       Text(this.label)
-        .fontSize(11)
-        .fontColor('#6C7782')
+        .fontSize(12)
+        .fontColor(UI_COLOR_MUTED)
       Text(`${this.value}${this.unit}`)
         .fontSize(22)
         .fontWeight(FontWeight.Bold)
-        .fontColor('#18212B')
+        .fontColor(UI_COLOR_TEXT)
         .maxLines(1)
     }
     .alignItems(HorizontalAlign.Start)
@@ -4012,10 +4680,12 @@ struct DevicePane {
   @Prop device: Device | null;
   @Prop state: DeviceState | null;
   @Prop series: SeriesResponse | null;
+  @Prop seriesRange: DeviceSeriesRange;
   @Prop freshness: string;
   @Prop offline: boolean;
   @Prop refreshing: boolean;
   onRefresh: () => void = () => {};
+  onRangeChange: (range: DeviceSeriesRange) => void = () => {};
   onBack: () => void = () => {};
   @State private selectedMetricKey: string = 'tilt_x_deg';
 
@@ -4023,6 +4693,7 @@ struct DevicePane {
     const options: Array<DeviceMetricOption> = [
       { sensorKey: 'tilt_x_deg', label: 'X 倾角' },
       { sensorKey: 'tilt_y_deg', label: 'Y 倾角' },
+      { sensorKey: 'tilt_z_deg', label: 'Z 倾角' },
       { sensorKey: 'soil_temperature_c', label: '土壤温度' },
       { sensorKey: 'soil_moisture_pct', label: '土壤湿度' }
     ];
@@ -4072,6 +4743,35 @@ struct DevicePane {
     return series.points[series.points.length - 1].value;
   }
 
+  private statusText(): string {
+    if (this.refreshing) return '正在同步 · 当前监测值保持可见';
+    if (this.offline) return `离线缓存 · ${this.freshness}`;
+    if (!this.device) return '设备状态等待确认';
+    if (!isDeviceOnline(this.device, this.state?.updatedAt)) {
+      return `设备离线 · 最近数据 · ${this.freshness}`;
+    }
+    return `实时数据 · ${deviceConnectivityLabel(this.device, this.state?.updatedAt)} · ${this.freshness}`;
+  }
+
+  private statusTone(): string {
+    if (this.refreshing) return UI_COLOR_ACCENT;
+    if (this.offline) return UI_COLOR_WARNING;
+    if (!this.device) return UI_COLOR_INFO;
+    return isDeviceOnline(this.device, this.state?.updatedAt) ? UI_COLOR_SUCCESS : UI_COLOR_WARNING;
+  }
+
+  private rangeTitle(): string {
+    if (this.seriesRange === '1h') return '近 1 小时趋势';
+    if (this.seriesRange === '7d') return '近 7 日趋势';
+    return '近 24 小时趋势';
+  }
+
+  private rangeInterval(): string {
+    if (this.seriesRange === '1h') return '1 分钟均值';
+    if (this.seriesRange === '7d') return '1 小时均值';
+    return '5 分钟均值';
+  }
+
   build() {
     Column() {
       Row({ space: 12 }) {
@@ -4084,7 +4784,7 @@ struct DevicePane {
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
           Text(stationNameLabel(this.device?.stationName))
-            .fontSize(11)
+            .fontSize(12)
             .fontColor(UI_COLOR_MUTED)
         }
         .alignItems(HorizontalAlign.Start)
@@ -4096,12 +4796,8 @@ struct DevicePane {
       Scroll() {
         Column({ space: 12 }) {
           StatusBanner({
-            text: this.refreshing
-              ? '正在同步 · 当前监测值保持可见'
-              : this.offline
-              ? `离线缓存 · ${this.freshness}`
-              : `实时数据 · ${this.device ? deviceConnectivityLabel(this.device, this.state?.updatedAt) : '状态未知'} · ${this.freshness}`,
-            tone: this.refreshing ? UI_COLOR_ACCENT : this.offline ? UI_COLOR_DANGER : this.device && isDeviceOnline(this.device, this.state?.updatedAt) ? UI_COLOR_SUCCESS : UI_COLOR_DANGER
+            text: this.statusText(),
+            tone: this.statusTone()
           });
           CurrentMetricsPane({
             state: this.state,
@@ -4109,18 +4805,35 @@ struct DevicePane {
             showConductivity: deviceSupportsConductivity(this.device)
           });
           Row() {
-            Text('24 小时趋势')
-              .fontSize(16)
+            Text(this.rangeTitle())
+              .fontSize(17)
               .fontWeight(FontWeight.Bold)
-              .fontColor('#18212B')
+              .fontColor(UI_COLOR_TEXT)
             Blank().layoutWeight(1)
-            Text('5 分钟均值')
-              .fontSize(11)
-              .fontColor('#6C7782')
+            Text(this.rangeInterval())
+              .fontSize(12)
+              .fontColor(UI_COLOR_MUTED)
+          }
+          .width('100%')
+          Row({ space: 6 }) {
+            DeviceRangeSegment({ label: '1 小时', range: '1h', active: this.seriesRange === '1h', onTap: (range: DeviceSeriesRange) => this.onRangeChange(range) });
+            DeviceRangeSegment({ label: '24 小时', range: '24h', active: this.seriesRange === '24h', onTap: (range: DeviceSeriesRange) => this.onRangeChange(range) });
+            DeviceRangeSegment({ label: '7 日', range: '7d', active: this.seriesRange === '7d', onTap: (range: DeviceSeriesRange) => this.onRangeChange(range) });
           }
           .width('100%')
           Row({ space: 4 }) {
-            ForEach(this.metricOptions(), (option: DeviceMetricOption) => {
+            ForEach(this.metricOptions().slice(0, 3), (option: DeviceMetricOption) => {
+              MetricSegment({
+                label: option.label,
+                active: this.activeMetricKey() === option.sensorKey,
+                available: this.metricFor(option.sensorKey) !== null,
+                onTap: () => this.selectedMetricKey = option.sensorKey
+              });
+            }, (option: DeviceMetricOption) => option.sensorKey)
+          }
+          .width('100%')
+          Row({ space: 4 }) {
+            ForEach(this.metricOptions().slice(3), (option: DeviceMetricOption) => {
               MetricSegment({
                 label: option.label,
                 active: this.activeMetricKey() === option.sensorKey,
@@ -4134,20 +4847,13 @@ struct DevicePane {
             SeriesTrendCard({ metric: metric });
           }, (metric: MetricSeries) => this.metricRenderKey(metric))
           if (this.activeMetrics().length === 0) {
-            Column({ space: 6 }) {
-              Text('暂无历史趋势')
-                .fontSize(14)
-                .fontWeight(FontWeight.Medium)
-                .fontColor('#18212B')
-              Text('当前值仍会每 10 秒更新')
-                .fontSize(11)
-                .fontColor('#6C7782')
-            }
-            .alignItems(HorizontalAlign.Start)
-            .padding(14)
-            .backgroundColor('#FFFFFF')
-            .borderRadius(8)
-            .width('100%')
+            OperationalStatePanel({
+              icon: $r('sys.symbol.arrow_clockwise'),
+              title: this.refreshing ? '正在读取趋势' : '该时段暂无趋势数据',
+              detail: this.refreshing ? `${this.rangeTitle()}数据正在同步，当前监测值保持可见` : '当前值仍会每 10 秒更新，可切换其他时间范围查看',
+              tone: this.refreshing ? UI_COLOR_ACCENT : UI_COLOR_INFO,
+              loading: this.refreshing
+            });
           }
         }
         .padding({ left: 16, right: 16, bottom: 24 })
@@ -4166,6 +4872,29 @@ interface DeviceMetricOption {
 }
 
 @Component
+struct DeviceRangeSegment {
+  @Prop label: string;
+  @Prop range: DeviceSeriesRange;
+  @Prop active: boolean;
+  onTap: (range: DeviceSeriesRange) => void = () => {};
+
+  build() {
+    Button(this.label)
+      .height(44)
+      .layoutWeight(1)
+      .fontSize(13)
+      .fontWeight(this.active ? FontWeight.Bold : FontWeight.Medium)
+      .fontColor(this.active ? UI_COLOR_SURFACE : UI_COLOR_TEXT_SECONDARY)
+      .backgroundColor(this.active ? UI_COLOR_HERMES : UI_COLOR_SURFACE_ALT)
+      .border({ width: 1, color: this.active ? UI_COLOR_HERMES : UI_COLOR_LINE })
+      .borderRadius(UI_RADIUS_SURFACE)
+      .animation({ duration: 180, curve: Curve.EaseOut })
+      .accessibilityText(`${this.label}${this.active ? '，已选择' : ''}`)
+      .onClick(() => this.onTap(this.range))
+  }
+}
+
+@Component
 struct MetricSegment {
   @Prop label: string;
   @Prop active: boolean;
@@ -4174,15 +4903,17 @@ struct MetricSegment {
 
   build() {
     Text(this.label)
-      .fontSize(11)
+      .fontSize(13)
       .fontWeight(this.active ? FontWeight.Bold : FontWeight.Medium)
-      .fontColor(this.active ? '#FFFFFF' : this.available ? '#52606D' : '#AAB2B9')
+      .fontColor(this.active ? '#FFFFFF' : this.available ? UI_COLOR_TEXT_SECONDARY : '#AAB2B9')
       .textAlign(TextAlign.Center)
       .maxLines(1)
-      .height(34)
+      .height(44)
       .layoutWeight(1)
-      .backgroundColor(this.active ? '#18212B' : '#E9EDF0')
-      .borderRadius(6)
+      .backgroundColor(this.active ? UI_COLOR_HERMES : UI_COLOR_SURFACE_ALT)
+      .border({ width: 1, color: this.active ? UI_COLOR_HERMES : UI_COLOR_LINE })
+      .borderRadius(UI_RADIUS_SURFACE)
+      .animation({ duration: 180, curve: Curve.EaseOut })
       .enabled(this.available)
       .onClick(() => {
         if (this.available) this.onTap();
@@ -4273,12 +5004,12 @@ struct SeriesTrendCard {
 
   private startTime(): string {
     const points = this.points();
-    return points.length > 0 ? shortTime(points[0].ts) : '--';
+    return points.length > 0 ? shortDateTime(points[0].ts) : '--';
   }
 
   private endTime(): string {
     const points = this.points();
-    return points.length > 0 ? shortTime(points[points.length - 1].ts) : '--';
+    return points.length > 0 ? shortDateTime(points[points.length - 1].ts) : '--';
   }
 
   build() {
@@ -4286,12 +5017,12 @@ struct SeriesTrendCard {
       Row() {
         Column({ space: 2 }) {
           Text(metricShortLabel(this.metric.sensorKey))
-            .fontSize(15)
+            .fontSize(16)
             .fontWeight(FontWeight.Bold)
-            .fontColor('#18212B')
+            .fontColor(UI_COLOR_TEXT)
           Text(`${this.metric.points.length} 个数据点 · ${this.startTime()} 至 ${this.endTime()}`)
-            .fontSize(11)
-            .fontColor('#6C7782')
+            .fontSize(12)
+            .fontColor(UI_COLOR_MUTED)
         }
         .alignItems(HorizontalAlign.Start)
         Blank().layoutWeight(1)
@@ -4309,18 +5040,19 @@ struct SeriesTrendCard {
       TrendLineChart({ metric: this.metric, accent: this.accent(), fillColor: this.fillColor() });
       Row() {
         Text(this.startTime())
-          .fontSize(10)
+          .fontSize(12)
           .fontColor(UI_COLOR_SUBTLE)
         Blank().layoutWeight(1)
         Text(this.endTime())
-          .fontSize(10)
+          .fontSize(12)
           .fontColor(UI_COLOR_SUBTLE)
       }
       .width('100%')
     }
-    .padding(14)
-    .backgroundColor('#FFFFFF')
-    .borderRadius(8)
+    .padding(16)
+    .backgroundColor(UI_COLOR_SURFACE)
+    .border({ width: 1, color: UI_COLOR_LINE })
+    .borderRadius(UI_RADIUS_SURFACE)
     .width('100%')
   }
 }
@@ -4333,12 +5065,12 @@ struct TrendStat {
   build() {
     Column({ space: 2 }) {
       Text(this.label)
-        .fontSize(10)
-        .fontColor('#8A949E')
-      Text(this.value)
         .fontSize(12)
+        .fontColor(UI_COLOR_SUBTLE)
+      Text(this.value)
+        .fontSize(13)
         .fontWeight(FontWeight.Medium)
-        .fontColor('#52606D')
+        .fontColor(UI_COLOR_TEXT_SECONDARY)
         .maxLines(1)
     }
     .alignItems(HorizontalAlign.Start)
@@ -4462,149 +5194,336 @@ struct TrendLineChart {
   }
 }
 
+type AlertSeverityFilter = 'all' | 'urgent' | 'medium' | 'low';
+
 @Component
 struct AlertsPane {
   @Prop alerts: Array<Alert>;
+  @Prop devices: Array<Device>;
+  @Prop stations: Array<Station>;
+  @Prop viewStatus: AlertListStatus;
   @Prop selectedAlert: Alert | null;
   @Prop events: Array<AlertEvent>;
   @Prop loadingEvents: boolean;
   @Prop freshness: string;
   @Prop offline: boolean;
   @Prop refreshing: boolean;
+  onStatusChange: (status: AlertListStatus) => void = () => {};
   onSelect: (alert: Alert) => void = () => {};
   onOpenMap: (alert: Alert | null) => void = () => {};
   onRefresh: () => void = () => {};
+  @State private severityFilter: AlertSeverityFilter = 'all';
+  @State private detailOnly: boolean = false;
+
+  private pageTitle(): string {
+    if (this.viewStatus === 'acked') return '已确认告警';
+    if (this.viewStatus === 'resolved') return '已解除告警';
+    return '活动告警';
+  }
+
+  private emptyTitle(): string {
+    if (this.refreshing) return '正在检查告警记录';
+    if (this.offline) return '告警记录暂时不可用';
+    if (this.viewStatus === 'acked') return '暂无已确认告警';
+    if (this.viewStatus === 'resolved') return '暂无已解除告警';
+    return '当前无活动告警';
+  }
+
+  private emptyDetail(): string {
+    if (this.offline) return `请检查网络后重试 · ${this.freshness}`;
+    if (this.refreshing) return '正在连接服务器并读取最新状态';
+    if (this.severityFilter !== 'all') return '当前严重度筛选下没有记录，可切换为全部';
+    return this.viewStatus === 'active' ? '监测系统当前没有待处理告警' : '服务器暂未返回该状态的历史记录';
+  }
+
+  private severityRank(value: string): number {
+    if (value === 'critical') return 4;
+    if (value === 'high') return 3;
+    if (value === 'medium') return 2;
+    return 1;
+  }
+
+  private severityMatches(alert: Alert): boolean {
+    if (this.severityFilter === 'all') return true;
+    if (this.severityFilter === 'urgent') return alert.severity === 'critical' || alert.severity === 'high';
+    return alert.severity === this.severityFilter;
+  }
+
+  private visibleAlerts(): Array<Alert> {
+    const visible: Array<Alert> = [];
+    for (let index = 0; index < this.alerts.length; index++) {
+      if (this.severityMatches(this.alerts[index])) visible.push(this.alerts[index]);
+    }
+    visible.sort((left: Alert, right: Alert): number => {
+      const severity = this.severityRank(right.severity) - this.severityRank(left.severity);
+      if (severity !== 0) return severity;
+      return new Date(right.lastEventAt ?? 0).getTime() - new Date(left.lastEventAt ?? 0).getTime();
+    });
+    return visible;
+  }
+
+  private urgentCount(): number {
+    let count = 0;
+    for (let index = 0; index < this.alerts.length; index++) {
+      if (this.alerts[index].severity === 'critical' || this.alerts[index].severity === 'high') count += 1;
+    }
+    return count;
+  }
+
+  private alertTitle(alert: Alert): string {
+    let title = alert.title.trim().length > 0 ? alert.title : '监测告警';
+    title = title.replace('field-node-a', '监测节点 A');
+    title = title.replace('field-node-b', '监测节点 B');
+    title = title.replace('field-node-c', '监测节点 C');
+    return title;
+  }
+
+  private deviceLabel(alert: Alert): string {
+    for (let index = 0; index < this.devices.length; index++) {
+      if (this.devices[index].deviceId === alert.deviceId) return deviceDisplayName(this.devices[index]);
+    }
+    for (let index = 0; index < this.stations.length; index++) {
+      if (this.stations[index].stationId === alert.stationId) return stationDisplayName(this.stations[index]);
+    }
+    return alert.deviceId ? edgeNodeFallbackName(alert.deviceId) : '监测站点';
+  }
+
+  private alertDetail(alert: Alert): string {
+    const message = alert.message?.trim() ?? '';
+    return message.length > 0 ? message : `${this.deviceLabel(alert)}触发${severityLabel(alert.severity)}，请查看事件证据。`;
+  }
+
+  private displayedAlerts(): Array<Alert> {
+    if (this.detailOnly && this.selectedAlert) return [this.selectedAlert];
+    return this.visibleAlerts();
+  }
+
+  private changeStatus(status: AlertListStatus): void {
+    this.detailOnly = false;
+    this.onStatusChange(status);
+  }
+
+  private changeSeverity(filter: AlertSeverityFilter): void {
+    this.detailOnly = false;
+    this.severityFilter = filter;
+  }
+
+  private showAlertEvents(alert: Alert): void {
+    this.detailOnly = true;
+    this.onSelect(alert);
+  }
+
+  private severityColor(alert: Alert): string {
+    return alert.severity === 'critical' || alert.severity === 'high' ? UI_COLOR_DANGER :
+      alert.severity === 'medium' ? UI_COLOR_WARNING : UI_COLOR_INFO;
+  }
 
   build() {
     Column() {
       PageHeader({
-        title: '当前告警',
-        subtitle: `${this.alerts.length} 条待处理 · ${this.freshness}`,
+        title: '告警中心',
+        subtitle: `${this.pageTitle()} · ${this.alerts.length} 条 · ${this.freshness}`,
         offline: this.offline,
         refreshing: this.refreshing,
         onRefresh: () => this.onRefresh()
       });
       Scroll() {
-        Column({ space: 10 }) {
-          ForEach(this.alerts, (alert: Alert) => {
+        Column({ space: 12 }) {
+          Row({ space: 6 }) {
+            AlertModeSegment({ label: '活动', status: 'active', active: this.viewStatus === 'active', onTap: (status: AlertListStatus) => this.changeStatus(status) });
+            AlertModeSegment({ label: '已确认', status: 'acked', active: this.viewStatus === 'acked', onTap: (status: AlertListStatus) => this.changeStatus(status) });
+            AlertModeSegment({ label: '已解除', status: 'resolved', active: this.viewStatus === 'resolved', onTap: (status: AlertListStatus) => this.changeStatus(status) });
+          }
+          .padding(4)
+          .backgroundColor('#E9EEEC')
+          .borderRadius(UI_RADIUS_SURFACE)
+          .width('100%')
+
+          Row() {
+            AlertSummaryValue({ label: '当前记录', value: `${this.alerts.length}`, tone: UI_COLOR_TEXT });
+            AlertSummaryValue({ label: '严重告警', value: `${this.urgentCount()}`, tone: this.urgentCount() > 0 ? UI_COLOR_DANGER : UI_COLOR_MUTED });
+            AlertSummaryValue({ label: '数据状态', value: this.offline ? '离线' : this.refreshing ? '同步中' : '已更新', tone: this.offline ? UI_COLOR_DANGER : this.refreshing ? UI_COLOR_ACCENT : UI_COLOR_SUCCESS });
+          }
+          .padding({ top: 12, bottom: 12 })
+          .backgroundColor(UI_COLOR_SURFACE)
+          .border({ width: 1, color: UI_COLOR_LINE })
+          .borderRadius(UI_RADIUS_SURFACE)
+          .width('100%')
+
+          Row({ space: 6 }) {
+            AlertSeverityChip({ label: '全部', filter: 'all', active: this.severityFilter === 'all', onTap: (filter: AlertSeverityFilter) => this.changeSeverity(filter) });
+            AlertSeverityChip({ label: '严重', filter: 'urgent', active: this.severityFilter === 'urgent', onTap: (filter: AlertSeverityFilter) => this.changeSeverity(filter) });
+            AlertSeverityChip({ label: '一般', filter: 'medium', active: this.severityFilter === 'medium', onTap: (filter: AlertSeverityFilter) => this.changeSeverity(filter) });
+            AlertSeverityChip({ label: '较低', filter: 'low', active: this.severityFilter === 'low', onTap: (filter: AlertSeverityFilter) => this.changeSeverity(filter) });
+          }
+          .width('100%')
+
+          ForEach(this.displayedAlerts(), (alert: Alert) => {
             Column({ space: 10 }) {
-              Row() {
+              Row({ space: 10 }) {
+                Stack({ alignContent: Alignment.Center }) {
+                  Circle({ width: 38, height: 38 }).fill(this.severityColor(alert) === UI_COLOR_DANGER ? UI_COLOR_DANGER_SOFT : this.severityColor(alert) === UI_COLOR_WARNING ? UI_COLOR_WARNING_SOFT : UI_COLOR_INFO_SOFT)
+                  SymbolGlyph($r('sys.symbol.bell'))
+                    .fontSize(18)
+                    .fontColor([this.severityColor(alert)])
+                }
+                .width(38)
+                .height(38)
                 Column({ space: 4 }) {
-                  Text(alert.title)
-                    .fontSize(14)
-                    .fontWeight(FontWeight.Medium)
-                    .fontColor('#18212B')
+                  Text(this.alertTitle(alert))
+                    .fontSize(16)
+                    .fontWeight(FontWeight.Bold)
+                    .fontColor(UI_COLOR_TEXT)
                     .maxLines(2)
-                  Text(`${alertStatusLabel(alert.status)} · ${relativeTime(alert.lastEventAt)}`)
-                    .fontSize(11)
-                    .fontColor('#6C7782')
+                    .textOverflow({ overflow: TextOverflow.Ellipsis })
+                  Text(`${this.deviceLabel(alert)} · ${relativeTime(alert.lastEventAt)}`)
+                    .fontSize(12)
+                    .fontColor(UI_COLOR_MUTED)
+                    .maxLines(1)
+                    .textOverflow({ overflow: TextOverflow.Ellipsis })
                 }
                 .alignItems(HorizontalAlign.Start)
                 .layoutWeight(1)
                 Text(severityLabel(alert.severity))
-                  .fontSize(11)
-                  .fontColor(alert.severity === 'critical' || alert.severity === 'high' ? '#B44832' : '#A76A2E')
-              }
-              Divider().color('#EEF1F3')
-              Row({ space: 8 }) {
-                SymbolGlyph($r('sys.symbol.dot_radiowaves_left_and_right'))
-                  .fontSize(15)
-                  .fontColor(['#B44832'])
-                Text('告警位置')
-                  .fontSize(11)
-                  .fontColor('#6C7782')
-                Blank().layoutWeight(1)
-                Button('查看地图')
-                  .height(34)
                   .fontSize(12)
-                  .fontColor('#FFFFFF')
-                  .backgroundColor('#18212B')
-                  .borderRadius(6)
+                  .fontWeight(FontWeight.Bold)
+                  .fontColor(this.severityColor(alert))
+              }
+              Text(this.alertDetail(alert))
+                .fontSize(13)
+                .lineHeight(20)
+                .fontColor(UI_COLOR_TEXT_SECONDARY)
+                .maxLines(2)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+                .width('100%')
+              Row({ space: 8 }) {
+                Text(`${alertStatusLabel(alert.status)} · ${shortDateTime(alert.lastEventAt ?? '')}`)
+                  .fontSize(12)
+                  .fontColor(UI_COLOR_MUTED)
+                  .layoutWeight(1)
+                Button('事件')
+                  .height(44)
+                  .fontSize(13)
+                  .fontColor(UI_COLOR_TEXT)
+                  .backgroundColor(UI_COLOR_SURFACE_ALT)
+                  .border({ width: 1, color: UI_COLOR_LINE })
+                  .borderRadius(UI_RADIUS_SURFACE)
+                  .onClick(() => this.showAlertEvents(alert))
+                Button('地图')
+                  .height(44)
+                  .fontSize(13)
+                  .fontColor(UI_COLOR_SURFACE)
+                  .backgroundColor(UI_COLOR_TEXT)
+                  .borderRadius(UI_RADIUS_SURFACE)
                   .onClick(() => this.onOpenMap(alert))
+              }
+              .width('100%')
+            }
+            .padding(14)
+            .backgroundColor(this.selectedAlert?.alertId === alert.alertId ? UI_COLOR_DANGER_SOFT : UI_COLOR_SURFACE)
+            .border({ width: 1, color: this.selectedAlert?.alertId === alert.alertId ? '#EACBC2' : UI_COLOR_LINE })
+            .borderRadius(UI_RADIUS_SURFACE)
+            .animation({ duration: 180, curve: Curve.EaseOut })
+            .accessibilityText(`${this.alertTitle(alert)}，${this.deviceLabel(alert)}，${severityLabel(alert.severity)}，${alertStatusLabel(alert.status)}`)
+          }, (alert: Alert) => alert.alertId)
+
+          if (this.visibleAlerts().length === 0) {
+            OperationalStatePanel({
+              icon: $r('sys.symbol.bell'),
+              title: this.emptyTitle(),
+              detail: this.emptyDetail(),
+              tone: this.offline ? UI_COLOR_DANGER : this.refreshing ? UI_COLOR_ACCENT : UI_COLOR_SUCCESS,
+              loading: this.refreshing,
+              actionLabel: this.refreshing ? '' : this.offline ? '重新加载' : this.viewStatus === 'active' ? '查看站点地图' : '',
+              onAction: () => {
+                if (this.offline) this.onRefresh();
+                else if (this.viewStatus === 'active') this.onOpenMap(null);
+              }
+            });
+          }
+
+          if (this.selectedAlert) {
+            Column({ space: 12 }) {
+              Row() {
+                Column({ space: 3 }) {
+                  Text('事件轨迹')
+                    .fontSize(17)
+                    .fontWeight(FontWeight.Bold)
+                    .fontColor(UI_COLOR_TEXT)
+                  Text(`${this.deviceLabel(this.selectedAlert)} · ${alertStatusLabel(this.selectedAlert.status)} · ${shortDateTime(this.selectedAlert.lastEventAt ?? '')}`)
+                    .fontSize(12)
+                    .fontColor(UI_COLOR_MUTED)
+                    .maxLines(1)
+                    .textOverflow({ overflow: TextOverflow.Ellipsis })
+                }
+                .alignItems(HorizontalAlign.Start)
+                .layoutWeight(1)
+                Button('返回列表')
+                  .height(44)
+                  .fontSize(13)
+                  .fontColor(UI_COLOR_TEXT_SECONDARY)
+                  .backgroundColor(UI_COLOR_SURFACE_ALT)
+                  .borderRadius(UI_RADIUS_SURFACE)
+                  .onClick(() => this.detailOnly = false)
+                Button('查看定位')
+                  .height(44)
+                  .fontSize(13)
+                  .fontColor(UI_COLOR_TEXT)
+                  .backgroundColor(UI_COLOR_SURFACE_ALT)
+                  .border({ width: 1, color: UI_COLOR_LINE })
+                  .borderRadius(UI_RADIUS_SURFACE)
+                  .onClick(() => this.onOpenMap(this.selectedAlert))
+              }
+              .width('100%')
+              if (this.loadingEvents) {
+                Row({ space: 8 }) {
+                  LoadingProgress().width(18).height(18).color(UI_COLOR_ACCENT)
+                  Text('正在读取事件证据').fontSize(13).fontColor(UI_COLOR_MUTED)
+                }
+                .height(48)
+                .width('100%')
+              } else if (this.events.length === 0) {
+                Text('服务器暂未返回该告警的事件记录')
+                  .fontSize(13)
+                  .fontColor(UI_COLOR_MUTED)
+                  .padding({ top: 10, bottom: 10 })
+                  .width('100%')
+              } else {
+                Column() {
+                  ForEach(this.events, (event: AlertEvent, index: number) => {
+                    Row({ space: 10 }) {
+                      Circle({ width: 9, height: 9 })
+                        .fill(event.eventType === 'ALERT_RESOLVE' ? UI_COLOR_SUCCESS : event.eventType === 'ALERT_ACK' ? UI_COLOR_INFO : UI_COLOR_DANGER)
+                      Column({ space: 3 }) {
+                        Text(eventTypeLabel(event.eventType))
+                          .fontSize(14)
+                          .fontWeight(FontWeight.Medium)
+                          .fontColor(UI_COLOR_TEXT)
+                        Text(`${shortDateTime(event.createdAt)} · ${severityLabel(event.severity ?? '')}`)
+                          .fontSize(12)
+                          .fontColor(UI_COLOR_MUTED)
+                      }
+                      .alignItems(HorizontalAlign.Start)
+                      .layoutWeight(1)
+                    }
+                    .constraintSize({ minHeight: 58 })
+                    .padding({ left: 12, right: 12 })
+                    .width('100%')
+                    if (index < this.events.length - 1) {
+                      Divider().color(UI_COLOR_LINE).margin({ left: 30 })
+                    }
+                  }, (event: AlertEvent) => event.eventId)
+                }
+                .backgroundColor(UI_COLOR_SURFACE_ALT)
+                .borderRadius(7)
+                .width('100%')
               }
             }
             .padding(14)
-            .backgroundColor(this.selectedAlert?.alertId === alert.alertId ? '#FFF1EA' : '#FFFFFF')
-            .borderRadius(8)
-            .onClick(() => this.onSelect(alert))
-          }, (alert: Alert) => alert.alertId)
-          if (this.alerts.length === 0) {
-            Column({ space: 8 }) {
-              Stack({ alignContent: Alignment.Center }) {
-                Circle({ width: 44, height: 44 })
-                  .fill(this.offline ? '#F8E9E5' : this.refreshing ? '#FFF1EA' : '#EAF5F1')
-                SymbolGlyph($r('sys.symbol.bell'))
-                  .fontSize(21)
-                  .fontColor([this.offline ? UI_COLOR_DANGER : this.refreshing ? UI_COLOR_ACCENT : UI_COLOR_SUCCESS])
-              }
-              .width(44)
-              .height(44)
-              Text(this.refreshing ? '正在检查告警状态' : this.offline ? '暂时无法获取告警' : '当前无活动告警')
-                .fontSize(16)
-                .fontWeight(FontWeight.Medium)
-                .fontColor('#18212B')
-              Text(this.offline ? `保留最近缓存 · ${this.freshness}` : this.refreshing ? '正在连接监测服务器' : '监测系统运行正常')
-                .fontSize(12)
-                .fontColor('#6C7782')
-              Button() {
-                Row({ space: 7 }) {
-                  SymbolGlyph($r('sys.symbol.dot_radiowaves_left_and_right'))
-                    .fontSize(17)
-                    .fontColor(['#FFFFFF'])
-                  Text('地图预览')
-                    .fontSize(13)
-                    .fontWeight(FontWeight.Medium)
-                    .fontColor('#FFFFFF')
-                }
-              }
-              .height(42)
-              .margin({ top: 8 })
-              .padding({ left: 18, right: 18 })
-              .backgroundColor('#18212B')
-              .borderRadius(7)
-              .onClick(() => this.onOpenMap(null))
-            }
-            .justifyContent(FlexAlign.Center)
-            .padding({ top: 28, bottom: 28 })
-            .backgroundColor('#FFFFFF')
-            .borderRadius(8)
+            .backgroundColor(UI_COLOR_SURFACE)
+            .border({ width: 1, color: UI_COLOR_LINE })
+            .borderRadius(UI_RADIUS_SURFACE)
             .width('100%')
-          }
-          if (this.selectedAlert) {
-            Row() {
-              Text('事件记录')
-                .fontSize(16)
-                .fontWeight(FontWeight.Bold)
-                .fontColor('#18212B')
-              Blank().layoutWeight(1)
-              Button('地图')
-                .height(34)
-                .fontSize(12)
-                .fontColor('#18212B')
-                .backgroundColor('#E9EDF0')
-                .borderRadius(6)
-                .onClick(() => this.onOpenMap(this.selectedAlert))
-            }
-            .width('100%')
-            .margin({ top: 8 })
-            if (this.loadingEvents) {
-              Text('正在读取事件…')
-                .fontSize(13)
-                .fontColor('#6C7782')
-            }
-            ForEach(this.events, (event: AlertEvent) => {
-              Column({ space: 4 }) {
-                Text(eventTypeLabel(event.eventType))
-                  .fontSize(13)
-                  .fontColor('#18212B')
-                Text(`${relativeTime(event.createdAt)} · ${severityLabel(event.severity ?? '')}`)
-                  .fontSize(11)
-                  .fontColor('#6C7782')
-              }
-              .padding(12)
-              .backgroundColor('#FFFFFF')
-              .borderRadius(8)
-            }, (event: AlertEvent) => event.eventId)
           }
         }
         .padding({ left: 16, right: 16, bottom: 24 })
@@ -4614,6 +5533,71 @@ struct AlertsPane {
       .scrollBar(BarState.Off)
       .align(Alignment.TopStart)
     }
+    .layoutWeight(1)
+  }
+}
+
+@Component
+struct AlertModeSegment {
+  @Prop label: string;
+  @Prop status: AlertListStatus;
+  @Prop active: boolean;
+  onTap: (status: AlertListStatus) => void = () => {};
+
+  build() {
+    Button(this.label)
+      .height(44)
+      .layoutWeight(1)
+      .fontSize(13)
+      .fontWeight(this.active ? FontWeight.Bold : FontWeight.Medium)
+      .fontColor(this.active ? UI_COLOR_TEXT : UI_COLOR_MUTED)
+      .backgroundColor(this.active ? UI_COLOR_SURFACE : Color.Transparent)
+      .borderRadius(6)
+      .animation({ duration: 180, curve: Curve.EaseOut })
+      .accessibilityText(`${this.label}${this.active ? '，已选择' : ''}`)
+      .onClick(() => this.onTap(this.status))
+  }
+}
+
+@Component
+struct AlertSeverityChip {
+  @Prop label: string;
+  @Prop filter: AlertSeverityFilter;
+  @Prop active: boolean;
+  onTap: (filter: AlertSeverityFilter) => void = () => {};
+
+  build() {
+    Button(this.label)
+      .height(44)
+      .layoutWeight(1)
+      .fontSize(13)
+      .fontWeight(this.active ? FontWeight.Bold : FontWeight.Medium)
+      .fontColor(this.active ? UI_COLOR_SURFACE : UI_COLOR_TEXT_SECONDARY)
+      .backgroundColor(this.active ? UI_COLOR_TEXT : UI_COLOR_SURFACE)
+      .border({ width: 1, color: this.active ? UI_COLOR_TEXT : UI_COLOR_LINE })
+      .borderRadius(UI_RADIUS_SURFACE)
+      .animation({ duration: 180, curve: Curve.EaseOut })
+      .onClick(() => this.onTap(this.filter))
+  }
+}
+
+@Component
+struct AlertSummaryValue {
+  @Prop label: string;
+  @Prop value: string;
+  @Prop tone: string;
+
+  build() {
+    Column({ space: 3 }) {
+      Text(this.value)
+        .fontSize(16)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(this.tone)
+      Text(this.label)
+        .fontSize(12)
+        .fontColor(UI_COLOR_MUTED)
+    }
+    .alignItems(HorizontalAlign.Center)
     .layoutWeight(1)
   }
 }
@@ -4780,7 +5764,7 @@ struct AlertMapPane {
           Text(this.alert
             ? this.location ? alertLocationSourceLabel(this.location.source) : '正在解析位置'
             : `${this.locations.length} 个监测节点`)
-            .fontSize(11)
+            .fontSize(12)
             .fontColor(this.sourceTone())
         }
         .alignItems(HorizontalAlign.Start)
@@ -4826,7 +5810,7 @@ struct AlertMapPane {
           Column({ space: 10 }) {
             Row() {
               Text(this.alert ? alertLocationSourceLabel(this.location.source) : '节点总览')
-                .fontSize(11)
+                .fontSize(12)
                 .fontWeight(FontWeight.Medium)
                 .fontColor(this.sourceTone())
                 .padding({ left: 8, right: 8, top: 4, bottom: 4 })
@@ -4834,7 +5818,7 @@ struct AlertMapPane {
                 .borderRadius(4)
               Blank().layoutWeight(1)
               Text(this.alert ? severityLabel(this.alert.severity) : `共 ${this.locations.length} 个`)
-                .fontSize(11)
+                .fontSize(12)
                 .fontWeight(FontWeight.Medium)
                 .fontColor(this.alert ? UI_COLOR_DANGER : UI_COLOR_MAP_MUTED)
             }
@@ -4871,8 +5855,8 @@ struct AlertMapPane {
                         .fontSize(15)
                         .fontColor(['#285F89'])
                     }
-                    .width(30)
-                    .height(30)
+                    .width(44)
+                    .height(44)
                     .backgroundColor('#EAF3F8')
                     .accessibilityText('重新获取手机定位')
                     .onClick(() => this.onRelocateUser())
@@ -4905,7 +5889,7 @@ struct AlertMapPane {
                 .borderRadius(6)
 
                 Text(`${this.coordinateText()} · ${this.updatedText()}`)
-                  .fontSize(10)
+                  .fontSize(12)
                   .fontColor(UI_COLOR_MAP_MUTED)
                   .maxLines(1)
                   .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -4960,12 +5944,22 @@ struct SettingsPane {
   @Prop apiBaseUrl: string;
   @Prop connectionState: string;
   @Prop connectionUpdatedAt: string;
+  @Prop alarmSoundEnabled: boolean;
+  @Prop alarmVibrationEnabled: boolean;
+  @Prop notificationEnabled: boolean | null;
+  @Prop alarmTestFeedback: string;
+  onAlarmSoundChange: (enabled: boolean) => void = () => {};
+  onAlarmVibrationChange: (enabled: boolean) => void = () => {};
+  onCheckNotification: () => void = () => {};
+  onTestAlarm: () => void = () => {};
   onSave: (value: string) => void = () => {};
   onClearCache: () => void = () => {};
   onLogout: () => void = () => {};
   @State private draftUrl: string = '';
   @State private editingServer: boolean = false;
   @State private cacheStatus: string = '保留最近一次总览、站点与设备快照';
+  @State private confirmingServerSwitch: boolean = false;
+  @State private confirmingLogout: boolean = false;
 
   aboutToAppear(): void {
     this.draftUrl = this.apiBaseUrl;
@@ -4988,18 +5982,26 @@ struct SettingsPane {
     this.cacheStatus = '本地缓存已清理';
   }
 
+  private notificationText(): string {
+    if (this.notificationEnabled === null) return '尚未检查系统通知权限';
+    return this.notificationEnabled ? '系统通知已开启' : '系统通知未开启，点击检查';
+  }
+
   build() {
     Column() {
       if (this.editingServer) {
         Row({ space: 10 }) {
-          BackIconButton({ accessibilityLabel: '返回我的', onBack: () => this.editingServer = false })
+          BackIconButton({ accessibilityLabel: '返回我的', onBack: () => {
+            this.confirmingServerSwitch = false;
+            this.editingServer = false;
+          } })
           Column({ space: 3 }) {
             Text('服务器连接')
               .fontSize(20)
               .fontWeight(FontWeight.Bold)
               .fontColor(UI_COLOR_TEXT)
             Text('修改后需要重新登录')
-              .fontSize(11)
+              .fontSize(12)
               .fontColor(UI_COLOR_MUTED)
           }
           .alignItems(HorizontalAlign.Start)
@@ -5033,24 +6035,73 @@ struct SettingsPane {
                 .backgroundColor('#F2F5F4')
                 .border({ width: 1, color: UI_COLOR_LOGIN_BORDER })
                 .borderRadius(8)
-              Text('地址需要包含 /api/v1')
-                .fontSize(11)
-                .fontColor(UI_COLOR_MUTED)
+              Row({ space: 8 }) {
+                SymbolGlyph($r('sys.symbol.exclamationmark_triangle'))
+                  .fontSize(16)
+                  .fontColor([UI_COLOR_WARNING])
+                Text('保存后会清理当前账号缓存并退出登录，重新登录后生效。')
+                  .fontSize(13)
+                  .fontColor(UI_COLOR_TEXT_SECONDARY)
+                  .lineHeight(20)
+                  .layoutWeight(1)
+              }
+              .padding(12)
+              .backgroundColor('#FFF6E9')
+              .borderRadius(UI_RADIUS_SURFACE)
+              .width('100%')
             }
             .alignItems(HorizontalAlign.Start)
             .width('100%')
 
-            Button('保存服务器设置')
-              .enabled(this.draftUrl.trim().length > 0)
+            if (this.confirmingServerSwitch) {
+              Column({ space: 12 }) {
+                Text('确认切换服务器？')
+                  .fontSize(16)
+                  .fontWeight(FontWeight.Bold)
+                  .fontColor(UI_COLOR_TEXT)
+                Text('当前登录会话和本地业务缓存将被清理，随后需要使用新服务器重新登录。')
+                  .fontSize(13)
+                  .lineHeight(20)
+                  .fontColor(UI_COLOR_TEXT_SECONDARY)
+                  .width('100%')
+                Row({ space: 8 }) {
+                  Button('取消')
+                    .height(44)
+                    .layoutWeight(1)
+                    .fontColor(UI_COLOR_TEXT)
+                    .backgroundColor(UI_COLOR_SURFACE)
+                    .border({ width: 1, color: UI_COLOR_LINE })
+                    .borderRadius(8)
+                    .onClick(() => this.confirmingServerSwitch = false)
+                  Button('确认切换')
+                    .height(44)
+                    .layoutWeight(1)
+                    .fontColor(UI_COLOR_SURFACE)
+                    .backgroundColor(UI_COLOR_DANGER)
+                    .borderRadius(8)
+                    .onClick(() => {
+                      this.onSave(this.draftUrl);
+                      this.confirmingServerSwitch = false;
+                      this.editingServer = false;
+                    })
+                }
+                .width('100%')
+              }
+              .padding(14)
+              .backgroundColor(UI_COLOR_DANGER_SOFT)
+              .borderRadius(UI_RADIUS_SURFACE)
               .width('100%')
-              .height(48)
-              .fontColor(UI_COLOR_SURFACE)
-              .backgroundColor(UI_COLOR_TEXT)
-              .borderRadius(8)
-              .onClick(() => {
-                this.onSave(this.draftUrl);
-                this.editingServer = false;
-              })
+              .animation({ duration: 180, curve: Curve.EaseOut })
+            } else {
+              Button('切换服务器并退出登录')
+                .enabled(this.draftUrl.trim().length > 0)
+                .width('100%')
+                .height(48)
+                .fontColor(UI_COLOR_SURFACE)
+                .backgroundColor(UI_COLOR_TEXT)
+                .borderRadius(8)
+                .onClick(() => this.confirmingServerSwitch = true)
+            }
           }
           .padding({ left: 16, right: 16, bottom: 24 })
           .width('100%')
@@ -5064,7 +6115,7 @@ struct SettingsPane {
             .fontWeight(FontWeight.Bold)
             .fontColor(UI_COLOR_TEXT)
           Text('账号、安全与数据')
-            .fontSize(11)
+            .fontSize(13)
             .fontColor(UI_COLOR_MUTED)
         }
         .alignItems(HorizontalAlign.Start)
@@ -5089,37 +6140,61 @@ struct SettingsPane {
                   .fontWeight(FontWeight.Medium)
                   .fontColor(UI_COLOR_TEXT)
                 Text('已登录 · 监测平台账号')
-                  .fontSize(11)
+                  .fontSize(12)
                   .fontColor(UI_COLOR_SUCCESS)
               }
               .alignItems(HorizontalAlign.Start)
             }
             .padding(14)
             .backgroundColor(UI_COLOR_SURFACE)
-            .borderRadius(8)
+            .border({ width: 1, color: UI_COLOR_LINE })
+            .borderRadius(UI_RADIUS_SURFACE)
             .width('100%')
 
             SettingsSectionTitle({ text: '告警与安全' });
             Column() {
+              ToggleSettingsItem({
+                icon: $r('sys.symbol.bell'),
+                title: '告警声音',
+                detail: '活动告警持续播放提示音',
+                tone: UI_COLOR_DANGER,
+                switchedOn: this.alarmSoundEnabled,
+                onChange: (enabled: boolean) => this.onAlarmSoundChange(enabled)
+              });
+              Divider().color(UI_COLOR_LINE).margin({ left: 56 })
+              ToggleSettingsItem({
+                icon: $r('sys.symbol.dot_radiowaves_left_and_right'),
+                title: '告警震动',
+                detail: '真机支持时随告警循环震动',
+                tone: UI_COLOR_WARNING,
+                switchedOn: this.alarmVibrationEnabled,
+                onChange: (enabled: boolean) => this.onAlarmVibrationChange(enabled)
+              });
+              Divider().color(UI_COLOR_LINE).margin({ left: 56 })
               SettingsItem({
                 icon: $r('sys.symbol.bell'),
-                title: '告警提醒',
-                detail: '软件内弹窗、声音与震动',
-                tone: UI_COLOR_DANGER,
-                actionable: false
+                title: '系统通知',
+                detail: this.notificationText(),
+                tone: this.notificationEnabled ? UI_COLOR_SUCCESS : UI_COLOR_INFO,
+                actionable: true,
+                actionLabel: '检查',
+                onTap: () => this.onCheckNotification()
               });
-              Divider().color('#EEF1F3').margin({ left: 52 })
+              Divider().color(UI_COLOR_LINE).margin({ left: 56 })
               SettingsItem({
-                icon: $r('sys.symbol.dot_radiowaves_left_and_right'),
-                title: '定位使用',
-                detail: '查看告警地图时获取当前位置',
-                tone: '#377BB1',
-                actionable: false
+                icon: $r('sys.symbol.arrow_clockwise'),
+                title: '测试告警提醒',
+                detail: this.alarmTestFeedback.length > 0 ? this.alarmTestFeedback : '使用当前声音与震动设置测试 4 秒',
+                tone: UI_COLOR_DANGER,
+                actionable: true,
+                actionLabel: '测试',
+                onTap: () => this.onTestAlarm()
               });
             }
             .width('100%')
             .backgroundColor(UI_COLOR_SURFACE)
-            .borderRadius(8)
+            .border({ width: 1, color: UI_COLOR_LINE })
+            .borderRadius(UI_RADIUS_SURFACE)
 
             SettingsSectionTitle({ text: '数据与连接' });
             Column() {
@@ -5130,7 +6205,7 @@ struct SettingsPane {
                 tone: UI_COLOR_SUCCESS,
                 actionable: false
               });
-              Divider().color('#EEF1F3').margin({ left: 52 })
+              Divider().color(UI_COLOR_LINE).margin({ left: 56 })
               SettingsItem({
                 icon: $r('sys.symbol.house'),
                 title: '本地缓存',
@@ -5140,7 +6215,7 @@ struct SettingsPane {
                 actionLabel: '清理',
                 onTap: () => this.clearCache()
               });
-              Divider().color('#EEF1F3').margin({ left: 52 })
+              Divider().color(UI_COLOR_LINE).margin({ left: 56 })
               SettingsItem({
                 icon: $r('sys.symbol.dot_radiowaves_left_and_right'),
                 title: '服务器连接',
@@ -5153,7 +6228,8 @@ struct SettingsPane {
             }
             .width('100%')
             .backgroundColor(UI_COLOR_SURFACE)
-            .borderRadius(8)
+            .border({ width: 1, color: UI_COLOR_LINE })
+            .borderRadius(UI_RADIUS_SURFACE)
 
             SettingsSectionTitle({ text: '关于' });
             Column() {
@@ -5167,15 +6243,52 @@ struct SettingsPane {
             }
             .width('100%')
             .backgroundColor(UI_COLOR_SURFACE)
-            .borderRadius(8)
+            .border({ width: 1, color: UI_COLOR_LINE })
+            .borderRadius(UI_RADIUS_SURFACE)
 
-            Button('退出登录')
+            if (this.confirmingLogout) {
+              Column({ space: 12 }) {
+                Text('退出当前账号？')
+                  .fontSize(15)
+                  .fontWeight(FontWeight.Bold)
+                  .fontColor(UI_COLOR_TEXT)
+                Text('退出后会清理当前账号缓存，声音与震动偏好会保留在本机。')
+                  .fontSize(13)
+                  .fontColor(UI_COLOR_TEXT_SECONDARY)
+                  .lineHeight(20)
+                  .width('100%')
+                Row({ space: 8 }) {
+                  Button('取消')
+                    .height(44)
+                    .layoutWeight(1)
+                    .fontColor(UI_COLOR_TEXT)
+                    .backgroundColor(UI_COLOR_SURFACE_ALT)
+                    .borderRadius(UI_RADIUS_SURFACE)
+                    .onClick(() => this.confirmingLogout = false)
+                  Button('退出登录')
+                    .height(44)
+                    .layoutWeight(1)
+                    .fontColor(UI_COLOR_SURFACE)
+                    .backgroundColor(UI_COLOR_DANGER)
+                    .borderRadius(UI_RADIUS_SURFACE)
+                    .onClick(() => this.onLogout())
+                }
+                .width('100%')
+              }
+              .padding(14)
+              .backgroundColor(UI_COLOR_DANGER_SOFT)
+              .borderRadius(UI_RADIUS_SURFACE)
               .width('100%')
-              .height(46)
-              .fontColor(UI_COLOR_DANGER)
-              .backgroundColor(UI_COLOR_SURFACE)
-              .borderRadius(8)
-              .onClick(() => this.onLogout())
+            } else {
+              Button('退出登录')
+                .width('100%')
+                .height(46)
+                .fontColor(UI_COLOR_DANGER)
+                .backgroundColor(UI_COLOR_SURFACE)
+                .border({ width: 1, color: UI_COLOR_LINE })
+                .borderRadius(UI_RADIUS_SURFACE)
+                .onClick(() => this.confirmingLogout = true)
+            }
           }
           .padding({ left: 16, right: 16, bottom: 24 })
           .width('100%')
@@ -5196,9 +6309,55 @@ struct SettingsSectionTitle {
   build() {
     Text(this.text)
       .fontSize(13)
-      .fontWeight(FontWeight.Medium)
-      .fontColor('#52606D')
+      .fontWeight(FontWeight.Bold)
+      .fontColor(UI_COLOR_TEXT_SECONDARY)
       .width('100%')
+  }
+}
+
+@Component
+struct ToggleSettingsItem {
+  @Prop icon: Resource;
+  @Prop title: string;
+  @Prop detail: string;
+  @Prop tone: string;
+  @Prop switchedOn: boolean;
+  onChange: (enabled: boolean) => void = () => {};
+
+  build() {
+    Row({ space: 12 }) {
+      Stack({ alignContent: Alignment.Center }) {
+        Circle({ width: 40, height: 40 }).fill('#EEF2F0')
+        SymbolGlyph(this.icon)
+          .fontSize(18)
+          .fontColor([this.tone])
+      }
+      .width(40)
+      .height(40)
+      Column({ space: 3 }) {
+        Text(this.title)
+          .fontSize(14)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(UI_COLOR_TEXT)
+        Text(this.detail)
+          .fontSize(12)
+          .fontColor(UI_COLOR_MUTED)
+          .maxLines(2)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+      }
+      .alignItems(HorizontalAlign.Start)
+      .layoutWeight(1)
+      Toggle({ type: ToggleType.Switch, isOn: this.switchedOn })
+        .width(52)
+        .height(44)
+        .selectedColor(UI_COLOR_HERMES)
+        .accessibilityText(`${this.title}${this.switchedOn ? '已开启' : '已关闭'}`)
+        .onChange((enabled: boolean) => this.onChange(enabled))
+    }
+    .width('100%')
+    .constraintSize({ minHeight: 72 })
+    .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+    .alignItems(VerticalAlign.Center)
   }
 }
 
@@ -5215,20 +6374,20 @@ struct SettingsItem {
   build() {
     Row({ space: 12 }) {
       Stack({ alignContent: Alignment.Center }) {
-        Circle({ width: 36, height: 36 }).fill('#EEF2F0')
+        Circle({ width: 40, height: 40 }).fill('#EEF2F0')
         SymbolGlyph(this.icon)
           .fontSize(18)
           .fontColor([this.tone])
       }
-      .width(36)
-      .height(36)
+      .width(40)
+      .height(40)
       Column({ space: 3 }) {
         Text(this.title)
           .fontSize(14)
           .fontWeight(FontWeight.Medium)
           .fontColor(UI_COLOR_TEXT)
         Text(this.detail)
-          .fontSize(11)
+          .fontSize(12)
           .fontColor(UI_COLOR_MUTED)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -5239,7 +6398,7 @@ struct SettingsItem {
         Row({ space: 5 }) {
           if (this.actionLabel.length > 0) {
             Text(this.actionLabel)
-              .fontSize(11)
+              .fontSize(12)
               .fontColor(UI_COLOR_MUTED)
           }
           SymbolGlyph($r('sys.symbol.chevron_right'))
@@ -5249,8 +6408,8 @@ struct SettingsItem {
       }
     }
     .width('100%')
-    .height(64)
-    .padding({ left: 12, right: 12 })
+    .constraintSize({ minHeight: 68 })
+    .padding({ left: 12, right: 12, top: 8, bottom: 8 })
     .alignItems(VerticalAlign.Center)
     .onClick(() => {
       if (this.actionable) this.onTap();
@@ -5261,13 +6420,14 @@ struct SettingsItem {
 @Component
 struct BottomTabs {
   @Prop screen: AppScreen;
+  @Prop activeAlertCount: number;
   onSelect: (screen: AppScreen) => void = () => {};
 
   build() {
     Column() {
-      Divider().color('#EEF1F3')
+      Divider().color(UI_COLOR_LINE)
       Row() {
-        TabButton({ label: '总览', icon: $r('sys.symbol.house'), active: this.screen === 'overview' || this.screen === 'alerts', badgeCount: 0, onTap: () => this.onSelect('overview') });
+        TabButton({ label: '总览', icon: $r('sys.symbol.house'), active: this.screen === 'overview' || this.screen === 'alerts', badgeCount: this.activeAlertCount, onTap: () => this.onSelect('overview') });
         TabButton({ label: '站点', icon: $r('sys.symbol.dot_radiowaves_left_and_right'), active: this.screen === 'stations' || this.screen === 'device', badgeCount: 0, onTap: () => this.onSelect('stations') });
         TabButton({ label: 'AI', icon: $r('sys.symbol.arrow_clockwise'), textIcon: 'AI', active: this.screen === 'ai', badgeCount: 0, onTap: () => this.onSelect('ai') });
         TabButton({ label: '我的', icon: $r('sys.symbol.person_crop_circle_fill_1'), active: this.screen === 'settings', badgeCount: 0, onTap: () => this.onSelect('settings') });
@@ -5275,7 +6435,7 @@ struct BottomTabs {
       .layoutWeight(1)
       .width('100%')
     }
-    .height(65)
+    .height(68)
     .width('100%')
     .backgroundColor(UI_COLOR_SURFACE)
   }
@@ -5295,38 +6455,41 @@ struct TabButton {
       Stack({ alignContent: Alignment.TopEnd }) {
         if (this.textIcon.length > 0) {
           Text(this.textIcon)
-            .fontSize(11)
+            .fontSize(12)
             .fontWeight(FontWeight.Bold)
-            .fontColor(this.active ? UI_COLOR_ACCENT : UI_COLOR_MUTED)
+            .fontColor(this.active ? UI_COLOR_HERMES : UI_COLOR_MUTED)
             .textAlign(TextAlign.Center)
             .width(25)
             .height(22)
-            .border({ width: 1.5, color: this.active ? UI_COLOR_ACCENT : UI_COLOR_MUTED })
+            .border({ width: 1.5, color: this.active ? UI_COLOR_HERMES : UI_COLOR_MUTED })
             .borderRadius(6)
         } else {
           SymbolGlyph(this.icon)
             .fontSize(22)
-            .fontColor([this.active ? UI_COLOR_ACCENT : UI_COLOR_MUTED])
+            .fontColor([this.active ? UI_COLOR_HERMES : UI_COLOR_MUTED])
         }
         if (this.badgeCount > 0) {
           Text(this.badgeCount > 99 ? '99+' : `${this.badgeCount}`)
-            .fontSize(8)
+            .fontSize(10)
             .fontWeight(FontWeight.Bold)
             .fontColor(UI_COLOR_SURFACE)
             .textAlign(TextAlign.Center)
-            .width(this.badgeCount > 99 ? 24 : 15)
-            .height(15)
+            .width(this.badgeCount > 99 ? 26 : 18)
+            .height(18)
             .padding({ left: 3, right: 3 })
             .backgroundColor(UI_COLOR_DANGER)
             .borderRadius(8)
             .offset({ x: 8, y: -3 })
         }
       }
-      .width(32)
-      .height(24)
+      .width(40)
+      .height(28)
+      .backgroundColor(this.active ? UI_COLOR_HERMES_SOFT : Color.Transparent)
+      .borderRadius(8)
+      .animation({ duration: 180, curve: Curve.EaseOut })
       Text(this.label)
-        .fontSize(10)
-        .fontColor(this.active ? UI_COLOR_ACCENT : UI_COLOR_MUTED)
+        .fontSize(12)
+        .fontColor(this.active ? UI_COLOR_HERMES : UI_COLOR_MUTED)
         .fontWeight(this.active ? FontWeight.Bold : FontWeight.Medium)
     }
     .layoutWeight(1)

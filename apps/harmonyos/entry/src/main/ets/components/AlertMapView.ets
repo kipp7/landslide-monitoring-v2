@@ -115,7 +115,7 @@ export struct AlertMapView {
             .fontWeight(FontWeight.Medium)
             .fontColor('#18212B')
           Text('经纬度信息仍可正常查看')
-            .fontSize(11)
+            .fontSize(12)
             .fontColor(MAP_COLOR_MUTED)
         }
         .width('100%')

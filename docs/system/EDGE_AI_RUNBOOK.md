@@ -83,6 +83,26 @@ restarts only Hermes. The gateway and rule chain remain untouched.
   core Hermes supervision refresh.
 - The App loads AI independently and keeps its last cached snapshot when the
   endpoint is unavailable.
+- Hermes conversation planning is server-side and optional. Configure an
+  OpenAI-compatible endpoint with `HERMES_LLM_BASE_URL` and
+  `HERMES_LLM_MODEL`; keep credentials only in the production environment.
+  The planner can also target a server-local compatible endpoint without
+  changing the App or RK3568 contract.
+- Every model result must pass the strict JSON schema and the existing
+  `recheck`, `collect_logs`, `generate_report` allowlist. Protected intent is
+  rejected before the model request. The model never receives Shell, serial,
+  MQTT, threshold, physical-alarm, or direct device-control authority.
+- Model timeout, transient HTTP failure, or network loss is retried at most
+  `HERMES_LLM_MAX_ATTEMPTS` times within the App request budget, then falls
+  back to deterministic planning. A short `HERMES_LLM_COOLDOWN_MS` circuit
+  then keeps subsequent requests responsive before automatically probing the
+  model again. Invalid structured output fails over without retrying. The
+  response and audit metadata identify `model` versus
+  `deterministic` planning and the fallback reason.
+- If the phone cannot reach the server, the App does not queue an action for
+  later automatic execution. It retains the text for explicit retry. If the
+  server reaches the planner but RK3568 is offline, the task is recorded as
+  failed and is never replayed after the board reconnects.
 - App action retries are idempotent by `requestId`; queued tasks are serialized
   and capped by `ACTION_QUEUE_MAX_OUTSTANDING` (default 16).
 - An interrupted queued or running task is marked failed after Hermes starts;

@@ -14,6 +14,7 @@ export struct InAppAlertOverlay {
   @Prop muted: boolean;
   @Prop queuedCount: number;
   @Prop sourceLabel: string;
+  @State private revealed: boolean = false;
   onToggleMute: () => void = () => {};
   onOpenMap: () => void = () => {};
   onDismiss: () => void = () => {};
@@ -113,7 +114,7 @@ export struct InAppAlertOverlay {
           Row() {
             Column({ space: 3 }) {
               Text('最大相对偏移')
-                .fontSize(11)
+                .fontSize(12)
                 .fontColor(COLOR_MUTED)
               Text(this.maxDeviationLabel())
                 .fontSize(17)
@@ -125,7 +126,7 @@ export struct InAppAlertOverlay {
 
             Column({ space: 3 }) {
               Text('主变化轴')
-                .fontSize(11)
+                .fontSize(12)
                 .fontColor(COLOR_MUTED)
               Text(this.maxAxisLabel())
                 .fontSize(17)
@@ -218,7 +219,7 @@ export struct InAppAlertOverlay {
           .width('100%')
 
           Button('收起提醒')
-            .height(40)
+            .height(44)
             .fontSize(14)
             .fontColor(COLOR_MUTED)
             .backgroundColor(Color.Transparent)
@@ -235,6 +236,9 @@ export struct InAppAlertOverlay {
       .borderRadius(8)
       .clip(true)
       .shadow({ radius: 28, color: '#52000000', offsetX: 0, offsetY: 12 })
+      .opacity(this.revealed ? 1 : 0.75)
+      .scale({ x: this.revealed ? 1 : 0.97, y: this.revealed ? 1 : 0.97 })
+      .onAppear(() => this.getUIContext().animateTo({ duration: 220, curve: Curve.EaseOut }, () => this.revealed = true))
     }
     .width('100%')
     .height('100%')
@@ -249,6 +253,7 @@ export struct ActiveAlertBanner {
   @Prop event: AlertStreamEvent;
   @Prop muted: boolean;
   onOpen: () => void = () => {};
+  @State private revealed: boolean = false;
 
   private title(): string {
     const title = this.event.title.trim();
@@ -271,7 +276,7 @@ export struct ActiveAlertBanner {
             .textOverflow({ overflow: TextOverflow.Ellipsis })
           Text(this.muted ? '告警未解除 · 声音与震动已暂停' : '告警未解除 · 声音与震动持续中')
             .width('100%')
-            .fontSize(11)
+            .fontSize(12)
             .fontColor('#FADDD5')
             .maxLines(1)
         }
@@ -291,5 +296,8 @@ export struct ActiveAlertBanner {
     .borderRadius(0)
     .accessibilityText('打开当前告警提醒')
     .onClick(() => this.onOpen())
+    .opacity(this.revealed ? 1 : 0.65)
+    .translate({ y: this.revealed ? 0 : 8 })
+    .onAppear(() => this.getUIContext().animateTo({ duration: 180, curve: Curve.EaseOut }, () => this.revealed = true))
   }
 }

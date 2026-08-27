@@ -14,8 +14,8 @@ export class AlertNotificationService {
     this.context = context;
   }
 
-  async prepare(): Promise<void> {
-    if (this.prepared) return;
+  async prepare(forceRequest: boolean = false): Promise<void> {
+    if (this.prepared && !forceRequest) return;
     this.prepared = true;
     try {
       if (!await notificationManager.isNotificationEnabled()) {
@@ -23,6 +23,14 @@ export class AlertNotificationService {
       }
     } catch {
       // Notification permission is optional; realtime data remains available in the app.
+    }
+  }
+
+  isEnabled(): boolean {
+    try {
+      return notificationManager.isNotificationEnabledSync();
+    } catch {
+      return false;
     }
   }
 
